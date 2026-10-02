@@ -45,6 +45,17 @@ describe('pcIdentity', () => {
     }
   });
 
+  it('GURPS: only a positive number or a digits-only string is a points total', () => {
+    const b = setRow(templateBody('pc-gurps-4e.md'), '**Total**', ['**150**']);
+    const points = (pt) => pcIdentity('gurps-4e', { point_total: pt }, sectionsOf(b));
+    assert.deepStrictEqual(points('250'), [['Points', '250']]);
+    assert.deepStrictEqual(points(' 250 '), [['Points', '250']]);
+    for (const bad of ['lots', '250 pts', '1e3', ['250'], { n: 1 }, 0, '0', NaN, Infinity, -5, null, true]) {
+      assert.deepStrictEqual(points(bad), [['Points', '150']], String(JSON.stringify(bad)));
+    }
+    assert.deepStrictEqual(pcIdentity('gurps-4e', { point_total: 0 }, []), []);
+  });
+
   it('CoC aliases: Occupation and Age from frontmatter only', () => {
     for (const system of ['coc', 'coc-7e', 'regency-cthulhu', 'coc-7e-regency']) {
       assert.deepStrictEqual(pcIdentity(system, { occupation: 'Antiquarian', age: 41 }, sectionsOf(templateBody('pc-coc-7e.md'))),

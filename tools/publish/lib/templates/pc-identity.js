@@ -10,13 +10,14 @@ const {
 
 const CLASS = 'Class(?:es)?(?:\\s*/\\s*Subclass(?:es)?)?';
 
-// The value of the first `Level` row in any table of the section.
-function levelRow(section) {
+// The cell `pick` returns from the first row, in any table of the section, that it accepts.
+// `pick(cells)` gets [label, value] and returns the value to take, or '' to go on.
+function tableValue(section, columns, pick) {
   if (!section) return '';
   let found = '';
   for (const table of String(section.html || '').match(/<table[\s\S]*?<\/table>/gi) || []) {
-    consumeTable(table, ATTRIBUTE_COLUMNS, ([label, value]) => {
-      if (!found && /^level$/i.test(label)) found = filled(value);
+    consumeTable(table, columns, (cells) => {
+      if (!found) found = filled(pick(cells));
       return true;
     });
     if (found) break;
@@ -24,23 +25,21 @@ function levelRow(section) {
   return found;
 }
 
+const levelRow = (section) => tableValue(section, ATTRIBUTE_COLUMNS, ([label, value]) => (/^level$/i.test(label) ? value : ''));
 // The last cell of the first `## Points Summary` row whose first cell says total.
-function pointsTotal(section) {
-  if (!section) return '';
-  let total = '';
-  for (const table of String(section.html || '').match(/<table[\s\S]*?<\/table>/gi) || []) {
-    consumeTable(table, [/./, /./], ([label, value]) => {
-      if (!total && /total/i.test(label)) total = filled(value);
-      return true;
-    });
-    if (total) break;
-  }
-  return total;
-}
+const pointsTotal = (section) => tableValue(section, [/./, /./], ([label, value]) => (/total/i.test(label) ? value : ''));
 
 function fromFrontmatter(frontmatter, key) {
   const raw = (frontmatter || {})[key];
   return typeof raw === 'string' || typeof raw === 'number' ? filled(String(raw)) : '';
+}
+
+// A points total: a positive finite number, or a string of digits only. Anything else
+// (text, a list, 0) is not a total, and the body's Points Summary is read instead.
+function pointTotal(frontmatter) {
+  const raw = (frontmatter || {}).point_total;
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw > 0 ? String(raw) : '';
+  return typeof raw === 'string' && /^\d+$/.test(raw.trim()) && Number(raw) > 0 ? raw.trim() : '';
 }
 
 // pcIdentity(system, frontmatter, sections) -> [[label, value], ...]
@@ -62,7 +61,7 @@ function pcIdentity(system, frontmatter, sections) {
   } else if (family === 'fitd') {
     pairs = [['Playbook', stat ? boldField(stat.html, 'Playbook') : ''], ['Heritage', field('Heritage')], ['Vice', field('Vice(?:/Purveyor)?')]];
   } else if (family === 'gurps') {
-    pairs = [['Points', fromFrontmatter(frontmatter, 'point_total') || pointsTotal(read.first('Points Summary'))]];
+    pairs = [['Points', pointTotal(frontmatter) || pointsTotal(read.first('Points Summary'))]];
   } else if (system && getRenderer(system) === renderCoCSheet) {
     pairs = [['Occupation', fromFrontmatter(frontmatter, 'occupation')], ['Age', fromFrontmatter(frontmatter, 'age')]];
   } else {

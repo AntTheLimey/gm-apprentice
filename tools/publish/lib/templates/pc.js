@@ -25,6 +25,9 @@ function renderMetaSpans(fm) {
     .join('\n    ');
 }
 
+// The frontmatter field an identity label is read from (pc-identity.js), where it has one.
+const IDENTITY_SOURCE_FIELD = { Occupation: 'occupation', Age: 'age', Points: 'point_total' };
+
 const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
 
 // Sections the structured GURPS renderer consumes into the sheet/combat tabs.
@@ -239,8 +242,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const pages = (context || {}).pages || [];
   const live = publishConfig.live || {};
   const showInbox = live.inbox === true;
-  // Character sheets off: no sheet content of any kind reaches the page, whatever the caller passed.
-  const sheetsOff = !!publishConfig.switches && publishConfig.switches.characterSheets === false;
+  // Character sheets off (decided once, by the build, from the same list the section filter uses):
+  // no sheet content of any kind reaches the page, whatever else the caller passed.
+  const sheetsOff = (context || {}).sheetsOff === true;
   const showStatusBar = live.stats === true && !sheetsOff;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
@@ -347,7 +351,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   let sheetContent;
   if (sheetsOff) {
     // Who the character is, then the line saying why there is no sheet; the kept prose follows.
-    const pairs = (context || {}).identity || [];
+    // A fact the header's meta badges already show is not said twice.
+    const headerFields = new Set((Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS)
+      .filter(field => fm[field] != null && fm[field] !== ''));
+    const pairs = ((context || {}).identity || []).filter(([label]) => !headerFields.has(IDENTITY_SOURCE_FIELD[label]));
     const strip = pairs.length
       ? `<div class="pc-identity">\n${pairs.map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(value)}</span>`).join('\n')}\n</div>\n`
       : '';

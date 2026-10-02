@@ -84,7 +84,8 @@ function build(options = {}) {
   const excludeSections = publishConfig.exclude_sections;
   // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
   const pcKeepSections = pcKeepList(publishConfig);
-  const sheetsOff = !!pcKeepSections;
+  // The one derivation of "sheets off": the filter's own answer, handed to the page template.
+  const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = publishConfig.exclude_callouts;
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
@@ -895,6 +896,7 @@ function build(options = {}) {
             systemRecordHtml: systemOut.recordHtml || null,
             systemStatusBarHtml: systemOut.statusBarHtml || null,
             identity,
+            sheetsOff,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;

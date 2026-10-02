@@ -54,7 +54,7 @@ function pcFor(system) {
   } else if (system === 'coc-7e') {
     b = setRow(b, 'STR', [ABILITY, '4365', '1746']);
     fm = 'occupation: Antiquarian\nage: 41\n';
-    identity = [['Occupation', 'Antiquarian'], ['Age', '41']];
+    identity = [];   // the header badges already show occupation and age
   } else if (system === 'fitd') {
     b = setRow(b, 'Skirmish', [ABILITY]);
     b = replace(b, '**Playbook:** {Playbook name}', '**Playbook:** Cutter');
@@ -144,7 +144,7 @@ describe('character sheets off: nothing from the sheet is published', () => {
         assert.ok(!on.pc().includes('sheet-withheld'));
         assert.ok(!on.pc().includes('pc-identity'));
         // The sheets-on page keeps its own tabs (it is byte-identical to the build before this change).
-        assert.ok(on.pc().includes('data-tab="equipment"') || on.pc().includes('data-target="p-equipment"'));
+        assert.ok(on.pc().includes(system === 'coc-7e' ? 'data-target="p-equipment"' : 'data-tab="equipment"'), 'the system\'s own equipment tab');
         assert.ok(!on.pc().includes('data-sheets'));
       });
 
@@ -233,8 +233,31 @@ describe('character sheets off: more cases', () => {
   });
 
   it('identity values are HTML-escaped', () => {
-    const { pc } = buildSite({ system: 'coc-7e', pcBody: '## Background\n\nx\n', pcFm: 'occupation: "Tom & <b>Jerry</b>"\n' });
-    assert.deepStrictEqual(identityOf(pc()), [['Occupation', 'Tom &amp; &lt;b&gt;Jerry&lt;/b&gt;']]);
+    const { pc } = buildSite({ system: 'gurps-4e', pcBody: '## Background\n\nx\n', pcFm: 'point_total: 150\n', publish: '' });
+    assert.deepStrictEqual(identityOf(pc()), [['Points', '150']]);
+    const body = '## Points Summary\n\n| Category | Points |\n|---|---|\n| **Total** | **1 <i>x</i>** |\n';
+    assert.deepStrictEqual(identityOf(buildSite({ system: 'gurps-4e', pcBody: body }).pc()), [['Points', '1 &lt;i&gt;x&lt;/i&gt;']]);
+  });
+
+  it('a fact the header already shows is said once: CoC default header carries occupation and age', () => {
+    const html = buildSite({ system: 'coc-7e', pcBody: '## Background\n\nx\n', pcFm: 'occupation: Antiquarian\nage: 41\n' }).pc();
+    assert.strictEqual(identityOf(html), null, 'no strip, no empty div');
+    assert.ok(!html.includes('pc-identity'));
+    assert.strictEqual(html.split('Antiquarian').length - 1, 1, 'occupation appears once');
+    assert.ok(html.includes('sheet-withheld'));
+  });
+
+  it('a display_meta that leaves a field out of the header lets the strip carry it', () => {
+    const html = buildSite({ system: 'coc-7e', pcBody: '## Background\n\nx\n', pcFm: 'occupation: Antiquarian\nage: 41\ndisplay_meta: [occupation]\n' }).pc();
+    assert.deepStrictEqual(identityOf(html), [['Age', '41']]);
+  });
+
+  it('a display_meta naming point_total puts the points in the header only', () => {
+    const named = buildSite({ system: 'gurps-4e', pcBody: '## Background\n\nx\n', pcFm: 'point_total: 250\ndisplay_meta: [point_total]\n' }).pc();
+    assert.strictEqual(identityOf(named), null);
+    assert.strictEqual(named.split('250').length - 1, 1);
+    const plain = buildSite({ system: 'gurps-4e', pcBody: '## Background\n\nx\n', pcFm: 'point_total: 250\n' }).pc();
+    assert.deepStrictEqual(identityOf(plain), [['Points', '250']]);
   });
 
   it('a note whose headings shift shows only frontmatter identity and none of its body', () => {
