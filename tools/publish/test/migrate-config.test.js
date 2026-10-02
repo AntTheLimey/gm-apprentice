@@ -649,11 +649,33 @@ describe('migrate-config', () => {
     const siteBefore = read(s.configPath);
     assert.throws(
       () => applyMigration(plan, { configPath: s.configPath }, { writeSite: () => { throw new Error('disk full'); } }),
-      (e) => [s.vaultFile, s.configPath, `${s.vaultFile}.pre-migrate`, `${s.configPath}.pre-migrate`, 'disk full'].every((x) => e.message.includes(x)),
+      (e) => e.message === `${s.vaultFile} was updated but ${s.configPath} could not be written (disk full); the originals are in ${s.vaultFile}.pre-migrate and ${s.configPath}.pre-migrate`,
     );
     assert.strictEqual(publishOf(s.vaultFile).site_title, 'T');
     assert.strictEqual(read(s.configPath), siteBefore);
     assert.strictEqual(read(`${s.configPath}.pre-migrate`), siteBefore);
+  });
+
+  it('a failed site write with no vault write names only the site file and its backup', () => {
+    const s = makeSite({ site: { siteTitle: 'T' }, vaultFile: '---\npublish:\n  site_title: T\n---\n' });
+    const plan = planMigration({ configPath: s.configPath });
+    assert.deepStrictEqual(plan.vaultSet, {});
+    assert.throws(
+      () => applyMigration(plan, { configPath: s.configPath }, { writeSite: () => { throw new Error('disk full'); } }),
+      (e) => e.message === `${s.configPath} could not be written (disk full); the original is in ${s.configPath}.pre-migrate`,
+    );
+    assert.ok(!fs.existsSync(`${s.vaultFile}.pre-migrate`));
+  });
+
+  it('a failed site write after the vault file was created names no vault backup', () => {
+    const s = makeSite({ site: { siteTitle: 'T' }, vaultFile: null });
+    const plan = planMigration({ configPath: s.configPath });
+    assert.throws(
+      () => applyMigration(plan, { configPath: s.configPath }, { writeSite: () => { throw new Error('disk full'); } }),
+      (e) => e.message === `${s.vaultFile} was created but ${s.configPath} could not be written (disk full); the original is in ${s.configPath}.pre-migrate`,
+    );
+    assert.ok(fs.existsSync(s.vaultFile));
+    assert.ok(!fs.existsSync(`${s.vaultFile}.pre-migrate`));
   });
 
   it('--json carries `lines`, the exact lines the human run prints', () => {

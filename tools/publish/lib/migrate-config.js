@@ -295,9 +295,11 @@ function applyMigration(plan, { configPath, vaultPath } = {}, deps = {}) {
     try {
       (deps.writeSite || writeAtomic)(configPath, JSON.stringify(kept, null, 2) + '\n');
     } catch (e) {
+      const wrote = writeVault ? `${vaultFile} was ${exists ? 'updated' : 'created'} but ` : '';
+      const saved = [...(writeVault && exists ? [`${vaultFile}.pre-migrate`] : []), `${configPath}.pre-migrate`];
       throw new Error(
-        `${vaultFile} was updated but ${configPath} could not be written (${e.message}); ` +
-        `the originals are in ${vaultFile}.pre-migrate and ${configPath}.pre-migrate`
+        `${wrote}${configPath} could not be written (${e.message}); ` +
+        `${saved.length > 1 ? 'the originals are' : 'the original is'} in ${saved.join(' and ')}`
       );
     }
   }
