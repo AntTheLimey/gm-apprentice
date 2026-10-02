@@ -54,13 +54,15 @@ def rows_for(rows, needle):
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
-                      stripped=None, sheet_source=None):
+                      stripped=None, sheet_source=None, unparseable=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
     (None: an older tool's answer, without the field); `sheet_source` maps
     a PC's path to its `sheetSourceSet` (None: an older tool's answer,
-    without the field); `plan` is what `manifest publish-played
+    without the field); `unparseable` maps a path to the parser message
+    the tool reports for it (None: a tool older than 1.11.45, which gives
+    the `FILE_UNPARSEABLE` code alone); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -99,6 +101,13 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       if p not in {page["path"] for page in pages}]
             for page in pages:
                 page["sheetSourceSet"] = sheet_source.get(page["path"])
+        for path, message in (unparseable or {}).items():
+            page = {"path": path, "bodyWithheld": False, "publishes": False,
+                    "code": "FILE_UNPARSEABLE", "strippedSections": None,
+                    "sheetSourceSet": None}
+            if message is not None:
+                page["frontmatterError"] = message
+            pages.append(page)
         return subprocess.CompletedProcess(
             cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
 
@@ -788,6 +797,97 @@ STORY = "Characters/PCs/Fine_Story.md"
 UNPUBLISHED = "Characters/NPCs/Unpublished.md"
 STUB = "Characters/NPCs/Stub.md"
 HIDDEN = "Characters/PCs/Hidden.md"
+
+
+class FrontmatterUnparseableTests(unittest.TestCase):
+    """#287: the line reader passes frontmatter the site's build rejects,
+    and the note drops off the site."""
+
+    DUP = "---\ntype: pc\nsheet_source: paper\nsheet_source: PDF\n---\n"
+
+    def _vault(self, **stub):
+        vault = make_vault(self)
+        (vault / "PCs").mkdir()
+        (vault / "PCs" / "Dup.md").write_text(self.DUP, encoding="utf-8")
+        (vault / "Fine.md").write_text("---\ntype: npc\n---\n",
+                                       encoding="utf-8")
+        return vault, stub_publish_tool(self, vault, **stub)
+
+    def test_a_note_the_build_cannot_parse_is_a_warning_with_the_message(self):
+        vault, calls = self._vault(unparseable={
+            "PCs/Dup.md": "duplicated mapping key (4:1)\n\n 3 | sheet_source"})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(rows, [
+            "WARNING\tPCs/Dup.md\tthe site's build cannot parse this "
+            "frontmatter (duplicated mapping key (4:1)) — the note gets no "
+            "page on the site; fix the YAML"])
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_the_line_reader_alone_sees_nothing_wrong(self):
+        # What #287 reported: without the tool's answer the file passes.
+        vault, _calls = self._vault()
+        self.assertFalse(rows_for(vc.check_frontmatter(vault, None),
+                                  "cannot parse"))
+
+    def test_an_older_tool_gives_the_code_without_a_message(self):
+        vault, _calls = self._vault(unparseable={"PCs/Dup.md": None})
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("this frontmatter — the note gets no page", rows[0])
+
+    def test_folder_scope_leaves_out_files_outside_it(self):
+        vault, _calls = self._vault(unparseable={
+            "PCs/Dup.md": "bad", "Elsewhere/Other.md": "bad"})
+        (vault / "Elsewhere").mkdir()
+        (vault / "Elsewhere" / "Other.md").write_text(self.DUP,
+                                                      encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, "PCs"), "cannot parse")
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("PCs/Dup.md", rows[0])
+
+    def test_a_decomposed_filename_still_matches_the_tools_nfc_path(self):
+        # The tool reports NFC paths; the vault walk gives the name as
+        # written on disk.
+        vault, _calls = self._vault(unparseable={"Ren\u00e9e.md": "bad"})
+        (vault / "Rene\u0301e.md").write_text(self.DUP, encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, None), "cannot parse")
+        self.assertEqual(len(rows), 1, rows)
+
+    def test_a_tool_that_cannot_answer_says_what_went_unchecked(self):
+        vault, _calls = self._vault(which=None)
+        rows = vc.check_frontmatter(vault, None)
+        info = rows_for(rows, "could not be consulted")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("node is not on PATH", info[0])
+        self.assertIn("were not looked for", info[0])
+        self.assertFalse(rows_for(rows, "cannot parse this"), rows)
+
+    def test_a_vault_that_does_not_publish_is_not_asked_or_told(self):
+        vault = make_vault(self)
+        (vault / "Dup.md").write_text(self.DUP, encoding="utf-8")
+        with mock.patch.object(vc.subprocess, "run") as run:
+            rows = vc.check_frontmatter(vault, None)
+        run.assert_not_called()
+        self.assertFalse(rows_for(rows, "publish tool"), rows)
+        self.assertFalse(rows_for(rows, "cannot parse"), rows)
+
+    def test_an_answer_of_the_wrong_shape_is_reported_not_raised(self):
+        vault = make_vault(self)
+        (vault / "Dup.md").write_text(self.DUP, encoding="utf-8")
+        for payload in ('{"pages": [5]}', '{"nope": 1}', '[]'):
+            with self.subTest(payload=payload):
+                stub_publish_tool(self, vault, run=lambda cmd, **kw:
+                                  subprocess.CompletedProcess(cmd, 0, payload, ""))
+                rows = vc.check_frontmatter(vault, None)
+                self.assertTrue(rows_for(rows, "expected JSON"), rows)
+
+    def test_all_asks_the_tool_once_for_frontmatter_gm_leak_and_pc_body(self):
+        vault, calls = self._vault(unparseable={"PCs/Dup.md": "bad"})
+        explain = vc.ExplainAll(vault)
+        vc.check_frontmatter(vault, None, explain)
+        vc.check_gm_leak(vault, None, explain=explain)
+        vc.check_pc_body(vault, explain=explain)
+        self.assertEqual(len(calls), 1, calls)
 
 
 class GmLeakCommandTests(unittest.TestCase):
@@ -3194,6 +3294,26 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_sessions(broken),
                                   "session index body"))
 
+
+    def test_notes_the_build_cannot_parse_come_from_the_tool(self):
+        # #287, against the real tool: a duplicated key and an unquoted
+        # colon both pass the line reader and both lose their page. Two
+        # notes with identical text must both be named.
+        vault = self.site_vault("", "session_number: 1\n")
+        dup = "---\ntype: session\nstatus: played\nstatus: prepped\n---\n"
+        for name, text in (("Dup.md", dup), ("Dup Twin.md", dup),
+                           ("Colon.md", "---\ntype: session\ntitle: a: b\n---\n")):
+            (vault / "Sessions" / name).write_text(text, encoding="utf-8")
+        rows = vc.check_frontmatter(vault, None)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        warned = rows_for(rows, "cannot parse this frontmatter")
+        self.assertEqual(sorted(r.split("\t")[1] for r in warned),
+                         ["Sessions/Colon.md", "Sessions/Dup Twin.md",
+                          "Sessions/Dup.md"], rows)
+        self.assertTrue(all(r.startswith("WARNING\t") for r in warned))
+        self.assertIn("duplicated mapping key",
+                      rows_for(warned, "Sessions/Dup.md")[0])
+        self.assertTrue(all("\n" not in r for r in warned))
 
     def test_a_handouts_keeper_sections_come_from_the_tool(self):
         # #280, against the real tool: it withholds the handout's Context

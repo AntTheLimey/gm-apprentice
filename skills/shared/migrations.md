@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.22"
+current_version: "1.10.23"
 ---
 
 # Vault Migration Registry
@@ -1223,3 +1223,40 @@ the vault.
   that 1.11.43 dropped from any PC with a sheet and no `key_traits`.
   A site pinned to 1.11.43 should move to 1.11.44; nothing in the
   vault changes.
+
+## Migration: 1.10.22 → 1.10.23
+
+A note whose frontmatter the site's build cannot parse is now reported
+(#287). No frontmatter changes.
+
+### Structural
+
+- Nothing.
+
+### Content
+
+- If the vault publishes, run `vault_check.py <vault> frontmatter`. For
+  each WARNING row "the site's build cannot parse this frontmatter",
+  fix the YAML at the line the row names: quote a value that holds a
+  colon, and keep one of a key written twice, asking the GM only when
+  the two values differ. Each such note has had no page on the site.
+
+### Tooling
+
+- `vault_check.py frontmatter` asks the site's publish tool which notes
+  it cannot parse (`explain --all --json`, verdict `FILE_UNPARSEABLE`)
+  and reports each as a WARNING. Its own reader takes the last of a
+  duplicated key and accepts an unquoted `key: a: b`, so it passed
+  these files before. A vault with no `publish:` block is not asked.
+  Where the tool cannot answer, one INFO row says the check was not
+  made.
+- `gm-apprentice-publish` 1.11.45: the build repeats the notes it
+  skipped for unparseable frontmatter in a closing WARNING line (the
+  first eight, with the parser's message); `explain --all --json`
+  carries that message as `frontmatterError`; and two notes with the
+  same broken frontmatter are both reported, where the second used to
+  read as a note with no `type:`. If `publish.site_dir` is set, offer
+  `update-pin --site <site-dir>` (publish-site's build tool). For a
+  site outside the plugin, `update-pin --site <site-dir> --tag
+  publish-v1.11.45`. A site on an older pin still gets the
+  `vault_check` rows, without the parser's message.

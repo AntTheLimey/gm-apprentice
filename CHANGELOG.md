@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.23] — 2026-10-01
+
+### Fixed
+
+- **A note whose frontmatter is not valid YAML dropped off the site
+  with `vault_check` passing it** (#287). A key written twice, or an
+  unquoted value with a colon in it (`role: a: b`), makes the publish
+  build skip the note: no page, no entry in any index, exit 0. The
+  only notice was one `scanner: skipping …` line above the whole
+  `wrote …` list.
+  - `vault_check frontmatter` now asks the site's publish tool which
+    notes it cannot parse (`explain --all --json`) and reports each as
+    a WARNING with the parser's message. It does not read the YAML a
+    second way: its own reader takes the last of a duplicated key and
+    was never going to see these. `vault_check all` still runs the
+    tool once, shared with `gm-leak` and `pc-body`. A vault that does
+    not publish is not asked.
+  - The build repeats the skipped notes in a closing line, next to its
+    other warnings: `WARNING: 1 note was left off the site because its
+    frontmatter is not valid YAML: PCs/Dup.md (duplicated mapping key
+    at line 5, column 1)`. It names the first eight and counts the
+    rest. Publish tool 1.11.45.
+  - `explain --all --json` carries the parser's message per file as
+    `frontmatterError`.
+- **Two notes with the same broken frontmatter: only the first was
+  reported as broken.** gray-matter caches a parse by the note's
+  exact text, and caches before parsing, so the second note came back
+  empty and was listed as having no `type:`. The same happened to any
+  note on a second scan in one process. Every read now goes through
+  one uncached parser (`lib/frontmatter.js`). Two notes with identical
+  text also no longer share one frontmatter object.
+
 ## [1.10.22] — 2026-10-01
 
 ### Added

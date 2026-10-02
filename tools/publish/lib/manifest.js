@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const matter = require('gray-matter');
+const { parseNote } = require('./frontmatter');
 const { canonicalNfc } = require('./unicode');
 
 // Manifest entries are vault-relative paths, optionally annotated with an inline
@@ -31,7 +31,7 @@ function stripInlineComment(entry) {
 }
 
 function parseManifest(markdown) {
-  const { data, content } = matter(markdown);
+  const { data, content } = parseNote(markdown);
   const publishing = [];
   const needsDecision = [];
   const resolved = [];

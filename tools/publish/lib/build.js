@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVault, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
@@ -295,7 +295,8 @@ function build(options = {}) {
   // four predict exactly the same exclusions the build applies.
   const scanConfig = scanConfigFor(config, publishConfig);
   console.log('Scanning vault:', config.vaultPath);
-  let pages = scanVault(scanConfig);
+  const scanReport = scanVaultReport(scanConfig);
+  let pages = warnScanReport(scanReport);
   console.log(`Found ${pages.length} pages`);
   // Capture the scanned pages before the manifest/draft filters reassign `pages` to the published
   // subset, so templates can reach context that is excluded from rendering — above all the
@@ -742,6 +743,8 @@ function build(options = {}) {
   // PCs whose system has a sheet renderer that produced no sheet (#273).
   const sheetlessPcs = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
+  const UNPARSEABLE_NAMED = 8;
+  const firstLine = (text) => String(text).split('\n')[0].trim().replace(/:$/, '');
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
   for (const page of pages) {
@@ -1228,6 +1231,15 @@ function build(options = {}) {
     const shown = sheetlessPcs.slice(0, SHEETLESS_NAMED);
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
     console.warn(`  WARNING: ${n} PC${n === 1 ? '' : 's'} published with no character sheet (${shown.join(', ')}${more}) — the site found no stats it can read. Fill in ## Stat Sheet to the system template's layout, or set sheet_source on the PC to say where the sheet is kept. \`vault_check.py <vault> pc-body\` lists each file.`);
+  }
+
+  // The scanner said this once, above every `wrote …` line, where nobody reads (#287).
+  // Each of these files has no page: not a broken one, none at all.
+  if (scanReport.malformed.length > 0) {
+    const n = scanReport.malformed.length;
+    const shown = scanReport.malformed.slice(0, UNPARSEABLE_NAMED).map((m) => `${m.rel} (${firstLine(m.message)})`);
+    const more = n > shown.length ? `, and ${n - shown.length} more` : '';
+    console.warn(`  WARNING: ${n} note${n === 1 ? ' was' : 's were'} left off the site because ${n === 1 ? 'its' : 'their'} frontmatter is not valid YAML: ${shown.join('; ')}${more} — fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
 
   if (errorCount > 0) {

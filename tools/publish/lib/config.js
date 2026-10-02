@@ -1,7 +1,7 @@
 const { normalizeDefaultMode } = require('./color-mode');
 const fs = require('fs');
 const path = require('path');
-const matter = require('gray-matter');
+const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
 
 const PUBLISH_DEFAULTS = {
@@ -286,7 +286,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
 
   if (fs.existsSync(configFile)) {
     const raw = fs.readFileSync(configFile, 'utf-8');
-    const { data } = matter(raw);
+    const { data } = parseNote(raw);
     if (data.publish) {
       publish = data.publish;
     }

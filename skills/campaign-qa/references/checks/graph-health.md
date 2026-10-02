@@ -101,7 +101,12 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
 
 `vault_check.py frontmatter` checks required fields, enum
 values, legacy field names, and unquoted frontmatter links in
-one pass. Read `_meta/entity-types.md` for the type hierarchy
+one pass. On a vault that publishes it also asks the publish
+tool which notes the site's build cannot parse: a WARNING row,
+"the site's build cannot parse this frontmatter", means the note
+gets no page at all. Fix the YAML at the line it names: quote a
+value that holds a colon, and keep one of a key written twice,
+asking the GM only when the two values differ. Read `_meta/entity-types.md` for the type hierarchy
 and interpret its findings against it:
 - Verify the entity's `type` field matches a known type
 - Flag entities still marked as STUB that have been

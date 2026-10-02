@@ -280,11 +280,8 @@ describe('doctor --site', () => {
   // C1: a file gray-matter cannot parse used to vanish entirely — neither untyped nor
   // unmapped, so the audit found nothing wrong with a vault that was silently missing
   // a page.
-  // gray-matter caches a parse by exact string content, so the two vaults below use
-  // distinct frontmatter bodies (a `marker` field) even though the shape of the
-  // brokenness — an unterminated double-quoted scalar — is the same one gray-matter
-  // caches: reusing one literal string across both checks would make only the first
-  // see the throw and silently "fix" the second.
+  // The `marker` field dates from when gray-matter's parse cache made a second read of
+  // the same broken text come back clean; lib/frontmatter.js no longer uses it (#287).
   const malformedFrontmatter = (marker) => `---\ntype: npc\nmarker: ${marker}\nname: "Unterminated\n---\n\nBody.\n`;
 
   it('reports an unparseable file as FILE_UNPARSEABLE, naming the YAML error', async () => {
