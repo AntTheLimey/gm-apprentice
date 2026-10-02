@@ -64,8 +64,14 @@ function site(vault) {
   const raw = publish.site_dir;
   if (raw === undefined || raw === null || raw === '') return { publishes: true, siteDir: null };
   if (typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
+  return { publishes: true, siteDir: siteDirPath(vault, raw) };
+}
+
+// The folder a `publish.site_dir` value names: `~` is the home folder, and a relative
+// path is taken from the vault. `init` and `update-pin` compare sites through this too.
+function siteDirPath(vault, raw) {
   const expanded = raw === '~' || raw.startsWith('~/') ? path.join(os.homedir(), raw.slice(1)) : raw;
-  return { publishes: true, siteDir: path.resolve(vault, expanded) };
+  return path.resolve(vault, expanded);
 }
 
 function answer(request) {
@@ -131,4 +137,4 @@ function runLines(deps) {
   });
 }
 
-module.exports = { runLines, answer, answerLine };
+module.exports = { runLines, answer, answerLine, siteDirPath };

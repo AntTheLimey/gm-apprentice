@@ -486,6 +486,20 @@ describe('update-pin records the site in its vault', () => {
       } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
     }
   });
+  it('the same site written from the home folder is not a different site', async () => {
+    const s = site('---\npublish:\n  site_dir: ~/site\n---\n');
+    const was = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    process.env.HOME = s.root;
+    process.env.USERPROFILE = s.root;
+    try {
+      const { out } = await run(s);
+      assert.ok(!out.some((l) => l.includes('different site')), out.join('\n'));
+      assert.strictEqual(s.publish().site_dir, '~/site');
+    } finally {
+      for (const [k, v] of Object.entries(was)) { if (v === undefined) delete process.env[k]; else process.env[k] = v; }
+      fs.rmSync(s.root, { recursive: true, force: true });
+    }
+  });
   it('says so when the vault names a different site, and when the file cannot be edited', async () => {
     const other = site('---\npublish:\n  site_dir: /somewhere/else\n---\n');
     const flow = site('---\npublish: {mode: player}\n---\n');

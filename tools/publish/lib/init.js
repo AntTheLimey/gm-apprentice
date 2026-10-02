@@ -3,6 +3,7 @@ const fsSync = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { setPublishKeys, fillUnset } = require('./vault-config-edit');
+const { siteDirPath } = require('./lines-cli');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -84,10 +85,10 @@ function seedVaultSettings(vaultDir, settings, options = {}) {
       // A blank site_dir is no site: fill it. One naming another folder is the GM's,
       // and is left, but said out loud by the caller.
       if (publish[key] === null || publish[key] === '') { set[key] = value; continue; }
-      // The same folder written another way (relative to the vault, a trailing slash,
-      // through a symlink) is this site.
+      // The same folder written another way (relative to the vault, from `~`, a trailing
+      // slash, through a symlink) is this site.
       const real = (p) => { try { return fsSync.realpathSync(p); } catch { return path.resolve(p); } };
-      if (typeof publish[key] !== 'string' || real(path.resolve(vaultDir, publish[key])) !== real(value)) {
+      if (typeof publish[key] !== 'string' || real(siteDirPath(vaultDir, publish[key])) !== real(value)) {
         otherSite = String(publish[key]);
       }
     }
