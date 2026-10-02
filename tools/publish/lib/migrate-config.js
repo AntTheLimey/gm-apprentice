@@ -20,6 +20,9 @@ const VAULT_REL = path.join('_meta', 'vault-config.md');
 const NEW_VAULT_FILE = '---\ntype: meta\n---\n';
 const DETECTORS = { statusBar: detectStatusBar, inbox: detectInbox };
 const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const isText = (v) => typeof v === 'string' && v.trim() !== '';
+// Only non-empty text is a list entry; anything else is set aside and reported.
+const splitEntries = (list) => ({ text: list.filter(isText), skipped: list.filter((v) => !isText(v)) });
 const oneLine = (s) => String(s).split('\n')[0].trim();
 
 const refuse = (reason) => ({
@@ -81,8 +84,14 @@ function planMigration({ configPath, vaultPath } = {}) {
       const fromVault = publish[entry.publish];
       plan.siteRemove.push(entry.json);
       if (fromVault === undefined) {
-        plan.vaultSet[entry.publish] = fromSite;
-        plan.moves.push({ from: `vault.config.json ${entry.json}`, to: `publish.${entry.publish}`, value: fromSite });
+        const move = { from: `vault.config.json ${entry.json}`, to: `publish.${entry.publish}`, value: fromSite };
+        if (entry.kind === 'list' && Array.isArray(fromSite)) {
+          const { text, skipped } = splitEntries(fromSite);
+          move.value = text;
+          if (skipped.length) move.skipped = skipped;
+        }
+        plan.vaultSet[entry.publish] = move.value;
+        plan.moves.push(move);
         continue;
       }
       if (entry.kind === 'list') {
@@ -95,14 +104,15 @@ function planMigration({ configPath, vaultPath } = {}) {
             : (s) => String(s).toLowerCase();
           const have = new Set(fromVault.map(keyOf));
           const added = [];
-          for (const s of fromSite) {
+          const { text, skipped } = splitEntries(fromSite);
+          for (const s of text) {
             if (have.has(keyOf(s))) continue;
             have.add(keyOf(s));
             added.push(s);
           }
-          if (added.length) {
-            plan.vaultSet[entry.publish] = [...fromVault, ...added];
-            plan.merges.push({ to: `publish.${entry.publish}`, added });
+          if (added.length) plan.vaultSet[entry.publish] = [...fromVault, ...added];
+          if (added.length || skipped.length) {
+            plan.merges.push({ to: `publish.${entry.publish}`, added, ...(skipped.length ? { skipped } : {}) });
           }
           continue;
         }
@@ -123,6 +133,7 @@ function planMigration({ configPath, vaultPath } = {}) {
         const kept = theme && theme.tagline;
         if (kept === undefined || kept === null || kept === '') {
           plan.vaultSet.theme = { ...(theme || {}), tagline };
+          if (theme) plan.notes.push('publish.theme is rewritten to add tagline; comments inside it are not kept');
           plan.moves.push({ from: 'vault.config.json landingTagline', to: 'publish.theme.tagline', value: tagline });
         } else if (kept !== tagline) {
           plan.conflicts.push({ key: 'landingTagline', kept, discarded: tagline });
@@ -142,19 +153,31 @@ function planMigration({ configPath, vaultPath } = {}) {
   }
   const vaultBackend = publish.backend || {};
   const jsonBackend = siteBackend || {};
+  // Detection only helps a site that still has something to migrate; a site file holding
+  // only deployment keys is already migrated, and a switch the GM removed stays removed.
+  const hasLegacy = !!site && (siteBackend !== undefined || site.landingTagline !== undefined
+    || MOVED_KEYS.some((e) => site[e.json] !== undefined));
   for (const [oldName, newName] of Object.entries(OLD_SWITCHES)) {
-    if (publish[newName] !== undefined) continue;
-    const sources = [[`backend.${oldName}`, vaultBackend[oldName]], [`vault.config.json backend.${oldName}`, jsonBackend[oldName]]];
-    const explicit = sources.find(([, v]) => v !== undefined);
-    if (explicit) {
-      const [from, raw] = explicit;
+    const sources = [[`backend.${oldName}`, vaultBackend[oldName]], [`vault.config.json backend.${oldName}`, jsonBackend[oldName]]]
+      .filter(([, v]) => v !== undefined);
+    let kept;
+    if (publish[newName] !== undefined) {
+      kept = asBool(publish[newName]);
+    } else if (sources.length) {
+      const [from, raw] = sources[0];
       const b = asBool(raw);
       if (b === null) plan.notes.push(`${from} is not true or false (${JSON.stringify(raw)}); written as false`);
-      plan.vaultSet[newName] = b === null ? false : b;
-      plan.switches.push({ to: `publish.${newName}`, value: plan.vaultSet[newName], from });
-    } else if (siteDir && DETECTORS[oldName](siteDir)) {
+      kept = b === null ? false : b;
+      plan.vaultSet[newName] = kept;
+      plan.switches.push({ to: `publish.${newName}`, value: kept, from });
+      sources.shift();
+    } else if (hasLegacy && DETECTORS[oldName](siteDir)) {
       plan.vaultSet[newName] = true;
       plan.switches.push({ to: `publish.${newName}`, value: true, from: 'detected' });
+    }
+    // Any other old flag that disagrees with the one kept is dropped, and said so.
+    for (const [, raw] of sources) {
+      if (!isDeepStrictEqual(asBool(raw), kept)) plan.conflicts.push({ key: `backend.${oldName}`, kept, discarded: raw });
     }
   }
   if (publish.backend !== undefined) plan.vaultRemove.push('backend');
@@ -170,15 +193,19 @@ function planMigration({ configPath, vaultPath } = {}) {
 // A backup is the file as it was before the first migration; an existing one is never replaced.
 function backup(file) {
   const dest = `${file}.pre-migrate`;
-  if (fs.existsSync(dest)) return null;
+  if (fs.existsSync(dest)) return { kept: dest };
   fs.copyFileSync(file, dest);
-  return dest;
+  return { written: dest };
 }
 
-function writeAtomic(file, text) {
+// Writes through a symlink to the real file, and keeps the file's permission bits.
+function writeAtomic(link, text) {
+  const file = fs.realpathSync(link);
+  const mode = fs.statSync(file).mode & 0o7777;
   const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
   try {
-    fs.writeFileSync(tmp, text);
+    fs.writeFileSync(tmp, text, { mode });
+    fs.chmodSync(tmp, mode);
     fs.renameSync(tmp, file);
   } catch (e) {
     fs.rmSync(tmp, { force: true });
@@ -186,9 +213,10 @@ function writeAtomic(file, text) {
   }
 }
 
-function applyMigration(plan, { configPath, vaultPath } = {}) {
-  const backups = [];
-  if (!plan.applicable) return { backups };
+// deps.writeSite(file, text) replaces the site file writer (tests inject a failing one).
+function applyMigration(plan, { configPath, vaultPath } = {}, deps = {}) {
+  const made = [];
+  if (!plan.applicable) return { backups: [], keptBackups: [] };
   let site = null;
   let vault = vaultPath ? path.resolve(vaultPath) : null;
   if (configPath) {
@@ -204,13 +232,13 @@ function applyMigration(plan, { configPath, vaultPath } = {}) {
   const writeVault = edit.text !== before || (!exists && Object.keys(plan.vaultSet).length > 0);
   const writeSite = !!site && plan.siteRemove.length > 0;
 
-  if (writeVault && exists) backups.push(backup(vaultFile));
-  if (writeSite) backups.push(backup(configPath));
+  if (writeVault && exists) made.push(backup(vaultFile));
+  if (writeSite) made.push(backup(configPath));
   if (writeVault) setPublishKeys(vault, plan.vaultSet, plan.vaultRemove);
   if (writeSite) {
     const kept = Object.fromEntries(Object.entries(site).filter(([k]) => !plan.siteRemove.includes(k)));
     try {
-      writeAtomic(configPath, JSON.stringify(kept, null, 2) + '\n');
+      (deps.writeSite || writeAtomic)(configPath, JSON.stringify(kept, null, 2) + '\n');
     } catch (e) {
       throw new Error(
         `${vaultFile} was updated but ${configPath} could not be written (${e.message}); ` +
@@ -218,15 +246,19 @@ function applyMigration(plan, { configPath, vaultPath } = {}) {
       );
     }
   }
-  return { backups: backups.filter(Boolean) };
+  return { backups: made.filter((b) => b.written).map((b) => b.written), keptBackups: made.filter((b) => b.kept).map((b) => b.kept) };
 }
 
 const show = (v) => JSON.stringify(v);
 
 function describePlan(plan) {
   const lines = [];
-  for (const m of plan.moves) lines.push(`move ${m.from} -> ${m.to}`);
-  for (const m of plan.merges) lines.push(`merge ${m.to}: added ${m.added.map(show).join(', ')}`);
+  const skippedLine = (to, skipped) => skipped && lines.push(`skipped ${to}: not text, so not carried over: ${skipped.map(show).join(', ')}`);
+  for (const m of plan.moves) { lines.push(`move ${m.from} -> ${m.to}`); skippedLine(m.to, m.skipped); }
+  for (const m of plan.merges) {
+    lines.push(`merge ${m.to}: added ${m.added.map(show).join(', ') || 'nothing'}`);
+    skippedLine(m.to, m.skipped);
+  }
   for (const s of plan.switches) lines.push(`switch ${s.to} = ${s.value} (from ${s.from})`);
   for (const c of plan.conflicts) lines.push(`conflict ${c.key}: kept ${show(c.kept)} from the vault file, discarded ${show(c.discarded)}`);
   for (const n of plan.notes) lines.push(`note ${n}`);
@@ -248,7 +280,7 @@ function runMigrateConfig({ configPath, vaultPath, dryRun = false, json = false 
     err(`Error: ${plan.reason}`);
     return 1;
   }
-  let result = { backups: [] };
+  let result = { backups: [], keptBackups: [] };
   if (!dryRun) {
     try {
       result = applyMigration(plan, { configPath, vaultPath });
@@ -258,7 +290,7 @@ function runMigrateConfig({ configPath, vaultPath, dryRun = false, json = false 
     }
   }
   if (json) {
-    out(JSON.stringify(plan, null, 2));
+    out(JSON.stringify(dryRun ? plan : { ...plan, ...result }, null, 2));
     return 0;
   }
   if (!plan.applicable) {
@@ -267,7 +299,10 @@ function runMigrateConfig({ configPath, vaultPath, dryRun = false, json = false 
   }
   for (const line of describePlan(plan)) out(line);
   if (dryRun) out('Dry run: nothing written.');
-  else for (const b of result.backups) out(`backup ${b}`);
+  else {
+    for (const b of result.backups) out(`backup ${b}`);
+    for (const b of result.keptBackups) out(`backup kept from an earlier run: ${b}`);
+  }
   return 0;
 }
 

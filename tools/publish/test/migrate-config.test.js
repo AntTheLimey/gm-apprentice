@@ -72,7 +72,10 @@ describe('migrate-config', () => {
     const planned = JSON.parse(dry.stdout);
     const real = cli(['--json', '--config', s.configPath]);
     assert.strictEqual(real.status, 0, real.stderr);
-    assert.deepStrictEqual(JSON.parse(real.stdout), planned);
+    const { backups, keptBackups, ...applied } = JSON.parse(real.stdout);
+    assert.deepStrictEqual(applied, planned);
+    assert.strictEqual(backups.length, 2);
+    assert.deepStrictEqual(keptBackups, []);
     const pub = publishOf(s.vaultFile);
     for (const [k, v] of Object.entries(planned.vaultSet)) assert.deepStrictEqual(pub[k], v, k);
     const site = JSON.parse(read(s.configPath));
@@ -115,7 +118,7 @@ describe('migrate-config', () => {
   });
 
   it('6: with no flags, a deployed inbox is detected and only true is written', () => {
-    const s = makeSite();
+    const s = makeSite({ site: { siteTitle: 'T' } });
     fs.mkdirSync(path.join(s.root, 'functions', 'api'), { recursive: true });
     fs.writeFileSync(path.join(s.root, 'functions', 'api', 'request.js'), '// fn');
     fs.writeFileSync(path.join(s.root, 'wrangler.toml'), KV_TOML);
@@ -124,6 +127,27 @@ describe('migrate-config', () => {
     const pub = publishOf(s.vaultFile);
     assert.strictEqual(pub.inbox, true);
     assert.ok(!('live_stats' in pub));
+  });
+
+  it('6b: detection runs once: a removed switch stays removed, and a migrated site is not probed', () => {
+    const wire = (s) => {
+      fs.mkdirSync(path.join(s.root, 'functions', 'api'), { recursive: true });
+      fs.writeFileSync(path.join(s.root, 'functions', 'api', 'request.js'), '// fn');
+      fs.writeFileSync(path.join(s.root, 'wrangler.toml'), KV_TOML);
+    };
+    const s = makeSite({ site: { landingTagline: 'Hi' } });
+    wire(s);
+    migrate(s);
+    assert.strictEqual(publishOf(s.vaultFile).inbox, true);
+    fs.writeFileSync(s.vaultFile, read(s.vaultFile).replace(/\n  inbox: true/, ''));
+    assert.ok(!('inbox' in publishOf(s.vaultFile)));
+    const again = migrate(s).plan;
+    assert.deepStrictEqual([again.moves, again.switches, again.vaultSet], [[], [], {}]);
+    assert.ok(!('inbox' in publishOf(s.vaultFile)));
+    const t = makeSite();
+    wire(t);
+    assert.deepStrictEqual(migrate(t).plan.switches, []);
+    assert.ok(!('inbox' in (publishOf(t.vaultFile) || {})));
   });
 
   it('7: with no flags and no backend, neither switch is written', () => {
@@ -329,5 +353,86 @@ describe('migrate-config', () => {
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(lines.filter((l) => /^(move|merge|switch|conflict) /.test(l)).length, 4);
     assert.ok(lines.includes('Dry run: nothing written.'));
+  });
+
+  it('a dropped switch is reported: two sites, one vault', () => {
+    const a = makeSite({ site: { backend: { inbox: true } } });
+    migrate(a);
+    const b = makeSite({ site: {}, vaultFile: null });
+    fs.writeFileSync(b.configPath, JSON.stringify({ vaultPath: a.vault, backend: { inbox: false, statusBar: true } }));
+    const { plan } = migrate(b);
+    assert.deepStrictEqual(plan.conflicts, [{ key: 'backend.inbox', kept: true, discarded: false }]);
+    assert.deepStrictEqual(plan.switches.map((x) => x.to), ['publish.live_stats']);
+    assert.strictEqual(publishOf(a.vaultFile).inbox, true);
+    // Two explicit old flags that disagree: the first is kept, the other reported.
+    const c = makeSite({ site: { backend: { statusBar: false } }, vaultFile: '---\npublish:\n  backend:\n    statusBar: true\n---\n' });
+    assert.deepStrictEqual(migrate(c).plan.conflicts, [{ key: 'backend.statusBar', kept: true, discarded: false }]);
+  });
+
+  it('a kept earlier backup is reported, and a second site leaves it untouched', () => {
+    const a = makeSite({ site: { siteTitle: 'A' } });
+    migrate(a);
+    const first = read(`${a.vaultFile}.pre-migrate`);
+    const b = makeSite({ site: {}, vaultFile: null });
+    fs.writeFileSync(b.configPath, JSON.stringify({ vaultPath: a.vault, footer: 'F' }));
+    const lines = [];
+    const rc = runMigrateConfig({ configPath: b.configPath }, { out: (l) => lines.push(l) });
+    assert.strictEqual(rc, 0);
+    assert.strictEqual(read(`${a.vaultFile}.pre-migrate`), first);
+    assert.ok(lines.includes(`backup kept from an earlier run: ${a.vaultFile}.pre-migrate`), lines.join('\n'));
+    assert.ok(lines.includes(`backup ${b.configPath}.pre-migrate`));
+  });
+
+  it('a theme block that gets a tagline carries a note saying its comments are lost', () => {
+    const s = makeSite({ site: { landingTagline: 'Hi' }, vaultFile: '---\npublish:\n  theme:\n    # keep\n    genre: noir\n---\n' });
+    const lines = [];
+    runMigrateConfig({ configPath: s.configPath, dryRun: true }, { out: (l) => lines.push(l) });
+    assert.ok(lines.includes('note publish.theme is rewritten to add tagline; comments inside it are not kept'), lines.join('\n'));
+    migrate(s);
+    assert.deepStrictEqual(publishOf(s.vaultFile).theme, { genre: 'noir', tagline: 'Hi' });
+    const t = makeSite({ site: { landingTagline: 'Hi' } });
+    assert.deepStrictEqual(planMigration({ configPath: t.configPath }).notes, []);
+  });
+
+  it('list entries that are not text are skipped and reported, on a merge and on a whole move', () => {
+    const s = makeSite({ site: { excludeDirs: [1, null, '', 'A'], excludeFields: [null, 'f'] }, vaultFile: '---\npublish:\n  exclude_dirs: [B]\n---\n' });
+    const lines = [];
+    const plan = planMigration({ configPath: s.configPath });
+    assert.deepStrictEqual(plan.merges, [{ to: 'publish.exclude_dirs', added: ['A'], skipped: [1, null, ''] }]);
+    assert.deepStrictEqual(plan.moves[0].value, ['f']);
+    assert.deepStrictEqual(plan.moves[0].skipped, [null]);
+    runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
+    assert.strictEqual(lines.filter((l) => l.startsWith('skipped ')).length, 2, lines.join('\n'));
+    const pub = publishOf(s.vaultFile);
+    assert.deepStrictEqual(pub.exclude_dirs, ['B', 'A']);
+    assert.deepStrictEqual(pub.exclude_fields, ['f']);
+  });
+
+  it('the site file keeps its mode, and a symlinked config is written through', () => {
+    const s = makeSite({ site: { siteTitle: 'T' } });
+    fs.chmodSync(s.configPath, 0o640);
+    migrate(s);
+    assert.strictEqual(fs.statSync(s.configPath).mode & 0o777, 0o640);
+    const t = makeSite({ site: {} });
+    const real = path.join(t.root, 'real.json');
+    fs.writeFileSync(real, JSON.stringify({ vaultPath: t.vault, siteTitle: 'T' }));
+    fs.rmSync(t.configPath);
+    try { fs.symlinkSync(real, t.configPath); } catch (e) { return; }
+    migrate(t);
+    assert.ok(fs.lstatSync(t.configPath).isSymbolicLink());
+    assert.deepStrictEqual(JSON.parse(read(real)), { vaultPath: t.vault });
+  });
+
+  it('a failed site write after the vault write names both files and both backups', () => {
+    const s = makeSite({ site: { siteTitle: 'T' } });
+    const plan = planMigration({ configPath: s.configPath });
+    const siteBefore = read(s.configPath);
+    assert.throws(
+      () => applyMigration(plan, { configPath: s.configPath }, { writeSite: () => { throw new Error('disk full'); } }),
+      (e) => [s.vaultFile, s.configPath, `${s.vaultFile}.pre-migrate`, `${s.configPath}.pre-migrate`, 'disk full'].every((x) => e.message.includes(x)),
+    );
+    assert.strictEqual(publishOf(s.vaultFile).site_title, 'T');
+    assert.strictEqual(read(s.configPath), siteBefore);
+    assert.strictEqual(read(`${s.configPath}.pre-migrate`), siteBefore);
   });
 });
