@@ -1311,16 +1311,17 @@ function build(options = {}) {
   const legacyLine = legacyWarning(publishConfig.legacy);
   if (legacyLine) console.warn(`  ${legacyLine}`);
 
-  // An unmigrated site used to get live stats and the inbox by detection; unset now means
-  // off. Say so, so the loss is never silent: only for a site still holding old settings,
-  // with the switch unset in both files and the feature actually deployed.
-  if (hasLegacy(rawConfig)) {
-    const unset = switches.unset || [];
-    const lost = (label, key, verb, pron) => console.warn(
-      `  WARNING: ${label} ${verb[0]} on for this site and ${verb[1]} now off: publish.${key} is not set. Run \`migrate.py <vault>\` to keep ${pron}.`);
-    if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live stats', 'live_stats', ['were', 'are'], 'them');
-    if (unset.includes('inbox') && detectInbox(configDir)) lost('the inbox', 'inbox', ['was', 'is'], 'it');
-  }
+  // Live stats and the inbox used to be detected from a deployed backend; unset now means
+  // off. A deployed feature whose switch neither file sets is never lost silently: the line
+  // says what happened and what to do, whatever else the site file holds. Not said for live
+  // stats when character_sheets is off (that is the GM's own choice, and the files are removed).
+  const unset = switches.unset || [];
+  const legacySite = hasLegacy(rawConfig);
+  const lost = (key, was, is, subject, them, its) => console.warn(legacySite
+    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: publish.${key} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
+    : `  WARNING: ${subject} ${is} deployed on this site but publish.${key} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set publish.${key} to true to keep ${them}, or to false to remove ${its} functions.`);
+  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
+  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);

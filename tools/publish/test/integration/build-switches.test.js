@@ -54,11 +54,19 @@ describe('live stats and the inbox follow the switches', () => {
     assert.ok(lines.some((l) => l.includes('WARNING: publish.inbox is on but this site has no KV store wired')), lines.join('\n'));
   });
 
-  it('switches unset: nothing appears and nothing is warned, however deployed the backend is', () => {
-    const { html, lines } = buildSite({ wrangler: true, functions: true });
+  it('switches unset with the backend not deployed: nothing appears and nothing is warned', () => {
+    const { html, lines } = buildSite({});
     assert.ok(!html.includes('id="cr-root"'));
     assert.ok(!html.includes('gurps-live.js'));
     assert.ok(!lines.some((l) => l.includes('WARNING')), lines.join('\n'));
+  });
+
+  it('switches unset with the backend deployed: nothing appears, and the build says so', () => {
+    const { html, lines } = buildSite({ wrangler: true, functions: true });
+    assert.ok(!html.includes('id="cr-root"'));
+    assert.ok(!html.includes('gurps-live.js'));
+    assert.strictEqual(lines.filter((l) => l.includes('WARNING: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, or to false to remove their functions.')).length, 1, lines.join('\n'));
+    assert.strictEqual(lines.filter((l) => l.includes('WARNING: the inbox is deployed on this site but publish.inbox is not set, so it is off. Set publish.inbox to true to keep it, or to false to remove its functions.')).length, 1, lines.join('\n'));
   });
 
   it('character_sheets off forces live stats off, with one line saying so', () => {
@@ -82,10 +90,13 @@ describe('an unmigrated site that loses live stats or the inbox is told', () => 
     assert.ok(!html.includes('gurps-live.js'), 'unset still means off');
   });
 
-  it('a migrated site (no old settings) is not warned', () => {
+  it('a site with only deployment keys is not sent to migrate.py: the other wording applies', () => {
     const { lines } = buildSite({ ...deployed });
     assert.strictEqual(said(lines, 'were on for this site'), 0, lines.join('\n'));
     assert.strictEqual(said(lines, 'was on for this site'), 0, lines.join('\n'));
+    assert.strictEqual(said(lines, 'publish.live_stats is not set, so they are off'), 1, lines.join('\n'));
+    assert.strictEqual(said(lines, 'publish.inbox is not set, so it is off'), 1, lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('migrate.py')), lines.join('\n'));
   });
 
   it('a switch set either way, in either file, is not warned', () => {
@@ -95,6 +106,7 @@ describe('an unmigrated site that loses live stats or the inbox is told', () => 
     const b = buildSite({ ...deployed, siteExtra: { backend: { statusBar: false, inbox: false } } });
     assert.strictEqual(said(b.lines, LIVE), 0, b.lines.join('\n'));
     assert.strictEqual(said(b.lines, INBOX), 0, b.lines.join('\n'));
+    for (const r of [a, b]) assert.ok(!r.lines.some((l) => l.includes('is not set, so')), r.lines.join('\n'));
   });
 
   it('no deployed backend: nothing was lost, so nothing is said', () => {
@@ -106,6 +118,9 @@ describe('an unmigrated site that loses live stats or the inbox is told', () => 
     const { lines } = buildSite({ ...deployed, publish: '  character_sheets: false\n', siteExtra: { siteTitle: 'Old' } });
     assert.strictEqual(said(lines, LIVE), 0, lines.join('\n'));
     assert.strictEqual(said(lines, INBOX), 1, lines.join('\n'));
+    const clean = buildSite({ ...deployed, publish: '  character_sheets: false\n' });
+    assert.strictEqual(said(clean.lines, 'live stats are deployed'), 0, clean.lines.join('\n'));
+    assert.strictEqual(said(clean.lines, 'the inbox is deployed'), 1, clean.lines.join('\n'));
   });
 
   it('the warnings come with the closing lines, after the campaign-settings one', () => {

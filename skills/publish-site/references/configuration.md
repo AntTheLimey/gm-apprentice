@@ -290,9 +290,10 @@ The build does not detect a deployed backend: a site whose Functions
 and KV store exist still builds without live stats and the inbox until
 the switch says `true`. The setup commands write the switch for you
 (`cloudflare-pages.md` § The fast way).
-A site that still holds old settings in `vault.config.json` and loses
-either feature this way gets a closing build warning naming the
-switch; `migrate.py` writes `true` for it.
+A site that loses either feature this way gets a closing build warning
+naming the switch. When the site still holds old settings in
+`vault.config.json`, `migrate.py` writes `true` for it; otherwise set the
+switch to `true` to keep the feature or to `false` to remove its Functions.
 
 **The forcing rule.** `character_sheets: false` turns live stats off
 even when `live_stats: true`; the build prints one line saying so. The
