@@ -340,6 +340,79 @@ describe('explain on a session index that does not publish (#276)', () => {
   });
 });
 
+describe('explain reports the switches and the sheet-withheld sections (#285)', () => {
+  function vaultWith(publishLines, siteExtra) {
+    const vault = makeVault();
+    write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${publishLines}---\n`);
+    write(vault, 'Sessions/Hero.md', [
+      '---', 'type: pc', '---', '',
+      '## Stat Sheet', '', 'ST 12', '',
+      '## Skills', '', 'Brawling 12', '',
+      '## Background', '', 'A sailor.', '',
+      '## GM Notes', '', 'Secret.', '',
+    ].join('\n'));
+    const configPath = siteFor(vault);
+    if (siteExtra) {
+      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      fs.writeFileSync(configPath, JSON.stringify(Object.assign(cfg, siteExtra)));
+    }
+    return { vault, configPath };
+  }
+  async function explainAll(configPath) {
+    const c = capture();
+    assert.strictEqual(await runExplainAll({ configPath }, c.deps), 0);
+    return JSON.parse(c.out.join(''));
+  }
+
+  it('reports the defaults, sheets off forcing live stats off, and all on', async () => {
+    const d = vaultWith('');
+    assert.deepStrictEqual((await explainAll(d.configPath)).switches,
+      { characterSheets: true, liveStats: false, inbox: false });
+    const off = vaultWith('  character_sheets: false\n  live_stats: true\n');
+    assert.deepStrictEqual((await explainAll(off.configPath)).switches,
+      { characterSheets: false, liveStats: false, inbox: false });
+    const on = vaultWith('  live_stats: true\n  inbox: true\n');
+    assert.deepStrictEqual((await explainAll(on.configPath)).switches,
+      { characterSheets: true, liveStats: true, inbox: true });
+    for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
+  });
+
+  it('names the sections only the keep-list withholds, apart from the stripped ones', async () => {
+    const off = vaultWith('  character_sheets: false\n');
+    const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));
+    const hero = pages.get('Sessions/Hero.md');
+    assert.deepStrictEqual(hero.sheetWithheldSections, ['Stat Sheet', 'Skills']);
+    assert.deepStrictEqual(hero.strippedSections, ['GM Notes']);
+    fs.rmSync(off.vault, { recursive: true, force: true });
+    const on = vaultWith('');
+    const heroOn = (await explainAll(on.configPath)).pages.find((p) => p.path === 'Sessions/Hero.md');
+    assert.deepStrictEqual(heroOn.sheetWithheldSections, []);
+    fs.rmSync(on.vault, { recursive: true, force: true });
+  });
+
+  it('gives null for a file the scanner made no page for', async () => {
+    const off = vaultWith('  character_sheets: false\n');
+    write(off.vault, 'Unmapped/Hidden.md', '---\ntype: pc\n---\n\n## Stat Sheet\n\nST 12\n');
+    const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));
+    assert.strictEqual(pages.get('Unmapped/Hidden.md').sheetWithheldSections, null);
+    fs.rmSync(off.vault, { recursive: true, force: true });
+  });
+
+  it('single-file --json and the report carry the same field', async () => {
+    const off = vaultWith('  character_sheets: false\n');
+    const j = capture();
+    await runExplain({ configPath: off.configPath, target: 'Sessions/Hero.md', json: true }, j.deps);
+    assert.deepStrictEqual(JSON.parse(j.out.join('')).sheetWithheldSections, ['Stat Sheet', 'Skills']);
+    const h = capture();
+    await runExplain({ configPath: off.configPath, target: 'Sessions/Hero.md' }, h.deps);
+    assert.match(h.text(), /sections withheld with the character sheet: Stat Sheet, Skills/);
+    const s = capture();
+    await runExplain({ configPath: off.configPath, target: 'Sessions/Session_07.md' }, s.deps);
+    assert.doesNotMatch(s.text(), /withheld with the character sheet/);
+    fs.rmSync(off.vault, { recursive: true, force: true });
+  });
+});
+
 describe('explain --all (#276)', () => {
   function all(configPath, extra) {
     const c = capture();
@@ -360,6 +433,7 @@ describe('explain --all (#276)', () => {
       code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
       strippedSections: ['GM Notes', 'Reconciliation Context'],
       sheetSourceSet: null,
+      sheetWithheldSections: [],
       retiredSheetFields: null,
       frontmatterError: null,
     });

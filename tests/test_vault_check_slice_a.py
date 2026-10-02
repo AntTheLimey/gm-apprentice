@@ -55,7 +55,7 @@ def rows_for(rows, needle):
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
                       stripped=None, sheet_source=None, unparseable=None,
-                      retired=None):
+                      retired=None, switches=None, sheet_withheld=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
@@ -65,7 +65,9 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
     the tool reports for it (None: a tool older than 1.11.45, which gives
     the `FILE_UNPARSEABLE` code alone); `retired` maps a PC's path to its
     `retiredSheetFields` (None: an older tool's answer, without the field);
-    `plan` is what `manifest publish-played
+    `switches` is the answer's top-level `switches` block (None: a tool older
+    than 1.12.0, without one); `sheet_withheld` maps a path to its
+    `sheetWithheldSections`; `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -110,6 +112,12 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       if p not in {page["path"] for page in pages}]
             for page in pages:
                 page["retiredSheetFields"] = retired.get(page["path"])
+        if sheet_withheld is not None:
+            pages += [{"path": p, "bodyWithheld": False}
+                      for p in sheet_withheld
+                      if p not in {page["path"] for page in pages}]
+            for page in pages:
+                page["sheetWithheldSections"] = sheet_withheld.get(page["path"])
         for path, message in (unparseable or {}).items():
             page = {"path": path, "bodyWithheld": False, "publishes": False,
                     "code": "FILE_UNPARSEABLE", "strippedSections": None,
@@ -117,8 +125,10 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             if message is not None:
                 page["frontmatterError"] = message
             pages.append(page)
-        return subprocess.CompletedProcess(
-            cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
+        answer = {"vaultPath": str(vault), "pages": pages}
+        if switches is not None:
+            answer["switches"] = switches
+        return subprocess.CompletedProcess(cmd, 0, json.dumps(answer), "")
 
     patches = [mock.patch.object(vc.shutil, "which", return_value=which),
                mock.patch.object(vc.subprocess, "run", run or fake)]
@@ -2077,6 +2087,81 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertIn("B.md", rows[0])
         self.assertEqual(len(calls), 1)
 
+    ON = {"characterSheets": True, "liveStats": False, "inbox": False}
+    OFF = {"characterSheets": False, "liveStats": False, "inbox": False}
+
+    def _sheetless(self, **stub):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, **stub)
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
+        return vc.check_pc_body(vault), calls
+
+    def test_sheets_off_silences_the_stat_sheet_rows(self):
+        rows, _calls = self._sheetless(switches=self.ON)
+        self.assertEqual(len(rows_for(rows, "Stat Sheet section")), 1, rows)
+        rows, _calls = self._sheetless(switches=self.OFF)
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+        self.assertFalse(rows_for(rows, "canonical skeleton"), rows)
+
+    def test_sheets_off_keeps_the_current_status_rows(self):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, switches=self.OFF)
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Notes\n\nx\n\n## Current Status\n\n"
+            "**Location:** Docks\n", encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertEqual(len(rows_for(rows, "comes after ## Notes")), 1, rows)
+
+    def test_a_tool_without_a_switches_block_leaves_sheets_on(self):
+        rows, _calls = self._sheetless(sheet_source={"Hero.md": False})
+        self.assertEqual(len(rows_for(rows, "Stat Sheet section")), 1, rows)
+
+    def test_sheets_off_silences_the_retired_field_row_too(self):
+        for switches, expected in ((self.OFF, 0), (self.ON, 1), (None, 1)):
+            with self.subTest(switches=switches):
+                rows, _calls = self._retired(
+                    retired={"Old.md": ["stress"]}, switches=switches)
+                self.assertEqual(len(rows_for(rows, self.RETIRED)), expected,
+                                 rows)
+
+    def test_at_most_one_tool_call_and_none_without_a_pc(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, switches=self.OFF)
+        for name in ("A", "B"):
+            (vault / f"{name}.md").write_text(
+                f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
+        vc.check_pc_body(vault)
+        self.assertEqual(len(calls), 1, calls)
+        bare = make_vault(self)
+        calls = stub_publish_tool(self, bare, switches=self.OFF)
+        (bare / "Npc.md").write_text("---\ntype: npc\n---\n\nx\n",
+                                     encoding="utf-8")
+        vc.check_pc_body(bare)
+        self.assertEqual(calls, [])
+        plain = make_vault(self)
+        (plain / "Hero.md").write_text(
+            f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
+        with mock.patch.object(vc.subprocess, "run") as run:
+            vc.check_pc_body(plain)
+        run.assert_not_called()
+
+    def test_publish_switches_reads_the_cached_answer_without_a_second_call(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, switches=self.OFF)
+        explain = vc.ExplainAll(vault)
+        self.assertEqual(vc.publish_switches(explain()), self.OFF)
+        vc.publish_switches(explain())
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_publish_switches_is_none_for_anything_it_cannot_trust(self):
+        for data in (None, {"pages": []}, {"switches": None},
+                     {"switches": {"characterSheets": "no", "liveStats": False,
+                                   "inbox": False}},
+                     {"switches": {"characterSheets": False}}):
+            with self.subTest(data=data):
+                self.assertIsNone(vc.publish_switches(vc.ToolAnswer(data=data)))
+
     def test_a_tool_that_cannot_answer_takes_a_written_value_as_set(self):
         # No node, and a tool too old to report the field: say so, and do
         # not warn about a PC whose GM wrote something.
@@ -3241,6 +3326,50 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
 
+class GmLeakSheetsOffTests(unittest.TestCase):
+    """Character sheets off: the sections the tool withholds from a PC with
+    the sheet (`sheetWithheldSections`) are not published, so not scanned
+    and never planned for a re-nest."""
+    HERO = ("---\ntype: pc\n---\n\n## Background\n\nA sailor.\n\n"
+            "## Skills\n\n**Keeper-only:** x\n\n"
+            "## **GM Notes**\n\nThe sailor is a spy.\n")
+
+    def vault(self, **stub):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, **stub)
+        (vault / "Hero.md").write_text(self.HERO, encoding="utf-8")
+        return vault
+
+    def test_sections_withheld_with_the_sheet_are_not_scanned(self):
+        rows = vc.check_gm_leak(self.vault(), None)
+        self.assertTrue(rows_for(rows, "bold label 'Keeper-only'"), rows)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\tHero.md"), rows)
+        rows = vc.check_gm_leak(self.vault(sheet_withheld={
+            "Hero.md": ["Skills", "**GM Notes**"]}), None)
+        self.assertFalse(rows_for(rows, "Hero.md"), rows)
+
+    def test_only_the_named_sections_leave_the_scan(self):
+        rows = vc.check_gm_leak(self.vault(sheet_withheld={
+            "Hero.md": ["Skills"]}), None)
+        self.assertFalse(rows_for(rows, "bold label"), rows)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\tHero.md"), rows)
+
+    def test_fix_plans_no_renest_for_a_withheld_section(self):
+        vault = self.vault(sheet_withheld={"Hero.md": ["Skills", "**GM Notes**"]})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "Hero.md"), self.HERO)
+
+    def test_a_stub_page_keeps_its_own_filter_too(self):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": ["Skills"]})
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\npublish: stub\npublish_include_sections: "
+            "[Skills, Background]\n---\n\n## Background\n\nA sailor.\n\n"
+            "## Skills\n\n**Keeper-only:** x\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "Hero.md"))
+
+
 class GmLeakHandoutSectionTests(unittest.TestCase):
     """#280: a handout's Keeper sections outside GM Notes. The publish tool
     says which headings it withholds (`strippedSections`); gm-leak names
@@ -3488,6 +3617,24 @@ class PublishToolEndToEndTests(unittest.TestCase):
         vc.check_gm_leak(vault, None, fix=True)
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
                                   "Keeper material outside"))
+
+    def test_sheets_off_leaves_a_sheetless_pc_alone(self):
+        # The switch is the tool's reading of vault-config.md, end to end.
+        vault = self.site_vault("", "")
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "  mode: player\n", "  mode: player\n  character_sheets: false\n"),
+            encoding="utf-8")
+        (vault / "Sessions" / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Background\n\nA sailor.\n",
+            encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "character_sheets: false", "character_sheets: true"),
+            encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
 
     def test_manifest_rows_follow_publish_played(self):
         # The real `manifest publish-played --dry-run --json --vault`: a

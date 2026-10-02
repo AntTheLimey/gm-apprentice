@@ -127,7 +127,9 @@ Read `references/synthesis-templates.md`.
 4. Each PC active in the period gets a consolidated character
    story entry (synthesis-templates.md § Character Story
    Backstory Entries). A PC whose sources hold no stats:
-   `shared/pc-body-structure.md` § A sheet kept somewhere else.
+   `shared/pc-body-structure.md` § A sheet kept somewhere else; on a
+   campaign that does not publish sheets (`vault_check.py pc-body`
+   emits no Stat Sheet rows) do not ask where one is kept.
 
 Check each entity as you write it: entity mentions are
 `[[Entity Name]]` wiki-links; `play_date` is `YYYY-MM-DD`;

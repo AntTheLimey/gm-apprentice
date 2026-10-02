@@ -105,6 +105,16 @@ where? It writes each answer to `sheet_source` itself. If stats are
 coming, it leaves the field empty and the warning stands until they
 arrive.
 
+A campaign that keeps no sheets on the site at all sets
+`publish.character_sheets: false`; `sheet_source` is the per-PC answer
+and that switch is the campaign-wide one. With it off `pc-body` emits no Stat
+Sheet rows and asks about no `sheet_source`. A PC page then publishes
+only the keep-list sections (Background, Current Status, Notes,
+Relationships, Appearances, and the CoC and FitD prose sections);
+`publish.pc_prose_sections` adds more. Everything else, `## Stat Sheet`
+and the stat sections included, stays off the site. A sheet is read from
+the note body only, never from frontmatter fields.
+
 **Consumed by:** session-prep (Context Source, Threads, PC arc check),
 the-midwife (new-chapter hooks), ttrpg-expert (arc/thread analysis),
 campaign-qa (Current Status consistency check).

@@ -1525,6 +1525,55 @@ def sections_withheld(answer: ToolAnswer
         return None, "explain did not return the expected JSON"
 
 
+def publish_switches(answer: ToolAnswer) -> dict[str, bool] | None:
+    """The site's resolved switches (`characterSheets`, `liveStats`,
+    `inbox`) from `explain --all --json`, or None when the tool could not
+    answer or its answer has no usable `switches` block (a tool older than
+    1.12.0). Callers treat None as sheets on. The tool owns the keys and
+    their precedence; nothing here reads them from the config."""
+    try:
+        block = answer.data["switches"] if answer.data is not None else None
+        if not isinstance(block, dict):
+            return None
+        got = {k: block[k] for k in ("characterSheets", "liveStats", "inbox")}
+    except (KeyError, TypeError):
+        return None
+    return got if all(isinstance(v, bool) for v in got.values()) else None
+
+
+def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
+    """Per file (NFC path), the casefolded `##` headings the site withholds
+    only because character sheets are off, from `sheetWithheldSections` in
+    `explain --all --json`. Empty when the tool could not be asked,
+    answered oddly, or predates the field: an older tool withholds nothing
+    here, so nothing is removed from what gm-leak scans."""
+    try:
+        pages = answer.data["pages"] if answer.data is not None else []
+        return {unicodedata.normalize("NFC", str(p["path"])):
+                {str(t).strip().casefold() for t in p["sheetWithheldSections"]}
+                for p in pages if p.get("sheetWithheldSections")}
+    except (KeyError, TypeError, AttributeError):
+        return {}
+
+
+def _without_sections(states: list[LineState], kept: set[int] | None,
+                      titles: set[str]) -> set[int]:
+    """`kept` (None: every line) minus the lines under each H2 whose title
+    is in `titles` (casefolded, emphasis unwrapped or not), down to the
+    next heading of level 2 or shallower, as the tool's own walk ends it."""
+    left = {s.lineno for s in states} if kept is None else set(kept)
+    dropping = False
+    for state in states:
+        if state.heading is not None and state.heading[0] <= 2:
+            title = state.heading[1].strip()
+            dropping = state.heading[0] == 2 and (
+                title.casefold() in titles
+                or _plain_title(title).casefold() in titles)
+        if dropping:
+            left.discard(state.lineno)
+    return left
+
+
 def _yaml_hint(message: str) -> str:
     """What to look for, read off the parser's own message. With no
     message (a tool older than 1.11.45) the two commonest causes; with
@@ -1891,8 +1940,10 @@ def check_gm_leak(vault: Path, folder: str | None,
     withheld: set[str] = set()
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
+    sheet_off: dict[str, set[str]] = {}
     if notes:
         tool = (explain or ExplainAll(vault))()
+        sheet_off = sheet_withheld_sections(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
         if any(fm.get("type") == "session" for _r, _t, fm in notes):
@@ -1938,6 +1989,12 @@ def check_gm_leak(vault: Path, folder: str | None,
             continue
         states, problems = scan_body(text, excludes)
         kept = _published_linenos(states, fm)
+        # With character sheets off the tool withholds a PC's sheet sections
+        # whatever they are called; their lines are no more published than a
+        # stub's omitted ones, so they leave the kept set the same way.
+        no_sheet = sheet_off.get(unicodedata.normalize("NFC", rel))
+        if no_sheet:
+            kept = _without_sections(states, kept, no_sheet)
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
@@ -2269,6 +2326,9 @@ def check_pc_body(vault: Path, folder: str | None = None,
     sources: tuple[set[str] | None, str | None, str | None] | None = None
     # The fields each PC carries that its sheet no longer reads, once asked.
     retired: dict[str, list[str]] | None = None
+    # False once the tool says character sheets are off: no sheet is built, so
+    # nothing about one is worth a row. Unknown (an older tool) means on.
+    sheets_on = True
     for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
@@ -2282,9 +2342,12 @@ def check_pc_body(vault: Path, folder: str | None = None,
         rows.extend(_fence_rows(rel, problems, kept))
 
         if retired is None:
-            retired = retired_sheet_fields(explain())
+            answer = explain()
+            retired = retired_sheet_fields(answer)
+            switches = publish_switches(answer)
+            sheets_on = switches is None or switches["characterSheets"]
         stale = retired.get(unicodedata.normalize("NFC", rel))
-        if stale:
+        if stale and sheets_on:
             rows.append(f"WARNING\t{rel}\tfrontmatter field(s) "
                         f"{', '.join(stale)} are no longer read for the "
                         f"character sheet \u2014 move the values into the "
@@ -2346,7 +2409,7 @@ def check_pc_body(vault: Path, folder: str | None = None,
         # a Character Sheet tab that says nothing (#273). `sheet_source`
         # records that the sheet is kept elsewhere, which settles it. A stub
         # publishes named fragments only, so its Stat Sheet is not judged.
-        if kept is None:
+        if kept is None and sheets_on:
             # A fenced or excluded Stat Sheet does not publish, so the page
             # has none.
             stat = next((st for st, title in h2s
@@ -2382,7 +2445,7 @@ def check_pc_body(vault: Path, folder: str | None = None,
             if row:
                 rows.append(row)
 
-        if kept is None and h2s \
+        if kept is None and sheets_on and h2s \
                 and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():
             rows.append(f"INFO\t{rel}\tfirst body H2 is '## {h2s[0][1]}' — "
                         f"the canonical skeleton opens with "

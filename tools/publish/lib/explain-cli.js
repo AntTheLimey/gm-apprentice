@@ -15,12 +15,26 @@ const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
-const { strippedSectionTitles, publishMode } = require('./processor');
+const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
 const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
 const { nearestNames } = require('./site-doctor');
+
+// The switches as the build resolves them, without the config notes.
+function switchesOf(publishConfig) {
+  const { characterSheets, liveStats, inbox } = publishConfig.switches || {};
+  return { characterSheets, liveStats, inbox };
+}
+
+// The `##` titles only the PC keep-list withholds. Raw-text decision: a note whose
+// headings a link label shifts is withheld whole by the build, which this does not
+// replicate (the build's own stability check owns that).
+function sheetWithheldOf(publishConfig, markdown, frontmatter) {
+  return [...new Set(sheetWithheldTitles(markdown, publishConfig.exclude_sections || [], frontmatter,
+    { pcKeepSections: pcKeepList(publishConfig) }))];
+}
 
 const MANIFEST_LABEL = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
 
@@ -124,6 +138,7 @@ async function runExplain(options, deps) {
   // The strip's own walk, so a document's Keeper sections (#280) are named here too.
   const stripped = frontmatterError ? null
     : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
+  const sheetWithheld = frontmatterError || !page ? null : sheetWithheldOf(publishConfig, markdown, frontmatter);
   const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
@@ -159,6 +174,7 @@ async function runExplain(options, deps) {
       mergedInto: mergedInto ? mergedInto.displayTitle || mergedInto.title : null,
       frontmatterError,
       strippedSections: stripped,
+      sheetWithheldSections: sheetWithheld,
       gmOnlyBlocks,
       bodyPublishes: publishes && !hubBodyUnpublished,
       bodyWithheld: hubBodyUnpublished,
@@ -187,6 +203,9 @@ async function runExplain(options, deps) {
   out('');
   out(`  sections stripped on publish: ${
     stripped == null ? 'unknown — frontmatter could not be parsed' : (stripped.length ? stripped.join(', ') : 'none')}`);
+  if (sheetWithheld && sheetWithheld.length) {
+    out(`  sections withheld with the character sheet: ${sheetWithheld.join(', ')}`);
+  }
   out(`  gm-only blocks: ${gmOnlyBlocks == null ? 'unknown' : gmOnlyBlocks}`);
   if (hubBodyUnpublished) {
     // A hub that does not publish has no page to build from anything; say only that
@@ -207,7 +226,8 @@ function publishedPagesOf(survey) {
     .map(([, p]) => p);
 }
 
-// `explain --all --json`: the verdict for every file the vault walk sees, in one run,
+// `explain --all --json`: a top-level `switches` block ({ characterSheets, liveStats,
+// inbox }, as the build resolves them), then the verdict for every file the vault walk sees, in one run,
 // so a caller that needs the build's answer for many files (vault_check gm-leak and
 // sessions, #276) asks once instead of re-implementing the rules. Each entry:
 //   path           vault-relative path (NFC, POSIX)
@@ -218,6 +238,9 @@ function publishedPagesOf(survey) {
 //   bodyPublishes  publishes && !bodyWithheld
 //   sheetSourceSet a PC whose `sheet_source` says where its sheet is kept (#273);
 //                  null for any other file
+//   sheetWithheldSections  the `##` headings only the PC keep-list withholds (character
+//                  sheets off); [] when none, null when the scanner made no page. Disjoint
+//                  from strippedSections.
 //   retiredSheetFields  a PC's frontmatter fields the campaign system's sheet no longer reads (the note
 //                  body is the only source); [] when none, null for any other file
 //   frontmatterError the parser's message for a file whose frontmatter could not be
@@ -247,6 +270,7 @@ async function runExplainAll(options, deps) {
       strippedSections: page
         ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig) }))]
         : null,
+      sheetWithheldSections: page ? sheetWithheldOf(survey.publishConfig, page.markdown || '', page.frontmatter) : null,
       // vault_check pc-body reads this rather than parse the field itself.
       sheetSourceSet: page && page.frontmatter && page.frontmatter.type === 'pc'
         ? Boolean(sheetSourceOf(page.frontmatter))
@@ -259,7 +283,7 @@ async function runExplainAll(options, deps) {
       frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,
     };
   });
-  out(JSON.stringify({ vaultPath: survey.vaultPath, pages }, null, 2));
+  out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig), pages }, null, 2));
   return 0;
 }
 

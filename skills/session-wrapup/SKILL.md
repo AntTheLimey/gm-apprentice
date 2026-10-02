@@ -208,7 +208,9 @@ children, cross-entity claim targets, Event files — `vault_check.py
 pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
 PC refreshed in 3c (a WARNING about a missing or untouched
 `## Stat Sheet`: `shared/pc-body-structure.md` § A sheet kept
-somewhere else), `vault_check.py wrapup --file <wrap-up>`. If
+somewhere else; no Stat Sheet rows means the campaign publishes no
+sheets, so there is nothing to ask), `vault_check.py wrapup --file
+<wrap-up>`. If
 Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and
 never touched again) as a completeness cross-check on the `--file`
