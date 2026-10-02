@@ -69,7 +69,7 @@ to the cult leader whose existence gives the game away.
 ## Configuration
 
 All settings live in `_meta/vault-config.md` under `publish:`.
-See `configuration.md` for the full list.
+See the design spec for the full schema.
 
 ## Inline GM-Only Markers
 
@@ -147,8 +147,8 @@ demand — see `campaign-qa/references/checks/open-spoilers.md`.
 Obsidian callouts (`> [!type] Title` blocks) are **published by
 default** — `exclude_callouts` defaults to `false`, so an existing
 vault with no explicit setting still renders every callout to the
-site. Enable stripping with `publish.exclude_callouts` in
-`_meta/vault-config.md`:
+site. Enable stripping with `publish.exclude_callouts` (or
+`excludeCallouts` in `vault.config.json`):
 
 - `true` — strip every callout
 - an array of types, e.g. `["warning", "danger", "info"]` — strip
@@ -156,7 +156,7 @@ site. Enable stripping with `publish.exclude_callouts` in
 
 The gm-apprentice convention treats callouts as Keeper-facing
 (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
-State), so **newly scaffolded** sites set `exclude_callouts: true` by
+State), so **newly scaffolded** sites set `excludeCallouts: true` by
 default. Sites created before this option existed keep the default
 `false` until you set it explicitly — if you rely on callouts to hide
 Keeper content, turn it on, or move that content under a `## GM Notes`

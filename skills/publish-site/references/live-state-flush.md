@@ -14,10 +14,6 @@ when nothing changed is a harmless no-op.
 
 Loadout (carried items) and hero points are not synced.
 
-It does nothing when `publish.live_stats` is not `true`, or when
-`character_sheets` is `false` (which forces live stats off): it prints one line
-saying so and reads nothing from KV.
-
 ## When to run it
 
 - **Tier-2b (inbox loop):** the change-request loop already runs flush on **stop**

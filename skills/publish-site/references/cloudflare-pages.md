@@ -247,8 +247,8 @@ unaffected — this only changes what a brand-new site ships.
 
 These do everything the manual steps below do — create/reuse the `INBOX` KV
 namespace, align `wrangler.toml`'s `name` to the Cloudflare project, patch in
-the `[[kv_namespaces]]` block, turn the switch on in the vault's
-`_meta/vault-config.md`, rebuild, and deploy — in one command. Run from the site directory:
+the `[[kv_namespaces]]` block, flip the backend flag, rebuild, and deploy —
+in one command. Run from the site directory:
 
 ```bash
 node "$TOOL" setup-status-bar   # live status bar (Tier 2a)
@@ -258,13 +258,8 @@ node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
 Each defaults to `./vault.config.json`; pass `--config <path>` if you're
 running from elsewhere. Both are:
 
-- **Vault-file check first** — the command writes `publish.live_stats: true`
-  (`setup-status-bar`) or `publish.inbox: true` (`setup-inbox`) into the
-  vault's `_meta/vault-config.md`. If that file cannot be edited safely it
-  stops with `cannot edit _meta/vault-config.md: …` before it touches
-  wrangler or KV. Nothing is written to `vault.config.json`.
-- **KV-permission probe next** — the command lists KV namespaces to
-  confirm the token can manage KV before it creates or changes anything (this is the
+- **KV-permission probe first** — the command lists KV namespaces to
+  confirm the token can manage KV before touching anything (this is the
   command's own check, not a `doctor` run). If the token can't manage KV, it stops with the fix
   rather than half-applying anything: edit the token (My Profile → API
   Tokens → your token → Edit) to add **Account · Workers KV Storage · Edit**
@@ -275,31 +270,22 @@ running from elsewhere. Both are:
 
 `setup-inbox` requires and ensures the same KV namespace as the status bar
 (**inbox ⇒ KV** — you never create it separately) and is **infra-only**: it
-sets `publish.inbox: true` but does not open a session or set a
+flips `backend.inbox` to `true` but does not open a session or set a
 `config:code`. Opening a live session is still the `inbox open <CODE>` loop
-(Part 3 / `references/change-request-loop.md`) — run that once the switch is
+(Part 3 / `references/change-request-loop.md`) — run that once the flag is
 live.
-
-The switches are the only thing that turns these features on. The build does
-not detect a deployed backend: with `publish.live_stats` / `publish.inbox`
-unset, a site that has the KV binding and the Functions still builds without
-them. See `configuration.md` § Switches.
 
 If you'd rather see each step yourself, or the command isn't available on
 your setup, the manual path below does the same thing by hand.
 
 ### Or by hand
 
-**You do not hand-copy the Functions.** Once a switch (`publish.inbox` or
-`publish.live_stats`) is `true` in the vault's `_meta/vault-config.md`, the next
-`npm run build` copies the plugin's Cloudflare Functions into the site's
-`functions/` for you, each feature's files for its own switch (`live_stats`:
-`loadout`, `loadout-list`; `inbox`: `request`; a Tier-1 site with both switches
-off gets none — they live beside `vault.config.json`, not in `docs/`). Setting
-a switch to `false` removes that feature's files on the next build or deploy,
-and the removal reaches the live site with the next deploy. The manual steps
-below do exactly that: create the namespace, bind it in `wrangler.toml`, turn
-the switch on, rebuild, deploy.
+**You do not hand-copy the Functions.** Once a backend flag (`backend.inbox` or
+`backend.statusBar`) is `true` in `vault.config.json`, the next `npm run build`
+copies the plugin's Cloudflare Functions into the site's `functions/` for you (a
+Tier-1 site with both flags off gets none — they live beside `vault.config.json`,
+not in `docs/`). The manual steps below do exactly that: create the namespace,
+bind it in `wrangler.toml`, flip the flag, rebuild, deploy.
 
 The at-table **loadout** endpoint (`/api/loadout`) ships in the same
 `functions/api/` directory and **reuses this same `INBOX` KV namespace**
@@ -316,7 +302,7 @@ files, then redeploy.
 state (`{ "<key>": {v,items,hp,fp,updatedAt}, … }`) for the roster-page party
 board. It is **read-only** — it exposes only `onRequestGet`, never a write. Bound
 to the same `INBOX` KV namespace as `/api/loadout`; no new namespace or binding is
-needed. With a switch on it ships with the rebuild; a legacy site
+needed. On the flag-based flow below it ships with the rebuild; a legacy site
 that hand-manages `functions/` must copy `functions/api/loadout-list.js` **and
 its `functions/api/loadout-core.mjs` dependency** (`loadout-list.js` imports it —
 skip it only if the loadout endpoint already put it there), then re-deploy.
@@ -404,22 +390,18 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    `id = "PUT-YOUR-KV-NAMESPACE-ID-HERE"` line, replace that id instead of
    adding a second block.)
 
-3. **Turn on the inbox switch.** In the vault's `_meta/vault-config.md`, set
-   `inbox` to `true` under `publish:`:
+3. **Turn on the inbox flag.** In `vault.config.json`, set `inbox` to `true`:
 
-   ```yaml
-   publish:
-     inbox: true
+   ```json
+   "backend": { "statusBar": false, "inbox": true }
    ```
 
-   (For the live status bar / party board, set `live_stats: true` too — it
+   (For the live status bar / party board, set `"statusBar": true` too — it
    reuses the same namespace.) This is what makes the next build ship the inbox
-   chatbox **and** copy the inbox Functions into `functions/`. With the switch
-   on and no real KV id in `wrangler.toml`, the build warns and leaves the
-   feature out.
+   chatbox **and** copy the inbox Functions into `functions/`.
 
-4. **Build and deploy.** The build copies the Functions in because a switch
-   is now on:
+4. **Build and deploy.** The build copies the Functions in because a backend
+   flag is now on:
 
    ```bash
    npm run build

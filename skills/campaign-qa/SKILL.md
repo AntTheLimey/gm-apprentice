@@ -105,10 +105,7 @@ Read the named check file when the mode runs.
 - PCs with no character sheet — `vault_check.py pc-body`: a
   WARNING for a PC with no `## Stat Sheet`, or one still holding
   the template's values. Ask where the sheet is kept and write
-  `sheet_source` (`shared/pc-body-structure.md`). When `pc-body`
-  emits no such rows there is nothing to ask; never ask where a
-  sheet is kept on a campaign that does not publish sheets
-  (`publish.character_sheets: false`)
+  `sheet_source` (`shared/pc-body-structure.md`)
 - `createdSession` vs timeline: for `source: "play"` or `"prep"`,
   it should match the session whose timeline entry introduces the
   entity; `source: "backstory"` is exempt

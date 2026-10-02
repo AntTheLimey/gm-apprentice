@@ -28,8 +28,8 @@ or shows a broken image icon.
 
 One of two things:
 
-- `publish.attachments_dir` in `_meta/vault-config.md` does not
-  match the actual folder name in the vault.
+- The `attachmentsDir` in `vault.config.json` does not match
+  the actual folder name in the vault.
 - The portrait file referenced in the entity's frontmatter does
   not exist at the expected path.
 
@@ -37,13 +37,13 @@ One of two things:
 
 Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
 `PORTRAIT_MISSING` row names the entity and the portrait filename it
-expected inside `attachments_dir` (default `_attachments`) — the fix line
+expected inside `attachmentsDir` (default `_attachments`) — the fix line
 says whether to add the file or correct the `portrait:` value.
 
 ### Fix
 
-- If `attachments_dir` is wrong: update `publish.attachments_dir`
-  in `_meta/vault-config.md` to match the actual folder name.
+- If `attachmentsDir` is wrong: update the value in
+  `vault.config.json` to match the actual folder name.
 - If the image file is missing: add the image to the vault, or
   remove the `portrait` field from the entity's frontmatter
   (the page will render cleanly without it).
@@ -126,9 +126,9 @@ vault but does not appear anywhere on the built site.
 
 One of:
 
-- The entity's vault folder is not listed in `publish.folder_map`
-  in `_meta/vault-config.md`
-- The entity's vault folder name is listed in `publish.exclude_dirs`
+- The entity's vault folder is not listed in `folderMap` in
+  `vault.config.json`
+- The entity's vault folder name is listed in `excludeDirs`
 - The entity's markdown file does not have a `type` frontmatter
   field
 - The file's frontmatter is not valid YAML, most often a key written
@@ -139,7 +139,7 @@ One of:
 ### Diagnosis steps
 
 For one entity, run `node "$TOOL" explain "<vault-relative path>"` — it
-prints the folder's `folder_map` mapping (or lack of one), the file's
+prints the folder's `folderMap` mapping (or lack of one), the file's
 `type:` status, and the build's verdict in one shot. Vault-wide, `node
 "$TOOL" doctor --site --config <dir>/vault.config.json` reports the same
 causes: `FOLDER_UNMAPPED` (a folder with typed pages inside that will
@@ -150,20 +150,19 @@ lists the unparseable files too.
 
 ### Fix
 
-**Folder not in the folder map:**
-Add the folder to `publish.folder_map` in `_meta/vault-config.md`
-with an appropriate URL slug. For example, if your creatures live in
-a folder called `Bestiary`:
-```yaml
-publish:
-  folder_map:
-    # … existing entries
-    Bestiary: creatures
+**Folder not in folderMap:**
+Add the folder to `folderMap` with an appropriate URL slug. For
+example, if your creatures live in a folder called `Bestiary`:
+```json
+"folderMap": {
+  ...
+  "Bestiary": "creatures"
+}
 ```
 
-**Folder in exclude_dirs:**
-Remove it from the `publish.exclude_dirs` list, or move the entity
-to a different folder.
+**Folder in excludeDirs:**
+Remove it from the `excludeDirs` list, or move the entity to a
+different folder.
 
 **Missing type field:**
 Add `type: npc` (or the appropriate type) to the entity's
@@ -356,10 +355,10 @@ pages. The wrap-up (`type: session_wrap`) supplies the recap text, but it
 only surfaces when its paired session index — and for the Campaign Saga,
 a chapter page — are published too. Two common breakdowns:
 
-1. The vault's `Chapters/` folder is missing from `publish.folder_map`
-   in `_meta/vault-config.md`, so every chapter, session, scene, and wrap-up
+1. The vault's `Chapters/` folder is missing from `folderMap` in
+   `vault.config.json`, so every chapter, session, scene, and wrap-up
    file is skipped. Builds from tool 1.6.0 print a
-   `scanner: skipping "<dir>" — not in publish.folder_map` warning; older builds
+   `scanner: skipping "<dir>" — not in folderMap` warning; older builds
    skip silently. (Scaffolds from 1.6.0 include the mapping by default.)
 2. The session index or chapter page exists but is unpublished — held
    back by the manifest, `DRAFT` status, or player-mode auto-exclusion.
@@ -373,7 +372,7 @@ missing — exactly the two breakdowns above.
 
 ### Fix
 
-Add the missing `folder_map` entry, publish the session index and a
+Add the missing `folderMap` entry, publish the session index and a
 player-safe chapter page alongside the wrap-up, and rebuild. To show a
 recap, all three must publish: the session index (`type: session`), its
 chapter (`type: chapter`), and the wrap-up (`type: session_wrap`).
