@@ -1589,8 +1589,9 @@ def _bare_section_title(title: str) -> str:
         return re.sub(r":$", "", t).strip()
 
     def unwrap(t: str) -> str:
+        # One pair wrapping the whole title; a marker inside means two spans.
         m = re.match(r"^(\*\*|\*|__|_)(.+)\1$", t)
-        return m.group(2).strip() if m else t
+        return m.group(2).strip() if m and m.group(1) not in m.group(2) else t
     return un_colon(unwrap(un_colon(title.strip().lower())))
 
 

@@ -3484,6 +3484,11 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         # Both sides go through the tool's own normalisation.
         self.assertEqual(vc._bare_section_title("**A** and **B**"),
                          vc._bare_section_title("**a** and **b**"))
+        # Never unwrapped to `a** and **b`: two spans stay as written.
+        self.assertEqual(vc._bare_section_title("**A** and **B**"),
+                         "**a** and **b**")
+        self.assertEqual(vc._bare_section_title("**Skills**:"), "skills")
+        self.assertEqual(vc._bare_section_title("_a_b_"), "_a_b_")
 
     def test_a_stub_page_keeps_its_own_filter_too(self):
         vault = make_vault(self)

@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { filterSections, strippedSectionTitles, sheetWithheldTitles, playerSafeMarkdown, processContent } = require('../../lib/processor');
-const { PC_PROSE_SECTIONS, pcKeepList } = require('../../lib/pc-prose');
+const { PC_PROSE_SECTIONS, pcKeepList, bareSectionTitle } = require('../../lib/pc-prose');
 const pc = { type: 'pc' };
 const rules = { pcKeepSections: PC_PROSE_SECTIONS };
 const note = [
@@ -370,5 +370,20 @@ describe('PC keep-list stability against link and embed labels', () => {
       const r = processContent(page, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS });
       assert.ok(!r.html.includes('STAT14'), `${body}: ${r.html}`);
     }
+  });
+});
+
+describe('bareSectionTitle', () => {
+  it('unwraps one pair of emphasis around the whole title, and a trailing colon', () => {
+    assert.strictEqual(bareSectionTitle('**Skills**'), 'skills');
+    assert.strictEqual(bareSectionTitle('*Skills*:'), 'skills');
+    assert.strictEqual(bareSectionTitle('__Skills__'), 'skills');
+    assert.strictEqual(bareSectionTitle('_Skills_'), 'skills');
+    assert.strictEqual(bareSectionTitle('Notes:'), 'notes');
+  });
+  it('leaves two emphasised spans alone', () => {
+    assert.strictEqual(bareSectionTitle('**A** and **B**'), '**a** and **b**');
+    assert.strictEqual(bareSectionTitle('*A* and *B*'), '*a* and *b*');
+    assert.strictEqual(bareSectionTitle('_a_b_'), '_a_b_');
   });
 });

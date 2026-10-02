@@ -53,7 +53,11 @@ function retiredSheetFieldsMessage(names) {
 // way a section reaches the site.
 function bareSectionTitle(title) {
   const lower = String(title).trim().toLowerCase();
-  const unwrap = (t) => t.replace(/^(\*\*|\*|__|_)(.+)\1$/, '$2').trim();
+  // One pair wrapping the whole title; a marker inside means two spans (`**A** and **B**`).
+  const unwrap = (t) => {
+    const m = /^(\*\*|\*|__|_)(.+)\1$/.exec(t);
+    return m && !m[2].includes(m[1]) ? m[2].trim() : t;
+  };
   const unColon = (t) => t.replace(/:$/, '').trim();
   return unColon(unwrap(unColon(lower)));
 }
