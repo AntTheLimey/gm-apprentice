@@ -104,6 +104,13 @@ class TemplateTests(unittest.TestCase):
             item.apply(None)
         self.assertEqual(mv.find_templates(vault), [])
 
+    def test_an_unreadable_template_is_a_failed_step(self):
+        vault = make_vault(self)
+        (vault / "_Templates").mkdir()
+        (vault / "_Templates" / "_Template_NPC.md").write_bytes(b"\xff\xfe\x00bad")
+        with self.assertRaises(StepFailed):
+            mv.find_templates(vault)
+
     def test_a_vault_with_no_templates_folder_gets_one(self):
         vault = make_vault(self)
         for item in mv.find_templates(vault):
@@ -167,6 +174,62 @@ class SchemaMirrorTests(unittest.TestCase):
         self.assertIn("**Starship:** `tonnage`, `crew`", text)
         self.assertTrue(text.endswith("## Notes\n\nmine\n"))
         self.assertEqual(mv.find_schema_mirror(vault), [])
+
+    def test_a_copy_of_the_entry_above_the_heading_is_left_alone(self):
+        vault = make_vault(self)
+        entries = self.canonical()
+        kept = dict(entries)
+        old = "**Event:** `event_type`, `date` (in-game)"
+        kept["Event"] = old
+        body = "\n\n".join(kept.values())
+        self.mirror(vault, f"# Types\n\n{old}\n\n## Type-Specific Fields\n\n{body}\n")
+        (item,) = mv.find_schema_mirror(vault)
+        item.apply(None)
+        text = (vault / "_meta" / "entity-types.md").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith(f"# Types\n\n{old}\n\n## Type"))
+        self.assertIn(entries["Event"], text)
+        self.assertEqual(mv.find_schema_mirror(vault), [])
+
+    def test_text_after_the_last_entry_survives_an_update(self):
+        for trailer in ("<!-- keep -->", "---", "# Heading"):
+            vault = make_vault(self)
+            entries = self.canonical()
+            last = list(entries)[-1]
+            kept = dict(entries)
+            kept[last] = f"**{last}:** `old`"
+            body = "\n\n".join(kept.values())
+            self.mirror(vault, f"## Type-Specific Fields\n\n{body}\n"
+                               f"{trailer}\n## Notes\n")
+            (item,) = mv.find_schema_mirror(vault)
+            item.apply(None)
+            text = (vault / "_meta" / "entity-types.md").read_text(
+                encoding="utf-8")
+            self.assertTrue(text.endswith(f"{entries[last]}\n{trailer}\n## Notes\n"),
+                            trailer)
+            self.assertEqual(mv.find_schema_mirror(vault), [])
+
+    def test_crlf_file_stays_crlf(self):
+        vault = make_vault(self)
+        entries = self.canonical()
+        kept = dict(entries)
+        del kept["Creature"]
+        kept["Event"] = "**Event:** `event_type`"
+        body = "\n\n".join(kept.values())
+        path = vault / "_meta" / "entity-types.md"
+        path.write_bytes(
+            f"# T\n\n## Type-Specific Fields\n\n{body}\n\n## Notes\n"
+            .replace("\n", "\r\n").encode())
+        (item,) = mv.find_schema_mirror(vault)
+        item.apply(None)
+        raw = path.read_bytes()
+        self.assertNotIn(b"\n", raw.replace(b"\r\n", b""))
+        self.assertEqual(mv.find_schema_mirror(vault), [])
+
+    def test_unreadable_mirror_is_a_failed_step(self):
+        vault = make_vault(self)
+        (vault / "_meta" / "entity-types.md").write_bytes(b"\xff\xfe\x00bad")
+        with self.assertRaises(StepFailed):
+            mv.find_schema_mirror(vault)
 
     def test_no_mirror_file_plans_nothing(self):
         self.assertEqual(mv.find_schema_mirror(make_vault(self)), [])

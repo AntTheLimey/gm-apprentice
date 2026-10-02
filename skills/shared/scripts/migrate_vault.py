@@ -69,10 +69,12 @@ def vault_system(vault: Path) -> str | None:
 
 def _stat_block(kind: str, system: str | None) -> str:
     base = "coc-7e" if system == "coc-7e-regency" else system
+    if not base:
+        return GENERIC_BLOCK
     for folder in ((f"{kind}-stats", "npc-stats") if kind == "creature"
                    else ("npc-stats",)):
         path = TEMPLATES / folder / f"{base}.md"
-        if base and path.is_file():
+        if path.is_file():
             lines = path.read_text(encoding="utf-8").strip().split("\n")
             kept = []
             for line in lines:
@@ -143,8 +145,10 @@ def find_templates(vault: Path) -> list[Item]:
 
 
 def _read(path: Path) -> str:
+    """The file's text with its own line endings kept."""
     try:
-        return path.read_text(encoding="utf-8")
+        with path.open("r", encoding="utf-8", newline="") as f:
+            return f.read()
     except (OSError, UnicodeDecodeError) as e:
         raise StepFailed(f"{path.parent.name}/{path.name} cannot be read "
                          f"({e.__class__.__name__})") from e
@@ -179,25 +183,51 @@ ENTRY_RE = re.compile(r"^\*\*([^*:\n]+):\*\*")
 
 
 def _section_span(text: str) -> tuple[int, int] | None:
-    start = re.search(rf"^{re.escape(SECTION)}[ \t]*$", text, re.M)
+    start = re.search(rf"^{re.escape(SECTION)}[ \t]*\r?$", text, re.M)
     if not start:
         return None
     nxt = re.search(r"^## ", text[start.end():], re.M)
     return start.end(), start.end() + nxt.start() if nxt else len(text)
 
 
-def type_entries(text: str) -> dict[str, str]:
-    """`**Type:** …` paragraphs under `## Type-Specific Fields`, by type."""
+def _ends_entry(line: str) -> bool:
+    """A line that is not a continuation of the entry above it."""
+    bare = line.strip()
+    return (not bare or bare == "---" or bare.startswith(("<!--", "#"))
+            or bool(ENTRY_RE.match(bare)))
+
+
+def _entry_spans(text: str) -> dict[str, tuple[int, int]]:
+    """Type -> (start, end) offsets in `text` of each `**Type:** …` entry
+    under `## Type-Specific Fields`: the entry line and its continuation
+    lines, ending before the blank line, comment, rule or heading that
+    follows. The end excludes the last line's line ending."""
     span = _section_span(text)
     if span is None:
         return {}
-    out: dict[str, str] = {}
-    for para in re.split(r"\n[ \t]*\n", text[span[0]:span[1]]):
-        para = para.strip("\n")
-        m = ENTRY_RE.match(para)
-        if m:
-            out[m.group(1).strip()] = para
+    out: dict[str, tuple[int, int]] = {}
+    current: tuple[str, int, int] | None = None
+    for m in re.finditer(r"[^\n]*\n|[^\n]+", text[span[0]:span[1]]):
+        raw = m.group(0)
+        line = raw.rstrip("\r\n")
+        at = span[0] + m.start()
+        entry = ENTRY_RE.match(line)
+        if entry or (current and _ends_entry(line)):
+            if current:
+                out[current[0]] = (current[1], current[2])
+            current = None
+        if entry:
+            current = (entry.group(1).strip(), at, at + len(line))
+        elif current:
+            current = (current[0], current[1], at + len(line))
+    if current:
+        out[current[0]] = (current[1], current[2])
     return out
+
+
+def type_entries(text: str) -> dict[str, str]:
+    """`**Type:** …` entries under `## Type-Specific Fields`, by type."""
+    return {n: text[a:b] for n, (a, b) in _entry_spans(text).items()}
 
 
 def find_schema_mirror(vault: Path) -> list[Item]:
@@ -219,21 +249,28 @@ def find_schema_mirror(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         new = _read(path)
+        eol = "\r\n" if "\r\n" in new else "\n"
+
+        def fit(name: str) -> str:
+            return canonical[name].replace("\n", eol)
+
         for name in stale:
-            new = new.replace(type_entries(new)[name], canonical[name], 1)
+            a, b = _entry_spans(new)[name]
+            new = new[:a] + fit(name) + new[b:]
         order = list(canonical)
         for name in missing:
-            have = type_entries(new)
-            before = next((have[p] for p in reversed(order[:order.index(name)])
+            have = _entry_spans(new)
+            before = next((p for p in reversed(order[:order.index(name)])
                            if p in have), None)
             if before is not None:
-                new = new.replace(before, f"{before}\n\n{canonical[name]}", 1)
+                at = have[before][1]
+                new = f"{new[:at]}{eol}{eol}{fit(name)}{new[at:]}"
             else:
                 span = _section_span(new)
                 assert span is not None
-                head = new[:span[0]].rstrip("\n")
-                rest = new[span[0]:].lstrip("\n")
-                new = f"{head}\n\n{canonical[name]}\n\n{rest}"
+                rest = new[span[0]:].lstrip("\r\n")
+                tail = f"{eol}{eol}{rest}" if rest else eol
+                new = f"{new[:span[0]]}{eol}{eol}{fit(name)}{tail}"
         write_text_atomic(path, new)
         return ([f"updated the {n} entry" for n in stale]
                 + [f"added the {n} entry" for n in missing])
@@ -265,8 +302,8 @@ MOBRPG_ADD = ("Campaign Log", "Encounters")
 
 def _mobrpg_map(vault: Path) -> dict | None:
     try:
-        data = json.loads((vault / MOBRPG_MAP).read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        data = json.loads(_read(vault / MOBRPG_MAP))
+    except (StepFailed, ValueError):
         return None
     return data if isinstance(data, dict) else None
 
@@ -288,9 +325,11 @@ def find_mobrpg_sections(vault: Path) -> list[Item]:
         if fresh is None or not isinstance(fresh.get("vaultOnlySections"), list):
             raise StepFailed(f"{MOBRPG_MAP} changed and can no longer be read")
         fresh["vaultOnlySections"] = [*fresh["vaultOnlySections"], *add]
+        eol = "\r\n" if "\r\n" in _read(vault / MOBRPG_MAP) else "\n"
         write_text_atomic(
             vault / MOBRPG_MAP,
-            json.dumps(fresh, indent=2, ensure_ascii=False) + "\n")
+            (json.dumps(fresh, indent=2, ensure_ascii=False) + "\n")
+            .replace("\n", eol))
         return [f"added {', '.join(add)} to vaultOnlySections in {MOBRPG_MAP}"]
 
     return [Item("mobrpg-sections", CHOICE,
