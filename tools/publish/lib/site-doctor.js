@@ -239,7 +239,7 @@ async function runSiteDoctor(options, deps) {
     findings.push(finding(
       'FOLDER_UNMAPPED', 'warning', entry.dir,
       `${plural(entry.typedFileCount, 'typed page')} inside will not publish`,
-      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to folderMap or list it in excludeDirs`,
+      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to publish.folder_map or list it in publish.exclude_dirs (_meta/vault-config.md)`,
     ));
   }
   const shownUntyped = report.untyped.slice(0, UNTYPED_ROW_CAP);

@@ -174,6 +174,11 @@ function stricterCallouts(fromVault, fromSite) {
   return fromVault;
 }
 
+// The four settings that always merged per sub-key across the two files: with both set, a
+// sub-key only the site file has still applies, and the vault file wins a sub-key both set.
+const MERGED_MAPS = new Set(['landing', 'images', 'banners', 'locations']);
+const isPlainMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
 // Vault file value when set, else the site file's, recording which was used. A moved key
 // is "set" when it is not undefined: an explicit false or null is a value, not silence.
 // `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
@@ -199,6 +204,8 @@ function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) =>
   let value = fromVault !== undefined ? fromVault : fromSite;
   if (fromSite !== undefined) {
     const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
+    // A site-file list key that is not a list is read as nothing; the migration leaves it too.
+    if (entry.kind === 'list' && !Array.isArray(fromSite)) rec.notAList = true;
     if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite)) {
       const base = vaultMalformed ? PUBLISH_DEFAULTS[entry.publish] : fromVault;
       const have = new Set(base.map((s) => keyOf(s)));
@@ -212,6 +219,14 @@ function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) =>
         value = [...base, ...stillApplied];
       } else if (vaultMalformed) {
         value = [...base];
+      }
+    }
+    if (MERGED_MAPS.has(entry.publish) && fromVault !== undefined && isPlainMap(fromSite)) {
+      const base = isPlainMap(fromVault) ? fromVault : {};
+      const extra = Object.keys(fromSite).filter((k) => !(k in base));
+      if (extra.length) {
+        rec.stillApplied = extra;
+        value = { ...base, ...Object.fromEntries(extra.map((k) => [k, fromSite[k]])) };
       }
     }
     if (entry.publish === 'exclude_callouts' && fromVault !== undefined) {
@@ -495,4 +510,4 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
   return { config, publishConfig };
 }
 
-module.exports = { loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };
+module.exports = { MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };

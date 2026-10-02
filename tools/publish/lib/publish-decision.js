@@ -136,7 +136,7 @@ function decidePage(page, options) {
   const excludedDir = alwaysExcludedSegment(rel);
   if (excludedDir) return verdict('exclude', 'DIR_ALWAYS_EXCLUDED', `in ${excludedDir}/ — never published`);
   if (!folderMapped) {
-    return verdict('decide', 'DIR_UNMAPPED', 'its folder is not in folderMap');
+    return verdict('decide', 'DIR_UNMAPPED', 'its folder is not in publish.folder_map');
   }
   if (!frontmatter || !frontmatter.type) {
     return verdict('decide', 'NO_TYPE', 'no `type:` in frontmatter');

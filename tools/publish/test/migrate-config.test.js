@@ -472,7 +472,7 @@ describe('migrate-config', () => {
     const s = makeSite({ site: { landingTagline: 'Hi' }, vaultFile: '---\npublish:\n  theme:\n    # keep\n    genre: noir\n---\n' });
     const lines = [];
     runMigrateConfig({ configPath: s.configPath, dryRun: true }, { out: (l) => lines.push(l) });
-    assert.ok(lines.includes('note publish.theme is rewritten to add tagline; comments inside it are not kept'), lines.join('\n'));
+    assert.ok(lines.includes('note publish.theme is rewritten; comments inside it are not kept'), lines.join('\n'));
     migrate(s);
     assert.deepStrictEqual(publishOf(s.vaultFile).theme, { genre: 'noir', tagline: 'Hi' });
     const t = makeSite({ site: { landingTagline: 'Hi' } });
@@ -532,6 +532,39 @@ describe('migrate-config', () => {
     });
     assert.deepStrictEqual(Object.keys(a).sort(), Object.keys(b).sort());
     for (const k of Object.keys(a)) assert.strictEqual(fs.readFileSync(a[k]).equals(fs.readFileSync(b[k])), true, k);
+  });
+
+  it('maps: sub-keys the vault map lacks move in, a sub-key both set keeps the vault value and reports the other', () => {
+    const s = makeSite({
+      site: { landing: { max_npcs: 5, max_locations: 9 }, images: { optimize: true }, banners: { a: 'x' } },
+      vaultFile: '---\npublish:\n  landing:\n    # keep me\n    max_npcs: 2\n  banners:\n---\n',
+    });
+    const lines = [];
+    runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
+    const pub = publishOf(s.vaultFile);
+    assert.deepStrictEqual(pub.landing, { max_npcs: 2, max_locations: 9 });
+    assert.deepStrictEqual(pub.images, { optimize: true });
+    assert.deepStrictEqual(pub.banners, { a: 'x' });
+    assert.ok(lines.some((l) => l.startsWith('merge publish.landing: added "max_locations"')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.startsWith('conflict landing.max_npcs: kept 2') && l.includes('discarded 5')), lines.join('\n'));
+    assert.ok(lines.includes('note publish.landing is rewritten; comments inside it are not kept'), lines.join('\n'));
+    assert.deepStrictEqual(JSON.parse(read(s.configPath)), { vaultPath: s.vault, outputDir: './docs' });
+  });
+
+  it('maps: the resolved landing, images, banners and locations are the same before and after a migration', () => {
+    const site = { landing: { max_npcs: 5, max_locations: 9 }, images: { optimize: true, quality: 70 }, banners: { a: 'x', b: 'y' }, locations: { group_by: 'kind' } };
+    const s = makeSite({ site, vaultFile: '---\npublish:\n  landing:\n    max_npcs: 2\n  banners:\n    a: z\n---\n' });
+    const pick = () => { const p = loadPublishConfig(s.vault, JSON.parse(read(s.configPath)), () => {}); return { l: p.landing, i: p.images, b: p.banners, x: p.locations }; };
+    const before = pick();
+    migrate(s);
+    assert.deepStrictEqual(pick(), before);
+  });
+
+  it('every rewritten list or map in the vault file carries a comments note', () => {
+    const s = makeSite({ site: { excludeDirs: ['Secrets'] }, vaultFile: '---\npublish:\n  exclude_dirs: [Drafts] # mine\n---\n' });
+    const lines = [];
+    runMigrateConfig({ configPath: s.configPath, dryRun: true }, { out: (l) => lines.push(l) });
+    assert.ok(lines.includes('note publish.exclude_dirs is rewritten; comments inside it are not kept'), lines.join('\n'));
   });
 
   it('I2: exclude_callouts moves the stricter of the two values and reports it', () => {

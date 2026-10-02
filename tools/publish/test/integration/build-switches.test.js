@@ -163,6 +163,27 @@ describe('the closing line about campaign settings left in vault.config.json', (
     assert.match(said[0], /excludeSections entry "Keeper Only" is still applied from vault\.config\.json/);
   });
 
+  it('names landingTagline and backend, either of which gives the migration work', () => {
+    for (const [extra, key] of [[{ landingTagline: 'Hi' }, 'landingTagline'], [{ backend: { inbox: false } }, 'backend']]) {
+      const { lines } = buildSite({ siteExtra: extra });
+      const said = lines.filter((l) => l.includes('still holds campaign settings'));
+      assert.strictEqual(said.length, 1, lines.join('\n'));
+      assert.ok(said[0].includes(`settings: ${key}.`), said[0]);
+    }
+  });
+
+  it('a site-file list that is not a list gets its own clause', () => {
+    const { lines } = buildSite({ siteExtra: { excludeSections: 'Keeper Only' } });
+    const clause = lines.filter((l) => l.includes('excludeSections in vault.config.json is not a list and is ignored; remove it or move its entries to publish.exclude_sections by hand'));
+    assert.strictEqual(clause.length, 1, lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('migrate.py')), 'alone, it does not send the GM to migrate.py');
+    const both = buildSite({ siteExtra: { excludeSections: 'Keeper Only', siteTitle: 'Old' } });
+    const settings = both.lines.filter((l) => l.includes('still holds campaign settings'));
+    assert.strictEqual(settings.length, 1, both.lines.join('\n'));
+    assert.ok(settings[0].includes('settings: siteTitle.') && !settings[0].includes('excludeSections'), settings[0]);
+    assert.ok(both.lines.some((l) => l.includes('excludeSections in vault.config.json is not a list')));
+  });
+
   it('is absent when the site file holds only deploy keys', () => {
     const { lines } = buildSite({});
     assert.ok(!lines.some((l) => l.includes('still holds campaign settings')));

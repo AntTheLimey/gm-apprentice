@@ -339,6 +339,8 @@ The vault does not change. The sheet stays in each PC note and
   and Background (PF2e); Playbook, Heritage and Vice (FitD); the point
   total (GURPS); occupation and age (CoC). A value the page header
   already shows is not repeated.
+  The header badges come from `display_meta`, which is your own
+  choice, so a stat field listed there still shows and is published.
 - There is no live status bar, and the roster page has no party board.
 - With `inbox: true` the widget stays, as a question channel labelled
   "Ask the GM" (see `change-request-loop.md`).
@@ -414,10 +416,14 @@ and warns. That site-file form is planned to be removed in plugin
 - A setting the vault file does not set is taken from the site file.
 - A setting both files set comes from the vault file. The site file's
   value is ignored.
-- An exclude list is the one exception: a folder, section or field
-  named only in the site file is still applied, with a warning
-  naming it, until the migration moves it. The two lists are merged
-  only as this fallback (the vault file's entries first).
+- Three kinds of setting are the exceptions, applied from the site
+  file with a warning until the migration moves them. A folder,
+  section or field named only in an exclude list in the site file
+  (the vault file's entries first). `exclude_callouts`, where the
+  stricter of the two files wins: `true` beats a list, a list beats
+  `false`, and two lists are joined. A sub-key of `landing`,
+  `images`, `banners` or `locations` that only the site file's map
+  has; where both set a sub-key, the vault file's value is used.
 - A vault-file exclude list that is set but is not a list (for example
   left empty) gets the built-in default, with a warning. The site
   file's entries are still added to it.
@@ -485,7 +491,9 @@ one site directly, run `node "$TOOL" migrate-config --dry-run --config
   any other key the site file holds is left as it is, and named in
   the output;
 - merges exclude lists: the vault file's entries first, then the site
-  file's entries that are not already there;
+  file's entries that are not already there. It adds the sub-keys of
+  `landing`, `images`, `banners` and `locations` that the vault file's
+  map lacks, and keeps the stricter `exclude_callouts`;
 - keeps the vault file's value where both files set a key, and reports
   the value it discarded;
 - copies an old `backend` flag to `live_stats` / `inbox`. With no flag
@@ -497,9 +505,10 @@ one site directly, run `node "$TOOL" migrate-config --dry-run --config
 - copies both files to `<file>.pre-migrate` first. An existing backup
   is never replaced;
 - changes only the keys it moves in the vault file. Comments and
-  layout elsewhere stay as written, with one exception: adding a
-  tagline to an existing `theme:` block rewrites that block, so
-  comments inside it are lost, and the tool prints a note saying so.
+  layout elsewhere stay as written, with one exception: adding to an
+  existing list or map in the vault file (a merged exclude list, a
+  `theme:` block that gets a tagline) rewrites that block, so
+  comments inside it are lost, and the tool prints a note for each.
   It writes nothing when the vault
   file cannot be edited safely (a `publish: {…}` written on one line,
   tab indentation, mixed line endings, YAML that does not parse).

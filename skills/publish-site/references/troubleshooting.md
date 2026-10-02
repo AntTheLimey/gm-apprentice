@@ -127,8 +127,7 @@ vault but does not appear anywhere on the built site.
 One of:
 
 - The entity's vault folder is not listed in `publish.folder_map`
-  in `_meta/vault-config.md` (the tool's messages call it
-  `folderMap`)
+  in `_meta/vault-config.md`
 - The entity's vault folder name is listed in `publish.exclude_dirs`
 - The entity's markdown file does not have a `type` frontmatter
   field
@@ -360,7 +359,7 @@ a chapter page — are published too. Two common breakdowns:
 1. The vault's `Chapters/` folder is missing from `publish.folder_map`
    in `_meta/vault-config.md`, so every chapter, session, scene, and wrap-up
    file is skipped. Builds from tool 1.6.0 print a
-   `scanner: skipping "<dir>" — not in folderMap` warning; older builds
+   `scanner: skipping "<dir>" — not in publish.folder_map` warning; older builds
    skip silently. (Scaffolds from 1.6.0 include the mapping by default.)
 2. The session index or chapter page exists but is unpublished — held
    back by the manifest, `DRAFT` status, or player-mode auto-exclusion.

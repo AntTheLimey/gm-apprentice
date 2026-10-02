@@ -13,6 +13,7 @@ const { applyCoCFlush } = require('./flush/coc-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
 const { resolveConfig } = require('./config');
+const { detectStatusBar } = require('./backend-flags');
 
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
 
@@ -73,9 +74,12 @@ async function runFlush(deps) {
   // with no `switches` (a test seam) means on, as in pcKeepList.
   const switches = publishConfig.switches;
   if (switches && switches.liveStats !== true) {
+    const deployedButUnset = switches.characterSheets !== false && (switches.unset || []).includes('live_stats') && detectStatusBar(configDir);
     out(switches.characterSheets === false
       ? 'Nothing flushed: character sheets are off for this campaign, so live stats are off too.'
-      : 'Nothing flushed: live stats are off for this campaign (publish.live_stats is not true).');
+      : deployedButUnset
+        ? 'Nothing flushed: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, then flush again.'
+        : 'Nothing flushed: live stats are off for this campaign (publish.live_stats is not true).');
     return 0;
   }
 

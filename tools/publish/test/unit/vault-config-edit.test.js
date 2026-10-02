@@ -211,3 +211,33 @@ describe('setPublishKeys write failure', () => {
     }
   });
 });
+
+describe('setPublishKeys keeps a symlink and the file mode', () => {
+  it('writes through a symlinked vault-config.md and keeps its permission bits', { skip: process.platform === 'win32' }, () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-vce-link-'));
+    try {
+      const real = path.join(dir, 'shared', 'real-config.md');
+      fs.mkdirSync(path.dirname(real));
+      fs.writeFileSync(real, '---\npublish:\n  mode: player\n---\n');
+      fs.chmodSync(real, 0o640);
+      fs.mkdirSync(path.join(dir, 'vault', '_meta'), { recursive: true });
+      const link = path.join(dir, 'vault', '_meta', 'vault-config.md');
+      fs.symlinkSync(real, link);
+      assert.deepStrictEqual(setPublishKeys(path.join(dir, 'vault'), { inbox: true }), { changed: true });
+      assert.ok(fs.lstatSync(link).isSymbolicLink(), 'still a symlink');
+      assert.match(fs.readFileSync(real, 'utf8'), /^  inbox: true$/m);
+      assert.strictEqual(fs.statSync(real).mode & 0o777, 0o640);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('fillUnset', () => {
+  const { fillUnset } = require('../../lib/vault-config-edit');
+  it('adds only what the existing map leaves unset, and returns null when nothing is added', () => {
+    assert.deepStrictEqual(fillUnset({ genre: 'noir', tagline: '' }, { tagline: 'Hi', genre: 'x' }), { genre: 'noir', tagline: 'Hi' });
+    assert.deepStrictEqual(fillUnset({}, { tagline: 'Hi' }), { tagline: 'Hi' });
+    assert.strictEqual(fillUnset({ tagline: 'Mine' }, { tagline: 'Hi' }), null);
+  });
+});

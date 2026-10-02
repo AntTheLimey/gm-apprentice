@@ -2,7 +2,7 @@ const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
-const { setPublishKeys } = require('./vault-config-edit');
+const { setPublishKeys, fillUnset } = require('./vault-config-edit');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -74,8 +74,8 @@ function seedVaultSettings(vaultDir, settings) {
     // where the vault file leaves them unset. (The theme block is re-written, so comments
     // inside it are not kept, as with migrate-config.)
     if (key === 'theme' && isMap(value) && isMap(publish.theme)) {
-      const add = Object.entries(value).filter(([k]) => publish.theme[k] === undefined || publish.theme[k] === null || publish.theme[k] === '');
-      if (add.length) { set.theme = { ...publish.theme, ...Object.fromEntries(add) }; continue; }
+      const filled = fillUnset(publish.theme, value);
+      if (filled) { set.theme = filled; continue; }
     }
     kept.push(key);
   }

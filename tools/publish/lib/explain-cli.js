@@ -107,7 +107,7 @@ async function runExplain(options, deps) {
   // vault's config chose to exclude it".
   const verdict = verdicts.get(target)
     || (configExcluded && !alwaysExcluded
-      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in excludeDirs`, outputPath: null }
+      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in publish.exclude_dirs`, outputPath: null }
       : decidePage(page || { rel: target, frontmatter: null }, {
         rel: target,
         publishConfig,
@@ -187,9 +187,9 @@ async function runExplain(options, deps) {
   out('');
   out('  exists: yes');
   out(`  directory: ${dir || '(vault root)'} — ${
-    configExcluded ? `listed in excludeDirs (${configExcluded})`
+    configExcluded ? `listed in publish.exclude_dirs (${configExcluded})`
       : mappedTo ? `mapped to ${mappedTo}`
-        : dir ? 'not in folderMap' : 'the vault root'}`);
+        : dir ? 'not in publish.folder_map' : 'the vault root'}`);
   if (frontmatterError) out(`  frontmatter: could not be parsed — ${frontmatterError}`);
   out(`  type: ${(frontmatter && frontmatter.type) || '(none)'}`);
   out(`  publish mode: ${frontmatter ? publishMode(frontmatter) : '(no frontmatter)'}`);

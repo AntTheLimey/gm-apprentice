@@ -269,7 +269,7 @@ describe('explain', () => {
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
     assert.strictEqual(rc, 0);
-    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in excludeDirs \(DIR_CONFIG_EXCLUDED\)/);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in publish\.exclude_dirs \(DIR_CONFIG_EXCLUDED\)/);
 
     const j = capture();
     await runExplain({ configPath, target: 'Drafts/Idea.md', json: true }, j.deps);
@@ -300,7 +300,7 @@ describe('explain', () => {
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
     assert.strictEqual(rc, 0);
-    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in excludeDirs \(DIR_CONFIG_EXCLUDED\)/);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in publish\.exclude_dirs \(DIR_CONFIG_EXCLUDED\)/);
     fs.rmSync(vault, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
   });

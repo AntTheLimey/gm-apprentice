@@ -178,6 +178,32 @@ function editPublishBlock(text, changes = {}) {
   }
 }
 
+// The existing map plus the entries of `additions` it leaves unset (missing, null or empty
+// text); null when there is nothing to add. The one rule for adding keys beside a GM's own
+// (init's seeded theme keys, migrate-config's tagline).
+function fillUnset(existing, additions) {
+  const add = Object.entries(additions).filter(([k]) => existing[k] === undefined || existing[k] === null || existing[k] === '');
+  return add.length ? { ...existing, ...Object.fromEntries(add) } : null;
+}
+
+// Write beside the target and rename over it, so a crash never leaves a truncated file.
+// Writes through a symlink to the real file and keeps its permission bits; a file that is
+// not there yet is created with the default mode. `rename` replaces fs.renameSync (tests).
+function writeAtomic(link, text, { rename } = {}) {
+  const existing = fs.existsSync(link);
+  const file = existing ? fs.realpathSync(link) : link;
+  const mode = existing ? fs.statSync(file).mode & 0o7777 : null;
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
+  try {
+    fs.writeFileSync(tmp, text, mode === null ? undefined : { mode });
+    if (mode !== null) fs.chmodSync(tmp, mode);
+    (rename || fs.renameSync)(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
+}
+
 // setPublishKeys(vaultPath, set, remove) -> { changed }. Throws Error(reason) on refusal.
 // deps.rename replaces fs.renameSync (tests inject a failing one).
 function setPublishKeys(vaultPath, set, remove = [], deps = {}) {
@@ -188,16 +214,8 @@ function setPublishKeys(vaultPath, set, remove = [], deps = {}) {
   if (out.error) throw new Error(`cannot edit ${CONFIG_REL}: ${out.error}`);
   if (out.text === before && (exists || !Object.keys(set).length)) return { changed: false };
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  // Write beside the target and rename over it, so a crash never leaves a truncated file.
-  const tmp = path.join(path.dirname(file), `.vault-config.md.${process.pid}.tmp`);
-  try {
-    fs.writeFileSync(tmp, out.text);
-    (deps.rename || fs.renameSync)(tmp, file);
-  } catch (e) {
-    fs.rmSync(tmp, { force: true });
-    throw e;
-  }
+  writeAtomic(file, out.text, { rename: deps.rename });
   return { changed: true };
 }
 
-module.exports = { editPublishBlock, setPublishKeys };
+module.exports = { editPublishBlock, setPublishKeys, writeAtomic, fillUnset };

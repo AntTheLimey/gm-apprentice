@@ -226,3 +226,23 @@ test('flush does nothing, and says why, when live stats are off or character she
     assert.match(r.lines[0], say);
   }
 });
+
+test('flush says why when live stats are off only because the switch is unset and the backend is deployed', async () => {
+  const fs = require('node:fs'); const os = require('node:os'); const path = require('node:path');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-flush-unset-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
+    fs.mkdirSync(path.join(dir, 'functions', 'api'), { recursive: true });
+    fs.writeFileSync(path.join(dir, 'functions', 'api', 'loadout.js'), '// fn');
+    const say = async (switches) => {
+      const r = run({ configPath: path.join(dir, 'vault.config.json'), publishConfig: { switches } });
+      assert.equal(await r.promise, 0);
+      return r.lines.join('\n');
+    };
+    assert.match(await say({ characterSheets: true, liveStats: false, unset: ['live_stats'] }),
+      /live stats are deployed on this site but publish\.live_stats is not set, so they are off\. Set publish\.live_stats to true to keep them/);
+    // set to false: the bare line; sheets off: the sheets line; nothing deployed is covered above
+    assert.match(await say({ characterSheets: true, liveStats: false, unset: [] }), /live stats are off for this campaign/);
+    assert.match(await say({ characterSheets: false, liveStats: false, unset: ['live_stats'] }), /character sheets are off/);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

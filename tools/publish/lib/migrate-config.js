@@ -10,10 +10,10 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy } = require('./config-keys');
-const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
+const { editPublishBlock, setPublishKeys, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
 const { asBool } = require('./switches');
-const { normalizeExcludeDir, stricterCallouts } = require('./config');
+const { normalizeExcludeDir, stricterCallouts, MERGED_MAPS } = require('./config');
 const { parseNote } = require('./frontmatter');
 
 const VAULT_REL = path.join('_meta', 'vault-config.md');
@@ -146,6 +146,22 @@ function planMigration({ configPath, vaultPath } = {}) {
           continue;
         }
       }
+      if (MERGED_MAPS.has(entry.publish) && isMap(fromSite)) {
+        // Sub-keys only the site file has move into the vault map; one both set keeps the
+        // vault's value and the discarded one is reported.
+        const base = isMap(fromVault) ? fromVault : {};
+        const added = Object.keys(fromSite).filter((k) => !(k in base));
+        if (added.length) {
+          plan.vaultSet[entry.publish] = { ...base, ...Object.fromEntries(added.map((k) => [k, fromSite[k]])) };
+          plan.merges.push({ to: `publish.${entry.publish}`, added });
+        }
+        for (const k of Object.keys(fromSite)) {
+          if (k in base && !isDeepStrictEqual(base[k], fromSite[k])) {
+            plan.conflicts.push({ key: `${entry.json}.${k}`, kept: base[k], discarded: fromSite[k] });
+          }
+        }
+        continue;
+      }
       if (entry.publish === 'exclude_callouts') {
         // The stricter of the two is kept: `true` beats a list, a list beats off, two lists
         // are unioned. A weaker site value is the only thing discarded.
@@ -170,13 +186,12 @@ function planMigration({ configPath, vaultPath } = {}) {
         if (theme !== undefined && theme !== null && !isMap(theme)) {
           return refuse(`cannot migrate landingTagline: publish.theme in ${VAULT_REL} is not a map`);
         }
-        const kept = theme && theme.tagline;
-        if (kept === undefined || kept === null || kept === '') {
-          plan.vaultSet.theme = { ...(theme || {}), tagline };
-          if (theme) plan.notes.push('publish.theme is rewritten to add tagline; comments inside it are not kept');
+        const filled = fillUnset(theme || {}, { tagline });
+        if (filled) {
+          plan.vaultSet.theme = filled;
           plan.moves.push({ from: 'vault.config.json landingTagline', to: 'publish.theme.tagline', value: tagline });
-        } else if (kept !== tagline) {
-          plan.conflicts.push({ key: 'landingTagline', kept, discarded: tagline });
+        } else if (theme.tagline !== tagline) {
+          plan.conflicts.push({ key: 'landingTagline', kept: theme.tagline, discarded: tagline });
         }
       }
     }
@@ -227,6 +242,14 @@ function planMigration({ configPath, vaultPath } = {}) {
   if (publish.backend !== undefined) plan.vaultRemove.push('backend');
   if (siteBackend !== undefined) plan.siteRemove.push('backend');
 
+  // A list or map that already sits in the vault file and gets new content is written
+  // again from its values, so a comment inside it is lost: say so, for each such key.
+  for (const key of Object.keys(plan.vaultSet)) {
+    const existing = publish[key];
+    if (existing !== undefined && existing !== null && typeof existing === 'object') {
+      plan.notes.push(`publish.${key} is rewritten; comments inside it are not kept`);
+    }
+  }
   const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove });
   if (edit.error) return refuse(`cannot edit ${VAULT_REL}: ${edit.error}`);
   // A key that still holds entries the vault file cannot take stays in the site file.
@@ -243,21 +266,6 @@ function backup(file) {
   if (fs.existsSync(dest)) return { kept: dest };
   fs.copyFileSync(file, dest);
   return { written: dest };
-}
-
-// Writes through a symlink to the real file, and keeps the file's permission bits.
-function writeAtomic(link, text) {
-  const file = fs.realpathSync(link);
-  const mode = fs.statSync(file).mode & 0o7777;
-  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
-  try {
-    fs.writeFileSync(tmp, text, { mode });
-    fs.chmodSync(tmp, mode);
-    fs.renameSync(tmp, file);
-  } catch (e) {
-    fs.rmSync(tmp, { force: true });
-    throw e;
-  }
 }
 
 // deps.writeSite(file, text) replaces the site file writer (tests inject a failing one).

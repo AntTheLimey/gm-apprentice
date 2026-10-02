@@ -32,15 +32,28 @@ const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
 // The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
 // keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
-// list that the vault file's list lacks is named as still applied from the site file. Null when none.
-function legacyWarning(legacy) {
-  if (!Array.isArray(legacy) || legacy.length === 0) return null;
+// list that the vault file's list lacks is named as still applied from the site file. The
+// old `backend` block and `landingTagline` are named too: either gives the migration work.
+// A list key that is not a list gets its own clause (the migration cannot move it) and does
+// not send the GM to migrate.py when it is all that is left. Returns the lines to print.
+function legacyWarning(legacy, rawConfig) {
   const parts = [];
-  for (const rec of legacy) {
+  const byHand = [];
+  for (const rec of Array.isArray(legacy) ? legacy : []) {
+    if (rec.notAList) {
+      byHand.push(`${rec.key} in vault.config.json is not a list and is ignored; remove it or move its entries to publish.${rec.publishKey} by hand`);
+      continue;
+    }
     parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);
     for (const x of rec.stillApplied || []) parts.push(`${rec.key} entry "${x}" is still applied from vault.config.json`);
   }
-  return `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`;
+  for (const key of ['backend', 'landingTagline']) {
+    if (rawConfig && rawConfig[key] !== undefined) parts.push(key);
+  }
+  const moved = parts.length
+    ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`
+    : null;
+  return [moved, ...byHand.map((c) => `WARNING: ${c}.`)].filter(Boolean);
 }
 
 function build(options = {}) {
@@ -1308,8 +1321,7 @@ function build(options = {}) {
   }
 
   // Settings that still live in the site file. One line, so it is the thing the GM reads.
-  const legacyLine = legacyWarning(publishConfig.legacy);
-  if (legacyLine) console.warn(`  ${legacyLine}`);
+  for (const line of legacyWarning(publishConfig.legacy, rawConfig)) console.warn(`  ${line}`);
 
   // Live stats and the inbox used to be detected from a deployed backend; unset now means
   // off. A deployed feature whose switch neither file sets is never lost silently: the line

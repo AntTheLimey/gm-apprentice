@@ -3,6 +3,7 @@ const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS, failureDetail } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
 const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
+const { OLD_SWITCHES } = require('./config-keys');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
 const KV_PERMISSION_FIX =
@@ -80,7 +81,7 @@ const defaultRunWrangler = (args, opts = {}, run = runCommand) => {
   return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error || null };
 };
 
-const SWITCH_KEY = { statusBar: 'live_stats', inbox: 'inbox' };
+const SWITCH_KEY = OLD_SWITCHES;
 const FLAG_KEY = { 'status-bar': 'statusBar', inbox: 'inbox' };
 const LABEL = { 'status-bar': 'live status bar', inbox: 'change-request inbox' };
 
