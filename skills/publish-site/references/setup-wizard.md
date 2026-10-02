@@ -264,13 +264,9 @@ If `_Campaign/Campaign Overview.md` exists in the vault, read its
 > "I found a title in your campaign overview: '[title]'. Would
 > you like to use that, or something different?"
 
-Store the confirmed name as `site_title` in `setup_progress`, and
-write it to `publish.site_title` in `_meta/vault-config.md` now.
-`init` (Step 13) fills in only the settings the vault file does not
-already set, so the title written here is the one the site uses.
-Edit the `publish:` block in place: add
-only that key, and leave every other line as written. If the file has
-no `publish:` block, add one at the end of the frontmatter.
+Store the confirmed name as `site_title` in `setup_progress`. Step 13
+hands it to `init` as `--title`, which writes `publish.site_title` in
+`_meta/vault-config.md` when the vault file does not already set it.
 
 ### Step 7: Landing page tagline
 
@@ -283,13 +279,10 @@ Ask:
 > or
 > 'A Regency-era Call of Cthulhu investigation in Bath, 1814.'"
 
-Store as `tagline` in `setup_progress`, and write it to
-`publish.theme.tagline` in `_meta/vault-config.md` (a child of
-`theme:`, beside any palette and fonts set later). Edit the
-`publish:` block in place: add only that key (and the `theme:` line
-above it when there is none), and leave every other line as written.
-If the file has no `publish:` block, add one at the end of the
-frontmatter.
+Store as `tagline` in `setup_progress`. Step 13 hands it to `init` as
+`--tagline`, which writes `publish.theme.tagline` in
+`_meta/vault-config.md` (a child of `theme:`, beside any palette and
+fonts set later) when the vault file does not already set it.
 
 ### Step 8: Name the site (host-specific)
 
@@ -401,14 +394,16 @@ npm registry. Run its `init` from the plugin cache so the scaffold pins
 itself to the exact version the GM has installed:
 
 ```bash
-node "$TOOL" init "<site_dir>" --vault "<vault_path>"
+node "$TOOL" init "<site_dir>" --vault "<vault_path>" --title "<site_title>" --tagline "<tagline>"
 ```
 
 Use the plugin cache path for the GM's OS (e.g.
 `~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). Pass the
 absolute vault path from Step 1: `--vault` records it as `vaultPath`
 in the site file and tells `init` where the campaign settings go
-(without it `init` assumes `./vault` inside the site directory). This
+(without it `init` assumes `./vault` inside the site directory).
+`--title` and `--tagline` carry the Step 6 and Step 7 answers; leave
+one out and `init` uses "My Campaign" or sets no tagline. This
 creates the following structure inside `<site_dir>`:
 
 ```text
@@ -431,11 +426,11 @@ at-table inbox or live status bar later (Phase G).
 `_meta/vault-config.md`, under `publish:`, for each key that file does
 not already set: `site_title`, `folder_map` (the standard vault
 folders), `attachments_dir`, `exclude_dirs` (`_meta`, `_Templates`,
-`_resources`) and `exclude_callouts: true`. A key already there, such
-as the `site_title` from Step 6, is left alone. If `init` prints
-`Campaign settings were not written: …`, the vault file could not be
-edited safely: fix what the message names, then add the listed keys
-under `publish:` yourself (Step 15 shows the full block; without a
+`_resources`) and `exclude_callouts: true`, plus `site_title` and
+`theme.tagline` from `--title` and `--tagline`. A key already there is
+left alone. If `init` prints `Campaign settings were not written: …`,
+the vault file could not be edited safely: fix what the message
+names, then add the listed keys under `publish:` yourself (Step 15 shows the full block; without a
 `folder_map` no folder publishes).
 
 If the command fails with "command not found", explain:
@@ -548,8 +543,8 @@ publish:
   exclude_callouts: true
 ```
 
-If `site_title` reads `My Campaign`, `init` ran before the title was
-written: set it to the Step 6 answer. Leave `folder_map`,
+If `site_title` reads `My Campaign`, `init` ran without `--title`: set
+it to the Step 6 answer. Leave `folder_map`,
 `exclude_dirs` and `attachments_dir` as written unless the vault uses
 non-standard folder names. Leave `live_stats` and `inbox` unset: unset
 means off, which keeps the live status bar and the at-table inbox off

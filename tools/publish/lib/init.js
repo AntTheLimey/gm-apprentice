@@ -30,15 +30,18 @@ const DEFAULT_FOLDER_MAP = {
   'Heritages': 'heritages',
 };
 
-function defaultCampaignSettings(siteTitle) {
+function defaultCampaignSettings(siteTitle, tagline) {
   return {
     site_title: siteTitle,
     folder_map: DEFAULT_FOLDER_MAP,
     attachments_dir: '_attachments',
     exclude_dirs: ['_meta', '_Templates', '_resources'],
     exclude_callouts: true,
+    ...(tagline ? { theme: { tagline } } : {}),
   };
 }
+
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 /**
  * Write the starting campaign settings into the vault file, for keys it does not
@@ -66,7 +69,15 @@ function seedVaultSettings(vaultDir, settings) {
   const set = {};
   const kept = [];
   for (const [key, value] of Object.entries(settings)) {
-    if (publish[key] === undefined) set[key] = value; else kept.push(key);
+    if (publish[key] === undefined) { set[key] = value; continue; }
+    // `theme` holds other keys the GM may have set: add the seeded ones beside them, only
+    // where the vault file leaves them unset. (The theme block is re-written, so comments
+    // inside it are not kept, as with migrate-config.)
+    if (key === 'theme' && isMap(value) && isMap(publish.theme)) {
+      const add = Object.entries(value).filter(([k]) => publish.theme[k] === undefined || publish.theme[k] === null || publish.theme[k] === '');
+      if (add.length) { set.theme = { ...publish.theme, ...Object.fromEntries(add) }; continue; }
+    }
+    kept.push(key);
   }
   if (!Object.keys(set).length) return { written: [], kept, skipped: null, missing: {} };
   try {
@@ -104,6 +115,8 @@ function applyPlaceholders(content, values) {
  * @param {string} targetDir - Directory to write scaffold into (default: cwd)
  * @param {object} [options]
  * @param {boolean} [options.verbose] - Log progress (default: false)
+ * @param {string} [options.siteTitle] - Seeds publish.site_title (default "My Campaign")
+ * @param {string} [options.tagline] - Seeds publish.theme.tagline when the vault file leaves it unset
  * @param {string} [options.vaultPath] - The vault; recorded as vaultPath in the site file and
  *   where the starting campaign settings go (default: ./vault beside the site)
  * @returns {Promise<{ success: true, files: string[], vaultSettings: object }>}
@@ -194,7 +207,7 @@ async function init(targetDir = '.', options = {}) {
   // file the editor refuses, never stops the scaffold: the site is written and the caller
   // is told which settings to add.
   const vaultDir = path.resolve(dest, values.VAULT_PATH);
-  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle));
+  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline));
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
     log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}${which}`);

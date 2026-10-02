@@ -370,6 +370,70 @@ describe('init', () => {
       }
     });
 
+    it('--title and --tagline seed site_title and theme.tagline through the CLI', async () => {
+      const tmpDir = await makeTmpDir();
+      const { spawnSync } = require('child_process');
+      const cli = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+      const run = (args) => spawnSync(process.execPath, [cli, 'init', ...args], { cwd: tmpDir, encoding: 'utf8' });
+      try {
+        await fs.mkdir(path.join(tmpDir, 'vault'));
+        let r = run(['site', '--title', 'The Long Dark', '--vault', 'vault', '--tagline', 'Nobody sleeps']);
+        assert.strictEqual(r.status, 0, r.stderr);
+        const pub = publishOf(path.join(tmpDir, 'vault'));
+        assert.strictEqual(pub.site_title, 'The Long Dark');
+        assert.deepStrictEqual(pub.theme, { tagline: 'Nobody sleeps' });
+        assert.match(readFileSync(path.join(tmpDir, 'site', 'README.md'), 'utf8'), /^# The Long Dark/);
+        // a flag with no text is refused before anything is written
+        r = run(['site2', '--tagline']);
+        assert.strictEqual(r.status, 2);
+        assert.match(r.stderr, /--tagline needs some text/);
+        r = run(['site2', '--title', '--vault', 'vault']);
+        assert.strictEqual(r.status, 2);
+        assert.match(r.stderr, /--title needs some text/);
+        await assert.rejects(fs.access(path.join(tmpDir, 'site2')));
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('the tagline joins the theme keys already there, and never replaces a tagline', async () => {
+      const tmpDir = await makeTmpDir();
+      try {
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        const file = path.join(vault, '_meta', 'vault-config.md');
+        await fs.writeFile(file, '---\ntype: meta\npublish:\n  theme:\n    genre: noir\n---\n');
+        const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault, tagline: 'Rain, always' });
+        assert.deepStrictEqual(publishOf(vault).theme, { genre: 'noir', tagline: 'Rain, always' });
+        assert.ok(result.vaultSettings.written.includes('theme'));
+        // a second scaffold (new site, same vault) keeps the tagline already there
+        await init(path.join(tmpDir, 'site2'), { vaultPath: vault, tagline: 'Other words' });
+        assert.deepStrictEqual(publishOf(vault).theme, { genre: 'noir', tagline: 'Rain, always' });
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('a refused vault file is not written for the tagline either, and it is listed as missing', async () => {
+      const tmpDir = await makeTmpDir();
+      const real = console.warn;
+      const warned = [];
+      console.warn = (m) => warned.push(m);
+      try {
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        const original = '---\ntype: meta\npublish: {site_title: X}\n---\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault, tagline: 'Hi' });
+        assert.deepStrictEqual(result.vaultSettings.missing.theme, { tagline: 'Hi' });
+        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
+        assert.match(warned.join('\n'), /theme/);
+      } finally {
+        console.warn = real;
+        await removeTmpDir(tmpDir);
+      }
+    });
+
     it('a vault file the editor refuses is left alone and the reason is shown', async () => {
       const tmpDir = await makeTmpDir();
       const real = console.warn;

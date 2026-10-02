@@ -63,7 +63,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `vault.config.json` and the campaign settings (`site_title`,
   `folder_map`, `attachments_dir`, `exclude_dirs`, `exclude_callouts`)
   into the vault file, for each key it does not already set. It takes
-  `--vault <dir>`. A vault folder that is not there yet, or a vault
+  `--vault <dir>`, `--title <text>` (the site title, instead of "My
+  Campaign") and `--tagline <text>` (`publish.theme.tagline`, beside
+  any other theme keys). A vault folder that is not there yet, or a vault
   file that cannot be edited, does not stop the scaffold; the settings
   to add are printed. A fresh `init` and `build` prints no warning.
 - **Setup commands.** `setup-status-bar` and `setup-inbox` set

@@ -61,7 +61,7 @@ Every subcommand accepts --help / -h.
 // reference for what each command accepts.
 const SUBCOMMAND_HELP = {
   init: `
-gm-apprentice-publish init [target-dir] [--vault <dir>]
+gm-apprentice-publish init [target-dir] [--vault <dir>] [--title <text>] [--tagline <text>]
 
 Scaffolds a new site in target-dir (default: the current directory):
 package.json pinned to this tool, vault.config.json (the deployment
@@ -80,6 +80,10 @@ Follow with "build" to generate the site.
   --vault <dir>      The vault, read relative to where you run this. Recorded as
                      vaultPath (relative to the site if inside it, else absolute)
                      and given the settings
+  --title <text>     The site title (publish.site_title), instead of "My Campaign"
+  --tagline <text>   The landing-page tagline (publish.theme.tagline); other
+                     theme keys are kept
+                     Both are written only where the vault file leaves the key unset.
   --help, -h         Show this help
 `,
   build: `
@@ -445,6 +449,22 @@ if (wantsHelp) {
 
 if (command === 'init') {
   const rest = args.slice(1);
+  // --title / --tagline seed publish.site_title / publish.theme.tagline in the vault file.
+  const textOption = (flag) => {
+    const i = rest.indexOf(flag);
+    if (i === -1) return undefined;
+    const value = rest[i + 1];
+    if (!value || !value.trim() || value.startsWith('--')) return null;
+    rest.splice(i, 2);
+    return value.trim();
+  };
+  const siteTitle = textOption('--title');
+  const tagline = textOption('--tagline');
+  if (siteTitle === null || tagline === null) {
+    console.error(`Init failed: ${siteTitle === null ? '--title' : '--tagline'} needs some text`);
+    exitAfterFlush(2);
+    return;
+  }
   let vaultPath;
   const vi = rest.indexOf('--vault');
   if (vi !== -1) {
@@ -463,7 +483,7 @@ if (command === 'init') {
   }
   const targetDir = rest[0] || '.';
   const { init } = require('../lib/init');
-  init(targetDir, { verbose: true, vaultPath }).then(() => {
+  init(targetDir, { verbose: true, vaultPath, siteTitle, tagline }).then(() => {
     exitAfterFlush(0);
   }).catch((err) => {
     console.error(`Init failed: ${err.message}`);
