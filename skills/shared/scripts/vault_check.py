@@ -1542,7 +1542,7 @@ def publish_switches(answer: ToolAnswer) -> dict[str, bool] | None:
 
 
 def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
-    """Per file (NFC path), the casefolded `##` headings the site withholds
+    """Per file (NFC path), the `##` headings (`_bare_section_title`) the site withholds
     only because character sheets are off, from `sheetWithheldSections` in
     `explain --all --json`. Empty when the tool could not be asked,
     answered oddly, or predates the field: an older tool withholds nothing
@@ -1550,25 +1550,61 @@ def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
     try:
         pages = answer.data["pages"] if answer.data is not None else []
         return {unicodedata.normalize("NFC", str(p["path"])):
-                {str(t).strip().casefold() for t in p["sheetWithheldSections"]}
+                {_bare_section_title(str(t)) for t in p["sheetWithheldSections"]}
                 for p in pages if p.get("sheetWithheldSections")}
     except (KeyError, TypeError, AttributeError):
         return {}
 
 
+def _bare_section_title(title: str) -> str:
+    """pc-prose.js `bareSectionTitle`: lower-cased, one layer of emphasis
+    and a trailing colon removed, so `**Skills**`, `Skills:` and `skills`
+    are one section. The tool's titles and the file's headings both go
+    through this, so a spelling cannot make them differ."""
+    def un_colon(t: str) -> str:
+        return re.sub(r":$", "", t).strip()
+
+    def unwrap(t: str) -> str:
+        m = re.match(r"^(\*\*|\*|__|_)(.+)\1$", t)
+        return m.group(2).strip() if m else t
+    return un_colon(unwrap(un_colon(title.strip().lower())))
+
+
+_LOOSE_HEADING_RE = re.compile(r"^\s{0,3}#{1,2}(\s|$)")
+_SETEXT_UNDERLINE_RE = re.compile(r"^\s{0,3}(=+|-+)\s*$")
+_HTML_HEADING_RE = re.compile(r"<h[1-6]", re.I)
+
+
 def _without_sections(states: list[LineState], kept: set[int] | None,
                       titles: set[str]) -> set[int]:
-    """`kept` (None: every line) minus the lines under each H2 whose title
-    is in `titles` (casefolded, emphasis unwrapped or not), down to the
-    next heading of level 2 or shallower, as the tool's own walk ends it."""
+    """`kept` (None: every line) minus the lines under each published H2
+    whose title is in `titles` (already `_bare_section_title`d).
+
+    Sections start only where this is sure: a level-2 heading that
+    publishes and sits outside code. They end wherever a level-1 or 2
+    heading could be, by a deliberately loose test the tool's own parser
+    would pass or fail the same way or narrower (setext, indented ATX,
+    empty `##`, an HTML heading), and the heading is then judged afresh.
+    Any doubt leaves lines in the set, so they are scanned: a line wrongly
+    dropped hides a leak, a line wrongly kept costs one row.
+    """
     left = {s.lineno for s in states} if kept is None else set(kept)
+    stops: set[int] = set()
+    for i, state in enumerate(states):
+        if (_LOOSE_HEADING_RE.match(state.line)
+                or _HTML_HEADING_RE.search(state.line)):
+            stops.add(i)
+        elif (i > 0 and _SETEXT_UNDERLINE_RE.match(state.line)
+                and states[i - 1].line.strip()):
+            stops.update((i - 1, i))
     dropping = False
-    for state in states:
-        if state.heading is not None and state.heading[0] <= 2:
-            title = state.heading[1].strip()
-            dropping = state.heading[0] == 2 and (
-                title.casefold() in titles
-                or _plain_title(title).casefold() in titles)
+    for i, state in enumerate(states):
+        if i in stops:
+            dropping = False
+        if (state.heading is not None and state.heading[0] == 2
+                and state.published and not state.in_code
+                and _bare_section_title(state.heading[1]) in titles):
+            dropping = True
         if dropping:
             left.discard(state.lineno)
     return left
@@ -3411,7 +3447,10 @@ def renest_wrapup(text: str,
 def _plain_title(title: str) -> str:
     """A heading title with any whole-title emphasis unwrapped."""
     m = EMPHASIS_RE.match(title)
-    return m.group(2).strip() if m else title
+    # `**A** and **B**` is two emphasised words, not one wrapped title.
+    if m and m.group(1) not in m.group(2):
+        return m.group(2).strip()
+    return title
 
 
 def _depth(state: LineState) -> int:

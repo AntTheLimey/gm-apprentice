@@ -3360,6 +3360,64 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Hero.md"), self.HERO)
 
+    def _scan(self, body, withheld, fix=False):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": withheld})
+        (vault / "Hero.md").write_text("---\ntype: pc\n---\n\n" + body,
+                                       encoding="utf-8")
+        return vc.check_gm_leak(vault, None, fix=fix)
+
+    LABEL = "bold label 'Keeper-only'"
+
+    def test_a_setext_or_indented_heading_ends_the_dropped_section(self):
+        for heading in ("Notes\n-----", "Notes\n=====", "  ## Notes", "##"):
+            with self.subTest(heading=heading):
+                rows = self._scan("## Skills\n\nBrawling\n\n" + heading
+                                  + "\n\n**Keeper-only:** x\n", ["Skills"])
+                self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_a_withheld_title_inside_a_gm_only_block_starts_nothing(self):
+        rows = self._scan("## Background\n\n<!-- gm-only -->\n## Skills\n"
+                          "<!-- /gm-only -->\n\n**Keeper-only:** x\n",
+                          ["Skills"])
+        self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_every_section_with_a_withheld_title_is_dropped(self):
+        rows = self._scan("## Skills\n\n**Keeper-only:** x\n\n## Skills\n\n"
+                          "**Keeper-only:** y\n", ["Skills"])
+        self.assertFalse(rows_for(rows, self.LABEL), rows)
+
+    def test_a_level_one_title_is_never_dropped(self):
+        rows = self._scan("# Stats\n\n**Keeper-only:** x\n", ["Stats"])
+        self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_dressed_titles_match(self):
+        for heading in ("## **Skills**", "## Skills:", "## skills"):
+            with self.subTest(heading=heading):
+                rows = self._scan(heading + "\n\n**Keeper-only:** x\n",
+                                  ["Skills"])
+                self.assertFalse(rows_for(rows, self.LABEL), rows)
+        rows = self._scan("## Skills\n\n**Keeper-only:** x\n", ["**Skills**"])
+        self.assertFalse(rows_for(rows, self.LABEL), rows)
+
+    def test_fix_plans_a_renest_only_for_the_published_section(self):
+        rows = self._scan("## **GM Notes**\n\nx\n\n## Skills\n\ny\n\n"
+                          "## Background\n\nz\n", ["Skills"])
+        self.assertEqual(len(rows_for(rows, "WOULD-FIX\tHero.md")), 1, rows)
+        rows = self._scan("## Skills\n\n## **GM Notes**\n\nx\n\n"
+                          "## Background\n\nz\n", ["Skills", "**GM Notes**"])
+        self.assertFalse(rows_for(rows, "WOULD-FIX"), rows)
+        rows = self._scan("## Skills\n\nBrawling\n\n## **GM Notes**\n\nx\n",
+                          ["Skills"], fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tHero.md")), 1, rows)
+
+    def test_a_title_of_two_emphasised_words_is_not_unwrapped(self):
+        self.assertEqual(vc._plain_title("**A** and **B**"), "**A** and **B**")
+        self.assertEqual(vc._plain_title("**Skills**"), "Skills")
+        # Both sides go through the tool's own normalisation.
+        self.assertEqual(vc._bare_section_title("**A** and **B**"),
+                         vc._bare_section_title("**a** and **b**"))
+
     def test_a_stub_page_keeps_its_own_filter_too(self):
         vault = make_vault(self)
         stub_publish_tool(self, vault, sheet_withheld={"Hero.md": ["Skills"]})
