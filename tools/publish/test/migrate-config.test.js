@@ -8,6 +8,7 @@ const { planMigration, applyMigration, runMigrateConfig } = require('../lib/migr
 const { MOVED_KEYS, DEPLOY_KEYS } = require('../lib/config-keys');
 const { parseNote } = require('../lib/frontmatter');
 const { build } = require('../lib/build');
+const { loadPublishConfig } = require('../lib/config');
 
 const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'with-gurps-pc');
@@ -372,13 +373,13 @@ describe('migrate-config', () => {
     assert.ok(out.some((l) => l.startsWith('skipped publish.exclude_dirs:') && l.includes('is not a list') && l.includes('left in the site file')), out.join('\n'));
   });
 
-  it('a site list of only unusable entries writes no empty list; the key leaves the site file', () => {
-    const s = makeSite({ site: { excludeFields: [null, 3] } });
+  it('a site list of only unusable entries writes no empty list; the key stays in the site file', () => {
+    const s = makeSite({ site: { excludeFields: [null, { a: 1 }] } });
     const { plan } = migrate(s);
     assert.strictEqual(publishOf(s.vaultFile)?.exclude_fields, undefined);
-    assert.ok(!('excludeFields' in JSON.parse(read(s.configPath))));
+    assert.deepStrictEqual(JSON.parse(read(s.configPath)).excludeFields, [null, { a: 1 }]);
     assert.strictEqual(plan.skipped[0].key, 'excludeFields');
-    assert.ok(plan.skipped[0].reason.includes('removed from the site file'), plan.skipped[0].reason);
+    assert.ok(plan.skipped[0].reason.includes('left in the site file'), plan.skipped[0].reason);
   });
 
   it('a site list with some usable entries still moves the usable ones', () => {
@@ -479,10 +480,10 @@ describe('migrate-config', () => {
   });
 
   it('list entries that are not text are skipped and reported, on a merge and on a whole move', () => {
-    const s = makeSite({ site: { excludeDirs: [1, null, '', 'A'], excludeFields: [null, 'f'] }, vaultFile: '---\npublish:\n  exclude_dirs: [B]\n---\n' });
+    const s = makeSite({ site: { excludeDirs: [{ x: 1 }, null, '', 'A'], excludeFields: [null, 'f'] }, vaultFile: '---\npublish:\n  exclude_dirs: [B]\n---\n' });
     const lines = [];
     const plan = planMigration({ configPath: s.configPath });
-    assert.deepStrictEqual(plan.merges, [{ to: 'publish.exclude_dirs', added: ['A'], skipped: [1, null, ''] }]);
+    assert.deepStrictEqual(plan.merges, [{ to: 'publish.exclude_dirs', added: ['A'], skipped: [{ x: 1 }, null, ''] }]);
     assert.deepStrictEqual(plan.moves[0].value, ['f']);
     assert.deepStrictEqual(plan.moves[0].skipped, [null]);
     runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
@@ -490,6 +491,47 @@ describe('migrate-config', () => {
     const pub = publishOf(s.vaultFile);
     assert.deepStrictEqual(pub.exclude_dirs, ['B', 'A']);
     assert.deepStrictEqual(pub.exclude_fields, ['f']);
+  });
+
+  // The list the reader resolves for a site, before and after the migration.
+  const resolvedLists = (s) => {
+    const cfg = JSON.parse(read(s.configPath));
+    const p = loadPublishConfig(s.vault, cfg, () => {});
+    return { exclude_dirs: p.exclude_dirs.map(String), exclude_sections: p.exclude_sections.map(String), exclude_fields: p.exclude_fields.map(String) };
+  };
+
+  it('I1: the resolved exclude lists are the same before and after a migration, for entries that are not plain text', () => {
+    const vectors = [[2024, '_meta'], [true, 'X'], [null, 'X'], [{ a: 1 }], [2024, null, 'Y', '']];
+    for (const list of vectors) {
+      const s = makeSite({ site: { excludeDirs: list, excludeSections: list, excludeFields: list } });
+      const before = resolvedLists(s);
+      migrate(s);
+      const after = resolvedLists(s);
+      for (const k of Object.keys(before)) assert.deepStrictEqual([...after[k]].sort(), [...before[k]].sort(), `${JSON.stringify(list)} ${k}`);
+    }
+    const s = makeSite({ site: { excludeDirs: [2024, '_meta'] } });
+    migrate(s);
+    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_dirs, ['2024', '_meta']);
+  });
+
+  it('I1: skipped entries stay in the site file, the line says so, and a second run changes nothing', () => {
+    const s = makeSite({ site: { excludeSections: [null, 'X'] } });
+    const lines = [];
+    runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
+    assert.deepStrictEqual(JSON.parse(read(s.configPath)).excludeSections, [null]);
+    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_sections, ['X']);
+    assert.ok(lines.some((l) => l.startsWith('skipped publish.exclude_sections:') && l.includes('left in vault.config.json')), lines.join('\n'));
+    const again = planMigration({ configPath: s.configPath });
+    assert.strictEqual(again.applicable, false);
+  });
+
+  it('I1: a build before and after migrating a list with a number in it is byte-identical', () => {
+    const { a, b } = buildBeforeAndAfter({
+      vaultYaml: '---\ntype: meta\npublish:\n  mode: player\n---\n',
+      site: { excludeDirs: [2024, 'Nowhere'], excludeSections: [true, 'Keeper Only'] },
+    });
+    assert.deepStrictEqual(Object.keys(a).sort(), Object.keys(b).sort());
+    for (const k of Object.keys(a)) assert.strictEqual(fs.readFileSync(a[k]).equals(fs.readFileSync(b[k])), true, k);
   });
 
   it('the site file keeps its mode, and a symlinked config is written through', () => {

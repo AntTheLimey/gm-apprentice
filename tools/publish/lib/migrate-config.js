@@ -21,13 +21,20 @@ const NEW_VAULT_FILE = '---\ntype: meta\n---\n';
 const DETECTORS = { statusBar: detectStatusBar, inbox: detectInbox };
 const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
-// Only non-empty text is a list entry; anything else is set aside and reported.
-const splitEntries = (list) => ({ text: list.filter(isText), skipped: list.filter((v) => !isText(v)) });
+// What the reader does with a list entry is String(entry), so text, numbers and booleans
+// carry over (as text, exactly as the reader spells them). Only null, a map or list, a
+// non-finite number and an empty string are set aside; they stay in the site file, where the
+// reader still applies them, and the plan reports them.
+const usable = (v) => isText(v) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
+const splitEntries = (list) => ({
+  text: list.filter(usable).map((v) => (typeof v === 'string' ? v : String(v))),
+  skipped: list.filter((v) => !usable(v)),
+});
 const oneLine = (s) => String(s).split('\n')[0].trim();
 
 const refuse = (reason) => ({
   applicable: false, refused: true, reason: oneLine(reason),
-  moves: [], merges: [], switches: [], conflicts: [], notes: [], skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [],
+  moves: [], merges: [], switches: [], conflicts: [], notes: [], skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [], siteSet: {},
 });
 
 // The site's vaultPath is resolved against the config file's directory, as build() does.
@@ -74,7 +81,7 @@ function planMigration({ configPath, vaultPath } = {}) {
 
   const plan = {
     applicable: false, moves: [], merges: [], switches: [], conflicts: [], notes: [],
-    skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [],
+    skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [], siteSet: {},
   };
 
   if (site) {
@@ -95,10 +102,9 @@ function planMigration({ configPath, vaultPath } = {}) {
         }
         const { text, skipped } = splitEntries(fromSite);
         if (skipped.length && !text.length) {
-          plan.siteRemove.push(entry.json);
           plan.skipped.push({
             key: entry.json, to, entries: skipped,
-            reason: `${from} has no entry that is text, so nothing was written and the key was removed from the site file`,
+            reason: `${from} has no entry that can be carried over, so nothing was written and the key was left in the site file, where the build still applies it`,
           });
           continue;
         }
@@ -109,7 +115,7 @@ function planMigration({ configPath, vaultPath } = {}) {
         if (entry.kind === 'list' && Array.isArray(fromSite)) {
           const { text, skipped } = splitEntries(fromSite);
           move.value = text;
-          if (skipped.length) move.skipped = skipped;
+          if (skipped.length) { move.skipped = skipped; plan.siteSet[entry.json] = skipped; }
         }
         plan.vaultSet[entry.publish] = move.value;
         plan.moves.push(move);
@@ -132,6 +138,7 @@ function planMigration({ configPath, vaultPath } = {}) {
             added.push(s);
           }
           if (added.length) plan.vaultSet[entry.publish] = [...fromVault, ...added];
+          if (skipped.length) plan.siteSet[entry.json] = skipped;
           if (added.length || skipped.length) {
             plan.merges.push({ to: `publish.${entry.publish}`, added, ...(skipped.length ? { skipped } : {}) });
           }
@@ -210,7 +217,10 @@ function planMigration({ configPath, vaultPath } = {}) {
 
   const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove });
   if (edit.error) return refuse(`cannot edit ${VAULT_REL}: ${edit.error}`);
-  plan.applicable = Object.keys(plan.vaultSet).length > 0 || plan.vaultRemove.length > 0 || plan.siteRemove.length > 0;
+  // A key that still holds entries the vault file cannot take stays in the site file.
+  plan.siteRemove = plan.siteRemove.filter((k) => !(k in plan.siteSet));
+  const siteRewritten = !!site && Object.keys(plan.siteSet).some((k) => !isDeepStrictEqual(site[k], plan.siteSet[k]));
+  plan.applicable = Object.keys(plan.vaultSet).length > 0 || plan.vaultRemove.length > 0 || plan.siteRemove.length > 0 || siteRewritten;
   if (!plan.applicable) plan.reason = 'nothing to migrate';
   return plan;
 }
@@ -255,13 +265,14 @@ function applyMigration(plan, { configPath, vaultPath } = {}, deps = {}) {
   const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove });
   if (edit.error) throw new Error(`cannot edit ${VAULT_REL}: ${edit.error}`);
   const writeVault = edit.text !== before || (!exists && Object.keys(plan.vaultSet).length > 0);
-  const writeSite = !!site && plan.siteRemove.length > 0;
+  const writeSite = !!site && (plan.siteRemove.length > 0 || Object.keys(plan.siteSet || {}).some((k) => !isDeepStrictEqual(site[k], plan.siteSet[k])));
 
   if (writeVault && exists) made.push(backup(vaultFile));
   if (writeSite) made.push(backup(configPath));
   if (writeVault) setPublishKeys(vault, plan.vaultSet, plan.vaultRemove);
   if (writeSite) {
-    const kept = Object.fromEntries(Object.entries(site).filter(([k]) => !plan.siteRemove.includes(k)));
+    const kept = Object.fromEntries(Object.entries(site).filter(([k]) => !plan.siteRemove.includes(k))
+      .map(([k, v]) => [k, k in (plan.siteSet || {}) ? plan.siteSet[k] : v]));
     try {
       (deps.writeSite || writeAtomic)(configPath, JSON.stringify(kept, null, 2) + '\n');
     } catch (e) {
@@ -282,7 +293,7 @@ function planEntries(plan) {
   const lines = [];
   const change = (text) => lines.push({ text, note: false });
   const note = (text) => lines.push({ text, note: true });
-  const skippedLine = (to, skipped) => skipped && note(`skipped ${to}: not text, so not carried over: ${skipped.map(show).join(', ')}`);
+  const skippedLine = (to, skipped) => skipped && note(`skipped ${to}: ${skipped.map(show).join(', ')} cannot be carried over, so it is left in vault.config.json, where the build still applies it`);
   for (const m of plan.moves) { change(`move ${m.from} -> ${m.to}`); skippedLine(m.to, m.skipped); }
   for (const m of plan.merges) {
     change(`merge ${m.to}: added ${m.added.map(show).join(', ') || 'nothing'}`);
