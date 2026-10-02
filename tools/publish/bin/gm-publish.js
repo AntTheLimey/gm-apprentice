@@ -38,6 +38,7 @@ Usage:
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
+  gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
@@ -191,6 +192,25 @@ withholds because its Wrap-Up publishes.
   --all              Every file at once (needs --json)
   --vault <dir>      With --all: read this vault through the site's rules
                      instead of the vault the config names
+  --help, -h         Show this help
+`,
+  'migrate-config': `
+gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
+
+Moves the campaign settings in the site's vault.config.json (title, folder map,
+exclude lists, images, ...) into publish: in the vault's _meta/vault-config.md,
+renames publish.backend.statusBar / inbox to publish.live_stats / inbox, and
+leaves only the deployment keys in the site file. The vault file wins when both
+set a key (the difference is reported); exclude lists are merged. Both files are
+backed up as <file>.pre-migrate first (an existing backup is never replaced).
+Nothing is written if the vault file cannot be edited safely. Running it again
+changes nothing.
+
+  --dry-run, -n      Print what would change; write nothing
+  --json             Print the plan as JSON
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --vault <dir>      The vault to edit (default: the one the config names). With
+                     no site file, only the backend rename is planned.
   --help, -h         Show this help
 `,
   deploy: `
@@ -542,6 +562,31 @@ if (command === 'explain' && args[1] === '--all') {
   runExplainAll({ configPath: parsed.configPath, vaultPath: parsed.flags.vault })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'migrate-config') {
+  const parsed = parseSubcommandArgs(
+    args.slice(1),
+    { '--dry-run': 'dryRun', '-n': 'dryRun', '--json': 'json' },
+    { '--vault': 'vault' },
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('migrate-config');
+    process.exit(1);
+  }
+  // With --vault and no site file, plan only the vault file's own rename.
+  const explicitConfig = args.includes('--config');
+  const hasSite = explicitConfig || fs.existsSync(parsed.configPath) || !parsed.flags.vault;
+  const { runMigrateConfig } = require('../lib/migrate-config.js');
+  const rc = runMigrateConfig({
+    configPath: hasSite ? parsed.configPath : undefined,
+    vaultPath: parsed.flags.vault,
+    dryRun: !!parsed.flags.dryRun,
+    json: !!parsed.flags.json,
+  });
+  exitAfterFlush(rc);
   return;
 }
 

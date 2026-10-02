@@ -431,4 +431,4 @@ function resolveConfig(rawConfig, vaultPath) {
   return { config, publishConfig };
 }
 
-module.exports = { loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig };
+module.exports = { loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir };
