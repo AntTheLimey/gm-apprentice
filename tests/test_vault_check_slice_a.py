@@ -1581,16 +1581,27 @@ class RenestReviewRegressionTests(unittest.TestCase):
                   "```text\n### Deeper\n## Roll table\n# Top\n```\n"
                   "SECRET-after-code\n")
 
-    def test_a_code_fence_heading_ending_gm_notes_is_reported_on_an_old_pin(self):
-        vault = self.vault(self.old_pin(FIX_CONFIG), {"C.md": self.FENCED_END})
-        rows = vc.check_gm_leak(vault, None)
-        found = rows_for(rows, "in a code fence ends the 'GM Notes'")
-        # The first line that tool reads as a level 2 or shallower heading.
-        self.assertEqual(len(found), 1, rows)
-        self.assertIn("C.md:13\t", found[0])
-        self.assertIn("publish tool 1.12.0 predates 1.12.1", found[0])
-        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
-                                       "tool 1.12.0 predates 1.12.1"), rows)
+    def test_an_old_pin_is_not_checked_and_not_written(self):
+        # 1.12.0 ends GM Notes at the `## Roll table` line. That is its
+        # rule, not one kept here, so the answer is to update the pin.
+        config = self.old_pin(self.COLLAPSE_CONFIG)
+        vault = self.vault(config, {"C.md": self.FENCED_COLLAPSE,
+                                    "W.md": NoPublishToolTests.WRAP})
+        for name, rows in (
+                ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
+                ("gm-leak", vc.check_gm_leak(vault, None, fix=True,
+                                             renest_excludes=True)),
+                ("wrapup", vc.check_wrapup(vault, None, True))):
+            with self.subTest(name):
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(
+                    f"ERROR\t(vault)\t{name} could not ask the publish tool "
+                    f"what publishes (the site's publish tool 1.12.0 "
+                    f"predates 1.12.1 and cannot be asked) — nothing "
+                    f"checked, nothing written; run update-pin --site "), rows)
+        self.assertEqual(read(vault, "_meta/vault-config.md"), config)
+        self.assertEqual(read(vault, "C.md"), self.FENCED_COLLAPSE)
+        self.assertEqual(read(vault, "W.md"), NoPublishToolTests.WRAP)
 
     def test_a_code_fence_heading_does_not_end_gm_notes(self):
         vault = self.vault(FIX_CONFIG, {"C.md": self.FENCED_END})
@@ -1604,14 +1615,6 @@ class RenestReviewRegressionTests(unittest.TestCase):
     FENCED_MOVE = ("---\ntype: npc\n---\n\n# C\n\nPublic.\n\n"
                    "## **Keeper Secrets**\n\n```\n## World State\n```\n"
                    "SECRET\n")
-
-    def test_a_moved_block_with_a_code_fence_heading_is_refused_on_an_old_pin(self):
-        vault = self.vault(self.old_pin(FIX_CONFIG), {"C.md": self.FENCED_MOVE})
-        rows = vc.check_gm_leak(vault, None, fix=True)
-        self.assertTrue(rows_for(rows, "heading-shaped line in a code fence"),
-                        rows)
-        self.assertTrue(rows_for(rows, "run update-pin first"), rows)
-        self.assertEqual(read(vault, "C.md"), self.FENCED_MOVE)
 
     def test_a_moved_block_with_a_code_fence_heading_moves(self):
         vault = self.vault(FIX_CONFIG, {"C.md": self.FENCED_MOVE})
@@ -1628,13 +1631,6 @@ class RenestReviewRegressionTests(unittest.TestCase):
     COLLAPSE_CONFIG = ('---\npublish:\n  exclude_sections: [GM Notes, '
                        'World State]\n---\n')
 
-    def test_a_collapse_exposed_by_a_code_fence_heading_is_refused_on_an_old_pin(self):
-        config = self.old_pin(self.COLLAPSE_CONFIG)
-        vault = self.vault(config, {"C.md": self.FENCED_COLLAPSE})
-        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        self.assertTrue(rows_for(rows, "migration blocked"), rows)
-        self.assertEqual(read(vault, "_meta/vault-config.md"), config)
-
     def test_a_collapse_past_a_code_fence_heading_is_safe(self):
         vault = self.vault(self.COLLAPSE_CONFIG, {"C.md": self.FENCED_COLLAPSE})
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
@@ -1645,7 +1641,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
 
     def test_a_setext_excluded_heading_is_withheld(self):
         text = ("---\ntype: npc\n---\n\n# C\n\nGM Notes\n--------\n\n"
-                "SECRET\n\n   ## Players\n\nshown\n")
+                "SECRET\n\n## Players\n\nshown\n")
         vault = self.vault(FIX_CONFIG, {"C.md": text})
         published = self.published(vault, "C.md")
         self.assertNotIn("SECRET", published)
@@ -1747,14 +1743,20 @@ class NoPublishToolTests(unittest.TestCase):
     PC = ("---\ntype: pc\n---\n\n# Jean\n\n## Current Status\n\n"
           "**HP:** 10\n\n## GM Notes\n\nsecret\n")
 
-    def vault(self, site):
+    def vault(self, site, publish=True, wrap=None):
+        """`site`: a `site_dir` is set. `publish=False`: no `publish:`
+        block at all."""
         config = "---\ntype: meta\npublish:\n  mode: player\n---\n"
         if site:
             folder = Path(tempfile.mkdtemp(prefix="vc-site-"))
             self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
             config = config.replace(
                 "publish:\n", f"publish:\n  site_dir: {folder.as_posix()}\n")
+        if not publish:
+            config = "---\ntype: meta\n---\n"
         vault = make_vault(self, config)
+        if wrap is not None:
+            self.WRAP = wrap
         (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
         (vault / "Jean.md").write_text(self.PC, encoding="utf-8")
         return vault
@@ -1786,8 +1788,15 @@ class NoPublishToolTests(unittest.TestCase):
             lines.ask({"op": "stub", "text": ""})
         self.assertIn("no `lines` command", str(raised.exception))
 
-    def test_a_site_vault_is_not_checked_and_not_written(self):
-        vault = self.vault(site=True)
+    def test_a_publishing_vault_is_not_checked_and_not_written(self):
+        # With a site_dir or without: the build never reads site_dir, so a
+        # `publish:` block alone means the vault may publish.
+        for site in (True, False):
+            with self.subTest(site_dir=site):
+                self.publishing_vault_stops(site)
+
+    def publishing_vault_stops(self, site):
+        vault = self.vault(site=site)
         self.no_tool()
         for name, rows in (
                 ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
@@ -1801,8 +1810,8 @@ class NoPublishToolTests(unittest.TestCase):
                 self.assertIn("nothing checked, nothing written", rows[0])
         self.assertEqual(read(vault, "W.md"), self.WRAP)
 
-    def test_a_vault_with_no_site_skips_the_leak_checks(self):
-        vault = self.vault(site=False)
+    def test_a_vault_that_does_not_publish_skips_the_leak_checks(self):
+        vault = self.vault(site=False, publish=False)
         self.no_tool()
         for name, rows in (("gm-leak", vc.check_gm_leak(vault, None)),
                            ("pc-body", vc.check_pc_body(vault))):
@@ -1812,8 +1821,8 @@ class NoPublishToolTests(unittest.TestCase):
                     f"INFO\t(vault)\t{name} did not ask what a section "
                     f"hides"), rows)
 
-    def test_a_vault_with_no_site_still_repairs_its_wrap_ups(self):
-        vault = self.vault(site=False)
+    def test_a_vault_that_does_not_publish_still_repairs_its_wrap_ups(self):
+        vault = self.vault(site=False, publish=False)
         self.no_tool()
         rows = vc.check_wrapup(vault, None, True)
         self.assertEqual(len(rows_for(rows, "INFO\t(vault)\twrapup did not "
@@ -1830,6 +1839,65 @@ class NoPublishToolTests(unittest.TestCase):
             self.assertEqual(vc.run(), 2)
         self.assertIn("stopped answering part-way (node could not run)",
                       err.getvalue())
+
+    def test_the_fence_check_before_a_write_needs_no_tool(self):
+        # An unclosed code fence swallows the closer the repair writes; the
+        # rewrite would leave a gm-only block open to the end of the note.
+        wrap = ("---\ntype: session_wrap\n---\n\n## Narrative Recap\n\n"
+                "It happened.\n\n## GM Notes\n\nSECRET-A\n\n```\ncode\n\n"
+                "## Keeper Checklist\n\nSECRET-B\n")
+        vault = self.vault(site=False, publish=False, wrap=wrap)
+        self.no_tool()
+        rows = vc.check_wrapup(vault, None, True)
+        self.assertTrue(rows_for(rows, "repair refused: the rewrite leaves"),
+                        rows)
+        self.assertEqual(read(vault, "W.md"), wrap)
+
+    def test_a_tool_lost_mid_run_keeps_the_rows_so_far(self):
+        vault = self.vault(site=True)
+        (vault / "W2.md").write_text(self.WRAP, encoding="utf-8")
+        real = vaultlib.PUBLISH_LINES.ask
+        asked = []
+
+        def ask(request):
+            asked.append(request)
+            if len(asked) > 4:
+                raise vaultlib.PublishToolUnavailable("gone")
+            return real(request)
+
+        with mock.patch.object(vaultlib.PUBLISH_LINES, "ask", ask):
+            rows = vc.check_wrapup(vault, None, True)
+        self.assertTrue(rows[-1].startswith(
+            "ERROR\t(vault)\twrapup stopped: the publish tool stopped "
+            "answering (gone)"), rows)
+        # The first wrap-up's rows are still there, and so is its repair.
+        self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
+        self.assertEqual(read(vault, "W2.md"), self.WRAP)
+
+    def test_a_tool_lost_mid_run_is_one_row_for_a_check_that_writes_last(self):
+        vault = self.vault(site=True)
+        before = read(vault, "Jean.md")
+        real = vaultlib.PUBLISH_LINES.ask
+        asked = []
+
+        def ask(request):
+            asked.append(request)
+            if len(asked) > 1:      # the gate's question is answered
+                raise vaultlib.PublishToolUnavailable("gone")
+            return real(request)
+
+        for name, check in (
+                ("gm-leak", lambda: vc.check_gm_leak(vault, None, fix=True)),
+                ("pc-body", lambda: vc.check_pc_body(vault))):
+            asked.clear()
+            with self.subTest(name), \
+                    mock.patch.object(vaultlib.PUBLISH_LINES, "ask", ask):
+                rows = check()
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(
+                    f"ERROR\t(vault)\t{name} stopped: the publish tool "
+                    f"stopped answering (gone)"), rows)
+        self.assertEqual(read(vault, "Jean.md"), before)
 
     def test_the_writers_invariant_raises_rather_than_guesses(self):
         self.no_tool()
@@ -3464,25 +3532,26 @@ class GmLeakWithheldHubTests(unittest.TestCase):
     def test_the_sites_installed_tool_answers(self):
         vault = self.vault()
         calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
-                                  installed="1.11.40")
+                                  installed="1.12.1")
         rows = vc.check_gm_leak(vault, None)
         self.assertEqual(self.hub_rows(rows), [])
         self.assertIn("node_modules", calls[0][1])
         self.assertFalse(rows_for(rows, "asked the plugin"), rows)
 
-    def test_a_site_pinned_below_withholding_scans_every_hub(self):
-        # Its renderer publishes every hub body in full, whatever the
-        # plugin's tool would say.
+    def test_a_site_pinned_to_a_tool_too_old_to_ask_is_not_scanned(self):
+        # Its renderer builds by rules the plugin's tool no longer has, and
+        # it has no `lines` command, so nothing is said on its behalf.
         vault = self.vault()
         calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
                                   installed="1.11.39")
         rows = vc.check_gm_leak(vault, None)
         self.assertEqual(calls, [])
-        self.assertTrue(self.hub_rows(rows))
-        note = rows_for(rows, "could not be consulted")
-        self.assertEqual(len(note), 1, rows)
-        self.assertIn("site pinned to 1.11.39 predates body withholding",
-                      note[0])
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
+            "publishes (the site's publish tool 1.11.39 predates 1.12.1 and "
+            "cannot be asked)"), rows)
+        self.assertIn("run update-pin --site ", rows[0])
 
     def test_a_pin_not_yet_installed_is_still_the_sites_tool(self):
         # Re-check: package.json pins a vendored 1.11.39 and nothing is
@@ -3497,17 +3566,25 @@ class GmLeakWithheldHubTests(unittest.TestCase):
             encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
         self.assertEqual(calls, [])
-        self.assertTrue(self.hub_rows(rows))
-        self.assertTrue(rows_for(rows, "site pinned to 1.11.39 predates "
-                                       "body withholding"), rows)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
+            "publishes (the site's publish tool 1.11.39 predates 1.12.1 and "
+            "cannot be asked)"), rows)
+        self.assertIn("run update-pin --site ", rows[0])
 
     def test_an_installed_prerelease_is_below_the_release(self):
         vault = self.vault()
         calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
-                                  installed="1.11.40-rc.1")
+                                  installed="1.12.1-rc.1")
         rows = vc.check_gm_leak(vault, None)
         self.assertEqual(calls, [])
-        self.assertTrue(self.hub_rows(rows))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
+            "publishes (the site's publish tool 1.12.1-rc.1 predates 1.12.1 and "
+            "cannot be asked)"), rows)
+        self.assertIn("run update-pin --site ", rows[0])
 
     def test_an_unreadable_site_tool_scans_every_hub(self):
         vault = self.vault()
@@ -3769,25 +3846,22 @@ class GmLeakHandoutSectionTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
                                        "tool predates 1.11.41"), rows)
 
-    def test_a_pin_below_the_rule_warns_even_when_the_plugin_answers(self):
-        # Review: the site pins 1.11.40 but hasn't installed it, so the
-        # plugin's 1.11.41 answers — yet the site will build with 1.11.40.
+    def test_a_pin_below_the_lines_command_stops_the_check(self):
+        # The site pins 1.12.0 but hasn't installed it, so the plugin's
+        # tool could answer. The site will build with 1.12.0, though.
         vault = self.vault()
-        stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
+        calls = stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
         site = Path(vc.read_publish_scalar(vault, "site_dir"))
         (site / "package.json").write_text(json.dumps({"dependencies": {
-            "gm-apprentice-publish": "1.11.40"}}), encoding="utf-8")
-        rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
-                                       "tool 1.11.40 predates 1.11.41"), rows)
-
-    def test_a_site_too_old_to_ask_is_a_warning_not_a_note(self):
-        vault = self.vault()
-        calls = stub_publish_tool(self, vault, installed="1.11.39")
+            "gm-apprentice-publish": "1.12.0"}}), encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
         self.assertEqual(calls, [])
-        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
-                                       "tool 1.11.39 predates 1.11.41"), rows)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t(vault)\tgm-leak could not ask the publish tool what "
+            "publishes (the site's publish tool 1.12.0 predates 1.12.1 and "
+            "cannot be asked)"), rows)
+        self.assertIn("run update-pin --site ", rows[0])
 
     def test_an_emphasis_wrapped_heading_is_named_and_moved(self):
         vault = make_vault(self)

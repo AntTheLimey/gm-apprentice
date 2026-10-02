@@ -11,56 +11,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **A `#` line inside a code block ended a withheld section, and the
-  rest of it published.** With `GM Notes` on the exclude list, a
-  `## Example` shown in a fenced or indented code block under
-  `## GM Notes` was read as the next heading, so every line after the
-  code block reached the site. Two more shapes got through the same
-  filter: an excluded heading written with an underline (`GM Notes`
-  over `--------`) and one indented by one to three spaces were not
-  seen as headings, so their sections published whole.
-  - The build now takes its section boundaries from the renderer's own
-    parser, as the sheets-off PC page already did. A heading is
-    whatever will render as one: fenced and indented code is never a
-    heading; an underlined, indented, empty or closed (`## Title ##`)
-    heading is.
-  - A heading inside a blockquote or a list item never ends a withheld
-    section. One with a title on the exclude list starts one, which
-    runs to the next heading outside the quote or list.
-  - `publish: stub` pages read `publish_include_sections` headings the
-    same way: a `## Overview` shown in a code block inside
-    `## GM Notes` no longer publishes what follows it.
+- **A `#` line inside a fenced code block ended a withheld section, and
+  the rest of it published.** With `GM Notes` on the exclude list, a
+  `## Example` shown in a fenced code block under `## GM Notes` was
+  read as the next heading, so every line after the code block reached
+  the site. Two more shapes got through the same filter: an excluded
+  heading written with an underline (`GM Notes` over `--------`) and
+  one indented by one to three spaces were not seen as headings, so
+  their sections published whole.
+  - The build now also asks the renderer's own parser where the
+    headings are, and takes whichever reading withholds more. A
+    withheld section starts at anything the parser or the old pattern
+    reads as a heading with an excluded title: underlined, indented,
+    inside a blockquote or list item, or typed after a non-breaking
+    space. It ends only where both agree: a `#` heading at the margin,
+    with a title, outside a code block.
+  - So nothing that was withheld before publishes now. A line with
+    `---` typed straight under it, a bare `##`, and an indented heading
+    do not end a withheld section. An excluded title shown in a code
+    block still starts one, as it always did.
+  - An excluded heading inside a blockquote or list item is new: what
+    follows it is withheld to the next heading outside the quote or
+    list.
+  - `publish: stub` pages read `publish_include_sections` the strict
+    way round: a section is kept only from a heading both readings
+    agree on, and ends at anything either calls a heading. A
+    `## Overview` shown in a code block inside `## GM Notes` no longer
+    publishes what follows it.
   - A PC or NPC page's accordion sections no longer split at a `##`
     line inside a code block.
   - A note the parser cannot read is withheld whole, with a build
     warning.
-  - Proved on scratch copies of two real vaults: with no note using
-    these shapes the old and new builds are byte-identical, and three
-    planted notes (fenced, underlined, indented) leak under the old
-    tool and not under the new.
+- **A note whose title line is on the exclude list published its
+  body.** The page drops its `# Title` line before filtering, so a note
+  that opens `# GM Notes` lost the heading and kept everything under
+  it. The filter now runs first for such a note.
+- Proved on scratch copies of two real vaults: with no note using these
+  shapes the old and new builds are byte-identical, and planted notes
+  (fenced, underlined, indented) leak under the old tool and not under
+  the new. A random-note comparison against the previous release found
+  no line the new build publishes that the old one withheld.
 
 ### Changed
 
 - **`vault_check` asks the publish tool which lines publish; it no
   longer keeps its own copy of the rules.** `vaultlib.py` carried a
   hand-kept copy of the build's strip chain and section filter, which
-  had to match `processor.js` line for line and had the same three
-  defects. That copy is deleted. `gm-leak`, `pc-body`, `wrapup` and the
-  check each `--fix` runs before it writes now ask
+  had to match `processor.js` line for line and had the same defects.
+  That copy is deleted. `gm-leak`, `pc-body`, `wrapup` and the check
+  each `--fix` runs before it writes now ask
   `gm-apprentice-publish lines`, a new command that answers from the
   functions the build calls. One node process serves a whole run.
-  - These checks now need Node 22+ on PATH. With no node, a vault that
-    has a site gets one ERROR row and nothing is checked or written. A
-    vault with no site gets one INFO row; `gm-leak` and `pc-body` stop
-    there, and `wrapup --fix` still makes its repairs.
-  - A site pinned to a publish tool older than 1.12.1 builds the old
-    way. `gm-leak` adds a WARNING saying so, and an ERROR at each `#`
-    line in a code block that ends a withheld section on that site. A
-    `--fix` that would leave such a line in a withheld section is
-    refused until `update-pin` has run.
+  - These checks now need Node 22+ on PATH. When the tool cannot be
+    asked, a vault with a `publish:` block gets one ERROR row and
+    nothing is checked or written. A vault with no `publish:` block
+    gets one INFO row; `gm-leak` and `pc-body` stop there, and
+    `wrapup --fix` still makes its repairs, checking only that it
+    leaves no `<!-- gm-only -->` block open.
+  - **A site pinned to a publish tool older than 1.12.1 is not
+    checked.** That tool builds by the old rules and has no `lines`
+    command, and the old rules are no longer copied here. `gm-leak`,
+    `pc-body` and `wrapup` give one ERROR row naming the pin and write
+    nothing until `update-pin --site <site-dir>` has run.
   - The fix-time refusal "holds a heading-shaped line in a code fence"
-    is gone for sites on 1.12.1 or later, where such a block is now
-    safe to move.
+    is gone: such a block is now safe to move.
+  - If the tool stops answering part-way, the check ends with an ERROR
+    row. Rows already produced are kept and nothing further is written.
 
 ### Added
 

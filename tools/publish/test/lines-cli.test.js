@@ -62,12 +62,27 @@ describe('lines: the protocol', () => {
   it('answers each line in order and resolves when the input closes', async () => {
     const out = [];
     const rc = await runLines({
-      input: Readable.from(['{"op":"stub","text":"## A","include":["a"]}\n\nbroken\n{"op":"published","text":"x"}\n']),
+      input: Readable.from([Buffer.from('{"op":"stub","text":"## A","include":["a"]}\n\nbroken\n{"op":"published","text":"x"}\n')]),
       write: (s) => out.push(s),
     });
     assert.strictEqual(rc, 0);
     const answers = out.join('').trim().split('\n').map((l) => JSON.parse(l));
     assert.deepStrictEqual(answers.map((a) => Object.keys(a)[0]), ['kept', 'error', 'text']);
+  });
+  it('a line separator inside a request does not split it', async () => {
+    const out = [];
+    await runLines({
+      input: Readable.from([Buffer.from('{"op":"sections","text":"a\u2028b\u2029c","excludeSections":[]}\r\n{"op":"stub","text":"x","include":[]}')]),
+      write: (s) => out.push(s),
+    });
+    const answers = out.join('').trim().split('\n').map((l) => JSON.parse(l));
+    assert.deepStrictEqual(answers, [{ withheldBy: [null] }, { kept: [false] }]);
+  });
+  it('a multi-byte character split across two chunks is read whole', async () => {
+    const bytes = Buffer.from('{"op":"published","text":"caf\u00e9"}\n');
+    const out = [];
+    await runLines({ input: Readable.from([bytes.subarray(0, 30), bytes.subarray(30)]), write: (s) => out.push(s) });
+    assert.strictEqual(JSON.parse(out.join('')).text, 'caf\u00e9');
   });
   it('runs from the command line', () => {
     const run = spawnSync(process.execPath, [BIN, 'lines'], {

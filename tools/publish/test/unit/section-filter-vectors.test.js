@@ -40,3 +40,42 @@ describe('section filter: failure and code', () => {
     assert.deepStrictEqual(extractSections('Gear\n----\nrope\n').map(s => s.title), ['Gear']);
   });
 });
+
+describe('section filter: what reaches the page', () => {
+  const { processContent, extractSections } = require('../../lib/processor');
+  const page = (markdown, frontmatter = { type: 'npc' }) => ({ markdown, frontmatter, outputPath: 'npcs/x.html' });
+  const html = (markdown, fm) => processContent(page(markdown, fm), {}, ['GM Notes'], {}).html;
+
+  it('a divider typed straight under a line of GM Notes publishes nothing', () => {
+    const out = html('# Inn\nA cosy inn.\n\n## GM Notes\nThe innkeeper is the cultist.\n---\nHe poisons the ale.\n');
+    assert.strictEqual(out, '<p>A cosy inn.</p>\n');
+  });
+  it('a `##` line in a code block under GM Notes publishes nothing after it', () => {
+    const out = html('# Inn\nA cosy inn.\n\n## GM Notes\nsecret\n```\n## Example\n```\nHe poisons the ale.\n');
+    assert.strictEqual(out, '<p>A cosy inn.</p>\n');
+  });
+  it('an underlined, an indented and a non-breaking-space GM Notes heading are all withheld', () => {
+    for (const heading of ['GM Notes\n--------', '  ## GM Notes', '## GM Notes']) {
+      const out = html(`# Inn\nA cosy inn.\n\n${heading}\nHe poisons the ale.\n`);
+      assert.ok(!out.includes('poisons'), `${JSON.stringify(heading)} published: ${out}`);
+      assert.ok(out.includes('A cosy inn.'));
+    }
+  });
+  it('an unclosed code block above GM Notes does not publish it', () => {
+    assert.ok(!html('# Inn\n## Menu\n```\nale\n## GM Notes\nHe poisons the ale.\n').includes('poisons'));
+  });
+  it('a note whose title line is itself withheld publishes no body', () => {
+    assert.strictEqual(html('# GM Notes\nthe butler did it\n\n## Plan\nambush\n').trim(), '');
+    assert.strictEqual(html('\n# GM Notes #\nthe butler did it\n').trim(), '');
+  });
+  it('a withheld title runs to the next level 1 heading', () => {
+    const out = html('# GM Notes\nsecret\n# Players\nshown\n');
+    assert.ok(!out.includes('secret') && out.includes('shown'), out);
+  });
+  it('an ordinary title is dropped and the body kept, as before', () => {
+    assert.strictEqual(html('# Inn\nA cosy inn.\n'), '<p>A cosy inn.</p>\n');
+  });
+  it('extractSections does not make a section of a bare ##', () => {
+    assert.deepStrictEqual(extractSections('## Gear\nrope\n##\nmore\n').map((s) => s.title), ['Gear']);
+  });
+});

@@ -567,9 +567,12 @@ anchors computed from `currentOutputPath`.
 **`filterSections(markdown, excludeHeadings)`**
 
 Removes each section whose heading appears in `excludeHeadings`, at any
-level, down to the next heading of that level or shallower. Headings
-are the ones the renderer's parser reports: a `#` line in a code block
-is not a heading, and an underlined (setext) or indented heading is.
+level, down to the next heading of that level or shallower. It reads
+headings two ways, the renderer's parser and a plain `#` pattern at the
+margin, and takes whichever withholds more: a section starts at a
+heading either one sees (underlined, indented, inside a blockquote or
+list) and ends only at one both see, so a `#` line in a code block or a
+line with `---` under it does not end it.
 
 **`stripDataview(markdown)`**
 

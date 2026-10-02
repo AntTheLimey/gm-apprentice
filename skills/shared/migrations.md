@@ -1311,12 +1311,15 @@ three switches control character sheets, live stats and the inbox
 
 ## Migration: 1.10.24 → 1.10.25
 
-The publish build now reads headings the way its renderer does when it
-withholds an excluded section. No frontmatter changes.
+The publish build withholds an excluded section more carefully, and the
+vault checks ask the build what publishes. No frontmatter changes.
 
 ### Structural
 
-- Nothing.
+- If the vault publishes and its site is pinned to a publish tool older
+  than 1.12.1, run `update-pin --site <site-dir>`. Until then
+  `vault_check.py` `gm-leak`, `pc-body` and `wrapup` stop with one
+  ERROR row and write nothing.
 
 ### Content
 
@@ -1324,17 +1327,15 @@ withholds an excluded section. No frontmatter changes.
 
 ### Tooling
 
-- `gm-apprentice-publish` 1.12.1. A `#` line inside a code block no
-  longer ends a withheld section such as `## GM Notes`. A heading on the
-  exclude list is withheld when it is written with an underline
+- `gm-apprentice-publish` 1.12.1. A `#` line inside a fenced code block
+  no longer ends a withheld section such as `## GM Notes`. A heading on
+  the exclude list is withheld when it is written with an underline
   (`GM Notes` over `--------`), indented up to three spaces, or inside
-  a blockquote or list. A `publish: stub` page reads its
-  `publish_include_sections` headings the same way.
-- A site pinned to an older publish tool still builds the old way.
-  `vault_check.py <vault> gm-leak` says so and names each note where a
-  `#` line in a code block publishes the rest of a withheld section.
-  Run `update-pin --site <site-dir>` to pick up the fix.
-- `vault_check.py` `gm-leak`, `pc-body` and `wrapup` now ask the publish
-  tool which lines publish, so they need Node 22+ on PATH. With no node,
-  a vault that has a site gets one ERROR row and nothing is written; a
-  vault with no site gets one INFO row, and `wrapup --fix` still runs.
+  a blockquote or list item. Nothing that was withheld before publishes
+  now. A note whose `# Title` line is on the exclude list publishes no
+  body.
+- `vault_check.py` `gm-leak`, `pc-body` and `wrapup` ask the publish
+  tool which lines publish, so they need Node 22+ on PATH. With no
+  node, a vault with a `publish:` block gets one ERROR row and nothing
+  is written; a vault with none gets one INFO row, and `wrapup --fix`
+  still runs.

@@ -23,7 +23,7 @@
 //                            these `publish_include_sections` keeps it
 //
 // A request that cannot be answered gets {"error":…}; the process carries on.
-const readline = require('readline');
+const { StringDecoder } = require('string_decoder');
 const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 function list(value) {
@@ -58,16 +58,32 @@ function answerLine(line) {
 }
 
 // Resolves 0 when stdin closes. `deps.input` / `deps.write` are test seams.
+// Requests are split on `\n` alone: readline also breaks at U+2028 and U+2029, which
+// are legal inside a JSON string, and one split request would put every later answer
+// out of step with its question.
 function runLines(deps) {
   const d = deps || {};
   const input = d.input || process.stdin;
   const write = d.write || ((s) => process.stdout.write(s));
   return new Promise((resolve) => {
-    const rl = readline.createInterface({ input, crlfDelay: Infinity });
-    rl.on('line', (line) => {
-      if (line.trim() !== '') write(`${answerLine(line)}\n`);
+    const decoder = new StringDecoder('utf8');
+    let pending = '';
+    const take = (line) => {
+      const request = line.replace(/\r$/, '');
+      if (request.trim() !== '') write(`${answerLine(request)}\n`);
+    };
+    input.on('data', (chunk) => {
+      pending += typeof chunk === 'string' ? chunk : decoder.write(chunk);
+      let at;
+      while ((at = pending.indexOf('\n')) !== -1) {
+        take(pending.slice(0, at));
+        pending = pending.slice(at + 1);
+      }
     });
-    rl.on('close', () => resolve(0));
+    input.on('end', () => {
+      take(pending + decoder.end());
+      resolve(0);
+    });
   });
 }
 

@@ -30,6 +30,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -793,6 +794,8 @@ _MARKERS = (("gm", "gm-only"), ("spoiler", "spoiler"))
 # (<plugin>/skills/shared/scripts/vaultlib.py, <plugin>/tools/publish/...).
 PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
                 / "tools" / "publish" / "bin" / "gm-publish.js")
+# How long one question may take before the tool is given up on.
+PUBLISH_LINES_TIMEOUT = 120
 
 
 class PublishToolUnavailable(Exception):
@@ -828,19 +831,26 @@ class PublishLines:
     def ask(self, request: dict[str, Any]) -> dict[str, Any]:
         proc = self._process()
         assert proc.stdin is not None and proc.stdout is not None
+        # A tool that hangs is killed, which ends the read below.
+        watchdog = threading.Timer(PUBLISH_LINES_TIMEOUT, proc.kill)
+        watchdog.daemon = True
+        watchdog.start()
         try:
             proc.stdin.write(json.dumps(request) + "\n")
             proc.stdin.flush()
             line = proc.stdout.readline()
-        except OSError as e:
+        except (OSError, ValueError) as e:
             self.close()
             raise PublishToolUnavailable(
                 f"the publish tool stopped answering "
                 f"({e.__class__.__name__})") from e
+        finally:
+            watchdog.cancel()
         if not line:
             self.close()
             raise PublishToolUnavailable(
-                "the publish tool has no `lines` command")
+                "the publish tool exited without answering (it needs Node "
+                "22+, and a tool older than 1.12.1 has no `lines` command)")
         try:
             answer = json.loads(line)
         except ValueError as e:
