@@ -9,23 +9,22 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy } = require('./config-keys');
+const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy, isText, usable } = require('./config-keys');
 const { editPublishBlock, setPublishKeys, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
 const { asBool } = require('./switches');
 const { normalizeExcludeDir, stricterCallouts, MERGED_MAPS } = require('./config');
 const { parseNote } = require('./frontmatter');
 
-const VAULT_REL = path.join('_meta', 'vault-config.md');
+// Shown in messages, so always forward-slashed; path.join accepts it on every platform.
+const VAULT_REL = '_meta/vault-config.md';
 const NEW_VAULT_FILE = '---\ntype: meta\n---\n';
 const DETECTORS = { statusBar: detectStatusBar, inbox: detectInbox };
 const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-const isText = (v) => typeof v === 'string' && v.trim() !== '';
 // What the reader does with a list entry is String(entry), so text, numbers and booleans
 // carry over (as text, exactly as the reader spells them). Only null, a map or list, a
 // non-finite number and an empty string are set aside; they stay in the site file, where the
 // reader still applies them, and the plan reports them.
-const usable = (v) => isText(v) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
 const splitEntries = (list) => ({
   text: list.filter(usable).map((v) => (typeof v === 'string' ? v : String(v))),
   skipped: list.filter((v) => !usable(v)),

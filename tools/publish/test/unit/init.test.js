@@ -346,7 +346,7 @@ describe('init', () => {
         // an absolute --vault is recorded as given
         r = run(['site3', '--vault', path.join(tmpDir, 'elsewhere')]);
         assert.strictEqual(r.status, 0, r.stderr);
-        assert.strictEqual(JSON.parse(readFileSync(path.join(tmpDir, 'site3', 'vault.config.json'), 'utf8')).vaultPath, path.join(tmpDir, 'elsewhere'));
+        assert.strictEqual(JSON.parse(readFileSync(path.join(tmpDir, 'site3', 'vault.config.json'), 'utf8')).vaultPath.split('/').join(path.sep), path.join(tmpDir, 'elsewhere'));
       } finally {
         await removeTmpDir(tmpDir);
       }

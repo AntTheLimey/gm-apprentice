@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { syncSiteFunctions, featuresByFile, SCAFFOLD_FUNCTIONS_DIR } = require('../../lib/sync-functions');
+const { syncSiteFunctions, featuresByFile, featuresOfFile, SCAFFOLD_FUNCTIONS_DIR } = require('../../lib/sync-functions');
 const { runSetupBackend } = require('../../lib/setup-backend');
 
 const roots = [];
@@ -180,5 +180,18 @@ describe('the function step as the building commands run it', () => {
     assert.strictEqual(syncSiteFunctionsOrWarn(path.join(dir, 'vault.config.json'), { warn: (m) => warns.push(m) }), null);
     assert.ok(warns[0].includes('Could not sync scaffold Functions'));
     assert.ok(fs.existsSync(path.join(dir, 'functions', 'api', 'loadout.js')));
+  });
+});
+
+describe('the file-to-feature lookup on Windows-style paths', () => {
+  it('keys are forward-slashed, and a backslash-separated path finds the same owners', () => {
+    for (const rel of featuresByFile(SCAFFOLD_FUNCTIONS_DIR).keys()) assert.ok(!rel.includes('\\'), rel);
+    for (const rel of [...LIVE, ...INBOX, ...SHARED]) {
+      const win = rel.split('/').join('\\');
+      assert.deepStrictEqual([...featuresOfFile(win)].sort(), [...featuresOfFile(rel)].sort(), win);
+      assert.ok(featuresOfFile(win).size > 0, win);
+    }
+    assert.deepStrictEqual([...featuresOfFile('api\\request.js')], ['inbox']);
+    assert.strictEqual(featuresOfFile('api\\nope.js').size, 0);
   });
 });

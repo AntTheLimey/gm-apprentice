@@ -598,7 +598,8 @@ describe('migrate-config', () => {
     const s = makeSite({ site: { siteTitle: 'T' } });
     fs.chmodSync(s.configPath, 0o640);
     migrate(s);
-    assert.strictEqual(fs.statSync(s.configPath).mode & 0o777, 0o640);
+    // POSIX permission bits do not exist on Windows.
+    if (process.platform !== 'win32') assert.strictEqual(fs.statSync(s.configPath).mode & 0o777, 0o640);
     const t = makeSite({ site: {} });
     const real = path.join(t.root, 'real.json');
     fs.writeFileSync(real, JSON.stringify({ vaultPath: t.vault, siteTitle: 'T' }));

@@ -11,7 +11,8 @@ const { isDeepStrictEqual } = require('node:util');
 const yaml = require('js-yaml');
 const { parseNote } = require('./frontmatter');
 
-const CONFIG_REL = path.join('_meta', 'vault-config.md');
+// Shown in messages, so always forward-slashed; path.join accepts it on every platform.
+const CONFIG_REL = '_meta/vault-config.md';
 const KEY_RE = /^(?:"([^"]*)"|'([^']*)'|([^\s#:'"-][^:]*?))([ \t]*):(?:\s|$)/;
 
 const indentOf = (line) => line.length - line.trimStart().length;

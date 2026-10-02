@@ -61,6 +61,12 @@ function featuresByFile(sourceDir = SCAFFOLD_FUNCTIONS_DIR) {
   return owners;
 }
 
+// The features that need one scaffold file, given its path relative to functions/ spelled with
+// either separator (a Windows caller may hand in `api\\request.js`). Empty set for an unknown file.
+function featuresOfFile(rel, sourceDir = SCAFFOLD_FUNCTIONS_DIR) {
+  return featuresByFile(sourceDir).get(String(rel).split('\\').join('/')) || new Set();
+}
+
 // Files a site with these features on needs: any file one of them needs.
 function filesForFeatures(sourceDir, features) {
   const out = new Set();
@@ -228,4 +234,4 @@ function syncSiteFunctionsOrWarn(configPath, options = {}) {
   }
 }
 
-module.exports = { syncScaffoldFunctions, removeScaffoldFunctions, syncSiteFunctions, syncSiteFunctionsOrWarn, featuresByFile, FEATURE_ROOTS, SCAFFOLD_FUNCTIONS_DIR };
+module.exports = { syncScaffoldFunctions, removeScaffoldFunctions, syncSiteFunctions, syncSiteFunctionsOrWarn, featuresByFile, featuresOfFile, FEATURE_ROOTS, SCAFFOLD_FUNCTIONS_DIR };
