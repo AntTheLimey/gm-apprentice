@@ -30,4 +30,8 @@ function hasLegacy(site) {
   return !!site && typeof site === 'object' && (site.backend !== undefined || site.landingTagline !== undefined
     || MOVED_KEYS.some((e) => site[e.json] !== undefined));
 }
-module.exports = { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy };
+// What the reader does with a list entry is String(entry), so text, numbers and booleans
+// can be carried over; null, a map or list, a non-finite number and an empty string cannot.
+const isText = (v) => typeof v === 'string' && v.trim() !== '';
+const usable = (v) => isText(v) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
+module.exports = { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy, isText, usable };

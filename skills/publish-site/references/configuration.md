@@ -303,7 +303,8 @@ inbox is independent of the other two.
 `functions/` in step with the switches, one feature at a time. `live_stats: true`
 copies the live-stats files (`api/loadout.js`, `api/loadout-list.js`,
 `api/loadout-core.mjs`); `inbox: true` copies the inbox files
-(`api/request.js`, `api/inbox-core.mjs`); `api/package.json` follows either.
+(`api/request.js`, `api/inbox-core.mjs`); `api/package.json` is copied when
+either feature is on and removed only when both are explicitly off.
 A switch set to off, or live stats forced off by `character_sheets: false`,
 removes that feature's files and prints one `removed functions/…` line each.
 A file you edited is kept with a warning, and nothing else in `functions/`

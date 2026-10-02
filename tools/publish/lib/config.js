@@ -4,7 +4,7 @@ const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
 const { isDeepStrictEqual } = require('node:util');
-const { MOVED_KEYS } = require('./config-keys');
+const { MOVED_KEYS, usable } = require('./config-keys');
 const { resolveSwitches, asBool } = require('./switches');
 
 const PUBLISH_DEFAULTS = {
@@ -206,6 +206,9 @@ function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) =>
     const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
     // A site-file list key that is not a list is read as nothing; the migration leaves it too.
     if (entry.kind === 'list' && !Array.isArray(fromSite)) rec.notAList = true;
+    // A list that holds entries but none the migration can carry over stays in the site file
+    // for good, so the closing line must not send the GM to migrate.py for it.
+    if (entry.kind === 'list' && Array.isArray(fromSite) && fromSite.length && !fromSite.some(usable)) rec.unmovable = true;
     if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite)) {
       const base = vaultMalformed ? PUBLISH_DEFAULTS[entry.publish] : fromVault;
       const have = new Set(base.map((s) => keyOf(s)));

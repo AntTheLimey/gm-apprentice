@@ -34,14 +34,18 @@ const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 // keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
 // list that the vault file's list lacks is named as still applied from the site file. The
 // old `backend` block and `landingTagline` are named too: either gives the migration work.
-// A list key that is not a list gets its own clause (the migration cannot move it) and does
-// not send the GM to migrate.py when it is all that is left. Returns the lines to print.
+// A list key that is not a list, or holds only entries that cannot be carried over, gets its
+// own clause (the migration cannot move it) and does not send the GM to migrate.py when it is all that is left. Returns the lines to print.
 function legacyWarning(legacy, rawConfig) {
   const parts = [];
   const byHand = [];
   for (const rec of Array.isArray(legacy) ? legacy : []) {
     if (rec.notAList) {
       byHand.push(`${rec.key} in vault.config.json is not a list and is ignored; remove it or move its entries to publish.${rec.publishKey} by hand`);
+      continue;
+    }
+    if (rec.unmovable) {
+      byHand.push(`${rec.key} in vault.config.json holds entries that are not text and cannot be moved; remove them or the key by hand`);
       continue;
     }
     parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);

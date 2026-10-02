@@ -184,6 +184,17 @@ describe('the closing line about campaign settings left in vault.config.json', (
     assert.ok(both.lines.some((l) => l.includes('excludeSections in vault.config.json is not a list')));
   });
 
+  it('a list holding only entries that cannot be moved is named by hand and never sent to migrate.py', () => {
+    const { lines } = buildSite({ siteExtra: { excludeDirs: [null] } });
+    const clause = lines.filter((l) => l.includes('excludeDirs in vault.config.json holds entries that are not text and cannot be moved; remove them or the key by hand'));
+    assert.strictEqual(clause.length, 1, lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('migrate.py') || l.includes('still holds campaign settings')), lines.join('\n'));
+    const both = buildSite({ siteExtra: { excludeDirs: [null], siteTitle: 'Old' } });
+    const settings = both.lines.filter((l) => l.includes('still holds campaign settings'));
+    assert.strictEqual(settings.length, 1, both.lines.join('\n'));
+    assert.ok(settings[0].includes('settings: siteTitle.') && !settings[0].includes('excludeDirs'), settings[0]);
+  });
+
   it('is absent when the site file holds only deploy keys', () => {
     const { lines } = buildSite({});
     assert.ok(!lines.some((l) => l.includes('still holds campaign settings')));
