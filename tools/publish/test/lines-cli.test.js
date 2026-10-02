@@ -20,11 +20,14 @@ describe('lines: published', () => {
     assert.strictEqual(got.text, '## Overview\npublic');
   });
   it('a stub with no list, and publish none, publish nothing', () => {
-    assert.strictEqual(answer({ op: 'published', text: NOTE, publish: 'stub' }).text, '');
-    assert.strictEqual(answer({ op: 'published', text: NOTE, publish: 'none' }).text, '');
+    assert.strictEqual(answer({ op: 'published', text: NOTE, excludeSections: [], publish: 'stub', include: [] }).text, '');
+    assert.strictEqual(answer({ op: 'published', text: NOTE, excludeSections: [], publish: 'none' }).text, '');
   });
-  it('a missing list is no list; a malformed request is refused, never read as "nothing withheld"', () => {
-    assert.strictEqual(answer({ op: 'published', text: '## GM Notes\nx' }).text, '## GM Notes\nx');
+  it('a missing or malformed list is refused, never read as "nothing withheld"', () => {
+    assert.throws(() => answer({ op: 'published', text: '## GM Notes\nx' }), /excludeSections must be a list of strings/);
+    assert.throws(() => answer({ op: 'sections', text: '## GM Notes\nx' }), /excludeSections must be a list of strings/);
+    assert.throws(() => answer({ op: 'stub', text: 'x' }), /include must be a list of strings/);
+    assert.throws(() => answer({ op: 'published', text: 'x', excludeSections: [], publish: 'stub' }), /include must be a list of strings/);
     assert.throws(() => answer({ op: 'published', text: 'x', excludeSections: 'GM Notes' }), /excludeSections must be a list of strings/);
     assert.throws(() => answer({ op: 'sections', text: 'x', excludeSections: [7] }), /excludeSections must be a list of strings/);
     assert.throws(() => answer({ op: 'stub', text: 'x', include: 'Overview' }), /include must be a list of strings/);
@@ -55,7 +58,7 @@ describe('lines: stub', () => {
     assert.strictEqual(NOTE.split('\n').filter((_, i) => kept[i]).join('\n'), keepOnlySections(NOTE, ['Overview']));
   });
   it('no list keeps nothing', () => {
-    assert.ok(answer({ op: 'stub', text: NOTE }).kept.every((k) => k === false));
+    assert.ok(answer({ op: 'stub', text: NOTE, include: [] }).kept.every((k) => k === false));
   });
 });
 
@@ -69,7 +72,7 @@ describe('lines: the protocol', () => {
   it('answers each line in order and resolves when the input closes', async () => {
     const out = [];
     const rc = await runLines({
-      input: Readable.from([Buffer.from('{"op":"stub","text":"## A","include":["a"]}\n\nbroken\n{"op":"published","text":"x"}\n')]),
+      input: Readable.from([Buffer.from('{"op":"stub","text":"## A","include":["a"]}\n\nbroken\n{"op":"published","text":"x","excludeSections":[]}\n')]),
       write: (s) => out.push(s),
     });
     assert.strictEqual(rc, 0);
@@ -86,9 +89,11 @@ describe('lines: the protocol', () => {
     assert.deepStrictEqual(answers, [{ withheldBy: [null] }, { kept: [false] }]);
   });
   it('a multi-byte character split across two chunks is read whole', async () => {
-    const bytes = Buffer.from('{"op":"published","text":"caf\u00e9"}\n');
+    const bytes = Buffer.from('{"op":"published","excludeSections":[],"text":"caf\u00e9"}\n');
+    assert.ok(bytes.indexOf(0xc3) > 30 && bytes[bytes.indexOf(0xc3) + 1] === 0xa9);
     const out = [];
-    await runLines({ input: Readable.from([bytes.subarray(0, 30), bytes.subarray(30)]), write: (s) => out.push(s) });
+    const mid = bytes.indexOf(0xc3) + 1;   // between the two bytes of the e-acute
+    await runLines({ input: Readable.from([bytes.subarray(0, mid), bytes.subarray(mid)]), write: (s) => out.push(s) });
     assert.strictEqual(JSON.parse(out.join('')).text, 'caf\u00e9');
   });
   it('runs from the command line', () => {

@@ -30,7 +30,6 @@ const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts 
 // would answer "nothing is withheld".
 function list(request, key) {
   const value = request[key];
-  if (value === undefined) return [];
   if (!Array.isArray(value) || value.some((s) => typeof s !== 'string')) {
     throw new Error(`${key} must be a list of strings`);
   }
@@ -46,7 +45,7 @@ function answer(request) {
       const publish = request.publish === undefined ? 'all' : request.publish;
       if (!['all', 'stub', 'none'].includes(publish)) throw new Error('publish must be all, stub or none');
       const excludeSections = list(request, 'excludeSections');
-      const include = list(request, 'include');
+      const include = publish === 'stub' ? list(request, 'include') : [];
       if (publish === 'none') return { text: '' };
       // The stub reduction runs first, as in the build (see sheet-cli playerSafeBody).
       const body = publish === 'stub' ? keepOnlySections(text, include) : text;

@@ -199,8 +199,9 @@ stdin closes.
 | `{"op":"stub","text":…,"include":[…]}` | `{"kept":[…]}`: for each line of `text`, whether a stub page keeps it. |
 
 A request that cannot be answered gets `{"error":…}` and the process
-carries on. That includes a malformed one: `text` must be a string and
-each list a list of strings.
+carries on. That includes a malformed one: `text` must be a string, and
+`excludeSections` (and `include`, where it applies) must be present and
+a list of strings.
 
 ---
 

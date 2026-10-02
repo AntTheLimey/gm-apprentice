@@ -45,7 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     warning.
   - A code block left open inside a withheld section now withholds the
     rest of the note, where a later `##` used to end the section. The
-    build warns, naming the line, when headings follow it.
+    build warns when headings follow it.
 - **With character sheets off, a PC page could publish a withheld
   section.** That page is filtered by its own walk, which read
   headings from the parser alone: `## GM Notes` typed after a
@@ -74,9 +74,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - These checks now need Node 22+ on PATH. When the tool cannot be
     asked, a vault with a `publish:` block gets one ERROR row and
     nothing is checked or written. A vault with no `publish:` block
-    gets one INFO row; `gm-leak` and `pc-body` stop there, and
-    `wrapup --fix` still makes its repairs, checking that it leaves no
-    `<!-- gm-only -->` block open and moves nothing out of one.
+    gets one INFO row; `gm-leak` and `pc-body` stop there, and `wrapup`
+    still lists its findings, with each repair as a WOULD-FIX row.
+    Nothing is written without the tool, in any vault: whether a repair
+    would unhide a line is the tool's to say.
   - **The site's own installed tool is the one asked.** A site pinned
     to a publish tool older than 1.12.1 builds by the old rules and
     has no `lines` command, and the old rules are no longer copied
@@ -84,8 +85,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     one ERROR row and write nothing until
     `update-pin --site <site-dir>` has run. The same goes for a pin
     whose version cannot be read (a git URL, a tag, a range, a local
-    path) and for a `site_dir` with no site in it. With no `site_dir`
-    set, the plugin's own tool answers.
+    path), a pin that appears twice or is overridden, and a `site_dir`
+    with no site in it. A tool installed above the site folder (a
+    workspace) is found the way node finds it. With no `site_dir` set,
+    the plugin's own tool answers.
   - The fix-time refusal "holds a heading-shaped line in a code fence"
     is gone: such a block is now safe to move.
   - If the tool stops answering part-way, the check ends with an ERROR

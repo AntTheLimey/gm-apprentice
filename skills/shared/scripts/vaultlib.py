@@ -869,6 +869,8 @@ class PublishLines:
         except ValueError as e:
             self.close()
             raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
                 "the publish tool did not answer in JSON") from e
         if not isinstance(answer, dict) or "error" in answer:
             why = answer.get("error") if isinstance(answer, dict) else answer

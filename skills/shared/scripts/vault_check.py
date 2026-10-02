@@ -1532,8 +1532,8 @@ LINES_SINCE = "1.12.1"
 
 def vault_publishes(vault: Path) -> bool:
     """Whether the vault file has a `publish:` block. Read loosely on
-    purpose (any line starting `publish:`, a byte-order mark or an odd
-    `---` fence notwithstanding): the answer decides whether a check may
+    purpose (any line starting `publish:`, quoted or not, a byte-order
+    mark or an odd `---` fence notwithstanding): the answer decides whether a check may
     carry on without the publish tool, so a file this cannot read counts
     as publishing. `site_dir` is not the test: the build never reads it."""
     try:
@@ -1542,7 +1542,7 @@ def vault_publishes(vault: Path) -> bool:
         return False
     except (OSError, UnicodeDecodeError):
         return True
-    return re.search(r"(?m)^publish\s*:", text) is not None
+    return re.search(r"""(?m)^["']?publish["']?\s*:""", text) is not None
 
 
 def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None]:
@@ -1575,10 +1575,18 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None]:
     site = config.parent
     fix = update.format(f" --site {site.as_posix()}")
     pin = site_pin(site)
-    if (pin.source == "none"
-            and PUBLISH_PACKAGE in _raw_text(site / "package.json")):
-        return None, (f"the site's package.json names {PUBLISH_PACKAGE} "
-                      f"where this cannot read its version"), fix
+    if pin.source != "installed":
+        hoisted = _resolved_from(site)
+        if hoisted is not None:
+            # Installed above the site folder (a workspace): that is the
+            # tool the site builds with, so that is the one to ask.
+            script = hoisted / "bin" / "gm-publish.js"
+            if not script.is_file():
+                return None, f"{script.as_posix()} is missing", fix
+            return script, None, fix
+        why = _pin_unreadable(site)
+        if why is not None:
+            return None, why, fix
     if pin.version is not None and semver_below(pin.version, LINES_SINCE):
         return None, (f"the site's publish tool {pin.version} predates "
                       f"{LINES_SINCE} and cannot be asked"), fix
@@ -1586,6 +1594,60 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None]:
     if tool is None:
         return None, why, fix
     return tool, None, fix
+
+
+def _resolved_from(site: Path) -> Path | None:
+    """The folder node would load the publish tool from when run in the
+    site folder, when that is not the site's own node_modules. None when
+    node finds none, or cannot be run."""
+    node = shutil.which("node")
+    if not node:
+        return None
+    script = ("try { process.stdout.write(require.resolve("
+              f"'{PUBLISH_PACKAGE}/package.json', {{ paths: [process.cwd()] "
+              "})); } catch (e) {}")
+    try:
+        with subprocess.Popen(
+                [node, "-e", script], cwd=site, stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                errors="replace") as proc:
+            try:
+                found, _ = proc.communicate(timeout=PUBLISH_TOOL_TIMEOUT)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                return None
+    except OSError:
+        return None
+    found = found.strip()
+    return Path(found).parent if found else None
+
+
+def _pin_unreadable(site: Path) -> str | None:
+    """Why the site's package.json does not say plainly which publish tool
+    the next install brings in, or None when it does (or names none).
+    Plainly means one entry, under dependencies or devDependencies, with
+    nothing overriding it."""
+    missing, data, error = _read_json(site / "package.json")
+    if missing:
+        return None
+    if not isinstance(data, dict):
+        return (f"the site's package.json can't be read "
+                f"({error or 'not an object'})")
+    tables = [key for key in ("dependencies", "devDependencies",
+                              "optionalDependencies", "peerDependencies")
+              if isinstance(data.get(key), dict)
+              and PUBLISH_PACKAGE in data[key]]
+    forced = [key for key in ("overrides", "resolutions")
+              if PUBLISH_PACKAGE in json.dumps(data.get(key, ""))]
+    if (len(tables) > 1 or forced
+            or any(t.startswith(("optional", "peer")) for t in tables)):
+        return (f"the site's package.json names {PUBLISH_PACKAGE} under "
+                f"{', '.join(tables + forced)}, so this cannot tell which "
+                f"version it builds with")
+    if not tables and PUBLISH_PACKAGE in _raw_text(site / "package.json"):
+        return (f"the site's package.json names {PUBLISH_PACKAGE} where "
+                f"this cannot read its version")
+    return None
 
 
 def _raw_text(path: Path) -> str:
@@ -4182,8 +4244,13 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
                 return rows
             if why is not None:
                 # No publish: block and no tool: nothing publishes, so the
-                # repairs run with nothing counted as hidden.
-                excludes, no_tool = [], True
+                # findings are still worth having, with nothing counted as
+                # hidden. Nothing is written: whether a repair would unhide
+                # a line is the tool's to say.
+                excludes, no_tool, fix = [], True, False
+                rows.append("INFO\t(vault)\twrapup --fix writes nothing "
+                            "without the publish tool; the repairs below "
+                            "are listed as WOULD-FIX")
         try:
             rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes,
                                           fix, player, no_tool))
@@ -4203,8 +4270,8 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       no_tool: bool = False) -> list[str]:
     """One wrap-up: findings, then the plan, then a single write.
     `no_tool`: a vault with no `publish:` block and no publish tool to
-    ask, where the check before the write covers fences only
-    (`check_wrapup` says so)."""
+    ask. `check_wrapup` has already turned `fix` off; the plan is still
+    worked out, checked without the tool as far as that goes."""
     path = vault / rel
     try:
         # newline='' preserves the file's own line endings exactly, the

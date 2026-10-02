@@ -306,7 +306,7 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
   // the GM should hear that the rest of the page went with it.
   if (openFence !== null && withheldBy[openFence] !== null && typeof rules.warn === 'function'
       && lines.slice(openFence + 1).some((line) => MARGIN_HEADING_RE.test(line))) {
-    rules.warn(`a code block opened on line ${openFence + 1}, inside the withheld section "${withheldBy[openFence]}", is never closed; everything after it is withheld. Close it.`);
+    rules.warn(`a code block opened inside the withheld section "${withheldBy[openFence]}" is never closed; everything after it is withheld, headings included. Close it.`);
   }
 
   return { kept, stripped, withheldBy };
@@ -435,13 +435,17 @@ function keptSectionFlags(markdown, includeSections = []) {
     const hashes = MARGIN_HEADING_RE.exec(lines[i]);
     const level = Math.min(h ? h.level : 7, hashes ? hashes[1].length : 7);
     if (keeping && level <= keepLevel) keeping = false;
-    if (h && h.atx && margin && h.level === margin.level && wanted.includes(h.title.toLowerCase())) {
+    // The margin reading's title is the line's own text after the hashes, as this
+    // always compared it: `## Overview ##` is not "Overview" here.
+    const written = hashes ? hashes[2].trim().toLowerCase() : null;
+    if (h && h.atx && hashes && h.level === hashes[1].length
+        && wanted.includes(h.title.toLowerCase()) && wanted.includes(written)) {
       keeping = true;
       keepLevel = h.level;
     } else if (keeping) {
       // A wanted title only one reading sees opens nothing, but it does what it
       // always did to a section already open: sets the level it closes at.
-      for (const seen of [h, margin]) {
+      for (const seen of [h, margin, written === null ? null : { title: written, level: hashes[1].length }]) {
         if (seen && wanted.includes(seen.title.toLowerCase())) keepLevel = Math.max(keepLevel, seen.level);
       }
     }
@@ -691,12 +695,12 @@ function stripLeadingH1(markdown) {
   return lines.join('\n');
 }
 
-// Whether the first line of the note is one the exclude list withholds, by the walk's
-// own verdict, so the page and everything else that asks the walk agree.
+// Whether the line stripLeadingH1 would drop is one the exclude list withholds, by the
+// walk's own verdict, so the page and everything else that asks the walk agree.
 function leadingH1Withheld(markdown, excludeSections, frontmatter) {
   const lines = markdown.split('\n');
   const first = lines.findIndex((line) => line.trim() !== '');
-  if (first === -1) return false;
+  if (first === -1 || !/^#\s+/.test(lines[first])) return false;
   return walkExcludeList(lines, excludeSections, frontmatter, {}).withheldBy[first] !== null;
 }
 
@@ -971,11 +975,14 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   // A note whose title line is itself withheld (`# GM Notes`) is withheld before the
   // title is dropped: once the line is gone nothing below would know its section had
   // started, and the body used to publish.
+  // The withheld title goes with its section, so there is no title left to drop: the
+  // next `#` line is a section like any other, not this note's title.
   const fm = page.sourceFrontmatter || page.frontmatter;
   if (leadingH1Withheld(markdown, excludeSections, fm)) {
-    markdown = filterSections(markdown, excludeSections, fm, { warn: (m) => warnings.push(m) });
+    markdown = walkExcludeList(markdown.split('\n'), excludeSections, fm, { warn: (m) => warnings.push(m) }).kept.join('\n');
+  } else {
+    markdown = stripLeadingH1(markdown);
   }
-  markdown = stripLeadingH1(markdown);
   markdown = stripCallouts(markdown, options.excludeCallouts);
   // The PC keep-list is decided here, on the raw note, before any transform: the same
   // text publishedMarkdown, explain and the doctor walk. A note whose headings the

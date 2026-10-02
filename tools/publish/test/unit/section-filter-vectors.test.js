@@ -104,6 +104,23 @@ describe('section filter: a PC page with character sheets off', () => {
   });
 });
 
+describe('section filter: stub pages open only where both readings agree', () => {
+  it('a title the two readings spell differently opens nothing, as before', () => {
+    assert.strictEqual(keepOnlySections('x\n## GM  Notes\nSECRET\n', ['GM Notes']), '');
+    assert.strictEqual(keepOnlySections('x\n## GM Notes ##\nSECRET\n', ['GM Notes']), '');
+    assert.strictEqual(keepOnlySections('x\n## GM Notes\nkept\n', ['GM Notes']), '## GM Notes\nkept\n');
+  });
+});
+
+describe('section filter: a withheld opening section on a sheets-off PC page', () => {
+  const { processContent } = require('../../lib/processor');
+  it('does not turn the next # line into the title', () => {
+    const page = { markdown: '> ## Secrets\n\nintro\n\n# Public\n\n## Backstory\n\nstory TOK\n', frontmatter: { type: 'pc' }, outputPath: 'pcs/a.html' };
+    const { html } = processContent(page, {}, ['GM Notes', 'Secrets'], {}, { pcKeepSections: ['Backstory', 'Overview'] });
+    assert.ok(!html.includes('TOK'), html);
+  });
+});
+
 describe('section filter: the title line and the open code block', () => {
   const { processContent } = require('../../lib/processor');
   const run = (markdown) => processContent({ markdown, frontmatter: { type: 'npc' }, outputPath: 'npcs/x.html' }, {}, ['GM Notes'], {});
@@ -117,7 +134,7 @@ describe('section filter: the title line and the open code block', () => {
     const { html, warnings } = run('# Inn\n## GM Notes\n```\nstat block\n## Menu\nale\n');
     assert.strictEqual(html.trim(), '');
     assert.strictEqual(warnings.length, 1);
-    assert.match(warnings[0], /code block opened on line 2, inside the withheld section "GM Notes", is never closed/);
+    assert.match(warnings[0], /code block opened inside the withheld section "GM Notes" is never closed/);
   });
   it('a closed code block, or an open one with nothing after it, draws no warning', () => {
     assert.deepStrictEqual(run('# Inn\n## GM Notes\n```\nx\n```\n## Menu\nale\n').warnings, []);

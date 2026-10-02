@@ -154,8 +154,8 @@ python.org installer provides only `python` and `py`).
 Publishing a site needs Node 22 or later. So do the checks that ask
 which lines of a note would publish (`vault_check.py` `gm-leak`,
 `pc-body` and `wrapup`): they ask the publish tool rather than keep a
-copy of its rules. A vault with no `publish:` block runs without node;
-those checks say what they skipped.
+copy of its rules. Without node those checks say what they skipped
+and write nothing.
 
 ## License
 

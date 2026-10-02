@@ -1839,15 +1839,21 @@ class NoPublishToolTests(unittest.TestCase):
                     f"INFO\t(vault)\t{name} did not ask what a section "
                     f"hides"), rows)
 
-    def test_a_vault_that_does_not_publish_still_repairs_its_wrap_ups(self):
+    def test_a_vault_that_does_not_publish_gets_its_findings_and_no_write(self):
+        # Whether a repair would unhide a line is the tool's to say, so
+        # without it nothing is written, in any vault.
         vault = self.vault(site=False, publish=False)
         self.no_tool()
         rows = vc.check_wrapup(vault, None, True)
         self.assertEqual(len(rows_for(rows, "INFO\t(vault)\twrapup did not "
                                             "ask what a section hides")), 1,
                          rows)
-        self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
-        self.assertIn("## GM Notes", read(vault, "W.md"))
+        self.assertEqual(len(rows_for(rows, "wrapup --fix writes nothing "
+                                            "without the publish tool")), 1,
+                         rows)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\tW.md"), rows)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "W.md"), self.WRAP)
 
     def test_a_tool_that_goes_away_mid_run_is_an_error_exit(self):
         gone = vaultlib.PublishToolUnavailable("node could not run")
@@ -1957,6 +1963,14 @@ class NoPublishToolTests(unittest.TestCase):
             "installed, no version": {"installed": {"name": name}},
             "installed, old": {"installed": {"version": "1.12.0"}},
             "pinned, old": {"package": {"devDependencies": {name: "^1.11.0"}}},
+            "peer": {"package": {"peerDependencies": {name: "1.12.1"}}},
+            "pinned twice": {"package": {
+                "dependencies": {name: "^1.12.1"},
+                "devDependencies": {name: "1.11.0"}}},
+            "overridden": {"package": {
+                "dependencies": {name: "^1.12.1"},
+                "overrides": {name: "1.11.0"}}},
+            "not an object": {"package": [name]},
         }
         for form, site in sites.items():
             with self.subTest(form):
@@ -1999,12 +2013,39 @@ class NoPublishToolTests(unittest.TestCase):
         self.assertIn("exited without answering", rows[0])
         self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
 
+    def test_a_tool_installed_above_the_site_folder_is_the_one_asked(self):
+        # A workspace hoists the package to a parent node_modules. Node
+        # loads it from there, so that tool answers, not the plugin's.
+        root = Path(tempfile.mkdtemp(prefix="vc-workspace-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        site = root / "site"
+        site.mkdir()
+        (site / "vault.config.json").write_text("{}", encoding="utf-8")
+        pkg = root / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "package.json").write_text(json.dumps(
+            {"name": "gm-apprentice-publish", "version": "1.12.0"}),
+            encoding="utf-8")
+        (pkg / "bin" / "gm-publish.js").write_text("process.exit(1);\n",
+                                                   encoding="utf-8")
+        vault = make_vault(self, "---\npublish:\n  site_dir: "
+                                 f"{site.as_posix()}\n---\n")
+        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
+        tool, why, _fix = vc._lines_tool(vault)
+        self.assertEqual(tool.resolve(), (pkg / "bin" / "gm-publish.js").resolve())
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("exited without answering", rows[0])
+        self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
+
     def test_a_publish_block_is_seen_however_the_file_is_saved(self):
         block = "publish:\n  mode: player\n"
         for form, data in (
                 ("byte-order mark", ("\ufeff---\n" + block + "---\n").encode()),
                 ("space after the fence", ("--- \n" + block + "---\n").encode()),
                 ("inline", b"---\npublish: {mode: player}\n---\n"),
+                ("double-quoted key", b'---\n"publish":\n  mode: player\n---\n'),
+                ("single-quoted key", b"---\n'publish' :\n  mode: player\n---\n"),
                 ("not utf-8", b"---\n# caf\xe9\n" + block.encode() + b"---\n")):
             with self.subTest(form):
                 vault = make_vault(self, "")
@@ -2024,6 +2065,7 @@ class NoPublishToolTests(unittest.TestCase):
         rows = vc.check_wrapup(vault, None, True)
         self.assertTrue(rows_for(rows, "repair refused: "), rows)
         self.assertTrue(rows_for(rows, "hidden line(s) would publish"), rows)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "W.md"), wrap)
 
     def test_a_tool_that_hangs_is_given_up_on_and_said_so(self):
