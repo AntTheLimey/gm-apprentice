@@ -12,6 +12,22 @@ does the waiting, and you only wake when a request actually arrives.
   See `references/cloudflare-pages.md` → "Change-request inbox".
 - The system is GURPS 4e or CoC 7e (including Regency Cthulhu). For any
   other system, stop and tell the GM this isn't supported yet.
+- You know the campaign's switches. Ask the tool, from the site directory,
+  before opening the session. Do not read the config files and work it out:
+
+  ```bash
+  npx gm-apprentice-publish explain --all --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["switches"])'
+  ```
+
+  It prints the three values as the build resolves them, e.g.
+  `{'characterSheets': True, 'liveStats': False, 'inbox': True}`.
+  - `inbox` is `False`: the site has no widget, so there is nothing to
+    drain. Tell the GM (`publish.inbox` in `_meta/vault-config.md`, or
+    `setup-inbox`) and stop.
+  - `characterSheets` is `False`: run the loop as a question channel. See
+    "When character sheets are off" below.
+  - The command fails: act as if character sheets are on, and tell the GM
+    you could not check.
 
 ## Start
 
@@ -246,6 +262,29 @@ same answer twice. Finalized entries linger for 7 days, so a
 player who put the phone down still gets the answer; a request the server has
 lost reports `status: gone` to the widget, which tells the player to resend.
 
+## When character sheets are off
+
+With `publish.character_sheets` off (`switches.characterSheets` is `false`
+in the Prerequisites check), the site carries no sheet and the widget is a
+question channel labelled "Ask the GM". The Start, watcher, failure and Stop
+sections apply unchanged. "When a batch arrives" changes:
+
+- **Every request is a question.** Step 0 (resolve the `character`) still
+  applies. Skip step 1's classification and step 2 entirely, for GURPS and
+  CoC alike.
+- **Never apply a sheet change.** Do not edit a PC's `.md`, do not track a
+  running value, and never finalize with `applied`: there is no sheet on the
+  site for a change to show up on.
+- **Answer per step 3**, from `sheet show --player-safe` output only, and
+  finalize with `advice`. Don't point the player at a sheet on the site.
+- **A request worded as a change** ("spend 4 points on DX", "lost 3 SAN") is
+  still answered, not applied. Reply `advice` saying the sheet isn't kept on
+  the site and the change is one to raise with the GM at the table, and log
+  a `⚠ NEEDS YOU` line (character · what was asked · "sheets off — nothing
+  applied") so the GM sees it.
+- **Step 4 never runs.** With no applied batch there is nothing to build or
+  deploy. Go straight to step 5.
+
 ## CoC 7e changes
 
 CoC has no points pool to spend from, so a change is checked against the
@@ -259,9 +298,9 @@ ask which.
 - **SAN, HP, MP, Luck, Reputation (Regency) and conditions** ("lost 4 SAN",
   "HP is 7 now", "spent 10 Luck", "I'm unconscious"). First check whether the
   sheet is live-tracked. Look at what the site actually built, not the config:
-  the build can switch live tracking on by itself when neither config file
-  sets it. The PC's built page in the site's output folder contains
-  `id="coc-live-data"` when it is live.
+  `publish.live_stats` can be on while the build leaves live tracking out
+  (no KV store wired in `wrangler.toml`). The PC's built page in the site's
+  output folder contains `id="coc-live-data"` when it is live.
   - **Live-tracked:** these values, and the skill improvement ticks, live on
     the player's sheet and save the moment they tap them. The live value wins
     over the vault, so an edit here would be silently ignored. Apply nothing

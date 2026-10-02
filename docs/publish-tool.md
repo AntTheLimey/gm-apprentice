@@ -53,8 +53,9 @@ publish turns it into a shareable website.
 
 If pages are missing from your site, the most common cause is that
 the vault files lack a `type` field or live in a folder that is not
-mapped in `vault.config.json`. campaign-organizer can help you fix
-frontmatter; the publish-site skill can help you update the folder map.
+mapped in `publish.folder_map` in the vault's `_meta/vault-config.md`.
+campaign-organizer can help you fix frontmatter; the publish-site skill
+can help you update the folder map.
 
 ## Getting started
 
