@@ -1541,6 +1541,21 @@ def publish_switches(answer: ToolAnswer) -> dict[str, bool] | None:
     return got if all(isinstance(v, bool) for v in got.values()) else None
 
 
+def tool_exclude_sections(answer: ToolAnswer) -> list[str] | None:
+    """The exclude list the build resolves (`excludeSections` in
+    `explain --all --json`: the vault file's list, else the site file's,
+    else the built-in default), or None when the tool could not answer or
+    its answer has no usable list (an older tool). Callers then fall back to
+    the vault file's own list; nothing here reads the site file's."""
+    try:
+        block = answer.data["excludeSections"] if answer.data is not None else None
+    except (KeyError, TypeError):
+        return None
+    if not isinstance(block, list) or not all(isinstance(t, str) for t in block):
+        return None
+    return list(block)
+
+
 def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
     """Per file (NFC path), the `##` headings (`_bare_section_title`) the site withholds
     only because character sheets are off, from `sheetWithheldSections` in
@@ -1958,27 +1973,32 @@ def check_gm_leak(vault: Path, folder: str | None,
     exclusion is an ERROR: `filterSections` does not track code fences,
     so everything after it publishes.
     """
-    excludes = effective_exclude_sections(vault)
+    notes = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault, folder)]
+    # The list the build applies comes from the publish tool, asked once for
+    # the run; the vault file's own list only when it cannot be asked.
+    tool = (explain or ExplainAll(vault))() if notes else None
+    tool_list = tool_exclude_sections(tool) if tool is not None else None
+    excludes = effective_exclude_sections(vault, tool_list)
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
     own = read_publish_list(vault, "exclude_sections")
-    if (own.publish_line is not None and not own.error and own.value is None
-            and not read_publish_scalar(vault, "site_dir")):
+    if (tool_list is None and own.publish_line is not None and not own.error
+            and own.value is None):
         # A vault that publishes (it has a publish: block) with no list of its
-        # own relies on the site's, which this check can only read through
-        # publish.site_dir (#240). A vault that never publishes isn't told.
-        rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
-                    f"assumes the default exclude list; set site_dir so it "
-                    f"reads the site's vault.config.json excludeSections too")
-    notes = [(rel, text, extract_frontmatter(text) or {})
-             for rel, text in vault_files(vault, folder)]
+        # own relies on the site's, which only the publish tool reads. It
+        # could not be asked, so the default list stands in (#240). A vault
+        # that never publishes isn't told.
+        rows.append(f"INFO\t{VAULT_CONFIG}\tthe publish tool could not be "
+                    f"asked for the site's exclude list — gm-leak assumes "
+                    f"the default list; check publish.site_dir and that node "
+                    f"is installed so it reads the build's own")
     withheld: set[str] = set()
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
     sheet_off: dict[str, set[str]] = {}
-    if notes:
-        tool = (explain or ExplainAll(vault))()
+    if tool is not None:
         sheet_off = sheet_withheld_sections(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
@@ -2354,10 +2374,11 @@ def check_pc_body(vault: Path, folder: str | None = None,
     run just refreshed — the check reads every row it emits either way,
     so scoping is about not emitting the vault's pre-existing findings.
     """
-    excludes = effective_exclude_sections(vault)
     rows: list[str] = []
-    # One `explain --all` for the run, shared by both questions asked of it.
+    # One `explain --all` for the run, shared by every question asked of it.
     explain = explain or ExplainAll(vault)
+    # The build's exclude list, asked of the tool at the first PC.
+    excludes: list[str] | None = None
     # The publish tool's reading of each PC's sheet_source, once asked.
     sources: tuple[set[str] | None, str | None, str | None] | None = None
     # The fields each PC carries that its sheet no longer reads, once asked.
@@ -2371,6 +2392,9 @@ def check_pc_body(vault: Path, folder: str | None = None,
             continue
         if publish_mode(fm) == "none":
             continue
+        if excludes is None:
+            excludes = effective_exclude_sections(
+                vault, tool_exclude_sections(explain()))
         states, problems = scan_body(text, excludes)
         kept = _published_linenos(states, fm)
         if kept is not None and not kept:
@@ -3795,7 +3819,9 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
     current `exclude_sections` (hidden today or not) under `## GM Notes`,
     then collapses the list to `["GM Notes"]`. A vault that sets no list
     is re-nested only: the publisher's defaults stay in force, and no
-    list is written that would drop them for future content.
+    list is written that would drop them for future content. This works
+    on the vault file's own list alone; the site file's is never read here,
+    and a heading it moves only becomes more hidden, never less.
 
     Walks every file the publisher might ship, not just the ones the
     `gm-leak` report reads — a played session-plan publishes too — so
@@ -3920,7 +3946,8 @@ def apply_frontmatter_fixes(lines: list[str],
     return actions
 
 
-def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
+def check_wrapup(vault: Path, file: str | None, fix: bool,
+                 explain: ExplainAll | None = None) -> list[str]:
     """Session Wrap-Up conformance, and the mechanical repairs.
 
     Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
@@ -3939,10 +3966,15 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
     Exit code is not a gate here: wrap-up drift is triage, and an
     ordinary vault of ingested back-history would fail every run.
     """
-    excludes = effective_exclude_sections(vault)
     player = wrap_player_sections(vault)
     entries = [(rel, text, extract_frontmatter(text) or {})
                for rel, text in vault_files(vault)]
+    # The build's exclude list from the publish tool (asked only when there
+    # is a wrap-up to check), else the vault file's own.
+    excludes: list[str] = []
+    if any(entity_type(fm) in WRAP_TYPES for _r, _t, fm in entries):
+        excludes = effective_exclude_sections(
+            vault, tool_exclude_sections((explain or ExplainAll(vault))()))
     rows: list[str] = []
     matched = False
     for rel, _text, fm in entries:
@@ -4275,7 +4307,8 @@ def main() -> int:
         # from a command whose other twelve checks are read-only.
         wrap_file = args.file[0] if args.file else None
         emit_rows("wrapup", check_wrapup(args.vault, wrap_file,
-                                         args.fix and args.command == "wrapup"))
+                                         args.fix and args.command == "wrapup",
+                                         explain))
     return 0
 
 

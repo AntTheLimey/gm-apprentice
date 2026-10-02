@@ -55,7 +55,8 @@ def rows_for(rows, needle):
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
                       stripped=None, sheet_source=None, unparseable=None,
-                      retired=None, switches=None, sheet_withheld=None):
+                      retired=None, switches=None, sheet_withheld=None,
+                      exclude_sections=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
@@ -67,7 +68,8 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
     `retiredSheetFields` (None: an older tool's answer, without the field);
     `switches` is the answer's top-level `switches` block (None: a tool older
     than 1.12.0, without one); `sheet_withheld` maps a path to its
-    `sheetWithheldSections`; `plan` is what `manifest publish-played
+    `sheetWithheldSections`; `exclude_sections` is the answer's top-level
+    `excludeSections` (None: a tool without the field); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -128,6 +130,8 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
         answer = {"vaultPath": str(vault), "pages": pages}
         if switches is not None:
             answer["switches"] = switches
+        if exclude_sections is not None:
+            answer["excludeSections"] = exclude_sections
         return subprocess.CompletedProcess(cmd, 0, json.dumps(answer), "")
 
     patches = [mock.patch.object(vc.shutil, "which", return_value=which),
@@ -3090,8 +3094,13 @@ if __name__ == "__main__":
 
 
 class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
-    """#240: the site's vault.config.json `excludeSections` joins the list,
-    exactly as config.js `unionExcludeList` does."""
+    """The exclude list is the publish tool's resolved `excludeSections`
+    (#240 follow-up): Python never reads the site file's list and never
+    unions. With no tool answer it uses the vault file's own list, else
+    the built-in defaults."""
+
+    NOTE = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+            "## Keeper Only\n\n**Keeper-only:** Bob is the Baron.\n")
 
     def vault(self, vault_list=None, site_list=None, site_json=None):
         site = Path(tempfile.mkdtemp(prefix="vc-site-"))
@@ -3104,27 +3113,73 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         lines = ["---", "type: meta", "publish:", f'  site_dir: "{site}"']
         if vault_list is not None:
             lines.append(f"  exclude_sections: {json.dumps(vault_list)}")
-        return make_vault(self, "\n".join(lines + ["---", ""]))
+        vault = make_vault(self, "\n".join(lines + ["---", ""]))
+        (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
+        return vault
 
-    def test_a_shorter_site_list_replaces_the_defaults(self):
-        # the leak #240 describes: no vault list, so the site uses ONLY its
-        # JSON list, and Player Notes publishes
-        vault = self.vault(site_list=["GM Notes"])
+    def marker_rows(self, vault):
+        return rows_for(vc.check_gm_leak(vault, None), "bold label")
+
+    def test_a_section_the_tool_does_not_list_is_scanned(self):
+        # the site file lists Keeper Only, the vault file wins with GM Notes:
+        # the build now publishes the section, so the marker is reported
+        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
+        calls = stub_publish_tool(self, vault, exclude_sections=["GM Notes"])
+        self.assertTrue(self.marker_rows(vault))
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_a_section_the_tool_lists_is_not_scanned(self):
+        vault = self.vault(vault_list=["GM Notes"])
+        calls = stub_publish_tool(self, vault,
+                                  exclude_sections=["GM Notes", "Keeper Only"])
+        self.assertFalse(self.marker_rows(vault))
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_one_tool_call_serves_every_check_in_the_run(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, exclude_sections=["GM Notes"])
+        explain = vc.ExplainAll(vault)
+        vc.check_gm_leak(vault, None, explain=explain)
+        vc.check_pc_body(vault, explain=explain)
+        vc.check_wrapup(vault, None, False, explain)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_without_the_tool_the_vault_file_list_stands_and_the_site_file_is_not_read(self):
+        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
+        patch = mock.patch.object(vc.shutil, "which", return_value=None)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.assertTrue(self.marker_rows(vault))
         self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
 
-    def test_both_lists_are_unioned(self):
-        vault = self.vault(vault_list=["GM Notes"], site_list=["gm notes", "Secrets"])
-        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes", "Secrets"])
-
-    def test_no_site_list_keeps_todays_answer(self):
-        self.assertEqual(vc.effective_exclude_sections(self.vault()),
+    def test_without_the_tool_and_a_silent_vault_file_the_defaults_apply(self):
+        vault = self.vault(site_list=["Keeper Only"])
+        patch = mock.patch.object(vc.shutil, "which", return_value=None)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.assertEqual(vc.effective_exclude_sections(vault),
                          list(__import__("vaultlib").DEFAULT_EXCLUDE_SECTIONS))
-        self.assertEqual(vc.effective_exclude_sections(self.vault(vault_list=["GM Notes"])),
-                         ["GM Notes"])
+        self.assertTrue(self.marker_rows(vault))
 
-    def test_unreadable_site_json_fails_closed(self):
+    def test_a_tool_answer_without_the_field_falls_back_to_the_vault_file(self):
+        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
+        stub_publish_tool(self, vault)
+        self.assertTrue(self.marker_rows(vault))
+
+    def test_a_malformed_field_is_not_trusted(self):
+        for bad in ("GM Notes", [1, 2], {"a": 1}, None):
+            with self.subTest(bad=bad):
+                self.assertIsNone(vc.tool_exclude_sections(
+                    vc.ToolAnswer(data={"excludeSections": bad})))
+
+    def test_an_unreadable_site_file_is_not_read_at_all(self):
         vault = self.vault(site_json="{not json")
-        self.assertEqual(vc.effective_exclude_sections(vault), [])
+        self.assertEqual(vc.effective_exclude_sections(vault),
+                         list(__import__("vaultlib").DEFAULT_EXCLUDE_SECTIONS))
+
+    def test_the_tools_list_is_the_answer_even_when_empty(self):
+        vault = self.vault(vault_list=["GM Notes"])
+        self.assertEqual(vc.effective_exclude_sections(vault, []), [])
 
 
 class GmLeakCollapsedWorldStateTests(unittest.TestCase):
@@ -3694,6 +3749,33 @@ class PublishToolEndToEndTests(unittest.TestCase):
             encoding="utf-8")
         self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
 
+    def test_the_exclude_list_is_the_builds_not_the_site_files_union(self):
+        # The vault file lists GM Notes, the site file lists Keeper Only:
+        # the build uses the vault file's list alone, so the marker under
+        # `## Keeper Only` publishes and gm-leak must scan it.
+        vault = self.site_vault("", "")
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "  mode: player\n",
+            '  mode: player\n  exclude_sections: ["GM Notes"]\n'),
+            encoding="utf-8")
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        site_cfg = json.loads((site / "vault.config.json").read_text(encoding="utf-8"))
+        site_cfg["excludeSections"] = ["Keeper Only"]
+        (site / "vault.config.json").write_text(json.dumps(site_cfg), encoding="utf-8")
+        (vault / "Sessions" / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+            "## Keeper Only\n\n**Keeper-only:** Bob is the Baron.\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertTrue(rows_for(rows, "Sessions/Bob.md:11\tbold label"), rows)
+        # and when the vault file is silent the site file's list is the build's
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            '  exclude_sections: ["GM Notes"]\n', ""), encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "Sessions/Bob.md:11\tbold label"), rows)
+
     def test_manifest_rows_follow_publish_played(self):
         # The real `manifest publish-played --dry-run --json --vault`: a
         # reviewed session with its linked Wrap-Up will be registered; one
@@ -3756,14 +3838,6 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
             "# a column-0 comment inside the block\n  notes: |\n    site_dir: /also-wrong\n"
             '  site_dir: "C:\\\\Sites\\\\x"\n---\n'))
         self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "C:\\Sites\\x")
-
-    def test_a_bom_site_json_is_read(self):
-        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
-        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
-        (site / "vault.config.json").write_text(
-            "\ufeff" + json.dumps({"excludeSections": ["GM Notes"]}), encoding="utf-8")
-        vault = make_vault(self, f'---\ntype: meta\npublish:\n  site_dir: "{site}"\n---\n')
-        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
 
     def test_no_site_dir_and_no_vault_list_is_an_info(self):
         vault = make_vault(self, "---\ntype: meta\npublish:\n  mode: player\n---\n")

@@ -377,6 +377,20 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
+  it('reports the list the build resolves: vault file first, else the site file, else the default', async () => {
+    const both = vaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
+    assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes']);
+    const siteOnly = vaultWith('', { excludeSections: ['Keeper Only'] });
+    assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections, ['Keeper Only']);
+    const none = vaultWith('');
+    assert.deepStrictEqual((await explainAll(none.configPath)).excludeSections,
+      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
+    const c = capture();
+    assert.strictEqual(await runExplain({ configPath: both.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
+    assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes']);
+    for (const v of [both, siteOnly, none]) fs.rmSync(v.vault, { recursive: true, force: true });
+  });
+
   it('names the sections only the keep-list withholds, apart from the stripped ones', async () => {
     const off = vaultWith('  character_sheets: false\n');
     const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));

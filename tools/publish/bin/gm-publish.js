@@ -194,8 +194,11 @@ rather than the whole vault.
   gm-apprentice-publish explain "Sessions/Session 7.md"
 
 With --all, prints one JSON object for every file the vault walk sees:
-{ vaultPath, pages: [{ path, type, publishes, code, bodyWithheld,
-bodyPublishes }] }. bodyWithheld marks a session index whose body the site
+{ vaultPath, switches, excludeSections, pages: [{ path, type, publishes,
+code, bodyWithheld, bodyPublishes }] }. switches is { characterSheets,
+liveStats, inbox } as the build resolves them; excludeSections is the list of
+H2 titles the build strips (the vault file's list, else the site file's, else
+the built-in default). bodyWithheld marks a session index whose body the site
 withholds because its Wrap-Up publishes.
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)

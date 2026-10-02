@@ -167,6 +167,7 @@ async function runExplain(options, deps) {
       autoExclude: auto,
       canonStatus,
       excludeDrafts: !!publishConfig.exclude_drafts,
+      excludeSections: publishConfig.exclude_sections || [],
       manifestSection: manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : null,
       verdict,
       publishes,
@@ -227,7 +228,8 @@ function publishedPagesOf(survey) {
 }
 
 // `explain --all --json`: a top-level `switches` block ({ characterSheets, liveStats,
-// inbox }, as the build resolves them), then the verdict for every file the vault walk sees, in one run,
+// inbox }, as the build resolves them), a top-level `excludeSections` (the `##` titles
+// the build strips: the vault file's list, else the site file's, else the default), then the verdict for every file the vault walk sees, in one run,
 // so a caller that needs the build's answer for many files (vault_check gm-leak and
 // sessions, #276) asks once instead of re-implementing the rules. Each entry:
 //   path           vault-relative path (NFC, POSIX)
@@ -283,7 +285,8 @@ async function runExplainAll(options, deps) {
       frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,
     };
   });
-  out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig), pages }, null, 2));
+  out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),
+    excludeSections: survey.publishConfig.exclude_sections || [], pages }, null, 2));
   return 0;
 }
 
