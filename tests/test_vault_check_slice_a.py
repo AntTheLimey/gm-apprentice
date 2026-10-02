@@ -14,6 +14,8 @@ One class per command; later Slice A tasks append their own classes.
 Run: python3 tests/test_vault_check_slice_a.py
 """
 
+import contextlib
+import io
 import json
 import os
 import shutil
@@ -1819,6 +1821,15 @@ class NoPublishToolTests(unittest.TestCase):
                          rows)
         self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
         self.assertIn("## GM Notes", read(vault, "W.md"))
+
+    def test_a_tool_that_goes_away_mid_run_is_an_error_exit(self):
+        gone = vaultlib.PublishToolUnavailable("node could not run")
+        err = io.StringIO()
+        with mock.patch.object(vc, "main", side_effect=gone), \
+                contextlib.redirect_stderr(err):
+            self.assertEqual(vc.run(), 2)
+        self.assertIn("stopped answering part-way (node could not run)",
+                      err.getvalue())
 
     def test_the_writers_invariant_raises_rather_than_guesses(self):
         self.no_tool()

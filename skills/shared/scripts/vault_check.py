@@ -4465,5 +4465,17 @@ def main() -> int:
     return 0
 
 
+def run() -> int:
+    """`main`, with the one failure no check can answer for itself: the
+    publish tool going away after a check began asking it."""
+    try:
+        return main()
+    except PublishToolUnavailable as e:
+        print(f"error: the publish tool stopped answering part-way ({e}) — "
+              f"the rows above are incomplete and nothing further was "
+              f"written; run it again", file=sys.stderr)
+        return 2
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(run())
