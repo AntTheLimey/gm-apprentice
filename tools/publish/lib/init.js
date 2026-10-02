@@ -84,7 +84,12 @@ function seedVaultSettings(vaultDir, settings, options = {}) {
       // A blank site_dir is no site: fill it. One naming another folder is the GM's,
       // and is left, but said out loud by the caller.
       if (publish[key] === null || publish[key] === '') { set[key] = value; continue; }
-      if (publish[key] !== value) otherSite = String(publish[key]);
+      // The same folder written another way (relative to the vault, a trailing slash,
+      // through a symlink) is this site.
+      const real = (p) => { try { return fsSync.realpathSync(p); } catch { return path.resolve(p); } };
+      if (typeof publish[key] !== 'string' || real(path.resolve(vaultDir, publish[key])) !== real(value)) {
+        otherSite = String(publish[key]);
+      }
     }
     // `theme` holds other keys the GM may have set: add the seeded ones beside them, only
     // where the vault file leaves them unset. (The theme block is re-written, so comments

@@ -175,7 +175,10 @@ In this order:
    re-run `gm-leak` and `wrapup`; any ERROR row from either (a
    heading row, `re-nest refused`, `repair refused`, a fence that
    crosses a section, a Keeper-facing H2 that publishes) means the
-   item failed
+   item failed. An `INFO (vault) gm-leak did not ask…` row means the
+   vault has no site and no Node to check with: nothing was re-nested
+   and nothing was changed. Leave the 1.8.3 entry pending and say so
+   in the Step 8 report; it runs when Node is available
 7. Copy selected templates to `_Templates/` (content)
 8. Overwrite selected templates in `_Templates/` (content)
 9. Update or add selected `_meta/entity-types.md` Type-Specific

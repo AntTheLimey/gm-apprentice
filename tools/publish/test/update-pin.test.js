@@ -476,6 +476,16 @@ describe('update-pin records the site in its vault', () => {
       } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
     }
   });
+  it('the same site written another way is not a different site', async () => {
+    for (const written of ['../site', '../site/']) {
+      const s = site(`---\npublish:\n  site_dir: ${written}\n---\n`);
+      try {
+        const { out } = await run(s);
+        assert.ok(!out.some((l) => l.includes('different site')), out.join('\n'));
+        assert.strictEqual(s.publish().site_dir, written);
+      } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+    }
+  });
   it('says so when the vault names a different site, and when the file cannot be edited', async () => {
     const other = site('---\npublish:\n  site_dir: /somewhere/else\n---\n');
     const flow = site('---\npublish: {mode: player}\n---\n');

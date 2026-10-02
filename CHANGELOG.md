@@ -90,7 +90,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     checks with or without Node, and `gm-leak` reports what would show
     if the vault were published now, or gives one INFO row when there
     is no Node to ask with. A GM who only keeps a vault needs Python
-    and nothing else, as before.
+    and nothing else, as before. Without the tool, a wrap-up repair is
+    still checked for what a `<!-- gm-only -->` block or an HTML
+    comment hides; what an excluded section hides is the tool's to
+    say, so a recap written under an excluded heading can be moved out
+    from under it. When the tool cannot be asked and the vault file
+    mentions `site_dir` at all, the vault is treated as having a site.
   - **The site's own installed tool is the one asked.** With a
     `site_dir`, the questions go to the publish tool installed in that
     site folder, because that is what the site builds with. It is not
@@ -105,8 +110,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     the plugin's tool answers.
   - Whether the vault has a `publish:` block, and where its `site_dir`
     points, is read by the publish tool's YAML parser, so a block
-    written in a way the Python line reader does not expect (quoted
-    key, saved with a byte-order mark) is still seen. For a vault with
+    written in a way the Python line reader does not expect (a quoted
+    key, a byte-order mark) is still seen. For a vault with
     a site, a block written on one line or indented, which that reader
     cannot take the exclude list from, stops the check with an ERROR
     row instead of being scanned on the default list.

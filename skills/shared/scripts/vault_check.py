@@ -1536,12 +1536,13 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     try:
         publishes, site = vault_site(vault)
     except PublishToolUnavailable as e:
-        if shutil.which("node") and PUBLISH_TOOL.is_file():
-            # The tool ran and refused the vault file. Whether there is a
-            # site is then unknown, which is not "no site".
-            return None, str(e), f"fix {VAULT_CONFIG}", True
-        return None, str(e), node_fix, bool(
-            read_publish_scalar(vault, "site_dir"))
+        # No node, a node too old to run the tool, or a vault file the tool
+        # will not parse. The file is then looked at here, and only for one
+        # thing: "no site" is said only when the file does not so much as
+        # mention site_dir. Anything else is a site until the tool says not.
+        refused = str(e).startswith("the publish tool refused")
+        return None, str(e), (f"fix {VAULT_CONFIG}" if refused
+                              else node_fix), _may_have_site(vault)
     if site is None:
         return PUBLISH_TOOL, None, node_fix, False
     if publishes and (publish_block_inline(vault) or read_publish_list(
@@ -1581,6 +1582,21 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         return above / "bin" / "gm-publish.js", None, fix, True
     # A site with no tool of its own is built with the plugin's.
     return PUBLISH_TOOL, None, node_fix, True
+
+
+def _may_have_site(vault: Path) -> bool:
+    """Whether the vault file could name a site: it mentions `site_dir`
+    anywhere, or cannot be read. For the one time the publish tool's own
+    reading (`vault_site`) is not to be had. It errs toward "yes": a vault
+    wrongly taken to have a site is told to get the tool working, one
+    wrongly taken to have none could be written to on a guess."""
+    try:
+        text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return False
+    except (OSError, UnicodeDecodeError):
+        return True
+    return "site_dir" in text
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -3691,9 +3707,19 @@ def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
 
 
 def _marker_hidden(states: list[LineState]) -> Counter:
-    """The lines a `<!-- gm-only -->` or `<!-- spoiler -->` block hides,
-    keyed as `hidden_lines` keys them."""
-    return _keys([s.line for s in states if not s.published])
+    """The lines a `<!-- gm-only -->` or `<!-- spoiler -->` block or an
+    HTML comment hides, keyed as `hidden_lines` keys them. What an
+    excluded section hides is not here: that is the publish tool's to
+    say."""
+    hidden: list[str] = []
+    in_comment = False
+    for s in states:
+        opened = in_comment
+        if not s.in_code:
+            _kept, in_comment = strip_comment_spans(s.line, in_comment)
+        if not s.published or opened or in_comment:
+            hidden.append(s.line)
+    return _keys(hidden)
 
 
 def leak_problem(before: str, before_excludes: list[str], after: str,

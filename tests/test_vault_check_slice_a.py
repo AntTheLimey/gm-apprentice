@@ -1852,6 +1852,51 @@ class NoPublishToolTests(unittest.TestCase):
                 self.assertTrue(rows_for(wrap, "FIXED\tW.md"), wrap)
                 self.assertIn("<!-- gm-only -->", read(vault, "W.md"))
 
+    def test_without_the_tool_a_file_that_mentions_site_dir_is_a_site(self):
+        # The line reader misses these spellings; the tool's parser does
+        # not. With no tool to ask, a mention is enough: nothing is written.
+        for form, block in (
+                ("folded", "publish:\n  site_dir: >-\n    /some/site\n"),
+                ("one line", "publish: {site_dir: /some/site}\n"),
+                ("indented", "  publish:\n    site_dir: /some/site\n"),
+                ("not YAML", "publish:\n  site_dir: [\n")):
+            with self.subTest(form):
+                vault = make_vault(self, f"---\n{block}---\n")
+                (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+                self.no_tool()
+                rows = vc.check_wrapup(vault, None, True)
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(
+                    "ERROR\t(vault)\twrapup could not ask"), rows)
+                self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_a_node_that_cannot_run_the_tool_does_not_block_a_vault_with_no_site(self):
+        # Node is on PATH but too old: the tool exits without answering.
+        gone = vaultlib.PublishToolUnavailable(
+            "the publish tool exited without answering")
+        for publish in (True, False):
+            with self.subTest(publish_block=publish):
+                vault = self.vault(site=False, publish=publish)
+                with mock.patch.object(vc, "vault_site", side_effect=gone), \
+                        mock.patch.object(vc, "publish_tool_problem",
+                                          return_value=str(gone)):
+                    rows = vc.check_wrapup(vault, None, True)
+                    leak = vc.check_gm_leak(vault, None)
+                self.assertFalse(rows_for(rows, "ERROR\t(vault)"), rows)
+                self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
+                self.assertEqual(len(leak), 1, leak)
+                self.assertTrue(leak[0].startswith("INFO\t(vault)\t"), leak)
+                self.assertNotIn("fix _meta/vault-config.md", leak[0])
+
+    def test_no_tool_does_not_move_text_out_of_an_html_comment(self):
+        wrap = ("---\ntype: session_wrap\n---\n\n## GM Notes\n\nx\n\n<!--\n"
+                "## Narrative Recap\n\nHIDDEN RECAP\n-->\n")
+        vault = self.vault(site=False, publish=False, wrap=wrap)
+        self.no_tool()
+        rows = vc.check_wrapup(vault, None, True)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "W.md"), wrap)
+
     def test_a_vault_with_no_site_and_node_is_checked_by_the_plugins_tool(self):
         vault = self.vault(site=False)
         (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")

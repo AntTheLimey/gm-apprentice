@@ -1426,7 +1426,7 @@ def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
     frontmatter → no list set. An unreadable file is an error."""
     config = vault / "_meta" / "vault-config.md"
     try:
-        text = config.read_text(encoding="utf-8")
+        text = config.read_text(encoding="utf-8-sig")
     except FileNotFoundError:
         return ExcludeListConfig()
     except (OSError, UnicodeDecodeError) as e:
