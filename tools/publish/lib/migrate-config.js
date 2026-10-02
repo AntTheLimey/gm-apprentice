@@ -276,28 +276,34 @@ function applyMigration(plan, { configPath, vaultPath } = {}, deps = {}) {
 
 const show = (v) => JSON.stringify(v);
 
-function describePlan(plan) {
+// Each line is { text, note }: a note says something about what was left alone (or where a
+// backup is) rather than a change, so a caller counts changes without matching prefixes.
+function planEntries(plan) {
   const lines = [];
-  const skippedLine = (to, skipped) => skipped && lines.push(`skipped ${to}: not text, so not carried over: ${skipped.map(show).join(', ')}`);
-  for (const m of plan.moves) { lines.push(`move ${m.from} -> ${m.to}`); skippedLine(m.to, m.skipped); }
+  const change = (text) => lines.push({ text, note: false });
+  const note = (text) => lines.push({ text, note: true });
+  const skippedLine = (to, skipped) => skipped && note(`skipped ${to}: not text, so not carried over: ${skipped.map(show).join(', ')}`);
+  for (const m of plan.moves) { change(`move ${m.from} -> ${m.to}`); skippedLine(m.to, m.skipped); }
   for (const m of plan.merges) {
-    lines.push(`merge ${m.to}: added ${m.added.map(show).join(', ') || 'nothing'}`);
+    change(`merge ${m.to}: added ${m.added.map(show).join(', ') || 'nothing'}`);
     skippedLine(m.to, m.skipped);
   }
-  for (const s of plan.switches) lines.push(`switch ${s.to} = ${s.value} (from ${s.from})`);
-  for (const c of plan.conflicts) lines.push(`conflict ${c.key}: kept ${show(c.kept)} from the vault file, discarded ${show(c.discarded)}`);
-  for (const k of plan.skipped || []) lines.push(`skipped ${k.to}: ${k.reason}${k.entries ? `: ${k.entries.map(show).join(', ')}` : ''}`);
-  for (const n of plan.notes) lines.push(`note ${n}`);
-  if (plan.leftover && plan.leftover.length) lines.push(`left in vault.config.json (not a setting this tool reads): ${plan.leftover.join(', ')}`);
+  for (const s of plan.switches) change(`switch ${s.to} = ${s.value} (from ${s.from})`);
+  for (const c of plan.conflicts) change(`conflict ${c.key}: kept ${show(c.kept)} from the vault file, discarded ${show(c.discarded)}`);
+  for (const k of plan.skipped || []) note(`skipped ${k.to}: ${k.reason}${k.entries ? `: ${k.entries.map(show).join(', ')}` : ''}`);
+  for (const n of plan.notes) note(`note ${n}`);
+  if (plan.leftover && plan.leftover.length) note(`left in vault.config.json (not a setting this tool reads): ${plan.leftover.join(', ')}`);
   return lines;
 }
 
+const describePlan = (plan) => planEntries(plan).map((l) => l.text);
+
 // The planned changes, then (after a real run) the backups it wrote or kept.
-function changeLines(plan, result) {
+function changeEntries(plan, result) {
   return [
-    ...describePlan(plan),
-    ...result.backups.map((b) => `backup ${b}`),
-    ...result.keptBackups.map((b) => `backup kept from an earlier run: ${b}`),
+    ...planEntries(plan),
+    ...result.backups.map((b) => ({ text: `backup ${b}`, note: true })),
+    ...result.keptBackups.map((b) => ({ text: `backup kept from an earlier run: ${b}`, note: true })),
   ];
 }
 
@@ -327,9 +333,11 @@ function runMigrateConfig({ configPath, vaultPath, dryRun = false, json = false 
   }
   // The one rendering of the plan: the human run prints these, and --json carries them
   // as `lines` so a caller never re-renders the plan itself.
-  const lines = plan.applicable ? changeLines(plan, result) : [];
+  const entries = plan.applicable ? changeEntries(plan, result) : [];
+  const lines = entries.map((l) => l.text);
   if (json) {
-    out(JSON.stringify({ ...plan, ...(dryRun ? {} : result), lines }, null, 2));
+    const noteLines = entries.filter((l) => l.note).map((l) => l.text);
+    out(JSON.stringify({ ...plan, ...(dryRun ? {} : result), lines, noteLines }, null, 2));
     return 0;
   }
   if (!plan.applicable) {

@@ -228,7 +228,8 @@ function publishedPagesOf(survey) {
 }
 
 // `explain --all --json`: a top-level `switches` block ({ characterSheets, liveStats,
-// inbox }, as the build resolves them), a top-level `excludeSections` (the `##` titles
+// inbox }, as the build resolves them), a top-level `pcKeepSections` (the resolved PC
+// keep-list; null when sheets are on), a top-level `excludeSections` (the `##` titles
 // the build strips: the vault file's list, else the site file's, else the default), then the verdict for every file the vault walk sees, in one run,
 // so a caller that needs the build's answer for many files (vault_check gm-leak and
 // sessions, #276) asks once instead of re-implementing the rules. Each entry:
@@ -286,6 +287,7 @@ async function runExplainAll(options, deps) {
     };
   });
   out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),
+    pcKeepSections: pcKeepList(survey.publishConfig),
     excludeSections: survey.publishConfig.exclude_sections || [], pages }, null, 2));
   return 0;
 }

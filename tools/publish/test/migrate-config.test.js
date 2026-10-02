@@ -69,10 +69,10 @@ describe('migrate-config', () => {
     assert.strictEqual(dry.status, 0, dry.stderr);
     assert.deepStrictEqual([read(s.configPath), read(s.vaultFile)], before);
     assert.ok(!fs.existsSync(`${s.configPath}.pre-migrate`));
-    const { lines: plannedLines, ...planned } = JSON.parse(dry.stdout);
+    const { lines: plannedLines, noteLines: plannedNotes, ...planned } = JSON.parse(dry.stdout);
     const real = cli(['--json', '--config', s.configPath]);
     assert.strictEqual(real.status, 0, real.stderr);
-    const { backups, keptBackups, lines: appliedLines, ...applied } = JSON.parse(real.stdout);
+    const { backups, keptBackups, lines: appliedLines, noteLines: appliedNotes, ...applied } = JSON.parse(real.stdout);
     assert.deepStrictEqual(applied, planned);
     assert.strictEqual(backups.length, 2);
     assert.deepStrictEqual(keptBackups, []);
@@ -81,6 +81,20 @@ describe('migrate-config', () => {
     const site = JSON.parse(read(s.configPath));
     for (const k of planned.siteRemove) assert.ok(!(k in site), k);
     assert.ok(!('backend' in pub));
+  });
+
+  it('2b: --json noteLines are the lines that are not changes', () => {
+    const s = makeSite({ site: { siteTitle: 'T', excludeDirs: [null, 'Secrets'], customThing: 1 } });
+    const r = cli(['--json', '--config', s.configPath]);
+    assert.strictEqual(r.status, 0, r.stderr);
+    const j = JSON.parse(r.stdout);
+    assert.ok(j.noteLines.length >= 3, j.stdout);
+    assert.ok(j.noteLines.every((l) => j.lines.includes(l)));
+    const notes = j.lines.filter((l) => /^(left in |skipped |note |backup)/.test(l));
+    assert.deepStrictEqual(j.noteLines, notes);
+    assert.ok(j.lines.filter((l) => !j.noteLines.includes(l)).every((l) => /^(move|merge|switch|conflict) /.test(l)));
+    const none = JSON.parse(cli(['--json', '--config', makeSite().configPath]).stdout);
+    assert.deepStrictEqual(none.noteLines, []);
   });
 
   it('3: exclude lists merge, de-duplicated the way the reader compares them', () => {

@@ -377,6 +377,15 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
+  it('reports the PC keep-list: null with sheets on, the list with sheets off', async () => {
+    const on = vaultWith('');
+    assert.strictEqual((await explainAll(on.configPath)).pcKeepSections, null);
+    const off = vaultWith('  character_sheets: false\n  pc_prose_sections: [Rumours]\n');
+    const keep = (await explainAll(off.configPath)).pcKeepSections;
+    assert.ok(Array.isArray(keep) && keep.includes('Background') && keep.includes('Rumours'), String(keep));
+    for (const v of [on, off]) fs.rmSync(v.vault, { recursive: true, force: true });
+  });
+
   it('reports the list the build resolves: vault file then site-only entries, else the site file, else the default', async () => {
     const both = vaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
     assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
