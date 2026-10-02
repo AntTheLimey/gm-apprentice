@@ -22,4 +22,12 @@ const MOVED_KEYS = [
 const DEPLOY_KEYS = ['vaultPath', 'outputDir', 'host', 'siteUrl', 'cloudflarePagesProject', 'preserveDirs'];
 // Old switch names, in either file. Handled by switches.js, moved by migrate-config.
 const OLD_SWITCHES = { statusBar: 'live_stats', inbox: 'inbox' };
-module.exports = { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES };
+// True while the site file still holds anything the migration would move: a moved key, the
+// old `backend` block, or `landingTagline`. One predicate for migrate-config (which detects
+// a deployed backend only for such a site) and the build (which says what a switch left
+// unset has stopped doing).
+function hasLegacy(site) {
+  return !!site && typeof site === 'object' && (site.backend !== undefined || site.landingTagline !== undefined
+    || MOVED_KEYS.some((e) => site[e.json] !== undefined));
+}
+module.exports = { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy };

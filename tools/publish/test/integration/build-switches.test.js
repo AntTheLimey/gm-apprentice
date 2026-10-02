@@ -69,6 +69,52 @@ describe('live stats and the inbox follow the switches', () => {
   });
 });
 
+describe('an unmigrated site that loses live stats or the inbox is told', () => {
+  const LIVE = 'WARNING: live stats were on for this site and are now off: publish.live_stats is not set. Run `migrate.py <vault>` to keep them.';
+  const INBOX = 'WARNING: the inbox was on for this site and is now off: publish.inbox is not set. Run `migrate.py <vault>` to keep it.';
+  const said = (lines, text) => lines.filter((l) => l.includes(text)).length;
+  const deployed = { wrangler: true, functions: true };
+
+  it('old settings left, both switches unset, backend deployed: one warning each', () => {
+    const { lines, html } = buildSite({ ...deployed, siteExtra: { siteTitle: 'Old' } });
+    assert.strictEqual(said(lines, LIVE), 1, lines.join('\n'));
+    assert.strictEqual(said(lines, INBOX), 1, lines.join('\n'));
+    assert.ok(!html.includes('gurps-live.js'), 'unset still means off');
+  });
+
+  it('a migrated site (no old settings) is not warned', () => {
+    const { lines } = buildSite({ ...deployed });
+    assert.strictEqual(said(lines, 'were on for this site'), 0, lines.join('\n'));
+    assert.strictEqual(said(lines, 'was on for this site'), 0, lines.join('\n'));
+  });
+
+  it('a switch set either way, in either file, is not warned', () => {
+    const a = buildSite({ ...deployed, publish: '  live_stats: false\n  inbox: true\n', siteExtra: { siteTitle: 'Old' } });
+    assert.strictEqual(said(a.lines, LIVE), 0, a.lines.join('\n'));
+    assert.strictEqual(said(a.lines, INBOX), 0, a.lines.join('\n'));
+    const b = buildSite({ ...deployed, siteExtra: { backend: { statusBar: false, inbox: false } } });
+    assert.strictEqual(said(b.lines, LIVE), 0, b.lines.join('\n'));
+    assert.strictEqual(said(b.lines, INBOX), 0, b.lines.join('\n'));
+  });
+
+  it('no deployed backend: nothing was lost, so nothing is said', () => {
+    const { lines } = buildSite({ siteExtra: { siteTitle: 'Old' } });
+    assert.strictEqual(said(lines, 'on for this site and'), 0, lines.join('\n'));
+  });
+
+  it('character_sheets off: no live stats warning, the inbox one stays', () => {
+    const { lines } = buildSite({ ...deployed, publish: '  character_sheets: false\n', siteExtra: { siteTitle: 'Old' } });
+    assert.strictEqual(said(lines, LIVE), 0, lines.join('\n'));
+    assert.strictEqual(said(lines, INBOX), 1, lines.join('\n'));
+  });
+
+  it('the warnings come with the closing lines, after the campaign-settings one', () => {
+    const { lines } = buildSite({ ...deployed, siteExtra: { siteTitle: 'Old' } });
+    const settings = lines.findIndex((l) => l.includes('still holds campaign settings'));
+    assert.ok(settings >= 0 && lines.findIndex((l) => l.includes(LIVE)) > settings, lines.join('\n'));
+  });
+});
+
 describe('the closing line about campaign settings left in vault.config.json', () => {
   it('names each key and each list entry still applied, once, and says how to move them', () => {
     const { lines } = buildSite({

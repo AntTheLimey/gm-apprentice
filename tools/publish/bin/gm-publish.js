@@ -214,8 +214,9 @@ gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--v
 Moves the campaign settings in the site's vault.config.json (title, folder map,
 exclude lists, images, ...) into publish: in the vault's _meta/vault-config.md,
 renames publish.backend.statusBar / inbox to publish.live_stats / inbox, and
-leaves only the deployment keys in the site file. The vault file wins when both
-set a key (the difference is reported); exclude lists are merged. Both files are
+leaves only the deployment keys in the site file, plus any key the tool does not
+read (named in the output, never removed). The vault file wins when both set a
+key (the difference is reported); exclude lists are merged. Both files are
 backed up as <file>.pre-migrate first (an existing backup is never replaced).
 Nothing is written if the vault file cannot be edited safely. Running it again
 changes nothing.

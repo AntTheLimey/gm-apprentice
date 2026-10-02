@@ -290,6 +290,9 @@ The build does not detect a deployed backend: a site whose Functions
 and KV store exist still builds without live stats and the inbox until
 the switch says `true`. The setup commands write the switch for you
 (`cloudflare-pages.md` § The fast way).
+A site that still holds old settings in `vault.config.json` and loses
+either feature this way gets a closing build warning naming the
+switch; `migrate.py` writes `true` for it.
 
 **The forcing rule.** `character_sheets: false` turns live stats off
 even when `live_stats: true`; the build prints one line saying so. The
@@ -467,7 +470,8 @@ one site directly, run `node "$TOOL" migrate-config --dry-run --config
 
 - writes each campaign setting under `publish:` and removes it from
   the site file. Only the old keys in the table above are removed;
-  any other key the site file holds is left as it is;
+  any other key the site file holds is left as it is, and named in
+  the output;
 - merges exclude lists: the vault file's entries first, then the site
   file's entries that are not already there;
 - keeps the vault file's value where both files set a key, and reports

@@ -326,6 +326,53 @@ describe('migrate-config', () => {
     }
   });
 
+  it('names the site-file keys it leaves behind, without removing them', () => {
+    const s = makeSite({ site: { siteTitle: 'T', campaignImage: 'a.png', fourOhFour: 'x', backend: { inbox: true } } });
+    const { plan } = migrate(s);
+    assert.deepStrictEqual(plan.leftover, ['campaignImage', 'fourOhFour']);
+    // Applied above, so run a fresh site through the human output.
+    const t = makeSite({ site: { siteTitle: 'T', campaignImage: 'a.png', fourOhFour: 'x' } });
+    const out = [];
+    runMigrateConfig({ configPath: t.configPath, dryRun: true }, { out: (l) => out.push(l) });
+    assert.ok(out.includes('left in vault.config.json (not a setting this tool reads): campaignImage, fourOhFour'), out.join('\n'));
+    const kept = JSON.parse(read(s.configPath));
+    assert.strictEqual(kept.campaignImage, 'a.png');
+    assert.strictEqual(kept.fourOhFour, 'x');
+  });
+
+  it('a site file with only deployment and moved keys has no leftover', () => {
+    const s = makeSite({ site: { siteTitle: 'T', host: 'github-pages', landingTagline: 'Hi' } });
+    assert.deepStrictEqual(planMigration({ configPath: s.configPath }).leftover, []);
+  });
+
+  it('a site list that is not a list is skipped, reported and left in the site file', () => {
+    const s = makeSite({ site: { siteTitle: 'T', excludeDirs: 'Secrets' } });
+    const { plan } = migrate(s);
+    assert.strictEqual(plan.skipped.length, 1);
+    assert.strictEqual(plan.skipped[0].key, 'excludeDirs');
+    assert.strictEqual(publishOf(s.vaultFile).exclude_dirs, undefined);
+    assert.strictEqual(JSON.parse(read(s.configPath)).excludeDirs, 'Secrets');
+    const out = [];
+    const t = makeSite({ site: { siteTitle: 'T', excludeDirs: 'Secrets' } });
+    runMigrateConfig({ configPath: t.configPath, dryRun: true }, { out: (l) => out.push(l) });
+    assert.ok(out.some((l) => l.startsWith('skipped publish.exclude_dirs:') && l.includes('is not a list') && l.includes('left in the site file')), out.join('\n'));
+  });
+
+  it('a site list of only unusable entries writes no empty list; the key leaves the site file', () => {
+    const s = makeSite({ site: { excludeFields: [null, 3] } });
+    const { plan } = migrate(s);
+    assert.strictEqual(publishOf(s.vaultFile)?.exclude_fields, undefined);
+    assert.ok(!('excludeFields' in JSON.parse(read(s.configPath))));
+    assert.strictEqual(plan.skipped[0].key, 'excludeFields');
+    assert.ok(plan.skipped[0].reason.includes('removed from the site file'), plan.skipped[0].reason);
+  });
+
+  it('a site list with some usable entries still moves the usable ones', () => {
+    const s = makeSite({ site: { excludeFields: ['secret', null] } });
+    migrate(s);
+    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_fields, ['secret']);
+  });
+
   it('a vault list key that is set but not a list refuses, naming the key', () => {
     for (const body of ['  exclude_dirs:\n', '  exclude_dirs: Secrets\n']) {
       const s = makeSite({ site: { excludeDirs: ['X'] }, vaultFile: `---\npublish:\n${body}---\n` });

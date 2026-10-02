@@ -21,7 +21,8 @@ const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
-const { hasRealKvId } = require('./backend-flags');
+const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
+const { hasLegacy } = require('./config-keys');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
@@ -1309,6 +1310,17 @@ function build(options = {}) {
   // Settings that still live in the site file. One line, so it is the thing the GM reads.
   const legacyLine = legacyWarning(publishConfig.legacy);
   if (legacyLine) console.warn(`  ${legacyLine}`);
+
+  // An unmigrated site used to get live stats and the inbox by detection; unset now means
+  // off. Say so, so the loss is never silent: only for a site still holding old settings,
+  // with the switch unset in both files and the feature actually deployed.
+  if (hasLegacy(rawConfig)) {
+    const unset = switches.unset || [];
+    const lost = (label, key, verb, pron) => console.warn(
+      `  WARNING: ${label} ${verb[0]} on for this site and ${verb[1]} now off: publish.${key} is not set. Run \`migrate.py <vault>\` to keep ${pron}.`);
+    if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live stats', 'live_stats', ['were', 'are'], 'them');
+    if (unset.includes('inbox') && detectInbox(configDir)) lost('the inbox', 'inbox', ['was', 'is'], 'it');
+  }
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);

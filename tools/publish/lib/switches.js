@@ -24,6 +24,7 @@ function resolveSwitches(publish, json) {
   const pb = asMap(p.backend, 'backend');
   const jb = asMap(json && json.backend, 'vault.config.json backend');
   // First source that sets it wins: new name, old name in the vault file, old name in the site file.
+  const unset = [];
   const read = (key, sources, fallback) => {
     for (const [label, raw] of sources) {
       const b = asBool(raw);
@@ -36,6 +37,7 @@ function resolveSwitches(publish, json) {
       }
       return b;
     }
+    unset.push(key);
     return fallback;
   };
   const characterSheets = read('character_sheets', [['character_sheets', p.character_sheets]], true);
@@ -45,7 +47,8 @@ function resolveSwitches(publish, json) {
     notes.push({ key: 'live_stats', problem: 'is on but character_sheets is off; live stats are not published' });
     liveStats = false;
   }
-  return { characterSheets, liveStats, inbox, notes };
+  // `unset`: the switches neither file sets (they sit at their default).
+  return { characterSheets, liveStats, inbox, notes, unset };
 }
 
 module.exports = { resolveSwitches, asBool };

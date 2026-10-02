@@ -42,8 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `<file>.pre-migrate` once. It edits the vault file in place, leaves
   comments and layout outside the changed keys alone, and refuses,
   writing nothing, a file it cannot edit safely (a flow-style
-  `publish: {…}`, tabs, mixed line endings). Safe to run twice.
-  Publish tool 1.12.0.
+  `publish: {…}`, tabs, mixed line endings). Safe to run twice. A key
+  it does not read (such as `campaignImage`) is named in the output
+  and left in the site file; a list setting that is not a list is
+  reported and left there too. Publish tool 1.12.0.
 - `explain --all --json` reports `switches` and, per page,
   `sheetWithheldSections` and `retiredSheetFields`.
 
@@ -79,7 +81,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Live stats and the inbox no longer switch on by detection.** A
   site with a deployed backend and no setting used to get both. Unset
   now means off; the migration writes `true` for a site that uses
-  them.
+  them. A site still holding old settings that loses either this way
+  is told so at the end of the build, with the command that keeps it.
 - **A switch value that is not true or false (or yes/no/on/off),
   including an empty one, is treated as off**, with a build warning.
   For `character_sheets` that withholds sheets.

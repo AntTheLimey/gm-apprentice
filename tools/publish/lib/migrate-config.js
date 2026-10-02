@@ -9,7 +9,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { MOVED_KEYS, OLD_SWITCHES } = require('./config-keys');
+const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy } = require('./config-keys');
 const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
 const { asBool } = require('./switches');
@@ -27,7 +27,7 @@ const oneLine = (s) => String(s).split('\n')[0].trim();
 
 const refuse = (reason) => ({
   applicable: false, refused: true, reason: oneLine(reason),
-  moves: [], merges: [], switches: [], conflicts: [], notes: [], vaultSet: {}, vaultRemove: [], siteRemove: [],
+  moves: [], merges: [], switches: [], conflicts: [], notes: [], skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [],
 });
 
 // The site's vaultPath is resolved against the config file's directory, as build() does.
@@ -74,7 +74,7 @@ function planMigration({ configPath, vaultPath } = {}) {
 
   const plan = {
     applicable: false, moves: [], merges: [], switches: [], conflicts: [], notes: [],
-    vaultSet: {}, vaultRemove: [], siteRemove: [],
+    skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [],
   };
 
   if (site) {
@@ -82,6 +82,27 @@ function planMigration({ configPath, vaultPath } = {}) {
       if (site[entry.json] === undefined) continue;
       const fromSite = site[entry.json];
       const fromVault = publish[entry.publish];
+      if (fromVault === undefined && entry.kind === 'list') {
+        // A list key whose value is not a list is not moved (a non-list under a list key
+        // would be unreadable) and stays in the site file. A list with nothing but
+        // unusable entries writes nothing either: `[]` would replace the built-in
+        // default (for exclude_fields, the protective one). It is removed from the site file.
+        const to = `publish.${entry.publish}`;
+        const from = `vault.config.json ${entry.json}`;
+        if (!Array.isArray(fromSite)) {
+          plan.skipped.push({ key: entry.json, to, reason: `${from} is not a list, so it was not moved and was left in the site file` });
+          continue;
+        }
+        const { text, skipped } = splitEntries(fromSite);
+        if (skipped.length && !text.length) {
+          plan.siteRemove.push(entry.json);
+          plan.skipped.push({
+            key: entry.json, to, entries: skipped,
+            reason: `${from} has no entry that is text, so nothing was written and the key was removed from the site file`,
+          });
+          continue;
+        }
+      }
       plan.siteRemove.push(entry.json);
       if (fromVault === undefined) {
         const move = { from: `vault.config.json ${entry.json}`, to: `publish.${entry.publish}`, value: fromSite };
@@ -155,8 +176,7 @@ function planMigration({ configPath, vaultPath } = {}) {
   const jsonBackend = siteBackend || {};
   // Detection only helps a site that still has something to migrate; a site file holding
   // only deployment keys is already migrated, and a switch the GM removed stays removed.
-  const hasLegacy = !!site && (siteBackend !== undefined || site.landingTagline !== undefined
-    || MOVED_KEYS.some((e) => site[e.json] !== undefined));
+  const hasLegacy = siteHasLegacy(site);
   for (const [oldName, newName] of Object.entries(OLD_SWITCHES)) {
     const sources = [[`backend.${oldName}`, vaultBackend[oldName]], [`vault.config.json backend.${oldName}`, jsonBackend[oldName]]]
       .filter(([, v]) => v !== undefined);
@@ -179,6 +199,11 @@ function planMigration({ configPath, vaultPath } = {}) {
     for (const [, raw] of sources) {
       if (!isDeepStrictEqual(asBool(raw), kept)) plan.conflicts.push({ key: `backend.${oldName}`, kept, discarded: raw });
     }
+  }
+  // Site-file keys no part of the tool reads: named, never removed.
+  if (site) {
+    const known = new Set([...DEPLOY_KEYS, ...MOVED_KEYS.map((e) => e.json), 'backend', 'landingTagline']);
+    plan.leftover = Object.keys(site).filter((k) => !known.has(k));
   }
   if (publish.backend !== undefined) plan.vaultRemove.push('backend');
   if (siteBackend !== undefined) plan.siteRemove.push('backend');
@@ -261,7 +286,9 @@ function describePlan(plan) {
   }
   for (const s of plan.switches) lines.push(`switch ${s.to} = ${s.value} (from ${s.from})`);
   for (const c of plan.conflicts) lines.push(`conflict ${c.key}: kept ${show(c.kept)} from the vault file, discarded ${show(c.discarded)}`);
+  for (const k of plan.skipped || []) lines.push(`skipped ${k.to}: ${k.reason}${k.entries ? `: ${k.entries.map(show).join(', ')}` : ''}`);
   for (const n of plan.notes) lines.push(`note ${n}`);
+  if (plan.leftover && plan.leftover.length) lines.push(`left in vault.config.json (not a setting this tool reads): ${plan.leftover.join(', ')}`);
   return lines;
 }
 
