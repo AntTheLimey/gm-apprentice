@@ -308,6 +308,11 @@ describe('init', () => {
         assert.match(siteOffFor(configPath), /the site is off for this vault \(publish\.site/);
         assert.throws(() => build({ configPath }), /the site is off for this vault/);
         await assert.rejects(fs.access(path.join(site, 'docs', 'index.html')));
+        // Off next to a line the parser rejects: still not built or uploaded.
+        const offText = readFileSync(file, 'utf8');
+        await fs.writeFile(file, offText.replace('site: false', 'site: false\n  broken: [unclosed'));
+        assert.match(siteOffFor(configPath), /^cannot tell whether the site is on \(/);
+        await fs.writeFile(file, offText);
         // A site folder whose vault never set the switch still builds.
         await fs.writeFile(file, readFileSync(file, 'utf8').replace(/^ *site: false\n/m, ''));
         assert.strictEqual(publishOf(vault).site, undefined);

@@ -196,7 +196,7 @@ function recordSiteDir(siteDir, opts, d) {
     result = { written: [], kept: [], skipped: err.message, missing: {} };
   }
   if (result.written.includes('site_dir')) say(`recorded this site in the vault: publish.site_dir = ${here}`);
-  if (result.written.includes('site')) say('recorded that the vault has a site: publish.site = true');
+  if (result.written.includes('site')) say('turned the site switch on in the vault: publish.site = true');
   if (!result.written.length && result.skipped) say(`could not record this site in the vault (${result.skipped}). Add \`site: true\` and \`site_dir: ${here}\` under publish: in _meta/vault-config.md.`);
   if (result.otherSite) say(`the vault already names a different site (publish.site_dir: ${result.otherSite}); it was left as it is.`);
   return result;

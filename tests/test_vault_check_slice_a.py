@@ -1917,6 +1917,8 @@ class NoPublishToolTests(unittest.TestCase):
                 # Not a switch word: off, as the publish tool reads it.
                 ("n", lambda: self.vault(True, switch="n")),
                 ("maybe", lambda: self.vault(True, switch="maybe")),
+                ("blank", lambda: self.vault(True, switch="")),
+                ("null", lambda: self.vault(True, switch="~")),
                 ("comment", lambda: self.vault(True, switch="false # for now")),
                 ("quoted", lambda: self.vault(True, switch='"Off"'))):
             with self.subTest(form):
@@ -1927,11 +1929,12 @@ class NoPublishToolTests(unittest.TestCase):
     def test_the_line_reader_and_the_tool_read_the_switch_alike(self):
         for word in ("true", "True", "yes", "ON", "false", "No", "off", "n",
                      "y", "maybe", "0", "1", '"false"', "'yes'",
-                     "false # later"):
+                     "false # later", "", "~", "null", "# todo", '""',
+                     "[a]"):
             with self.subTest(word):
                 vault = self.vault(True, switch=word)
-                self.assertEqual(vaultlib.site_switch(vault),
-                                 vaultlib.vault_site(vault)[1])
+                self.assertIs(vaultlib.site_switch(vault),
+                              vaultlib.vault_site(vault)[1])
 
     def test_an_off_site_is_not_reported_as_a_tool_that_could_not_be_asked(self):
         vault = self.vault(True, switch="false")

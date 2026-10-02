@@ -429,7 +429,7 @@ describe('update-pin records the site in its vault', () => {
     try {
       const a = await run(unset);
       assert.strictEqual(unset.publish().site, true);
-      assert.ok(a.out.some((l) => l.includes('publish.site = true')), a.out.join('\n'));
+      assert.ok(a.out.some((l) => l.includes('turned the site switch on in the vault: publish.site = true')), a.out.join('\n'));
       const b = await run(off);
       assert.strictEqual(off.publish().site, false);
       assert.strictEqual(off.publish().site_dir, off.posix);

@@ -941,13 +941,14 @@ SITE_ON_WORDS = ("true", "yes", "on")
 
 def site_switch(vault: Path) -> bool | None:
     """`publish.site` as the line reader sees it: True, False, or None when
-    it is unset or blank. A value that is not one of the switch words is
-    off, as the publish tool reads it (`asBool` in switches.js). For when
-    the tool cannot be asked; its own reading (`vault_site`) comes first."""
-    word = (read_publish_scalar(vault, "site") or "").strip().lower()
-    if not word:
+    the key is not written. A key left blank, or holding anything that is
+    not one of the switch words, is off, as the publish tool reads it
+    (`asBool` in switches.js). For when the tool cannot be asked; its own
+    reading (`vault_site`) comes first."""
+    written, value = _publish_scalar(vault, "site")
+    if not written:
         return None
-    return word in SITE_ON_WORDS
+    return (value or "").strip().lower() in SITE_ON_WORDS
 
 
 def publish_tool_problem() -> str | None:
@@ -1497,20 +1498,20 @@ def read_wrap_up_player_sections(vault: Path) -> list[str]:
     return [] if cfg.error else list(cfg.value or [])
 
 
-def read_publish_scalar(vault: Path, key: str) -> str | None:
-    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
-    say), or None when absent, null or not a plain scalar. Only a direct
-    child of `publish:` counts: a same-named key nested deeper, or a line
-    inside a block scalar, is someone else's."""
+def _publish_scalar(vault: Path, key: str) -> tuple[bool, str | None]:
+    """(whether `publish.<key>` is written in `_meta/vault-config.md`, its
+    value as a scalar: None when null, blank or not a plain scalar). Only
+    a direct child of `publish:` counts: a same-named key nested deeper,
+    or a line inside a block scalar, is someone else's."""
     try:
         text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
     except (OSError, UnicodeDecodeError):
-        return None
+        return False, None
     lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
     start = next((i for i, line in enumerate(lines)
                   if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
     if start is None:
-        return None
+        return False, None
     indent: int | None = None
     for line in lines[start + 1:]:
         stripped = line.strip()
@@ -1534,16 +1535,23 @@ def read_publish_scalar(vault: Path, key: str) -> str | None:
             # apostrophe ("GM's Site") is just a character.
             value = re.split(r"\s#", raw, maxsplit=1)[0].strip()
         if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
-            return None
+            return True, None
         if value.startswith('"'):
             try:
-                return json.loads(value) or None  # YAML double quotes use JSON's escapes
+                return True, json.loads(value) or None  # YAML double quotes use JSON's escapes
             except ValueError:
-                return None
+                return True, None
         if value.startswith("'"):
-            return value[1:-1].replace("''", "'") or None if value.endswith("'") else None
-        return value
-    return None
+            return True, (value[1:-1].replace("''", "'") or None
+                          if value.endswith("'") else None)
+        return True, value
+    return False, None
+
+
+def read_publish_scalar(vault: Path, key: str) -> str | None:
+    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
+    say), or None when absent, null or not a plain scalar."""
+    return _publish_scalar(vault, key)[1]
 
 
 # The publish pipeline's own defaults (tools/publish/lib/config.js

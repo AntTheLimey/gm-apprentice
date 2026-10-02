@@ -514,16 +514,25 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
 }
 
 // Why `build` and `deploy` must not run for the site at `configPath`: the GM turned the
-// site off (`publish.site`). null when it is on or unset, and when the config cannot be
-// read here (the command then reports that in its own words).
+// site off (`publish.site`), or the vault file cannot be read to tell. null when it is on
+// or unset, and when the site's own vault.config.json cannot be read (the command then
+// reports that in its own words).
 function siteOffFor(configPath) {
+  let raw;
+  let vaultPath;
   try {
     const resolved = path.resolve(configPath);
-    const raw = loadVaultConfig(resolved);
-    const vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath);
-    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches);
+    raw = loadVaultConfig(resolved);
+    vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath);
   } catch {
     return null;
+  }
+  try {
+    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches);
+  } catch (err) {
+    // A deploy without a build reads nothing else: a vault file that says `site: false`
+    // next to a broken line must not be uploaded for.
+    return `cannot tell whether the site is on (${String(err.message).split('\n')[0].trim()}); nothing was built.`;
   }
 }
 

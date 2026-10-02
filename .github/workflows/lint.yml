@@ -125,8 +125,8 @@ jobs:
         env:
           VAULT_CHECK_REQUIRE_NODE: '1'
         run: |
-          pip install 'pytest>=8,<10'
-          python -m pytest tests -q
+          pip install 'pytest>=8,<10' 'pytest-xdist>=3,<4'
+          python -m pytest tests -q -n auto
 
       - name: Every system ships its NOTICE.md with the required text
         run: python scripts/attribution_check.py
