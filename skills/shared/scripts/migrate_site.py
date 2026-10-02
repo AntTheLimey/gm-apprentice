@@ -34,13 +34,6 @@ INLINE_PUBLISH = (
 # What the tool's note lines start with, for a tool that does not name them
 # (`noteLines`); backups are never changes either.
 NOTE_PREFIXES = ("left in ", "skipped ", "note ")
-SITE_OFF = ("the site is off (publish.site); site settings were not looked at. "
-            "Turn it on and run migrate.py again to move them.")
-SITE_DIR_UNSET = (
-    "publish.site_dir is not set; site settings were not looked at. Set it "
-    "to your site folder and run migrate.py again, or run "
-    "`gm-apprentice-publish migrate-config --config <site>/vault.config.json` "
-    "from the site.")
 
 
 @dataclass
@@ -48,10 +41,8 @@ class StepPlan:
     applies: bool
     lines: list[str]        # one human line per change, or why it does not apply
     error: str | None = None
-    notes: int = 0          # how many leading lines are warnings, not changes
     after: tuple[str, ...] = ()  # trailing lines that are not changes (backups)
     kept_notes: tuple[str, ...] = ()  # the tool's notes: after the changes, not counted
-
 
 
 # --- the config step ---------------------------------------------------------
@@ -95,23 +86,6 @@ def _tool_error(vault: Path, why: str) -> str:
     return why
 
 
-def _site_note(vault: Path) -> str:
-    """The line for a site the tool did not look at: `publish.site_dir`
-    unset, or set to a folder with no vault.config.json. The tool then
-    only looks at the vault file, and saying so keeps a missing or
-    mistyped path from reading as "nothing to move". Empty when the site
-    was looked at."""
-    site, has_config = configured_site(vault)
-    if site is None and site_switch(vault) is False:
-        return SITE_OFF
-    if site is None:
-        return SITE_DIR_UNSET
-    if not has_config:
-        return (f"publish.site_dir is set to {site} but no vault.config.json "
-                f"is there; site settings were not looked at")
-    return ""
-
-
 def _backup_places(vault: Path) -> str:
     site, has_config = configured_site(vault)
     places = [str(vault / "_meta" / "vault-config.md.pre-migrate")]
@@ -145,12 +119,10 @@ def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
     plan, why = _ask(vault, args)
     if why is not None:
         return StepPlan(False, [], error=why), False
-    note = _site_note(vault)
     if plan is None:
         return StepPlan(False, [DOES_NOT_PUBLISH]), False
-    notes = [note] if note else []
     if not plan["applicable"]:
-        return StepPlan(False, [*notes, NOTHING_TO_DO]), False
+        return StepPlan(False, [NOTHING_TO_DO]), False
     named = plan.get("noteLines")
     def is_note(x: str) -> bool:
         if isinstance(named, list) and all(isinstance(n, str) for n in named):
@@ -160,8 +132,7 @@ def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
     kept = [x for x in plan["lines"] if not x.startswith("backup ") and is_note(x)]
     changes = [x for x in plan["lines"]
                if not x.startswith("backup ") and not is_note(x)]
-    return StepPlan(True, [*notes, *changes], notes=len(notes),
-                    after=tuple(backups), kept_notes=tuple(kept)), True
+    return StepPlan(True, changes, after=tuple(backups), kept_notes=tuple(kept)), True
 
 
 def describe_config_to_vault(vault: Path) -> StepPlan:
@@ -210,14 +181,17 @@ def find_site_repin(vault: Path) -> list[Item]:
         raise StepFailed(
             f"publish.site_dir is set to {site} but no vault.config.json is "
             f"there; correct the path, or set site: false")
-    _code, out, _err = plugin_tool(
+    code, out, err = plugin_tool(
         ["update-pin", "--check", "--json", "--site", str(site)])
     try:
         data = json.loads(out)
     except ValueError:
         data = None
     if not isinstance(data, dict) or not isinstance(data.get("ok"), bool):
-        raise StepFailed("update-pin --check did not return the expected JSON")
+        said = [x for x in err.splitlines() if x.strip()]
+        raise StepFailed(
+            "update-pin --check did not return the expected JSON: "
+            + (said[-1].strip() if said else f"update-pin exited {code}"))
     if data["ok"]:
         return []
     installed = data.get("installedBefore") or "none"
@@ -252,9 +226,9 @@ def find_config_to_vault(vault: Path) -> list[Item]:
         done = apply_config_to_vault(vault)
         if done.error:
             raise StepFailed(done.error)
-        return [*done.lines[done.notes:], *done.kept_notes, *done.after]
+        return [*done.lines, *done.kept_notes, *done.after]
 
-    return [Item("config-to-vault", WILL, plan.lines[plan.notes:], apply)]
+    return [Item("config-to-vault", WILL, plan.lines, apply)]
 
 
 def find_publish_site(vault: Path) -> list[Item]:

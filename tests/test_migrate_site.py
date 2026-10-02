@@ -189,8 +189,128 @@ class RepinTests(unittest.TestCase):
         self.assertIn("did not return the expected JSON",
                       str(caught.exception))
 
+    def test_a_crashed_check_says_why(self):
+        vault = make_vault(self)
+        crash = mock.Mock(return_value=(
+            1, "", "node:internal\nError: Cannot find module 'x'\n\n"))
+        with mock.patch.object(ms, "plugin_tool", crash), \
+                self.assertRaises(StepFailed) as caught:
+            ms.find_site_repin(vault)
+        self.assertTrue(str(caught.exception).endswith(
+            "expected JSON: Error: Cannot find module 'x'"))
+        silent = mock.Mock(return_value=(3, "", ""))
+        with mock.patch.object(ms, "plugin_tool", silent), \
+                self.assertRaises(StepFailed) as caught:
+            ms.find_site_repin(vault)
+        self.assertTrue(str(caught.exception).endswith(
+            "expected JSON: update-pin exited 3"))
+
 
 class ConfigStepTests(unittest.TestCase):
+    def pin_site(self, spec):
+        vault = make_vault(self)
+        site = site_of(vault)
+        (site / "package.json").write_text(json.dumps(
+            {"dependencies": {"gm-apprentice-publish": spec}}), encoding="utf-8")
+        return vault, site
+
+    def fails_with(self, vault, tool):
+        tool = tool or Tool()
+        with stubbed(tool), self.assertRaises(StepFailed) as caught:
+            ms.find_config_to_vault(vault)
+        return str(caught.exception), tool
+
+    def test_unknown_command_names_the_site_and_the_fix(self):
+        vault = make_vault(self)
+        msg, _ = self.fails_with(
+            vault, Tool(fail="Unknown command: migrate-config"))
+        self.assertEqual(
+            msg, f"the site's publish tool does not have migrate-config; it "
+                 f"is older than this migration needs ({ms.NEEDS_PUBLISH}). "
+                 f"Run update-pin --site {site_of(vault)}, then migrate.py "
+                 f"again.")
+
+    def test_unknown_command_without_a_site_says_to_update_the_plugin(self):
+        msg, _ = self.fails_with(make_vault(self, site=False),
+                                 Tool(fail="Unknown command: migrate-config"))
+        self.assertNotIn("update-pin", msg)
+        self.assertIn("Update the gm-apprentice plugin", msg)
+
+    def test_old_numeric_pin_gets_one_plain_message(self):
+        vault, site = self.pin_site("1.10.19")
+        msg, tool = self.fails_with(vault, None)
+        self.assertEqual(tool.calls, [])
+        self.assertEqual(
+            msg, f"the site's publish tool (1.10.19) is older than this "
+                 f"migration needs ({ms.NEEDS_PUBLISH}). Run update-pin "
+                 f"--site {site}, then migrate.py again.")
+
+    def test_unreadable_pin_says_it_cannot_tell(self):
+        vault, site = self.pin_site("file:../tools/publish")
+        msg, tool = self.fails_with(vault, None)
+        self.assertEqual(tool.calls, [])
+        self.assertEqual(
+            msg, f"cannot tell which publish tool the site at {site} uses "
+                 f"(file:../tools/publish). Run update-pin --site {site}, "
+                 f"then migrate.py again.")
+
+    def test_an_unreadable_package_json_is_said_plainly(self):
+        vault = make_vault(self)
+        (site_of(vault) / "package.json").write_text("{not json",
+                                                     encoding="utf-8")
+        msg, _ = self.fails_with(vault, None)
+        self.assertIn("the site's package.json can't be read", msg)
+        self.assertTrue(msg.endswith("then run migrate.py again"))
+
+    def test_a_missing_tool_script_points_at_update_pin(self):
+        vault = make_vault(self)
+        site = site_of(vault)
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "package.json").write_text('{"version": "1.12.0"}',
+                                          encoding="utf-8")
+        msg, tool = self.fails_with(vault, None)
+        self.assertEqual(tool.calls, [])
+        self.assertEqual(
+            msg, f"{pkg / 'bin' / 'gm-publish.js'} is missing. Run "
+                 f"update-pin --site {site}, then migrate.py again.")
+
+    def test_no_node_is_not_blamed_on_the_pin(self):
+        vault = make_vault(self)
+        with mock.patch.object(ms.shutil, "which", return_value=None), \
+                mock.patch.object(vc.shutil, "which", return_value=None), \
+                self.assertRaises(StepFailed) as caught:
+            ms.find_config_to_vault(vault)
+        self.assertEqual(str(caught.exception),
+                         "node is not on PATH; install Node.js, then run "
+                         "migrate.py again")
+
+    def test_temp_dir_failure_is_not_reported_as_node_failing(self):
+        vault, tool = make_vault(self, site=False), Tool()
+        with mock.patch.object(vc.tempfile, "mkdtemp", side_effect=OSError):
+            msg, _ = self.fails_with(vault, tool)
+        self.assertIn("no temporary directory", msg)
+        self.assertNotIn("node could not run", msg)
+        self.assertEqual(tool.calls, [])
+
+    def test_a_publish_block_on_one_line_stops_the_config_step(self):
+        vault = make_vault(self, publish=False)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish: {mode: player, site_dir: ../site}\n---\n",
+            encoding="utf-8")
+        msg, tool = self.fails_with(vault, None)
+        self.assertIn("written on one line", msg)
+        self.assertEqual(tool.calls, [])
+
+    def test_a_publish_block_without_a_site_still_reaches_the_tool(self):
+        tool = Tool()
+        with stubbed(tool):
+            (item,) = ms.find_config_to_vault(make_vault(self, site=False))
+        self.assertEqual(len(tool.calls), 1)
+        self.assertNotIn("--config", tool.calls[0])
+        self.assertIn("--vault", tool.calls[0])
+        self.assertEqual(item.id, "config-to-vault")
+
     def test_pending_moves_are_one_will_do_item(self):
         vault = make_vault(self)
         with stubbed(Tool()):
@@ -304,6 +424,10 @@ class PublishSiteTests(unittest.TestCase):
         self.assertEqual(self.text(vault), before)
 
 
+@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                     or (shutil.which("node") and (
+                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                     "node and the publish tool's node_modules are needed")
 class MigrateEndToEndTests(unittest.TestCase):
     def test_legacy_site_migrates_and_frontmatter_stays_clean(self):
         vault = tmp(self, "mig-e2e-vault-")
