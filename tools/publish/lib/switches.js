@@ -1,5 +1,6 @@
 // tools/publish/lib/switches.js
-// The only place the three GM switches are decided (#285).
+// The only place the GM switches are decided (#285): whether the vault has a site at all
+// (`site`), and the three features of one.
 const WORDS = new Map([['true', true], ['yes', true], ['on', true], ['false', false], ['no', false], ['off', false]]);
 
 // undefined: not set. true/false: set. null: set to something unreadable,
@@ -40,6 +41,8 @@ function resolveSwitches(publish, json) {
     unset.push(key);
     return fallback;
   };
+  // A site is on or off. Unset, in a vault written before the switch, a site_dir says on.
+  const site = read('site', [['site', p.site]], typeof p.site_dir === 'string' && p.site_dir.trim() !== '');
   const characterSheets = read('character_sheets', [['character_sheets', p.character_sheets]], true);
   let liveStats = read('live_stats', [['live_stats', p.live_stats], ['backend.statusBar', pb.statusBar], ['vault.config.json backend.statusBar', jb.statusBar]], false);
   const inbox = read('inbox', [['inbox', p.inbox], ['backend.inbox', pb.inbox], ['vault.config.json backend.inbox', jb.inbox]], false);
@@ -54,8 +57,16 @@ function resolveSwitches(publish, json) {
   const explicitOff = {
     liveStats: !liveStats && (!unset.includes('live_stats') || !characterSheets),
     inbox: !inbox && !unset.includes('inbox'),
+    site: !site && !unset.includes('site'),
   };
-  return { characterSheets, liveStats, inbox, notes, unset, explicitOff };
+  return { site, characterSheets, liveStats, inbox, notes, unset, explicitOff };
 }
 
-module.exports = { resolveSwitches, asBool };
+// What `build` and `deploy` say instead of running when the GM has turned the site off.
+// Only an explicit off stops them: a site folder whose vault never set the switch builds.
+const SITE_OFF = 'the site is off for this vault (publish.site in _meta/vault-config.md); nothing was built. Set publish.site: true to publish again.';
+function siteOff(switches) {
+  return switches && switches.explicitOff && switches.explicitOff.site ? SITE_OFF : null;
+}
+
+module.exports = { resolveSwitches, asBool, siteOff, SITE_OFF };

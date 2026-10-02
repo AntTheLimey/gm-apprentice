@@ -23,10 +23,13 @@
 //                            these `publish_include_sections` keeps it
 //
 //   {"op":"site","vault":…}
-//       -> {"publishes":…,"siteDir":…}  whether the vault file has a `publish:`
-//                            block, and the site folder its `site_dir` names (an
-//                            absolute path, or null). Read with the build's own YAML
-//                            parser, so vault_check does not read that file a second way.
+//       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault file has a
+//                            `publish:` block, whether the vault has a site (`publish.site`;
+//                            unset, a site_dir says yes), and the site folder `site_dir`
+//                            names (an absolute path; null when the site is off or no
+//                            folder is named, which for a site that is on means it is still
+//                            to be set up). Read with the build's own YAML parser, so
+//                            vault_check does not read that file a second way.
 //
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
@@ -34,6 +37,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
+const { asBool } = require('./switches');
 const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -51,7 +55,7 @@ function list(request, key) {
 function site(vault) {
   if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
   const file = path.join(vault, '_meta', 'vault-config.md');
-  if (!fs.existsSync(file)) return { publishes: false, siteDir: null };
+  if (!fs.existsSync(file)) return { publishes: false, site: false, siteDir: null };
   let data;
   try {
     ({ data } = parseNote(fs.readFileSync(file, 'utf-8')));
@@ -59,12 +63,18 @@ function site(vault) {
     throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(err.message).split('\n')[0].trim()}`);
   }
   const publish = data && data.publish;
-  if (publish === undefined || publish === null) return { publishes: false, siteDir: null };
+  if (publish === undefined || publish === null) return { publishes: false, site: false, siteDir: null };
   if (typeof publish !== 'object' || Array.isArray(publish)) throw new Error('publish: in _meta/vault-config.md is not a block of settings');
   const raw = publish.site_dir;
-  if (raw === undefined || raw === null || raw === '') return { publishes: true, siteDir: null };
+  const blank = raw === undefined || raw === null || raw === '';
+  // `publish.site` is the switch. Off: there is no site, whatever site_dir says. Unset, in
+  // a vault written before the switch, a site_dir says on. An unreadable value is off, as
+  // for the other switches.
+  const flag = asBool(publish.site);
+  const on = flag === undefined ? !blank : flag === true;
+  if (!on || blank) return { publishes: true, site: on, siteDir: null };
   if (typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
-  return { publishes: true, siteDir: siteDirPath(vault, raw) };
+  return { publishes: true, site: true, siteDir: siteDirPath(vault, raw) };
 }
 
 // The folder a `publish.site_dir` value names: `~` is the home folder, and a relative

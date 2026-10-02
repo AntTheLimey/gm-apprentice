@@ -5,7 +5,7 @@ const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
 const { isDeepStrictEqual } = require('node:util');
 const { MOVED_KEYS, usable } = require('./config-keys');
-const { resolveSwitches, asBool } = require('./switches');
+const { resolveSwitches, asBool, siteOff } = require('./switches');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
@@ -513,4 +513,18 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
   return { config, publishConfig };
 }
 
-module.exports = { MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };
+// Why `build` and `deploy` must not run for the site at `configPath`: the GM turned the
+// site off (`publish.site`). null when it is on or unset, and when the config cannot be
+// read here (the command then reports that in its own words).
+function siteOffFor(configPath) {
+  try {
+    const resolved = path.resolve(configPath);
+    const raw = loadVaultConfig(resolved);
+    const vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath);
+    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches);
+  } catch {
+    return null;
+  }
+}
+
+module.exports = { siteOffFor, MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };

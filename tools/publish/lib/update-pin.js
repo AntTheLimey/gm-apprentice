@@ -174,7 +174,8 @@ async function runUpdatePinTag(opts, d) {
 // vault cannot find the site and vault_check takes it to have none. Any update-pin run
 // puts that right: it is the command a GM with an older site is told to run. It adds to
 // a vault file that is already there and never creates one, never changes a site_dir
-// that is set, and never stops the repoint. What it could not do, it says.
+// that is set, and never stops the repoint. What it could not do, it says. It also writes
+// `site: true` where the switch is unset; a site the GM turned off stays off.
 function recordSiteDir(siteDir, opts, d) {
   if (opts.check) return null;
   const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
@@ -190,13 +191,14 @@ function recordSiteDir(siteDir, opts, d) {
   if (typeof vaultPath !== 'string' || vaultPath === '') return null;
   let result;
   try {
-    result = seed(path.resolve(siteDir, vaultPath), { site_dir: here }, { existingOnly: true });
+    result = seed(path.resolve(siteDir, vaultPath), { site: true, site_dir: here }, { existingOnly: true });
   } catch (err) {
     result = { written: [], kept: [], skipped: err.message, missing: {} };
   }
-  if (result.written.length) say(`recorded this site in the vault: publish.site_dir = ${here}`);
-  else if (result.skipped) say(`could not record this site in the vault (${result.skipped}). Add \`site_dir: ${here}\` under publish: in _meta/vault-config.md.`);
-  else if (result.otherSite) say(`the vault already names a different site (publish.site_dir: ${result.otherSite}); it was left as it is.`);
+  if (result.written.includes('site_dir')) say(`recorded this site in the vault: publish.site_dir = ${here}`);
+  if (result.written.includes('site')) say('recorded that the vault has a site: publish.site = true');
+  if (!result.written.length && result.skipped) say(`could not record this site in the vault (${result.skipped}). Add \`site: true\` and \`site_dir: ${here}\` under publish: in _meta/vault-config.md.`);
+  if (result.otherSite) say(`the vault already names a different site (publish.site_dir: ${result.otherSite}); it was left as it is.`);
   return result;
 }
 

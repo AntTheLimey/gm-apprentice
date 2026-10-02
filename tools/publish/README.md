@@ -173,10 +173,12 @@ Scaffolds a new site in `dir` (defaults to the current directory).
 Refuses to overwrite existing files — run it in an empty directory
 or provide a new directory name.
 
-`init` also writes `publish.site_dir`, the absolute path of the new
-site folder, into the vault's `_meta/vault-config.md`, and `update-pin`
-adds it to a vault that lacks it. That is how the vault finds its site
-again.
+`init` also writes `publish.site: true` and `publish.site_dir`, the
+absolute path of the new site folder, into the vault's
+`_meta/vault-config.md`. `update-pin` adds either to a vault that lacks
+it and leaves a `site: false` alone. `publish.site` says whether the
+vault has a site: with it set to `false`, `build` and `deploy` stop
+with one line and exit code 1, and nothing is built.
 
 ### `build [--config path]`
 
@@ -202,7 +204,7 @@ stdin closes.
 | `{"op":"published","text":…,"excludeSections":[…],"publish":"all"}` | `{"text":…}`: the body the site renders. `publish` is `all`, `stub` (with `include`, the page's `publish_include_sections`) or `none`. |
 | `{"op":"sections","text":…,"excludeSections":[…]}` | `{"withheldBy":[…]}`: for each line of `text`, the excluded section withholding it, or `null`. |
 | `{"op":"stub","text":…,"include":[…]}` | `{"kept":[…]}`: for each line of `text`, whether a stub page keeps it. |
-| `{"op":"site","vault":…}` | `{"publishes":…,"siteDir":…}`: whether the vault's `_meta/vault-config.md` has a `publish:` block, and the absolute path its `site_dir` names (or `null`). |
+| `{"op":"site","vault":…}` | `{"publishes":…,"site":…,"siteDir":…}`: whether the vault's `_meta/vault-config.md` has a `publish:` block, whether its site is on (`publish.site`; unset, a `site_dir` says on), and the absolute path its `site_dir` names (`null` when the site is off or no folder is named). |
 
 A request that cannot be answered gets `{"error":…}` and the process
 carries on. That includes a malformed one: `text` must be a string, and

@@ -134,8 +134,9 @@ campaign-organizer if entity filing is needed.
 
 Only if `_meta/publish-manifest.md` exists and `publish.mode` in
 `_meta/vault-config.md` is `player` or unset; otherwise skip. If
-`publish.site_dir` is unset the vault has no site, so skip this step
-too; a relative `site_dir` is relative to the vault. A played session
+`publish.site` is `false`, or it is unset and so is
+`publish.site_dir`, the vault has no site, so skip this step too; a
+relative `site_dir` is relative to the vault. A played session
 left in the manifest's Needs Decision never reaches the player site
 (#277). Run it yourself, unconditionally, and report the paths it
 ticked:

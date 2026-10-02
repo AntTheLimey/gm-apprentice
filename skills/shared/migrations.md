@@ -1311,18 +1311,28 @@ three switches control character sheets, live stats and the inbox
 
 ## Migration: 1.10.24 → 1.10.25
 
-The publish build withholds an excluded section more carefully, and the
-vault checks ask the build what publishes. No frontmatter changes.
+The publish build withholds an excluded section more carefully, the
+vault checks ask the build what publishes, and `publish.site` in
+`_meta/vault-config.md` says whether the vault has a site. No entity
+frontmatter changes.
 
 ### Structural
 
+- **`publish.site`** is a new switch in vault-config: `true` when the
+  vault has a site, `false` when it does not. With it off nothing is
+  built and no leak check runs, whatever `publish.site_dir` says.
+  Unset counts as on only when `site_dir` is set, so a vault that is
+  not migrated yet behaves as before.
 - If the GM has a site, run `update-pin --site <site-dir>`. It
-  installs publish tool 1.12.1 there and writes `publish.site_dir`
-  into the vault file when it is missing. Ask the GM for the site
-  folder if the vault file does not name one. Until the site's tool is
-  1.12.1 or later, `vault_check.py` `gm-leak`, `pc-body` and `wrapup`
-  stop with one ERROR row and write nothing.
-- A vault with no `site_dir` after that has no site.
+  installs publish tool 1.12.1 there and writes `publish.site: true`
+  and `publish.site_dir` into the vault file where they are missing;
+  it leaves a `site: false` alone. Ask the GM for the site folder if
+  the vault file does not name one. Until the site's tool is 1.12.1 or
+  later, `vault_check.py` `gm-leak`, `pc-body` and `wrapup` stop with
+  one ERROR row and write nothing.
+- If the GM has no site and the vault file has a `publish:` block, add
+  `site: false` under it. A vault file with no `publish:` block needs
+  nothing: it has no site.
 
 ### Content
 

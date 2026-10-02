@@ -917,21 +917,39 @@ def _close_publish_tools() -> None:
 atexit.register(_close_publish_tools)
 
 
-def vault_site(vault: Path) -> tuple[bool, Path | None]:
-    """(whether the vault file has a `publish:` block, the site folder its
-    `site_dir` names). Asked of the plugin's own publish tool, which reads
-    the file with the build's YAML parser: the line reader here would miss
-    a block written any way it does not expect. Raises
+def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
+    """(whether the vault file has a `publish:` block, whether the vault
+    has a site, the site folder its `site_dir` names). `publish.site` is
+    the switch: off is no site whatever `site_dir` says, and on with no
+    folder is a site still to be set up. Asked of the plugin's own publish
+    tool, which reads the file with the build's YAML parser. Raises
     `PublishToolUnavailable` when the tool cannot be asked or cannot
     parse the file."""
     answer = _LINES_BY_TOOL[PUBLISH_TOOL].ask(
         {"op": "site", "vault": str(vault.resolve())})
-    publishes, site = answer.get("publishes"), answer.get("siteDir")
-    if not isinstance(publishes, bool) or not (site is None
-                                                or isinstance(site, str)):
+    publishes, on = answer.get("publishes"), answer.get("site")
+    site = answer.get("siteDir")
+    if (not isinstance(publishes, bool) or not isinstance(on, bool)
+            or not (site is None or isinstance(site, str))):
         raise PublishToolUnavailable(
             "the publish tool's answer about the site is not understood")
-    return publishes, Path(site) if site else None
+    return publishes, on, Path(site) if site else None
+
+
+SITE_ON_WORDS = ("true", "yes", "on")
+SITE_OFF_WORDS = ("false", "no", "off")
+
+
+def site_switch(vault: Path) -> bool | None:
+    """`publish.site` as the line reader sees it: True, False, or None when
+    it is unset or not one of the switch words. For when the publish tool
+    cannot be asked; the tool's own reading (`vault_site`) comes first."""
+    word = (read_publish_scalar(vault, "site") or "").strip().lower()
+    if word in SITE_ON_WORDS:
+        return True
+    if word in SITE_OFF_WORDS:
+        return False
+    return None
 
 
 def publish_tool_problem() -> str | None:

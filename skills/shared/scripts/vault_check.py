@@ -177,6 +177,7 @@ from vaultlib import (  # noqa: F401
     publisher_lines,
     stub_kept,
     use_publish_tool,
+    site_switch,
     vault_site,
     strip_comment_spans,
     read_publish_list,
@@ -1185,10 +1186,11 @@ WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
 
 def configured_site(vault: Path) -> tuple[Path | None, bool]:
     """(the site folder `publish.site_dir` names, whether a
-    vault.config.json is in it). (None, False) when `site_dir` is unset. A
-    relative `site_dir` is relative to the vault."""
+    vault.config.json is in it). (None, False) when `site_dir` is unset or
+    the site is off (`publish.site`). A relative `site_dir` is relative to
+    the vault."""
     site_dir = read_publish_scalar(vault, "site_dir")
-    if not site_dir:
+    if not site_dir or site_switch(vault) is False:
         return None, False
     site = Path(site_dir).expanduser()
     if not site.is_absolute():
@@ -1513,13 +1515,14 @@ STRIPPED_SECTIONS_SINCE = "1.11.41"
 
 def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
                                       bool]:
-    """(the tool to ask what publishes, why none can be asked, what to do
+    """(the tool to ask what publishes, why none is asked, what to do
     about it, whether the vault has a site).
 
-    A site is `publish.site_dir`, and nothing else: `init` writes it, and
-    a GM who only keeps a vault never has one. Whether it is set is read
-    by the plugin's publish tool (`vault_site`), which has the build's YAML
-    parser; with no node to run that tool, by the line reader here.
+    `publish.site` is the switch, read by the plugin's publish tool
+    (`vault_site`), which has the build's YAML parser. Off, there is no
+    site: nothing is asked and nothing is checked for one, whatever
+    `site_dir` says. Unset, in a vault from before the switch, a `site_dir`
+    says on. On with no `site_dir` is a site still to be set up.
 
     With a site, the tool installed in that site folder answers: it is the
     one the site builds with, and it is not judged by a version number or
@@ -1528,18 +1531,13 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     being installed has no tool to ask. One that does not name it is asked
     through whatever copy node would load from there (a workspace installs
     it higher up), and failing that by the plugin's own tool.
-
-    With no site, the plugin's own tool answers, when there is node to run
-    it: what would publish if a site were made today.
     """
     node_fix = "it needs Node 22+ on PATH"
     try:
-        publishes, site = vault_site(vault)
+        publishes, on, site = vault_site(vault)
     except PublishToolUnavailable as e:
         # No node, a node too old to run the tool, or a vault file the tool
-        # will not parse. The file is then looked at here, and only for one
-        # thing: "no site" is said only when the file could not name one
-        # (`_site_hint`). Anything else is a site until the tool says not.
+        # will not parse: the switch is read here instead (`_site_unasked`).
         why = str(e)
         if why.startswith("the publish tool refused"):
             fix = f"fix {VAULT_CONFIG}"
@@ -1549,14 +1547,21 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
             fix = "update the gm-apprentice plugin"
         else:
             fix = node_fix
-        hint = _site_hint(vault)
-        if hint is not None:
-            fix += f"; {VAULT_CONFIG} {hint}"
-            if hint != UNREADABLE:
-                fix += ": if this vault has no site, take that out"
-        return None, why, fix, hint is not None
+        has_site = _site_unasked(vault)
+        if has_site:
+            fix += (f"; if this vault has no site, set publish.site: false "
+                    f"in {VAULT_CONFIG}")
+        elif fix == node_fix:
+            # The site is off and only node is missing: there is nothing a
+            # GM with no site has to hear about node.
+            return None, SITE_IS_OFF, None, False
+        return None, why, fix, has_site
+    if not on:
+        return None, SITE_IS_OFF, None, False
     if site is None:
-        return PUBLISH_TOOL, None, node_fix, False
+        return None, "publish.site is on but publish.site_dir names no site", (
+            "set the site up with publish-site, or set publish.site: false"
+            ), True
     if publishes and (publish_block_inline(vault) or read_publish_list(
             vault, "exclude_sections").publish_line is None):
         # The tool reads this block; the reader here that the exclude list
@@ -1596,57 +1601,24 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     return PUBLISH_TOOL, None, node_fix, True
 
 
-UNREADABLE = "cannot be read"
-NOT_PLAIN = "which cannot be told from a site setting without the publish tool"
-# What frontmatter that is only plain `key: value` lines, lists and block
-# text is written with. Left out is everything YAML can build a key with
-# other than its letters: a backslash (an escape), `!` (a tag), `?` (a key
-# on its own line), `&` and `*` (a name for a value, and its use), braces
-# and `<` (a merged block). Checked against the tool's parser by hand and
-# by fuzzing; widen it only with the same check.
-_NOT_PLAIN_CHAR = re.compile(
-    r"""[^\w \t\r\n\-:./"',\[\]#()@%$+=;~|>\u0080-\u0084\u0086-‧"""
-    r"""‪-\U0010ffff]""")
+SITE_IS_OFF = "publish.site is not on"
 
 
-def _site_hint(vault: Path) -> str | None:
-    """What in the vault file could name a site, or None when nothing
-    could. For the one time the publish tool's own reading (`vault_site`)
-    is not to be had.
-
-    This is not a reading of the file, and "no site" is the only answer it
-    has to get right. It says so only for a file that mentions `site_dir`
-    nowhere, comment and prose included, and that has no frontmatter or
-    frontmatter in plain characters. Everything else is a site until the
-    tool says not: an opening line that is not a bare `---` (it can name
-    another language to read the block as), or a character YAML could
-    build a key with. A vault wrongly taken to have a site is told to get
-    the tool working, one wrongly taken to have none could be written to
-    on a guess."""
+def _site_unasked(vault: Path) -> bool:
+    """Whether the vault has a site, for the one time the publish tool
+    cannot be asked. The switch as the line reader sees it; where that is
+    unset, a vault file that mentions `site_dir`, or that cannot be read,
+    is taken to have one."""
+    switch = site_switch(vault)
+    if switch is not None:
+        return switch
     try:
         text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
     except FileNotFoundError:
-        return None
+        return False
     except (OSError, UnicodeDecodeError):
-        return UNREADABLE
-    if "site_dir" in text:
-        return "mentions site_dir"
-    if not text.startswith("---"):
-        return None
-    first, _, rest = text.partition("\n")
-    if first.rstrip() != "---":
-        return f"opens with {first.rstrip()!r}, not ---, {NOT_PLAIN}"
-    # Up to the first line that is a bare `---`: never less than the block
-    # the tool reads, which ends at the first line that starts with one.
-    block: list[str] = []
-    for line in rest.split("\n"):
-        if line.rstrip() == "---":
-            break
-        block.append(line)
-    odd = _NOT_PLAIN_CHAR.search("\n".join(block))
-    if odd:
-        return f"has {odd.group()!r} in its frontmatter, {NOT_PLAIN}"
-    return None
+        return True
+    return "site_dir" in text
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -1681,11 +1653,11 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
     the tool chosen here (`_lines_tool`).
 
     What a section hides is the tool's decision and there is no copy of it
-    here. For a vault with a site, no answer means the check stops and
-    nothing is written: (why, [an ERROR]), because a guess could leak. For
-    a vault with no site there is nothing to leak and nothing a GM who only
-    keeps a vault should have to install: (why, [an INFO]), and the caller
-    carries on with whatever it can do without the tool.
+    here. For a vault with a site (`publish.site` on), no answer means the
+    check stops and nothing is written: (why, [an ERROR]), because a guess
+    could leak. For a vault with no site there is nothing to leak, nothing
+    is asked and nothing has to be installed: (why, [an INFO]), and the
+    caller carries on with whatever it does without the tool.
     """
     tool, why, fix, has_site = _lines_tool(vault)
     if tool is not None:
@@ -1697,12 +1669,18 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
         return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
                      f"tool what publishes ({why}) — nothing checked, "
                      f"nothing written; {fix}"]
-    # A vault file the tool refused is still to be fixed; a missing node is
-    # nothing a GM with no site has to act on.
+    if why == SITE_IS_OFF:
+        # gm-leak is only about the site, so it says why it has no rows. A
+        # check with work of its own (pc-body, wrapup) just gets on with it.
+        return why, [f"INFO\t(vault)\t{check} has no site to check: "
+                     f"{SITE_IS_OFF} in {VAULT_CONFIG}, so nothing publishes"
+                     ] if check == "gm-leak" else []
+    # The tool could not be asked. A vault file it refused is still to be
+    # fixed; a missing node is nothing a GM with no site has to act on.
     todo = f"; {fix}" if fix == f"fix {VAULT_CONFIG}" else ""
     return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
                  f"hide on a site ({why}). This vault has no site "
-                 f"(publish.site_dir is not set), so nothing publishes{todo}"]
+                 f"(publish.site is not on), so nothing publishes{todo}"]
 
 
 def _tool_gone_row(check: str, e: Exception) -> str:
@@ -2230,8 +2208,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         # publishes isn't told.
         reason = ("the publish tool's answer has no exclude list (an older tool "
                "— run update-pin)" if tool is not None and tool.data is not None
-               else "there is no site to ask (publish.site_dir is not "
-                    "set), or its publish tool could not be asked")
+               else "there is no site to ask (publish.site is not on), "
+                    "or its publish tool could not be asked")
         rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
                     f"exclude list: {reason}")
     withheld: set[str] = set()
@@ -2633,7 +2611,7 @@ def _pc_body(vault: Path, folder: str | None = None,
         if not gated:
             gated = True
             why, gate = no_publish_tool(vault, "pc-body")
-            if why is not None and gate[0].startswith("ERROR"):
+            if why is not None and gate and gate[0].startswith("ERROR"):
                 return gate
             if why is not None:
                 # No site and no tool: the structure checks still run,
@@ -4276,7 +4254,7 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
             gated = True
             why, gate = no_publish_tool(vault, "wrapup")
             rows.extend(gate)
-            if why is not None and gate[0].startswith("ERROR"):
+            if why is not None and gate and gate[0].startswith("ERROR"):
                 return rows
             if why is not None:
                 # No site and no tool: nothing publishes, so the repairs

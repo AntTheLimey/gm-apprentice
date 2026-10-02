@@ -551,7 +551,8 @@ Under `publish:`:
 | Field | Type | Description |
 |-------|------|-------------|
 | `system` | string | `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e` or `fitd`; drives system-specific rendering. |
-| `site_dir` | string | Path to the site folder (`init` writes an absolute one; a relative one is read relative to the vault). `init` writes it, and `update-pin` adds it to a site made before 1.10.25. It is how the vault finds its site: `vault_check` asks the publish tool installed there what publishes. Unset means the vault has no site. |
+| `site` | boolean | Whether the vault has a site. `true`: it does; `vault_check` asks the publish tool installed in `site_dir` what publishes, and with no `site_dir` the site is still to be set up. `false`: it does not, whatever `site_dir` says; `build` and `deploy` refuse, and `gm-leak` has nothing to check. `init` writes `true`. Unset, a `site_dir` says on (a vault from before 1.10.25). Takes `yes`/`no`, `on`/`off` too. |
+| `site_dir` | string | Path to the site folder (`init` writes an absolute one; a relative one is read relative to the vault). `init` writes it, and `update-pin` adds it to a site made before 1.10.25. It is where the vault finds its site when `site` is on. |
 | `mode` | string | `"player"` or `"full"` — GM-only content visibility |
 | `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | `wrap_up` | object | `player_sections`: extra H2 titles on a Wrap-Up that `vault_check wrapup` treats as player-facing (default none) |

@@ -17,6 +17,7 @@ Run: python3 tests/test_vault_check_slice_a.py
 import contextlib
 import io
 import json
+import re
 import os
 import shutil
 import subprocess
@@ -31,6 +32,9 @@ SCRIPTS = ROOT / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 import vault_check as vc  # noqa: E402
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from site_fixture import give_site, site_copy, with_site  # noqa: E402
 
 FIXTURES = Path(__file__).resolve().parent / "fixtures" / "slice-a"
 VAULT_CHECK_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "vault-check"
@@ -161,9 +165,11 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
     return calls
 
 
-def make_vault(case, config=None, meta=True):
+def make_vault(case, config=None, meta=True, site=True):
     """A throwaway vault; `config` is the vault-config.md text, or None for
-    no config file. `meta=False` omits `_meta/` entirely."""
+    no config file. `meta=False` omits `_meta/` entirely. `site=True` turns
+    the site on (`site_fixture.with_site`): with it off the leak checks
+    have nothing to check."""
     d = Path(tempfile.mkdtemp(prefix="vc-slice-a-"))
     case.addCleanup(shutil.rmtree, d, ignore_errors=True)
     # A check points the questions at its vault's site tool; a new vault
@@ -173,10 +179,38 @@ def make_vault(case, config=None, meta=True):
                                    encoding="utf-8")
     if meta:
         (d / "_meta").mkdir()
+        if site:
+            config = with_site(
+                config, d,
+                lambda p: case.addCleanup(shutil.rmtree, p, ignore_errors=True))
         if config is not None:
             (d / "_meta" / "vault-config.md").write_text(config,
                                                          encoding="utf-8")
     return d
+
+
+def stub_site(case):
+    """A bare site folder: a vault.config.json and nothing installed."""
+    site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+    case.addCleanup(shutil.rmtree, site, ignore_errors=True)
+    (site / "vault.config.json").write_text("{}", encoding="utf-8")
+    return site
+
+
+def site_for(case, vault):
+    """Turn the site on in a vault whose config the test wrote itself."""
+    give_site(vault,
+              lambda p: case.addCleanup(shutil.rmtree, p, ignore_errors=True))
+
+
+def config_of(vault):
+    """The vault file without the two lines `with_site` adds."""
+    text = (vault / "_meta" / "vault-config.md").read_bytes().decode("utf-8")
+    return re.sub(r"(?m)^[ \t]+site(_dir)?: .*\n", "", text)
+
+
+SITE_OFF_ROW = ("INFO\t(vault)\tgm-leak has no site to check: publish.site "
+                "is not on in _meta/vault-config.md, so nothing publishes")
 
 
 class VersionCommandTests(unittest.TestCase):
@@ -687,7 +721,7 @@ class SessionsManifestTests(unittest.TestCase):
 
     def vault(self, manifest, config="---\npublish:\n  mode: player\n---\n",
               status="reviewed"):
-        vault = make_vault(self, config=config)
+        vault = make_vault(self, config=config, site=False)
         (vault / self.INDEX).write_text(
             f"---\ntype: session\nsession_number: 1\nstatus: {status}\n---\n",
             encoding="utf-8")
@@ -829,7 +863,8 @@ class SessionsManifestTests(unittest.TestCase):
             "## Publishing (0 files)\n", status="prepped")), [])
 
 
-LEAK = FIXTURES / "leak"
+# A copy with its site on: with the site off there is nothing to check.
+LEAK = site_copy(FIXTURES / "leak")
 GOOD = "Characters/NPCs/Good.md"
 LEAKY = "Characters/NPCs/Leaky.md"
 CONFIG = "Characters/NPCs/Config.md"
@@ -983,7 +1018,7 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "cannot parse this"), rows)
 
     def test_a_vault_that_does_not_publish_is_not_asked_or_told(self):
-        vault = make_vault(self)
+        vault = make_vault(self, site=False)
         (vault / "Dup.md").write_text(self.DUP, encoding="utf-8")
         with mock.patch.object(vc.subprocess, "run") as run:
             rows = vc.check_frontmatter(vault, None)
@@ -1410,8 +1445,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "WOULD-FIX\t_meta/vault-config.md"),
                         rows)
         self.assertEqual(read(vault, "Bob.md"), self.BOB)
-        self.assertEqual(read(vault, "_meta/vault-config.md"),
-                         self.OLD_CONFIG)
+        self.assertEqual(config_of(vault), self.OLD_CONFIG)
 
     def test_fix_hides_everything_after_the_collapse(self):
         vault = self.vault()
@@ -1441,7 +1475,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
                   "    - World State\n  mode: player\n---\n")
         vault = self.vault(config)
         vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        self.assertEqual(read(vault, "_meta/vault-config.md"),
+        self.assertEqual(config_of(vault),
                          '---\npublish:\n  exclude_sections: ["GM Notes"]\n'
                          "  mode: player\n---\n")
 
@@ -1474,8 +1508,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "migration blocked"), rows)
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Bob.md"), self.BOB)
-        self.assertEqual(read(vault, "_meta/vault-config.md"),
-                         self.OLD_CONFIG)
+        self.assertEqual(config_of(vault), self.OLD_CONFIG)
 
     def test_an_already_nested_heading_stays_put(self):
         text = ("---\ntype: npc\n---\n\n# Cy\n\n## GM Notes\n\n"
@@ -1532,7 +1565,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
                          ["GM Notes", "World State", "Keeper Checklist"])
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
-        self.assertEqual(read(vault, "_meta/vault-config.md"),
+        self.assertEqual(config_of(vault),
                          '---\npublish:\n  exclude_sections: ["GM Notes"]\n'
                          "---\n")
         out = self.published(vault, "Bob.md")
@@ -1571,6 +1604,15 @@ class RenestReviewRegressionTests(unittest.TestCase):
             with self.subTest(form=name):
                 config = f"---\n{body}---\n"
                 vault = self.vault(config, {"Bob.md": self.WS})
+                if name == "flow publish":
+                    # One line holds the whole block, the site with it.
+                    site = stub_site(self)
+                    config = config.replace(
+                        "{", f"{{site: true, site_dir: {site.as_posix()}, ")
+                    (vault / "_meta" / "vault-config.md").write_text(
+                        config, encoding="utf-8")
+                else:
+                    config = read(vault, "_meta/vault-config.md")
                 rows = vc.check_gm_leak(vault, None, fix=True,
                                         renest_excludes=True)
                 # The publish tool refuses a file its YAML parser rejects
@@ -1756,29 +1798,30 @@ class WrapupLeakInvariantTests(unittest.TestCase):
 
 class NoPublishToolTests(unittest.TestCase):
     """What a section hides is the publish tool's decision and nothing
-    here copies it. `publish.site_dir` is the dividing line. A vault with a
-    site is checked through that site's tool, or not at all. A vault with
-    no site has nothing that can leak, and a GM who only keeps a vault is
-    never made to install anything: its checks and repairs carry on."""
+    here copies it. `publish.site` is the switch. A vault with its site on
+    is checked through that site's tool, or not at all. With it off nothing
+    can leak: nothing is asked, nothing is checked for a site, and a GM who
+    only keeps a vault is never made to install anything."""
 
     WRAP = ("---\ntype: session_wrap\n---\n\n## Narrative Recap\n\n"
             "It happened.\n\n## Keeper Checklist\n\n- task\n")
     PC = ("---\ntype: pc\n---\n\n# Jean\n\n## Current Status\n\n"
           "**HP:** 10\n\n## GM Notes\n\nsecret\n")
 
-    def vault(self, site, publish=True, wrap=None):
+    def vault(self, site, publish=True, wrap=None, switch=None):
         """`site`: a `site_dir` is set. `publish=False`: no `publish:`
-        block at all."""
+        block at all. `switch`: the word written for `publish.site`
+        (None: the key is not there)."""
         config = "---\ntype: meta\npublish:\n  mode: player\n---\n"
         if site:
-            folder = Path(tempfile.mkdtemp(prefix="vc-site-"))
-            self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
-            (folder / "vault.config.json").write_text("{}", encoding="utf-8")
+            folder = stub_site(self)
             config = config.replace(
                 "publish:\n", f"publish:\n  site_dir: {folder.as_posix()}\n")
+        if switch is not None:
+            config = config.replace("publish:\n", f"publish:\n  site: {switch}\n")
         if not publish:
             config = "---\ntype: meta\n---\n"
-        vault = make_vault(self, config)
+        vault = make_vault(self, config, site=False)
         if wrap is not None:
             self.WRAP = wrap
         (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
@@ -1830,171 +1873,136 @@ class NoPublishToolTests(unittest.TestCase):
                     f"checked, nothing written; it needs Node 22+"), rows)
         self.assertEqual(read(vault, "W.md"), self.WRAP)
 
-    def test_a_vault_with_no_site_is_never_blocked(self):
-        # With a publish: block (the game system lives there) or without:
-        # no site_dir is no site, and no node is no obstacle.
-        for publish in (True, False):
-            with self.subTest(publish_block=publish):
-                vault = self.vault(site=False, publish=publish)
+    def assert_stopped(self, vault, why):
+        """Each check gives the one ERROR row, and nothing is written."""
+        for name, rows in (
+                ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
+                ("pc-body", vc.check_pc_body(vault)),
+                ("wrapup", vc.check_wrapup(vault, None, True))):
+            self.assertEqual(len(rows), 1, rows)
+            self.assertTrue(rows[0].startswith(
+                f"ERROR\t(vault)\t{name} could not ask the publish tool "
+                f"what publishes ({why}"), rows)
+        self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def assert_not_checked(self, vault):
+        """The site is off: gm-leak says so in one row, pc-body and the
+        wrap-up repair get on with their own work, and no tool is run."""
+        self.assertEqual(vc.check_gm_leak(vault, None, fix=True),
+                         [SITE_OFF_ROW])
+        body = vc.check_pc_body(vault)
+        self.assertFalse(rows_for(body, "\t(vault)\t"), body)
+        wrap = vc.check_wrapup(vault, None, True)
+        self.assertFalse(rows_for(wrap, "\t(vault)\t"), wrap)
+        self.assertTrue(rows_for(wrap, "FIXED\tW.md"), wrap)
+        self.assertIn("<!-- gm-only -->", read(vault, "W.md"))
+
+    def test_with_the_site_off_nothing_is_checked_for_one(self):
+        # Off by the switch whatever site_dir says, or never turned on.
+        for form, make in (
+                ("no publish block", lambda: self.vault(False, publish=False)),
+                ("never set", lambda: self.vault(False)),
+                ("off", lambda: self.vault(False, switch="false")),
+                ("off with a site_dir", lambda: self.vault(True, switch="off")),
+                ("not a switch word", lambda: self.vault(True, switch="maybe"))):
+            with self.subTest(form):
+                self.assert_not_checked(make())
+
+    def test_with_the_site_off_no_node_is_needed(self):
+        for form, make in (
+                ("no publish block", lambda: self.vault(False, publish=False)),
+                ("never set", lambda: self.vault(False)),
+                ("off", lambda: self.vault(False, switch="false")),
+                ("off with a site_dir", lambda: self.vault(True, switch="no"))):
+            with self.subTest(form):
+                vault = make()
                 self.no_tool()
-                leak = vc.check_gm_leak(vault, None, fix=True)
-                self.assertEqual(len(leak), 1, leak)
-                self.assertTrue(leak[0].startswith(
-                    "INFO\t(vault)\tgm-leak did not ask what a section would "
-                    "hide on a site (node is not on PATH). This vault has no "
-                    "site"), leak)
-                body = vc.check_pc_body(vault)
-                self.assertFalse(rows_for(body, "ERROR\t(vault)"), body)
-                self.assertEqual(len(rows_for(body, "INFO\t(vault)\tpc-body "
-                                                    "did not ask")), 1, body)
-                wrap = vc.check_wrapup(vault, None, True)
-                self.assertFalse(rows_for(wrap, "ERROR\t(vault)"), wrap)
-                self.assertTrue(rows_for(wrap, "FIXED\tW.md"), wrap)
-                self.assertIn("<!-- gm-only -->", read(vault, "W.md"))
+                self.assert_not_checked(vault)
+
+    def test_the_site_on_with_no_site_dir_is_a_site_to_set_up(self):
+        for blank in ("", "  site_dir:\n"):
+            with self.subTest(blank):
+                vault = self.vault(False, switch="true")
+                if blank:
+                    file = vault / "_meta" / "vault-config.md"
+                    file.write_text(file.read_text(encoding="utf-8").replace(
+                        "publish:\n", "publish:\n" + blank), encoding="utf-8")
+                self.assert_stopped(
+                    vault, "publish.site is on but publish.site_dir names no "
+                           "site) — nothing checked, nothing written; set the "
+                           "site up with publish-site, or set publish.site: "
+                           "false")
+
+    def test_the_site_on_is_checked_through_its_tool(self):
+        vault = make_vault(self, "---\npublish:\n  mode: player\n---\n")
+        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "\t(vault)\t"), rows)
+        self.assertTrue(rows_for(rows, "ERROR\tBob.md"), rows)
+
+    def test_without_the_tool_the_switch_is_read_here(self):
+        # No node: on stops the check, as an unset switch with a site_dir
+        # does; the row says how a vault with no site gets out of it.
+        for form, make in (
+                ("on", lambda: self.vault(False, switch="true")),
+                ("on with a site_dir", lambda: self.vault(True, switch="yes")),
+                ("unset with a site_dir", lambda: self.vault(True))):
+            with self.subTest(form):
+                vault = make()
+                self.no_tool()
+                self.assert_stopped(
+                    vault, "node is not on PATH) — nothing checked, nothing "
+                           "written; it needs Node 22+ on PATH; if this vault "
+                           "has no site, set publish.site: false in "
+                           "_meta/vault-config.md")
 
     def test_without_the_tool_a_file_that_mentions_site_dir_is_a_site(self):
         # The line reader misses these spellings; the tool's parser does
-        # not. With no tool to ask, a mention is enough: nothing is written.
+        # not. With no tool to ask and no switch, a mention is enough.
         for form, block in (
                 ("folded", "publish:\n  site_dir: >-\n    /some/site\n"),
                 ("one line", "publish: {site_dir: /some/site}\n"),
                 ("indented", "  publish:\n    site_dir: /some/site\n"),
-                ("not YAML", "publish:\n  site_dir: [\n"),
-                # YAML reads these keys as site_dir; the letters are not there.
-                ("escaped", 'publish:\n  "site\\x5Fdir": /some/site\n'),
-                ("escaped u", 'publish:\n  "site\\u005Fdir": /some/site\n'),
-                # No site_dir in the letters and no backslash either.
-                ("binary key", "publish:\n  ? !!binary c2l0ZV9kaXI=\n"
-                               "  : /some/site\n"),
-                ("quoted #", 'publish: {n: "x\n#", site_dir: /some/site}\n'),
-                ("line separator", "publish: {a: 1,\u2028#x, "
-                                   "site_dir: /some/site}\n"),
-                ("built in braces", "publish: {a: &k x, *k : /some/site}\n"),
-                ("in a comment", "publish:\n  # site_dir: set by init\n"),
-                ("blank", "publish:\n  site_dir:\n"),
-                ("on the next line", "publish:\n  site_dir:\n    /some/site\n")):
-            vault = make_vault(self, f"---\n{block}---\n")
-            (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
-            (vault / "Jean.md").write_text(self.PC, encoding="utf-8")
-            self.no_tool()
-            for name, rows in (
-                    ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
-                    ("pc-body", vc.check_pc_body(vault)),
-                    ("wrapup", vc.check_wrapup(vault, None, True))):
-                with self.subTest(form=form, check=name):
-                    self.assertEqual(len(rows), 1, rows)
-                    self.assertTrue(rows[0].startswith(
-                        f"ERROR\t(vault)\t{name} could not ask"), rows)
-            self.assertEqual(read(vault, "W.md"), self.WRAP)
-
-    def test_without_the_tool_another_language_on_the_opening_line_is_a_site(self):
-        # The tool reads ---js as JavaScript, which needs none of the letters.
-        for opener in ("---js", "--- js", "---yaml", "----"):
-            with self.subTest(opener):
-                vault = make_vault(
-                    self, f"{opener}\nObject.fromEntries([['publish', 1]])\n"
-                          f"---\n")
-                (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
-                self.no_tool()
-                rows = vc.check_wrapup(vault, None, True)
-                self.assertEqual(len(rows), 1, rows)
-                self.assertTrue(rows[0].startswith(
-                    "ERROR\t(vault)\twrapup could not ask"), rows)
-                self.assertTrue(rows[0].endswith(
-                    f"_meta/vault-config.md opens with '{opener}', not ---, "
-                    f"which cannot be told from a site setting without the "
-                    f"publish tool: if this vault has no site, take that "
-                    f"out"), rows)
-                self.assertEqual(read(vault, "W.md"), self.WRAP)
-
-    def test_the_row_for_a_site_that_is_only_a_mention_says_the_way_out(self):
-        # A GM with no site and no node, whose file has a blank site_dir or
-        # one in a comment, is stopped: the row says what to take out, not
-        # only "install node".
-        for block in ("publish:\n  site_dir:\n",
-                      "publish:\n  mode: player\n  # site_dir: later\n"):
-            with self.subTest(block):
-                vault = make_vault(self, f"---\n{block}---\n")
-                self.no_tool()
-                rows = vc.check_gm_leak(vault, None)
-                self.assertEqual(len(rows), 1, rows)
-                self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
-                self.assertIn("it needs Node 22+ on PATH", rows[0])
-                self.assertTrue(rows[0].endswith(
-                    "_meta/vault-config.md mentions site_dir: if this vault "
-                    "has no site, take that out"), rows)
-
-    def test_the_row_names_the_character_that_could_spell_a_site(self):
-        for ch, line in (("&", 'title: "D&D night"'), ("?", "title: Who?"),
-                         ("!", "title: Run!"), ("{", "tags: {a: 1}"),
-                         ("*", "title: a *b"), ("\\", 'title: "a\\tb"'),
-                         ("<", "<<: x"), ("`", "title: `x`"),
-                         ("\u2028", "title: a\u2028b")):
-            with self.subTest(ch):
-                vault = make_vault(self, f"---\n{line}\n---\n")
-                self.no_tool()
-                rows = vc.check_gm_leak(vault, None)
-                self.assertEqual(len(rows), 1, rows)
-                self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
-                self.assertIn(f"_meta/vault-config.md has {ch!r} in its "
-                              f"frontmatter, which cannot be told from a "
-                              f"site setting", rows[0])
-
-    def test_a_plain_vault_file_with_no_site_dir_is_not_a_site(self):
-        # What a vault kept without a site looks like: quoted values, a
-        # list, a comment, an accent, prose below. None of it is in the way.
-        for form, text in (
-                ("usual", '---\ntype: meta\ngm_apprentice_version: "1.10.25"\n'
-                          'publish:\n  system: "coc-7e"\n---\n\nNotes: a {b} '
-                          '\\ c!\n'),
-                ("list and comment", "---\n# the campaign\ntitle: 'Château "
-                                     "(2026)'\ntags: [a, b]\nplayers:\n"
-                                     "  - Jean\n---\n"),
-                ("block text and signs", "---\ndescription: |\n  A long one;"
-                                         " 100% — $5 + tax = more\nnote: >-\n"
-                                         "  folded\nmail: gm@example.org\n"
-                                         "none: ~\n---\n"),
-                ("windows line ends", "---\r\ntype: meta\r\n---\r\n"),
-                ("no frontmatter", "Just notes about {the} campaign!\n"),
-                ("empty", "")):
+                ("not YAML", "publish:\n  site_dir: [\n")):
             with self.subTest(form):
-                vault = make_vault(self, text)
+                vault = make_vault(self, f"---\n{block}---\n", site=False)
                 (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+                (vault / "Jean.md").write_text(self.PC, encoding="utf-8")
                 self.no_tool()
-                leak = vc.check_gm_leak(vault, None)
-                self.assertEqual(len(leak), 1, leak)
-                self.assertTrue(leak[0].startswith("INFO\t(vault)\t"), leak)
-                wrap = vc.check_wrapup(vault, None, True)
-                self.assertFalse(rows_for(wrap, "ERROR\t(vault)"), wrap)
-                self.assertTrue(rows_for(wrap, "FIXED\tW.md"), wrap)
+                self.assert_stopped(vault, "node is not on PATH")
 
-    def test_a_vault_file_that_cannot_be_read_is_a_site(self):
-        vault = make_vault(self, "---\ntype: meta\n---\n")
+    def test_without_the_tool_a_vault_file_that_cannot_be_read_is_a_site(self):
+        vault = self.vault(False)
         (vault / "_meta" / "vault-config.md").write_bytes(b"---\n\xff\xfe\n")
         self.no_tool()
-        rows = vc.check_gm_leak(vault, None)
-        self.assertEqual(len(rows), 1, rows)
-        self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows)
-        self.assertIn("_meta/vault-config.md cannot be read", rows[0])
+        self.assert_stopped(vault, "node is not on PATH")
 
     def test_a_site_and_a_node_too_old_for_the_tool_is_still_stopped(self):
         gone = vaultlib.PublishToolUnavailable(
             "the publish tool exited without answering")
         vault = self.vault(site=True)
         with mock.patch.object(vc, "vault_site", side_effect=gone):
-            for name, rows in (
-                    ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
-                    ("pc-body", vc.check_pc_body(vault)),
-                    ("wrapup", vc.check_wrapup(vault, None, True))):
-                with self.subTest(name):
-                    self.assertEqual(len(rows), 1, rows)
-                    self.assertTrue(rows[0].startswith(
-                        f"ERROR\t(vault)\t{name} could not ask"), rows)
-        self.assertEqual(read(vault, "W.md"), self.WRAP)
+            self.assert_stopped(vault, "the publish tool exited without "
+                                       "answering")
+
+    def test_a_node_too_old_for_the_tool_does_not_block_a_vault_with_no_site(self):
+        gone = vaultlib.PublishToolUnavailable(
+            "the publish tool exited without answering")
+        for publish in (True, False):
+            with self.subTest(publish_block=publish):
+                vault = self.vault(site=False, publish=publish)
+                with mock.patch.object(vc, "vault_site", side_effect=gone):
+                    rows = vc.check_wrapup(vault, None, True)
+                    leak = vc.check_gm_leak(vault, None)
+                self.assertFalse(rows_for(rows, "ERROR\t(vault)"), rows)
+                self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
+                self.assertEqual(len(leak), 1, leak)
+                self.assertTrue(leak[0].startswith("INFO\t(vault)\t"), leak)
+                self.assertNotIn("fix _meta/vault-config.md", leak[0])
 
     def test_a_vault_file_the_tool_refuses_is_named_even_with_no_site(self):
-        # Broken YAML that never mentions site_dir: no site, so nothing is
-        # stopped, but the row says the file is to be fixed.
+        # Broken YAML with no switch and no site_dir: nothing is stopped,
+        # but the row says the file is to be fixed.
         refused = vaultlib.PublishToolUnavailable(
             "the publish tool refused: _meta/vault-config.md frontmatter is "
             "not valid YAML: bad indentation")
@@ -2017,24 +2025,6 @@ class NoPublishToolTests(unittest.TestCase):
         self.assertNotIn("Node 22+", rows[0])
         self.assertIn("update the gm-apprentice plugin", rows[0])
 
-    def test_a_node_that_cannot_run_the_tool_does_not_block_a_vault_with_no_site(self):
-        # Node is on PATH but too old: the tool exits without answering.
-        gone = vaultlib.PublishToolUnavailable(
-            "the publish tool exited without answering")
-        for publish in (True, False):
-            with self.subTest(publish_block=publish):
-                vault = self.vault(site=False, publish=publish)
-                with mock.patch.object(vc, "vault_site", side_effect=gone), \
-                        mock.patch.object(vc, "publish_tool_problem",
-                                          return_value=str(gone)):
-                    rows = vc.check_wrapup(vault, None, True)
-                    leak = vc.check_gm_leak(vault, None)
-                self.assertFalse(rows_for(rows, "ERROR\t(vault)"), rows)
-                self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
-                self.assertEqual(len(leak), 1, leak)
-                self.assertTrue(leak[0].startswith("INFO\t(vault)\t"), leak)
-                self.assertNotIn("fix _meta/vault-config.md", leak[0])
-
     def test_no_tool_does_not_move_text_out_of_an_html_comment(self):
         wrap = ("---\ntype: session_wrap\n---\n\n## GM Notes\n\nx\n\n<!--\n"
                 "## Narrative Recap\n\nHIDDEN RECAP\n-->\n")
@@ -2043,13 +2033,6 @@ class NoPublishToolTests(unittest.TestCase):
         rows = vc.check_wrapup(vault, None, True)
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "W.md"), wrap)
-
-    def test_a_vault_with_no_site_and_node_is_checked_by_the_plugins_tool(self):
-        vault = self.vault(site=False)
-        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
-        rows = vc.check_gm_leak(vault, None)
-        self.assertFalse(rows_for(rows, "(vault)\tgm-leak did not ask"), rows)
-        self.assertTrue(rows_for(rows, "ERROR\tBob.md"), rows)
 
     def test_a_tool_that_goes_away_mid_run_is_an_error_exit(self):
         gone = vaultlib.PublishToolUnavailable("node could not run")
@@ -2258,9 +2241,9 @@ class NoPublishToolTests(unittest.TestCase):
                 ("single-quoted key", b"---\n'publish' :\n  mode: player\n---\n"),
                 ("not utf-8", b"---\n# caf\xe9\n" + block.encode() + b"---\n")):
             with self.subTest(form):
-                vault = make_vault(self, "")
+                vault = make_vault(self, "", site=False)
                 (vault / "_meta" / "vault-config.md").write_bytes(data)
-                self.assertEqual(vaultlib.vault_site(vault), (True, None))
+                self.assertEqual(vaultlib.vault_site(vault), (True, False, None))
         for form, text in (
                 ("indented", "---\n  publish:\n    mode: player\n---\n"),
                 ("complex key", "---\n? publish\n: {mode: player}\n---\n"),
@@ -2268,12 +2251,12 @@ class NoPublishToolTests(unittest.TestCase):
                 ("merge key", "---\nb: &b {publish: {mode: player}}\n"
                               "<<: *b\n---\n")):
             with self.subTest(form):
-                vault = make_vault(self, text)
-                self.assertEqual(vaultlib.vault_site(vault), (True, None))
-        none = make_vault(self, "---\ntype: meta\n---\n")
-        self.assertEqual(vaultlib.vault_site(none), (False, None))
+                vault = make_vault(self, text, site=False)
+                self.assertEqual(vaultlib.vault_site(vault), (True, False, None))
+        none = make_vault(self, "---\ntype: meta\n---\n", site=False)
+        self.assertEqual(vaultlib.vault_site(none), (False, False, None))
         self.assertEqual(vaultlib.vault_site(make_vault(self, meta=False)),
-                         (False, None))
+                         (False, False, None))
 
     def test_a_block_the_list_reader_cannot_read_is_not_checked_on_a_guess(self):
         # The gate's tool reads these; the exclude list is still read by the
@@ -2330,7 +2313,7 @@ class NoPublishToolTests(unittest.TestCase):
                                  f"    site_dir: {site.as_posix()}\n---\n")
         (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
         (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
-        self.assertEqual(vaultlib.vault_site(vault)[1].resolve(),
+        self.assertEqual(vaultlib.vault_site(vault)[2].resolve(),
                          site.resolve())
         for rows in (vc.check_gm_leak(vault, None, fix=True),
                      vc.check_wrapup(vault, None, True)):
@@ -2836,20 +2819,20 @@ class PcBodyCommandTests(unittest.TestCase):
                                  rows)
 
     def test_at_most_one_tool_call_and_none_without_a_pc(self):
-        vault = make_vault(self)
+        vault = make_vault(self, site=False)
         calls = stub_publish_tool(self, vault, switches=self.OFF)
         for name in ("A", "B"):
             (vault / f"{name}.md").write_text(
                 f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
         vc.check_pc_body(vault)
         self.assertEqual(len(calls), 1, calls)
-        bare = make_vault(self)
+        bare = make_vault(self, site=False)
         calls = stub_publish_tool(self, bare, switches=self.OFF)
         (bare / "Npc.md").write_text("---\ntype: npc\n---\n\nx\n",
                                      encoding="utf-8")
         vc.check_pc_body(bare)
         self.assertEqual(calls, [])
-        plain = make_vault(self)
+        plain = make_vault(self, site=False)
         (plain / "Hero.md").write_text(
             f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
         with mock.patch.object(vc.subprocess, "run") as run:
@@ -2999,7 +2982,7 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertIn("## pc-body", run_cli(LEAK, "all").stdout)
 
 
-WRAPUP = FIXTURES / "wrapup"
+WRAPUP = site_copy(FIXTURES / "wrapup")
 S7 = "Chapters/Chapter 3 - Vienna/Sessions/Session 07"
 CONFORMANT = f"{S7}/Chapter_03_Session_07_Wrap_Up.md"
 LEGACY = f"{S7}/Session 07 - The Ball - Wrap-Up.md"
@@ -3075,6 +3058,8 @@ def copy_fixture(case, name):
     d = Path(tempfile.mkdtemp(prefix="vc-wrapup-"))
     case.addCleanup(shutil.rmtree, d, ignore_errors=True)
     shutil.copytree(FIXTURES / name, d / "vault")
+    give_site(d / "vault",
+              lambda p: case.addCleanup(shutil.rmtree, p, ignore_errors=True))
     return d / "vault"
 
 
@@ -4084,13 +4069,14 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertIn("fix publish.site_dir", rows[0])
 
     def test_vault_that_never_publishes_does_not_ask(self):
-        # No publish: block, so no site: nothing is withheld, nothing to say.
+        # No publish: block, so no site: nothing is asked and nothing checked.
         vault = self.vault()
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\n---\n", encoding="utf-8")
         with mock.patch.object(vc.subprocess, "run") as run:
             rows = vc.check_gm_leak(vault, None)
         run.assert_not_called()
-        self.assertTrue(self.hub_rows(rows))
-        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertEqual(rows, [SITE_OFF_ROW])
 
     def test_one_explain_run_serves_hubs_and_sections(self):
         # Hubs and a handout's stripped sections both come from the one
@@ -4600,6 +4586,7 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
         pasted = row[row.index("["):row.index("]") + 1]
         (vault / "_meta" / "vault-config.md").write_text(
             f"---\ntype: meta\npublish:\n  exclude_sections: {pasted}\n---\n", encoding="utf-8")
+        site_for(self, vault)
         vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         hidden = vc.hidden_lines(read(vault, "Bob.md"), ["GM Notes"], {"type": "npc"})
         self.assertIn("burns", hidden)
@@ -4614,12 +4601,11 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
         self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "C:\\Sites\\x")
 
     def test_no_site_dir_and_no_vault_list_is_an_info(self):
-        vault = make_vault(self, "---\ntype: meta\npublish:\n  mode: player\n---\n")
-        rows = vc.check_gm_leak(vault, None)
-        self.assertTrue([r for r in rows if r.startswith("INFO\t_meta/vault-config.md")
-                         and "site_dir" in r], rows)
-        listed = make_vault(self, '---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n')
-        self.assertFalse([r for r in vc.check_gm_leak(listed, None) if "site_dir" in r])
+        # With no site there is no list to assume: nothing is checked.
+        for config in ("---\ntype: meta\npublish:\n  mode: player\n---\n",
+                       '---\ntype: meta\npublish:\n  exclude_sections: ["GM Notes"]\n---\n'):
+            vault = make_vault(self, config, site=False)
+            self.assertEqual(vc.check_gm_leak(vault, None), [SITE_OFF_ROW])
 
     def test_a_vault_that_never_publishes_gets_no_site_dir_info(self):
         vault = make_vault(self, "---\ntype: meta\nsystem: coc-7e\n---\n")
@@ -4707,8 +4693,12 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
     def test_without_the_tool_it_refuses_and_writes_nothing(self):
         vault = self.setup_vault()
         before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        self.assertTrue(rows_for(rows, "could not say which exclude list"), rows)
+        vaultlib._close_publish_tools()
+        with mock.patch.object(vaultlib.shutil, "which", return_value=None):
+            rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "ERROR\t(vault)\tgm-leak could not ask the publish tool"), rows)
         self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
         self.assertEqual((vault / "_meta" / "vault-config.md").read_text(
             encoding="utf-8"), before)
@@ -4721,20 +4711,20 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
         self.assertIn("GM Notes", (vault / "Bob.md").read_text(encoding="utf-8"))
 
     def test_a_vault_that_never_publishes_uses_the_defaults_without_error(self):
+        # No site: nothing publishes, so there is nothing to re-nest for.
         vault = self.setup_vault("---\ntype: meta\n---\n")
         calls = stub_publish_tool(self, vault)
         (vault / "_meta" / "vault-config.md").write_text(
             "---\ntype: meta\n---\n", encoding="utf-8")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        self.assertFalse(rows_for(rows, "ERROR"), rows)
+        self.assertEqual(rows, [SITE_OFF_ROW])
         self.assertEqual(calls, [])
-        self.assertIn("GM Notes", (vault / "Bob.md").read_text(encoding="utf-8"))
+        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
 
     def test_a_publishing_vault_whose_tool_cannot_be_asked_still_errors(self):
+        # A site whose tool answers without an exclude list (an older one).
         vault = self.setup_vault()
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\ntype: meta\npublish:\n  mode: player\n---\n",
-            encoding="utf-8")
+        stub_publish_tool(self, vault, mode="player")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "could not say which exclude list"), rows)
         self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)

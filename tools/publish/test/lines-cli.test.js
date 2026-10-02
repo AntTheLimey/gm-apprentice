@@ -79,9 +79,9 @@ describe('lines: site', () => {
   };
 
   it('no file, and a file with no publish block, publish nothing', () => {
-    assert.deepStrictEqual(ask(null).got, { publishes: false, siteDir: null });
-    assert.deepStrictEqual(ask('---\ntype: meta\n---\n').got, { publishes: false, siteDir: null });
-    assert.deepStrictEqual(ask('---\npublish:\n---\n').got, { publishes: false, siteDir: null });
+    assert.deepStrictEqual(ask(null).got, { publishes: false, site: false, siteDir: null });
+    assert.deepStrictEqual(ask('---\ntype: meta\n---\n').got, { publishes: false, site: false, siteDir: null });
+    assert.deepStrictEqual(ask('---\npublish:\n---\n').got, { publishes: false, site: false, siteDir: null });
   });
   it('reads the block however YAML allows it to be written', () => {
     for (const config of [
@@ -93,8 +93,20 @@ describe('lines: site', () => {
       '---\n{publish: {mode: player}}\n---\n',
       '---\npublish: {mode: player}\n---\n',
     ]) {
-      assert.deepStrictEqual(ask(config).got, { publishes: true, siteDir: null }, JSON.stringify(config));
+      assert.deepStrictEqual(ask(config).got, { publishes: true, site: false, siteDir: null }, JSON.stringify(config));
     }
+  });
+  it('the switch decides: off is no site whatever site_dir says, on with no folder is a site to set up', () => {
+    const dir = path.resolve(os.tmpdir(), 'a-site').replace(/\\/g, '/');
+    const cfg = (lines) => `---\npublish:\n${lines.map((l) => `  ${l}\n`).join('')}---\n`;
+    assert.deepStrictEqual(ask(cfg(['site: false', `site_dir: "${dir}"`])).got, { publishes: true, site: false, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site: off', 'site_dir: [not, a, path]'])).got, { publishes: true, site: false, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site: maybe', `site_dir: "${dir}"`])).got, { publishes: true, site: false, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site: true'])).got, { publishes: true, site: true, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site: true', 'site_dir:'])).got, { publishes: true, site: true, siteDir: null });
+    assert.deepStrictEqual(ask(cfg(['site: yes', `site_dir: "${dir}"`])).got, { publishes: true, site: true, siteDir: path.resolve(dir) });
+    // Unset, in a vault written before the switch: a site_dir says on.
+    assert.deepStrictEqual(ask(cfg([`site_dir: "${dir}"`])).got, { publishes: true, site: true, siteDir: path.resolve(dir) });
   });
   it('resolves site_dir against the vault, and ~ against the home folder', () => {
     const abs = path.resolve(os.tmpdir(), 'some site');

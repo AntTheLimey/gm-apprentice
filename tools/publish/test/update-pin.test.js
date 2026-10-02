@@ -423,6 +423,22 @@ describe('update-pin records the site in its vault', () => {
       assert.ok(out.some((l) => l.includes('recorded this site in the vault')), out.join('\n'));
     } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
   });
+  it('records that the vault has a site where the switch is unset, and leaves one the GM set', async () => {
+    const unset = site('---\npublish:\n  mode: player\n---\n');
+    const off = site('---\npublish:\n  site: false\n---\n');
+    try {
+      const a = await run(unset);
+      assert.strictEqual(unset.publish().site, true);
+      assert.ok(a.out.some((l) => l.includes('publish.site = true')), a.out.join('\n'));
+      const b = await run(off);
+      assert.strictEqual(off.publish().site, false);
+      assert.strictEqual(off.publish().site_dir, off.posix);
+      assert.ok(!b.out.some((l) => l.includes('publish.site = true')), b.out.join('\n'));
+    } finally {
+      fs.rmSync(unset.root, { recursive: true, force: true });
+      fs.rmSync(off.root, { recursive: true, force: true });
+    }
+  });
   it('leaves a site_dir that is already set, wherever it points', async () => {
     const s = site('---\npublish:\n  site_dir: /somewhere/else\n---\n');
     try {

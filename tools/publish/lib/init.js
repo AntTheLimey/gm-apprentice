@@ -32,10 +32,10 @@ const DEFAULT_FOLDER_MAP = {
 };
 
 // `siteDir` is where the vault finds its site again: vault_check asks the tool installed
-// there what publishes, and a vault with no site_dir is taken to have no site.
+// there what publishes. `site: true` says the vault has a site; `init` is the GM asking for one.
 function defaultCampaignSettings(siteTitle, tagline, siteDir) {
   return {
-    ...(siteDir ? { site_dir: siteDir.split(path.sep).join('/') } : {}),
+    ...(siteDir ? { site: true, site_dir: siteDir.split(path.sep).join('/') } : {}),
     site_title: siteTitle,
     folder_map: DEFAULT_FOLDER_MAP,
     attachments_dir: '_attachments',
@@ -81,6 +81,9 @@ function seedVaultSettings(vaultDir, settings, options = {}) {
   let otherSite;
   for (const [key, value] of Object.entries(settings)) {
     if (publish[key] === undefined) { set[key] = value; continue; }
+    // `init` is the GM asking for a site, so it turns one on over an earlier off. Any
+    // other caller (update-pin) leaves a switch the GM set.
+    if (key === 'site' && options.turnSiteOn && publish[key] !== true) { set[key] = value; continue; }
     if (key === 'site_dir') {
       // A blank site_dir is no site: fill it. One naming another folder is the GM's,
       // and is left, but said out loud by the caller.
@@ -229,7 +232,7 @@ async function init(targetDir = '.', options = {}) {
   // file the editor refuses, never stops the scaffold: the site is written and the caller
   // is told which settings to add.
   const vaultDir = path.resolve(dest, values.VAULT_PATH);
-  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)));
+  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
     log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}${which}`);

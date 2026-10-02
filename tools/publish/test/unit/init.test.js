@@ -266,8 +266,9 @@ describe('init', () => {
         assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(),
           ['host', 'outputDir', 'siteUrl', 'vaultPath']);
         assert.deepStrictEqual(result.vaultSettings.written,
-          ['site_dir', 'site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_callouts']);
+          ['site', 'site_dir', 'site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_callouts']);
         const pub = publishOf(vault);
+        assert.strictEqual(pub.site, true);
         // The vault can find its site again: an absolute path, forward slashes.
         assert.strictEqual(pub.site_dir, path.resolve(site).split(path.sep).join('/'));
         assert.strictEqual(pub.site_title, 'Dead Light');
@@ -284,6 +285,39 @@ describe('init', () => {
         await removeTmpDir(tmpDir);
       }
       assert.deepStrictEqual(lines.filter((l) => /WARNING/.test(l)), []);
+    });
+
+    it('the site switch: init turns it on over an off, and a site turned off does not build', async () => {
+      const tmpDir = await makeTmpDir();
+      try {
+        const site = path.join(tmpDir, 'site');
+        const vault = path.join(tmpDir, 'vault');
+        const file = path.join(vault, '_meta', 'vault-config.md');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
+        await fs.writeFile(file, '---\ntype: meta\npublish:\n  site: false\n---\n');
+        const result = await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
+        assert.ok(result.vaultSettings.written.includes('site'));
+        assert.strictEqual(publishOf(vault).site, true);
+        const configPath = path.join(site, 'vault.config.json');
+        const { siteOffFor } = require('../../lib/config');
+        assert.strictEqual(siteOffFor(configPath), null);
+
+        await fs.writeFile(file, readFileSync(file, 'utf8').replace('site: true', 'site: false'));
+        assert.strictEqual(publishOf(vault).site, false);
+        assert.match(siteOffFor(configPath), /the site is off for this vault \(publish\.site/);
+        assert.throws(() => build({ configPath }), /the site is off for this vault/);
+        await assert.rejects(fs.access(path.join(site, 'docs', 'index.html')));
+        // A site folder whose vault never set the switch still builds.
+        await fs.writeFile(file, readFileSync(file, 'utf8').replace(/^ *site: false\n/m, ''));
+        assert.strictEqual(publishOf(vault).site, undefined);
+        const real = { log: console.log, warn: console.warn };
+        console.log = console.warn = () => {};
+        try { build({ configPath }); } finally { Object.assign(console, real); }
+        await assert.doesNotReject(fs.access(path.join(site, 'docs', 'index.html')));
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
     });
 
     it('leaves a key the vault file already sets, and keeps the rest of the theme', async () => {

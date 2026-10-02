@@ -36,7 +36,11 @@ import vault_check as vc  # noqa: E402
 TABLES_FIXTURE = Path(__file__).resolve().parent / "fixtures" / "vault-check"
 RELATIONSHIPS_FIXTURE = (Path(__file__).resolve().parent / "fixtures"
                          / "relationship-predicates")
-LEAK = (Path(__file__).resolve().parent / "fixtures" / "slice-a" / "leak")
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from site_fixture import site_copy  # noqa: E402
+
+# A copy with its site on: with the site off there is nothing to check.
+LEAK = site_copy(Path(__file__).resolve().parent / "fixtures" / "slice-a" / "leak")
 FENCED = "Characters/PCs/Fenced.md"
 LATE = "Characters/PCs/Late.md"
 BARE = "Characters/PCs/Bare.md"

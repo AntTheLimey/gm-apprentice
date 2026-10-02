@@ -71,6 +71,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   install had worked, and never reported a site as current. It now
   compares against the version of the tool in that folder.
 
+- **`init` and `update-pin` called a site written as `~/site` a
+  different site.** They compared the path as typed, without the home
+  folder filled in, and reported "the vault already names a different
+  site". They now resolve the path the way the rest of the tool does.
+
 ### Changed
 
 - **`vault_check` asks the publish tool which lines publish; it no
@@ -81,28 +86,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each `--fix` runs before it writes now ask
   `gm-apprentice-publish lines`, a new command that answers from the
   functions the build calls. One node process serves a whole run.
-  - **`publish.site_dir` is the dividing line.** A vault with a
-    `site_dir` has a site: its checks go through that site's publish
-    tool, and when the tool cannot be asked each check gives one ERROR
-    row and nothing is checked or written. A vault with no `site_dir`
-    has no site, so nothing can leak and nothing here gets in the way:
-    `wrapup --fix` makes its repairs and `pc-body` runs its structure
-    checks with or without Node, and `gm-leak` reports what would show
-    if the vault were published now, or gives one INFO row when there
-    is no Node to ask with. A GM who only keeps a vault needs Python
-    and nothing else, as before. Without the tool, a wrap-up repair is
-    still checked for what a `<!-- gm-only -->` block or an HTML
-    comment hides; what an excluded section hides is the tool's to
-    say, so a recap written under an excluded heading can be moved out
-    from under it. When the tool cannot be asked, "no site" is said
-    only for a vault file with no frontmatter, or one whose frontmatter
-    is plain `key: value` lines and lists that never mention
-    `site_dir`. Any mention of `site_dir`, an opening line that is not
-    a bare `---`, a character YAML can build a key with (a backslash,
-    `!`, `?`, `&`, `*`, `<`, braces) or a file that cannot be read
-    makes the vault one with a site. The ERROR row names what it was,
-    down to the character, and says to take it out if the vault has no
-    site. Checked against the tool's parser on 40,000 generated files.
+  - **`publish.site` says whether the vault has a site.** It is a
+    switch in `_meta/vault-config.md`, on or off, and `init` writes
+    `true`.
+    - **On, with a `publish.site_dir`:** the checks go through that
+      site's publish tool, and when the tool cannot be asked each check
+      gives one ERROR row and nothing is checked or written.
+    - **On, with no `site_dir`:** a site still to be set up. The checks
+      give one ERROR row that says to run the setup or turn the switch
+      off.
+    - **Off, whatever `site_dir` says:** there is no site. `build` and
+      `deploy` stop with one line and exit code 1. `gm-leak` gives one
+      INFO row and checks nothing. `wrapup --fix` makes its repairs and
+      `pc-body` runs its structure checks without asking the tool, so a
+      GM who only keeps a vault needs Python and nothing else. A
+      wrap-up repair is still checked for what a `<!-- gm-only -->`
+      block or an HTML comment hides.
+    - **Unset:** on when `site_dir` is set, off when it is not, so a
+      vault from before the switch behaves as it did. `update-pin`
+      writes `site: true` for a site whose vault lacks it, and leaves a
+      `site: false` alone.
+    - When the publish tool cannot be asked (no Node), the switch is
+      read from the vault file directly. Where it is unset, a vault
+      file that mentions `site_dir` counts as having a site, and the
+      ERROR row says to set `publish.site: false` if it has none.
   - **The site's own installed tool is the one asked.** With a
     `site_dir`, the questions go to the publish tool installed in that
     site folder, because that is what the site builds with. It is not
@@ -130,6 +137,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     finished. A tool that hangs is given up on after two minutes.
 
 ### Added
+
+- **`publish.site`: a switch for whether the vault has a site.** Set
+  it to `false` to stop publishing without deleting the site folder's
+  path: `build` and `deploy` stop, and the leak checks have nothing to
+  check. Set it to `true` with no `publish.site_dir` and the checks say
+  the site is still to be set up. `init` writes `true`, and turns on a
+  site that was off. See § Switches in the publish-site configuration
+  reference.
 
 - **`init` writes `publish.site_dir` into the vault file**, as an
   absolute path, and `update-pin` adds it to a vault that lacks it. A
