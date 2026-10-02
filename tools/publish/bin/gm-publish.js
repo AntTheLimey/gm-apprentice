@@ -40,6 +40,7 @@ Usage:
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
   gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
+  gm-apprentice-publish vault-setting        Read or set the default palette and font source (used by migrate.py)
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
@@ -230,6 +231,20 @@ withholds because its Wrap-Up publishes.
   --vault <dir>      With --all: read this vault through the site's rules
                      instead of the vault the config names
   --help, -h         Show this help
+`,
+  'vault-setting': `
+gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <path>] [--vault <dir>]
+
+With no --set, reports what the vault file says: whether theme.default_mode is
+set, the font source, and the fonts the site would load from Google. With --set,
+writes one of: theme.default_mode ("dark", "light", "system") or
+theme.fonts.source ("self-host"). Used by migrate.py.
+
+  --set <key>=<json>  The setting and its value as JSON; repeatable
+  --vault <dir>       The vault to read and write (default: the config's vaultPath)
+  --config <path>     Path to vault.config.json (default: ./vault.config.json)
+  --json              Emit JSON
+  --help, -h          Show this help
 `,
   'migrate-config': `
 gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
@@ -661,6 +676,25 @@ if (command === 'migrate-config') {
     dryRun: !!parsed.flags.dryRun,
     json: !!parsed.flags.json,
   });
+  exitAfterFlush(rc);
+  return;
+}
+
+if (command === 'vault-setting') {
+  const sets = [];
+  const rest = [];
+  const tail = args.slice(1);
+  for (let i = 0; i < tail.length; i += 1) {
+    if (tail[i] === '--set') { sets.push(tail[i + 1] === undefined ? '' : tail[i + 1]); i += 1; } else rest.push(tail[i]);
+  }
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, { '--vault': 'vault' });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('vault-setting');
+    process.exit(1);
+  }
+  const { runVaultSetting } = require('../lib/vault-setting-cli.js');
+  const rc = runVaultSetting({ configPath: parsed.configPath, vault: parsed.flags.vault, set: sets, json: !!parsed.flags.json });
   exitAfterFlush(rc);
   return;
 }

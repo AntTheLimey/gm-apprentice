@@ -425,6 +425,60 @@ def find_postbuild(vault: Path) -> list[Item]:
                   f"{POSTBUILD}"])]
 
 
+def _theme_facts(vault: Path) -> dict[str, Any] | None:
+    """What the site's tool says about the theme, or None with no site."""
+    if configured_site(vault)[0] is None:
+        return None
+    answer = ask_publish_tool(vault, ["vault-setting"])
+    if answer.why is not None:
+        raise StepFailed(answer.why)
+    return answer.data if isinstance(answer.data, dict) else None
+
+
+def _set_setting(vault: Path, key: str, value: object) -> None:
+    answer = ask_publish_tool(
+        vault, ["vault-setting", "--set", f"{key}={json.dumps(value)}"])
+    if answer.why is not None:
+        raise StepFailed(answer.why)
+
+
+def find_default_mode(vault: Path) -> list[Item]:
+    """1.10.16: the site has a light/dark toggle. A site designed for one
+    palette can start every reader there."""
+    facts = _theme_facts(vault)
+    if not facts or facts.get("defaultModeSet") is not False:
+        return []
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("dark", "light"):
+            raise StepFailed("default-mode takes dark or light")
+        _set_setting(vault, "theme.default_mode", value)
+        return [f"wrote publish.theme.default_mode: {value}"]
+
+    return [Item("default-mode", CHOICE,
+                 ["start every reader on one palette (unset follows the "
+                  "reader's device, as before)"], apply, wants="dark or light")]
+
+
+def find_fonts(vault: Path) -> list[Item]:
+    """1.10.17: fonts loaded from Google send each reader's IP address to
+    Google. Self-hosting serves the same fonts from the site."""
+    facts = _theme_facts(vault)
+    names = facts.get("googleFonts") if facts else None
+    if not isinstance(names, list) or not names:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        _set_setting(vault, "theme.fonts.source", "self-host")
+        return ["wrote publish.theme.fonts.source: self-host; the next build "
+                "downloads the fonts once and serves them from the site"]
+
+    return [Item("fonts-self-host", CHOICE,
+                 [f"serve {', '.join(str(n) for n in names)} from the site "
+                  f"instead of Google Fonts, which sees each reader's IP "
+                  f"address; the look does not change"], apply)]
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check("config-to-vault", "1.10.24", 2,
@@ -432,6 +486,10 @@ SITE_CHECKS: list[Check] = [
           asks_site=True),
     Check("publish-site", None, 2, "the publish.site switch",
           find_publish_site),
+    Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,
+          asks_site=True, choices=("default-mode=",)),
+    Check("fonts-self-host", "1.10.17", 2, "fonts served from the site",
+          find_fonts, asks_site=True, choices=("fonts-self-host",)),
     Check("postbuild", "1.10.17", 3, "the site's postbuild script",
           find_postbuild),
     Check("publish-played", "1.10.18", 4, "played sessions are registered",

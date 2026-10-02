@@ -17,9 +17,12 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
 import migrate  # noqa: E402
 import migrate_core  # noqa: E402
 import migrate_site as ms  # noqa: E402
+import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
 
@@ -622,6 +625,95 @@ class SheetSourceTests(unittest.TestCase):
         item.apply("on paper")
         self.assertIn('sheet_source: "on paper"', pc.read_text(encoding="utf-8"))
         self.assertEqual(ms.find_sheet_source(vault), [])
+
+
+class ThemeChoiceTests(unittest.TestCase):
+    def ask(self, facts, calls):
+        def fake(vault, args, vault_only=False):
+            calls.append(args)
+            if "--set" in args:
+                return vc.ToolAnswer(data={"written": [args[2].split("=")[0]]})
+            return vc.ToolAnswer(data=facts)
+        return fake
+
+    def test_default_mode_is_offered_while_unset_and_writes_the_answer(self):
+        vault = make_vault(self)
+        calls = []
+        facts = {"defaultModeSet": False, "fontSource": None, "googleFonts": []}
+        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
+            (item,) = ms.find_default_mode(vault)
+            self.assertEqual((item.id, item.wants),
+                             ("default-mode", "dark or light"))
+            self.assertEqual(item.apply("dark"),
+                             ["wrote publish.theme.default_mode: dark"])
+            with self.assertRaises(StepFailed):
+                item.apply("purple")
+        self.assertEqual(calls[1], ["vault-setting", "--set",
+                                    'theme.default_mode="dark"'])
+
+    def test_default_mode_already_set_is_not_offered(self):
+        facts = {"defaultModeSet": True, "fontSource": None, "googleFonts": []}
+        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, [])):
+            self.assertEqual(ms.find_default_mode(make_vault(self)), [])
+
+    def test_google_fonts_offer_self_hosting(self):
+        vault = make_vault(self)
+        calls = []
+        facts = {"defaultModeSet": True, "fontSource": None,
+                 "googleFonts": ["Cinzel", "Rajdhani"]}
+        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
+            (item,) = ms.find_fonts(vault)
+            self.assertEqual(item.id, "fonts-self-host")
+            self.assertIn("Cinzel, Rajdhani", item.lines[0])
+            item.apply(None)
+        self.assertEqual(calls[1], ["vault-setting", "--set",
+                                    'theme.fonts.source="self-host"'])
+
+    def test_no_google_fonts_or_no_site_offers_nothing(self):
+        facts = {"defaultModeSet": True, "fontSource": "local", "googleFonts": []}
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
+            self.assertEqual(ms.find_fonts(make_vault(self)), [])
+            calls.clear()
+            self.assertEqual(ms.find_fonts(make_vault(self, site=False)), [])
+            self.assertEqual(ms.find_default_mode(make_vault(self, site=False)), [])
+        self.assertEqual(calls, [])
+
+    def test_a_tool_too_old_to_answer_stops(self):
+        with mock.patch.object(ms, "ask_publish_tool", return_value=vc.ToolAnswer(
+                why="vault-setting exited 1: Error: Unknown command")):
+            with self.assertRaises(StepFailed):
+                ms.find_fonts(make_vault(self))
+
+    def test_the_default_mode_choice_needs_a_value(self):
+        check = next(c for c in ms.SITE_CHECKS if c.name == "default-mode")
+        self.assertEqual(check.choices, ("default-mode=",))
+        self.assertEqual(
+            [c.name for c in ms.SITE_CHECKS[:5]],
+            [ms.REPIN, "config-to-vault", "publish-site", "default-mode",
+             "fonts-self-host"])
+
+
+@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                     or (shutil.which("node") and (
+                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                     "node and the publish tool's node_modules are needed")
+class VaultSettingEndToEndTests(unittest.TestCase):
+    def test_the_real_command_reads_sets_and_reads_again(self):
+        vault = tmp(self, "vs-e2e-vault-")
+        (vault / "_meta").mkdir()
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\npublish:\n  mode: player\n---\n",
+            encoding="utf-8")
+        site_fixture.give_site(vault, lambda p: None)
+        before = vc.ask_publish_tool(vault, ["vault-setting"])
+        self.assertIsNone(before.why)
+        self.assertIs(before.data["defaultModeSet"], False)
+        done = vc.ask_publish_tool(
+            vault, ["vault-setting", "--set", 'theme.default_mode="dark"'])
+        self.assertEqual(done.data, {"written": ["theme.default_mode"]})
+        after = vc.ask_publish_tool(vault, ["vault-setting"])
+        self.assertIs(after.data["defaultModeSet"], True)
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
