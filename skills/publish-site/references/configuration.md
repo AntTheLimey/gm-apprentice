@@ -1,19 +1,47 @@
 # Configuration Reference
 
-Publish settings are split between two files. Understanding
-which file owns which setting prevents confusion.
+Everything about what the site publishes is set in one place: the
+`publish:` block of `_meta/vault-config.md` in the vault. The site's
+`vault.config.json` holds only deployment settings (see
+§ `vault.config.json`).
 
 ## `_meta/vault-config.md` (in the vault)
 
-YAML frontmatter under `publish:`. This is the authoritative
-source for content filtering and theming. Values here take
-precedence over `vault.config.json` for scalar settings; the
-exclude **lists** union across both files rather than shadowing
-each other — see § Precedence.
+YAML frontmatter under `publish:`. A setting left out uses its
+built-in default. Setting an exclude list replaces the built-in list
+rather than adding to it, so repeat the default entries you still
+want.
+
+```yaml
+publish:
+  site_title: "The Iron Crown"
+  mode: player
+  system: gurps-4e
+  folder_map:
+    Characters/PCs: characters/pcs
+    Characters/NPCs: characters/npcs
+    Locations: locations
+  attachments_dir: _attachments
+  exclude_dirs: ["_meta", "_Templates", "_resources"]
+  exclude_callouts: true
+  theme:
+    tagline: "A GURPS Special Forces campaign set in 1990s Britain."
+```
 
 | Setting | Key path | Description |
 |---------|----------|-------------|
 | Publish mode | `publish.mode` | `player` or `full` |
+| Site title | `publish.site_title` | Name shown in the nav bar and browser tab |
+| Landing tagline | `publish.theme.tagline` | One-sentence hook under the title on the landing page (default: none) |
+| Footer | `publish.footer` | Text for the footer of every page (default: none) |
+| Search | `publish.search` | `false` (or `no`, `off`) leaves out the search index (default: `true`) |
+| Game system | `publish.system` | Selects the PC character-sheet renderer. Values in `schema-reference.md` § Site-level configuration fields |
+| Folder map | `publish.folder_map` | Maps vault folders to site output paths. A folder holding typed pages with no entry is skipped with a build warning. Default: empty; `init` writes the standard map |
+| Attachments directory | `publish.attachments_dir` | Vault folder holding images (default: `_attachments`) |
+| Character sheets | `publish.character_sheets` | Switch (default: on). See § Switches |
+| Live stats | `publish.live_stats` | Switch (default: off). See § Switches |
+| Inbox | `publish.inbox` | Switch (default: off). See § Switches |
+| PC prose sections | `publish.pc_prose_sections` | Extra `##` headings a PC page keeps when character sheets are off (default: none). See § Switches |
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | Wrap-Up player sections | `publish.wrap_up.player_sections` | Extra H2 titles on a Wrap-Up that count as player-facing, next to `## Narrative Recap` and `## Memorable Moments` (default: none). Read by `vault_check wrapup` only; see below |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
@@ -213,28 +241,6 @@ files are included or excluded through the publish manifest
 `content-filtering.md`. A build warns on any other
 `publish.overrides.*` key rather than ignoring it silently.
 
-## `vault.config.json` (in the site repo)
-
-JSON file in the site directory. Controls paths, URLs, and
-display settings that are specific to the generated site.
-
-| Setting | Key | Description |
-|---------|-----|-------------|
-| Vault path | `vaultPath` | Path to the vault directory |
-| Output directory | `outputDir` | Where generated HTML is written |
-| Site title | `siteTitle` | Name shown in nav bar and browser tab |
-| Landing tagline | `landingTagline` | One-sentence hook on the homepage |
-| Host | `host` | Where the site is deployed: `github-pages` (default, or when absent) or `cloudflare-pages`. See `cloudflare-pages.md`. |
-| Site URL | `siteUrl` | Canonical base URL. For `cloudflare-pages` this **must** be the Cloudflare URL (e.g. `https://<project>.pages.dev`) — Cloudflare serves at the root, so a leftover `github.io` URL breaks the 404 page. |
-| Cloudflare project | `cloudflarePagesProject` | Optional. Cloudflare Pages project name for deploys. Defaults to the site directory's folder name. |
-| Attachments directory | `attachmentsDir` | Subfolder in vault holding images |
-| Folder map | `folderMap` | Maps vault folders to site output paths |
-| Exclude directories | `excludeDirs` | Unioned with `publish.exclude_dirs` in `vault-config.md` (see § Precedence) |
-| Exclude sections | `excludeSections` | Unioned with `publish.exclude_sections` in `vault-config.md` (see § Precedence) |
-| Exclude fields | `excludeFields` | Unioned with `publish.exclude_fields` in `vault-config.md` (see § Precedence) |
-| Exclude callouts | `excludeCallouts` | Fallback if `vault-config.md` doesn't set `publish.exclude_callouts`. `true` strips all callouts, or an array of types |
-| Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
-
 ### Extra player-facing Wrap-Up sections
 
 `vault_check wrapup` treats every Wrap-Up H2 except the recap and
@@ -255,45 +261,264 @@ stays fenced. The list does not change what the site strips: hide
 sections with `exclude_sections` as before. Absent or empty means
 only the two default sections are player-facing.
 
-## Precedence
+## Switches
 
-Three different rules apply, depending on the setting.
+Three keys under `publish:` decide whether character sheets, live
+stats and the at-table inbox are published.
 
-**List settings** — `exclude_sections`, `exclude_fields`, `exclude_dirs`
-— are **unioned**, not overridden. If `publish.exclude_sections` (etc.)
-in `vault-config.md` and the matching `excludeSections`/`excludeFields`/
-`excludeDirs` in `vault.config.json` both supply a list, the two lists
-are merged (case-insensitively deduplicated, first-seen casing kept), so
-a section/field/directory named in only one file is still excluded —
-neither file shadows the other. The built-in default list is used only
-when **neither** file provides a list for that setting; as soon as
-either does, the default stops applying on its own (it is not unioned
-in alongside them).
+```yaml
+publish:
+  character_sheets: true   # default: on
+  live_stats: false        # default: off
+  inbox: false             # default: off
+```
 
-**`vault-config.md`-only settings** — `mode`, `exclude_drafts`,
-`theme`, `four_oh_four`, `overrides`, `section_titles`, and
-`setting_year` — are never read from `vault.config.json` at all: the
-`vault-config.md` value applies when set, otherwise the built-in
-default (`setting_year` has none — unset just means unset). Putting
-them in the JSON file does nothing.
+| Key | Default | On | Off |
+|-----|---------|----|-----|
+| `publish.character_sheets` | on | Each PC page carries its character sheet | PC pages publish prose only (see § With character sheets off). Live stats are forced off |
+| `publish.live_stats` | off | The live status bar on each PC sheet, and the roster page's party board updates live. One switch covers both | Sheets and the party board show the values in the vault |
+| `publish.inbox` | off | The change-request widget on each PC page | No widget |
 
-`publish.system` is *almost* one of them: the build reads it from
-`vault-config.md` only, but the `flush` command falls back to a
-top-level `system` in `vault.config.json` when `publish.system` is
-unset, to pick the GURPS vs CoC writeback. Set it in `vault-config.md`
-and both agree; if a legacy site has it only in the JSON, leave it
-there — deleting it would change what `flush` writes back.
+**Accepted values.** `true` or `false`, or one of the words `yes`,
+`no`, `on`, `off`, `true`, `false` in any case. Anything else,
+including a key left empty (`inbox:`), is treated as **off** and the
+build prints a warning naming the key. This holds for all three
+switches, so an unreadable `character_sheets` withholds the sheets.
 
-**Scalar and passthrough settings** — `sheet_crest`, `exclude_callouts`,
-`backend.statusBar`/`backend.inbox`, and the per-key settings inside
-`images`, `banners`, and `locations` — follow simple precedence: the
-`vault-config.md` `publish.*` value wins when set, `vault.config.json`
-is used only as a fallback when `vault-config.md` doesn't set it, and
-where the setting has a built-in default (`exclude_callouts` and the
-`images` keys) that default applies only when neither file sets it.
-`sheet_crest`, `banners`, `locations` and `backend.*` have no built-in
-default at all — unset stays unset, deliberately, so the build can tell
-"never configured" apart from "configured off".
+**Unset means the default.** An unset `live_stats` or `inbox` is off.
+The build does not detect a deployed backend: a site whose Functions
+and KV store exist still builds without live stats and the inbox until
+the switch says `true`. The setup commands write the switch for you
+(`cloudflare-pages.md` § The fast way).
+A site that loses either feature this way gets a closing build warning
+naming the switch. When the site still holds old settings in
+`vault.config.json`, `migrate.py` writes `true` for it; otherwise set the
+switch to `true` to keep the feature or to `false` to remove its Functions.
+
+**The forcing rule.** `character_sheets: false` turns live stats off
+even when `live_stats: true`; the build prints one line saying so. The
+inbox is independent of the other two.
+
+**Functions follow their switch.** `build` and `deploy` keep the site's
+`functions/` in step with the switches, one feature at a time. `live_stats: true`
+copies the live-stats files (`api/loadout.js`, `api/loadout-list.js`,
+`api/loadout-core.mjs`); `inbox: true` copies the inbox files
+(`api/request.js`, `api/inbox-core.mjs`); `api/package.json` is copied when
+either feature is on and removed only when both are explicitly off.
+A switch set to off, or live stats forced off by `character_sheets: false`,
+removes that feature's files and prints one `removed functions/…` line each.
+A file you edited is kept with a warning, and nothing else in `functions/`
+is touched. A switch that is unset removes nothing. A removal reaches the live
+site only with the next deploy, which uploads whatever `functions/` holds then.
+
+**On, but no KV store.** `live_stats` and `inbox` need the site's
+`wrangler.toml` to carry a real `INBOX` KV namespace id. When a switch
+is on and the id is missing or is still the scaffold placeholder, the
+build warns and builds without that feature:
+
+```text
+WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published
+WARNING: publish.inbox is on but this site has no KV store wired; the change-request inbox is not published
+```
+
+The build copies the plugin's Cloudflare Functions into the site's
+`functions/` only when live stats or the inbox is on.
+
+### With character sheets off
+
+The vault does not change. The sheet stays in each PC note and
+`sheet show` still prints it. On the site:
+
+- The PC page's first tab is labelled "Character" and there are no
+  Combat or Equipment tabs.
+- The tab opens with a short identity strip, then the line "Character
+  sheets aren't published for this campaign." When the PC lists
+  `sheet_source` in `display_meta`, the line continues "This sheet is
+  kept: <value>."
+- The identity strip shows, where the note has them: Level, Class,
+  Species and Background (D&D 5e); Level, Class, Ancestry, Heritage
+  and Background (PF2e); Playbook, Heritage and Vice (FitD); the point
+  total (GURPS); occupation and age (CoC). A value the page header
+  already shows is not repeated.
+  The header badges come from `display_meta`, which is your own
+  choice, so a stat field listed there still shows and is published.
+- There is no live status bar, and the roster page has no party board.
+- With `inbox: true` the widget stays, as a question channel labelled
+  "Ask the GM" (see `change-request-loop.md`).
+
+Only these `##` sections of a PC note are published:
+
+- `Background`, `Current Status`, `Notes`, `Relationships`,
+  `Appearances`
+- CoC: `Fellow Investigators`, `Encounters with Strange Entities`
+- FitD: `Friends & Rivals`, `Long-Term Projects`
+- any heading listed in `publish.pc_prose_sections`
+
+```yaml
+publish:
+  character_sheets: false
+  pc_prose_sections: ["Personality", "Goals"]
+```
+
+`pc_prose_sections` is a list of heading titles. Titles match
+case-insensitively, ignoring bold or italic wrapping and a trailing
+colon. Every other section is withheld, including a homebrew section
+the build does not recognise and any text before the first `##`
+heading. Withheld text is left out of the page, the search index and
+every other output. `exclude_sections` still applies on top, so
+`GM Notes` stays hidden as always. A `pc_prose_sections` that is not
+a list is ignored with a warning; so is an entry that is not text.
+
+**Heading-shift warning.** If a link or embed label in a PC note would
+change the note's headings once resolved, the build cannot tell which
+sections are safe. It withholds everything after the note's title and
+prints:
+
+```text
+WARNING: <page>: a link or embed label changes this note's headings; nothing after its title is published while character sheets are off. Fix the label.
+```
+
+Fix the label in the note and rebuild.
+
+## `vault.config.json` (in the site repo)
+
+JSON file in the site directory. It holds six deployment keys and
+nothing else: where the vault is, where the output goes and where the
+site is hosted.
+
+| Setting | Key | Description |
+|---------|-----|-------------|
+| Vault path | `vaultPath` | Path to the vault directory, relative to this file or absolute |
+| Output directory | `outputDir` | Where generated HTML is written |
+| Host | `host` | Where the site is deployed: `github-pages` (default, or when absent) or `cloudflare-pages`. See `cloudflare-pages.md`. |
+| Site URL | `siteUrl` | Canonical base URL. For `cloudflare-pages` this **must** be the Cloudflare URL (e.g. `https://<project>.pages.dev`) — Cloudflare serves at the root, so a leftover `github.io` URL breaks the 404 page. |
+| Cloudflare project | `cloudflarePagesProject` | Optional. Cloudflare Pages project name for deploys. Defaults to the site directory's folder name. |
+| Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
+
+A newly scaffolded site file has `host`, `siteUrl`, `vaultPath` and
+`outputDir`:
+
+```json
+{
+  "host": "cloudflare-pages",
+  "siteUrl": "https://iron-crown.pages.dev",
+  "vaultPath": "./vault",
+  "outputDir": "./docs"
+}
+```
+
+## Settings left in `vault.config.json`
+
+One rule: the vault file decides. Campaign settings used to live in
+the site file under other names. The build still reads them there,
+and warns. That site-file form is planned to be removed in plugin
+1.11.0:
+
+- A setting the vault file does not set is taken from the site file.
+- A setting both files set comes from the vault file. The site file's
+  value is ignored.
+- Three kinds of setting are the exceptions, applied from the site
+  file with a warning until the migration moves them. A folder,
+  section or field named only in an exclude list in the site file
+  (the vault file's entries first). `exclude_callouts`, where the
+  stricter of the two files wins: `true` beats a list, a list beats
+  `false`, and two lists are joined. A sub-key of `landing`,
+  `images`, `banners` or `locations` that only the site file's map
+  has; where both set a sub-key, the vault file's value is used.
+- A vault-file exclude list that is set but is not a list (for example
+  left empty) gets the built-in default, with a warning. The site
+  file's entries are still added to it.
+
+Every build ends with one line naming each key still in the site file:
+
+```text
+WARNING: vault.config.json still holds campaign settings: siteTitle, excludeDirs (ignored; the vault file sets it), excludeDirs entry "Secrets" is still applied from vault.config.json. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run `migrate.py <vault>` to move them.
+```
+
+| Old key in `vault.config.json` | Key under `publish:` |
+|--------------------------------|----------------------|
+| `siteTitle` | `site_title` |
+| `footer` | `footer` |
+| `searchEnabled` | `search` |
+| `folderMap` | `folder_map` |
+| `attachmentsDir` | `attachments_dir` |
+| `system` | `system` |
+| `excludeDirs` | `exclude_dirs` |
+| `excludeSections` | `exclude_sections` |
+| `excludeFields` | `exclude_fields` |
+| `excludeCallouts` | `exclude_callouts` |
+| `sheet_crest` | `sheet_crest` |
+| `landing` | `landing` |
+| `images` | `images` |
+| `banners` | `banners` |
+| `locations` | `locations` |
+| `backend.statusBar` | `live_stats` |
+| `backend.inbox` | `inbox` |
+| `landingTagline` | `theme.tagline` |
+
+Two rows behave differently:
+
+- `backend.statusBar` and `backend.inbox` are also old names when
+  written as `publish.backend.*` in the vault file. Either form is
+  still read when the new key is unset, and the build warns that it is
+  an old name.
+- `landingTagline` is not read by the build and is not named in the
+  warning. The tagline shows only when `publish.theme.tagline` is set.
+
+Settings that never had a site-file form (`mode`, `exclude_drafts`,
+`theme`, `four_oh_four`, `overrides`, `section_titles`,
+`pc_prose_sections`, `character_sheets`, `setting_year`) are read from
+the vault file only.
+
+### Moving the settings
+
+From the plugin, run the migration against the vault. Show the GM the
+dry run's lines first, then run it for real:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> --dry-run
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault>
+```
+
+It finds the site through `publish.site_dir` in the vault file and
+asks that site's publish tool to do the move (`migrate-config`). Set
+`publish.site_dir` first: without it the migration looks at the vault
+file only and the site file's settings stay where they are. To move
+one site directly, run `node "$TOOL" migrate-config --dry-run --config
+<dir>/vault.config.json`, then again without `--dry-run`. The move:
+
+- writes each campaign setting under `publish:` and removes it from
+  the site file. Only the old keys in the table above are removed;
+  any other key the site file holds is left as it is, and named in
+  the output;
+- merges exclude lists: the vault file's entries first, then the site
+  file's entries that are not already there. It adds the sub-keys of
+  `landing`, `images`, `banners` and `locations` that the vault file's
+  map lacks, and keeps the stricter `exclude_callouts`;
+- keeps the vault file's value where both files set a key, and reports
+  the value it discarded;
+- copies an old `backend` flag to `live_stats` / `inbox`. With no flag
+  at all, it writes `true` for a feature that is deployed on the site
+  (its Function and a real KV id are present), but only while the
+  site file still holds old settings to move. A later run on a
+  migrated site does not switch a feature back on. It never writes
+  `character_sheets`;
+- copies both files to `<file>.pre-migrate` first. An existing backup
+  is never replaced;
+- changes only the keys it moves in the vault file. Comments and
+  layout elsewhere stay as written, with one exception: adding to an
+  existing list or map in the vault file (a merged exclude list, a
+  `theme:` block that gets a tagline) rewrites that block, so
+  comments inside it are lost, and the tool prints a note for each.
+  It writes nothing when the vault
+  file cannot be edited safely (a `publish: {…}` written on one line,
+  tab indentation, mixed line endings, YAML that does not parse).
+
+Running it twice is safe: the second run reports nothing to do.
+`--status` shows whether the step is pending. Exit code 0 means done
+or nothing to do, 1 a step failed, 2 bad arguments. If it stops with
+a message about the publish tool, run `update-pin --site <site-dir>`,
+then `migrate.py` again.
 
 ---
 
