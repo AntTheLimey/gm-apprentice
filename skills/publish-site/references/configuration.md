@@ -399,19 +399,18 @@ and warns. That site-file form is planned to be removed in plugin
 - A setting the vault file does not set is taken from the site file.
 - A setting both files set comes from the vault file. The site file's
   value is ignored.
-- The exclude lists of the two files are no longer added together.
-  When both files give a list, only the vault file's list applies, and
-  the build names each site-file entry that is no longer applied. A
-  folder, section or field named only in the site file then publishes,
-  so move the lists before relying on them.
+- An exclude list is the one exception: a folder, section or field
+  named only in the site file is still applied, with a warning
+  naming it, until the migration moves it. The two lists are merged
+  only as this fallback (the vault file's entries first).
 - A vault-file exclude list that is set but is not a list (for example
   left empty) gets the built-in default, with a warning. The site
-  file's list is not used in its place.
+  file's entries are still added to it.
 
 Every build ends with one line naming each key still in the site file:
 
 ```text
-WARNING: vault.config.json still holds campaign settings: siteTitle, excludeDirs (ignored; the vault file sets it), excludeDirs entry "Secrets" is no longer applied. Run `migrate.py <vault>` to move them.
+WARNING: vault.config.json still holds campaign settings: siteTitle, excludeDirs (ignored; the vault file sets it), excludeDirs entry "Secrets" is still applied from vault.config.json. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run `migrate.py <vault>` to move them.
 ```
 
 | Old key in `vault.config.json` | Key under `publish:` |

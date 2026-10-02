@@ -56,9 +56,9 @@ describe('publish.exclude_dirs from vault-config.md reaches the scanner (#209)',
   });
 });
 
-// #209 continued: the vault file's exclude_dirs is the list in force; a site-file excludeDirs
-// does not add to it (no union).
-describe('publish.exclude_dirs wins whole over vault.config.json excludeDirs (#209)', () => {
+// #209 continued: the vault file's exclude_dirs leads; a site-file excludeDirs entry it lacks
+// is still applied until the migration moves it, so an upgrade never publishes a hidden folder.
+describe('vault.config.json excludeDirs entries the vault list lacks still apply (#209)', () => {
   let work, outputDir;
 
   before(() => {
@@ -97,8 +97,8 @@ describe('publish.exclude_dirs wins whole over vault.config.json excludeDirs (#2
     assert.ok(!fs.existsSync(path.join(outputDir, 'from-vault-config', 'a.html')));
   });
 
-  it('ignores the site file list when the vault file sets its own', () => {
-    assert.ok(fs.existsSync(path.join(outputDir, 'from-json-config', 'b.html')));
+  it('still applies a site file entry the vault file lacks', () => {
+    assert.ok(!fs.existsSync(path.join(outputDir, 'from-json-config', 'b.html')));
   });
 
   it('publishes everything the vault file does not exclude', () => {

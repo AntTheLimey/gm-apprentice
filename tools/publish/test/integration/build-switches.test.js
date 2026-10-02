@@ -70,7 +70,7 @@ describe('live stats and the inbox follow the switches', () => {
 });
 
 describe('the closing line about campaign settings left in vault.config.json', () => {
-  it('names each key and each list entry no longer applied, once, and says how to move them', () => {
+  it('names each key and each list entry still applied, once, and says how to move them', () => {
     const { lines } = buildSite({
       publish: '  exclude_dirs: [_meta]\n',
       siteExtra: { siteTitle: 'Old Title', excludeDirs: ['Secrets'] },
@@ -79,8 +79,27 @@ describe('the closing line about campaign settings left in vault.config.json', (
     assert.strictEqual(said.length, 1, lines.join('\n'));
     assert.match(said[0], /siteTitle/);
     assert.match(said[0], /excludeDirs \(ignored; the vault file sets it\)/);
-    assert.match(said[0], /excludeDirs entry "Secrets" is no longer applied/);
-    assert.ok(said[0].endsWith('Run `migrate.py <vault>` to move them.'), said[0]);
+    assert.match(said[0], /excludeDirs entry "Secrets" is still applied from vault\.config\.json/);
+    assert.ok(said[0].endsWith('Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run `migrate.py <vault>` to move them.'), said[0]);
+  });
+
+  it('a site-file exclusion the vault list lacks keeps hiding its section everywhere', () => {
+    const { lines, root } = buildSite({
+      publish: '  exclude_sections: [GM Notes]\n',
+      siteExtra: { excludeSections: ['Keeper Only'] },
+      pcAppend: '\n## Keeper Only\n\nZorblatt the unspeakable.\n',
+    });
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true })
+      .flatMap((e) => (e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]));
+    const files = walk(path.join(root, 'docs'));
+    assert.ok(files.length > 3);
+    for (const f of files) {
+      if (/\.(png|jpe?g|webp|woff2?)$/.test(f)) continue;
+      assert.ok(!/zorblatt/i.test(fs.readFileSync(f, 'utf8')), `${path.relative(root, f)} carries the section`);
+    }
+    const said = lines.filter((l) => l.includes('still holds campaign settings'));
+    assert.strictEqual(said.length, 1, lines.join('\n'));
+    assert.match(said[0], /excludeSections entry "Keeper Only" is still applied from vault\.config\.json/);
   });
 
   it('is absent when the site file holds only deploy keys', () => {

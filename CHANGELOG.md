@@ -68,13 +68,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `publish.live_stats` and `publish.inbox` in the vault file instead
   of writing `backend` into `vault.config.json`, and refuse before
   touching wrangler or KV when the vault file cannot be edited.
-- **Exclude lists in the two files are no longer added together.**
-  Where the vault file sets `exclude_dirs`, `exclude_sections` or
-  `exclude_fields`, that list alone applies, and a site-file entry
-  not in it is dropped, with a warning naming it. The migration
-  merges the two lists once, so run it before relying on this. A
-  vault-file list key that is set but is not a list is warned about
-  by name and the built-in default applies.
+- **A site-file exclusion keeps hiding what it hid until the
+  migration moves it.** Where the vault file sets `exclude_dirs`,
+  `exclude_sections` or `exclude_fields`, its list leads, and a
+  site-file entry it lacks is still applied, with a warning naming
+  it. The two lists are merged only as this fallback, and the
+  migration merges them once. A vault-file list key that is set but
+  is not a list is warned about by name, the built-in default
+  applies, and the site-file entries are still added.
 - **Live stats and the inbox no longer switch on by detection.** A
   site with a deployed backend and no setting used to get both. Unset
   now means off; the migration writes `true` for a site that uses

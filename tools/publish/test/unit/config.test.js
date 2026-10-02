@@ -62,10 +62,10 @@ describe('exclude_sections default (issue #144)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('a vault-config.md list wins whole over a stale vault.config.json excludeSections, with no default injection', () => {
+  it('a vault-config.md list is first, a stale vault.config.json excludeSections only adds its missing entries', () => {
     // A site scaffolded before #144 has a stale 4-item excludeSections in
-    // vault.config.json. The vault file's list is the one in force: no union with
-    // the stale list, and the built-in default must not sneak in on top.
+    // vault.config.json. The vault file's list leads; the stale entries it lacks are
+    // still applied (a site-file exclusion keeps hiding what it hid) until migrated.
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -77,7 +77,7 @@ describe('exclude_sections default (issue #144)', () => {
       excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
     };
     const result = loadPublishConfig(tmpDir, staleFallback);
-    assert.deepStrictEqual(result.exclude_sections, ['Custom Section']);
+    assert.deepStrictEqual(result.exclude_sections, ['Custom Section', 'GM Notes', 'DM Notes', 'Player Notes', 'Source References']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });
@@ -156,7 +156,7 @@ describe('loadPublishConfig', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('does not union vault-config.md and vault.config.json exclude lists (the vault file wins whole)', () => {
+  it('merges vault-config.md and vault.config.json exclude lists only as the fallback (vault list first)', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -167,12 +167,12 @@ describe('loadPublishConfig', () => {
       excludeDirs: ['_meta', '_QA'],
     };
     const result = loadPublishConfig(tmpDir, fallback);
-    assert.deepStrictEqual(result.exclude_sections, ['GM Notes']);
-    assert.deepStrictEqual(result.exclude_dirs, ['_meta']);
+    assert.deepStrictEqual(result.exclude_sections, ['GM Notes', 'DM Notes', 'Player Notes', 'Source References']);
+    assert.deepStrictEqual(result.exclude_dirs, ['_meta', '_QA']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('names the entries a stale site-file list would have added, as dropped', () => {
+  it('applies, and names, the site-file entries the vault list lacks', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -181,9 +181,9 @@ describe('loadPublishConfig', () => {
       '---\npublish:\n  exclude_sections:\n    - "GM Notes"\n---\n',
     );
     const result = loadPublishConfig(tmpDir, { excludeSections: ['gm notes', 'Secrets'] });
-    assert.deepStrictEqual(result.exclude_sections, ['GM Notes']);
+    assert.deepStrictEqual(result.exclude_sections, ['GM Notes', 'Secrets']);
     assert.deepStrictEqual(result.legacy, [
-      { key: 'excludeSections', publishKey: 'exclude_sections', status: 'ignored', dropped: ['Secrets'] },
+      { key: 'excludeSections', publishKey: 'exclude_sections', status: 'ignored', stillApplied: ['Secrets'] },
     ]);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -378,7 +378,7 @@ describe('section_titles passthrough', () => {
 });
 
 describe('exclude_fields resolution', () => {
-  it('the vault-config.md list wins whole over vault.config.json excludeFields (no union)', () => {
+  it('the vault-config.md list leads; vault.config.json excludeFields adds its missing entries', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -387,7 +387,7 @@ describe('exclude_fields resolution', () => {
       '---\npublish:\n  exclude_fields:\n    - "secrets"\n---\n',
     );
     const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
-    assert.deepStrictEqual(result.exclude_fields, ['secrets']);
+    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'custom_field']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

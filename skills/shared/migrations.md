@@ -1299,8 +1299,9 @@ three switches control character sheets, live stats and the inbox
   page publishes its prose sections and no stats.
 - A setting left in `vault.config.json` is still read when the vault
   file does not set it, and the build warns. Where both set it the
-  vault file wins; exclude lists are no longer added together. That
-  fallback is removed in 1.11.0.
+  vault file wins, except that an exclude-list entry only the site file
+  has is still applied, with a warning, until the migration moves it.
+  That fallback is removed in 1.11.0.
 - Live stats and the inbox no longer switch on by detection: unset
   means off. The migration writes `true` for a site using them.
 - A character sheet is read from the note body only. Stats written

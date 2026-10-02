@@ -377,9 +377,9 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 
-  it('reports the list the build resolves: vault file first, else the site file, else the default', async () => {
+  it('reports the list the build resolves: vault file then site-only entries, else the site file, else the default', async () => {
     const both = vaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
-    assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes']);
+    assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
     const siteOnly = vaultWith('', { excludeSections: ['Keeper Only'] });
     assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections, ['Keeper Only']);
     const none = vaultWith('');
@@ -387,7 +387,7 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
       ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
     const c = capture();
     assert.strictEqual(await runExplain({ configPath: both.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
-    assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes']);
+    assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes', 'Keeper Only']);
     for (const v of [both, siteOnly, none]) fs.rmSync(v.vault, { recursive: true, force: true });
   });
 

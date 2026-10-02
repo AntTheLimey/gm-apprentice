@@ -31,15 +31,15 @@ const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
 // The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
 // keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
-// list that the vault file's list lacks is named as no longer applied. Null when none.
+// list that the vault file's list lacks is named as still applied from the site file. Null when none.
 function legacyWarning(legacy) {
   if (!Array.isArray(legacy) || legacy.length === 0) return null;
   const parts = [];
   for (const rec of legacy) {
     parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);
-    for (const x of rec.dropped || []) parts.push(`${rec.key} entry "${x}" is no longer applied`);
+    for (const x of rec.stillApplied || []) parts.push(`${rec.key} entry "${x}" is still applied from vault.config.json`);
   }
-  return `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Run \`migrate.py <vault>\` to move them.`;
+  return `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`;
 }
 
 function build(options = {}) {

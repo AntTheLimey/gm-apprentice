@@ -258,17 +258,16 @@ describe('migrate-config', () => {
     assert.ok(fs.existsSync(`${s.vaultFile}.pre-migrate`));
   });
 
-  it('16: before and after a migration the built HTML is byte-identical and the warning is gone', () => {
+  // Builds a fixture site twice, before and after migrating it; returns both docs trees.
+  function buildBeforeAndAfter({ vaultYaml, site, pcAppend = '' }) {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-migrate-build-'));
     roots.push(root);
     const vault = path.join(root, 'vault');
     fs.cpSync(FIXTURE, vault, { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\ntype: meta\npublish:\n  mode: player\n---\n');
+    if (pcAppend) fs.appendFileSync(path.join(vault, 'Characters', 'PCs', 'Karl Brenner.md'), pcAppend);
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), vaultYaml);
     const configPath = path.join(root, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
-      vaultPath: './vault', outputDir: './docs', siteTitle: 'Migrated Site', footer: 'Foot',
-      system: 'gurps-4e', folderMap: { 'Characters/PCs': 'characters/pcs' }, excludeDirs: ['Nowhere'],
-    }, null, 2));
+    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: './vault', outputDir: './docs', ...site }, null, 2));
     const run = () => {
       const lines = [];
       const real = { warn: console.warn, log: console.log };
@@ -290,17 +289,41 @@ describe('migrate-config', () => {
       return out;
     };
     const first = run();
-    assert.ok(first.some((l) => l.includes('vault.config.json still holds campaign settings')), first.join('\n'));
     fs.renameSync(path.join(root, 'docs'), path.join(root, 'docs-before'));
     migrate({ configPath });
     const second = run();
+    return { root, first, second, a: tree(path.join(root, 'docs-before')), b: tree(path.join(root, 'docs')) };
+  }
+
+  it('16: before and after a migration the built HTML is byte-identical and the warning is gone', () => {
+    const { first, second, a, b } = buildBeforeAndAfter({
+      vaultYaml: '---\ntype: meta\npublish:\n  mode: player\n---\n',
+      site: {
+        siteTitle: 'Migrated Site', footer: 'Foot',
+        system: 'gurps-4e', folderMap: { 'Characters/PCs': 'characters/pcs' }, excludeDirs: ['Nowhere'],
+      },
+    });
+    assert.ok(first.some((l) => l.includes('vault.config.json still holds campaign settings')), first.join('\n'));
     assert.ok(!second.some((l) => l.includes('still holds campaign settings')), second.join('\n'));
-    const a = tree(path.join(root, 'docs-before'));
-    const b = tree(path.join(root, 'docs'));
     assert.deepStrictEqual(Object.keys(b).sort(), Object.keys(a).sort());
     const html = Object.keys(a).filter((f) => f.endsWith('.html'));
     assert.ok(html.length > 3);
     for (const f of html) assert.ok(read(a[f]) === read(b[f]), `${f} differs`);
+  });
+
+  it('16b: a site-only exclude_sections entry hides the section before and after, byte-identical', () => {
+    const { first, second, a, b } = buildBeforeAndAfter({
+      vaultYaml: '---\ntype: meta\npublish:\n  mode: player\n  exclude_sections: [GM Notes]\n---\n',
+      site: { system: 'gurps-4e', folderMap: { 'Characters/PCs': 'characters/pcs' }, excludeSections: ['Keeper Only'] },
+      pcAppend: '\n## Keeper Only\n\nZorblatt the unspeakable.\n',
+    });
+    assert.ok(first.some((l) => l.includes('excludeSections entry "Keeper Only" is still applied')), first.join('\n'));
+    assert.ok(!second.some((l) => l.includes('still holds campaign settings')), second.join('\n'));
+    assert.deepStrictEqual(Object.keys(b).sort(), Object.keys(a).sort());
+    for (const f of Object.keys(a)) {
+      assert.ok(read(a[f]) === read(b[f]), `${f} differs`);
+      assert.ok(!/Zorblatt/i.test(read(b[f])), `${f} leaks the withheld section`);
+    }
   });
 
   it('a vault list key that is set but not a list refuses, naming the key', () => {

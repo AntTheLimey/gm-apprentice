@@ -150,30 +150,42 @@ function normalizeExcludeDirs(list, vaultPath, warn = true) {
 // is "set" when it is not undefined: an explicit false or null is a value, not silence.
 // `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
 // "Secrets" in the other are the same entry.
+//
+// The three exclude lists are the one exception to "the vault file wins outright": a
+// site-file entry the vault list lacks is still applied until the migration moves it (the
+// vault list first, then those entries), and the record names them as `stillApplied`. An
+// upgrade must never be what publishes a section or folder the site file used to hide.
 function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase(), warn = console.warn) {
   const fromVault = publish[entry.publish];
   const fromSite = json[entry.json];
   const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
   if (vaultMalformed) {
     // The vault file "sets" the key but gives no list, so the built-in default applies
-    // (the safe direction) and nothing from the site file is carried over.
+    // (the safe direction); entries the site file lists are still added to it.
     const what = fromVault === null ? 'empty' : `${typeof fromVault}`;
-    warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default, not the vault.config.json ${entry.json}.`);
+    warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default instead of the vault file's value.`);
   }
+  let value = fromVault !== undefined ? fromVault : fromSite;
   if (fromSite !== undefined) {
     const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
     if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite)) {
-      if (vaultMalformed) {
-        if (fromSite.length) rec.dropped = [...fromSite];
-      } else {
-        const have = new Set(fromVault.map((s) => keyOf(s)));
-        const dropped = fromSite.filter((s) => !have.has(keyOf(s)));
-        if (dropped.length) rec.dropped = dropped;
+      const base = vaultMalformed ? PUBLISH_DEFAULTS[entry.publish] : fromVault;
+      const have = new Set(base.map((s) => keyOf(s)));
+      const stillApplied = [];
+      for (const s of fromSite) {
+        const k = keyOf(s);
+        if (!have.has(k)) { have.add(k); stillApplied.push(s); }
+      }
+      if (stillApplied.length) {
+        rec.stillApplied = stillApplied;
+        value = [...base, ...stillApplied];
+      } else if (vaultMalformed) {
+        value = [...base];
       }
     }
     legacy.push(rec);
   }
-  return normalize(fromVault !== undefined ? fromVault : fromSite);
+  return normalize(value);
 }
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,

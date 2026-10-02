@@ -27,7 +27,7 @@ describe('config resolution: vault file first, site file only when it is silent'
         else assert.deepStrictEqual(warned, []);
         for (const [key, value] of Object.entries(v.expect)) assert.deepStrictEqual(cfg[key], value, key);
         assert.deepStrictEqual(
-          cfg.legacy.map(({ key, status, dropped }) => (dropped ? { key, status, dropped } : { key, status })),
+          cfg.legacy.map(({ key, status, stillApplied }) => (stillApplied ? { key, status, stillApplied } : { key, status })),
           v.legacy);
       } finally {
         fs.rmSync(vault, { recursive: true, force: true });
