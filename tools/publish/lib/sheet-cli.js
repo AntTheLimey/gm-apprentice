@@ -17,6 +17,7 @@ const path = require('path');
 const matter = require('gray-matter');
 const { scanVault, scanAllNotes, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath } = require('./config');
+const { pcKeepList } = require('./pc-prose');
 const {
   playerSafeMarkdown,
   keepOnlySections,
@@ -73,6 +74,7 @@ function playerSafeBody(page, publishConfig, warnings) {
   const result = playerSafeMarkdown(markdown, {
     excludeCallouts: publishConfig.exclude_callouts,
     excludeSections: publishConfig.exclude_sections,
+    pcKeepSections: pcKeepList(publishConfig),
     frontmatter: page.frontmatter,
   });
   warnings.push(...result.warnings);

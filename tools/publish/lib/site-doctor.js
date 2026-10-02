@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
@@ -284,6 +285,7 @@ async function runSiteDoctor(options, deps) {
     const body = hubPairs.has(page) ? '' : playerSafeMarkdown(page.markdown || '', {
       excludeCallouts: publishConfig.exclude_callouts,
       excludeSections: publishConfig.exclude_sections,
+      pcKeepSections: pcKeepList(publishConfig),
       frontmatter: page.frontmatter,
     }).text;
     const seen = new Set();

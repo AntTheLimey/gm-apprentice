@@ -7,6 +7,7 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
+const { pcKeepList } = require('./pc-prose');
 const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
@@ -80,6 +81,8 @@ function build(options = {}) {
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
+  // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
+  const pcKeepSections = pcKeepList(publishConfig);
   const excludeCallouts = publishConfig.exclude_callouts;
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
@@ -528,7 +531,7 @@ function build(options = {}) {
     const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter);
+    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections });
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -776,7 +779,7 @@ function build(options = {}) {
         const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
-      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
+      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections });
       logWarnings(page.outputPath, processed.warnings);
       let html;
 
@@ -786,7 +789,7 @@ function build(options = {}) {
         case 'pc': {
           // Warnings are dropped here, not ignored: processContent above ran this same
           // strip chain over the same markdown and already reported them.
-          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
+          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {

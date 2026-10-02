@@ -30,7 +30,7 @@ function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions =
   try { build({ configPath }); } finally { Object.assign(console, real); }
   const pcDir = path.join(root, 'docs', 'characters', 'pcs');
   const pcFile = fs.readdirSync(pcDir).find((f) => f.endsWith('.html') && !f.startsWith('index') && !f.includes('player-characters'));
-  return { html: fs.readFileSync(path.join(pcDir, pcFile), 'utf8'), lines };
+  return { html: fs.readFileSync(path.join(pcDir, pcFile), 'utf8'), lines, root };
 }
 
 const roots = [];
@@ -85,5 +85,23 @@ describe('the closing line about campaign settings left in vault.config.json', (
   it('is absent when the site file holds only deploy keys', () => {
     const { lines } = buildSite({});
     assert.ok(!lines.some((l) => l.includes('still holds campaign settings')));
+  });
+});
+
+describe('the PC keep-list reaches the search index', () => {
+  // lunr stores lower-cased, stemmed terms as object keys.
+  const search = (root) => fs.readFileSync(path.join(root, 'docs', 'search-index.json'), 'utf8');
+  const has = (text, term) => text.includes(`"${term}"`);
+  it('character_sheets off: sheet sections stay out of search, kept prose stays in', () => {
+    const { root } = buildSite({ publish: '  character_sheets: false\n' });
+    const text = search(root);
+    assert.ok(!has(text, 'broadsword'), 'equipment section withheld');
+    assert.ok(!has(text, 'hauberk'), 'equipment sub-section withheld');
+    assert.ok(has(text, 'district'), 'Current Status kept');
+  });
+  it('character_sheets on: nothing is withheld by the keep-list', () => {
+    const { root } = buildSite({});
+    const text = search(root);
+    for (const term of ['broadsword', 'hauberk', 'district']) assert.ok(has(text, term), term);
   });
 });

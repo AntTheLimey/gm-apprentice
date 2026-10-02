@@ -395,6 +395,15 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     setting_year: settingYear,
   };
 
+  // A keep-list that is not a list, or holds non-text entries, is dropped (never read
+  // as "keep everything"); say so where the build prints the switch notes.
+  const proseRaw = publish.pc_prose_sections;
+  if (proseRaw !== undefined && !Array.isArray(proseRaw)) {
+    merged.switches.notes.push({ key: 'pc_prose_sections', problem: 'is not a list of section titles; ignored' });
+  } else if (Array.isArray(proseRaw) && proseRaw.some((s) => typeof s !== 'string')) {
+    merged.switches.notes.push({ key: 'pc_prose_sections', problem: 'has entries that are not text; those are ignored' });
+  }
+
   return merged;
 }
 

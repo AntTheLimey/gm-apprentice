@@ -16,6 +16,7 @@ const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXC
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
 const { strippedSectionTitles, publishMode } = require('./processor');
+const { pcKeepList } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
@@ -122,7 +123,7 @@ async function runExplain(options, deps) {
   const excludeSections = publishConfig.exclude_sections || [];
   // The strip's own walk, so a document's Keeper sections (#280) are named here too.
   const stripped = frontmatterError ? null
-    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter))];
+    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
   const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
@@ -242,7 +243,7 @@ async function runExplainAll(options, deps) {
       // the scanner produced no page for it. gm-leak reads these rather than keep a
       // second copy of the rules (#280).
       strippedSections: page
-        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter))]
+        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig) }))]
         : null,
       // vault_check pc-body reads this rather than parse the field itself.
       sheetSourceSet: page && page.frontmatter && page.frontmatter.type === 'pc'
