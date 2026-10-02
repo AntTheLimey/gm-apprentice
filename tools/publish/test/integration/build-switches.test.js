@@ -105,3 +105,11 @@ describe('the PC keep-list reaches the search index', () => {
     for (const term of ['broadsword', 'hauberk', 'district']) assert.ok(has(text, term), term);
   });
 });
+
+describe('a malformed pc_prose_sections', () => {
+  it('prints a warning in the build output and never keeps everything', () => {
+    const { lines, root } = buildSite({ publish: '  character_sheets: false\n  pc_prose_sections: everything\n' });
+    assert.ok(lines.some((l) => l.includes('WARNING: publish.pc_prose_sections is not a list')), lines.join('\n'));
+    assert.ok(!fs.readFileSync(path.join(root, 'docs', 'search-index.json'), 'utf8').includes('"broadsword"'));
+  });
+});
