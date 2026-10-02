@@ -102,9 +102,7 @@ function isDocumentPage(frontmatter) {
 // Why a heading is withheld: 'excluded' (on the exclude list at any level, or a
 // document page's Keeper section at level 2), 'sheet' (a PC section that is not on
 // the keep-list, level 1-2 only), or null. isExcludedSection and the strip both
-// ask this, so the explanation cannot drift from the strip. The exclude-list line
-// below is the one vaultlib's `_js_filter_sections` mirrors; the keep-list is a
-// separate check after it that Python deliberately does not port.
+// ask this, so the explanation cannot drift from the strip.
 function exclusionReason(title, excludeSections = [], frontmatter = null, level = 2, rules = {}) {
   const lower = String(title).trim().toLowerCase();
   if ((excludeSections || []).some(s => lower === String(s).toLowerCase())) return 'excluded';
@@ -137,11 +135,8 @@ function isExcludedSection(title, excludeSections = [], frontmatter = null, leve
   return exclusionReason(title, excludeSections, frontmatter, level, rules) !== null;
 }
 
-// Line endings are normalized first: the heading pattern below ends in `$`,
-// and `.` does not match `\r`, so on a CRLF vault NO heading matched and
-// nothing was ever excluded. processContent strips \r before rendering, which
-// kept the page itself safe and hid the bug — but publishedMarkdown does not,
-// and that is what feeds the search index, backlinks and recency.
+// Line endings are normalized first: `publishedMarkdown` is fed text that still
+// carries `\r`, and it is what feeds the search index, backlinks and recency.
 //
 // `rules.pcKeepSections`: when character sheets are off, a PC note keeps only
 // these `##` sections (see pc-prose.js). Absent means no rule.
@@ -164,26 +159,69 @@ function sheetWithheldTitles(markdown, excludeSections = [], frontmatter = null,
     .filter(s => s.reason === 'sheet').map(s => s.title);
 }
 
-// The exclude-list walk. This is the path vaultlib's `_js_filter_sections` mirrors line
-// for line; a note under the PC keep-list takes walkKeepList instead.
+// Every heading the renderer will render, by its first source line, and the lines that
+// are code. Asked of the renderer's own parser (the instance the build renders with), so
+// a boundary is never a pattern's guess: ATX at any indent the parser accepts, empty and
+// closed headings, setext, and every fence rule are exactly what will be rendered.
+// `nested` marks a heading inside a blockquote or list, which renders inside its parent
+// section. Throws when the parser does.
+function findHeadings(text, parse) {
+  const tokens = (parse || parseBlocks)(text);
+  const headingAt = new Map();   // first line -> { end, level, title, nested }
+  const inCode = new Set();      // lines of fenced or indented code, at any depth
+  for (let t = 0; t < tokens.length; t++) {
+    const tok = tokens[t];
+    if (!tok.map) continue;
+    if (tok.type === 'heading_open') {
+      const inline = tokens[t + 1];
+      headingAt.set(tok.map[0], {
+        end: tok.map[1],
+        level: Number(tok.tag.slice(1)),
+        title: inline && inline.type === 'inline' ? inline.content.trim() : '',
+        nested: tok.level > 0,
+      });
+    } else if (tok.type === 'fence' || tok.type === 'code_block') {
+      for (let l = tok.map[0]; l < tok.map[1]; l++) inCode.add(l);
+    }
+  }
+  return { headingAt, inCode };
+}
+
+// What the build renders with, asked for its own reading of the note.
+function parseBlocks(text) {
+  return md.parse(text, {});
+}
+
+// The exclude-list walk; a note under the PC keep-list takes walkKeepList instead.
+// A withheld section runs from its heading to the next TOP-LEVEL heading of its level
+// or shallower. A heading inside a blockquote or list never ends one, and one with a
+// withheld title starts one, so what follows it is withheld to the next top-level
+// heading. A heading-shaped line in code is neither (it used to end the section and
+// publish the rest of `## GM Notes`). A parse failure withholds the whole body.
+// vault_check does not copy this walk: it asks for the verdicts (the `lines` command).
+// `rules.parse` replaces the parser (a test seam); `rules.warn` hears of a failure.
 function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
   if (pcKeepRuleApplies(frontmatter, rules)) return walkKeepList(markdown, excludeSections, frontmatter, rules);
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const kept = [];
   const stripped = [];
+  const withheldBy = [];   // per line: the title of the section withholding it, or null
+  let headingAt;
+  try {
+    ({ headingAt } = findHeadings(lines.join('\n'), rules.parse));
+  } catch (err) {
+    if (typeof rules.warn === 'function') rules.warn(`section filter: could not parse the note, body withheld (${err.message})`);
+    stripped.push({ title: '(unparsed note)', reason: 'excluded' });
+    return { kept, stripped, withheldBy: lines.map(() => '(unparsed note)') };
+  }
   let excluding = false;
   let excludeLevel = 0;
+  let by = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      // An ATX closing sequence (`## GM Notes ##`) is not part of the title:
-      // markdown-it renders it as "GM Notes", so it must match as one.
-      const title = headingMatch[2].trim().replace(/\s+#+$/, '').trim();
-
-      if (excluding && level <= excludeLevel) {
+    const h = headingAt.get(i);
+    if (h) {
+      if (excluding && !h.nested && h.level <= excludeLevel) {
         excluding = false;
       }
 
@@ -191,65 +229,53 @@ function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
       // excluded heading (`## GM Notes` / `### Player Notes`) used to reset
       // excludeLevel to 3, so the next `### Secrets` ended the exclusion and
       // published the rest of GM Notes (#228).
-      const reason = excluding ? null : exclusionReason(title, excludeSections, frontmatter, level, rules);
+      const reason = excluding ? null : exclusionReason(h.title, excludeSections, frontmatter, h.level, rules);
       if (reason) {
         excluding = true;
-        excludeLevel = level;
-        stripped.push({ title, reason });
-        continue;
+        excludeLevel = h.level;
+        by = h.title;
+        stripped.push({ title: h.title, reason });
       }
     }
 
+    withheldBy.push(excluding ? by : null);
     if (!excluding) {
-      kept.push(line);
+      kept.push(lines[i]);
     }
   }
 
-  return { kept, stripped };
+  return { kept, stripped, withheldBy };
+}
+
+// For each line of `markdown`, the title of the excluded section that withholds it,
+// or null when the exclude list leaves it in. The exclude-list walk's own verdicts
+// (no PC keep-list, no document rule), for a caller that needs them by line: the
+// `lines` command answers vault_check with this instead of vault_check keeping a
+// copy of the walk.
+function sectionVerdicts(markdown, excludeSections = []) {
+  return walkSections(markdown, excludeSections, null, {}).withheldBy;
 }
 
 const HTML_HEADING_RE = /<h[1-6][\s>]/i;
 
-// What the build renders with, asked for its own reading of the note.
-function parseBlocks(text) {
-  return md.parse(text, {});
-}
-
 // The walk for a PC note under the keep-list. Section boundaries come from the
-// renderer's own parser (the instance the build renders with), not from patterns that
-// approximate it: ATX at any indent the parser accepts, empty and closed headings,
-// setext, and every fence rule are exactly what will be rendered. Only TOP-LEVEL
-// headings are boundaries; one inside a blockquote or list renders inside its parent
-// section, like a level 3+ heading. A parse failure withholds the whole body.
+// renderer's own parser (findHeadings). Only TOP-LEVEL headings are boundaries; one
+// inside a blockquote or list renders inside its parent section, like a level 3+
+// heading. A parse failure withholds the whole body.
 // `rules.parse` replaces the parser (a test seam); `rules.warn` hears of a failure.
 function walkKeepList(markdown, excludeSections, frontmatter, rules) {
   const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const stripped = [];
-  let tokens;
+  let found;
   try {
-    tokens = (rules.parse || parseBlocks)(lines.join('\n'));
+    found = findHeadings(lines.join('\n'), rules.parse);
   } catch (err) {
     if (typeof rules.warn === 'function') rules.warn(`keep-list: could not parse the note, body withheld (${err.message})`);
     stripped.push({ title: '(unparsed note)', reason: 'sheet' });
     return { kept: [], stripped };
   }
-
-  const headingAt = new Map();   // first line -> { end, level, title }
-  const inCode = new Set();      // lines of fenced or indented code, at any depth
-  for (let t = 0; t < tokens.length; t++) {
-    const tok = tokens[t];
-    if (!tok.map) continue;
-    if (tok.type === 'heading_open' && tok.level === 0) {
-      const inline = tokens[t + 1];
-      headingAt.set(tok.map[0], {
-        end: tok.map[1],
-        level: Number(tok.tag.slice(1)),
-        title: inline && inline.type === 'inline' ? inline.content.trim() : '',
-      });
-    } else if (tok.type === 'fence' || tok.type === 'code_block') {
-      for (let l = tok.map[0]; l < tok.map[1]; l++) inCode.add(l);
-    }
-  }
+  const { inCode } = found;
+  const headingAt = new Map([...found.headingAt].filter(([, h]) => !h.nested));
 
   const kept = [];
   let excluding = false;
@@ -304,29 +330,42 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
 // section added later is suppressed until the GM names it, rather than
 // appearing the moment someone writes it.
 function keepOnlySections(markdown, includeSections = []) {
-  const wanted = includeSections
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  const flags = keptSectionFlags(markdown, includeSections);
+  return lines.filter((_, i) => flags[i]).join('\n');
+}
+
+// keepOnlySections by line: whether each line of `markdown` is kept.
+function keptSectionFlags(markdown, includeSections = []) {
+  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  const wanted = (Array.isArray(includeSections) ? includeSections : [])
     .filter(s => typeof s === 'string')
     .map(s => s.toLowerCase());
-  if (wanted.length === 0) return '';
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
-  const result = [];
+  if (wanted.length === 0) return lines.map(() => false);
+  let headingAt;
+  try {
+    ({ headingAt } = findHeadings(lines.join('\n')));
+  } catch (err) {
+    return lines.map(() => false);
+  }
+  const flags = [];
   let keeping = false;
   let keepLevel = 0;
 
-  for (const line of lines) {
-    const headingMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (headingMatch) {
-      const level = headingMatch[1].length;
-      const title = headingMatch[2].trim().toLowerCase();
-      if (keeping && level <= keepLevel) keeping = false;
-      if (wanted.includes(title)) {
+  // Only a top-level heading opens or closes a kept section: a nested one, or a
+  // heading-shaped line in code, is content of whatever section it sits in.
+  for (let i = 0; i < lines.length; i++) {
+    const h = headingAt.get(i);
+    if (h && !h.nested) {
+      if (keeping && h.level <= keepLevel) keeping = false;
+      if (wanted.includes(h.title.toLowerCase())) {
         keeping = true;
-        keepLevel = level;
+        keepLevel = h.level;
       }
     }
-    if (keeping) result.push(line);
+    flags.push(keeping);
   }
-  return result.join('\n');
+  return flags;
 }
 
 function stripDataview(markdown) {
@@ -862,19 +901,23 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   return { html, relationships, warnings };
 }
 
-// Extract ## sections for accordion rendering (used by PC/NPC templates)
+// Extract ## sections for accordion rendering (used by PC/NPC templates). The
+// boundaries are the renderer's top-level level 2 headings, so a `## line` shown in a
+// code block stays inside its section.
 function extractSections(markdown) {
   const lines = markdown.replace(/\r/g, '').split('\n');
+  const { headingAt } = findHeadings(lines.join('\n'));
   const sections = [];
   let current = null;
 
-  for (const line of lines) {
-    const h2Match = line.match(/^##\s+(.+)$/);
-    if (h2Match) {
+  for (let i = 0; i < lines.length; i++) {
+    const h = headingAt.get(i);
+    if (h && !h.nested && h.level === 2) {
       if (current) sections.push(current);
-      current = { title: h2Match[1].trim(), lines: [] };
+      current = { title: h.title, lines: [] };
+      i = h.end - 1;
     } else if (current) {
-      current.lines.push(line);
+      current.lines.push(lines[i]);
     }
   }
   if (current) sections.push(current);
@@ -1099,4 +1142,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, sheetWithheldTitles };
+module.exports = { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

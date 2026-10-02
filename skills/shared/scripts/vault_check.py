@@ -171,7 +171,11 @@ from vaultlib import (  # noqa: F401
     entity_type,
     body_text,
     parse_publish_list,
+    PUBLISH_TOOL,
+    PublishToolUnavailable,
+    publish_tool_problem,
     publisher_lines,
+    stub_kept,
     strip_comment_spans,
     read_publish_list,
     read_publish_scalar,
@@ -1166,10 +1170,8 @@ def _resolve_chain_key(key: str, rel: str, stem: str, number: int | None,
     return linked or found, broken, unlinked
 
 
-# The publish tool, beside skills/ in both the repo and the installed plugin
-# (<plugin>/skills/shared/scripts/vault_check.py, <plugin>/tools/publish/...).
-PUBLISH_TOOL = (Path(__file__).resolve().parents[3]
-                / "tools" / "publish" / "bin" / "gm-publish.js")
+# The publish tool (`PUBLISH_TOOL`, from vaultlib) sits beside skills/ in
+# both the repo and the installed plugin.
 PUBLISH_TOOL_TIMEOUT = 120
 # The site builds with the tool installed in its own node_modules (update-pin
 # reads it there too), so that is the renderer whose answer counts. The first
@@ -1506,6 +1508,56 @@ def hub_bodies_withheld(vault: Path, answer: ToolAnswer | None = None
 # The first release whose `explain --all` names each file's stripped sections,
 # and the first that withholds a handout's Keeper sections (#280).
 STRIPPED_SECTIONS_SINCE = "1.11.41"
+
+# The first release whose section filter takes its headings from the
+# renderer's parser. An older one reads every `#`-shaped line at the margin
+# as a heading, in a code fence too, and no setext or indented heading.
+FENCE_AWARE_SINCE = "1.12.1"
+
+
+def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
+    """(why the publish tool cannot say what publishes, the row saying so).
+
+    (None, []) when it can. What a section hides is the tool's decision
+    and there is no copy of it here, so without the tool a check stops:
+    an ERROR for a vault with a site, where a guess could leak, and an
+    INFO for one with none.
+    """
+    why = publish_tool_problem()
+    if why is None:
+        return None, []
+    site, _has_config = configured_site(vault)
+    if site is not None:
+        return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
+                     f"tool what publishes ({why}) — nothing checked, "
+                     f"nothing written; it needs Node 22+ on PATH"]
+    return why, [f"INFO\t(vault)\t{check} did not ask what a section hides "
+                 f"({why}; Node 22+ is needed for that). This vault has no "
+                 f"site, so nothing can publish"]
+
+
+def fenced_boundaries(states: list[LineState]) -> list[tuple[int, str]]:
+    """(line, section) for the first heading-shaped line in a code fence
+    inside each withheld section that a publish tool below
+    FENCE_AWARE_SINCE reads as that section's end. Only for a site still
+    pinned to one: the line is where its page starts publishing again."""
+    found: list[tuple[int, str]] = []
+    current: str | None = None
+    level = 2
+    seen = False
+    for state in states:
+        if state.excluded_by != current:
+            current = state.excluded_by
+            m = HEADING_RE.match(state.line.strip())
+            level = len(m.group(1)) if m else 2
+            seen = False
+        if current is None or seen or not state.in_code:
+            continue
+        m = HEADING_RE.match(state.line)
+        if m and len(m.group(1)) <= level:
+            found.append((state.lineno, current))
+            seen = True
+    return found
 
 
 def _pin_below(vault: Path, version: str) -> str | None:
@@ -1950,38 +2002,19 @@ def _published_linenos(states: list[LineState],
                        fm: dict) -> set[int] | None:
     """Which body lines a `publish: stub` page actually ships, or None.
 
-    None means every line — the page is not a stub. Mirrors
-    processor.js `keepOnlySections`, which build.js applies to a stub
-    page's body before anything downstream reads it: content runs from an
-    included heading down to the next heading at its level or shallower,
-    and an absent or empty `publish_include_sections` ships nothing at
-    all. Headings are matched on the raw line rather than through
-    `LineState.heading`, because `keepOnlySections` — like
-    `filterSections` — does no code-fence tracking, and the whole point
-    of this helper is to agree with the tool.
+    None means every line — the page is not a stub. The answer is the
+    publish tool's `keepOnlySections` (`stub_kept`), which build.js
+    applies to a stub page's body before anything downstream reads it:
+    content runs from an included heading down to the next heading at its
+    level or shallower, and an absent or empty `publish_include_sections`
+    ships nothing at all.
     """
     if publish_mode(fm) != "stub":
         return None
     raw = fm.get("publish_include_sections")
-    include = raw if isinstance(raw, list) else []
-    wanted = {str(s).strip().casefold() for s in include if isinstance(s, str)}
-    kept: set[int] = set()
-    if not wanted:
-        return kept
-    keeping = False
-    keep_level = 0
-    for state in states:
-        m = HEADING_RE.match(state.line)
-        if m:
-            level = len(m.group(1))
-            if keeping and level <= keep_level:
-                keeping = False
-            if m.group(2).strip().casefold() in wanted:
-                keeping = True
-                keep_level = level
-        if keeping:
-            kept.add(state.lineno)
-    return kept
+    kept = stub_kept([s.line for s in states],
+                     raw if isinstance(raw, list) else [])
+    return {s.lineno for s, keep in zip(states, kept) if keep}
 
 
 def check_gm_leak(vault: Path, folder: str | None,
@@ -2017,12 +2050,22 @@ def check_gm_leak(vault: Path, folder: str | None,
     `renest_excludes` appends `renest_excludes_migration`'s rows (the
     1.8.3 migration) instead of planning the plain re-nest.
 
-    A heading-shaped line inside a code fence that ends a running
-    exclusion is an ERROR: `filterSections` does not track code fences,
-    so everything after it publishes.
+    On a site pinned below FENCE_AWARE_SINCE, a heading-shaped line
+    inside a code fence that ends a withheld section is an ERROR: that
+    tool's section filter does not track code fences, so everything after
+    the line publishes there.
+
+    Which lines an excluded section withholds is asked of the publish
+    tool (`scan_body`); when it cannot be asked the check says so and
+    stops (`no_publish_tool`).
     """
     notes = [(rel, text, extract_frontmatter(text) or {})
              for rel, text in vault_files(vault, folder)]
+    if notes:
+        why, gate = no_publish_tool(vault, "gm-leak")
+        if why is not None:
+            return gate
+    fence_pin = _pin_below(vault, FENCE_AWARE_SINCE)
     # The list the build applies comes from the publish tool, asked once for
     # the run; the vault file's own list only when it cannot be asked.
     explain = explain or ExplainAll(vault)
@@ -2045,6 +2088,12 @@ def check_gm_leak(vault: Path, folder: str | None,
                     "publish.site_dir and that node is installed)")
         rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
                     f"exclude list: {reason}")
+    if fence_pin is not None:
+        rows.append(f"WARNING\t(vault)\tthe site's publish tool {fence_pin} "
+                    f"predates {FENCE_AWARE_SINCE}: it does not withhold an "
+                    f"excluded section written as a setext or indented "
+                    f"heading, and a `#` line in a code fence ends one — "
+                    f"run update-pin")
     withheld: set[str] = set()
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
@@ -2107,18 +2156,18 @@ def check_gm_leak(vault: Path, folder: str | None,
         rows.extend(_fence_rows(rel, problems, kept))
         own_strips = tool_stripped.get(unicodedata.normalize("NFC", rel), set())
         heading_leak = False
-        prev_excluded: str | None = None
+        if fence_pin is not None:
+            for lineno, section in fenced_boundaries(states):
+                if kept is not None and lineno not in kept:
+                    continue
+                rows.append(f"ERROR\t{rel}:{lineno}\theading-shaped line in "
+                            f"a code fence ends the '{section}' exclusion on "
+                            f"the site, whose publish tool {fence_pin} predates "
+                            f"{FENCE_AWARE_SINCE} — everything after it "
+                            f"publishes; run update-pin")
         for state in states:
             if kept is not None and state.lineno not in kept:
                 continue
-            if (state.in_code and state.published and state.excluded_by
-                    is None and HEADING_RE.match(state.line)
-                    and prev_excluded is not None):
-                rows.append(f"ERROR\t{rel}:{state.lineno}\theading-shaped "
-                            f"line in a code fence ends the '{prev_excluded}' "
-                            f"exclusion on the site — everything after it "
-                            f"publishes; indent it or move the code block")
-            prev_excluded = state.excluded_by
             # `published` deliberately says nothing about code fences —
             # vaultlib's divergence note — so exclude them here, or this
             # repo's own documented examples become findings.
@@ -2430,6 +2479,8 @@ def check_pc_body(vault: Path, folder: str | None = None,
     explain = explain or ExplainAll(vault)
     # The build's exclude list, asked of the tool at the first PC.
     excludes: list[str] | None = None
+    # Whether the publish tool can say what a section hides, once asked.
+    gated = False
     # The publish tool's reading of each PC's sheet_source, once asked.
     sources: tuple[set[str] | None, str | None, str | None] | None = None
     # The fields each PC carries that its sheet no longer reads, once asked.
@@ -2443,6 +2494,11 @@ def check_pc_body(vault: Path, folder: str | None = None,
             continue
         if publish_mode(fm) == "none":
             continue
+        if not gated:
+            gated = True
+            why, gate = no_publish_tool(vault, "pc-body")
+            if why is not None:
+                return gate
         if excludes is None:
             excludes = effective_exclude_sections(
                 vault, tool_exclude_sections(explain()))
@@ -3550,8 +3606,8 @@ def _keys(lines: list[str]) -> Counter:
 def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
     """Every non-blank, non-comment body line the site would NOT publish.
 
-    Read through `publisher_lines`, a line-for-line port of the publish
-    pipeline — not `scan_body`'s model — because this is the invariant
+    Read through `publisher_lines`, the publish tool's own answer — not
+    `scan_body`'s model — because this is the invariant
     every writer here checks before it writes: a line hidden before a
     repair must still be hidden after it. Counted by content, not
     position, because a repair moves lines; headings by title, because
@@ -3563,18 +3619,34 @@ def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
 
 
 def leak_problem(before: str, before_excludes: list[str], after: str,
-                 after_excludes: list[str], fm: dict) -> str | None:
+                 after_excludes: list[str], fm: dict,
+                 old_pin: str | None = None) -> str | None:
     """Why `after` must not be written, or None when it is safe.
 
     Unsafe means the rewrite added a gm-only/spoiler fence problem, or a
     line hidden in `before` (read under `before_excludes`) publishes in
     `after` (read under `after_excludes`). The two exclude lists differ
     only for a migration that also changes the vault's config.
+
+    Both are read as the current publish tool builds them. `old_pin` is
+    the version of a site pinned below FENCE_AWARE_SINCE: there a
+    heading-shaped line in a code fence ends a withheld section, which
+    this cannot model, so a rewrite holding one is refused.
+
+    Raises `PublishToolUnavailable` when the tool cannot be asked.
     """
     _states, was = scan_body(before, before_excludes)
-    _states, now = scan_body(after, after_excludes)
+    after_states, now = scan_body(after, after_excludes)
     if len(now) > len(was):
         return f"the rewrite leaves {now[-1]}"
+    if old_pin is not None:
+        ends = fenced_boundaries(after_states)
+        if ends:
+            lineno, section = ends[0]
+            return (f"line {lineno}: a heading-shaped line in a code fence "
+                    f"ends the '{section}' exclusion on the site, whose "
+                    f"publish tool {old_pin} predates {FENCE_AWARE_SINCE} "
+                    f"— run update-pin first")
     lost = hidden_lines(before, before_excludes, fm) - hidden_lines(
         after, after_excludes, fm)
     if lost:
@@ -3605,10 +3677,7 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
 
     A moved block runs to the next heading at its level or shallower
     *at fence depth 0* — never ending while a gm-only/spoiler fence it
-    opened is still open. A block holding a heading-shaped line inside a
-    code fence is refused: the publisher's section filter does not know
-    about code fences, so that line ends the exclusion on the site.
-    Blocks go under the first `## GM Notes`, straight after its heading
+    opened is still open. Blocks go under the first `## GM Notes`, straight after its heading
     and any lead prose — before its first sub-heading, where a nested
     excluded heading could not claim them — and inside its fence when it
     is fenced; a new `## GM Notes` is appended when there is none.
@@ -3646,12 +3715,7 @@ def renest_gm_leak(text: str, match: set[str], excludes: list[str],
             j = i + 1
             while j < n and not ends_block(states[j], level):
                 j += 1
-            block = states[i:j]
-            if any(s.in_code and HEADING_RE.match(s.line) for s in block):
-                return text, [], (
-                    f"'{state.heading[1]}' holds a heading-shaped line in a "
-                    f"code fence, which ends the exclusion on the site")
-            moved_blocks.append(block)
+            moved_blocks.append(states[i:j])
             i = j
         else:
             kept_states.append(state)
@@ -3795,7 +3859,7 @@ def _plan_gm_leak_fix(vault: Path, rel: str, fm: dict,
                           "under it hides nothing — add it to the list "
                           "first")
     problem = leak_problem(text, before_excludes, new_text, after_excludes,
-                           fm)
+                           fm, _pin_below(vault, FENCE_AWARE_SINCE))
     if problem:
         h1 = _h1_target(text, match)
         if h1 is not None:
@@ -4050,14 +4114,25 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
             vault, tool_exclude_sections((explain or ExplainAll(vault))()))
     rows: list[str] = []
     matched = False
+    gated = no_tool = False
     for rel, _text, fm in entries:
         if entity_type(fm) not in WRAP_TYPES:
             continue
         if file is not None and rel != file:
             continue
         matched = True
+        if not gated:
+            gated = True
+            why, gate = no_publish_tool(vault, "wrapup")
+            rows.extend(gate)
+            if why is not None and configured_site(vault)[0] is not None:
+                return rows
+            if why is not None:
+                # No site and no tool: nothing can publish, so the repairs
+                # run with nothing counted as hidden and no leak check.
+                excludes, no_tool = [], True
         rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes, fix,
-                                     player))
+                                     player, no_tool))
     if file is not None and not matched:
         rows.append(f"INFO\t{file}\tno wrap-up with that path — `type:` must "
                     f"be one of {', '.join(sorted(WRAP_TYPES))}")
@@ -4067,8 +4142,11 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
 def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       entries: list[tuple[str, str, dict]],
                       excludes: list[str], fix: bool,
-                      player: frozenset[str] = frozenset()) -> list[str]:
-    """One wrap-up: findings, then the plan, then a single write."""
+                      player: frozenset[str] = frozenset(),
+                      no_tool: bool = False) -> list[str]:
+    """One wrap-up: findings, then the plan, then a single write.
+    `no_tool`: a vault with no site and no publish tool to ask, where the
+    leak check before the write is skipped (`check_wrapup` says so)."""
     path = vault / rel
     try:
         # newline='' preserves the file's own line endings exactly, the
@@ -4123,7 +4201,9 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
         # Byte-identical: whatever the plan said, nothing moved.
         rows.append(f"UNCHANGED\t{rel}\tnothing to fix")
         return rows
-    problem = leak_problem(text, excludes, new_text, excludes, fm)
+    problem = None if no_tool else leak_problem(
+        text, excludes, new_text, excludes, fm,
+        _pin_below(vault, FENCE_AWARE_SINCE))
     if problem:
         rows.append(f"ERROR\t{rel}\trepair refused: {problem} — nothing "
                     f"written; fix it by hand")

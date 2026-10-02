@@ -741,9 +741,16 @@ class StripCommentSpansTests(unittest.TestCase):
         self.assertEqual(vl.strip_comment_spans("end --> tail", True),
                          (" tail", False))
 
-    def test_matches_the_whole_list_port(self):
+    def test_matches_the_publish_tool(self):
         lines = ["one <!-- a", "b --> two", "<!-- c -->", "three"]
-        self.assertEqual(vl._js_strip_comments(lines), ["one ", " two", "three"])
+        self.assertEqual(vl.publisher_lines("\n".join(lines), []),
+                         ["one ", " two", "three"])
+        kept, in_comment = [], False
+        for line in lines:
+            text, in_comment = vl.strip_comment_spans(line, in_comment)
+            if text.strip() or not line.strip():
+                kept.append(text)
+        self.assertEqual(kept, ["one ", " two", "three"])
 
 
 if __name__ == "__main__":

@@ -1559,38 +1559,99 @@ class RenestReviewRegressionTests(unittest.TestCase):
                 self.assertEqual(read(vault, "_meta/vault-config.md"), config)
                 self.assertEqual(read(vault, "Bob.md"), self.WS)
 
-    # ---- N2: code-fence headings end exclusions on the site ----------
+    # ---- N2: code-fence headings ended exclusions before publish 1.12.1 --
 
-    def test_a_code_fence_heading_ending_gm_notes_is_reported(self):
-        text = ("---\ntype: npc\n---\n\n# C\n\n## GM Notes\n\nhidden\n\n"
-                "```text\n## Roll table\n```\nSECRET-after-code\n")
-        vault = self.vault(FIX_CONFIG, {"C.md": text})
+    def old_pin(self, config):
+        """`config` pointing at a site pinned to a publish tool whose
+        section filter reads every `#`-shaped line as a heading."""
+        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text("{}", encoding="utf-8")
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "package.json").write_text(json.dumps({"version": "1.12.0"}),
+                                          encoding="utf-8")
+        (pkg / "bin" / "gm-publish.js").write_text("", encoding="utf-8")
+        return config.replace("publish:\n",
+                              f"publish:\n  site_dir: {site.as_posix()}\n")
+
+    FENCED_END = ("---\ntype: npc\n---\n\n# C\n\n## GM Notes\n\nhidden\n\n"
+                  "```text\n### Deeper\n## Roll table\n# Top\n```\n"
+                  "SECRET-after-code\n")
+
+    def test_a_code_fence_heading_ending_gm_notes_is_reported_on_an_old_pin(self):
+        vault = self.vault(self.old_pin(FIX_CONFIG), {"C.md": self.FENCED_END})
         rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(rows_for(rows, "in a code fence ends the 'GM Notes'"),
-                        rows)
-        self.assertIn("SECRET-after-code", self.published(vault, "C.md"))
+        found = rows_for(rows, "in a code fence ends the 'GM Notes'")
+        # The first line that tool reads as a level 2 or shallower heading.
+        self.assertEqual(len(found), 1, rows)
+        self.assertIn("C.md:13\t", found[0])
+        self.assertIn("publish tool 1.12.0 predates 1.12.1", found[0])
+        self.assertTrue(rows_for(rows, "WARNING\t(vault)\tthe site's publish "
+                                       "tool 1.12.0 predates 1.12.1"), rows)
 
-    def test_a_moved_block_with_a_code_fence_heading_is_refused(self):
-        text = ("---\ntype: npc\n---\n\n# C\n\nPublic.\n\n"
-                "## **Keeper Secrets**\n\n```\n## World State\n```\n"
-                "SECRET\n")
-        vault = self.vault(FIX_CONFIG, {"C.md": text})
+    def test_a_code_fence_heading_does_not_end_gm_notes(self):
+        vault = self.vault(FIX_CONFIG, {"C.md": self.FENCED_END})
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "C.md"), rows)
+        self.assertFalse(rows_for(rows, "predates 1.12.1"), rows)
+        published = self.published(vault, "C.md")
+        self.assertNotIn("SECRET-after-code", published)
+        self.assertNotIn("Roll table", published)
+
+    FENCED_MOVE = ("---\ntype: npc\n---\n\n# C\n\nPublic.\n\n"
+                   "## **Keeper Secrets**\n\n```\n## World State\n```\n"
+                   "SECRET\n")
+
+    def test_a_moved_block_with_a_code_fence_heading_is_refused_on_an_old_pin(self):
+        vault = self.vault(self.old_pin(FIX_CONFIG), {"C.md": self.FENCED_MOVE})
         rows = vc.check_gm_leak(vault, None, fix=True)
         self.assertTrue(rows_for(rows, "heading-shaped line in a code fence"),
                         rows)
-        self.assertEqual(read(vault, "C.md"), text)
+        self.assertTrue(rows_for(rows, "run update-pin first"), rows)
+        self.assertEqual(read(vault, "C.md"), self.FENCED_MOVE)
 
-    def test_a_collapse_exposed_by_a_code_fence_heading_is_refused(self):
-        # Under the old list `### World State` re-starts an exclusion after
-        # the code heading ends GM Notes; under ["GM Notes"] it would not.
-        text = ("---\ntype: npc\n---\n\n# C\n\n## GM Notes\n\n```\n"
-                "## Roll table\n```\n\n### World State\n\nSECRET-WS\n")
-        config = ('---\npublish:\n  exclude_sections: [GM Notes, '
-                  'World State]\n---\n')
-        vault = self.vault(config, {"C.md": text})
+    def test_a_moved_block_with_a_code_fence_heading_moves(self):
+        vault = self.vault(FIX_CONFIG, {"C.md": self.FENCED_MOVE})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertTrue(rows_for(rows, "FIXED"), rows)
+        self.assertFalse(rows_for(rows, "refused"), rows)
+        self.assertNotIn("SECRET", self.published(vault, "C.md"))
+        self.assertIn("## World State", read(vault, "C.md"))
+
+    # On an old pin `### World State` re-starts an exclusion after the code
+    # heading ends GM Notes; under ["GM Notes"] alone it would not.
+    FENCED_COLLAPSE = ("---\ntype: npc\n---\n\n# C\n\n## GM Notes\n\n```\n"
+                       "## Roll table\n```\n\n### World State\n\nSECRET-WS\n")
+    COLLAPSE_CONFIG = ('---\npublish:\n  exclude_sections: [GM Notes, '
+                       'World State]\n---\n')
+
+    def test_a_collapse_exposed_by_a_code_fence_heading_is_refused_on_an_old_pin(self):
+        config = self.old_pin(self.COLLAPSE_CONFIG)
+        vault = self.vault(config, {"C.md": self.FENCED_COLLAPSE})
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "migration blocked"), rows)
         self.assertEqual(read(vault, "_meta/vault-config.md"), config)
+
+    def test_a_collapse_past_a_code_fence_heading_is_safe(self):
+        vault = self.vault(self.COLLAPSE_CONFIG, {"C.md": self.FENCED_COLLAPSE})
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "migration blocked"), rows)
+        self.assertNotIn("SECRET-WS", self.published(vault, "C.md"))
+
+    # ---- setext and indented headings are headings ---------------------
+
+    def test_a_setext_excluded_heading_is_withheld(self):
+        text = ("---\ntype: npc\n---\n\n# C\n\nGM Notes\n--------\n\n"
+                "SECRET\n\n   ## Players\n\nshown\n")
+        vault = self.vault(FIX_CONFIG, {"C.md": text})
+        published = self.published(vault, "C.md")
+        self.assertNotIn("SECRET", published)
+        self.assertIn("shown", published)
+        states, _ = vc.scan_body(text, ["GM Notes"])
+        by_line = {s.line: s.excluded_by for s in states}
+        self.assertEqual(by_line["SECRET"], "GM Notes")
+        self.assertIsNone(by_line["shown"])
 
     # ---- N3: every file the publisher might ship ---------------------
 
@@ -1671,6 +1732,98 @@ class WrapupLeakInvariantTests(unittest.TestCase):
         rows = vc.check_wrapup(vault, rel, True)
         self.assertTrue(rows_for(rows, "repair refused: forced"), rows)
         self.assertEqual(read(vault, rel), text)
+
+
+class NoPublishToolTests(unittest.TestCase):
+    """What a section hides is the publish tool's decision and nothing
+    here copies it. Without the tool a check that needs the answer stops:
+    loudly for a vault with a site, quietly for one with none, where the
+    wrap-up repairs still run."""
+
+    WRAP = ("---\ntype: session_wrap\n---\n\n## Narrative Recap\n\n"
+            "It happened.\n\n## Keeper Checklist\n\n- task\n")
+    PC = ("---\ntype: pc\n---\n\n# Jean\n\n## Current Status\n\n"
+          "**HP:** 10\n\n## GM Notes\n\nsecret\n")
+
+    def vault(self, site):
+        config = "---\ntype: meta\npublish:\n  mode: player\n---\n"
+        if site:
+            folder = Path(tempfile.mkdtemp(prefix="vc-site-"))
+            self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+            config = config.replace(
+                "publish:\n", f"publish:\n  site_dir: {folder.as_posix()}\n")
+        vault = make_vault(self, config)
+        (vault / "W.md").write_text(self.WRAP, encoding="utf-8")
+        (vault / "Jean.md").write_text(self.PC, encoding="utf-8")
+        return vault
+
+    def no_tool(self):
+        missing = vaultlib.PublishLines(Path("/nonexistent/gm-publish.js"))
+        patcher = mock.patch.object(vaultlib, "PUBLISH_LINES", missing)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def test_the_tool_answers_here(self):
+        self.assertIsNone(vaultlib.publish_tool_problem())
+
+    def test_no_node_is_said_in_words(self):
+        with mock.patch.object(vaultlib.shutil, "which", return_value=None):
+            lines = vaultlib.PublishLines()
+            with self.assertRaises(vaultlib.PublishToolUnavailable) as raised:
+                lines.ask({"op": "stub", "text": ""})
+        self.assertEqual(str(raised.exception), "node is not on PATH")
+
+    def test_a_tool_without_the_command_is_said_in_words(self):
+        # An older publish tool exits on the unknown command.
+        old = Path(tempfile.mkdtemp(prefix="vc-old-tool-")) / "gm-publish.js"
+        self.addCleanup(shutil.rmtree, old.parent, ignore_errors=True)
+        old.write_text("process.exit(1);\n", encoding="utf-8")
+        lines = vaultlib.PublishLines(old)
+        self.addCleanup(lines.close)
+        with self.assertRaises(vaultlib.PublishToolUnavailable) as raised:
+            lines.ask({"op": "stub", "text": ""})
+        self.assertIn("no `lines` command", str(raised.exception))
+
+    def test_a_site_vault_is_not_checked_and_not_written(self):
+        vault = self.vault(site=True)
+        self.no_tool()
+        for name, rows in (
+                ("gm-leak", vc.check_gm_leak(vault, None, fix=True)),
+                ("pc-body", vc.check_pc_body(vault)),
+                ("wrapup", vc.check_wrapup(vault, None, True))):
+            with self.subTest(name):
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(
+                    f"ERROR\t(vault)\t{name} could not ask the publish tool "
+                    f"what publishes (the publish tool is not at "), rows)
+                self.assertIn("nothing checked, nothing written", rows[0])
+        self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_a_vault_with_no_site_skips_the_leak_checks(self):
+        vault = self.vault(site=False)
+        self.no_tool()
+        for name, rows in (("gm-leak", vc.check_gm_leak(vault, None)),
+                           ("pc-body", vc.check_pc_body(vault))):
+            with self.subTest(name):
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(
+                    f"INFO\t(vault)\t{name} did not ask what a section "
+                    f"hides"), rows)
+
+    def test_a_vault_with_no_site_still_repairs_its_wrap_ups(self):
+        vault = self.vault(site=False)
+        self.no_tool()
+        rows = vc.check_wrapup(vault, None, True)
+        self.assertEqual(len(rows_for(rows, "INFO\t(vault)\twrapup did not "
+                                            "ask what a section hides")), 1,
+                         rows)
+        self.assertTrue(rows_for(rows, "FIXED\tW.md"), rows)
+        self.assertIn("## GM Notes", read(vault, "W.md"))
+
+    def test_the_writers_invariant_raises_rather_than_guesses(self):
+        self.no_tool()
+        with self.assertRaises(vaultlib.PublishToolUnavailable):
+            vc.leak_problem(self.PC, ["GM Notes"], self.PC, ["GM Notes"], {})
 
 
 class PcBodyCommandTests(unittest.TestCase):
@@ -3940,11 +4093,11 @@ import vaultlib  # noqa: E402
 
 
 class InlineMarkerTests(unittest.TestCase):
-    """Markers not on their own line: the exact port and
-    scan_body must agree with stripMarkedBlocks."""
+    """Markers not on their own line: what the publish tool keeps
+    (`publisher_lines`), and scan_body's reading of the same text."""
 
     def strip(self, text, word="gm-only"):
-        return "\n".join(vaultlib._js_strip_marked(text.split("\n"), word))
+        return "\n".join(vaultlib.publisher_lines(text, []))
 
     def test_same_line_pair(self):
         out = self.strip("a <!-- gm-only -->SECRET<!-- /gm-only --> b")

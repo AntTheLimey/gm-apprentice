@@ -184,6 +184,23 @@ directories listed in `preserveDirs`.
 |--------|---------|-------------|
 | `--config <path>` | `./vault.config.json` | Path to config file |
 
+### `lines`
+
+Answers what the build would publish, for text handed in on stdin.
+`vault_check.py` uses it, so the vault checks never keep their own copy
+of the build's filters. It takes no arguments and reads no config: one
+JSON request per input line, one JSON answer per output line, until
+stdin closes.
+
+| Request | Answer |
+|---------|--------|
+| `{"op":"published","text":…,"excludeSections":[…],"publish":"all"}` | `{"text":…}`: the body the site renders. `publish` is `all`, `stub` (with `include`, the page's `publish_include_sections`) or `none`. |
+| `{"op":"sections","text":…,"excludeSections":[…]}` | `{"withheldBy":[…]}`: for each line of `text`, the excluded section withholding it, or `null`. |
+| `{"op":"stub","text":…,"include":[…]}` | `{"kept":[…]}`: for each line of `text`, whether a stub page keeps it. |
+
+A request that cannot be answered gets `{"error":…}` and the process
+carries on.
+
 ---
 
 ## vault.config.json reference
@@ -200,7 +217,7 @@ directories listed in `preserveDirs`.
 | `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
 | `folderMap` | object | Maps vault folder paths to site output paths (see below) |
 | `excludeDirs` | array | Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Unioned with `publish.exclude_dirs` from `_meta/vault-config.md` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
-| `excludeSections` | array | Markdown H2 section headings to strip before rendering (e.g. `["GM Notes"]`) |
+| `excludeSections` | array | Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
 | `preserveDirs` | array | Output subdirectories to keep across builds (e.g. `["superpowers"]`) |
 
 ### folderMap
@@ -549,7 +566,10 @@ anchors computed from `currentOutputPath`.
 
 **`filterSections(markdown, excludeHeadings)`**
 
-Removes H2 sections whose headings appear in `excludeHeadings`.
+Removes each section whose heading appears in `excludeHeadings`, at any
+level, down to the next heading of that level or shallower. Headings
+are the ones the renderer's parser reports: a `#` line in a code block
+is not a heading, and an underlined (setext) or indented heading is.
 
 **`stripDataview(markdown)`**
 
