@@ -92,6 +92,64 @@ describe('editPublishBlock', () => {
   });
 });
 
+describe('editPublishBlock edge cases', () => {
+  const run = (before, changes) => editPublishBlock(before, changes);
+  const scalar = '---\npublish:\n  footer: |\n    line one\n    # not a comment\n  mode: player\n---\n';
+  const scalarLast = '---\npublish:\n  mode: player\n  footer: |\n    line one\n    # not a comment\nsetting_year: 1\n---\n';
+
+  it('removes a block scalar whose last line starts with #', () => {
+    assert.strictEqual(run(scalar, { remove: ['footer'] }).text, '---\npublish:\n  mode: player\n---\n');
+  });
+  it('replaces a block scalar whose last line starts with #', () => {
+    assert.strictEqual(run(scalar, { set: { footer: 'x' } }).text, '---\npublish:\n  footer: x\n  mode: player\n---\n');
+  });
+  it('appends after a block scalar ending in a # line', () => {
+    assert.strictEqual(run(scalarLast, { set: { inbox: true } }).text, '---\npublish:\n  mode: player\n  footer: |\n    line one\n    # not a comment\n  inbox: true\nsetting_year: 1\n---\n');
+  });
+  it('treats inbox and inbox_notes as different keys', () => {
+    const before = '---\npublish:\n  inbox_notes: a\n  inbox: false\n---\n';
+    assert.strictEqual(run(before, { set: { inbox: true } }).text, '---\npublish:\n  inbox_notes: a\n  inbox: true\n---\n');
+    assert.strictEqual(run(before, { remove: ['inbox'] }).text, '---\npublish:\n  inbox_notes: a\n---\n');
+    assert.strictEqual(run(before, { remove: ['inbox_notes'] }).text, '---\npublish:\n  inbox: false\n---\n');
+  });
+  it('finds double- and single-quoted keys', () => {
+    assert.strictEqual(run('---\npublish:\n  "inbox": false\n---\n', { set: { inbox: true } }).text, '---\npublish:\n  inbox: true\n---\n');
+    assert.strictEqual(run("---\npublish:\n  'inbox': false\n  mode: player\n---\n", { remove: ['inbox'] }).text, '---\npublish:\n  mode: player\n---\n');
+  });
+  it('ignores a key-looking line inside a block scalar', () => {
+    const before = '---\npublish:\n  footer: |\n    inbox: true\n---\n';
+    assert.strictEqual(run(before, { set: { inbox: false } }).text, '---\npublish:\n  footer: |\n    inbox: true\n  inbox: false\n---\n');
+  });
+  it('refuses a BOM before the opening fence', () => {
+    const out = run('\uFEFF---\npublish:\n  mode: player\n---\n', { set: { inbox: true } });
+    assert.ok(out.error);
+    assert.strictEqual(out.text, undefined);
+  });
+  it('edits a publish: line that carries a comment', () => {
+    assert.strictEqual(run('---\npublish: # settings\n  mode: player\n---\n', { set: { inbox: true } }).text, '---\npublish: # settings\n  mode: player\n  inbox: true\n---\n');
+  });
+  it('leaves a second --- in the body alone', () => {
+    const body = '\nbody\n---\nmore\n';
+    assert.strictEqual(run(`---\npublish:\n  mode: player\n---\n${body}`, { set: { inbox: true } }).text, `---\npublish:\n  mode: player\n  inbox: true\n---\n${body}`);
+  });
+  it('replaces and removes a sequence written at its key indent as a whole', () => {
+    const before = '---\npublish:\n  exclude_dirs:\n  - _meta\n  - Secrets\n  mode: player\n---\n';
+    assert.strictEqual(run(before, { set: { exclude_dirs: ['X'] } }).text, '---\npublish:\n  exclude_dirs:\n    - X\n  mode: player\n---\n');
+    assert.strictEqual(run(before, { remove: ['exclude_dirs'] }).text, '---\npublish:\n  mode: player\n---\n');
+  });
+  it('leaves a bare (null) publish: when the only child is removed', () => {
+    assert.strictEqual(run('---\ntype: meta\npublish:\n  backend:\n    inbox: true\n---\n', { remove: ['backend'] }).text, '---\ntype: meta\npublish:\n---\n');
+  });
+  it('refuses indented top-level keys with a plain reason', () => {
+    const out = run('---\n  type: meta\n  publish:\n    mode: player\n---\n', { set: { inbox: true } });
+    assert.match(out.error, /top-level keys are indented/);
+  });
+  it('refuses a child key written with a space before the colon', () => {
+    const out = run('---\npublish:\n  inbox : false\n---\n', { set: { inbox: true } });
+    assert.match(out.error, /space before its colon/);
+  });
+});
+
 describe('setPublishKeys', () => {
   const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'vce-'));
   const cfg = (dir) => path.join(dir, '_meta', 'vault-config.md');
@@ -100,6 +158,7 @@ describe('setPublishKeys', () => {
     const dir = tmp();
     assert.deepStrictEqual(setPublishKeys(dir, { inbox: true }), { changed: true });
     assert.strictEqual(fs.readFileSync(cfg(dir), 'utf8'), '---\ntype: meta\npublish:\n  inbox: true\n---\n');
+    assert.deepStrictEqual(fs.readdirSync(path.join(dir, '_meta')), ['vault-config.md']);
   });
   it('throws with the reason and leaves the file byte-identical on refusal', () => {
     const dir = tmp();
@@ -108,6 +167,7 @@ describe('setPublishKeys', () => {
     fs.writeFileSync(cfg(dir), before);
     assert.throws(() => setPublishKeys(dir, { inbox: true }), /not written as a block/);
     assert.strictEqual(fs.readFileSync(cfg(dir), 'utf8'), before);
+    assert.deepStrictEqual(fs.readdirSync(path.join(dir, '_meta')), ['vault-config.md']);
   });
   it('returns changed: false without rewriting when nothing changes', () => {
     const dir = tmp();

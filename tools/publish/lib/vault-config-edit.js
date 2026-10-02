@@ -62,21 +62,30 @@ function locateBlock(lines) {
   const limit = stop < 0 ? lines.length : stop;
   let end = start + 1;
   for (let i = start + 1; i < limit; i++) if (!isBlank(lines[i]) && !isComment(lines[i])) end = i + 1;
+  const first = lines.slice(start + 1, end).find((l) => !isBlank(l) && !isComment(l));
+  const indent = first === undefined ? 2 : indentOf(first);
+  // Lines indented deeper than the keys (a block scalar ending in a `#` line) belong to the
+  // last key; only comments at the key indent or shallower sit outside the block.
+  for (let i = end; i < limit; i++) {
+    if (isBlank(lines[i])) continue;
+    if (indentOf(lines[i]) <= indent) break;
+    end = i + 1;
+  }
   for (let i = start + 1; i < end; i++) {
     if (/^ *\t/.test(lines[i])) return { error: 'the publish block is indented with a tab' };
   }
-  const first = lines.slice(start + 1, end).find((l) => !isBlank(l) && !isComment(l));
-  const indent = first === undefined ? 2 : indentOf(first);
   const starts = [];
   for (let i = start + 1; i < end; i++) {
     if (indentOf(lines[i]) === indent && !isBlank(lines[i]) && !isComment(lines[i])) {
       const key = keyOf(lines[i].slice(indent));
+      if (key !== null && key !== key.trim()) return { error: `the key "${key.trim()}" has a space before its colon` };
       if (key !== null) starts.push({ key, from: i });
     }
   }
   const keys = starts.map((s, n) => {
     let to = n + 1 < starts.length ? starts[n + 1].from : end;
-    while (to > s.from + 1 && (isComment(lines[to - 1]) || isBlank(lines[to - 1])) && n + 1 < starts.length) to--;
+    const outside = (l) => isBlank(l) || (isComment(l) && indentOf(l) <= indent);
+    while (to > s.from + 1 && outside(lines[to - 1]) && n + 1 < starts.length) to--;
     return { key: s.key, from: s.from, to };
   });
   return { start, end, indent, keys };
@@ -133,6 +142,8 @@ function editPublishBlock(text, changes = {}) {
     if (overlap) return { error: `${overlap} is both set and removed` };
     const fm = splitFrontmatter(text);
     if (fm.error) return { error: fm.error };
+    const firstLine = fm.lines.find((l) => !isBlank(l) && !isComment(l));
+    if (firstLine !== undefined && /^[ \t]/.test(firstLine)) return { error: 'the top-level keys are indented' };
     const old = readOrReason(text);
     if (old.error) return { error: old.error };
     const oldPub = old.data.publish;
@@ -172,7 +183,15 @@ function setPublishKeys(vaultPath, set, remove = []) {
   if (out.error) throw new Error(`cannot edit ${CONFIG_REL}: ${out.error}`);
   if (out.text === before && (exists || !Object.keys(set).length)) return { changed: false };
   fs.mkdirSync(path.dirname(file), { recursive: true });
-  fs.writeFileSync(file, out.text);
+  // Write beside the target and rename over it, so a crash never leaves a truncated file.
+  const tmp = path.join(path.dirname(file), `.vault-config.md.${process.pid}.tmp`);
+  try {
+    fs.writeFileSync(tmp, out.text);
+    fs.renameSync(tmp, file);
+  } catch (e) {
+    fs.rmSync(tmp, { force: true });
+    throw e;
+  }
   return { changed: true };
 }
 
