@@ -169,9 +169,30 @@ async function runUpdatePinTag(opts, d) {
   return result({ pinnedBefore: pinnedVersion, pinnedAfter: desired, installedBefore, installedAfter, changed: true }, ok ? 0 : 1);
 }
 
+// A site made before `init` wrote it has no `publish.site_dir` in its vault, so the
+// vault cannot find the site and vault_check takes it to have none. Any update-pin run
+// puts that right: it is the command a GM with an older site is told to run. Never
+// changes a site_dir that is already set, and never stops the repoint.
+function recordSiteDir(siteDir, opts, d) {
+  if (opts.check) return null;
+  const readFile = d.readFile || ((p) => fs.readFileSync(p, 'utf8'));
+  const seed = d.seedVaultSettings || require('./init').seedVaultSettings;
+  let vaultPath;
+  try {
+    vaultPath = JSON.parse(readFile(path.join(siteDir, 'vault.config.json'))).vaultPath;
+  } catch { return null; }
+  if (typeof vaultPath !== 'string' || vaultPath === '') return null;
+  const result = seed(path.resolve(siteDir, vaultPath), { site_dir: toPosix(siteDir) });
+  if (result.written.length && !opts.json) {
+    (d.out || console.log)(`recorded this site in the vault: publish.site_dir = ${toPosix(siteDir)}`);
+  }
+  return result;
+}
+
 async function runUpdatePin(options, deps) {
   const opts = options || {};
   const d = deps || {};
+  recordSiteDir(path.resolve(opts.siteDir || '.'), opts, d);
   // Any --tag at all, even an empty one, is a tag pin: `--tag ""` falling through to a
   // plugin-cache repoint would silently do the opposite of what was asked.
   if (opts.tag !== undefined && opts.tag !== null && opts.tag !== false) return runUpdatePinTag(opts, d);

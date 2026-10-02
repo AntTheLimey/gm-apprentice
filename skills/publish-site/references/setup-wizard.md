@@ -403,8 +403,10 @@ absolute vault path from Step 1: `--vault` records it as `vaultPath`
 in the site file and tells `init` where the campaign settings go
 (without it `init` assumes `./vault` inside the site directory).
 `--title` and `--tagline` carry the Step 6 and Step 7 answers; leave
-one out and `init` uses "My Campaign" or sets no tagline. This
-creates the following structure inside `<site_dir>`:
+one out and `init` uses "My Campaign" or sets no tagline. `init`
+also writes `publish.site_dir` into the vault file, so the vault can
+find this site again; do not add it by hand. This creates the
+following structure inside `<site_dir>`:
 
 ```text
 <site_dir>/

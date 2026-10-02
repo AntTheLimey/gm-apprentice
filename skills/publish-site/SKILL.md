@@ -90,9 +90,10 @@ https://nodejs.org (LTS).
 
 **Site directory:** capabilities 2 and 4 read `publish.site_dir`
 from `_meta/vault-config.md`; a relative value is relative to the
-vault. If unset, ask for the absolute path to the site repo and offer
-to save it there. With no site at all there is nothing to register,
-so skip `publish-played`.
+vault. `init` writes it. If it is unset and the GM has a site (one
+made before 1.10.25), run `update-pin --site <dir>`, which records it.
+With no site at all there is nothing to register, so skip
+`publish-played`.
 
 ## Nine Capabilities
 

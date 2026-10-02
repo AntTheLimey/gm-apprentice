@@ -1316,11 +1316,13 @@ vault checks ask the build what publishes. No frontmatter changes.
 
 ### Structural
 
-- If the vault publishes and its site has a publish tool older than
-  1.12.1 installed, or names the tool in `package.json` without it
-  being installed, run `update-pin --site <site-dir>`. Until then
-  `vault_check.py` `gm-leak`, `pc-body` and `wrapup` stop with one
-  ERROR row and write nothing.
+- If the GM has a site, run `update-pin --site <site-dir>`. It
+  installs publish tool 1.12.1 there and writes `publish.site_dir`
+  into the vault file when it is missing. Ask the GM for the site
+  folder if the vault file does not name one. Until the site's tool is
+  1.12.1 or later, `vault_check.py` `gm-leak`, `pc-body` and `wrapup`
+  stop with one ERROR row and write nothing.
+- A vault with no `site_dir` after that has no site.
 
 ### Content
 

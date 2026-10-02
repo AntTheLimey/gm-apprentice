@@ -388,3 +388,71 @@ describe('update-pin --tag', () => {
     assert.strictEqual(payload.changed, true);
   });
 });
+
+describe('update-pin records the site in its vault', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const { parseNote } = require('../lib/frontmatter');
+
+  // A real site and vault on disk: the vault file is edited for real.
+  function site(config) {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'pin-site-'));
+    const siteDir = path.join(root, 'site');
+    const vault = path.join(root, 'vault');
+    fs.mkdirSync(siteDir);
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(siteDir, 'vault.config.json'), JSON.stringify({ vaultPath: '../vault' }));
+    if (config !== null) fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), config);
+    const publish = () => parseNote(fs.readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8')).data.publish;
+    return { root, siteDir, vault, publish, posix: path.resolve(siteDir).split(path.sep).join('/') };
+  }
+  // Not in a plugin cache: the repoint itself has nothing to do.
+  const run = (s, opts = {}) => {
+    const out = [];
+    return runUpdatePin({ siteDir: s.siteDir, ...opts }, { out: (l) => out.push(String(l)), detect: () => null }).then((rc) => ({ rc, out }));
+  };
+
+  it('writes publish.site_dir when the vault does not have it', async () => {
+    const s = site('---\ntype: meta\npublish:\n  mode: player\n---\n');
+    try {
+      const { rc, out } = await run(s);
+      assert.strictEqual(rc, 0);
+      assert.strictEqual(s.publish().site_dir, s.posix);
+      assert.strictEqual(s.publish().mode, 'player');
+      assert.ok(out.some((l) => l.includes('recorded this site in the vault')), out.join('\n'));
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+  it('leaves a site_dir that is already set, wherever it points', async () => {
+    const s = site('---\npublish:\n  site_dir: /somewhere/else\n---\n');
+    try {
+      const { out } = await run(s);
+      assert.strictEqual(s.publish().site_dir, '/somewhere/else');
+      assert.ok(!out.some((l) => l.includes('recorded this site')));
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+  it('--check writes nothing', async () => {
+    const before = '---\npublish:\n  mode: player\n---\n';
+    const s = site(before);
+    try {
+      await run(s, { check: true });
+      assert.strictEqual(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.md'), 'utf8'), before);
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+  it('--json stays one JSON document', async () => {
+    const s = site('---\npublish:\n  mode: player\n---\n');
+    try {
+      const { out } = await run(s, { json: true });
+      assert.doesNotThrow(() => JSON.parse(out.join('\n')));
+      assert.strictEqual(s.publish().site_dir, s.posix);
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+  it('a site with no vault.config.json, or a vault that is not there, stops nothing', async () => {
+    const s = site(null);
+    try {
+      fs.rmSync(s.vault, { recursive: true, force: true });
+      assert.strictEqual((await run(s)).rc, 0);
+      fs.rmSync(path.join(s.siteDir, 'vault.config.json'));
+      assert.strictEqual((await run(s)).rc, 0);
+    } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
+  });
+});

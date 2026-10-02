@@ -266,8 +266,10 @@ describe('init', () => {
         assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(),
           ['host', 'outputDir', 'siteUrl', 'vaultPath']);
         assert.deepStrictEqual(result.vaultSettings.written,
-          ['site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_callouts']);
+          ['site_dir', 'site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_callouts']);
         const pub = publishOf(vault);
+        // The vault can find its site again: an absolute path, forward slashes.
+        assert.strictEqual(pub.site_dir, path.resolve(site).split(path.sep).join('/'));
         assert.strictEqual(pub.site_title, 'Dead Light');
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
         assert.strictEqual(pub.attachments_dir, '_attachments');

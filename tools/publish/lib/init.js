@@ -30,8 +30,11 @@ const DEFAULT_FOLDER_MAP = {
   'Heritages': 'heritages',
 };
 
-function defaultCampaignSettings(siteTitle, tagline) {
+// `siteDir` is where the vault finds its site again: vault_check asks the tool installed
+// there what publishes, and a vault with no site_dir is taken to have no site.
+function defaultCampaignSettings(siteTitle, tagline, siteDir) {
   return {
+    ...(siteDir ? { site_dir: siteDir.split(path.sep).join('/') } : {}),
     site_title: siteTitle,
     folder_map: DEFAULT_FOLDER_MAP,
     attachments_dir: '_attachments',
@@ -207,7 +210,7 @@ async function init(targetDir = '.', options = {}) {
   // file the editor refuses, never stops the scaffold: the site is written and the caller
   // is told which settings to add.
   const vaultDir = path.resolve(dest, values.VAULT_PATH);
-  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline));
+  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)));
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
     log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}${which}`);
@@ -220,4 +223,4 @@ async function init(targetDir = '.', options = {}) {
   return { success: true, files: created, vaultSettings };
 }
 
-module.exports = { init };
+module.exports = { init, seedVaultSettings };

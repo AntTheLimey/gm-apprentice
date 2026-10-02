@@ -92,7 +92,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     installed, and a `site_dir` with no site in it. A site that names
     no tool of its own is asked through whatever copy node would load
     from that folder (a workspace installs it higher up); failing that,
-    and for a vault with no `site_dir`, the plugin's tool answers.
+    and for a vault with no `site_dir` (no site), the plugin's tool
+    answers.
   - Whether the vault has a `publish:` block, and where its `site_dir`
     points, is read by the publish tool's YAML parser, so a block
     written in a way the Python line reader does not expect (quoted
@@ -109,6 +110,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **`init` writes `publish.site_dir` into the vault file**, as an
+  absolute path, and `update-pin` adds it to a vault that lacks it. A
+  site made by `init` alone used to leave the vault with no record of
+  where its site was, so the vault checks could not find the tool that
+  site builds with. A `site_dir` that is already set is never changed.
+  A vault with no `site_dir` has no site: the leak checks then report
+  what would show if it were published now.
 - **`gm-apprentice-publish lines`.** Reads one JSON request per line on
   stdin and writes one JSON answer per line: `published` (the body the
   site renders for a note), `sections` (per line, the excluded section

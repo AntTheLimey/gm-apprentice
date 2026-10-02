@@ -551,7 +551,7 @@ Under `publish:`:
 | Field | Type | Description |
 |-------|------|-------------|
 | `system` | string | `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e` or `fitd`; drives system-specific rendering. |
-| `site_dir` | string | Absolute path to the site repo, so publish-site needn't ask each session. Optional. |
+| `site_dir` | string | Absolute path to the site folder. `init` writes it, and `update-pin` adds it to a site made before 1.10.25. It is how the vault finds its site: `vault_check` asks the publish tool installed there what publishes. Unset means the vault has no site. |
 | `mode` | string | `"player"` or `"full"` — GM-only content visibility |
 | `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | `wrap_up` | object | `player_sections`: extra H2 titles on a Wrap-Up that `vault_check wrapup` treats as player-facing (default none) |

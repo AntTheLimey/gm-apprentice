@@ -173,6 +173,11 @@ Scaffolds a new site in `dir` (defaults to the current directory).
 Refuses to overwrite existing files — run it in an empty directory
 or provide a new directory name.
 
+`init` also writes `publish.site_dir`, the absolute path of the new
+site folder, into the vault's `_meta/vault-config.md`, and `update-pin`
+adds it to a vault that lacks it. That is how the vault finds its site
+again.
+
 ### `build [--config path]`
 
 Reads `vault.config.json` (or the file at `--config path`) and writes
