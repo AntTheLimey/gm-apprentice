@@ -25,11 +25,13 @@
   "license": "MIT",
   "bundleDependencies": [
     "gray-matter",
+    "js-yaml",
     "lunr",
     "markdown-it"
   ],
   "dependencies": {
     "gray-matter": "^4.0.3",
+    "js-yaml": "^3.13.1",
     "lunr": "^2.3.9",
     "markdown-it": "^14.1.0"
   }
