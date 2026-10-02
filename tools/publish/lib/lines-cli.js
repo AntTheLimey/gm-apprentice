@@ -26,24 +26,36 @@
 const { StringDecoder } = require('string_decoder');
 const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
-function list(value) {
-  return Array.isArray(value) ? value.filter((s) => typeof s === 'string') : [];
+// A request is checked, not coerced: a list that is not a list read as "no list"
+// would answer "nothing is withheld".
+function list(request, key) {
+  const value = request[key];
+  if (value === undefined) return [];
+  if (!Array.isArray(value) || value.some((s) => typeof s !== 'string')) {
+    throw new Error(`${key} must be a list of strings`);
+  }
+  return value;
 }
 
 function answer(request) {
-  if (!request || typeof request !== 'object') throw new Error('a request is a JSON object');
-  const text = typeof request.text === 'string' ? request.text : '';
+  if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('a request is a JSON object');
+  if (typeof request.text !== 'string') throw new Error('text must be a string');
+  const { text } = request;
   switch (request.op) {
     case 'published': {
-      if (request.publish === 'none') return { text: '' };
+      const publish = request.publish === undefined ? 'all' : request.publish;
+      if (!['all', 'stub', 'none'].includes(publish)) throw new Error('publish must be all, stub or none');
+      const excludeSections = list(request, 'excludeSections');
+      const include = list(request, 'include');
+      if (publish === 'none') return { text: '' };
       // The stub reduction runs first, as in the build (see sheet-cli playerSafeBody).
-      const body = request.publish === 'stub' ? keepOnlySections(text, list(request.include)) : text;
-      return { text: playerSafeMarkdown(body, { excludeSections: list(request.excludeSections) }).text };
+      const body = publish === 'stub' ? keepOnlySections(text, include) : text;
+      return { text: playerSafeMarkdown(body, { excludeSections }).text };
     }
     case 'sections':
-      return { withheldBy: sectionVerdicts(text, list(request.excludeSections)) };
+      return { withheldBy: sectionVerdicts(text, list(request, 'excludeSections')) };
     case 'stub':
-      return { kept: keptSectionFlags(text, list(request.include)) };
+      return { kept: keptSectionFlags(text, list(request, 'include')) };
     default:
       throw new Error(`unknown op: ${JSON.stringify(request.op)}`);
   }

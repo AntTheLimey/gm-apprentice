@@ -66,7 +66,19 @@
     { "name": "a fenced excluded title inside a blockquote starts nothing",
       "text": "> ```\n> ## GM Notes\n> ```\n\npublic", "excludes": ["GM Notes"], "kept": "> ```\n> ## GM Notes\n> ```\n\npublic", "stripped": [] },
     { "name": "CRLF line endings",
-      "text": "## GM Notes\r\nsecret\r\n```\r\n## Example\r\n```\r\n## Next\r\npublic", "excludes": ["GM Notes"], "kept": "## Next\npublic", "stripped": ["GM Notes"] }
+      "text": "## GM Notes\r\nsecret\r\n```\r\n## Example\r\n```\r\n## Next\r\npublic", "excludes": ["GM Notes"], "kept": "## Next\npublic", "stripped": ["GM Notes"] },
+    { "name": "hashes followed only by spaces do not end a withheld section",
+      "text": "## GM Notes\ncultist\n##  \nsecret\n## \t\nsecret\n## #\nsecret", "excludes": ["GM Notes"], "kept": "", "stripped": ["GM Notes"] },
+    { "name": "margin-shaped text over an underline does not end a withheld section",
+      "text": "# GM Notes\nsecret\n##\u00a0Next\n===\nstill secret", "excludes": ["GM Notes"], "kept": "", "stripped": ["GM Notes"] },
+    { "name": "a shallower withheld heading takes over the level",
+      "text": "## GM Notes\na\n# GM Notes\nb\n## Next\nc\n# Top\nd", "excludes": ["GM Notes"], "kept": "# Top\nd", "stripped": ["GM Notes", "GM Notes"] },
+    { "name": "an unclosed code block above an indented excluded heading does not publish it",
+      "text": "## Menu\n```\nale\n  ## GM Notes\nsecret", "excludes": ["GM Notes"], "kept": "## Menu\n```\nale", "stripped": ["GM Notes"] },
+    { "name": "an unclosed code block above an underlined excluded heading does not publish it",
+      "text": "## Menu\n```\nale\nGM Notes\n--------\nsecret", "excludes": ["GM Notes"], "kept": "## Menu\n```\nale", "stripped": ["GM Notes"] },
+    { "name": "doubled spaces in a title are matched as they render",
+      "text": "# Inn\nok\n## GM  Notes\nsecret", "excludes": ["GM Notes"], "kept": "# Inn\nok", "stripped": ["GM Notes"] }
   ],
   "keepOnly": [
     { "name": "keeps only the named section",
@@ -88,6 +100,10 @@
     { "name": "a heading typed with a non-breaking space ends a kept section",
       "text": "## Overview\npublic\n##\u00a0GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic" },
     { "name": "a heading inside a blockquote is never the kept section",
-      "text": "## GM Notes\n> ## Overview\n> secret quote\n\nsecret", "include": ["Overview"], "kept": "" }
+      "text": "## GM Notes\n> ## Overview\n> secret quote\n\nsecret", "include": ["Overview"], "kept": "" },
+    { "name": "a wanted title shown in a code block still sets where the kept section ends",
+      "text": "# Overview\nintro\n```\n## Overview\n```\n## Secret prep\nhidden", "include": ["Overview"], "kept": "# Overview\nintro\n```\n## Overview\n```" },
+    { "name": "a wanted title typed with a non-breaking space sets where the kept section ends",
+      "text": "# Overview\nintro\n##\u00a0Overview\nx\n## Secret prep\nhidden", "include": ["Overview"], "kept": "# Overview\nintro\n##\u00a0Overview\nx" }
   ]
 }

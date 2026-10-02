@@ -176,6 +176,7 @@ from vaultlib import (  # noqa: F401
     publish_tool_problem,
     publisher_lines,
     stub_kept,
+    use_publish_tool,
     strip_comment_spans,
     read_publish_list,
     read_publish_scalar,
@@ -1530,35 +1531,89 @@ LINES_SINCE = "1.12.1"
 
 
 def vault_publishes(vault: Path) -> bool:
-    """Whether the vault file has a `publish:` block at all. `site_dir` is
-    not the test: the build never reads it, so a vault can publish
-    without one."""
-    return (read_publish_list(vault, "exclude_sections").publish_line
-            is not None or publish_block_inline(vault))
+    """Whether the vault file has a `publish:` block. Read loosely on
+    purpose (any line starting `publish:`, a byte-order mark or an odd
+    `---` fence notwithstanding): the answer decides whether a check may
+    carry on without the publish tool, so a file this cannot read counts
+    as publishing. `site_dir` is not the test: the build never reads it."""
+    try:
+        text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return False
+    except (OSError, UnicodeDecodeError):
+        return True
+    return re.search(r"(?m)^publish\s*:", text) is not None
+
+
+def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None]:
+    """(the tool to ask what this vault's site publishes, why none can be
+    asked, what to do about it).
+
+    The site's installed tool answers for the site, as it does for
+    `explain`. It is not judged by its version number: it is asked, and a
+    tool without the `lines` command does not answer. The plugin's own
+    tool stands in only when the site has nothing installed and pins a
+    version this can read, at LINES_SINCE or later. A pin this cannot
+    read (a git URL, a range, a tag, a local path) is not guessed at.
+    With no `site_dir` there is no site to look at, and the plugin's
+    tool answers: a site built elsewhere with an older tool is beyond what
+    this can see.
+    """
+    update = "run update-pin{}, then run this again"
+    config, why = _site_config(vault)
+    if config is None:
+        if publish_block_inline(vault):
+            return None, (f"publish: in {VAULT_CONFIG} is written on one "
+                          f"line and is not understood"), (
+                "write it as a block, one key per line")
+        if why and "site_dir is not set" not in why:
+            return None, why, "fix publish.site_dir"
+        if not PUBLISH_TOOL.is_file():
+            return None, f"the publish tool is not at {PUBLISH_TOOL}", (
+                "reinstall the plugin")
+        return PUBLISH_TOOL, None, None
+    site = config.parent
+    fix = update.format(f" --site {site.as_posix()}")
+    pin = site_pin(site)
+    if (pin.source == "none"
+            and PUBLISH_PACKAGE in _raw_text(site / "package.json")):
+        return None, (f"the site's package.json names {PUBLISH_PACKAGE} "
+                      f"where this cannot read its version"), fix
+    if pin.version is not None and semver_below(pin.version, LINES_SINCE):
+        return None, (f"the site's publish tool {pin.version} predates "
+                      f"{LINES_SINCE} and cannot be asked"), fix
+    tool, _label, why = _publish_tool_for(site)
+    if tool is None:
+        return None, why, fix
+    return tool, None, fix
+
+
+def _raw_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
 
 
 def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
     """(why the publish tool cannot say what this vault's site publishes,
-    the row saying so).
+    the rows to print).
 
-    (None, []) when it can. What a section hides is the tool's decision
-    and there is no copy of it here, so without an answer a check stops:
-    an ERROR for a vault that publishes, where a guess could leak, and an
-    INFO for one with no `publish:` block. A site pinned to a tool older
-    than LINES_SINCE counts as no answer: that tool builds by other rules
-    and has no command to ask.
+    What a section hides is the tool's decision and there is no copy of
+    it here, so without an answer a check stops: (why, [an ERROR]) for a
+    vault that publishes, where a guess could leak, and (why, [an INFO])
+    for one with no `publish:` block. (None, []) when the tool answers.
+    Every later question in the run goes to the tool chosen here
+    (`_lines_tool`).
     """
-    why = publish_tool_problem()
-    fix = "it needs Node 22+ on PATH"
-    if why is None:
-        pin = _pin_below(vault, LINES_SINCE)
-        if pin is None:
+    tool, why, fix = _lines_tool(vault)
+    if tool is not None:
+        use_publish_tool(tool)
+        why = publish_tool_problem()
+        if why is None:
             return None, []
-        site, _has_config = configured_site(vault)
-        why = (f"the site's publish tool {pin} predates {LINES_SINCE} and "
-               f"cannot be asked")
-        where = f" --site {site.as_posix()}" if site is not None else ""
-        fix = f"run update-pin{where}, then run this again"
+        if tool == PUBLISH_TOOL:
+            fix = "it needs Node 22+ on PATH"
     if vault_publishes(vault):
         return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
                      f"tool what publishes ({why}) — nothing checked, "
@@ -1572,8 +1627,8 @@ def _tool_gone_row(check: str, e: Exception) -> str:
     """The row for a publish tool that stopped answering after a check
     began: what came before it stands, nothing after it was done."""
     return (f"ERROR\t(vault)\t{check} stopped: the publish tool stopped "
-            f"answering ({e}) — the rows above are incomplete and nothing "
-            f"further was written; run it again")
+            f"answering ({e}) — the check is incomplete and nothing further "
+            f"was written; run it again")
 
 
 def sections_withheld(answer: ToolAnswer
@@ -3616,6 +3671,12 @@ def hidden_lines(text: str, excludes: list[str], fm: dict) -> Counter:
             - _keys(publisher_lines(text, excludes, fm)))
 
 
+def _marker_hidden(states: list[LineState]) -> Counter:
+    """The lines a `<!-- gm-only -->` or `<!-- spoiler -->` block hides,
+    keyed as `hidden_lines` keys them."""
+    return _keys([s.line for s in states if not s.published])
+
+
 def leak_problem(before: str, before_excludes: list[str], after: str,
                  after_excludes: list[str], fm: dict,
                  ask_tool: bool = True) -> str | None:
@@ -3628,17 +3689,19 @@ def leak_problem(before: str, before_excludes: list[str], after: str,
 
     What publishes is the publish tool's answer; `PublishToolUnavailable`
     is raised when it cannot be asked. `ask_tool=False` is for a vault
-    with no `publish:` block and no tool: only the fence half, which
-    needs no tool, is checked.
+    with no `publish:` block and no tool: the fences, and the lines a
+    gm-only or spoiler block hides, are checked without it.
     """
-    _states, was = scan_body(before, ())
-    _states, now = scan_body(after, ())
+    _before, was = scan_body(before, ())
+    _after, now = scan_body(after, ())
     if len(now) > len(was):
         return f"the rewrite leaves {now[-1]}"
-    if not ask_tool:
-        return None
-    lost = hidden_lines(before, before_excludes, fm) - hidden_lines(
-        after, after_excludes, fm)
+    if ask_tool:
+        lost = hidden_lines(before, before_excludes, fm) - hidden_lines(
+            after, after_excludes, fm)
+    else:
+        # What a gm-only or spoiler block hides needs no tool to read.
+        lost = _marker_hidden(_before) - _marker_hidden(_after)
     if lost:
         first = next(iter(lost)).lstrip("#")
         return (f"{sum(lost.values())} hidden line(s) would publish "

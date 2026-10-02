@@ -832,7 +832,13 @@ class PublishLines:
         proc = self._process()
         assert proc.stdin is not None and proc.stdout is not None
         # A tool that hangs is killed, which ends the read below.
-        watchdog = threading.Timer(PUBLISH_LINES_TIMEOUT, proc.kill)
+        timed_out: list[bool] = []
+
+        def give_up() -> None:
+            timed_out.append(True)
+            proc.kill()
+
+        watchdog = threading.Timer(PUBLISH_LINES_TIMEOUT, give_up)
         watchdog.daemon = True
         watchdog.start()
         try:
@@ -842,10 +848,17 @@ class PublishLines:
         except (OSError, ValueError) as e:
             self.close()
             raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s" if timed_out else
                 f"the publish tool stopped answering "
                 f"({e.__class__.__name__})") from e
         finally:
             watchdog.cancel()
+        if not line and timed_out:
+            self.close()
+            raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s")
         if not line:
             self.close()
             raise PublishToolUnavailable(
@@ -877,8 +890,28 @@ class PublishLines:
                 proc.stdout.close()
 
 
+# The process every question below goes to. The plugin's own tool until a
+# check that knows the vault's site points it at the tool that site builds
+# with (`use_publish_tool`).
 PUBLISH_LINES = PublishLines()
-atexit.register(PUBLISH_LINES.close)
+_LINES_BY_TOOL: dict[Path, PublishLines] = {PUBLISH_TOOL: PUBLISH_LINES}
+
+
+def use_publish_tool(tool: Path) -> None:
+    """Ask `tool` from here on: the publish tool a vault's site builds
+    with, whose answer is the one that counts for that vault."""
+    global PUBLISH_LINES
+    if tool not in _LINES_BY_TOOL:
+        _LINES_BY_TOOL[tool] = PublishLines(tool)
+    PUBLISH_LINES = _LINES_BY_TOOL[tool]
+
+
+def _close_publish_tools() -> None:
+    for lines in set(_LINES_BY_TOOL.values()) | {PUBLISH_LINES}:
+        lines.close()
+
+
+atexit.register(_close_publish_tools)
 
 
 def publish_tool_problem() -> str | None:

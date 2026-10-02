@@ -54,6 +54,10 @@ def rows_for(rows, needle):
     return [r for r in rows if needle in r]
 
 
+# Found once, before any test patches `shutil.which`.
+REAL_NODE = shutil.which("node")
+
+
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
                       stripped=None, sheet_source=None, unparseable=None,
@@ -85,7 +89,11 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
         (pkg / "bin").mkdir(parents=True)
         (pkg / "package.json").write_text(json.dumps({"version": installed}),
                                           encoding="utf-8")
-        (pkg / "bin" / "gm-publish.js").write_text("", encoding="utf-8")
+        # Stands in for the site's tool: the `lines` questions go to it
+        # for real, so it hands them to the plugin's.
+        (pkg / "bin" / "gm-publish.js").write_text(
+            f"require({json.dumps(str(vc.PUBLISH_TOOL))});\n",
+            encoding="utf-8")
     (vault / "_meta").mkdir(exist_ok=True)
     mode_line = f"  mode: {mode}\n" if mode else ""
     (vault / "_meta" / "vault-config.md").write_text(
@@ -139,7 +147,10 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             answer["pcKeepSections"] = pc_keep
         return subprocess.CompletedProcess(cmd, 0, json.dumps(answer), "")
 
-    patches = [mock.patch.object(vc.shutil, "which", return_value=which),
+    # A stand-in path does for the stubbed `subprocess.run`; the `lines`
+    # questions start a real process, so "node present" is the real node.
+    node = REAL_NODE if which else which
+    patches = [mock.patch.object(vc.shutil, "which", return_value=node),
                mock.patch.object(vc.subprocess, "run", run or fake)]
     for patch in patches:
         patch.start()
@@ -152,6 +163,9 @@ def make_vault(case, config=None, meta=True):
     no config file. `meta=False` omits `_meta/` entirely."""
     d = Path(tempfile.mkdtemp(prefix="vc-slice-a-"))
     case.addCleanup(shutil.rmtree, d, ignore_errors=True)
+    # A check points the questions at its vault's site tool; a new vault
+    # starts from the plugin's, as a new run does.
+    vc.use_publish_tool(vc.PUBLISH_TOOL)
     (d / "Overview.md").write_text("---\ntype: campaign_overview\n---\n",
                                    encoding="utf-8")
     if meta:
@@ -1750,6 +1764,7 @@ class NoPublishToolTests(unittest.TestCase):
         if site:
             folder = Path(tempfile.mkdtemp(prefix="vc-site-"))
             self.addCleanup(shutil.rmtree, folder, ignore_errors=True)
+            (folder / "vault.config.json").write_text("{}", encoding="utf-8")
             config = config.replace(
                 "publish:\n", f"publish:\n  site_dir: {folder.as_posix()}\n")
         if not publish:
@@ -1762,12 +1777,15 @@ class NoPublishToolTests(unittest.TestCase):
         return vault
 
     def no_tool(self):
-        missing = vaultlib.PublishLines(Path("/nonexistent/gm-publish.js"))
-        patcher = mock.patch.object(vaultlib, "PUBLISH_LINES", missing)
+        """No node on PATH, and no process left running from before."""
+        vaultlib._close_publish_tools()
+        patcher = mock.patch.object(vaultlib.shutil, "which",
+                                    return_value=None)
         patcher.start()
         self.addCleanup(patcher.stop)
 
     def test_the_tool_answers_here(self):
+        vc.use_publish_tool(vc.PUBLISH_TOOL)
         self.assertIsNone(vaultlib.publish_tool_problem())
 
     def test_no_node_is_said_in_words(self):
@@ -1806,9 +1824,9 @@ class NoPublishToolTests(unittest.TestCase):
                 self.assertEqual(len(rows), 1, rows)
                 self.assertTrue(rows[0].startswith(
                     f"ERROR\t(vault)\t{name} could not ask the publish tool "
-                    f"what publishes (the publish tool is not at "), rows)
-                self.assertIn("nothing checked, nothing written", rows[0])
-        self.assertEqual(read(vault, "W.md"), self.WRAP)
+                    f"what publishes (node is not on PATH) — nothing "
+                    f"checked, nothing written; it needs Node 22+"), rows)
+                self.assertEqual(read(vault, "W.md"), self.WRAP)
 
     def test_a_vault_that_does_not_publish_skips_the_leak_checks(self):
         vault = self.vault(site=False, publish=False)
@@ -1876,6 +1894,9 @@ class NoPublishToolTests(unittest.TestCase):
 
     def test_a_tool_lost_mid_run_is_one_row_for_a_check_that_writes_last(self):
         vault = self.vault(site=True)
+        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_gm_leak(vault, None),
+                                 "WOULD-FIX\tBob.md"))
         before = read(vault, "Jean.md")
         real = vaultlib.PUBLISH_LINES.ask
         asked = []
@@ -1898,6 +1919,124 @@ class NoPublishToolTests(unittest.TestCase):
                     f"ERROR\t(vault)\t{name} stopped: the publish tool "
                     f"stopped answering (gone)"), rows)
         self.assertEqual(read(vault, "Jean.md"), before)
+        self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
+
+    LEAKY = ("---\ntype: npc\n---\n\n# Bob\n\nPublic.\n\n"
+             "## **GM Notes**\n\nSECRET\n")
+
+    def pinned_site(self, package=None, installed=None):
+        """A vault whose site has this package.json and, optionally, an
+        installed tool with this package.json."""
+        vault = self.vault(site=True)
+        (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        if package is not None:
+            (site / "package.json").write_text(json.dumps(package),
+                                               encoding="utf-8")
+        if installed is not None:
+            pkg = site / "node_modules" / "gm-apprentice-publish"
+            (pkg / "bin").mkdir(parents=True)
+            (pkg / "package.json").write_text(json.dumps(installed),
+                                              encoding="utf-8")
+            (pkg / "bin" / "gm-publish.js").write_text(
+                f"require({json.dumps(str(vc.PUBLISH_TOOL))});\n",
+                encoding="utf-8")
+        return vault
+
+    def test_a_pin_that_cannot_be_read_is_not_taken_for_a_new_tool(self):
+        name = "gm-apprentice-publish"
+        sites = {
+            "git url": {"package": {"dependencies": {
+                name: "github:AntTheLimey/gm-apprentice#publish-v1.11.0"}}},
+            "tag": {"package": {"dependencies": {name: "latest"}}},
+            "local path": {"package": {"dependencies": {
+                name: "file:../../old-tool"}}},
+            "range": {"package": {"dependencies": {name: ">=1.11.0 <2"}}},
+            "x range": {"package": {"dependencies": {name: "1.11.x"}}},
+            "optional": {"package": {"optionalDependencies": {name: "1.11.0"}}},
+            "installed, no version": {"installed": {"name": name}},
+            "installed, old": {"installed": {"version": "1.12.0"}},
+            "pinned, old": {"package": {"devDependencies": {name: "^1.11.0"}}},
+        }
+        for form, site in sites.items():
+            with self.subTest(form):
+                vault = self.pinned_site(**site)
+                for rows in (vc.check_gm_leak(vault, None, fix=True),
+                             vc.check_gm_leak(vault, None, fix=True,
+                                              renest_excludes=True),
+                             vc.check_pc_body(vault),
+                             vc.check_wrapup(vault, None, True)):
+                    self.assertEqual(len(rows), 1, rows)
+                    self.assertIn("could not ask the publish tool what "
+                                  "publishes", rows[0])
+                    self.assertIn("nothing written; run update-pin --site ",
+                                  rows[0])
+                self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
+                self.assertEqual(read(vault, "W.md"), self.WRAP)
+
+    def test_a_site_on_a_tool_that_answers_is_checked_and_fixed(self):
+        for form, site in (
+                ("installed", {"installed": {"version": "1.12.1"}}),
+                ("pinned, not installed", {"package": {"dependencies": {
+                    "gm-apprentice-publish": "^1.12.1"}}}),
+                ("no pin at all", {})):
+            with self.subTest(form):
+                vault = self.pinned_site(**site)
+                rows = vc.check_gm_leak(vault, None, fix=True)
+                self.assertTrue(rows_for(rows, "FIXED\tBob.md"), rows)
+                self.assertNotIn("SECRET", "\n".join(vc.publisher_lines(
+                    read(vault, "Bob.md"), ["GM Notes"], {})))
+
+    def test_the_sites_installed_tool_is_the_one_asked(self):
+        # Its answer is the site's. Here it has no `lines` command at all,
+        # whatever its version number says.
+        vault = self.pinned_site(installed={"version": "9.9.9"})
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        (site / "node_modules" / "gm-apprentice-publish" / "bin"
+         / "gm-publish.js").write_text("process.exit(1);\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn("exited without answering", rows[0])
+        self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
+
+    def test_a_publish_block_is_seen_however_the_file_is_saved(self):
+        block = "publish:\n  mode: player\n"
+        for form, data in (
+                ("byte-order mark", ("\ufeff---\n" + block + "---\n").encode()),
+                ("space after the fence", ("--- \n" + block + "---\n").encode()),
+                ("inline", b"---\npublish: {mode: player}\n---\n"),
+                ("not utf-8", b"---\n# caf\xe9\n" + block.encode() + b"---\n")):
+            with self.subTest(form):
+                vault = make_vault(self, "")
+                (vault / "_meta" / "vault-config.md").write_bytes(data)
+                self.assertTrue(vc.vault_publishes(vault))
+        self.assertFalse(vc.vault_publishes(make_vault(self, "---\ntype: meta\n---\n")))
+        self.assertFalse(vc.vault_publishes(make_vault(self, meta=False)))
+
+    def test_no_tool_does_not_move_fenced_text_out_of_its_fence(self):
+        # What a gm-only block hides needs no tool to read, so the check
+        # before a write still catches a repair that would unhide it.
+        wrap = ("---\ntype: session_wrap\n---\n\n<!-- gm-only -->\n"
+                "## Recap\n\nHIDDEN RECAP\n\n## Memorable Moments\n\n"
+                "HIDDEN MOMENT\n\n## GM Notes\n\nx\n<!-- /gm-only -->\n")
+        vault = self.vault(site=False, publish=False, wrap=wrap)
+        self.no_tool()
+        rows = vc.check_wrapup(vault, None, True)
+        self.assertTrue(rows_for(rows, "repair refused: "), rows)
+        self.assertTrue(rows_for(rows, "hidden line(s) would publish"), rows)
+        self.assertEqual(read(vault, "W.md"), wrap)
+
+    def test_a_tool_that_hangs_is_given_up_on_and_said_so(self):
+        hang = Path(tempfile.mkdtemp(prefix="vc-hang-")) / "gm-publish.js"
+        self.addCleanup(shutil.rmtree, hang.parent, ignore_errors=True)
+        hang.write_text("setInterval(() => {}, 1000);\n", encoding="utf-8")
+        lines = vaultlib.PublishLines(hang)
+        self.addCleanup(lines.close)
+        with mock.patch.object(vaultlib, "PUBLISH_LINES_TIMEOUT", 1), \
+                self.assertRaises(vaultlib.PublishToolUnavailable) as raised:
+            lines.ask({"op": "stub", "text": ""})
+        self.assertEqual(str(raised.exception),
+                         "the publish tool did not answer within 1s")
 
     def test_the_writers_invariant_raises_rather_than_guesses(self):
         self.no_tool()
@@ -3586,13 +3725,15 @@ class GmLeakWithheldHubTests(unittest.TestCase):
             "cannot be asked)"), rows)
         self.assertIn("run update-pin --site ", rows[0])
 
-    def test_an_unreadable_site_tool_scans_every_hub(self):
+    def test_an_unreadable_site_tool_is_not_guessed_at(self):
         vault = self.vault()
         stub_publish_tool(self, vault, ["Session 01 - Lone.md"],
                           installed="not-a-version")
         rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(self.hub_rows(rows))
-        self.assertTrue(rows_for(rows, "no readable version"), rows)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("ERROR\t(vault)\tgm-leak could "
+                                           "not ask the publish tool"), rows)
+        self.assertIn("no readable version", rows[0])
 
     def test_the_plugins_tool_stands_in_only_without_a_site_tool_and_says_so(self):
         vault = self.vault()
@@ -3604,15 +3745,18 @@ class GmLeakWithheldHubTests(unittest.TestCase):
                          ["INFO\t(vault)\tasked the plugin's publish tool "
                           "(the site has none installed)"])
 
-    def test_missing_site_config_scans_every_hub(self):
+    def test_a_site_dir_with_no_site_in_it_is_not_guessed_at(self):
         vault = self.vault()
         stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
         (vault / "_meta" / "vault-config.md").write_text(
             "---\npublish:\n  site_dir: /no/such/site\n---\n",
             encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(self.hub_rows(rows))
-        self.assertTrue(rows_for(rows, "no vault.config.json"), rows)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("ERROR\t(vault)\tgm-leak could "
+                                           "not ask the publish tool"), rows)
+        self.assertIn("no vault.config.json", rows[0])
+        self.assertIn("fix publish.site_dir", rows[0])
 
     def test_vault_that_never_publishes_does_not_ask(self):
         # No publish: block, so no site: nothing is withheld, nothing to say.

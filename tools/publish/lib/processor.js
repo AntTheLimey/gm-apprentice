@@ -169,9 +169,16 @@ function findHeadings(text, parse) {
   const tokens = (parse || parseBlocks)(text);
   const headingAt = new Map();   // first line -> { end, level, title, nested, atx }
   const inCode = new Set();      // lines of fenced or indented code, at any depth
+  const source = text.split('\n');
+  let openFence = null;          // first line of a top-level fence that is never closed
   for (let t = 0; t < tokens.length; t++) {
     const tok = tokens[t];
     if (!tok.map) continue;
+    if (tok.type === 'fence' && tok.level === 0 && openFence === null) {
+      const last = tok.map[1] - 1;
+      const closer = new RegExp(`^ {0,3}\\${tok.markup[0]}{${tok.markup.length},}\\s*$`);
+      if (last === tok.map[0] || !closer.test(source[last] || '')) openFence = tok.map[0];
+    }
     if (tok.type === 'heading_open') {
       const inline = tokens[t + 1];
       headingAt.set(tok.map[0], {
@@ -186,7 +193,7 @@ function findHeadings(text, parse) {
       for (let l = tok.map[0]; l < tok.map[1]; l++) inCode.add(l);
     }
   }
-  return { headingAt, inCode };
+  return { headingAt, inCode, openFence };
 }
 
 // What the build renders with, asked for its own reading of the note.
@@ -200,8 +207,24 @@ const MARGIN_HEADING_RE = /^(#{1,6})\s+(.+)$/;
 
 function marginHeading(line) {
   const m = MARGIN_HEADING_RE.exec(line);
-  // An ATX closing sequence (`## GM Notes ##`) is not part of the title.
-  return m ? { level: m[1].length, title: m[2].trim().replace(/\s+#+$/, '').trim() } : null;
+  if (!m) return null;
+  // An ATX closing sequence (`## GM Notes ##`, `## #`) is not part of the title.
+  const title = m[2].trim().replace(/(^|\s+)#+$/, '').trim();
+  return title === '' ? null : { level: m[1].length, title };
+}
+
+// A third reading, for starting a withheld section only: what a heading looks like
+// whatever the parser made of the lines around it. An unclosed code block above
+// `  ## GM Notes`, or above `GM Notes` over `-----`, turns both into code, which
+// neither the parser nor the margin pattern calls a heading.
+const SETEXT_UNDERLINE_RE = /^ {0,3}(=+|-+)\s*$/;
+
+function looseHeading(lines, i) {
+  const atx = marginHeading(lines[i].replace(/^ {1,3}(?=#)/, ''));
+  if (atx) return atx;
+  const under = i + 1 < lines.length ? SETEXT_UNDERLINE_RE.exec(lines[i + 1]) : null;
+  const title = lines[i].trim();
+  return under && title !== '' ? { level: under[1][0] === '=' ? 1 : 2, title } : null;
 }
 
 // The exclude-list walk; a note under the PC keep-list takes walkKeepList instead.
@@ -212,9 +235,10 @@ function marginHeading(line) {
 // under it, at a bare `##`, and does not see `## GM Notes` at all when a
 // non-breaking space follows the hashes or an unclosed code block sits above it. So the
 // walk takes whichever reading withholds more:
-//   - a section STARTS at a line EITHER reading calls a heading with a withheld title
+//   - a section STARTS at a line ANY reading calls a heading with a withheld title
 //     (a parser heading at any indent, underlined, or inside a blockquote or list; a
-//     margin-pattern line even inside code);
+//     margin-pattern line even inside code; and looseHeading's, for an indented or
+//     underlined title the parser read as code);
 //   - it ENDS only at a line BOTH call a heading of its level or shallower: a
 //     top-level `#` heading at the margin, with a title, outside code, not underlined.
 // A parse failure withholds the whole body.
@@ -222,13 +246,17 @@ function marginHeading(line) {
 // `rules.parse` replaces the parser (a test seam); `rules.warn` hears of a failure.
 function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
   if (pcKeepRuleApplies(frontmatter, rules)) return walkKeepList(markdown, excludeSections, frontmatter, rules);
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  return walkExcludeList(String(markdown).replace(/\r\n?/g, '\n').split('\n'), excludeSections, frontmatter, rules);
+}
+
+function walkExcludeList(lines, excludeSections, frontmatter, rules) {
   const kept = [];
   const stripped = [];
   const withheldBy = [];   // per line: the title of the section withholding it, or null
   let headingAt;
+  let openFence;
   try {
-    ({ headingAt } = findHeadings(lines.join('\n'), rules.parse));
+    ({ headingAt, openFence } = findHeadings(lines.join('\n'), rules.parse));
   } catch (err) {
     if (typeof rules.warn === 'function') rules.warn(`section filter: could not parse the note, body withheld (${err.message})`);
     stripped.push({ title: '(unparsed note)', reason: 'excluded' });
@@ -243,7 +271,7 @@ function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
     const margin = marginHeading(lines[i]);
     // Both readings, of the same heading: text over an underline can itself look
     // like a margin heading (`## x` typed with a non-breaking space, then `===`).
-    if (excluding && h && h.atx && !h.nested && margin && Math.max(h.level, margin.level) <= excludeLevel) {
+    if (excluding && h && h.atx && h.title !== '' && margin && Math.max(h.level, margin.level) <= excludeLevel) {
       excluding = false;
     }
 
@@ -254,8 +282,8 @@ function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
     // A withheld heading met while one is running can only widen it: a shallower
     // one takes over the level, so a `# GM Notes` under `## GM Notes` is not ended
     // by the next `##`.
-    for (const seen of [h, margin]) {
-      const reason = seen ? exclusionReason(seen.title, excludeSections, frontmatter, seen.level, rules) : null;
+    for (const seen of [h, margin, h || margin ? null : looseHeading(lines, i)]) {
+      const reason = seen ? exclusionReason(seen.title, excludeSections, frontmatter, seen.level, {}) : null;
       if (!reason) continue;
       if (excluding) {
         excludeLevel = Math.min(excludeLevel, seen.level);
@@ -271,6 +299,14 @@ function walkSections(markdown, excludeSections, frontmatter, rules = {}) {
     if (!excluding) {
       kept.push(lines[i]);
     }
+  }
+
+  // A code block left open inside a withheld section swallows every heading after
+  // it, so the section runs to the end of the note. That is the safe reading, and
+  // the GM should hear that the rest of the page went with it.
+  if (openFence !== null && withheldBy[openFence] !== null && typeof rules.warn === 'function'
+      && lines.slice(openFence + 1).some((line) => MARGIN_HEADING_RE.test(line))) {
+    rules.warn(`a code block opened on line ${openFence + 1}, inside the withheld section "${withheldBy[openFence]}", is never closed; everything after it is withheld. Close it.`);
   }
 
   return { kept, stripped, withheldBy };
@@ -305,16 +341,20 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
   }
   const { inCode } = found;
   const headingAt = new Map([...found.headingAt].filter(([, h]) => !h.nested));
+  // The exclude list is applied by its own walk, exactly as on any other page; a line
+  // it withholds is withheld here whatever the keep-list makes of it.
+  const excluded = walkExcludeList(lines, excludeSections, frontmatter, { parse: rules.parse, warn: rules.warn });
+  for (const s of excluded.stripped) stripped.push(s);
 
   const kept = [];
   let excluding = false;
   let excludeLevel = 0;
   let sawHeading = false;  // the note's first heading is its title (a level 1, unless the H1 strip ran)
   let sawSection = false;  // text before the first level 1-2 section belongs to no kept section
-  const keep = (line, isPreamble) => {
-    if (excluding) return;
-    if (isPreamble && line.trim() !== '') return;
-    kept.push(line);
+  const keep = (l, isPreamble) => {
+    if (excluding || excluded.withheldBy[l] !== null) return;
+    if (isPreamble && lines[l].trim() !== '') return;
+    kept.push(lines[l]);
   };
 
   for (let i = 0; i < lines.length; i++) {
@@ -329,9 +369,10 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
       if (reason) {
         excluding = true;
         excludeLevel = h.level;
-        stripped.push({ title: h.title || '(empty heading)', reason });
+        // The exclude walk has already reported the sections it withholds.
+        if (reason !== 'excluded') stripped.push({ title: h.title || '(empty heading)', reason });
       } else if (!excluding && (isTitle || h.level <= 2 || sawSection)) {
-        for (let l = i; l < h.end; l++) keep(lines[l], false);
+        for (let l = i; l < h.end; l++) keep(l, false);
       }
       i = Math.max(i, h.end - 1);
       continue;
@@ -346,7 +387,7 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
       continue;
     }
 
-    keep(lines[i], !sawSection);
+    keep(i, !sawSection);
   }
 
   return { kept, stripped };
@@ -390,11 +431,19 @@ function keptSectionFlags(markdown, includeSections = []) {
     const parsed = headingAt.get(i);
     const h = parsed && !parsed.nested ? parsed : null;
     const margin = marginHeading(lines[i]);
-    const level = Math.min(h ? h.level : 7, margin ? margin.level : 7);
+    // For closing, hashes at the margin count with or without a title.
+    const hashes = MARGIN_HEADING_RE.exec(lines[i]);
+    const level = Math.min(h ? h.level : 7, hashes ? hashes[1].length : 7);
     if (keeping && level <= keepLevel) keeping = false;
     if (h && h.atx && margin && h.level === margin.level && wanted.includes(h.title.toLowerCase())) {
       keeping = true;
       keepLevel = h.level;
+    } else if (keeping) {
+      // A wanted title only one reading sees opens nothing, but it does what it
+      // always did to a section already open: sets the level it closes at.
+      for (const seen of [h, margin]) {
+        if (seen && wanted.includes(seen.title.toLowerCase())) keepLevel = Math.max(keepLevel, seen.level);
+      }
     }
     flags.push(keeping);
   }
@@ -642,11 +691,13 @@ function stripLeadingH1(markdown) {
   return lines.join('\n');
 }
 
-// Whether the line stripLeadingH1 would drop is a heading the exclude list withholds.
+// Whether the first line of the note is one the exclude list withholds, by the walk's
+// own verdict, so the page and everything else that asks the walk agree.
 function leadingH1Withheld(markdown, excludeSections, frontmatter) {
-  const first = markdown.split('\n').find((line) => line.trim() !== '');
-  const h1 = first === undefined ? null : marginHeading(first);
-  return !!h1 && h1.level === 1 && exclusionReason(h1.title, excludeSections, frontmatter, 1, {}) === 'excluded';
+  const lines = markdown.split('\n');
+  const first = lines.findIndex((line) => line.trim() !== '');
+  if (first === -1) return false;
+  return walkExcludeList(lines, excludeSections, frontmatter, {}).withheldBy[first] !== null;
 }
 
 function renderRelationships(frontmatter, linkMap, currentOutputPath) {

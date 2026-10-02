@@ -79,3 +79,49 @@ describe('section filter: what reaches the page', () => {
     assert.deepStrictEqual(extractSections('## Gear\nrope\n##\nmore\n').map((s) => s.title), ['Gear']);
   });
 });
+
+describe('section filter: a PC page with character sheets off', () => {
+  const { processContent, filterSections: filter } = require('../../lib/processor');
+  const pc = { type: 'pc' };
+  const rules = { pcKeepSections: ['Background'] };
+  const html = (markdown) => processContent({ markdown, frontmatter: pc, outputPath: 'pcs/aria.html' }, {}, ['GM Notes'], {}, { pcKeepSections: ['Background'] }).html;
+
+  it('withholds an excluded heading the parser does not see, as on any other page', () => {
+    for (const note of [
+      '# Aria\n## Background\nborn\n## GM Notes\nSECRET\n',
+      '# Aria\n## Background\n```\nale\n## GM Notes\nSECRET\n',
+      '# Aria\n## Background\n````\nale\n```\n## GM Notes\nSECRET\n',
+    ]) {
+      assert.ok(!html(note).includes('SECRET'), JSON.stringify(note));
+      assert.ok(!filter(note, ['GM Notes'], pc, rules).includes('SECRET'), JSON.stringify(note));
+    }
+  });
+  it('still keeps the keep-listed prose', () => {
+    assert.match(html('# Aria\n## Background\nborn\n## GM Notes\nSECRET\n'), /born/);
+  });
+  it('reports an excluded section once, as excluded', () => {
+    assert.deepStrictEqual(strippedSectionTitles('# Aria\n## Background\nborn\n## GM Notes\nSECRET\n## Skills\nx\n', ['GM Notes'], pc, rules), ['GM Notes']);
+  });
+});
+
+describe('section filter: the title line and the open code block', () => {
+  const { processContent } = require('../../lib/processor');
+  const run = (markdown) => processContent({ markdown, frontmatter: { type: 'npc' }, outputPath: 'npcs/x.html' }, {}, ['GM Notes'], {});
+
+  it('a withheld title is recognised however the walk recognises it', () => {
+    for (const title of ['# GM  Notes', '# GM Notes', '# GM\tNotes', '  # GM Notes', 'GM Notes\n===']) {
+      assert.strictEqual(run(`${title}\nSECRET\n`).html.trim(), '', JSON.stringify(title));
+    }
+  });
+  it('a code block left open inside a withheld section is said out loud', () => {
+    const { html, warnings } = run('# Inn\n## GM Notes\n```\nstat block\n## Menu\nale\n');
+    assert.strictEqual(html.trim(), '');
+    assert.strictEqual(warnings.length, 1);
+    assert.match(warnings[0], /code block opened on line 2, inside the withheld section "GM Notes", is never closed/);
+  });
+  it('a closed code block, or an open one with nothing after it, draws no warning', () => {
+    assert.deepStrictEqual(run('# Inn\n## GM Notes\n```\nx\n```\n## Menu\nale\n').warnings, []);
+    assert.deepStrictEqual(run('# Inn\n## GM Notes\n```\nstat block\n').warnings, []);
+    assert.deepStrictEqual(run('# Inn\n## Menu\n```\nale\n## Rooms\n').warnings, []);
+  });
+});

@@ -23,9 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     headings are, and takes whichever reading withholds more. A
     withheld section starts at anything the parser or the old pattern
     reads as a heading with an excluded title: underlined, indented,
-    inside a blockquote or list item, or typed after a non-breaking
-    space. It ends only where both agree: a `#` heading at the margin,
-    with a title, outside a code block.
+    inside a blockquote or list item, typed after a non-breaking
+    space, or sitting under a code block that was never closed. It
+    ends only where both agree: a `#` heading at the margin, with a
+    title, outside a code block.
   - So nothing that was withheld before publishes now. A line with
     `---` typed straight under it, a bare `##`, and an indented heading
     do not end a withheld section. An excluded title shown in a code
@@ -42,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     line inside a code block.
   - A note the parser cannot read is withheld whole, with a build
     warning.
+  - A code block left open inside a withheld section now withholds the
+    rest of the note, where a later `##` used to end the section. The
+    build warns, naming the line, when headings follow it.
+- **With character sheets off, a PC page could publish a withheld
+  section.** That page is filtered by its own walk, which read
+  headings from the parser alone: `## GM Notes` typed after a
+  non-breaking space, or under an unclosed code block, published. The
+  exclude list is now applied to a PC page exactly as to any other.
 - **A note whose title line is on the exclude list published its
   body.** The page drops its `# Title` line before filtering, so a note
   that opens `# GM Notes` lost the heading and kept everything under
@@ -66,17 +75,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     asked, a vault with a `publish:` block gets one ERROR row and
     nothing is checked or written. A vault with no `publish:` block
     gets one INFO row; `gm-leak` and `pc-body` stop there, and
-    `wrapup --fix` still makes its repairs, checking only that it
-    leaves no `<!-- gm-only -->` block open.
-  - **A site pinned to a publish tool older than 1.12.1 is not
-    checked.** That tool builds by the old rules and has no `lines`
-    command, and the old rules are no longer copied here. `gm-leak`,
-    `pc-body` and `wrapup` give one ERROR row naming the pin and write
-    nothing until `update-pin --site <site-dir>` has run.
+    `wrapup --fix` still makes its repairs, checking that it leaves no
+    `<!-- gm-only -->` block open and moves nothing out of one.
+  - **The site's own installed tool is the one asked.** A site pinned
+    to a publish tool older than 1.12.1 builds by the old rules and
+    has no `lines` command, and the old rules are no longer copied
+    here, so it is not checked: `gm-leak`, `pc-body` and `wrapup` give
+    one ERROR row and write nothing until
+    `update-pin --site <site-dir>` has run. The same goes for a pin
+    whose version cannot be read (a git URL, a tag, a range, a local
+    path) and for a `site_dir` with no site in it. With no `site_dir`
+    set, the plugin's own tool answers.
   - The fix-time refusal "holds a heading-shaped line in a code fence"
     is gone: such a block is now safe to move.
   - If the tool stops answering part-way, the check ends with an ERROR
-    row. Rows already produced are kept and nothing further is written.
+    row and nothing further is written. `gm-leak` and `pc-body` give
+    that row alone; `wrapup` keeps the rows of the wrap-ups it had
+    finished. A tool that hangs is given up on after two minutes.
 
 ### Added
 
@@ -84,6 +99,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stdin and writes one JSON answer per line: `published` (the body the
   site renders for a note), `sections` (per line, the excluded section
   withholding it) and `stub` (per line, whether a stub page keeps it).
+  A malformed request is answered with an error, never read as
+  "nothing is withheld".
 
 ## [1.10.24] — 2026-10-02
 

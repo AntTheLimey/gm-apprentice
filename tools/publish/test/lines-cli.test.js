@@ -23,8 +23,14 @@ describe('lines: published', () => {
     assert.strictEqual(answer({ op: 'published', text: NOTE, publish: 'stub' }).text, '');
     assert.strictEqual(answer({ op: 'published', text: NOTE, publish: 'none' }).text, '');
   });
-  it('a missing or malformed list is no list', () => {
-    assert.strictEqual(answer({ op: 'published', text: '## GM Notes\nx', excludeSections: 'GM Notes' }).text, '## GM Notes\nx');
+  it('a missing list is no list; a malformed request is refused, never read as "nothing withheld"', () => {
+    assert.strictEqual(answer({ op: 'published', text: '## GM Notes\nx' }).text, '## GM Notes\nx');
+    assert.throws(() => answer({ op: 'published', text: 'x', excludeSections: 'GM Notes' }), /excludeSections must be a list of strings/);
+    assert.throws(() => answer({ op: 'sections', text: 'x', excludeSections: [7] }), /excludeSections must be a list of strings/);
+    assert.throws(() => answer({ op: 'stub', text: 'x', include: 'Overview' }), /include must be a list of strings/);
+    assert.throws(() => answer({ op: 'sections', text: null, excludeSections: [] }), /text must be a string/);
+    assert.throws(() => answer({ op: 'sections', excludeSections: [] }), /text must be a string/);
+    assert.throws(() => answer({ op: 'published', text: 'x', publish: 'STUB' }), /publish must be all, stub or none/);
   });
 });
 
@@ -56,7 +62,8 @@ describe('lines: stub', () => {
 describe('lines: the protocol', () => {
   it('a bad request is answered with an error, not a crash', () => {
     assert.match(JSON.parse(answerLine('not json')).error, /JSON/);
-    assert.match(JSON.parse(answerLine('{"op":"nope"}')).error, /unknown op/);
+    assert.match(JSON.parse(answerLine('{"op":"nope","text":""}')).error, /unknown op/);
+    assert.match(JSON.parse(answerLine('[]')).error, /JSON object/);
     assert.match(JSON.parse(answerLine('7')).error, /JSON object/);
   });
   it('answers each line in order and resolves when the input closes', async () => {

@@ -1317,9 +1317,11 @@ vault checks ask the build what publishes. No frontmatter changes.
 ### Structural
 
 - If the vault publishes and its site is pinned to a publish tool older
-  than 1.12.1, run `update-pin --site <site-dir>`. Until then
-  `vault_check.py` `gm-leak`, `pc-body` and `wrapup` stop with one
-  ERROR row and write nothing.
+  than 1.12.1, or pins it in a form with no readable version (a git
+  URL, a tag, a range, a local path), run
+  `update-pin --site <site-dir>`. Until then `vault_check.py`
+  `gm-leak`, `pc-body` and `wrapup` stop with one ERROR row and write
+  nothing.
 
 ### Content
 
@@ -1333,7 +1335,9 @@ vault checks ask the build what publishes. No frontmatter changes.
   (`GM Notes` over `--------`), indented up to three spaces, or inside
   a blockquote or list item. Nothing that was withheld before publishes
   now. A note whose `# Title` line is on the exclude list publishes no
-  body.
+  body. With character sheets off, a PC page obeys the exclude list
+  as any other page does. A code block left open inside a withheld
+  section withholds the rest of the note, and the build warns.
 - `vault_check.py` `gm-leak`, `pc-body` and `wrapup` ask the publish
   tool which lines publish, so they need Node 22+ on PATH. With no
   node, a vault with a `publish:` block gets one ERROR row and nothing

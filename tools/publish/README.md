@@ -199,7 +199,8 @@ stdin closes.
 | `{"op":"stub","text":…,"include":[…]}` | `{"kept":[…]}`: for each line of `text`, whether a stub page keeps it. |
 
 A request that cannot be answered gets `{"error":…}` and the process
-carries on.
+carries on. That includes a malformed one: `text` must be a string and
+each list a list of strings.
 
 ---
 
@@ -572,7 +573,9 @@ headings two ways, the renderer's parser and a plain `#` pattern at the
 margin, and takes whichever withholds more: a section starts at a
 heading either one sees (underlined, indented, inside a blockquote or
 list) and ends only at one both see, so a `#` line in a code block or a
-line with `---` under it does not end it.
+line with `---` under it does not end it. With the PC keep-list in
+force (character sheets off) the exclude list is applied the same way
+first.
 
 **`stripDataview(markdown)`**
 
