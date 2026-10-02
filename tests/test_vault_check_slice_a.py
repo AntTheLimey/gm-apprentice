@@ -1431,6 +1431,10 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
                 "## Reconciliation Context\n\nx2\n")
         config = "---\npublish:\n  mode: player\n---\n"
         vault = self.vault(config, **{"Ann.md": text})
+        # The vault file sets no list, so the build's own (the tool's) is used.
+        stub_publish_tool(self, vault, exclude_sections=list(
+            vc.resolve_exclude_sections(None)))
+        config = read(vault, "_meta/vault-config.md")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertFalse(rows_for(rows, "collapsed"), rows)
         self.assertEqual(read(vault, "_meta/vault-config.md"), config)
@@ -3089,10 +3093,6 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn("type: session_wrap", read(vault, LEGACY))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
     """The exclude list is the publish tool's resolved `excludeSections`
     (#240 follow-up): Python never reads the site file's list and never
@@ -3159,7 +3159,19 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         self.addCleanup(patch.stop)
         self.assertEqual(vc.effective_exclude_sections(vault),
                          list(__import__("vaultlib").DEFAULT_EXCLUDE_SECTIONS))
-        self.assertTrue(self.marker_rows(vault))
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "bold label"))
+        info = rows_for(rows, "assumes the default exclude list")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("could not be asked", info[0])
+
+    def test_an_older_tool_answer_says_so_rather_than_that_it_was_unreachable(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault)
+        info = rows_for(vc.check_gm_leak(vault, None),
+                        "assumes the default exclude list")
+        self.assertEqual(len(info), 1, info)
+        self.assertIn("no exclude list", info[0])
 
     def test_a_tool_answer_without_the_field_falls_back_to_the_vault_file(self):
         vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
@@ -3749,10 +3761,12 @@ class PublishToolEndToEndTests(unittest.TestCase):
             encoding="utf-8")
         self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
 
-    def test_the_exclude_list_is_the_builds_not_the_site_files_union(self):
-        # The vault file lists GM Notes, the site file lists Keeper Only:
-        # the build uses the vault file's list alone, so the marker under
-        # `## Keeper Only` publishes and gm-leak must scan it.
+    def test_python_scans_by_the_list_the_build_resolves(self):
+        # Vault file lists GM Notes, site file lists Keeper Only. Python
+        # uses whatever the tool resolves: during the 1.10.x fallback the
+        # build still applies the site entry, so the section is hidden and
+        # the marker is not reported. A silent vault file gives the site
+        # list alone; Python never reads the site file itself.
         vault = self.site_vault("", "")
         config = vault / "_meta" / "vault-config.md"
         config.write_text(config.read_text(encoding="utf-8").replace(
@@ -3767,14 +3781,13 @@ class PublishToolEndToEndTests(unittest.TestCase):
             "---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
             "## Keeper Only\n\n**Keeper-only:** Bob is the Baron.\n",
             encoding="utf-8")
+        marker = "Sessions/Bob.md:11\tbold label"
         rows = vc.check_gm_leak(vault, None)
         self.assertFalse(rows_for(rows, "could not be consulted"), rows)
-        self.assertTrue(rows_for(rows, "Sessions/Bob.md:11\tbold label"), rows)
-        # and when the vault file is silent the site file's list is the build's
+        self.assertFalse(rows_for(rows, marker), rows)
         config.write_text(config.read_text(encoding="utf-8").replace(
             '  exclude_sections: ["GM Notes"]\n', ""), encoding="utf-8")
-        rows = vc.check_gm_leak(vault, None)
-        self.assertFalse(rows_for(rows, "Sessions/Bob.md:11\tbold label"), rows)
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), marker))
 
     def test_manifest_rows_follow_publish_played(self):
         # The real `manifest publish-played --dry-run --json --vault`: a
@@ -3908,3 +3921,44 @@ class InlineMarkerTests(unittest.TestCase):
     def test_scan_body_unclosed_inline_reports(self):
         _states, problems = vc.scan_body("a <!-- gm-only -->SECRET", ())
         self.assertTrue(any("never closed" in p for p in problems))
+
+
+class RenestExcludesSilentVaultTests(unittest.TestCase):
+    """`gm-leak --renest-excludes` when the vault file sets no list: the
+    build's list (the tool's) decides, never an assumed default."""
+
+    NOTE = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+            "## Keeper Only\n\n### Player Notes\n\nBob is the Baron.\n")
+
+    def setup_vault(self, config="---\ntype: meta\npublish:\n  mode: player\n---\n"):
+        vault = make_vault(self, config)
+        (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
+        return vault
+
+    def test_the_tools_list_guards_the_move(self):
+        vault = self.setup_vault()
+        calls = stub_publish_tool(self, vault, exclude_sections=["Keeper Only"])
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
+        self.assertFalse([r for r in rows if r.startswith(("FIXED", "WOULD-FIX"))], rows)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_without_the_tool_it_refuses_and_writes_nothing(self):
+        vault = self.setup_vault()
+        before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "could not say which exclude list"), rows)
+        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
+        self.assertEqual((vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8"), before)
+
+    def test_a_vault_file_list_behaves_as_before(self):
+        vault = self.setup_vault(
+            '---\ntype: meta\npublish:\n  exclude_sections: ["Keeper Only"]\n---\n')
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "could not say"), rows)
+        self.assertIn("GM Notes", (vault / "Bob.md").read_text(encoding="utf-8"))
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

@@ -1986,7 +1986,8 @@ def check_gm_leak(vault: Path, folder: str | None,
              for rel, text in vault_files(vault, folder)]
     # The list the build applies comes from the publish tool, asked once for
     # the run; the vault file's own list only when it cannot be asked.
-    tool = (explain or ExplainAll(vault))() if notes else None
+    explain = explain or ExplainAll(vault)
+    tool = explain() if notes else None
     tool_list = tool_exclude_sections(tool) if tool is not None else None
     excludes = effective_exclude_sections(vault, tool_list)
     match = {s.casefold() for s in excludes}
@@ -1996,13 +1997,15 @@ def check_gm_leak(vault: Path, folder: str | None,
     if (tool_list is None and own.publish_line is not None and not own.error
             and own.value is None):
         # A vault that publishes (it has a publish: block) with no list of its
-        # own relies on the site's, which only the publish tool reads. It
-        # could not be asked, so the default list stands in (#240). A vault
-        # that never publishes isn't told.
-        rows.append(f"INFO\t{VAULT_CONFIG}\tthe publish tool could not be "
-                    f"asked for the site's exclude list — gm-leak assumes "
-                    f"the default list; check publish.site_dir and that node "
-                    f"is installed so it reads the build's own")
+        # own relies on the build's, which only the publish tool reads. It
+        # gave none, so the default list stands in (#240). A vault that never
+        # publishes isn't told.
+        reason = ("the publish tool's answer has no exclude list (an older tool "
+               "— run update-pin)" if tool is not None and tool.data is not None
+               else "the publish tool could not be asked (check "
+                    "publish.site_dir and that node is installed)")
+        rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
+                    f"exclude list: {reason}")
     withheld: set[str] = set()
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
@@ -2126,7 +2129,7 @@ def check_gm_leak(vault: Path, folder: str | None,
         elif new_text is not None:
             writes.append((rel, new_text, moved))
     if renest_excludes:
-        return rows + renest_excludes_migration(vault, fix)
+        return rows + renest_excludes_migration(vault, fix, explain)
     mode = "FIXED" if fix else "WOULD-FIX"
     for rel, new_text, moved in writes:
         if fix:
@@ -3821,16 +3824,19 @@ def _publish_dirs(vault: Path) -> list[str]:
     return ["_meta", "_Templates"] if cfg.value is None else cfg.value
 
 
-def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
+def renest_excludes_migration(vault: Path, fix: bool,
+                              explain: ExplainAll | None = None) -> list[str]:
     """`gm-leak --renest-excludes`: the 1.8.3 migration, all or nothing.
 
     Moves every level-2+ heading titled with an entry of the vault's
     current `exclude_sections` (hidden today or not) under `## GM Notes`,
     then collapses the list to `["GM Notes"]`. A vault that sets no list
     is re-nested only: the publisher's defaults stay in force, and no
-    list is written that would drop them for future content. This works
-    on the vault file's own list alone; the site file's is never read here,
-    and a heading it moves only becomes more hidden, never less.
+    list is written that would drop them for future content. When the
+    vault file sets no list, the build may be using the site file's, so
+    the list in force is the publish tool's (`explain`, shared with the
+    run); if it cannot say, nothing is written. The site file is never
+    read here.
 
     Walks every file the publisher might ship, not just the ones the
     `gm-leak` report reads — a played session-plan publishes too — so
@@ -3845,7 +3851,20 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
         return [f"ERROR\t{VAULT_CONFIG}\tpublish.exclude_sections not "
                 f"understood ({cfg.error}) — nothing written; rewrite it as "
                 f"a plain list first"]
-    before = resolve_exclude_sections(cfg.value)
+    if cfg.value is not None:
+        before = resolve_exclude_sections(cfg.value)
+    else:
+        # Silent vault file: which list publishes is the build's decision.
+        # Assuming the defaults could move a heading out of a section the
+        # build hides into a published `## GM Notes`.
+        tool_list = tool_exclude_sections((explain or ExplainAll(vault))())
+        if tool_list is None:
+            return [f"ERROR\t{VAULT_CONFIG}\tpublish.exclude_sections is not "
+                    f"set and the publish tool could not say which exclude "
+                    f"list the build uses — nothing written; set the list in "
+                    f"_meta/vault-config.md or fix the tool problem "
+                    f"(publish.site_dir, node, an older pin)"]
+        before = resolve_exclude_sections(tool_list)
     collapse = cfg.value is not None and [
         s.casefold() for s in before] != [GM_NOTES]
     after = list(COLLAPSED_EXCLUDES) if cfg.value is not None else before
