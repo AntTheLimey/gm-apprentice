@@ -266,7 +266,8 @@ async function prefetchForConfig(configPath, opts = {}) {
   const resolved = path.resolve(configPath || './vault.config.json');
   const config = require(resolved);
   const vaultPath = path.resolve(path.dirname(resolved), config.vaultPath);
-  const { publishConfig } = resolveConfig(config, vaultPath);
+  // The build resolves the same config next and reports its warnings; say nothing twice.
+  const { publishConfig } = resolveConfig(config, vaultPath, () => {});
   const fonts = publishConfig.theme.fonts || {};
   if (fonts.source !== 'self-host') return;
   await ensureFontCache(vaultPath, selfHostFamilies(fonts, presetFamiliesFor(publishConfig.theme)), opts);

@@ -464,11 +464,8 @@ if (command === 'build') {
     const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
     const vaultPath = path.resolve(siteRoot, rawConfig.vaultPath);
     // The build resolves the same config next and says everything it has to say; this
-    // read only needs the switches, so its warnings would just print twice.
-    const warn = console.warn;
-    let publishConfig;
-    console.warn = () => {};
-    try { ({ publishConfig } = require('../lib/config').resolveConfig(rawConfig, vaultPath)); } finally { console.warn = warn; }
+    // read only needs the switches, so its warnings go nowhere rather than print twice.
+    const { publishConfig } = require('../lib/config').resolveConfig(rawConfig, vaultPath, () => {});
     if (shouldSyncFunctions(siteRoot, publishConfig.switches)) {
       const { created, updated } = syncScaffoldFunctions(siteRoot);
       for (const f of created) console.log(`  synced (new) functions/${f}`);

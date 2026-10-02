@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS, failureDetail } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
-const { setPublishKeys } = require('./vault-config-edit');
+const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
 const KV_PERMISSION_FIX =
@@ -104,6 +104,16 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   // finds wrangler.toml's `pages_build_output_dir`. Harmless for account-level KV ops.
   const runWranglerAt = (args) => runWrangler(args, { cwd: siteRoot });
 
+  // The real edit comes after the wrangler work, but it must not be able to refuse once
+  // KV is created and wrangler.toml patched: the editor is pure on text, so ask it now.
+  const switchKey = SWITCH_KEY[flagKey];
+  if (!config.vaultPath) { out(`${configPath} has no "vaultPath"`); return 1; }
+  const vaultPath = path.resolve(siteRoot, config.vaultPath);
+  const vaultFile = path.join(vaultPath, '_meta', 'vault-config.md');
+  const current = fs.existsSync(vaultFile) ? fs.readFileSync(vaultFile, 'utf8') : '---\ntype: meta\n---\n';
+  const refusal = editPublishBlock(current, { set: { [switchKey]: true } }).error;
+  if (refusal) { out(`cannot edit _meta/vault-config.md: ${refusal}`); return 1; }
+
   // Preflight: KV permission.
   const perm = checkKvPermission({ runWrangler: runWranglerAt });
   if (!perm.ok) { out(perm.fix); return 1; }
@@ -119,10 +129,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   writeFile(tomlPath, tomlText);
 
   // Turn the switch on in the vault's _meta/vault-config.md, the one place settings live.
-  try {
-    if (!config.vaultPath) throw new Error(`${configPath} has no "vaultPath"`);
-    setPublishKeys(path.resolve(siteRoot, config.vaultPath), { [SWITCH_KEY[flagKey]]: true });
-  } catch (e) { out(e.message); return 1; }
+  try { setPublishKeys(vaultPath, { [switchKey]: true }); } catch (e) { out(e.message); return 1; }
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot);

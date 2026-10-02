@@ -41,6 +41,7 @@ describe('live stats and the inbox follow the switches', () => {
     const { html, lines } = buildSite({ publish: '  live_stats: true\n  inbox: true\n', wrangler: true, functions: true });
     assert.ok(html.includes('id="cr-root"'), 'chatbox root');
     assert.ok(html.includes('gurps-live.js'), 'live client script');
+    assert.ok(html.includes('js/change-request.js'), 'change-request client script');
     assert.ok(!lines.some((l) => /WARNING: publish\.(live_stats|inbox)/.test(l)), lines.join('\n'));
   });
 
@@ -56,7 +57,7 @@ describe('live stats and the inbox follow the switches', () => {
     const { html, lines } = buildSite({ wrangler: true, functions: true });
     assert.ok(!html.includes('id="cr-root"'));
     assert.ok(!html.includes('gurps-live.js'));
-    assert.ok(!lines.some((l) => /KV store|character_sheets/.test(l)), lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('WARNING')), lines.join('\n'));
   });
 
   it('character_sheets off forces live stats off, with one line saying so', () => {

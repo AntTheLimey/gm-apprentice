@@ -90,10 +90,10 @@ const PUBLISH_DEFAULTS = {
 };
 
 // A mistyped default_mode falls back to 'system' — say so rather than silently.
-function defaultModeFrom(raw) {
+function defaultModeFrom(raw, warn = console.warn) {
   const mode = normalizeDefaultMode(raw);
   if (raw != null && String(raw).trim().toLowerCase() !== mode) {
-    console.warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
+    warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
   }
   return mode;
 }
@@ -108,6 +108,8 @@ function defaultModeFrom(raw) {
 // rather than silently doing nothing forever. Returns null for an entry that normalizes
 // to nothing (empty, or outside the vault).
 function normalizeExcludeDir(entry, vaultPath, warn = true) {
+  // `warn`: true = console.warn, false = silent, or a function that takes the message.
+  const say = typeof warn === 'function' ? warn : (warn ? console.warn : () => {});
   let raw = String(entry).trim().replace(/\\/g, '/');
   if (!raw) return null;
   const looksAbsolute = raw.startsWith('/') || /^[A-Za-z]:\//.test(raw);
@@ -115,7 +117,7 @@ function normalizeExcludeDir(entry, vaultPath, warn = true) {
     const resolved = path.resolve(raw);
     const vaultRoot = path.resolve(vaultPath);
     if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
-      if (warn) console.warn(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
+      say(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
       return null;
     }
     raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
@@ -129,11 +131,11 @@ function normalizeExcludeDir(entry, vaultPath, warn = true) {
 // matching operate on the same spelling. Not a union of sources: the caller has already
 // picked one list. Kept separate from the other lists because exclude_sections/exclude_fields
 // are not filesystem paths and must not be slash/absolute-path normalized.
-function normalizeExcludeDirs(list, vaultPath) {
+function normalizeExcludeDirs(list, vaultPath, warn = true) {
   const seen = new Set();
   const out = [];
   for (const item of list) {
-    const normalized = normalizeExcludeDir(item, vaultPath);
+    const normalized = normalizeExcludeDir(item, vaultPath, warn);
     if (normalized == null) continue;
     const key = normalized.toLowerCase();
     if (!seen.has(key)) {
@@ -148,7 +150,7 @@ function normalizeExcludeDirs(list, vaultPath) {
 // is "set" when it is not undefined: an explicit false or null is a value, not silence.
 // `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
 // "Secrets" in the other are the same entry.
-function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase()) {
+function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase(), warn = console.warn) {
   const fromVault = publish[entry.publish];
   const fromSite = json[entry.json];
   const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
@@ -156,7 +158,7 @@ function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) =>
     // The vault file "sets" the key but gives no list, so the built-in default applies
     // (the safe direction) and nothing from the site file is carried over.
     const what = fromVault === null ? 'empty' : `${typeof fromVault}`;
-    console.warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default, not the vault.config.json ${entry.json}.`);
+    warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default, not the vault.config.json ${entry.json}.`);
   }
   if (fromSite !== undefined) {
     const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
@@ -179,12 +181,12 @@ function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) =>
 // key typed by the config author in a different normal form (e.g. an NFD-decomposed
 // accented filename) would otherwise never match — canonicalize once here, at load, so
 // build.js's single query-side normalization is enough.
-function canonicalizeOverrideFieldKeys(fields) {
+function canonicalizeOverrideFieldKeys(fields, warn = console.warn) {
   if (fields == null) return {};
   // Same trap as the block above: Object.entries on a string yields per-character keys, which
   // would become override entries no page path can ever match.
   if (typeof fields !== 'object' || Array.isArray(fields)) {
-    console.warn(
+    warn(
       `config: publish.overrides.fields must be a map keyed by vault-relative path, but is ` +
       `${Array.isArray(fields) ? 'a list' : typeof fields}. No field overrides applied.`
     );
@@ -196,7 +198,7 @@ function canonicalizeOverrideFieldKeys(fields) {
     if (problem) {
       // Dropping the entry leaves the exclusions in force, which is the safe
       // direction: a malformed `include` must never re-admit a field by accident.
-      console.warn(
+      warn(
         `config: publish.overrides.fields["${key}"] ${problem}. That override is ignored. ` +
         'Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.'
       );
@@ -229,13 +231,13 @@ function overrideEntryProblem(value) {
 // A key under `publish.overrides` that the build never reads changes nothing about the
 // published site, and the GM has no way to tell that from "the override didn't match".
 // Name it, and say where the real one lives.
-function warnUnreadOverrideKeys(overrides) {
+function warnUnreadOverrideKeys(overrides, warn = console.warn) {
   if (overrides == null) return;
   // A malformed block — `overrides: fields` (a bare string), or a list — must not be walked
   // as a key/value map: Object.keys('fields') is ['0'..'5'], which would report six invented
   // keys and bury the real problem.
   if (typeof overrides !== 'object' || Array.isArray(overrides)) {
-    console.warn(
+    warn(
       `config: publish.overrides must be a map, but is ${Array.isArray(overrides) ? 'a list' : typeof overrides}. ` +
       'Nothing under it is being read. Expected shape: overrides: { fields: ' +
       '{ "Characters/NPCs/Vex.md": { include: ["secrets"] } } }.'
@@ -244,7 +246,7 @@ function warnUnreadOverrideKeys(overrides) {
   }
   for (const key of Object.keys(overrides)) {
     if (key === 'fields') continue;
-    console.warn(
+    warn(
       `config: publish.overrides.${key} is not read by the build and has no effect. ` +
       'The only supported override is publish.overrides.fields, keyed by vault-relative ' +
       'path: fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }.'
@@ -281,7 +283,7 @@ function loadVaultConfig(configPath, deps = {}, { requireVaultPath = false } = {
   return config;
 }
 
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
   let settingYear = null;
@@ -304,7 +306,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     }
   }
 
-  warnUnreadOverrideKeys(publish.overrides);
+  warnUnreadOverrideKeys(publish.overrides, warn);
 
   // One pass over the moved-key table, in table order, so `legacy` reads the same way
   // every time. The per-key merges below read from `picked`.
@@ -315,11 +317,12 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     picked[entry.publish] = pick(
       publish, jsonConfig, entry, legacy,
       entry.publish === 'exclude_dirs'
-        ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath) : v)
+        ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath, warn) : v)
         : undefined,
       entry.publish === 'exclude_dirs'
         ? (s) => (normalizeExcludeDir(s, vaultPath, false) ?? String(s)).toLowerCase()
         : undefined,
+      warn,
     );
   }
   const list = (v, fallback) => (Array.isArray(v) ? v : [...fallback]);
@@ -360,7 +363,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
         ...PUBLISH_DEFAULTS.theme.fonts,
         ...(publish.theme && publish.theme.fonts),
       },
-      default_mode: defaultModeFrom(publish.theme && publish.theme.default_mode),
+      default_mode: defaultModeFrom(publish.theme && publish.theme.default_mode, warn),
     },
     four_oh_four: {
       ...PUBLISH_DEFAULTS.four_oh_four,
@@ -383,7 +386,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       fields: canonicalizeOverrideFieldKeys(
         // `??`, not `||`: an explicitly falsy `fields: false` is malformed config the
         // validator must see and report, not something to silently swap for the default.
-        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields
+        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields,
+        warn
       ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
@@ -421,8 +425,8 @@ function scanConfigFor(config, publishConfig) {
 // silent), so templates and the scanner that read config.siteTitle / folderMap /
 // attachmentsDir keep working. `publishConfig` is loadPublishConfig's own output. The raw
 // object is not mutated. A key neither file sets stays as the raw object had it.
-function resolveConfig(rawConfig, vaultPath) {
-  const publishConfig = loadPublishConfig(vaultPath, rawConfig);
+function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
+  const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn);
   const config = Object.assign({}, rawConfig);
   for (const entry of MOVED_KEYS) {
     const value = publishConfig[entry.publish];
