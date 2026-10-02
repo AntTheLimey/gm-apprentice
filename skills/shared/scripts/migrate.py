@@ -27,16 +27,16 @@ import sys
 from pathlib import Path
 
 from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed, edit_frontmatter
+from migrate_site import REPIN, SITE_CHECKS
 from vault_check import emit
 from vaultlib import extract_frontmatter, parse_version, plugin_version, set_key
 
 FLOOR = "1.10.12"
 LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
-REPIN = "site-repin"
 TITLES = {WILL: "Will do", CHOICE: "Your choice", PERSON: "Needs a person"}
 WAITING = "Checked once the site's tool is updated"
 
-CHECKS: list[Check] = []
+CHECKS: list[Check] = [*SITE_CHECKS]
 
 
 def gate(vault: Path) -> tuple[str, str] | str:

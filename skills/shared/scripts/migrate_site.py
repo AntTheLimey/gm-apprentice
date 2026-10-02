@@ -1,38 +1,27 @@
 #!/usr/bin/env python3
-"""migrate.py — run the vault's coded migrations, in version order.
+"""migrate_site.py: the migration checks that concern the vault's site.
 
-    migrate.py VAULT [--status | --dry-run]
-
-Each step belongs to a plugin version and has two halves: `describe` (what
-would change, writing nothing) and `apply` (do it, report what changed).
-Output has the shape vault_check's `emit` prints: `## <version> <name>`,
-`# count: N`, then one row per line.
-
-  --status    which steps are pending. A step is pending when its dry run
-              says it has changes; there is no state file to drift.
-  --dry-run   the planned changes of every step; nothing is written.
-  (neither)   apply every step in version order; a step that fails stops
-              the run and later steps do not run.
-
-Exit: 0 done or nothing to do; 1 a step failed; 2 bad arguments.
-
-The config step moves campaign settings into `_meta/vault-config.md`. The
-publish tool does that (`migrate-config`) and is the only reader of those
-keys; this script asks it and renders its plan, and never parses a publish
-setting itself.
+The site's publish tool is repinned first; everything else that asks the
+tool runs after it. What publishes, what the pin is and what the config
+holds are the publish tool's answers, never a second reading here.
 """
 
 from __future__ import annotations
 
-import argparse
-import sys
+import json
+import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from vault_check import (PUBLISH_PACKAGE, ToolAnswer, ask_publish_tool,
-                         configured_site, parse_semver, publish_block_inline,
-                         site_pin, site_switch)
+from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
+                          edit_frontmatter, plugin_tool)
+from vault_check import (PUBLISH_PACKAGE, ExplainAll, ToolAnswer,
+                         ask_publish_tool, check_frontmatter, check_gm_leak,
+                         check_pc_body, check_sessions, configured_site,
+                         publish_block_inline, site_pin)
+from vaultlib import (read_publish_list, read_publish_scalar, set_key,
+                      set_nested_key, site_switch, yaml_scalar)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
@@ -63,13 +52,6 @@ class StepPlan:
     after: tuple[str, ...] = ()  # trailing lines that are not changes (backups)
     kept_notes: tuple[str, ...] = ()  # the tool's notes: after the changes, not counted
 
-
-@dataclass(frozen=True)
-class Step:
-    version: str            # the plugin version the step belongs to
-    name: str
-    describe: Callable[[Path], StepPlan]
-    apply: Callable[[Path], StepPlan]
 
 
 # --- the config step ---------------------------------------------------------
@@ -206,67 +188,101 @@ def apply_config_to_vault(vault: Path) -> StepPlan:
     return done
 
 
-STEPS: list[Step] = [
-    Step("1.10.24", "config-to-vault",
-         describe_config_to_vault, apply_config_to_vault),
-]
+# --- the checks ---------------------------------------------------------------
+
+REPIN = "site-repin"
 
 
-# --- the runner --------------------------------------------------------------
-
-def _version_key(step: Step) -> tuple[int, int, int]:
-    parsed = parse_semver(step.version)
-    if parsed is None:
-        raise ValueError(f"step {step.name} has no semver version: {step.version}")
-    return parsed[0]
-
-
-def run(vault: Path, mode: str, steps: list[Step] | None = None) -> int:
-    """Run `steps` (default STEPS) in version order. `mode` is "apply",
-    "dry-run" or "status". Returns the exit code."""
-    chosen = STEPS if steps is None else steps
-    for step in sorted(chosen, key=_version_key):
-        plan = (step.apply if mode == "apply" else step.describe)(vault)
-        label = f"{step.version} {step.name}"
-        if plan.error:
-            print(f"migrate.py: {label}: {plan.error}", file=sys.stderr)
-            return 1
-        count = len(plan.lines) - plan.notes if plan.applies else 0
-        if mode == "status":
-            rows = ([f"pending: {count} change(s)", *plan.lines[:plan.notes],
-                     *plan.kept_notes]
-                    if plan.applies else
-                    [f"done: {plan.lines[-1] if plan.lines else NOTHING_TO_DO}",
-                     *plan.lines[:-1]])
-        else:
-            rows = [*(plan.lines or [NOTHING_TO_DO]), *plan.kept_notes, *plan.after]
-        print(f"## {label}")
-        print(f"# count: {count}")
-        for row in rows:
-            print(row)
-    return 0
-
-
-def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(
-        prog="migrate.py", description="Run the vault's coded migrations.")
-    ap.add_argument("vault")
-    group = ap.add_mutually_exclusive_group()
-    group.add_argument("--status", action="store_true",
-                       help="show which steps are pending")
-    group.add_argument("--dry-run", action="store_true",
-                       help="show what would change; write nothing")
+def find_site_repin(vault: Path) -> list[Item]:
+    """The site builds with the tool installed in it, so that tool is
+    brought to the plugin's before anything else asks it. `update-pin
+    --check` says whether it is; this never reads the pin itself."""
+    if publish_block_inline(vault):
+        raise StepFailed(INLINE_PUBLISH)
+    site, has_config = configured_site(vault)
+    if site is None:
+        if site_switch(vault) is True:
+            raise StepFailed(
+                "publish.site is on but publish.site_dir names no folder; "
+                "set site_dir to the site folder, or set site: false")
+        return []
+    if not has_config:
+        raise StepFailed(
+            f"publish.site_dir is set to {site} but no vault.config.json is "
+            f"there; correct the path, or set site: false")
+    _code, out, _err = plugin_tool(
+        ["update-pin", "--check", "--json", "--site", str(site)])
     try:
-        args = ap.parse_args(argv)
-    except SystemExit as e:
-        return 2 if e.code else 0
-    vault = Path(args.vault).expanduser()
-    if not vault.is_dir():
-        print(f"migrate.py: not a directory: {vault}", file=sys.stderr)
-        return 2
-    mode = "status" if args.status else "dry-run" if args.dry_run else "apply"
-    return run(vault, mode)
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool):
+        raise StepFailed("update-pin --check did not return the expected JSON")
+    if data["ok"]:
+        return []
+    installed = data.get("installedBefore") or "none"
+
+    def apply(_value: str | None) -> list[str]:
+        code, text, err = plugin_tool(["update-pin", "--site", str(site)])
+        lines = [line for line in text.splitlines() if line.strip()]
+        if code != 0:
+            tail = lines[-3:] or [err.strip() or f"update-pin exited {code}"]
+            raise StepFailed("; ".join(tail))
+        return lines
+
+    return [Item(REPIN, WILL,
+                 [f"repin the site's publish tool at {site} "
+                  f"(installed: {installed})"], apply)]
 
 
-if __name__ == "__main__":
-    sys.exit(main())
+def find_config_to_vault(vault: Path) -> list[Item]:
+    """1.10.24: campaign settings move from the site's vault.config.json
+    into the vault file. The publish tool plans and does it."""
+    if configured_site(vault)[0] is None and shutil.which("node") is None:
+        # No site to move settings from, and no Node to ask: a vault that
+        # only keeps notes is never stopped for the publish tool.
+        return []
+    plan = describe_config_to_vault(vault)
+    if plan.error:
+        raise StepFailed(plan.error)
+    if not plan.applies:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = apply_config_to_vault(vault)
+        if done.error:
+            raise StepFailed(done.error)
+        return [*done.lines[done.notes:], *done.kept_notes, *done.after]
+
+    return [Item("config-to-vault", WILL, plan.lines[plan.notes:], apply)]
+
+
+def find_publish_site(vault: Path) -> list[Item]:
+    """`publish.site` says whether the vault has a site. Written where it
+    is missing: true with a site_dir, else false. A vault file with no
+    `publish:` block has no site and gets nothing."""
+    if (publish_block_inline(vault)
+            or read_publish_list(vault, "exclude_sections").publish_line is None
+            or site_switch(vault) is not None):
+        return []
+    value = "true" if read_publish_scalar(vault, "site_dir") else "false"
+
+    def apply(_value: str | None) -> list[str]:
+        edit_frontmatter(
+            vault / "_meta" / "vault-config.md",
+            lambda fm, eol: set_nested_key(fm, "publish", "site", value, eol))
+        return [f"wrote publish.site: {value}"]
+
+    return [Item("publish-site", WILL,
+                 [f"write publish.site: {value} in _meta/vault-config.md"],
+                 apply)]
+
+
+SITE_CHECKS: list[Check] = [
+    Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
+    Check("config-to-vault", "1.10.24", 2,
+          "campaign settings move into the vault file", find_config_to_vault,
+          asks_site=True),
+    Check("publish-site", None, 2, "the publish.site switch",
+          find_publish_site),
+]

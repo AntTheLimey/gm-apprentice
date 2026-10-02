@@ -1,4 +1,4 @@
-"""migrate.py: the migration runner and its config-to-vault step. The
+"""migrate_site.py: the repin, config-to-vault and publish.site checks. The
 publish tool is stubbed the way tests/test_vault_check_slice_a.py stubs it,
 plus one end-to-end test against the real tool."""
 
@@ -18,7 +18,10 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import migrate  # noqa: E402
+import migrate_core  # noqa: E402
+import migrate_site as ms  # noqa: E402
 import vault_check as vc  # noqa: E402
+from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
 
 MOVES = {"applicable": True,
          "moves": [{"from": "vault.config.json siteTitle",
@@ -45,18 +48,27 @@ def site_of(vault):
     return vc.configured_site(vault)[0]
 
 
-def make_vault(case, publish=True, site=True):
+def make_vault(case, publish=True, site=True, version="1.10.12", extra=""):
     vault = tmp(case, "mig-vault-")
     (vault / "_meta").mkdir()
+    body = f'---\ngm_apprentice_version: "{version}"\n'
     if publish:
-        site_line = ""
+        body += "publish:\n  mode: player\n"
         if site:
             site_dir = tmp(case, "mig-site-")
             (site_dir / "vault.config.json").write_text("{}", encoding="utf-8")
-            site_line = f"  site_dir: {site_dir}\n"
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\npublish:\n  mode: player\n{site_line}---\n", encoding="utf-8")
+            body += f"  site_dir: {site_dir}\n"
+        body += extra
+    (vault / "_meta" / "vault-config.md").write_text(body + "---\n",
+                                                    encoding="utf-8")
     return vault
+
+
+@contextlib.contextmanager
+def stubbed(tool):
+    with mock.patch.object(vc.shutil, "which", return_value="/usr/bin/node"), \
+            mock.patch.object(vc.subprocess, "run", tool):
+        yield
 
 
 class Tool:
@@ -86,352 +98,212 @@ class Tool:
         return subprocess.CompletedProcess(cmd, 0, json.dumps(plan), "")
 
 
-def run_cli(args, tool):
-    out, err = io.StringIO(), io.StringIO()
-    with mock.patch.object(vc.shutil, "which", return_value="/usr/bin/node"), \
-            mock.patch.object(vc.subprocess, "run", tool), \
-            contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-        code = migrate.main(args)
-    return code, out.getvalue(), err.getvalue()
+class Pin:
+    """A stand-in for migrate_core.plugin_tool running update-pin."""
+
+    def __init__(self, ok=False, installed="1.11.41", fails=False, out=None):
+        self.ok, self.installed, self.fails, self.out = ok, installed, fails, out
+        self.calls = []
+
+    def __call__(self, args):
+        self.calls.append(args)
+        if "--check" in args:
+            text = self.out if self.out is not None else json.dumps(
+                {"ok": self.ok, "installedBefore": self.installed,
+                 "desired": "1.10.26", "changed": False})
+            return (0 if self.ok else 1), text, ""
+        if self.fails:
+            return 1, "Repointed package.json, but npm install left nothing " \
+                      "in node_modules.\nnpm ERR! network\n", ""
+        self.ok = True
+        return 0, "Updated gm-apprentice-publish from 1.11.41 to 1.12.2\n", ""
 
 
-class MigrateTests(unittest.TestCase):
-    def test_status_reports_pending(self):
+class RepinTests(unittest.TestCase):
+    def find(self, vault, pin):
+        with mock.patch.object(ms, "plugin_tool", pin):
+            return ms.find_site_repin(vault)
+
+    def test_a_current_site_plans_nothing(self):
+        self.assertEqual(self.find(make_vault(self), Pin(ok=True)), [])
+
+    def test_a_stale_site_is_one_will_do_item_that_repins(self):
         vault = make_vault(self)
-        tool = Tool()
-        code, out, _ = run_cli([str(vault), "--status"], tool)
-        self.assertEqual(code, 0)
-        self.assertIn("## 1.10.24 config-to-vault", out)
-        self.assertIn("pending", out)
-        self.assertTrue(all("--dry-run" in c for c in tool.calls))
+        pin = Pin()
+        with mock.patch.object(ms, "plugin_tool", pin):
+            (item,) = ms.find_site_repin(vault)
+            self.assertEqual((item.id, item.group), (migrate.REPIN, WILL))
+            self.assertIn("installed: 1.11.41", item.lines[0])
+            self.assertEqual(item.apply(None), [
+                "Updated gm-apprentice-publish from 1.11.41 to 1.12.2"])
+            self.assertEqual(ms.find_site_repin(vault), [])
+        self.assertEqual(pin.calls[1][:1], ["update-pin"])
+        self.assertNotIn("--check", pin.calls[1])
+        self.assertIn(str(site_of(vault)), pin.calls[1])
 
-    def test_dry_run_lists_each_move_and_only_dry_runs(self):
+    def test_a_failed_install_raises_with_npms_last_lines(self):
         vault = make_vault(self)
-        tool = Tool()
-        code, out, _ = run_cli([str(vault), "--dry-run"], tool)
-        self.assertEqual(code, 0)
-        self.assertIn("# count: 2", out)
-        for line in MOVES["lines"]:
-            self.assertIn(line + "\n", out)
-        self.assertNotIn("backup", out)
-        self.assertEqual(len(tool.calls), 1)
-        self.assertIn("--dry-run", tool.calls[0])
+        with mock.patch.object(ms, "plugin_tool", Pin(fails=True)):
+            (item,) = ms.find_site_repin(vault)
+            with self.assertRaises(StepFailed) as caught:
+                item.apply(None)
+        self.assertIn("npm ERR! network", str(caught.exception))
+
+    def test_no_site_never_runs_the_tool(self):
+        pin = Pin()
+        for vault in (make_vault(self, publish=False),
+                      make_vault(self, site=False),
+                      make_vault(self, extra="  site: false\n")):
+            self.assertEqual(self.find(vault, pin), [])
+        self.assertEqual(pin.calls, [])
+
+    def test_a_site_that_is_on_with_no_folder_stops(self):
+        vault = make_vault(self, site=False, extra="  site: true\n")
+        with self.assertRaises(StepFailed) as caught:
+            self.find(vault, Pin())
+        self.assertIn("publish.site is on but publish.site_dir names no "
+                      "folder", str(caught.exception))
+
+    def test_a_site_dir_with_no_site_file_stops(self):
+        vault = make_vault(self)
+        (site_of(vault) / "vault.config.json").unlink()
+        with self.assertRaises(StepFailed) as caught:
+            self.find(vault, Pin())
+        self.assertIn("no vault.config.json is there", str(caught.exception))
+
+    def test_inline_publish_block_stops_the_repin(self):
+        vault = make_vault(self, publish=False)
+        (vault / "_meta" / "vault-config.md").write_text(
+            '---\ngm_apprentice_version: "1.10.12"\n'
+            "publish: {mode: player, site_dir: ../site}\n---\n",
+            encoding="utf-8")
+        pin = Pin()
+        with self.assertRaises(StepFailed) as caught:
+            self.find(vault, pin)
+        self.assertIn("written on one line", str(caught.exception))
+        self.assertEqual(pin.calls, [])
+
+    def test_unreadable_check_output_stops(self):
+        with self.assertRaises(StepFailed) as caught:
+            self.find(make_vault(self), Pin(out="not json"))
+        self.assertIn("did not return the expected JSON",
+                      str(caught.exception))
+
+
+class ConfigStepTests(unittest.TestCase):
+    def test_pending_moves_are_one_will_do_item(self):
+        vault = make_vault(self)
+        with stubbed(Tool()):
+            (item,) = ms.find_config_to_vault(vault)
+        self.assertEqual((item.id, item.group), ("config-to-vault", WILL))
+        self.assertEqual(item.lines, [MOVES["lines"][0], MOVES["lines"][2]])
 
     def test_apply_runs_the_tool_then_verifies_with_a_dry_run(self):
         vault = make_vault(self)
         tool = Tool()
-        code, out, _ = run_cli([str(vault)], tool)
-        self.assertEqual(code, 0)
-        for line in MOVES["lines"] + BACKUPS:
-            self.assertIn(line + "\n", out)
-        self.assertEqual(len(tool.calls), 2)
-        self.assertNotIn("--dry-run", tool.calls[0])
-        self.assertIn("migrate-config", tool.calls[0])
-        self.assertIn("--dry-run", tool.calls[1])
+        with stubbed(tool):
+            (item,) = ms.find_config_to_vault(vault)
+            done = item.apply(None)
+            self.assertEqual(ms.find_config_to_vault(vault), [])
+        self.assertEqual(done, [MOVES["lines"][0], MOVES["lines"][2],
+                                MOVES["lines"][1], MOVES["lines"][3],
+                                *BACKUPS])
+        self.assertNotIn("--dry-run", tool.calls[1])
+        self.assertIn("--dry-run", tool.calls[2])
 
     def test_apply_that_leaves_changes_planned_fails(self):
         vault = make_vault(self)
-        code, out, err = run_cli([str(vault)], Tool(stays_pending=True))
-        self.assertEqual(code, 1)
-        self.assertIn("left changes planned", err)
+        with stubbed(Tool(stays_pending=True)):
+            (item,) = ms.find_config_to_vault(vault)
+            with self.assertRaises(StepFailed) as caught:
+                item.apply(None)
+        self.assertIn("left changes planned", str(caught.exception))
 
-    def test_second_apply_has_nothing_to_do(self):
-        vault = make_vault(self)
+    def test_nothing_to_move_plans_nothing(self):
+        with stubbed(Tool(pending=False)):
+            self.assertEqual(ms.find_config_to_vault(make_vault(self)), [])
+
+    def test_a_vault_that_does_not_publish_never_runs_node(self):
         tool = Tool()
-        self.assertEqual(run_cli([str(vault)], tool)[0], 0)
-        code, out, _ = run_cli([str(vault)], tool)
-        self.assertEqual(code, 0)
-        self.assertIn("nothing to do", out)
-        self.assertIn("# count: 0", out)
+        with stubbed(tool):
+            self.assertEqual(
+                ms.find_config_to_vault(make_vault(self, publish=False)), [])
+        self.assertEqual(tool.calls, [])
 
-    def test_tool_without_lines_is_too_old(self):
-        vault = make_vault(self)
-        code, _, err = run_cli([str(vault), "--dry-run"], Tool(no_lines=True))
-        self.assertEqual(code, 1)
-        self.assertIn("migrate-config does not report its lines", err)
-        self.assertIn(f"older than this migration needs ({migrate.NEEDS_PUBLISH})", err)
-        self.assertIn("Run update-pin --site", err)
+    def test_a_tool_that_cannot_answer_stops_with_its_reason(self):
+        with stubbed(Tool(fail="Error: vault file is broken")):
+            with self.assertRaises(StepFailed) as caught:
+                ms.find_config_to_vault(make_vault(self))
+        self.assertIn("vault file is broken", str(caught.exception))
+
+    def test_a_tool_without_lines_is_too_old(self):
+        with stubbed(Tool(no_lines=True)):
+            with self.assertRaises(StepFailed) as caught:
+                ms.find_config_to_vault(make_vault(self))
+        self.assertIn(f"older than this migration needs ({ms.NEEDS_PUBLISH})",
+                      str(caught.exception))
 
     def test_unparseable_apply_output_says_files_may_have_changed(self):
         vault = make_vault(self)
-        code, _, err = run_cli([str(vault)], Tool(stdout="not json"))
-        self.assertEqual(code, 1)
-        self.assertIn("may already have been changed", err)
-        self.assertIn("vault-config.md.pre-migrate", err)
-        self.assertIn("vault.config.json.pre-migrate", err)
-
-    def test_site_dir_without_a_site_file_is_never_silent(self):
-        vault = make_vault(self)
-        missing = tmp(self, "mig-gone-") / "typo"
-        (vault / "_meta" / "vault-config.md").write_text(
-            f"---\npublish:\n  mode: player\n  site_dir: {missing}\n---\n",
-            encoding="utf-8")
-        line = (f"publish.site_dir is set to {missing} but no vault.config.json "
-                f"is there; site settings were not looked at")
-        for tool in (Tool(pending=False), Tool()):
-            code, out, _ = run_cli([str(vault), "--dry-run"], tool)
-            self.assertEqual(code, 0)
-            self.assertIn(line + "\n", out)
-            self.assertNotIn("--config", tool.calls[0])
-
-    def test_temp_dir_failure_is_not_reported_as_node_failing(self):
-        vault = make_vault(self, site=False)
-        tool = Tool()
-        with mock.patch.object(vc.tempfile, "mkdtemp", side_effect=OSError):
-            code, _, err = run_cli([str(vault)], tool)
-        self.assertEqual(code, 1)
-        self.assertIn("no temporary directory", err)
-        self.assertNotIn("node could not run", err)
-        self.assertEqual(tool.calls, [])
-
-    def test_unset_site_dir_is_never_silent(self):
-        vault = make_vault(self, site=False)
-        line = ("publish.site_dir is not set; site settings were not looked "
-                "at. Set it to your site folder and run migrate.py again, or "
-                "run `gm-apprentice-publish migrate-config --config "
-                "<site>/vault.config.json` from the site.")
-        for tool in (Tool(pending=False), Tool()):
-            code, out, _ = run_cli([str(vault), "--dry-run"], tool)
-            self.assertEqual(code, 0)
-            self.assertIn(line + "\n", out)
-            self.assertNotIn("site_dir is set to", out)
-
-    def test_a_site_that_is_off_is_said_to_be_off(self):
-        # site_dir is set; the site settings are not moved because the site
-        # is off, and the line must not tell the GM to set site_dir.
-        vault = make_vault(self)
-        file = vault / "_meta" / "vault-config.md"
-        file.write_text(file.read_text(encoding="utf-8").replace(
-            "publish:\n", "publish:\n  site: false\n"), encoding="utf-8")
-        code, out, _ = run_cli([str(vault), "--dry-run"], Tool())
-        self.assertEqual(code, 0)
-        self.assertIn("the site is off (publish.site); site settings were "
-                      "not looked at.", out)
-        self.assertNotIn("site_dir is not set", out)
-
-    def test_vault_without_publish_block_has_no_site_dir_line(self):
-        vault = make_vault(self, publish=False)
-        _, out, _ = run_cli([str(vault), "--dry-run"], Tool())
-        self.assertNotIn("site_dir", out)
-
-    def test_apply_counts_changes_not_backups(self):
-        vault = make_vault(self)
-        _, dry, _ = run_cli([str(vault), "--dry-run"], Tool())
-        _, out, _ = run_cli([str(vault)], Tool())
-        self.assertIn("# count: 2\n", dry)
-        self.assertIn("# count: 2\n", out)
-        lines = out.splitlines()
-        self.assertEqual(lines[-2:], BACKUPS)
-        self.assertEqual(lines[2:6], [MOVES["lines"][i] for i in (0, 2, 1, 3)])
-
-    def test_configured_site_reports_path_and_config(self):
-        vault = make_vault(self)
-        site, has = vc.configured_site(vault)
-        self.assertTrue(has)
-        (site / "vault.config.json").unlink()
-        self.assertEqual(vc.configured_site(vault), (site, False))
-        self.assertEqual(vc.configured_site(make_vault(self, site=False)),
-                         (None, False))
-
-    def test_tool_failure_exits_1_with_its_reason(self):
-        vault = make_vault(self)
-        code, out, err = run_cli([str(vault)], Tool(fail="Error: vault file is broken"))
-        self.assertEqual(code, 1)
-        self.assertEqual(len(err.strip().splitlines()), 1)
-        self.assertIn("Error: vault file is broken", err)
-        self.assertNotIn("update-pin", err)
-
-    def test_unknown_command_names_the_site_and_the_fix(self):
-        vault = make_vault(self)
-        site = site_of(vault)
-        code, _, err = run_cli([str(vault)], Tool(fail="Unknown command: migrate-config"))
-        self.assertEqual(code, 1)
-        self.assertEqual(len(err.strip().splitlines()), 1)
-        self.assertIn(
-            f"the site's publish tool does not have migrate-config; it is "
-            f"older than this migration needs ({migrate.NEEDS_PUBLISH}). "
-            f"Run update-pin --site {site}, then migrate.py again.", err)
-
-    def test_unknown_command_without_a_site_says_to_update_the_plugin(self):
-        vault = make_vault(self, site=False)
-        code, _, err = run_cli([str(vault)], Tool(fail="Unknown command: migrate-config"))
-        self.assertEqual(code, 1)
-        self.assertNotIn("update-pin", err)
-        self.assertIn("Update the gm-apprentice plugin", err)
-
-    def pin_site(self, spec):
-        vault = make_vault(self)
-        site = site_of(vault)
-        (site / "package.json").write_text(json.dumps(
-            {"dependencies": {"gm-apprentice-publish": spec}}), encoding="utf-8")
-        return vault, site
-
-    def test_old_numeric_pin_gets_one_plain_message(self):
-        vault, site = self.pin_site("1.10.19")
-        tool = Tool()
-        code, _, err = run_cli([str(vault), "--status"], tool)
-        self.assertEqual(code, 1)
-        self.assertEqual(tool.calls, [])
-        self.assertIn(
-            f"the site's publish tool (1.10.19) is older than this migration "
-            f"needs ({migrate.NEEDS_PUBLISH}). Run update-pin --site {site}, "
-            f"then migrate.py again.", err)
-        self.assertEqual(err.count("update-pin"), 1)
-        self.assertNotIn("predates", err)
-
-    def test_unreadable_pin_says_it_cannot_tell(self):
-        vault, site = self.pin_site("file:../tools/publish")
-        tool = Tool()
-        code, _, err = run_cli([str(vault), "--status"], tool)
-        self.assertEqual(code, 1)
-        self.assertEqual(tool.calls, [])
-        self.assertIn(
-            f"cannot tell which publish tool the site at {site} uses "
-            f"(file:../tools/publish). Run update-pin --site {site}, then "
-            f"migrate.py again.", err)
-        self.assertEqual(err.count("update-pin"), 1)
-        self.assertNotIn("isn't a version", err)
-
-    def test_notes_are_not_counted_as_changes(self):
-        # Without `noteLines` the prefixes the tool uses mark the notes; they
-        # print after the changes and before the backups.
-        vault = make_vault(self)
-        _, out, _ = run_cli([str(vault)], Tool())
-        lines = out.splitlines()
-        self.assertEqual(lines[1], "# count: 2")
-        self.assertEqual(lines[2:], [MOVES["lines"][0], MOVES["lines"][2],
-                                     MOVES["lines"][1], MOVES["lines"][3],
-                                     *BACKUPS])
-        _, status, _ = run_cli([str(vault), "--status"], Tool())
-        self.assertIn("pending: 2 change(s)", status)
+        with stubbed(Tool()):
+            (item,) = ms.find_config_to_vault(vault)
+        with stubbed(Tool(stdout="not json")):
+            with self.assertRaises(StepFailed) as caught:
+                item.apply(None)
+        self.assertIn("may already have been changed", str(caught.exception))
+        self.assertIn("vault-config.md.pre-migrate", str(caught.exception))
 
     def test_the_tools_own_note_lines_decide_what_is_a_note(self):
         plan = dict(MOVES, lines=["move a -> b", "tidy c", "left over d"],
                     noteLines=["left over d"])
-        vault = make_vault(self)
-        _, out, _ = run_cli([str(vault), "--dry-run"], Tool(plan=plan))
-        self.assertEqual(out.splitlines()[1:],
-                         ["# count: 2", "move a -> b", "tidy c", "left over d"])
-        _, status, _ = run_cli([str(vault), "--status"], Tool(plan=plan))
-        self.assertIn("pending: 2 change(s)", status)
-        self.assertIn("left over d", status)
-        # A prefix is not a note when the tool says what its notes are.
-        plan = dict(MOVES, lines=["note x moved to y", "move a -> b"],
-                    noteLines=[])
-        _, out, _ = run_cli([str(vault), "--dry-run"], Tool(plan=plan))
-        self.assertIn("# count: 2\n", out)
+        with stubbed(Tool(plan=plan)):
+            (item,) = ms.find_config_to_vault(make_vault(self))
+        self.assertEqual(item.lines, ["move a -> b", "tidy c"])
 
-    def test_a_publish_block_on_one_line_is_named_and_fails(self):
-        vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish: {mode: player, site_dir: ../site}\n---\n",
-            encoding="utf-8")
-        for args in ([], ["--dry-run"], ["--status"]):
-            tool = Tool()
-            code, out, err = run_cli([str(vault), *args], tool)
-            self.assertEqual(code, 1)
-            self.assertIn("the publish: block in _meta/vault-config.md is "
-                          "written on one line ({…}); write it as a block so "
-                          "its settings can be read", err)
-            self.assertNotIn("site_dir is not set", err + out)
-            self.assertEqual(tool.calls, [])
-
-    def test_a_missing_tool_script_points_at_update_pin(self):
-        vault = make_vault(self)
-        site = site_of(vault)
-        pkg = site / "node_modules" / "gm-apprentice-publish"
-        (pkg / "bin").mkdir(parents=True)
-        (pkg / "package.json").write_text('{"version": "1.12.0"}', encoding="utf-8")
-        tool = Tool()
-        code, _, err = run_cli([str(vault), "--status"], tool)
-        self.assertEqual(code, 1)
-        self.assertEqual(tool.calls, [])
-        self.assertIn(f"{pkg / 'bin' / 'gm-publish.js'} is missing. "
-                      f"Run update-pin --site {site}, then migrate.py again.", err)
-
-    def test_an_unreadable_package_json_is_said_plainly(self):
-        vault = make_vault(self)
-        site = site_of(vault)
-        (site / "package.json").write_text("{not json", encoding="utf-8")
-        code, _, err = run_cli([str(vault), "--status"], Tool())
-        self.assertEqual(code, 1)
-        self.assertIn("the site's package.json can't be read", err)
-        self.assertNotIn("no readable version", err)
-
-    def test_other_callers_keep_the_pin_reason(self):
-        vault, _ = self.pin_site("1.10.19")
-        answer = vc.ask_publish_tool(vault, ["explain", "--all"])
-        self.assertIn("predates body withholding", answer.why)
-
-    def test_no_node_is_not_blamed_on_the_pin(self):
-        vault = make_vault(self)
-        err = io.StringIO()
-        with mock.patch.object(vc.shutil, "which", return_value=None), \
-                contextlib.redirect_stdout(io.StringIO()), \
-                contextlib.redirect_stderr(err):
-            code = migrate.main([str(vault)])
-        self.assertEqual(code, 1)
-        self.assertIn("node is not on PATH; install Node.js, then run "
-                      "migrate.py again", err.getvalue())
-        self.assertNotIn("update-pin", err.getvalue())
-
-    def test_vault_without_a_publish_block_never_runs_node(self):
-        vault = make_vault(self, publish=False)
-        tool = Tool()
-        code, out, _ = run_cli([str(vault)], tool)
-        self.assertEqual(code, 0)
-        self.assertIn("this vault does not publish", out)
-        self.assertEqual(tool.calls, [])
-
-    def test_publish_block_without_a_site_still_reaches_the_tool(self):
+    def test_no_site_and_no_node_never_stops(self):
         vault = make_vault(self, site=False)
-        tool = Tool()
-        code, out, _ = run_cli([str(vault), "--dry-run"], tool)
-        self.assertEqual(code, 0)
-        self.assertEqual(len(tool.calls), 1)
-        self.assertNotIn("--config", tool.calls[0])
-        self.assertIn("--vault", tool.calls[0])
+        with mock.patch.object(ms.shutil, "which", return_value=None), \
+                mock.patch.object(vc.shutil, "which", return_value=None):
+            self.assertEqual(ms.find_config_to_vault(vault), [])
+            self.assertEqual(ms.find_site_repin(vault), [])
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out), \
+                    mock.patch.object(migrate, "plugin_version",
+                                      return_value=("1.10.26", "t")), \
+                    mock.patch.object(migrate, "CHECKS", ms.SITE_CHECKS[:3]):
+                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
+        self.assertIn("stamped 1.10.26", out.getvalue())
 
-    def test_bad_arguments_exit_2(self):
+
+class PublishSiteTests(unittest.TestCase):
+    def text(self, vault):
+        return (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+
+    def test_a_site_dir_writes_true(self):
         vault = make_vault(self)
-        self.assertEqual(run_cli([str(vault), "--status", "--dry-run"], Tool())[0], 2)
-        self.assertEqual(run_cli([str(vault / "nope")], Tool())[0], 2)
+        (item,) = ms.find_publish_site(vault)
+        self.assertEqual((item.id, item.group), ("publish-site", WILL))
+        self.assertEqual(item.apply(None), ["wrote publish.site: true"])
+        self.assertIn("\n  site: true\n", self.text(vault))
+        self.assertEqual(ms.find_publish_site(vault), [])
 
-    def fake_steps(self, log, fail_at=None):
-        def step(version, name):
-            def go(vault):
-                log.append(name)
-                if name == fail_at:
-                    return migrate.StepPlan(False, [], error="broke")
-                return migrate.StepPlan(True, [f"did {name}"])
-            return migrate.Step(version, name, go, go)
-        return [step("1.10.30", "third"), step("1.10.9", "first"),
-                step("1.10.24", "second")]
+    def test_no_site_dir_writes_false(self):
+        vault = make_vault(self, site=False)
+        (item,) = ms.find_publish_site(vault)
+        item.apply(None)
+        self.assertIn("\n  site: false\n", self.text(vault))
 
-    def test_steps_run_in_version_order(self):
-        log = []
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            code = migrate.run(Path("."), "apply", steps=self.fake_steps(log))
-        self.assertEqual(code, 0)
-        self.assertEqual(log, ["first", "second", "third"])
+    def test_a_switch_already_written_is_left(self):
+        vault = make_vault(self, extra="  site: false\n")
+        self.assertEqual(ms.find_publish_site(vault), [])
 
-    def test_failing_step_stops_the_run(self):
-        log = []
-        err = io.StringIO()
-        with contextlib.redirect_stdout(io.StringIO()), \
-                contextlib.redirect_stderr(err):
-            code = migrate.run(Path("."), "apply",
-                               steps=self.fake_steps(log, fail_at="second"))
-        self.assertEqual(code, 1)
-        self.assertEqual(log, ["first", "second"])
-        self.assertIn("1.10.24 second: broke", err.getvalue())
+    def test_no_publish_block_gets_nothing(self):
+        vault = make_vault(self, publish=False)
+        before = self.text(vault)
+        self.assertEqual(ms.find_publish_site(vault), [])
+        self.assertEqual(self.text(vault), before)
 
 
-@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
-                     or (shutil.which("node") and (
-                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
-                     "node and the publish tool's node_modules are needed")
 class MigrateEndToEndTests(unittest.TestCase):
     def test_legacy_site_migrates_and_frontmatter_stays_clean(self):
         vault = tmp(self, "mig-e2e-vault-")
@@ -440,23 +312,24 @@ class MigrateEndToEndTests(unittest.TestCase):
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ncanon_status: AUTHORITATIVE\n---\n\n# Overview\n", encoding="utf-8")
         (vault / "_meta" / "vault-config.md").write_text(
-            f"---\ntype: meta\npublish:\n  mode: player\n  site_dir: {site}\n---\n",
+            f'---\ntype: meta\ngm_apprentice_version: "1.10.23"\npublish:\n  mode: player\n  site_dir: {site}\n---\n',
             encoding="utf-8")
         (site / "vault.config.json").write_text(json.dumps({
             "siteTitle": "Legacy", "vaultPath": str(vault),
             "outputDir": "./docs", "excludeDirs": ["_meta"],
             "backend": {"inbox": True}}), encoding="utf-8")
         out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self.assertEqual(migrate.run(vault, "apply"), 0)
-        self.assertIn("publish.site_title", out.getvalue())
-        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        self.assertIn("site_title", text)
-        self.assertNotIn("siteTitle", (site / "vault.config.json").read_text())
-        again = io.StringIO()
-        with contextlib.redirect_stdout(again):
-            self.assertEqual(migrate.run(vault, "apply"), 0)
-        self.assertIn("nothing to do", again.getvalue())
+        with mock.patch.object(ms, "plugin_tool", Pin(ok=True)), \
+                contextlib.redirect_stdout(out):
+            self.assertEqual(migrate.main([str(vault), "apply"]), 0)
+            self.assertIn("config-to-vault\tmove", out.getvalue())
+            text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+            self.assertIn("site_title", text)
+            self.assertNotIn("siteTitle", (site / "vault.config.json").read_text())
+            again = io.StringIO()
+            with contextlib.redirect_stdout(again):
+                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
+        self.assertIn("already at", again.getvalue())
         proc = subprocess.run(
             [sys.executable, str(SCRIPTS / "vault_check.py"), str(vault),
              "frontmatter"], capture_output=True, text=True, check=False)
