@@ -1211,6 +1211,9 @@ def publish_block_inline(vault: Path) -> bool:
                for line in _frontmatter_lines(text) or [])
 
 
+NO_SITE_DIR = "publish.site_dir is not set in _meta/vault-config.md"
+
+
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     """(the site's vault.config.json, why there is none).
 
@@ -1220,7 +1223,7 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     if site is None:
         if read_publish_list(vault, "exclude_sections").publish_line is None:
             return None, None
-        return None, "publish.site_dir is not set in _meta/vault-config.md"
+        return None, NO_SITE_DIR
     if not has_config:
         return None, f"no vault.config.json in publish.site_dir ({site})"
     return site / "vault.config.json", None
@@ -1422,7 +1425,10 @@ def ask_publish_tool(vault: Path, args: list[str],
     no_site = config is None
     if config is None:
         if not (vault_only and why):
-            return ToolAnswer(why=why)
+            # A site that is off is not a tool that could not be asked:
+            # there is nothing to say. One that is on with no folder is.
+            quiet = why == NO_SITE_DIR and site_switch(vault) is not True
+            return ToolAnswer(why=None if quiet else why)
         label = "the plugin's publish tool (the vault has no site)"
         if not PUBLISH_TOOL.is_file():
             return ToolAnswer(

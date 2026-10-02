@@ -21,16 +21,25 @@ TOOL_DIR = Path(__file__).resolve().parents[1] / "tools" / "publish"
 BARE = "---\npublish:\n---\n"
 
 
+_SITE: Path | None = None
+
+
 def new_site(vault: Path, cleanup: Callable[[Path], object]) -> Path:
-    """A site folder for `vault`, with the repo's publish tool installed."""
-    folder = Path(tempfile.mkdtemp(prefix="vc-site-"))
-    cleanup(folder)
-    (folder / "vault.config.json").write_text(
-        json.dumps({"vaultPath": vault.as_posix()}), encoding="utf-8")
-    (folder / "node_modules").mkdir()
-    os.symlink(TOOL_DIR, folder / "node_modules" / "gm-apprentice-publish",
-               target_is_directory=True)
-    return folder
+    """The site folder test vaults share, with the repo's publish tool
+    installed. One folder for the whole run: the checks keep one node
+    process per installed tool, so a folder per vault would start a new
+    process for every test. The tool is always told which vault to read
+    (`--vault`), so the folder's own `vaultPath` is never used."""
+    global _SITE
+    if _SITE is None:
+        _SITE = Path(tempfile.mkdtemp(prefix="vc-site-"))
+        atexit.register(shutil.rmtree, _SITE, ignore_errors=True)
+        (_SITE / "vault.config.json").write_text(
+            json.dumps({"vaultPath": "."}), encoding="utf-8")
+        (_SITE / "node_modules").mkdir()
+        os.symlink(TOOL_DIR, _SITE / "node_modules" / "gm-apprentice-publish",
+                   target_is_directory=True)
+    return _SITE
 
 
 def with_site(config: str | None, vault: Path,

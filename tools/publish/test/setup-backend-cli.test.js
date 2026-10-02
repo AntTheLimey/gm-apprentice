@@ -64,6 +64,18 @@ test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', 
   assert.ok(syncIdx < deployIdx, 'sync ran before deploy');
 });
 
+test('a site the GM turned off gets no backend: nothing is created or written', async () => {
+  const { deps, calls, files, vault } = harness();
+  const before = vaultConfig(vault);
+  const toml = files['wrangler.toml'];
+  deps.siteOffFor = () => 'the site is off for this vault (publish.site in _meta/vault-config.md); nothing was built.';
+  const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
+  assert.strictEqual(rc, 1);
+  assert.deepStrictEqual(calls, []);
+  assert.strictEqual(vaultConfig(vault), before);
+  assert.strictEqual(files['wrangler.toml'], toml);
+});
+
 test('setup-inbox flips the inbox flag (and KV is ensured — inbox⇒KV)', async () => {
   const { deps, files, vault } = harness();
   const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);

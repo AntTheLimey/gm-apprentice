@@ -937,19 +937,17 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
 
 
 SITE_ON_WORDS = ("true", "yes", "on")
-SITE_OFF_WORDS = ("false", "no", "off")
 
 
 def site_switch(vault: Path) -> bool | None:
     """`publish.site` as the line reader sees it: True, False, or None when
-    it is unset or not one of the switch words. For when the publish tool
-    cannot be asked; the tool's own reading (`vault_site`) comes first."""
+    it is unset or blank. A value that is not one of the switch words is
+    off, as the publish tool reads it (`asBool` in switches.js). For when
+    the tool cannot be asked; its own reading (`vault_site`) comes first."""
     word = (read_publish_scalar(vault, "site") or "").strip().lower()
-    if word in SITE_ON_WORDS:
-        return True
-    if word in SITE_OFF_WORDS:
-        return False
-    return None
+    if not word:
+        return None
+    return word in SITE_ON_WORDS
 
 
 def publish_tool_problem() -> str | None:

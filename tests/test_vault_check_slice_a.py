@@ -1913,11 +1913,32 @@ class NoPublishToolTests(unittest.TestCase):
                 ("no publish block", lambda: self.vault(False, publish=False)),
                 ("never set", lambda: self.vault(False)),
                 ("off", lambda: self.vault(False, switch="false")),
-                ("off with a site_dir", lambda: self.vault(True, switch="no"))):
+                ("off with a site_dir", lambda: self.vault(True, switch="no")),
+                # Not a switch word: off, as the publish tool reads it.
+                ("n", lambda: self.vault(True, switch="n")),
+                ("maybe", lambda: self.vault(True, switch="maybe")),
+                ("comment", lambda: self.vault(True, switch="false # for now")),
+                ("quoted", lambda: self.vault(True, switch='"Off"'))):
             with self.subTest(form):
                 vault = make()
                 self.no_tool()
                 self.assert_not_checked(vault)
+
+    def test_the_line_reader_and_the_tool_read_the_switch_alike(self):
+        for word in ("true", "True", "yes", "ON", "false", "No", "off", "n",
+                     "y", "maybe", "0", "1", '"false"', "'yes'",
+                     "false # later"):
+            with self.subTest(word):
+                vault = self.vault(True, switch=word)
+                self.assertEqual(vaultlib.site_switch(vault),
+                                 vaultlib.vault_site(vault)[1])
+
+    def test_an_off_site_is_not_reported_as_a_tool_that_could_not_be_asked(self):
+        vault = self.vault(True, switch="false")
+        for rows in (vc.check_frontmatter(vault, None),
+                     vc.check_sessions(vault)):
+            self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+            self.assertFalse(rows_for(rows, "site_dir"), rows)
 
     def test_the_site_on_with_no_site_dir_is_a_site_to_set_up(self):
         for blank in ("", "  site_dir:\n"):
