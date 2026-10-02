@@ -127,6 +127,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from collections import Counter
 import sys
 from dataclasses import dataclass, field
@@ -1378,14 +1379,28 @@ class ExplainAll:
         return self._answer
 
 
-def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
+def ask_publish_tool(vault: Path, args: list[str],
+                     vault_only: bool = False) -> ToolAnswer:
     """Run the site's publish tool with `args` plus `--json`, `--config`
     and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
-    reason means the vault publishes nothing."""
+    reason means the vault publishes nothing. `vault_only` is for a
+    command that has work to do without a site (migrate-config's backend
+    rename): a vault with a `publish:` block but no usable site is then
+    asked through the plugin's own tool with `--vault` alone, run from an
+    empty directory so no stray vault.config.json is picked up."""
     config, why = _site_config(vault)
+    site_args = ["--config", str(config)] if config is not None else []
+    no_site = config is None
     if config is None:
-        return ToolAnswer(why=why)
-    tool, label, why = _publish_tool_for(config.parent)
+        if not (vault_only and why):
+            return ToolAnswer(why=why)
+        label = "the plugin's publish tool (the vault has no site)"
+        if not PUBLISH_TOOL.is_file():
+            return ToolAnswer(
+                why=f"the publish tool is not at {PUBLISH_TOOL}", used=label)
+        tool: Path | None = PUBLISH_TOOL
+    else:
+        tool, label, why = _publish_tool_for(config.parent)
     used = label if tool == PUBLISH_TOOL else None
     if tool is None:
         return ToolAnswer(why=why, used=label)
@@ -1394,11 +1409,13 @@ def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
         return ToolAnswer(why="node is not on PATH", used=label)
     name = " ".join(args[:2])
     try:
-        proc = subprocess.run(
-            [node, str(tool), *args, "--json",
-             "--config", str(config), "--vault", str(vault.resolve())],
-            capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+        with tempfile.TemporaryDirectory(prefix="vc-nosite-") as empty:
+            proc = subprocess.run(
+                [node, str(tool), *args, "--json", *site_args,
+                 "--vault", str(vault.resolve())],
+                capture_output=True, text=True, encoding="utf-8",
+                errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False,
+                cwd=empty if no_site else None)
     except subprocess.TimeoutExpired:
         return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
                           used=label)
