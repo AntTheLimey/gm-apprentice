@@ -399,4 +399,20 @@ function scanConfigFor(config, publishConfig) {
   return Object.assign({}, config, { excludeDirs: publishConfig.exclude_dirs });
 }
 
-module.exports = { loadPublishConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig };
+// The one resolved config every command reads. `config` is the raw vault.config.json
+// object with each moved key overwritten, in its old JSON spelling, by the value
+// loadPublishConfig settled on (vault file first, site file only when the vault file is
+// silent), so templates and the scanner that read config.siteTitle / folderMap /
+// attachmentsDir keep working. `publishConfig` is loadPublishConfig's own output. The raw
+// object is not mutated. A key neither file sets stays as the raw object had it.
+function resolveConfig(rawConfig, vaultPath) {
+  const publishConfig = loadPublishConfig(vaultPath, rawConfig);
+  const config = Object.assign({}, rawConfig);
+  for (const entry of MOVED_KEYS) {
+    const value = publishConfig[entry.publish];
+    if (value !== undefined && value !== null) config[entry.json] = value;
+  }
+  return { config, publishConfig };
+}
+
+module.exports = { loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig };

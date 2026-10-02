@@ -262,11 +262,11 @@ function presetFamiliesFor(theme) {
 // Prefetch for a vault.config.json path, then the caller builds. Mirrors what build()
 // will resolve (same config, same preset families) so the cache is warm.
 async function prefetchForConfig(configPath, opts = {}) {
-  const { loadPublishConfig } = require('./config');
+  const { resolveConfig } = require('./config');
   const resolved = path.resolve(configPath || './vault.config.json');
   const config = require(resolved);
   const vaultPath = path.resolve(path.dirname(resolved), config.vaultPath);
-  const publishConfig = loadPublishConfig(vaultPath, config);
+  const { publishConfig } = resolveConfig(config, vaultPath);
   const fonts = publishConfig.theme.fonts || {};
   if (fonts.source !== 'self-host') return;
   await ensureFontCache(vaultPath, selfHostFamilies(fonts, presetFamiliesFor(publishConfig.theme)), opts);

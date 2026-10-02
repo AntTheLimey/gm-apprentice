@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
-const { loadPublishConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
+const { resolveConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
@@ -151,10 +151,12 @@ function surveyVault(options, deps) {
   // options.vaultPath (`--vault`) reads another vault through this site's rules —
   // vault_check asks about the vault it is checking, which need not be the one the
   // site's own vaultPath names (a working copy, say).
-  const config = loadVaultConfig(configPath, deps, { requireVaultPath: !options.vaultPath });
+  const rawConfig = loadVaultConfig(configPath, deps, { requireVaultPath: !options.vaultPath });
   const vaultPath = options.vaultPath ? path.resolve(options.vaultPath)
-    : deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
-  const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
+    : deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
+  const { config, publishConfig } = deps.publishConfig
+    ? { config: rawConfig, publishConfig: deps.publishConfig }
+    : resolveConfig(rawConfig, vaultPath);
   const manifest = loadManifest(vaultPath);
 
   // scanConfigFor: same unioned, normalized exclude_dirs build.js uses, so this command
@@ -298,7 +300,7 @@ async function runApply(options, deps, survey) {
   const text = renderManifest({
     entries,
     generated: now().toISOString(),
-    vault: publishConfig.title || config.siteTitle || path.basename(vaultPath),
+    vault: publishConfig.site_title || path.basename(vaultPath),
     mode: publishConfig.mode,
     totalFiles: files.length,
   });

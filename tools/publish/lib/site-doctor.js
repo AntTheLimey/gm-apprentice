@@ -13,7 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, pairStoryFiles, slugify } = require('./scanner');
-const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
@@ -151,7 +151,9 @@ async function runSiteDoctor(options, deps) {
     )], vaultPath, asJson);
   }
 
-  const publishConfig = loadPublishConfig(vaultPath, config);
+  const resolved = resolveConfig(config, vaultPath);
+  config = resolved.config;
+  const publishConfig = resolved.publishConfig;
   const manifest = loadManifest(vaultPath);
   // scanConfigFor: same unioned, normalized exclude_dirs the build applies, so `doctor
   // --site` predicts exactly what the build does (#209 follow-up).

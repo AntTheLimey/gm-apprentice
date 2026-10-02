@@ -10,7 +10,7 @@ const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
-const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -31,8 +31,9 @@ function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
   const configDir = path.dirname(resolvedConfigPath);
-  const config = require(resolvedConfigPath);
-  config.vaultPath = path.resolve(configDir, config.vaultPath);
+  const rawConfig = require(resolvedConfigPath);
+  rawConfig.vaultPath = path.resolve(configDir, rawConfig.vaultPath);
+  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
   const outputDir = path.resolve(configDir, config.outputDir);
 
   const host = config.host || 'github-pages';
@@ -44,7 +45,6 @@ function build(options = {}) {
     );
   }
 
-  const publishConfig = loadPublishConfig(config.vaultPath, config);
   // Merge explicit flags (Task 1) with legacy auto-detect, keyed off the site
   // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
   // publishConfig.backend, so this must run before any page renders.
