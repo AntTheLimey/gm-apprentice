@@ -20,12 +20,25 @@ const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
-const { resolveBackendFlags } = require('./backend-flags');
+const { hasRealKvId } = require('./backend-flags');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 
 const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+
+// The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
+// keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
+// list that the vault file's list lacks is named as no longer applied. Null when none.
+function legacyWarning(legacy) {
+  if (!Array.isArray(legacy) || legacy.length === 0) return null;
+  const parts = [];
+  for (const rec of legacy) {
+    parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);
+    for (const x of rec.dropped || []) parts.push(`${rec.key} entry "${x}" is no longer applied`);
+  }
+  return `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Run \`migrate.py <vault>\` to move them.`;
+}
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
@@ -45,13 +58,24 @@ function build(options = {}) {
     );
   }
 
-  // Merge explicit flags (Task 1) with legacy auto-detect, keyed off the site
-  // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
-  // publishConfig.backend, so this must run before any page renders.
-  publishConfig.backend = resolveBackendFlags(
-    { statusBar: (publishConfig.switches || {}).liveStats === true, inbox: (publishConfig.switches || {}).inbox === true },
-    configDir,
-  );
+  // The switches decide what the GM wants; a KV store (wrangler.toml, next to the site's
+  // vault.config.json) decides whether it can work. Templates read publishConfig.live and
+  // nothing else, so this must run before any page renders. A switch on without a KV
+  // store is withheld and said so.
+  const switches = publishConfig.switches || {};
+  const kvWired = hasRealKvId(configDir);
+  publishConfig.live = {
+    stats: switches.liveStats === true && kvWired,
+    inbox: switches.inbox === true && kvWired,
+  };
+  for (const note of switches.notes || []) {
+    const label = note.key.startsWith('vault.config.json') ? note.key : `publish.${note.key}`;
+    console.warn(`  WARNING: ${label} ${note.problem}`);
+  }
+  if (!kvWired) {
+    if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
+    if (switches.inbox === true) console.warn('  WARNING: publish.inbox is on but this site has no KV store wired; the change-request inbox is not published');
+  }
   const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
@@ -941,7 +965,7 @@ function build(options = {}) {
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
     const board = boardFor(publishConfig.system);
-    const live = (publishConfig.switches || {}).liveStats === true;
+    const live = publishConfig.live.stats;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
@@ -1242,6 +1266,10 @@ function build(options = {}) {
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
     console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
+
+  // Settings that still live in the site file. One line, so it is the thing the GM reads.
+  const legacyLine = legacyWarning(publishConfig.legacy);
+  if (legacyLine) console.warn(`  ${legacyLine}`);
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);

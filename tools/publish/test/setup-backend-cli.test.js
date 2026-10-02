@@ -1,12 +1,25 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const nodePath = require('node:path');
 const { runSetupBackend } = require('../lib/setup-backend');
 
-function harness(overrides = {}) {
+// A throwaway vault whose _meta/vault-config.md is where the switch is written.
+function tempVault(configText) {
+  const vault = fs.mkdtempSync(nodePath.join(os.tmpdir(), 'gm-setup-vault-'));
+  if (configText !== undefined) {
+    fs.mkdirSync(nodePath.join(vault, '_meta'));
+    fs.writeFileSync(nodePath.join(vault, '_meta', 'vault-config.md'), configText);
+  }
+  return vault;
+}
+const vaultConfig = (vault) => fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.md'), 'utf8');
+
+function harness(overrides = {}, vault = tempVault('---\ntype: meta\npublish:\n  mode: player\n---\n')) {
   const files = {
     './vault.config.json': JSON.stringify({
-      cloudflarePagesProject: 'proj-x', siteUrl: 'https://proj-x.pages.dev',
-      backend: { statusBar: false, inbox: false },
+      cloudflarePagesProject: 'proj-x', siteUrl: 'https://proj-x.pages.dev', vaultPath: vault,
     }),
     'wrangler.toml': 'name = "old"\npages_build_output_dir = "docs"\n',
   };
@@ -27,16 +40,17 @@ function harness(overrides = {}) {
     writeFile: (p, c) => { files[p] = c; files[require('path').basename(p)] = c; },
     ...overrides,
   };
-  return { deps, files, calls, recorded };
+  return { deps, files, calls, recorded, vault };
 }
 
 test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', async () => {
-  const { deps, files, calls, recorded } = harness();
+  const { deps, files, calls, recorded, vault } = harness();
   const rc = await runSetupBackend('status-bar', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 0);
   assert.match(files['wrangler.toml'], /name = "proj-x"/);        // name aligned
   assert.match(files['wrangler.toml'], /id = "kv777"/);           // KV bound
-  assert.match(files['./vault.config.json'], /"statusBar":\s*true/);
+  assert.match(vaultConfig(vault), /^  live_stats: true$/m);
+  assert.doesNotMatch(files['./vault.config.json'], /backend/);   // the site file is not touched
   assert.ok(calls.includes('build'));
   assert.ok(calls.some((c) => c.startsWith('pages deploy')));
   // Bare `pages deploy` must run in the site root so it finds wrangler.toml's
@@ -51,10 +65,11 @@ test('setup-status-bar: creates KV, patches toml, flips flag, builds, deploys', 
 });
 
 test('setup-inbox flips the inbox flag (and KV is ensured — inbox⇒KV)', async () => {
-  const { deps, files } = harness();
+  const { deps, files, vault } = harness();
   const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 0);
-  assert.match(files['./vault.config.json'], /"inbox":\s*true/);
+  assert.match(vaultConfig(vault), /^  inbox: true$/m);
+  assert.match(vaultConfig(vault), /^  mode: player$/m);   // other keys untouched
   assert.match(files['wrangler.toml'], /id = "kv777"/);
 });
 
@@ -79,4 +94,15 @@ test('idempotent: a second run with KV already bound + flag true still succeeds 
   await runSetupBackend('status-bar', { configPath: './vault.config.json' }, deps);
   const after = calls.filter((c) => c.includes('namespace create')).length;
   assert.strictEqual(after, before);   // no second create (real id now in toml)
+});
+
+test('a vault file the edit refuses is the command fails, and nothing deploys', async () => {
+  const vault = tempVault('---\npublish: [1, 2\n---\n');
+  const lines = [];
+  const { deps, calls } = harness({ out: (m) => lines.push(m) }, vault);
+  const rc = await runSetupBackend('status-bar', { configPath: './vault.config.json' }, deps);
+  assert.strictEqual(rc, 1);
+  assert.match(lines.join('\n'), /cannot edit _meta\/vault-config\.md/);
+  assert.ok(!calls.some((c) => c.startsWith('pages deploy')));
+  assert.ok(!calls.includes('build'));
 });

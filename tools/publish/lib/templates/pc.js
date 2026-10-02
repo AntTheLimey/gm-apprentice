@@ -234,9 +234,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const pages = (context || {}).pages || [];
-  const backend = publishConfig.backend || {};
-  const showInbox = backend.inbox === true;
-  const showStatusBar = backend.statusBar === true;
+  const live = publishConfig.live || {};
+  const showInbox = live.inbox === true;
+  const showStatusBar = live.stats === true;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);

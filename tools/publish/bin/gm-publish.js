@@ -440,13 +440,16 @@ if (command === 'build') {
   try {
     const { syncScaffoldFunctions, shouldSyncFunctions } = require('../lib/sync-functions');
     const siteRoot = path.dirname(path.resolve(configPath));
-    let backendExplicit;
-    try {
-      backendExplicit = JSON.parse(fs.readFileSync(configPath, 'utf8')).backend;
-    } catch {
-      // Unreadable/absent config → leave undefined so resolveBackendFlags falls back to detection.
-    }
-    if (shouldSyncFunctions(siteRoot, backendExplicit)) {
+    // Unreadable config throws into the catch below: nothing is synced, nothing is guessed.
+    const rawConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const vaultPath = path.resolve(siteRoot, rawConfig.vaultPath);
+    // The build resolves the same config next and says everything it has to say; this
+    // read only needs the switches, so its warnings would just print twice.
+    const warn = console.warn;
+    let publishConfig;
+    console.warn = () => {};
+    try { ({ publishConfig } = require('../lib/config').resolveConfig(rawConfig, vaultPath)); } finally { console.warn = warn; }
+    if (shouldSyncFunctions(siteRoot, publishConfig.switches)) {
       const { created, updated } = syncScaffoldFunctions(siteRoot);
       for (const f of created) console.log(`  synced (new) functions/${f}`);
       for (const f of updated) console.log(`  synced (updated) functions/${f}`);

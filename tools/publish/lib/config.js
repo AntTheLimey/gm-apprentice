@@ -107,7 +107,7 @@ function defaultModeFrom(raw) {
 // vault can never match anything the scanner walks, so it is dropped with a warning
 // rather than silently doing nothing forever. Returns null for an entry that normalizes
 // to nothing (empty, or outside the vault).
-function normalizeExcludeDir(entry, vaultPath) {
+function normalizeExcludeDir(entry, vaultPath, warn = true) {
   let raw = String(entry).trim().replace(/\\/g, '/');
   if (!raw) return null;
   const looksAbsolute = raw.startsWith('/') || /^[A-Za-z]:\//.test(raw);
@@ -115,7 +115,7 @@ function normalizeExcludeDir(entry, vaultPath) {
     const resolved = path.resolve(raw);
     const vaultRoot = path.resolve(vaultPath);
     if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
-      console.warn(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
+      if (warn) console.warn(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
       return null;
     }
     raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
@@ -146,15 +146,28 @@ function normalizeExcludeDirs(list, vaultPath) {
 
 // Vault file value when set, else the site file's, recording which was used. A moved key
 // is "set" when it is not undefined: an explicit false or null is a value, not silence.
-function pick(publish, json, entry, legacy, normalize = (x) => x) {
+// `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
+// "Secrets" in the other are the same entry.
+function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase()) {
   const fromVault = publish[entry.publish];
   const fromSite = json[entry.json];
+  const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
+  if (vaultMalformed) {
+    // The vault file "sets" the key but gives no list, so the built-in default applies
+    // (the safe direction) and nothing from the site file is carried over.
+    const what = fromVault === null ? 'empty' : `${typeof fromVault}`;
+    console.warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default, not the vault.config.json ${entry.json}.`);
+  }
   if (fromSite !== undefined) {
     const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
-    if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite) && Array.isArray(fromVault)) {
-      const have = new Set(fromVault.map((s) => String(s).toLowerCase()));
-      const dropped = fromSite.filter((s) => !have.has(String(s).toLowerCase()));
-      if (dropped.length) rec.dropped = dropped;
+    if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite)) {
+      if (vaultMalformed) {
+        if (fromSite.length) rec.dropped = [...fromSite];
+      } else {
+        const have = new Set(fromVault.map((s) => keyOf(s)));
+        const dropped = fromSite.filter((s) => !have.has(keyOf(s)));
+        if (dropped.length) rec.dropped = dropped;
+      }
     }
     legacy.push(rec);
   }
@@ -303,6 +316,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
       publish, jsonConfig, entry, legacy,
       entry.publish === 'exclude_dirs'
         ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath) : v)
+        : undefined,
+      entry.publish === 'exclude_dirs'
+        ? (s) => (normalizeExcludeDir(s, vaultPath, false) ?? String(s)).toLowerCase()
         : undefined,
     );
   }

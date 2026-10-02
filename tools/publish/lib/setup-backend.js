@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS, failureDetail } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
+const { setPublishKeys } = require('./vault-config-edit');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
 const KV_PERMISSION_FIX =
@@ -79,6 +80,7 @@ const defaultRunWrangler = (args, opts = {}, run = runCommand) => {
   return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error || null };
 };
 
+const SWITCH_KEY = { statusBar: 'live_stats', inbox: 'inbox' };
 const FLAG_KEY = { 'status-bar': 'statusBar', inbox: 'inbox' };
 const LABEL = { 'status-bar': 'live status bar', inbox: 'change-request inbox' };
 
@@ -116,10 +118,11 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   tomlText = patchWranglerToml(tomlText, { name: projectName, kvId: kv.id });
   writeFile(tomlPath, tomlText);
 
-  // Flip the backend flag.
-  config.backend = config.backend || {};
-  config.backend[flagKey] = true;
-  writeFile(configPath, JSON.stringify(config, null, 2) + '\n');
+  // Turn the switch on in the vault's _meta/vault-config.md, the one place settings live.
+  try {
+    if (!config.vaultPath) throw new Error(`${configPath} has no "vaultPath"`);
+    setPublishKeys(path.resolve(siteRoot, config.vaultPath), { [SWITCH_KEY[flagKey]]: true });
+  } catch (e) { out(e.message); return 1; }
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot);

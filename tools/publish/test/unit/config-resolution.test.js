@@ -17,7 +17,14 @@ describe('config resolution: vault file first, site file only when it is silent'
     it(v.name, () => {
       const vault = vaultWith(v.vault);
       try {
-        const cfg = loadPublishConfig(vault, v.site);
+        const warned = [];
+        const realWarn = console.warn;
+        console.warn = (...a) => warned.push(a.join(' '));
+        let cfg;
+        try { cfg = loadPublishConfig(vault, v.site); } finally { console.warn = realWarn; }
+        // A vector names the warning it expects, or expects none.
+        if (v.warns) assert.ok(warned.some((w) => w.includes(v.warns)), `expected a warning naming ${v.warns}: ${warned}`);
+        else assert.deepStrictEqual(warned, []);
         for (const [key, value] of Object.entries(v.expect)) assert.deepStrictEqual(cfg[key], value, key);
         assert.deepStrictEqual(
           cfg.legacy.map(({ key, status, dropped }) => (dropped ? { key, status, dropped } : { key, status })),

@@ -1,0 +1,88 @@
+const { describe, it, after } = require('node:test');
+const assert = require('node:assert');
+const fs = require('fs'); const path = require('path'); const os = require('os');
+const { build } = require('../../lib/build');
+
+const FIXTURE = path.join(__dirname, '..', 'fixtures', 'with-gurps-pc');
+const KV_TOML = '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n';
+
+// Builds the with-gurps-pc fixture in a temp site whose vault file carries `publish`
+// (a YAML fragment), and returns the PC page HTML plus every line the build printed.
+function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions = false }) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-switches-'));
+  roots.push(root);
+  const vault = path.join(root, 'vault');
+  fs.cpSync(FIXTURE, vault, { recursive: true });
+  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
+    `---\npublish:\n  mode: player\n  system: gurps-4e\n  folder_map:\n    Characters/PCs: characters/pcs\n${publish}---\n`);
+  if (wrangler) fs.writeFileSync(path.join(root, 'wrangler.toml'), KV_TOML);
+  if (functions) {
+    fs.mkdirSync(path.join(root, 'functions', 'api'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'functions', 'api', 'request.js'), '// fn');
+    fs.writeFileSync(path.join(root, 'functions', 'api', 'loadout.js'), '// fn');
+  }
+  const configPath = path.join(root, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), ...siteExtra }));
+  const real = { warn: console.warn, log: console.log };
+  const lines = [];
+  console.warn = (...a) => lines.push(a.join(' '));
+  console.log = (...a) => lines.push(a.join(' '));
+  try { build({ configPath }); } finally { Object.assign(console, real); }
+  const pcDir = path.join(root, 'docs', 'characters', 'pcs');
+  const pcFile = fs.readdirSync(pcDir).find((f) => f.endsWith('.html') && !f.startsWith('index') && !f.includes('player-characters'));
+  return { html: fs.readFileSync(path.join(pcDir, pcFile), 'utf8'), lines };
+}
+
+const roots = [];
+after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: true })));
+
+describe('live stats and the inbox follow the switches', () => {
+  it('both on with a KV store wired: chatbox and live scripts appear', () => {
+    const { html, lines } = buildSite({ publish: '  live_stats: true\n  inbox: true\n', wrangler: true, functions: true });
+    assert.ok(html.includes('id="cr-root"'), 'chatbox root');
+    assert.ok(html.includes('gurps-live.js'), 'live client script');
+    assert.ok(!lines.some((l) => /WARNING: publish\.(live_stats|inbox)/.test(l)), lines.join('\n'));
+  });
+
+  it('both on with no KV store: neither appears, and the build says why for each', () => {
+    const { html, lines } = buildSite({ publish: '  live_stats: true\n  inbox: true\n' });
+    assert.ok(!html.includes('id="cr-root"'));
+    assert.ok(!html.includes('gurps-live.js'));
+    assert.ok(lines.some((l) => l.includes('WARNING: publish.live_stats is on but this site has no KV store wired')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('WARNING: publish.inbox is on but this site has no KV store wired')), lines.join('\n'));
+  });
+
+  it('switches unset: nothing appears and nothing is warned, however deployed the backend is', () => {
+    const { html, lines } = buildSite({ wrangler: true, functions: true });
+    assert.ok(!html.includes('id="cr-root"'));
+    assert.ok(!html.includes('gurps-live.js'));
+    assert.ok(!lines.some((l) => /KV store|character_sheets/.test(l)), lines.join('\n'));
+  });
+
+  it('character_sheets off forces live stats off, with one line saying so', () => {
+    const { html, lines } = buildSite({ publish: '  character_sheets: false\n  live_stats: true\n', wrangler: true, functions: true });
+    assert.ok(!html.includes('gurps-live.js'));
+    const said = lines.filter((l) => l.includes('publish.live_stats is on but character_sheets is off; live stats are not published'));
+    assert.strictEqual(said.length, 1, lines.join('\n'));
+  });
+});
+
+describe('the closing line about campaign settings left in vault.config.json', () => {
+  it('names each key and each list entry no longer applied, once, and says how to move them', () => {
+    const { lines } = buildSite({
+      publish: '  exclude_dirs: [_meta]\n',
+      siteExtra: { siteTitle: 'Old Title', excludeDirs: ['Secrets'] },
+    });
+    const said = lines.filter((l) => l.includes('WARNING: vault.config.json still holds campaign settings'));
+    assert.strictEqual(said.length, 1, lines.join('\n'));
+    assert.match(said[0], /siteTitle/);
+    assert.match(said[0], /excludeDirs \(ignored; the vault file sets it\)/);
+    assert.match(said[0], /excludeDirs entry "Secrets" is no longer applied/);
+    assert.ok(said[0].endsWith('Run `migrate.py <vault>` to move them.'), said[0]);
+  });
+
+  it('is absent when the site file holds only deploy keys', () => {
+    const { lines } = buildSite({});
+    assert.ok(!lines.some((l) => l.includes('still holds campaign settings')));
+  });
+});

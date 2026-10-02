@@ -6,7 +6,7 @@ const page = { frontmatter: { type: 'pc', name: 'Six' }, displayTitle: 'Six', ou
 const noop = () => '';
 const cfg = { siteTitle: 'S', footer: '' };
 
-const inboxOn = { publishConfig: { backend: { inbox: true } } };
+const inboxOn = { publishConfig: { live: { inbox: true } } };
 
 test('PC page prepends the change-request widget when inbox is enabled', () => {
   const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, inboxOn);

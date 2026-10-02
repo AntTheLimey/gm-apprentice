@@ -1,6 +1,5 @@
 const fs = require('fs');
 const path = require('path');
-const { resolveBackendFlags } = require('./backend-flags');
 
 const SCAFFOLD_FUNCTIONS_DIR = path.join(__dirname, '..', 'templates-scaffold', 'functions');
 
@@ -87,10 +86,10 @@ function syncScaffoldFunctions(siteRoot, options = {}) {
 
 // The build re-syncs plugin-owned Functions so upgraded sites get new API routes.
 // A Tier-1 (static) site has no backend, so it must not have Functions re-added.
-// Gate the sync on the site's resolved backend flags.
-function shouldSyncFunctions(siteRoot, backendExplicit) {
-  const flags = resolveBackendFlags(backendExplicit, siteRoot);
-  return Boolean(flags.statusBar || flags.inbox);
+// Gate the sync on the resolved switches; a missing set means off.
+function shouldSyncFunctions(siteRoot, switches) {
+  const s = switches || {};
+  return Boolean(s.liveStats || s.inbox);
 }
 
 module.exports = { syncScaffoldFunctions, shouldSyncFunctions, SCAFFOLD_FUNCTIONS_DIR };

@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
+const { setPublishKeys } = require('../../lib/vault-config-edit');
 
 describe('build integration — GURPS PC', () => {
   const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -16,12 +17,16 @@ describe('build integration — GURPS PC', () => {
       outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-gurps-'));
       configPath = path.join(outputDir, 'config.json');
 
+      // The switch lives in the vault file; a wired KV store lets it take effect.
+      const vault = path.join(outputDir, 'vault');
+      fs.cpSync(path.join(fixturesDir, 'with-gurps-pc'), vault, { recursive: true });
+      setPublishKeys(vault, { live_stats: true });
+      fs.writeFileSync(path.join(outputDir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
       const config = {
-        vaultPath: path.join(fixturesDir, 'with-gurps-pc'),
+        vaultPath: vault,
         outputDir: path.join(outputDir, 'docs'),
         attachmentsDir: '_attachments',
         siteTitle: 'GURPS Test',
-        backend: { statusBar: true },
         excludeDirs: ['_meta', '_Templates'],
         excludeSections: [],
         folderMap: {

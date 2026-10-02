@@ -8,6 +8,7 @@ const { buildPartyManifest, partyDataScript } = require('../lib/party-manifest')
 const { renderPartyBoard } = require('../lib/templates/gurps/party-board');
 const { boardFor } = require('../lib/party-board-registry');
 const { build } = require('../lib/build');
+const { setPublishKeys } = require('../lib/vault-config-edit');
 
 function pcEntry(name, slug, bs, dx) {
   return { name, outputPath: 'characters/pcs/' + slug + '.html', data: {
@@ -49,17 +50,22 @@ test('wikiTemplate without party context renders no board or live scripts', () =
 });
 
 // Build the with-party-roster fixture and return the rendered roster HTML.
-// Gate under test: build() only wires the live party board when backend.statusBar
+// Gate under test: build() only wires the live party board when live_stats
 // is on — the board polls /api/loadout-list, a KV backend absent on a static site.
 function buildRosterHtml(statusBar) {
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-roster-'));
   try {
     const configPath = path.join(outputDir, 'config.json');
+    // The switch lives in the vault file, and a wired KV store is what lets it take effect.
+    const vault = path.join(outputDir, 'vault');
+    fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
+    if (statusBar) setPublishKeys(vault, { live_stats: true });
+    fs.writeFileSync(path.join(outputDir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
     fs.writeFileSync(configPath, JSON.stringify({
-      vaultPath: path.join(__dirname, 'fixtures', 'with-party-roster'),
+      vaultPath: vault,
       outputDir: path.join(outputDir, 'docs'),
       attachmentsDir: '_attachments', siteTitle: 'Roster Test',
-      system: 'gurps-4e', backend: { statusBar },
+      system: 'gurps-4e',
       excludeDirs: ['_meta', '_Templates'], excludeSections: [],
       folderMap: { 'Characters/PCs': 'characters/pcs' },
     }, null, 2));
@@ -72,7 +78,7 @@ function buildRosterHtml(statusBar) {
   }
 }
 
-test('build() renders a static roster table but no live layer when backend.statusBar is off', () => {
+test('build() renders a static roster table but no live layer when live_stats is off', () => {
   const html = buildRosterHtml(false);         // statusBar off
   // Static initiative table renders (baked authored values):
   assert.match(html, /class="gl-party"/);
@@ -83,7 +89,7 @@ test('build() renders a static roster table but no live layer when backend.statu
   assert.doesNotMatch(html, /gl-party-live/);            // no "live" indicator
 });
 
-test('build() wires the live party board on the roster when backend.statusBar is on', () => {
+test('build() wires the live party board on the roster when live_stats is on', () => {
   const marker = 'id="' + boardFor('gurps-4e').scriptId + '"'; // id="gurps-party-data"
   const html = buildRosterHtml(true);
   assert.ok(html.includes(marker), 'party-board island present when statusBar on');
