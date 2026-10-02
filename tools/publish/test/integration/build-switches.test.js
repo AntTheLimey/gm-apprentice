@@ -8,11 +8,12 @@ const KV_TOML = '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n';
 
 // Builds the with-gurps-pc fixture in a temp site whose vault file carries `publish`
 // (a YAML fragment), and returns the PC page HTML plus every line the build printed.
-function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions = false }) {
+function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions = false, pcAppend = '' }) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-switches-'));
   roots.push(root);
   const vault = path.join(root, 'vault');
   fs.cpSync(FIXTURE, vault, { recursive: true });
+  if (pcAppend) fs.appendFileSync(path.join(vault, 'Characters', 'PCs', 'Karl Brenner.md'), pcAppend);
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
     `---\npublish:\n  mode: player\n  system: gurps-4e\n  folder_map:\n    Characters/PCs: characters/pcs\n${publish}---\n`);
   if (wrangler) fs.writeFileSync(path.join(root, 'wrangler.toml'), KV_TOML);
@@ -111,5 +112,46 @@ describe('a malformed pc_prose_sections', () => {
     const { lines, root } = buildSite({ publish: '  character_sheets: false\n  pc_prose_sections: everything\n' });
     assert.ok(lines.some((l) => l.includes('WARNING: publish.pc_prose_sections is not a list')), lines.join('\n'));
     assert.ok(!fs.readFileSync(path.join(root, 'docs', 'search-index.json'), 'utf8').includes('"broadsword"'));
+  });
+});
+
+describe('PC notes whose labels shift their headings', () => {
+  const SENT = 'STAT14';
+  const bodies = {
+    labelNewline: { text: '[[Nowhere|a\n## Skills]]', warns: 0 },
+    embedNewline: { text: '![[m.png|a\n## Skills]]', warns: 0 },
+    labelSpace: { text: '[[Nowhere| ## Skills]]', warns: 1 },
+    embedDashes: { text: 'Skills\n![[m.png]]---', warns: 1 },
+    embedHeading: { text: '![[m.png]]## Skills', warns: 1 },
+  };
+  const allOutput = (root) => {
+    const out = [];
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).forEach((e) => {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f); else if (/\.(html|json|js|md|txt|xml)$/.test(e.name)) out.push([f, fs.readFileSync(f, 'utf8')]);
+    });
+    walk(path.join(root, 'docs'));
+    return out;
+  };
+  for (const [name, { text, warns }] of Object.entries(bodies)) {
+    const pcAppend = `\n## Background\nok\n${text}\n${SENT}\n`;
+    it(`${name}: sheets off publishes no ${SENT} anywhere and warns ${warns} time(s)`, () => {
+      const { lines, root } = buildSite({ publish: '  character_sheets: false\n', pcAppend });
+      for (const [f, body] of allOutput(root)) assert.ok(!body.includes(SENT), f);
+      const warned = lines.filter((l) => l.includes("changes this note's headings; nothing after its title is published while character sheets are off. Fix the label."));
+      assert.strictEqual(warned.length, warns, lines.join('\n'));
+      if (warns) assert.ok(warned[0].includes('WARNING: characters/pcs/'), warned[0]);
+    });
+    it(`${name}: sheets on builds as before, with no keep-list warning`, () => {
+      const { lines, root } = buildSite({ pcAppend });
+      assert.ok(!lines.some((l) => l.includes('changes this note')), lines.join('\n'));
+      assert.ok(allOutput(root).some(([, body]) => body.includes(SENT)), 'the note still publishes its body');
+    });
+  }
+  it('a normal note with links and embeds is stable and keeps its sections', () => {
+    const pcAppend = '\n## Background\nMet [[Nowhere]] and [[Karl Brenner]]. ![[m.png]]\n\n**Note:** kept prose\n';
+    const { lines, html } = buildSite({ publish: '  character_sheets: false\n', pcAppend });
+    assert.ok(!lines.some((l) => l.includes('changes this note')), lines.join('\n'));
+    assert.ok(html.includes('kept prose'));
   });
 });

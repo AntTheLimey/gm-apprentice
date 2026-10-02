@@ -328,17 +328,47 @@ describe('PC keep-list: nothing but kept headings and no stats survive the real 
       }
     });
   }
-  it('a wikilink label cannot become a heading the filters did not judge', () => {
-    // The label is prose of the Background section in both views: the search text and
-    // the page agree, because the rewrite no longer makes it block syntax.
-    const md = `${base}[[Nowhere|## Skills]]\n${SENT}\n`;
-    const page = { markdown: md, frontmatter: pc, outputPath: 'pcs/jean.html' };
-    const html = processContent(page, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS }).html;
-    assert.ok(!/<h[1-6]/.test(html.replace('<h2>Background</h2>', '')), html);
-    assert.ok(html.includes('## Skills') && html.includes(SENT), html);
-    for (const label of ['---', '===', '# Stats', '```']) {
-      const out = processContent({ ...page, markdown: `${base}Intro\n[[Nowhere|${label}]]\n${SENT}\n` }, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS }).html;
-      assert.ok(!/<h[1-6]|<hr|<pre/.test(out.replace('<h2>Background</h2>', '')), `${label}: ${out}`);
+  it('resolveWikiLinks is left as it was', () => {
+    const { resolveWikiLinks } = require('../../lib/processor');
+    assert.strictEqual(resolveWikiLinks('[[Gone|#1]] [[Gone|--x]] [[Gone|a\nb]]', {}, 'a/b.html'), '#1 --x a\nb');
+    const page = { markdown: '`[[Gone|#1]]` [[Gone|--x]]\n', frontmatter: {}, outputPath: 'a/b.html' };
+    const html = processContent(page, {}, [], {}, {}).html;
+    assert.ok(html.includes('<code>#1</code>') && html.includes(' --x'), html);
+  });
+});
+
+describe('PC keep-list stability against link and embed labels', () => {
+  const { pcHeadingsUnstable } = require('../../lib/processor');
+  const verdict = (md) => pcHeadingsUnstable({ markdown: md, frontmatter: pc, outputPath: 'pcs/jean.html' }, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS });
+  const base = '# Jean\n## Background\nok\n';
+  it('a transform that creates a heading makes the note unstable', () => {
+    for (const body of ['[[Nowhere| ## Skills]]', 'Skills\n![[m.png]]---', '![[m.png]]## Skills', '[[Nowhere|## Skills]]']) {
+      assert.strictEqual(verdict(`${base}${body}\nSTAT14\n`), true, body);
+    }
+  });
+  it('a transform that removes a heading makes the note unstable', () => {
+    const body = '## Notes\n![[m.png|a\n## Skills]]\nplayer text\n';
+    // The raw text has a real `## Skills]]` heading; the kept text drops it, so the embed is unmatched.
+    assert.strictEqual(verdict(`${base}${body}`), false);
+    assert.strictEqual(verdict(`${base}[[Nowhere|a\n## Notes]]\nSTAT14\n`), false);
+  });
+  it('an ordinary note with links and embeds is stable', () => {
+    const md = `${base}Met [[Bob]] and [[Nowhere]]. ![[m.png]] ![[a.png]]\n\n**Location:** Brest\n**Condition:** ok\n\n## Stats\n[[Bob]]\n`;
+    assert.strictEqual(verdict(md), false);
+    assert.strictEqual(pcHeadingsUnstable({ markdown: md, frontmatter: { type: 'npc' }, outputPath: 'a.html' }, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS }), false);
+    assert.strictEqual(pcHeadingsUnstable({ markdown: md, frontmatter: pc, outputPath: 'a.html' }, {}, [], {}, {}), false);
+  });
+  it('processContent withholds an unstable body and says why, without the build', () => {
+    const page = { markdown: `${base}[[Nowhere| ## Skills]]\nSTAT14\n`, frontmatter: pc, outputPath: 'pcs/jean.html' };
+    const r = processContent(page, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS });
+    assert.ok(!r.html.includes('STAT14') && !r.html.includes('ok'), r.html);
+    assert.ok(r.warnings.some((w) => /changes this note's headings/.test(w)));
+  });
+  it('an embed or label that removes a raw heading cannot publish what followed it', () => {
+    for (const body of ['[[Nowhere|a\n## Skills]]', '![[m.png|a\n## Skills]]']) {
+      const page = { markdown: `${base}${body}\nSTAT14\n`, frontmatter: pc, outputPath: 'pcs/jean.html' };
+      const r = processContent(page, {}, [], {}, { pcKeepSections: PC_PROSE_SECTIONS });
+      assert.ok(!r.html.includes('STAT14'), `${body}: ${r.html}`);
     }
   });
 });

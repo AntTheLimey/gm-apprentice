@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStor
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList } = require('./pc-prose');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
@@ -514,6 +514,9 @@ function build(options = {}) {
       page.frontmatter, excludeFields, overridesForFile);
   }
 
+  // Scanned here, not later, because the keep-list stability check below reads it.
+  const imageMap = scanAttachments(scanConfig);
+
   const { buildBacklinks } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
@@ -524,6 +527,14 @@ function build(options = {}) {
   // (B6 spoiler leak). Spoiler blocks are unrevealed narrative content, not permanent
   // secrets, but they're just as unpublished until reconcile's reveal step strips the
   // fence — until then they must never surface in a derived widget either.
+  // A PC note whose link or embed labels would change its headings is withheld whole
+  // while character sheets are off. Decided once, here, so the page, its sections and
+  // the search/backlink text all get the same answer.
+  for (const page of pages) {
+    if (!pcKeepSections) break;
+    page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
+    if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
+  }
   for (const page of pages) {
     const gmStripped = stripGmOnly(page.markdown || '');
     const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
@@ -531,7 +542,7 @@ function build(options = {}) {
     const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
+    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
       { pcKeepSections, warn: (m) => console.warn(`  WARNING: ${page.outputPath}: ${m}`) });
   }
 
@@ -660,7 +671,6 @@ function build(options = {}) {
     ? 'timeline.html'
     : (authoredTimeline ? authoredTimeline.outputPath : null);
 
-  const imageMap = scanAttachments(scanConfig);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
 
   // Re-encode before a single page renders. The tool owns both the image copy and every
@@ -790,16 +800,13 @@ function build(options = {}) {
         case 'pc': {
           // Warnings are dropped here, not ignored: processContent above ran this same
           // strip chain over the same markdown and already reported them.
-          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
+          let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
             portraitBasename: portraitBasename(page.frontmatter),
           });
           filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
-          // The keep-list again, on the text extractSections will split: the rewrites
-          // above can change lines, and the sections must be the ones that were judged.
-          if (pcKeepSections) filtered = filterSections(filtered, excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections });
           const sections = extractSections(filtered);
 
           let storyHtml;

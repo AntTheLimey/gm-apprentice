@@ -73,10 +73,7 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
     // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
     const display = displayText || wikiTargetLabel(target);
     const targetPath = linkMap[target];
-    // Plain text standing where a link was must not turn into block syntax: a label
-    // of `## Stats` or `---` at the start of a line would otherwise become a heading
-    // the section filters, which read the text before this runs, never saw.
-    if (!targetPath) return display.replace(/\s*\n\s*/g, ' ').replace(/^([#=\-~`])/, '\\$1');
+    if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
     // A raw space (or other unsafe char) in the destination is not valid markdown link
     // syntax — markdown-it falls back to literal `[text](path)` text, and the typographer
@@ -757,6 +754,65 @@ function playerSafeMarkdown(markdown, options = {}) {
   return { text, warnings };
 }
 
+const HEADINGS_UNSTABLE_WARNING = 'a link or embed label changes this note\'s headings; nothing after its title is published while character sheets are off. Fix the label.';
+
+// The level 1-2 top-level headings of a text, as `level:bare title` (the note's own
+// first heading, when it is a title, by level only: a title may carry a link).
+function headingShape(text, titleFirst) {
+  const shape = [];
+  let first = true;
+  for (let t = 0, tokens = md.parse(text, {}); t < tokens.length; t++) {
+    const tok = tokens[t];
+    if (tok.type !== 'heading_open' || tok.level !== 0) continue;
+    const level = Number(tok.tag.slice(1));
+    if (level > 2) continue;
+    const inline = tokens[t + 1];
+    const isTitle = titleFirst && first && level === 1;
+    first = false;
+    shape.push(isTitle ? '1:' : `${level}:${bareSectionTitle(inline ? inline.content : '')}`);
+  }
+  return shape.join('\n');
+}
+
+// Whether the pre-render transforms (image embeds, wikilinks, bold-label spacing) would
+// create or remove a top-level heading in a PC note's raw-kept text. Such a note's
+// heading structure is not what the keep-list judged, so the build withholds its whole
+// body from EVERY output (page, sections, search/backlink text). Deliberately blunt:
+// explain, site-doctor and `sheet show --player-safe` report the raw-text decision only,
+// so for an unstable note the build withholds more than they say, never less.
+// Two pipelines are checked, the page's (title stripped, bold spacing) and the sheet
+// sections' (title kept). Any failure to parse counts as unstable.
+function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = {}) {
+  const fm = page.sourceFrontmatter || page.frontmatter;
+  if (!pcKeepRuleApplies(fm, { pcKeepSections: options.pcKeepSections })) return false;
+  const base = playerSafeMarkdown(page.markdown || '', { excludeCallouts: options.excludeCallouts }).text;
+  const transform = (text) => {
+    // A missing image embed warns; this is a dry run, so it must stay quiet and leave usedImages alone.
+    const warn = console.warn;
+    console.warn = () => {};
+    try {
+      const withImages = resolveImageEmbeds(text, imageMap || {}, page.outputPath || '', new Set(), { portraitBasename: portraitBasename(page.frontmatter) });
+      return resolveWikiLinks(withImages, linkMap || {}, page.outputPath || '');
+    } finally { console.warn = warn; }
+  };
+  const variants = [
+    { text: stripLeadingH1(base), stripped: true, spaced: true },
+    { text: base, stripped: false, spaced: false },
+  ];
+  try {
+    for (const v of variants) {
+      const rules = { pcKeepSections: options.pcKeepSections, titleStripped: v.stripped };
+      const kept = filterSections(v.text, excludeSections, fm, rules);
+      const after = transform(v.spaced ? separateBoldLabelLines(kept) : kept);
+      if (filterSections(after, excludeSections, fm, rules) !== after) return true;
+      if (headingShape(after, !v.stripped) !== headingShape(kept, !v.stripped)) return true;
+    }
+  } catch (err) {
+    return true;
+  }
+  return false;
+}
+
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
   let markdown = page.markdown.replace(/\r/g, '');
   const warnings = [];
@@ -784,17 +840,23 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   markdown = stripLeadingH1(markdown);
   markdown = stripCallouts(markdown, options.excludeCallouts);
-  markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter);
+  // The PC keep-list is decided here, on the raw note, before any transform: the same
+  // text publishedMarkdown, explain and the doctor walk. A note whose headings the
+  // transforms below would change is withheld whole (pcHeadingsUnstable).
+  const keepRules = { pcKeepSections: options.pcKeepSections, titleStripped: true, warn: (m) => warnings.push(m) };
+  let unstable = false;
+  if (options.pcKeepSections && page.headingsUnstable === undefined) {
+    unstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options);
+    if (unstable) warnings.push(HEADINGS_UNSTABLE_WARNING);
+  } else if (page.headingsUnstable) {
+    unstable = true;   // decided up front by the build, which has already said so
+  }
+  markdown = unstable ? '' : filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter, keepRules);
   markdown = separateBoldLabelLines(markdown);
   markdown = resolveImageEmbeds(markdown, imageMap, page.outputPath, options.usedImages, {
     portraitBasename: portraitBasename(page.frontmatter),
   });
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
-  // The PC keep-list reads the text the renderer will read: the transforms above can
-  // rewrite lines, so its section boundaries are found here, not before them.
-  // stripLeadingH1 has already taken the title, so every `#` is judged.
-  markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter,
-    { pcKeepSections: options.pcKeepSections, titleStripped: true, warn: (m) => warnings.push(m) });
   const html = md.render(markdown);
   const relationships = renderRelationships(page.frontmatter, linkMap, page.outputPath);
   return { html, relationships, warnings };
@@ -1037,4 +1099,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, sheetWithheldTitles };
+module.exports = { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, sheetWithheldTitles };
