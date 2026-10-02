@@ -1,12 +1,92 @@
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
+const { parseNote } = require('./frontmatter');
+const { setPublishKeys, fillUnset } = require('./vault-config-edit');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
 const DEFAULTS = {
   SITE_TITLE: 'My Campaign',
   SITE_URL: 'https://example.github.io/my-campaign',
+  VAULT_PATH: './vault',
 };
+
+// The campaign settings a new site starts with. They live in the vault file
+// (_meta/vault-config.md, under publish:), not in the site's vault.config.json.
+const DEFAULT_FOLDER_MAP = {
+  'Characters/PCs': 'characters/pcs',
+  'Characters/NPCs': 'characters/npcs',
+  'Locations': 'locations',
+  'Factions & Organizations': 'factions',
+  'Items & Artifacts': 'items',
+  'Creatures': 'creatures',
+  'Events': 'events',
+  'Documents': 'documents',
+  'Clues': 'clues',
+  'Chapters': 'chapters',
+  '_Campaign': 'campaign',
+  '_World': 'world',
+  'Heritages': 'heritages',
+};
+
+function defaultCampaignSettings(siteTitle, tagline) {
+  return {
+    site_title: siteTitle,
+    folder_map: DEFAULT_FOLDER_MAP,
+    attachments_dir: '_attachments',
+    exclude_dirs: ['_meta', '_Templates', '_resources'],
+    exclude_callouts: true,
+    ...(tagline ? { theme: { tagline } } : {}),
+  };
+}
+
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/**
+ * Write the starting campaign settings into the vault file, for keys it does not
+ * already set. Never creates the vault directory and never writes into a vault file
+ * the editor refuses. Returns what happened so the caller can tell the user.
+ * @returns {{ written: string[], kept: string[], skipped: string|null, missing: Record<string, unknown> }}
+ */
+function seedVaultSettings(vaultDir, settings) {
+  const none = (skipped, missing) => ({ written: [], kept: [], skipped, missing });
+  if (!fsSync.existsSync(vaultDir) || !fsSync.statSync(vaultDir).isDirectory()) {
+    return none(`the vault folder ${vaultDir} does not exist yet`, settings);
+  }
+  const file = path.join(vaultDir, '_meta', 'vault-config.md');
+  let publish = {};
+  if (fsSync.existsSync(file)) {
+    try {
+      publish = parseNote(fsSync.readFileSync(file, 'utf8')).data.publish ?? {};
+    } catch (e) {
+      return none(`_meta/vault-config.md does not parse: ${String(e.message).split('\n')[0].trim()}`, settings);
+    }
+    if (publish === null || typeof publish !== 'object' || Array.isArray(publish)) {
+      return none('publish: in _meta/vault-config.md is not a map', settings);
+    }
+  }
+  const set = {};
+  const kept = [];
+  for (const [key, value] of Object.entries(settings)) {
+    if (publish[key] === undefined) { set[key] = value; continue; }
+    // `theme` holds other keys the GM may have set: add the seeded ones beside them, only
+    // where the vault file leaves them unset. (The theme block is re-written, so comments
+    // inside it are not kept, as with migrate-config.)
+    if (key === 'theme' && isMap(value) && isMap(publish.theme)) {
+      const filled = fillUnset(publish.theme, value);
+      if (filled) { set.theme = filled; continue; }
+    }
+    kept.push(key);
+  }
+  if (!Object.keys(set).length) return { written: [], kept, skipped: null, missing: {} };
+  try {
+    setPublishKeys(vaultDir, set);
+  } catch (e) {
+    return { written: [], kept, skipped: e.message, missing: set };
+  }
+  return { written: Object.keys(set), kept, skipped: null, missing: {} };
+}
 
 function slugify(text) {
   const slug = text
@@ -35,7 +115,11 @@ function applyPlaceholders(content, values) {
  * @param {string} targetDir - Directory to write scaffold into (default: cwd)
  * @param {object} [options]
  * @param {boolean} [options.verbose] - Log progress (default: false)
- * @returns {Promise<{ success: true, files: string[] }>}
+ * @param {string} [options.siteTitle] - Seeds publish.site_title (default "My Campaign")
+ * @param {string} [options.tagline] - Seeds publish.theme.tagline when the vault file leaves it unset
+ * @param {string} [options.vaultPath] - The vault; recorded as vaultPath in the site file and
+ *   where the starting campaign settings go (default: ./vault beside the site)
+ * @returns {Promise<{ success: true, files: string[], vaultSettings: object }>}
  */
 async function init(targetDir = '.', options = {}) {
   const verbose = options.verbose === true;
@@ -44,6 +128,7 @@ async function init(targetDir = '.', options = {}) {
     ...DEFAULTS,
     SITE_TITLE: siteTitle,
     PACKAGE_NAME: slugify(siteTitle),
+    VAULT_PATH: (options.vaultPath || DEFAULTS.VAULT_PATH).split(path.sep).join('/'),
     // Pin the scaffold to THIS tool — the copy running init, which lives in the plugin
     // cache. The site then builds with the exact version of the plugin the GM installed,
     // with no npm-registry round-trip and no manual repoint. options.toolDep is an escape
@@ -118,7 +203,21 @@ async function init(targetDir = '.', options = {}) {
     created.push('.nojekyll');
   }
 
-  return { success: true, files: created };
+  // The campaign settings go into the vault file. A vault that is not there yet, or a vault
+  // file the editor refuses, never stops the scaffold: the site is written and the caller
+  // is told which settings to add.
+  const vaultDir = path.resolve(dest, values.VAULT_PATH);
+  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline));
+  if (vaultSettings.written.length) {
+    const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
+    log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}${which}`);
+  }
+  if (vaultSettings.skipped) {
+    const keys = Object.keys(vaultSettings.missing).join(', ');
+    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these under publish: in _meta/vault-config.md: ${keys}.`);
+  }
+
+  return { success: true, files: created, vaultSettings };
 }
 
 module.exports = { init };

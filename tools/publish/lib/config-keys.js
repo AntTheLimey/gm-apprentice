@@ -1,0 +1,37 @@
+// Every setting that used to live in the site's vault.config.json and now lives
+// under `publish:` in _meta/vault-config.md. The reader, the build warning and
+// migrate-config all read this table; a key missing here is not migrated.
+const MOVED_KEYS = [
+  { json: 'siteTitle',       publish: 'site_title',       kind: 'scalar' },
+  { json: 'footer',          publish: 'footer',           kind: 'scalar' },
+  { json: 'searchEnabled',   publish: 'search',           kind: 'scalar' },
+  { json: 'folderMap',       publish: 'folder_map',       kind: 'map' },
+  { json: 'attachmentsDir',  publish: 'attachments_dir',  kind: 'scalar' },
+  { json: 'system',          publish: 'system',           kind: 'scalar' },
+  { json: 'excludeDirs',     publish: 'exclude_dirs',     kind: 'list' },
+  { json: 'excludeSections', publish: 'exclude_sections', kind: 'list' },
+  { json: 'excludeFields',   publish: 'exclude_fields',   kind: 'list' },
+  { json: 'excludeCallouts', publish: 'exclude_callouts', kind: 'scalar' },
+  { json: 'sheet_crest',     publish: 'sheet_crest',      kind: 'scalar' },
+  { json: 'landing',         publish: 'landing',          kind: 'map' },
+  { json: 'images',          publish: 'images',           kind: 'map' },
+  { json: 'banners',         publish: 'banners',          kind: 'map' },
+  { json: 'locations',       publish: 'locations',        kind: 'map' },
+];
+// The six keys that stay in vault.config.json.
+const DEPLOY_KEYS = ['vaultPath', 'outputDir', 'host', 'siteUrl', 'cloudflarePagesProject', 'preserveDirs'];
+// Old switch names, in either file. Handled by switches.js, moved by migrate-config.
+const OLD_SWITCHES = { statusBar: 'live_stats', inbox: 'inbox' };
+// True while the site file still holds anything the migration would move: a moved key, the
+// old `backend` block, or `landingTagline`. One predicate for migrate-config (which detects
+// a deployed backend only for such a site) and the build (which says what a switch left
+// unset has stopped doing).
+function hasLegacy(site) {
+  return !!site && typeof site === 'object' && (site.backend !== undefined || site.landingTagline !== undefined
+    || MOVED_KEYS.some((e) => site[e.json] !== undefined));
+}
+// What the reader does with a list entry is String(entry), so text, numbers and booleans
+// can be carried over; null, a map or list, a non-finite number and an empty string cannot.
+const isText = (v) => typeof v === 'string' && v.trim() !== '';
+const usable = (v) => isText(v) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
+module.exports = { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy, isText, usable };

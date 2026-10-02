@@ -1457,28 +1457,6 @@ def read_publish_scalar(vault: Path, key: str) -> str | None:
     return None
 
 
-def read_site_exclude_sections(vault: Path) -> tuple[list[str] | None, str | None]:
-    """(the site's vault.config.json `excludeSections`, error). The site is
-    found through `publish.site_dir`; with none set, or no JSON there, the
-    list is None (not set). A JSON file that doesn't parse is an error."""
-    site_dir = read_publish_scalar(vault, "site_dir")
-    if not site_dir:
-        return None, None
-    site = Path(site_dir).expanduser()
-    if not site.is_absolute():
-        site = vault / site
-    config = site / "vault.config.json"
-    try:
-        data = json.loads(config.read_text(encoding="utf-8-sig"))  # the build's require() takes a BOM
-    except FileNotFoundError:
-        return None, None
-    except (OSError, UnicodeDecodeError, ValueError) as e:
-        return None, f"{config} not readable ({e.__class__.__name__})"
-    value = data.get("excludeSections") if isinstance(data, dict) else None
-    # config.js keeps only an array; anything else counts as not set.
-    return ([str(v) for v in value] if isinstance(value, list) else None), None
-
-
 # The publish pipeline's own defaults (tools/publish/lib/config.js
 # PUBLISH_DEFAULTS.exclude_sections). Keep the two in step: a section the
 # site drops but a check treats as published is a leak waiting to happen.
@@ -1488,37 +1466,41 @@ DEFAULT_EXCLUDE_SECTIONS: tuple[str, ...] = (
 )
 
 
-def resolve_exclude_sections(vault_list: list[str] | None,
-                             site_list: list[str] | None = None) -> list[str]:
-    """config.js `unionExcludeList`: the union of the vault's own list and
-    the site's `vault.config.json` `excludeSections`, whichever are set, and
-    the defaults only when neither is. The defaults are a fallback, not a
-    floor: a vault with no list whose site sets a shorter one publishes
-    everything that shorter list leaves out (#240). De-duplicated
+def resolve_exclude_sections(vault_list: list[str] | None) -> list[str]:
+    """The vault file's own `publish.exclude_sections`, or the built-in
+    defaults when it sets none. This is the fallback for a vault the
+    publish tool cannot be asked about; when it can, the tool's resolved
+    list is used instead (`effective_exclude_sections(tool_list=...)`),
+    because the build decides between the vault file, the site file and
+    the defaults and Python never reads the site file's list. De-duplicated
     case-insensitively, first casing wins.
     """
-    sources = [s for s in (vault_list, site_list) if s is not None]
-    if not sources:
-        sources = [list(DEFAULT_EXCLUDE_SECTIONS)]
+    source = vault_list if vault_list is not None else list(
+        DEFAULT_EXCLUDE_SECTIONS)
     result: list[str] = []
     seen: set[str] = set()
-    for value in (v for s in sources for v in s):
+    for value in source:
         if value and value.casefold() not in seen:
             seen.add(value.casefold())
             result.append(value)
     return result
 
 
-def effective_exclude_sections(vault: Path) -> list[str]:
-    """The exclude list the publisher actually applies to this vault.
+def effective_exclude_sections(vault: Path,
+                               tool_list: list[str] | None = None) -> list[str]:
+    """The exclude list the publisher applies to this vault.
 
-    Matches tools/publish/lib/config.js exactly: the vault's
-    `publish.exclude_sections` unioned with the site's `vault.config.json`
-    `excludeSections` (found through `publish.site_dir`); the defaults
-    only when neither is set. Treating the defaults as always-on told the checks
-    Player Notes and Source References were hidden on sites that
-    publish them.
+    `tool_list` is the publish tool's resolved list (`excludeSections` in
+    `explain --all --json`); when given it is the answer, as the tool is
+    the only reader of the vault file's, the site file's and the default
+    list. Without it (no tool answer: no node, no site, an older tool) this
+    falls back to the vault file's own `publish.exclude_sections`, else
+    the built-in defaults. It never reads the site file's `excludeSections`:
+    a vault whose list lives only there is read with the defaults on this
+    path (the caller's tool row says the tool could not be asked).
     """
+    if tool_list is not None:
+        return list(tool_list)
     cfg = read_publish_list(vault, "exclude_sections")
     if cfg.error:
         # Guessing at a list we cannot read is how a check ends up
@@ -1528,12 +1510,7 @@ def effective_exclude_sections(vault: Path) -> list[str]:
               f"not understood ({cfg.error}) — treating nothing as "
               f"excluded", file=sys.stderr)
         return []
-    site_list, site_error = read_site_exclude_sections(vault)
-    if site_error:
-        print(f"warning: site config {site_error} — treating nothing as "
-              f"excluded", file=sys.stderr)
-        return []
-    return resolve_exclude_sections(cfg.value, site_list)
+    return resolve_exclude_sections(cfg.value)
 
 
 # --------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 const { describe, it, before, after } = require('node:test');
+require('../helpers/quiet-legacy-warning.js');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
@@ -56,9 +57,9 @@ describe('publish.exclude_dirs from vault-config.md reaches the scanner (#209)',
   });
 });
 
-// #209 continued: vault.config.json's legacy excludeDirs must keep working too — the fix
-// unions both sources, it does not swap one for the other.
-describe('legacy vault.config.json excludeDirs still honoured alongside publish.exclude_dirs (#209)', () => {
+// #209 continued: the vault file's exclude_dirs leads; a site-file excludeDirs entry it lacks
+// is still applied until the migration moves it, so an upgrade never publishes a hidden folder.
+describe('vault.config.json excludeDirs entries the vault list lacks still apply (#209)', () => {
   let work, outputDir;
 
   before(() => {
@@ -97,11 +98,11 @@ describe('legacy vault.config.json excludeDirs still honoured alongside publish.
     assert.ok(!fs.existsSync(path.join(outputDir, 'from-vault-config', 'a.html')));
   });
 
-  it('still honours the legacy vault.config.json source', () => {
+  it('still applies a site file entry the vault file lacks', () => {
     assert.ok(!fs.existsSync(path.join(outputDir, 'from-json-config', 'b.html')));
   });
 
-  it('publishes everything neither source excludes', () => {
+  it('publishes everything the vault file does not exclude', () => {
     assert.ok(fs.existsSync(path.join(outputDir, 'characters', 'npcs', 'visible.html')));
   });
 });

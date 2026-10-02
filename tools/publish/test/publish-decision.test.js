@@ -73,6 +73,7 @@ describe('publish-decision: one case per code', () => {
     const v = decide({ type: 'npc' }, { folderMapped: false });
     assert.strictEqual(v.bucket, 'decide');
     assert.strictEqual(v.code, 'DIR_UNMAPPED');
+    assert.match(v.reason, /publish\.folder_map/);
   });
 
   it('NO_TYPE when the frontmatter carries no type', () => {

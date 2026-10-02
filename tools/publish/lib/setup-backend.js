@@ -2,6 +2,8 @@ const fs = require('fs');
 const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS, failureDetail } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
+const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
+const { OLD_SWITCHES } = require('./config-keys');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
 const KV_PERMISSION_FIX =
@@ -79,6 +81,7 @@ const defaultRunWrangler = (args, opts = {}, run = runCommand) => {
   return { code: r.code, stdout: r.stdout || '', stderr: r.stderr || '', error: r.error || null };
 };
 
+const SWITCH_KEY = OLD_SWITCHES;
 const FLAG_KEY = { 'status-bar': 'statusBar', inbox: 'inbox' };
 const LABEL = { 'status-bar': 'live status bar', inbox: 'change-request inbox' };
 
@@ -88,7 +91,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
   const build = deps.build || (async (opts) => { await require('./fonts').prefetchForConfig(opts.configPath); return require('./build').build(opts); });
-  const syncFunctions = deps.syncFunctions || ((root) => require('./sync-functions').syncScaffoldFunctions(root));
+  const syncFunctions = deps.syncFunctions || ((root, cfgPath) => require('./sync-functions').syncSiteFunctions({ configPath: cfgPath }));
 
   const flagKey = FLAG_KEY[feature];
   if (!flagKey) { out(`Unknown setup feature: ${feature}`); return 1; }
@@ -101,6 +104,16 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   // All wrangler calls must run from the site root so a bare `pages deploy`
   // finds wrangler.toml's `pages_build_output_dir`. Harmless for account-level KV ops.
   const runWranglerAt = (args) => runWrangler(args, { cwd: siteRoot });
+
+  // The real edit comes after the wrangler work, but it must not be able to refuse once
+  // KV is created and wrangler.toml patched: the editor is pure on text, so ask it now.
+  const switchKey = SWITCH_KEY[flagKey];
+  if (!config.vaultPath) { out(`${configPath} has no "vaultPath"`); return 1; }
+  const vaultPath = path.resolve(siteRoot, config.vaultPath);
+  const vaultFile = path.join(vaultPath, '_meta', 'vault-config.md');
+  const current = fs.existsSync(vaultFile) ? fs.readFileSync(vaultFile, 'utf8') : '---\ntype: meta\n---\n';
+  const refusal = editPublishBlock(current, { set: { [switchKey]: true } }).error;
+  if (refusal) { out(`cannot edit _meta/vault-config.md: ${refusal}`); return 1; }
 
   // Preflight: KV permission.
   const perm = checkKvPermission({ runWrangler: runWranglerAt });
@@ -116,13 +129,11 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   tomlText = patchWranglerToml(tomlText, { name: projectName, kvId: kv.id });
   writeFile(tomlPath, tomlText);
 
-  // Flip the backend flag.
-  config.backend = config.backend || {};
-  config.backend[flagKey] = true;
-  writeFile(configPath, JSON.stringify(config, null, 2) + '\n');
+  // Turn the switch on in the vault's _meta/vault-config.md, the one place settings live.
+  try { setPublishKeys(vaultPath, { [switchKey]: true }); } catch (e) { out(e.message); return 1; }
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
-  syncFunctions(siteRoot);
+  syncFunctions(siteRoot, configPath);
   await build({ configPath });
   const dep = runWranglerAt(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${failureDetail(dep)}`); return 1; }

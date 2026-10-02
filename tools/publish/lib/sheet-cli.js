@@ -16,7 +16,8 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { scanVault, scanAllNotes, slugify } = require('./scanner');
-const { loadPublishConfig, vaultRelPath } = require('./config');
+const { resolveConfig, vaultRelPath, loadVaultConfig } = require('./config');
+const { pcKeepList } = require('./pc-prose');
 const {
   playerSafeMarkdown,
   keepOnlySections,
@@ -73,6 +74,7 @@ function playerSafeBody(page, publishConfig, warnings) {
   const result = playerSafeMarkdown(markdown, {
     excludeCallouts: publishConfig.exclude_callouts,
     excludeSections: publishConfig.exclude_sections,
+    pcKeepSections: pcKeepList(publishConfig),
     frontmatter: page.frontmatter,
   });
   warnings.push(...result.warnings);
@@ -105,9 +107,11 @@ async function runSheetShow(deps) {
   // same exclude lists back this view as back the site.
   const configPath = path.resolve(deps.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const config = deps.config || require(configPath);
-  const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
-  const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
+  const rawConfig = loadVaultConfig(configPath, deps);
+  const vaultPath = deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
+  const { config, publishConfig } = deps.publishConfig
+    ? { config: rawConfig, publishConfig: deps.publishConfig }
+    : resolveConfig(rawConfig, vaultPath);
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
   const scanned = scan();

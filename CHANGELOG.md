@@ -7,6 +7,121 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.24] — 2026-10-02
+
+### Added
+
+- **Three publish switches, set under `publish:` in
+  `_meta/vault-config.md`** (#285). `character_sheets` (on by
+  default), `live_stats` and `inbox` (both off by default). Each
+  takes `true` or `false`, or the words yes, no, on and off in any
+  case.
+  - `character_sheets: false` withholds the sheet as well as silencing
+    the warnings about it. A PC page publishes only its Background,
+    Current Status, Notes, Relationships and Appearances sections
+    (plus the system's own prose sections, such as a CoC PC's
+    Fellow Investigators), and any heading listed in the new
+    `pc_prose_sections`. The Character tab shows an identity strip and
+    a line saying sheets are not published. A PC that keeps its sheet
+    elsewhere still shows `sheet_source` when it is in `display_meta`.
+    Turning sheets off also turns live stats off; the inbox stays,
+    as a question channel ("Ask the GM"). The vault is unchanged:
+    `sheet show` still works.
+  - `live_stats` covers the live values on each sheet and the Party
+    Status board; `inbox` covers the change-request widget. Turned on
+    for a site with no KV store wired in `wrangler.toml`, the build
+    warns and builds without the feature.
+- **`migrate.py <vault> [--status | --dry-run]`**, the first coded
+  migration step (`skills/shared/scripts/migrate.py`). Step 1.10.24
+  runs `migrate-config`. Exit code 0 is done or nothing to do, 1 a
+  step failed, 2 bad arguments.
+- **`gm-apprentice-publish migrate-config [--dry-run] [--json]`**.
+  Moves each campaign setting from the site's `vault.config.json`
+  into `publish:`, renames `publish.backend.statusBar` and `inbox` to
+  `live_stats` and `inbox`, and backs both files up as
+  `<file>.pre-migrate` once. It edits the vault file in place, leaves
+  comments and layout outside the changed keys alone, and refuses,
+  writing nothing, a file it cannot edit safely (a flow-style
+  `publish: {…}`, tabs, mixed line endings). Safe to run twice. A key
+  it does not read (such as `campaignImage`) is named in the output
+  and left in the site file; a list setting that is not a list is
+  reported and left there too. Publish tool 1.12.0.
+- `explain --all --json` reports `switches` and, per page,
+  `sheetWithheldSections` and `retiredSheetFields`.
+
+### Changed
+
+- **One place for publish settings.** `vault.config.json` keeps six
+  keys: `vaultPath`, `outputDir`, `host`, `siteUrl`,
+  `cloudflarePagesProject` and `preserveDirs`. Everything else is
+  read from `publish:` in the vault file. Until plugin 1.11.0 a
+  setting still in the site file is read when the vault file does not
+  set it, and the build ends with one `WARNING` line naming each such
+  key and ending "Run `migrate.py <vault>` to move them." Where both
+  files set a key, the vault file wins.
+- **Scaffold.** `init` writes the four deployment keys to
+  `vault.config.json` and the campaign settings (`site_title`,
+  `folder_map`, `attachments_dir`, `exclude_dirs`, `exclude_callouts`)
+  into the vault file, for each key it does not already set. It takes
+  `--vault <dir>`, `--title <text>` (the site title, instead of "My
+  Campaign") and `--tagline <text>` (`publish.theme.tagline`, beside
+  any other theme keys). A vault folder that is not there yet, or a vault
+  file that cannot be edited, does not stop the scaffold; the settings
+  to add are printed. A fresh `init` and `build` prints no warning.
+- **Setup commands.** `setup-status-bar` and `setup-inbox` set
+  `publish.live_stats` and `publish.inbox` in the vault file instead
+  of writing `backend` into `vault.config.json`, and refuse before
+  touching wrangler or KV when the vault file cannot be edited.
+- **A site-file exclusion keeps hiding what it hid until the
+  migration moves it.** Where the vault file sets `exclude_dirs`,
+  `exclude_sections` or `exclude_fields`, its list leads, and a
+  site-file entry it lacks is still applied, with a warning naming
+  it. The two lists are merged only as this fallback, and the
+  migration merges them once. A vault-file list key that is set but
+  is not a list is warned about by name, the built-in default
+  applies, and the site-file entries are still added.
+- **Live stats and the inbox no longer switch on by detection.** A
+  site with a deployed backend and no setting used to get both. Unset
+  now means off; the migration writes `true` for a site that uses
+  them. A site still holding old settings that loses either this way
+  is told so at the end of the build, with the command that keeps it.
+- **A switch value that is not true or false (or yes/no/on/off),
+  including an empty one, is treated as off**, with a build warning.
+  For `character_sheets` that withholds sheets.
+- **Character sheets are read from the note body only.** Stats written
+  in PC frontmatter are no longer rendered: for GURPS `attributes`,
+  `skills`, `advantages`, `disadvantages`, `loadouts`, `appearance`
+  and `identity` among others; for D&D `ability_scores`,
+  `class_features`, `spell_slots` and `proficiencies`; for PF2e
+  `attributes`, `hero_points` and `skill_proficiencies`; for FitD
+  `action_ratings`, `stress`, `trauma` and `load`. A PC with a sheet
+  in that form now publishes without it. The build names each such PC
+  in a closing `WARNING`, and `vault_check pc-body` reports the same;
+  move the values into the note's `## Stat Sheet` sections.
+  `occupation`, `age`, `player_name`, `status` and `point_total`
+  are still read.
+- **With sheets off, a link or embed label that changes a PC note's
+  headings withholds everything after the note's title**, and the
+  build warns to fix the label, because the section filter can no
+  longer tell which heading is which.
+- **`landingTagline` in the site file** was never read by the build.
+  The migration moves it to `publish.theme.tagline` (keeping the
+  theme's other keys), which can put a tagline on the homepage where
+  none showed before.
+- **Cloudflare Functions follow their own switch.** `live_stats`
+  copies only the live-stats functions and `inbox` only the inbox
+  ones; before, either switch copied the whole set. A switch set to
+  off (or live stats forced off by `character_sheets: false`) removes
+  that feature's functions from the site's `functions/`, printing a
+  line for each, and keeps and names a file you edited. An unset
+  switch removes nothing. `deploy` now runs the same step as `build`.
+
+### Upgrading
+
+Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py"
+<vault>` on each vault (add `--dry-run` first to see the lines). If it
+asks for it, run `update-pin --site <site-dir>` and run it again.
+
 ## [1.10.23] — 2026-10-01
 
 ### Fixed

@@ -7,10 +7,11 @@ const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
-const { processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
+const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
-const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -20,19 +21,52 @@ const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/
 const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
-const { resolveBackendFlags } = require('./backend-flags');
+const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
+const { hasLegacy } = require('./config-keys');
 const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
+const { pcIdentity } = require('./templates/pc-identity');
 
 const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+
+// The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
+// keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
+// list that the vault file's list lacks is named as still applied from the site file. The
+// old `backend` block and `landingTagline` are named too: either gives the migration work.
+// A list key that is not a list, or holds only entries that cannot be carried over, gets its
+// own clause (the migration cannot move it) and does not send the GM to migrate.py when it is all that is left. Returns the lines to print.
+function legacyWarning(legacy, rawConfig) {
+  const parts = [];
+  const byHand = [];
+  for (const rec of Array.isArray(legacy) ? legacy : []) {
+    if (rec.notAList) {
+      byHand.push(`${rec.key} in vault.config.json is not a list and is ignored; remove it or move its entries to publish.${rec.publishKey} by hand`);
+      continue;
+    }
+    if (rec.unmovable) {
+      byHand.push(`${rec.key} in vault.config.json holds entries that are not text and cannot be moved; remove them or the key by hand`);
+      continue;
+    }
+    parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);
+    for (const x of rec.stillApplied || []) parts.push(`${rec.key} entry "${x}" is still applied from vault.config.json`);
+  }
+  for (const key of ['backend', 'landingTagline']) {
+    if (rawConfig && rawConfig[key] !== undefined) parts.push(key);
+  }
+  const moved = parts.length
+    ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`
+    : null;
+  return [moved, ...byHand.map((c) => `WARNING: ${c}.`)].filter(Boolean);
+}
 
 function build(options = {}) {
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
   const configDir = path.dirname(resolvedConfigPath);
-  const config = require(resolvedConfigPath);
-  config.vaultPath = path.resolve(configDir, config.vaultPath);
+  const rawConfig = loadVaultConfig(resolvedConfigPath);
+  rawConfig.vaultPath = path.resolve(configDir, rawConfig.vaultPath);
+  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
   const outputDir = path.resolve(configDir, config.outputDir);
 
   const host = config.host || 'github-pages';
@@ -44,18 +78,32 @@ function build(options = {}) {
     );
   }
 
-  const publishConfig = loadPublishConfig(config.vaultPath, config);
-  // Merge explicit flags (Task 1) with legacy auto-detect, keyed off the site
-  // dir (where wrangler.toml / functions/ live). Downstream templates gate UI on
-  // publishConfig.backend, so this must run before any page renders.
-  publishConfig.backend = resolveBackendFlags(
-    { statusBar: publishConfig.backend.statusBar, inbox: publishConfig.backend.inbox },
-    configDir,
-  );
+  // The switches decide what the GM wants; a KV store (wrangler.toml, next to the site's
+  // vault.config.json) decides whether it can work. Templates read publishConfig.live and
+  // nothing else, so this must run before any page renders. A switch on without a KV
+  // store is withheld and said so.
+  const switches = publishConfig.switches || {};
+  const kvWired = hasRealKvId(configDir);
+  publishConfig.live = {
+    stats: switches.liveStats === true && kvWired,
+    inbox: switches.inbox === true && kvWired,
+  };
+  for (const note of switches.notes || []) {
+    const label = note.key.startsWith('vault.config.json') ? note.key : `publish.${note.key}`;
+    console.warn(`  WARNING: ${label} ${note.problem}`);
+  }
+  if (!kvWired) {
+    if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
+    if (switches.inbox === true) console.warn('  WARNING: publish.inbox is on but this site has no KV store wired; the change-request inbox is not published');
+  }
   const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
+  // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
+  const pcKeepSections = pcKeepList(publishConfig);
+  // The one derivation of "sheets off": the filter's own answer, handed to the page template.
+  const sheetsOff = pcKeepSections !== null;
   const excludeCallouts = publishConfig.exclude_callouts;
   const excludeFields = publishConfig.exclude_fields;
   const fieldOverrides = publishConfig.overrides.fields || {};
@@ -487,6 +535,9 @@ function build(options = {}) {
       page.frontmatter, excludeFields, overridesForFile);
   }
 
+  // Scanned here, not later, because the keep-list stability check below reads it.
+  const imageMap = scanAttachments(scanConfig);
+
   const { buildBacklinks } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
@@ -497,6 +548,14 @@ function build(options = {}) {
   // (B6 spoiler leak). Spoiler blocks are unrevealed narrative content, not permanent
   // secrets, but they're just as unpublished until reconcile's reveal step strips the
   // fence — until then they must never surface in a derived widget either.
+  // A PC note whose link or embed labels would change its headings is withheld whole
+  // while character sheets are off. Decided once, here, so the page, its sections and
+  // the search/backlink text all get the same answer.
+  for (const page of pages) {
+    if (!pcKeepSections) break;
+    page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
+    if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
+  }
   for (const page of pages) {
     const gmStripped = stripGmOnly(page.markdown || '');
     const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
@@ -504,7 +563,8 @@ function build(options = {}) {
     const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
     const commentStripped = stripHtmlComments(afterSpoiler);
     const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter);
+    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
+      { pcKeepSections, warn: (m) => console.warn(`  WARNING: ${page.outputPath}: ${m}`) });
   }
 
   // Whether a Story section will exist. Computed early (pure function of pages) so the
@@ -632,7 +692,6 @@ function build(options = {}) {
     ? 'timeline.html'
     : (authoredTimeline ? authoredTimeline.outputPath : null);
 
-  const imageMap = scanAttachments(scanConfig);
   console.log(`Found ${Object.keys(imageMap).length} image files`);
 
   // Re-encode before a single page renders. The tool owns both the image copy and every
@@ -742,6 +801,7 @@ function build(options = {}) {
   const partyEntries = [];
   // PCs whose system has a sheet renderer that produced no sheet (#273).
   const sheetlessPcs = [];
+  const retiredFieldPcs = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
@@ -752,7 +812,7 @@ function build(options = {}) {
         const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
         if (basename && imageMap[basename]) usedImages.add(basename);
       }
-      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
+      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections });
       logWarnings(page.outputPath, processed.warnings);
       let html;
 
@@ -762,7 +822,7 @@ function build(options = {}) {
         case 'pc': {
           // Warnings are dropped here, not ignored: processContent above ran this same
           // strip chain over the same markdown and already reported them.
-          let filtered = playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
+          let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
           // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
           // brackets of an `![[image.png]]` embed and would flatten it to literal text.
           filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
@@ -784,7 +844,8 @@ function build(options = {}) {
           }
 
           const system = publishConfig.system;
-          const systemRenderer = getRenderer(system);
+          // With sheets off the renderer is never called: no sheet, tab, panel, island or party entry exists to leak.
+          const systemRenderer = sheetsOff ? null : getRenderer(system);
           const meta = {
             system,
             campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
@@ -807,9 +868,23 @@ function build(options = {}) {
           // sections only, so it is not expected to carry a sheet.
           const sourceFm = page.sourceFrontmatter || page.frontmatter;
           const sheetSource = sheetSourceOf(sourceFm);
+          // The identity strip reads the note with GM content stripped but before the keep-list,
+          // for this and nothing else. A note whose headings shift has no readable body.
+          let identity = [];
+          if (sheetsOff) {
+            const identityText = page.headingsUnstable ? '' : resolveWikiLinks(
+              playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm }).text,
+              linkMap, page.outputPath);
+            identity = pcIdentity(system, page.frontmatter, extractSections(identityText));
+          }
           const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
           const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
           if (sheetless && sheetExpected) sheetlessPcs.push(page.displayTitle || page.title);
+          // A frontmatter stat is not read; with sheets off no sheet is built, so nothing is lost.
+          if (!sheetsOff) {
+            const retired = retiredSheetFieldsFor(sourceFm, system);
+            if (retired.length) retiredFieldPcs.push({ rel: vaultRelPathOf(page), names: retired });
+          }
           // A system renderer may report structural warnings (e.g. a CoC sheet whose body
           // diverges from the contract and parses near-empty, #107). Surface them like other
           // page warnings instead of shipping a silently-broken sheet — unless the sheet is
@@ -838,6 +913,8 @@ function build(options = {}) {
             systemStatusPanelHtml: systemOut.statusPanelHtml || null,
             systemRecordHtml: systemOut.recordHtml || null,
             systemStatusBarHtml: systemOut.statusBarHtml || null,
+            identity,
+            sheetsOff,
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
@@ -940,8 +1017,8 @@ function build(options = {}) {
     // published values. When the status-bar tier is on it also goes live
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
-    const board = boardFor(publishConfig.system);
-    const live = publishConfig.backend.statusBar === true;
+    const board = sheetsOff ? null : boardFor(publishConfig.system);
+    const live = publishConfig.live.stats;
     // Named partyManifest (not manifest) to avoid shadowing the outer vault
     // manifest. Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
@@ -1224,6 +1301,10 @@ function build(options = {}) {
     }
   }
 
+  for (const { rel, names } of retiredFieldPcs) {
+    console.warn(`  WARNING: ${rel}: ${retiredSheetFieldsMessage(names)}`);
+  }
+
   if (sheetlessPcs.length > 0) {
     const n = sheetlessPcs.length;
     const shown = sheetlessPcs.slice(0, SHEETLESS_NAMED);
@@ -1242,6 +1323,21 @@ function build(options = {}) {
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
     console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
+
+  // Settings that still live in the site file. One line, so it is the thing the GM reads.
+  for (const line of legacyWarning(publishConfig.legacy, rawConfig)) console.warn(`  ${line}`);
+
+  // Live stats and the inbox used to be detected from a deployed backend; unset now means
+  // off. A deployed feature whose switch neither file sets is never lost silently: the line
+  // says what happened and what to do, whatever else the site file holds. Not said for live
+  // stats when character_sheets is off (that is the GM's own choice, and the files are removed).
+  const unset = switches.unset || [];
+  const legacySite = hasLegacy(rawConfig);
+  const lost = (key, was, is, subject, them, its) => console.warn(legacySite
+    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: publish.${key} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
+    : `  WARNING: ${subject} ${is} deployed on this site but publish.${key} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set publish.${key} to true to keep ${them}, or to false to remove ${its} functions.`);
+  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
+  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);

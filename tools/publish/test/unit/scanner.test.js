@@ -268,7 +268,7 @@ describe('scanVault unmapped-directory warning', () => {
       },
     };
     const warns = captureWarns(() => scanVault(config));
-    const locWarns = warns.filter(w => w.includes('Locations') && w.includes('folderMap'));
+    const locWarns = warns.filter(w => w.includes('Locations') && w.includes('publish.folder_map'));
     assert.strictEqual(locWarns.length, 1);
   });
 
@@ -284,7 +284,7 @@ describe('scanVault unmapped-directory warning', () => {
       },
     };
     const warns = captureWarns(() => scanVault(config));
-    assert.strictEqual(warns.filter(w => w.includes('folderMap')).length, 0);
+    assert.strictEqual(warns.filter(w => w.includes('publish.folder_map')).length, 0);
   });
 });
 
@@ -393,7 +393,7 @@ describe('scanVault untyped-file warning', () => {
       assert.strictEqual(untypedWarns.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
       assert.ok(untypedWarns[0].includes('Characters/NPCs/Scratchpad.md'), untypedWarns[0]);
       assert.ok(untypedWarns[0].includes('skipped 1 file(s)'), untypedWarns[0]);
-      assert.ok(untypedWarns[0].includes('excludeDirs'), untypedWarns[0]);
+      assert.ok(untypedWarns[0].includes('publish.exclude_dirs'), untypedWarns[0]);
       assert.strictEqual(pages.length, 1);
       assert.strictEqual(pages[0].title, 'Gatekeeper');
     } finally {
@@ -560,7 +560,7 @@ describe('scanAttachments excludeDirs (#210)', () => {
       console.warn = orig;
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
-    assert.ok(warns.some((w) => w.includes('excludeDirs') && w.includes('_attachments')), warns.join(' | '));
+    assert.ok(warns.some((w) => w.includes('publish.exclude_dirs') && w.includes('_attachments')), warns.join(' | '));
   });
 });
 
@@ -703,7 +703,7 @@ describe('scanVaultReport', () => {
       const pages = scanVault(config(vault));
       assert.strictEqual(pages.length, 1);
       assert.strictEqual(warns.filter(w => w.includes('no `type:`')).length, 1);
-      assert.strictEqual(warns.filter(w => w.includes('not in folderMap')).length, 1);
+      assert.strictEqual(warns.filter(w => w.includes('not in publish.folder_map')).length, 1);
       assert.ok(warns.find(w => w.includes('Session Notes')), warns.join(' | '));
     } finally {
       console.warn = orig;

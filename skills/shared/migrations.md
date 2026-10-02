@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.23"
+current_version: "1.10.24"
 ---
 
 # Vault Migration Registry
@@ -1267,3 +1267,44 @@ A note whose frontmatter the site's build cannot parse is now reported
   gets the `vault_check` rows, without the parser's message, and
   still misses the second of two notes with the same broken text.
   A pin below 1.11.40 cannot be asked at all: one INFO row says so.
+
+## Migration: 1.10.23 → 1.10.24
+
+Publish settings now live in one place, `_meta/vault-config.md`, and
+three switches control character sheets, live stats and the inbox
+(#285).
+
+### Structural
+
+- Run `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py"
+  <vault> --dry-run`, show the GM its lines, then run it without
+  `--dry-run`. It moves every campaign setting from the site's
+  `vault.config.json` into `publish:` in the vault file, merges the
+  exclude lists, writes `live_stats` and `inbox` where they are in use
+  today, and leaves a `.pre-migrate` copy of both files. Running it
+  twice is safe.
+- If it stops with a message about the site's publish tool, run
+  `update-pin --site <site-dir>` first, then `migrate.py` again.
+
+### Content
+
+- Nothing. No note changes.
+
+### Tooling
+
+- `gm-apprentice-publish` 1.12.0. New optional keys under `publish:`:
+  `character_sheets` (default on), `live_stats` and `inbox` (default
+  off), `pc_prose_sections`, `site_title`, `footer`, `search`,
+  `folder_map`, `attachments_dir`. With `character_sheets: false` a PC
+  page publishes its prose sections and no stats.
+- A setting left in `vault.config.json` is still read when the vault
+  file does not set it, and the build warns. Where both set it the
+  vault file wins, except that an exclude-list entry only the site file
+  has is still applied, with a warning, until the migration moves it.
+  That fallback is removed in 1.11.0.
+- Live stats and the inbox no longer switch on by detection: unset
+  means off. The migration writes `true` for a site using them.
+- A character sheet is read from the note body only. Stats written
+  as PC frontmatter fields (`attributes`, `skills`, `loadouts` and
+  the like) are no longer read; `vault_check.py <vault> pc-body`
+  names any PC that has them.

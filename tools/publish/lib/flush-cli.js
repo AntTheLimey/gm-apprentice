@@ -12,7 +12,8 @@ const { latestStateByPcSlug } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
-const { loadPublishConfig } = require('./config');
+const { resolveConfig, loadVaultConfig } = require('./config');
+const { detectStatusBar } = require('./backend-flags');
 
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
 
@@ -42,12 +43,7 @@ function summarize(changes) {
 // The only two live-state systems are GURPS and CoC. Anything not GURPS routes
 // to the CoC writeback — the historical default (legacy CoC sites carry no
 // system). A PC's own frontmatter.system wins; otherwise the campaign system
-// decides. Note flush resolves that campaign system more permissively than
-// build.js does: build reads `publishConfig.system` alone (vault-config.md
-// only), while flush falls back to a top-level `system` in vault.config.json
-// when vault-config.md doesn't set one — see runFlush below. So a legacy site
-// carrying `system` only in the JSON gets the right writeback here even though
-// the build would treat it as unset.
+// decides. The campaign system is publishConfig.system, resolved as build.js does.
 function resolveSystem(frontmatter, campaignSystem) {
   const s = String((frontmatter && frontmatter.system) || campaignSystem || '').toLowerCase();
   return s.indexOf('gurps') !== -1 ? 'gurps' : 'coc';
@@ -65,11 +61,27 @@ async function runFlush(deps) {
   // Resolve config exactly as build.js does (so campaignId/pcSlug match).
   const configPath = path.resolve(deps.configPath || './vault.config.json');
   const configDir = path.dirname(configPath);
-  const config = deps.config || require(configPath);
-  const vaultPath = deps.config ? config.vaultPath : path.resolve(configDir, config.vaultPath);
-  const publishConfig = deps.publishConfig || loadPublishConfig(vaultPath, config);
-  const campaignSystem = publishConfig.system || config.system;
+  const rawConfig = loadVaultConfig(configPath, deps);
+  const vaultPath = deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
+  const { config, publishConfig } = deps.publishConfig
+    ? { config: rawConfig, publishConfig: deps.publishConfig }
+    : resolveConfig(rawConfig, vaultPath);
+  const campaignSystem = publishConfig.system;
   const campaignId = slugify(config.siteTitle || 'campaign');
+
+  // Flush writes live vitals into PC notes. With live stats off (or sheets off, which forces
+  // them off) there is no live state to keep, so it does nothing. An injected publishConfig
+  // with no `switches` (a test seam) means on, as in pcKeepList.
+  const switches = publishConfig.switches;
+  if (switches && switches.liveStats !== true) {
+    const deployedButUnset = switches.characterSheets !== false && (switches.unset || []).includes('live_stats') && detectStatusBar(configDir);
+    out(switches.characterSheets === false
+      ? 'Nothing flushed: character sheets are off for this campaign, so live stats are off too.'
+      : deployedButUnset
+        ? 'Nothing flushed: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, then flush again.'
+        : 'Nothing flushed: live stats are off for this campaign (publish.live_stats is not true).');
+    return 0;
+  }
 
   const adapter = deps.adapter || defaultAdapter(configDir);
   const core = await import('../templates-scaffold/functions/api/loadout-core.mjs');

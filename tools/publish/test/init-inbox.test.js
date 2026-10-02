@@ -7,6 +7,7 @@ const { init } = require('../lib/init.js');
 
 test('init scaffolds a Tier-1 wrangler.toml with no KV binding and no Functions', async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'tier1-init-'));
+  await fs.mkdir(path.join(dir, 'vault')); // so init has a vault to put the campaign settings in
   await init(dir, { siteTitle: 'Dead End', toolDep: 'file:../tool' });
 
   // wrangler.toml: keeps the deploy config, drops the inbox KV binding.

@@ -554,6 +554,27 @@ h3 {
   margin: 0 0 1.5rem;
 }
 
+/* ===== PC PAGE WITHOUT A SHEET ===== */
+.pc-identity {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  font-size: 0.95rem;
+  margin: 0 0 0.75rem;
+}
+.pc-identity .label {
+  color: var(--accent);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-right: 0.35rem;
+}
+.sheet-withheld {
+  color: var(--text-muted);
+  font-style: italic;
+  margin: 0 0 1.5rem;
+}
+
 /* ===== CHARACTER HEADER CARD (legacy, used by simple entities) ===== */
 .char-header {
   background: var(--bg-card);
@@ -3707,12 +3728,6 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .dnd-skill .skill-ability { font-size: 0.65rem; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 400; }
 .dnd-skill .skill-mod { font-family: var(--font-mono); text-align: right; }
 .dnd-proficiency-list p { margin: 0 0 0.35rem; }
-.dnd-proficiencies {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 1rem;
-}
 .dnd-proficiency {
   background: var(--accent-dim);
   color: var(--accent);
@@ -3748,19 +3763,6 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   font-weight: 700;
   font-size: 1.5rem;
   color: var(--accent);
-}
-.pf2e-proficiencies {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-  margin-bottom: 1rem;
-}
-.pf2e-proficiency {
-  background: var(--accent-dim);
-  color: var(--accent);
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 0.2rem;
 }
 
 /* FitD */
@@ -3802,23 +3804,6 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
   border-radius: 0.375rem;
   padding: 0.5rem 0.75rem;
   margin-bottom: 0.5rem;
-}
-.fitd-special-ability {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  margin-bottom: 0.5rem;
-}
-.fitd-special-ability h4 {
-  margin: 0 0 0.25rem;
-  font-size: 0.9rem;
-  color: var(--text);
-}
-.fitd-special-ability p {
-  margin: 0;
-  font-size: 0.85rem;
-  color: var(--text-muted);
 }
 
 .fitd-identity {

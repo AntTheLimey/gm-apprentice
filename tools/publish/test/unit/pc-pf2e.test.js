@@ -132,58 +132,74 @@ describe('pcTemplate with a PF2e sheet', () => {
   });
 });
 
-describe('renderPF2eSheet frontmatter fallback', () => {
+describe('renderPF2eSheet body sections', () => {
   it('renders 6 attribute cards with signed modifiers', () => {
-    const html = renderPF2eSheet({ type: 'pc', attributes: { STR: 4, DEX: 2, CON: 3, INT: 0, WIS: 1, CHA: -1 } }, []);
+    const html = render([
+      '## Stat Sheet', '', '### Attributes', '',
+      '| Attribute | Modifier |', '|---|---|',
+      '| STR | +4 |', '| DEX | +2 |', '| CON | +3 |', '| INT | +0 |', '| WIS | +1 |', '| CHA | -1 |',
+    ].join('\n'));
     assert.strictEqual((html.match(/class="dnd-ability-card/g) || []).length, 6);
     assert.ok(html.includes('+4'));
     assert.ok(html.includes('+0'));
     assert.ok(html.includes('-1'));
   });
 
-  it('prefers the body attributes over frontmatter', () => {
-    const html = render(druidBody(), { type: 'pc', attributes: { WIS: 9 } });
-    assert.ok(!html.includes('+9'));
-  });
-
-  it('renders skill proficiencies as pills with rank', () => {
-    const html = renderPF2eSheet({ type: 'pc', skill_proficiencies: [{ name: 'Athletics', rank: 'Expert' }, 'Acrobatics'] }, []);
-    assert.ok(html.includes('pf2e-proficiencies'));
+  it('renders body skills with their rank', () => {
+    const html = render([
+      '## Skills', '', '| Skill | Attribute | Rank | Modifier |', '|---|---|---|---|',
+      '| Athletics | STR | Expert | +9 |', '| Acrobatics | DEX | Trained | +5 |',
+    ].join('\n'));
+    assert.ok(html.includes('dnd-skills'));
     assert.ok(html.includes('Athletics'));
     assert.ok(html.includes('Expert'));
     assert.ok(html.includes('Acrobatics'));
   });
 
-  it('renders class features sorted by level', () => {
-    const html = renderPF2eSheet({ type: 'pc', class_features: [
-      { name: 'Deny Advantage', level: 3 }, { name: 'Sneak Attack', level: 1 },
-    ] }, []);
-    assert.ok(html.includes('Level 1'));
-    assert.ok(html.indexOf('Sneak Attack') < html.indexOf('Deny Advantage'));
+  it('renders hero points from the body Core table', () => {
+    const body = '## Stat Sheet\n\n### Core\n\n| Attribute | Value |\n|---|---|\n| Level | 2 |\n| Hero Points | 2 |\n';
+    assert.strictEqual(stat(render(body), 'Hero Points'), '2');
   });
 
-  it('renders hero points when the body has no stat sheet', () => {
-    const html = renderPF2eSheet({ type: 'pc', hero_points: 2 }, []);
-    assert.strictEqual(stat(html, 'Hero Points'), '2');
-  });
-
-  it('renders hero points when the body Core table has no such row', () => {
-    const body = '## Stat Sheet\n\n### Core\n\n| Attribute | Value |\n|---|---|\n| Level | 2 |\n';
-    const html = render(body, { type: 'pc', hero_points: 3 });
-    assert.strictEqual(stat(html, 'Hero Points'), '3');
-    assert.strictEqual((render(druidBody(), { type: 'pc', hero_points: 3 }).match(/Hero Points/g) || []).length, 1);
-  });
-
-  it('renders spell slots by rank', () => {
-    const html = renderPF2eSheet({ type: 'pc', spell_slots: { 1: 3, 2: 2 } }, []);
+  it('renders spell slots by rank from the body', () => {
+    const html = render([
+      '## Spellcasting', '', '### Spell Slots', '',
+      '| Rank | Total | Expended |', '|---|---|---|', '| 1 | 3 | 0 |', '| 2 | 2 | 0 |',
+    ].join('\n'));
     assert.ok(html.includes('Spell Slots'));
-    assert.strictEqual(stat(html, 'Rank 1'), '3');
+    assert.strictEqual(stat(html, 'Rank 1'), '3 / 3');
+  });
+});
+
+// The note body is the only source: a frontmatter copy of any stat is not read.
+describe('renderPF2eSheet ignores frontmatter stats', () => {
+  const sentinel = {
+    type: 'pc',
+    attributes: { STR: 77, DEX: 77, CON: 77, INT: 77, WIS: 77, CHA: 77 },
+    skill_proficiencies: [{ name: 'FMSKILL', rank: 'Expert' }, 'FMSTRING'],
+    class_features: [{ name: 'FMFEATURE', level: 1 }],
+    hero_points: 7,
+    spell_slots: { 1: 5 },
+  };
+
+  it('returns null when only frontmatter carries stats', () => {
+    assert.strictEqual(renderPF2eSheet(sentinel, []), null);
   });
 
-  it('survives malformed frontmatter', () => {
-    const html = renderPF2eSheet({ type: 'pc', attributes: { STR: 'abc' }, skill_proficiencies: 'Stealth', class_features: [null] }, []);
-    assert.ok(html.includes('Stealth'));
-    assert.ok(!html.includes('NaN'));
+  it('renders a filled body sheet identically with or without them', () => {
+    assert.strictEqual(render(druidBody(), sentinel), render(druidBody()));
+  });
+
+  it('leaves every frontmatter value off a sheet built from the template body', () => {
+    const html = render(blank(), sentinel);
+    for (const s of ['77', 'FMSKILL', 'FMSTRING', 'FMFEATURE', 'Spell Slots']) {
+      assert.ok(!html.includes(s), `${s} must not come from frontmatter`);
+    }
+    assert.notStrictEqual(stat(html, 'Hero Points'), '7');
+  });
+
+  it('does not choke on malformed frontmatter values', () => {
+    assert.strictEqual(renderPF2eSheet({ type: 'pc', attributes: { STR: 'abc' }, skill_proficiencies: 'Stealth', class_features: [null] }, []), null);
   });
 
   it('returns null when no PF2e data present', () => {

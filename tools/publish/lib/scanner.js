@@ -174,7 +174,7 @@ function warnScanReport(report) {
     console.warn(`scanner: skipping ${fullPath} — malformed frontmatter: ${message}`);
   }
   for (const { dir } of unmapped) {
-    console.warn(`scanner: skipping "${dir}" — not in folderMap; typed pages inside will not publish. Add it to folderMap to publish, or to excludeDirs to silence this warning.`);
+    console.warn(`scanner: skipping "${dir}" — not in publish.folder_map; typed pages inside will not publish. Add it to publish.folder_map in _meta/vault-config.md to publish, or to publish.exclude_dirs to silence this warning.`);
   }
   if (untyped.length > 0) {
     const shown = untyped.slice(0, 5).join(', ');
@@ -182,7 +182,7 @@ function warnScanReport(report) {
     console.warn(
       `scanner: skipped ${untyped.length} file(s) with no \`type:\` in frontmatter — ` +
       `they will not publish: ${shown}${more}. Add \`type:\` to publish them, or list ` +
-      `their folder in excludeDirs to silence this.`
+      `their folder in publish.exclude_dirs (_meta/vault-config.md) to silence this.`
     );
   }
   return pages;
@@ -272,7 +272,7 @@ function scanAttachments(config) {
   // (CodeRabbit review, PR #234). Check the root the same way before ever walking it.
   const attachmentsRootRel = toPosix(path.relative(vaultPath, attachmentsPath));
   if (dirIsExcluded(attachmentsRootRel, excludes)) {
-    console.warn(`scanner: attachments root "${attachmentsRootRel}" is listed in excludeDirs — no attachments scanned`);
+    console.warn(`scanner: attachments root "${attachmentsRootRel}" is listed in publish.exclude_dirs — no attachments scanned`);
     return nfcLookupTable(map);
   }
 

@@ -127,6 +127,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from collections import Counter
 import sys
 from dataclasses import dataclass, field
@@ -164,6 +165,7 @@ from vaultlib import (  # noqa: F401
     active_pc_names,
     atx_title,
     active_pcs,
+    _frontmatter_lines,
     delete_key,
     effective_exclude_sections,
     entity_type,
@@ -1177,24 +1179,45 @@ PUBLISH_PACKAGE = "gm-apprentice-publish"
 WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
 
 
+def configured_site(vault: Path) -> tuple[Path | None, bool]:
+    """(the site folder `publish.site_dir` names, whether a
+    vault.config.json is in it). (None, False) when `site_dir` is unset. A
+    relative `site_dir` is relative to the vault."""
+    site_dir = read_publish_scalar(vault, "site_dir")
+    if not site_dir:
+        return None, False
+    site = Path(site_dir).expanduser()
+    if not site.is_absolute():
+        site = vault / site
+    return site, (site / "vault.config.json").is_file()
+
+
+def publish_block_inline(vault: Path) -> bool:
+    """Whether `publish:` in `_meta/vault-config.md` is written on one line
+    (`publish: {mode: player}`). `configured_site` cannot read such a block,
+    and neither can the publish tool, so a caller says that instead of
+    "site_dir is not set"."""
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return any(re.match(r"""^["']?publish["']?\s*:\s*\{""", line)
+               for line in _frontmatter_lines(text) or [])
+
+
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     """(the site's vault.config.json, why there is none).
 
     (None, None) means the vault publishes nothing — no `publish:` block —
-    so there is nothing to ask about. A relative `publish.site_dir` is
-    relative to the vault."""
-    site_dir = read_publish_scalar(vault, "site_dir")
-    if not site_dir:
+    so there is nothing to ask about."""
+    site, has_config = configured_site(vault)
+    if site is None:
         if read_publish_list(vault, "exclude_sections").publish_line is None:
             return None, None
         return None, "publish.site_dir is not set in _meta/vault-config.md"
-    site = Path(site_dir).expanduser()
-    if not site.is_absolute():
-        site = vault / site
-    config = site / "vault.config.json"
-    if not config.is_file():
+    if not has_config:
         return None, f"no vault.config.json in publish.site_dir ({site})"
-    return config, None
+    return site / "vault.config.json", None
 
 
 _SEMVER = re.compile(
@@ -1277,6 +1300,7 @@ class SitePin:
     source: str  # "installed", "package.json" or "none"
     version: str | None
     stale: str | None
+    spec: str | None = None  # the package.json spec, when that is what was read
 
 
 def _stale_reason(version: str) -> str | None:
@@ -1319,8 +1343,8 @@ def site_pin(site: Path) -> SitePin:
     if version is None:
         return SitePin("package.json", None,
                        f"the site pins {PUBLISH_PACKAGE} as \"{spec}\", which "
-                       f"isn't a version this can check")
-    return SitePin("package.json", version, _stale_reason(version))
+                       f"isn't a version this can check", str(spec))
+    return SitePin("package.json", version, _stale_reason(version), str(spec))
 
 
 def _publish_tool_for(site: Path) -> tuple[Path | None, str, str | None]:
@@ -1378,14 +1402,28 @@ class ExplainAll:
         return self._answer
 
 
-def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
+def ask_publish_tool(vault: Path, args: list[str],
+                     vault_only: bool = False) -> ToolAnswer:
     """Run the site's publish tool with `args` plus `--json`, `--config`
     and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
-    reason means the vault publishes nothing."""
+    reason means the vault publishes nothing. `vault_only` is for a
+    command that has work to do without a site (migrate-config's backend
+    rename): a vault with a `publish:` block but no usable site is then
+    asked through the plugin's own tool with `--vault` alone, run from an
+    empty directory so no stray vault.config.json is picked up."""
     config, why = _site_config(vault)
+    site_args = ["--config", str(config)] if config is not None else []
+    no_site = config is None
     if config is None:
-        return ToolAnswer(why=why)
-    tool, label, why = _publish_tool_for(config.parent)
+        if not (vault_only and why):
+            return ToolAnswer(why=why)
+        label = "the plugin's publish tool (the vault has no site)"
+        if not PUBLISH_TOOL.is_file():
+            return ToolAnswer(
+                why=f"the publish tool is not at {PUBLISH_TOOL}", used=label)
+        tool: Path | None = PUBLISH_TOOL
+    else:
+        tool, label, why = _publish_tool_for(config.parent)
     used = label if tool == PUBLISH_TOOL else None
     if tool is None:
         return ToolAnswer(why=why, used=label)
@@ -1393,18 +1431,30 @@ def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
     if not node:
         return ToolAnswer(why="node is not on PATH", used=label)
     name = " ".join(args[:2])
+    empty: str | None = None
+    if no_site:
+        try:
+            empty = tempfile.mkdtemp(prefix="vc-nosite-")
+        except OSError as e:
+            return ToolAnswer(
+                why=f"no temporary directory to run in ({e.__class__.__name__})",
+                used=label)
     try:
         proc = subprocess.run(
-            [node, str(tool), *args, "--json",
-             "--config", str(config), "--vault", str(vault.resolve())],
+            [node, str(tool), *args, "--json", *site_args,
+             "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False,
+            cwd=empty)
     except subprocess.TimeoutExpired:
         return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
                           used=label)
     except OSError as e:
         return ToolAnswer(why=f"node could not run ({e.__class__.__name__})",
                           used=label)
+    finally:
+        if empty is not None:
+            shutil.rmtree(empty, ignore_errors=True)
     if proc.returncode != 0:
         detail = (proc.stderr or "").strip().splitlines()
         return ToolAnswer(why=(f"{name} exited {proc.returncode}"
@@ -1496,6 +1546,131 @@ def sections_withheld(answer: ToolAnswer
                 for p in pages if p["strippedSections"]}, None
     except (KeyError, TypeError):
         return None, "explain did not return the expected JSON"
+
+
+def publish_switches(answer: ToolAnswer) -> dict[str, bool] | None:
+    """The site's resolved switches (`characterSheets`, `liveStats`,
+    `inbox`) from `explain --all --json`, or None when the tool could not
+    answer or its answer has no usable `switches` block (a tool older than
+    1.12.0). Callers treat None as sheets on. The tool owns the keys and
+    their precedence; nothing here reads them from the config."""
+    try:
+        block = answer.data["switches"] if answer.data is not None else None
+        if not isinstance(block, dict):
+            return None
+        got = {k: block[k] for k in ("characterSheets", "liveStats", "inbox")}
+    except (KeyError, TypeError):
+        return None
+    return got if all(isinstance(v, bool) for v in got.values()) else None
+
+
+def tool_exclude_sections(answer: ToolAnswer) -> list[str] | None:
+    """The exclude list the build resolves (`excludeSections` in
+    `explain --all --json`: the vault file's list, else the site file's,
+    else the built-in default), or None when the tool could not answer or
+    its answer has no usable list (an older tool). Callers then fall back to
+    the vault file's own list; nothing here reads the site file's."""
+    try:
+        block = answer.data["excludeSections"] if answer.data is not None else None
+    except (KeyError, TypeError):
+        return None
+    if not isinstance(block, list) or not all(isinstance(t, str) for t in block):
+        return None
+    return list(block)
+
+
+def pc_keep_sections(answer: ToolAnswer) -> set[str]:
+    """The bare titles (`_bare_section_title`) of the `##` sections a PC
+    keeps whatever the switches say: `pcKeepSections` in `explain --all
+    --json` (a list when sheets are off, null or absent otherwise). Empty
+    for a tool that predates the field; nothing here holds a copy of the
+    list. Titles in parentheses are the tool's placeholders, not sections."""
+    try:
+        block = answer.data["pcKeepSections"] if answer.data is not None else None
+    except (KeyError, TypeError):
+        return set()
+    if not isinstance(block, list) or not all(isinstance(t, str) for t in block):
+        return set()
+    return {_bare_section_title(t) for t in block if not t.strip().startswith("(")}
+
+
+def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
+    """Per file (NFC path), the `##` headings (`_bare_section_title`) the site withholds
+    only because character sheets are off, from `sheetWithheldSections` in
+    `explain --all --json`. Empty when the tool could not be asked,
+    answered oddly, or predates the field: an older tool withholds nothing
+    here, so nothing is removed from what gm-leak scans.
+
+    The tool reports an HTML heading it withheld by its text, and names a
+    heading it cannot read in parentheses (`(empty heading)`). So a title
+    that starts with `(`, or that is one of `pc_keep_sections`, is never
+    returned: a real, published `## Background` is scanned even when the
+    tool also lists "Background" for an HTML heading."""
+    keep = pc_keep_sections(answer)
+    try:
+        pages = answer.data["pages"] if answer.data is not None else []
+        got = {unicodedata.normalize("NFC", str(p["path"])):
+               {_bare_section_title(str(t)) for t in p["sheetWithheldSections"]
+                if not str(t).strip().startswith("(")} - keep
+               for p in pages if p.get("sheetWithheldSections")}
+        return {rel: titles for rel, titles in got.items() if titles}
+    except (KeyError, TypeError, AttributeError):
+        return {}
+
+
+def _bare_section_title(title: str) -> str:
+    """pc-prose.js `bareSectionTitle`: lower-cased, one layer of emphasis
+    and a trailing colon removed, so `**Skills**`, `Skills:` and `skills`
+    are one section. The tool's titles and the file's headings both go
+    through this, so a spelling cannot make them differ."""
+    def un_colon(t: str) -> str:
+        return re.sub(r":$", "", t).strip()
+
+    def unwrap(t: str) -> str:
+        # One pair wrapping the whole title; a marker inside means two spans.
+        m = re.match(r"^(\*\*|\*|__|_)(.+)\1$", t)
+        return m.group(2).strip() if m and m.group(1) not in m.group(2) else t
+    return un_colon(unwrap(un_colon(title.strip().lower())))
+
+
+_LOOSE_HEADING_RE = re.compile(r"^\s{0,3}#{1,2}(\s|$)")
+_SETEXT_UNDERLINE_RE = re.compile(r"^\s{0,3}(=+|-+)\s*$")
+_HTML_HEADING_RE = re.compile(r"<h[1-6]", re.I)
+
+
+def _without_sections(states: list[LineState], kept: set[int] | None,
+                      titles: set[str]) -> set[int]:
+    """`kept` (None: every line) minus the lines under each published H2
+    whose title is in `titles` (already `_bare_section_title`d).
+
+    Sections start only where this is sure: a level-2 heading that
+    publishes and sits outside code. They end wherever a level-1 or 2
+    heading could be, by a deliberately loose test the tool's own parser
+    would pass or fail the same way or narrower (setext, indented ATX,
+    empty `##`, an HTML heading), and the heading is then judged afresh.
+    Any doubt leaves lines in the set, so they are scanned: a line wrongly
+    dropped hides a leak, a line wrongly kept costs one row.
+    """
+    left = {s.lineno for s in states} if kept is None else set(kept)
+    stops: set[int] = set()
+    for i, state in enumerate(states):
+        if (_LOOSE_HEADING_RE.match(state.line)
+                or _HTML_HEADING_RE.search(state.line)):
+            stops.add(i)
+        elif (i > 0 and _SETEXT_UNDERLINE_RE.match(state.line)
+                and states[i - 1].line.strip()):
+            stops.update((i - 1, i))
+    dropping = False
+    for i, state in enumerate(states):
+        if i in stops:
+            dropping = False
+        if (state.heading is not None and state.heading[0] == 2
+                and state.published and not state.in_code
+                and _bare_section_title(state.heading[1]) in titles):
+            dropping = True
+        if dropping:
+            left.discard(state.lineno)
+    return left
 
 
 def _yaml_hint(message: str) -> str:
@@ -1846,26 +2021,36 @@ def check_gm_leak(vault: Path, folder: str | None,
     exclusion is an ERROR: `filterSections` does not track code fences,
     so everything after it publishes.
     """
-    excludes = effective_exclude_sections(vault)
+    notes = [(rel, text, extract_frontmatter(text) or {})
+             for rel, text in vault_files(vault, folder)]
+    # The list the build applies comes from the publish tool, asked once for
+    # the run; the vault file's own list only when it cannot be asked.
+    explain = explain or ExplainAll(vault)
+    tool = explain() if notes else None
+    tool_list = tool_exclude_sections(tool) if tool is not None else None
+    excludes = effective_exclude_sections(vault, tool_list)
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
     own = read_publish_list(vault, "exclude_sections")
-    if (own.publish_line is not None and not own.error and own.value is None
-            and not read_publish_scalar(vault, "site_dir")):
+    if (tool_list is None and own.publish_line is not None and not own.error
+            and own.value is None):
         # A vault that publishes (it has a publish: block) with no list of its
-        # own relies on the site's, which this check can only read through
-        # publish.site_dir (#240). A vault that never publishes isn't told.
-        rows.append(f"INFO\t{VAULT_CONFIG}\tpublish.site_dir not set — gm-leak "
-                    f"assumes the default exclude list; set site_dir so it "
-                    f"reads the site's vault.config.json excludeSections too")
-    notes = [(rel, text, extract_frontmatter(text) or {})
-             for rel, text in vault_files(vault, folder)]
+        # own relies on the build's, which only the publish tool reads. It
+        # gave none, so the default list stands in (#240). A vault that never
+        # publishes isn't told.
+        reason = ("the publish tool's answer has no exclude list (an older tool "
+               "— run update-pin)" if tool is not None and tool.data is not None
+               else "the publish tool could not be asked (check "
+                    "publish.site_dir and that node is installed)")
+        rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
+                    f"exclude list: {reason}")
     withheld: set[str] = set()
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
-    if notes:
-        tool = (explain or ExplainAll(vault))()
+    sheet_off: dict[str, set[str]] = {}
+    if tool is not None:
+        sheet_off = sheet_withheld_sections(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
         if any(fm.get("type") == "session" for _r, _t, fm in notes):
@@ -1911,6 +2096,12 @@ def check_gm_leak(vault: Path, folder: str | None,
             continue
         states, problems = scan_body(text, excludes)
         kept = _published_linenos(states, fm)
+        # With character sheets off the tool withholds a PC's sheet sections
+        # whatever they are called; their lines are no more published than a
+        # stub's omitted ones, so they leave the kept set the same way.
+        no_sheet = sheet_off.get(unicodedata.normalize("NFC", rel))
+        if no_sheet:
+            kept = _without_sections(states, kept, no_sheet)
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
@@ -1977,7 +2168,7 @@ def check_gm_leak(vault: Path, folder: str | None,
         elif new_text is not None:
             writes.append((rel, new_text, moved))
     if renest_excludes:
-        return rows + renest_excludes_migration(vault, fix)
+        return rows + renest_excludes_migration(vault, fix, explain)
     mode = "FIXED" if fix else "WOULD-FIX"
     for rel, new_text, moved in writes:
         if fix:
@@ -2045,6 +2236,21 @@ def sheet_sources_unset(answer: ToolAnswer
                 None, answer.used)
     except (KeyError, TypeError):
         return None, "explain did not return the expected JSON", answer.used
+
+
+def retired_sheet_fields(answer: ToolAnswer) -> dict[str, list[str]]:
+    """The frontmatter fields each PC carries that the character sheet no
+    longer reads, by NFC path, from `retiredSheetFields` in `explain --all
+    --json`. The publish tool owns the list (pc-prose.js); nothing here
+    names a field. Empty when the tool could not be asked, answered oddly,
+    or predates the field: the warning is advice, so an older tool means
+    no row, never a guess."""
+    try:
+        pages = answer.data["pages"] if answer.data is not None else []
+        return {unicodedata.normalize("NFC", str(p["path"])): list(p["retiredSheetFields"])
+                for p in pages if p.get("retiredSheetFields")}
+    except (KeyError, TypeError, AttributeError):
+        return {}
 
 
 def _is_stat_sheet(title: str) -> bool:
@@ -2219,21 +2425,44 @@ def check_pc_body(vault: Path, folder: str | None = None,
     run just refreshed — the check reads every row it emits either way,
     so scoping is about not emitting the vault's pre-existing findings.
     """
-    excludes = effective_exclude_sections(vault)
     rows: list[str] = []
+    # One `explain --all` for the run, shared by every question asked of it.
+    explain = explain or ExplainAll(vault)
+    # The build's exclude list, asked of the tool at the first PC.
+    excludes: list[str] | None = None
     # The publish tool's reading of each PC's sheet_source, once asked.
     sources: tuple[set[str] | None, str | None, str | None] | None = None
+    # The fields each PC carries that its sheet no longer reads, once asked.
+    retired: dict[str, list[str]] | None = None
+    # False once the tool says character sheets are off: no sheet is built, so
+    # nothing about one is worth a row. Unknown (an older tool) means on.
+    sheets_on = True
     for rel, text in vault_files(vault, folder, files, newer_than=newer_than):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
         if publish_mode(fm) == "none":
             continue
+        if excludes is None:
+            excludes = effective_exclude_sections(
+                vault, tool_exclude_sections(explain()))
         states, problems = scan_body(text, excludes)
         kept = _published_linenos(states, fm)
         if kept is not None and not kept:
             continue
         rows.extend(_fence_rows(rel, problems, kept))
+
+        if retired is None:
+            answer = explain()
+            retired = retired_sheet_fields(answer)
+            switches = publish_switches(answer)
+            sheets_on = switches is None or switches["characterSheets"]
+        stale = retired.get(unicodedata.normalize("NFC", rel))
+        if stale and sheets_on:
+            rows.append(f"WARNING\t{rel}\tfrontmatter field(s) "
+                        f"{', '.join(stale)} are no longer read for the "
+                        f"character sheet \u2014 move the values into the "
+                        f"note's ## {CANONICAL_FIRST_H2} sections")
 
         headings: list[tuple[LineState, int, str]] = []
         for state in states:
@@ -2291,7 +2520,7 @@ def check_pc_body(vault: Path, folder: str | None = None,
         # a Character Sheet tab that says nothing (#273). `sheet_source`
         # records that the sheet is kept elsewhere, which settles it. A stub
         # publishes named fragments only, so its Stat Sheet is not judged.
-        if kept is None:
+        if kept is None and sheets_on:
             # A fenced or excluded Stat Sheet does not publish, so the page
             # has none.
             stat = next((st for st, title in h2s
@@ -2312,8 +2541,7 @@ def check_pc_body(vault: Path, folder: str | None = None,
             if row and _sheet_source_written(text):
                 # Asked once a run, and only when a PC's answer turns on it.
                 if sources is None:
-                    sources = sheet_sources_unset(
-                        (explain or ExplainAll(vault))())
+                    sources = sheet_sources_unset(explain())
                     unset, why, used = sources
                     if unset is not None:
                         rows.extend(_tool_used_row(used))
@@ -2328,7 +2556,7 @@ def check_pc_body(vault: Path, folder: str | None = None,
             if row:
                 rows.append(row)
 
-        if kept is None and h2s \
+        if kept is None and sheets_on and h2s \
                 and h2s[0][1].casefold() != CANONICAL_FIRST_H2.casefold():
             rows.append(f"INFO\t{rel}\tfirst body H2 is '## {h2s[0][1]}' — "
                         f"the canonical skeleton opens with "
@@ -3294,7 +3522,10 @@ def renest_wrapup(text: str,
 def _plain_title(title: str) -> str:
     """A heading title with any whole-title emphasis unwrapped."""
     m = EMPHASIS_RE.match(title)
-    return m.group(2).strip() if m else title
+    # `**A** and **B**` is two emphasised words, not one wrapped title.
+    if m and m.group(1) not in m.group(2):
+        return m.group(2).strip()
+    return title
 
 
 def _depth(state: LineState) -> int:
@@ -3632,14 +3863,19 @@ def _publish_dirs(vault: Path) -> list[str]:
     return ["_meta", "_Templates"] if cfg.value is None else cfg.value
 
 
-def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
+def renest_excludes_migration(vault: Path, fix: bool,
+                              explain: ExplainAll | None = None) -> list[str]:
     """`gm-leak --renest-excludes`: the 1.8.3 migration, all or nothing.
 
     Moves every level-2+ heading titled with an entry of the vault's
     current `exclude_sections` (hidden today or not) under `## GM Notes`,
     then collapses the list to `["GM Notes"]`. A vault that sets no list
     is re-nested only: the publisher's defaults stay in force, and no
-    list is written that would drop them for future content.
+    list is written that would drop them for future content. When the
+    vault file sets no list, the build may be using the site file's, so
+    the list in force is the publish tool's (`explain`, shared with the
+    run); if it cannot say, nothing is written. The site file is never
+    read here.
 
     Walks every file the publisher might ship, not just the ones the
     `gm-leak` report reads — a played session-plan publishes too — so
@@ -3654,7 +3890,26 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
         return [f"ERROR\t{VAULT_CONFIG}\tpublish.exclude_sections not "
                 f"understood ({cfg.error}) — nothing written; rewrite it as "
                 f"a plain list first"]
-    before = resolve_exclude_sections(cfg.value)
+    if cfg.value is not None:
+        before = resolve_exclude_sections(cfg.value)
+    else:
+        # Silent vault file: which list publishes is the build's decision.
+        # Assuming the defaults could move a heading out of a section the
+        # build hides into a published `## GM Notes`.
+        answer = (explain or ExplainAll(vault))()
+        tool_list = tool_exclude_sections(answer)
+        if tool_list is None and answer.data is None and answer.why is None:
+            # No `publish:` block: nothing is built, so no build can
+            # disagree. The defaults stand, as they did before the tool
+            # owned the list.
+            tool_list = list(resolve_exclude_sections(None))
+        if tool_list is None:
+            return [f"ERROR\t{VAULT_CONFIG}\tpublish.exclude_sections is not "
+                    f"set and the publish tool could not say which exclude "
+                    f"list the build uses — nothing written; set the list in "
+                    f"_meta/vault-config.md or fix the tool problem "
+                    f"(publish.site_dir, node, an older pin)"]
+        before = resolve_exclude_sections(tool_list)
     collapse = cfg.value is not None and [
         s.casefold() for s in before] != [GM_NOTES]
     after = list(COLLAPSED_EXCLUDES) if cfg.value is not None else before
@@ -3764,7 +4019,8 @@ def apply_frontmatter_fixes(lines: list[str],
     return actions
 
 
-def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
+def check_wrapup(vault: Path, file: str | None, fix: bool,
+                 explain: ExplainAll | None = None) -> list[str]:
     """Session Wrap-Up conformance, and the mechanical repairs.
 
     Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
@@ -3783,10 +4039,15 @@ def check_wrapup(vault: Path, file: str | None, fix: bool) -> list[str]:
     Exit code is not a gate here: wrap-up drift is triage, and an
     ordinary vault of ingested back-history would fail every run.
     """
-    excludes = effective_exclude_sections(vault)
     player = wrap_player_sections(vault)
     entries = [(rel, text, extract_frontmatter(text) or {})
                for rel, text in vault_files(vault)]
+    # The build's exclude list from the publish tool (asked only when there
+    # is a wrap-up to check), else the vault file's own.
+    excludes: list[str] = []
+    if any(entity_type(fm) in WRAP_TYPES for _r, _t, fm in entries):
+        excludes = effective_exclude_sections(
+            vault, tool_exclude_sections((explain or ExplainAll(vault))()))
     rows: list[str] = []
     matched = False
     for rel, _text, fm in entries:
@@ -4119,7 +4380,8 @@ def main() -> int:
         # from a command whose other twelve checks are read-only.
         wrap_file = args.file[0] if args.file else None
         emit_rows("wrapup", check_wrapup(args.vault, wrap_file,
-                                         args.fix and args.command == "wrapup"))
+                                         args.fix and args.command == "wrapup",
+                                         explain))
     return 0
 
 

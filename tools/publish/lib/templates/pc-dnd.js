@@ -1,4 +1,3 @@
-const { escapeHtml } = require('../processor');
 const { yesNo, consumedTitleMatcher } = require('./sheet-parse');
 const { renderD20Sheet, CONSUMED_TITLES } = require('./d20-sheet');
 
@@ -26,10 +25,6 @@ const DND = {
     const n = parseInt(score, 10);
     return { score, mod: mod || (Number.isFinite(n) ? abilityMod(n) : ''), save: proficient };
   },
-  abilityField: 'ability_scores',
-  abilityFromFrontmatter: score => ({
-    score, mod: Number.isFinite(Number(score)) ? abilityMod(Number(score)) : '', save: false,
-  }),
   headerFields: ['Class(?:es)?(?:\\s*/\\s*Subclass(?:es)?)?', '(?:Species|Race)', 'Background'],
   skillColumns: [/^skills?$/i, /^abilit/i, /^prof/i, /^expert/i, /^(mod|bonus)/i],
   readSkill: ([name, ability, proficient, expertise, modifier]) => {
@@ -45,12 +40,6 @@ const DND = {
   slotWord: 'Level',
   placeholders: ['list', 'Continue per level as needed.'],
   templateNotes: [/^Omit this section if the character has no spellcasting\.?$/i],
-  fallbacks: (frontmatter, rendered) => {
-    const proficiencies = [].concat(frontmatter.proficiencies || []);
-    if (rendered.proficiencies || proficiencies.length === 0) return [];
-    const pills = proficiencies.map(p => `<span class="dnd-proficiency">${escapeHtml(String(p))}</span>`).join('\n');
-    return [`<h3>Proficiencies</h3>\n<div class="dnd-proficiencies">${pills}</div>`];
-  },
 };
 
 function renderDnDSheet(frontmatter, sections) {

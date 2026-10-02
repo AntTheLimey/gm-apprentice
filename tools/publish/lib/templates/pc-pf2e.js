@@ -1,4 +1,3 @@
-const { escapeHtml } = require('../processor');
 const { cellText, hasContent, consumedTitleMatcher } = require('./sheet-parse');
 const { renderD20Sheet, CONSUMED_TITLES } = require('./d20-sheet');
 
@@ -17,12 +16,6 @@ function rankKey(cell) {
   if (RANKS[s]) return s;
   const found = Object.keys(RANKS).find(k => RANKS[k].toLowerCase() === s);
   return found || '';
-}
-
-function signedMod(value) {
-  const mod = Number(value);
-  if (!Number.isFinite(mod)) return String(value);
-  return mod >= 0 ? `+${mod}` : String(mod);
 }
 
 // `### Focus Spells` opens with a one-row table whose second header cell holds
@@ -44,8 +37,6 @@ const PF2E = {
   abilityColumns: [/^(attribute|abilit)/i, /^mod/i],
   // Remaster attributes are modifiers; the card's figure is the modifier.
   readAbility: ([, mod]) => ({ score: mod, mod: '', save: false }),
-  abilityField: 'attributes',
-  abilityFromFrontmatter: value => ({ score: signedMod(value), mod: '', save: false }),
   headerFields: ['Class(?:es)?(?:\\s*/\\s*Subclass(?:es)?)?', 'Ancestry', 'Heritage', 'Background'],
   skillColumns: [/^skills?$/i, /^(attribute|abilit)/i, /^(rank|prof)/i, /^(mod|bonus)/i],
   readSkill: ([name, ability, rank, modifier]) => {
@@ -71,25 +62,6 @@ const PF2E = {
     /^Remaster attributes are modifiers, not scores\.?$/i,
     /^Rank: U \(Untrained\), T \(Trained\), E \(Expert\), M \(Master\), L \(Legendary\)\.?$/i,
   ],
-  fallbacks: (frontmatter, rendered) => {
-    const out = [];
-    const heroPoints = frontmatter.hero_points;
-    // Wherever the body's Core table gave no Hero Points row.
-    const onSheet = /<span class="stat-label">Hero Points<\/span>/i.test(rendered['stat sheet'] || '');
-    if (!onSheet && heroPoints !== undefined && heroPoints !== null) {
-      out.push(`<div class="quick-stats"><div class="stat-item"><span class="stat-label">Hero Points</span><span class="stat-value">${escapeHtml(String(heroPoints))}</span></div></div>`);
-    }
-    const skills = [].concat(frontmatter.skill_proficiencies || []).filter(Boolean);
-    if (!rendered.skills && skills.length > 0) {
-      const pills = skills.map(s => {
-        if (typeof s === 'string') return `<span class="pf2e-proficiency">${escapeHtml(s)}</span>`;
-        const rank = s.rank ? ` <span class="sidebar-badge">${escapeHtml(String(s.rank))}</span>` : '';
-        return `<span class="pf2e-proficiency">${escapeHtml(String(s.name || ''))}${rank}</span>`;
-      }).join('\n');
-      out.push(`<h3>Skills</h3>\n<div class="pf2e-proficiencies">${pills}</div>`);
-    }
-    return out;
-  },
 };
 
 function renderPF2eSheet(frontmatter, sections) {

@@ -94,7 +94,7 @@ describe('doctor --site', () => {
     assert.deepStrictEqual(byCode.FOLDER_UNMAPPED.map(f => f.path), ['Session Notes']);
     assert.strictEqual(
       byCode.FOLDER_UNMAPPED[0].fix,
-      'add "Session Notes": "session-notes" to folderMap or list it in excludeDirs',
+      'add "Session Notes": "session-notes" to publish.folder_map or list it in publish.exclude_dirs (_meta/vault-config.md)',
     );
 
     assert.deepStrictEqual(byCode.PORTRAIT_MISSING.map(f => f.path), ['Characters/NPCs/Dr_Armitage.md']);

@@ -185,20 +185,6 @@ function consumedTitleMatcher(titles) {
   return title => keys.includes(normalizeTitle(title));
 }
 
-// Frontmatter `class_features` cards, the fallback shared by the d20 sheets.
-function featureCards(features) {
-  const list = [].concat(features || []).filter(f => f && (typeof f === 'string' || f.name));
-  if (list.length === 0) return '';
-  const items = list
-    .sort((a, b) => (a.level || 0) - (b.level || 0))
-    .map(f => {
-      const levelBadge = f.level ? `<span class="sidebar-badge">Level ${escapeHtml(String(f.level))}</span>` : '';
-      const desc = f.description ? `<div class="card-excerpt">${escapeHtml(f.description)}</div>` : '';
-      return `<div class="entity-card"><h4>${escapeHtml(String(f.name || f))} ${levelBadge}</h4>${desc}</div>`;
-    }).join('\n');
-  return `<h3>Class Features</h3>\n<div class="card-grid">${items}</div>`;
-}
-
 // Did a sheet built on this module place anything — a tile, an ability card,
 // a skill, a track, an identity block, a proficiency or ability list — or
 // pass a table through? If not it is only loose text ("TBD", "see D&D
@@ -206,12 +192,12 @@ function featureCards(features) {
 function hasSheetStructure(html) {
   const s = String(html || '');
   return /<table[ >]/i.test(s)
-    || /class="(?:stat-item|dnd-ability-card|dnd-skill|dnd-proficiency|dnd-proficiency-list|pf2e-proficiency|entity-card|fitd-action-row|fitd-tracker|fitd-identity|fitd-abilities|fitd-special-ability)[ "]/.test(s);
+    || /class="(?:stat-item|dnd-ability-card|dnd-skill|dnd-proficiency|dnd-proficiency-list|fitd-action-row|fitd-tracker|fitd-identity|fitd-abilities)[ "]/.test(s);
 }
 
 module.exports = {
   hasSheetStructure,
   ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, yesNo, isPlaceholder, filled, hasContent, statItem,
   subsections, consumeTable, stripTemplatePlaceholders, boldField, readAttributes, tiles, readSlots,
-  sectionReader, consumedTitleMatcher, featureCards,
+  sectionReader, consumedTitleMatcher,
 };

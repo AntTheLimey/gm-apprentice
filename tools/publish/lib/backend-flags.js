@@ -28,14 +28,4 @@ function detectStatusBar(siteDir) {
   return fs.existsSync(path.join(siteDir, 'functions', 'api', 'loadout.js')) && hasRealKvId(siteDir);
 }
 
-// Explicit boolean flags are authoritative; an undefined flag falls back to
-// detection so pre-flags sites keep their UI after upgrading.
-function resolveBackendFlags(explicit, siteDir) {
-  const e = explicit || {};
-  return {
-    statusBar: typeof e.statusBar === 'boolean' ? e.statusBar : detectStatusBar(siteDir),
-    inbox: typeof e.inbox === 'boolean' ? e.inbox : detectInbox(siteDir),
-  };
-}
-
-module.exports = { resolveBackendFlags, detectInbox, detectStatusBar, hasRealKvId };
+module.exports = { detectInbox, detectStatusBar, hasRealKvId };

@@ -15,11 +15,26 @@ const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
 const { canonicalPath } = require('./manifest');
-const { strippedSectionTitles, publishMode } = require('./processor');
+const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
+const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
 const { nearestNames } = require('./site-doctor');
+
+// The switches as the build resolves them, without the config notes.
+function switchesOf(publishConfig) {
+  const { characterSheets, liveStats, inbox } = publishConfig.switches || {};
+  return { characterSheets, liveStats, inbox };
+}
+
+// The `##` titles only the PC keep-list withholds. Raw-text decision: a note whose
+// headings a link label shifts is withheld whole by the build, which this does not
+// replicate (the build's own stability check owns that).
+function sheetWithheldOf(publishConfig, markdown, frontmatter) {
+  return [...new Set(sheetWithheldTitles(markdown, publishConfig.exclude_sections || [], frontmatter,
+    { pcKeepSections: pcKeepList(publishConfig) }))];
+}
 
 const MANIFEST_LABEL = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
 
@@ -92,7 +107,7 @@ async function runExplain(options, deps) {
   // vault's config chose to exclude it".
   const verdict = verdicts.get(target)
     || (configExcluded && !alwaysExcluded
-      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in excludeDirs`, outputPath: null }
+      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in publish.exclude_dirs`, outputPath: null }
       : decidePage(page || { rel: target, frontmatter: null }, {
         rel: target,
         publishConfig,
@@ -122,7 +137,8 @@ async function runExplain(options, deps) {
   const excludeSections = publishConfig.exclude_sections || [];
   // The strip's own walk, so a document's Keeper sections (#280) are named here too.
   const stripped = frontmatterError ? null
-    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter))];
+    : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
+  const sheetWithheld = frontmatterError || !page ? null : sheetWithheldOf(publishConfig, markdown, frontmatter);
   const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
 
   const publishes = publishesPage(verdict);
@@ -151,6 +167,7 @@ async function runExplain(options, deps) {
       autoExclude: auto,
       canonStatus,
       excludeDrafts: !!publishConfig.exclude_drafts,
+      excludeSections: publishConfig.exclude_sections || [],
       manifestSection: manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : null,
       verdict,
       publishes,
@@ -158,6 +175,7 @@ async function runExplain(options, deps) {
       mergedInto: mergedInto ? mergedInto.displayTitle || mergedInto.title : null,
       frontmatterError,
       strippedSections: stripped,
+      sheetWithheldSections: sheetWithheld,
       gmOnlyBlocks,
       bodyPublishes: publishes && !hubBodyUnpublished,
       bodyWithheld: hubBodyUnpublished,
@@ -169,9 +187,9 @@ async function runExplain(options, deps) {
   out('');
   out('  exists: yes');
   out(`  directory: ${dir || '(vault root)'} — ${
-    configExcluded ? `listed in excludeDirs (${configExcluded})`
+    configExcluded ? `listed in publish.exclude_dirs (${configExcluded})`
       : mappedTo ? `mapped to ${mappedTo}`
-        : dir ? 'not in folderMap' : 'the vault root'}`);
+        : dir ? 'not in publish.folder_map' : 'the vault root'}`);
   if (frontmatterError) out(`  frontmatter: could not be parsed — ${frontmatterError}`);
   out(`  type: ${(frontmatter && frontmatter.type) || '(none)'}`);
   out(`  publish mode: ${frontmatter ? publishMode(frontmatter) : '(no frontmatter)'}`);
@@ -186,6 +204,9 @@ async function runExplain(options, deps) {
   out('');
   out(`  sections stripped on publish: ${
     stripped == null ? 'unknown — frontmatter could not be parsed' : (stripped.length ? stripped.join(', ') : 'none')}`);
+  if (sheetWithheld && sheetWithheld.length) {
+    out(`  sections withheld with the character sheet: ${sheetWithheld.join(', ')}`);
+  }
   out(`  gm-only blocks: ${gmOnlyBlocks == null ? 'unknown' : gmOnlyBlocks}`);
   if (hubBodyUnpublished) {
     // A hub that does not publish has no page to build from anything; say only that
@@ -206,7 +227,10 @@ function publishedPagesOf(survey) {
     .map(([, p]) => p);
 }
 
-// `explain --all --json`: the verdict for every file the vault walk sees, in one run,
+// `explain --all --json`: a top-level `switches` block ({ characterSheets, liveStats,
+// inbox }, as the build resolves them), a top-level `pcKeepSections` (the resolved PC
+// keep-list; null when sheets are on), a top-level `excludeSections` (the `##` titles
+// the build strips: the vault file's list, else the site file's, else the default), then the verdict for every file the vault walk sees, in one run,
 // so a caller that needs the build's answer for many files (vault_check gm-leak and
 // sessions, #276) asks once instead of re-implementing the rules. Each entry:
 //   path           vault-relative path (NFC, POSIX)
@@ -217,6 +241,11 @@ function publishedPagesOf(survey) {
 //   bodyPublishes  publishes && !bodyWithheld
 //   sheetSourceSet a PC whose `sheet_source` says where its sheet is kept (#273);
 //                  null for any other file
+//   sheetWithheldSections  the `##` headings only the PC keep-list withholds (character
+//                  sheets off); [] when none, null when the scanner made no page. Disjoint
+//                  from strippedSections.
+//   retiredSheetFields  a PC's frontmatter fields the campaign system's sheet no longer reads (the note
+//                  body is the only source); [] when none, null for any other file
 //   frontmatterError the parser's message for a file whose frontmatter could not be
 //                  parsed (code FILE_UNPARSEABLE, no page is built); null otherwise (#287)
 async function runExplainAll(options, deps) {
@@ -242,17 +271,24 @@ async function runExplainAll(options, deps) {
       // the scanner produced no page for it. gm-leak reads these rather than keep a
       // second copy of the rules (#280).
       strippedSections: page
-        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter))]
+        ? [...new Set(strippedSectionTitles(page.markdown || '', survey.publishConfig.exclude_sections || [], page.frontmatter, { pcKeepSections: pcKeepList(survey.publishConfig) }))]
         : null,
+      sheetWithheldSections: page ? sheetWithheldOf(survey.publishConfig, page.markdown || '', page.frontmatter) : null,
       // vault_check pc-body reads this rather than parse the field itself.
       sheetSourceSet: page && page.frontmatter && page.frontmatter.type === 'pc'
         ? Boolean(sheetSourceOf(page.frontmatter))
+        : null,
+      // vault_check pc-body warns on these; the list lives in pc-prose.js.
+      retiredSheetFields: page && page.frontmatter && page.frontmatter.type === 'pc'
+        ? retiredSheetFieldsFor(page.sourceFrontmatter || page.frontmatter, survey.publishConfig.system)
         : null,
       // vault_check frontmatter reports these: its own reader accepts YAML this one rejects.
       frontmatterError: parseErrors.has(rel) ? parseErrors.get(rel) : null,
     };
   });
-  out(JSON.stringify({ vaultPath: survey.vaultPath, pages }, null, 2));
+  out(JSON.stringify({ vaultPath: survey.vaultPath, switches: switchesOf(survey.publishConfig),
+    pcKeepSections: pcKeepList(survey.publishConfig),
+    excludeSections: survey.publishConfig.exclude_sections || [], pages }, null, 2));
   return 0;
 }
 

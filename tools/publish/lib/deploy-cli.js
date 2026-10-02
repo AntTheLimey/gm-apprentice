@@ -107,7 +107,13 @@ async function runDeploy(options, deps) {
   const exists = d.exists || ((p) => fs.existsSync(p));
   const runCommand = d.runCommand || require('./run-command').runCommand;
   const runWrangler = d.runWrangler || require('./setup-backend').defaultRunWrangler;
-  const build = d.build || (async (o) => { await require('./fonts').prefetchForConfig(o.configPath); return require('./build').build(o); });
+  // The default build runs the function step first, as `gm-publish build` does, so a deploy
+  // ships (and no longer ships) the functions the switches say.
+  const build = d.build || (async (o) => {
+    require('./sync-functions').syncSiteFunctionsOrWarn(o.configPath);
+    await require('./fonts').prefetchForConfig(o.configPath);
+    return require('./build').build(o);
+  });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
   const sleep = d.sleep || defaultSleep;
   const now = d.now || (() => new Date());

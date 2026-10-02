@@ -7,6 +7,7 @@ const { excerptFromMarkdown } = require('../excerpt');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher } = require('./pc-registry');
+const { sheetSourceOf } = require('../sheet-source');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -23,6 +24,9 @@ function renderMetaSpans(fm) {
     .map(field => `<span><span class="label">${escapeHtml(formatLabel(field))}</span> ${escapeHtml(String(fm[field]))}</span>`)
     .join('\n    ');
 }
+
+// The frontmatter field an identity label is read from (pc-identity.js), where it has one.
+const IDENTITY_SOURCE_FIELD = { Occupation: 'occupation', Age: 'age', Points: 'point_total' };
 
 const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
 
@@ -195,7 +199,9 @@ function buildRouteMap(page, pages) {
   return `<div class="relationship-graph" style="margin-bottom:2rem"><h3>Campaign Route</h3>${svg}</div>`;
 }
 
-function tabScript() {
+const ALL_TABS = ['sheet', 'combat', 'equipment', 'story', 'journey'];
+
+function tabScript(tabs = ALL_TABS) {
   return `
 <script>
 function switchTab(tab) {
@@ -224,7 +230,7 @@ document.addEventListener('click', function(e) {
 });
 (function() {
   var hash = location.hash.slice(1);
-  if (['sheet', 'combat', 'equipment', 'story', 'journey'].includes(hash)) switchTab(hash);
+  if ([${tabs.map(t => `'${t}'`).join(', ')}].includes(hash)) switchTab(hash);
   else if (hash) openAccordion(hash);
 })();
 </script>`;
@@ -234,9 +240,12 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const pages = (context || {}).pages || [];
-  const backend = publishConfig.backend || {};
-  const showInbox = backend.inbox === true;
-  const showStatusBar = backend.statusBar === true;
+  const live = publishConfig.live || {};
+  const showInbox = live.inbox === true;
+  // Character sheets off (decided once, by the build, from the same list the section filter uses):
+  // no sheet content of any kind reaches the page, whatever else the caller passed.
+  const sheetsOff = (context || {}).sheetsOff === true;
+  const showStatusBar = live.stats === true && !sheetsOff;
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
@@ -275,13 +284,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // Read system HTML before filtering so the filter can react to what was actually rendered.
-  const systemHtml = (context || {}).systemSheetHtml || null;
-  const systemCombatHtml = (context || {}).systemCombatHtml || null;
-  const systemEquipmentHtml = (context || {}).systemEquipmentHtml || null;
-  const systemLiveData = (context || {}).systemLiveData || null;
-  const systemStatusPanelHtml = (context || {}).systemStatusPanelHtml || null;
-  const systemRecordHtml = (context || {}).systemRecordHtml || null;
-  const systemStatusBarHtml = (context || {}).systemStatusBarHtml || null;
+  const fromSystem = (key) => (sheetsOff ? null : ((context || {})[key] || null));
+  const systemHtml = fromSystem('systemSheetHtml');
+  const systemCombatHtml = fromSystem('systemCombatHtml');
+  const systemEquipmentHtml = fromSystem('systemEquipmentHtml');
+  const systemLiveData = fromSystem('systemLiveData');
+  const systemStatusPanelHtml = fromSystem('systemStatusPanelHtml');
+  const systemRecordHtml = fromSystem('systemRecordHtml');
+  const systemStatusBarHtml = fromSystem('systemStatusBarHtml');
 
   // --- Character Epithet ---
   // key_traits when the PC has any, otherwise the first sentence of the body's
@@ -315,7 +325,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const sheetConsumes = getConsumedTitleMatcher(publishConfig.system);
   const sheetSections = sections.filter(s => {
     const lower = s.title.toLowerCase();
-    if (EQUIPMENT_SECTION_TITLES.has(lower)) return false;
+    // With sheets off there is no Equipment tab to take these, and the keep-list already chose them.
+    if (!sheetsOff && EQUIPMENT_SECTION_TITLES.has(lower)) return false;
     if (gurpsSheet && systemHtml && GURPS_CONSUMED_TITLES.has(lower) && !GURPS_COMBAT_TITLES.has(lower)) return false;
     if (gurpsSheet && systemCombatHtml && GURPS_COMBAT_TITLES.has(lower)) return false;
     if (cocSheet && (systemHtml || systemRecordHtml) && COC_CONSUMED_TITLES.has(lower)) return false;
@@ -338,7 +349,26 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 </div>`).join('\n');
 
   let sheetContent;
-  if (systemHtml) {
+  if (sheetsOff) {
+    // Who the character is, then the line saying why there is no sheet; the kept prose follows.
+    // A fact the header's meta badges already show is not said twice.
+    const headerFields = new Set((Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS)
+      .filter(field => fm[field] != null && fm[field] !== ''));
+    // ... but only when the header shows the same value the strip would: a header that shows
+    // a raw "ca. 150" leaves the strip's valid total (from the Points Summary) in place.
+    const inHeader = (label, value) => {
+      const field = IDENTITY_SOURCE_FIELD[label];
+      return headerFields.has(field) && String(fm[field]).trim() === value;
+    };
+    const pairs = ((context || {}).identity || []).filter(([label, value]) => !inHeader(label, value));
+    const strip = pairs.length
+      ? `<div class="pc-identity">\n${pairs.map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(value)}</span>`).join('\n')}\n</div>\n`
+      : '';
+    const metaFields = Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS;
+    const kept = metaFields.includes('sheet_source') ? sheetSourceOf(fm) : '';
+    const keptLine = kept ? ` This sheet is kept: ${escapeHtml(kept)}.` : '';
+    sheetContent = `${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
+  } else if (systemHtml) {
     const liveClient = liveData ? clientFor(publishConfig.system) : null;
     const island = liveClient ? '\n' + liveDataScript(liveData, liveClient.domId) : '';
     sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}${island}`;
@@ -347,7 +377,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // --- Equipment Tab ---
-  const equipmentContent = systemEquipmentHtml || extractEquipment(fm, sections);
+  const equipmentContent = sheetsOff ? '' : (systemEquipmentHtml || extractEquipment(fm, sections));
 
   // --- Story Tab ---
   const opts = context || {};
@@ -369,17 +399,23 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const combatPanel = systemCombatHtml
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
 
+  // --- Equipment Tab (none without a sheet) ---
+  const equipmentTabButton = sheetsOff ? ''
+    : `\n  <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>`;
+  const equipmentPanel = sheetsOff ? ''
+    : `\n<div class="tab-panel" id="tab-equipment">\n${equipmentContent}\n</div>`;
+
   // --- Assemble ---
   // NFC at the boundary, not because this is a path (it isn't — see unicode.js on
   // why emitted paths stay byte-exact) but because the browser posts this value
   // back as the inbox entry's `character`, where it is matched against vault note
   // names. A decomposed name would survive into that runtime comparison and miss.
   const crWidget = showInbox
-    ? `<div id="cr-root" data-character="${escapeHtml(canonicalNfc(page.frontmatter.name || page.displayTitle || page.title || ''))}"></div>`
+    ? `<div id="cr-root" data-character="${escapeHtml(canonicalNfc(page.frontmatter.name || page.displayTitle || page.title || ''))}"${sheetsOff ? ' data-sheets="off"' : ''}></div>`
     : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
-  if (cocSheet) {
+  if (cocSheet && !sheetsOff) {
     const portraitUrl = hasPortrait
       ? (((portraitImg(fm, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
       : '';
@@ -423,17 +459,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 ${heroBanner}
 ${epithet}
 ${statusPanel ? statusPanel + '\n' : ''}<div class="tab-bar">
-  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">Character Sheet</button>${combatTabButton}
-  <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>
+  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">${sheetsOff ? 'Character' : 'Character Sheet'}</button>${combatTabButton}${equipmentTabButton}
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
   <button class="pc-tab" data-tab="journey" onclick="switchTab('journey')">Journey</button>
 </div>
 <div class="tab-panel active" id="tab-sheet">
 ${sheetContent}
-</div>${combatPanel}
-<div class="tab-panel" id="tab-equipment">
-${equipmentContent}
-</div>
+</div>${combatPanel}${equipmentPanel}
 <div class="tab-panel" id="tab-story">
   <div class="story-prose">
     ${storyContent}
@@ -442,7 +474,7 @@ ${equipmentContent}
 <div class="tab-panel" id="tab-journey">
 ${journeyContent}
 </div>
-${tabScript()}`;
+${tabScript(sheetsOff ? ALL_TABS.filter(t => t !== 'combat' && t !== 'equipment') : ALL_TABS)}`;
 
   return baseShell({
     title: page.displayTitle,

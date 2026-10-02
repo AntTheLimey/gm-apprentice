@@ -269,7 +269,7 @@ describe('explain', () => {
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
     assert.strictEqual(rc, 0);
-    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in excludeDirs \(DIR_CONFIG_EXCLUDED\)/);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in publish\.exclude_dirs \(DIR_CONFIG_EXCLUDED\)/);
 
     const j = capture();
     await runExplain({ configPath, target: 'Drafts/Idea.md', json: true }, j.deps);
@@ -300,7 +300,7 @@ describe('explain', () => {
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
     assert.strictEqual(rc, 0);
-    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in excludeDirs \(DIR_CONFIG_EXCLUDED\)/);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in publish\.exclude_dirs \(DIR_CONFIG_EXCLUDED\)/);
     fs.rmSync(vault, { recursive: true, force: true });
     fs.rmSync(dir, { recursive: true, force: true });
   });
@@ -340,6 +340,102 @@ describe('explain on a session index that does not publish (#276)', () => {
   });
 });
 
+describe('explain reports the switches and the sheet-withheld sections (#285)', () => {
+  function vaultWith(publishLines, siteExtra) {
+    const vault = makeVault();
+    write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${publishLines}---\n`);
+    write(vault, 'Sessions/Hero.md', [
+      '---', 'type: pc', '---', '',
+      '## Stat Sheet', '', 'ST 12', '',
+      '## Skills', '', 'Brawling 12', '',
+      '## Background', '', 'A sailor.', '',
+      '## GM Notes', '', 'Secret.', '',
+    ].join('\n'));
+    const configPath = siteFor(vault);
+    if (siteExtra) {
+      const cfg = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+      fs.writeFileSync(configPath, JSON.stringify(Object.assign(cfg, siteExtra)));
+    }
+    return { vault, configPath };
+  }
+  async function explainAll(configPath) {
+    const c = capture();
+    assert.strictEqual(await runExplainAll({ configPath }, c.deps), 0);
+    return JSON.parse(c.out.join(''));
+  }
+
+  it('reports the defaults, sheets off forcing live stats off, and all on', async () => {
+    const d = vaultWith('');
+    assert.deepStrictEqual((await explainAll(d.configPath)).switches,
+      { characterSheets: true, liveStats: false, inbox: false });
+    const off = vaultWith('  character_sheets: false\n  live_stats: true\n');
+    assert.deepStrictEqual((await explainAll(off.configPath)).switches,
+      { characterSheets: false, liveStats: false, inbox: false });
+    const on = vaultWith('  live_stats: true\n  inbox: true\n');
+    assert.deepStrictEqual((await explainAll(on.configPath)).switches,
+      { characterSheets: true, liveStats: true, inbox: true });
+    for (const v of [d, off, on]) fs.rmSync(v.vault, { recursive: true, force: true });
+  });
+
+  it('reports the PC keep-list: null with sheets on, the list with sheets off', async () => {
+    const on = vaultWith('');
+    assert.strictEqual((await explainAll(on.configPath)).pcKeepSections, null);
+    const off = vaultWith('  character_sheets: false\n  pc_prose_sections: [Rumours]\n');
+    const keep = (await explainAll(off.configPath)).pcKeepSections;
+    assert.ok(Array.isArray(keep) && keep.includes('Background') && keep.includes('Rumours'), String(keep));
+    for (const v of [on, off]) fs.rmSync(v.vault, { recursive: true, force: true });
+  });
+
+  it('reports the list the build resolves: vault file then site-only entries, else the site file, else the default', async () => {
+    const both = vaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
+    assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
+    const siteOnly = vaultWith('', { excludeSections: ['Keeper Only'] });
+    assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections, ['Keeper Only']);
+    const none = vaultWith('');
+    assert.deepStrictEqual((await explainAll(none.configPath)).excludeSections,
+      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
+    const c = capture();
+    assert.strictEqual(await runExplain({ configPath: both.configPath, target: 'Sessions/Hero.md', json: true }, c.deps), 0);
+    assert.deepStrictEqual(JSON.parse(c.out.join('')).excludeSections, ['GM Notes', 'Keeper Only']);
+    for (const v of [both, siteOnly, none]) fs.rmSync(v.vault, { recursive: true, force: true });
+  });
+
+  it('names the sections only the keep-list withholds, apart from the stripped ones', async () => {
+    const off = vaultWith('  character_sheets: false\n');
+    const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));
+    const hero = pages.get('Sessions/Hero.md');
+    assert.deepStrictEqual(hero.sheetWithheldSections, ['Stat Sheet', 'Skills']);
+    assert.deepStrictEqual(hero.strippedSections, ['GM Notes']);
+    fs.rmSync(off.vault, { recursive: true, force: true });
+    const on = vaultWith('');
+    const heroOn = (await explainAll(on.configPath)).pages.find((p) => p.path === 'Sessions/Hero.md');
+    assert.deepStrictEqual(heroOn.sheetWithheldSections, []);
+    fs.rmSync(on.vault, { recursive: true, force: true });
+  });
+
+  it('gives null for a file the scanner made no page for', async () => {
+    const off = vaultWith('  character_sheets: false\n');
+    write(off.vault, 'Unmapped/Hidden.md', '---\ntype: pc\n---\n\n## Stat Sheet\n\nST 12\n');
+    const pages = new Map((await explainAll(off.configPath)).pages.map((p) => [p.path, p]));
+    assert.strictEqual(pages.get('Unmapped/Hidden.md').sheetWithheldSections, null);
+    fs.rmSync(off.vault, { recursive: true, force: true });
+  });
+
+  it('single-file --json and the report carry the same field', async () => {
+    const off = vaultWith('  character_sheets: false\n');
+    const j = capture();
+    await runExplain({ configPath: off.configPath, target: 'Sessions/Hero.md', json: true }, j.deps);
+    assert.deepStrictEqual(JSON.parse(j.out.join('')).sheetWithheldSections, ['Stat Sheet', 'Skills']);
+    const h = capture();
+    await runExplain({ configPath: off.configPath, target: 'Sessions/Hero.md' }, h.deps);
+    assert.match(h.text(), /sections withheld with the character sheet: Stat Sheet, Skills/);
+    const s = capture();
+    await runExplain({ configPath: off.configPath, target: 'Sessions/Session_07.md' }, s.deps);
+    assert.doesNotMatch(s.text(), /withheld with the character sheet/);
+    fs.rmSync(off.vault, { recursive: true, force: true });
+  });
+});
+
 describe('explain --all (#276)', () => {
   function all(configPath, extra) {
     const c = capture();
@@ -360,6 +456,8 @@ describe('explain --all (#276)', () => {
       code: pages.get('Sessions/Session_07.md').code, bodyWithheld: true, bodyPublishes: false,
       strippedSections: ['GM Notes', 'Reconciliation Context'],
       sheetSourceSet: null,
+      sheetWithheldSections: [],
+      retiredSheetFields: null,
       frontmatterError: null,
     });
     assert.strictEqual(pages.get('Sessions/Session_07_Wrap_Up.md').bodyPublishes, true);
@@ -383,6 +481,42 @@ describe('explain --all (#276)', () => {
     assert.ok(pages.get('Sessions/Colon.md').frontmatterError);
     assert.strictEqual(pages.get('Sessions/Session_07.md').frontmatterError, null);
     fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  describe('retiredSheetFields follow the campaign system', () => {
+    async function retiredFor(system, fm) {
+      const vault = makeVault();
+      write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${system ? `  system: ${system}\n` : ''}---\n`);
+      write(vault, 'Sessions/Pc.md', `---\ntype: pc\noccupation: Sailor\n${fm}---\n\nA sailor.\n`);
+      write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
+      const { rc, json } = await all(siteFor(vault));
+      assert.strictEqual(rc, 0);
+      const pages = byPath(json);
+      assert.strictEqual(pages.get('Sessions/Npc.md').retiredSheetFields, null);
+      assert.strictEqual(pages.get('Sessions/Session_07.md').retiredSheetFields, null);
+      fs.rmSync(vault, { recursive: true, force: true });
+      return pages.get('Sessions/Pc.md').retiredSheetFields;
+    }
+    const gurpsFm = 'attributes: { ST: 77 }\nskills: [{ name: Sentinel }]\nstress: { current: 1, max: 9 }\n';
+
+    it('lists a GURPS name on a GURPS PC (aliases included), and [] when none is carried', async () => {
+      assert.deepStrictEqual(await retiredFor('gurps-4e', gurpsFm), ['attributes', 'skills']);
+      assert.deepStrictEqual(await retiredFor('gurps', gurpsFm), ['attributes', 'skills']);
+      assert.deepStrictEqual(await retiredFor('gurps-4e', 'point_total: 150\n'), []);
+    });
+
+    it('does not report a GURPS-only name on a CoC, D&D or generic PC', async () => {
+      for (const system of ['coc-7e', 'dnd-5e-2024', 'fitd', 'generic', '']) {
+        const got = await retiredFor(system, 'skills: [x]\nidentity: x\nlanguages: [x]\npoints: [x]\n');
+        assert.deepStrictEqual(got, [], system);
+      }
+    });
+
+    it('reports each system its own names, a shared name for every system that read it', async () => {
+      assert.deepStrictEqual(await retiredFor('dnd-5e-2024', gurpsFm + 'ability_scores: {}\nspell_slots: {}\n'), ['ability_scores', 'spell_slots']);
+      assert.deepStrictEqual(await retiredFor('blades', gurpsFm), ['stress']);
+      assert.deepStrictEqual(await retiredFor('pathfinder-2e', gurpsFm + 'hero_points: 1\nspell_slots: {}\n'), ['attributes', 'spell_slots', 'hero_points']);
+    });
   });
 
   it('says whether each PC has a sheet_source, and null for any other file (#273)', async () => {

@@ -38,9 +38,10 @@ Usage:
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
+  gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
-  gm-apprentice-publish setup-status-bar     Enable the live status bar (KV + deploy)
-  gm-apprentice-publish setup-inbox          Enable the change-request inbox (KV + deploy)
+  gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
+  gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
   gm-apprentice-publish --version            Show version
   gm-apprentice-publish --help               Show this help
 
@@ -60,14 +61,29 @@ Every subcommand accepts --help / -h.
 // reference for what each command accepts.
 const SUBCOMMAND_HELP = {
   init: `
-gm-apprentice-publish init [target-dir]
+gm-apprentice-publish init [target-dir] [--vault <dir>] [--title <text>] [--tagline <text>]
 
 Scaffolds a new site in target-dir (default: the current directory):
-package.json pinned to this tool, vault.config.json, README.md,
-css/overrides.css, .gitignore, wrangler.toml, and .nojekyll.
-Refuses to overwrite — if any of those files already exists, nothing is
-written. Follow with "build" to generate the site.
+package.json pinned to this tool, vault.config.json (the deployment
+settings only), README.md, css/overrides.css, .gitignore, wrangler.toml,
+and .nojekyll. Refuses to overwrite — if any of those files already
+exists, nothing is written.
 
+The campaign settings (site title, folder map, attachments folder,
+excluded folders, callout rule) go under publish: in the vault's
+_meta/vault-config.md, for each key the file does not already set. The
+vault is ./vault beside the site unless --vault names it. If the vault
+folder is not there yet, or its config file cannot be edited safely, the
+site is still scaffolded and the settings to add are printed.
+Follow with "build" to generate the site.
+
+  --vault <dir>      The vault, read relative to where you run this. Recorded as
+                     vaultPath (relative to the site if inside it, else absolute)
+                     and given the settings
+  --title <text>     The site title (publish.site_title), instead of "My Campaign"
+  --tagline <text>   The landing-page tagline (publish.theme.tagline); other
+                     theme keys are kept
+                     Both are written only where the vault file leaves the key unset.
   --help, -h         Show this help
 `,
   build: `
@@ -182,8 +198,11 @@ rather than the whole vault.
   gm-apprentice-publish explain "Sessions/Session 7.md"
 
 With --all, prints one JSON object for every file the vault walk sees:
-{ vaultPath, pages: [{ path, type, publishes, code, bodyWithheld,
-bodyPublishes }] }. bodyWithheld marks a session index whose body the site
+{ vaultPath, switches, excludeSections, pages: [{ path, type, publishes,
+code, bodyWithheld, bodyPublishes }] }. switches is { characterSheets,
+liveStats, inbox } as the build resolves them; excludeSections is the list of
+H2 titles the build strips (the vault file's list, else the site file's, else
+the built-in default). bodyWithheld marks a session index whose body the site
 withholds because its Wrap-Up publishes.
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
@@ -191,6 +210,26 @@ withholds because its Wrap-Up publishes.
   --all              Every file at once (needs --json)
   --vault <dir>      With --all: read this vault through the site's rules
                      instead of the vault the config names
+  --help, -h         Show this help
+`,
+  'migrate-config': `
+gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
+
+Moves the campaign settings in the site's vault.config.json (title, folder map,
+exclude lists, images, ...) into publish: in the vault's _meta/vault-config.md,
+renames publish.backend.statusBar / inbox to publish.live_stats / inbox, and
+leaves only the deployment keys in the site file, plus any key the tool does not
+read (named in the output, never removed). The vault file wins when both set a
+key (the difference is reported); exclude lists are merged. Both files are
+backed up as <file>.pre-migrate first (an existing backup is never replaced).
+Nothing is written if the vault file cannot be edited safely. Running it again
+changes nothing.
+
+  --dry-run, -n      Print what would change; write nothing
+  --json             Print the plan as JSON
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --vault <dir>      The vault to edit (default: the one the config names). With
+                     no site file, only the backend rename is planned.
   --help, -h         Show this help
 `,
   deploy: `
@@ -255,9 +294,11 @@ the edit that fixes it. Exits 1 only on an error, not on a warning.
   'setup-status-bar': `
 gm-apprentice-publish setup-status-bar [--config <path>]
 
-Enables the live status bar: creates the KV namespace, records its id in
-wrangler.toml, flips the backend flag in vault.config.json, then rebuilds
-and deploys the site. Requires wrangler auth ("doctor" checks it).
+Enables live stats: creates the KV namespace, records its id in
+wrangler.toml, sets publish.live_stats: true in the vault's
+_meta/vault-config.md (refusing first if that file cannot be edited),
+then rebuilds and deploys the site. Requires wrangler auth ("doctor"
+checks it).
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
@@ -266,8 +307,10 @@ and deploys the site. Requires wrangler auth ("doctor" checks it).
 gm-apprentice-publish setup-inbox [--config <path>]
 
 Enables the change-request inbox: creates the KV namespace, records its id
-in wrangler.toml, flips the backend flag in vault.config.json, then rebuilds
-and deploys the site. Requires wrangler auth ("doctor" checks it).
+in wrangler.toml, sets publish.inbox: true in the vault's
+_meta/vault-config.md (refusing first if that file cannot be edited),
+then rebuilds and deploys the site. Requires wrangler auth ("doctor"
+checks it).
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
@@ -405,9 +448,42 @@ if (wantsHelp) {
 
 
 if (command === 'init') {
-  const targetDir = args[1] || '.';
+  const rest = args.slice(1);
+  // --title / --tagline seed publish.site_title / publish.theme.tagline in the vault file.
+  const textOption = (flag) => {
+    const i = rest.indexOf(flag);
+    if (i === -1) return undefined;
+    const value = rest[i + 1];
+    if (!value || !value.trim() || value.startsWith('--')) return null;
+    rest.splice(i, 2);
+    return value.trim();
+  };
+  const siteTitle = textOption('--title');
+  const tagline = textOption('--tagline');
+  if (siteTitle === null || tagline === null) {
+    console.error(`Init failed: ${siteTitle === null ? '--title' : '--tagline'} needs some text`);
+    exitAfterFlush(2);
+    return;
+  }
+  let vaultPath;
+  const vi = rest.indexOf('--vault');
+  if (vi !== -1) {
+    vaultPath = rest[vi + 1];
+    if (!vaultPath) {
+      console.error('Init failed: --vault needs a directory');
+      exitAfterFlush(2);
+      return;
+    }
+    rest.splice(vi, 2);
+    // Typed relative to where the user is; vaultPath is read relative to the site folder.
+    // Inside the site folder it is recorded relative (forward slashes), else absolute.
+    const vaultAbs = path.resolve(vaultPath);
+    const rel = path.relative(path.resolve(rest[0] || '.'), vaultAbs);
+    vaultPath = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? `./${rel.split(path.sep).join('/')}` : vaultAbs;
+  }
+  const targetDir = rest[0] || '.';
   const { init } = require('../lib/init');
-  init(targetDir, { verbose: true }).then(() => {
+  init(targetDir, { verbose: true, vaultPath, siteTitle, tagline }).then(() => {
     exitAfterFlush(0);
   }).catch((err) => {
     console.error(`Init failed: ${err.message}`);
@@ -436,24 +512,9 @@ if (command === 'build') {
 
   // Bring plugin-owned Cloudflare Functions up to date on every build so API routes
   // added or fixed in a newer plugin version reach flagged sites scaffolded before they
-  // existed. A Tier-1 (static) site has no backend, so it gets no Functions re-added.
-  try {
-    const { syncScaffoldFunctions, shouldSyncFunctions } = require('../lib/sync-functions');
-    const siteRoot = path.dirname(path.resolve(configPath));
-    let backendExplicit;
-    try {
-      backendExplicit = JSON.parse(fs.readFileSync(configPath, 'utf8')).backend;
-    } catch {
-      // Unreadable/absent config → leave undefined so resolveBackendFlags falls back to detection.
-    }
-    if (shouldSyncFunctions(siteRoot, backendExplicit)) {
-      const { created, updated } = syncScaffoldFunctions(siteRoot);
-      for (const f of created) console.log(`  synced (new) functions/${f}`);
-      for (const f of updated) console.log(`  synced (updated) functions/${f}`);
-    }
-  } catch (err) {
-    console.warn(`⚠️  Could not sync scaffold Functions: ${err.message}`);
-  }
+  // existed. Each feature's files follow its own switch: on copies them, an explicit off
+  // removes them, unset does neither (a Tier-1 static site gets no Functions re-added).
+  require('../lib/sync-functions').syncSiteFunctionsOrWarn(configPath);
 
   const { build } = loadBuild();
   (async () => {
@@ -539,6 +600,31 @@ if (command === 'explain' && args[1] === '--all') {
   runExplainAll({ configPath: parsed.configPath, vaultPath: parsed.flags.vault })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'migrate-config') {
+  const parsed = parseSubcommandArgs(
+    args.slice(1),
+    { '--dry-run': 'dryRun', '-n': 'dryRun', '--json': 'json' },
+    { '--vault': 'vault' },
+  );
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('migrate-config');
+    process.exit(1);
+  }
+  // With --vault and no site file, plan only the vault file's own rename.
+  const explicitConfig = args.includes('--config');
+  const hasSite = explicitConfig || fs.existsSync(parsed.configPath) || !parsed.flags.vault;
+  const { runMigrateConfig } = require('../lib/migrate-config.js');
+  const rc = runMigrateConfig({
+    configPath: hasSite ? parsed.configPath : undefined,
+    vaultPath: parsed.flags.vault,
+    dryRun: !!parsed.flags.dryRun,
+    json: !!parsed.flags.json,
+  });
+  exitAfterFlush(rc);
   return;
 }
 

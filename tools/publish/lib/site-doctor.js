@@ -13,7 +13,8 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, pairStoryFiles, slugify } = require('./scanner');
-const { loadPublishConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
@@ -151,7 +152,9 @@ async function runSiteDoctor(options, deps) {
     )], vaultPath, asJson);
   }
 
-  const publishConfig = loadPublishConfig(vaultPath, config);
+  const resolved = resolveConfig(config, vaultPath);
+  config = resolved.config;
+  const publishConfig = resolved.publishConfig;
   const manifest = loadManifest(vaultPath);
   // scanConfigFor: same unioned, normalized exclude_dirs the build applies, so `doctor
   // --site` predicts exactly what the build does (#209 follow-up).
@@ -236,7 +239,7 @@ async function runSiteDoctor(options, deps) {
     findings.push(finding(
       'FOLDER_UNMAPPED', 'warning', entry.dir,
       `${plural(entry.typedFileCount, 'typed page')} inside will not publish`,
-      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to folderMap or list it in excludeDirs`,
+      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to publish.folder_map or list it in publish.exclude_dirs (_meta/vault-config.md)`,
     ));
   }
   const shownUntyped = report.untyped.slice(0, UNTYPED_ROW_CAP);
@@ -282,6 +285,7 @@ async function runSiteDoctor(options, deps) {
     const body = hubPairs.has(page) ? '' : playerSafeMarkdown(page.markdown || '', {
       excludeCallouts: publishConfig.exclude_callouts,
       excludeSections: publishConfig.exclude_sections,
+      pcKeepSections: pcKeepList(publishConfig),
       frontmatter: page.frontmatter,
     }).text;
     const seen = new Set();

@@ -54,7 +54,9 @@ def rows_for(rows, needle):
 
 def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       run=None, plan=None, installed=None, mode=None,
-                      stripped=None, sheet_source=None, unparseable=None):
+                      stripped=None, sheet_source=None, unparseable=None,
+                      retired=None, switches=None, sheet_withheld=None,
+                      exclude_sections=None, pc_keep=None):
     """Point the vault at a site and stand in for the publish tool's
     `explain --all --json`: `withheld` lists the hub paths it reports with
     `bodyWithheld: true`; `stripped` maps a path to its `strippedSections`
@@ -62,7 +64,13 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
     a PC's path to its `sheetSourceSet` (None: an older tool's answer,
     without the field); `unparseable` maps a path to the parser message
     the tool reports for it (None: a tool older than 1.11.45, which gives
-    the `FILE_UNPARSEABLE` code alone); `plan` is what `manifest publish-played
+    the `FILE_UNPARSEABLE` code alone); `retired` maps a PC's path to its
+    `retiredSheetFields` (None: an older tool's answer, without the field);
+    `switches` is the answer's top-level `switches` block (None: a tool older
+    than 1.12.0, without one); `sheet_withheld` maps a path to its
+    `sheetWithheldSections`; `exclude_sections` is the answer's top-level
+    `excludeSections` (None: a tool without the field); `pc_keep` is the
+    answer's top-level `pcKeepSections` (None: absent, an older tool); `plan` is what `manifest publish-played
     --dry-run --json` answers. `which=None` means no node on PATH; `run`
     replaces subprocess.run outright; `installed` is the version of a
     gm-apprentice-publish in the site's node_modules. Returns the recorded
@@ -101,6 +109,18 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
                       if p not in {page["path"] for page in pages}]
             for page in pages:
                 page["sheetSourceSet"] = sheet_source.get(page["path"])
+        if retired is not None:
+            pages += [{"path": p, "bodyWithheld": False}
+                      for p in retired
+                      if p not in {page["path"] for page in pages}]
+            for page in pages:
+                page["retiredSheetFields"] = retired.get(page["path"])
+        if sheet_withheld is not None:
+            pages += [{"path": p, "bodyWithheld": False}
+                      for p in sheet_withheld
+                      if p not in {page["path"] for page in pages}]
+            for page in pages:
+                page["sheetWithheldSections"] = sheet_withheld.get(page["path"])
         for path, message in (unparseable or {}).items():
             page = {"path": path, "bodyWithheld": False, "publishes": False,
                     "code": "FILE_UNPARSEABLE", "strippedSections": None,
@@ -108,8 +128,14 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             if message is not None:
                 page["frontmatterError"] = message
             pages.append(page)
-        return subprocess.CompletedProcess(
-            cmd, 0, json.dumps({"vaultPath": str(vault), "pages": pages}), "")
+        answer = {"vaultPath": str(vault), "pages": pages}
+        if switches is not None:
+            answer["switches"] = switches
+        if exclude_sections is not None:
+            answer["excludeSections"] = exclude_sections
+        if pc_keep is not None:
+            answer["pcKeepSections"] = pc_keep
+        return subprocess.CompletedProcess(cmd, 0, json.dumps(answer), "")
 
     patches = [mock.patch.object(vc.shutil, "which", return_value=which),
                mock.patch.object(vc.subprocess, "run", run or fake)]
@@ -1408,6 +1434,10 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
                 "## Reconciliation Context\n\nx2\n")
         config = "---\npublish:\n  mode: player\n---\n"
         vault = self.vault(config, **{"Ann.md": text})
+        # The vault file sets no list, so the build's own (the tool's) is used.
+        stub_publish_tool(self, vault, exclude_sections=list(
+            vc.resolve_exclude_sections(None)))
+        config = read(vault, "_meta/vault-config.md")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertFalse(rows_for(rows, "collapsed"), rows)
         self.assertEqual(read(vault, "_meta/vault-config.md"), config)
@@ -1929,21 +1959,23 @@ class PcBodyCommandTests(unittest.TestCase):
                                    sheet_source={"Hero.md": True})
         self.assertFalse(rows_for(rows, "Stat Sheet section"), rows)
 
-    def test_a_blank_sheet_source_never_asks_the_tool(self):
+    def test_a_blank_sheet_source_is_never_what_asks_the_tool(self):
+        # The one `explain --all` a run makes (for retiredSheetFields) is the
+        # only call; the stubbed sheet_source answer is not used for a blank.
         for value in ("", '""', "''", '"  "'):
             with self.subTest(sheet_source=value):
                 rows, calls = self._asked(value, sheet_source={"Hero.md": True})
                 self.assertTrue(rows_for(rows, "Stat Sheet section"), rows)
-                self.assertEqual(calls, [])
+                self.assertEqual(len(calls), 1, calls)
 
-    def test_a_pc_with_a_sheet_never_asks_the_tool(self):
+    def test_a_pc_with_a_sheet_is_not_asked_about_its_sheet_source(self):
         vault = make_vault(self)
         calls = stub_publish_tool(self, vault, sheet_source={"Hero.md": True})
         (vault / "Hero.md").write_text(
             '---\ntype: pc\nsheet_source: "D&D Beyond"\n---\n\n'
             "## Stat Sheet\n\nST 12, DX 13.\n", encoding="utf-8")
         self.assertFalse(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
-        self.assertEqual(calls, [])
+        self.assertEqual(len(calls), 1, calls)
 
     def test_a_list_under_sheet_source_is_asked_about(self):
         vault = make_vault(self)
@@ -1991,6 +2023,63 @@ class PcBodyCommandTests(unittest.TestCase):
         vc.check_pc_body(vault, explain=explain)
         self.assertEqual(len(calls), 1, calls)
 
+    RETIRED = "no longer read for the character sheet"
+
+    def _retired(self, **stub):
+        """pc-body rows for two PCs, `Old.md` with retired fields in its
+        frontmatter and `New.md` without; and the tool calls made."""
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, **stub)
+        (vault / "Old.md").write_text(
+            "---\ntype: pc\nattributes: {ST: 77}\nskills: []\n---\n\n"
+            "## Stat Sheet\n\nST 12, DX 13.\n", encoding="utf-8")
+        (vault / "New.md").write_text(
+            "---\ntype: pc\n---\n\n## Stat Sheet\n\nST 12, DX 13.\n",
+            encoding="utf-8")
+        return vc.check_pc_body(vault), calls
+
+    def test_a_pc_with_retired_frontmatter_fields_is_warned_about(self):
+        rows, calls = self._retired(retired={
+            "Old.md": ["attributes", "skills"], "New.md": []})
+        warned = rows_for(rows, self.RETIRED)
+        self.assertEqual(warned, [
+            "WARNING\tOld.md\tfrontmatter field(s) attributes, skills are "
+            "no longer read for the character sheet \u2014 move the values "
+            "into the note's ## Stat Sheet sections"], rows)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_an_older_tool_without_the_field_gives_no_row(self):
+        rows, _calls = self._retired(sheet_source={"Old.md": True})
+        self.assertFalse(rows_for(rows, self.RETIRED), rows)
+
+    def test_a_tool_that_cannot_answer_gives_no_retired_row_and_no_crash(self):
+        for stub in ({"which": None}, {"run": lambda cmd, **kw:
+                     subprocess.CompletedProcess(cmd, 0, '{"pages": "abc"}', "")},
+                     {"run": lambda cmd, **kw:
+                      subprocess.CompletedProcess(cmd, 0, "null", "")}):
+            with self.subTest(stub=sorted(stub)):
+                rows, _calls = self._retired(**stub)
+                self.assertFalse(rows_for(rows, self.RETIRED), rows)
+
+    def test_a_vault_that_does_not_publish_gives_no_retired_row(self):
+        vault = make_vault(self)
+        (vault / "Old.md").write_text(
+            "---\ntype: pc\nattributes: {ST: 77}\n---\n\n## Stat Sheet\n\n"
+            "ST 12.\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_pc_body(vault), self.RETIRED))
+
+    def test_retired_fields_and_sheet_source_share_one_tool_run(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, sheet_source={"Old.md": True},
+                                  retired={"Old.md": ["stress"]})
+        (vault / "Old.md").write_text(
+            f"---\ntype: pc\nsheet_source: paper\nstress: 1\n---\n\n"
+            f"{self.SHEETLESS}", encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertEqual(len(rows_for(rows, self.RETIRED)), 1, rows)
+        self.assertFalse(rows_for(rows, "no published"), rows)
+        self.assertEqual(len(calls), 1, calls)
+
     def test_a_pc_the_tool_makes_no_page_for_is_not_warned_about(self):
         # sheetSourceSet is null for a file in an unmapped folder.
         rows, _calls = self._asked("paper", sheet_source={"Hero.md": None})
@@ -2008,6 +2097,81 @@ class PcBodyCommandTests(unittest.TestCase):
         self.assertEqual(len(rows), 1, rows)
         self.assertIn("B.md", rows[0])
         self.assertEqual(len(calls), 1)
+
+    ON = {"characterSheets": True, "liveStats": False, "inbox": False}
+    OFF = {"characterSheets": False, "liveStats": False, "inbox": False}
+
+    def _sheetless(self, **stub):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, **stub)
+        (vault / "Hero.md").write_text(
+            f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
+        return vc.check_pc_body(vault), calls
+
+    def test_sheets_off_silences_the_stat_sheet_rows(self):
+        rows, _calls = self._sheetless(switches=self.ON)
+        self.assertEqual(len(rows_for(rows, "Stat Sheet section")), 1, rows)
+        rows, _calls = self._sheetless(switches=self.OFF)
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+        self.assertFalse(rows_for(rows, "canonical skeleton"), rows)
+
+    def test_sheets_off_keeps_the_current_status_rows(self):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, switches=self.OFF)
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Notes\n\nx\n\n## Current Status\n\n"
+            "**Location:** Docks\n", encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertEqual(len(rows_for(rows, "comes after ## Notes")), 1, rows)
+
+    def test_a_tool_without_a_switches_block_leaves_sheets_on(self):
+        rows, _calls = self._sheetless(sheet_source={"Hero.md": False})
+        self.assertEqual(len(rows_for(rows, "Stat Sheet section")), 1, rows)
+
+    def test_sheets_off_silences_the_retired_field_row_too(self):
+        for switches, expected in ((self.OFF, 0), (self.ON, 1), (None, 1)):
+            with self.subTest(switches=switches):
+                rows, _calls = self._retired(
+                    retired={"Old.md": ["stress"]}, switches=switches)
+                self.assertEqual(len(rows_for(rows, self.RETIRED)), expected,
+                                 rows)
+
+    def test_at_most_one_tool_call_and_none_without_a_pc(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, switches=self.OFF)
+        for name in ("A", "B"):
+            (vault / f"{name}.md").write_text(
+                f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
+        vc.check_pc_body(vault)
+        self.assertEqual(len(calls), 1, calls)
+        bare = make_vault(self)
+        calls = stub_publish_tool(self, bare, switches=self.OFF)
+        (bare / "Npc.md").write_text("---\ntype: npc\n---\n\nx\n",
+                                     encoding="utf-8")
+        vc.check_pc_body(bare)
+        self.assertEqual(calls, [])
+        plain = make_vault(self)
+        (plain / "Hero.md").write_text(
+            f"---\ntype: pc\n---\n\n{self.SHEETLESS}", encoding="utf-8")
+        with mock.patch.object(vc.subprocess, "run") as run:
+            vc.check_pc_body(plain)
+        run.assert_not_called()
+
+    def test_publish_switches_reads_the_cached_answer_without_a_second_call(self):
+        vault = make_vault(self)
+        calls = stub_publish_tool(self, vault, switches=self.OFF)
+        explain = vc.ExplainAll(vault)
+        self.assertEqual(vc.publish_switches(explain()), self.OFF)
+        vc.publish_switches(explain())
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_publish_switches_is_none_for_anything_it_cannot_trust(self):
+        for data in (None, {"pages": []}, {"switches": None},
+                     {"switches": {"characterSheets": "no", "liveStats": False,
+                                   "inbox": False}},
+                     {"switches": {"characterSheets": False}}):
+            with self.subTest(data=data):
+                self.assertIsNone(vc.publish_switches(vc.ToolAnswer(data=data)))
 
     def test_a_tool_that_cannot_answer_takes_a_written_value_as_set(self):
         # No node, and a tool too old to report the field: say so, and do
@@ -2932,13 +3096,14 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn("type: session_wrap", read(vault, LEGACY))
 
 
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
-
-
 class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
-    """#240: the site's vault.config.json `excludeSections` joins the list,
-    exactly as config.js `unionExcludeList` does."""
+    """The exclude list is the publish tool's resolved `excludeSections`
+    (#240 follow-up): Python never reads the site file's list and never
+    unions. With no tool answer it uses the vault file's own list, else
+    the built-in defaults."""
+
+    NOTE = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+            "## Keeper Only\n\n**Keeper-only:** Bob is the Baron.\n")
 
     def vault(self, vault_list=None, site_list=None, site_json=None):
         site = Path(tempfile.mkdtemp(prefix="vc-site-"))
@@ -2951,27 +3116,85 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         lines = ["---", "type: meta", "publish:", f'  site_dir: "{site}"']
         if vault_list is not None:
             lines.append(f"  exclude_sections: {json.dumps(vault_list)}")
-        return make_vault(self, "\n".join(lines + ["---", ""]))
+        vault = make_vault(self, "\n".join(lines + ["---", ""]))
+        (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
+        return vault
 
-    def test_a_shorter_site_list_replaces_the_defaults(self):
-        # the leak #240 describes: no vault list, so the site uses ONLY its
-        # JSON list, and Player Notes publishes
-        vault = self.vault(site_list=["GM Notes"])
+    def marker_rows(self, vault):
+        return rows_for(vc.check_gm_leak(vault, None), "bold label")
+
+    def test_a_section_the_tool_does_not_list_is_scanned(self):
+        # the site file lists Keeper Only, the vault file wins with GM Notes:
+        # the build now publishes the section, so the marker is reported
+        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
+        calls = stub_publish_tool(self, vault, exclude_sections=["GM Notes"])
+        self.assertTrue(self.marker_rows(vault))
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_a_section_the_tool_lists_is_not_scanned(self):
+        vault = self.vault(vault_list=["GM Notes"])
+        calls = stub_publish_tool(self, vault,
+                                  exclude_sections=["GM Notes", "Keeper Only"])
+        self.assertFalse(self.marker_rows(vault))
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_one_tool_call_serves_every_check_in_the_run(self):
+        vault = self.vault()
+        calls = stub_publish_tool(self, vault, exclude_sections=["GM Notes"])
+        explain = vc.ExplainAll(vault)
+        vc.check_gm_leak(vault, None, explain=explain)
+        vc.check_pc_body(vault, explain=explain)
+        vc.check_wrapup(vault, None, False, explain)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_without_the_tool_the_vault_file_list_stands_and_the_site_file_is_not_read(self):
+        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
+        patch = mock.patch.object(vc.shutil, "which", return_value=None)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.assertTrue(self.marker_rows(vault))
         self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
 
-    def test_both_lists_are_unioned(self):
-        vault = self.vault(vault_list=["GM Notes"], site_list=["gm notes", "Secrets"])
-        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes", "Secrets"])
-
-    def test_no_site_list_keeps_todays_answer(self):
-        self.assertEqual(vc.effective_exclude_sections(self.vault()),
+    def test_without_the_tool_and_a_silent_vault_file_the_defaults_apply(self):
+        vault = self.vault(site_list=["Keeper Only"])
+        patch = mock.patch.object(vc.shutil, "which", return_value=None)
+        patch.start()
+        self.addCleanup(patch.stop)
+        self.assertEqual(vc.effective_exclude_sections(vault),
                          list(__import__("vaultlib").DEFAULT_EXCLUDE_SECTIONS))
-        self.assertEqual(vc.effective_exclude_sections(self.vault(vault_list=["GM Notes"])),
-                         ["GM Notes"])
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "bold label"))
+        info = rows_for(rows, "assumes the default exclude list")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("could not be asked", info[0])
 
-    def test_unreadable_site_json_fails_closed(self):
+    def test_an_older_tool_answer_says_so_rather_than_that_it_was_unreachable(self):
+        vault = self.vault()
+        stub_publish_tool(self, vault)
+        info = rows_for(vc.check_gm_leak(vault, None),
+                        "assumes the default exclude list")
+        self.assertEqual(len(info), 1, info)
+        self.assertIn("no exclude list", info[0])
+
+    def test_a_tool_answer_without_the_field_falls_back_to_the_vault_file(self):
+        vault = self.vault(vault_list=["GM Notes"], site_list=["Keeper Only"])
+        stub_publish_tool(self, vault)
+        self.assertTrue(self.marker_rows(vault))
+
+    def test_a_malformed_field_is_not_trusted(self):
+        for bad in ("GM Notes", [1, 2], {"a": 1}, None):
+            with self.subTest(bad=bad):
+                self.assertIsNone(vc.tool_exclude_sections(
+                    vc.ToolAnswer(data={"excludeSections": bad})))
+
+    def test_an_unreadable_site_file_is_not_read_at_all(self):
         vault = self.vault(site_json="{not json")
-        self.assertEqual(vc.effective_exclude_sections(vault), [])
+        self.assertEqual(vc.effective_exclude_sections(vault),
+                         list(__import__("vaultlib").DEFAULT_EXCLUDE_SECTIONS))
+
+    def test_the_tools_list_is_the_answer_even_when_empty(self):
+        vault = self.vault(vault_list=["GM Notes"])
+        self.assertEqual(vc.effective_exclude_sections(vault, []), [])
 
 
 class GmLeakCollapsedWorldStateTests(unittest.TestCase):
@@ -3171,6 +3394,160 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         calls = stub_publish_tool(self, bare, [], stripped={})
         vc.check_gm_leak(bare, None)
         self.assertEqual(len(calls), 1)
+
+
+class GmLeakSheetsOffTests(unittest.TestCase):
+    """Character sheets off: the sections the tool withholds from a PC with
+    the sheet (`sheetWithheldSections`) are not published, so not scanned
+    and never planned for a re-nest."""
+    HERO = ("---\ntype: pc\n---\n\n## Background\n\nA sailor.\n\n"
+            "## Skills\n\n**Keeper-only:** x\n\n"
+            "## **GM Notes**\n\nThe sailor is a spy.\n")
+
+    def vault(self, **stub):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, **stub)
+        (vault / "Hero.md").write_text(self.HERO, encoding="utf-8")
+        return vault
+
+    def test_sections_withheld_with_the_sheet_are_not_scanned(self):
+        rows = vc.check_gm_leak(self.vault(), None)
+        self.assertTrue(rows_for(rows, "bold label 'Keeper-only'"), rows)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\tHero.md"), rows)
+        rows = vc.check_gm_leak(self.vault(sheet_withheld={
+            "Hero.md": ["Skills", "**GM Notes**"]}), None)
+        self.assertFalse(rows_for(rows, "Hero.md"), rows)
+
+    def test_only_the_named_sections_leave_the_scan(self):
+        rows = vc.check_gm_leak(self.vault(sheet_withheld={
+            "Hero.md": ["Skills"]}), None)
+        self.assertFalse(rows_for(rows, "bold label"), rows)
+        self.assertTrue(rows_for(rows, "WOULD-FIX\tHero.md"), rows)
+
+    def test_fix_plans_no_renest_for_a_withheld_section(self):
+        vault = self.vault(sheet_withheld={"Hero.md": ["Skills", "**GM Notes**"]})
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertEqual(read(vault, "Hero.md"), self.HERO)
+
+    def _scan(self, body, withheld, fix=False):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": withheld})
+        (vault / "Hero.md").write_text("---\ntype: pc\n---\n\n" + body,
+                                       encoding="utf-8")
+        return vc.check_gm_leak(vault, None, fix=fix)
+
+    LABEL = "bold label 'Keeper-only'"
+
+    def test_a_setext_or_indented_heading_ends_the_dropped_section(self):
+        for heading in ("Notes\n-----", "Notes\n=====", "  ## Notes", "##"):
+            with self.subTest(heading=heading):
+                rows = self._scan("## Skills\n\nBrawling\n\n" + heading
+                                  + "\n\n**Keeper-only:** x\n", ["Skills"])
+                self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_a_withheld_title_inside_a_gm_only_block_starts_nothing(self):
+        rows = self._scan("## Background\n\n<!-- gm-only -->\n## Skills\n"
+                          "<!-- /gm-only -->\n\n**Keeper-only:** x\n",
+                          ["Skills"])
+        self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_every_section_with_a_withheld_title_is_dropped(self):
+        rows = self._scan("## Skills\n\n**Keeper-only:** x\n\n## Skills\n\n"
+                          "**Keeper-only:** y\n", ["Skills"])
+        self.assertFalse(rows_for(rows, self.LABEL), rows)
+
+    def test_a_level_one_title_is_never_dropped(self):
+        rows = self._scan("# Stats\n\n**Keeper-only:** x\n", ["Stats"])
+        self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_dressed_titles_match(self):
+        for heading in ("## **Skills**", "## Skills:", "## skills"):
+            with self.subTest(heading=heading):
+                rows = self._scan(heading + "\n\n**Keeper-only:** x\n",
+                                  ["Skills"])
+                self.assertFalse(rows_for(rows, self.LABEL), rows)
+        rows = self._scan("## Skills\n\n**Keeper-only:** x\n", ["**Skills**"])
+        self.assertFalse(rows_for(rows, self.LABEL), rows)
+
+    def test_fix_plans_a_renest_only_for_the_published_section(self):
+        rows = self._scan("## **GM Notes**\n\nx\n\n## Skills\n\ny\n\n"
+                          "## Background\n\nz\n", ["Skills"])
+        self.assertEqual(len(rows_for(rows, "WOULD-FIX\tHero.md")), 1, rows)
+        rows = self._scan("## Skills\n\n## **GM Notes**\n\nx\n\n"
+                          "## Background\n\nz\n", ["Skills", "**GM Notes**"])
+        self.assertFalse(rows_for(rows, "WOULD-FIX"), rows)
+        rows = self._scan("## Skills\n\nBrawling\n\n## **GM Notes**\n\nx\n",
+                          ["Skills"], fix=True)
+        self.assertEqual(len(rows_for(rows, "FIXED\tHero.md")), 1, rows)
+
+    def test_a_title_of_two_emphasised_words_is_not_unwrapped(self):
+        self.assertEqual(vc._plain_title("**A** and **B**"), "**A** and **B**")
+        self.assertEqual(vc._plain_title("**Skills**"), "Skills")
+        # Both sides go through the tool's own normalisation.
+        self.assertEqual(vc._bare_section_title("**A** and **B**"),
+                         vc._bare_section_title("**a** and **b**"))
+        # Never unwrapped to `a** and **b`: two spans stay as written.
+        self.assertEqual(vc._bare_section_title("**A** and **B**"),
+                         "**a** and **b**")
+        self.assertEqual(vc._bare_section_title("**Skills**:"), "skills")
+        self.assertEqual(vc._bare_section_title("_a_b_"), "_a_b_")
+
+    def test_a_kept_section_is_scanned_though_the_tool_lists_its_title(self):
+        # An HTML heading the tool withheld is reported by its text; the real
+        # `## Background` it shares a name with still publishes.
+        for keep in (["Background"], ["**Background**:"]):
+            with self.subTest(keep=keep):
+                vault = make_vault(self)
+                stub_publish_tool(self, vault, pc_keep=keep, sheet_withheld={
+                    "Hero.md": ["Background", "Skills"]})
+                (vault / "Hero.md").write_text(
+                    "---\ntype: pc\n---\n\n## Background\n\n"
+                    "**Keeper-only:** x\n\n## Skills\n\n"
+                    "**Keeper-only:** y\n", encoding="utf-8")
+                rows = vc.check_gm_leak(vault, None)
+                self.assertEqual(len(rows_for(rows, self.LABEL)), 1, rows)
+                self.assertIn("Hero.md:7", rows_for(rows, self.LABEL)[0])
+
+    def test_a_placeholder_title_never_drops_anything(self):
+        for pc_keep in (None, [], ["Background"]):
+            with self.subTest(pc_keep=pc_keep):
+                vault = make_vault(self)
+                stub_publish_tool(self, vault, pc_keep=pc_keep, sheet_withheld={
+                    "Hero.md": ["(empty heading)", "(html heading)",
+                                "(unparsed note)"]})
+                (vault / "Hero.md").write_text(
+                    "---\ntype: pc\n---\n\n## (empty heading)\n\n"
+                    "**Keeper-only:** x\n", encoding="utf-8")
+                rows = vc.check_gm_leak(vault, None)
+                self.assertTrue(rows_for(rows, self.LABEL), rows)
+
+    def test_an_older_tool_without_the_keep_list_drops_as_before(self):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": ["Background"]})
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Background\n\n**Keeper-only:** x\n",
+            encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), self.LABEL))
+
+    def test_the_keep_list_comes_from_the_tool_alone(self):
+        self.assertEqual(vc.pc_keep_sections(vc.ToolAnswer(data={})), set())
+        self.assertEqual(vc.pc_keep_sections(
+            vc.ToolAnswer(data={"pcKeepSections": None})), set())
+        self.assertEqual(vc.pc_keep_sections(
+            vc.ToolAnswer(data={"pcKeepSections": ["Notes", "(x)", 3]})), set())
+        self.assertEqual(vc.pc_keep_sections(
+            vc.ToolAnswer(data={"pcKeepSections": ["Notes", "**Current Status**"]})),
+            {"notes", "current status"})
+
+    def test_a_stub_page_keeps_its_own_filter_too(self):
+        vault = make_vault(self)
+        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": ["Skills"]})
+        (vault / "Hero.md").write_text(
+            "---\ntype: pc\npublish: stub\npublish_include_sections: "
+            "[Skills, Background]\n---\n\n## Background\n\nA sailor.\n\n"
+            "## Skills\n\n**Keeper-only:** x\n", encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "Hero.md"))
 
 
 class GmLeakHandoutSectionTests(unittest.TestCase):
@@ -3421,6 +3798,52 @@ class PublishToolEndToEndTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None),
                                   "Keeper material outside"))
 
+    def test_sheets_off_leaves_a_sheetless_pc_alone(self):
+        # The switch is the tool's reading of vault-config.md, end to end.
+        vault = self.site_vault("", "")
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "  mode: player\n", "  mode: player\n  character_sheets: false\n"),
+            encoding="utf-8")
+        (vault / "Sessions" / "Hero.md").write_text(
+            "---\ntype: pc\n---\n\n## Background\n\nA sailor.\n",
+            encoding="utf-8")
+        rows = vc.check_pc_body(vault)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertFalse(rows_for(rows, "Stat Sheet"), rows)
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "character_sheets: false", "character_sheets: true"),
+            encoding="utf-8")
+        self.assertTrue(rows_for(vc.check_pc_body(vault), "Stat Sheet"))
+
+    def test_python_scans_by_the_list_the_build_resolves(self):
+        # Vault file lists GM Notes, site file lists Keeper Only. Python
+        # uses whatever the tool resolves: during the 1.10.x fallback the
+        # build still applies the site entry, so the section is hidden and
+        # the marker is not reported. A silent vault file gives the site
+        # list alone; Python never reads the site file itself.
+        vault = self.site_vault("", "")
+        config = vault / "_meta" / "vault-config.md"
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            "  mode: player\n",
+            '  mode: player\n  exclude_sections: ["GM Notes"]\n'),
+            encoding="utf-8")
+        site = Path(vc.read_publish_scalar(vault, "site_dir"))
+        site_cfg = json.loads((site / "vault.config.json").read_text(encoding="utf-8"))
+        site_cfg["excludeSections"] = ["Keeper Only"]
+        (site / "vault.config.json").write_text(json.dumps(site_cfg), encoding="utf-8")
+        (vault / "Sessions" / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+            "## Keeper Only\n\n**Keeper-only:** Bob is the Baron.\n",
+            encoding="utf-8")
+        marker = "Sessions/Bob.md:11\tbold label"
+        rows = vc.check_gm_leak(vault, None)
+        self.assertFalse(rows_for(rows, "could not be consulted"), rows)
+        self.assertFalse(rows_for(rows, marker), rows)
+        config.write_text(config.read_text(encoding="utf-8").replace(
+            '  exclude_sections: ["GM Notes"]\n', ""), encoding="utf-8")
+        self.assertFalse(rows_for(vc.check_gm_leak(vault, None), marker))
+
     def test_manifest_rows_follow_publish_played(self):
         # The real `manifest publish-played --dry-run --json --vault`: a
         # reviewed session with its linked Wrap-Up will be registered; one
@@ -3483,14 +3906,6 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
             "# a column-0 comment inside the block\n  notes: |\n    site_dir: /also-wrong\n"
             '  site_dir: "C:\\\\Sites\\\\x"\n---\n'))
         self.assertEqual(vaultlib.read_publish_scalar(vault, "site_dir"), "C:\\Sites\\x")
-
-    def test_a_bom_site_json_is_read(self):
-        site = Path(tempfile.mkdtemp(prefix="vc-site-"))
-        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
-        (site / "vault.config.json").write_text(
-            "\ufeff" + json.dumps({"excludeSections": ["GM Notes"]}), encoding="utf-8")
-        vault = make_vault(self, f'---\ntype: meta\npublish:\n  site_dir: "{site}"\n---\n')
-        self.assertEqual(vc.effective_exclude_sections(vault), ["GM Notes"])
 
     def test_no_site_dir_and_no_vault_list_is_an_info(self):
         vault = make_vault(self, "---\ntype: meta\npublish:\n  mode: player\n---\n")
@@ -3561,3 +3976,72 @@ class InlineMarkerTests(unittest.TestCase):
     def test_scan_body_unclosed_inline_reports(self):
         _states, problems = vc.scan_body("a <!-- gm-only -->SECRET", ())
         self.assertTrue(any("never closed" in p for p in problems))
+
+
+class RenestExcludesSilentVaultTests(unittest.TestCase):
+    """`gm-leak --renest-excludes` when the vault file sets no list: the
+    build's list (the tool's) decides, never an assumed default."""
+
+    NOTE = ("---\ntype: npc\n---\n\n# Bob\n\nA sailor.\n\n"
+            "## Keeper Only\n\n### Player Notes\n\nBob is the Baron.\n")
+
+    def setup_vault(self, config="---\ntype: meta\npublish:\n  mode: player\n---\n"):
+        vault = make_vault(self, config)
+        (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
+        return vault
+
+    def test_the_tools_list_guards_the_move(self):
+        vault = self.setup_vault()
+        calls = stub_publish_tool(self, vault, exclude_sections=["Keeper Only"])
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
+        self.assertFalse([r for r in rows if r.startswith(("FIXED", "WOULD-FIX"))], rows)
+        self.assertEqual(len(calls), 1, calls)
+
+    def test_without_the_tool_it_refuses_and_writes_nothing(self):
+        vault = self.setup_vault()
+        before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "could not say which exclude list"), rows)
+        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
+        self.assertEqual((vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8"), before)
+
+    def test_a_vault_file_list_behaves_as_before(self):
+        vault = self.setup_vault(
+            '---\ntype: meta\npublish:\n  exclude_sections: ["Keeper Only"]\n---\n')
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "could not say"), rows)
+        self.assertIn("GM Notes", (vault / "Bob.md").read_text(encoding="utf-8"))
+
+    def test_a_vault_that_never_publishes_uses_the_defaults_without_error(self):
+        vault = self.setup_vault("---\ntype: meta\n---\n")
+        calls = stub_publish_tool(self, vault)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\n---\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertFalse(rows_for(rows, "ERROR"), rows)
+        self.assertEqual(calls, [])
+        self.assertIn("GM Notes", (vault / "Bob.md").read_text(encoding="utf-8"))
+
+    def test_a_publishing_vault_whose_tool_cannot_be_asked_still_errors(self):
+        vault = self.setup_vault()
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\npublish:\n  mode: player\n---\n",
+            encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+        self.assertTrue(rows_for(rows, "could not say which exclude list"), rows)
+        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
+
+    def test_publish_block_written_on_one_line_is_detected(self):
+        for text, want in (("---\npublish: {mode: player}\n---\n", True),
+                           ('---\n"publish": { mode: player } # c\n---\n', True),
+                           ("---\npublish:\n  mode: player\n---\n", False),
+                           ("---\ntype: meta\n---\n", False)):
+            with self.subTest(text=text):
+                vault = make_vault(self, text)
+                self.assertEqual(vc.publish_block_inline(vault), want)
+
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)

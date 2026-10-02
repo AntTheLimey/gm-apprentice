@@ -62,13 +62,10 @@ describe('exclude_sections default (issue #144)', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('unions vault-config.md with a stale vault.config.json excludeSections list, with no default injection', () => {
-    // Regression for the exact upgrade scenario #144 leaves unfixed: a site
-    // scaffolded before this change has a stale 4-item excludeSections in
-    // vault.config.json. Adding a vault-config.md list must union with that
-    // stale list (neither shadows the other, per the existing union
-    // semantics), and the six-item built-in default must not sneak in on
-    // top of either explicit source.
+  it('a vault-config.md list is first, a stale vault.config.json excludeSections only adds its missing entries', () => {
+    // A site scaffolded before #144 has a stale 4-item excludeSections in
+    // vault.config.json. The vault file's list leads; the stale entries it lacks are
+    // still applied (a site-file exclusion keeps hiding what it hid) until migrated.
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -80,22 +77,8 @@ describe('exclude_sections default (issue #144)', () => {
       excludeSections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References'],
     };
     const result = loadPublishConfig(tmpDir, staleFallback);
-    assert.deepStrictEqual(result.exclude_sections, [
-      'Custom Section',
-      'GM Notes',
-      'DM Notes',
-      'Player Notes',
-      'Source References',
-    ]);
-    assert.ok(!result.exclude_sections.includes('Reconciliation Context'));
-    assert.ok(!result.exclude_sections.includes('Handoff to Reconcile'));
+    assert.deepStrictEqual(result.exclude_sections, ['Custom Section', 'GM Notes', 'DM Notes', 'Player Notes', 'Source References']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
-  });
-
-  it('scaffold template excludeSections stays in sync with PUBLISH_DEFAULTS.exclude_sections', () => {
-    const tmplPath = path.join(__dirname, '../../templates-scaffold/vault.config.json.tmpl');
-    const parsed = JSON.parse(fs.readFileSync(tmplPath, 'utf8'));
-    assert.deepStrictEqual(parsed.excludeSections, PUBLISH_DEFAULTS.exclude_sections);
   });
 });
 
@@ -173,9 +156,7 @@ describe('loadPublishConfig', () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('unions vault-config.md and vault.config.json exclude lists (neither shadows the other)', () => {
-    // Regression for the spoiler-filter gap: a section listed only in vault.config.json
-    // used to be silently ignored whenever vault-config.md defined exclude_sections.
+  it('merges vault-config.md and vault.config.json exclude lists only as the fallback (vault list first)', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -186,14 +167,12 @@ describe('loadPublishConfig', () => {
       excludeDirs: ['_meta', '_QA'],
     };
     const result = loadPublishConfig(tmpDir, fallback);
-    for (const s of ['GM Notes', 'DM Notes', 'Player Notes', 'Source References']) {
-      assert.ok(result.exclude_sections.includes(s), `expected '${s}' to be excluded`);
-    }
-    assert.ok(result.exclude_dirs.includes('_QA'), 'exclude_dirs should union too');
+    assert.deepStrictEqual(result.exclude_sections, ['GM Notes', 'DM Notes', 'Player Notes', 'Source References']);
+    assert.deepStrictEqual(result.exclude_dirs, ['_meta', '_QA']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('dedupes the unioned exclude_sections case-insensitively', () => {
+  it('applies, and names, the site-file entries the vault list lacks', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -202,9 +181,10 @@ describe('loadPublishConfig', () => {
       '---\npublish:\n  exclude_sections:\n    - "GM Notes"\n---\n',
     );
     const result = loadPublishConfig(tmpDir, { excludeSections: ['gm notes', 'Secrets'] });
-    const gmCount = result.exclude_sections.filter((s) => s.toLowerCase() === 'gm notes').length;
-    assert.strictEqual(gmCount, 1, 'case-insensitive duplicate should collapse to one');
-    assert.ok(result.exclude_sections.includes('Secrets'));
+    assert.deepStrictEqual(result.exclude_sections, ['GM Notes', 'Secrets']);
+    assert.deepStrictEqual(result.legacy, [
+      { key: 'excludeSections', publishKey: 'exclude_sections', status: 'ignored', stillApplied: ['Secrets'] },
+    ]);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
@@ -397,10 +377,8 @@ describe('section_titles passthrough', () => {
   });
 });
 
-describe('exclude_fields union merge', () => {
-  it('unions vault-config.md and vault.config.json exclude_fields (neither shadows the other)', () => {
-    // Regression: exclude_fields still had the A || B shadowing bug after
-    // exclude_sections/exclude_dirs were already fixed to union.
+describe('exclude_fields resolution', () => {
+  it('the vault-config.md list leads; vault.config.json excludeFields adds its missing entries', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir);
@@ -408,25 +386,15 @@ describe('exclude_fields union merge', () => {
       path.join(metaDir, 'vault-config.md'),
       '---\npublish:\n  exclude_fields:\n    - "secrets"\n---\n',
     );
-    const fallback = { excludeFields: ['secrets', 'custom_field'] };
-    const result = loadPublishConfig(tmpDir, fallback);
-    assert.ok(result.exclude_fields.includes('secrets'));
-    assert.ok(result.exclude_fields.includes('custom_field'), 'field listed only in vault.config.json must still be excluded');
+    const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
+    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'custom_field']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it('dedupes the unioned exclude_fields case-insensitively', () => {
+  it('vault.config.json excludeFields applies when the vault file is silent', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
-    const metaDir = path.join(tmpDir, '_meta');
-    fs.mkdirSync(metaDir);
-    fs.writeFileSync(
-      path.join(metaDir, 'vault-config.md'),
-      '---\npublish:\n  exclude_fields:\n    - "Secrets"\n---\n',
-    );
-    const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'gm_notes'] });
-    const secretsCount = result.exclude_fields.filter((f) => f.toLowerCase() === 'secrets').length;
-    assert.strictEqual(secretsCount, 1, 'case-insensitive duplicate should collapse to one');
-    assert.ok(result.exclude_fields.includes('gm_notes'));
+    const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
+    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'custom_field']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

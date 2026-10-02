@@ -5,6 +5,7 @@ const path = require('node:path');
 const matter = require('gray-matter');
 const { extractSections } = require('../../lib/processor');
 const { renderDnDSheet } = require('../../lib/templates/pc-dnd');
+const { sectionsFromMarkdown } = require('../helpers/sections');
 const { pcTemplate } = require('../../lib/templates/pc');
 
 // The real template the skills hand a GM. Tests build their PC from it so the
@@ -317,13 +318,18 @@ describe('pcTemplate with a D&D sheet', () => {
   });
 });
 
-describe('renderDnDSheet frontmatter fallback', () => {
+describe('renderDnDSheet body sections', () => {
+  const abilityBody = rows => [
+    '## Stat Sheet', '', '### Ability Scores', '',
+    '| Ability | Score | Modifier | Saving Throw Proficient |', '|---|---|---|---|',
+    ...rows,
+  ].join('\n');
+
   it('renders 6 ability score cards', () => {
-    const fm = {
-      type: 'pc',
-      ability_scores: { STR: 16, DEX: 14, CON: 12, INT: 10, WIS: 13, CHA: 8 },
-    };
-    const html = renderDnDSheet(fm, []);
+    const html = renderDnDSheet({ type: 'pc' }, sectionsFromMarkdown(abilityBody([
+      '| STR | 16 | | No |', '| DEX | 14 | | No |', '| CON | 12 | | No |',
+      '| INT | 10 | | No |', '| WIS | 13 | | No |', '| CHA | 8 | | No |',
+    ])));
     assert.ok(html.includes('dnd-ability-scores'));
     assert.ok(html.includes('STR'));
     assert.ok(html.includes('16'));
@@ -331,11 +337,10 @@ describe('renderDnDSheet frontmatter fallback', () => {
   });
 
   it('calculates modifiers correctly', () => {
-    const fm = {
-      type: 'pc',
-      ability_scores: { STR: 10, DEX: 8, CON: 15, INT: 1, WIS: 20, CHA: 18 },
-    };
-    const html = renderDnDSheet(fm, []);
+    const html = renderDnDSheet({ type: 'pc' }, sectionsFromMarkdown(abilityBody([
+      '| STR | 10 | | No |', '| DEX | 8 | | No |', '| CON | 15 | | No |',
+      '| INT | 1 | | No |', '| WIS | 20 | | No |', '| CHA | 18 | | No |',
+    ])));
     assert.ok(html.includes('+0'));
     assert.ok(html.includes('-1'));
     assert.ok(html.includes('+2'));
@@ -343,65 +348,52 @@ describe('renderDnDSheet frontmatter fallback', () => {
     assert.ok(html.includes('+4'));
   });
 
-  it('prefers the body abilities over frontmatter', () => {
-    const html = renderDnDSheet({ type: 'pc', ability_scores: { STR: 20 } }, extractSections(wizardBody()));
-    const str = html.match(/<span class="ability-name">STR<\/span>[\s\S]*?<\/div>/)[0];
-    assert.match(str, />8</);
-  });
-
-  it('renders proficiencies as pills', () => {
-    const fm = {
-      type: 'pc',
-      proficiencies: ['Athletics', 'Perception', 'Stealth'],
-    };
-    const html = renderDnDSheet(fm, []);
-    assert.ok(html.includes('dnd-proficiencies'));
+  it('renders proficiencies from the body', () => {
+    const html = renderDnDSheet({ type: 'pc' }, sectionsFromMarkdown(
+      '## Proficiencies\n\n**Armor Training:** Light\n\n**Tools:** Athletics, Perception, Stealth\n'));
+    assert.ok(html.includes('dnd-proficiency-list'));
     assert.ok(html.includes('Athletics'));
     assert.ok(html.includes('Perception'));
   });
 
-  it('renders class features', () => {
-    const fm = {
-      type: 'pc',
-      class_features: [
-        { name: 'Sneak Attack', level: 1, description: 'Extra damage on finesse attacks' },
-        { name: 'Cunning Action', level: 2, description: 'Bonus action to Dash, Disengage, or Hide' },
-      ],
-    };
-    const html = renderDnDSheet(fm, []);
-    assert.ok(html.includes('Sneak Attack'));
-    assert.ok(html.includes('Level 1'));
-  });
-
-  it('renders spell slots when present', () => {
-    const fm = {
-      type: 'pc',
-      spell_slots: { 1: 4, 2: 3, 3: 2 },
-    };
-    const html = renderDnDSheet(fm, []);
+  it('renders spell slots from the body when present', () => {
+    const html = renderDnDSheet({ type: 'pc' }, sectionsFromMarkdown([
+      '## Spellcasting', '', '### Spell Slots', '',
+      '| Level | Total | Expended |', '|---|---|---|', '| 1st | 4 | 1 |', '| 2nd | 3 | 0 |',
+    ].join('\n')));
     assert.ok(html.includes('Spell Slots'));
   });
+});
 
-  it('falls back to frontmatter when the body section is unfilled', () => {
-    const html = renderDnDSheet({ type: 'pc', proficiencies: ['FMPROF'], spell_slots: { 1: 4 } }, extractSections(templateBody()));
-    assert.ok(html.includes('FMPROF'));
-    assert.ok(html.includes('Spell Slots'));
+// The note body is the only source: a frontmatter copy of any stat is not read.
+describe('renderDnDSheet ignores frontmatter stats', () => {
+  const sentinel = {
+    type: 'pc',
+    ability_scores: { STR: 77, DEX: 77, CON: 77, INT: 77, WIS: 77, CHA: 77 },
+    proficiencies: ['FMPROF'],
+    class_features: [{ name: 'FMFEATURE', level: 1, description: 'x' }],
+    spell_slots: { 1: 4, 2: 3 },
+  };
+
+  it('returns null when only frontmatter carries stats', () => {
+    assert.strictEqual(renderDnDSheet(sentinel, []), null);
   });
 
-  it('returns null when class_features has no usable entry', () => {
-    assert.strictEqual(renderDnDSheet({ type: 'pc', class_features: [{ level: 1 }] }, []), null);
+  it('renders a filled body sheet identically with or without them', () => {
+    const sections = extractSections(wizardBody());
+    assert.strictEqual(renderDnDSheet(sentinel, sections), renderDnDSheet({ type: 'pc' }, sections));
   });
 
-  it('survives malformed frontmatter', () => {
-    const html = renderDnDSheet({ type: 'pc', ability_scores: { STR: 'abc' }, class_features: [null, 'Second Wind'] }, []);
-    assert.ok(!html.includes('NaN'));
-    assert.ok(html.includes('Second Wind'));
+  it('leaves every frontmatter value off a sheet built from the template body', () => {
+    const html = renderDnDSheet(sentinel, extractSections(templateBody()));
+    for (const s of ['77', 'FMPROF', 'FMFEATURE', 'Spell Slots']) {
+      assert.ok(!(html || '').includes(s), `${s} must not come from frontmatter`);
+    }
   });
 
-  it('accepts a single proficiency string and lowercase ability keys', () => {
-    const html = renderDnDSheet({ type: 'pc', proficiencies: 'Common', ability_scores: { str: 16 } }, []);
-    assert.ok(html.includes('Common'));
-    assert.match(html, /<span class="ability-name">STR<\/span>/);
+  it('does not choke on malformed frontmatter values', () => {
+    const html = renderDnDSheet({ type: 'pc', ability_scores: { STR: 'abc' }, class_features: [null, 'Second Wind'], proficiencies: 'Common' }, []);
+    assert.strictEqual(html, null);
   });
 
   it('returns null when no D&D data present', () => {

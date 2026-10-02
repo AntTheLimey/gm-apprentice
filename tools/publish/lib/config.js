@@ -3,20 +3,23 @@ const fs = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
+const { isDeepStrictEqual } = require('node:util');
+const { MOVED_KEYS, usable } = require('./config-keys');
+const { resolveSwitches, asBool } = require('./switches');
 
 const PUBLISH_DEFAULTS = {
   mode: 'player',
   exclude_drafts: false,
   exclude_callouts: false,
-  // Keep in sync with templates-scaffold/vault.config.json.tmpl's
-  // "excludeSections" — the scaffold ships this same list as the JSON
-  // fallback for new sites. Reconciliation Context / Handoff to Reconcile
-  // are written automatically by reconcile and session-wrapup and carry GM
-  // plot state; they must never reach a published player-mode site (#144).
-  // test/unit/config.test.js has a sync check that fails if these drift apart.
+  // Reconciliation Context / Handoff to Reconcile are written automatically by
+  // reconcile and session-wrapup and carry GM plot state; they must never reach a
+  // published player-mode site (#144).
   exclude_sections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
   exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability'],
   exclude_dirs: ['_meta', '_Templates'],
+  search: true,
+  attachments_dir: '_attachments',
+  folder_map: {},
   // Landing page selection. build.js has always read publishConfig.landing.*,
   // but `landing` was missing from the whitelist that builds `merged`, so the
   // key was permanently undefined and every knob here was silently ignored —
@@ -85,40 +88,27 @@ const PUBLISH_DEFAULTS = {
     fields: {},
   },
   section_titles: {},
-  // Backend-capability gates. undefined = "not set" (the build's resolver then
-  // auto-detects from deployed Functions for legacy sites); an explicit boolean
-  // is authoritative. Both default off for new sites (set in the init scaffold).
-  backend: { statusBar: undefined, inbox: undefined },
 };
 
-// A mistyped default_mode falls back to 'system' — say so rather than silently.
-function defaultModeFrom(raw) {
-  const mode = normalizeDefaultMode(raw);
-  if (raw != null && String(raw).trim().toLowerCase() !== mode) {
-    console.warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
+// `search` takes the same words as the switches (true/false, yes/no, on/off). Unset is the
+// default (on); a value that is not one of them is the default too, and said so.
+function searchFrom(raw, label, warn = console.warn) {
+  if (raw === undefined) return PUBLISH_DEFAULTS.search;
+  const b = asBool(raw);
+  if (b === null) {
+    warn(`config: ${label} is not true or false (${JSON.stringify(raw)}); search stays on`);
+    return PUBLISH_DEFAULTS.search;
   }
-  return mode;
+  return b;
 }
 
-// Union exclude lists from both config sources (vault-config.md and vault.config.json),
-// case-insensitively de-duplicated, preserving first-seen casing/order. Falls back to
-// `defaults` only when NEITHER source provides a list. A spoiler filter must never strip
-// LESS than either source asked for, so the sources merge rather than shadow each other.
-function unionExcludeList(primary, fallback, defaults) {
-  const sources = [primary, fallback].filter(Array.isArray);
-  if (sources.length === 0) return [...defaults];
-  const seen = new Set();
-  const out = [];
-  for (const list of sources) {
-    for (const item of list) {
-      const key = String(item).toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(item);
-      }
-    }
+// A mistyped default_mode falls back to 'system' — say so rather than silently.
+function defaultModeFrom(raw, warn = console.warn) {
+  const mode = normalizeDefaultMode(raw);
+  if (raw != null && String(raw).trim().toLowerCase() !== mode) {
+    warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
   }
-  return out;
+  return mode;
 }
 
 // exclude_dirs entries are matched against vault-relative POSIX paths the scanner walks
@@ -130,7 +120,9 @@ function unionExcludeList(primary, fallback, defaults) {
 // vault can never match anything the scanner walks, so it is dropped with a warning
 // rather than silently doing nothing forever. Returns null for an entry that normalizes
 // to nothing (empty, or outside the vault).
-function normalizeExcludeDir(entry, vaultPath) {
+function normalizeExcludeDir(entry, vaultPath, warn = true) {
+  // `warn`: true = console.warn, false = silent, or a function that takes the message.
+  const say = typeof warn === 'function' ? warn : (warn ? console.warn : () => {});
   let raw = String(entry).trim().replace(/\\/g, '/');
   if (!raw) return null;
   const looksAbsolute = raw.startsWith('/') || /^[A-Za-z]:\//.test(raw);
@@ -138,7 +130,7 @@ function normalizeExcludeDir(entry, vaultPath) {
     const resolved = path.resolve(raw);
     const vaultRoot = path.resolve(vaultPath);
     if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
-      console.warn(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
+      say(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
       return null;
     }
     raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
@@ -147,29 +139,110 @@ function normalizeExcludeDir(entry, vaultPath) {
   return raw || null;
 }
 
-// Same shape as unionExcludeList (dedup case-insensitively, preserve first-seen casing/
-// order, fall back to `defaults` only when neither source provides a list) but for
-// exclude_dirs specifically: every entry is run through normalizeExcludeDir first, so
-// dedup and the scanner's own matching both operate on the same normalized spelling.
-// Kept separate from unionExcludeList because exclude_sections/exclude_fields are not
-// filesystem paths and must not be slash/absolute-path normalized.
-function unionExcludeDirs(primary, fallback, defaults, vaultPath) {
-  const sources = [primary, fallback].filter(Array.isArray);
-  const lists = sources.length === 0 ? [defaults] : sources;
+// Normalizes every entry of the chosen exclude_dirs list through normalizeExcludeDir, then
+// de-duplicates case-insensitively (first-seen spelling wins) so dedup and the scanner's own
+// matching operate on the same spelling. Not a union of sources: the caller has already
+// picked one list. Kept separate from the other lists because exclude_sections/exclude_fields
+// are not filesystem paths and must not be slash/absolute-path normalized.
+function normalizeExcludeDirs(list, vaultPath, warn = true) {
   const seen = new Set();
   const out = [];
-  for (const list of lists) {
-    for (const item of list) {
-      const normalized = normalizeExcludeDir(item, vaultPath);
-      if (normalized == null) continue;
-      const key = normalized.toLowerCase();
-      if (!seen.has(key)) {
-        seen.add(key);
-        out.push(normalized);
-      }
+  for (const item of list) {
+    const normalized = normalizeExcludeDir(item, vaultPath, warn);
+    if (normalized == null) continue;
+    const key = normalized.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      out.push(normalized);
     }
   }
   return out;
+}
+
+// exclude_callouts is `true` (strip every callout), a list of types, or off. When both files
+// set it, the stricter wins: true beats a list, a list beats off, two lists are unioned
+// (the vault file's first). An upgrade must never be what publishes a callout.
+function stricterCallouts(fromVault, fromSite) {
+  const stripsAll = (v) => !!v && !Array.isArray(v);
+  if (stripsAll(fromVault)) return fromVault;
+  if (stripsAll(fromSite)) return fromSite;
+  if (Array.isArray(fromVault) && Array.isArray(fromSite)) {
+    const have = new Set(fromVault.map((t) => String(t).toLowerCase()));
+    return [...fromVault, ...fromSite.filter((t) => !have.has(String(t).toLowerCase()) && have.add(String(t).toLowerCase()))];
+  }
+  if (Array.isArray(fromSite)) return fromSite;
+  return fromVault;
+}
+
+// The four settings that always merged per sub-key across the two files: with both set, a
+// sub-key only the site file has still applies, and the vault file wins a sub-key both set.
+const MERGED_MAPS = new Set(['landing', 'images', 'banners', 'locations']);
+const isPlainMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+// Vault file value when set, else the site file's, recording which was used. A moved key
+// is "set" when it is not undefined: an explicit false or null is a value, not silence.
+// `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
+// "Secrets" in the other are the same entry.
+//
+// The three exclude lists (and exclude_callouts, which takes the stricter of the two) are the
+// exception to "the vault file wins outright": a
+// site-file entry the vault list lacks is still applied until the migration moves it (the
+// vault list first, then those entries), and the record names them as `stillApplied`. An
+// upgrade must never be what publishes a section or folder the site file used to hide.
+function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase(), warn = console.warn) {
+  // An empty `exclude_callouts:` in the vault file (null) says nothing, so the site file's
+  // value is not discarded for it.
+  const fromVault = entry.publish === 'exclude_callouts' && publish[entry.publish] === null ? undefined : publish[entry.publish];
+  const fromSite = json[entry.json];
+  const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
+  if (vaultMalformed) {
+    // The vault file "sets" the key but gives no list, so the built-in default applies
+    // (the safe direction); entries the site file lists are still added to it.
+    const what = fromVault === null ? 'empty' : `${typeof fromVault}`;
+    warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default instead of the vault file's value.`);
+  }
+  let value = fromVault !== undefined ? fromVault : fromSite;
+  if (fromSite !== undefined) {
+    const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
+    // A site-file list key that is not a list is read as nothing; the migration leaves it too.
+    if (entry.kind === 'list' && !Array.isArray(fromSite)) rec.notAList = true;
+    // A list that holds entries but none the migration can carry over stays in the site file
+    // for good, so the closing line must not send the GM to migrate.py for it.
+    if (entry.kind === 'list' && Array.isArray(fromSite) && fromSite.length && !fromSite.some(usable)) rec.unmovable = true;
+    if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite)) {
+      const base = vaultMalformed ? PUBLISH_DEFAULTS[entry.publish] : fromVault;
+      const have = new Set(base.map((s) => keyOf(s)));
+      const stillApplied = [];
+      for (const s of fromSite) {
+        const k = keyOf(s);
+        if (!have.has(k)) { have.add(k); stillApplied.push(s); }
+      }
+      if (stillApplied.length) {
+        rec.stillApplied = stillApplied;
+        value = [...base, ...stillApplied];
+      } else if (vaultMalformed) {
+        value = [...base];
+      }
+    }
+    if (MERGED_MAPS.has(entry.publish) && fromVault !== undefined && isPlainMap(fromSite)) {
+      const base = isPlainMap(fromVault) ? fromVault : {};
+      const extra = Object.keys(fromSite).filter((k) => !(k in base));
+      if (extra.length) {
+        rec.stillApplied = extra;
+        value = { ...base, ...Object.fromEntries(extra.map((k) => [k, fromSite[k]])) };
+      }
+    }
+    if (entry.publish === 'exclude_callouts' && fromVault !== undefined) {
+      value = stricterCallouts(fromVault, fromSite);
+      if (!isDeepStrictEqual(value, fromVault)) {
+        // What the site file adds: `true`, or the list entries the vault value lacks.
+        const had = new Set((Array.isArray(fromVault) ? fromVault : []).map((t) => String(t).toLowerCase()));
+        rec.stillApplied = Array.isArray(value) ? value.filter((t) => !had.has(String(t).toLowerCase())) : [value];
+      }
+    }
+    legacy.push(rec);
+  }
+  return normalize(value);
 }
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
@@ -177,12 +250,12 @@ function unionExcludeDirs(primary, fallback, defaults, vaultPath) {
 // key typed by the config author in a different normal form (e.g. an NFD-decomposed
 // accented filename) would otherwise never match — canonicalize once here, at load, so
 // build.js's single query-side normalization is enough.
-function canonicalizeOverrideFieldKeys(fields) {
+function canonicalizeOverrideFieldKeys(fields, warn = console.warn) {
   if (fields == null) return {};
   // Same trap as the block above: Object.entries on a string yields per-character keys, which
   // would become override entries no page path can ever match.
   if (typeof fields !== 'object' || Array.isArray(fields)) {
-    console.warn(
+    warn(
       `config: publish.overrides.fields must be a map keyed by vault-relative path, but is ` +
       `${Array.isArray(fields) ? 'a list' : typeof fields}. No field overrides applied.`
     );
@@ -194,7 +267,7 @@ function canonicalizeOverrideFieldKeys(fields) {
     if (problem) {
       // Dropping the entry leaves the exclusions in force, which is the safe
       // direction: a malformed `include` must never re-admit a field by accident.
-      console.warn(
+      warn(
         `config: publish.overrides.fields["${key}"] ${problem}. That override is ignored. ` +
         'Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.'
       );
@@ -227,13 +300,13 @@ function overrideEntryProblem(value) {
 // A key under `publish.overrides` that the build never reads changes nothing about the
 // published site, and the GM has no way to tell that from "the override didn't match".
 // Name it, and say where the real one lives.
-function warnUnreadOverrideKeys(overrides) {
+function warnUnreadOverrideKeys(overrides, warn = console.warn) {
   if (overrides == null) return;
   // A malformed block — `overrides: fields` (a bare string), or a list — must not be walked
   // as a key/value map: Object.keys('fields') is ['0'..'5'], which would report six invented
   // keys and bury the real problem.
   if (typeof overrides !== 'object' || Array.isArray(overrides)) {
-    console.warn(
+    warn(
       `config: publish.overrides must be a map, but is ${Array.isArray(overrides) ? 'a list' : typeof overrides}. ` +
       'Nothing under it is being read. Expected shape: overrides: { fields: ' +
       '{ "Characters/NPCs/Vex.md": { include: ["secrets"] } } }.'
@@ -242,7 +315,7 @@ function warnUnreadOverrideKeys(overrides) {
   }
   for (const key of Object.keys(overrides)) {
     if (key === 'fields') continue;
-    console.warn(
+    warn(
       `config: publish.overrides.${key} is not read by the build and has no effect. ` +
       'The only supported override is publish.overrides.fields, keyed by vault-relative ' +
       'path: fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }.'
@@ -279,7 +352,7 @@ function loadVaultConfig(configPath, deps = {}, { requireVaultPath = false } = {
   return config;
 }
 
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn) {
   const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
   let publish = {};
   let settingYear = null;
@@ -302,41 +375,52 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     }
   }
 
-  warnUnreadOverrideKeys(publish.overrides);
+  warnUnreadOverrideKeys(publish.overrides, warn);
+
+  // One pass over the moved-key table, in table order, so `legacy` reads the same way
+  // every time. The per-key merges below read from `picked`.
+  const legacy = [];
+  const picked = {};
+  const jsonConfig = jsonConfigFallback || {};
+  for (const entry of MOVED_KEYS) {
+    picked[entry.publish] = pick(
+      publish, jsonConfig, entry, legacy,
+      entry.publish === 'exclude_dirs'
+        ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath, warn) : v)
+        : undefined,
+      entry.publish === 'exclude_dirs'
+        ? (s) => (normalizeExcludeDir(s, vaultPath, false) ?? String(s)).toLowerCase()
+        : undefined,
+      warn,
+    );
+  }
+  const list = (v, fallback) => (Array.isArray(v) ? v : [...fallback]);
+  const asMap = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 
   const merged = {
     mode: publish.mode || PUBLISH_DEFAULTS.mode,
-    system: publish.system || null,
-    // CoC sheet masthead crest/seal. Not part of any list-union — a bare passthrough,
-    // publish block first then the vault.config.json fallback (see #112).
-    sheet_crest: publish.sheet_crest || jsonConfigFallback.sheet_crest || null,
+    site_title: picked.site_title ?? null,
+    footer: picked.footer ?? null,
+    search: searchFrom(picked.search, publish.search !== undefined ? 'publish.search' : 'vault.config.json searchEnabled', warn),
+    folder_map: asMap(picked.folder_map),
+    attachments_dir: picked.attachments_dir || PUBLISH_DEFAULTS.attachments_dir,
+    pc_prose_sections: Array.isArray(publish.pc_prose_sections) ? publish.pc_prose_sections : [],
+    system: picked.system || null,
+    // CoC sheet masthead crest/seal.
+    sheet_crest: picked.sheet_crest || null,
     exclude_drafts: publish.exclude_drafts ?? PUBLISH_DEFAULTS.exclude_drafts,
-    // Boolean (strip all callouts) or an array of types to strip — not a union list,
-    // so a bare publish-block-first / vault.config.json fallback like sheet_crest (#137).
-    exclude_callouts: publish.exclude_callouts ?? jsonConfigFallback.excludeCallouts ?? PUBLISH_DEFAULTS.exclude_callouts,
-    exclude_sections: unionExcludeList(
-      publish.exclude_sections,
-      jsonConfigFallback.excludeSections,
-      PUBLISH_DEFAULTS.exclude_sections,
-    ),
-    exclude_fields: unionExcludeList(
-      publish.exclude_fields,
-      jsonConfigFallback.excludeFields,
-      PUBLISH_DEFAULTS.exclude_fields,
-    ),
-    exclude_dirs: unionExcludeDirs(
-      publish.exclude_dirs,
-      jsonConfigFallback.excludeDirs,
-      PUBLISH_DEFAULTS.exclude_dirs,
-      vaultPath,
-    ),
+    // Boolean (strip all callouts) or an array of types to strip.
+    exclude_callouts: picked.exclude_callouts ?? PUBLISH_DEFAULTS.exclude_callouts,
+    exclude_sections: list(picked.exclude_sections, PUBLISH_DEFAULTS.exclude_sections),
+    exclude_fields: list(picked.exclude_fields, PUBLISH_DEFAULTS.exclude_fields),
+    exclude_dirs: list(picked.exclude_dirs, PUBLISH_DEFAULTS.exclude_dirs),
+    legacy,
     // Per-key merge, not a whole-block replace: setting only max_npcs must not
-    // silently drop recency_window back to nothing. Publish block wins, then
-    // vault.config.json, then the defaults.
+    // silently drop recency_window back to nothing. The chosen source (vault file, else
+    // site file) supplies the keys; the defaults fill the rest.
     landing: {
       ...PUBLISH_DEFAULTS.landing,
-      ...(jsonConfigFallback.landing || {}),
-      ...(publish.landing || {}),
+      ...asMap(picked.landing),
     },
     theme: {
       ...PUBLISH_DEFAULTS.theme,
@@ -348,7 +432,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
         ...PUBLISH_DEFAULTS.theme.fonts,
         ...(publish.theme && publish.theme.fonts),
       },
-      default_mode: defaultModeFrom(publish.theme && publish.theme.default_mode),
+      default_mode: defaultModeFrom(publish.theme && publish.theme.default_mode, warn),
     },
     four_oh_four: {
       ...PUBLISH_DEFAULTS.four_oh_four,
@@ -356,35 +440,38 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}) {
     },
     images: {
       ...PUBLISH_DEFAULTS.images,
-      ...jsonConfigFallback.images,
-      ...publish.images,
+      ...asMap(picked.images),
     },
     // Per-section index banners, keyed by output dir ("locations", "factions", …). No
     // defaults: absent means "look for the conventional _banner.* in the section folder".
-    banners: { ...jsonConfigFallback.banners, ...publish.banners },
+    banners: { ...asMap(picked.banners) },
     // Deliberately not merged with a default: the Locations index needs to tell
     // "group_by never mentioned" (fall back to the genre's pivot) apart from
     // "group_by explicitly falsy" (grouping off), and a default would erase that.
-    locations: { ...jsonConfigFallback.locations, ...publish.locations },
+    locations: { ...asMap(picked.locations) },
     // Only `fields` is carried through: nothing downstream reads any other override key, so
     // passing one along would just relocate the silent no-op into publishConfig.
     overrides: {
       fields: canonicalizeOverrideFieldKeys(
         // `??`, not `||`: an explicitly falsy `fields: false` is malformed config the
         // validator must see and report, not something to silently swap for the default.
-        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields
+        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields,
+        warn
       ),
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
-    // Explicit flags win, publish block over json fallback; absent stays undefined.
-    backend: {
-      statusBar: (publish.backend && publish.backend.statusBar)
-        ?? (jsonConfigFallback.backend && jsonConfigFallback.backend.statusBar),
-      inbox: (publish.backend && publish.backend.inbox)
-        ?? (jsonConfigFallback.backend && jsonConfigFallback.backend.inbox),
-    },
+    switches: resolveSwitches(publish, jsonConfigFallback),
     setting_year: settingYear,
   };
+
+  // A keep-list that is not a list, or holds non-text entries, is dropped (never read
+  // as "keep everything"); say so where the build prints the switch notes.
+  const proseRaw = publish.pc_prose_sections;
+  if (proseRaw !== undefined && !Array.isArray(proseRaw)) {
+    merged.switches.notes.push({ key: 'pc_prose_sections', problem: 'is not a list of section titles; ignored' });
+  } else if (Array.isArray(proseRaw) && proseRaw.some((s) => typeof s !== 'string')) {
+    merged.switches.notes.push({ key: 'pc_prose_sections', problem: 'has entries that are not text; those are ignored' });
+  }
 
   return merged;
 }
@@ -410,4 +497,20 @@ function scanConfigFor(config, publishConfig) {
   return Object.assign({}, config, { excludeDirs: publishConfig.exclude_dirs });
 }
 
-module.exports = { loadPublishConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig };
+// The one resolved config every command reads. `config` is the raw vault.config.json
+// object with each moved key overwritten, in its old JSON spelling, by the value
+// loadPublishConfig settled on (vault file first, site file only when the vault file is
+// silent), so templates and the scanner that read config.siteTitle / folderMap /
+// attachmentsDir keep working. `publishConfig` is loadPublishConfig's own output. The raw
+// object is not mutated. A key neither file sets stays as the raw object had it.
+function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
+  const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn);
+  const config = Object.assign({}, rawConfig);
+  for (const entry of MOVED_KEYS) {
+    const value = publishConfig[entry.publish];
+    if (value !== undefined && value !== null) config[entry.json] = value;
+  }
+  return { config, publishConfig };
+}
+
+module.exports = { MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };
