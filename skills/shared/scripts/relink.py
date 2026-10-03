@@ -25,15 +25,19 @@ Exit: 0 done or a clean plan; 1 refused or failed (one line why);
 
 from __future__ import annotations
 
+import json
 import posixpath
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from urllib.parse import quote, unquote
 
 from vaultlib import LINK_RE, is_skipped_path, normalize, scan_body
 
 BAD_NAME_CHARS = set("[]#^|")
 INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
+MD_LINK_RE = re.compile(
+    r"(!?\[[^\]\n]*\]\()(<[^>\n]+>|[^)\s]+)((?:\s+\"[^\"\n]*\")?\))")
 
 
 class RelinkError(Exception):
@@ -141,6 +145,31 @@ class _Resolver:
             return False
         return f"{_stem(self.new)}{suffix}{sub}{alias}"
 
+    def markdown(self, src: str, dest: str) -> str | None:
+        """New destination for a markdown link to OLD, else None."""
+        wrapped = dest.startswith("<") and dest.endswith(">")
+        raw = dest[1:-1] if wrapped else dest
+        if "://" in raw or raw.startswith("mailto:"):
+            return None
+        path, hashmark, frag = raw.partition("#")
+        decoded = unquote(path)
+        if not decoded.lower().endswith(".md"):
+            return None
+        rooted = decoded.startswith("/")
+        here = posixpath.normpath(
+            posixpath.join(posixpath.dirname(src), decoded))
+        if not rooted and here == self.old:
+            out = posixpath.relpath(self.new,
+                                    posixpath.dirname(src) or ".")
+        elif posixpath.normpath(decoded.lstrip("/")) == self.old:
+            out = ("/" if rooted else "") + self.new
+        else:
+            return None
+        if not wrapped and ("%" in path or " " in out):
+            out = quote(out, safe="/")
+        out = f"{out}{hashmark}{frag}"
+        return f"<{out}>" if wrapped else out
+
 
 def _code_spans(line: str) -> list[tuple[int, int]]:
     return [m.span() for m in INLINE_CODE_RE.finditer(line)]
@@ -162,6 +191,7 @@ def _rewrite_note(rel: str, text: str, res: _Resolver,
             continue
         spans = _code_spans(line) if lineno >= body_start else []
         new_line = _rewrite_wikilinks(rel, lineno, line, spans, res, p)
+        new_line = _rewrite_markdown(rel, lineno, new_line, spans, res, p)
         out.append(new_line)
     return "".join(out)
 
@@ -184,6 +214,21 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
         p.changes.append(Change(rel, lineno, m.group(0), after))
         return after
     return LINK_RE.sub(sub, line)
+
+
+def _rewrite_markdown(rel: str, lineno: int, line: str,
+                      spans: list[tuple[int, int]], res: _Resolver,
+                      p: Plan) -> str:
+    def sub(m: re.Match[str]) -> str:
+        if _inside(m.start(), spans):
+            return m.group(0)
+        got = res.markdown(rel, m.group(2))
+        if got is None:
+            return m.group(0)
+        after = f"{m.group(1)}{got}{m.group(3)}"
+        p.changes.append(Change(rel, lineno, m.group(0), after))
+        return after
+    return MD_LINK_RE.sub(sub, line)
 
 
 def _vault_rel(vault: Path, raw: str, base: str | None) -> str:
@@ -211,4 +256,15 @@ def plan(vault: Path, old: str, new: str) -> Plan:
         changed = _rewrite_note(rel, text, res, p)
         if changed != text:
             p.originals[rel], p.texts[rel] = text, changed
+    needle = re.compile(r'("file"\s*:\s*)' + re.escape(json.dumps(old)))
+    for rel in _walk(vault, ".canvas"):
+        text = _read(vault, rel)
+        if text is None or not needle.search(text):
+            continue
+        changed = needle.sub(lambda m: m.group(1) + json.dumps(new), text)
+        for m in needle.finditer(text):
+            p.changes.append(Change(rel, text.count("\n", 0, m.start()) + 1,
+                                    m.group(0),
+                                    m.group(1) + json.dumps(new)))
+        p.originals[rel], p.texts[rel] = text, changed
     return p

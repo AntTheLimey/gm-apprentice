@@ -126,5 +126,46 @@ class WikilinkTests(unittest.TestCase):
                                   for p in vault.rglob("*")})
 
 
+class MarkdownAndCanvasTests(unittest.TestCase):
+    def test_markdown_links(self):
+        cases = {
+            # relative to the linking note (NPCs/)
+            "[s4](../Sessions/Session_4_Wrapup.md)":
+                "[s4](../Sessions/Chapter_01_Session_04_Wrap_Up.md)",
+            # from the vault root
+            "[s4](Sessions/Session_4_Wrapup.md#Clues)":
+                "[s4](Sessions/Chapter_01_Session_04_Wrap_Up.md#Clues)",
+            "[s4](/Sessions/Session_4_Wrapup.md)":
+                "[s4](/Sessions/Chapter_01_Session_04_Wrap_Up.md)",
+            '[s4](<Sessions/Session_4_Wrapup.md> "t")':
+                '[s4](<Sessions/Chapter_01_Session_04_Wrap_Up.md> "t")',
+            "[x](https://e.com/Sessions/Session_4_Wrapup.md)":
+                "[x](https://e.com/Sessions/Session_4_Wrapup.md)",
+        }
+        for before, after in cases.items():
+            with self.subTest(before=before):
+                vault = make_vault(self, {OLD: "x\n",
+                                          "NPCs/Hallam.md": f"{before}\n"})
+                p = relink.plan(vault, OLD, NEW)
+                self.assertEqual(
+                    p.texts.get("NPCs/Hallam.md", f"{before}\n"), f"{after}\n")
+
+    def test_percent_encoding_is_kept(self):
+        old, new = "Sessions/Old Name.md", "Sessions/New Name.md"
+        vault = make_vault(self, {old: "x\n",
+                                  "A.md": "[a](Sessions/Old%20Name.md)\n"})
+        self.assertEqual(relink.plan(vault, old, new).texts["A.md"],
+                         "[a](Sessions/New%20Name.md)\n")
+
+    def test_canvas_file_nodes(self):
+        canvas = ('{\n\t"nodes":[\n\t\t{"id":"1","type":"file",'
+                  '"file":"Sessions/Session_4_Wrapup.md"}\n\t]\n}')
+        vault = make_vault(self, {OLD: "x\n", "Board.canvas": canvas})
+        p = relink.plan(vault, OLD, NEW)
+        self.assertEqual(p.texts["Board.canvas"],
+                         canvas.replace("Session_4_Wrapup",
+                                        "Chapter_01_Session_04_Wrap_Up"))
+
+
 if __name__ == "__main__":
     unittest.main()
