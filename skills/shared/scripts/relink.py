@@ -107,6 +107,14 @@ class _Resolver:
         if not m:
             return False
         dest, sub, alias = m.group(1), m.group(2) or "", m.group(3) or ""
+        if alias and (sub or dest).endswith("\\"):
+            # An escaped pipe (table cell): the backslash belongs to the
+            # separator, not the destination.
+            alias = "\\" + alias
+            if sub:
+                sub = sub[:-1]
+            else:
+                dest = dest[:-1]
         if not dest.strip():
             return False
         has_md = dest.lower().endswith(".md")
@@ -197,6 +205,8 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     for rel in notes:
         text = _read(vault, rel)
         if text is None:
+            p.warnings.append(
+                f"{rel} is not UTF-8; links in it were not checked")
             continue
         changed = _rewrite_note(rel, text, res, p)
         if changed != text:

@@ -103,6 +103,21 @@ class WikilinkTests(unittest.TestCase):
             ".obsidian/x.md": "[[Session_4_Wrapup]]\n"})
         self.assertEqual(relink.plan(vault, OLD, NEW).texts, {})
 
+    def test_escaped_pipe_in_table_rows(self):
+        text, _ = self.rewrite(
+            "| [[Session_4_Wrapup\\|S4]] | [[Session_4_Wrapup#H\\|x]] |")
+        self.assertEqual(
+            text, "| [[Chapter_01_Session_04_Wrap_Up\\|S4]] | "
+                  "[[Chapter_01_Session_04_Wrap_Up#H\\|x]] |\n")
+
+    def test_non_utf8_note_is_warned_about(self):
+        vault = make_vault(self, {OLD: "x\n"})
+        (vault / "Bad.md").write_bytes(b"\xff\xfe[[Session_4_Wrapup]]\n")
+        p = relink.plan(vault, OLD, NEW)
+        self.assertEqual(
+            p.warnings,
+            ["Bad.md is not UTF-8; links in it were not checked"])
+
     def test_plan_writes_nothing(self):
         vault = make_vault(self, {OLD: "x\n", "A.md": "[[Session_4_Wrapup]]\n"})
         before = {p: p.stat().st_mtime_ns for p in vault.rglob("*")}
