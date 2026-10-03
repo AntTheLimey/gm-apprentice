@@ -2,7 +2,9 @@
 
 import contextlib
 import io
+import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -16,6 +18,7 @@ sys.path.insert(0, str(SCRIPTS))
 import migrate  # noqa: E402
 import migrate_site  # noqa: E402
 import vault_check as vc  # noqa: E402
+from vaultlib import extract_frontmatter  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed, edit_frontmatter, write_text_atomic)
 from site_fixture import give_site  # noqa: E402
@@ -271,7 +274,7 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("site-repin\tdid site-repin", out)
         self.assertTrue(out.rstrip().endswith(
             "the site's publish tool is updated; run plan again for the "
-            "checks that waited on it\nnot stamped"))
+            "choices it now offers\nnot stamped"))
         _, plan, _ = call([str(vault), "plan"], checks)
         self.assertIn("## Your choice\n# count: 1\nfonts\tself-host", plan)
         self.assertNotIn("Checked once", plan)
@@ -444,6 +447,16 @@ class ApplyGuardTests(unittest.TestCase):
         self.assertIn("vault-config.md", err)
         self.assertIn("nothing was changed", err)
 
+    def test_a_current_vault_with_an_uneditable_config_still_applies(self):
+        vault = make_vault(self, PLUGIN)
+        path = vault / "_meta" / "vault-config.md"
+        path.write_text(f'---\ngm_apprentice_version: "{PLUGIN}"\n'
+                        'description: >\n  folded text\n---\n',
+                        encoding="utf-8")
+        code, out, err = call([str(vault), "apply"], [will("copy", None)])
+        self.assertEqual(code, 0, err)
+        self.assertIn("copy\tdid copy", out)
+
     def test_a_byte_order_mark_is_read_and_kept(self):
         vault = make_vault(self)
         path = vault / "_meta" / "vault-config.md"
@@ -552,6 +565,31 @@ class RealToolTests(unittest.TestCase):
         self.assertLess(text.index("## GM Notes"), text.index("Context"))
         code, again, _ = self.run_real(vault, "plan")
         self.assertEqual(again.splitlines()[1], "up to date", again)
+
+    def test_a_multi_line_footer_moves_and_the_vault_still_stamps(self):
+        vault = make_vault(self, "1.10.12")
+        give_site(vault, lambda p: self.addCleanup(
+            shutil.rmtree, p, ignore_errors=True))
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        site = Path(re.search(r"^\s*site_dir:\s*(.+)$", text, re.M)
+                    .group(1).strip().strip("\"'"))
+        footer = 'Line one\n"quoted" \\ slash\nlast line'
+        config = json.loads((site / "vault.config.json").read_text(
+            encoding="utf-8"))
+        config["footer"] = footer
+        (site / "vault.config.json").write_text(json.dumps(config),
+                                                encoding="utf-8")
+        code, did, err = self.run_real(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertIn("publish.footer", did)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        moved = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        self.assertIn('  footer: "Line one\\n', moved)
+        fm = extract_frontmatter(moved)
+        self.assertIsNotNone(fm)
+        self.assertEqual(self.run_real(vault, "plan")[1].splitlines()[1],
+                         "up to date")
+        self.assertEqual(self.run_real(vault, "apply")[0], 0)
 
     def test_a_vault_with_no_site_migrates_without_a_site_step(self):
         vault = make_vault(self, "1.10.12")

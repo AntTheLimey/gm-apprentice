@@ -15,6 +15,7 @@ const { parseNote } = require('./frontmatter');
 const CONFIG_REL = '_meta/vault-config.md';
 const KEY_RE = /^(?:"([^"]*)"|'([^']*)'|([^\s#:'"-][^:]*?))([ \t]*):(?:\s|$)/;
 
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 const indentOf = (line) => line.length - line.trimStart().length;
 const isBlank = (line) => line.trim() === '';
 const isComment = (line) => line.trimStart().startsWith('#');
@@ -118,8 +119,25 @@ function scanKeys(lines, from, end, indent) {
   return { keys };
 }
 
-function dumpAt(key, value, indent) {
-  const body = yaml.safeDump({ [key]: value }, { lineWidth: -1 }).replace(/\n$/, '');
+// A string with a line break is written on one line, double-quoted (`\n`, `\"`, `\\` escaped),
+// not as a block scalar: the GM's editor and the vault scripts read the file line by line and
+// refuse the indented lines of a block scalar. It parses back to the same string.
+function singleLineStrings(value, quoted) {
+  if (typeof value === 'string' && /[\r\n]/.test(value)) {
+    const token = `MULTILINE${quoted.length}TOKEN`;
+    quoted.push([token, JSON.stringify(value)]);
+    return token;
+  }
+  if (Array.isArray(value)) return value.map((v) => singleLineStrings(v, quoted));
+  if (isMap(value)) return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, singleLineStrings(v, quoted)]));
+  return value;
+}
+
+// `step` is the indent of each nested level; it follows the block the key goes into.
+function dumpAt(key, value, indent, step = 2) {
+  const quoted = [];
+  let body = yaml.safeDump({ [key]: singleLineStrings(value, quoted) }, { lineWidth: -1, indent: step }).replace(/\n$/, '');
+  for (const [token, text] of quoted) body = body.replace(token, () => text);
   const pad = ' '.repeat(indent);
   return body.split('\n').map((l) => (l === '' ? l : pad + l));
 }
@@ -144,8 +162,6 @@ function applyOne(fm, change) {
   return { lines };
 }
 
-const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-
 // A nested value for the path `keys` ending in `value`.
 const nestOf = (keys, value) => keys.reduceRight((acc, k) => ({ [k]: acc }), value);
 
@@ -159,26 +175,26 @@ function withLeaf(data, keys, value) {
 // Set the one entry at `keys` inside the map whose entries sit at `indent` in
 // lines[from, end), and touch no other line. `data` is the map as parsed, for the one case
 // (an entry written on one line, `theme: {a: 1}`) where the entry has to be written again.
-function setLeaf(lines, from, end, indent, keys, value, data) {
+function setLeaf(lines, from, end, indent, keys, value, data, step) {
   const scanned = scanKeys(lines, from, end, indent);
   if (scanned.error) return scanned;
   const [head, ...rest] = keys;
   const hit = scanned.keys.find((k) => k.key === head);
   if (!hit) {
-    lines.splice(end, 0, ...dumpAt(head, nestOf(rest, value), indent));
+    lines.splice(end, 0, ...dumpAt(head, nestOf(rest, value), indent, step));
     return {};
   }
   if (!rest.length) {
-    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, value, indent));
+    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, value, indent, step));
     return {};
   }
   if (!/:[ \t]*(#.*)?$/.test(lines[hit.from])) {
-    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, withLeaf(data && data[head], rest, value), indent));
+    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, withLeaf(data && data[head], rest, value), indent, step));
     return {};
   }
   const inner = spanOf(lines, hit.from + 1, hit.to);
-  const innerIndent = inner.indent === null ? indent + 2 : inner.indent;
-  return setLeaf(lines, hit.from + 1, inner.end, innerIndent, rest, value, data && data[head]);
+  const innerIndent = inner.indent === null ? indent + step : inner.indent;
+  return setLeaf(lines, hit.from + 1, inner.end, innerIndent, rest, value, data && data[head], step);
 }
 
 // The publish map as the frontmatter lines now parse (what a one-line entry is rewritten from).
@@ -195,7 +211,7 @@ function applyLeaf(fm, leaf, data) {
     lines.push('publish:');
     block = locateBlock(lines);
   }
-  const done = setLeaf(lines, block.start + 1, block.end, block.indent, leaf.path, leaf.value, data);
+  const done = setLeaf(lines, block.start + 1, block.end, block.indent, leaf.path, leaf.value, data, block.indent);
   return done.error ? done : { lines };
 }
 

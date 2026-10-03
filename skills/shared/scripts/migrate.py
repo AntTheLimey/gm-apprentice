@@ -40,7 +40,7 @@ LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
 TITLES = {WILL: "Will do", CHOICE: "Your choice", PERSON: "Needs a person"}
 WAITING = "Checked once the site's tool is updated"
 WAITED_LINE = ("the site's publish tool is updated; run plan again for the "
-               "checks that waited on it")
+               "choices it now offers")
 
 CHECKS: list[Check] = [*SITE_CHECKS, *VAULT_CHECKS]
 
@@ -165,11 +165,12 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         if problem:
             print(f"migrate.py: {problem}", file=sys.stderr)
             return 2
-    try:   # the stamp is written last; find out now that it can be
-        check_editable(vault / "_meta" / "vault-config.md")
-    except StepFailed as e:
-        print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
-        return 1
+    if parse_version(vault_v) < parse_version(plugin_v):
+        try:   # a stamp is due, written last; find out now that it can be
+            check_editable(vault / "_meta" / "vault-config.md")
+        except StepFailed as e:
+            print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
+            return 1
     did: list[str] = []
     person: list[str] = []
     used: set[str] = set()

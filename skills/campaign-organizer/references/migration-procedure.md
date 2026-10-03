@@ -8,7 +8,8 @@ migration is a script; this file says how to drive it.
    person, and, while the site's publish tool is out of date, Checked
    once the site's tool is updated. It writes nothing. `up to date`
    means there is nothing to do: skip to the end.
-2. Ask once: "May I apply Will do? Tell me which of Your choice you
+2. Ask once: "May I apply Will do and the checks listed to run once
+   the site's tool is updated? Tell me which of Your choice you
    want." A choice that shows `id=<…>` needs the GM's answer for the
    value.
 3. On the GM's yes, run the same script with `<vault> apply`, adding

@@ -112,3 +112,23 @@ test('two settings in one call both land, and a theme written on one line still 
   assert.deepEqual(run(s, []).data.defaultModeSet, true);
   assert.match(config(s), /source: self-host/);
 });
+
+test('a fonts block it creates uses the publish block\'s indent step', () => {
+  const s = scratch('    mode: player\n    theme:\n        preset: gothic\n');
+  assert.equal(run(s, ['theme.fonts.source="self-host"']).rc, 0);
+  assert.match(config(s), /\n {8}fonts:\n {12}source: self-host\n/);
+  assert.deepEqual(run(s, []).data.googleFonts, []);
+});
+
+test('a multi-line string is written on one line and parses back equal', () => {
+  const { editPublishBlock } = require('../lib/vault-config-edit.js');
+  const { parseNote } = require('../lib/frontmatter');
+  const footer = 'Line one\n"quoted" and C:\\path\n\nlast line';
+  const out = editPublishBlock('---\ntype: meta\npublish:\n  mode: player\n---\n', { set: { footer, nested: { note: 'a\nb' } } });
+  assert.ok(!out.error, out.error);
+  assert.ok(!/[|>]-?\n/.test(out.text), out.text);
+  assert.ok(out.text.split('\n').every((l) => !/^\s+(Line one|last line|b)/.test(l)), out.text);
+  const pub = parseNote(out.text).data.publish;
+  assert.equal(pub.footer, footer);
+  assert.equal(pub.nested.note, 'a\nb');
+});
