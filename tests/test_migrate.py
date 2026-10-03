@@ -2,6 +2,7 @@
 
 import contextlib
 import io
+import os
 import shutil
 import sys
 import tempfile
@@ -13,8 +14,11 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import migrate  # noqa: E402
+import migrate_site  # noqa: E402
+import vault_check as vc  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed, edit_frontmatter, write_text_atomic)
+from site_fixture import give_site  # noqa: E402
 
 PLUGIN = "1.10.30"
 
@@ -390,3 +394,62 @@ class WriteTextAtomicTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def map_folder(vault, folder, key):
+    """Add `folder: key` to the vault's `publish.folder_map`, so the
+    publish tool takes notes from that folder."""
+    file = vault / "_meta" / "vault-config.md"
+    lines = file.read_text(encoding="utf-8").split("\n")
+    at = lines.index("publish:")
+    lines[at + 1:at + 1] = ["  folder_map:", f"    {folder}: {key}"]
+    file.write_text("\n".join(lines), encoding="utf-8")
+
+
+@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                     or (shutil.which("node") and (
+                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                     "node and the publish tool's node_modules are needed")
+class RealToolTests(unittest.TestCase):
+    def run_real(self, vault, *args):
+        out, err = io.StringIO(), io.StringIO()
+        ok = (0, '{"ok": true}', "")
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=(PLUGIN, "test")), \
+                mock.patch.object(migrate_site, "plugin_tool",
+                                  return_value=ok), \
+                contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = migrate.main([str(vault), *args])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_plan_apply_plan_on_a_vault_with_a_site(self):
+        vault = make_vault(self, "1.10.12")
+        (vault / "Documents").mkdir()
+        (vault / "Documents" / "Letter.md").write_text(
+            '---\nname: "Letter"\ntype: document\ncanon_status: AUTHORITATIVE\n'
+            "---\n\n## The Text\n\nDear sir.\n\n## Context\n\nThe forger is "
+            "Vane.\n", encoding="utf-8")
+        give_site(vault, lambda p: self.addCleanup(
+            shutil.rmtree, p, ignore_errors=True))
+        map_folder(vault, "Documents", "documents")
+        code, plan, err = self.run_real(vault, "plan")
+        self.assertEqual(code, 0, err)
+        self.assertIn("## Will do", plan)
+        self.assertIn("template:_Template_NPC.md\t", plan)
+        self.assertIn("gm-leak\tDocuments/Letter.md: re-nest 'Context'", plan)
+        code, did, err = self.run_real(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        text = (vault / "Documents" / "Letter.md").read_text(encoding="utf-8")
+        self.assertLess(text.index("## GM Notes"), text.index("Context"))
+        code, again, _ = self.run_real(vault, "plan")
+        self.assertEqual(again.splitlines()[1], "up to date", again)
+
+    def test_a_vault_with_no_site_migrates_without_a_site_step(self):
+        vault = make_vault(self, "1.10.12")
+        code, did, err = self.run_real(vault, "apply")
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("site-repin", did)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertEqual(self.run_real(vault, "plan")[1].splitlines()[1],
+                         "up to date")
