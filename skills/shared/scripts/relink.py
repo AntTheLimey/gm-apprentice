@@ -105,6 +105,13 @@ def _read(vault: Path, rel: str) -> str | None:
         raise RelinkError(f"{rel} cannot be read: {e}") from e
 
 
+def _raw(vault: Path, rel: str) -> str:
+    try:
+        return (vault / rel).read_bytes().decode("utf-8", "replace")
+    except OSError as e:
+        raise RelinkError(f"{rel} cannot be read: {e}") from e
+
+
 def _plain(s: str) -> str:
     return s
 
@@ -372,7 +379,7 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     res = _Resolver(notes, old, new)
     for rel, text in texts.items():
         if text is None:
-            raw = (vault / rel).read_bytes().decode("utf-8", "replace")
+            raw = _raw(vault, rel)
             if (any(isinstance(res.wiki(rel, m.group(1)), str)
                     for m in LINK_RE.finditer(raw))
                     or any(res.markdown(rel, m.group(2)) is not None
@@ -388,7 +395,7 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     for rel in _walk(vault, ".canvas"):
         text = _read(vault, rel)
         if text is None:
-            raw = (vault / rel).read_bytes().decode("utf-8", "replace")
+            raw = _raw(vault, rel)
             if (_canvas_names_old(raw, old)
                     or any(isinstance(res.wiki(rel, m.group(1)), str)
                            for m in LINK_RE.finditer(raw))):
@@ -477,13 +484,14 @@ def _move(vault: Path, old: str, new: str) -> None:
             os.rename(src, tmp)
             try:
                 os.rename(tmp, dst)
-            except OSError as e:
+            except BaseException as e:
                 try:
                     os.rename(tmp, src)
-                except OSError:
+                except BaseException:
                     raise _Stranded(
                         f"{old} is stranded as {tmp.relative_to(vault)}: "
-                        f"rename it back by hand ({e})") from e
+                        f"rename it back by hand ({e or type(e).__name__})"
+                    ) from e
                 raise
             return
         if dst.exists():
@@ -532,25 +540,30 @@ def apply(p: Plan) -> list[str]:
     written: list[str] = []
     try:
         for rel in sorted(p.texts):
+            written.append(rel)  # before the write: an interrupt mid-write
             write_text_atomic(p.vault / rel, p.texts[rel])
-            written.append(rel)
         _move(p.vault, p.old, p.new)
-    except (OSError, StepFailed, _Stranded, KeyboardInterrupt) as e:
+    except BaseException as e:
         stuck = []
         for rel in written:
             try:
                 write_text_atomic(p.vault / rel, p.originals[rel])
-            except (OSError, StepFailed):
+            except BaseException:
                 stuck.append(rel)
+        cause = e.__cause__ if isinstance(e, _Stranded) else e
+        said = str(e) or type(e).__name__
         if stuck:
-            raise RelinkError(f"{e}; these notes could not be put back and "
-                              f"still have the new links: "
-                              f"{', '.join(stuck)}") from e
-        if isinstance(e, KeyboardInterrupt):
+            said += (f"; these notes could not be put back and still have "
+                     f"the new links: {', '.join(stuck)}")
+        elif isinstance(e, _Stranded):
+            said += "; the links were put back"
+        else:
+            said += "; the vault is as it was"
+        if isinstance(cause, KeyboardInterrupt):
+            raise KeyboardInterrupt(said) from None
+        if isinstance(cause, SystemExit) and not stuck and e is cause:
             raise
-        if isinstance(e, _Stranded):
-            raise RelinkError(f"{e}; the links were put back") from e
-        raise RelinkError(f"{e}; the vault is as it was") from e
+        raise RelinkError(said) from e
     return rows(p, done=True)
 
 
@@ -572,6 +585,10 @@ def main(argv: list[str] | None = None) -> int:
     except RelinkError as e:
         print(f"relink.py: {e}", file=sys.stderr)
         return 2 if e.usage else 1
+    except KeyboardInterrupt as e:
+        print(f"relink.py: interrupted; {e}" if str(e)
+              else "relink.py: interrupted", file=sys.stderr)
+        return 130
     print("\n".join(out))
     return 0
 

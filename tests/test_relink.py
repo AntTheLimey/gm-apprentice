@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """relink.py: rename or move a note and rewrite every link to it."""
 
+import io
 import os
 import shutil
 import subprocess
@@ -446,6 +447,47 @@ class ApplyTests(unittest.TestCase):
                 relink.apply(relink.plan(self.vault, OLD, NEW))
         self.assertEqual(before, self.snapshot())
 
+    def test_a_restore_keeps_going_past_a_failed_note(self):
+        with self.fail_replace_on(3, 4):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertIn("A.md", str(cm.exception))
+        self.assertNotIn("B.md", str(cm.exception))
+        self.assertEqual(read(self.vault, "B.md"),
+                         "see [[Session_4_Wrapup|S4]]\n")
+
+    def test_an_interrupt_inside_a_write_still_restores_that_note(self):
+        before = self.snapshot()
+        real = relink.write_text_atomic
+        n = []
+
+        def write_then_interrupt(path, text):
+            real(path, text)
+            n.append(1)
+            if len(n) == 1:
+                raise KeyboardInterrupt
+        with mock.patch.object(relink, "write_text_atomic",
+                               write_then_interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertEqual(before, self.snapshot())
+
+    def test_system_exit_restores_and_reraises(self):
+        before = self.snapshot()
+        with mock.patch.object(relink.os, "rename", side_effect=SystemExit(3)):
+            with self.assertRaises(SystemExit):
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertEqual(before, self.snapshot())
+
+    def test_any_other_failure_becomes_a_refusal_after_restore(self):
+        before = self.snapshot()
+        with mock.patch.object(relink.os, "rename",
+                               side_effect=RuntimeError("odd")):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertIn("as it was", str(cm.exception))
+        self.assertEqual(before, self.snapshot())
+
     def test_a_note_added_since_the_plan_is_refused(self):
         p = relink.plan(self.vault, OLD, NEW)
         (self.vault / "C.md").write_bytes(b"[[Session_4_Wrapup]]\n")
@@ -595,6 +637,67 @@ class ApplyExtraTests(unittest.TestCase):
         self.assertIn(".s4.md.relink", str(cm.exception))
         self.assertNotIn("as it was", str(cm.exception))
         self.assertEqual(read(vault, "A.md"), "[[s4]]\n")
+
+    def test_interrupt_between_the_two_case_renames_puts_note_back(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        real = os.rename
+        n = []
+
+        def flaky(a, b):
+            n.append(1)
+            if len(n) == 2:
+                raise KeyboardInterrupt
+            real(a, b)
+        with mock.patch.object(relink.os, "rename", flaky):
+            with self.assertRaises(KeyboardInterrupt):
+                relink.apply(relink.plan(vault, "s4.md", "S4.md"))
+        self.assertEqual(sorted(os.listdir(vault)), ["A.md", "s4.md"])
+        self.assertEqual(read(vault, "A.md"), "[[s4]]\n")
+
+    def test_interrupt_that_strands_the_note_names_it(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        real = os.rename
+        n = []
+
+        def flaky(a, b):
+            n.append(1)
+            if len(n) == 2:
+                raise KeyboardInterrupt
+            if len(n) == 3:
+                raise OSError("locked")
+            real(a, b)
+        with mock.patch.object(relink.os, "rename", flaky):
+            with self.assertRaises(KeyboardInterrupt) as cm:
+                relink.apply(relink.plan(vault, "s4.md", "S4.md"))
+        self.assertIn(".s4.md.relink", str(cm.exception))
+        self.assertEqual(read(vault, "A.md"), "[[s4]]\n")
+
+    def test_main_reports_an_interrupt_in_one_line(self):
+        vault = make_vault(self, {"s4.md": "x\n"})
+        err = io.StringIO()
+        with mock.patch.object(relink, "apply",
+                               side_effect=KeyboardInterrupt("stopped")), \
+                mock.patch.object(sys, "stderr", err):
+            code = relink.main([str(vault), "s4.md", "t4.md", "--apply"])
+        self.assertEqual(code, 130)
+        self.assertEqual(err.getvalue(), "relink.py: interrupted; stopped\n")
+
+    def test_unreadable_note_in_the_utf8_branch_is_a_refusal(self):
+        vault = make_vault(self, {"s4.md": "x\n", "Bad.md": "y\n"})
+        real = Path.read_bytes
+        n = []
+
+        def flaky(self_):
+            if self_.name == "Bad.md":
+                n.append(1)
+                if len(n) == 1:
+                    return b"\xff"
+                raise PermissionError("denied")
+            return real(self_)
+        with mock.patch.object(Path, "read_bytes", flaky):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.plan(vault, "s4.md", "t4.md")
+        self.assertIn("Bad.md", str(cm.exception))
 
     def test_leftover_temp_name_is_refused_up_front(self):
         vault = make_vault(self, {"s4.md": "x\n", ".s4.md.relink": "keep\n"})
