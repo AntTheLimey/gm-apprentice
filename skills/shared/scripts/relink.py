@@ -191,8 +191,9 @@ def _parse_link(body: str, json_text: bool = False
 
 
 def _bare_spelling(body: str) -> str | None:
-    """The name a bare wikilink writes, as the site looks it up (no `.md`),
-    or None for a path-written link."""
+    """The name a bare wikilink writes, as the site's link map is asked for
+    it: the site resolves `[[Name#heading]]`, `[[Name^block]]` and
+    `[[Name.md]]` by the name alone. None for a path-written link."""
     parsed = _parse_link(body)
     if parsed is None or not parsed[0].strip():
         return None

@@ -121,7 +121,8 @@ calls:
 ### Step 3: Filename Conformance
 
 Filename should be `Chapter_CC_Session_NN_Wrap_Up.md`
-(zero-padded, no title). Drifted names — Warning. Rename with `relink.py <vault> <old path>
+(zero-padded, no title). Drifted names — Warning. Rename with
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path>
 Chapter_CC_Session_NN_Wrap_Up` (dry run; add `--apply` on the GM's
 yes): it renames the file and rewrites every link to it, the session
 index's `documents.wrap_up` included, in one pass.

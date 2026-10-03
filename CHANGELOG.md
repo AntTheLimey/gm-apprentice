@@ -21,12 +21,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   stats under. `relink.py` writes it when it renames a PC, so a renamed
   character keeps their current HP/SAN, loadouts and party-board entry.
   Notes without it behave as before. Publish tool 1.12.3.
+- `gm-apprentice-publish manifest rename` tells `relink.py`, from the
+  site's own build rules, what a rename changes on the site: the publish
+  list and the vault settings that name the note, a PC's live key, the
+  story file that moves with a PC, which notes the site publishes, where
+  it sends each spelling of a shared name, and whether the new place
+  would take the page off the site.
+- The build warns when two PCs share a live key.
+- `sheet show` and the change-request loop find a renamed PC by its
+  `live_key`.
 
 ### Changed
 
 - The migration renames old-style Wrap-Up filenames, with their links,
   as one choice, instead of listing them for the GM. mobRPG heritage
-  notes outside `Heritages/` are moved the same way.
+  notes outside `Heritages/` are moved the same way, into an existing
+  `heritages/` folder in whatever case it has. A rename that has a link
+  which could mean either of two notes, or that would take a published
+  page off the site (a folder missing from `publish.folder_map`), is left
+  for the GM instead.
+- "Mentioned in" lists, and the connections graph, also count links
+  written through an alias, a path, or a superseded page's redirect, the
+  ways the site already resolves them.
 - The Wrap-Up filename warning no longer calls a rename opt-in on a
   published vault; QA and publish troubleshooting point at `relink.py`
   instead of a hand find-and-replace.
@@ -45,7 +61,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   page. Renaming the story alone is refused, since it would detach.
 - Renaming a note with `relink.py` keeps its page on the site's publish
   list: the list, and the vault settings that name the note, are updated
-  in the same pass. A vault with no site needs no Node.
+  in the same pass. A vault with no site is never asked, so it needs no
+  Node.
+- A relink of a vault with a site asks the publish tool that site builds
+  with; if that tool is too old to know the question it says to run the
+  migration first.
+- Decimal chapter wrap-ups (`Chapter_0.6_Wrap_Up.md`) are conformant, and
+  the migration leaves them alone.
+- Links with a heading, block or `.md` (`[[Lord_Vane#Past]]`) now link
+  to their page on the site instead of showing as plain text, and count
+  as mentions.
+- A secret alias written with a block anchor (`[[Elias Crowe^b1]]`) no
+  longer shows the secret name on the player page or in the search index.
+- Flushing live stats into a CoC sheet no longer misreads a table row
+  that holds a `[[Name\|Shown]]` link.
+- Relink refuses a target outside the vault and a move that changes only
+  a folder's case, and treats a partial-path link that two notes match as
+  unsure.
 - Table links written `[[Name\|Shown]]` now link on the published site
   and are no longer reported broken by `graph_check.py`. A link with an
   empty display name (`[[Name|]]`) shows the name. Publish tool 1.12.3.

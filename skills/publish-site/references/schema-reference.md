@@ -26,6 +26,7 @@ These entity types have purpose-built page layouts.
 | `key_traits` | Optional | List of defining traits (shown on PC card and landing page) |
 | `player_name` | Optional | Real-world player name |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
+| `live_key` | Optional | Written by `relink.py` when it renames a PC, so the PC keeps their live stats on the site. Leave it alone |
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
 
@@ -321,7 +322,10 @@ SUPERSEDED entities also redirect wiki-links to their
 
 **Page title:** The page title is always derived from the vault
 filename (without the `.md` extension), not from frontmatter. To
-change a page's title, rename the file. To make a page findable
+change a page's title, rename the file with
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name> --apply`,
+which rewrites every link to it, and keeps a renamed PC's live stats
+and story file with it. To make a page findable
 under alternate names, use the `aliases` field. For a name players
 mustn't see, use `gm_aliases`.
 
