@@ -832,6 +832,131 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
             batch.row("WOULD-ADD", rel, where, detail)
 
 
+# --- timeline ----------------------------------------------------------------
+
+TIMELINE = "_Campaign/Timeline.md"
+HEADING_ARG_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+TIME_OF_DAY_RE = re.compile(
+    r"\b(morning|afternoon|evening|night|midnight|noon|dawn|dusk)\b",
+    re.IGNORECASE)
+YEAR_RE = re.compile(r"\b\d{4}\b")
+ENTRY_DATE_RE = re.compile(r"^[-*+]\s+\*\*(.+?)\*\*")
+LABEL_START_RE = re.compile(r"(?i)^(session|chapter)\b")
+
+
+def split_timeline(text: str) -> list[list[str]]:
+    """The entries on stdin, exactly as written. A line that starts at the
+    margin opens an entry; indented lines and blank lines between them
+    belong to the entry above."""
+    entries: list[list[str]] = []
+    for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
+        if line.strip() and not line[0].isspace():
+            entries.append([line.rstrip()])
+        elif entries:
+            entries[-1].append(line.rstrip())
+    for entry in entries:
+        while not entry[-1].strip():
+            entry.pop()
+    return entries
+
+
+def _heading_arg(raw: str, flag: str) -> tuple[int, str]:
+    m = HEADING_ARG_RE.match(raw)
+    if not m:
+        raise WriteError(f"{flag} takes a heading with its hashes, "
+                         f"e.g. '### Session 13 \u2014 The Assault'")
+    return len(m.group(1)), m.group(2)
+
+
+def _find(doc: Doc, level: int, title: str) -> Head | None:
+    return next((h for h in doc.heads
+                 if h.level == level and key(h.title) == key(title)), None)
+
+
+def _need(doc: Doc, level: int, title: str) -> Head:
+    head = _find(doc, level, title)
+    if head is None:
+        raise WriteError(f"heading '{title}' is missing after it was placed")
+    return head
+
+
+def _last_gm_opener(doc: Doc) -> int | None:
+    """Line index of the opener of the last top-level gm-only block that
+    runs to the end of the note (nothing but blank lines after its closer),
+    or None when the note does not end with one."""
+    depth = 0
+    opener: int | None = None
+    closed_at: int | None = None
+    for s in doc.states:
+        if s.marker == OPEN_GM:
+            if depth == 0:
+                opener = s.lineno - 1
+            depth += 1
+        elif s.marker == CLOSE_GM and depth > 0:
+            depth -= 1
+            if depth == 0:
+                closed_at = s.lineno - 1
+    if opener is None or closed_at is None:
+        return None
+    if any(line.strip() for line in doc.lines[closed_at + 1:]):
+        return None
+    return opener
+
+
+def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    rel = batch.resolve(args.file or TIMELINE)
+    if not batch.exists(rel):
+        raise WriteError(f"{rel}: no timeline \u2014 new-vault setup creates it")
+    entries = split_timeline(text)
+    if not entries:
+        raise WriteError("nothing on stdin")
+    level, title = _heading_arg(args.under, "--under")
+    where = f"\u00a7{title}"
+    note = batch.read(rel)
+    doc = parse(note)
+    if doc.problems:
+        raise WriteError(f"{rel}: gm-only fence is unbalanced "
+                         f"({doc.problems[0]})")
+    if _find(doc, level, title) is None:
+        if args.after:
+            after = _find(doc, *_heading_arg(args.after, "--after"))
+            if after is None:
+                raise WriteError(f"{rel}: no heading '{args.after}'")
+            at = section_end(doc, after)
+        else:
+            opener = _last_gm_opener(doc)
+            at = len(doc.lines) if opener is None else opener
+        before = next((h.title for h in reversed(doc.heads) if h.idx < at),
+                      "the top")
+        following = next((h.title for h in doc.heads if h.idx >= at),
+                         "the end")
+        note = place(doc, at, [f"{'#' * level} {title}"])
+        batch.put(rel, note)
+        batch.row("WOULD-ADD", rel, where,
+                  f"new heading between '{before}' and '{following}'")
+    for entry in entries:
+        doc = parse(note)
+        head = _need(doc, level, title)
+        end = section_end(doc, head)
+        if any(existing.strip() == entry[0].strip()
+               for existing in doc.lines[head.idx + 1:end]):
+            batch.row("SKIP", rel, where, "already there")
+            continue
+        note = place(doc, end, entry, tight=True)
+        batch.put(rel, note)
+        batch.row("WOULD-ADD", rel, where, entry[0][:60])
+        dated = ENTRY_DATE_RE.match(entry[0])
+        date = dated.group(1) if dated else ""
+        if not date or LABEL_START_RE.match(date):
+            continue        # undated, or a label like "Session 2"
+        if TIME_OF_DAY_RE.search(date):
+            batch.row("WARNING", rel, where, f"'{date}' has a time of day: "
+                      f"the site's timeline will not sort it")
+        elif not YEAR_RE.search(date):
+            batch.row("WARNING", rel, where, f"'{date}' has no 4-digit "
+                      f"year: the site's timeline will not sort it")
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -859,13 +984,20 @@ def build_parser() -> argparse.ArgumentParser:
     story.add_argument("--write", action="store_true")
     log = sub.add_parser("log", help="add log lines to notes (stdin rows)")
     log.add_argument("--write", action="store_true")
+    tl = sub.add_parser("timeline", help="add timeline entries (stdin)")
+    tl.add_argument("--under", required=True,
+                    help="the heading to add under, with its hashes")
+    tl.add_argument("--after", help="where a new heading goes")
+    tl.add_argument("--file", help=f"the timeline note (default {TIMELINE})")
+    tl.add_argument("--write", action="store_true")
     return ap
 
 
 COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new,
                                "wrapup-add": cmd_wrapup_add,
                                "story": cmd_story,
-                               "log": cmd_log}
+                               "log": cmd_log,
+                               "timeline": cmd_timeline}
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:

@@ -1025,5 +1025,124 @@ class FenceAndLineTests(unittest.TestCase):
         self.assertIn("- a\n- new\n\n## Log\n\n- b\n", read(vault, NPC_REL))
 
 
+TL_REL = "_Campaign/Timeline.md"
+TL = """---
+type: timeline
+---
+
+# Timeline
+
+## Chapter 1
+
+### Session 1 — Arrival (3 August)
+
+- **3 August 1814** — [[The Arrival]] — They came.
+
+<!-- gm-only -->
+
+## Future Events
+
+- **12 August 1814** — the ritual.
+
+<!-- /gm-only -->
+"""
+
+
+def tl(vault, rows, *flags):
+    return run(vault, "timeline", *flags, "--write", stdin=rows)
+
+
+class TimelineTests(unittest.TestCase):
+    def test_lines_under_an_existing_heading(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **4 August 1814** — [[The Duel]] — Blood.\n"
+                              "- **4 August 1814** — They slept.\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertIn(
+            "They came.\n"
+            "- **4 August 1814** — [[The Duel]] — Blood.\n"
+            "- **4 August 1814** — They slept.\n\n<!-- gm-only -->",
+            read(vault, TL_REL))
+
+    def test_an_entry_keeps_its_own_shape_and_sub_lines(self):
+        vault = make_vault(self, {TL_REL: TL})
+        entry = ("- **Session 2** — [[The Duel]] — Blood on the grass.\n"
+                 "  - A glove left behind.\n"
+                 "  - The Bishop watched.\n")
+        code, out = tl(vault, entry,
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("WARNING", out)
+        self.assertIn("They came.\n" + entry + "\n<!-- gm-only -->",
+                      read(vault, TL_REL))
+
+    def test_a_new_heading_goes_before_a_trailing_gm_block(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **5 August 1814** — Dawn.\n",
+                       "--under", "### Session 2 — The Duel")
+        self.assertEqual(code, 0, out)
+        self.assertIn("between", out)
+        text = read(vault, TL_REL)
+        self.assertIn("They came.\n\n### Session 2 — The Duel\n\n"
+                      "- **5 August 1814** — Dawn.\n\n<!-- gm-only -->", text)
+
+    def test_after_names_where_a_new_heading_goes(self):
+        two = TL.replace("<!-- gm-only -->", "## Chapter 2\n\n- **1815** — "
+                         "Later.\n\n<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: two})
+        tl(vault, "- **5 August 1814** — Dawn.\n",
+           "--under", "### Session 2 — The Duel",
+           "--after", "### Session 1 — Arrival (3 August)")
+        text = read(vault, TL_REL)
+        self.assertLess(text.index("### Session 2"), text.index("## Chapter 2"))
+
+    def test_date_warnings_do_not_block(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **Evening, 4 August 1814** — A.\n"
+                              "- **4 August** — B.\n"
+                              "- **3rd of Harvestmoon** — C.\n"
+                              "- An undated line is the author's choice.\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("WARNING\t"), 3)
+        self.assertIn("will not sort", out)
+        self.assertIn("- **3rd of Harvestmoon** — C.\n", read(vault, TL_REL))
+
+    def test_a_repeat_is_a_skip(self):
+        vault = make_vault(self, {TL_REL: TL})
+        row = "- **3 August 1814** — [[The Arrival]] — They came.\n"
+        code, out = tl(vault, row,
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0)
+        self.assertIn("SKIP\t", out)
+        self.assertEqual(read(vault, TL_REL), TL)
+
+    def test_refusals(self):
+        vault = make_vault(self, {TL_REL: TL})
+        for name, rows, flags in (
+                ("no after", "- **1814** — x\n",
+                 ("--under", "### New", "--after", "### Nope")),
+                ("no hashes", "- **1814** — x\n", ("--under", "Session 9")),
+                ("empty", "", ("--under", "### New"))):
+            with self.subTest(name):
+                code, _ = tl(vault, rows, *flags)
+                self.assertEqual(code, 1)
+                self.assertEqual(read(vault, TL_REL), TL)
+
+    def test_a_missing_timeline_says_who_creates_it(self):
+        vault = make_vault(self, {"x.md": "x\n"})
+        code, out = tl(vault, "- **1814** — x\n", "--under", "### New")
+        self.assertEqual(code, 1)
+        self.assertIn("vault setup", out)
+
+    def test_file_flag_names_another_timeline(self):
+        vault = make_vault(self, {"Lore/When.md": TL})
+        code, _ = tl(vault, "- **1814** — x\n", "--under",
+                     "### Session 1 — Arrival (3 August)",
+                     "--file", "Lore/When.md")
+        self.assertEqual(code, 0)
+
+
 if __name__ == "__main__":
     unittest.main()
