@@ -9,7 +9,9 @@ then up to three lists: Will do (what one yes covers, in run order), Your
 choice (each with an id for --choose) and Needs a person (file, line, what
 is wrong). While the site's publish tool is out of date the steps that ask
 it are listed under a fourth heading. An `apply` that repins the site
-leaves them, and the stamp, for the next `plan`, which asks the updated tool.
+runs them right after: their Will do is done and their Needs a person
+printed. Only if one offers a Your choice the GM was never shown does it
+hold the stamp, for the next `plan`, which lists that choice.
 
 `apply` runs Will do, then the chosen choices, stamps
 `gm_apprentice_version`, and prints what it did and Needs a person again.
@@ -168,12 +170,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     failed: int | None = None
     error = ""
     repinned = waited = False
-    held: list[str] = []   # choices of the checks that waited
     for n, check in enumerate(todo):
-        if check.asks_site and repinned:
-            waited = True   # plan did not show its rows: it asks the new tool
-            held.extend(check.choices)
-            continue
+        after_repin = check.asks_site and repinned   # plan did not list it
         try:
             for item in check.find(vault):
                 if item.group == PERSON:
@@ -181,6 +179,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     continue
                 picks = ([None] if item.group == WILL else
                          [v for i, v in chosen if i == item.id])
+                if after_repin and item.group == CHOICE and not picks:
+                    waited = True   # a choice the GM has not seen
                 for value in picks:
                     if item.wants and not value:
                         raise StepFailed(
@@ -215,8 +215,6 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             failed = failed if failed is not None else len(todo)
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
-        if _choice_problem(choice, "x", held) is None:
-            continue   # the wait line says why
         print(f"not offered: {choice}")
     if person:
         emit(TITLES[PERSON], person)

@@ -259,13 +259,13 @@ class ApplyTests(unittest.TestCase):
                 Check("fonts-check", None, 4, "fonts", find, asks_site=True,
                       choices=("fonts",))]
 
-    def test_apply_that_repins_leaves_the_waiting_checks_and_the_stamp(self):
+    def test_waited_choice_the_gm_never_saw_holds_the_stamp(self):
         vault = make_vault(self)
         log = []
         checks = self.site_choice_checks(log)
-        code, out, _ = call([str(vault), "apply", "--choose", "fonts"], checks)
+        code, out, _ = call([str(vault), "apply"], checks)
         self.assertEqual(code, 0)
-        self.assertEqual(log, [migrate.REPIN])
+        self.assertEqual(log, [migrate.REPIN, "looked"])
         self.assertNotIn("not offered", out)
         self.assertEqual(stamp_of(vault), "1.10.12")
         self.assertIn("site-repin\tdid site-repin", out)
@@ -280,6 +280,34 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("fonts\tfonts done", out)
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertTrue(out.rstrip().endswith(f"stamped {PLUGIN}"))
+
+    def test_waited_choice_already_named_is_taken_and_stamped(self):
+        vault = make_vault(self)
+        log = []
+        checks = self.site_choice_checks(log)
+        code, out, _ = call([str(vault), "apply", "--choose", "fonts"], checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, [migrate.REPIN, "looked", "fonts"])
+        self.assertIn("fonts\tfonts done", out)
+        self.assertNotIn("run plan again", out)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+
+    def test_waited_will_do_and_person_rows_run_in_the_same_apply(self):
+        vault = make_vault(self)
+        log = []
+        waited_will = will("leak", None, 4, log, asks_site=True)
+
+        def person(v):
+            return [Item("review", PERSON, ["N.md:3\tlook at this"])]
+        checks = [will(migrate.REPIN, None, 1, log), waited_will,
+                  Check("review", None, 4, "review", person, asks_site=True)]
+        code, out, _ = call([str(vault), "apply"], checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, [migrate.REPIN, "leak"])
+        self.assertIn("leak\tdid leak", out)
+        self.assertIn("N.md:3\tlook at this", out)
+        self.assertNotIn("run plan again", out)
+        self.assertEqual(stamp_of(vault), PLUGIN)
 
     def test_a_pending_repin_with_no_site_check_stamps_in_one_run(self):
         vault = make_vault(self)
