@@ -854,6 +854,9 @@ def split_timeline(text: str) -> list[list[str]]:
             entries.append([line.rstrip()])
         elif entries:
             entries[-1].append(line.rstrip())
+        elif line.strip():
+            raise WriteError("stdin must start with an entry at the margin "
+                             "(the first line is indented)")
     for entry in entries:
         while not entry[-1].strip():
             entry.pop()
@@ -942,9 +945,14 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
                for existing in doc.lines[head.idx + 1:end]):
             batch.row("SKIP", rel, where, "already there")
             continue
-        note = place(doc, end, entry, tight=True)
+        note = place(doc, end, entry, tight=bool(LIST_RE.match(entry[0])))
         batch.put(rel, note)
-        batch.row("WOULD-ADD", rel, where, entry[0][:60])
+        child = next((h for h in reversed(doc.heads)
+                      if head.idx < h.idx < end), None)
+        detail = entry[0][:60]
+        if child is not None:
+            detail = f"under '{'#' * child.level} {child.title}': {detail}"
+        batch.row("WOULD-ADD", rel, where, detail)
         dated = ENTRY_DATE_RE.match(entry[0])
         date = dated.group(1) if dated else ""
         if not date or LABEL_START_RE.match(date):

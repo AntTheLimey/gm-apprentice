@@ -1082,7 +1082,8 @@ class TimelineTests(unittest.TestCase):
         code, out = tl(vault, "- **5 August 1814** — Dawn.\n",
                        "--under", "### Session 2 — The Duel")
         self.assertEqual(code, 0, out)
-        self.assertIn("between", out)
+        self.assertIn("between 'Session 1 — Arrival (3 August)' and "
+                      "'Future Events'", out)
         text = read(vault, TL_REL)
         self.assertIn("They came.\n\n### Session 2 — The Duel\n\n"
                       "- **5 August 1814** — Dawn.\n\n<!-- gm-only -->", text)
@@ -1142,6 +1143,72 @@ class TimelineTests(unittest.TestCase):
                      "### Session 1 — Arrival (3 August)",
                      "--file", "Lore/When.md")
         self.assertEqual(code, 0)
+
+    def test_text_before_the_first_margin_line_is_refused(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "\n  - indented first\n- **1814** — x\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 1, out)
+        self.assertIn("must start with an entry at the margin", out)
+        self.assertEqual(read(vault, TL_REL), TL)
+        code, out = tl(vault, "\n\n- **1814** — x\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+
+    def test_paragraph_entry_is_kept_apart_from_a_bullet(self):
+        vault = make_vault(self, {TL_REL: TL})
+        tl(vault, "Plain paragraph.\n",
+           "--under", "### Session 1 — Arrival (3 August)")
+        self.assertIn("They came.\n\nPlain paragraph.\n\n<!-- gm-only -->",
+                      read(vault, TL_REL))
+        tl(vault, "- **1814** — b\n",
+           "--under", "### Session 1 — Arrival (3 August)")
+        self.assertIn("Plain paragraph.\n\n- **1814** — b\n",
+                      read(vault, TL_REL))
+        vault = make_vault(self, {TL_REL: TL})
+        tl(vault, "- **1814** — a\n- **1814** — b\n",
+           "--under", "### Session 1 — Arrival (3 August)")
+        self.assertIn("They came.\n- **1814** — a\n- **1814** — b\n",
+                      read(vault, TL_REL))
+
+    def test_row_says_when_entries_land_in_a_child_section(self):
+        note = TL.replace("### Session 1", "### Session 1").replace(
+            "<!-- gm-only -->", "#### Scene A\n\n- x\n\n<!-- gm-only -->", 1)
+        vault = make_vault(self, {TL_REL: note})
+        code, out = tl(vault, "- **1814** — y\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertIn("under '#### Scene A': - **1814** — y", out)
+        self.assertIn("- x\n- **1814** — y\n", read(vault, TL_REL))
+
+    def test_an_unbalanced_fence_is_refused_once(self):
+        bad = TL.replace("<!-- /gm-only -->\n", "")
+        vault = make_vault(self, {TL_REL: bad})
+        code, out = tl(vault, "- **1814** — x\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 1)
+        self.assertEqual(out.count("ERROR\t"), 1, out)
+        self.assertEqual(read(vault, TL_REL), bad)
+
+    def test_crlf_timeline_stays_crlf(self):
+        crlf = TL.replace("\n", "\r\n")
+        vault = make_vault(self, {TL_REL: crlf})
+        code, out = tl(vault, "- **1814** — x\n  - sub\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        text = read(vault, TL_REL)
+        self.assertIn("They came.\r\n- **1814** — x\r\n  - sub\r\n\r\n"
+                      "<!-- gm-only -->", text)
+        self.assertEqual(text.replace("\r\n", "").count("\n"), 0)
+
+    def test_the_same_entry_twice_is_one_add_and_one_skip(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **1814** — x\n- **1814** — x\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("ADDED\t"), 1, out)
+        self.assertEqual(out.count("SKIP\t"), 1, out)
+        self.assertEqual(read(vault, TL_REL).count("- **1814** — x"), 1)
 
 
 if __name__ == "__main__":
