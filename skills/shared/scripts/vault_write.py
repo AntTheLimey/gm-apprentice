@@ -45,6 +45,10 @@ class WriteError(Exception):
     """A refusal. One line; nothing is written."""
 
 
+class RestoreFailed(WriteError):
+    """A write failed and the undo did too: some files are left changed."""
+
+
 def nfc(text: str) -> str:
     return unicodedata.normalize("NFC", text)
 
@@ -135,6 +139,7 @@ def apply(batch: Batch) -> list[str]:
             done.append(rel)
             write_text_atomic(batch.vault / rel, batch.texts[rel])
     except BaseException as e:
+        unrestored: list[str] = []
         for rel in reversed(done):
             before = batch.originals[rel]
             try:
@@ -143,7 +148,11 @@ def apply(batch: Batch) -> list[str]:
                 else:
                     write_text_atomic(batch.vault / rel, before)
             except (OSError, StepFailed):
-                pass
+                unrestored.append(rel)
+        if unrestored:
+            why = str(e) or e.__class__.__name__
+            raise RestoreFailed(
+                f"{why}; could not restore: {', '.join(unrestored)}") from e
         if isinstance(e, StepFailed):
             raise WriteError(str(e)) from e
         raise
@@ -278,6 +287,10 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         if args.write:
             apply(batch)
             wrote = True
+    except RestoreFailed as e:
+        print(f"ERROR\t{e}")
+        print("# files were left changed: restore them from the list above")
+        return 1
     except WriteError as e:
         print(f"ERROR\t{e}")
         print("# nothing written")

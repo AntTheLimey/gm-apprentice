@@ -136,10 +136,8 @@ class BatchTests(unittest.TestCase):
         batch.create("new.md", "N\n")
         batch.put("b.md", "B2\n")
         real = vw.write_text_atomic
-        calls = []
 
         def flaky(path, text):
-            calls.append(path.name)
             if path.name == "b.md" and text == "B2\n":
                 raise vw.StepFailed("b.md cannot be written (OSError)")
             real(path, text)
@@ -150,6 +148,54 @@ class BatchTests(unittest.TestCase):
         self.assertEqual(read(vault, "a.md"), "A\n")
         self.assertEqual(read(vault, "b.md"), "B\n")
         self.assertFalse((vault / "new.md").exists())
+
+    def test_a_failed_undo_names_the_files_left_changed(self):
+        vault = make_vault(self, {"a.md": "A\n", "b.md": "B\n"})
+        batch = vw.Batch(vault)
+        batch.put("a.md", "A2\n")
+        batch.put("b.md", "B2\n")
+        real = vw.write_text_atomic
+
+        def flaky(path, text):
+            if path.name == "b.md" and text == "B2\n":
+                raise vw.StepFailed("b.md cannot be written (OSError)")
+            if path.name == "a.md" and text == "A\n":
+                raise vw.StepFailed("a.md cannot be written (OSError)")
+            real(path, text)
+
+        with mock.patch.object(vw, "write_text_atomic", flaky):
+            with self.assertRaises(vw.RestoreFailed) as ctx:
+                vw.apply(batch)
+        self.assertIn("could not restore: a.md", str(ctx.exception))
+
+    def test_an_interrupt_restores_and_reraises(self):
+        vault = make_vault(self, {"a.md": "A\n", "b.md": "B\n"})
+        batch = vw.Batch(vault)
+        batch.put("a.md", "A2\n")
+        batch.put("b.md", "B2\n")
+        real = vw.write_text_atomic
+
+        def interrupt(path, text):
+            if path.name == "b.md" and text == "B2\n":
+                raise KeyboardInterrupt
+            real(path, text)
+
+        with mock.patch.object(vw, "write_text_atomic", interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                vw.apply(batch)
+        self.assertEqual(read(vault, "a.md"), "A\n")
+        self.assertEqual(read(vault, "b.md"), "B\n")
+
+    def test_a_created_file_that_appeared_is_refused(self):
+        vault = make_vault(self, {"a.md": "A\n"})
+        batch = vw.Batch(vault)
+        batch.put("a.md", "A2\n")
+        batch.create("new.md", "N\n")
+        (vault / "new.md").write_bytes(b"theirs\n")
+        with self.assertRaises(vw.WriteError):
+            vw.apply(batch)
+        self.assertEqual(read(vault, "new.md"), "theirs\n")
+        self.assertEqual(read(vault, "a.md"), "A\n")
 
     def test_a_file_changed_since_the_plan_is_refused(self):
         vault = make_vault(self, {"a.md": "A\n"})
