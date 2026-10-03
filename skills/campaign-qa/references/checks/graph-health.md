@@ -82,11 +82,8 @@ not here. This is exactly the shape of content that silently
 leaks to the published site (an NPC's tactical notes under a
 bold-wrapped `### **Keeper Notes**` heading defeat exact-string
 matching the same way a genuinely un-fenced heading does).
-Skip files the publish pipeline would already exclude wholesale
-(Session Plans and prep-status files, anything under
-`exclude_dirs`, and — when the vault has `exclude_drafts`
-configured — draft entities), so this check only flags content
-that would actually reach the site.
+The script skips notes the site does not publish, so it only flags
+content that would actually reach the site.
 Severity: Critical if the vault has a site (`publish.site` is on,
 or unset with a `publish.site_dir`); Warning otherwise.
 

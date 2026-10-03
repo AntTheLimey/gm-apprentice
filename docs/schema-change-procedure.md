@@ -83,7 +83,13 @@ A migration is code, not prose: `migrate.py` runs it, and
   settle it)
 - [ ] Add a `Check` entry to that file's check list, with the
   release that introduces the change (or `None` if it must run
-  on every pass)
+  on every pass), its `band` (1 repin, 2 config, 3 files, 4 asks
+  the site's tool; this is the run order), and `asks_site=True`
+  when it asks the publish tool, so it waits for the repin
+- [ ] For a Your-choice item, declare its id in the check's
+  `choices` (a trailing `=` marks one that needs a value, a
+  trailing `:` a prefix such as `played:`). An id that is not
+  declared there can never be picked: `--choose` refuses it
 - [ ] For field additions: decide whether existing files are
   backfilled (and with what value) or left as-is
 - [ ] For field renames: code the old→new mapping

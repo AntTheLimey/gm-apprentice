@@ -266,7 +266,8 @@ class SchemaMirrorTests(unittest.TestCase):
         self.assertEqual((item.id, item.group), ("schema-mirror", CHOICE))
         self.assertEqual(sorted(item.lines), [
             "add the Creature entry to _meta/entity-types.md",
-            "update the Event entry in _meta/entity-types.md"])
+            "update the Event entry in _meta/entity-types.md (your edits inside "
+            "that entry are replaced)"])
         item.apply(None)
         text = (vault / "_meta" / "entity-types.md").read_text(encoding="utf-8")
         self.assertIn(entries["Event"], text)

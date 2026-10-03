@@ -469,7 +469,6 @@ def find_sheet_source(vault: Path) -> list[Item]:
 
         def apply(value: str | None, rel: str = rel) -> list[str]:
             scalar = yaml_scalar(value or "")
-
             edit_frontmatter(
                 vault / rel,
                 lambda fm, eol: set_key(fm, "sheet_source", scalar, eol))

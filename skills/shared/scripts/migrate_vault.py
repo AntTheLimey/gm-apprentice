@@ -327,7 +327,8 @@ def find_schema_mirror(vault: Path) -> list[Item]:
         return ([f"updated the {n} entry" for n in stale]
                 + [f"added the {n} entry" for n in missing])
 
-    lines = ([f"update the {n} entry in _meta/entity-types.md" for n in stale]
+    lines = ([f"update the {n} entry in _meta/entity-types.md (your edits "
+              f"inside that entry are replaced)" for n in stale]
              + [f"add the {n} entry to _meta/entity-types.md" for n in missing])
     return [Item("schema-mirror", CHOICE, lines, apply)]
 
