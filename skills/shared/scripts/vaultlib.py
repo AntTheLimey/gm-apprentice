@@ -658,6 +658,23 @@ def chapter_key(rel: str, fm: dict[str, Any]) -> str | None:
     return c.casefold() if c else None
 
 
+def wrapup_filename(rel: str, fm: dict[str, Any]) -> str | None:
+    """`Chapter_CC_Session_NN_Wrap_Up.md` for the session a note at `rel`
+    with frontmatter `fm` belongs to, or None when its chapter or session
+    number cannot be read. A decimal chapter (0.5) has no such name."""
+    session = parse_session_number(fm.get("session_number"))
+    if session is None:
+        session = session_ref_number(fm)
+    ch = (chapter_of(rel, fm) or "").strip()
+    chapter = (re.fullmatch(r"(\d+)(?!\.\d)", ch)
+               or re.search(r"chapter\D{0,3}(\d+)(?!\.?\d)", ch,
+                            re.IGNORECASE))
+    if session is None or chapter is None:
+        return None
+    return (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
+            f"_Wrap_Up.md")
+
+
 # Every `type:` spelling a Session Wrap-Up is written with in the wild.
 # One definition, because a script that knows only two of the three finds
 # a vault's wrap-ups and another one silently does not: `vault_check

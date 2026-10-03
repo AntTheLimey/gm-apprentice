@@ -257,6 +257,95 @@ def place(doc: Doc, at: int, block: list[str], tight: bool = False) -> str:
     return "".join(lines)
 
 
+SHARED_TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
+WRAP_TEMPLATES = ("_Template_Session_WrapUp.md",)
+COMMENT_TAIL_RE = re.compile(r"\s+#.*$")
+
+
+def template_text(vault: Path, vault_names: tuple[str, ...],
+                  shared_name: str) -> str:
+    for name in vault_names:
+        path = vault / "_Templates" / name
+        if path.is_file():
+            return path.read_text(encoding="utf-8-sig")
+    try:
+        return (SHARED_TEMPLATES / shared_name).read_text(encoding="utf-8")
+    except OSError as e:
+        raise WriteError(f"template {shared_name} is missing from the "
+                         f"plugin ({e.__class__.__name__})") from e
+
+
+def template_frontmatter(text: str) -> list[str]:
+    """A template's frontmatter lines without endings and without its
+    comments (whole-line or trailing)."""
+    lines = text.splitlines()
+    if not lines or lines[0].strip() != "---":
+        raise WriteError("template has no frontmatter")
+    out: list[str] = []
+    for line in lines[1:]:
+        if line.strip() == "---":
+            return out
+        if line.strip().startswith("#") or not line.strip():
+            continue
+        quoted = re.match(r'^(\s*[\w-]+:\s*"[^"]*")', line)
+        out.append(quoted.group(1) if quoted
+                   else COMMENT_TAIL_RE.sub("", line))
+    raise WriteError("template frontmatter never closes")
+
+
+def raw_value(text: str, name: str) -> str | None:
+    """A top-level frontmatter value exactly as written (quotes kept)."""
+    lines = text.splitlines(keepends=True)
+    end, error = vl.frontmatter_span(lines)
+    if error:
+        raise WriteError(error)
+    value = vl.get_key(lines[1:end], name)
+    return None if value is None else COMMENT_TAIL_RE.sub("", value).strip()
+
+
+def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
+    index = batch.resolve(args.session)
+    text = batch.read(index)
+    fm = vl.extract_frontmatter(text) or {}
+    if vl.entity_type(fm) != "session":
+        raise WriteError(f"{index}: not a session index (type: session)")
+    name = vl.wrapup_filename(index, fm)
+    if name is None:
+        raise WriteError(f"{index}: its chapter or session number cannot "
+                         f"be read, so the Wrap-Up has no name")
+    number = vl.parse_session_number(fm.get("session_number"))
+    if number is None:
+        number = vl.session_ref_number(fm)
+    folder = index.rpartition("/")[0]
+    rel = f"{folder}/{name}" if folder else name
+    stem = Path(index).stem
+    title = stem.split(" - ", 1)[1] if " - " in stem else stem
+    notes = vl.nested_mapping(text, "documents").get("play_notes") or ""
+    values = {
+        "session": f'"[[{stem}]]"',
+        "session_number": str(number),
+        "source_document": (f'"{notes}"' if notes.startswith("[[")
+                            else notes or '"[[]]"'),
+    }
+    for field in ("chapter", "campaign", "play_date", "in_game_date"):
+        found = raw_value(text, field)
+        if found:
+            values[field] = found
+    fm_lines = [line + "\n" for line in template_frontmatter(
+        template_text(batch.vault, WRAP_TEMPLATES, "session-wrap.md"))]
+    for field, value in values.items():
+        vl.set_key(fm_lines, field, value, "\n")
+    chapter_no, session_no = name.split("_")[1], name.split("_")[3]
+    body = ["", f"# Chapter {chapter_no} \u00b7 Session {session_no} \u2014 "
+                f"{title} \u2014 Wrap-Up", ""]
+    if args.source:
+        body += ["> [!info] Source", f"> {args.source}", ""]
+    body += ["<!-- gm-only -->", "", "## GM Notes", "", "<!-- /gm-only -->"]
+    batch.create(rel, "---\n" + "".join(fm_lines) + "---\n"
+                 + "\n".join(body) + "\n")
+    batch.row("WOULD-CREATE", rel, "", f"from {index}")
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -264,11 +353,16 @@ def build_parser() -> argparse.ArgumentParser:
         prog="vault_write.py", description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("vault", type=Path)
-    ap.add_subparsers(dest="command", required=True)
+    sub = ap.add_subparsers(dest="command", required=True)
+    new = sub.add_parser("wrapup-new", help="create a session's Wrap-Up")
+    new.add_argument("--session", required=True,
+                     help="the session index, vault-relative")
+    new.add_argument("--source", help="text of the Source callout")
+    new.add_argument("--write", action="store_true")
     return ap
 
 
-COMMANDS: dict[str, object] = {}
+COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new}
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
@@ -278,7 +372,8 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
         print(f"vault_write.py: {args.vault} is not a folder",
               file=sys.stderr)
         return 2
-    text = sys.stdin.read() if stdin is None else stdin
+    needs_stdin = args.command != "wrapup-new"
+    text = (sys.stdin.read() if stdin is None else stdin) if needs_stdin else ""
     batch = Batch(args.vault)
     try:
         run_command = COMMANDS[args.command]

@@ -14,9 +14,8 @@ import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           edit_frontmatter, write_text_atomic)
 from vault_check import WRAP_TYPES, wrapup_filename_findings
-from vaultlib import (chapter_of, entity_type, extract_frontmatter,
-                      parse_session_number, read_publish_scalar,
-                      session_ref_number, vault_files)
+from vaultlib import (entity_type, extract_frontmatter, read_publish_scalar,
+                      vault_files, wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -340,19 +339,8 @@ def find_schema_mirror(vault: Path) -> list[Item]:
 
 def _wrapup_target(rel: str, text: str) -> str | None:
     """Chapter_CC_Session_NN_Wrap_Up.md beside the note, or None."""
-    fm = extract_frontmatter(text) or {}
-    session = parse_session_number(fm.get("session_number"))
-    if session is None:
-        session = session_ref_number(fm)
-    ch = (chapter_of(rel, fm) or "").strip()
-    chapter = (re.fullmatch(r"(\d+)(?!\.\d)", ch)
-               or re.search(r"chapter\D{0,3}(\d+)(?!\.?\d)", ch,
-                            re.IGNORECASE))
-    if session is None or chapter is None:
-        return None
-    name = (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
-            f"_Wrap_Up.md")
-    return posixpath.join(posixpath.dirname(rel), name)
+    name = wrapup_filename(rel, extract_frontmatter(text) or {})
+    return posixpath.join(posixpath.dirname(rel), name) if name else None
 
 
 def _relink_items(vault: Path, item_id: str, verb: str,

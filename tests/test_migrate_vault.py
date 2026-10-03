@@ -342,6 +342,14 @@ class SmallCheckTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"---\ntype: session_wrap\n{fm}---\n", encoding="utf-8")
 
+    def test_wrapup_filename_lives_in_vaultlib(self):
+        import vaultlib
+        fm = {"session_number": 7, "chapter": "[[Chapter 3 - Vienna]]"}
+        self.assertEqual(
+            vaultlib.wrapup_filename("Chapters/Chapter 3 - Vienna/x.md", fm),
+            "Chapter_03_Session_07_Wrap_Up.md")
+        self.assertIsNone(vaultlib.wrapup_filename("x.md", {}))
+
     def test_old_wrap_up_filenames_are_a_choice_that_renames(self):
         vault = make_vault(self)
         self.wrap(vault, "Chapters/Chapter 1/Session 03 - Ball - Wrap-Up.md",

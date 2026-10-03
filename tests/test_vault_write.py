@@ -220,5 +220,110 @@ class BatchTests(unittest.TestCase):
                       vw.emit(batch, True))
 
 
+INDEX_REL = ("Chapters/Chapter 1 - Arrival/Sessions/Session 02/"
+             "Session 02 - The Docks.md")
+WRAP_REL = ("Chapters/Chapter 1 - Arrival/Sessions/Session 02/"
+            "Chapter_01_Session_02_Wrap_Up.md")
+INDEX = """---
+type: session
+session_number: 2
+chapter: "[[Chapter 1 - Arrival]]"
+campaign: "The Ashford Case"
+play_date: "2026-09-30"
+in_game_date: "17 October 1923"
+status: played
+documents:
+  plan: "[[Session 02 - The Docks - Plan]]"
+  play_notes: "[[Session 02 - The Docks - Play Notes]]"
+  wrap_up: "[[Chapter_01_Session_02_Wrap_Up]]"
+---
+
+# Session 02 - The Docks
+"""
+
+
+class WrapupNewTests(unittest.TestCase):
+    def test_dry_run_writes_nothing(self):
+        vault = make_vault(self, {INDEX_REL: INDEX})
+        code, out = run(vault, "wrapup-new", "--session", INDEX_REL)
+        self.assertEqual(code, 0)
+        self.assertIn(f"WOULD-CREATE\t{WRAP_REL}", out)
+        self.assertFalse((vault / WRAP_REL).exists())
+
+    def test_creates_the_wrap_up_beside_the_index(self):
+        vault = make_vault(self, {INDEX_REL: INDEX})
+        code, out = run(vault, "wrapup-new", "--session", INDEX_REL,
+                        "--source", "Play notes, session ended mid-scene.",
+                        "--write")
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAP_REL)
+        for line in ('type: session_wrap',
+                     'session: "[[Session 02 - The Docks]]"',
+                     'session_number: 2',
+                     'chapter: "[[Chapter 1 - Arrival]]"',
+                     'campaign: "The Ashford Case"',
+                     'play_date: "2026-09-30"',
+                     'in_game_date: "17 October 1923"',
+                     'source_document: "[[Session 02 - The Docks - Play Notes]]"',
+                     'canon_status: DRAFT',
+                     'created_by: session-wrapup'):
+            self.assertIn(line + "\n", text)
+        body = text.split("---\n", 2)[2]
+        self.assertEqual(body, (
+            "\n# Chapter 01 \u00b7 Session 02 \u2014 The Docks \u2014 Wrap-Up\n\n"
+            "> [!info] Source\n"
+            "> Play notes, session ended mid-scene.\n\n"
+            "<!-- gm-only -->\n\n## GM Notes\n\n<!-- /gm-only -->\n"))
+
+    def test_frontmatter_carries_no_template_comments(self):
+        vault = make_vault(self, {INDEX_REL: INDEX})
+        run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        fm = read(vault, WRAP_REL).split("---\n")[1]
+        self.assertNotIn("#", fm)
+        self.assertNotIn("Placeholders:", read(vault, WRAP_REL))
+
+    def test_no_source_means_no_callout(self):
+        vault = make_vault(self, {INDEX_REL: INDEX})
+        run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertNotIn("[!info]", read(vault, WRAP_REL))
+
+    def test_the_vault_template_is_preferred(self):
+        tmpl = ("---\ntype: session_wrap\nsession: \"[[]]\"\n"
+                "session_number: null\nhouse_rule: yes\n---\n\n# x\n")
+        vault = make_vault(self, {
+            INDEX_REL: INDEX,
+            "_Templates/_Template_Session_WrapUp.md": tmpl})
+        run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertIn("house_rule: yes\n", read(vault, WRAP_REL))
+
+    def test_refusals(self):
+        cases = {
+            "exists": {INDEX_REL: INDEX, WRAP_REL: "x\n"},
+            "not an index": {INDEX_REL: INDEX.replace("type: session\n",
+                                                      "type: npc\n")},
+            "no session number": {INDEX_REL: INDEX.replace(
+                "session_number: 2\n", "")},
+            "no chapter": {"Loose/Session 02 - The Docks.md": INDEX.replace(
+                'chapter: "[[Chapter 1 - Arrival]]"\n', "")},
+        }
+        for name, files in cases.items():
+            with self.subTest(name):
+                vault = make_vault(self, files)
+                index = next(r for r in files if "Wrap_Up" not in r)
+                code, out = run(vault, "wrapup-new", "--session", index,
+                                "--write")
+                self.assertEqual(code, 1, out)
+                self.assertIn("ERROR\t", out)
+
+    def test_missing_index_is_refused(self):
+        vault = make_vault(self, {"x.md": "x\n"})
+        code, _ = run(vault, "wrapup-new", "--session", "nope.md")
+        self.assertEqual(code, 1)
+
+    def test_the_name_passes_the_checkers_pattern(self):
+        import vault_check as vc
+        self.assertRegex(Path(WRAP_REL).stem, vc.WRAP_FILENAME_RE)
+
+
 if __name__ == "__main__":
     unittest.main()
