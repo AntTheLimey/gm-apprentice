@@ -491,18 +491,21 @@ the vault file only.
 ### Moving the settings
 
 From the plugin, run the migration against the vault. Show the GM the
-dry run's lines first, then run it for real:
+plan first, then apply it on their yes:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> --dry-run
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault>
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> plan
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> apply
 ```
+
+The move is the `config-to-vault` step under Will do.
 
 It finds the site through `publish.site_dir` in the vault file and
 asks that site's publish tool to do the move (`migrate-config`). Set
 `publish.site_dir` first: without it the migration looks at the vault
-file only and the site file's settings stay where they are. To move
-one site directly, run `node "$TOOL" migrate-config --dry-run --config
+file only and the site file's settings stay where they are. The
+migration offers the move only to a vault below 1.10.24. To move one
+site directly (a vault already stamped 1.10.24 or later), run `node "$TOOL" migrate-config --dry-run --config
 <dir>/vault.config.json`, then again without `--dry-run`. The move:
 
 - writes each campaign setting under `publish:` and removes it from
@@ -532,11 +535,11 @@ one site directly, run `node "$TOOL" migrate-config --dry-run --config
   file cannot be edited safely (a `publish: {…}` written on one line,
   tab indentation, mixed line endings, YAML that does not parse).
 
-Running it twice is safe: the second run reports nothing to do.
-`--status` shows whether the step is pending. Exit code 0 means done
-or nothing to do, 1 a step failed, 2 bad arguments. If it stops with
-a message about the publish tool, run `update-pin --site <site-dir>`,
-then `migrate.py` again.
+Running it twice is safe: once the move is done, `plan` no longer
+lists it. Exit code 0 means done or nothing to do, 1 a step failed, 2
+bad arguments or a vault it does not migrate. The migration repins the
+site's publish tool itself, as the first step under Will do, before it
+asks the tool to move anything.
 
 ---
 
