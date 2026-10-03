@@ -408,6 +408,15 @@ class SmallCheckTests(unittest.TestCase):
         self.assertEqual(item.group, CHOICE)
         self.assertIn("Chapter_04_Session_03_Wrap_Up.md", item.lines[0])
 
+    def test_a_bare_digit_chapter_counts(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Flat/One.md", "session_number: 3\nchapter: 2\n")
+        self.wrap(vault, "Flat/Two.md", 'session_number: 4\nchapter: "04"\n')
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, CHOICE)
+        self.assertIn("Flat/Chapter_02_Session_03_Wrap_Up.md", item.lines[0])
+        self.assertIn("Flat/Chapter_04_Session_04_Wrap_Up.md", item.lines[1])
+
     def test_a_chapter_with_no_chapter_word_needs_a_person(self):
         vault = make_vault(self)
         self.wrap(vault, "Chapters/The 7 Sisters/Old.md",
