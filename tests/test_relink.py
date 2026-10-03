@@ -1283,6 +1283,27 @@ class SpellingOwnerTests(unittest.TestCase):
         self.assertEqual(p.texts["Sessions/S1.md"],
                          "---\ntype: session\n---\n[[hallam]] [[Hallam_Reeve]]\n")
 
+    def test_the_site_folders_config_is_handed_to_the_tool(self):
+        # The folder map lives only in the site's vault.config.json.
+        site = Path(tempfile.mkdtemp(prefix="relink-site-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        import json
+        (site / "vault.config.json").write_text(json.dumps({
+            "folderMap": {"Characters/NPCs": "characters/npcs",
+                          "Characters/PCs": "characters/pcs",
+                          "Sessions": "sessions"}}))
+        vault = make_vault(self, {
+            NPC: typed("npc"), PCN: typed("pc", "canon_status: SUPERSEDED\n"),
+            "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte_Thorne]]\n",
+            "_meta/vault-config.md":
+                f"---\npublish:\n  site: true\n  mode: full\n"
+                f"  site_dir: {site.as_posix()}\n---\n"})
+        p = relink.plan(vault, NPC, NPC_NEW)
+        self.assertEqual(p.owners.get("Charlotte_Thorne"), NPC)
+        self.assertIn("Sessions/S1.md", p.texts)
+        rule = [r for r in relink.rows(p) if r.startswith("RULE\t")]
+        self.assertIn("the site's link map", rule[0])
+
     def test_a_manifest_without_a_site_does_not_follow_the_link_map(self):
         vault = make_vault(self, {
             NPC: typed("npc"), PCN: typed("pc"),
