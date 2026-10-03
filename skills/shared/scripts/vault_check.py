@@ -96,7 +96,7 @@ Notes`, recap-heading and template-heading variants, and the
 filename pattern. A gm-only fence that is unbalanced or crosses a
 player-facing section boundary gets its frontmatter backfilled and
 its body left alone, for the GM to fix by hand; filename renames
-are never automatic.
+are left to `relink.py`, which the migration offers as a choice.
 
 `sessions` derives each session's status from its chain documents. For
 a session index whose Wrap-Up is explicitly linked (so the site
@@ -3475,9 +3475,8 @@ def _wrap_h2_finding(rel: str, state: LineState, where: str,
 
 
 def wrapup_filename_findings(rel: str) -> list[Finding]:
-    """Step 4. Never fixed: the filename derives the page's site URL, so
-    a rename 404s links players have already shared and has to update
-    every inbound reference in the same pass."""
+    """Step 4. Never fixed here: `relink.py` renames the file and every
+    link to it, and the migration offers it as a choice."""
     stem = Path(rel).stem
     if WRAP_FILENAME_RE.match(stem):
         return []
@@ -3486,9 +3485,8 @@ def wrapup_filename_findings(rel: str) -> list[Finding]:
                         "chapter-level wrap-up filename — conformant as-is")]
     return [Finding("WARNING", rel,
                     f"filename '{Path(rel).name}' is not "
-                    f"Chapter_CC_Session_NN_Wrap_Up.md — opt-in on a "
-                    f"published vault — a rename changes the page URL and "
-                    f"needs every inbound link updated")]
+                    f"Chapter_CC_Session_NN_Wrap_Up.md — relink.py renames "
+                    f"it and updates every link")]
 
 
 def _wrap_blocks(states: list[LineState],

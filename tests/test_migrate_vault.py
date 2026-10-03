@@ -337,15 +337,49 @@ class SchemaMirrorTests(unittest.TestCase):
 
 
 class SmallCheckTests(unittest.TestCase):
-    def test_old_wrap_up_filenames_need_a_person(self):
+    def wrap(self, vault, rel, fm):
+        path = vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(f"---\ntype: session_wrap\n{fm}---\n", encoding="utf-8")
+
+    def test_old_wrap_up_filenames_are_a_choice_that_renames(self):
         vault = make_vault(self)
-        for name in ("Session_03_Wrap_Up.md", "Chapter_01_Session_03_Wrap_Up.md"):
-            (vault / name).write_text("---\ntype: session_wrap\n---\n",
-                                      encoding="utf-8")
+        self.wrap(vault, "Chapters/Chapter 1/Session 03 - Ball - Wrap-Up.md",
+                  "session_number: 3\n")
+        self.wrap(vault, "Chapter_01_Session_04_Wrap_Up.md",
+                  "session_number: 4\n")
+        (vault / "Index.md").write_text(
+            "[[Session 03 - Ball - Wrap-Up]]\n", encoding="utf-8")
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual((item.id, item.group), ("wrapup-filenames", CHOICE))
+        self.assertEqual(item.lines, [
+            "rename Chapters/Chapter 1/Session 03 - Ball - Wrap-Up.md to "
+            "Chapters/Chapter 1/Chapter_01_Session_03_Wrap_Up.md and update "
+            "1 link(s) to it"])
+        item.apply(None)
+        self.assertTrue((vault / "Chapters/Chapter 1/"
+                         "Chapter_01_Session_03_Wrap_Up.md").is_file())
+        self.assertEqual((vault / "Index.md").read_text(encoding="utf-8"),
+                         "[[Chapter_01_Session_03_Wrap_Up]]\n")
+
+    def test_a_wrap_up_whose_name_cannot_be_worked_out_needs_a_person(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Session_03_Wrap_Up.md", "session_number: 3\n")
         (item,) = mv.find_wrapup_filenames(vault)
         self.assertEqual(item.group, PERSON)
-        self.assertEqual(len(item.lines), 1)
         self.assertTrue(item.lines[0].startswith("Session_03_Wrap_Up.md\t"))
+        self.assertIn("chapter", item.lines[0])
+
+    def test_two_wrap_ups_that_would_share_a_name(self):
+        vault = make_vault(self)
+        for name in ("S3 a.md", "S3 b.md"):
+            self.wrap(vault, f"Chapters/Chapter 2/{name}",
+                      "session_number: 3\n")
+        items = mv.find_wrapup_filenames(vault)
+        (choice,) = [i for i in items if i.group == CHOICE]
+        (person,) = [i for i in items if i.group == PERSON]
+        self.assertEqual(len(choice.lines), 1)
+        self.assertIn("another note would also become", person.lines[0])
 
     def test_mobrpg_sections_choice_adds_the_two_titles(self):
         vault = make_vault(self)
@@ -369,17 +403,19 @@ class SmallCheckTests(unittest.TestCase):
                                                          encoding="utf-8")
         self.assertEqual(mv.find_mobrpg_sections(vault), [])
 
-    def test_heritage_notes_outside_heritages_need_a_person(self):
+    def test_heritage_notes_are_a_choice_that_moves_them(self):
         vault = make_vault(self)
         (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")
-        for folder in ("Cultures", "Heritages"):
-            (vault / folder).mkdir()
-            (vault / folder / "Dwarves.md").write_text(
-                "---\ntype: heritage\n---\n", encoding="utf-8")
+        (vault / "Cultures").mkdir()
+        (vault / "Cultures" / "Elves.md").write_text(
+            "---\ntype: culture\n---\n", encoding="utf-8")
+        (vault / "A.md").write_text("[[Cultures/Elves]]\n", encoding="utf-8")
         (item,) = mv.find_heritage_notes(vault)
-        self.assertEqual(item.group, PERSON)
-        self.assertEqual([line.split("\t")[0] for line in item.lines],
-                         ["Cultures/Dwarves.md"])
+        self.assertEqual((item.id, item.group), ("heritage-notes", CHOICE))
+        item.apply(None)
+        self.assertTrue((vault / "Heritages" / "Elves.md").is_file())
+        self.assertEqual((vault / "A.md").read_text(encoding="utf-8"),
+                         "[[Heritages/Elves]]\n")
 
 
 if __name__ == "__main__":
