@@ -173,6 +173,24 @@ describe('a pinned key reaches the build', () => {
     assert.match(page, /"pcSlug":"karl-brenner"/);
     fs.rmSync(root, { recursive: true, force: true });
   });
+
+  it('the build stays silent for a roster with distinct keys', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-ok-'));
+    const vault = path.join(root, 'vault');
+    fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
+    const configPath = path.join(root, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
+      siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
+      folderMap: { 'Characters/PCs': 'characters/pcs' },
+    }));
+    const warned = [];
+    const real = console.warn;
+    console.warn = (...a) => warned.push(a.join(' '));
+    try { build({ configPath }); } finally { console.warn = real; }
+    assert.deepStrictEqual(warned.filter((m) => /live key/i.test(m)), []);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 });
 
 describe('two PCs on one live key', () => {
@@ -197,6 +215,24 @@ describe('two PCs on one live key', () => {
     assert.ok(w, warned.join('\n'));
     assert.match(w, /Characters\/PCs\/Karl Brenner\.md/);
     assert.match(w, /Characters\/PCs\/Karl_Hale\.md/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+
+  it('the build stays silent for a roster with distinct keys', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-ok-'));
+    const vault = path.join(root, 'vault');
+    fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
+    const configPath = path.join(root, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
+      siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
+      folderMap: { 'Characters/PCs': 'characters/pcs' },
+    }));
+    const warned = [];
+    const real = console.warn;
+    console.warn = (...a) => warned.push(a.join(' '));
+    try { build({ configPath }); } finally { console.warn = real; }
+    assert.deepStrictEqual(warned.filter((m) => /live key/i.test(m)), []);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

@@ -147,9 +147,11 @@ first from the PC's `.md`:
    `gm-apprentice-publish sheet show` lists back on a miss (`No PC named "…".
    PCs: …`), or the published site's roster. Then **type the matched roster
    name into the command by hand**, and use only that name for the rest of
-   this entry. `sheet show --pc` with
-   that name also finds a PC whose note was renamed. A `character` that
-   matches no roster entry is not guessed at —
+   this entry. A name that matches no roster
+   entry may belong to a PC renamed since: a renamed PC's note carries
+   `live_key`, the slug of its old filename. Match the request's name
+   against those before rejecting it. A `character` that matches nothing
+   is not guessed at —
    apply nothing and finalize with a **`rejected`** reply asking which PC was
    meant:
 
