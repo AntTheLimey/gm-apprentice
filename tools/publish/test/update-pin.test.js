@@ -78,7 +78,8 @@ describe('update-pin', () => {
     const rc = await runUpdatePin({ siteDir: '/site', json: true }, h.deps);
     assert.strictEqual(rc, 0);
     const written = JSON.parse(h.writes[path.resolve('/site/package.json')]);
-    assert.strictEqual(written.dependencies['gm-apprentice-publish'], `file:${path.resolve(CHECKOUT)}`);
+    assert.strictEqual(written.dependencies['gm-apprentice-publish'],
+      `file:${path.resolve(CHECKOUT).split(path.sep).join('/')}`);
     const payload = JSON.parse(h.out.join('\n'));
     assert.deepStrictEqual(
       [payload.ok, payload.changed, payload.installedAfter, payload.desired],
