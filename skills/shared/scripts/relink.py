@@ -169,20 +169,23 @@ def _json_inner(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)[1:-1]
 
 
-def _parse_link(body: str) -> tuple[str, str, str] | None:
-    """(destination, #heading or ^block, |alias) of a wikilink body."""
+def _parse_link(body: str, json_text: bool = False
+                ) -> tuple[str, str, str] | None:
+    """(destination, #heading or ^block, |alias) of a wikilink body. In
+    canvas JSON text the escaped pipe of a table cell is `\\\\|`."""
     m = re.match(r"([^|#^]*)([#^][^|]*)?(\|.*)?$", body, re.DOTALL)
     if not m:
         return None
     dest, sub, alias = m.group(1), m.group(2) or "", m.group(3) or ""
-    if alias and (sub or dest).endswith("\\"):
+    slash = "\\\\" if json_text else "\\"
+    if alias and (sub or dest).endswith(slash):
         # An escaped pipe (table cell): the backslash belongs to the
         # separator, not the destination.
-        alias = "\\" + alias
+        alias = slash + alias
         if sub:
-            sub = sub[:-1]
+            sub = sub[:-len(slash)]
         else:
-            dest = dest[:-1]
+            dest = dest[:-len(slash)]
     return dest, sub, alias
 
 
@@ -227,7 +230,7 @@ class _Move:
         """New link body, False if not a link to OLD, None if unsure.
         With `rebase`, a relative link of the moved note `src` to some
         other note is rewritten to keep its target."""
-        parsed = _parse_link(body)
+        parsed = _parse_link(body, esc is _json_inner)
         if parsed is None:
             return False
         dest, sub, alias = parsed
@@ -245,6 +248,14 @@ class _Move:
                 segs = [normalize(s) for s in bare.split("/") if s]
                 old_segs = [normalize(s) for s in self.old_noext.split("/")]
                 ours = old_segs[-len(segs):] == segs
+                if ours and len(segs) < len(old_segs):
+                    # A partial path: certain only if no other note ends
+                    # the same way.
+                    same = [n for n in self.sharing
+                            if [normalize(x) for x in n[:-3].split("/")][
+                                -len(segs):] == segs]
+                    if len(same) > 1:
+                        return None
             if not ours:
                 if rebase and bare.startswith(("./", "../")):
                     new_dir = src_new_dir
@@ -421,6 +432,11 @@ def _vault_rel(vault: Path, raw: str, base: str | None) -> str:
     return posixpath.normpath(rel)
 
 
+def _is_absolute(raw: str) -> bool:
+    text = raw.replace("\\", "/").strip()
+    return text.startswith("/") or bool(re.match(r"^[A-Za-z]:/", text))
+
+
 def resolve_old(vault: Path, raw: str) -> str:
     """OLD as a vault-relative path. A bare name must be one note's."""
     value = raw.replace("\\", "/").strip().strip("/")
@@ -461,6 +477,11 @@ def _refusal(vault: Path, notes: list[str], old: str, new: str) -> str | None:
         return f"{new} is in a folder the vault scripts skip"
     if new == old:
         return f"{old} and {new} are the same path"
+    old_dir, new_dir = posixpath.dirname(old), posixpath.dirname(new)
+    if (new_dir != old_dir and (vault / new_dir).exists()
+            and os.path.samefile(vault / old_dir, vault / new_dir)):
+        return (f"{new_dir} is {old_dir} in another case; folder case "
+                f"changes aren't supported: rename the folder in Obsidian")
     if BAD_NAME_CHARS & set(_stem(new)):
         return (f"a link to {_stem(new)} cannot be written: the name has "
                 f"one of [ ] # ^ |")
@@ -638,6 +659,8 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     move with it. Writes nothing."""
     notes = _walk(vault, ".md")
     old = _vault_rel(vault, old, None)
+    if _is_absolute(new):
+        raise RelinkError(f"{new} is outside the vault")
     new = _vault_rel(vault, new, posixpath.dirname(old))
     why = _refusal(vault, notes, old, new)
     if why:
@@ -923,12 +946,9 @@ def apply(p: Plan) -> list[str]:
         if stuck:
             said += (f"; these notes could not be put back and still have "
                      f"the new links: {', '.join(stuck)}")
-        elif unmoved:
-            pass
-        elif isinstance(e, _Stranded):
-            said += "; the links were put back"
-        else:
-            said += "; the vault is as it was"
+        elif not unmoved:
+            said += ("; the links were put back" if isinstance(e, _Stranded)
+                     else "; the vault is as it was")
         if isinstance(cause, KeyboardInterrupt):
             raise KeyboardInterrupt(said) from None
         if (isinstance(cause, SystemExit) and not stuck and not unmoved

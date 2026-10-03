@@ -485,6 +485,18 @@ class SmallCheckTests(unittest.TestCase):
                                                          encoding="utf-8")
         self.assertEqual(mv.find_mobrpg_sections(vault), [])
 
+    def test_a_heritage_note_goes_to_the_folder_in_its_real_case(self):
+        vault = make_vault(self)
+        (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")
+        (vault / "heritages").mkdir()
+        (vault / "heritages" / "Humans.md").write_text(
+            "---\ntype: culture\n---\n", encoding="utf-8")
+        (vault / "Cultures").mkdir()
+        (vault / "Cultures" / "Elves.md").write_text(
+            "---\ntype: culture\n---\n", encoding="utf-8")
+        (item,) = mv.find_heritage_notes(vault)
+        self.assertIn("heritages/Elves.md", item.lines[0])
+
     def test_heritage_notes_are_a_choice_that_moves_them(self):
         vault = make_vault(self)
         (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")

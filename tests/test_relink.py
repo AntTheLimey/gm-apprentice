@@ -1409,5 +1409,41 @@ class CompanionReviewTests(unittest.TestCase):
                       str(cm.exception))
 
 
+class FinalFixTests(unittest.TestCase):
+    def test_an_absolute_new_is_refused_not_rerooted(self):
+        vault = make_vault(self, {"A/Old.md": "x\n"})
+        for new in ("/tmp/x.md", str(vault / "A" / "New.md")):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.plan(vault, "A/Old.md", new)
+            self.assertIn("outside the vault", str(cm.exception))
+
+    def test_a_folder_case_only_move_is_refused(self):
+        vault = make_vault(self, {"npcs/Duke.md": "x\n", "A.md": "[[Duke]]\n"})
+        if not (vault / "NPCs").exists():
+            self.skipTest("a case-sensitive file system keeps two folders")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "npcs/Duke.md", "NPCs/Duke.md")
+        self.assertIn("folder case", str(cm.exception))
+
+    def test_a_partial_path_matching_two_notes_is_unsure(self):
+        vault = make_vault(self, {
+            "A/Ch1/Old.md": "x\n", "B/Ch1/Old.md": "y\n",
+            "N.md": "[[Ch1/Old]]\n"})
+        p = relink.plan(vault, "A/Ch1/Old.md", "A/Ch1/New.md")
+        self.assertNotIn("N.md", p.texts)
+        self.assertEqual(len(p.unsure), 1)
+
+    def test_a_partial_path_matching_one_note_is_rewritten(self):
+        vault = make_vault(self, {"A/Ch1/Old.md": "x\n", "N.md": "[[Ch1/Old]]\n"})
+        p = relink.plan(vault, "A/Ch1/Old.md", "A/Ch1/New.md")
+        self.assertEqual(p.texts["N.md"], "[[A/Ch1/New]]\n")
+
+    def test_a_canvas_table_link_with_a_json_escaped_pipe_is_rewritten(self):
+        canvas = '{"nodes":[{"id":"a","type":"text","text":"| [[%s\\\\|x]] |"}]}'
+        vault = make_vault(self, {"NPCs/Duke.md": "x\n", "M.canvas": canvas % "Duke"})
+        relink.apply(relink.plan(vault, "NPCs/Duke.md", "NPCs/Duke_Reeve.md"))
+        self.assertEqual(read(vault, "M.canvas"), canvas % "Duke_Reeve")
+
+
 if __name__ == "__main__":
     unittest.main()

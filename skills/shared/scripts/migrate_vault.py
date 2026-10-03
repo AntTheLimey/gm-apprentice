@@ -462,8 +462,12 @@ def find_heritage_notes(vault: Path) -> list[Item]:
     one outside it is moved there, with every link to it, on a yes."""
     if _mobrpg_map(vault) is None:
         return []
+    # The folder may already exist in another case: move into it as it is.
+    folder = next((d.name for d in sorted(vault.iterdir())
+                   if d.is_dir() and d.name.casefold() == "heritages"),
+                  "Heritages")
     moves: list[tuple[str, str | None, str]] = [
-        (rel, f"Heritages/{Path(rel).name}", "")
+        (rel, f"{folder}/{Path(rel).name}", "")
         for rel, text in vault_files(vault)
         if entity_type(extract_frontmatter(text) or {}) in HERITAGE_TYPES
         and Path(rel).parts[0].casefold() != "heritages"]
