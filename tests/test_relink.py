@@ -1307,6 +1307,38 @@ class SpellingOwnerTests(unittest.TestCase):
         rule = [r for r in relink.rows(p) if r.startswith("RULE\t")]
         self.assertIn("the site's link map", rule[0])
 
+    def test_the_rule_row_names_both_rules_when_an_unpublished_note_links_it(self):
+        vault = make_vault(self, {
+            "NPCs/Hallam.md": typed("npc"), "GM/Hallam.md": typed("npc"),
+            "GM/Plan.md": "---\ntype: session\n---\n[[Hallam]]\n",
+            "Sessions/S1.md": "---\ntype: session\n---\n[[Hallam]]\n",
+            "_meta/vault-config.md": SitePublishTests.CFG})
+        rule = [r for r in relink.rows(relink.plan(
+            vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md"))
+            if r.startswith("RULE\t")]
+        self.assertIn("same-folder rule in the rest", rule[0])
+
+    def test_an_alias_warning_is_a_field_of_the_plan(self):
+        vault = make_vault(self, {
+            "A/Old.md": "x\n", "B/Other.md": 'aliases: ["New"]\n'.join(["---\n", "---\n"])})
+        p = relink.plan(vault, "A/Old.md", "A/New.md")
+        self.assertEqual(len(p.alias_warnings), 1)
+        self.assertIn("alias", p.alias_warnings[0])
+
+    def test_a_site_with_no_tool_to_ask_says_why(self):
+        site = Path(tempfile.mkdtemp(prefix="relink-notool-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text("{}")
+        (site / "package.json").write_text('{"dependencies": {"gm-apprentice-publish": "1"}}')
+        vault = make_vault(self, {
+            "_meta/vault-config.md": SitePublishTests.CFG.replace(
+                "site: true\n", f"site: true\n  site_dir: {site.as_posix()}\n"),
+            "NPCs/Hallam.md": typed("npc")})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
+        self.assertIn("not installed", str(cm.exception))
+        self.assertIn("migrate.py", str(cm.exception))
+
     def test_a_manifest_without_a_site_does_not_follow_the_link_map(self):
         vault = make_vault(self, {
             NPC: typed("npc"), PCN: typed("pc"),

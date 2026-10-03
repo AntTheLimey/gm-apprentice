@@ -540,6 +540,29 @@ class SmallCheckTests(unittest.TestCase):
         with self.assertRaises(StepFailed):
             item.apply(None)
 
+    @unittest.skipUnless(shutil.which("node"), "needs Node")
+    def test_an_old_site_tool_is_worded_for_the_migration(self):
+        site = Path(tempfile.mkdtemp(prefix="mig-oldtool-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text("{}")
+        tool = site / "node_modules" / "gm-apprentice-publish" / "bin"
+        tool.mkdir(parents=True)
+        (tool / "gm-publish.js").write_text(
+            "console.error('Error: Unknown manifest command: rename');"
+            "process.exit(1);")
+        vault = make_vault(self)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish:\n  site: true\n  mode: full\n"
+            f"  site_dir: {site.as_posix()}\n---\n", encoding="utf-8")
+        (vault / "Chapters" / "Chapter 1").mkdir(parents=True)
+        (vault / "Chapters" / "Chapter 1" / "Session 03 - Ball - Wrap-Up.md"
+         ).write_text("---\ntype: session_wrap\nsession_number: 3\n---\n",
+                      encoding="utf-8")
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, PERSON)
+        self.assertIn("older than this needs", item.lines[0])
+        self.assertNotIn("run the migration", item.lines[0])
+
     def test_heritage_notes_are_a_choice_that_moves_them(self):
         vault = make_vault(self)
         (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")

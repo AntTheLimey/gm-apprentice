@@ -116,6 +116,13 @@ describe('a secret alias with a ^block anchor is still rewritten', () => {
     assert.strictEqual(rw.markdown('![[Elias Crowe^b1]]'), '![[Lord Vane^b1]]');
     assert.strictEqual(rw.markdown('[[Elias Crowe#Past]]'), '[[Lord Vane#Past]]');
   });
+
+  it('and with a .md on the name', () => {
+    assert.strictEqual(rw.markdown('[[Elias Crowe.md]]'), '[[Lord Vane]]');
+    assert.strictEqual(rw.markdown('[[Elias Crowe.md#Past]]'), '[[Lord Vane#Past]]');
+    assert.strictEqual(rw.markdown('[[Elias Crowe.md^b1|y]]'), '[[Lord Vane^b1|y]]');
+    assert.strictEqual(rw.markdown('![[Elias Crowe.md]]'), '![[Lord Vane]]');
+  });
 });
 
 describe('backlinks, recency, search and excerpt read the escaped link', () => {

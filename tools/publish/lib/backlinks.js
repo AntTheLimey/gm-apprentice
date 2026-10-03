@@ -23,7 +23,7 @@ function buildBacklinks(pages, linkMap) {
       const key = linkMap ? linkMap[target] : target;
       // A link to its own heading or block (`[[Self#Part]]`) is not a mention of itself. (A plain
       // `[[Self]]` has always been counted.)
-      const toSelfPart = key === page.outputPath && parsed.raw !== parsed.name;
+      const toSelfPart = key === page.outputPath && parsed.raw !== parsed.target;
       if (!key || toSelfPart || seen.has(key)) continue;
       seen.add(key);
 

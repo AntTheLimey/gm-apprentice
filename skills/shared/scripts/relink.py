@@ -88,6 +88,10 @@ class RelinkError(Exception):
         self.usage = usage
 
 
+class ToolTooOld(RelinkError):
+    """The site's publish tool does not know the rename question."""
+
+
 @dataclass
 class Change:
     rel: str
@@ -106,6 +110,9 @@ class Plan:
     changes: list[Change] = field(default_factory=list)
     unsure: list[Change] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # The warnings that are about a note whose alias the new name would
+    # capture (a subset of `warnings`).
+    alias_warnings: list[str] = field(default_factory=list)
     republished: list[str] = field(default_factory=list)
     pin: str | None = None
     # Files the site pairs to the note by name (a PC's story), moved with it.
@@ -576,6 +583,11 @@ def _pin_live_key(p: Plan, texts: dict[str, str | None], slug: str) -> None:
     p.pin = slug
 
 
+class _SiteToolMissing(PublishToolUnavailable):
+    """The site has no publish tool that can be asked; the message says
+    why and what to do."""
+
+
 def _site_tool(vault: Path) -> Path | None:
     """The publish tool the vault's site builds with, which is the one to
     ask what a rename changes there. None means the plugin's own, for a
@@ -587,7 +599,11 @@ def _site_tool(vault: Path) -> Path | None:
     if not has_site:
         return None
     if tool is None:
-        raise PublishToolUnavailable(why or "the site's tool cannot be found")
+        # The migration repins the site's tool; the GM is not sent to
+        # update-pin by hand, which is what `fix` says.
+        raise _SiteToolMissing(
+            f"{why or 'the site tool cannot be found'}; run the migration "
+            f"(`migrate.py <vault> apply`) to repin it")
     return None if tool == vaultlib.PUBLISH_TOOL else tool
 
 
@@ -604,10 +620,14 @@ def _ask_publish(vault: Path, old: str, new: str, listed: bool,
         tool = _site_tool(vault)
         return publish_rename_refs(vault, old, new, _site_config(vault),
                                    names, tool)
+    except _SiteToolMissing as e:
+        raise RelinkError(
+            f"{old} belongs to the vault's site, whose publish tool cannot "
+            f"be asked: {e}; nothing was changed") from None
     except PublishToolUnavailable as e:
         if site and ("Unknown manifest command" in str(e)
                      or "Unknown argument" in str(e)):
-            raise RelinkError(
+            raise ToolTooOld(
                 "the site's publish tool is older than this rename needs; "
                 "run the migration (`migrate.py <vault> apply`) first"
             ) from None
@@ -716,7 +736,9 @@ def plan(vault: Path, old: str, new: str) -> Plan:
                 p.owners = dict(asked["owners"])
                 p.published = {_nfc(x) for x in asked.get("published", [])}
     for o, n in p.moves:
-        p.warnings += _alias_warnings(texts, o, n)
+        aliased = _alias_warnings(texts, o, n)
+        p.warnings += aliased
+        p.alias_warnings += aliased
     res = _Resolver(notes, p.moves, p.owners, p.published)
     for o, _n in p.moves:
         shared = [n for n in notes if normalize(_stem(n)) == normalize(_stem(o))]
@@ -725,7 +747,13 @@ def plan(vault: Path, old: str, new: str) -> Plan:
             if not site:
                 how = "the same-folder rule (no site to follow)"
             elif any(p.owners.get(x) is not None for x in mine):
-                how = "the site's link map"
+                outside = p.published is not None and any(
+                    t is not None and _nfc(r) not in p.published
+                    and _spellings([t], [(o, _n)])
+                    for r, t in texts.items())
+                how = ("the site's link map in notes the site publishes, the "
+                       "same-folder rule in the rest" if outside
+                       else "the site's link map")
             else:
                 how = "the same-folder rule (no site answer)"
             p.rules.append(f"RULE\t{o}\tbare links to {_stem(o)} follow {how}")

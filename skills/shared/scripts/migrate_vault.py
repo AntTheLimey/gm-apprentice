@@ -370,10 +370,14 @@ def _relink_items(vault: Path, item_id: str, verb: str,
         if dst is not None:
             try:
                 plan = relink.plan(vault, src, dst)
+            except relink.ToolTooOld:
+                dst, why = None, ("the site's publish tool is older than this "
+                                  "needs; update it (the repin step), then "
+                                  "run the plan again")
             except relink.RelinkError as e:
                 dst, why = None, str(e)
             else:
-                alias = [w for w in plan.warnings if "has the alias" in w]
+                alias = plan.alias_warnings
                 if plan.unsure or alias:
                     dst = None
                     why = (f"{len(plan.unsure)} link(s) could mean either "
@@ -502,10 +506,14 @@ VAULT_CHECKS: list[Check] = [
           "sheet_source in PC templates", find_pc_template_field),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,
           choices=("schema-mirror",)),
-    Check("wrapup-filenames", None, 3, "Wrap-Up filenames",
-          find_wrapup_filenames, choices=("wrapup-filenames",)),
+    # A rename asks the site's publish tool (what it changes on the site), so
+    # it waits for the repin: band 4, asks_site.
+    Check("wrapup-filenames", None, 4, "Wrap-Up filenames",
+          find_wrapup_filenames, asks_site=True,
+          choices=("wrapup-filenames",)),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
-    Check("heritage-notes", "1.10.15", 3, "mobRPG heritage notes",
-          find_heritage_notes, choices=("heritage-notes",)),
+    Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
+          find_heritage_notes, asks_site=True,
+          choices=("heritage-notes",)),
 ]

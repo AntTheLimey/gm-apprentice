@@ -1199,11 +1199,10 @@ function gmAliasRewriter(pages, published) {
     return String(text).replace(WIKI, (match, body) => {
       const bang = match.startsWith('!') ? '!' : '';
       const w = parseWikilink(body);
-      // The owner is looked up by the name before any `#heading` or `^block`, which stay
-      // on the link.
-      const hash = w.raw.search(/[#^]/);
-      const target = hash === -1 ? w.raw : w.raw.slice(0, hash);
-      const anchor = hash === -1 ? '' : w.raw.slice(hash);
+      // The owner is looked up by the name alone (no `.md`, `#heading` or `^block`); the anchor
+      // stays on the link.
+      const target = w.name;
+      const anchor = w.raw.slice(w.target.length);
       const bar = w.escapedPipe ? '\\|' : '|';
       const label = w.display ? bar + w.display : '';
       const owner = owners.get(gmAliasKey(target));

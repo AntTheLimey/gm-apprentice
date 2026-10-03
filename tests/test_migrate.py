@@ -195,6 +195,39 @@ class PlanTests(unittest.TestCase):
                       "is fixed)", out)
 
 
+class VaultRenameWaitsForTheRepinTests(unittest.TestCase):
+    """The wrap-up rename asks the site's tool, so it waits for the repin."""
+
+    def vault_with_a_wrapup(self):
+        vault = make_vault(self)
+        note = vault / "Chapters" / "Chapter 1" / "Session 03 - Ball - Wrap-Up.md"
+        note.parent.mkdir(parents=True)
+        note.write_text("---\ntype: session_wrap\nsession_number: 3\n---\n",
+                        encoding="utf-8")
+        return vault, note
+
+    def checks(self):
+        import migrate_vault
+        (wrap,) = [c for c in migrate_vault.VAULT_CHECKS
+                   if c.name == "wrapup-filenames"]
+        return [will(migrate.REPIN, None, band=1), wrap]
+
+    def test_plan_lists_it_as_waiting_not_as_a_refusal(self):
+        vault, _ = self.vault_with_a_wrapup()
+        code, out, _ = call([str(vault), "plan"], self.checks())
+        self.assertEqual(code, 0)
+        self.assertIn("## Checked once the site's tool is updated\n"
+                      "# count: 1\nwrapup-filenames\tWrap-Up filenames\n", out)
+        self.assertNotIn("older than this", out)
+
+    def test_apply_holds_the_stamp_when_the_choice_was_not_seen(self):
+        vault, note = self.vault_with_a_wrapup()
+        code, out, _ = call([str(vault), "apply"], self.checks())
+        self.assertIn("run plan again", out)
+        self.assertTrue(note.exists())
+        self.assertNotEqual(stamp_of(vault), PLUGIN)
+
+
 class ApplyTests(unittest.TestCase):
     def test_runs_in_band_then_release_order_and_stamps(self):
         vault = make_vault(self)
