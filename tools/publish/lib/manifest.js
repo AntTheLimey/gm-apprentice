@@ -96,4 +96,4 @@ function loadManifest(vaultPath) {
   return parseManifest(raw);
 }
 
-module.exports = { parseManifest, loadManifest, stripInlineComment, canonicalPath };
+module.exports = { parseManifest, loadManifest, stripInlineComment, canonicalPath, ENTRY_RE };

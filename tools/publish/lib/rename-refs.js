@@ -15,15 +15,13 @@ const fs = require('fs');
 const path = require('path');
 const { isDeepStrictEqual } = require('util');
 const { parseNote } = require('./frontmatter');
-const { canonicalPath } = require('./manifest');
+const { canonicalPath, ENTRY_RE } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { pcLiveKey } = require('./scanner');
 const { splitFrontmatter, locateBlock } = require('./vault-config-edit');
 
 const MANIFEST_REL = '_meta/publish-manifest.md';
 const CONFIG_REL = '_meta/vault-config.md';
-// The same anchoring as manifest.js's ENTRY_RE: a name may hold " — ".
-const ENTRY_RE = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$/;
 const NAME_LISTS = ['featured_npcs', 'featured_locations', 'quick_links'];
 
 function lines(text) {
@@ -84,13 +82,12 @@ function renameInConfig(text, vault, from, to) {
   const overrides = expected.publish.overrides;
   const fields = overrides && overrides.fields;
   const pathKey = fields && typeof fields === 'object' ? Object.keys(fields).find((k) => canonicalPath(k) === want) : undefined;
-  // A name is the filename: where another note has it too, it may mean that one.
-  const shared = mdFiles(vault).filter((f) => canonicalNfc(stemOf(f)) === oldStem && canonicalPath(f) !== want).length > 0;
-  const renameNames = oldStem !== canonicalNfc(newStem) && !shared;
   const landing = expected.publish.landing;
-  const listed = (key) => renameNames && landing && Array.isArray(landing[key])
+  const listed = (key) => landing && Array.isArray(landing[key])
     && landing[key].some((n) => typeof n === 'string' && canonicalNfc(n) === oldStem);
-  const lists = NAME_LISTS.filter(listed);
+  let lists = oldStem === canonicalNfc(newStem) ? [] : NAME_LISTS.filter(listed);
+  // A name is the filename: where another note has it too, it may mean that one.
+  if (lists.length && mdFiles(vault).some((f) => canonicalNfc(stemOf(f)) === oldStem && canonicalPath(f) !== want)) lists = [];
   if (pathKey === undefined && lists.length === 0) return null;
 
   if (pathKey !== undefined) { fields[to] = fields[pathKey]; delete fields[pathKey]; }
@@ -123,13 +120,16 @@ function renameInConfig(text, vault, from, to) {
   return next;
 }
 
-function pinOf(vault, from) {
+function pinOf(vault, from, to) {
   const file = path.join(vault, from);
   if (!fs.existsSync(file)) return null;
   let data;
   try { data = parseNote(fs.readFileSync(file, 'utf-8')).data; } catch (e) { return null; }
   if (!data || data.type !== 'pc') return null;
-  return { live_key: pcLiveKey(data, path.basename(from, '.md')) };
+  const key = pcLiveKey(data, path.basename(from, '.md'));
+  // A move, or a rename that slugs the same, keeps the key: nothing to pin.
+  if (pcLiveKey(data, path.basename(to, '.md')) === key) return null;
+  return { live_key: key };
 }
 
 function renameRefs(vault, from, to) {
@@ -145,7 +145,7 @@ function renameRefs(vault, from, to) {
   const edited = config === null ? null : renameInConfig(config, vault, from, to);
   if (edited !== null) files[CONFIG_REL] = edited;
   const answer = { files };
-  const pin = pinOf(vault, from);
+  const pin = pinOf(vault, from, to);
   if (pin) answer.pin = pin;
   return answer;
 }

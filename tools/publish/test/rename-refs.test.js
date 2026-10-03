@@ -105,9 +105,12 @@ describe('manifest rename: the live key', () => {
     assert.deepStrictEqual(rename(vault), { files: {}, pin: { live_key: 'emma-wentworth' } });
   });
 
-  it('answers with the key the note already pins', () => {
-    const vault = vaultWith({ [FROM]: '---\ntype: pc\nlive_key: Old Key\n---\n' });
-    assert.deepStrictEqual(rename(vault).pin, { live_key: 'old-key' });
+  it('has no pin when the rename leaves the key as it is', () => {
+    const pinned = vaultWith({ [FROM]: '---\ntype: pc\nlive_key: Old Key\n---\n' });
+    assert.strictEqual(rename(pinned).pin, undefined);
+    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n' });
+    assert.strictEqual(rename(vault, FROM, 'Characters/Retired/Emma_Wentworth.md').pin, undefined);
+    assert.strictEqual(rename(vault, FROM, 'Characters/PCs/emma wentworth.md').pin, undefined);
   });
 
   it('has no pin for a note that holds no live state', () => {
@@ -168,6 +171,32 @@ describe('a pinned key reaches the build', () => {
     assert.match(read('characters', 'pcs', 'player-characters.html'), /"pcSlug":"karl-brenner"/);
     const page = read('characters', 'pcs', 'karl-hale.html');
     assert.match(page, /"pcSlug":"karl-brenner"/);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe('two PCs on one live key', () => {
+  it('the build warns, naming both notes', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-dup-'));
+    const vault = path.join(root, 'vault');
+    fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
+    const pcs = path.join(vault, 'Characters', 'PCs');
+    const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');
+    fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), src.replace('type: pc\n', 'type: pc\nlive_key: karl-brenner\n'));
+    const configPath = path.join(root, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({
+      vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
+      siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
+      folderMap: { 'Characters/PCs': 'characters/pcs' },
+    }));
+    const warned = [];
+    const real = console.warn;
+    console.warn = (...a) => warned.push(a.join(' '));
+    try { build({ configPath }); } finally { console.warn = real; }
+    const w = warned.find((m) => /live key/i.test(m));
+    assert.ok(w, warned.join('\n'));
+    assert.match(w, /Characters\/PCs\/Karl Brenner\.md/);
+    assert.match(w, /Characters\/PCs\/Karl_Hale\.md/);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

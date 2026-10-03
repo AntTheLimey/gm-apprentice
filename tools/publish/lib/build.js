@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles, pcLiveKey } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -538,6 +538,20 @@ function build(options = {}) {
       page.frontmatter, excludeFields, overridesForFile);
   }
 
+  // Two PCs on one live key would share one set of live stats (HP, loadouts, party board).
+  {
+    const byKey = new Map();
+    for (const page of pages) {
+      const fm = page.sourceFrontmatter || page.frontmatter;
+      if (!fm || fm.type !== 'pc') continue;
+      const key = pcLiveKey(fm, page.title);
+      byKey.set(key, (byKey.get(key) || []).concat(vaultRelPathOf(page)));
+    }
+    for (const [key, rels] of byKey) {
+      if (rels.length > 1) console.warn(`  WARNING: ${rels.join(' and ')} share the live key "${key}", so they share one set of live stats. Give one a different live_key in its frontmatter.`);
+    }
+  }
+
   // Scanned here, not later, because the keep-list stability check below reads it.
   const imageMap = scanAttachments(scanConfig);
 
@@ -852,7 +866,7 @@ function build(options = {}) {
           const meta = {
             system,
             campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
-            pcSlug: require('./scanner').pcLiveKey(page.sourceFrontmatter || page.frontmatter, page.title),
+            pcSlug: pcLiveKey(page.sourceFrontmatter || page.frontmatter, page.title),
             buildVersion: require('crypto').createHash('sha1')
               .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           };

@@ -180,6 +180,7 @@ from vaultlib import (  # noqa: F401
     stub_kept,
     use_publish_tool,
     site_switch,
+    site_unasked,
     vault_site,
     strip_comment_spans,
     read_publish_list,
@@ -1545,7 +1546,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         publishes, on, site = vault_site(vault)
     except PublishToolUnavailable as e:
         # No node, a node too old to run the tool, or a vault file the tool
-        # will not parse: the switch is read here instead (`_site_unasked`).
+        # will not parse: the switch is read here instead (`site_unasked`).
         why = str(e)
         if why.startswith("the publish tool refused"):
             fix = f"fix {VAULT_CONFIG}"
@@ -1555,7 +1556,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
             fix = "update the gm-apprentice plugin"
         else:
             fix = node_fix
-        has_site = _site_unasked(vault)
+        has_site = site_unasked(vault)
         if has_site:
             fix += (f"; if this vault has no site, set publish.site: false "
                     f"in {VAULT_CONFIG}")
@@ -1610,23 +1611,6 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
 
 
 SITE_IS_OFF = "publish.site is not on"
-
-
-def _site_unasked(vault: Path) -> bool:
-    """Whether the vault has a site, for the one time the publish tool
-    cannot be asked. The switch as the line reader sees it; where that is
-    unset, a vault file that mentions `site_dir`, or that cannot be read,
-    is taken to have one."""
-    switch = site_switch(vault)
-    if switch is not None:
-        return switch
-    try:
-        text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
-    except FileNotFoundError:
-        return False
-    except (OSError, UnicodeDecodeError):
-        return True
-    return "site_dir" in text
 
 
 def _resolved_from(site: Path) -> Path | None:

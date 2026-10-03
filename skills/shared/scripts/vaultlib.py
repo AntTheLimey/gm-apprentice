@@ -1033,6 +1033,24 @@ def site_switch(vault: Path) -> bool | None:
     return (value or "").strip().lower() in SITE_ON_WORDS
 
 
+def site_unasked(vault: Path) -> bool:
+    """Whether the vault has a site, for the one time the publish tool
+    cannot be asked. The switch as the line reader sees it; where that is
+    unset, a vault file that mentions `site_dir`, or that cannot be read,
+    is taken to have one."""
+    switch = site_switch(vault)
+    if switch is not None:
+        return switch
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8-sig")
+    except FileNotFoundError:
+        return False
+    except (OSError, UnicodeDecodeError):
+        return True
+    return "site_dir" in text
+
+
 def publish_tool_problem() -> str | None:
     """Why the publish tool cannot be asked what publishes, or None when it
     can. A check that depends on the answer asks this first and says so,

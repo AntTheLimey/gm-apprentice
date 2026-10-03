@@ -62,7 +62,7 @@ from vaultlib import (
     scalar_value,
     scan_body,
     set_key,
-    site_switch,
+    site_unasked,
     vault_site,
 )
 
@@ -403,7 +403,7 @@ def _has_site(vault: Path) -> bool:
     try:
         return vault_site(vault)[1]
     except PublishToolUnavailable:
-        return site_switch(vault) is True
+        return site_unasked(vault)
 
 
 def _live_key_text(slug: str) -> str:
@@ -435,7 +435,8 @@ def _pin_live_key(p: Plan, texts: dict[str, str | None], slug: str) -> None:
     p.pin = slug
 
 
-def _publish_updates(p: Plan, texts: dict[str, str | None]) -> None:
+def _publish_updates(p: Plan, texts: dict[str, str | None],
+                     res: _Resolver) -> None:
     """The site's own files that name the note (its publish list, vault
     settings) and the live key a PC is stored under, as the publish tool
     says: it alone knows their formats. A vault with no publish list and no
@@ -464,9 +465,11 @@ def _publish_updates(p: Plan, texts: dict[str, str | None]) -> None:
                               f"encoding first")
         if text == before:
             continue
-        if rel in p.texts:
-            raise RelinkError(f"{rel} names {p.old} for the site and also "
-                              f"has links to it; nothing was changed")
+        # The tool's edits (paths, names) and the link rewrite (wikilinks)
+        # do not overlap: the links go over the tool's text. The links were
+        # already counted, so this pass is scratch.
+        text = _rewrite_note(rel, text, res,
+                             Plan(p.vault, p.old, p.new))
         p.originals[rel], p.texts[rel] = before, text
         p.republished.append(rel)
     pin = answer.get("pin")
@@ -516,7 +519,7 @@ def plan(vault: Path, old: str, new: str) -> Plan:
         changed = _rewrite_canvas(rel, text, old, new, res, p)
         if changed != text:
             p.originals[rel], p.texts[rel] = text, changed
-    _publish_updates(p, texts)
+    _publish_updates(p, texts, res)
     return p
 
 
