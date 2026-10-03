@@ -537,6 +537,166 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         batch.row("WOULD-ADD", rel, f"§{title}", detail)
 
 
+STORY_TEMPLATES = ("character-story.md", "_Template_Character_Story.md")
+PC_LINE_RE = re.compile(
+    r"^#\s+(?:\[\[)?([^\]\[|#]+?)(?:\|[^\]]*)?(?:\]\])?\s*$")
+LABEL_RE = re.compile(r"^(.*?\bSession\s+)(\d+)\s*$", re.IGNORECASE)
+DASH = " \u2014 "
+
+
+def find_pc(batch: Batch, name: str) -> str:
+    """The vault-relative path of the one PC note called (or aliased) `name`."""
+    want = vl.normalize(name)
+    hits = []
+    for rel, text in vl.vault_files(batch.vault):
+        if rel.endswith("_Story.md"):
+            continue
+        fm = vl.extract_frontmatter(text) or {}
+        if vl.entity_type(fm) != "pc":
+            continue
+        names = [Path(rel).stem, *vl.frontmatter_aliases(text)]
+        if want in {vl.normalize(n) for n in names}:
+            hits.append(rel)
+    if len(hits) != 1:
+        raise WriteError(f"PC '{name}': " + ("not found" if not hits else
+                         "matches " + ", ".join(sorted(hits))))
+    return hits[0]
+
+
+def split_entries(text: str) -> list[tuple[str, str | None, list[str]]]:
+    """(PC name, the entry's own `## ` heading or None, its lines). An
+    entry that opens with a `## ` line is headed exactly so."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    raw: list[tuple[str, list[str]]] = []
+    fence = False
+    for line in lines:
+        if line.lstrip().startswith(("```", "~~~")):
+            fence = not fence
+        m = None if fence else PC_LINE_RE.match(line)
+        if m:
+            raw.append((m.group(1).strip(), []))
+        elif raw:
+            raw[-1][1].append(line)
+        elif line.strip():
+            raise WriteError("stdin must start with a '# [[PC Name]]' line")
+    if not raw:
+        raise WriteError("nothing on stdin")
+    out: list[tuple[str, str | None, list[str]]] = []
+    for name, body in raw:
+        while body and not body[0].strip():
+            body.pop(0)
+        while body and not body[-1].strip():
+            body.pop()
+        custom = None
+        if body and re.match(r"^##\s+\S", body[0]):
+            custom = body.pop(0).rstrip()
+            while body and not body[0].strip():
+                body.pop(0)
+        if not body:
+            raise WriteError(f"PC '{name}': the entry is empty")
+        if any(h[1] <= 2 for h in vl._fenced_headings("\n".join(body))):
+            raise WriteError(f"PC '{name}': an entry cannot hold a # or ## "
+                             f"heading after its own (it would read as "
+                             f"another session)")
+        out.append((name, custom, body))
+    return out
+
+
+def story_label(story: str | None, number: int) -> str:
+    """`Session N` in the shape of the file's last entry heading."""
+    last = None
+    for h in (parse(story).heads if story else []):
+        if h.level == 2:
+            m = LABEL_RE.match(re.split(r"\s+[\u2014\u2013-]\s+", h.title,
+                                        maxsplit=1)[0])
+            if m:
+                last = m
+    if last is None:
+        return f"Session {number}"
+    return f"{last.group(1)}{number:0{len(last.group(2))}d}"
+
+
+def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    wrap_rel = batch.resolve(args.wrapup)
+    wrap = batch.read(wrap_rel)
+    fm = vl.extract_frontmatter(wrap) or {}
+    if vl.entity_type(fm) not in vc.WRAP_TYPES:
+        raise WriteError(f"{wrap_rel}: not a Wrap-Up")
+    number = vl.parse_session_number(fm.get("session_number"))
+    if number is None:
+        number = vl.session_ref_number(fm)
+    if number is None:
+        raise WriteError(f"{wrap_rel}: no session number")
+    stem = vl.wikilink_target(fm.get("session")) or ""
+    title = stem.split(" - ", 1)[1] if " - " in stem else stem
+    if not title:
+        raise WriteError(f"{wrap_rel}: `session:` names no session")
+    canon = raw_value(wrap, "canon_status") or "DRAFT"
+    date = args.date or vl.unquote(raw_value(wrap, "play_date") or "")
+    for name, custom, body in split_entries(text):
+        pc_rel = find_pc(batch, name)
+        rel = pc_rel[:-3] + "_Story.md"
+        existing = batch.read(rel) if batch.exists(rel) else None
+        label = args.label or story_label(existing, number)
+        heading = custom or f"## {label}{DASH}{title}"
+        opener = closer = ""
+        if existing is None:
+            fm_lines = [line + "\n" for line in template_frontmatter(
+                template_text(batch.vault, STORY_TEMPLATES,
+                              "character-story.md"))]
+            eol, tail = "\n", ""
+            opener, closer = "---\n", "---\n"
+        else:
+            lines = existing.splitlines(keepends=True)
+            # A BOM is part of the opener's bytes, not of the delimiter.
+            probe = [lines[0].lstrip("\ufeff"), *lines[1:]] if lines else lines
+            end, error = vl.frontmatter_span(probe)
+            if error:
+                raise WriteError(f"{rel}: {error}")
+            eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+            opener, closer = lines[0], lines[end]
+            if not closer.endswith(("\n", "\r")):
+                closer += eol
+            fm_lines, tail = lines[1:end], "".join(lines[end + 1:])
+            if any(h.level == 2 and key(h.title) == key(heading[3:])
+                   for h in parse(existing).heads):
+                raise WriteError(f"{rel}: already has '{heading}'")
+        old_as_of = vl.get_key(fm_lines, "asOfSession")
+        old_plain = vl.unquote(old_as_of or "")
+        as_of = args.as_of or (
+            str(number) if existing is not None
+            and re.fullmatch(r"\d+", old_plain) else label)
+        if existing is not None and old_plain == as_of:
+            raise WriteError(f"{rel}: already has an entry for {as_of} "
+                             f"(asOfSession)")
+        quoted_int = (old_as_of or "")[:1] in ('"', "'")
+        stamps = {"asOfSession": vl.yaml_scalar(as_of, quoted_int=quoted_int),
+                  "canon_status": canon}
+        if date:
+            stamps["lastUpdated"] = vl.yaml_scalar(date)
+        if existing is None:
+            stamps["character"] = f'"[[{Path(pc_rel).stem}]]"'
+            stamps["createdSession"] = vl.yaml_scalar(as_of)
+            campaign = raw_value(wrap, "campaign")
+            if campaign:
+                stamps["campaign"] = campaign
+        for field, value in stamps.items():
+            vl.set_key(fm_lines, field, value, eol)
+        if tail and not tail.endswith(("\n", "\r")):
+            tail += eol
+        entry = eol.join(["", heading, "", *body]) + eol
+        new = opener + "".join(fm_lines) + closer + tail + entry
+        if existing is None:
+            batch.create(rel, new)
+            batch.row("WOULD-CREATE", rel, f"\u00a7{heading[3:]}", "")
+        else:
+            batch.put(rel, new)
+            batch.row("WOULD-ADD", rel, f"\u00a7{heading[3:]}", "")
+        if not date:
+            batch.row("WARNING", rel, "", "no play_date on the Wrap-Up and "
+                      "no --date: lastUpdated left as it was")
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -556,11 +716,18 @@ def build_parser() -> argparse.ArgumentParser:
                      help="replace a section that already exists")
     add.add_argument("--after", help="the heading a new section goes after")
     add.add_argument("--write", action="store_true")
+    story = sub.add_parser("story", help="append story entries (stdin)")
+    story.add_argument("--wrapup", required=True)
+    story.add_argument("--label", help="the entry heading's label")
+    story.add_argument("--as-of", dest="as_of", help="asOfSession value")
+    story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
+    story.add_argument("--write", action="store_true")
     return ap
 
 
 COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new,
-                               "wrapup-add": cmd_wrapup_add}
+                               "wrapup-add": cmd_wrapup_add,
+                               "story": cmd_story}
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:

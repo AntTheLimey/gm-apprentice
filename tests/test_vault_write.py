@@ -609,5 +609,171 @@ class StripCommentTests(unittest.TestCase):
                          ["tags:", 'k: "a # b"', "j: x"])
 
 
+PC_REL = "Characters/PCs/Rock Lavey.md"
+STORY_REL = "Characters/PCs/Rock Lavey_Story.md"
+PC = "---\ntype: pc\naliases: [Rock]\n---\n\n# Rock Lavey\n"
+STORY = """---
+type: character-story
+character: "[[Rock Lavey]]"
+campaign: "Dead End"
+canon_status: AUTHORITATIVE
+lastUpdated: "2026-09-21"
+asOfSession: "Session 1"
+createdSession: "Session 1"
+---
+
+## Session 1 — The Ragged Edge
+
+He ran.
+"""
+STORY_WRAP = WRAP.replace(
+    "canon_status: DRAFT\n",
+    'canon_status: DRAFT\ncampaign: "Dead End"\nplay_date: "2026-09-30"\n')
+
+
+def story_vault(case, extra=None):
+    files = {WRAP_REL: STORY_WRAP, INDEX_REL: INDEX, PC_REL: PC,
+             STORY_REL: STORY}
+    files.update(extra or {})
+    return make_vault(case, {k: v for k, v in files.items() if v is not None})
+
+
+def tell(vault, stdin, *flags):
+    return run(vault, "story", "--wrapup", WRAP_REL, *flags, "--write",
+               stdin=stdin)
+
+
+class StoryTests(unittest.TestCase):
+    def test_append_leaves_earlier_bytes_identical(self):
+        vault = story_vault(self)
+        code, out = tell(vault, "# [[Rock Lavey]]\n\nHe fought.\n\nHe won.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, STORY_REL)
+        body_before = STORY.split("---\n", 2)[2]
+        self.assertTrue(text.split("---\n", 2)[2].startswith(body_before))
+        self.assertTrue(text.endswith(
+            "He ran.\n\n## Session 2 — The Docks\n\nHe fought.\n\nHe won.\n"))
+
+    def test_frontmatter_is_stamped(self):
+        vault = story_vault(self)
+        tell(vault, "# [[Rock Lavey]]\n\nHe fought.\n")
+        text = read(vault, STORY_REL)
+        self.assertIn('asOfSession: "Session 2"\n', text)
+        self.assertIn('lastUpdated: "2026-09-30"\n', text)
+        self.assertIn("canon_status: DRAFT\n", text)
+        self.assertIn('createdSession: "Session 1"\n', text)
+
+    def test_as_of_and_date_can_be_given(self):
+        vault = story_vault(self)
+        tell(vault, "# [[Rock Lavey]]\n\nHe fought.\n",
+             "--as-of", "Chapter 1, Session 2", "--date", "2026-10-01")
+        text = read(vault, STORY_REL)
+        self.assertIn('asOfSession: "Chapter 1, Session 2"\n', text)
+        self.assertIn('lastUpdated: "2026-10-01"\n', text)
+
+    def test_the_label_follows_the_last_entry(self):
+        for last, want in (("## Session 01 — A", "## Session 02 — The Docks"),
+                           ("## Chapter 1, Session 1 — A",
+                            "## Chapter 1, Session 2 — The Docks")):
+            with self.subTest(last):
+                vault = story_vault(self, {STORY_REL: STORY.replace(
+                    "## Session 1 — The Ragged Edge", last)})
+                tell(vault, "# Rock Lavey\n\nHe fought.\n")
+                self.assertIn(want + "\n", read(vault, STORY_REL))
+
+    def test_label_flag_wins(self):
+        vault = story_vault(self)
+        tell(vault, "# Rock\n\nHe fought.\n", "--label", "Interlude")
+        self.assertIn("## Interlude — The Docks\n", read(vault, STORY_REL))
+
+    def test_a_missing_story_is_created_from_the_template(self):
+        vault = story_vault(self, {STORY_REL: None})
+        code, out = tell(vault, "# [[Rock Lavey]]\n\nHe fought.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn(f"CREATED\t{STORY_REL}", out)
+        text = read(vault, STORY_REL)
+        self.assertIn('character: "[[Rock Lavey]]"\n', text)
+        self.assertIn('campaign: "Dead End"\n', text)
+        self.assertIn('createdSession: "Session 2"\n', text)
+        self.assertNotIn("{", text)
+        self.assertTrue(text.endswith(
+            "---\n\n## Session 2 — The Docks\n\nHe fought.\n"))
+
+    def test_an_entry_can_carry_its_own_heading(self):
+        vault = story_vault(self)
+        code, out = tell(vault, "# Rock\n\n## Interlude — The Long Night\n\n"
+                                "He waited.\n")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(read(vault, STORY_REL).endswith(
+            "He ran.\n\n## Interlude — The Long Night\n\nHe waited.\n"))
+
+    def test_an_entry_may_hold_lists_and_subheadings(self):
+        vault = story_vault(self)
+        code, out = tell(vault, "# Rock\n\n### The letter\n\n- one\n- two\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("### The letter\n\n- one\n- two\n",
+                      read(vault, STORY_REL))
+
+    def test_append_to_a_file_with_no_final_newline(self):
+        vault = story_vault(self, {STORY_REL: STORY.rstrip("\n")})
+        tell(vault, "# Rock\n\nHe fought.\n")
+        self.assertIn("He ran.\n\n## Session 2 — The Docks\n",
+                      read(vault, STORY_REL))
+
+    def test_a_second_run_is_refused(self):
+        vault = story_vault(self)
+        tell(vault, "# Rock\n\nHe fought.\n")
+        once = read(vault, STORY_REL)
+        code, out = tell(vault, "# Rock\n\nHe fought again.\n")
+        self.assertEqual(code, 1)
+        self.assertIn("already has", out)
+        self.assertEqual(read(vault, STORY_REL), once)
+
+    def test_one_wrong_pc_writes_none(self):
+        vault = story_vault(self)
+        code, _ = tell(vault, "# Rock\n\nHe fought.\n\n# Nobody\n\nGone.\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(read(vault, STORY_REL), STORY)
+
+    def test_refusals(self):
+        for name, stdin in (("empty entry", "# Rock\n\n# Rock\n\nx\n"),
+                            ("h2 inside", "# Rock\n\nA.\n\n## Session 9 — x\n\ny\n"),
+                            ("no pc line", "He fought.\n"),
+                            ("empty", "")):
+            with self.subTest(name):
+                vault = story_vault(self)
+                code, _ = tell(vault, stdin)
+                self.assertEqual(code, 1)
+                self.assertEqual(read(vault, STORY_REL), STORY)
+
+    def test_several_pcs_in_one_call(self):
+        other = "Characters/PCs/Six.md"
+        vault = story_vault(self, {other: "---\ntype: pc\n---\n"})
+        code, out = tell(vault, "# [[Rock Lavey]]\n\nA.\n\n# [[Six]]\n\nB.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("\nA.\n", read(vault, STORY_REL))
+        self.assertIn("\nB.\n", read(vault, "Characters/PCs/Six_Story.md"))
+
+    def test_append_keeps_a_bom_and_the_closing_line_as_written(self):
+        bom = "\ufeff" + STORY
+        vault = story_vault(self, {STORY_REL: bom})
+        code, out = tell(vault, "# Rock\n\nHe fought.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, STORY_REL)
+        self.assertTrue(text.startswith("\ufeff---\n"))
+        self.assertIn("He ran.\n\n## Session 2 \u2014 The Docks\n", text)
+
+    def test_crlf_story_stays_crlf(self):
+        crlf = STORY.replace("\n", "\r\n")
+        vault = story_vault(self, {STORY_REL: crlf})
+        code, out = tell(vault, "# Rock\n\nHe fought.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, STORY_REL)
+        self.assertNotIn("\n", text.replace("\r\n", ""))
+        self.assertTrue(text.endswith(
+            "He ran.\r\n\r\n## Session 2 \u2014 The Docks\r\n\r\n"
+            "He fought.\r\n"))
+
+
 if __name__ == "__main__":
     unittest.main()
