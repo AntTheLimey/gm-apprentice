@@ -774,6 +774,173 @@ class StoryTests(unittest.TestCase):
             "He ran.\r\n\r\n## Session 2 \u2014 The Docks\r\n\r\n"
             "He fought.\r\n"))
 
+    def test_a_hash_line_in_an_entry_is_named_as_the_likely_cause(self):
+        vault = story_vault(self)
+        code, out = tell(vault, "# Rock\n\nHe fought.\n\n# Notes\n\nmore\n")
+        self.assertEqual(code, 1)
+        self.assertIn("PC 'Notes': not found (a line starting with '# ' "
+                      "opens a new PC's entry", out)
+        self.assertEqual(read(vault, STORY_REL), STORY)
+
+    def test_a_bare_integer_as_of_stays_bare_and_a_repeat_is_refused(self):
+        bare = STORY.replace('asOfSession: "Session 1"', "asOfSession: 1")
+        vault = story_vault(self, {STORY_REL: bare})
+        code, out = tell(vault, "# Rock\n\nHe fought.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("asOfSession: 2\n", read(vault, STORY_REL))
+        once = read(vault, STORY_REL)
+        code, _ = tell(vault, "# Rock\n\nHe fought again.\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(read(vault, STORY_REL), once)
+
+    def test_a_custom_heading_run_twice_is_refused(self):
+        vault = story_vault(self)
+        entry = "# Rock\n\n## Interlude — The Long Night\n\nHe waited.\n"
+        tell(vault, entry)
+        once = read(vault, STORY_REL)
+        code, out = tell(vault, entry)
+        self.assertEqual(code, 1)
+        self.assertIn("already has", out)
+        self.assertEqual(read(vault, STORY_REL), once)
+
+
+NPC_REL = "Characters/NPCs/Hallam.md"
+S2 = "- **[[Session 02 - The Docks]]** — "
+
+
+def log(vault, rows, *flags):
+    return run(vault, "log", *flags, "--write", stdin=rows)
+
+
+class LogTests(unittest.TestCase):
+    def test_public_and_keeper_lines(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = log(vault,
+                        f"{NPC_REL}\tCampaign Log\t{S2}sold a map.\n"
+                        f"{NPC_REL}\tGM Notes/Behind the Scenes\t{S2}it was fake.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, NPC_REL)
+        self.assertIn("met the party.\n" + S2 + "sold a map.\n\n<!-- gm-only",
+                      text)
+        self.assertIn("lied.\n" + S2 + "it was fake.\n\n<!-- /gm-only", text)
+
+    def test_dry_run_writes_nothing(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = run(vault, "log",
+                        stdin=f"{NPC_REL}\tCampaign Log\t{S2}x\n")
+        self.assertEqual(code, 0)
+        self.assertIn("WOULD-ADD\t", out)
+        self.assertEqual(read(vault, NPC_REL), NPC)
+
+    def test_a_repeat_is_a_skip(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        row = f"{NPC_REL}\tCampaign Log\t{S2}sold a map.\n"
+        log(vault, row)
+        once = read(vault, NPC_REL)
+        code, out = log(vault, row)
+        self.assertEqual(code, 0)
+        self.assertIn("SKIP\t", out)
+        self.assertEqual(read(vault, NPC_REL), once)
+
+    def test_a_missing_keeper_section_is_created_inside_the_fence(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        log(vault, f"{NPC_REL}\tGM Notes/Under Pressure\t- folds fast\n")
+        text = read(vault, NPC_REL)
+        self.assertLess(text.index("### Wants"),
+                        text.index("### Under Pressure"))
+        self.assertLess(text.index("### Under Pressure"),
+                        text.index("### Behind the Scenes"))
+        self.assertIn("### Under Pressure\n\n- folds fast\n", text)
+
+    def test_a_note_with_no_gm_notes_gets_a_fenced_one(self):
+        bare = "---\ntype: npc\n---\n\n# Hallam\n\nA clerk.\n"
+        vault = make_vault(self, {NPC_REL: bare})
+        log(vault, f"{NPC_REL}\tGM Notes/Behind the Scenes\t{S2}lied.\n")
+        self.assertEqual(read(vault, NPC_REL), bare + (
+            "\n<!-- gm-only -->\n\n## GM Notes\n\n### Behind the Scenes\n\n"
+            + S2 + "lied.\n\n<!-- /gm-only -->\n"))
+
+    def test_an_unfenced_gm_notes_is_used_as_it_is(self):
+        unfenced = ("---\ntype: faction\n---\n\n# Order\n\n## GM Notes\n\n"
+                    "Plans.\n")
+        rel = "Factions/Order.md"
+        vault = make_vault(self, {rel: unfenced})
+        log(vault, f"{rel}\tGM Notes/Behind the Scenes\t{S2}moved.\n")
+        text = read(vault, rel)
+        self.assertNotIn("gm-only", text)
+        self.assertTrue(text.endswith(
+            "Plans.\n\n### Behind the Scenes\n\n" + S2 + "moved.\n"))
+
+    def test_a_missing_public_section_goes_in_template_order(self):
+        no_log = NPC.replace(
+            "## Campaign Log\n\n- **[[Session 01 - Start]]** — met the "
+            "party.\n\n", "")
+        vault = make_vault(self, {NPC_REL: no_log})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}x\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("players will see this", out)
+        text = read(vault, NPC_REL)
+        self.assertIn("## Campaign Log\n\n" + S2 + "x\n\n<!-- gm-only -->",
+                      text)
+
+    def test_any_section_name_is_accepted(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = log(vault,
+                        f"{NPC_REL}\tRumours\t- Said to be a spy.\n"
+                        f"{NPC_REL}\tGM Notes/Debts\t- Owes the Bishop.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, NPC_REL)
+        self.assertLess(text.index("## Rumours"), text.index("<!-- gm-only"))
+        self.assertLess(text.index("### Debts"), text.index("<!-- /gm-only"))
+        self.assertLess(text.index("<!-- gm-only"), text.index("### Debts"))
+
+    def test_a_pc_takes_log_lines(self):
+        vault = make_vault(self, {PC_REL: PC})
+        code, _ = log(vault, f"{PC_REL}\tCampaign Log\t{S2}x\n")
+        self.assertEqual(code, 0)
+
+    def test_crlf_note_stays_crlf(self):
+        crlf = NPC.replace("\n", "\r\n")
+        vault = make_vault(self, {NPC_REL: crlf})
+        log(vault, f"{NPC_REL}\tCampaign Log\t{S2}x\n")
+        text = read(vault, NPC_REL)
+        self.assertEqual(text.replace(S2 + "x\r\n", ""), crlf)
+
+    def test_decomposed_filename_is_found(self):
+        stored = unicodedata.normalize("NFD", "Characters/NPCs/Société.md")
+        asked = unicodedata.normalize("NFC", "Characters/NPCs/Société.md")
+        vault = make_vault(self, {stored: NPC})
+        code, out = log(vault, f"{asked}\tCampaign Log\t{S2}x\n")
+        self.assertEqual(code, 0, out)
+
+    def test_one_bad_row_writes_nothing(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}x\n"
+                               f"Nope.md\tCampaign Log\t{S2}y\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(read(vault, NPC_REL), NPC)
+
+    def test_refusals(self):
+        vault = make_vault(self, {
+            NPC_REL: NPC.replace("<!-- /gm-only -->\n", "")})
+        for name, rows in (("unbalanced", f"{NPC_REL}\tCampaign Log\t- x\n"),
+                           ("two fields", f"{NPC_REL}\tCampaign Log\n"),
+                           ("empty line", f"{NPC_REL}\tCampaign Log\t \n"),
+                           ("empty", "")):
+            with self.subTest(name):
+                code, _ = log(vault, rows)
+                self.assertEqual(code, 1)
+
+    def test_many_notes_in_one_call(self):
+        loc = "Locations/Docks.md"
+        vault = make_vault(self, {NPC_REL: NPC, loc: NPC.replace("npc",
+                                                                "location")})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}a\n"
+                               f"{loc}\tCampaign Log\t{S2}b\n"
+                               f"{NPC_REL}\tGM Notes/Behind the Scenes\t{S2}c\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("ADDED\t"), 3)
+
 
 if __name__ == "__main__":
     unittest.main()

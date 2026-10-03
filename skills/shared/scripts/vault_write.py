@@ -557,9 +557,12 @@ def find_pc(batch: Batch, name: str) -> str:
         names = [Path(rel).stem, *vl.frontmatter_aliases(text)]
         if want in {vl.normalize(n) for n in names}:
             hits.append(rel)
+    if not hits:
+        raise WriteError(f"PC '{name}': not found (a line starting with "
+                         f"'# ' opens a new PC's entry; an entry cannot "
+                         f"hold a '# ' heading)")
     if len(hits) != 1:
-        raise WriteError(f"PC '{name}': " + ("not found" if not hits else
-                         "matches " + ", ".join(sorted(hits))))
+        raise WriteError(f"PC '{name}': matches " + ", ".join(sorted(hits)))
     return hits[0]
 
 
@@ -697,6 +700,112 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
                       "no --date: lastUpdated left as it was")
 
 
+def type_template(note_type: str) -> tuple[TemplateMap | None, bool]:
+    """(the shared template's section map for a note type, whether that
+    template fences its GM Notes). An unknown type has no map and is
+    fenced."""
+    path = SHARED_TEMPLATES / f"{note_type}.md"
+    if not note_type or not path.is_file():
+        return None, True
+    text = path.read_text(encoding="utf-8")
+    return read_template_map(text), "<!-- gm-only -->" in text
+
+
+def _gm_notes_head(doc: Doc) -> Head | None:
+    return next((h for h in doc.heads
+                 if h.level == 2 and key(h.title) == GM_NOTES), None)
+
+
+def add_line(text: str, rel: str, section: str, line: str,
+             tmap: TemplateMap | None, fenced: bool
+             ) -> tuple[str | None, str]:
+    """(the note's new text, the row's detail), or (None, why) when `line`
+    is already in the section. `section` is `Name` for a public `##` or
+    `GM Notes/Name` for a `###` under GM Notes. A GM Notes the note has is
+    used as it is; one it lacks is added at the end, fenced when `fenced`."""
+    doc = parse(text)
+    if doc.problems:
+        raise WriteError(f"{rel}: gm-only fence is unbalanced "
+                         f"({doc.problems[0]})")
+    keeper = "/" in section and key(section.split("/", 1)[0]) == GM_NOTES
+    name = section.split("/", 1)[1].strip() if keeper else section.strip()
+    if not name:
+        raise WriteError(f"{rel}: the section has no name")
+    k = key(name)
+    gm = _gm_notes_head(doc)
+    if keeper or k == GM_NOTES:
+        if gm is None:
+            block = ["## GM Notes", ""]
+            if k != GM_NOTES:
+                block += [f"### {name}", ""]
+            block += [line]
+            if fenced:
+                block = ["<!-- gm-only -->", "", *block, "",
+                         "<!-- /gm-only -->"]
+            return place(doc, len(doc.lines), block), "new GM Notes"
+        stop = section_end(doc, gm)
+        head: Head
+        if k == GM_NOTES:
+            head = gm
+        else:
+            scope = [h for h in doc.heads
+                     if h.level == 3 and gm.idx < h.idx < stop]
+            found = next((h for h in scope if key(h.title) == k), None)
+            if found is None:
+                later = tmap.later(3, k) if tmap else set()
+                at = next((h.idx for h in scope if key(h.title) in later),
+                          stop)
+                return place(doc, at, [f"### {name}", "", line]), \
+                    "new section"
+            head = found
+    else:
+        scope = [h for h in doc.heads if h.level == 2 and not h.gm
+                 and key(h.title) != GM_NOTES]
+        found = next((h for h in scope if key(h.title) == k), None)
+        if found is None:
+            default = len(doc.lines)
+            if gm is not None:
+                openers = [s.lineno - 1 for s in doc.states
+                           if s.marker == OPEN_GM and s.lineno - 1 < gm.idx]
+                default = max(openers) if gm.gm and openers else gm.idx
+            public = ({c for _l, c in tmap.order} - tmap.gm) if tmap else set()
+            later = tmap.later(2, k, public) if tmap else set()
+            at = next((h.idx for h in scope if key(h.title) in later),
+                      default)
+            return place(doc, at, [f"## {name}", "", line]), PLAYERS_SEE
+        head = found
+    end = section_end(doc, head)
+    if any(existing.strip() == line.strip()
+           for existing in doc.lines[head.idx + 1:end]):
+        return None, "already there"
+    return place(doc, end, [line], tight=True), ""
+
+
+def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
+    rows = [r for r in text.replace("\r\n", "\n").split("\n") if r.strip()]
+    if not rows:
+        raise WriteError("nothing on stdin")
+    templates: dict[str, tuple[TemplateMap | None, bool]] = {}
+    for n, raw in enumerate(rows, 1):
+        cells = raw.split("\t")
+        if len(cells) != 3 or not all(c.strip() for c in cells):
+            raise WriteError(f"row {n}: want PATH<TAB>SECTION<TAB>LINE")
+        rel = batch.resolve(cells[0].strip())
+        note = batch.read(rel)
+        note_type = vl.entity_type(vl.extract_frontmatter(note) or {})
+        if note_type not in templates:
+            templates[note_type] = type_template(note_type)
+        tmap, fenced = templates[note_type]
+        new, detail = add_line(note, rel, cells[1], cells[2].strip(),
+                               tmap, fenced)
+        where = f"§{cells[1].strip()}"
+        if new is None:
+            batch.row("SKIP", rel, where, detail)
+        else:
+            batch.put(rel, new)
+            batch.row("WOULD-ADD", rel, where, detail)
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -722,12 +831,15 @@ def build_parser() -> argparse.ArgumentParser:
     story.add_argument("--as-of", dest="as_of", help="asOfSession value")
     story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
     story.add_argument("--write", action="store_true")
+    log = sub.add_parser("log", help="add log lines to notes (stdin rows)")
+    log.add_argument("--write", action="store_true")
     return ap
 
 
 COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new,
                                "wrapup-add": cmd_wrapup_add,
-                               "story": cmd_story}
+                               "story": cmd_story,
+                               "log": cmd_log}
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
