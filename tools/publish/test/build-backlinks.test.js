@@ -58,3 +58,14 @@ test('heading, block and .md links resolve to the page, and count as mentions', 
   assert.match(read('characters', 'npcs', 'lord-vane.html'), /Mentioned In/i);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('a page that links to its own heading does not list itself as a mention', () => {
+  const { read, root } = buildVault({
+    '_meta/vault-config.md': CONFIG,
+    'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n\nSee [[Hallam#Past]].\n\n## Past\n\nx\n',
+  });
+  const html = read('characters', 'npcs', 'hallam.html');
+  assert.doesNotMatch(html, /Mentioned In/i);
+  assert.doesNotMatch(html, /x1="300" y1="200" x2="300" y2="200"/);
+  fs.rmSync(root, { recursive: true, force: true });
+});

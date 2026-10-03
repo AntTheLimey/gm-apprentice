@@ -17,10 +17,14 @@ function buildBacklinks(pages, linkMap) {
       // Keyed in NFC (#139): the key is the mention as typed inside a note, but every read is
       // `_backlinks[page.title]` — the scanned filename. Two authors, two normal forms, and a
       // mismatch silently drops the entity's whole "Mentioned in" sidebar.
-      const target = canonicalNfc(parseWikilink(match[1]).name.trim());
+      const parsed = parseWikilink(match[1]);
+      const target = canonicalNfc(parsed.name.trim());
       if (!target) continue;
       const key = linkMap ? linkMap[target] : target;
-      if (!key || seen.has(key)) continue;
+      // A link to its own heading or block (`[[Self#Part]]`) is not a mention of itself. (A plain
+      // `[[Self]]` has always been counted.)
+      const toSelfPart = key === page.outputPath && parsed.raw !== parsed.name;
+      if (!key || toSelfPart || seen.has(key)) continue;
       seen.add(key);
 
       if (!backlinks[key]) backlinks[key] = [];
