@@ -17,7 +17,7 @@ function buildBacklinks(pages, linkMap) {
       // Keyed in NFC (#139): the key is the mention as typed inside a note, but every read is
       // `_backlinks[page.title]` — the scanned filename. Two authors, two normal forms, and a
       // mismatch silently drops the entity's whole "Mentioned in" sidebar.
-      const target = canonicalNfc(parseWikilink(match[1]).raw.trim());
+      const target = canonicalNfc(parseWikilink(match[1]).name.trim());
       if (!target) continue;
       const key = linkMap ? linkMap[target] : target;
       if (!key || seen.has(key)) continue;

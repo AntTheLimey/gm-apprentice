@@ -1,5 +1,7 @@
 'use strict';
 
+const { canonicalNfc } = require('./unicode');
+
 // The one wikilink pattern and parser the publish tool uses.
 //
 // Obsidian writes a link inside a markdown table with its alias pipe escaped:
@@ -31,6 +33,7 @@ function firstWikilinkTarget(value) {
 // Split a wikilink body (the text between the brackets) into its parts.
 //   raw         everything before the alias, backslash-of-the-pipe removed (`Note#H`)
 //   target      `raw` up to the first `#` or `^`
+//   name        `target` without a trailing `.md`: what the site's link map is asked
 //   heading     the text after a `#` (or `^`), '' when there is none
 //   display     the alias, '' when there is none (`![[img.png\|300]]` gives '300')
 //   escapedPipe true when the source wrote the pipe as `\|`
@@ -45,9 +48,11 @@ function parseWikilink(body) {
     escapedPipe = true;
   }
   const frag = raw.search(/[#^]/);
+  const target = frag === -1 ? raw : raw.slice(0, frag);
   return {
     raw,
-    target: frag === -1 ? raw : raw.slice(0, frag),
+    target,
+    name: target.replace(/\.md$/i, ''),
     heading: frag === -1 ? '' : raw.slice(frag + 1),
     display,
     escapedPipe,
@@ -55,9 +60,28 @@ function parseWikilink(body) {
 }
 
 // The target a frontmatter reference names, whether written `Name`, `[[Name]]` or
-// `[[Name|Shown]]` (or `\|` in a table): brackets and alias gone, `#heading` kept.
+// `[[Name|Shown]]` (or `\|` in a table): brackets and alias gone, `#heading` kept, NFC (a
+// ref typed in one editor is compared with a filename from another, #139).
 function refTarget(value) {
-  return parseWikilink(String(value == null ? '' : value).replace(/\[\[|\]\]/g, '')).raw.trim();
+  return canonicalNfc(parseWikilink(String(value == null ? '' : value).replace(/\[\[|\]\]/g, '')).raw.trim());
 }
 
-module.exports = { WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget };
+// Split a markdown table row on its cell pipes, not on the pipe inside a `[[link|alias]]` or
+// after a backslash (`\|`). Like `line.split('|')`: the pieces join back to the line with `|`,
+// the first is what sits before the first pipe.
+function splitTableRow(line) {
+  const text = String(line);
+  const out = [];
+  let start = 0;
+  let depth = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === '[' && text[i + 1] === '[') { depth++; i++; continue; }
+    if (c === ']' && text[i + 1] === ']' && depth > 0) { depth--; i++; continue; }
+    if (c === '|' && depth === 0 && text[i - 1] !== '\\') { out.push(text.slice(start, i)); start = i + 1; }
+  }
+  out.push(text.slice(start));
+  return out;
+}
+
+module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget };

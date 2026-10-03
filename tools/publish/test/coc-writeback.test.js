@@ -87,3 +87,11 @@ test('never touches the Skills table', () => {
   const { markdown } = applyCoCFlush(SHEET, blob({ hp: 7 }));
   assert.match(markdown, /\| Spot Hidden \| 25 \| 58 \| 29 \| 11 \|/);
 });
+
+test('a wikilink with an escaped pipe in an earlier cell does not shift the cells', () => {
+  const sheet = ['### Derived', '', '| Attribute | Max | Current |', '|---|---|---|',
+    '| HP | [[Max\\|11]] | 11 |', '| MP | 13 | 13 |', ''].join('\n');
+  const r = applyCoCFlush(sheet, { hp: 7 });
+  assert.match(r.markdown, /\| HP \| \[\[Max\\\|11\]\] \| 7 \|/);
+  assert.strictEqual(r.changes.length, 1);
+});

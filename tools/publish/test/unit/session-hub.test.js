@@ -54,11 +54,10 @@ describe('publishedWrapUpFor resolves links as the site does (#276 review)', () 
     assert.strictEqual(publishedWrapUpFor(byAlias, [w]), w);
   });
 
-  it('does not fold case or strip #heading — neither link resolves on the site', () => {
+  it('does not fold case, but a #heading link reaches the page as it does on the site', () => {
     const w = wrap('Session 01 Wrap-Up');
-    for (const link of ['[[session 01 wrap-up]]', '[[Session 01 Wrap-Up#Narrative Recap]]']) {
-      assert.strictEqual(publishedWrapUpFor(hub('Session 01', { documents: { wrap_up: link } }), [w]), null, link);
-    }
+    assert.strictEqual(publishedWrapUpFor(hub('Session 01', { documents: { wrap_up: '[[session 01 wrap-up]]' } }), [w]), null);
+    assert.strictEqual(publishedWrapUpFor(hub('Session 01', { documents: { wrap_up: '[[Session 01 Wrap-Up#Narrative Recap]]' } }), [w]), w);
     const s = hub('Session 01 - Arrival');
     assert.strictEqual(publishedWrapUpFor(s, [wrap('W', { session: '[[session 01 - arrival]]' })]), null);
   });

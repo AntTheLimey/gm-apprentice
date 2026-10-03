@@ -44,3 +44,17 @@ test('a mention through an alias counts for the page the alias reaches', () => {
   assert.match(read('characters', 'npcs', 'hallam.html'), /Mentioned In/i);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('heading, block and .md links resolve to the page, and count as mentions', () => {
+  const { read, root } = buildVault({
+    '_meta/vault-config.md': CONFIG,
+    'Characters/NPCs/Lord_Vane.md': '---\ntype: npc\n---\n# Lord Vane\n\n## Past\n\ntext\n',
+    'Sessions/S1.md': '---\ntype: session\n---\nA [[Lord_Vane#Past]] B [[Lord_Vane^b1|the lord]] C [[Lord_Vane.md]] D [[Lord_Vane#Past|history]].\n',
+  });
+  const html = read('sessions', 's1.html');
+  const links = html.match(/href="[^"]*lord-vane\.html"/g) || [];
+  assert.strictEqual(links.length >= 4, true, html.match(/<p>.*<\/p>/s)[0]);
+  assert.doesNotMatch(html, /Lord_Vane#Past|Lord Vane#Past|Lord_Vane\^b1/);
+  assert.match(read('characters', 'npcs', 'lord-vane.html'), /Mentioned In/i);
+  fs.rmSync(root, { recursive: true, force: true });
+});

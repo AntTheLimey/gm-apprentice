@@ -39,11 +39,12 @@ function parseWikiRef(raw) {
   if (!inner) return { target: '', label: '' };
   const w = parseWikilink(inner);
   const label = w.display.trim();
+  // The target is the name the link map is asked for: no `#heading`, `^block` or `.md`.
+  const target = w.name.trim();
   if (!label) {
-    const target = w.raw.trim();
     return { target, label: bracketed ? wikiTargetLabel(target) : humanizeName(target) };
   }
-  return { target: w.raw.trim(), label };
+  return { target, label };
 }
 
 function relativePath(fromDir, toPath) {
@@ -74,11 +75,16 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   // below into `![text](path)` — an <img> whose src points at an HTML page. Image embeds
   // resolve earlier, in resolveImageEmbeds, so nothing reaching here should stay an image.
   return markdown.replace(wikilinkRe('g', true), (match, body) => {
-    const { raw: target, display: displayText } = parseWikilink(body);
+    const parsed = parseWikilink(body);
+    const { raw, display: displayText } = parsed;
+    // The map is asked for the name alone: a `#heading`, `^block` or `.md` on the link does
+    // not change which page it is. (The site has no heading anchors to jump to, so the link
+    // goes to the page.) A name only a literal spelling matches still does.
+    const target = linkMap[raw] ? raw : parsed.name;
     // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
     // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
-    const display = displayText || wikiTargetLabel(target);
     const targetPath = linkMap[target];
+    const display = displayText || wikiTargetLabel(targetPath ? target : raw);
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
     // A raw space (or other unsafe char) in the destination is not valid markdown link
@@ -1193,8 +1199,9 @@ function gmAliasRewriter(pages, published) {
     return String(text).replace(WIKI, (match, body) => {
       const bang = match.startsWith('!') ? '!' : '';
       const w = parseWikilink(body);
-      // The owner is looked up by the name before any `#`; a `^block` stays part of it.
-      const hash = w.raw.indexOf('#');
+      // The owner is looked up by the name before any `#heading` or `^block`, which stay
+      // on the link.
+      const hash = w.raw.search(/[#^]/);
       const target = hash === -1 ? w.raw : w.raw.slice(0, hash);
       const anchor = hash === -1 ? '' : w.raw.slice(hash);
       const bar = w.escapedPipe ? '\\|' : '|';

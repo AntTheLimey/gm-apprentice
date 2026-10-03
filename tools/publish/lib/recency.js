@@ -17,7 +17,7 @@ const publishedText = publishedSource;
 function extractMentions(markdown) {
   const mentions = new Set();
   for (const match of markdown.matchAll(wikilinkRe())) {
-    mentions.add(canonicalNfc(parseWikilink(match[1]).raw.trim()));
+    mentions.add(canonicalNfc(parseWikilink(match[1]).name.trim()));
   }
   return mentions;
 }

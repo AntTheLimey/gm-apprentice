@@ -26,9 +26,9 @@ const ROW = '| a | [[Emma_Wentworth\\|Emma]] |';
 describe('parseWikilink', () => {
   it('treats a backslash before the alias pipe as part of the pipe', () => {
     assert.deepStrictEqual(parseWikilink('Emma_Wentworth\\|Emma'),
-      { raw: 'Emma_Wentworth', target: 'Emma_Wentworth', heading: '', display: 'Emma', escapedPipe: true });
+      { raw: 'Emma_Wentworth', target: 'Emma_Wentworth', name: 'Emma_Wentworth', heading: '', display: 'Emma', escapedPipe: true });
     assert.deepStrictEqual(parseWikilink('Emma_Wentworth|Emma'),
-      { raw: 'Emma_Wentworth', target: 'Emma_Wentworth', heading: '', display: 'Emma', escapedPipe: false });
+      { raw: 'Emma_Wentworth', target: 'Emma_Wentworth', name: 'Emma_Wentworth', heading: '', display: 'Emma', escapedPipe: false });
   });
 
   it('keeps the heading and block after an escaped pipe', () => {
@@ -48,7 +48,7 @@ describe('parseWikilink', () => {
 
   it('has no alias and no heading on a bare target', () => {
     assert.deepStrictEqual(parseWikilink('Plain'),
-      { raw: 'Plain', target: 'Plain', heading: '', display: '', escapedPipe: false });
+      { raw: 'Plain', target: 'Plain', name: 'Plain', heading: '', display: '', escapedPipe: false });
   });
 
   it('wikilinkRe matches an escaped-pipe link as one link, and gives a fresh RegExp', () => {
@@ -102,6 +102,19 @@ describe('table links with an escaped pipe, in the site build', () => {
     const rw = gmAliasRewriter([owner]);
     assert.strictEqual(rw.markdown('| [[Elias\\|a patron]] |'), '| [[Lord Vane\\|a patron]] |');
     assert.strictEqual(rw.markdown('| [[Lord Vane\\|Elias]] |'), '| [[Lord Vane]] |');
+  });
+});
+
+describe('a secret alias with a ^block anchor is still rewritten', () => {
+  const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias Crowe'] } };
+  const rw = gmAliasRewriter([owner]);
+
+  it('in every link form', () => {
+    assert.strictEqual(rw.markdown('[[Elias Crowe^b1]]'), '[[Lord Vane^b1]]');
+    assert.strictEqual(rw.markdown('[[Elias Crowe^b1|y]]'), '[[Lord Vane^b1|y]]');
+    assert.strictEqual(rw.markdown('| [[Elias Crowe^b1\\|y]] |'), '| [[Lord Vane^b1\\|y]] |');
+    assert.strictEqual(rw.markdown('![[Elias Crowe^b1]]'), '![[Lord Vane^b1]]');
+    assert.strictEqual(rw.markdown('[[Elias Crowe#Past]]'), '[[Lord Vane#Past]]');
   });
 });
 
@@ -175,7 +188,7 @@ describe('an empty alias is no alias', () => {
   it('the shared pattern matches [[A|]] and ![[A|]] and parses no display', () => {
     assert.strictEqual(wikilinkRe('', true).exec('![[A|]]')[0], '![[A|]]');
     assert.deepStrictEqual(parseWikilink('A|'),
-      { raw: 'A', target: 'A', heading: '', display: '', escapedPipe: false });
+      { raw: 'A', target: 'A', name: 'A', heading: '', display: '', escapedPipe: false });
   });
 
   it('the gm-alias rewriter still rewrites a secret name with an empty alias', () => {

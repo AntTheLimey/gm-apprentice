@@ -1,4 +1,5 @@
 const path = require('path');
+const { refTarget } = require('./wikilink');
 const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
@@ -30,10 +31,6 @@ function findRecap(page, resolve) {
 // write side of both indexes and the ref in chapterMatchesSession; the reads below
 // canonicalize the title they look up with. A Map is not a plain object, so nfcLookupTable
 // cannot carry this — it has to be done at the call sites.
-function refTarget(value) {
-  if (!value) return '';
-  return canonicalNfc(parseWikilink(String(value).replace(/^\[\[/, '').replace(/\]\]$/, '')).raw.trim());
-}
 
 // Index wrap-up pages: bySession (keyed on the session ref target) and byChapter
 // (keyed on the chapter ref target, for wrap-ups with no session ref).
