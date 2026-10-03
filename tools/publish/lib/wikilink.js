@@ -11,9 +11,9 @@
 const TARGET_SOURCE = String.raw`(?:[^\]|\\]|\\(?!\|))+`;
 
 // `[[` body `]]`, with the whole body in group 1: the target (with any `#heading` or `^block`),
-// then an optional `|alias` or `\|alias`. Hand group 1 to parseWikilink. The leading `!` of an
+// then an optional `|alias` or `\|alias` (an empty alias is allowed and means none). Hand group 1 to parseWikilink. The leading `!` of an
 // embed is not part of it (see `wikilinkRe`).
-const WIKILINK_SOURCE = String.raw`\[\[(${TARGET_SOURCE}(?:\\?\|[^\]]+)?)\]\]`;
+const WIKILINK_SOURCE = String.raw`\[\[(${TARGET_SOURCE}(?:\\?\|[^\]]*)?)\]\]`;
 
 // A fresh RegExp each call, so no caller shares `lastIndex` with another. `withBang` also
 // matches a leading `!` (an embed or transclusion), which lands outside group 1.
@@ -21,9 +21,9 @@ function wikilinkRe(flags = 'g', withBang = false) {
   return new RegExp((withBang ? '!?' : '') + WIKILINK_SOURCE, flags);
 }
 
-// The target of a value that merely starts with a link (`[[Name|x]]`, closing brackets
-// optional), for frontmatter values. Returns the raw target or null.
-function leadingWikilinkTarget(value) {
+// The target of the first link in a value (`[[Name|x]]`, closing brackets optional), for
+// frontmatter values. Returns the raw target or null.
+function firstWikilinkTarget(value) {
   const m = new RegExp(String.raw`\[\[(${TARGET_SOURCE})`).exec(String(value));
   return m ? m[1] : null;
 }
@@ -54,4 +54,10 @@ function parseWikilink(body) {
   };
 }
 
-module.exports = { WIKILINK_SOURCE, wikilinkRe, parseWikilink, leadingWikilinkTarget };
+// The target a frontmatter reference names, whether written `Name`, `[[Name]]` or
+// `[[Name|Shown]]` (or `\|` in a table): brackets and alias gone, `#heading` kept.
+function refTarget(value) {
+  return parseWikilink(String(value == null ? '' : value).replace(/\[\[|\]\]/g, '')).raw.trim();
+}
+
+module.exports = { WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget };

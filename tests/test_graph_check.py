@@ -65,6 +65,24 @@ class UnresolvedTests(unittest.TestCase):
                                 "A.md": f"[[{nfc}]]\n"})
         self.assertEqual(run(vault)[0], "# count: 0")
 
+    def test_a_link_to_an_existing_attachment_resolves(self):
+        nfc = unicodedata.normalize("NFC", "Tich\u00e1.png")
+        vault = vault_of(self, {
+            "A.md": ("![[Map.PNG]] ![[maps/plan.pdf|300]] [[Sheet.pdf]] "
+                     f"![[{nfc}]]\n"),
+            "_attachments/map.png": "x", "docs/Plan.pdf": "x",
+            "Sheet.pdf": "x",
+            unicodedata.normalize("NFD", nfc): "x"})
+        self.assertEqual(run(vault)[0], "# count: 0")
+
+    def test_a_link_to_a_missing_attachment_is_reported(self):
+        vault = vault_of(self, {
+            "A.md": "![[gone.png]] [[Real]]\n", "Real.md": "x\n",
+            "_Templates/t.png": "x", ".hid/gone.png": "x"})
+        rows = run(vault)
+        self.assertEqual(rows[0], "# count: 1")
+        self.assertTrue(rows[1].startswith("gone.png"))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -524,26 +524,16 @@ def _move(vault: Path, old: str, new: str) -> None:
         raise
 
 
-def _old_name_listed(p: Plan) -> bool:
-    """Is OLD's exact-case spelling still in its folder? Checked at the
-    first path segment whose case differs from NEW's, so a folder-only
-    case rename (`Sub/a.md` to `sub/a.md`) is told apart too. Segments
-    above it are the same, so NEW's spelling reaches the right folder."""
-    old_parts, new_parts = p.old.split("/"), p.new.split("/")
-    for i, (a, b) in enumerate(zip(old_parts, new_parts)):
-        if a != b:
-            parent = p.vault.joinpath(*new_parts[:i])
-            return a in os.listdir(parent)
-    return False
-
-
 def _moved(p: Plan) -> bool:
     """True when the note is already at NEW, whatever step was reached."""
     dst = p.vault / p.new
     try:
         if _nfc(p.old).casefold() == _nfc(p.new).casefold():
+            # `_move` never renames a folder: the file leaves OLD's folder
+            # for NEW's, so OLD's exact name must be gone from its folder.
+            src = p.vault / p.old
             return (dst.name in os.listdir(dst.parent)
-                    and not _old_name_listed(p)
+                    and src.name not in os.listdir(src.parent)
                     and not _temp_name(p.vault, p.old).exists())
         return dst.exists() and not (p.vault / p.old).exists()
     except OSError:

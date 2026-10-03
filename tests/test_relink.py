@@ -793,13 +793,36 @@ class MovedTests(unittest.TestCase):
                                return_value=["S4.md"]):
             self.assertTrue(relink._moved(p))
 
-    def test_folder_case_only_rename_both_directions(self):
+    def listing(self, vault, here, there):
+        """os.listdir as a case-sensitive file system answers it: `here`
+        is what OLD's folder holds, `there` what NEW's folder holds."""
+        def fake(path):
+            path = Path(path)
+            if path == vault / "Sub":
+                return here
+            if path == vault / "sub":
+                return there
+            raise OSError(path)
+        return mock.patch.object(relink.os, "listdir", fake)
+
+    def test_folder_case_move_counts_once_the_file_is_in_new_folder(self):
+        # _move never renames a folder: the file leaves Sub/ for sub/.
         vault = make_vault(self, {"Sub/a.md": "x\n"})
         p = relink.Plan(vault, "Sub/a.md", "sub/a.md")
-        self.assertFalse(relink._moved(p))
-        os.rename(vault / "Sub", vault / ".tmp")
-        os.rename(vault / ".tmp", vault / "sub")
-        self.assertTrue(relink._moved(p))
+        with self.listing(vault, [], ["a.md"]):
+            self.assertTrue(relink._moved(p))
+
+    def test_folder_case_move_not_done_while_the_file_is_still_in_old_folder(self):
+        vault = make_vault(self, {"Sub/a.md": "x\n"})
+        p = relink.Plan(vault, "Sub/a.md", "sub/a.md")
+        with self.listing(vault, ["a.md"], ["a.md"]):
+            self.assertFalse(relink._moved(p))
+
+    def test_case_only_in_the_file_name_in_a_folder_the_other_way(self):
+        vault = make_vault(self, {"Sub/a.md": "x\n"})
+        p = relink.Plan(vault, "Sub/a.md", "sub/A.md")
+        with self.listing(vault, [], ["A.md"]):
+            self.assertTrue(relink._moved(p))
 
 
 if __name__ == "__main__":

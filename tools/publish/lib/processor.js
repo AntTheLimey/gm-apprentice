@@ -37,9 +37,13 @@ function parseWikiRef(raw) {
   const bracketed = /\[\[[^\]]*\]\]/.test(str);
   const inner = str.replace(/\[\[|\]\]/g, '').trim();
   if (!inner) return { target: '', label: '' };
-  if (!inner.includes('|')) return { target: inner, label: bracketed ? wikiTargetLabel(inner) : humanizeName(inner) };
   const w = parseWikilink(inner);
-  return { target: w.raw.trim(), label: w.display.trim() };
+  const label = w.display.trim();
+  if (!label) {
+    const target = w.raw.trim();
+    return { target, label: bracketed ? wikiTargetLabel(target) : humanizeName(target) };
+  }
+  return { target: w.raw.trim(), label };
 }
 
 function relativePath(fromDir, toPath) {

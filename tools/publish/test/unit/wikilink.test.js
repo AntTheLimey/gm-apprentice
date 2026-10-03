@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 const lunr = require('lunr');
 
-const { wikilinkRe, parseWikilink, leadingWikilinkTarget } = require('../../lib/wikilink');
+const { wikilinkRe, parseWikilink, firstWikilinkTarget } = require('../../lib/wikilink');
 const {
   resolveWikiLinks, resolveImageEmbeds, processContent, parseWikiRef, plainMetaValue,
   renderMetaValue, gmAliasRewriter,
@@ -15,6 +15,10 @@ const { scoreByRecency } = require('../../lib/recency');
 const { buildSearchIndex } = require('../../lib/search-index');
 const { excerptFromMarkdown } = require('../../lib/excerpt');
 const { runSiteDoctor } = require('../../lib/site-doctor');
+const { refTarget } = require('../../lib/wikilink');
+const { parseParticipant } = require('../../lib/templates/event');
+const { extractRecap } = require('../../lib/templates/landing-data');
+const { locationTemplate } = require('../../lib/templates/location');
 
 // Obsidian writes a link inside a table cell with its alias pipe escaped.
 const ROW = '| a | [[Emma_Wentworth\\|Emma]] |';
@@ -52,8 +56,8 @@ describe('parseWikilink', () => {
     assert.strictEqual(m[1], 'A\\|B');
     assert.notStrictEqual(wikilinkRe(), wikilinkRe());
     assert.strictEqual(wikilinkRe('g', true).exec('![[A]]')[0], '![[A]]');
-    assert.strictEqual(leadingWikilinkTarget('[[Name\\|x]]'), 'Name');
-    assert.strictEqual(leadingWikilinkTarget('[[Name|x]]'), 'Name');
+    assert.strictEqual(firstWikilinkTarget('[[Name\\|x]]'), 'Name');
+    assert.strictEqual(firstWikilinkTarget('[[Name|x]]'), 'Name');
   });
 });
 
@@ -164,5 +168,62 @@ describe('site-doctor and the escaped link', () => {
     const rows = await dead(files);
     assert.strictEqual(rows.length, 1);
     assert.match(rows[0].detail, /\[\[Nobody_Here\]\]/);
+  });
+});
+
+describe('an empty alias is no alias', () => {
+  it('the shared pattern matches [[A|]] and ![[A|]] and parses no display', () => {
+    assert.strictEqual(wikilinkRe('', true).exec('![[A|]]')[0], '![[A|]]');
+    assert.deepStrictEqual(parseWikilink('A|'),
+      { raw: 'A', target: 'A', heading: '', display: '', escapedPipe: false });
+  });
+
+  it('the gm-alias rewriter still rewrites a secret name with an empty alias', () => {
+    const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias'] } };
+    const rw = gmAliasRewriter([owner]);
+    for (const form of ['[[Elias|]]', '![[Elias|]]', '[[Elias\\|]]']) {
+      const out = rw.markdown(`She met ${form} there.`);
+      assert.ok(!out.includes('Elias'), out);
+      assert.match(out, /\[\[Lord Vane\]\]/);
+    }
+  });
+
+  it('resolveWikiLinks and the excerpt show the humanized target, never raw brackets', () => {
+    assert.strictEqual(resolveWikiLinks('[[Dr_Who|]]', {}, 'x.html'), 'Dr Who');
+    assert.strictEqual(resolveWikiLinks('[[Dr_Who|]]', { Dr_Who: 'c/who.html' }, 'x.html'), '[Dr Who](c/who.html)');
+    assert.strictEqual(excerptFromMarkdown('Met [[Dr_Who|]] today.'), 'Met Dr Who today.');
+  });
+});
+
+describe('templates read the escaped link', () => {
+  it('refTarget drops the alias and the backslash of the pipe', () => {
+    assert.strictEqual(refTarget('[[Name\\|Shown]]'), 'Name');
+    assert.strictEqual(refTarget('[[Name|Shown]]'), 'Name');
+    assert.strictEqual(refTarget('Name'), 'Name');
+  });
+
+  it('parseParticipant takes the target and alias of an escaped link', () => {
+    const p = parseParticipant('[[Emma_Wentworth\\|Emma]] (injured)');
+    assert.strictEqual(p.target, 'Emma_Wentworth');
+    assert.strictEqual(p.display, 'Emma');
+    assert.strictEqual(p.annotation, 'injured');
+    assert.strictEqual(parseParticipant('[[Emma_Wentworth|]]').display, 'Emma Wentworth');
+  });
+
+  it('the landing recap teaser shows the alias without a backslash', () => {
+    const page = { frontmatter: {}, markdown: '## Narrative Recap\n\nThey met [[Emma_Wentworth\\|Emma]] at dawn.\n' };
+    assert.strictEqual(extractRecap(page), 'They met Emma at dawn.');
+  });
+
+  it('a location is found by a parent_location written with an escaped pipe', () => {
+    const parent = { title: 'Sector_7G', displayTitle: 'Sector 7-G', outputPath: 'locations/s.html',
+      frontmatter: { type: 'location' }, markdown: '' };
+    const child = { title: 'Docking_Ring', displayTitle: 'Docking Ring', outputPath: 'locations/d.html',
+      frontmatter: { type: 'location', parent_location: '[[Sector_7G\\|Sector]]' },
+      markdown: '## Overview\n\nCargo moves at all hours here.\n' };
+    const ctx = { pages: [parent, child], linkMap: {}, publishConfig: { exclude_sections: [], _backlinks: {} } };
+    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' }, () => '',
+      { siteTitle: 'T', attachmentsDir: '_attachments' }, {}, ctx);
+    assert.ok(html.includes('Docking Ring'), 'child listed under its parent');
   });
 });

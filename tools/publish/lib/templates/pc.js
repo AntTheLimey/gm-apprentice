@@ -1,3 +1,4 @@
+const { refTarget } = require('../wikilink');
 const { escapeHtml, relativePath, relativeHref, publishedSource, encodeHref } = require('../processor');
 const { canonicalNfc } = require('../unicode');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
@@ -171,7 +172,7 @@ function buildRouteMap(page, pages) {
     if (loc) {
       // NFC (#139): a Set keyed on an author-typed ref, so two spellings of one location
       // would list it twice in the route map instead of deduping.
-      const locTitle = canonicalNfc(String(loc).replace(/\[\[|\]\]/g, '').split('|')[0].trim());
+      const locTitle = canonicalNfc(refTarget(loc));
       if (!seen.has(locTitle) || locations[locations.length - 1] !== locTitle) {
         locations.push(locTitle);
         seen.add(locTitle);

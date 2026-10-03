@@ -1,17 +1,19 @@
 const { escapeHtml, relativePath, humanizeName, wikiTargetLabel, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
+const { WIKILINK_SOURCE, parseWikilink } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function parseParticipant(raw) {
   const str = String(raw).trim();
-  const wikiMatch = str.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]\s*(?:\((.+)\))?$/);
+  const wikiMatch = str.match(new RegExp('^' + WIKILINK_SOURCE + String.raw`\s*(?:\((.+)\))?$`));
   if (wikiMatch) {
-    const target = wikiMatch[1].trim();
+    const link = parseWikilink(wikiMatch[1]);
+    const target = link.raw.trim();
     // Keep an explicit |alias verbatim; otherwise humanize the slug so participant links
     // don't show raw underscores (Adrien_de_Montferrand → Adrien de Montferrand).
-    const display = wikiMatch[2] ? wikiMatch[2].trim() : wikiTargetLabel(wikiMatch[1].trim());
-    const annotation = wikiMatch[3] ? wikiMatch[3].trim() : '';
+    const display = link.display.trim() ? link.display.trim() : wikiTargetLabel(target);
+    const annotation = wikiMatch[2] ? wikiMatch[2].trim() : '';
     return { target, display, annotation, isLink: true };
   }
   const plainMatch = str.match(/^(.+?)\s*\((.+)\)$/);
@@ -42,10 +44,11 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   }
   if (fm.location) {
     const locRaw = String(fm.location).trim();
-    const locMatch = locRaw.match(/^\[\[([^\]|]+)(?:\|([^\]]+))?\]\]$/);
-    const locTarget = locMatch ? locMatch[1].trim() : locRaw.replace(/\[\[|\]\]/g, '').trim();
+    const locMatch = locRaw.match(new RegExp('^' + WIKILINK_SOURCE + '$'));
+    const locLink = locMatch ? parseWikilink(locMatch[1]) : null;
+    const locTarget = locLink ? locLink.raw.trim() : locRaw.replace(/\[\[|\]\]/g, '').trim();
     // Humanize the slug unless an explicit |alias was given (Sealed_Anatomical_Theatre → …).
-    const locDisplay = locMatch && locMatch[2] ? locMatch[2].trim()
+    const locDisplay = locLink && locLink.display.trim() ? locLink.display.trim()
       : (locMatch ? wikiTargetLabel(locTarget) : humanizeName(locTarget));
     const locPath = linkMap?.[locTarget];
     if (locPath) {

@@ -1,5 +1,6 @@
 const { canonicalNfc, graphemes } = require('../unicode');
 const { escapeHtml, publishedSource } = require('../processor');
+const { wikilinkRe, parseWikilink } = require('../wikilink');
 const { stripTags } = require('../strip-tags');
 const { isLinkedWrapUp, isWrapUp } = require('../session-hub');
 
@@ -20,8 +21,10 @@ function getLatestSession(pages) {
 }
 
 function stripWikiLinks(text) {
-  return text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
-    .replace(/\[\[([^\]]+)\]\]/g, (m, target) => target.replace(/_/g, ' '));
+  return text.replace(wikilinkRe(), (m, body) => {
+    const w = parseWikilink(body);
+    return w.display || w.raw.replace(/_/g, ' ');
+  });
 }
 
 // The recap is printed as escaped plain text, so any raw HTML typed in the body is

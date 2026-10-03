@@ -1,4 +1,5 @@
 const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
+const { refTarget } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
 const {
   getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs,
@@ -39,7 +40,7 @@ function resolveSessionLink(link, pages) {
   if (!link) return null;
   // NFC both sides (#139). A miss here is masked by the getLatestSession fallback, so the
   // landing quietly features a DIFFERENT session than the overview names — worse than blank.
-  const target = canonicalNfc(String(link).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
+  const target = canonicalNfc(refTarget(link));
   if (!target) return null;
   return pages.find(p => p.frontmatter.type === 'session' && canonicalNfc(p.title) === target) || null;
 }

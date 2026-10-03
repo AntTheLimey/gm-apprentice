@@ -18,7 +18,8 @@ unresolved target name) per line. `all` prints labelled sections.
 Link forms handled: [[Name]], [[Name|alias]], [[Name#heading]],
 [[Name^block]], ![[embeds]], quoted "[[links]]" in YAML frontmatter,
 spaces vs underscores, case differences, and frontmatter `aliases:`.
-A table link `[[Name\\|alias]]` counts as `[[Name|alias]]`. Links quoted in
+A link to an existing image or other non-note file counts as resolved. A
+table link `[[Name\\|alias]]` counts as `[[Name|alias]]`. Links quoted in
 code fences or inline code are not links. Like every other vault script it
 skips hidden folders and the `_Templates`, `_templates` and `_inbox`
 folders.
@@ -91,6 +92,20 @@ def collect(vault: Path, excludes: list[str]):
     return notes, names, outbound
 
 
+def attachment_names(vault: Path) -> set[str]:
+    """Normalized names of the vault's non-note files (images, PDFs...),
+    walked like the notes: a `![[map.png]]` or `[[Sheet.pdf]]` link is
+    resolved against these, case-insensitively by file name like Obsidian."""
+    found: set[str] = set()
+    for path in vault.rglob("*"):
+        if path.suffix.lower() == ".md" or not path.is_file():
+            continue
+        if is_skipped_path(path.relative_to(vault).as_posix()):
+            continue
+        found.add(normalize(path.name))
+    return found
+
+
 def inbound_map(notes, names, outbound):
     """relpath -> set of relpaths that link to it (self-links excluded)."""
     inbound: dict[str, set[str]] = {rel: set() for rel in notes}
@@ -142,7 +157,7 @@ def main() -> int:
                       if not srcs and in_folder(r, args.folder))
 
     def unresolved():
-        known = set(names)
+        known = set(names) | attachment_names(args.vault)
         missing: dict[str, set[str]] = {}
         for src, targets in outbound.items():
             for t in targets:

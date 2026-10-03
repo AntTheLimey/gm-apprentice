@@ -1,3 +1,4 @@
+const { refTarget, parseWikilink } = require('../wikilink');
 const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -381,7 +382,7 @@ function renderChapterList(pages, indexDir) {
   const CHAPTER_PREFIX = /^chapter\s+\d+\s*[-–—:]\s*/i;
   const bare = (s) => s.replace(CHAPTER_PREFIX, '').trim();
   const refOf = (session) => canonicalNfc(
-    String(session.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').split('|')[0].trim()
+    refTarget(session.frontmatter.chapter || '')
   ).toLowerCase();
 
   // How strongly a ref names this chapter. 2 = the two titles are the same once a
@@ -669,8 +670,8 @@ function renderDocuments(pages, indexDir, imageMap = {}) {
     if (Array.isArray(raw)) raw = raw[0] || '';
     const s = String(raw).replace(/\[\[|\]\]/g, '').trim();
     if (!s) return OTHER;
-    const parts = s.split('|');            // [[Name|Display]] -> Display
-    return (parts[1] || parts[0]).trim() || OTHER;
+    const w = parseWikilink(s);            // [[Name|Display]] -> Display
+    return (w.display || w.raw).trim() || OTHER;
   }
 
   const byChar = {};

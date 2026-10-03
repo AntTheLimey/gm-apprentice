@@ -1,6 +1,6 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
-const { wikilinkRe, parseWikilink, leadingWikilinkTarget } = require('./wikilink');
+const { wikilinkRe, parseWikilink, firstWikilinkTarget } = require('./wikilink');
 const TERMINAL_STATUSES = new Set(['dead', 'deceased', 'destroyed', 'kia', 'dissolved']);
 // A session counts as "played" once it has been run — including the post-wrap-up, pre-reconcile
 // `wrap-up` state — so a freshly wrapped session still drives "recent" before it's reviewed.
@@ -31,12 +31,12 @@ function sessionMentions(session, wrapUpFor) {
   const fm = session.frontmatter || {};
   if (Array.isArray(fm.participants)) {
     for (const p of fm.participants) {
-      const t = leadingWikilinkTarget(p);
+      const t = firstWikilinkTarget(p);
       if (t !== null) names.add(canonicalNfc(t.trim()));
     }
   }
   if (fm.location) {
-    const t = leadingWikilinkTarget(fm.location);
+    const t = firstWikilinkTarget(fm.location);
     if (t !== null) names.add(canonicalNfc(t.trim()));
   }
   const wu = wrapUpFor.get(session);

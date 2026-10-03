@@ -1,3 +1,4 @@
+const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, parseWikiRef, publishedSource, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -11,7 +12,7 @@ const { canonicalNfc } = require('../unicode');
 // location page. Bare `===`, so no lookup-table wrapper can cover this.
 function matchesRef(refValue, title) {
   if (!refValue) return false;
-  const cleaned = canonicalNfc(String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].replace(/_/g, ' ').trim());
+  const cleaned = canonicalNfc(refTarget(refValue).replace(/_/g, ' '));
   const normalTitle = canonicalNfc(String(title || '').replace(/_/g, ' ').trim());
   return cleaned === normalTitle;
 }
