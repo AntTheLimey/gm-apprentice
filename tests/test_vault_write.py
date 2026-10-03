@@ -350,5 +350,209 @@ class WrapupNewTests(unittest.TestCase):
         self.assertRegex(Path(WRAP_REL).stem, vc.WRAP_FILENAME_RE)
 
 
+WRAP = """---
+type: session_wrap
+session: "[[Session 02 - The Docks]]"
+session_number: 2
+canon_status: DRAFT
+---
+
+# Chapter 01 · Session 02 — The Docks — Wrap-Up
+
+<!-- gm-only -->
+
+## GM Notes
+
+<!-- /gm-only -->
+"""
+
+
+def wrap_vault(case, text=WRAP):
+    return make_vault(case, {WRAP_REL: text})
+
+
+def add(vault, stdin, *flags):
+    return run(vault, "wrapup-add", WRAP_REL, *flags, "--write", stdin=stdin)
+
+
+def heading_lines(text):
+    return [line for line in text.splitlines()
+            if line.startswith("#") or line.startswith("<!--")]
+
+
+class WrapupAddTests(unittest.TestCase):
+    def test_sections_land_in_template_order_whatever_order_they_arrive(self):
+        vault = wrap_vault(self)
+        for chunk in ("### Handoff to session-prep\n\nOpens at dawn.\n",
+                      "### World State\n\n- **Location:** docks\n",
+                      "## Memorable Moments\n\n**The chase.**\n",
+                      "### Quick Bullets\n\n- one\n",
+                      "## Narrative Recap\n\nThey ran.\n"):
+            code, out = add(vault, chunk)
+            self.assertEqual(code, 0, out)
+        self.assertEqual(heading_lines(read(vault, WRAP_REL)), [
+            "# Chapter 01 · Session 02 — The Docks — Wrap-Up",
+            "## Narrative Recap", "## Memorable Moments",
+            "<!-- gm-only -->", "## GM Notes", "### Quick Bullets",
+            "### World State", "### Handoff to session-prep",
+            "<!-- /gm-only -->"])
+
+    def test_several_sections_in_one_call(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "## Narrative Recap\n\nThey ran.\n\n"
+                               "### World State\n\n- x\n\n"
+                               "### Quick Bullets\n\n- one\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("ADDED\t"), 3)
+        text = read(vault, WRAP_REL)
+        self.assertLess(text.index("### Quick Bullets"),
+                        text.index("### World State"))
+        self.assertLess(text.index("They ran."), text.index("<!-- gm-only"))
+
+    def test_a_subsection_creates_its_parent(self):
+        vault = wrap_vault(self)
+        add(vault, "#### Skipped Prep\n\n- **The warehouse** never fired.\n")
+        add(vault, "#### Unresolved Threads\n\n- **Ezra** got away.\n")
+        text = read(vault, WRAP_REL)
+        self.assertEqual(text.count("### What Carries Forward"), 1)
+        self.assertLess(text.index("#### Unresolved Threads"),
+                        text.index("#### Skipped Prep"))
+
+    def test_a_new_keeper_section_lands_at_the_end_of_gm_notes(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- x\n")
+        code, out = add(vault, "### Dream Omens\n\nThe tide spoke.\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAP_REL)
+        self.assertLess(text.index("### World State"),
+                        text.index("### Dream Omens"))
+        self.assertLess(text.index("### Dream Omens"),
+                        text.index("<!-- /gm-only -->"))
+
+    def test_a_new_player_section_lands_before_the_fence_and_says_so(self):
+        vault = wrap_vault(self)
+        add(vault, "## Narrative Recap\n\nThey ran.\n")
+        code, out = add(vault, "## Letters Home\n\nDear all.\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("players will see this", out)
+        text = read(vault, WRAP_REL)
+        self.assertLess(text.index("## Narrative Recap"),
+                        text.index("## Letters Home"))
+        self.assertLess(text.index("## Letters Home"),
+                        text.index("<!-- gm-only -->"))
+
+    def test_after_puts_a_new_section_where_the_gm_wants_it(self):
+        vault = wrap_vault(self)
+        add(vault, "## Narrative Recap\n\nThey ran.\n\n"
+                   "## Memorable Moments\n\n**The chase.**\n\n"
+                   "### Quick Bullets\n\n- one\n\n### World State\n\n- x\n")
+        code, out = add(vault, "## Letters Home\n\nDear all.\n",
+                        "--after", "## Narrative Recap")
+        self.assertEqual(code, 0, out)
+        code, out = add(vault, "### Dream Omens\n\nThe tide spoke.\n",
+                        "--after", "### Quick Bullets")
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAP_REL)
+        self.assertLess(text.index("## Narrative Recap"),
+                        text.index("## Letters Home"))
+        self.assertLess(text.index("## Letters Home"),
+                        text.index("## Memorable Moments"))
+        self.assertLess(text.index("### Quick Bullets"),
+                        text.index("### Dream Omens"))
+        self.assertLess(text.index("### Dream Omens"),
+                        text.index("### World State"))
+        code, _ = add(vault, "### Tides\n\nx\n", "--after", "### Nope")
+        self.assertEqual(code, 1)
+
+    def test_a_template_keeper_heading_at_h2_is_a_slip(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "## World State\n\n- x\n")
+        self.assertEqual(code, 1)
+        self.assertIn("### World State", out)
+        self.assertEqual(read(vault, WRAP_REL), WRAP)
+
+    def test_an_existing_section_needs_replace(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- old\n\n### Quality Notes\n\nFine.\n")
+        code, out = add(vault, "### World State\n\n- new\n")
+        self.assertEqual(code, 1)
+        self.assertIn("--replace", out)
+        code, out = add(vault, "### World State\n\n- new\n", "--replace")
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAP_REL)
+        self.assertNotIn("- old", text)
+        self.assertIn("### World State\n\n- new\n\n### Quality Notes", text)
+
+    def test_a_decorated_heading_is_the_same_section(self):
+        vault = wrap_vault(self, WRAP.replace(
+            "## GM Notes\n", "## GM Notes\n\n### **world state**\n\n- old\n"))
+        code, out = add(vault, "### World State\n\n- new\n")
+        self.assertEqual(code, 1)
+        self.assertIn("--replace", out)
+
+    def test_a_heading_in_a_code_fence_is_not_a_section(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "### Quality Notes\n\n```md\n## Narrative "
+                               "Recap\n```\n\nDone.\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("ADDED\t"), 1)
+        text = read(vault, WRAP_REL)
+        self.assertLess(text.index("<!-- gm-only -->"),
+                        text.index("## Narrative Recap"))
+
+    def test_deeper_headings_travel_with_their_section(self):
+        vault = wrap_vault(self)
+        add(vault, "### PC Carry-Forward\n\n#### [[Vint]] (Sam)\n\n"
+                   "- **Intent:** find Ezra\n")
+        text = read(vault, WRAP_REL)
+        self.assertIn("### PC Carry-Forward\n\n#### [[Vint]] (Sam)", text)
+
+    def test_one_bad_section_stops_the_whole_call(self):
+        vault = wrap_vault(self)
+        code, _ = add(vault, "### Quick Bullets\n\n- a\n\n"
+                             "## World State\n\n- x\n")
+        self.assertEqual(code, 1)
+        self.assertEqual(read(vault, WRAP_REL), WRAP)
+
+    def test_refusals(self):
+        cases = {
+            "empty": (WRAP, ""),
+            "no heading first": (WRAP, "Just prose.\n"),
+            "not a wrap-up": (WRAP.replace("session_wrap", "npc"),
+                              "### World State\n\n- x\n"),
+            "no fence": (WRAP.replace("<!-- gm-only -->\n\n", "")
+                         .replace("\n<!-- /gm-only -->\n", ""),
+                         "### World State\n\n- x\n"),
+            "unbalanced": (WRAP.replace("<!-- /gm-only -->\n", ""),
+                           "### World State\n\n- x\n"),
+        }
+        for name, (text, stdin) in cases.items():
+            with self.subTest(name):
+                vault = wrap_vault(self, text)
+                code, out = add(vault, stdin)
+                self.assertEqual(code, 1, out)
+                self.assertEqual(read(vault, WRAP_REL), text)
+        vault = wrap_vault(self, cases["no fence"][0])
+        _, out = add(vault, "### World State\n\n- x\n")
+        self.assertIn("wrapup --fix", out)
+
+    def test_the_result_passes_the_checker(self):
+        import vault_check as vc
+        vault = wrap_vault(self)
+        add(vault, "## Narrative Recap\n\nThey ran.\n\n"
+                   "### World State\n\n- x\n\n"
+                   "### Handoff to session-prep\n\nDawn.\n")
+        findings = vc.wrapup_structure_findings(
+            WRAP_REL, read(vault, WRAP_REL), [])
+        self.assertEqual([f.row for f in findings if f.level == "ERROR"], [])
+
+
+class StripCommentTests(unittest.TestCase):
+    def test_an_empty_value_with_a_trailing_comment_is_stripped(self):
+        text = "---\ntags: # note\nk: \"a # b\" # c\nj: x # y\n---\n"
+        self.assertEqual(vw.template_frontmatter(text),
+                         ["tags:", 'k: "a # b"', "j: x"])
+
+
 if __name__ == "__main__":
     unittest.main()

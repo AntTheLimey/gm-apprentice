@@ -32,6 +32,7 @@ import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 
+import vault_check as vc
 import vaultlib as vl
 from migrate_core import StepFailed, write_text_atomic
 from vaultlib import LineState, scan_body
@@ -278,6 +279,8 @@ def template_text(vault: Path, vault_names: tuple[str, ...],
 def strip_comment(value: str) -> str:
     """`value` without a trailing YAML comment. A quoted value is kept
     through its closing quote, so a # inside the quotes survives."""
+    if value.lstrip().startswith("#"):
+        return ""
     quoted = re.match(r"""^\s*("[^"]*"|'[^']*')""", value)
     if quoted:
         return quoted.group(1).strip()
@@ -297,9 +300,11 @@ def template_frontmatter(text: str) -> list[str]:
         if line.strip().startswith("#") or not line.strip():
             continue
         name, colon, value = line.partition(":")
-        out.append(name + colon + (" " if value[:1] == " " else "")
-                   + strip_comment(value.lstrip()) if colon
-                   else COMMENT_TAIL_RE.sub("", line))
+        if not colon:
+            out.append(COMMENT_TAIL_RE.sub("", line))
+            continue
+        kept = strip_comment(value.lstrip())
+        out.append(name + colon + (" " + kept if kept else ""))
     raise WriteError("template frontmatter never closes")
 
 
@@ -361,6 +366,166 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     batch.row("WOULD-CREATE", rel, "", f"from {index}")
 
 
+GM_NOTES = "gm notes"
+PLAYERS_SEE = "new section — players will see this"
+
+
+@dataclass
+class TemplateMap:
+    order: list[tuple[int, str]]    # (level, key) for H2-H4, template order
+    titles: dict[str, str]          # key -> the template's own spelling
+    parent: dict[str, str]          # H4 key -> its H3's key
+    gm: set[str]                    # keys that sit under ## GM Notes
+
+    def later(self, level: int, k: str, among: set[str] | None = None
+              ) -> set[str]:
+        """Keys of `level` that come after `k` in the template."""
+        keys = [c for lvl, c in self.order
+                if lvl == level and (among is None or c in among)]
+        return set(keys[keys.index(k) + 1:]) if k in keys else set()
+
+
+def read_template_map(text: str) -> TemplateMap:
+    tmap = TemplateMap([], {}, {}, set())
+    in_gm = False
+    h3: str | None = None
+    for h in parse(text).heads:
+        if h.level not in (2, 3, 4):
+            continue
+        k = key(h.title)
+        if h.level == 2:
+            in_gm, h3 = k == GM_NOTES, None
+            if in_gm:
+                continue
+        elif h.level == 3:
+            h3 = k
+        elif h3 is not None:
+            tmap.parent[k] = h3
+        tmap.order.append((h.level, k))
+        tmap.titles[k] = h.title
+        if in_gm:
+            tmap.gm.add(k)
+    return tmap
+
+
+def split_units(text: str, known: set[str]
+                ) -> list[tuple[int, str, list[str]]]:
+    """The sections on stdin. A heading opens a new section when the
+    template knows it or when it is no deeper than the section it follows;
+    any other heading travels with the section above it."""
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    while lines and not lines[-1].strip():
+        lines.pop()
+    if not lines:
+        raise WriteError("nothing on stdin")
+    heads = vl._fenced_headings("\n".join(lines))
+    if not heads or any(line.strip() for line in lines[:heads[0][0]]):
+        raise WriteError("stdin must start with a heading")
+    starts: list[tuple[int, int, str]] = []
+    for i, level, title in heads:
+        if (not starts or key(title) in known or level <= starts[-1][1]):
+            starts.append((i, level, title))
+    units = []
+    for n, (i, level, title) in enumerate(starts):
+        end = starts[n + 1][0] if n + 1 < len(starts) else len(lines)
+        body = lines[i:end]
+        while body and not body[-1].strip():
+            body.pop()
+        units.append((level, title, body))
+    return units
+
+
+def gm_region(doc: Doc, rel: str) -> tuple[Head, int, int]:
+    fix = "run vault_check.py wrapup --fix"
+    if doc.problems:
+        raise WriteError(f"{rel}: gm-only fence is unbalanced "
+                         f"({doc.problems[0]}) — {fix}")
+    for h in doc.heads:
+        if h.level == 2 and key(h.title) == GM_NOTES and h.gm:
+            opener = max(s.lineno - 1 for s in doc.states
+                         if s.marker == OPEN_GM and s.lineno - 1 < h.idx)
+            return h, opener, section_end(doc, h)
+    raise WriteError(f"{rel}: no fenced ## GM Notes — {fix}")
+
+
+def _replace(doc: Doc, head: Head, unit: list[str]) -> str:
+    end = section_end(doc, head)
+    while end > head.idx + 1 and not doc.lines[end - 1].strip():
+        end -= 1
+    new = [line + doc.eol for line in unit]
+    return "".join(doc.lines[:head.idx] + new + doc.lines[end:])
+
+
+def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
+                title: str, unit: list[str], replace: bool,
+                after: str | None = None) -> tuple[str, str]:
+    """(the Wrap-Up's new text, the row's detail). `after` names the
+    heading a section the template does not know goes after."""
+    doc = parse(text)
+    gm_head, opener, closer = gm_region(doc, rel)
+    k = key(title)
+    if level == 2:
+        if k == GM_NOTES or k in tmap.gm:
+            raise WriteError(
+                f"{rel}: '## {title}' is a GM Notes section — write it as "
+                f"'{'#' * (4 if k in tmap.parent else 3)} {title}'")
+        scope = [h for h in doc.heads if h.level == 2 and not h.gm]
+        default, detail = opener, "" if k in tmap.titles else PLAYERS_SEE
+        later = tmap.later(2, k, {c for _l, c in tmap.order} - tmap.gm)
+    else:
+        inside = [h for h in doc.heads if gm_head.idx < h.idx < closer]
+        pk = tmap.parent.get(k) if level == 4 else None
+        if pk is not None:
+            parent = next((h for h in inside
+                           if h.level == 3 and key(h.title) == pk), None)
+            if parent is None:
+                made, _ = add_section(text, rel, tmap, 3, tmap.titles[pk],
+                                      [f"### {tmap.titles[pk]}"], False)
+                return add_section(made, rel, tmap, level, title, unit,
+                                   replace, after)
+            stop = section_end(doc, parent)
+            scope = [h for h in inside
+                     if h.level == 4 and parent.idx < h.idx < stop]
+            default = stop
+            later = tmap.later(4, k, {c for c, p in tmap.parent.items()
+                                      if p == pk})
+        else:
+            scope = [h for h in inside if h.level == 3]
+            default, later = closer, tmap.later(3, k)
+        detail = ""
+    found = next((h for h in scope if key(h.title) == k), None)
+    if found is not None:
+        if not replace:
+            raise WriteError(f"{rel}: already has '{'#' * level} {title}' "
+                             f"— --replace to replace it")
+        return _replace(doc, found, unit), "replaced"
+    if after and k not in tmap.titles:
+        want = key(after.lstrip("#").strip())
+        anchor = next((h for h in scope if key(h.title) == want), None)
+        if anchor is None:
+            raise WriteError(f"{rel}: no heading '{after}' to go after")
+        return place(doc, section_end(doc, anchor), unit), detail
+    at = next((h.idx for h in scope if key(h.title) in later), default)
+    return place(doc, at, unit), detail
+
+
+def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
+    rel = batch.resolve(args.wrapup)
+    note = batch.read(rel)
+    if vl.entity_type(vl.extract_frontmatter(note) or {}) not in vc.WRAP_TYPES:
+        raise WriteError(f"{rel}: not a Wrap-Up")
+    tmap = read_template_map(
+        template_text(batch.vault, WRAP_TEMPLATES, "session-wrap.md"))
+    for level, title, unit in split_units(text, set(tmap.titles)):
+        if level not in (2, 3, 4):
+            raise WriteError(f"'{'#' * level} {title}': a Wrap-Up section "
+                             f"starts at ##, ### or ####")
+        note, detail = add_section(note, rel, tmap, level, title, unit,
+                                   args.replace, args.after)
+        batch.put(rel, note)
+        batch.row("WOULD-ADD", rel, f"§{title}", detail)
+
+
 # --- CLI ---------------------------------------------------------------------
 
 def build_parser() -> argparse.ArgumentParser:
@@ -374,10 +539,17 @@ def build_parser() -> argparse.ArgumentParser:
                      help="the session index, vault-relative")
     new.add_argument("--source", help="text of the Source callout")
     new.add_argument("--write", action="store_true")
+    add = sub.add_parser("wrapup-add", help="place Wrap-Up sections (stdin)")
+    add.add_argument("wrapup", help="the Wrap-Up, vault-relative")
+    add.add_argument("--replace", action="store_true",
+                     help="replace a section that already exists")
+    add.add_argument("--after", help="the heading a new section goes after")
+    add.add_argument("--write", action="store_true")
     return ap
 
 
-COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new}
+COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new,
+                               "wrapup-add": cmd_wrapup_add}
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
