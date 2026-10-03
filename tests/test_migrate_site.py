@@ -383,19 +383,34 @@ class ConfigStepTests(unittest.TestCase):
             (item,) = ms.find_config_to_vault(make_vault(self))
         self.assertEqual(item.lines, ["move a -> b", "tidy c"])
 
-    def test_no_site_and_no_node_never_stops(self):
+    def run_full_checks_on_a_no_site_vault(self, **patches):
         vault = make_vault(self, site=False)
-        with mock.patch.object(ms.shutil, "which", return_value=None), \
-                mock.patch.object(vc.shutil, "which", return_value=None):
-            self.assertEqual(ms.find_config_to_vault(vault), [])
-            self.assertEqual(ms.find_site_repin(vault), [])
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out), \
-                    mock.patch.object(migrate, "plugin_version",
-                                      return_value=("1.10.26", "t")), \
-                    mock.patch.object(migrate, "CHECKS", ms.SITE_CHECKS[:3]):
+        with contextlib.ExitStack() as stack:
+            for target, attr, value in patches["patches"]:
+                stack.enter_context(mock.patch.object(target, attr, value))
+            plan, out = io.StringIO(), io.StringIO()
+            stack.enter_context(mock.patch.object(
+                migrate, "plugin_version", return_value=("1.10.26", "t")))
+            stack.enter_context(mock.patch.object(
+                migrate, "CHECKS", ms.SITE_CHECKS))
+            with contextlib.redirect_stdout(plan):
+                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
+            with contextlib.redirect_stdout(out):
                 self.assertEqual(migrate.main([str(vault), "apply"]), 0)
+        self.assertNotIn("Needs a person", plan.getvalue())
+        self.assertNotIn("apply stops here", plan.getvalue())
         self.assertIn("stamped 1.10.26", out.getvalue())
+
+    def test_no_site_and_no_node_never_stops(self):
+        self.run_full_checks_on_a_no_site_vault(patches=[
+            (ms.shutil, "which", lambda *_a, **_k: None),
+            (vc.shutil, "which", lambda *_a, **_k: None)])
+
+    def test_no_site_on_a_skill_zip_install_never_stops(self):
+        gone = Path(tempfile.gettempdir()) / "no-such-plugin" / "gm-publish.js"
+        self.run_full_checks_on_a_no_site_vault(patches=[
+            (ms, "PUBLISH_TOOL", gone), (migrate_core, "PUBLISH_TOOL", gone),
+            (vc, "PUBLISH_TOOL", gone)])
 
     def test_a_vault_past_1_10_24_is_still_offered_the_move(self):
         check = next(c for c in ms.SITE_CHECKS if c.name == "config-to-vault")

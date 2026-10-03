@@ -21,7 +21,7 @@ from vault_check import (PUBLISH_PACKAGE, ExplainAll, ToolAnswer,
                          ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
                          publish_block_inline, site_pin)
-from vaultlib import (read_publish_list, read_publish_scalar, set_key,
+from vaultlib import (PUBLISH_TOOL, read_publish_list, read_publish_scalar, set_key,
                       set_nested_key, site_switch, yaml_scalar)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
@@ -214,9 +214,11 @@ def find_config_to_vault(vault: Path) -> list[Item]:
     """Every pass (since 1.10.24): campaign settings move from the site's
     vault.config.json into the vault file, whenever the site file still
     holds any. The publish tool plans and does it."""
-    if configured_site(vault)[0] is None and shutil.which("node") is None:
-        # No site to move settings from, and no Node to ask: a vault that
-        # only keeps notes is never stopped for the publish tool.
+    if configured_site(vault)[0] is None and (
+            shutil.which("node") is None or not PUBLISH_TOOL.is_file()):
+        # No site to move settings from, and no tool to ask (no Node, or a
+        # skill-zip install without it): a vault that only keeps notes is
+        # never stopped for the publish tool.
         return []
     plan = describe_config_to_vault(vault)
     if plan.error:
