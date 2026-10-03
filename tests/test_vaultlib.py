@@ -134,6 +134,12 @@ class FrontmatterEditorTests(unittest.TestCase):
         self.assertEqual(idx, -1)
         self.assertIn("does not look like YAML", err)
 
+    def test_frontmatter_span_rejects_an_indented_line_with_a_colon_inside_a_word(self):
+        text = "---\ntype: npc\n  Meet at 10:30 sharp\n---\n"
+        idx, err = vl.frontmatter_span(text.splitlines(keepends=True))
+        self.assertEqual(idx, -1)
+        self.assertIn("does not look like YAML", err)
+
     def test_frontmatter_span_rejects_malformed_delimiter(self):
         lines = "---\ntype: npc\n--- \n".splitlines(keepends=True)
         idx, err = vl.frontmatter_span(lines)

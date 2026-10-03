@@ -569,6 +569,12 @@ class LeakTests(unittest.TestCase):
         with mock.patch.object(ms, "check_gm_leak", return_value=rows):
             self.assertEqual(ms.find_gm_leak(make_vault(self, site=False)), [])
 
+    def test_the_skipped_notes_summary_is_routine(self):
+        rows = ["INFO\t(vault)\t12 notes skipped: the site does not publish "
+                "them"]
+        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
+            self.assertEqual(ms.find_gm_leak(make_vault(self)), [])
+
 
 class PlayedTests(unittest.TestCase):
     def answer(self, published, unclear):

@@ -1726,21 +1726,6 @@ def sections_withheld(answer: ToolAnswer
         return None, "explain did not return the expected JSON"
 
 
-def pages_walked(answer: ToolAnswer) -> set[str] | None:
-    """The notes (NFC paths) the publish tool's walk of the vault reached, from
-    `explain --all --json`'s `pages`. A note under an excluded folder is never
-    reached, so it is not in the list and nothing in it can publish. None
-    when the tool could not be asked or its answer does not give `publishes`
-    on every page (an older tool): the caller then skips nothing."""
-    try:
-        pages = answer.data["pages"] if answer.data is not None else None
-        if not pages or not all(isinstance(p["publishes"], bool) for p in pages):
-            return None
-        return {unicodedata.normalize("NFC", str(p["path"])) for p in pages}
-    except (KeyError, TypeError):
-        return None
-
-
 def pages_published(answer: ToolAnswer) -> set[str] | None:
     """The notes (NFC paths) the site publishes, from `explain --all --json`:
     the pages whose `publishes` is true. A note the tool's walk never reached
@@ -2254,14 +2239,14 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
                     f"exclude list: {reason}")
     withheld: set[str] = set()
-    walked: set[str] | None = None
+    published: set[str] | None = None
+    not_published = 0
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
     sheet_off: dict[str, set[str]] = {}
     if tool is not None:
         sheet_off = sheet_withheld_sections(tool)
         published = pages_published(tool)
-        walked = pages_walked(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
         if any(fm.get("type") == "session" for _r, _t, fm in notes):
@@ -2293,15 +2278,11 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             continue
         if publish_mode(fm) == "none":
             continue
-        if walked is not None and unicodedata.normalize(
-                "NFC", rel) not in walked:
-            # The publish tool never reached this note (an excluded
-            # folder): nothing in it can reach the players.
-            continue
         if published is not None and unicodedata.normalize(
                 "NFC", rel) not in published:
             # The site does not publish this note (an excluded folder, no
             # `type:`, a draft): nothing in it can reach the players.
+            not_published += 1
             continue
         if unicodedata.normalize("NFC", rel) in withheld:
             # session-hub.js suppressHubBody: the site publishes the
@@ -2371,6 +2352,9 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                         f"nothing written")
         elif new_text is not None:
             writes.append((rel, new_text, moved))
+    if not_published:
+        rows.append(f"INFO\t(vault)\t{not_published} notes skipped: the site "
+                    f"does not publish them")
     if renest_excludes:
         return rows + renest_excludes_migration(vault, fix, explain)
     mode = "FIXED" if fix else "WOULD-FIX"
