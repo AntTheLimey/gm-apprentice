@@ -19,17 +19,17 @@ every-pass check runs on every migration, whatever the vault's version.
 
 | Release | What changes in a vault | Check |
 |---|---|---|
-| every pass | Site's publish tool repinned; missing templates copied; changed templates and the schema mirror offered; `publish.site` written; withheld sections nested under GM Notes; old Wrap-Up filenames reported | `site-repin`, `templates`, `schema-mirror`, `publish-site`, `gm-leak`, `wrapup-filenames` |
+| every pass | Site's publish tool repinned; missing templates copied; changed templates and the schema mirror offered; settings left in the site's `vault.config.json` moved into the vault file; `publish.site` written; withheld sections nested under GM Notes; old Wrap-Up filenames reported | `site-repin`, `config-to-vault`, `templates`, `schema-mirror`, `publish-site`, `gm-leak`, `wrapup-filenames` |
 | 1.10.13 | Faction template writes `faction_type` (offered by every-pass `templates`); mobRPG keeps Campaign Log and Encounters in the vault | `mobrpg-sections` |
 | 1.10.14 | None | |
 | 1.10.15 | mobRPG heritage notes live in `Heritages/` | `heritage-notes` |
 | 1.10.16 | `publish.theme.default_mode` | `default-mode` |
 | 1.10.17 | `publish.theme.fonts.source: self-host`; a site's own postbuild step that adds a light/dark toggle (1.10.16) or drops retired PCs from the party board now doubles the tool | `fonts-self-host`, `postbuild` |
 | 1.10.18 | Session template (copied by every-pass `templates`); played sessions registered; index bodies withheld | `publish-played`, `session-recaps` |
-| 1.10.19 | Handout Keeper sections nested under GM Notes (every-pass `gm-leak`) | |
+| 1.10.19 | Handout Keeper sections nested under GM Notes | every pass, see above (`gm-leak`) |
 | 1.10.20, 1.10.21 | None (publish tool only) | |
 | 1.10.22 | `sheet_source` on PCs and PC templates | `pc-template-sheet-source`, `sheet-source` |
 | 1.10.23 | Notes the build cannot parse are reported | `unparseable-notes` |
-| 1.10.24 | Publish settings move into `_meta/vault-config.md` | `config-to-vault` |
-| 1.10.25 | `publish.site` says whether the vault has a site (every-pass `publish-site`) | |
+| 1.10.24 | Publish settings move into `_meta/vault-config.md` | every pass, see above (`config-to-vault`) |
+| 1.10.25 | `publish.site` says whether the vault has a site | every pass, see above (`publish-site`) |
 | 1.10.26 | None. Migrations run as `migrate.py plan` and `apply` | |

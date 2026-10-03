@@ -15,7 +15,8 @@ migration is a script; this file says how to drive it.
    `--choose <id>` or `--choose "<id>=<value>"` once for each choice
    they took. An instruction already in the request ("apply the
    migration") is a yes.
-4. Report what it printed under Did. Work through Needs a person with
+4. Report what it printed under Did, and any `not offered: <id>` line
+   (a choice it had nothing to apply to). Work through Needs a person with
    the GM, one row at a time; the script never changes those. A row
    ending "apply stops here until this is fixed" comes first.
 5. If it exits 1, give the GM the error line as printed. The vault is

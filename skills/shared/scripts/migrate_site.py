@@ -211,8 +211,9 @@ def find_site_repin(vault: Path) -> list[Item]:
 
 
 def find_config_to_vault(vault: Path) -> list[Item]:
-    """1.10.24: campaign settings move from the site's vault.config.json
-    into the vault file. The publish tool plans and does it."""
+    """Every pass (since 1.10.24): campaign settings move from the site's
+    vault.config.json into the vault file, whenever the site file still
+    holds any. The publish tool plans and does it."""
     if configured_site(vault)[0] is None and shutil.which("node") is None:
         # No site to move settings from, and no Node to ask: a vault that
         # only keeps notes is never stopped for the publish tool.
@@ -530,7 +531,7 @@ def find_fonts(vault: Path) -> list[Item]:
 
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
-    Check("config-to-vault", "1.10.24", 2,
+    Check("config-to-vault", None, 2,
           "campaign settings move into the vault file", find_config_to_vault,
           asks_site=True),
     Check("publish-site", None, 2, "the publish.site switch",

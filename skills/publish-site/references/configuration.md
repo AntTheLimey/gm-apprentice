@@ -498,15 +498,14 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> plan
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> apply
 ```
 
-The move is the `config-to-vault` step under Will do.
+The move is the `config-to-vault` step under Will do. The migration
+offers it whenever the site file still holds campaign settings,
+whatever the vault's version.
 
 It finds the site through `publish.site_dir` in the vault file and
 asks that site's publish tool to do the move (`migrate-config`). Set
 `publish.site_dir` first: without it the migration looks at the vault
-file only and the site file's settings stay where they are. The
-migration offers the move only to a vault below 1.10.24. To move one
-site directly (a vault already stamped 1.10.24 or later), run `node "$TOOL" migrate-config --dry-run --config
-<dir>/vault.config.json`, then again without `--dry-run`. The move:
+file only and the site file's settings stay where they are. The move:
 
 - writes each campaign setting under `publish:` and removes it from
   the site file. Only the old keys in the table above are removed;

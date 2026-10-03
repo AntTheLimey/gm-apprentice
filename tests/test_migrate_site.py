@@ -397,6 +397,31 @@ class ConfigStepTests(unittest.TestCase):
                 self.assertEqual(migrate.main([str(vault), "apply"]), 0)
         self.assertIn("stamped 1.10.26", out.getvalue())
 
+    def test_a_vault_past_1_10_24_is_still_offered_the_move(self):
+        check = next(c for c in ms.SITE_CHECKS if c.name == "config-to-vault")
+        self.assertIsNone(check.release)
+        for version in ("1.10.24", "1.10.26"):
+            vault = make_vault(self, version=version)
+            tool = Tool()
+            plans = []
+            with stubbed(tool), \
+                    mock.patch.object(migrate, "plugin_version",
+                                      return_value=("1.10.26", "t")):
+                for command in ("plan", "apply", "plan"):
+                    out = io.StringIO()
+                    with contextlib.redirect_stdout(out):
+                        self.assertEqual(migrate.run_plan(vault, [check])
+                                         if command == "plan" else
+                                         migrate.run_apply(vault, [], [check]),
+                                         0)
+                    plans.append(out.getvalue())
+            self.assertIn("## Will do", plans[0])
+            self.assertIn("config-to-vault\tmove vault.config.json siteTitle",
+                          plans[0])
+            self.assertIn("config-to-vault\t", plans[1])
+            self.assertEqual(plans[2], "vault 1.10.26, plugin 1.10.26\n"
+                                       "up to date\n")
+
 
 class PublishSiteTests(unittest.TestCase):
     def text(self, vault):
@@ -830,6 +855,43 @@ class MigrateEndToEndTests(unittest.TestCase):
              "frontmatter"], capture_output=True, text=True, check=False)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("# count: 0", proc.stdout)
+
+    def vault_at(self, version, site_file):
+        vault = tmp(self, "mig-e2e-vault-")
+        (vault / "_meta").mkdir()
+        site_dir = ""
+        if site_file is not None:
+            site = tmp(self, "mig-e2e-site-")
+            site_file.setdefault("vaultPath", str(vault))
+            (site / "vault.config.json").write_text(json.dumps(site_file),
+                                                    encoding="utf-8")
+            site_dir = f"  site_dir: {site}\n"
+        (vault / "_meta" / "vault-config.md").write_text(
+            f'---\ntype: meta\ngm_apprentice_version: "{version}"\n'
+            f"publish:\n  mode: player\n{site_dir}---\n", encoding="utf-8")
+        return vault
+
+    def test_settings_left_after_1_10_24_are_still_moved(self):
+        vault = self.vault_at("1.10.24", {"siteTitle": "Legacy",
+                                          "outputDir": "./docs"})
+        plugin = ("1.10.24", "t")
+        with mock.patch.object(ms, "plugin_tool", Pin(ok=True)), \
+                mock.patch.object(migrate, "plugin_version",
+                                  return_value=plugin):
+            out = io.StringIO()
+            with contextlib.redirect_stdout(out):
+                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
+            self.assertIn("config-to-vault\tmove", out.getvalue())
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
+            self.assertEqual(ms.find_config_to_vault(vault), [])
+        self.assertIn("site_title", (vault / "_meta" / "vault-config.md")
+                      .read_text(encoding="utf-8"))
+
+    def test_deployment_keys_only_or_no_site_offers_no_move(self):
+        for site_file in ({"outputDir": "./docs"}, None):
+            vault = self.vault_at("1.10.25", site_file)
+            self.assertEqual(ms.find_config_to_vault(vault), [], site_file)
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
