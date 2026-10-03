@@ -213,6 +213,7 @@ async function runUpdatePin(options, deps) {
   const writeFile = d.writeFile || ((p, c) => fs.writeFileSync(p, c));
   const runCommand = d.runCommand || require('./run-command').runCommand;
   const detect = d.detect || require('./version-check').detectVersionDrift;
+  const exists = d.exists || fs.existsSync;
   const toolDir = d.toolDir || path.join(__dirname, '..');
   const siteDir = path.resolve(opts.siteDir || '.');
   const asJson = !!opts.json;
@@ -233,7 +234,14 @@ async function runUpdatePin(options, deps) {
   if (!cache) {
     try { checkoutVersion = JSON.parse(readFile(path.join(toolDir, 'package.json'))).version || 'unknown'; } catch { /* keep 'unknown' */ }
   }
-  if (!cache && (inNodeModules || checkoutVersion === 'unknown')) {
+  // A git checkout has a `.git` (folder, or file in a worktree) at or above the tool.
+  const inGitCheckout = () => {
+    for (let dir = path.resolve(toolDir); ; dir = path.dirname(dir)) {
+      if (exists(path.join(dir, '.git'))) return true;
+      if (path.dirname(dir) === dir) return false;
+    }
+  };
+  if (!cache && (inNodeModules || checkoutVersion === 'unknown' || !inGitCheckout())) {
     if (!asJson) out(`not in a versioned plugin cache — the running tool is ${checkoutVersion}; nothing to repoint`);
     return report({
       pinnedBefore: null, pinnedAfter: null, installedBefore: null, installedAfter: null,
