@@ -28,6 +28,7 @@ from __future__ import annotations
 import json
 import posixpath
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, unquote
@@ -100,6 +101,15 @@ def _read(vault: Path, rel: str) -> str | None:
         raise RelinkError(f"{rel} cannot be read: {e}") from e
 
 
+def _plain(s: str) -> str:
+    return s
+
+
+def _json_inner(s: str) -> str:
+    """Text as it sits inside a JSON string."""
+    return json.dumps(s, ensure_ascii=False)[1:-1]
+
+
 class _Resolver:
     """Which links point at OLD, and what they become."""
 
@@ -120,7 +130,8 @@ class _Resolver:
                 if posixpath.dirname(n) == posixpath.dirname(src)]
         return here[0] if len(here) == 1 else None
 
-    def wiki(self, src: str, body: str) -> str | None | bool:
+    def wiki(self, src: str, body: str,
+             esc: Callable[[str], str] = _plain) -> str | None | bool:
         """New link body, False if not a link to OLD, None if unsure."""
         m = re.match(r"([^|#^]*)([#^][^|]*)?(\|.*)?$", body, re.DOTALL)
         if not m:
@@ -155,9 +166,9 @@ class _Resolver:
                         rel = posixpath.relpath(resolved, new_dir or ".")
                         if bare.startswith("./") and not rel.startswith("../"):
                             rel = "./" + rel
-                        return f"{rel}{suffix}{sub}{alias}"
+                        return f"{esc(rel)}{suffix}{sub}{alias}"
                 return False
-            return f"{self.new_noext}{suffix}{sub}{alias}"
+            return f"{esc(self.new_noext)}{suffix}{sub}{alias}"
         if normalize(bare.strip("/")) != self.old_stem:
             return False
         owner = self._bare_owner(src)
@@ -165,7 +176,7 @@ class _Resolver:
             return None
         if owner != self.old:
             return False
-        return f"{_stem(self.new)}{suffix}{sub}{alias}"
+        return f"{esc(_stem(self.new))}{suffix}{sub}{alias}"
 
     def markdown(self, src: str, dest: str) -> str | None:
         """New destination for a markdown link to OLD, else None."""
@@ -230,7 +241,7 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
     def sub(m: re.Match[str]) -> str:
         if _inside(m.start(), spans):
             return m.group(0)
-        got = res.wiki(rel, m.group(1))
+        got = res.wiki(rel, m.group(1), _json_inner if json_escape else _plain)
         if got is False:
             return m.group(0)
         if got is None:
@@ -238,9 +249,6 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
             return m.group(0)
         assert isinstance(got, str)
         bang = "!" if m.group(0).startswith("!") else ""
-        if json_escape:
-            # The link sits inside a JSON string in a canvas.
-            got = json.dumps(got, ensure_ascii=False)[1:-1]
         after = f"{bang}[[{got}]]"
         if after == m.group(0):
             return after
@@ -297,6 +305,8 @@ def _refusal(vault: Path, notes: list[str], old: str, new: str) -> str | None:
         return f"{old} does not exist"
     if new.startswith("../") or new == ".." or posixpath.isabs(new):
         return f"{new} is outside the vault"
+    if is_skipped_path(new):
+        return f"{new} is in a folder the vault scripts skip"
     if new == old:
         return f"{old} and {new} are the same path"
     if BAD_NAME_CHARS & set(_stem(new)):
@@ -313,14 +323,13 @@ def _refusal(vault: Path, notes: list[str], old: str, new: str) -> str | None:
     return None
 
 
-def _alias_warnings(vault: Path, notes: list[str], old: str,
+def _alias_warnings(texts: dict[str, str | None], old: str,
                     new: str) -> list[str]:
     want = normalize(_stem(new))
     out = []
-    for rel in notes:
+    for rel, text in texts.items():
         if rel == old:
             continue
-        text = _read(vault, rel)
         fm = extract_frontmatter(text or "") or {}
         if any(normalize(a) == want for a in link_aliases(fm)):
             out.append(f"{rel} has the alias {_stem(new)}; links to that "
@@ -337,14 +346,16 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     if why:
         raise RelinkError(why)
     p = Plan(vault, old, new)
-    p.warnings = _alias_warnings(vault, notes, old, new)
+    texts = {rel: _read(vault, rel) for rel in notes}
+    p.warnings = _alias_warnings(texts, old, new)
     res = _Resolver(notes, old, new)
-    for rel in notes:
-        text = _read(vault, rel)
+    for rel, text in texts.items():
         if text is None:
             raw = (vault / rel).read_bytes().decode("utf-8", "replace")
-            if any(res.wiki(rel, m.group(1)) is not False
-                   for m in LINK_RE.finditer(raw)):
+            if (any(isinstance(res.wiki(rel, m.group(1)), str)
+                    for m in LINK_RE.finditer(raw))
+                    or any(res.markdown(rel, m.group(2)) is not None
+                           for m in MD_LINK_RE.finditer(raw))):
                 raise RelinkError(f"{rel} is not valid UTF-8 and links to "
                                   f"{_stem(old)}; fix its encoding first")
             p.warnings.append(
@@ -356,6 +367,12 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     for rel in _walk(vault, ".canvas"):
         text = _read(vault, rel)
         if text is None:
+            raw = (vault / rel).read_bytes().decode("utf-8", "replace")
+            if (_canvas_names_old(raw, old)
+                    or any(isinstance(res.wiki(rel, m.group(1)), str)
+                           for m in LINK_RE.finditer(raw))):
+                raise RelinkError(f"{rel} is not valid UTF-8 and links to "
+                                  f"{_stem(old)}; fix its encoding first")
             p.warnings.append(
                 f"{rel} is not UTF-8; links in it were not checked")
             continue
@@ -368,6 +385,16 @@ def plan(vault: Path, old: str, new: str) -> Plan:
 def _json_string(value: str, ascii_only: bool, slash: bool) -> str:
     out = json.dumps(value, ensure_ascii=ascii_only)
     return out.replace("/", "\\/") if slash else out
+
+
+def _canvas_names_old(raw: str, old: str) -> bool:
+    for ascii_only in (True, False):
+        for slash in (False, True):
+            needle = re.compile(
+                r'"file"\s*:\s*' + re.escape(_json_string(old, ascii_only, slash)))
+            if needle.search(raw):
+                return True
+    return False
 
 
 def _rewrite_canvas(rel: str, text: str, old: str, new: str,

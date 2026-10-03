@@ -332,5 +332,58 @@ class ReviewFixTests(unittest.TestCase):
         self.assertEqual(got["nodes"][0]["text"], 'see [[Say "hi"]]')
 
 
+class FixRound1Tests(unittest.TestCase):
+    def refused(self, name, data, files=None, new=NEW):
+        vault = make_vault(self, {OLD: "x\n", **(files or {})})
+        (vault / name).write_bytes(data)
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, OLD, new)
+        return str(cm.exception)
+
+    def planned(self, name, data, new=NEW):
+        vault = make_vault(self, {OLD: "x\n"})
+        (vault / name).write_bytes(data)
+        return relink.plan(vault, OLD, new)
+
+    def test_canvas_alias_is_not_escaped_twice(self):
+        import json
+        canvas = ('{"nodes":[{"id":"1","type":"text","text":'
+                  '"[[Session_4_Wrapup|Say \\"hi\\"]]"}]}')
+        vault = make_vault(self, {OLD: "x\n", "B.canvas": canvas})
+        p = relink.plan(vault, OLD, 'Sessions/Q "x".md')
+        got = json.loads(p.texts["B.canvas"])["nodes"][0]["text"]
+        self.assertEqual(got, '[[Q "x"|Say "hi"]]')
+
+    def test_non_utf8_note_with_markdown_link_is_refused(self):
+        msg = self.refused("Bad.md", b"\xff [t](Sessions/Session_4_Wrapup.md)\n")
+        self.assertIn("Bad.md", msg)
+
+    def test_non_utf8_note_with_unsure_link_only_warns(self):
+        vault = make_vault(self, {
+            OLD: "x\n", "Other/Session_4_Wrapup.md": "x\n"})
+        (vault / "Bad.md").write_bytes(b"\xff [[Session_4_Wrapup]]\n")
+        p = relink.plan(vault, OLD, NEW)
+        self.assertEqual(
+            p.warnings, ["Bad.md is not UTF-8; links in it were not checked"])
+
+    def test_new_in_skipped_folder_is_refused(self):
+        for new in ("_Templates/X.md", "_inbox/X.md", ".hidden/X.md"):
+            vault = make_vault(self, {OLD: "x\n"})
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.plan(vault, OLD, new)
+            self.assertIn("skip", str(cm.exception))
+
+    def test_non_utf8_canvas_with_old_path_is_refused(self):
+        msg = self.refused(
+            "Bad.canvas", b'\xff{"file":"Sessions/Session_4_Wrapup.md"}')
+        self.assertIn("Bad.canvas", msg)
+
+    def test_non_utf8_canvas_without_old_path_warns(self):
+        p = self.planned("Bad.canvas", b'\xff{"file":"Other.md"}')
+        self.assertEqual(
+            p.warnings,
+            ["Bad.canvas is not UTF-8; links in it were not checked"])
+
+
 if __name__ == "__main__":
     unittest.main()
