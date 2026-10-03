@@ -485,6 +485,8 @@ def _move(vault: Path, old: str, new: str) -> None:
             try:
                 os.rename(tmp, dst)
             except BaseException as e:
+                if not tmp.exists():
+                    raise  # the second rename had already completed
                 try:
                     os.rename(tmp, src)
                 except BaseException:
@@ -504,6 +506,18 @@ def _move(vault: Path, old: str, new: str) -> None:
             except OSError:
                 pass
         raise
+
+
+def _moved(p: Plan) -> bool:
+    """True when the note is already at NEW, whatever step was reached."""
+    dst = p.vault / p.new
+    try:
+        if p.old.casefold() == p.new.casefold():
+            return (dst.name in os.listdir(dst.parent)
+                    and not _temp_name(p.vault, p.old).exists())
+        return dst.exists() and not (p.vault / p.old).exists()
+    except OSError:
+        return False
 
 
 def _check_fresh(p: Plan) -> None:
@@ -544,6 +558,13 @@ def apply(p: Plan) -> list[str]:
             write_text_atomic(p.vault / rel, p.texts[rel])
         _move(p.vault, p.old, p.new)
     except BaseException as e:
+        if _moved(p):
+            # The note is already at NEW, so the rewritten links are right.
+            said = (f"{p.old} was renamed to {p.new} and its links were "
+                    f"rewritten; the rename completed ({str(e) or type(e).__name__})")
+            if isinstance(e, KeyboardInterrupt):
+                raise KeyboardInterrupt(said) from None
+            raise RelinkError(said) from e
         stuck = []
         for rel in written:
             try:

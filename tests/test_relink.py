@@ -699,6 +699,39 @@ class ApplyExtraTests(unittest.TestCase):
                 relink.plan(vault, "s4.md", "t4.md")
         self.assertIn("Bad.md", str(cm.exception))
 
+    def rename_then_interrupt(self, nth):
+        real = os.rename
+        n = []
+
+        def flaky(a, b):
+            real(a, b)
+            n.append(1)
+            if len(n) == nth:
+                raise KeyboardInterrupt
+        return mock.patch.object(relink.os, "rename", flaky)
+
+    def test_interrupt_just_after_a_plain_move_keeps_the_links(self):
+        vault = make_vault(self, {OLD: "x\n", "A.md": "[[Session_4_Wrapup]]\n"})
+        with self.rename_then_interrupt(1):
+            with self.assertRaises(KeyboardInterrupt) as cm:
+                relink.apply(relink.plan(vault, OLD, NEW))
+        self.assertIn("renamed", str(cm.exception))
+        self.assertNotIn("as it was", str(cm.exception))
+        self.assertTrue((vault / NEW).exists())
+        self.assertFalse((vault / OLD).exists())
+        self.assertEqual(read(vault, "A.md"),
+                         "[[Chapter_01_Session_04_Wrap_Up]]\n")
+
+    def test_interrupt_just_after_the_case_only_move_keeps_the_links(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        with self.rename_then_interrupt(2):
+            with self.assertRaises(KeyboardInterrupt) as cm:
+                relink.apply(relink.plan(vault, "s4.md", "S4.md"))
+        self.assertIn("renamed", str(cm.exception))
+        self.assertNotIn("stranded", str(cm.exception))
+        self.assertEqual(sorted(os.listdir(vault)), ["A.md", "S4.md"])
+        self.assertEqual(read(vault, "A.md"), "[[S4]]\n")
+
     def test_leftover_temp_name_is_refused_up_front(self):
         vault = make_vault(self, {"s4.md": "x\n", ".s4.md.relink": "keep\n"})
         with self.assertRaises(relink.RelinkError) as cm:
