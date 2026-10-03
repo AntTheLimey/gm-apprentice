@@ -34,11 +34,17 @@ def new_site(vault: Path, cleanup: Callable[[Path], object]) -> Path:
     if _SITE is None:
         _SITE = Path(tempfile.mkdtemp(prefix="vc-site-"))
         atexit.register(shutil.rmtree, _SITE, ignore_errors=True)
-        (_SITE / "vault.config.json").write_text(
-            json.dumps({"vaultPath": "."}), encoding="utf-8")
         (_SITE / "node_modules").mkdir()
         os.symlink(TOOL_DIR, _SITE / "node_modules" / "gm-apprentice-publish",
                    target_is_directory=True)
+    # Written on every call: a test that migrates its vault moves these
+    # settings out of the shared file. The folders test notes live in are
+    # mapped, so the tool publishes them.
+    (_SITE / "vault.config.json").write_text(json.dumps({
+        "vaultPath": ".",
+        "folderMap": {"Characters/NPCs": "characters/npcs",
+                      "Characters/PCs": "characters/pcs",
+                      "Chapters": "chronicle"}}), encoding="utf-8")
     return _SITE
 
 

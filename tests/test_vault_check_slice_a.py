@@ -4271,21 +4271,36 @@ class GmLeakSheetsOffTests(unittest.TestCase):
 
 
 class GmLeakExcludedFolderTests(unittest.TestCase):
-    """A note under `publish.exclude_dirs` is never reached by the publish
-    tool's walk, so gm-leak reports nothing for it; the same heading in a
-    published folder still is."""
+    """The publish tool says which notes reach the site: one under
+    `publish.exclude_dirs` is not in its list, one without a `type:` is
+    listed as not publishing. gm-leak reports nothing for either; the same
+    heading in a published note still is."""
     NOTE = ("---\ntype: npc\n---\n\n# Hero\n\n## Motivations & Secrets\n\n"
             "He lied.\n")
+    UNTYPED = NOTE.replace("type: npc\n", "")
 
-    def test_an_excluded_folder_is_not_reported(self):
+    def rows(self, notes):
         vault = make_vault(
             self, config="---\npublish:\n  exclude_dirs: [_resources]\n---\n")
-        for rel in ("_resources/Hero.md", "Characters/Hero.md"):
+        for rel, text in notes.items():
             (vault / rel).parent.mkdir(parents=True, exist_ok=True)
-            (vault / rel).write_text(self.NOTE, encoding="utf-8")
-        rows = vc.check_gm_leak(vault, None)
-        self.assertTrue(rows_for(rows, "WARNING\tCharacters/Hero.md:"), rows)
+            (vault / rel).write_text(text, encoding="utf-8")
+        return vc.check_gm_leak(vault, None)
+
+    def test_a_published_note_is_still_reported(self):
+        rows = self.rows({"Characters/NPCs/Hero.md": self.NOTE})
+        self.assertTrue(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
+                        rows)
+
+    def test_an_excluded_folder_is_not_reported(self):
+        rows = self.rows({"_resources/Hero.md": self.NOTE,
+                          "Characters/NPCs/Hero.md": self.NOTE})
         self.assertFalse(rows_for(rows, "_resources/"), rows)
+        self.assertTrue(rows_for(rows, "Characters/NPCs/Hero.md:"), rows)
+
+    def test_a_note_with_no_type_is_not_reported(self):
+        rows = self.rows({"Characters/NPCs/Plain.md": self.UNTYPED})
+        self.assertFalse(rows_for(rows, "Plain.md"), rows)
 
 
 class GmLeakHandoutSectionTests(unittest.TestCase):
