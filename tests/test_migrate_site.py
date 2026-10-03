@@ -428,10 +428,20 @@ class PublishSiteTests(unittest.TestCase):
 
 
 class LeakTests(unittest.TestCase):
+    # Row texts as vault_check's gm-leak words them.
     ROWS = ["INFO\t(vault)\tasked the plugin's publish tool",
+            "WARNING\tHandouts/Letter.md:8\t'Context' is Keeper material "
+            "outside ## GM Notes \u2014 nest it under ## GM Notes (publish "
+            "1.11.41+ withholds it; to publish it, rename the heading)",
             "WOULD-FIX\tHandouts/Letter.md\tre-nested 'Context' under ## GM Notes",
-            "ERROR\tNPCs/Vane.md:12\tre-nest refused: an open code block",
-            "WARNING\tNPCs/Crowe.md:30\theading 'Keeper Secret' publishes"]
+            "ERROR\tNPCs/Vane.md\tre-nest refused: an open code block \u2014 "
+            "nothing written",
+            "WARNING\tNPCs/Crowe.md:30\tKeeper-facing heading 'Keeper "
+            "Secret' publishes \u2014 nest it under ## GM Notes or fence it",
+            "INFO\tNPCs/Crowe.md:31\tbold label 'Secret' looks Keeper-facing "
+            "\u2014 confirm with the GM (not a heading; not auto-movable)",
+            "INFO\t_meta/vault-config.md\tgm-leak assumes the default "
+            "exclude list: there is no site to ask"]
 
     def test_would_fix_is_will_do_and_the_rest_needs_a_person(self):
         vault = make_vault(self)
@@ -440,8 +450,41 @@ class LeakTests(unittest.TestCase):
         self.assertEqual(items[WILL].lines, [
             "Handouts/Letter.md: re-nest 'Context' under ## GM Notes"])
         self.assertEqual(items[PERSON].lines, [
-            "NPCs/Vane.md:12\tre-nest refused: an open code block",
-            "NPCs/Crowe.md:30\theading 'Keeper Secret' publishes"])
+            "NPCs/Vane.md\tre-nest refused: an open code block \u2014 "
+            "nothing written",
+            "NPCs/Crowe.md:30\tKeeper-facing heading 'Keeper Secret' "
+            "publishes \u2014 nest it under ## GM Notes or fence it"])
+
+    def test_a_pairing_matches_file_and_heading_not_loose_text(self):
+        rows = [self.ROWS[2],
+                "WARNING\tNPCs/Crowe.md:3\t'Context' is Keeper material "
+                "outside ## GM Notes \u2014 nest it",
+                "ERROR\tHandouts/Letter.md:9\tbold-wrapped heading 'Context' "
+                "defeats the exclude list and publishes \u2014 remove the ** "
+                "or move it under ## GM Notes",
+                "WARNING\tHandouts/Letter.md:12\tKeeper-facing heading "
+                "'Clues' publishes \u2014 nest it"]
+        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
+            items = {i.group: i for i in ms.find_gm_leak(make_vault(self))}
+        self.assertEqual([line.split("\t")[0] for line in items[PERSON].lines],
+                         ["NPCs/Crowe.md:3", "Handouts/Letter.md:12"])
+
+    def test_an_incomplete_check_is_not_clean(self):
+        rows = ["WARNING\t(vault)\texplain did not return the expected JSON",
+                "INFO\t(vault)\tthe publish tool could not be consulted (x), "
+                "so headings the site withholds on its own, like a handout's "
+                "Context, Clues and Prop Notes, were not checked",
+                "INFO\t(vault)\tthe publish tool could not be consulted (x), "
+                "so every session index body was scanned, including any the "
+                "site withholds",
+                "INFO\t(vault)\tgm-leak has no site to check: x"]
+        with mock.patch.object(ms, "check_gm_leak", return_value=rows):
+            (item,) = ms.find_gm_leak(make_vault(self))
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(len(item.lines), 2)
+        self.assertTrue(all(line.startswith("(vault)\tthe check was "
+                                            "incomplete: ")
+                            for line in item.lines))
 
     def test_apply_fixes_reports_and_checks_nothing_is_left(self):
         vault = make_vault(self)
@@ -452,7 +495,7 @@ class LeakTests(unittest.TestCase):
             if fix:
                 return ["FIXED\tHandouts/Letter.md\tre-nested 'Context' "
                         "under ## GM Notes"]
-            return self.ROWS[:2] if len(calls) == 1 else []
+            return self.ROWS[:3] if len(calls) == 1 else []
         with mock.patch.object(ms, "check_gm_leak", leak):
             item = next(i for i in ms.find_gm_leak(vault) if i.group == WILL)
             done = item.apply(None)
@@ -463,10 +506,31 @@ class LeakTests(unittest.TestCase):
 
     def test_a_fix_that_leaves_work_fails(self):
         vault = make_vault(self)
-        with mock.patch.object(ms, "check_gm_leak", return_value=self.ROWS[:2]):
+        with mock.patch.object(ms, "check_gm_leak", return_value=self.ROWS):
             item = next(i for i in ms.find_gm_leak(vault) if i.group == WILL)
             with self.assertRaises(StepFailed):
                 item.apply(None)
+
+    def test_a_tool_that_dies_during_the_fix_or_the_recheck_fails(self):
+        gone = "ERROR\t(vault)\tgm-leak stopped: the publish tool stopped"
+        for dies_at in (1, 2):
+            vault = make_vault(self)
+            calls = []
+
+            def leak(v, folder, fix=False):
+                calls.append(fix)
+                if len(calls) == 1:
+                    return self.ROWS
+                if len(calls) == dies_at + 1:
+                    return [gone]
+                return ["FIXED\tHandouts/Letter.md\tre-nested 'Context' "
+                        "under ## GM Notes"] if fix else []
+            with mock.patch.object(ms, "check_gm_leak", leak):
+                item = next(i for i in ms.find_gm_leak(vault)
+                            if i.group == WILL)
+                with self.assertRaises(StepFailed) as caught:
+                    item.apply(None)
+            self.assertIn("stopped", str(caught.exception))
 
     def test_a_tool_that_cannot_be_asked_stops(self):
         rows = ["ERROR\t(vault)\tgm-leak cannot ask the site's publish tool"]
@@ -489,10 +553,13 @@ class PlayedTests(unittest.TestCase):
     def test_reviewed_sessions_are_will_do_and_unclear_are_choices(self):
         vault = make_vault(self)
         asked = []
+        state = {"left": True}
 
         def ask(v, args, vault_only=False):
             asked.append(args)
             if "--dry-run" in args:
+                if not state["left"]:
+                    return self.answer([], [])
                 return self.answer(
                     ["Ch1/S01/Session 01.md"],
                     [{"path": "Ch1/S02/Session 02.md",
@@ -500,6 +567,7 @@ class PlayedTests(unittest.TestCase):
                       "wrapUp": "Ch1/S02/Wrap.md"},
                      {"path": "Ch1/S03/Session 03.md",
                       "reason": "no Wrap-Up", "wrapUp": None}])
+            state["left"] = False
             return vc.ToolAnswer(data={"applicable": True, "published": []})
         with mock.patch.object(ms, "ask_publish_tool", ask):
             items = {i.id: i for i in ms.find_publish_played(vault)}
@@ -510,13 +578,24 @@ class PlayedTests(unittest.TestCase):
             items["played:Ch1/S02/Session 02.md"].apply(None)
             items["played:Ch1/S03/Session 03.md"].apply(None)
         self.assertEqual(asked[1], ["manifest", "publish-played"])
-        self.assertEqual(asked[2], ["manifest", "publish-played", "--session",
+        self.assertEqual(asked[3], ["manifest", "publish-played", "--session",
                                     "Ch1/S02/Session 02.md",
                                     "--include-unreviewed"])
-        self.assertEqual(asked[3], ["manifest", "publish-played", "--session",
+        self.assertEqual(asked[5], ["manifest", "publish-played", "--session",
                                     "Ch1/S03/Session 03.md", "--publish-body"])
         self.assertIn("Wrap-Up not reviewed yet",
                       items["played:Ch1/S02/Session 02.md"].lines[0])
+
+    def test_a_registration_the_tool_does_not_keep_fails(self):
+        vault = make_vault(self)
+        same = self.answer(["Ch1/S01/Session 01.md"],
+                           [{"path": "Ch1/S02/Session 02.md",
+                             "reason": "r", "wrapUp": None}])
+        with mock.patch.object(ms, "ask_publish_tool", return_value=same):
+            items = {i.id: i for i in ms.find_publish_played(vault)}
+            for item in items.values():
+                with self.assertRaises(StepFailed):
+                    item.apply(None)
 
     def test_not_applicable_or_no_site_is_nothing(self):
         vault = make_vault(self)
@@ -751,6 +830,35 @@ class MigrateEndToEndTests(unittest.TestCase):
              "frontmatter"], capture_output=True, text=True, check=False)
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("# count: 0", proc.stdout)
+
+
+@unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
+                     or (shutil.which("node") and (
+                         vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
+                     "node and the publish tool's node_modules are needed")
+class LeakEndToEndTests(unittest.TestCase):
+    def test_a_handouts_context_is_planned_once_and_moved(self):
+        vault = tmp(self, "mig-leak-vault-")
+        # The real check asks the repo's publish tool (no mock), through a
+        # site folder with it installed.
+        vc.use_publish_tool(vc.PUBLISH_TOOL)
+        (vault / "Overview.md").write_text(
+            "---\ntype: campaign_overview\n---\n", encoding="utf-8")
+        site_fixture.give_site(vault, lambda p: None)
+        note = vault / "Letter.md"
+        note.write_text("---\ntype: document\n---\n\n# The Letter\n\n"
+                        "## Content\n\n> Dear Sir.\n\n## Context\n\n"
+                        "Why it was written.\n", encoding="utf-8")
+        items = {i.group: i for i in ms.find_gm_leak(vault)}
+        self.assertEqual(items[WILL].lines, [
+            "Letter.md: re-nest 'Context' under ## GM Notes"])
+        self.assertNotIn(PERSON, items)
+        done = items[WILL].apply(None)
+        self.assertIn("Letter.md: re-nested 'Context' under "
+                      "## GM Notes", done)
+        text = note.read_text(encoding="utf-8")
+        self.assertIn("## GM Notes", text)
+        self.assertEqual(ms.find_gm_leak(vault), [])
 
 
 if __name__ == "__main__":

@@ -9,6 +9,7 @@ holds are the publish tool's answers, never a second reading here.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
@@ -271,22 +272,59 @@ LEAK_NOTE = ("these sections no longer publish; if one was meant for "
              "a new heading")
 
 
+# The headings the check reports on its own row beside a WOULD-FIX row, as
+# vault_check's _heading_leak and _gm_leak word them; the title is the group.
+_HEADING_ROW = re.compile(
+    r"(?:bold-wrapped heading '(.+?)' defeats"
+    r"|GM-only heading '(.+?)' publishes"
+    r"|Keeper-facing heading '(.+?)' publishes"
+    r"|'(.+?)' is Keeper material outside ## GM Notes)")
+INCOMPLETE = "the check was incomplete: "
+
+
+def _plain(title: str) -> str:
+    return title.strip().strip("*_ ").casefold()
+
+
+def _is_incomplete(level: str, message: str) -> bool:
+    """A row on the vault saying the check did not look at everything, as
+    opposed to the two routine INFO rows ("has no site to check", "asked
+    <tool>")."""
+    return level == "WARNING" or (level == "INFO" and message.endswith(
+        "headings the site withholds on its own, like a handout's Context, "
+        "Clues and Prop Notes, were not checked"))
+
+
 def find_gm_leak(vault: Path) -> list[Item]:
     """Every pass: headings the site withholds are nested under GM Notes,
     so the vault matches the site (1.10.19 handout sections among them).
     What can be moved is Will do; what the check only reports needs a
-    person."""
+    person. Per-note INFO rows (bold labels, callouts) can never be cleared
+    and are left out."""
     rows = [_cells(r) for r in check_gm_leak(vault, None, fix=False)]
     _stopped(rows)
     would = [(where, m) for level, where, m in rows if level == "WOULD-FIX"]
+    moved = {(where, _plain(m.split("'")[1])) for where, m in would
+             if m.count("'") >= 2}
+
+    def handled(where: str, message: str) -> bool:
+        found = _HEADING_ROW.match(message)
+        title = next((g for g in found.groups() if g), "") if found else ""
+        return bool(found) and (where.rpartition(":")[0], _plain(title)) in moved
+
     person = [f"{where}\t{m}" for level, where, m in rows
-              if level in ("ERROR", "WARNING", "INFO") and where != "(vault)"]
+              if level in ("ERROR", "WARNING") and where != "(vault)"
+              and not handled(where, m)]
+    person += [f"(vault)\t{INCOMPLETE}{m}" for level, where, m in rows
+               if where == "(vault)" and _is_incomplete(level, m)]
     items: list[Item] = []
     if would:
         def apply(_value: str | None) -> list[str]:
             fixed = [_cells(r) for r in check_gm_leak(vault, None, fix=True)]
-            left = [r for r in check_gm_leak(vault, None, fix=False)
-                    if r.startswith("WOULD-FIX\t")]
+            _stopped(fixed)
+            again = [_cells(r) for r in check_gm_leak(vault, None, fix=False)]
+            _stopped(again)
+            left = [r for r in again if r[0] == "WOULD-FIX"]
             if left:
                 raise StepFailed(
                     f"gm-leak --fix left {len(left)} heading(s) to re-nest")
@@ -323,6 +361,12 @@ def find_publish_played(vault: Path) -> list[Item]:
     if published:
         def apply(_value: str | None) -> list[str]:
             _played(vault, [])
+            again = _played(vault, ["--dry-run"]) or {}
+            pending = [p for p in published
+                       if p in [str(x) for x in again.get("published") or []]]
+            if pending:
+                raise StepFailed("publish-played left these unregistered: "
+                                 + ", ".join(pending))
             return [f"registered {p}" for p in published]
 
         items.append(Item("publish-played", WILL,
@@ -337,6 +381,11 @@ def find_publish_played(vault: Path) -> list[Item]:
         def apply_one(_value: str | None, path: str = path,
                       flag: str = flag) -> list[str]:
             _played(vault, ["--session", path, flag])
+            again = _played(vault, ["--dry-run"]) or {}
+            if path in [str(e.get("path")) for e in again.get("unclear") or []
+                        if isinstance(e, dict)]:
+                raise StepFailed(f"{path} is still unclear after "
+                                 f"publish-played {flag}")
             return [f"registered {path}"]
 
         items.append(Item(f"played:{path}", CHOICE,
