@@ -560,6 +560,8 @@ async function runManifest(options, deps) {
       return 1;
     }
   }
+  // Answers about one vault from its files alone: no site config, no survey.
+  if (opts.verb === 'rename') return require('./rename-refs').runRename(opts, d);
   const survey = surveyVault(opts, d);
   if (opts.verb === 'diff') return runDiff(opts, d, survey);
   if (opts.verb === 'apply') return runApply(opts, d, survey);

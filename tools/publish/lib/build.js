@@ -852,7 +852,7 @@ function build(options = {}) {
           const meta = {
             system,
             campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
-            pcSlug: require('./scanner').slugify(page.title),
+            pcSlug: require('./scanner').pcLiveKey(page.sourceFrontmatter || page.frontmatter, page.title),
             buildVersion: require('crypto').createHash('sha1')
               .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           };

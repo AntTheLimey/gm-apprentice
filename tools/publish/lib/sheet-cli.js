@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
-const { scanVault, scanAllNotes, slugify } = require('./scanner');
+const { scanVault, scanAllNotes, slugify, pcLiveKey } = require('./scanner');
 const { resolveConfig, vaultRelPath, loadVaultConfig } = require('./config');
 const { pcKeepList } = require('./pc-prose');
 const {
@@ -41,7 +41,7 @@ function findPc(pcs, wanted) {
   const wantSlug = slugify(wanted);
   const wantFold = casefold(wanted);
   return pcs.find((p) => {
-    if (slugify(p.title) === wantSlug) return true;
+    if (slugify(p.title) === wantSlug || pcLiveKey(p.frontmatter, p.title) === wantSlug) return true;
     if (casefold(p.displayTitle) === wantFold) return true;
     const fmName = p.frontmatter && p.frontmatter.name;
     return fmName != null && casefold(fmName) === wantFold;

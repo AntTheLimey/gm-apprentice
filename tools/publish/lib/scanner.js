@@ -21,6 +21,15 @@ function slugify(name) {
   return slug || 'untitled';
 }
 
+// The key a PC's live state (current HP/SAN, loadouts, the party board, flush) is stored
+// under. A PC note's `live_key` pins it; with none it is the slug of the filename, as it
+// always was. A rename writes `live_key`, so the state stays with the character. Every
+// place that derives or matches this key goes through here.
+function pcLiveKey(frontmatter, title) {
+  const pinned = frontmatter && typeof frontmatter.live_key === 'string' ? frontmatter.live_key.trim() : '';
+  return slugify(pinned || title);
+}
+
 function toPosix(p) {
   return p.split(path.sep).join('/');
 }
@@ -382,4 +391,4 @@ function scanAllNotes(vaultPath) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, pcLiveKey, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
