@@ -749,6 +749,58 @@ class ApplyExtraTests(unittest.TestCase):
                          ["# 1 rename, 1 link(s) in 1 note(s)"])
         self.assertTrue(out[-1].startswith("# "))
 
+    def test_nfd_note_is_rewritten_from_nfc_links(self):
+        import unicodedata
+        nfc = unicodedata.normalize("NFC", "Tich\u00e1")
+        nfd = unicodedata.normalize("NFD", nfc)
+        vault = make_vault(self, {
+            f"NPCs/{nfd}.md": "x\n",
+            "A.md": f"[[{nfc}]] and [[NPCs/{nfc}|T]] and [x](NPCs/{nfc}.md)\n"})
+        p = relink.plan(vault, f"NPCs/{nfd}.md", "Ticha.md")
+        self.assertEqual(p.texts["A.md"],
+                         "[[Ticha]] and [[NPCs/Ticha|T]] and [x](NPCs/Ticha.md)\n")
+
+    def test_new_is_written_exactly_as_given(self):
+        import unicodedata
+        nfd = unicodedata.normalize("NFD", "Tich\u00e1")
+        vault = make_vault(self, {"Old.md": "x\n", "A.md": "[[Old]]\n"})
+        p = relink.plan(vault, "Old.md", f"{nfd}.md")
+        self.assertEqual(p.texts["A.md"], f"[[{nfd}]]\n")
+
+    def test_nfc_old_names_an_nfd_note_in_a_canvas(self):
+        import unicodedata
+        nfc = unicodedata.normalize("NFC", "Tich\u00e1")
+        nfd = unicodedata.normalize("NFD", nfc)
+        vault = make_vault(self, {
+            f"{nfd}.md": "x\n",
+            "c.canvas": '{"nodes":[{"file":"%s.md"}]}\n' % nfc})
+        p = relink.plan(vault, f"{nfd}.md", "Ticha.md")
+        self.assertIn('"file":"Ticha.md"', p.texts["c.canvas"])
+
+
+class MovedTests(unittest.TestCase):
+    def test_case_only_not_moved_while_old_exact_name_is_listed(self):
+        vault = make_vault(self, {"s4.md": "x\n"})
+        p = relink.Plan(vault, "s4.md", "S4.md")
+        with mock.patch.object(relink.os, "listdir",
+                               return_value=["S4.md", "s4.md"]):
+            self.assertFalse(relink._moved(p))
+
+    def test_case_only_moved_when_old_exact_name_is_gone(self):
+        vault = make_vault(self, {"s4.md": "x\n"})
+        p = relink.Plan(vault, "s4.md", "S4.md")
+        with mock.patch.object(relink.os, "listdir",
+                               return_value=["S4.md"]):
+            self.assertTrue(relink._moved(p))
+
+    def test_folder_case_only_rename_both_directions(self):
+        vault = make_vault(self, {"Sub/a.md": "x\n"})
+        p = relink.Plan(vault, "Sub/a.md", "sub/a.md")
+        self.assertFalse(relink._moved(p))
+        os.rename(vault / "Sub", vault / ".tmp")
+        os.rename(vault / ".tmp", vault / "sub")
+        self.assertTrue(relink._moved(p))
+
 
 if __name__ == "__main__":
     unittest.main()

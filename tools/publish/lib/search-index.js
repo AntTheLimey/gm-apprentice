@@ -1,12 +1,13 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const lunr = require('lunr');
+const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { stripTags } = require('./strip-tags');
 
 function stripMarkdown(md) {
   return stripTags(md)  // tags typed in a body are markup, not searchable prose
     .replace(/^#+\s+.*/gm, '')
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, t, d) => d || t)
+    .replace(wikilinkRe(), (_, body) => { const w = parseWikilink(body); return w.display || w.raw; })
     .replace(/!\[.*?\]\(.*?\)/g, '')
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/[*_~`#>]/g, '')

@@ -587,6 +587,34 @@ class TextHelperTests(unittest.TestCase):
         self.assertEqual(vl.link_target("Note#heading"), "note")
         self.assertEqual(vl.link_target("Folder/Note.md"), "note")
 
+    def test_escaped_pipe_belongs_to_the_pipe(self):
+        want = vl.normalize("Emma_Wentworth")
+        self.assertEqual(vl.link_target("Emma_Wentworth\\|Emma"), want)
+        self.assertEqual(vl.link_target("Emma_Wentworth#H\\|Emma"), want)
+        self.assertEqual(vl.link_target("Emma_Wentworth^b\\|Emma"), want)
+        self.assertEqual(vl.link_target("Emma_Wentworth|Emma"), want)
+        self.assertEqual(vl.wikilink_target("[[Emma_Wentworth\\|Emma]]"),
+                         "Emma_Wentworth")
+        self.assertEqual(vl.wikilink_target("[[Emma_Wentworth#H\\|Emma]]"),
+                         "Emma_Wentworth")
+        self.assertEqual(vl.wikilink_target("[[Emma_Wentworth|Emma]]"),
+                         "Emma_Wentworth")
+
+    def test_normalize_reconciles_nfd_and_nfc(self):
+        import unicodedata
+        nfc = unicodedata.normalize("NFC", "Opeyemi Tich\u00e1")
+        nfd = unicodedata.normalize("NFD", nfc)
+        self.assertNotEqual(nfc, nfd)
+        self.assertEqual(vl.normalize(nfd), vl.normalize(nfc))
+
+    def test_inline_code_spans(self):
+        line = "a `[[X]]` b ``[[Y]]`` c [[Z]]"
+        spans = vl.inline_code_spans(line)
+        self.assertEqual([line[a:b] for a, b in spans],
+                         ["`[[X]]`", "``[[Y]]``"])
+        self.assertTrue(vl.inside_spans(line.index("[[X"), spans))
+        self.assertFalse(vl.inside_spans(line.index("[[Z"), spans))
+
     def test_wikilink_target(self):
         self.assertEqual(vl.wikilink_target("[[Session 07|the bay]]"),
                          "Session 07")

@@ -18,6 +18,10 @@ unresolved target name) per line. `all` prints labelled sections.
 Link forms handled: [[Name]], [[Name|alias]], [[Name#heading]],
 [[Name^block]], ![[embeds]], quoted "[[links]]" in YAML frontmatter,
 spaces vs underscores, case differences, and frontmatter `aliases:`.
+A table link `[[Name\\|alias]]` counts as `[[Name|alias]]`. Links quoted in
+code fences or inline code are not links. Like every other vault script it
+skips hidden folders and the `_Templates`, `_templates` and `_inbox`
+folders.
 """
 
 import argparse
@@ -29,9 +33,30 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vaultlib import (  # noqa: E402
     LINK_RE,
     frontmatter_aliases,
+    inline_code_spans,
+    inside_spans,
+    is_skipped_path,
     link_target,
     normalize,
+    scan_body,
 )
+
+
+def body_links(text: str) -> list[str]:
+    """Wikilink bodies that are links: frontmatter ones too, but not those
+    quoted in a code fence or an inline code span."""
+    states, _ = scan_body(text)
+    code = {s.lineno for s in states if s.in_code}
+    body_start = states[0].lineno if states else 1
+    found: list[str] = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        if lineno in code:
+            continue
+        spans = inline_code_spans(line) if lineno >= body_start else []
+        for m in LINK_RE.finditer(line):
+            if not inside_spans(m.start(), spans):
+                found.append(m.group(1))
+    return found
 
 
 def collect(vault: Path, excludes: list[str]):
@@ -47,7 +72,7 @@ def collect(vault: Path, excludes: list[str]):
     for path in sorted(vault.rglob("*.md")):
         rel = path.relative_to(vault).as_posix()
         parts = rel.split("/")
-        if any(p.startswith(".") for p in parts):
+        if is_skipped_path(rel):
             continue
         if any(fnmatch.fnmatch(rel, g) or fnmatch.fnmatch(parts[0], g)
                for g in excludes):
@@ -62,7 +87,7 @@ def collect(vault: Path, excludes: list[str]):
         names.setdefault(base, set()).add(rel)
         for alias in frontmatter_aliases(text):
             names.setdefault(normalize(alias), set()).add(rel)
-        outbound[rel] = {link_target(m) for m in LINK_RE.findall(text)}
+        outbound[rel] = {link_target(b) for b in body_links(text)}
     return notes, names, outbound
 
 

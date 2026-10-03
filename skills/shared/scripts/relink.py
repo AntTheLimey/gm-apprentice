@@ -31,6 +31,7 @@ import os
 import posixpath
 import re
 import sys
+import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -40,6 +41,8 @@ from migrate_core import StepFailed, write_text_atomic
 from vaultlib import (
     LINK_RE,
     extract_frontmatter,
+    inline_code_spans,
+    inside_spans,
     is_skipped_path,
     link_aliases,
     normalize,
@@ -47,7 +50,6 @@ from vaultlib import (
 )
 
 BAD_NAME_CHARS = set("[]#^|")
-INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
 MD_LINK_RE = re.compile(
     r"(!?\[[^\]\n]*\]\()(<[^>\n]+>|(?:[^()\s]|\([^()\s]*\))+)((?:\s+\"[^\"\n]*\")?\))")
 
@@ -82,6 +84,12 @@ class Plan:
     changes: list[Change] = field(default_factory=list)
     unsure: list[Change] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+
+
+def _nfc(s: str) -> str:
+    """Composed form: macOS stores accented names decomposed, links are
+    typed composed. Paths are compared in NFC and written as given."""
+    return unicodedata.normalize("NFC", s)
 
 
 def _stem(rel: str) -> str:
@@ -132,6 +140,7 @@ class _Resolver:
     def __init__(self, notes: list[str], old: str, new: str) -> None:
         self.old, self.new = old, new
         self.old_noext = old[:-3]
+        self.old_nfc = _nfc(old)
         self.new_noext = new[:-3]
         self.old_stem = normalize(_stem(old))
         self.sharing = [n for n in notes
@@ -209,9 +218,9 @@ class _Resolver:
         # A moved note's own relative links keep their targets.
         new_dir = posixpath.dirname(self.new) if src == self.old else old_dir
         target = posixpath.normpath(posixpath.join(old_dir, decoded))
-        if not rooted and target == self.old:
+        if not rooted and _nfc(target) == self.old_nfc:
             out = posixpath.relpath(self.new, new_dir or ".")
-        elif posixpath.normpath(decoded.lstrip("/")) == self.old:
+        elif _nfc(posixpath.normpath(decoded.lstrip("/"))) == self.old_nfc:
             out = ("/" if rooted else "") + self.new
         elif (src == self.old and not rooted and decoded
               and new_dir != old_dir):
@@ -222,14 +231,6 @@ class _Resolver:
             out = quote(out, safe="/")
         out = f"{out}{hashmark}{frag}"
         return f"<{out}>" if wrapped else out
-
-
-def _code_spans(line: str) -> list[tuple[int, int]]:
-    return [m.span() for m in INLINE_CODE_RE.finditer(line)]
-
-
-def _inside(pos: int, spans: list[tuple[int, int]]) -> bool:
-    return any(a <= pos < b for a, b in spans)
 
 
 def _rewrite_note(rel: str, text: str, res: _Resolver,
@@ -244,8 +245,8 @@ def _rewrite_note(rel: str, text: str, res: _Resolver,
             continue
         in_body = lineno >= body_start
         new_line = _rewrite_wikilinks(
-            rel, lineno, line, _code_spans(line) if in_body else [], res, p)
-        spans = _code_spans(new_line) if in_body else []
+            rel, lineno, line, inline_code_spans(line) if in_body else [], res, p)
+        spans = inline_code_spans(new_line) if in_body else []
         new_line = _rewrite_markdown(rel, lineno, new_line, spans, res, p)
         out.append(new_line)
     return "".join(out)
@@ -255,7 +256,7 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
                        spans: list[tuple[int, int]], res: _Resolver,
                        p: Plan, json_escape: bool = False) -> str:
     def sub(m: re.Match[str]) -> str:
-        if _inside(m.start(), spans):
+        if inside_spans(m.start(), spans):
             return m.group(0)
         got = res.wiki(rel, m.group(1), _json_inner if json_escape else _plain)
         if got is False:
@@ -277,7 +278,7 @@ def _rewrite_markdown(rel: str, lineno: int, line: str,
                       spans: list[tuple[int, int]], res: _Resolver,
                       p: Plan) -> str:
     def sub(m: re.Match[str]) -> str:
-        if _inside(m.start(), spans):
+        if inside_spans(m.start(), spans):
             return m.group(0)
         got = res.markdown(rel, m.group(2))
         if got is None:
@@ -317,7 +318,7 @@ def resolve_old(vault: Path, raw: str) -> str:
 def _case_only(vault: Path, old: str, new: str) -> bool:
     """A rename that only changes case. On a case-sensitive file system a
     different file already named NEW makes it an ordinary clash."""
-    if old.casefold() != new.casefold():
+    if _nfc(old).casefold() != _nfc(new).casefold():
         return False
     dst = vault / new
     return not dst.exists() or os.path.samefile(vault / old, dst)
@@ -421,13 +422,22 @@ def _json_string(value: str, ascii_only: bool, slash: bool) -> str:
 
 
 def _canvas_names_old(raw: str, old: str) -> bool:
-    for ascii_only in (True, False):
-        for slash in (False, True):
-            needle = re.compile(
-                r'"file"\s*:\s*' + re.escape(_json_string(old, ascii_only, slash)))
-            if needle.search(raw):
-                return True
+    for form in _forms(old):
+        for ascii_only in (True, False):
+            for slash in (False, True):
+                needle = re.compile(
+                    r'"file"\s*:\s*'
+                    + re.escape(_json_string(form, ascii_only, slash)))
+                if needle.search(raw):
+                    return True
     return False
+
+
+def _forms(path: str) -> list[str]:
+    """A path as an NFC and as an NFD writer would store it."""
+    nfc = _nfc(path)
+    return [nfc, *([unicodedata.normalize("NFD", nfc)]
+                   if unicodedata.normalize("NFD", nfc) != nfc else [])]
 
 
 def _rewrite_canvas(rel: str, text: str, old: str, new: str,
@@ -438,19 +448,20 @@ def _rewrite_canvas(rel: str, text: str, old: str, new: str,
                    for n, line in enumerate(lines, 1))
     # Writers differ: Obsidian keeps UTF-8 raw, others escape it or `/`.
     seen: set[str] = set()
-    for ascii_only in (True, False):
-        for slash in (False, True):
-            old_s = _json_string(old, ascii_only, slash)
-            if old_s in seen:
-                continue
-            seen.add(old_s)
-            new_s = _json_string(new, ascii_only, slash)
-            needle = re.compile(r'("file"\s*:\s*)' + re.escape(old_s))
-            for m in needle.finditer(text):
-                p.changes.append(Change(
-                    rel, text.count("\n", 0, m.start()) + 1,
-                    m.group(0), m.group(1) + new_s))
-            text = needle.sub(lambda m: m.group(1) + new_s, text)
+    for form in _forms(old):
+        for ascii_only in (True, False):
+            for slash in (False, True):
+                old_s = _json_string(form, ascii_only, slash)
+                if old_s in seen:
+                    continue
+                seen.add(old_s)
+                new_s = _json_string(new, ascii_only, slash)
+                needle = re.compile(r'("file"\s*:\s*)' + re.escape(old_s))
+                for m in needle.finditer(text):
+                    p.changes.append(Change(
+                        rel, text.count("\n", 0, m.start()) + 1,
+                        m.group(0), m.group(1) + new_s))
+                text = needle.sub(lambda m: m.group(1) + new_s, text)
     return text
 
 
@@ -513,12 +524,26 @@ def _move(vault: Path, old: str, new: str) -> None:
         raise
 
 
+def _old_name_listed(p: Plan) -> bool:
+    """Is OLD's exact-case spelling still in its folder? Checked at the
+    first path segment whose case differs from NEW's, so a folder-only
+    case rename (`Sub/a.md` to `sub/a.md`) is told apart too. Segments
+    above it are the same, so NEW's spelling reaches the right folder."""
+    old_parts, new_parts = p.old.split("/"), p.new.split("/")
+    for i, (a, b) in enumerate(zip(old_parts, new_parts)):
+        if a != b:
+            parent = p.vault.joinpath(*new_parts[:i])
+            return a in os.listdir(parent)
+    return False
+
+
 def _moved(p: Plan) -> bool:
     """True when the note is already at NEW, whatever step was reached."""
     dst = p.vault / p.new
     try:
-        if p.old.casefold() == p.new.casefold():
+        if _nfc(p.old).casefold() == _nfc(p.new).casefold():
             return (dst.name in os.listdir(dst.parent)
+                    and not _old_name_listed(p)
                     and not _temp_name(p.vault, p.old).exists())
         return dst.exists() and not (p.vault / p.old).exists()
     except OSError:

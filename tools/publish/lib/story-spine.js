@@ -2,6 +2,7 @@ const path = require('path');
 const { extractSections, parseWikiRef, resolveWikiLinks, publishedSource } = require('./processor');
 const { slugify } = require('./scanner');
 const { canonicalNfc } = require('./unicode');
+const { parseWikilink } = require('./wikilink');
 const { isLinkedWrapUp, WRAP_UP_TYPES } = require('./session-hub');
 const { isSessionHub } = require('./processor');
 
@@ -31,7 +32,7 @@ function findRecap(page, resolve) {
 // cannot carry this — it has to be done at the call sites.
 function refTarget(value) {
   if (!value) return '';
-  return canonicalNfc(String(value).replace(/^\[\[/, '').replace(/\]\]$/, '').split('|')[0].trim());
+  return canonicalNfc(parseWikilink(String(value).replace(/^\[\[/, '').replace(/\]\]$/, '')).raw.trim());
 }
 
 // Index wrap-up pages: bySession (keyed on the session ref target) and byChapter

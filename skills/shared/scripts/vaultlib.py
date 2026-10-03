@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -496,13 +497,39 @@ def yaml_value_for_cli(raw: str) -> str:
 
 
 def normalize(name: str) -> str:
-    """Normalize a note name or link target for matching."""
+    """Normalize a note name or link target for matching. Composed (NFC)
+    first: macOS stores accented filenames decomposed, links are typed
+    composed."""
+    name = unicodedata.normalize("NFC", name)
     return re.sub(r"\s+", " ", name.replace("_", " ").strip()).casefold()
+
+
+INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
+
+
+def inline_code_spans(line: str) -> list[tuple[int, int]]:
+    """(start, end) of each inline code span on a line."""
+    return [m.span() for m in INLINE_CODE_RE.finditer(line)]
+
+
+def inside_spans(pos: int, spans: list[tuple[int, int]]) -> bool:
+    """Whether `pos` falls inside one of the spans."""
+    return any(a <= pos < b for a, b in spans)
+
+
+def alias_split(raw: str) -> str:
+    """The part of a wikilink body before its alias pipe. Obsidian writes
+    the pipe as `\\|` inside a table cell, and the backslash belongs to
+    the pipe, not the target."""
+    target = raw.split("|", 1)[0]
+    if "|" in raw and target.endswith("\\"):
+        target = target[:-1]
+    return target
 
 
 def link_target(raw: str) -> str:
     """Reduce a wikilink body to its target note name."""
-    target = raw.split("|", 1)[0]
+    target = alias_split(raw)
     target = re.split(r"[#^]", target, maxsplit=1)[0]
     # Path-style links resolve by final segment, like Obsidian.
     target = target.rstrip("/").rsplit("/", 1)[-1]
@@ -526,7 +553,8 @@ def wikilink_target(value: Any) -> str:
         if len(value) != 1:
             return ""
         value = value[0]
-    return re.sub(r"[\[\]]", "", str(value)).split("|")[0].split("#")[0].strip()
+    body = re.sub(r"[\[\]]", "", str(value))
+    return alias_split(body).split("#")[0].strip()
 
 
 def link_aliases(fm: dict[str, Any]) -> list[str]:
