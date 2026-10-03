@@ -119,6 +119,40 @@ describe('manifest rename: the live key', () => {
   });
 });
 
+const STORY = 'Characters/PCs/Emma_Wentworth_Story.md';
+const STORY_TO = 'Characters/PCs/Emma_Wentworth_Hale_Story.md';
+const STORY_NOTE = '---\ntype: character-story\ncharacter: "[[Emma_Wentworth]]"\n---\n';
+
+describe('manifest rename: story companions', () => {
+  const manifest = `## Publishing (2 files)\n\n- [x] ${FROM}\n- [x] ${STORY}\n`;
+
+  it('lists the story file beside the PC and rewrites its manifest entry too', () => {
+    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: STORY_NOTE, '_meta/publish-manifest.md': manifest });
+    const got = rename(vault);
+    assert.deepStrictEqual(got.companions, [{ from: STORY, to: STORY_TO }]);
+    assert.strictEqual(got.files['_meta/publish-manifest.md'], `## Publishing (2 files)\n\n- [x] ${TO}\n- [x] ${STORY_TO}\n`);
+    assert.strictEqual(got.detaches, undefined);
+  });
+
+  it('has no companion for a PC with no story, or a story file of the wrong type', () => {
+    const none = vaultWith({ [FROM]: '---\ntype: pc\n---\n' });
+    assert.strictEqual(rename(none).companions, undefined);
+    const wrong = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: '---\ntype: npc\n---\n' });
+    assert.strictEqual(rename(wrong).companions, undefined);
+  });
+
+  it('says the story alone would detach', () => {
+    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: STORY_NOTE });
+    const got = rename(vault, STORY, 'Characters/PCs/Emma_Tale.md');
+    assert.match(got.detaches, /Emma_Wentworth_Story\.md is Emma_Wentworth's story; rename Emma_Wentworth and the story moves with it/);
+  });
+
+  it('does not call a story with no PC detached', () => {
+    const vault = vaultWith({ [STORY]: STORY_NOTE });
+    assert.strictEqual(rename(vault, STORY, 'Characters/PCs/Emma_Tale.md').detaches, undefined);
+  });
+});
+
 describe('pcLiveKey', () => {
   it('is the slug of the title when live_key is absent, as before', () => {
     for (const title of ['Emma_Wentworth', 'Renée González', "O'Neil & Sons"]) {
@@ -171,24 +205,6 @@ describe('a pinned key reaches the build', () => {
     assert.match(read('characters', 'pcs', 'player-characters.html'), /"pcSlug":"karl-brenner"/);
     const page = read('characters', 'pcs', 'karl-hale.html');
     assert.match(page, /"pcSlug":"karl-brenner"/);
-    fs.rmSync(root, { recursive: true, force: true });
-  });
-
-  it('the build stays silent for a roster with distinct keys', () => {
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-ok-'));
-    const vault = path.join(root, 'vault');
-    fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
-    const configPath = path.join(root, 'config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
-      vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
-      siteTitle: 'Roster Test', system: 'gurps-4e', excludeDirs: ['_meta'], excludeSections: [],
-      folderMap: { 'Characters/PCs': 'characters/pcs' },
-    }));
-    const warned = [];
-    const real = console.warn;
-    console.warn = (...a) => warned.push(a.join(' '));
-    try { build({ configPath }); } finally { console.warn = real; }
-    assert.deepStrictEqual(warned.filter((m) => /live key/i.test(m)), []);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

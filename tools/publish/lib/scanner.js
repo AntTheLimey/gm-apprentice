@@ -319,6 +319,19 @@ function scanAttachments(config) {
   return nfcLookupTable(map);
 }
 
+// A PC's story is the note beside it named `<PC stem>_Story.md` (and typed
+// `character-story`). The one place that convention is written: the pairing below, the
+// build's story-companion verdict and the rename answer all go through these.
+const STORY_SUFFIX = '_Story.md';
+function storyPathOf(pcRel) {
+  return String(pcRel).replace(/\.md$/, STORY_SUFFIX);
+}
+// The PC path a story path would belong to, or null for a path that is not named like one.
+function storyOwnerPath(rel) {
+  const r = String(rel || '');
+  return r.endsWith(STORY_SUFFIX) ? r.slice(0, -STORY_SUFFIX.length) + '.md' : null;
+}
+
 function pairStoryFiles(pages, vaultPath) {
   const pcPages = pages.filter(p => p.frontmatter.type === 'pc');
   const storyIndices = new Set();
@@ -326,7 +339,7 @@ function pairStoryFiles(pages, vaultPath) {
   for (const pc of pcPages) {
     const pcDir = path.dirname(pc.sourcePath);
     const pcBase = path.basename(pc.sourcePath, '.md');
-    const storyPath = path.join(pcDir, pcBase + '_Story.md');
+    const storyPath = path.join(pcDir, pcBase + STORY_SUFFIX);
 
     const idx = pages.findIndex(p => p.sourcePath === storyPath);
     if (idx !== -1) storyIndices.add(idx);
@@ -391,4 +404,4 @@ function scanAllNotes(vaultPath) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, pcLiveKey, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

@@ -163,13 +163,17 @@ excluded versus missing is the GM's call.
   manifest rename --vault <dir> --from <vault path> --to <vault path> --json
                      What renaming a note would change in the files this tool
                      owns, so the page stays published: prints
-                     {"files": {<vault path>: <new full text>}, "pin": {"live_key"}}
+                     {"files": {<vault path>: <new full text>}, "pin": {"live_key"},
+                     "companions": [{"from","to"}], "detaches": "<why>"}
                      and writes nothing. files: the manifest entries and the
                      vault-config settings that name the note (an overrides
                      path, a landing featured/quick-link name). pin: present
                      for a PC page, with the key its live state is stored
                      under now; the caller writes it as live_key before the
-                     file moves. Needs no site config.
+                     file moves. companions: files paired to the note by
+                     name (a PC's _Story.md) that move with it; detaches:
+                     the note is one, and cannot move alone. Needs no site
+                     config.
   manifest publish-played [--dry-run] [--config <path>] [--vault <dir>] [--json]
                           [--session <index> [--include-unreviewed] [--publish-body]]
                      Move every reviewed session to Publishing together

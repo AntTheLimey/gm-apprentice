@@ -33,6 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Renaming a PC also renames its story file, so the story stays on its
+  page. Renaming the story alone is refused, since it would detach.
 - Renaming a note with `relink.py` keeps its page on the site's publish
   list: the list, and the vault settings that name the note, are updated
   in the same pass. A vault with no site needs no Node.

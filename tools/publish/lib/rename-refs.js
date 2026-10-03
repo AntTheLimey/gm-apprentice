@@ -4,6 +4,9 @@
 // owns, so a rename never quietly takes a page off the site. It writes nothing. The
 // answer is { files: { <vault path>: <new full text> }, pin?: { live_key } }:
 //
+//   companions  files the site pairs to the note by name, which move with it (a PC's
+//          `_Story.md`): [{ from, to }]. `detaches`, a one-line reason, instead says the
+//          note is such a companion and cannot be renamed alone.
 //   files  the publish list (_meta/publish-manifest.md) and the vault-config settings that
 //          name the note: an `overrides.fields` path, and a `landing` featured_npcs /
 //          featured_locations / quick_links name. Text comes back byte for byte but for
@@ -17,7 +20,7 @@ const { isDeepStrictEqual } = require('util');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath, ENTRY_RE } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { pcLiveKey } = require('./scanner');
+const { pcLiveKey, storyPathOf, storyOwnerPath } = require('./scanner');
 const { splitFrontmatter, locateBlock } = require('./vault-config-edit');
 
 const MANIFEST_REL = '_meta/publish-manifest.md';
@@ -132,19 +135,48 @@ function pinOf(vault, from, to) {
   return { live_key: key };
 }
 
+function typeOf(vault, rel) {
+  const file = path.join(vault, rel);
+  if (!fs.existsSync(file)) return null;
+  try { return (parseNote(fs.readFileSync(file, 'utf-8')).data || {}).type || null; } catch (e) { return null; }
+}
+
+// Files the site pairs to `from` by name, which must move with it, and why `from` itself
+// cannot move alone: a PC's story is `<PC stem>_Story.md` beside it (scanner.js).
+function companionsOf(vault, from, to) {
+  const owner = storyOwnerPath(from);
+  if (owner !== null && typeOf(vault, from) === 'character-story' && typeOf(vault, owner) === 'pc') {
+    const pc = path.posix.basename(owner, '.md');
+    return { detaches: `${from} is ${pc}'s story; rename ${pc} and the story moves with it` };
+  }
+  const story = storyPathOf(from);
+  if (typeOf(vault, from) === 'pc' && typeOf(vault, story) === 'character-story') {
+    return { companions: [{ from: story, to: storyPathOf(to) }] };
+  }
+  return {};
+}
+
 function renameRefs(vault, from, to) {
+  const found = companionsOf(vault, from, to);
+  if (found.detaches) return { files: {}, detaches: found.detaches };
+  const moves = [{ from, to }].concat(found.companions || []);
   const files = {};
   const read = (rel) => {
     const file = path.join(vault, rel);
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null;
   };
   const manifest = read(MANIFEST_REL);
-  const renamed = manifest === null ? null : renameInManifest(manifest, from, to);
-  if (renamed !== null) files[MANIFEST_REL] = renamed;
   const config = read(CONFIG_REL);
-  const edited = config === null ? null : renameInConfig(config, vault, from, to);
-  if (edited !== null) files[CONFIG_REL] = edited;
+  let manifestText = manifest;
+  let configText = config;
+  for (const move of moves) {
+    if (manifestText !== null) manifestText = renameInManifest(manifestText, move.from, move.to) ?? manifestText;
+    if (configText !== null) configText = renameInConfig(configText, vault, move.from, move.to) ?? configText;
+  }
+  if (manifest !== null && manifestText !== manifest) files[MANIFEST_REL] = manifestText;
+  if (config !== null && configText !== config) files[CONFIG_REL] = configText;
   const answer = { files };
+  if (found.companions) answer.companions = found.companions;
   const pin = pinOf(vault, from, to);
   if (pin) answer.pin = pin;
   return answer;

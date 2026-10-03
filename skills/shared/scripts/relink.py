@@ -24,7 +24,9 @@ changes there (it alone knows those formats): the publish list and the
 vault settings that name the note are rewritten in the same apply
 (REPUBLISH), and a PC page, which the site keys its live stats by the
 filename, gets `live_key` pinned first (PIN) so the stats stay with the
-character. A vault with no publish list and no site is not asked and
+character. A file the site pairs to the note by name, a PC's `_Story.md`,
+moves with it in the same all-or-nothing change; renaming the story alone
+is refused. A vault with no publish list and no site is not asked and
 needs no Node.
 
 Exit: 0 done or a clean plan; 1 refused or failed (one line why);
@@ -43,6 +45,7 @@ import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 from urllib.parse import quote, unquote
 
 import vaultlib
@@ -103,6 +106,13 @@ class Plan:
     warnings: list[str] = field(default_factory=list)
     republished: list[str] = field(default_factory=list)
     pin: str | None = None
+    # Files the site pairs to the note by name (a PC's story), moved with it.
+    companions: list[tuple[str, str]] = field(default_factory=list)
+
+    @property
+    def moves(self) -> list[tuple[str, str]]:
+        """Every move, the note's own first."""
+        return [(self.old, self.new), *self.companions]
 
 
 def _nfc(s: str) -> str:
@@ -153,8 +163,8 @@ def _json_inner(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)[1:-1]
 
 
-class _Resolver:
-    """Which links point at OLD, and what they become."""
+class _Move:
+    """Which links point at one moved note, and what they become."""
 
     def __init__(self, notes: list[str], old: str, new: str) -> None:
         self.old, self.new = old, new
@@ -174,9 +184,12 @@ class _Resolver:
                 if posixpath.dirname(n) == posixpath.dirname(src)]
         return here[0] if len(here) == 1 else None
 
-    def wiki(self, src: str, body: str,
-             esc: Callable[[str], str] = _plain) -> str | None | bool:
-        """New link body, False if not a link to OLD, None if unsure."""
+    def wiki(self, src: str, body: str, esc: Callable[[str], str] = _plain,
+             rebase: bool = False,
+             src_new_dir: str = "") -> str | None | bool:
+        """New link body, False if not a link to OLD, None if unsure.
+        With `rebase`, a relative link of the moved note `src` to some
+        other note is rewritten to keep its target."""
         m = re.match(r"([^|#^]*)([#^][^|]*)?(\|.*)?$", body, re.DOTALL)
         if not m:
             return False
@@ -204,9 +217,9 @@ class _Resolver:
                 old_segs = [normalize(s) for s in self.old_noext.split("/")]
                 ours = old_segs[-len(segs):] == segs
             if not ours:
-                if src == self.old and bare.startswith(("./", "../")):
-                    new_dir = posixpath.dirname(self.new)
-                    if new_dir != posixpath.dirname(self.old):
+                if rebase and bare.startswith(("./", "../")):
+                    new_dir = src_new_dir
+                    if new_dir != posixpath.dirname(src):
                         rel = posixpath.relpath(resolved, new_dir or ".")
                         if bare.startswith("./") and not rel.startswith("../"):
                             rel = "./" + rel
@@ -222,8 +235,11 @@ class _Resolver:
             return False
         return f"{esc(_stem(self.new))}{suffix}{sub}{alias}"
 
-    def markdown(self, src: str, dest: str) -> str | None:
-        """New destination for a markdown link to OLD, else None."""
+    def markdown(self, src: str, dest: str, src_new_dir: str,
+                 rebase: bool = False) -> str | None:
+        """New destination for a markdown link to OLD, else None. With
+        `rebase`, a relative link of the moved note `src` to another note
+        keeps its target."""
         wrapped = dest.startswith("<") and dest.endswith(">")
         raw = dest[1:-1] if wrapped else dest
         if URI_RE.match(raw):
@@ -235,13 +251,13 @@ class _Resolver:
         rooted = decoded.startswith("/")
         old_dir = posixpath.dirname(src)
         # A moved note's own relative links keep their targets.
-        new_dir = posixpath.dirname(self.new) if src == self.old else old_dir
+        new_dir = src_new_dir
         target = posixpath.normpath(posixpath.join(old_dir, decoded))
         if not rooted and _nfc(target) == self.old_nfc:
             out = posixpath.relpath(self.new, new_dir or ".")
         elif _nfc(posixpath.normpath(decoded.lstrip("/"))) == self.old_nfc:
             out = ("/" if rooted else "") + self.new
-        elif (src == self.old and not rooted and decoded
+        elif (rebase and not rooted and decoded
               and new_dir != old_dir):
             out = posixpath.relpath(target, new_dir or ".")
         else:
@@ -250,6 +266,41 @@ class _Resolver:
             out = quote(out, safe="/")
         out = f"{out}{hashmark}{frag}"
         return f"<{out}>" if wrapped else out
+
+
+class _Resolver:
+    """Every link to any moved note, in one pass: each move answers for the
+    links to its own note, and a moved note's relative links to notes that
+    stay put are rebased."""
+
+    def __init__(self, notes: list[str],
+                 moves: list[tuple[str, str]]) -> None:
+        self.moves = {old: _Move(notes, old, new) for old, new in moves}
+        self.new_of = dict(moves)
+
+    def _new_dir(self, src: str) -> str:
+        return posixpath.dirname(self.new_of.get(src, src))
+
+    def wiki(self, src: str, body: str,
+             esc: Callable[[str], str] = _plain) -> str | None | bool:
+        nd = self._new_dir(src)
+        for m in self.moves.values():
+            got = m.wiki(src, body, esc, False, nd)
+            if got is not False:
+                return got
+        if src in self.moves:
+            return self.moves[src].wiki(src, body, esc, True, nd)
+        return False
+
+    def markdown(self, src: str, dest: str) -> str | None:
+        nd = self._new_dir(src)
+        for m in self.moves.values():
+            got = m.markdown(src, dest, nd)
+            if got is not None:
+                return got
+        if src in self.moves:
+            return self.moves[src].markdown(src, dest, nd, True)
+        return None
 
 
 def _rewrite_note(rel: str, text: str, res: _Resolver,
@@ -435,25 +486,50 @@ def _pin_live_key(p: Plan, texts: dict[str, str | None], slug: str) -> None:
     p.pin = slug
 
 
-def _publish_updates(p: Plan, texts: dict[str, str | None],
-                     res: _Resolver) -> None:
-    """The site's own files that name the note (its publish list, vault
-    settings) and the live key a PC is stored under, as the publish tool
-    says: it alone knows their formats. A vault with no publish list and no
-    site is not asked, so it needs no Node."""
-    listed = (p.vault / MANIFEST_REL).is_file()
-    if not listed and not _has_site(p.vault):
-        return
+def _ask_publish(vault: Path, old: str, new: str) -> dict[str, Any] | None:
+    """What the publish tool says a rename of OLD changes on the site, or
+    None when the vault has neither a publish list nor a site (so nothing
+    is asked and no Node is needed)."""
+    listed = (vault / MANIFEST_REL).is_file()
+    if not listed and not _has_site(vault):
+        return None
     try:
-        answer = publish_rename_refs(p.vault, p.old, p.new)
+        return publish_rename_refs(vault, old, new)
     except PublishToolUnavailable:
         raise RelinkError(
-            f"{p.old} is on the site's publish list and the publish tool "
+            f"{old} is on the site's publish list and the publish tool "
             f"could not be asked to update it; nothing was changed"
             if listed else
-            f"{p.old} belongs to the vault's site and the publish tool "
+            f"{old} belongs to the vault's site and the publish tool "
             f"could not be asked what a rename changes there; nothing was "
             f"changed") from None
+
+
+def _companions(vault: Path, notes: list[str], p: Plan,
+                answer: dict[str, Any] | None) -> None:
+    """The files the site pairs to the note by name, which move with it:
+    refuse a rename that would detach the note, else plan their moves."""
+    if not answer:
+        return
+    if answer.get("detaches"):
+        raise RelinkError(f"{answer['detaches']}; nothing was changed")
+    for pair in answer.get("companions") or []:
+        old = _vault_rel(vault, pair["from"], None)
+        new = _vault_rel(vault, pair["to"], None)
+        why = _refusal(vault, notes, old, new)
+        if why:
+            raise RelinkError(f"{why} (it moves with {p.old}); nothing "
+                              f"was changed")
+        p.companions.append((old, new))
+
+
+def _publish_updates(p: Plan, answer: dict[str, Any] | None,
+                     texts: dict[str, str | None], res: _Resolver) -> None:
+    """The site's own files that name the note (its publish list, vault
+    settings) and the live key a PC is stored under, as the publish tool
+    says: it alone knows their formats."""
+    if not answer:
+        return
     for rel, text in sorted(answer["files"].items()):
         if rel.startswith("/") or ".." in rel.split("/"):
             raise RelinkError(f"the publish tool named {rel}, which is not "
@@ -478,7 +554,8 @@ def _publish_updates(p: Plan, texts: dict[str, str | None],
 
 
 def plan(vault: Path, old: str, new: str) -> Plan:
-    """Everything a rename of OLD to NEW would change. Writes nothing."""
+    """Everything a rename of OLD to NEW would change, and the files that
+    move with it. Writes nothing."""
     notes = _walk(vault, ".md")
     old = _vault_rel(vault, old, None)
     new = _vault_rel(vault, new, posixpath.dirname(old))
@@ -486,9 +563,12 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     if why:
         raise RelinkError(why)
     p = Plan(vault, old, new)
+    answer = _ask_publish(vault, old, new)
+    _companions(vault, notes, p, answer)
     texts = {rel: _read(vault, rel) for rel in notes}
-    p.warnings = _alias_warnings(texts, old, new)
-    res = _Resolver(notes, old, new)
+    for o, n in p.moves:
+        p.warnings += _alias_warnings(texts, o, n)
+    res = _Resolver(notes, p.moves)
     for rel, text in texts.items():
         if text is None:
             raw = _raw(vault, rel)
@@ -508,7 +588,7 @@ def plan(vault: Path, old: str, new: str) -> Plan:
         text = _read(vault, rel)
         if text is None:
             raw = _raw(vault, rel)
-            if (_canvas_names_old(raw, old)
+            if (any(_canvas_names_old(raw, o) for o, _ in p.moves)
                     or any(isinstance(res.wiki(rel, m.group(1)), str)
                            for m in LINK_RE.finditer(raw))):
                 raise RelinkError(f"{rel} is not valid UTF-8 and links to "
@@ -516,10 +596,10 @@ def plan(vault: Path, old: str, new: str) -> Plan:
             p.warnings.append(
                 f"{rel} is not UTF-8; links in it were not checked")
             continue
-        changed = _rewrite_canvas(rel, text, old, new, res, p)
+        changed = _rewrite_canvas(rel, text, p.moves, res, p)
         if changed != text:
             p.originals[rel], p.texts[rel] = text, changed
-    _publish_updates(p, texts, res)
+    _publish_updates(p, answer, texts, res)
     return p
 
 
@@ -547,35 +627,36 @@ def _forms(path: str) -> list[str]:
                    if unicodedata.normalize("NFD", nfc) != nfc else [])]
 
 
-def _rewrite_canvas(rel: str, text: str, old: str, new: str,
+def _rewrite_canvas(rel: str, text: str, moves: list[tuple[str, str]],
                     res: _Resolver, p: Plan) -> str:
     # [[wikilinks]] inside text nodes sit in the raw JSON string.
     lines = text.splitlines(keepends=True)
     text = "".join(_rewrite_wikilinks(rel, n, line, [], res, p, True)
                    for n, line in enumerate(lines, 1))
-    # Writers differ: Obsidian keeps UTF-8 raw, others escape it or `/`.
-    seen: set[str] = set()
-    for form in _forms(old):
-        for ascii_only in (True, False):
-            for slash in (False, True):
-                old_s = _json_string(form, ascii_only, slash)
-                if old_s in seen:
-                    continue
-                seen.add(old_s)
-                new_s = _json_string(new, ascii_only, slash)
-                needle = re.compile(r'("file"\s*:\s*)' + re.escape(old_s))
-                for m in needle.finditer(text):
-                    p.changes.append(Change(
-                        rel, text.count("\n", 0, m.start()) + 1,
-                        m.group(0), m.group(1) + new_s))
-                text = needle.sub(lambda m: m.group(1) + new_s, text)
+    for old, new in moves:
+        # Writers differ: Obsidian keeps UTF-8 raw, others escape it or `/`.
+        seen: set[str] = set()
+        for form in _forms(old):
+            for ascii_only in (True, False):
+                for slash in (False, True):
+                    old_s = _json_string(form, ascii_only, slash)
+                    if old_s in seen:
+                        continue
+                    seen.add(old_s)
+                    new_s = _json_string(new, ascii_only, slash)
+                    needle = re.compile(r'("file"\s*:\s*)' + re.escape(old_s))
+                    for m in needle.finditer(text):
+                        p.changes.append(Change(
+                            rel, text.count("\n", 0, m.start()) + 1,
+                            m.group(0), m.group(1) + new_s))
+                    text = needle.sub(lambda m: m.group(1) + new_s, text)
     return text
 
 
 def rows(p: Plan, done: bool = False) -> list[str]:
     ren, rel = ("RENAMED", "RELINKED") if done else ("WOULD-RENAME",
                                                      "WOULD-RELINK")
-    out = [f"{ren}\t{p.old}\t{p.new}"]
+    out = [f"{ren}\t{o}\t{n}" for o, n in p.moves]
     out += [f"{rel}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
             for c in p.changes]
     ful, pin = ("REPUBLISHED", "PINNED") if done else ("WOULD-REPUBLISH",
@@ -587,7 +668,8 @@ def rows(p: Plan, done: bool = False) -> list[str]:
             f"this name; left as written" for c in p.unsure]
     out += [f"WARNING\t{w}" for w in p.warnings]
     files = len({c.rel for c in p.changes})
-    total = (f"# 1 rename, {len(p.changes)} link(s) in {files} note(s)"
+    renames = (f"{len(p.moves)} renames" if len(p.moves) > 1 else "1 rename")
+    total = (f"# {renames}, {len(p.changes)} link(s) in {files} note(s)"
              + (f", {len(p.republished)} publish file(s) updated"
                 if p.republished else "")
              + (", live key pinned" if p.pin else "")
@@ -639,20 +721,25 @@ def _move(vault: Path, old: str, new: str) -> None:
         raise
 
 
-def _moved(p: Plan) -> bool:
+def _moved_one(vault: Path, old: str, new: str) -> bool:
     """True when the note is already at NEW, whatever step was reached."""
-    dst = p.vault / p.new
+    dst = vault / new
     try:
-        if _nfc(p.old).casefold() == _nfc(p.new).casefold():
+        if _nfc(old).casefold() == _nfc(new).casefold():
             # `_move` never renames a folder: the file leaves OLD's folder
             # for NEW's, so OLD's exact name must be gone from its folder.
-            src = p.vault / p.old
+            src = vault / old
             return (dst.name in os.listdir(dst.parent)
                     and src.name not in os.listdir(src.parent)
-                    and not _temp_name(p.vault, p.old).exists())
-        return dst.exists() and not (p.vault / p.old).exists()
+                    and not _temp_name(vault, old).exists())
+        return dst.exists() and not (vault / old).exists()
     except OSError:
         return False
+
+
+def _moved(p: Plan) -> bool:
+    """True when every note of the plan is already at its new path."""
+    return all(_moved_one(p.vault, o, n) for o, n in p.moves)
 
 
 def _check_fresh(p: Plan) -> None:
@@ -669,17 +756,17 @@ def _check_fresh(p: Plan) -> None:
                               f"changed, run it again")
         if now != text:
             raise RelinkError(f"{rel} {stale}")
-    if not (p.vault / p.old).is_file():
-        raise RelinkError(f"{p.old} {stale}")
-    if (not _case_only(p.vault, p.old, p.new)
-            and (p.vault / p.new).exists()):
-        raise RelinkError(f"{p.new} {stale}")
+    for old, new in p.moves:
+        if not (p.vault / old).is_file():
+            raise RelinkError(f"{old} {stale}")
+        if not _case_only(p.vault, old, new) and (p.vault / new).exists():
+            raise RelinkError(f"{new} {stale}")
     try:
         fresh = plan(p.vault, p.old, p.new)
     except RelinkError as e:
         raise RelinkError(f"{e} (the vault {stale})") from e
-    if (fresh.originals, fresh.texts, fresh.changes) != (
-            p.originals, p.texts, p.changes):
+    if (fresh.originals, fresh.texts, fresh.changes, fresh.moves) != (
+            p.originals, p.texts, p.changes, p.moves):
         raise RelinkError(f"the vault {stale}")
 
 
@@ -691,15 +778,27 @@ def apply(p: Plan) -> list[str]:
         for rel in sorted(p.texts):
             written.append(rel)  # before the write: an interrupt mid-write
             write_text_atomic(p.vault / rel, p.texts[rel])
-        _move(p.vault, p.old, p.new)
+        for old, new in p.moves:
+            _move(p.vault, old, new)
     except BaseException as e:
         if _moved(p):
-            # The note is already at NEW, so the rewritten links are right.
-            said = (f"{p.old} was renamed to {p.new} and its links were "
-                    f"rewritten; the rename completed ({str(e) or type(e).__name__})")
+            # Every note is already at its new path, so the rewritten links
+            # are right.
+            names = " and ".join(f"{o} to {n}" for o, n in p.moves)
+            said = (f"{names} {'were' if p.companions else 'was'} renamed "
+                    f"and the links were rewritten; the rename completed "
+                    f"({str(e) or type(e).__name__})")
             if isinstance(e, KeyboardInterrupt):
                 raise KeyboardInterrupt(said) from None
             raise RelinkError(said) from e
+        # Put back the notes that did move, last first, then the texts.
+        unmoved = []
+        for old, new in reversed(p.moves):
+            if _moved_one(p.vault, old, new):
+                try:
+                    _move(p.vault, new, old)
+                except BaseException:
+                    unmoved.append(new)
         stuck = []
         for rel in written:
             try:
@@ -708,16 +807,22 @@ def apply(p: Plan) -> list[str]:
                 stuck.append(rel)
         cause = e.__cause__ if isinstance(e, _Stranded) else e
         said = str(e) or type(e).__name__
+        if unmoved:
+            said += (f"; these notes could not be moved back and are still "
+                     f"at their new names: {', '.join(unmoved)}")
         if stuck:
             said += (f"; these notes could not be put back and still have "
                      f"the new links: {', '.join(stuck)}")
+        elif unmoved:
+            pass
         elif isinstance(e, _Stranded):
             said += "; the links were put back"
         else:
             said += "; the vault is as it was"
         if isinstance(cause, KeyboardInterrupt):
             raise KeyboardInterrupt(said) from None
-        if isinstance(cause, SystemExit) and not stuck and e is cause:
+        if (isinstance(cause, SystemExit) and not stuck and not unmoved
+                and e is cause):
             raise
         raise RelinkError(said) from e
     return rows(p, done=True)

@@ -1049,5 +1049,142 @@ class LiveKeyTests(unittest.TestCase):
         self.assertIn('"pcSlug":"karl-brenner"', page.replace(" ", ""))
 
 
+STORY_OLD = "Characters/PCs/Emma_Wentworth_Story.md"
+STORY_NEW = "Characters/PCs/Emma_Wentworth_Hale_Story.md"
+STORY_TEXT = ('---\ntype: character-story\ncharacter: "[[Emma_Wentworth]]"\n---\n'
+              "Back to [[Emma_Wentworth]].\n")
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class CompanionTests(unittest.TestCase):
+    """A PC's story file moves with it."""
+
+    def vault(self, extra=None):
+        files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n",
+                 STORY_OLD: STORY_TEXT,
+                 "_meta/publish-manifest.md":
+                     MANIFEST.replace(f"- [x] {PC_OLD}\n",
+                                      f"- [x] {PC_OLD}\n- [x] {STORY_OLD}\n"),
+                 "Sessions/S1.md": "[[Emma_Wentworth]] and [[Emma_Wentworth_Story|her tale]]\n"}
+        files.update(extra or {})
+        return make_vault(self, files)
+
+    def snapshot(self, vault):
+        return {p.relative_to(vault).as_posix(): p.read_bytes()
+                for p in vault.rglob("*") if p.is_file()}
+
+    def test_both_files_move_and_every_link_to_both_is_rewritten(self):
+        vault = self.vault()
+        p = relink.plan(vault, PC_OLD, PC_NEW)
+        rows = relink.rows(p)
+        self.assertIn(f"WOULD-RENAME\t{PC_OLD}\t{PC_NEW}", rows)
+        self.assertIn(f"WOULD-RENAME\t{STORY_OLD}\t{STORY_NEW}", rows)
+        self.assertTrue(rows[-1].startswith("# 2 renames, "), rows[-1])
+        relink.apply(p)
+        self.assertFalse((vault / PC_OLD).exists())
+        self.assertFalse((vault / STORY_OLD).exists())
+        self.assertEqual(
+            read(vault, "Sessions/S1.md"),
+            "[[Emma_Wentworth_Hale]] and [[Emma_Wentworth_Hale_Story|her tale]]\n")
+        self.assertEqual(
+            read(vault, STORY_NEW),
+            STORY_TEXT.replace("Emma_Wentworth", "Emma_Wentworth_Hale"))
+        manifest = read(vault, "_meta/publish-manifest.md")
+        self.assertIn(PC_NEW, manifest)
+        self.assertIn(STORY_NEW, manifest)
+        self.assertNotIn(STORY_OLD, manifest)
+
+    def test_the_story_alone_is_refused_and_nothing_is_written(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, STORY_OLD, "Characters/PCs/Emma_Tale.md")
+        self.assertIn("rename Emma_Wentworth and the story moves with it",
+                      str(cm.exception))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_a_companion_target_that_exists_refuses_the_whole_rename(self):
+        vault = self.vault({STORY_NEW: "x\n"})
+        before = self.snapshot(vault)
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertIn(STORY_NEW, str(cm.exception))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_a_failure_in_the_second_move_leaves_the_vault_as_it_was(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        real = relink._move
+        calls = []
+
+        def flaky(v, old, new):
+            calls.append(old)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            real(v, old, new)
+        with mock.patch.object(relink, "_move", flaky):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertIn("as it was", str(cm.exception))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_an_interrupt_in_the_second_move_leaves_the_vault_as_it_was(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        real = relink._move
+        calls = []
+
+        def flaky(v, old, new):
+            calls.append(old)
+            if len(calls) == 2:
+                raise KeyboardInterrupt
+            real(v, old, new)
+        with mock.patch.object(relink, "_move", flaky):
+            with self.assertRaises(KeyboardInterrupt):
+                relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_a_pc_with_no_story_behaves_as_before(self):
+        vault = make_vault(self, {PC_OLD: "---\ntype: pc\n---\n",
+                                  "_meta/publish-manifest.md": MANIFEST})
+        p = relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertEqual(p.companions, [])
+        rows = relink.rows(p)
+        self.assertEqual(len([r for r in rows if r.startswith("WOULD-RENAME")]), 1)
+        self.assertTrue(rows[-1].startswith("# 1 rename, "), rows[-1])
+
+    def test_a_relative_link_between_the_two_files_follows_them_both(self):
+        vault = self.vault({STORY_OLD: STORY_TEXT + "[tale](./Emma_Wentworth.md)\n"})
+        relink.apply(relink.plan(vault, PC_OLD, "Moved/Emma_Wentworth_Hale.md"))
+        self.assertIn("[tale](Emma_Wentworth_Hale.md)",
+                      read(vault, "Moved/Emma_Wentworth_Hale_Story.md"))
+
+    def test_a_build_shows_the_story_on_the_pc_page_after_the_rename(self):
+        root = Path(tempfile.mkdtemp(prefix="relink-story-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "vault"
+        shutil.copytree(PUBLISH_TOOL.parent.parent / "test" / "fixtures"
+                        / "with-story", vault)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish:\n  site: true\n  mode: full\n---\n")
+        old = "Characters/PCs/Lord_Blackwood.md"
+        relink.apply(relink.plan(vault, old, "Characters/PCs/Lord_Edmund_Blackwood.md"))
+        self.assertTrue((vault / "Characters/PCs/Lord_Edmund_Blackwood_Story.md").is_file())
+        import json
+        (root / "config.json").write_text(json.dumps({
+            "vaultPath": str(vault), "outputDir": str(root / "docs"),
+            "attachmentsDir": "_attachments", "siteTitle": "Story Test",
+            "system": "coc-7e", "excludeDirs": ["_meta"], "excludeSections": [],
+            "folderMap": {"Characters/PCs": "characters/pcs"}}))
+        r = subprocess.run(
+            ["node", "-e", "require(process.argv[1]).build({configPath: process.argv[2]})",
+             str(PUBLISH_TOOL.parent.parent / "lib" / "build.js"),
+             str(root / "config.json")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        docs = root / "docs"
+        self.assertTrue((docs / "story" / "characters" / "lord-edmund-blackwood.html").is_file())
+        self.assertFalse((docs / "characters" / "pcs" / "lord-edmund-blackwood-story.html").exists())
+
+
 if __name__ == "__main__":
     unittest.main()
