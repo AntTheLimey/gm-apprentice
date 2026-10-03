@@ -243,7 +243,12 @@ def find_publish_site(vault: Path) -> list[Item]:
             or read_publish_list(vault, "exclude_sections").publish_line is None
             or site_switch(vault) is not None):
         return []
-    value = "true" if read_publish_scalar(vault, "site_dir") else "false"
+    has_dir = bool(read_publish_scalar(vault, "site_dir"))
+    value = "true" if has_dir else "false"
+    row = (f"write publish.site: {value} in _meta/vault-config.md" if has_dir
+           else "write publish.site: false in _meta/vault-config.md (no site "
+                "folder is named; if this vault has a site, set "
+                "publish.site_dir to its folder instead)")
 
     def apply(_value: str | None) -> list[str]:
         edit_frontmatter(
@@ -251,9 +256,7 @@ def find_publish_site(vault: Path) -> list[Item]:
             lambda fm, eol: set_nested_key(fm, "publish", "site", value, eol))
         return [f"wrote publish.site: {value}"]
 
-    return [Item("publish-site", WILL,
-                 [f"write publish.site: {value} in _meta/vault-config.md"],
-                 apply)]
+    return [Item("publish-site", WILL, [row], apply)]
 
 
 def _cells(row: str) -> tuple[str, str, str]:

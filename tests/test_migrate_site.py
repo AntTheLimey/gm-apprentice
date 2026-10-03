@@ -453,8 +453,16 @@ class PublishSiteTests(unittest.TestCase):
     def test_no_site_dir_writes_false(self):
         vault = make_vault(self, site=False)
         (item,) = ms.find_publish_site(vault)
+        self.assertIn("no site folder is named; if this vault has a site, "
+                      "set publish.site_dir to its folder instead",
+                      item.lines[0])
         item.apply(None)
         self.assertIn("\n  site: false\n", self.text(vault))
+
+    def test_a_site_dir_row_has_no_caveat(self):
+        (item,) = ms.find_publish_site(make_vault(self))
+        self.assertEqual(
+            item.lines, ["write publish.site: true in _meta/vault-config.md"])
 
     def test_a_switch_already_written_is_left(self):
         vault = make_vault(self, extra="  site: false\n")
