@@ -24,9 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `plan`.
   - `migration-procedure.md` is now a short page on how to drive the
     script. `migrations.md` is a record of what each release changed.
-  - `config-to-vault` runs on every pass: a vault already at 1.10.24
-    or later whose site file still holds campaign settings is offered
-    the move.
+  - `config-to-vault` runs on every pass: whenever the site file still
+    holds campaign settings, they are moved into the vault file as part
+    of Will do.
 
 ### Added
 
