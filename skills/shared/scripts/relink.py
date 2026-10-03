@@ -37,7 +37,7 @@ from vaultlib import LINK_RE, is_skipped_path, normalize, scan_body
 BAD_NAME_CHARS = set("[]#^|")
 INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
 MD_LINK_RE = re.compile(
-    r"(!?\[[^\]\n]*\]\()(<[^>\n]+>|[^)\s]+)((?:\s+\"[^\"\n]*\")?\))")
+    r"(!?\[[^\]\n]*\]\()(<[^>\n]+>|(?:[^()\s]|\([^()\s]*\))+)((?:\s+\"[^\"\n]*\")?\))")
 
 
 class RelinkError(Exception):
@@ -134,6 +134,13 @@ class _Resolver:
                 old_segs = [normalize(s) for s in self.old_noext.split("/")]
                 ours = old_segs[-len(segs):] == segs
             if not ours:
+                if src == self.old and bare.startswith(("./", "../")):
+                    new_dir = posixpath.dirname(self.new)
+                    if new_dir != posixpath.dirname(self.old):
+                        rel = posixpath.relpath(resolved, new_dir or ".")
+                        if bare.startswith("./") and not rel.startswith("../"):
+                            rel = "./" + rel
+                        return f"{rel}{suffix}{sub}{alias}"
                 return False
             return f"{self.new_noext}{suffix}{sub}{alias}"
         if normalize(bare.strip("/")) != self.old_stem:
@@ -153,16 +160,20 @@ class _Resolver:
             return None
         path, hashmark, frag = raw.partition("#")
         decoded = unquote(path)
-        if not decoded.lower().endswith(".md"):
+        if not decoded:
             return None
         rooted = decoded.startswith("/")
-        here = posixpath.normpath(
-            posixpath.join(posixpath.dirname(src), decoded))
-        if not rooted and here == self.old:
-            out = posixpath.relpath(self.new,
-                                    posixpath.dirname(src) or ".")
+        old_dir = posixpath.dirname(src)
+        # A moved note's own relative links keep their targets.
+        new_dir = posixpath.dirname(self.new) if src == self.old else old_dir
+        target = posixpath.normpath(posixpath.join(old_dir, decoded))
+        if not rooted and target == self.old:
+            out = posixpath.relpath(self.new, new_dir or ".")
         elif posixpath.normpath(decoded.lstrip("/")) == self.old:
             out = ("/" if rooted else "") + self.new
+        elif (src == self.old and not rooted and decoded
+              and new_dir != old_dir):
+            out = posixpath.relpath(target, new_dir or ".")
         else:
             return None
         if not wrapped and ("%" in path or " " in out):
@@ -189,8 +200,10 @@ def _rewrite_note(rel: str, text: str, res: _Resolver,
         if lineno in code:
             out.append(line)
             continue
-        spans = _code_spans(line) if lineno >= body_start else []
-        new_line = _rewrite_wikilinks(rel, lineno, line, spans, res, p)
+        in_body = lineno >= body_start
+        new_line = _rewrite_wikilinks(
+            rel, lineno, line, _code_spans(line) if in_body else [], res, p)
+        spans = _code_spans(new_line) if in_body else []
         new_line = _rewrite_markdown(rel, lineno, new_line, spans, res, p)
         out.append(new_line)
     return "".join(out)
@@ -211,6 +224,8 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
         assert isinstance(got, str)
         bang = "!" if m.group(0).startswith("!") else ""
         after = f"{bang}[[{got}]]"
+        if after == m.group(0):
+            return after
         p.changes.append(Change(rel, lineno, m.group(0), after))
         return after
     return LINK_RE.sub(sub, line)
@@ -226,6 +241,8 @@ def _rewrite_markdown(rel: str, lineno: int, line: str,
         if got is None:
             return m.group(0)
         after = f"{m.group(1)}{got}{m.group(3)}"
+        if after == m.group(0):
+            return after
         p.changes.append(Change(rel, lineno, m.group(0), after))
         return after
     return MD_LINK_RE.sub(sub, line)
@@ -256,15 +273,42 @@ def plan(vault: Path, old: str, new: str) -> Plan:
         changed = _rewrite_note(rel, text, res, p)
         if changed != text:
             p.originals[rel], p.texts[rel] = text, changed
-    needle = re.compile(r'("file"\s*:\s*)' + re.escape(json.dumps(old)))
     for rel in _walk(vault, ".canvas"):
         text = _read(vault, rel)
-        if text is None or not needle.search(text):
+        if text is None:
+            p.warnings.append(
+                f"{rel} is not UTF-8; links in it were not checked")
             continue
-        changed = needle.sub(lambda m: m.group(1) + json.dumps(new), text)
-        for m in needle.finditer(text):
-            p.changes.append(Change(rel, text.count("\n", 0, m.start()) + 1,
-                                    m.group(0),
-                                    m.group(1) + json.dumps(new)))
-        p.originals[rel], p.texts[rel] = text, changed
+        changed = _rewrite_canvas(rel, text, old, new, res, p)
+        if changed != text:
+            p.originals[rel], p.texts[rel] = text, changed
     return p
+
+
+def _json_string(value: str, ascii_only: bool, slash: bool) -> str:
+    out = json.dumps(value, ensure_ascii=ascii_only)
+    return out.replace("/", "\\/") if slash else out
+
+
+def _rewrite_canvas(rel: str, text: str, old: str, new: str,
+                    res: _Resolver, p: Plan) -> str:
+    # [[wikilinks]] inside text nodes sit in the raw JSON string.
+    lines = text.splitlines(keepends=True)
+    text = "".join(_rewrite_wikilinks(rel, n, line, [], res, p)
+                   for n, line in enumerate(lines, 1))
+    # Writers differ: Obsidian keeps UTF-8 raw, others escape it or `/`.
+    seen: set[str] = set()
+    for ascii_only in (True, False):
+        for slash in (False, True):
+            old_s = _json_string(old, ascii_only, slash)
+            if old_s in seen:
+                continue
+            seen.add(old_s)
+            new_s = _json_string(new, ascii_only, slash)
+            needle = re.compile(r'("file"\s*:\s*)' + re.escape(old_s))
+            for m in needle.finditer(text):
+                p.changes.append(Change(
+                    rel, text.count("\n", 0, m.start()) + 1,
+                    m.group(0), m.group(1) + new_s))
+            text = needle.sub(lambda m: m.group(1) + new_s, text)
+    return text

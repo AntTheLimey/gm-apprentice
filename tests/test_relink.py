@@ -167,5 +167,84 @@ class MarkdownAndCanvasTests(unittest.TestCase):
                                         "Chapter_01_Session_04_Wrap_Up"))
 
 
+class MarkdownAndCanvasFixTests(unittest.TestCase):
+    def plan(self, files, old=OLD, new=NEW):
+        vault = make_vault(self, files)
+        return relink.plan(vault, old, new)
+
+    def test_non_ascii_canvas_names(self):
+        old, new = "Sessions/Caf\u00e9.md", "Sessions/Caf\u00e9 2.md"
+        raw = '{"nodes":[{"id":"1","type":"file","file":"Sessions/Caf\u00e9.md"}]}'
+        esc = '{"nodes":[{"id":"1","type":"file","file":"Sessions/Caf\\u00e9.md"}]}'
+        slash = '{"nodes":[{"id":"1","type":"file","file":"Sessions\\/Caf\u00e9.md"}]}'
+        p = self.plan({old: "x\n", "R.canvas": raw, "E.canvas": esc,
+                       "S.canvas": slash}, old, new)
+        self.assertEqual(p.texts["R.canvas"], raw.replace("Caf\u00e9", "Caf\u00e9 2"))
+        self.assertEqual(p.texts["E.canvas"],
+                         esc.replace("Caf\\u00e9", "Caf\\u00e9 2"))
+        self.assertEqual(p.texts["S.canvas"],
+                         slash.replace("Sessions\\/Caf\u00e9.md",
+                                       "Sessions\\/Caf\u00e9 2.md"))
+
+    def test_code_span_after_length_changing_wikilink(self):
+        line = ("[[Session_4_Wrapup]] " * 3
+                + "`[x](Sessions/Session_4_Wrapup.md)`")
+        p = self.plan({OLD: "x\n", "A.md": line + "\n"})
+        self.assertEqual(
+            p.texts["A.md"],
+            "[[Chapter_01_Session_04_Wrap_Up]] " * 3
+            + "`[x](Sessions/Session_4_Wrapup.md)`\n")
+
+    def test_links_in_the_moved_note_are_rebased(self):
+        new = "Sessions/Sub/Session_4_Wrapup.md"
+        body = ("[me](Session_4_Wrapup.md#Top)\n[o](../A.md)\n"
+                "![p](img/p.png)\n[[../X]]\n[[Bare]]\n[u](https://e.com/a.md)\n"
+                "[r](/A.md)\n")
+        p = self.plan({OLD: body, "A.md": "x\n", "X.md": "x\n"}, OLD, new)
+        self.assertEqual(
+            p.texts[OLD],
+            "[me](Session_4_Wrapup.md#Top)\n[o](../../A.md)\n"
+            "![p](../img/p.png)\n[[../../X]]\n[[Bare]]\n"
+            "[u](https://e.com/a.md)\n[r](/A.md)\n")
+        self.assertEqual(len(p.changes), 3)  # [me] is unchanged text
+
+    def test_rename_in_place_does_not_rebase(self):
+        p = self.plan({OLD: "[o](../A.md)\n![p](img/p.png)\n", "A.md": "x\n"})
+        self.assertEqual(p.texts, {})
+
+    def test_balanced_parentheses_in_destination(self):
+        old, new = "Sessions/Session_(4).md", "Sessions/S4.md"
+        p = self.plan({old: "x\n", "A.md": "[a](Sessions/Session_(4).md)\n"},
+                      old, new)
+        self.assertEqual(p.texts["A.md"], "[a](Sessions/S4.md)\n")
+
+    def test_non_utf8_canvas_is_warned_about(self):
+        vault = make_vault(self, {OLD: "x\n"})
+        (vault / "Bad.canvas").write_bytes(b"\xff\xfe")
+        self.assertEqual(
+            relink.plan(vault, OLD, NEW).warnings,
+            ["Bad.canvas is not UTF-8; links in it were not checked"])
+
+    def test_wikilinks_in_canvas_text_nodes(self):
+        canvas = '{"nodes":[{"id":"1","type":"text","text":"see [[Session_4_Wrapup]]"}]}'
+        p = self.plan({OLD: "x\n", "B.canvas": canvas})
+        self.assertEqual(
+            p.texts["B.canvas"],
+            canvas.replace("Session_4_Wrapup", "Chapter_01_Session_04_Wrap_Up"))
+
+    def test_markdown_link_in_frontmatter_embed_and_table(self):
+        for before, after in {
+            "---\nsession: [s](Sessions/Session_4_Wrapup.md)\n---\n":
+                "---\nsession: [s](Sessions/Chapter_01_Session_04_Wrap_Up.md)\n---\n",
+            "![](Sessions/Session_4_Wrapup.md)\n":
+                "![](Sessions/Chapter_01_Session_04_Wrap_Up.md)\n",
+            "| a | [s](Sessions/Session_4_Wrapup.md) |\n":
+                "| a | [s](Sessions/Chapter_01_Session_04_Wrap_Up.md) |\n",
+        }.items():
+            with self.subTest(before=before):
+                p = self.plan({OLD: "x\n", "A.md": before})
+                self.assertEqual(p.texts["A.md"], after)
+
+
 if __name__ == "__main__":
     unittest.main()
