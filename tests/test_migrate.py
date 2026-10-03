@@ -427,6 +427,36 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(raw.count(b"\r\n"), raw.count(b"\n"))
 
 
+class ApplyGuardTests(unittest.TestCase):
+    def test_a_frontmatter_the_stamp_cannot_edit_stops_before_anything_runs(self):
+        vault = make_vault(self)
+        path = vault / "_meta" / "vault-config.md"
+        path.write_text('---\ntype: meta\ngm_apprentice_version: "1.10.12"\n'
+                        'description: >\n  folded text\n---\n',
+                        encoding="utf-8")
+        before = path.read_bytes()
+        log = []
+        code, out, err = call([str(vault), "apply"],
+                              [will("files", None, 3, log)])
+        self.assertEqual(code, 1)
+        self.assertEqual(log, [])
+        self.assertEqual(path.read_bytes(), before)
+        self.assertIn("vault-config.md", err)
+        self.assertIn("nothing was changed", err)
+
+    def test_a_byte_order_mark_is_read_and_kept(self):
+        vault = make_vault(self)
+        path = vault / "_meta" / "vault-config.md"
+        path.write_bytes(b"\xef\xbb\xbf" + path.read_bytes())
+        code, out, _ = call([str(vault), "plan"], [])
+        self.assertEqual(code, 0)
+        self.assertIn("vault 1.10.12", out)
+        self.assertEqual(call([str(vault), "apply"], [])[0], 0)
+        raw = path.read_bytes()
+        self.assertTrue(raw.startswith(b"\xef\xbb\xbf---"))
+        self.assertEqual(stamp_of(vault).lstrip("\ufeff"), PLUGIN)
+
+
 class EditFrontmatterTests(unittest.TestCase):
     def test_failure_leaves_the_note_and_no_temp_file(self):
         vault = make_vault(self)

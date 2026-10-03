@@ -28,7 +28,8 @@ import argparse
 import sys
 from pathlib import Path
 
-from migrate_core import CHOICE, PERSON, WILL, Check, Item, StepFailed, edit_frontmatter
+from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
+                          check_editable, edit_frontmatter)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
 from vault_check import emit
@@ -54,7 +55,7 @@ def gate(vault: Path) -> tuple[str, str] | str:
         return f"{vault} has no _meta/ folder: first-time setup, not a migration"
     try:
         fm = extract_frontmatter((vault / "_meta" / "vault-config.md").read_text(
-            encoding="utf-8", errors="replace")) or {}
+            encoding="utf-8-sig", errors="replace")) or {}
     except OSError:
         fm = {}
     current = fm.get("gm_apprentice_version")
@@ -164,6 +165,11 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         if problem:
             print(f"migrate.py: {problem}", file=sys.stderr)
             return 2
+    try:   # the stamp is written last; find out now that it can be
+        check_editable(vault / "_meta" / "vault-config.md")
+    except StepFailed as e:
+        print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
+        return 1
     did: list[str] = []
     person: list[str] = []
     used: set[str] = set()

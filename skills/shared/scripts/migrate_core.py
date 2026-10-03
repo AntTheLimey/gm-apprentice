@@ -81,27 +81,41 @@ def write_text_atomic(path: Path, text: str) -> None:
                 pass
 
 
-def edit_frontmatter(path: Path,
-                     change: Callable[[list[str], str], object]) -> None:
-    """Run `change(frontmatter lines, eol)` on a note and write it back.
-    Only the frontmatter lines change; line endings are kept."""
+def _read_note(path: Path) -> tuple[list[str], int, str]:
+    """(the note's lines with endings, where its frontmatter closes, its
+    byte-order mark or ""). Raises StepFailed when the file cannot be read
+    or its frontmatter cannot be edited line by line."""
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
             text = f.read()
     except (OSError, UnicodeDecodeError) as e:
         raise StepFailed(f"{path.name} cannot be read "
                          f"({e.__class__.__name__})") from e
-    lines = text.splitlines(keepends=True)
+    bom = "\ufeff" if text.startswith("\ufeff") else ""
+    lines = text[len(bom):].splitlines(keepends=True)
     end, error = frontmatter_span(lines)
     if error:
         raise StepFailed(f"{path.name}: {error}")
+    return lines, end, bom
+
+
+def check_editable(path: Path) -> None:
+    """Raise StepFailed unless `edit_frontmatter` could edit this note."""
+    _read_note(path)
+
+
+def edit_frontmatter(path: Path,
+                     change: Callable[[list[str], str], object]) -> None:
+    """Run `change(frontmatter lines, eol)` on a note and write it back.
+    Only the frontmatter lines change; line endings are kept."""
+    lines, end, bom = _read_note(path)
     fm = lines[1:end]
     eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
     try:
         change(fm, eol)
     except ValueError as e:
         raise StepFailed(f"{path.name}: {e}") from e
-    new_text = "".join([lines[0], *fm, *lines[end:]])
+    new_text = "".join([bom, lines[0], *fm, *lines[end:]])
     write_text_atomic(path, new_text)
 
 

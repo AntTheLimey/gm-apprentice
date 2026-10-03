@@ -165,6 +165,23 @@ def apply_config_to_vault(vault: Path) -> StepPlan:
 REPIN = "site-repin"
 
 
+def _pin_check(site: Path) -> dict[str, Any]:
+    """`update-pin --check --json` for the site; its answer has a boolean
+    `ok`. Raises StepFailed when the tool does not give one."""
+    code, out, err = plugin_tool(
+        ["update-pin", "--check", "--json", "--site", str(site)])
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool):
+        said = [x for x in err.splitlines() if x.strip()]
+        raise StepFailed(
+            "update-pin --check did not return the expected JSON: "
+            + (said[-1].strip() if said else f"update-pin exited {code}"))
+    return data
+
+
 def find_site_repin(vault: Path) -> list[Item]:
     """The site builds with the tool installed in it, so that tool is
     brought to the plugin's before anything else asks it. `update-pin
@@ -182,17 +199,7 @@ def find_site_repin(vault: Path) -> list[Item]:
         raise StepFailed(
             f"publish.site_dir is set to {site} but no vault.config.json is "
             f"there; correct the path, or set site: false")
-    code, out, err = plugin_tool(
-        ["update-pin", "--check", "--json", "--site", str(site)])
-    try:
-        data = json.loads(out)
-    except ValueError:
-        data = None
-    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool):
-        said = [x for x in err.splitlines() if x.strip()]
-        raise StepFailed(
-            "update-pin --check did not return the expected JSON: "
-            + (said[-1].strip() if said else f"update-pin exited {code}"))
+    data = _pin_check(site)
     if data["ok"]:
         return []
     installed = data.get("installedBefore") or "none"
@@ -203,6 +210,10 @@ def find_site_repin(vault: Path) -> list[Item]:
         if code != 0:
             tail = lines[-3:] or [err.strip() or f"update-pin exited {code}"]
             raise StepFailed("; ".join(tail))
+        if not _pin_check(site)["ok"]:
+            raise StepFailed(
+                f"update-pin finished but the site at {site} is still out of "
+                f"date; run update-pin --site {site} by hand to see why")
         return lines
 
     return [Item(REPIN, WILL,
@@ -400,7 +411,19 @@ def find_publish_played(vault: Path) -> list[Item]:
     return items
 
 
-def _person_rows(rows: list[str], marker: str) -> list[str]:
+# vault_check's row (an INFO on the vault) for a check that could not ask the tool.
+NOT_CONSULTED = "the publish tool could not be consulted"
+
+
+def _person_rows(vault: Path, rows: list[str], marker: str) -> list[str]:
+    """The rows holding `marker`, as person rows. A vault with a site whose
+    check could not ask the tool did not look: that stops the run, so the
+    vault is not stamped past the release without the check having run."""
+    if configured_site(vault)[0] is not None:
+        for row in rows:
+            _level, where, message = _cells(row)
+            if where == "(vault)" and message.startswith(NOT_CONSULTED):
+                raise StepFailed(message)
     out = []
     for row in rows:
         _level, where, message = _cells(row)
@@ -411,13 +434,14 @@ def _person_rows(rows: list[str], marker: str) -> list[str]:
 
 def find_session_recaps(vault: Path) -> list[Item]:
     """1.10.18: a session index whose body the site now withholds."""
-    rows = _person_rows(check_sessions(vault), "session index body has")
+    rows = _person_rows(vault, check_sessions(vault),
+                        "session index body has")
     return [Item("session-recaps", PERSON, rows)] if rows else []
 
 
 def find_unparseable(vault: Path) -> list[Item]:
     """1.10.23: notes whose frontmatter the build cannot parse."""
-    rows = _person_rows(check_frontmatter(vault, None, ExplainAll(vault)),
+    rows = _person_rows(vault, check_frontmatter(vault, None, ExplainAll(vault)),
                         "cannot parse this frontmatter")
     return [Item("unparseable-notes", PERSON, rows)] if rows else []
 
@@ -445,6 +469,7 @@ def find_sheet_source(vault: Path) -> list[Item]:
 
         def apply(value: str | None, rel: str = rel) -> list[str]:
             scalar = yaml_scalar(value or "")
+
             edit_frontmatter(
                 vault / rel,
                 lambda fm, eol: set_key(fm, "sheet_source", scalar, eol))

@@ -152,6 +152,21 @@ class RepinTests(unittest.TestCase):
                 item.apply(None)
         self.assertIn("npm ERR! network", str(caught.exception))
 
+    def test_a_site_still_out_of_date_after_the_repin_stops(self):
+        vault = make_vault(self)
+
+        class Stuck(Pin):
+            def __call__(self, args):
+                code, text, err = super().__call__(args)
+                if "--check" not in args:
+                    self.ok = False   # update-pin said fine; the site is not
+                return code, text, err
+        with mock.patch.object(ms, "plugin_tool", Stuck()):
+            (item,) = ms.find_site_repin(vault)
+            with self.assertRaises(StepFailed) as caught:
+                item.apply(None)
+        self.assertIn("still out of date", str(caught.exception))
+
     def test_no_site_never_runs_the_tool(self):
         pin = Pin()
         for vault in (make_vault(self, publish=False),
@@ -686,6 +701,19 @@ class PersonRowTests(unittest.TestCase):
         self.assertEqual([line.split("\t")[0] for line in item.lines],
                          ["NPCs/A.md"])
 
+    def test_a_check_that_could_not_ask_the_tool_stops_a_site_vault(self):
+        row = ("INFO\t(vault)\tthe publish tool could not be consulted (node "
+               "is not on PATH), so no hub-bookkeeping rows are shown")
+        for name, find, check in (
+                ("session-recaps", ms.find_session_recaps, "check_sessions"),
+                ("unparseable-notes", ms.find_unparseable, "check_frontmatter")):
+            with mock.patch.object(ms, check, return_value=[row]):
+                with self.assertRaises(StepFailed, msg=name) as caught:
+                    find(make_vault(self))
+                self.assertIn("could not be consulted", str(caught.exception))
+                # No site: nothing publishes, so nothing waits on the tool.
+                self.assertEqual(find(make_vault(self, site=False)), [], name)
+
     def test_a_postbuild_script_is_named(self):
         vault = make_vault(self)
         site = site_of(vault)
@@ -733,6 +761,28 @@ class SheetSourceTests(unittest.TestCase):
         item.apply("paper, with the player")
         self.assertIn('sheet_source: "paper, with the player"\n',
                       pc.read_text(encoding="utf-8"))
+
+    def pc_written(self, written):
+        vault, pc = self.make_pc()
+        pc.write_text(f'---\nname: "Ada"\ntype: pc\n{written}\n---\n\n'
+                      f'## Stat Sheet\n\nTBD\n', encoding="utf-8")
+        rows = ["WARNING\tPCs/Ada.md:6\t## Stat Sheet holds no stats; fill it "
+                "in, or set sheet_source to where the sheet is kept"]
+        with mock.patch.object(ms, "check_pc_body", return_value=rows):
+            (item,) = ms.find_sheet_source(vault)
+        return item, pc
+
+    def test_a_spaced_or_quoted_sheet_source_key_stops_and_adds_no_second_key(self):
+        # The line editor refuses these forms (they are not plain `key:`), so
+        # the choice fails with the line named instead of adding a duplicate.
+        for written in ('sheet_source : ""', '"sheet_source": ""',
+                        "'sheet_source':  ''"):
+            item, pc = self.pc_written(written)
+            before = pc.read_bytes()
+            with self.assertRaises(StepFailed) as caught:
+                item.apply("on paper")
+            self.assertIn("sheet_source", str(caught.exception))
+            self.assertEqual(pc.read_bytes(), before, written)
 
     def test_a_tool_that_cannot_be_asked_stops(self):
         vault, _pc = self.make_pc()
