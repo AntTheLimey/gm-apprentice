@@ -327,8 +327,8 @@ change a page's title, rename the file with
 (a dry run: it shows every change and writes nothing), and after the
 GM's yes run it again with `--apply`. It rewrites every link to the
 note, and keeps a renamed PC's live stats and story file with it. To
-make a page findable under alternate names, use the `aliases` field. For a name players
-mustn't see, use `gm_aliases`.
+make a page findable under alternate names, use the `aliases` field.
+For a name players mustn't see, use `gm_aliases`.
 
 ---
 
