@@ -381,6 +381,62 @@ class SmallCheckTests(unittest.TestCase):
         self.assertEqual(len(choice.lines), 1)
         self.assertIn("another note would also become", person.lines[0])
 
+    def test_same_new_name_in_different_folders_is_one_choice(self):
+        vault = make_vault(self)
+        for rel in ("Chapters/Chapter 2/Wrap A.md", "Archive/Wrap B.md"):
+            self.wrap(vault, rel,
+                      'session_number: 3\nchapter: "Chapter 2"\n')
+        items = mv.find_wrapup_filenames(vault)
+        (choice,) = [i for i in items if i.group == CHOICE]
+        (person,) = [i for i in items if i.group == PERSON]
+        self.assertEqual(len(choice.lines), 1)
+        self.assertEqual(len(person.lines), 1)
+        choice.apply(None)
+
+    def test_session_number_zero_is_used(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Chapters/Chapter 1/Zero.md",
+                  'session_number: 0\nsession: "[[Session 05]]"\n')
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertIn("Chapter_01_Session_00_Wrap_Up.md", item.lines[0])
+
+    def test_chapter_number_follows_the_word_chapter(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Chapters/Act 2 - Chapter 4/Old.md",
+                  "session_number: 3\n")
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, CHOICE)
+        self.assertIn("Chapter_04_Session_03_Wrap_Up.md", item.lines[0])
+
+    def test_a_chapter_with_no_chapter_word_needs_a_person(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Chapters/The 7 Sisters/Old.md",
+                  "session_number: 3\n")
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, PERSON)
+
+    def test_nested_layout_wikilink_chapter_and_session(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Chapters/Chapter 4 - Calcutta/Sessions/Session 05/"
+                  "Old Name.md", "session_number: 5\n")
+        self.wrap(vault, "Elsewhere/Link.md",
+                  'chapter: "[[Chapters/Chapter 7 - Fog]]"\n'
+                  'session: "[[Session 05]]"\n')
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, CHOICE)
+        self.assertIn("Chapters/Chapter 4 - Calcutta/Sessions/Session 05/"
+                      "Chapter_04_Session_05_Wrap_Up.md", item.lines[0])
+        self.assertIn("Elsewhere/Chapter_07_Session_05_Wrap_Up.md",
+                      item.lines[1])
+
+    def test_heritages_folder_case_is_ignored(self):
+        vault = make_vault(self)
+        (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")
+        (vault / "heritages").mkdir()
+        (vault / "heritages" / "Elves.md").write_text(
+            "---\ntype: culture\n---\n", encoding="utf-8")
+        self.assertEqual(mv.find_heritage_notes(vault), [])
+
     def test_mobrpg_sections_choice_adds_the_two_titles(self):
         vault = make_vault(self)
         path = vault / "_meta" / "mobrpg-map.json"

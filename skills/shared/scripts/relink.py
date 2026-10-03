@@ -88,6 +88,11 @@ def _stem(rel: str) -> str:
     return posixpath.splitext(posixpath.basename(rel))[0]
 
 
+def name_key(rel: str) -> str:
+    """The note name as relink compares it: two notes with one key clash."""
+    return normalize(_stem(rel))
+
+
 def _walk(vault: Path, suffix: str) -> list[str]:
     return sorted(
         rel for rel in (p.relative_to(vault).as_posix()

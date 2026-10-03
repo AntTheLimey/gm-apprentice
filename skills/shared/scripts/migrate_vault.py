@@ -341,12 +341,14 @@ def find_schema_mirror(vault: Path) -> list[Item]:
 def _wrapup_target(rel: str, text: str) -> str | None:
     """Chapter_CC_Session_NN_Wrap_Up.md beside the note, or None."""
     fm = extract_frontmatter(text) or {}
-    session = (parse_session_number(fm.get("session_number"))
-               or session_ref_number(fm))
-    chapter = re.search(r"\d+", chapter_of(rel, fm) or "")
+    session = parse_session_number(fm.get("session_number"))
+    if session is None:
+        session = session_ref_number(fm)
+    chapter = re.search(r"chapter\D{0,3}(\d+)", chapter_of(rel, fm) or "",
+                        re.IGNORECASE)
     if session is None or chapter is None:
         return None
-    name = (f"Chapter_{int(chapter.group()):02d}_Session_{session:02d}"
+    name = (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
             f"_Wrap_Up.md")
     return posixpath.join(posixpath.dirname(rel), name)
 
@@ -359,7 +361,7 @@ def _relink_items(vault: Path, item_id: str, verb: str,
     person: list[str] = []
     taken: set[str] = set()
     for src, dst, why in moves:
-        if dst is not None and dst.casefold() in taken:
+        if dst is not None and relink.name_key(dst) in taken:
             dst, why = None, f"another note would also become {dst}"
         if dst is not None:
             try:
@@ -367,7 +369,7 @@ def _relink_items(vault: Path, item_id: str, verb: str,
             except relink.RelinkError as e:
                 dst, why = None, str(e)
             else:
-                taken.add(dst.casefold())
+                taken.add(relink.name_key(dst))
                 ok.append((src, dst, n))
                 continue
         person.append(f"{src}\t{why}")
@@ -462,7 +464,7 @@ def find_heritage_notes(vault: Path) -> list[Item]:
         (rel, f"Heritages/{Path(rel).name}", "")
         for rel, text in vault_files(vault)
         if entity_type(extract_frontmatter(text) or {}) in HERITAGE_TYPES
-        and Path(rel).parts[0] != "Heritages"]
+        and Path(rel).parts[0].casefold() != "heritages"]
     return _relink_items(vault, "heritage-notes", "move", moves)
 
 

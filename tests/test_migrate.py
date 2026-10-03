@@ -356,6 +356,30 @@ class ApplyTests(unittest.TestCase):
                       out)
         self.assertEqual(stamp_of(vault), PLUGIN)
 
+    def test_wrapup_choice_and_person_row_share_an_id_end_to_end(self):
+        import migrate_vault as mv
+        vault = make_vault(self)
+        for rel, fm in (("Chapters/Chapter 2/Old.md", "session_number: 3\n"),
+                        ("Session_09_Wrap_Up.md", "session_number: 9\n")):
+            path = vault / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(f"---\ntype: session_wrap\n{fm}---\n",
+                            encoding="utf-8")
+        (vault / "Index.md").write_text("[[Old]]\n", encoding="utf-8")
+        checks = [c for c in mv.VAULT_CHECKS if c.name == "wrapup-filenames"]
+        code, out, _ = call([str(vault), "plan"], checks)
+        self.assertEqual(code, 0)
+        self.assertIn("Chapter_02_Session_03_Wrap_Up.md", out)
+        self.assertIn("Session_09_Wrap_Up.md\t", out)
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "wrapup-filenames"], checks)
+        self.assertEqual(code, 0, out)
+        self.assertTrue((vault / "Chapters/Chapter 2/"
+                         "Chapter_02_Session_03_Wrap_Up.md").is_file())
+        self.assertEqual((vault / "Index.md").read_text(encoding="utf-8"),
+                         "[[Chapter_02_Session_03_Wrap_Up]]\n")
+        self.assertTrue((vault / "Session_09_Wrap_Up.md").is_file())
+
     def test_unknown_choice_exits_2_and_writes_nothing(self):
         vault = make_vault(self)
         log = []
