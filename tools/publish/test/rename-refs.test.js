@@ -316,7 +316,9 @@ describe('a pinned key reaches the build', () => {
     if (pinned) {
       const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');
       fs.rmSync(path.join(pcs, 'Karl Brenner.md'));
-      fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), src.replace('type: pc\n', 'type: pc\nlive_key: karl-brenner\n'));
+      // CRLF on every platform: a Windows checkout has it, and the pin must work there.
+      const crlf = src.replace(/\r?\n/g, '\r\n');
+      fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), crlf.replace(/type: pc(\r?\n)/, 'type: pc$1live_key: karl-brenner$1'));
     }
     fs.writeFileSync(path.join(root, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
     const configPath = path.join(root, 'config.json');
@@ -353,7 +355,7 @@ describe('two PCs on one live key', () => {
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
     const pcs = path.join(vault, 'Characters', 'PCs');
     const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');
-    fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), src.replace('type: pc\n', 'type: pc\nlive_key: karl-brenner\n'));
+    fs.writeFileSync(path.join(pcs, 'Karl_Hale.md'), src.replace(/type: pc(\r?\n)/, 'type: pc$1live_key: karl-brenner$1'));
     const configPath = path.join(root, 'config.json');
     fs.writeFileSync(configPath, JSON.stringify({
       vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments',
