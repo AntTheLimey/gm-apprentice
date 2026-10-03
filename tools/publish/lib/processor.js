@@ -1,6 +1,7 @@
 const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
 const { bareSectionTitle } = require('./pc-prose');
+const { wikilinkRe, parseWikilink } = require('./wikilink');
 const md = createRenderer();
 
 function renderMarkdown(markdown) {
@@ -36,9 +37,14 @@ function parseWikiRef(raw) {
   const bracketed = /\[\[[^\]]*\]\]/.test(str);
   const inner = str.replace(/\[\[|\]\]/g, '').trim();
   if (!inner) return { target: '', label: '' };
-  const pipe = inner.indexOf('|');
-  if (pipe === -1) return { target: inner, label: bracketed ? wikiTargetLabel(inner) : humanizeName(inner) };
-  return { target: inner.slice(0, pipe).trim(), label: inner.slice(pipe + 1).trim() };
+  const w = parseWikilink(inner);
+  const label = w.display.trim();
+  // The target is the name the link map is asked for: no `#heading`, `^block` or `.md`.
+  const target = w.name.trim();
+  if (!label) {
+    return { target, label: bracketed ? wikiTargetLabel(target) : humanizeName(target) };
+  }
+  return { target, label };
 }
 
 function relativePath(fromDir, toPath) {
@@ -68,11 +74,17 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
   // degrading it to an ordinary link. Leaving it would pair with the `[text](path)` emitted
   // below into `![text](path)` — an <img> whose src points at an HTML page. Image embeds
   // resolve earlier, in resolveImageEmbeds, so nothing reaching here should stay an image.
-  return markdown.replace(/!?\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (match, target, displayText) => {
+  return markdown.replace(wikilinkRe('g', true), (match, body) => {
+    const parsed = parseWikilink(body);
+    const { raw, display: displayText } = parsed;
+    // The map is asked for the name alone: a `#heading`, `^block` or `.md` on the link does
+    // not change which page it is. (The site has no heading anchors to jump to, so the link
+    // goes to the page.) A name only a literal spelling matches still does.
+    const target = linkMap[raw] ? raw : parsed.name;
     // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
     // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
-    const display = displayText || wikiTargetLabel(target);
     const targetPath = linkMap[target];
+    const display = displayText || wikiTargetLabel(targetPath ? target : raw);
     if (!targetPath) return display;
     const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
     // A raw space (or other unsafe char) in the destination is not valid markdown link
@@ -767,7 +779,8 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
   const dedupeKey = portraitKey && imageMap[portraitKey] ? portraitKey.toLowerCase() : null;
 
   // Match ![[filename.ext]] or ![[filename.ext|alt text]]
-  return markdown.replace(/!\[\[([^\]|]+?)(?:\|([^\]]+))?\]\]/g, (match, target, alt) => {
+  return markdown.replace(new RegExp('!' + wikilinkRe().source, 'g'), (match, body) => {
+    const { raw: target, display: alt } = parseWikilink(body);
     const basename = target.trim();
     if (!IMAGE_EXT_REGEX.test(basename)) return match; // not an image, leave as-is
 
@@ -796,7 +809,7 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
 function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
   const text = String(raw == null ? '' : raw);
   const out = [];
-  const pattern = /\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g;
+  const pattern = wikilinkRe();
   let last = 0;
   let match;
   while ((match = pattern.exec(text)) !== null) {
@@ -816,7 +829,7 @@ function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
 // subtitles, landing tiles) where a nested anchor would be invalid HTML.
 function plainMetaValue(raw) {
   return String(raw == null ? '' : raw)
-    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (m) => parseWikiRef(m).label);
+    .replace(wikilinkRe(), (m) => parseWikiRef(m).label);
 }
 
 function separateBoldLabelLines(markdown) {
@@ -1181,11 +1194,20 @@ function gmAliasRewriter(pages, published) {
   }
   if (owners.size === 0 && secretKeys.size === 0) return null;
 
-  const WIKI = /(!?)\[\[([^\]|#]+)(#[^\]|]*)?(\|[^\]]*)?\]\]/g;
+  const WIKI = wikilinkRe('g', true);
   function links(text, labelled) {
-    return String(text).replace(WIKI, (match, bang, target, anchor, label) => {
-      const owner = owners.get(gmAliasKey(target));
-      const labelIsSecret = !!label && secretKeys.has(gmAliasKey(label.slice(1)));
+    return String(text).replace(WIKI, (match, body) => {
+      const bang = match.startsWith('!') ? '!' : '';
+      const w = parseWikilink(body);
+      // The owner is looked up by the name alone (no `.md`, `#heading` or `^block`); the anchor
+      // stays on the link.
+      const target = w.name;
+      const anchor = w.raw.slice(w.target.length);
+      const bar = w.escapedPipe ? '\\|' : '|';
+      const label = w.display ? bar + w.display : '';
+      // A folder path names the note by its last segment (`[[NPCs/Elias Crowe]]`).
+      const owner = owners.get(gmAliasKey(target.split('/').pop()));
+      const labelIsSecret = !!label && secretKeys.has(gmAliasKey(w.display));
       if (!owner && !labelIsSecret) return match;
       // A secret label is never shown, whether or not it names the same page
       // as the target — treat it exactly as an absent label from here on.
@@ -1194,7 +1216,7 @@ function gmAliasRewriter(pages, published) {
       // than its filename. Frontmatter values keep a bare target, because
       // several renderers strip the brackets and look the rest up as-is.
       const shown = !effectiveLabel && labelled && owner && owner.displayTitle && owner.displayTitle !== humanizeName(owner.title)
-        ? `|${owner.displayTitle}` : '';
+        ? `${bar}${owner.displayTitle}` : '';
       return `${bang}[[${owner ? owner.title : target}${anchor || ''}${effectiveLabel || shown}]]`;
     });
   }
@@ -1214,7 +1236,7 @@ function gmAliasRewriter(pages, published) {
   // be an ordinary word must not rewrite `status:` or `occupation:`.
   function nameIn(v) {
     if (typeof v === 'string') {
-      const owner = owners.get(gmAliasKey(v));
+      const owner = owners.get(gmAliasKey(v.split('/').pop()));
       return owner ? owner.title : links(v, false);
     }
     if (Array.isArray(v)) return v.map(nameIn);

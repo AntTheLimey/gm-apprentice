@@ -6,14 +6,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import posixpath
 import re
 from pathlib import Path
 
+import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           edit_frontmatter, write_text_atomic)
 from vault_check import WRAP_TYPES, wrapup_filename_findings
-from vaultlib import (entity_type, extract_frontmatter, read_publish_scalar,
-                      vault_files)
+from vaultlib import (chapter_of, entity_type, extract_frontmatter,
+                      parse_session_number, read_publish_scalar,
+                      session_ref_number, vault_files)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -335,18 +338,104 @@ def find_schema_mirror(vault: Path) -> list[Item]:
 
 # --- small per-release checks -------------------------------------------------
 
+def _wrapup_target(rel: str, text: str) -> str | None:
+    """Chapter_CC_Session_NN_Wrap_Up.md beside the note, or None."""
+    fm = extract_frontmatter(text) or {}
+    session = parse_session_number(fm.get("session_number"))
+    if session is None:
+        session = session_ref_number(fm)
+    ch = (chapter_of(rel, fm) or "").strip()
+    chapter = (re.fullmatch(r"(\d+)(?!\.\d)", ch)
+               or re.search(r"chapter\D{0,3}(\d+)(?!\.?\d)", ch,
+                            re.IGNORECASE))
+    if session is None or chapter is None:
+        return None
+    name = (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
+            f"_Wrap_Up.md")
+    return posixpath.join(posixpath.dirname(rel), name)
+
+
+def _relink_items(vault: Path, item_id: str, verb: str,
+                  moves: list[tuple[str, str | None, str]]) -> list[Item]:
+    """One choice for every move relink accepts, and one person row for
+    each it cannot make. `moves` is (from, to or None, why-if-None). A move
+    with a link that could mean either of two notes (or an alias that the
+    new name would capture) is for a person: a rename must not settle it."""
+    ok: list[tuple[str, str, int]] = []
+    person: list[str] = []
+    taken: set[str] = set()
+    for src, dst, why in moves:
+        if dst is not None and relink.name_key(dst) in taken:
+            dst, why = None, f"another note would also become {dst}"
+        if dst is not None:
+            try:
+                plan = relink.plan(vault, src, dst)
+            except relink.ToolTooOld:
+                dst, why = None, ("the site's publish tool is older than this "
+                                  "needs; update it (the repin step), then "
+                                  "run the plan again")
+            except relink.RelinkError as e:
+                dst, why = None, str(e)
+            else:
+                alias = plan.alias_warnings
+                if plan.unsure or alias:
+                    dst = None
+                    why = (f"{len(plan.unsure)} link(s) could mean either "
+                           f"note; settle them first, then rename"
+                           if plan.unsure else alias[0])
+                else:
+                    taken.add(relink.name_key(dst))
+                    ok.append((src, dst, len(plan.changes)))
+                    continue
+        person.append(f"{src}\t{why}")
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for src, dst, shown in ok:
+            # Planned again against the vault as the earlier moves left it:
+            # what the GM was shown is what is done, and nothing is claimed
+            # that was not.
+            try:
+                fresh = relink.plan(vault, src, dst)
+            except relink.RelinkError as e:
+                raise StepFailed(f"{src}: {e}") from e
+            if fresh.unsure or len(fresh.changes) != shown:
+                raise StepFailed(
+                    f"{src}: the links it would change are no longer the "
+                    f"ones shown ({'some could now mean either note' if fresh.unsure else 'the count changed'}); "
+                    f"nothing more was renamed, run the migration again")
+            try:
+                relink.apply(fresh)
+            except relink.RelinkError as e:
+                raise StepFailed(f"{src}: {e}") from e
+            done.append(f"{verb}d {src} to {dst}")
+        return done
+
+    items = []
+    if ok:
+        items.append(Item(item_id, CHOICE,
+                          [f"{verb} {s} to {d} and update {n} link(s) to it"
+                           for s, d, n in ok], apply))
+    if person:
+        items.append(Item(item_id, PERSON, person))
+    return items
+
+
 def find_wrapup_filenames(vault: Path) -> list[Item]:
-    """Every pass: an old-pattern Wrap-Up filename. The rename needs every
-    link to it rewritten, which the relink script (a later release) does."""
-    rows = []
+    """Every pass: an old-pattern Wrap-Up filename, renamed with every link
+    to it on a yes. A name that cannot be worked out, or is taken, is
+    left for a person."""
+    moves: list[tuple[str, str | None, str]] = []
     for rel, text in vault_files(vault):
         if entity_type(extract_frontmatter(text) or {}) not in WRAP_TYPES:
             continue
-        if any(f.level == "WARNING" for f in wrapup_filename_findings(rel)):
-            rows.append(f"{rel}\told Wrap-Up filename "
-                        f"(not Chapter_CC_Session_NN_Wrap_Up.md); renaming it "
-                        f"means updating every link to it")
-    return [Item("wrapup-filenames", PERSON, rows)] if rows else []
+        if not any(f.level == "WARNING" for f in wrapup_filename_findings(rel)):
+            continue
+        moves.append((rel, _wrapup_target(rel, text),
+                      "old Wrap-Up filename; its chapter or session number "
+                      "cannot be read from the note, so the new name is "
+                      "unknown"))
+    return _relink_items(vault, "wrapup-filenames", "rename", moves)
 
 
 MOBRPG_MAP = "_meta/mobrpg-map.json"
@@ -394,16 +483,20 @@ HERITAGE_TYPES = {"heritage", "culture", "race"}
 
 
 def find_heritage_notes(vault: Path) -> list[Item]:
-    """1.10.15: mobRPG keeps culture and race notes in `Heritages/`. Moving
-    one breaks path links to it, so it is listed, not moved."""
+    """1.10.15: mobRPG keeps culture and race notes in `Heritages/`. Each
+    one outside it is moved there, with every link to it, on a yes."""
     if _mobrpg_map(vault) is None:
         return []
-    rows = [f"{rel}\ta mobRPG heritage note outside Heritages/; mobrpg "
-            f"tracks them there. Moving it means updating path links to it"
-            for rel, text in vault_files(vault)
-            if entity_type(extract_frontmatter(text) or {}) in HERITAGE_TYPES
-            and Path(rel).parts[0] != "Heritages"]
-    return [Item("heritage-notes", PERSON, rows)] if rows else []
+    # The folder may already exist in another case: move into it as it is.
+    folder = next((d.name for d in sorted(vault.iterdir())
+                   if d.is_dir() and d.name.casefold() == "heritages"),
+                  "Heritages")
+    moves: list[tuple[str, str | None, str]] = [
+        (rel, f"{folder}/{Path(rel).name}", "")
+        for rel, text in vault_files(vault)
+        if entity_type(extract_frontmatter(text) or {}) in HERITAGE_TYPES
+        and Path(rel).parts[0].casefold() != "heritages"]
+    return _relink_items(vault, "heritage-notes", "move", moves)
 
 
 VAULT_CHECKS: list[Check] = [
@@ -413,10 +506,14 @@ VAULT_CHECKS: list[Check] = [
           "sheet_source in PC templates", find_pc_template_field),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,
           choices=("schema-mirror",)),
-    Check("wrapup-filenames", None, 3, "Wrap-Up filenames",
-          find_wrapup_filenames),
+    # A rename asks the site's publish tool (what it changes on the site), so
+    # it waits for the repin: band 4, asks_site.
+    Check("wrapup-filenames", None, 4, "Wrap-Up filenames",
+          find_wrapup_filenames, asks_site=True,
+          choices=("wrapup-filenames",)),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
-    Check("heritage-notes", "1.10.15", 3, "mobRPG heritage notes",
-          find_heritage_notes),
+    Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
+          find_heritage_notes, asks_site=True,
+          choices=("heritage-notes",)),
 ]

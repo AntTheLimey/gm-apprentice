@@ -933,7 +933,7 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
   const HUB = 'Sessions/Session 01 - Arrival.md';
   const WRAP = 'Sessions/Session 01 Wrap-Up.md';
 
-  for (const variant of ['baseline', 'folder']) {
+  for (const variant of ['baseline', 'folder', 'heading']) {
     it(`ticks the hub and its Wrap-Up when the link resolves (${variant}), and the body is withheld`, async () => {
       const { payload, html, search } = await publishPlayedThenBuild(variant);
       assert.deepStrictEqual(payload.published, [HUB, WRAP]);
@@ -948,7 +948,6 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     excluded: /^Wrap-Up is Excluded \(Sessions\/Session 01 Wrap-Up\.md\)$/,
     pubnone: /^Wrap-Up Sessions\/Session 01 Wrap-Up\.md does not publish: publish: none$/,
     case: /^documents\.wrap_up \[\[session 01 wrap-up\]\] names no Wrap-Up/,
-    heading: /^documents\.wrap_up \[\[Session 01 Wrap-Up#Narrative Recap\]\] names no Wrap-Up/,
     sesscase: /^status reviewed but no Wrap-Up linked to it$/,
   };
   for (const [variant, reason] of Object.entries(UNCLEAR)) {

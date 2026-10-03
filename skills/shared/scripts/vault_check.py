@@ -96,7 +96,7 @@ Notes`, recap-heading and template-heading variants, and the
 filename pattern. A gm-only fence that is unbalanced or crosses a
 player-facing section boundary gets its frontmatter backfilled and
 its body left alone, for the GM to fix by hand; filename renames
-are never automatic.
+are left to `relink.py`, which the migration offers as a choice.
 
 `sessions` derives each session's status from its chain documents. For
 a session index whose Wrap-Up is explicitly linked (so the site
@@ -180,6 +180,7 @@ from vaultlib import (  # noqa: F401
     stub_kept,
     use_publish_tool,
     site_switch,
+    site_unasked,
     vault_site,
     strip_comment_spans,
     read_publish_list,
@@ -1545,7 +1546,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         publishes, on, site = vault_site(vault)
     except PublishToolUnavailable as e:
         # No node, a node too old to run the tool, or a vault file the tool
-        # will not parse: the switch is read here instead (`_site_unasked`).
+        # will not parse: the switch is read here instead (`site_unasked`).
         why = str(e)
         if why.startswith("the publish tool refused"):
             fix = f"fix {VAULT_CONFIG}"
@@ -1555,7 +1556,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
             fix = "update the gm-apprentice plugin"
         else:
             fix = node_fix
-        has_site = _site_unasked(vault)
+        has_site = site_unasked(vault)
         if has_site:
             fix += (f"; if this vault has no site, set publish.site: false "
                     f"in {VAULT_CONFIG}")
@@ -1610,23 +1611,6 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
 
 
 SITE_IS_OFF = "publish.site is not on"
-
-
-def _site_unasked(vault: Path) -> bool:
-    """Whether the vault has a site, for the one time the publish tool
-    cannot be asked. The switch as the line reader sees it; where that is
-    unset, a vault file that mentions `site_dir`, or that cannot be read,
-    is taken to have one."""
-    switch = site_switch(vault)
-    if switch is not None:
-        return switch
-    try:
-        text = (vault / VAULT_CONFIG).read_text(encoding="utf-8-sig")
-    except FileNotFoundError:
-        return False
-    except (OSError, UnicodeDecodeError):
-        return True
-    return "site_dir" in text
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -2854,7 +2838,7 @@ QUOTED_LINK_RE = re.compile(r'^(["\'])\[\[[^\[\]]+\]\]\1\s*(?:#.*)?$')
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SESSION_IN_NAME_RE = re.compile(r"session[ _-]?(\d+)", re.IGNORECASE)
 WRAP_FILENAME_RE = re.compile(r"^Chapter_\d{2}_Session_\d{2}_Wrap_Up$")
-CHAPTER_WRAP_FILENAME_RE = re.compile(r"^Chapter_\d+_Wrap_Up$")
+CHAPTER_WRAP_FILENAME_RE = re.compile(r"^Chapter_\d+(?:\.\d+)?_Wrap_Up$")
 RECONSTRUCTION_NOTE_RE = re.compile(
     r"^>\s*\[!\w[\w-]*\]\s*Reconstruction Note", re.IGNORECASE)
 RECONCILED_LINE_RE = re.compile(
@@ -3475,9 +3459,8 @@ def _wrap_h2_finding(rel: str, state: LineState, where: str,
 
 
 def wrapup_filename_findings(rel: str) -> list[Finding]:
-    """Step 4. Never fixed: the filename derives the page's site URL, so
-    a rename 404s links players have already shared and has to update
-    every inbound reference in the same pass."""
+    """Step 4. Never fixed here: `relink.py` renames the file and every
+    link to it, and the migration offers it as a choice."""
     stem = Path(rel).stem
     if WRAP_FILENAME_RE.match(stem):
         return []
@@ -3486,9 +3469,8 @@ def wrapup_filename_findings(rel: str) -> list[Finding]:
                         "chapter-level wrap-up filename — conformant as-is")]
     return [Finding("WARNING", rel,
                     f"filename '{Path(rel).name}' is not "
-                    f"Chapter_CC_Session_NN_Wrap_Up.md — opt-in on a "
-                    f"published vault — a rename changes the page URL and "
-                    f"needs every inbound link updated")]
+                    f"Chapter_CC_Session_NN_Wrap_Up.md — relink.py renames "
+                    f"it and updates every link")]
 
 
 def _wrap_blocks(states: list[LineState],

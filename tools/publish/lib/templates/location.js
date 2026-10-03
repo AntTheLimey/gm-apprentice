@@ -1,3 +1,5 @@
+const { backlinksOf } = require('../backlinks');
+const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, parseWikiRef, publishedSource, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -11,7 +13,7 @@ const { canonicalNfc } = require('../unicode');
 // location page. Bare `===`, so no lookup-table wrapper can cover this.
 function matchesRef(refValue, title) {
   if (!refValue) return false;
-  const cleaned = canonicalNfc(String(refValue).replace(/\[\[|\]\]/g, '').split('|')[0].replace(/_/g, ' ').trim());
+  const cleaned = canonicalNfc(refTarget(refValue).replace(/_/g, ' ').trim());
   const normalTitle = canonicalNfc(String(title || '').replace(/_/g, ' ').trim());
   return cleaned === normalTitle;
 }
@@ -19,7 +21,7 @@ function matchesRef(refValue, title) {
 function locationTemplate(page, processedContent, navFor, config, imageMap, context) {
   const { pages, linkMap, publishConfig } = context || {};
   const fm = page.frontmatter;
-  const backlinks = ((publishConfig || {})._backlinks || {})[page.title] || [];
+  const backlinks = backlinksOf((publishConfig || {})._backlinks, page);
 
   // Parse `[[Target|Alias]]` once: target keeps underscores for the linkMap lookup, label
   // is the alias or the humanized target. Reused by the breadcrumb and the sidebar below.

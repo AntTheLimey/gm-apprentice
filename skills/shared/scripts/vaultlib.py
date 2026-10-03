@@ -31,6 +31,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import unicodedata
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -496,13 +497,39 @@ def yaml_value_for_cli(raw: str) -> str:
 
 
 def normalize(name: str) -> str:
-    """Normalize a note name or link target for matching."""
+    """Normalize a note name or link target for matching. Composed (NFC)
+    first: macOS stores accented filenames decomposed, links are typed
+    composed."""
+    name = unicodedata.normalize("NFC", name)
     return re.sub(r"\s+", " ", name.replace("_", " ").strip()).casefold()
+
+
+INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
+
+
+def inline_code_spans(line: str) -> list[tuple[int, int]]:
+    """(start, end) of each inline code span on a line."""
+    return [m.span() for m in INLINE_CODE_RE.finditer(line)]
+
+
+def inside_spans(pos: int, spans: list[tuple[int, int]]) -> bool:
+    """Whether `pos` falls inside one of the spans."""
+    return any(a <= pos < b for a, b in spans)
+
+
+def alias_split(raw: str) -> str:
+    """The part of a wikilink body before its alias pipe. Obsidian writes
+    the pipe as `\\|` inside a table cell, and the backslash belongs to
+    the pipe, not the target."""
+    target = raw.split("|", 1)[0]
+    if "|" in raw and target.endswith("\\"):
+        target = target[:-1]
+    return target
 
 
 def link_target(raw: str) -> str:
     """Reduce a wikilink body to its target note name."""
-    target = raw.split("|", 1)[0]
+    target = alias_split(raw)
     target = re.split(r"[#^]", target, maxsplit=1)[0]
     # Path-style links resolve by final segment, like Obsidian.
     target = target.rstrip("/").rsplit("/", 1)[-1]
@@ -526,7 +553,8 @@ def wikilink_target(value: Any) -> str:
         if len(value) != 1:
             return ""
         value = value[0]
-    return re.sub(r"[\[\]]", "", str(value)).split("|")[0].split("#")[0].strip()
+    body = re.sub(r"[\[\]]", "", str(value))
+    return alias_split(body).split("#")[0].strip()
 
 
 def link_aliases(fm: dict[str, Any]) -> list[str]:
@@ -828,6 +856,33 @@ class PublishLines:
                 f"node could not run ({e.__class__.__name__})") from e
         return self._proc
 
+    def run_once(self, args: list[str]) -> str:
+        """One command of the tool, run to its end, and what it printed.
+        Found and run as the `lines` process is: the same Node, the same
+        tool file."""
+        node = shutil.which("node")
+        if not node:
+            raise PublishToolUnavailable("node is not on PATH")
+        if not self.tool.is_file():
+            raise PublishToolUnavailable(
+                f"the publish tool is not at {self.tool.as_posix()}")
+        try:
+            done = subprocess.run(
+                [node, str(self.tool), *args], capture_output=True,
+                timeout=PUBLISH_LINES_TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s") from e
+        except OSError as e:
+            raise PublishToolUnavailable(
+                f"node could not run ({e.__class__.__name__})") from e
+        if done.returncode != 0:
+            why = done.stderr.decode("utf-8", "replace").strip()
+            raise PublishToolUnavailable(
+                f"the publish tool refused: {why or done.returncode}")
+        return done.stdout.decode("utf-8", "replace")
+
     def ask(self, request: dict[str, Any]) -> dict[str, Any]:
         proc = self._process()
         assert proc.stdin is not None and proc.stdout is not None
@@ -936,6 +991,66 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
     return publishes, on, Path(site) if site else None
 
 
+def publish_rename_refs(vault: Path, old: str, new: str,
+                        config: Path | None = None,
+                        names: Iterable[str] = (),
+                        tool: Path | None = None) -> dict[str, Any]:
+    """What renaming the note `old` to `new` (vault-relative paths) changes
+    in the files the publish tool owns, asked of the plugin's own tool:
+    `{"files": {path: new text}, "pin": {"live_key": slug}, "companions":
+    [{"from", "to"}], "owners": {spelling: path or null}}` (`owners`
+    only for the `names` asked: where the site's link map sends each
+    spelling), or
+    `"detaches"` / `"refusal"` / `"unpublishes"` with a reason in place of an answer, `"published"` (the notes the site publishes, with `names`)
+    (`pin` only for a page the site keeps live state for). `config`, the
+    site's vault.config.json, is read by the tool when given; `tool` is
+    the one to ask (the plugin's own when None). Writes
+    nothing. Raises `PublishToolUnavailable` when it cannot be asked or
+    its answer is not understood."""
+    args = ["manifest", "rename", "--vault", str(vault.resolve()),
+            "--from", old, "--to", new, "--json"]
+    if config is not None:
+        args += ["--config", str(config)]
+    for name in names:
+        args += ["--name", name]
+    asked = _LINES_BY_TOOL[PUBLISH_TOOL] if tool is None else PublishLines(tool)
+    out = asked.run_once(args)
+    bad = PublishToolUnavailable("the publish tool's answer was not understood")
+    try:
+        answer = json.loads(out)
+    except ValueError as e:
+        raise bad from e
+    if not isinstance(answer, dict):
+        raise bad
+
+    def text_or_none(v: Any) -> bool:
+        return v is None or isinstance(v, str)
+
+    files, pin = answer.get("files"), answer.get("pin")
+    companions = answer.get("companions", [])
+    if (not isinstance(files, dict)
+            or not all(isinstance(k, str) and isinstance(v, str)
+                       for k, v in files.items())
+            or not (pin is None or (isinstance(pin, dict) and isinstance(
+                pin.get("live_key"), str) and pin["live_key"]))
+            or not isinstance(companions, list)
+            or not all(isinstance(c, dict) and isinstance(c.get("from"), str)
+                       and isinstance(c.get("to"), str)
+                       for c in companions)
+            or not (answer.get("owners") is None or (
+                isinstance(answer["owners"], dict)
+                and all(isinstance(k, str) and text_or_none(v)
+                        for k, v in answer["owners"].items())))
+            or not text_or_none(answer.get("detaches"))
+            or not text_or_none(answer.get("unpublishes"))
+            or not (answer.get("published") is None or (
+                isinstance(answer["published"], list)
+                and all(isinstance(x, str) for x in answer["published"])))
+            or not text_or_none(answer.get("refusal"))):
+        raise bad
+    return answer
+
+
 SITE_ON_WORDS = ("true", "yes", "on")
 
 
@@ -949,6 +1064,24 @@ def site_switch(vault: Path) -> bool | None:
     if not written:
         return None
     return (value or "").strip().lower() in SITE_ON_WORDS
+
+
+def site_unasked(vault: Path) -> bool:
+    """Whether the vault has a site, for the one time the publish tool
+    cannot be asked. The switch as the line reader sees it; where that is
+    unset, a vault file that mentions `site_dir`, or that cannot be read,
+    is taken to have one."""
+    switch = site_switch(vault)
+    if switch is not None:
+        return switch
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8-sig")
+    except FileNotFoundError:
+        return False
+    except (OSError, UnicodeDecodeError):
+        return True
+    return "site_dir" in text
 
 
 def publish_tool_problem() -> str | None:

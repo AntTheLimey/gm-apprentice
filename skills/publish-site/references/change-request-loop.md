@@ -147,9 +147,15 @@ first from the PC's `.md`:
    `gm-apprentice-publish sheet show` lists back on a miss (`No PC named "…".
    PCs: …`), or the published site's roster. Then **type the matched roster
    name into the command by hand**, and use only that name for the rest of
-   this entry. A `character` that matches no roster entry is not guessed at —
-   apply nothing and finalize with a **`rejected`** reply asking which PC was
-   meant:
+   this entry. A name that matches no roster entry may belong to a PC
+   renamed since: that PC's note carries `live_key`, the site's slug of
+   its old name (which only the tool knows how to make). Do not work the
+   slug out by hand: type the request's name into
+   `gm-apprentice-publish sheet show --pc "<name>"`, which also finds a
+   PC by its pinned `live_key`. If it names one PC, use that PC's
+   current name. A `character` that matches nothing, or more than one PC,
+   is not guessed at: apply nothing and finalize with a **`rejected`**
+   reply asking which PC was meant:
 
    ```bash
    npx gm-apprentice-publish inbox reply <id> rejected "I couldn't match that to a PC on the roster — which character is this for? Send it again naming one."

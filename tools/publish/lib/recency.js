@@ -1,6 +1,6 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
-const WIKI_LINK_RE = /\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g;
+const { wikilinkRe, parseWikilink, firstWikilinkTarget } = require('./wikilink');
 const TERMINAL_STATUSES = new Set(['dead', 'deceased', 'destroyed', 'kia', 'dissolved']);
 // A session counts as "played" once it has been run — including the post-wrap-up, pre-reconcile
 // `wrap-up` state — so a freshly wrapped session still drives "recent" before it's reviewed.
@@ -16,10 +16,8 @@ const publishedText = publishedSource;
 // latest session would otherwise never score, and never appear on the landing page.
 function extractMentions(markdown) {
   const mentions = new Set();
-  let match;
-  WIKI_LINK_RE.lastIndex = 0;
-  while ((match = WIKI_LINK_RE.exec(markdown)) !== null) {
-    mentions.add(canonicalNfc(match[1].trim()));
+  for (const match of markdown.matchAll(wikilinkRe())) {
+    mentions.add(canonicalNfc(parseWikilink(match[1]).name.trim()));
   }
   return mentions;
 }
@@ -33,13 +31,13 @@ function sessionMentions(session, wrapUpFor) {
   const fm = session.frontmatter || {};
   if (Array.isArray(fm.participants)) {
     for (const p of fm.participants) {
-      const m = String(p).match(/\[\[([^\]|]+)/);
-      if (m) names.add(canonicalNfc(m[1].trim()));
+      const t = firstWikilinkTarget(p);
+      if (t !== null) names.add(canonicalNfc(t.trim()));
     }
   }
   if (fm.location) {
-    const m = String(fm.location).match(/\[\[([^\]|]+)/);
-    if (m) names.add(canonicalNfc(m[1].trim()));
+    const t = firstWikilinkTarget(fm.location);
+    if (t !== null) names.add(canonicalNfc(t.trim()));
   }
   const wu = wrapUpFor.get(session);
   if (wu) {

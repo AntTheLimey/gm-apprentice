@@ -1,3 +1,4 @@
+const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativePath, parseWikiRef, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -6,7 +7,7 @@ const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
-  const backlinks = (publishConfig._backlinks || {})[page.title] || [];
+  const backlinks = backlinksOf(publishConfig._backlinks, page);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   // Build stat block

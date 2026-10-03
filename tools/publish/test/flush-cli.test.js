@@ -246,3 +246,12 @@ test('flush says why when live stats are off only because the switch is unset an
     assert.match(await say({ characterSheets: false, liveStats: false, unset: ['live_stats'] }), /character sheets are off/);
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('flush finds a renamed PC by its pinned live_key', async () => {
+  const renamed = () => [
+    { sourcePath: '/vault/PCs/Jane_Hale.md', title: 'Jane_Hale', displayTitle: 'Jane Hale', frontmatter: { type: 'pc', live_key: 'jane-ashford' } },
+  ];
+  const r = run({ scan: renamed, readFile: (p) => (p === '/vault/PCs/Jane_Hale.md' ? JANE_MD : '') });
+  assert.equal(await r.promise, 0);
+  assert.match(r.writes['/vault/PCs/Jane_Hale.md'], /\| HP \| 11 \| 7 \|/);
+});

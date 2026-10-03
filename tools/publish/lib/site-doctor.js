@@ -20,6 +20,7 @@ const { decidePage, publishesPage } = require('./publish-decision');
 const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
+const { wikilinkRe } = require('./wikilink');
 const { pinnedVersionOf } = require('./update-pin');
 
 const UNTYPED_ROW_CAP = 20;
@@ -289,7 +290,7 @@ async function runSiteDoctor(options, deps) {
       frontmatter: page.frontmatter,
     }).text;
     const seen = new Set();
-    for (const match of body.matchAll(/!?\[\[([^\]|]+)(?:\|[^\]]+)?\]\]/g)) {
+    for (const match of body.matchAll(wikilinkRe('g', true))) {
       const { target } = parseWikiRef(match[1]);
       const key = canonicalNfc(target);
       if (!target || seen.has(key) || key in linkMap) continue;

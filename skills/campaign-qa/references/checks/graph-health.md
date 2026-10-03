@@ -32,7 +32,10 @@ Read all entity files in scope. For each, extract:
 from the graph and probably forgotten.
 
 **Broken links:** what `graph_check.py unresolved` reports —
-wiki-links that point to files that don't exist.
+wiki-links that point to files that don't exist. The script
+already skips templates, links quoted in code, and links to
+images and attachments that exist, so report its rows as they
+come.
 
 **Ambiguous links:** what `graph_check.py ambiguous` reports —
 wiki-links using a bare basename that matches more than one
@@ -255,8 +258,9 @@ For each issue:
    - For ambiguous links: identify which file the GM meant from
      context, then either fix that one link, or — if the
      collision is structural (e.g., unmigrated Wrap-Up
-     filenames) — point to campaign-organizer's migration
-     workflow to rename the colliding files and repair every
-     reference vault-wide
+     filenames) — rename the colliding
+     files with `relink.py`, which rewrites every reference
+     vault-wide; a link it cannot place is listed as UNSURE for
+     the GM to settle
    - For schema violations: suggest the missing fields
    - For quality issues: suggest specific improvements

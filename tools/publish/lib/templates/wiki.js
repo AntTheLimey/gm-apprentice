@@ -1,3 +1,4 @@
+const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -9,7 +10,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const publishConfig = (context || {}).publishConfig || {};
   const linkMap = (context || {}).linkMap || {};
   const pages = (context || {}).pages || [];
-  const backlinks = (publishConfig._backlinks || {})[page.title] || [];
+  const backlinks = backlinksOf(publishConfig._backlinks, page);
   const extraSidebar = (context || {}).extraSidebar || {};
   const partyBoardHtml = (context || {}).partyBoardHtml || null;
   const partyDataScript = (context || {}).partyDataScript || null;

@@ -6,7 +6,7 @@
 // injectable dep so the runner is unit-testable without wrangler or real disk.
 const fs = require('fs');
 const path = require('path');
-const { scanVault, slugify } = require('./scanner');
+const { scanVault, slugify, pcLiveKey } = require('./scanner');
 const { readNamespaceId, makeAdapter } = require('./inbox-wrangler');
 const { latestStateByPcSlug } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
@@ -104,7 +104,7 @@ async function runFlush(deps) {
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
   const bySlug = {};
   for (const p of scan()) {
-    if (p.frontmatter && p.frontmatter.type === 'pc') bySlug[slugify(p.title)] = p;
+    if (p.frontmatter && p.frontmatter.type === 'pc') bySlug[pcLiveKey(p.frontmatter, p.title)] = p;
   }
 
   for (const slug of Object.keys(latest)) {

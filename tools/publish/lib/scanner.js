@@ -21,6 +21,15 @@ function slugify(name) {
   return slug || 'untitled';
 }
 
+// The key a PC's live state (current HP/SAN, loadouts, the party board, flush) is stored
+// under. A PC note's `live_key` pins it; with none it is the slug of the filename, as it
+// always was. A rename writes `live_key`, so the state stays with the character. Every
+// place that derives or matches this key goes through here.
+function pcLiveKey(frontmatter, title) {
+  const pinned = frontmatter && typeof frontmatter.live_key === 'string' ? frontmatter.live_key.trim() : '';
+  return slugify(pinned || title);
+}
+
 function toPosix(p) {
   return p.split(path.sep).join('/');
 }
@@ -310,6 +319,27 @@ function scanAttachments(config) {
   return nfcLookupTable(map);
 }
 
+// A PC's story is the note beside it named `<PC stem>_Story.md` (and typed
+// `character-story`). The one place that convention is written: the pairing below, the
+// build's story-companion verdict and the rename answer all go through these.
+const STORY_SUFFIX = '_Story.md';
+function storyPathOf(pcRel) {
+  return String(pcRel).replace(/\.md$/, STORY_SUFFIX);
+}
+// The PC path a story path would belong to, or null for a path that is not named like one.
+function storyOwnerPath(rel) {
+  const r = String(rel || '');
+  return r.endsWith(STORY_SUFFIX) ? r.slice(0, -STORY_SUFFIX.length) + '.md' : null;
+}
+
+// Whether a note beside a PC is hidden as that PC's story: any page the scanner produced
+// (so, one with a `type:`) at `<PC>_Story.md` beside a `pc`. The build, the story-companion
+// verdict and the rename answer all ask this. (Only a `character-story` also supplies the
+// story's text; that is pairStoryFiles's own business.)
+function isStoryCompanion(pcFrontmatter, storyFrontmatter) {
+  return !!(pcFrontmatter && pcFrontmatter.type === 'pc' && storyFrontmatter && storyFrontmatter.type);
+}
+
 function pairStoryFiles(pages, vaultPath) {
   const pcPages = pages.filter(p => p.frontmatter.type === 'pc');
   const storyIndices = new Set();
@@ -317,10 +347,10 @@ function pairStoryFiles(pages, vaultPath) {
   for (const pc of pcPages) {
     const pcDir = path.dirname(pc.sourcePath);
     const pcBase = path.basename(pc.sourcePath, '.md');
-    const storyPath = path.join(pcDir, pcBase + '_Story.md');
+    const storyPath = path.join(pcDir, pcBase + STORY_SUFFIX);
 
     const idx = pages.findIndex(p => p.sourcePath === storyPath);
-    if (idx !== -1) storyIndices.add(idx);
+    if (idx !== -1 && isStoryCompanion(pc.frontmatter, pages[idx].frontmatter)) storyIndices.add(idx);
 
     if (fs.existsSync(storyPath)) {
       let data, content;
@@ -382,4 +412,4 @@ function scanAllNotes(vaultPath) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

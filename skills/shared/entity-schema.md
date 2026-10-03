@@ -220,6 +220,12 @@ meaning in frontmatter).
 Absent, or an unrecognized `publish:` value, means normal
 publication.
 
+**PC `live_key`** (optional string, a slug; machine-written). The key the
+site stores a PC's live stats under (current HP/SAN, loadouts, party board).
+Absent means the slug of the filename, as always. `relink.py` writes it when
+it renames a PC, so the stats stay with the character; nothing else sets it
+and templates do not carry it.
+
 ## Core Entity Types
 
 Threads are not entity files. They live in each PC's `## Current

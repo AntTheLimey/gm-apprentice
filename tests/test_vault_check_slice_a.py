@@ -3418,9 +3418,8 @@ class WrapupCommandTests(unittest.TestCase):
     def test_a_drifted_filename_warns_and_is_never_renamed(self):
         self.assertIn(
             f"WARNING\t{LEGACY}\tfilename 'Session 07 - The Ball - "
-            f"Wrap-Up.md' is not Chapter_CC_Session_NN_Wrap_Up.md — opt-in "
-            f"on a published vault — a rename changes the page URL and "
-            f"needs every inbound link updated", self.rows)
+            f"Wrap-Up.md' is not Chapter_CC_Session_NN_Wrap_Up.md — "
+            f"relink.py renames it and updates every link", self.rows)
         self.assertFalse([r for r in self.fixes(LEGACY) if "filename" in r],
                          self.fixes(LEGACY))
 
@@ -3428,6 +3427,13 @@ class WrapupCommandTests(unittest.TestCase):
         self.assertIn(
             f"INFO\t{CHAPTER_LEVEL}\tchapter-level wrap-up filename — "
             f"conformant as-is", self.rows)
+
+    def test_a_decimal_chapter_wrap_up_filename_is_conformant(self):
+        rows = vc.wrapup_filename_findings(
+            "Chapters/Chapter 0.1 - The Beginning/Chapter_0.1_Wrap_Up.md")
+        self.assertEqual([(f.level, f.message) for f in rows],
+                         [("INFO", "chapter-level wrap-up filename — "
+                                   "conformant as-is")])
 
     # ---- the fix -----------------------------------------------------
 

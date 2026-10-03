@@ -206,8 +206,10 @@ Update the `[[wiki-link]]` in the source file to match the
 target file's filename exactly.
 
 **Target file is known by another name:**
-Rename the target file to match what the links use, or add the
-alternate spelling to the target file's `aliases` list:
+Rename the target file to match what the links use (with
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name>`
+for a dry run, then again with `--apply` after the GM's yes, so no link
+breaks), or add the alternate spelling to the target file's `aliases` list:
 ```yaml
 aliases:
   - The Crimson Duke
@@ -215,9 +217,11 @@ aliases:
 ```
 
 **File has been renamed:**
-If the vault file was renamed but the links were not updated,
-either rename the file back or do a find-and-replace in the
-vault to update all references to the new name.
+If the vault file was renamed without its links, rename it back, then
+rename it with
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name>`
+(a dry run), then again with `--apply` after the GM's yes. It rewrites
+every link to it.
 
 ---
 

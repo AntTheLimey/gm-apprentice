@@ -7,6 +7,7 @@
 // limit) so tab-indented headings from pasted text are still recognized as
 // headings and stripped from the excerpt, never leaked as literal "##" prose.
 const HEADING_RE = /^\s*(#{1,6})\s+(.+?)\s*$/;
+const { wikilinkRe, parseWikilink } = require('./wikilink');
 
 // Normalizes a captured heading's text before comparing it against
 // excludeSections, so decorations that don't change the heading's identity
@@ -107,8 +108,11 @@ function excerptFromMarkdown(source, opts = {}) {
   }
   text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, '');    // image markdown
   text = text.replace(/!\[\[[^\]]*\]\]/g, '');         // unresolved Obsidian image embed
-  text = text.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2');
-  text = text.replace(/\[\[([^\]]+)\]\]/g, (_, t) => t.replace(/_/g, ' '));
+  text = text.replace(wikilinkRe(), (_, body) => {
+    const w = parseWikilink(body);
+    return w.display || w.raw.replace(/_/g, ' ');
+  });
+  text = text.replace(/\[\[([^\]]+)\]\]/g, (_, t) => t.replace(/_/g, ' '));  // e.g. an empty target
   text = text.replace(/[*_`]+/g, '');
   text = text.replace(/\s+/g, ' ').trim();
 

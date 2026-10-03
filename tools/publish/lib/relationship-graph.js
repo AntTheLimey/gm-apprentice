@@ -1,4 +1,5 @@
 const { escapeHtml, encodeHref } = require('./processor');
+const { backlinksOf } = require('./backlinks');
 const { canonicalNfc, nfcLookupTable, truncateGraphemes } = require('./unicode');
 
 const SHAPE_MAP = {
@@ -70,7 +71,8 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
         }
       }
     }
-    const bl = backlinks[title] || [];
+    // Mentions are keyed by the page a link resolves to, not by title.
+    const bl = backlinksOf(backlinks, page);
     for (const b of bl) {
       if (isIndexTitle(b.title)) continue;
       const backTitle = canonicalNfc(b.title);

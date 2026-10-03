@@ -1,5 +1,7 @@
 'use strict';
 
+const { splitTableRow } = require('../wikilink');
+
 // Pure CoC vault-sheet writeback: map a live blob onto the specific markdown
 // table cells / checkbox markers, format-preservingly and idempotently. Owns all
 // CoC-sheet format knowledge; no KV, no fs, no config. Skill values are never
@@ -20,7 +22,7 @@ const CONDITIONS = [
 
 // First cell (the row label) of a `| a | b | c |` markdown table row, else null.
 function labelOfRow(line) {
-  const segs = line.split('|');
+  const segs = splitTableRow(line);
   return segs.length >= 3 ? segs[1].trim() : null;
 }
 
@@ -28,7 +30,7 @@ function labelOfRow(line) {
 // the pipes), preserving pipe spacing and any trailing note like "(starting 60)".
 // Returns { line, from } — `from` is the previous integer (or null if none).
 function replaceCell(line, idx, newVal) {
-  const segs = line.split('|'); // segs[0] is the piece before the first pipe
+  const segs = splitTableRow(line); // segs[0] is the piece before the first pipe
   const segIdx = idx + 1;
   if (segIdx < 1 || segIdx >= segs.length - 1) return { line: line, from: null };
   const cell = segs[segIdx];

@@ -338,4 +338,4 @@ function writeChanges(vaultPath, changes, deps) {
   return { changed: true };
 }
 
-module.exports = { editPublishBlock, setPublishKeys, setPublishLeaves, setPublishChanges, writeAtomic, fillUnset };
+module.exports = { editPublishBlock, setPublishKeys, setPublishLeaves, setPublishChanges, writeAtomic, fillUnset, splitFrontmatter, locateBlock };

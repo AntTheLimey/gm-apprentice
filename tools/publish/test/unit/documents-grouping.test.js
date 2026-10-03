@@ -57,6 +57,19 @@ describe('renderDocuments', () => {
     assert.ok(!html.includes('rock-lavey'));
   });
 
+  it('reads an escaped-pipe table link as its display half', () => {
+    const html = render([doc('Escaped', { about: '[[rock-lavey\\|Rock Lavey]]' })]);
+    assert.ok(html.includes('intel-section-title">Rock Lavey</h2>'));
+    assert.ok(!html.includes('\\'));
+  });
+
+  it('takes the second pipe segment, as before, with or without a backslash', () => {
+    for (const about of ['[[a|Rock Lavey|extra]]', '[[a\\|Rock Lavey|extra]]', '[[Rock Lavey|]]']) {
+      const html = render([doc('X', { about })]);
+      assert.ok(html.includes('intel-section-title">Rock Lavey</h2>'), about);
+    }
+  });
+
   it('sorts character groups alphabetically', () => {
     const html = render();
     assert.ok(idxOf(html, '>Rock Lavey<') < idxOf(html, '>Ronin Sanchez<'));

@@ -1,3 +1,4 @@
+const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativePath } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -7,7 +8,7 @@ function creatureTemplate(page, processedContent, navFor, config, imageMap, cont
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
   const linkMap = (context || {}).linkMap || {};
-  const backlinks = (publishConfig._backlinks || {})[page.title] || [];
+  const backlinks = backlinksOf(publishConfig._backlinks, page);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   // Build stat block from frontmatter fields

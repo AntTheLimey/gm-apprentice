@@ -143,7 +143,7 @@ the GM.
   --help, -h         Show this help
 `,
   manifest: `
-gm-apprentice-publish manifest <diff|apply|publish-played> [options]
+gm-apprentice-publish manifest <diff|apply|publish-played|rename> [options]
 
 Compares the publish manifest (_meta/publish-manifest.md) with what is actually
 in the vault, and edits it. "diff" classifies every vault file with the same
@@ -160,6 +160,23 @@ excluded versus missing is the GM's call.
                      Move paths between the three sections and rewrite the file.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
+  manifest rename --vault <dir> --from <vault path> --to <vault path> --json
+                 [--name <spelling>]... [--config <site vault.config.json>]
+                     What renaming a note would change in the files this tool
+                     owns, so the page stays published: prints
+                     {"files": {<vault path>: <new full text>}, "pin": {"live_key"},
+                     "companions": [{"from","to"}], "detaches": "<why>",
+                     "owners": {<spelling>: <vault path or null>}}
+                     and writes nothing. files: the manifest entries and the
+                     vault-config settings that name the note (an overrides
+                     path, a landing featured/quick-link name). pin: present
+                     for a PC page, with the key its live state is stored
+                     under now; the caller writes it as live_key before the
+                     file moves. owners: where the build's link map sends each --name
+                     spelling. companions: files paired to the note by
+                     name (a PC's _Story.md) that move with it; detaches:
+                     the note is one, and cannot move alone. Needs no site
+                     config.
   manifest publish-played [--dry-run] [--config <path>] [--vault <dir>] [--json]
                           [--session <index> [--include-unreviewed] [--publish-body]]
                      Move every reviewed session to Publishing together
@@ -747,8 +764,8 @@ if (command === 'deploy') {
 
 if (command === 'manifest') {
   const verb = args[1];
-  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played') {
-    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply or publish-played)');
+  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played' && verb !== 'rename') {
+    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply, publish-played or rename)');
     printSubcommandHelp('manifest');
     process.exit(1);
   }
@@ -761,20 +778,26 @@ if (command === 'manifest') {
       verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed', '--publish-body': 'publishBody' } : {}),
     // --vault: vault_check asks about the vault it is checking, which need not be the
     // one the site's vaultPath names (explain --all takes it for the same reason).
-    verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' } : {},
-    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' } : {},
+    verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
+      : verb === 'rename' ? { '--vault': 'vault', '--from': 'from', '--to': 'to' } : {},
+    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' }
+      : verb === 'rename' ? { '--name': 'names' } : {},
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
-    printSubcommandHelp('manifest');
+    if (verb !== 'rename') printSubcommandHelp('manifest');
     process.exit(1);
   }
   const { runManifest } = require('../lib/manifest-cli.js');
   runManifest({
     verb,
-    configPath: parsed.configPath,
+    // For rename, only a --config the caller typed: the default is a path in the working folder.
+    configPath: verb === 'rename' && !args.includes('--config') ? null : parsed.configPath,
     vaultPath: parsed.flags.vault,
     session: parsed.flags.session,
+    from: parsed.flags.from,
+    to: parsed.flags.to,
+    names: parsed.flags.names,
     includeUnreviewed: !!parsed.flags.includeUnreviewed,
     publishBody: !!parsed.flags.publishBody,
     publish: parsed.flags.publish,
