@@ -64,10 +64,24 @@ class Batch:
         self.rows: list[str] = []
         self._listing: dict[str, str] | None = None
 
+    def guard(self, rel: str) -> None:
+        """Refuse a path that is not a note inside the vault."""
+        if not rel.lower().endswith(".md"):
+            raise WriteError(f"{rel}: not a note (.md)")
+        full = self.vault / rel
+        try:
+            full.resolve().relative_to(self.vault.resolve())
+        except ValueError:
+            raise WriteError(f"{rel}: outside the vault") from None
+        if full.is_dir():
+            raise WriteError(f"{rel}: not a note (.md)")
+
     def resolve(self, raw: str) -> str:
         """The path as it is spelled on disk. macOS may store an accented
-        name decomposed, so a miss is retried NFC-normalised."""
+        name decomposed, so a miss is retried NFC-normalised. A path that
+        is not a note inside the vault is refused."""
         rel = vl.normalize_file_arg(raw)
+        self.guard(rel)
         if rel in self.texts or (self.vault / rel).is_file():
             return rel
         if self._listing is None:
@@ -83,6 +97,7 @@ class Batch:
     def read(self, rel: str) -> str:
         if rel in self.texts:
             return self.texts[rel]
+        self.guard(rel)
         try:
             with (self.vault / rel).open("r", encoding="utf-8",
                                          newline="") as f:
@@ -97,6 +112,7 @@ class Batch:
         return text
 
     def create(self, rel: str, text: str) -> None:
+        self.guard(rel)
         if self.exists(rel):
             raise WriteError(f"{rel}: already exists")
         self.originals[rel] = None
@@ -158,6 +174,15 @@ def apply(batch: Batch) -> list[str]:
             raise WriteError(str(e)) from e
         raise
     return changed
+
+
+def check_fences(batch: Batch) -> None:
+    """Refuse a write that would leave a gm-only fence unbalanced."""
+    for rel in batch.changed():
+        _states, problems = scan_body(batch.texts[rel], ())
+        if problems:
+            raise WriteError(f"{rel}: this would leave a gm-only fence "
+                             f"unbalanced ({problems[0]})")
 
 
 def emit(batch: Batch, wrote: bool) -> str:
@@ -705,7 +730,8 @@ def type_template(note_type: str) -> tuple[TemplateMap | None, bool]:
     template fences its GM Notes). An unknown type has no map and is
     fenced."""
     path = SHARED_TEMPLATES / f"{note_type}.md"
-    if not note_type or not path.is_file():
+    if (not note_type or "/" in note_type or "\\" in note_type
+            or ".." in note_type or not path.is_file()):
         return None, True
     text = path.read_text(encoding="utf-8")
     return read_template_map(text), "<!-- gm-only -->" in text
@@ -787,7 +813,7 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
         raise WriteError("nothing on stdin")
     templates: dict[str, tuple[TemplateMap | None, bool]] = {}
     for n, raw in enumerate(rows, 1):
-        cells = raw.split("\t")
+        cells = raw.split("\t", 2)
         if len(cells) != 3 or not all(c.strip() for c in cells):
             raise WriteError(f"row {n}: want PATH<TAB>SECTION<TAB>LINE")
         rel = batch.resolve(cells[0].strip())
@@ -855,6 +881,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
     try:
         run_command = COMMANDS[args.command]
         run_command(batch, args, text)  # type: ignore[operator]
+        check_fences(batch)
         wrote = False
         if args.write:
             apply(batch)

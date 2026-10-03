@@ -942,5 +942,88 @@ class LogTests(unittest.TestCase):
         self.assertEqual(out.count("ADDED\t"), 3)
 
 
+class GuardTests(unittest.TestCase):
+    def test_a_path_that_is_not_a_note_is_refused(self):
+        vault = make_vault(self, {NPC_REL: NPC, "pic.png": "x",
+                                  "Folder.md/inner.md": NPC})
+        evil = vault.parent / "evil.md"
+        evil.write_bytes(NPC.encode("utf-8"))
+        self.addCleanup(evil.unlink)
+        for path in ("pic.png", "Folder.md", "../evil.md"):
+            with self.subTest(path):
+                code, out = log(vault, f"{path}\tCampaign Log\t- x\n")
+                self.assertEqual(code, 1, out)
+        self.assertEqual(evil.read_bytes().decode("utf-8"), NPC)
+        self.assertEqual(read(vault, "pic.png"), "x")
+
+    def test_messages(self):
+        vault = make_vault(self, {"pic.png": "x"})
+        self.assertIn("pic.png: not a note (.md)",
+                      log(vault, "pic.png\tCampaign Log\t- x\n")[1])
+        self.assertIn("../evil.md: outside the vault",
+                      log(vault, "../evil.md\tCampaign Log\t- x\n")[1])
+
+    def test_another_command_refuses_a_txt_path(self):
+        vault = make_vault(self, {"Wrap.txt": "x"})
+        code, out = run(vault, "wrapup-add", "Wrap.txt", "--write",
+                        stdin="## A\n\nx\n")
+        self.assertEqual(code, 1)
+        self.assertIn("not a note", out)
+
+
+class FenceAndLineTests(unittest.TestCase):
+    def test_a_line_that_would_unbalance_a_fence_is_refused(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t<!-- /gm-only -->\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("unbalanced", out)
+        self.assertEqual(read(vault, NPC_REL), NPC)
+
+    def test_wrapup_add_fences(self):
+        vault = wrap_vault(self)
+        before = read(vault, WRAP_REL)
+        code, out = add(vault, "## Aside\n\nx\n<!-- gm-only -->\n")
+        self.assertEqual(code, 1, out)
+        self.assertEqual(read(vault, WRAP_REL), before)
+        code, out = add(vault, "## Aside\n\nx\n<!-- gm-only -->\nsecret\n"
+                               "<!-- /gm-only -->\n")
+        self.assertEqual(code, 0, out)
+
+    def test_a_tab_inside_the_line_is_kept(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t- a\tb\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("- a\tb\n", read(vault, NPC_REL))
+
+    def test_a_type_with_a_path_gets_no_template(self):
+        for bad in ("../../README", "a/b", "a\\b"):
+            self.assertEqual(vw.type_template(bad), (None, True))
+        bare = "---\ntype: ../../README\n---\n\n# H\n"
+        vault = make_vault(self, {NPC_REL: bare})
+        code, out = log(vault, f"{NPC_REL}\tCampaign Log\t- x\n")
+        self.assertEqual(code, 0, out)
+
+    def test_untyped_note_public_section_goes_before_gm_notes(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## One\n\nx\n\n"
+                "<!-- gm-only -->\n\n## GM Notes\n\nsecret\n\n"
+                "<!-- /gm-only -->\n")
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tRumours\t- r\n")
+        text = read(vault, NPC_REL)
+        self.assertLess(text.index("## One"), text.index("## Rumours"))
+        self.assertLess(text.index("## Rumours"), text.index("<!-- gm-only"))
+        bare = "---\ntype: zzz\n---\n\n# H\n\n## One\n\nx\n"
+        vault = make_vault(self, {NPC_REL: bare})
+        log(vault, f"{NPC_REL}\tRumours\t- r\n")
+        self.assertTrue(read(vault, NPC_REL).endswith("x\n\n## Rumours\n\n- r\n"))
+
+    def test_two_same_named_headings_use_the_first(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n\n"
+                "## Log\n\n- b\n")
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tLog\t- new\n")
+        self.assertIn("- a\n- new\n\n## Log\n\n- b\n", read(vault, NPC_REL))
+
+
 if __name__ == "__main__":
     unittest.main()
