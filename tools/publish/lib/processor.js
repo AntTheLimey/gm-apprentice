@@ -1205,7 +1205,8 @@ function gmAliasRewriter(pages, published) {
       const anchor = w.raw.slice(w.target.length);
       const bar = w.escapedPipe ? '\\|' : '|';
       const label = w.display ? bar + w.display : '';
-      const owner = owners.get(gmAliasKey(target));
+      // A folder path names the note by its last segment (`[[NPCs/Elias Crowe]]`).
+      const owner = owners.get(gmAliasKey(target.split('/').pop()));
       const labelIsSecret = !!label && secretKeys.has(gmAliasKey(w.display));
       if (!owner && !labelIsSecret) return match;
       // A secret label is never shown, whether or not it names the same page
@@ -1235,7 +1236,7 @@ function gmAliasRewriter(pages, published) {
   // be an ordinary word must not rewrite `status:` or `occupation:`.
   function nameIn(v) {
     if (typeof v === 'string') {
-      const owner = owners.get(gmAliasKey(v));
+      const owner = owners.get(gmAliasKey(v.split('/').pop()));
       return owner ? owner.title : links(v, false);
     }
     if (Array.isArray(v)) return v.map(nameIn);

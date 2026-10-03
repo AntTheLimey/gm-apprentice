@@ -1325,6 +1325,19 @@ class SpellingOwnerTests(unittest.TestCase):
         self.assertEqual(len(p.alias_warnings), 1)
         self.assertIn("alias", p.alias_warnings[0])
 
+    def test_another_reason_is_shown_without_the_migration_hint(self):
+        site = Path(tempfile.mkdtemp(prefix="relink-nocfg-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        vault = make_vault(self, {
+            "_meta/vault-config.md": SitePublishTests.CFG.replace(
+                "site: true\n", f"site: true\n  site_dir: {site.as_posix()}\n"),
+            "NPCs/Hallam.md": typed("npc")})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
+        self.assertIn("no vault.config.json", str(cm.exception))
+        self.assertNotIn("migrate.py", str(cm.exception))
+        self.assertNotIn("update-pin", str(cm.exception))
+
     def test_a_site_with_no_tool_to_ask_says_why(self):
         site = Path(tempfile.mkdtemp(prefix="relink-notool-"))
         self.addCleanup(shutil.rmtree, site, ignore_errors=True)

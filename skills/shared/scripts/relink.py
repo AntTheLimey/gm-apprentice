@@ -595,15 +595,18 @@ def _site_tool(vault: Path) -> Path | None:
     import vault_check  # the one place that resolves a site's tool
     if vault_site(vault)[2] is None:
         return None  # a site still to be set up builds with nothing yet
-    tool, why, _fix, has_site = vault_check._lines_tool(vault)
+    tool, why, fix, has_site = vault_check._lines_tool(vault)
     if not has_site:
         return None
     if tool is None:
-        # The migration repins the site's tool; the GM is not sent to
-        # update-pin by hand, which is what `fix` says.
-        raise _SiteToolMissing(
-            f"{why or 'the site tool cannot be found'}; run the migration "
-            f"(`migrate.py <vault> apply`) to repin it")
+        reason = why or "the site tool cannot be found"
+        if "is missing" in reason or "not installed" in reason:
+            # The migration repins the site's tool; the GM is not sent to
+            # update-pin by hand, which is what `fix` says here.
+            hint = "run the migration (`migrate.py <vault> apply`) to repin it"
+        else:
+            hint = fix if fix and "update-pin" not in fix else ""
+        raise _SiteToolMissing(f"{reason}; {hint}" if hint else reason)
     return None if tool == vaultlib.PUBLISH_TOOL else tool
 
 

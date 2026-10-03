@@ -78,3 +78,16 @@ test('a link to its own name with .md still counts as the plain self-link does',
   assert.match(read('characters', 'npcs', 'hallam.html'), /Mentioned In/i);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+test('a path-written link to a secret alias shows neither the secret nor its file name, on the page or in search', () => {
+  const { read, root } = buildVault({
+    '_meta/vault-config.md': CONFIG,
+    'Characters/NPCs/Lord_Vane.md': '---\ntype: npc\ngm_aliases: ["Elias Crowe"]\n---\n# Vane\n',
+    'Sessions/S1.md': '---\ntype: session\n---\nMet [[Characters/NPCs/Elias Crowe]] and [[Characters/NPCs/Elias Crowe.md#Past]].\n',
+  });
+  const page = read('sessions', 's1.html');
+  assert.doesNotMatch(page, /crowe/i);
+  assert.match(page, /lord-vane\.html/);
+  assert.doesNotMatch(read('search-index.json'), /crowe/i);
+  fs.rmSync(root, { recursive: true, force: true });
+});

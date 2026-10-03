@@ -117,6 +117,16 @@ describe('a secret alias with a ^block anchor is still rewritten', () => {
     assert.strictEqual(rw.markdown('[[Elias Crowe#Past]]'), '[[Lord Vane#Past]]');
   });
 
+  it('and when written with a folder path', () => {
+    assert.strictEqual(rw.markdown('[[NPCs/Elias Crowe]]'), '[[Lord Vane]]');
+    assert.strictEqual(rw.markdown('[[NPCs/Elias Crowe.md]]'), '[[Lord Vane]]');
+    assert.strictEqual(rw.markdown('[[NPCs/Elias Crowe#Past]]'), '[[Lord Vane#Past]]');
+    assert.strictEqual(rw.markdown('[[NPCs/Elias Crowe^b1|y]]'), '[[Lord Vane^b1|y]]');
+    assert.strictEqual(rw.markdown('| [[NPCs/Elias Crowe\\|y]] |'), '| [[Lord Vane\\|y]] |');
+    assert.strictEqual(rw.markdown('![[NPCs/Elias Crowe.md]]'), '![[Lord Vane]]');
+    assert.strictEqual(rw.markdown('[[NPCs/Lord Vane]]'), '[[NPCs/Lord Vane]]');
+  });
+
   it('and with a .md on the name', () => {
     assert.strictEqual(rw.markdown('[[Elias Crowe.md]]'), '[[Lord Vane]]');
     assert.strictEqual(rw.markdown('[[Elias Crowe.md#Past]]'), '[[Lord Vane#Past]]');
