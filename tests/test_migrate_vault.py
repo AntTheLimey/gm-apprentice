@@ -6,6 +6,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
@@ -103,6 +104,73 @@ class TemplateTests(unittest.TestCase):
         for item in items.values():
             item.apply(None)
         self.assertEqual(mv.find_templates(vault), [])
+
+    def older(self, history):
+        """A vault whose Document template is an old text; HISTORY points at
+        a file holding `history(old_text)`."""
+        vault = make_vault(self)
+        old = mv.expected_templates(vault)["_Template_Document.md"] \
+            + "\n## Handout Notes\n"
+        (vault / "_Templates").mkdir()
+        (vault / "_Templates" / "_Template_Document.md").write_text(
+            old.replace("\n", "\r\n"), encoding="utf-8", newline="")
+        file = Path(tempfile.mkdtemp(prefix="migh-")) / "template-history.json"
+        self.addCleanup(shutil.rmtree, file.parent, ignore_errors=True)
+        file.write_text(json.dumps(history(old)), encoding="utf-8")
+        patch = mock.patch.object(mv, "HISTORY", file)
+        patch.start()
+        self.addCleanup(patch.stop)
+        return vault
+
+    def doc(self, vault):
+        """The one Document-template item (the rest are missing: copies)."""
+        return by_id(mv.find_templates(vault))["template:_Template_Document.md"]
+
+    def test_an_untouched_older_template_is_upgraded_without_asking(self):
+        vault = self.older(lambda old: {
+            "_Template_Document.md": [mv.text_hash(old)]})
+        item = self.doc(vault)
+        self.assertEqual(item.group, WILL)
+        self.assertEqual(
+            item.lines,
+            ["update _Templates/_Template_Document.md from an earlier "
+             "release's text"])
+        item.apply(None)
+        self.assertNotIn("template:_Template_Document.md",
+                         by_id(mv.find_templates(vault)))
+
+    def test_an_edited_template_is_still_a_choice(self):
+        vault = self.older(lambda old: {
+            "_Template_Document.md": [mv.text_hash(old)]})
+        path = vault / "_Templates" / "_Template_Document.md"
+        path.write_text(path.read_text(encoding="utf-8") + "\nMy edit\n",
+                        encoding="utf-8")
+        self.assertEqual(self.doc(vault).group, CHOICE)
+
+    def test_a_template_in_no_release_is_a_choice(self):
+        for history in (lambda old: {},
+                        lambda old: {"_Template_Document.md": ["0" * 64]},
+                        lambda old: {"_Template_Item.md": [mv.text_hash(old)]}):
+            self.assertEqual(self.doc(self.older(history)).group, CHOICE)
+
+    def test_a_missing_history_file_leaves_every_difference_a_choice(self):
+        vault = self.older(lambda old: {})
+        with mock.patch.object(mv, "HISTORY", vault / "nope.json"):
+            self.assertEqual(self.doc(vault).group, CHOICE)
+
+    def test_the_history_holds_every_current_template(self):
+        history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
+        source = SHARED / "templates"
+        systems = {None, "coc-7e-regency"}
+        systems |= {p.stem.removeprefix("pc-") for p in source.glob("pc-*.md")}
+        systems |= {p.stem for p in source.glob("*-stats/*.md")}
+        systems.discard("generic")
+        for system in systems:
+            for name, text in mv.templates_for(system).items():
+                self.assertIn(
+                    mv.text_hash(text), history.get(name, []),
+                    f"{name} ({system}) is not in template-history.json; "
+                    f"regenerate it: python3 scripts/template_history.py")
 
     def test_an_unreadable_template_is_a_failed_step(self):
         vault = make_vault(self)

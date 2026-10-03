@@ -4,6 +4,7 @@ alone: templates, the schema mirror, and the small per-release fixes."""
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -16,6 +17,7 @@ from vaultlib import (entity_type, extract_frontmatter, read_publish_scalar,
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
+HISTORY = SHARED / "template-history.json"
 CONFIG = "_meta/vault-config.md"
 
 # shared/templates name -> _Templates name (vault-setup.md, Templates).
@@ -67,13 +69,13 @@ def vault_system(vault: Path) -> str | None:
     return None
 
 
-def _stat_block(kind: str, system: str | None) -> str:
+def _stat_block(kind: str, system: str | None, source: Path) -> str:
     base = "coc-7e" if system == "coc-7e-regency" else system
     if not base:
         return GENERIC_BLOCK
     for folder in ((f"{kind}-stats", "npc-stats") if kind == "creature"
                    else ("npc-stats",)):
-        path = TEMPLATES / folder / f"{base}.md"
+        path = source / folder / f"{base}.md"
         if path.is_file():
             lines = path.read_text(encoding="utf-8").strip().split("\n")
             kept = []
@@ -87,37 +89,72 @@ def _stat_block(kind: str, system: str | None) -> str:
     return GENERIC_BLOCK
 
 
-def expected_templates(vault: Path) -> dict[str, str]:
-    """What `_Templates/` should hold: vault filename -> text."""
-    system = vault_system(vault)
+def templates_for(system: str | None, source: Path = TEMPLATES,
+                  skip_missing: bool = False) -> dict[str, str]:
+    """What `_Templates/` holds for a vault of this system, built from the
+    template folder `source`: vault filename -> text. `skip_missing` leaves
+    out a template an older release's folder does not have."""
+    def read(name: str) -> str | None:
+        path = source / name
+        if skip_missing and not path.is_file():
+            return None
+        return path.read_text(encoding="utf-8")
+
     out: dict[str, str] = {}
-    for source, name in TEMPLATE_NAMES.items():
-        text = (TEMPLATES / source).read_text(encoding="utf-8")
-        if source in ("npc.md", "creature.md"):
-            block = _stat_block(source[:-3], system)
+    for src, name in TEMPLATE_NAMES.items():
+        text = read(src)
+        if text is None:
+            continue
+        if src in ("npc.md", "creature.md"):
+            block = _stat_block(src[:-3], system, source)
             text = STAT_BLOCK_RE.sub(lambda _m: block, text, count=1)
         out[name] = text
-    pc = f"pc-{system}.md" if system and (TEMPLATES / f"pc-{system}.md").is_file() \
+    pc = f"pc-{system}.md" if system and (source / f"pc-{system}.md").is_file() \
         else "pc-generic.md"
-    out[pc] = (TEMPLATES / pc).read_text(encoding="utf-8")
+    text = read(pc)
+    if text is not None:
+        out[pc] = text
     if system == "fitd":
-        out["crew-fitd.md"] = (TEMPLATES / "crew-fitd.md").read_text(
-            encoding="utf-8")
+        text = read("crew-fitd.md")
+        if text is not None:
+            out["crew-fitd.md"] = text
     return out
 
 
+def expected_templates(vault: Path) -> dict[str, str]:
+    """What `_Templates/` should hold: vault filename -> text."""
+    return templates_for(vault_system(vault))
+
+
+def normalise(text: str) -> str:
+    """The text with trailing blanks, CRLFs and runs of blank lines gone:
+    a template a model copied by hand differs that way and no other."""
+    lines = [line.rstrip() for line in text.replace("\r\n", "\n").split("\n")]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
+
+
+def text_hash(text: str) -> str:
+    return hashlib.sha256(normalise(text).encode("utf-8")).hexdigest()
+
+
 def _same(a: str, b: str) -> bool:
-    """Equal but for trailing blanks and runs of blank lines: a template a
-    model copied by hand differs that way and no other."""
-    def norm(text: str) -> str:
-        lines = [line.rstrip() for line in text.replace("\r\n", "\n").split("\n")]
-        return re.sub(r"\n{3,}", "\n\n", "\n".join(lines)).strip()
-    return norm(a) == norm(b)
+    return normalise(a) == normalise(b)
+
+
+def _released_hashes() -> dict[str, list[str]]:
+    """template-history.json: vault filename -> hashes of what releases wrote.
+    Missing or unreadable, no template counts as released (all are choices)."""
+    try:
+        data = json.loads(HISTORY.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return data if isinstance(data, dict) else {}
 
 
 def find_templates(vault: Path) -> list[Item]:
     folder = vault / "_Templates"
     items: list[Item] = []
+    released = _released_hashes()
     for name, text in expected_templates(vault).items():
         path = folder / name
 
@@ -136,7 +173,14 @@ def find_templates(vault: Path) -> list[Item]:
         except (OSError, UnicodeDecodeError) as e:
             raise StepFailed(f"_Templates/{name} cannot be read "
                              f"({e.__class__.__name__})") from e
-        if not _same(current, text):
+        if _same(current, text):
+            continue
+        if text_hash(current) in released.get(name, []):
+            items.append(Item(
+                f"template:{name}", WILL,
+                [f"update _Templates/{name} from an earlier release's text"],
+                apply))
+        else:
             items.append(Item(
                 f"template:{name}", CHOICE,
                 [f"overwrite _Templates/{name} with the plugin's version; "

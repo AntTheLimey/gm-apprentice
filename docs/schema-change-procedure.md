@@ -36,6 +36,9 @@ adding a new field, renaming a field, changing a field's type
 
 - [ ] Edit the corresponding template in
   `skills/shared/templates/` so new vaults get the field
+- [ ] Regenerate the template history so vaults holding the old text
+  are upgraded without a question:
+  `python3 scripts/template_history.py` (a test fails until you do)
 - [ ] If no shared template exists for this entity type,
   consider whether one should be created
 

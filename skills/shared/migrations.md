@@ -19,7 +19,7 @@ every-pass check runs on every migration, whatever the vault's version.
 
 | Release | What changes in a vault | Check |
 |---|---|---|
-| every pass | Site's publish tool repinned; missing templates copied; changed templates and the schema mirror offered; settings left in the site's `vault.config.json` moved into the vault file; `publish.site` written; withheld sections nested under GM Notes; old Wrap-Up filenames reported | `site-repin`, `config-to-vault`, `templates`, `schema-mirror`, `publish-site`, `gm-leak`, `wrapup-filenames` |
+| every pass | Site's publish tool repinned; missing templates copied; templates still holding an earlier release's text updated, other changed templates and the schema mirror offered; settings left in the site's `vault.config.json` moved into the vault file; `publish.site` written; withheld sections nested under GM Notes; old Wrap-Up filenames reported | `site-repin`, `config-to-vault`, `templates`, `schema-mirror`, `publish-site`, `gm-leak`, `wrapup-filenames` |
 | 1.10.13 | Faction template writes `faction_type` (offered by every-pass `templates`); mobRPG keeps Campaign Log and Encounters in the vault | `mobrpg-sections` |
 | 1.10.14 | None | |
 | 1.10.15 | mobRPG heritage notes live in `Heritages/` | `heritage-notes` |
