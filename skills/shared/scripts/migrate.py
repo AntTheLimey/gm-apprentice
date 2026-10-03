@@ -8,8 +8,8 @@
 then up to three lists: Will do (what one yes covers, in run order), Your
 choice (each with an id for --choose) and Needs a person (file, line, what
 is wrong). While the site's publish tool is out of date the steps that ask
-it are listed under a fourth heading and looked at by `apply`, after the
-repin.
+it are listed under a fourth heading. An `apply` that repins the site
+leaves them, and the stamp, for the next `plan`, which asks the updated tool.
 
 `apply` runs Will do, then the chosen choices, stamps
 `gm_apprentice_version`, and prints what it did and Needs a person again.
@@ -36,6 +36,8 @@ FLOOR = "1.10.12"
 LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
 TITLES = {WILL: "Will do", CHOICE: "Your choice", PERSON: "Needs a person"}
 WAITING = "Checked once the site's tool is updated"
+WAITED_LINE = ("the site's publish tool is updated; run plan again for the "
+               "checks that waited on it")
 
 CHECKS: list[Check] = [*SITE_CHECKS, *VAULT_CHECKS]
 
@@ -165,7 +167,11 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     used: set[str] = set()
     failed: int | None = None
     error = ""
+    repinned = waited = False
     for n, check in enumerate(todo):
+        if check.asks_site and repinned:
+            waited = True   # plan did not show its rows: it asks the new tool
+            continue
         try:
             for item in check.find(vault):
                 if item.group == PERSON:
@@ -183,6 +189,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     did.extend(f"{item.id}\t{line}"
                                for line in item.apply(value))
                     used.add(item.id)
+                    repinned = repinned or (check.name == REPIN
+                                            and item.group == WILL)
         except StepFailed as e:
             failed, error = n, f"{check.name}: {e}"
             break
@@ -195,7 +203,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             done = [c.release for c in todo
                     if c.release and parse_version(c.release) < first]
             target = max([vault_v, *done], key=parse_version)
-    stamped = parse_version(target) > parse_version(vault_v)
+    stamped = parse_version(target) > parse_version(vault_v) and not waited
     if stamped:
         try:
             _stamp(vault, target)
@@ -208,12 +216,17 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"not offered: {choice}")
     if person:
         emit(TITLES[PERSON], person)
+    if waited:
+        print(WAITED_LINE)
     if failed is not None:
         print(f"migrate.py: {error}", file=sys.stderr)
         print(f"stamped {target}; the rest is offered again next time"
               if stamped else "not stamped")
         return 1
-    print(f"stamped {plugin_v}" if stamped else f"already at {plugin_v}")
+    if waited:
+        print("not stamped")
+    else:
+        print(f"stamped {plugin_v}" if stamped else f"already at {plugin_v}")
     return 0
 
 

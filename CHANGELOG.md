@@ -27,6 +27,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `config-to-vault` runs on every pass: whenever the site file still
     holds campaign settings, they are moved into the vault file as part
     of Will do.
+- **A migration that updates the site's publish tool no longer skips
+  the checks that waited on it.** `apply` now does the repin and the
+  rest of what the GM saw, leaves the vault unstamped and says so; the
+  next `plan` asks the updated tool, so choices like `fonts-self-host`
+  and `sheet-source:` are shown instead of being passed over.
 
 ### Added
 

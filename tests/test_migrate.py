@@ -247,6 +247,49 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(log, [migrate.REPIN])
         self.assertEqual(stamp_of(vault), "1.10.25")
 
+    def site_choice_checks(self, log, repin=True):
+        """An out-of-date site (a pending repin) and a site check that
+        offers one choice and logs when it looks."""
+        def find(v):
+            log.append("looked")
+            return [Item("fonts", CHOICE, ["self-host"],
+                         lambda x: log.append("fonts") or ["fonts done"])]
+        return [will(migrate.REPIN, None, 1, log,
+                     pending={"pending": repin}),
+                Check("fonts-check", None, 4, "fonts", find, asks_site=True,
+                      choices=("fonts",))]
+
+    def test_apply_that_repins_leaves_the_waiting_checks_and_the_stamp(self):
+        vault = make_vault(self)
+        log = []
+        checks = self.site_choice_checks(log)
+        code, out, _ = call([str(vault), "apply", "--choose", "fonts"], checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, [migrate.REPIN])
+        self.assertEqual(stamp_of(vault), "1.10.12")
+        self.assertIn("site-repin\tdid site-repin", out)
+        self.assertTrue(out.rstrip().endswith(
+            "the site's publish tool is updated; run plan again for the "
+            "checks that waited on it\nnot stamped"))
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("## Your choice\n# count: 1\nfonts\tself-host", plan)
+        self.assertNotIn("Checked once", plan)
+        code, out, _ = call([str(vault), "apply", "--choose", "fonts"], checks)
+        self.assertEqual(code, 0)
+        self.assertIn("fonts\tfonts done", out)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertTrue(out.rstrip().endswith(f"stamped {PLUGIN}"))
+
+    def test_apply_with_a_current_site_stamps_in_one_run(self):
+        vault = make_vault(self)
+        log = []
+        checks = self.site_choice_checks(log, repin=False)
+        code, out, _ = call([str(vault), "apply", "--choose", "fonts"], checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, ["looked", "fonts"])
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertNotIn("run plan again", out)
+
     def choice_checks(self, log):
         def find(v):
             return [

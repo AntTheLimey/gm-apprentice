@@ -14,7 +14,9 @@ migration is a script; this file says how to drive it.
 3. On the GM's yes, run the same script with `<vault> apply`, adding
    `--choose <id>` or `--choose "<id>=<value>"` once for each choice
    they took. An instruction already in the request ("apply the
-   migration") is a yes.
+   migration") is a yes. If it prints "the site's publish tool is
+   updated; run plan again…", it did not stamp: go back to step 1 and
+   ask the GM only about the new rows.
 4. Report what it printed under Did, and any `not offered: <id>` line
    (a choice it had nothing to apply to). Work through Needs a person with
    the GM, one row at a time; the script never changes those. A row
