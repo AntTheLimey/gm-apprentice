@@ -23,8 +23,8 @@ function vaultWith(files) {
   return dir;
 }
 
-function rename(vault, from = FROM, to = TO) {
-  const out = execFileSync('node', [BIN, 'manifest', 'rename', '--vault', vault, '--from', from, '--to', to, '--json'], { encoding: 'utf8' });
+function rename(vault, from = FROM, to = TO, extra = []) {
+  const out = execFileSync('node', [BIN, 'manifest', 'rename', '--vault', vault, '--from', from, '--to', to, '--json', ...extra], { encoding: 'utf8' });
   return JSON.parse(out);
 }
 
@@ -175,24 +175,45 @@ describe('manifest rename: story companions', () => {
   });
 });
 
-describe('manifest rename: who a bare name goes to', () => {
+describe('manifest rename: who each spelling goes to', () => {
   const SITE = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
   const NPC = 'Characters/NPCs/Charlotte_Thorne.md';
   const PC = 'Characters/PCs/Charlotte_Thorne.md';
   const note = (type, extra = '') => `---\ntype: ${type}\n${extra}---\n# C\n`;
+  const names = (...n) => n.flatMap((x) => ['--name', x]);
+  const ask = (vault, spellings, from = NPC, extra = []) => rename(vault, from, 'Characters/NPCs/Charlotte_Thorne_NPC.md', [...names(...spellings), ...extra]);
 
-  it('names the note the build links the shared name to, not the other one', () => {
-    const toNpc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
-    assert.strictEqual(rename(toNpc, NPC, 'Characters/NPCs/Charlotte_Thorne_NPC.md').bareOwner, NPC);
-    const toPc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
-    assert.strictEqual(rename(toPc, NPC, 'Characters/NPCs/Charlotte_Thorne_NPC.md').bareOwner, PC);
+  it('asks nothing of the link map when no spelling is given', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc') });
+    assert.strictEqual(ask(vault, []).owners, undefined);
   });
 
-  it('answers OLD for a unique stem, and null when the name maps to nothing', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc') });
-    assert.strictEqual(rename(vault, NPC, 'Characters/NPCs/C2.md').bareOwner, NPC);
+  it('names the note the build links each spelling to', () => {
+    const toNpc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
+    assert.strictEqual(ask(toNpc, ['Charlotte_Thorne']).owners.Charlotte_Thorne, NPC);
+    const toPc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
+    assert.strictEqual(ask(toPc, ['Charlotte_Thorne']).owners.Charlotte_Thorne, PC);
+  });
+
+  it('follows an alias another note holds, and null for a spelling that maps to nothing', () => {
+    const vault = vaultWith({
+      '_meta/vault-config.md': SITE,
+      'Characters/PCs/Charlotte_Thorne.md': note('pc'),
+      'Characters/NPCs/Cast_Charlotte.md': note('npc', 'aliases: ["Charlotte Thorne"]\n'),
+    });
+    const got = ask(vault, ['Charlotte Thorne', 'Nobody_Here'], 'Characters/PCs/Charlotte_Thorne.md').owners;
+    assert.strictEqual(got['Charlotte Thorne'], 'Characters/NPCs/Cast_Charlotte.md');
+    assert.strictEqual(got.Nobody_Here, null);
     const hidden = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'publish: false\n') });
-    assert.strictEqual(rename(hidden, NPC, 'Characters/NPCs/C2.md').bareOwner, null);
+    assert.strictEqual(ask(hidden, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null);
+  });
+
+  it('reads the site config the build reads, when the folder map lives there', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': '---\npublish:\n  mode: full\n---\n', [NPC]: note('npc') });
+    const cfg = path.join(vault, 'site.config.json');
+    fs.writeFileSync(cfg, JSON.stringify({ vaultPath: vault, folderMap: { 'Characters/NPCs': 'characters/npcs' }, excludeDirs: ['_meta'] }));
+    assert.strictEqual(ask(vault, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null, 'no folder map without the site config');
+    assert.strictEqual(ask(vault, ['Charlotte_Thorne'], NPC, ['--config', cfg]).owners.Charlotte_Thorne, NPC);
   });
 
   it('agrees with what the build links a bare name to', () => {
@@ -211,8 +232,33 @@ describe('manifest rename: who a bare name goes to', () => {
     try { build({ configPath }); } finally { console.log = real; }
     const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
     const href = /href="([^"]*charlotte-thorne[^"]*)"/.exec(html)[1];
-    const owner = rename(vault, NPC, 'Characters/NPCs/Charlotte_Thorne_NPC.md').bareOwner;
-    assert.ok(href.includes(owner === NPC ? 'npcs/' : 'pcs/'), `${href} vs ${owner}`);
+    const owner = ask(vault, ['Charlotte_Thorne']).owners.Charlotte_Thorne;
+    assert.ok(href.includes(owner === NPC ? '/npcs/' : '/pcs/'), `${href} vs ${owner}`);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
+});
+
+describe('backlinks follow the page a link resolves to', () => {
+  it('two pages with one title: the session lists only the one the link map sends the name to', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backlink-key-'));
+    const vault = path.join(root, 'vault');
+    const files = {
+      '_meta/vault-config.md': '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n',
+      'Characters/NPCs/Charlotte_Thorne.md': '---\ntype: npc\ncanon_status: SUPERSEDED\n---\n# N\n',
+      'Characters/PCs/Charlotte_Thorne.md': '---\ntype: pc\n---\n# P\n',
+      'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Charlotte_Thorne]].\n',
+    };
+    for (const [rel, text] of Object.entries(files)) {
+      fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+      fs.writeFileSync(path.join(vault, rel), text);
+    }
+    const configPath = path.join(root, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+    const real = console.log; console.log = () => {};
+    try { build({ configPath }); } finally { console.log = real; }
+    const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
+    assert.match(html, /characters\/pcs\/charlotte-thorne\.html/);
+    assert.doesNotMatch(html, /characters\/npcs\/charlotte-thorne\.html/);
     fs.rmSync(root, { recursive: true, force: true });
   });
 });

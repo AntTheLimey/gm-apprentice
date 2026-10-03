@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pairStoryFiles, pcLiveKey } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pcLiveKey } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -24,7 +24,8 @@ const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
 const { hasLegacy } = require('./config-keys');
-const { decidePage, publishesPage, autoExcludeCode } = require('./publish-decision');
+const { publishesPage, autoExcludeCode } = require('./publish-decision');
+const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
@@ -406,20 +407,16 @@ function build(options = {}) {
     }
   }
 
-  pairStoryFiles(pages, config.vaultPath);
-
   // One verdict per page, from the shared decision module — the same call
   // `manifest diff`, `doctor --site` and `explain` make, so what those commands
   // predict is exactly what the build does. Everything that is not published is
-  // dropped here, before the link map, so a link to a withheld page resolves to
-  // nothing and renders as plain text rather than as a broken href.
-  //
-  // (Story companion files are already folded into their PC by pairStoryFiles
-  // above, and the DRAFT rule needs that pairing to have happened.)
-  const verdicts = new Map();
-  for (const page of pages) {
-    verdicts.set(page, decidePage(page, { rel: vaultRelPathOf(page), publishConfig, manifest }));
-  }
+  // dropped below, before the link map, so a link to a withheld page resolves to
+  // nothing and renders as plain text rather than as a broken href. Story companion
+  // files are folded into their PC first (the DRAFT rule needs that pairing). The
+  // rename tool asks the same function for the pages the link map is built from.
+  const { verdicts, published } = publishedPages(pages, {
+    vaultPath: config.vaultPath, publishConfig, manifest, relOf: vaultRelPathOf,
+  });
   const withCode = (...codes) => pages.filter(p => codes.includes(verdicts.get(p).code));
 
   const draftExcluded = withCode('DRAFT_EXCLUDED');
@@ -467,7 +464,7 @@ function build(options = {}) {
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
   }
 
-  pages = pages.filter(p => publishesPage(verdicts.get(p)));
+  pages = published;
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
@@ -555,7 +552,7 @@ function build(options = {}) {
   // Scanned here, not later, because the keep-list stability check below reads it.
   const imageMap = scanAttachments(scanConfig);
 
-  const { buildBacklinks } = require('./backlinks');
+  const { buildBacklinks, backlinksOf } = require('./backlinks');
   const { buildSearchIndex } = require('./search-index');
   const { scoreByRecency } = require('./recency');
 
@@ -591,7 +588,7 @@ function build(options = {}) {
     || pages.some(p => p.frontmatter && p.frontmatter.type === 'pc' && p.storyMarkdown);
 
   // Build-time data pipeline
-  const backlinks = buildBacklinks(pages);
+  const backlinks = buildBacklinks(pages, linkMap);
   console.log(`Built backlinks for ${Object.keys(backlinks).length} entities`);
 
   const sessions = pages.filter(p => p.frontmatter.type === 'session');
@@ -974,12 +971,12 @@ function build(options = {}) {
             const source = wrapUp || page;
             const sessionMentionedNPCs = (pages || []).filter(p =>
               p.frontmatter.type === 'npc' &&
-              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === source.title)
+              backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
             ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
 
             const sessionEvents = (pages || []).filter(p =>
               p.frontmatter.type === 'event' &&
-              ((publishConfig._backlinks || {})[p.title] || []).some(b => b.title === source.title)
+              backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
             ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
 
             extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };

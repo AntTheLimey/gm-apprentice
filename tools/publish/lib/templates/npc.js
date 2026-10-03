@@ -1,3 +1,4 @@
+const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativeHref, renderMetaValue, publishedSource, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -8,7 +9,7 @@ const { excerptFromMarkdown } = require('../excerpt');
 function npcTemplate(page, processedContent, navFor, config, imageMap, context) {
   const { pages, linkMap, publishConfig } = context || {};
   const fm = page.frontmatter;
-  const backlinks = ((publishConfig || {})._backlinks || {})[page.title] || [];
+  const backlinks = backlinksOf((publishConfig || {})._backlinks, page);
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);

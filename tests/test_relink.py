@@ -1256,6 +1256,54 @@ class SharedNameTests(unittest.TestCase):
 
 
 @unittest.skipUnless(shutil.which("node"), "needs Node")
+class SpellingOwnerTests(unittest.TestCase):
+    """Each spelling a note is linked by goes where the site sends it."""
+
+    def test_an_alias_another_note_holds_keeps_its_spelling(self):
+        vault = make_vault(self, {
+            "Players/Charlotte_Thorne.md": typed("pc"),
+            "Cast/Charlotte_Thorne.md": typed("npc", 'aliases: ["Charlotte Thorne"]\n'),
+            "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte Thorne]]\n",
+            "_meta/vault-config.md": SITE_FULL.replace(
+                "    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n",
+                "    Players: characters/pcs\n    Cast: characters/npcs\n")})
+        p = relink.plan(vault, "Players/Charlotte_Thorne.md",
+                        "Players/Charlotte_Thorne_PC.md")
+        self.assertNotIn("Sessions/S1.md", p.texts)
+        self.assertEqual(p.unsure, [])
+
+    def test_a_unique_name_another_notes_alias_claims_is_left_too(self):
+        vault = make_vault(self, {
+            "Characters/NPCs/Hallam.md": typed("npc"),
+            "Characters/NPCs/Other.md": typed("npc", 'aliases: ["hallam"]\n'),
+            "Sessions/S1.md": "---\ntype: session\n---\n[[hallam]] [[Hallam]]\n",
+            "_meta/vault-config.md": SITE_FULL})
+        p = relink.plan(vault, "Characters/NPCs/Hallam.md",
+                        "Characters/NPCs/Hallam_Reeve.md")
+        self.assertEqual(p.texts["Sessions/S1.md"],
+                         "---\ntype: session\n---\n[[hallam]] [[Hallam_Reeve]]\n")
+
+    def test_a_manifest_without_a_site_does_not_follow_the_link_map(self):
+        vault = make_vault(self, {
+            NPC: typed("npc"), PCN: typed("pc"),
+            "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte_Thorne]]\n",
+            "_meta/publish-manifest.md": "## Publishing (0 files)\n\n"})
+        p = relink.plan(vault, NPC, NPC_NEW)
+        self.assertEqual(len(p.unsure), 1)
+        self.assertEqual(p.owners, {})
+
+    def test_the_rule_row_says_when_the_site_gave_no_answer(self):
+        vault = make_vault(self, {
+            NPC: typed("npc", "publish: false\n"), PCN: typed("pc", "publish: false\n"),
+            "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte_Thorne]]\n",
+            "_meta/vault-config.md": SITE_FULL})
+        rule = [r for r in relink.rows(relink.plan(vault, NPC, NPC_NEW))
+                if r.startswith("RULE\t")]
+        self.assertEqual(len(rule), 1)
+        self.assertIn("no site answer", rule[0])
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
 class CompanionReviewTests(unittest.TestCase):
     def vault(self, extra=None):
         files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n", STORY_OLD: STORY_TEXT,
@@ -1289,7 +1337,8 @@ class CompanionReviewTests(unittest.TestCase):
         for bad in ('{"files": {}, "companions": [{"from": 1}]}',
                     '{"files": {}, "companions": "x"}',
                     '{"files": {}, "detaches": 4}',
-                    '{"files": {}, "bareOwner": 4}',
+                    '{"files": {}, "owners": {"a": 4}}',
+                    '{"files": {}, "owners": []}',
                     '{"files": {}, "refusal": []}'):
             with mock.patch.object(lines, "run_once", return_value=bad):
                 with self.assertRaises(vaultlib.PublishToolUnavailable):

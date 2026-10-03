@@ -1,3 +1,4 @@
+const { backlinksOf } = require('../backlinks');
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, parseWikiRef, publishedSource, encodeHref } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
@@ -20,7 +21,7 @@ function matchesRef(refValue, title) {
 function locationTemplate(page, processedContent, navFor, config, imageMap, context) {
   const { pages, linkMap, publishConfig } = context || {};
   const fm = page.frontmatter;
-  const backlinks = ((publishConfig || {})._backlinks || {})[page.title] || [];
+  const backlinks = backlinksOf((publishConfig || {})._backlinks, page);
 
   // Parse `[[Target|Alias]]` once: target keeps underscores for the linkMap lookup, label
   // is the alias or the humanized target. Reused by the breadcrumb and the sidebar below.

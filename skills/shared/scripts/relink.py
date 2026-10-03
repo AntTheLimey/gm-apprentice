@@ -110,7 +110,8 @@ class Plan:
     pin: str | None = None
     # Files the site pairs to the note by name (a PC's story), moved with it.
     companions: list[tuple[str, str]] = field(default_factory=list)
-    # Where the site's link map sends each moved note's bare name.
+    # Where the site's link map sends each bare spelling a moved note is
+    # linked by: spelling -> vault path, or None for nothing.
     owners: dict[str, str | None] = field(default_factory=dict)
     rules: list[str] = field(default_factory=list)
 
@@ -168,15 +169,42 @@ def _json_inner(s: str) -> str:
     return json.dumps(s, ensure_ascii=False)[1:-1]
 
 
+def _parse_link(body: str) -> tuple[str, str, str] | None:
+    """(destination, #heading or ^block, |alias) of a wikilink body."""
+    m = re.match(r"([^|#^]*)([#^][^|]*)?(\|.*)?$", body, re.DOTALL)
+    if not m:
+        return None
+    dest, sub, alias = m.group(1), m.group(2) or "", m.group(3) or ""
+    if alias and (sub or dest).endswith("\\"):
+        # An escaped pipe (table cell): the backslash belongs to the
+        # separator, not the destination.
+        alias = "\\" + alias
+        if sub:
+            sub = sub[:-1]
+        else:
+            dest = dest[:-1]
+    return dest, sub, alias
+
+
+def _bare_spelling(body: str) -> str | None:
+    """The name a bare wikilink writes, as the site looks it up (no `.md`),
+    or None for a path-written link."""
+    parsed = _parse_link(body)
+    if parsed is None or not parsed[0].strip():
+        return None
+    bare = parsed[0][:-3] if parsed[0].lower().endswith(".md") else parsed[0]
+    return None if "/" in bare.strip("/") else bare
+
+
 class _Move:
     """Which links point at one moved note, and what they become."""
 
     def __init__(self, notes: list[str], old: str, new: str,
-                 site_owner: str | None = None) -> None:
+                 owners: dict[str, str | None]) -> None:
         self.old, self.new = old, new
-        # Where the site's build sends the bare name, when a name two notes
-        # share was put to it; None when there is no site to follow.
-        self.site_owner = site_owner
+        # Where the site's build sends each bare spelling; empty when there
+        # is no site to follow.
+        self.owners = owners
         self.old_noext = old[:-3]
         self.old_nfc = _nfc(old)
         self.new_noext = new[:-3]
@@ -199,18 +227,10 @@ class _Move:
         """New link body, False if not a link to OLD, None if unsure.
         With `rebase`, a relative link of the moved note `src` to some
         other note is rewritten to keep its target."""
-        m = re.match(r"([^|#^]*)([#^][^|]*)?(\|.*)?$", body, re.DOTALL)
-        if not m:
+        parsed = _parse_link(body)
+        if parsed is None:
             return False
-        dest, sub, alias = m.group(1), m.group(2) or "", m.group(3) or ""
-        if alias and (sub or dest).endswith("\\"):
-            # An escaped pipe (table cell): the backslash belongs to the
-            # separator, not the destination.
-            alias = "\\" + alias
-            if sub:
-                sub = sub[:-1]
-            else:
-                dest = dest[:-1]
+        dest, sub, alias = parsed
         if not dest.strip():
             return False
         has_md = dest.lower().endswith(".md")
@@ -237,8 +257,11 @@ class _Move:
             return f"{esc(self.new_noext)}{suffix}{sub}{alias}"
         if normalize(bare.strip("/")) != self.old_stem:
             return False
-        if self.site_owner is not None and len(self.sharing) > 1:
-            if _nfc(self.site_owner) != self.old_nfc:
+        site_owner = self.owners.get(bare)
+        if site_owner is not None:
+            # The site resolves each spelling by its exact key: it is OLD's
+            # link only if the site sends it to OLD.
+            if _nfc(site_owner) != self.old_nfc:
                 return False
             return f"{esc(_stem(self.new))}{suffix}{sub}{alias}"
         owner = self._bare_owner(src)
@@ -289,7 +312,7 @@ class _Resolver:
     def __init__(self, notes: list[str], moves: list[tuple[str, str]],
                  owners: dict[str, str | None] | None = None) -> None:
         owners = owners or {}
-        self.moves = {old: _Move(notes, old, new, owners.get(old))
+        self.moves = {old: _Move(notes, old, new, owners)
                       for old, new in moves}
         self.new_of = dict(moves)
 
@@ -525,15 +548,18 @@ def _pin_live_key(p: Plan, texts: dict[str, str | None], slug: str) -> None:
     p.pin = slug
 
 
-def _ask_publish(vault: Path, old: str, new: str) -> dict[str, Any] | None:
-    """What the publish tool says a rename of OLD changes on the site, or
-    None when the vault has neither a publish list nor a site (so nothing
-    is asked and no Node is needed)."""
-    listed = (vault / MANIFEST_REL).is_file()
-    if not listed and not _has_site(vault):
+def _ask_publish(vault: Path, old: str, new: str, listed: bool,
+                 site: bool, names: tuple[str, ...] = ()
+                 ) -> dict[str, Any] | None:
+    """What the publish tool says a rename of OLD changes on the site (and,
+    for the bare `names`, where its link map sends each), or None when the
+    vault has neither a publish list nor a site, so nothing is asked and no
+    Node is needed."""
+    if not listed and not site:
         return None
     try:
-        return publish_rename_refs(vault, old, new, _site_config(vault))
+        return publish_rename_refs(vault, old, new, _site_config(vault),
+                                   names)
     except PublishToolUnavailable:
         raise RelinkError(
             f"{old} is on the site's publish list and the publish tool "
@@ -542,6 +568,19 @@ def _ask_publish(vault: Path, old: str, new: str) -> dict[str, Any] | None:
             f"{old} belongs to the vault's site and the publish tool "
             f"could not be asked what a rename changes there; nothing was "
             f"changed") from None
+
+
+def _spellings(texts: list[str], moves: list[tuple[str, str]]) -> tuple[str, ...]:
+    """Every bare spelling the notes use for a moved note's name, for the
+    site to say where each goes."""
+    stems = {normalize(_stem(o)) for o, _ in moves}
+    found: set[str] = set()
+    for text in texts:
+        for m in LINK_RE.finditer(text):
+            spelling = _bare_spelling(m.group(1))
+            if spelling is not None and normalize(spelling.strip("/")) in stems:
+                found.add(spelling)
+    return tuple(sorted(found))
 
 
 def _companions(vault: Path, notes: list[str], p: Plan,
@@ -554,8 +593,6 @@ def _companions(vault: Path, notes: list[str], p: Plan,
         raise RelinkError(f"{answer['detaches']}; nothing was changed")
     if answer.get("refusal"):
         raise RelinkError(f"{answer['refusal']}; nothing was changed")
-    if isinstance(answer.get("bareOwner"), str):
-        p.owners[p.old] = answer["bareOwner"]
     for pair in answer.get("companions") or []:
         old = _vault_rel(vault, pair["from"], None)
         new = _vault_rel(vault, pair["to"], None)
@@ -564,8 +601,6 @@ def _companions(vault: Path, notes: list[str], p: Plan,
             raise RelinkError(f"{why} (it moves with {p.old}); nothing "
                               f"was changed")
         p.companions.append((old, new))
-        if isinstance(pair.get("bareOwner"), str):
-            p.owners[old] = pair["bareOwner"]
 
 
 def _publish_updates(p: Plan, answer: dict[str, Any] | None,
@@ -608,21 +643,37 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     if why:
         raise RelinkError(why)
     p = Plan(vault, old, new)
-    answer = _ask_publish(vault, old, new)
+    listed = (vault / MANIFEST_REL).is_file()
+    site = _has_site(vault)
+    answer = _ask_publish(vault, old, new, listed, site)
     _companions(vault, notes, p, answer)
     texts = {rel: _read(vault, rel) for rel in notes}
+    names: tuple[str, ...] = ()
+    if site and answer is not None:
+        # The site resolves each spelling by its exact name, so ask where
+        # every spelling goes, not just the filename.
+        sources = [t for t in texts.values() if t is not None]
+        sources += [t for t in (_read(vault, c) for c in _walk(vault, ".canvas"))
+                    if t is not None]
+        names = _spellings(sources, p.moves)
+        if names:
+            asked = _ask_publish(vault, old, new, listed, site, names)
+            if asked is not None and asked.get("owners"):
+                p.owners = dict(asked["owners"])
     for o, n in p.moves:
         p.warnings += _alias_warnings(texts, o, n)
     res = _Resolver(notes, p.moves, p.owners)
     for o, _n in p.moves:
         shared = [n for n in notes if normalize(_stem(n)) == normalize(_stem(o))]
         if len(shared) > 1:
-            by_site = p.owners.get(o) is not None
-            p.rules.append(
-                f"RULE\t{o}\tbare links to {_stem(o)} follow "
-                + (f"the site's link map (it sends them to {p.owners[o]})"
-                   if by_site else
-                   "the same-folder rule (no site to follow)"))
+            mine = [x for x in names if normalize(x.strip("/")) == normalize(_stem(o))]
+            if not site:
+                how = "the same-folder rule (no site to follow)"
+            elif any(p.owners.get(x) is not None for x in mine):
+                how = "the site's link map"
+            else:
+                how = "the same-folder rule (no site answer)"
+            p.rules.append(f"RULE\t{o}\tbare links to {_stem(o)} follow {how}")
     for rel, text in texts.items():
         if text is None:
             hit = res.linked(rel, _raw(vault, rel))

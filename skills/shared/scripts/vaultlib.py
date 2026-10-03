@@ -992,11 +992,14 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
 
 
 def publish_rename_refs(vault: Path, old: str, new: str,
-                        config: Path | None = None) -> dict[str, Any]:
+                        config: Path | None = None,
+                        names: Iterable[str] = ()) -> dict[str, Any]:
     """What renaming the note `old` to `new` (vault-relative paths) changes
     in the files the publish tool owns, asked of the plugin's own tool:
     `{"files": {path: new text}, "pin": {"live_key": slug}, "companions":
-    [{"from", "to", "bareOwner"}], "bareOwner": path or null}`, or
+    [{"from", "to"}], "owners": {spelling: path or null}}` (`owners`
+    only for the `names` asked: where the site's link map sends each
+    spelling), or
     `"detaches"` / `"refusal"` with a reason in place of an answer
     (`pin` only for a page the site keeps live state for). `config`, the
     site's vault.config.json, is read by the tool when given. Writes
@@ -1006,6 +1009,8 @@ def publish_rename_refs(vault: Path, old: str, new: str,
             "--from", old, "--to", new, "--json"]
     if config is not None:
         args += ["--config", str(config)]
+    for name in names:
+        args += ["--name", name]
     out = _LINES_BY_TOOL[PUBLISH_TOOL].run_once(args)
     bad = PublishToolUnavailable("the publish tool's answer was not understood")
     try:
@@ -1028,9 +1033,11 @@ def publish_rename_refs(vault: Path, old: str, new: str,
             or not isinstance(companions, list)
             or not all(isinstance(c, dict) and isinstance(c.get("from"), str)
                        and isinstance(c.get("to"), str)
-                       and text_or_none(c.get("bareOwner"))
                        for c in companions)
-            or not text_or_none(answer.get("bareOwner"))
+            or not (answer.get("owners") is None or (
+                isinstance(answer["owners"], dict)
+                and all(isinstance(k, str) and text_or_none(v)
+                        for k, v in answer["owners"].items())))
             or not text_or_none(answer.get("detaches"))
             or not text_or_none(answer.get("refusal"))):
         raise bad

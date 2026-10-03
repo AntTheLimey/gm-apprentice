@@ -11,6 +11,8 @@
 //          name the note: an `overrides.fields` path, and a `landing` featured_npcs /
 //          featured_locations / quick_links name. Text comes back byte for byte but for
 //          the changed name, line endings kept.
+//   owners  with `--name <spelling>` (repeated): where the build's link map sends each spelling,
+//          { spelling: vault path | null }.
 //   pin    present when the note is a PC page, which the site keys live state by (its
 //          slug of the filename unless `live_key` pins it): the key it has now, so the
 //          caller can pin it before the file name changes. Only `pcLiveKey` knows it.
@@ -21,11 +23,11 @@ const { parseNote } = require('./frontmatter');
 const { canonicalPath, ENTRY_RE } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const {
-  pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, pairStoryFiles, buildLinkMap,
+  pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, buildLinkMap,
 } = require('./scanner');
 const { resolveConfig, scanConfigFor, vaultRelPath, loadVaultConfig } = require('./config');
 const { loadManifest } = require('./manifest');
-const { decidePage, publishesPage } = require('./publish-decision');
+const { publishedPages } = require('./published-pages');
 const { splitFrontmatter, locateBlock } = require('./vault-config-edit');
 
 const MANIFEST_REL = '_meta/publish-manifest.md';
@@ -175,30 +177,30 @@ function companionsOf(vault, from, to) {
   return {};
 }
 
-// The vault path of the note the build's link map gives each note's bare name, worked out
-// as the build does it: the pages that publish (story companions folded in), then
-// buildLinkMap's precedence. null when the name maps to nothing. `configPath`, the site's
-// vault.config.json, is read when given, for settings the vault file does not hold.
-function bareOwners(vault, froms, configPath) {
+// The vault path of the note the build's link map gives each spelling, worked out as the
+// build does it (publishedPages, then buildLinkMap's precedence: titles, paths, aliases;
+// NFC); null when the spelling maps to nothing. The site resolves a spelling by exact key,
+// so each spelling a note is linked by is asked, not just the filename. `configPath`, the
+// site's vault.config.json, is read when given, for settings the vault file does not hold.
+function ownersOf(vault, spellings, configPath) {
   const raw = configPath && fs.existsSync(configPath) ? loadVaultConfig(configPath) : {};
   const { config, publishConfig } = resolveConfig(raw, vault, () => {});
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig);
-  let pages = scanVaultReport(scanConfig).pages;
-  const manifest = loadManifest(vault);
-  pairStoryFiles(pages, vault);
   const relOf = (page) => canonicalPath(vaultRelPath(vault, page.sourcePath));
-  pages = pages.filter((page) => publishesPage(decidePage(page, { rel: relOf(page), publishConfig, manifest })));
-  const linkMap = buildLinkMap(pages);
+  const { published } = publishedPages(scanVaultReport(scanConfig).pages, {
+    vaultPath: vault, publishConfig, manifest: loadManifest(vault), relOf,
+  });
+  const linkMap = buildLinkMap(published);
   const owners = {};
-  for (const from of froms) {
-    const out = linkMap[canonicalNfc(path.posix.basename(from, '.md'))];
-    const page = out === undefined ? null : pages.find((p) => p.outputPath === out);
-    owners[from] = page ? relOf(page) : null;
+  for (const spelling of spellings) {
+    const out = linkMap[spelling];
+    const page = out === undefined ? null : published.find((p) => p.outputPath === out);
+    owners[spelling] = page ? relOf(page) : null;
   }
   return owners;
 }
 
-function renameRefs(vault, from, to, configPath) {
+function renameRefs(vault, from, to, configPath, names) {
   const found = companionsOf(vault, from, to);
   if (found.detaches) return { files: {}, detaches: found.detaches };
   if (found.refusal) return { files: {}, refusal: found.refusal };
@@ -219,9 +221,8 @@ function renameRefs(vault, from, to, configPath) {
   if (manifest !== null && manifestText !== manifest) files[MANIFEST_REL] = manifestText;
   if (config !== null && configText !== config) files[CONFIG_REL] = configText;
   const answer = { files };
-  const owners = bareOwners(vault, moves.map((m) => m.from), configPath);
-  answer.bareOwner = owners[from];
-  if (found.companions) answer.companions = found.companions.map((c) => Object.assign({}, c, { bareOwner: owners[c.from] }));
+  if (names && names.length) answer.owners = ownersOf(vault, names, configPath);
+  if (found.companions) answer.companions = found.companions;
   const pin = pinOf(vault, from, to);
   if (pin) answer.pin = pin;
   return answer;
@@ -239,7 +240,7 @@ function runRename(options, deps) {
   }
   const norm = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '');
   try {
-    out(JSON.stringify(renameRefs(path.resolve(vault), norm(from), norm(to), options.configPath)));
+    out(JSON.stringify(renameRefs(path.resolve(vault), norm(from), norm(to), options.configPath, options.names)));
   } catch (e) {
     console.error(`Error: ${String(e.message).split('\n')[0]}`);
     return 1;

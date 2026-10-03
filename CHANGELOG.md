@@ -33,9 +33,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A session's "NPCs appearing" and events sidebars, and every page's
+  "mentioned in" list, follow the page a link actually resolves to, so
+  two pages with one title (an NPC and a PC) no longer list each other's
+  mentions.
 - Renaming a note whose name another note shares (an NPC and a PC both
-  called `Charlotte_Thorne`) keeps every bare `[[Charlotte_Thorne]]` link
-  going where the site sends it, instead of leaving them to resolve to the
+  called `Charlotte_Thorne`) keeps every bare `[[Charlotte_Thorne]]` link, in each
+  spelling, going where the site sends it, instead of leaving them to resolve to the
   other note. Without a site, the same-folder rule applies as before.
 - Renaming a PC also renames its story file, so the story stays on its
   page. Renaming the story alone is refused, since it would detach.

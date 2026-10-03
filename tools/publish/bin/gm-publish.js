@@ -161,16 +161,19 @@ excluded versus missing is the GM's call.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
   manifest rename --vault <dir> --from <vault path> --to <vault path> --json
+                 [--name <spelling>]... [--config <site vault.config.json>]
                      What renaming a note would change in the files this tool
                      owns, so the page stays published: prints
                      {"files": {<vault path>: <new full text>}, "pin": {"live_key"},
-                     "companions": [{"from","to"}], "detaches": "<why>"}
+                     "companions": [{"from","to"}], "detaches": "<why>",
+                     "owners": {<spelling>: <vault path or null>}}
                      and writes nothing. files: the manifest entries and the
                      vault-config settings that name the note (an overrides
                      path, a landing featured/quick-link name). pin: present
                      for a PC page, with the key its live state is stored
                      under now; the caller writes it as live_key before the
-                     file moves. companions: files paired to the note by
+                     file moves. owners: where the build's link map sends each --name
+                     spelling. companions: files paired to the note by
                      name (a PC's _Story.md) that move with it; detaches:
                      the note is one, and cannot move alone. Needs no site
                      config.
@@ -777,7 +780,8 @@ if (command === 'manifest') {
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
       : verb === 'rename' ? { '--vault': 'vault', '--from': 'from', '--to': 'to' } : {},
-    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' } : {},
+    verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' }
+      : verb === 'rename' ? { '--name': 'names' } : {},
   );
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
@@ -793,6 +797,7 @@ if (command === 'manifest') {
     session: parsed.flags.session,
     from: parsed.flags.from,
     to: parsed.flags.to,
+    names: parsed.flags.names,
     includeUnreviewed: !!parsed.flags.includeUnreviewed,
     publishBody: !!parsed.flags.publishBody,
     publish: parsed.flags.publish,
