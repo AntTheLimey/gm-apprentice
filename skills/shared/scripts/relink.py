@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from migrate_core import write_text_atomic
+from migrate_core import StepFailed, write_text_atomic
 from vaultlib import (
     LINK_RE,
     extract_frontmatter,
@@ -302,6 +302,20 @@ def resolve_old(vault: Path, raw: str) -> str:
                       f"{', '.join(found)}; give the path", usage=True)
 
 
+def _case_only(vault: Path, old: str, new: str) -> bool:
+    """A rename that only changes case. On a case-sensitive file system a
+    different file already named NEW makes it an ordinary clash."""
+    if old.casefold() != new.casefold():
+        return False
+    dst = vault / new
+    return not dst.exists() or os.path.samefile(vault / old, dst)
+
+
+def _temp_name(vault: Path, old: str) -> Path:
+    src = vault / old
+    return src.with_name(f".{src.name}.relink")
+
+
 def _refusal(vault: Path, notes: list[str], old: str, new: str) -> str | None:
     if is_skipped_path(old):
         return f"{old} is in a folder the vault scripts skipped"
@@ -316,9 +330,12 @@ def _refusal(vault: Path, notes: list[str], old: str, new: str) -> str | None:
     if BAD_NAME_CHARS & set(_stem(new)):
         return (f"a link to {_stem(new)} cannot be written: the name has "
                 f"one of [ ] # ^ |")
-    case_only = new.casefold() == old.casefold()
+    case_only = _case_only(vault, old, new)
     if (vault / new).exists() and not case_only:
         return f"{new} already exists"
+    if case_only and _temp_name(vault, old).exists():
+        return (f"{_temp_name(vault, old).name} is left over from an earlier "
+                f"rename; remove it first")
     clash = [n for n in notes if n != old
              and normalize(_stem(n)) == normalize(_stem(new))]
     if clash:
@@ -440,51 +457,99 @@ def rows(p: Plan, done: bool = False) -> list[str]:
     return out + [total]
 
 
+class _Stranded(Exception):
+    """The note is parked under a temporary name and could not be put back."""
+
+
 def _move(vault: Path, old: str, new: str) -> None:
     src, dst = vault / old, vault / new
-    dst.parent.mkdir(parents=True, exist_ok=True)
-    if old.casefold() == new.casefold():
-        tmp = src.with_name(f".{src.name}.relink")
-        os.rename(src, tmp)
+    made: list[Path] = []
+    for d in reversed([dst.parent, *dst.parent.parents]):
+        if d == vault or d.exists() or vault not in d.parents:
+            continue
+        made.append(d)
+    try:
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if _case_only(vault, old, new):
+            tmp = _temp_name(vault, old)
+            if tmp.exists():
+                raise OSError(f"{tmp.name} is left over from an earlier rename")
+            os.rename(src, tmp)
+            try:
+                os.rename(tmp, dst)
+            except OSError as e:
+                try:
+                    os.rename(tmp, src)
+                except OSError:
+                    raise _Stranded(
+                        f"{old} is stranded as {tmp.relative_to(vault)}: "
+                        f"rename it back by hand ({e})") from e
+                raise
+            return
+        if dst.exists():
+            raise OSError(f"{new} appeared since the plan")
+        os.rename(src, dst)
+    except BaseException:
+        for d in reversed(made):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+        raise
+
+
+def _check_fresh(p: Plan) -> None:
+    """Refuse a plan the vault has moved on from. Nothing is written."""
+    stale = "changed since the plan; nothing was changed, run it again"
+    for rel, text in p.originals.items():
         try:
-            os.rename(tmp, dst)
-        except OSError:
-            os.rename(tmp, src)
-            raise
-        return
-    if dst.exists():
-        raise OSError(f"{new} appeared since the plan")
-    os.rename(src, dst)
+            now = _read(p.vault, rel)
+        except RelinkError:
+            raise RelinkError(f"{rel} can no longer be read; nothing was "
+                              f"changed, run it again") from None
+        if now is None:
+            raise RelinkError(f"{rel} is no longer valid UTF-8; nothing was "
+                              f"changed, run it again")
+        if now != text:
+            raise RelinkError(f"{rel} {stale}")
+    if not (p.vault / p.old).is_file():
+        raise RelinkError(f"{p.old} {stale}")
+    if (not _case_only(p.vault, p.old, p.new)
+            and (p.vault / p.new).exists()):
+        raise RelinkError(f"{p.new} {stale}")
+    try:
+        fresh = plan(p.vault, p.old, p.new)
+    except RelinkError as e:
+        raise RelinkError(f"{e} (the vault {stale})") from e
+    if (fresh.originals, fresh.texts, fresh.changes) != (
+            p.originals, p.texts, p.changes):
+        raise RelinkError(f"the vault {stale}")
 
 
 def apply(p: Plan) -> list[str]:
     """Carry the plan out, or leave the vault exactly as it was."""
-    stale = "changed since the plan; nothing was changed, run it again"
-    for rel, text in p.originals.items():
-        if _read(p.vault, rel) != text:
-            raise RelinkError(f"{rel} {stale}")
-    if not (p.vault / p.old).is_file():
-        raise RelinkError(f"{p.old} {stale}")
-    if (p.old.casefold() != p.new.casefold()
-            and (p.vault / p.new).exists()):
-        raise RelinkError(f"{p.new} {stale}")
+    _check_fresh(p)
     written: list[str] = []
     try:
         for rel in sorted(p.texts):
             write_text_atomic(p.vault / rel, p.texts[rel])
             written.append(rel)
         _move(p.vault, p.old, p.new)
-    except OSError as e:
+    except (OSError, StepFailed, _Stranded, KeyboardInterrupt) as e:
         stuck = []
         for rel in written:
             try:
                 write_text_atomic(p.vault / rel, p.originals[rel])
-            except OSError:
+            except (OSError, StepFailed):
                 stuck.append(rel)
         if stuck:
             raise RelinkError(f"{e}; these notes could not be put back and "
                               f"still have the new links: "
                               f"{', '.join(stuck)}") from e
+        if isinstance(e, KeyboardInterrupt):
+            raise
+        if isinstance(e, _Stranded):
+            raise RelinkError(f"{e}; the links were put back") from e
         raise RelinkError(f"{e}; the vault is as it was") from e
     return rows(p, done=True)
 

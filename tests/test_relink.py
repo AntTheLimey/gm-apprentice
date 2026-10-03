@@ -405,21 +405,74 @@ class ApplyTests(unittest.TestCase):
                          "[[Chapter_01_Session_04_Wrap_Up]]\r\n")
         self.assertTrue(rows[0].startswith(f"RENAMED\t{OLD}\t{NEW}"), rows)
 
-    def test_a_failed_write_puts_everything_back(self):
-        before = self.snapshot()
-        real = relink.write_text_atomic
+    def fail_replace_on(self, *which):
+        real = os.replace
         calls = []
 
-        def flaky(path, text):
-            calls.append(path)
-            if len(calls) == 2:
+        def flaky(src, dst):
+            calls.append(dst)
+            if len(calls) in which:
                 raise OSError("disk full")
-            real(path, text)
-        with mock.patch.object(relink, "write_text_atomic", flaky):
+            real(src, dst)
+        return mock.patch.object(relink.os, "replace", flaky)
+
+    def test_a_failed_write_puts_everything_back(self):
+        before = self.snapshot()
+        with self.fail_replace_on(2):
             with self.assertRaises(relink.RelinkError) as cm:
                 relink.apply(relink.plan(self.vault, OLD, NEW))
         self.assertIn("as it was", str(cm.exception))
         self.assertEqual(before, self.snapshot())
+
+    def test_a_failed_restore_names_the_stuck_note(self):
+        with self.fail_replace_on(2, 3):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertIn("A.md", str(cm.exception))
+        self.assertIn("could not be put back", str(cm.exception))
+
+    def test_interrupt_puts_everything_back_and_reraises(self):
+        before = self.snapshot()
+        real = os.replace
+        n = []
+
+        def interrupt(src, dst):
+            n.append(1)
+            if len(n) == 2:
+                raise KeyboardInterrupt
+            real(src, dst)
+        with mock.patch.object(relink.os, "replace", interrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertEqual(before, self.snapshot())
+
+    def test_a_note_added_since_the_plan_is_refused(self):
+        p = relink.plan(self.vault, OLD, NEW)
+        (self.vault / "C.md").write_bytes(b"[[Session_4_Wrapup]]\n")
+        before = self.snapshot()
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.apply(p)
+        self.assertIn("changed since", str(cm.exception))
+        self.assertEqual(before, self.snapshot())
+
+    def test_a_note_that_stopped_being_utf8_is_named(self):
+        p = relink.plan(self.vault, OLD, NEW)
+        (self.vault / "B.md").write_bytes(b"\xff\xfe")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.apply(p)
+        self.assertIn("B.md", str(cm.exception))
+        self.assertIn("UTF-8", str(cm.exception))
+
+    def test_new_folders_are_removed_when_the_move_fails(self):
+        before = self.snapshot()
+        dirs = {p for p in self.vault.rglob("*") if p.is_dir()}
+        with mock.patch.object(relink.os, "rename",
+                               side_effect=OSError("locked")):
+            with self.assertRaises(relink.RelinkError):
+                relink.apply(relink.plan(self.vault, OLD, "New/Deep/X.md"))
+        self.assertEqual(before, self.snapshot())
+        self.assertEqual(dirs, {p for p in self.vault.rglob("*")
+                                if p.is_dir()})
 
     def test_a_failed_move_puts_everything_back(self):
         before = self.snapshot()
@@ -516,6 +569,38 @@ class ApplyExtraTests(unittest.TestCase):
                 relink.apply(relink.plan(vault, "s4.md", "S4.md"))
         self.assertEqual(before, {p.name: p.read_bytes()
                                   for p in vault.iterdir()})
+
+    def test_case_only_is_refused_when_new_is_a_different_file(self):
+        vault = make_vault(self, {"s4.md": "x\n"})
+        with mock.patch.object(relink.Path, "exists", return_value=True), \
+                mock.patch.object(relink.os.path, "samefile",
+                                  return_value=False):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.plan(vault, "s4.md", "S4.md")
+        self.assertIn("already exists", str(cm.exception))
+
+    def test_stranded_note_is_named_not_called_as_it_was(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        real = os.rename
+        n = []
+
+        def flaky(a, b):
+            n.append(1)
+            if len(n) >= 2:
+                raise OSError("locked")
+            real(a, b)
+        with mock.patch.object(relink.os, "rename", flaky):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(vault, "s4.md", "S4.md"))
+        self.assertIn(".s4.md.relink", str(cm.exception))
+        self.assertNotIn("as it was", str(cm.exception))
+        self.assertEqual(read(vault, "A.md"), "[[s4]]\n")
+
+    def test_leftover_temp_name_is_refused_up_front(self):
+        vault = make_vault(self, {"s4.md": "x\n", ".s4.md.relink": "keep\n"})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "s4.md", "S4.md")
+        self.assertIn(".s4.md.relink", str(cm.exception))
 
     def test_rows_include_warnings_unsure_and_one_total(self):
         vault = make_vault(self, {
