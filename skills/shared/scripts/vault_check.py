@@ -1732,11 +1732,13 @@ def pages_published(answer: ToolAnswer) -> set[str] | None:
     (under an excluded folder) is not in its list at all, and one it lists
     with `publishes: false` (no `type:`, a draft, a play-notes page) is
     withheld; either way nothing in it can reach the players. None when the
-    tool could not be asked or its answer does not give `publishes` on every
-    page (an older tool): the caller then skips nothing."""
+    tool could not be asked, `pages` is missing or not a list, or a page does
+    not give a boolean `publishes` (an older tool): the caller then skips
+    nothing. An empty list is an answer: nothing publishes, so `set()`."""
     try:
         pages = answer.data["pages"] if answer.data is not None else None
-        if not pages or not all(isinstance(p["publishes"], bool) for p in pages):
+        if not isinstance(pages, list) or not all(
+                isinstance(p["publishes"], bool) for p in pages):
             return None
         return {unicodedata.normalize("NFC", str(p["path"]))
                 for p in pages if p["publishes"]}

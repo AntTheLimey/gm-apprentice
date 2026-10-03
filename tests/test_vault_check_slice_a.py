@@ -145,7 +145,11 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             if message is not None:
                 page["frontmatterError"] = message
             pages.append(page)
-        answer = {"vaultPath": str(vault), "pages": pages}
+        # no pages at all is an older tool's answer; `pages: []` would say
+        # that nothing publishes
+        answer = {"vaultPath": str(vault)}
+        if pages:
+            answer["pages"] = pages
         if switches is not None:
             answer["switches"] = switches
         if exclude_sections is not None:
@@ -4335,6 +4339,15 @@ class GmLeakExcludedFolderTests(unittest.TestCase):
         rows = self.answered(lambda a: a.pop("pages"))
         self.assertTrue(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
                         rows)
+
+    def test_an_answer_that_nothing_publishes_reports_nothing(self):
+        rows = self.answered(lambda a: a.update(pages=[]))
+        self.assertFalse(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
+                         rows)
+        info = rows_for(rows, "INFO\t(vault)\t")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("notes skipped: the site does not publish them",
+                      info[0])
 
     def test_an_answer_without_publishes_still_reports(self):
         def drop(answer):
