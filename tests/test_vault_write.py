@@ -296,6 +296,31 @@ class WrapupNewTests(unittest.TestCase):
         run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
         self.assertIn("house_rule: yes\n", read(vault, WRAP_REL))
 
+    def test_a_hash_inside_a_quoted_value_survives(self):
+        for q, value in (('"', 'Case #5 - the end'), ("'", "Day #3 here")):
+            with self.subTest(q):
+                src = INDEX.replace(
+                    'campaign: "The Ashford Case"',
+                    f"campaign: {q}{value}{q}  # note")
+                vault = make_vault(self, {INDEX_REL: src})
+                run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+                self.assertIn(f"campaign: {q}{value}{q}\n",
+                              read(vault, WRAP_REL))
+
+    def test_chapter_comes_from_the_folder_when_the_index_has_none(self):
+        src = INDEX.replace('chapter: "[[Chapter 1 - Arrival]]"\n', "")
+        vault = make_vault(self, {INDEX_REL: src})
+        run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertIn('chapter: "[[Chapter 1 - Arrival]]"\n',
+                      read(vault, WRAP_REL))
+
+    def test_a_multi_line_source_stays_in_the_callout(self):
+        vault = make_vault(self, {INDEX_REL: INDEX})
+        run(vault, "wrapup-new", "--session", INDEX_REL, "--source",
+            "one\n\ntwo", "--write")
+        self.assertIn("> [!info] Source\n> one\n>\n> two\n\n",
+                      read(vault, WRAP_REL))
+
     def test_refusals(self):
         cases = {
             "exists": {INDEX_REL: INDEX, WRAP_REL: "x\n"},

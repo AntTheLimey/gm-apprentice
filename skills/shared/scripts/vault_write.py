@@ -275,6 +275,15 @@ def template_text(vault: Path, vault_names: tuple[str, ...],
                          f"plugin ({e.__class__.__name__})") from e
 
 
+def strip_comment(value: str) -> str:
+    """`value` without a trailing YAML comment. A quoted value is kept
+    through its closing quote, so a # inside the quotes survives."""
+    quoted = re.match(r"""^\s*("[^"]*"|'[^']*')""", value)
+    if quoted:
+        return quoted.group(1).strip()
+    return COMMENT_TAIL_RE.sub("", value)
+
+
 def template_frontmatter(text: str) -> list[str]:
     """A template's frontmatter lines without endings and without its
     comments (whole-line or trailing)."""
@@ -287,8 +296,9 @@ def template_frontmatter(text: str) -> list[str]:
             return out
         if line.strip().startswith("#") or not line.strip():
             continue
-        quoted = re.match(r'^(\s*[\w-]+:\s*"[^"]*")', line)
-        out.append(quoted.group(1) if quoted
+        name, colon, value = line.partition(":")
+        out.append(name + colon + (" " if value[:1] == " " else "")
+                   + strip_comment(value.lstrip()) if colon
                    else COMMENT_TAIL_RE.sub("", line))
     raise WriteError("template frontmatter never closes")
 
@@ -300,7 +310,7 @@ def raw_value(text: str, name: str) -> str | None:
     if error:
         raise WriteError(error)
     value = vl.get_key(lines[1:end], name)
-    return None if value is None else COMMENT_TAIL_RE.sub("", value).strip()
+    return None if value is None else strip_comment(value).strip()
 
 
 def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
@@ -331,6 +341,10 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
         found = raw_value(text, field)
         if found:
             values[field] = found
+    if "chapter" not in values:
+        folder_chapter = vl.chapter_of(index, fm)
+        if folder_chapter:
+            values["chapter"] = f'"[[{folder_chapter}]]"'
     fm_lines = [line + "\n" for line in template_frontmatter(
         template_text(batch.vault, WRAP_TEMPLATES, "session-wrap.md"))]
     for field, value in values.items():
@@ -339,7 +353,8 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     body = ["", f"# Chapter {chapter_no} \u00b7 Session {session_no} \u2014 "
                 f"{title} \u2014 Wrap-Up", ""]
     if args.source:
-        body += ["> [!info] Source", f"> {args.source}", ""]
+        body += ["> [!info] Source",
+                 *[f"> {ln}".rstrip() for ln in args.source.splitlines()], ""]
     body += ["<!-- gm-only -->", "", "## GM Notes", "", "<!-- /gm-only -->"]
     batch.create(rel, "---\n" + "".join(fm_lines) + "---\n"
                  + "\n".join(body) + "\n")
