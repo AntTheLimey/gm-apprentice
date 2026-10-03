@@ -595,12 +595,12 @@ def _ask_publish(vault: Path, old: str, new: str, listed: bool,
                  ) -> dict[str, Any] | None:
     """What the publish tool says a rename of OLD changes on the site (and,
     for the bare `names`, where its link map sends each), or None when the
-    vault has neither a publish list nor a site, so nothing is asked and no
-    Node is needed. A vault with a site asks the tool the site builds with."""
-    if not listed and not site:
-        return None
+    vault has no site, so nothing is asked (the publish list included) and no
+    Node is needed. The tool the site builds with is the one asked."""
+    if not site:
+        return None  # no site: nothing is asked and no Node is needed
     try:
-        tool = _site_tool(vault) if site else None
+        tool = _site_tool(vault)
         return publish_rename_refs(vault, old, new, _site_config(vault),
                                    names, tool)
     except PublishToolUnavailable as e:

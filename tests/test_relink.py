@@ -840,7 +840,8 @@ class PublishListTests(unittest.TestCase):
     """A rename keeps the page on the site's publish list."""
 
     def vault(self, extra=None, pc="---\ntype: pc\n---\n# Emma\n"):
-        files = {PC_OLD: pc, "_meta/publish-manifest.md": MANIFEST}
+        files = {PC_OLD: pc, "_meta/publish-manifest.md": MANIFEST,
+                 "_meta/vault-config.md": SITE_CONFIG}
         files.update(extra or {})
         return make_vault(self, files)
 
@@ -1062,6 +1063,7 @@ class CompanionTests(unittest.TestCase):
     def vault(self, extra=None):
         files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n",
                  STORY_OLD: STORY_TEXT,
+                 "_meta/vault-config.md": SITE_CONFIG,
                  "_meta/publish-manifest.md":
                      MANIFEST.replace(f"- [x] {PC_OLD}\n",
                                       f"- [x] {PC_OLD}\n- [x] {STORY_OLD}\n"),
@@ -1146,6 +1148,7 @@ class CompanionTests(unittest.TestCase):
 
     def test_a_pc_with_no_story_behaves_as_before(self):
         vault = make_vault(self, {PC_OLD: "---\ntype: pc\n---\n",
+                                  "_meta/vault-config.md": SITE_CONFIG,
                                   "_meta/publish-manifest.md": MANIFEST})
         p = relink.plan(vault, PC_OLD, PC_NEW)
         self.assertEqual(p.companions, [])
@@ -1328,7 +1331,8 @@ class SpellingOwnerTests(unittest.TestCase):
 class CompanionReviewTests(unittest.TestCase):
     def vault(self, extra=None):
         files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n", STORY_OLD: STORY_TEXT,
-                 "_meta/publish-manifest.md": MANIFEST}
+                 "_meta/publish-manifest.md": MANIFEST,
+                 "_meta/vault-config.md": SITE_CONFIG}
         files.update(extra or {})
         return make_vault(self, files)
 
@@ -1402,6 +1406,7 @@ class CompanionReviewTests(unittest.TestCase):
         # Beside the PC, the note would be swallowed as its story.
         vault = make_vault(self, {
             PC_OLD: "---\ntype: pc\n---\n", "Characters/PCs/Hallam.md": "---\ntype: npc\n---\n",
+            "_meta/vault-config.md": SITE_CONFIG,
             "_meta/publish-manifest.md": MANIFEST})
         with self.assertRaises(relink.RelinkError) as cm:
             relink.plan(vault, "Characters/PCs/Hallam.md", STORY_OLD)
@@ -1459,6 +1464,13 @@ class SitePublishTests(unittest.TestCase):
 
 
 class FinalFixTests(unittest.TestCase):
+    def test_a_manifest_without_a_site_never_asks_the_tool(self):
+        vault = make_vault(self, {"A/Old.md": "x\n",
+                                  "_meta/publish-manifest.md": "## Publishing (1 files)\n\n- [x] A/Old.md\n"})
+        with mock.patch.object(relink, "publish_rename_refs") as spy:
+            relink.plan(vault, "A/Old.md", "A/New.md")
+        spy.assert_not_called()
+
     def test_an_absolute_new_is_refused_not_rerooted(self):
         vault = make_vault(self, {"A/Old.md": "x\n"})
         for new in ("/tmp/x.md", str(vault / "A" / "New.md")):
