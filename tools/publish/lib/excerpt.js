@@ -112,6 +112,7 @@ function excerptFromMarkdown(source, opts = {}) {
     const w = parseWikilink(body);
     return w.display || w.raw.replace(/_/g, ' ');
   });
+  text = text.replace(/\[\[([^\]]+)\]\]/g, (_, t) => t.replace(/_/g, ' '));  // e.g. an empty target
   text = text.replace(/[*_`]+/g, '');
   text = text.replace(/\s+/g, ' ').trim();
 

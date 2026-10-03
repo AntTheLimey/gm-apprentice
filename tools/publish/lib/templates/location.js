@@ -12,7 +12,7 @@ const { canonicalNfc } = require('../unicode');
 // location page. Bare `===`, so no lookup-table wrapper can cover this.
 function matchesRef(refValue, title) {
   if (!refValue) return false;
-  const cleaned = canonicalNfc(refTarget(refValue).replace(/_/g, ' '));
+  const cleaned = canonicalNfc(refTarget(refValue).replace(/_/g, ' ').trim());
   const normalTitle = canonicalNfc(String(title || '').replace(/_/g, ' ').trim());
   return cleaned === normalTitle;
 }

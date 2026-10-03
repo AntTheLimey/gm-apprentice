@@ -671,7 +671,7 @@ function renderDocuments(pages, indexDir, imageMap = {}) {
     const s = String(raw).replace(/\[\[|\]\]/g, '').trim();
     if (!s) return OTHER;
     const w = parseWikilink(s);            // [[Name|Display]] -> Display
-    return (w.display || w.raw).trim() || OTHER;
+    return (w.display.split('|')[0] || w.raw).trim() || OTHER;
   }
 
   const byChar = {};

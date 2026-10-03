@@ -227,3 +227,23 @@ describe('templates read the escaped link', () => {
     assert.ok(html.includes('Docking Ring'), 'child listed under its parent');
   });
 });
+
+describe('fix round 2: old semantics kept', () => {
+  it('a location whose title starts with an underscore still matches its ref', () => {
+    const hub = { title: '_Hub', displayTitle: 'Hub', outputPath: 'locations/h.html',
+      frontmatter: { type: 'location' }, markdown: '' };
+    const child = { title: 'Dock', displayTitle: 'Dock', outputPath: 'locations/d.html',
+      frontmatter: { type: 'location', parent_location: '[[_Hub]]' },
+      markdown: '## Overview\n\nCargo moves at all hours here.\n' };
+    const ctx = { pages: [hub, child], linkMap: {}, publishConfig: { exclude_sections: [], _backlinks: {} } };
+    const html = locationTemplate(hub, { html: '<p>x</p>', relationships: '' }, () => '',
+      { siteTitle: 'T', attachmentsDir: '_attachments' }, {}, ctx);
+    assert.ok(html.includes('Dock'), 'child listed under _Hub');
+  });
+
+  it('an empty-target link never renders as raw brackets', () => {
+    assert.strictEqual(excerptFromMarkdown('Met [[|x]] today.'), 'Met |x today.');
+    const page = { frontmatter: {}, markdown: '## Narrative Recap\n\nThey met [[|x]] at dawn.\n' };
+    assert.strictEqual(extractRecap(page), 'They met |x at dawn.');
+  });
+});

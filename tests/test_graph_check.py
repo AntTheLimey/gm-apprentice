@@ -9,6 +9,8 @@ import unicodedata
 import unittest
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"))
+
 SCRIPT = (Path(__file__).resolve().parent.parent / "skills" / "shared"
           / "scripts" / "graph_check.py")
 
@@ -82,6 +84,24 @@ class UnresolvedTests(unittest.TestCase):
         rows = run(vault)
         self.assertEqual(rows[0], "# count: 1")
         self.assertTrue(rows[1].startswith("gone.png"))
+
+    def test_hidden_folders_are_not_walked_for_attachments(self):
+        from unittest import mock
+        import graph_check
+        vault = vault_of(self, {"A.md": "x\n", ".git/objects/pic.png": "x",
+                                "_inbox/q.png": "x", "img/ok.png": "x"})
+        walked = []
+        real = graph_check.os.walk
+
+        def spy(top, *a, **k):
+            for root, dirs, files in real(top, *a, **k):
+                walked.append(Path(root).name)
+                yield root, dirs, files
+        with mock.patch.object(graph_check.os, "walk", spy):
+            found = graph_check.attachment_names(vault)
+        self.assertEqual(found, {"ok.png"})
+        self.assertNotIn(".git", walked)
+        self.assertNotIn("objects", walked)
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ function stripWikiLinks(text) {
   return text.replace(wikilinkRe(), (m, body) => {
     const w = parseWikilink(body);
     return w.display || w.raw.replace(/_/g, ' ');
-  });
+  }).replace(/\[\[([^\]]+)\]\]/g, (m, target) => target.replace(/_/g, ' '));
 }
 
 // The recap is printed as escaped plain text, so any raw HTML typed in the body is

@@ -27,6 +27,7 @@ folders.
 
 import argparse
 import fnmatch
+import os
 import sys
 from pathlib import Path
 
@@ -97,12 +98,16 @@ def attachment_names(vault: Path) -> set[str]:
     walked like the notes: a `![[map.png]]` or `[[Sheet.pdf]]` link is
     resolved against these, case-insensitively by file name like Obsidian."""
     found: set[str] = set()
-    for path in vault.rglob("*"):
-        if path.suffix.lower() == ".md" or not path.is_file():
-            continue
-        if is_skipped_path(path.relative_to(vault).as_posix()):
-            continue
-        found.add(normalize(path.name))
+    for root, dirs, files in os.walk(vault):
+        here = Path(root).relative_to(vault).as_posix()
+        prefix = "" if here == "." else here + "/"
+        # Prune in place so hidden folders (.git, .obsidian) are not entered.
+        dirs[:] = [d for d in dirs if not is_skipped_path(prefix + d)]
+        for name in files:
+            if name.lower().endswith(".md") or is_skipped_path(prefix + name):
+                continue
+            if (Path(root) / name).is_file():
+                found.add(normalize(name))
     return found
 
 
