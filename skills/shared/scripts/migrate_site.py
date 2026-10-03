@@ -95,6 +95,32 @@ def _backup_places(vault: Path) -> str:
     return " and ".join(places)
 
 
+def _relative(vault: Path, path: str) -> str:
+    """`path` as the vault's or the site's own relative path; a site file is
+    tagged "site:". Anything else is left as it was."""
+    site, _has_config = configured_site(vault)
+    for base, tag in ((vault, ""), (site, "site: ")):
+        if base is None:
+            continue
+        for root in dict.fromkeys((base, base.resolve())):
+            try:
+                return tag + Path(path).relative_to(root).as_posix()
+            except ValueError:
+                continue
+    return path
+
+
+def _backup_line(vault: Path, lines: tuple[str, ...]) -> list[str]:
+    """The tool's "backup <path>" lines as one line of relative paths."""
+    found = []
+    for line in lines:
+        path = line.removeprefix("backup ")
+        kept = path.startswith("kept from an earlier run: ")
+        path = path.removeprefix("kept from an earlier run: ")
+        found.append(_relative(vault, path) + (" (from an earlier run)" if kept else ""))
+    return [f"backups: {', '.join(found)}"] if found else []
+
+
 def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | None]:
     """(the tool's answer, or why there is none). (None, None) means the
     vault has no `publish:` block."""
@@ -217,8 +243,7 @@ def find_site_repin(vault: Path) -> list[Item]:
         return lines
 
     return [Item(REPIN, WILL,
-                 [f"repin the site's publish tool at {site} "
-                  f"(installed: {installed})"], apply)]
+                 [f"repin the site's publish tool (installed: {installed})"], apply)]
 
 
 def find_config_to_vault(vault: Path) -> list[Item]:
@@ -241,7 +266,8 @@ def find_config_to_vault(vault: Path) -> list[Item]:
         done = apply_config_to_vault(vault)
         if done.error:
             raise StepFailed(done.error)
-        return [*done.lines, *done.kept_notes, *done.after]
+        return [*done.lines, *done.kept_notes,
+                *_backup_line(vault, done.after)]
 
     return [Item("config-to-vault", WILL, plan.lines, apply)]
 
@@ -434,9 +460,30 @@ def _person_rows(vault: Path, rows: list[str], marker: str) -> list[str]:
 
 def find_session_recaps(vault: Path) -> list[Item]:
     """1.10.18: a session index whose body the site now withholds."""
-    rows = _person_rows(vault, check_sessions(vault),
-                        "session index body has")
+    rows = [_short_recap(r) for r in _person_rows(
+        vault, check_sessions(vault), "session index body has")]
     return [Item("session-recaps", PERSON, rows)] if rows else []
+
+
+_RECAP = re.compile(r"^(?P<where>[^\t]*)\tsession index body has (?P<n>\d+) "
+                    r"line\(s\) outside a gm-only fence \u2014 .*?metadata "
+                    r"only: (?P<homes>.*)$", re.S)
+RECAP_SHARED = ("session index body outside a gm-only fence; the site "
+                "withholds it now the session has a Wrap-Up. Keep the hub "
+                "metadata only; ")
+
+
+def _short_recap(row: str) -> str:
+    """One recap row with what every row says moved to the shared text: the
+    path keeps the line count and the hints that differ between notes."""
+    found = _RECAP.match(row)
+    if not found:
+        return row
+    *hints, remedy = found["homes"].split("; ")
+    extra = "".join(f"; {h}" for h in hints)
+    remedy = remedy.replace("on the hub", "there", 1)
+    return (f"{found['where']} ({found['n']} lines{extra})"
+            f"\t{RECAP_SHARED}{remedy}")
 
 
 def find_unparseable(vault: Path) -> list[Item]:
@@ -500,7 +547,7 @@ def find_postbuild(vault: Path) -> list[Item]:
     if not isinstance(script, str) or not script.strip():
         return []
     return [Item("postbuild", PERSON,
-                 [f'{site / "package.json"}\tpostbuild script "{script}": '
+                 [f'package.json (site)\tpostbuild script "{script}": '
                   f"{POSTBUILD}"])]
 
 

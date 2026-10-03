@@ -352,7 +352,7 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(log, [("mode", "dark")])
         self.assertIn("mode\tmode dark", out)
-        self.assertIn("## Needs a person\n# count: 1\nA.md:1\tlook at this",
+        self.assertIn("## Needs a person\n# count: 1\n# 1 row unchanged from the plan\n",
                       out)
         self.assertEqual(stamp_of(vault), PLUGIN)
 
@@ -428,6 +428,57 @@ class ApplyTests(unittest.TestCase):
         self.assertIn(f'gm_apprentice_version: "{PLUGIN}"\r\n'.encode(), raw)
         self.assertNotIn(b"\n\n", raw.replace(b"\r\n", b""))
         self.assertEqual(raw.count(b"\r\n"), raw.count(b"\n"))
+
+
+class ShortOutputTests(unittest.TestCase):
+    def person_check(self, name, rows, asks_site=False, release="1.10.20"):
+        return Check(name, release, 3 if not asks_site else 4, "t",
+                     lambda v: [Item(name, PERSON, rows)], asks_site=asks_site)
+
+    def test_rows_of_one_check_with_one_message_print_it_once(self):
+        vault = make_vault(self)
+        rows = ["A.md\told name; rename it", "B.md\told name; rename it",
+                "C.md:4\tsomething else"]
+        _, out, _ = call([str(vault), "plan"],
+                         [self.person_check("names", rows)])
+        self.assertIn("## Needs a person\n# count: 3\n"
+                      "names (2): old name; rename it\n  A.md\n  B.md\n"
+                      "C.md:4\tsomething else\n", out)
+
+    def test_differing_messages_stay_one_per_line(self):
+        vault = make_vault(self)
+        rows = ["A.md\tone", "B.md\ttwo"]
+        _, out, _ = call([str(vault), "plan"],
+                         [self.person_check("names", rows)])
+        self.assertIn("A.md\tone\nB.md\ttwo\n", out)
+        self.assertNotIn("names (", out)
+
+    def test_the_same_message_from_two_checks_is_not_merged(self):
+        vault = make_vault(self)
+        _, out, _ = call([str(vault), "plan"], [
+            self.person_check("x", ["A.md\tsame"]),
+            self.person_check("y", ["B.md\tsame"])])
+        self.assertIn("A.md\tsame\nB.md\tsame\n", out)
+
+    def test_apply_counts_the_plans_rows_and_prints_only_new_ones(self):
+        vault = make_vault(self)
+        checks = [will(migrate.REPIN, None, 1),
+                  self.person_check("old", ["A.md\tseen", "B.md\tseen"]),
+                  self.person_check("later", ["C.md\tnew", "D.md\tnew"],
+                                    asks_site=True)]
+        code, out, _ = call([str(vault), "apply"], checks)
+        self.assertEqual(code, 0)
+        self.assertIn("## Needs a person\n# count: 4\n"
+                      "# 2 rows unchanged from the plan\n"
+                      "later (2): new\n  C.md\n  D.md\n", out)
+        self.assertNotIn("A.md", out)
+
+    def test_apply_with_no_repin_prints_no_person_rows(self):
+        vault = make_vault(self)
+        checks = [self.person_check("old", ["A.md\tseen", "B.md\tseen"])]
+        _, out, _ = call([str(vault), "apply"], checks)
+        self.assertIn("# count: 2\n# 2 rows unchanged from the plan\n"
+                      "stamped", out)
 
 
 class ApplyGuardTests(unittest.TestCase):

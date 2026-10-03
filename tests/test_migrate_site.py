@@ -35,8 +35,11 @@ MOVES = {"applicable": True,
                    'skipped publish.exclude_dirs: not text, so not carried over: 2',
                    'conflict footer: kept "F" from the vault file, discarded "G"',
                    "note publish.exclude_dirs is rewritten; comments inside it are not kept"]}
-BACKUPS = ["backup /v/_meta/vault-config.md.pre-migrate",
-           "backup kept from an earlier run: /s/vault.config.json.pre-migrate"]
+def backups(vault):
+    """The tool's two backup lines for this vault and its site."""
+    return [f"backup {vault}/_meta/vault-config.md.pre-migrate",
+            f"backup kept from an earlier run: "
+            f"{site_of(vault)}/vault.config.json.pre-migrate"]
 NOTHING = dict(MOVES, applicable=False, moves=[], lines=[],
                reason="nothing to migrate")
 
@@ -93,7 +96,8 @@ class Tool:
         plan = (self.plan or MOVES) if self.pending else NOTHING
         if "--dry-run" not in cmd:
             if self.pending:
-                plan = dict(plan, lines=plan["lines"] + BACKUPS)
+                plan = dict(plan, lines=plan["lines"] + backups(
+                    Path(cmd[cmd.index("--vault") + 1])))
             if not self.stays:
                 self.pending = False
         if self.no_lines:
@@ -345,7 +349,9 @@ class ConfigStepTests(unittest.TestCase):
             self.assertEqual(ms.find_config_to_vault(vault), [])
         self.assertEqual(done, [MOVES["lines"][0], MOVES["lines"][2],
                                 MOVES["lines"][1], MOVES["lines"][3],
-                                *BACKUPS])
+                                "backups: _meta/vault-config.md.pre-migrate, "
+                                "site: vault.config.json.pre-migrate "
+                                "(from an earlier run)"])
         self.assertNotIn("--dry-run", tool.calls[1])
         self.assertIn("--dry-run", tool.calls[2])
 
@@ -692,6 +698,24 @@ class PersonRowTests(unittest.TestCase):
         self.assertEqual(len(item.lines), 1)
         self.assertTrue(item.lines[0].startswith("Ch1/S02/Session 02.md:9\t"))
 
+    def test_recap_rows_keep_the_variable_part_by_the_path(self):
+        homes = ("document links go in frontmatter `documents:`; anything "
+                 "the Keeper keeps on the hub goes under a fenced ## GM Notes "
+                 "(see _Templates/_Template_Session.md)")
+        rows = [f"INFO\tCh1/S0{n}/Session 0{n}.md:9\tsession index body has "
+                f"{n} line(s) outside a gm-only fence \u2014 the site "
+                f"withholds it now the session has a Wrap-Up, and the hub is "
+                f"metadata only: {homes}" for n in (2, 3)]
+        with mock.patch.object(ms, "check_sessions", return_value=rows):
+            (item,) = ms.find_session_recaps(make_vault(self))
+        head, _, message = item.lines[0].partition("\t")
+        self.assertEqual(head, "Ch1/S02/Session 02.md:9 (2 lines; document "
+                               "links go in frontmatter `documents:`)")
+        self.assertTrue(message.endswith("anything the Keeper keeps there "
+                                         "goes under a fenced ## GM Notes "
+                                         "(see _Templates/_Template_Session.md)"))
+        self.assertEqual(message, item.lines[1].partition("\t")[2])
+
     def test_notes_the_build_cannot_parse(self):
         rows = ["ERROR\tNPCs/A.md\tthe site's build cannot parse this "
                 "frontmatter (duplicated mapping key) and skips the note",
@@ -722,7 +746,7 @@ class PersonRowTests(unittest.TestCase):
         (item,) = ms.find_postbuild(vault)
         self.assertEqual(item.group, PERSON)
         self.assertIn("node add-toggle.js", item.lines[0])
-        self.assertTrue(item.lines[0].startswith(f"{site / 'package.json'}\t"))
+        self.assertTrue(item.lines[0].startswith("package.json (site)\t"))
         (site / "package.json").write_text("{}", encoding="utf-8")
         self.assertEqual(ms.find_postbuild(vault), [])
         self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])

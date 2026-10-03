@@ -32,7 +32,6 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           check_editable, edit_frontmatter)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
-from vault_check import emit
 from vaultlib import extract_frontmatter, parse_version, plugin_version, set_key
 
 FLOOR = "1.10.12"
@@ -82,11 +81,43 @@ def offered(checks: list[Check], vault_v: str,
         c.band, parse_version(c.release) if c.release else ()))
 
 
-def _rows(item: Item) -> list[str]:
+Row = tuple[str, str]   # (the check or item that printed it, its row)
+
+
+def _rows(item: Item) -> list[Row]:
     if item.group == PERSON:
-        return list(item.lines)
+        return [(item.id, line) for line in item.lines]
     label = f"{item.id}=<{item.wants}>" if item.wants else item.id
-    return [f"{label}\t{line}" for line in item.lines]
+    return [(item.id, f"{label}\t{line}") for line in item.lines]
+
+
+def _grouped(rows: list[Row]) -> list[str]:
+    """The rows as printed: rows of one check that say the same thing after
+    the tab become one line saying it once, then their heads (path, id)
+    indented under it. Other rows print as they are."""
+    buckets: dict[tuple[str, str], list[str]] = {}
+    for who, row in rows:
+        head, tab, message = row.partition("\t")
+        buckets.setdefault((who, message if tab else row), []).append(
+            head if tab else "")
+    out: list[str] = []
+    for (who, message), heads in buckets.items():
+        if len(heads) == 1 or len(set(heads)) == 1 or not heads[0]:
+            out.extend(f"{h}\t{message}" if h else message for h in heads)
+        else:
+            out.append(f"{who} ({len(heads)}): {message}")
+            out.extend(f"  {h}" for h in heads)
+    return out
+
+
+def emit(label: str, rows: list[Row], unchanged: int = 0) -> None:
+    """A list under its heading; `# count` is rows, not printed lines."""
+    print(f"## {label}")
+    print(f"# count: {len(rows) + unchanged}")
+    if unchanged:
+        print(f"# {unchanged} row{'s' * (unchanged != 1)} unchanged from the plan")
+    for line in _grouped(rows):
+        print(line)
 
 
 def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
@@ -95,18 +126,18 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         print(f"migrate.py: {refused}", file=sys.stderr)
         return 2
     vault_v, plugin_v = refused
-    groups: dict[str, list[str]] = {WILL: [], CHOICE: [], PERSON: []}
-    waiting: list[str] = []
+    groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
+    waiting: list[Row] = []
     repin_waits = False
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
-            waiting.append(f"{check.name}\t{check.title}")
+            waiting.append((check.name, f"{check.name}\t{check.title}"))
             continue
         try:
             items = check.find(vault)
         except StepFailed as e:
-            groups[PERSON].append(f"{check.name}\t{e} (apply stops here "
-                                  f"until this is fixed)")
+            groups[PERSON].append((check.name, f"{check.name}\t{e} (apply "
+                                   f"stops here until this is fixed)"))
             repin_waits = repin_waits or check.name == REPIN
             continue
         for item in items:
@@ -120,7 +151,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         return 0
     if behind:
         groups[WILL].append(
-            f"stamp\tgm_apprentice_version {vault_v} -> {plugin_v}")
+            ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> {plugin_v}"))
     for group in (WILL, CHOICE, PERSON):
         if groups[group]:
             emit(TITLES[group], groups[group])
@@ -171,8 +202,9 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         except StepFailed as e:
             print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
             return 1
-    did: list[str] = []
-    person: list[str] = []
+    did: list[Row] = []
+    person: list[Row] = []
+    shown = 0   # person rows the plan already listed
     used: set[str] = set()
     failed: int | None = None
     error = ""
@@ -182,7 +214,9 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         try:
             for item in check.find(vault):
                 if item.group == PERSON:
-                    person.extend(item.lines)
+                    # a check that waited on the repin was not in the plan
+                    person.extend(_rows(item) if after_repin else [])
+                    shown += 0 if after_repin else len(item.lines)
                     continue
                 picks = ([None] if item.group == WILL else
                          [v for i, v in chosen if i == item.id])
@@ -195,7 +229,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                             f"{item.id}=<{item.wants}>")
                     if item.apply is None:
                         raise StepFailed(f"{item.id} has nothing to run")
-                    did.extend(f"{item.id}\t{line}"
+                    did.extend((item.id, f"{item.id}\t{line}")
                                for line in item.apply(value))
                     used.add(item.id)
                     repinned = repinned or (check.name == REPIN
@@ -223,8 +257,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
         print(f"not offered: {choice}")
-    if person:
-        emit(TITLES[PERSON], person)
+    if person or shown:
+        emit(TITLES[PERSON], person, shown)
     if waited:
         print(WAITED_LINE)
     if failed is not None:
