@@ -20,7 +20,12 @@ const { isDeepStrictEqual } = require('util');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath, ENTRY_RE } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { pcLiveKey, storyPathOf, storyOwnerPath } = require('./scanner');
+const {
+  pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, pairStoryFiles, buildLinkMap,
+} = require('./scanner');
+const { resolveConfig, scanConfigFor, vaultRelPath, loadVaultConfig } = require('./config');
+const { loadManifest } = require('./manifest');
+const { decidePage, publishesPage } = require('./publish-decision');
 const { splitFrontmatter, locateBlock } = require('./vault-config-edit');
 
 const MANIFEST_REL = '_meta/publish-manifest.md';
@@ -135,30 +140,68 @@ function pinOf(vault, from, to) {
   return { live_key: key };
 }
 
-function typeOf(vault, rel) {
+function frontmatterOf(vault, rel) {
   const file = path.join(vault, rel);
   if (!fs.existsSync(file)) return null;
-  try { return (parseNote(fs.readFileSync(file, 'utf-8')).data || {}).type || null; } catch (e) { return null; }
+  try { return parseNote(fs.readFileSync(file, 'utf-8')).data || {}; } catch (e) { return null; }
 }
 
-// Files the site pairs to `from` by name, which must move with it, and why `from` itself
-// cannot move alone: a PC's story is `<PC stem>_Story.md` beside it (scanner.js).
+// Files the site pairs to `from` by name, which must move with it; why `from` itself cannot
+// move alone; and why `to` cannot be used. The pairing is scanner.js's `isStoryCompanion`:
+// a typed `<PC>_Story.md` beside a PC.
 function companionsOf(vault, from, to) {
+  const fromFm = frontmatterOf(vault, from);
   const owner = storyOwnerPath(from);
-  if (owner !== null && typeOf(vault, from) === 'character-story' && typeOf(vault, owner) === 'pc') {
+  if (owner !== null && isStoryCompanion(frontmatterOf(vault, owner), fromFm)) {
     const pc = path.posix.basename(owner, '.md');
     return { detaches: `${from} is ${pc}'s story; rename ${pc} and the story moves with it` };
   }
   const story = storyPathOf(from);
-  if (typeOf(vault, from) === 'pc' && typeOf(vault, story) === 'character-story') {
+  const isPc = !!fromFm && fromFm.type === 'pc';
+  if (isPc && isStoryCompanion(fromFm, frontmatterOf(vault, story))) {
     return { companions: [{ from: story, to: storyPathOf(to) }] };
+  }
+  // A note moved onto `<PC>_Story.md` beside a PC, or a PC moved onto a name whose story
+  // file is already there, would be swallowed by the build as that PC's story.
+  const newOwner = storyOwnerPath(to);
+  if (fromFm && fromFm.type && newOwner !== null && newOwner !== from
+      && isStoryCompanion(frontmatterOf(vault, newOwner), fromFm)) {
+    return { refusal: `${to} would attach to ${path.posix.basename(newOwner, '.md')} as its story` };
+  }
+  const there = storyPathOf(to);
+  if (isPc && there !== to && isStoryCompanion(fromFm, frontmatterOf(vault, there))) {
+    return { refusal: `${there} would attach to ${path.posix.basename(to, '.md')} as its story` };
   }
   return {};
 }
 
-function renameRefs(vault, from, to) {
+// The vault path of the note the build's link map gives each note's bare name, worked out
+// as the build does it: the pages that publish (story companions folded in), then
+// buildLinkMap's precedence. null when the name maps to nothing. `configPath`, the site's
+// vault.config.json, is read when given, for settings the vault file does not hold.
+function bareOwners(vault, froms, configPath) {
+  const raw = configPath && fs.existsSync(configPath) ? loadVaultConfig(configPath) : {};
+  const { config, publishConfig } = resolveConfig(raw, vault, () => {});
+  const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig);
+  let pages = scanVaultReport(scanConfig).pages;
+  const manifest = loadManifest(vault);
+  pairStoryFiles(pages, vault);
+  const relOf = (page) => canonicalPath(vaultRelPath(vault, page.sourcePath));
+  pages = pages.filter((page) => publishesPage(decidePage(page, { rel: relOf(page), publishConfig, manifest })));
+  const linkMap = buildLinkMap(pages);
+  const owners = {};
+  for (const from of froms) {
+    const out = linkMap[canonicalNfc(path.posix.basename(from, '.md'))];
+    const page = out === undefined ? null : pages.find((p) => p.outputPath === out);
+    owners[from] = page ? relOf(page) : null;
+  }
+  return owners;
+}
+
+function renameRefs(vault, from, to, configPath) {
   const found = companionsOf(vault, from, to);
   if (found.detaches) return { files: {}, detaches: found.detaches };
+  if (found.refusal) return { files: {}, refusal: found.refusal };
   const moves = [{ from, to }].concat(found.companions || []);
   const files = {};
   const read = (rel) => {
@@ -176,7 +219,9 @@ function renameRefs(vault, from, to) {
   if (manifest !== null && manifestText !== manifest) files[MANIFEST_REL] = manifestText;
   if (config !== null && configText !== config) files[CONFIG_REL] = configText;
   const answer = { files };
-  if (found.companions) answer.companions = found.companions;
+  const owners = bareOwners(vault, moves.map((m) => m.from), configPath);
+  answer.bareOwner = owners[from];
+  if (found.companions) answer.companions = found.companions.map((c) => Object.assign({}, c, { bareOwner: owners[c.from] }));
   const pin = pinOf(vault, from, to);
   if (pin) answer.pin = pin;
   return answer;
@@ -194,7 +239,7 @@ function runRename(options, deps) {
   }
   const norm = (p) => String(p).replace(/\\/g, '/').replace(/^\.\//, '');
   try {
-    out(JSON.stringify(renameRefs(path.resolve(vault), norm(from), norm(to))));
+    out(JSON.stringify(renameRefs(path.resolve(vault), norm(from), norm(to), options.configPath)));
   } catch (e) {
     console.error(`Error: ${String(e.message).split('\n')[0]}`);
     return 1;

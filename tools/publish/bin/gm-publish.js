@@ -787,7 +787,8 @@ if (command === 'manifest') {
   const { runManifest } = require('../lib/manifest-cli.js');
   runManifest({
     verb,
-    configPath: parsed.configPath,
+    // For rename, only a --config the caller typed: the default is a path in the working folder.
+    configPath: verb === 'rename' && !args.includes('--config') ? null : parsed.configPath,
     vaultPath: parsed.flags.vault,
     session: parsed.flags.session,
     from: parsed.flags.from,

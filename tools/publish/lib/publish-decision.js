@@ -31,7 +31,7 @@
 // allowlist or an explicit `publish: false` and reach the site when the old build
 // dropped it.
 const { publishMode } = require('./processor');
-const { storyOwnerPath } = require('./scanner');
+const { storyOwnerPath, isStoryCompanion } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
 
 const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
@@ -105,7 +105,8 @@ function storyCompanionPc(rel, pageIndex) {
   const owner = storyOwnerPath(rel);
   if (!pageIndex || owner === null) return null;
   const pc = pageIndex.get(owner);
-  return pc && pc.frontmatter && pc.frontmatter.type === 'pc' ? pc : null;
+  const story = pageIndex.get(String(rel));
+  return pc && isStoryCompanion(pc.frontmatter, story ? story.frontmatter : { type: 'story' }) ? pc : null;
 }
 
 /**

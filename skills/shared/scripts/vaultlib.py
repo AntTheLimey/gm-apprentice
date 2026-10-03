@@ -991,30 +991,49 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
     return publishes, on, Path(site) if site else None
 
 
-def publish_rename_refs(vault: Path, old: str, new: str) -> dict[str, Any]:
+def publish_rename_refs(vault: Path, old: str, new: str,
+                        config: Path | None = None) -> dict[str, Any]:
     """What renaming the note `old` to `new` (vault-relative paths) changes
     in the files the publish tool owns, asked of the plugin's own tool:
-    `{"files": {path: new text}, "pin": {"live_key": slug}}` (`pin` only
-    for a page the site keeps live state for). Writes nothing. Raises
-    `PublishToolUnavailable` when it cannot be asked."""
-    out = _LINES_BY_TOOL[PUBLISH_TOOL].run_once(
-        ["manifest", "rename", "--vault", str(vault.resolve()),
-         "--from", old, "--to", new, "--json"])
+    `{"files": {path: new text}, "pin": {"live_key": slug}, "companions":
+    [{"from", "to", "bareOwner"}], "bareOwner": path or null}`, or
+    `"detaches"` / `"refusal"` with a reason in place of an answer
+    (`pin` only for a page the site keeps live state for). `config`, the
+    site's vault.config.json, is read by the tool when given. Writes
+    nothing. Raises `PublishToolUnavailable` when it cannot be asked or
+    its answer is not understood."""
+    args = ["manifest", "rename", "--vault", str(vault.resolve()),
+            "--from", old, "--to", new, "--json"]
+    if config is not None:
+        args += ["--config", str(config)]
+    out = _LINES_BY_TOOL[PUBLISH_TOOL].run_once(args)
+    bad = PublishToolUnavailable("the publish tool's answer was not understood")
     try:
         answer = json.loads(out)
     except ValueError as e:
-        raise PublishToolUnavailable(
-            "the publish tool's answer was not understood") from e
-    files = answer.get("files") if isinstance(answer, dict) else None
-    pin = answer.get("pin") if isinstance(answer, dict) else None
+        raise bad from e
+    if not isinstance(answer, dict):
+        raise bad
+
+    def text_or_none(v: Any) -> bool:
+        return v is None or isinstance(v, str)
+
+    files, pin = answer.get("files"), answer.get("pin")
+    companions = answer.get("companions", [])
     if (not isinstance(files, dict)
             or not all(isinstance(k, str) and isinstance(v, str)
                        for k, v in files.items())
             or not (pin is None or (isinstance(pin, dict) and isinstance(
-                pin.get("live_key"), str) and pin["live_key"]))):
-        raise PublishToolUnavailable(
-            "the publish tool's answer was not understood")
-    assert isinstance(answer, dict)
+                pin.get("live_key"), str) and pin["live_key"]))
+            or not isinstance(companions, list)
+            or not all(isinstance(c, dict) and isinstance(c.get("from"), str)
+                       and isinstance(c.get("to"), str)
+                       and text_or_none(c.get("bareOwner"))
+                       for c in companions)
+            or not text_or_none(answer.get("bareOwner"))
+            or not text_or_none(answer.get("detaches"))
+            or not text_or_none(answer.get("refusal"))):
+        raise bad
     return answer
 
 

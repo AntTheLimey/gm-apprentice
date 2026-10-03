@@ -332,6 +332,14 @@ function storyOwnerPath(rel) {
   return r.endsWith(STORY_SUFFIX) ? r.slice(0, -STORY_SUFFIX.length) + '.md' : null;
 }
 
+// Whether a note beside a PC is hidden as that PC's story: any page the scanner produced
+// (so, one with a `type:`) at `<PC>_Story.md` beside a `pc`. The build, the story-companion
+// verdict and the rename answer all ask this. (Only a `character-story` also supplies the
+// story's text; that is pairStoryFiles's own business.)
+function isStoryCompanion(pcFrontmatter, storyFrontmatter) {
+  return !!(pcFrontmatter && pcFrontmatter.type === 'pc' && storyFrontmatter && storyFrontmatter.type);
+}
+
 function pairStoryFiles(pages, vaultPath) {
   const pcPages = pages.filter(p => p.frontmatter.type === 'pc');
   const storyIndices = new Set();
@@ -342,7 +350,7 @@ function pairStoryFiles(pages, vaultPath) {
     const storyPath = path.join(pcDir, pcBase + STORY_SUFFIX);
 
     const idx = pages.findIndex(p => p.sourcePath === storyPath);
-    if (idx !== -1) storyIndices.add(idx);
+    if (idx !== -1 && isStoryCompanion(pc.frontmatter, pages[idx].frontmatter)) storyIndices.add(idx);
 
     if (fs.existsSync(storyPath)) {
       let data, content;
@@ -404,4 +412,4 @@ function scanAllNotes(vaultPath) {
   return out;
 }
 
-module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };
+module.exports = { scanAllNotes, slugify, pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, STORY_SUFFIX, scanVault, scanVaultReport, warnScanReport, buildLinkMap, linkKeys, mapFolder, scanAttachments, pairStoryFiles, dirIsExcluded, matchExcludedDir };

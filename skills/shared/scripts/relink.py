@@ -15,9 +15,11 @@ Rewritten: [[Old]], [[Old|Shown]], [[Old#h]], [[Old^b]], ![[Old]],
 path-written [[Dir/Old]] and [[Old.md]], links in frontmatter, markdown
 links [t](Dir/Old.md), and `.canvas` file nodes. Left alone: links through
 an alias, and anything in a code fence or an inline code span. A bare
-link whose name two notes share is rewritten only when the note being
-renamed is in the linking note's folder; otherwise it is an UNSURE row
-and stays as written.
+link whose name two notes share is, in a vault with a site, rewritten or
+left as the site's build links it (the publish tool says where it sends
+that name); in a vault without one, rewritten only when the note being
+renamed is in the linking note's folder, otherwise it is an UNSURE row
+and stays as written. A RULE row says which applied.
 
 A vault with a site is also asked, of the publish tool, what the rename
 changes there (it alone knows those formats): the publish list and the
@@ -108,6 +110,9 @@ class Plan:
     pin: str | None = None
     # Files the site pairs to the note by name (a PC's story), moved with it.
     companions: list[tuple[str, str]] = field(default_factory=list)
+    # Where the site's link map sends each moved note's bare name.
+    owners: dict[str, str | None] = field(default_factory=dict)
+    rules: list[str] = field(default_factory=list)
 
     @property
     def moves(self) -> list[tuple[str, str]]:
@@ -166,8 +171,12 @@ def _json_inner(s: str) -> str:
 class _Move:
     """Which links point at one moved note, and what they become."""
 
-    def __init__(self, notes: list[str], old: str, new: str) -> None:
+    def __init__(self, notes: list[str], old: str, new: str,
+                 site_owner: str | None = None) -> None:
         self.old, self.new = old, new
+        # Where the site's build sends the bare name, when a name two notes
+        # share was put to it; None when there is no site to follow.
+        self.site_owner = site_owner
         self.old_noext = old[:-3]
         self.old_nfc = _nfc(old)
         self.new_noext = new[:-3]
@@ -228,6 +237,10 @@ class _Move:
             return f"{esc(self.new_noext)}{suffix}{sub}{alias}"
         if normalize(bare.strip("/")) != self.old_stem:
             return False
+        if self.site_owner is not None and len(self.sharing) > 1:
+            if _nfc(self.site_owner) != self.old_nfc:
+                return False
+            return f"{esc(_stem(self.new))}{suffix}{sub}{alias}"
         owner = self._bare_owner(src)
         if owner is None:
             return None
@@ -273,9 +286,11 @@ class _Resolver:
     links to its own note, and a moved note's relative links to notes that
     stay put are rebased."""
 
-    def __init__(self, notes: list[str],
-                 moves: list[tuple[str, str]]) -> None:
-        self.moves = {old: _Move(notes, old, new) for old, new in moves}
+    def __init__(self, notes: list[str], moves: list[tuple[str, str]],
+                 owners: dict[str, str | None] | None = None) -> None:
+        owners = owners or {}
+        self.moves = {old: _Move(notes, old, new, owners.get(old))
+                      for old, new in moves}
         self.new_of = dict(moves)
 
     def _new_dir(self, src: str) -> str:
@@ -291,6 +306,19 @@ class _Resolver:
         if src in self.moves:
             return self.moves[src].wiki(src, body, esc, True, nd)
         return False
+
+    def linked(self, src: str, raw: str, canvas: bool = False) -> str | None:
+        """The moved note that `raw`, text that cannot be rewritten, links
+        to, else None."""
+        nd = self._new_dir(src)
+        for old, m in self.moves.items():
+            if (any(isinstance(m.wiki(src, b.group(1), _plain, False, nd), str)
+                    for b in LINK_RE.finditer(raw))
+                    or any(m.markdown(src, b.group(2), nd) is not None
+                           for b in MD_LINK_RE.finditer(raw))
+                    or (canvas and _canvas_names_old(raw, old))):
+                return old
+        return None
 
     def markdown(self, src: str, dest: str) -> str | None:
         nd = self._new_dir(src)
@@ -457,6 +485,17 @@ def _has_site(vault: Path) -> bool:
         return site_unasked(vault)
 
 
+def _site_config(vault: Path) -> Path | None:
+    """The site's own vault.config.json, which the tool reads for settings
+    the vault file does not hold, when the vault has a site folder."""
+    try:
+        site = vault_site(vault)[2]
+    except PublishToolUnavailable:
+        return None
+    config = site / "vault.config.json" if site else None
+    return config if config is not None and config.is_file() else None
+
+
 def _live_key_text(slug: str) -> str:
     plain = re.fullmatch(r"[a-z][a-z0-9-]*", slug) and slug not in YAML_WORDS
     return slug if plain else f'"{slug}"'
@@ -494,7 +533,7 @@ def _ask_publish(vault: Path, old: str, new: str) -> dict[str, Any] | None:
     if not listed and not _has_site(vault):
         return None
     try:
-        return publish_rename_refs(vault, old, new)
+        return publish_rename_refs(vault, old, new, _site_config(vault))
     except PublishToolUnavailable:
         raise RelinkError(
             f"{old} is on the site's publish list and the publish tool "
@@ -513,6 +552,10 @@ def _companions(vault: Path, notes: list[str], p: Plan,
         return
     if answer.get("detaches"):
         raise RelinkError(f"{answer['detaches']}; nothing was changed")
+    if answer.get("refusal"):
+        raise RelinkError(f"{answer['refusal']}; nothing was changed")
+    if isinstance(answer.get("bareOwner"), str):
+        p.owners[p.old] = answer["bareOwner"]
     for pair in answer.get("companions") or []:
         old = _vault_rel(vault, pair["from"], None)
         new = _vault_rel(vault, pair["to"], None)
@@ -521,6 +564,8 @@ def _companions(vault: Path, notes: list[str], p: Plan,
             raise RelinkError(f"{why} (it moves with {p.old}); nothing "
                               f"was changed")
         p.companions.append((old, new))
+        if isinstance(pair.get("bareOwner"), str):
+            p.owners[old] = pair["bareOwner"]
 
 
 def _publish_updates(p: Plan, answer: dict[str, Any] | None,
@@ -568,16 +613,22 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     texts = {rel: _read(vault, rel) for rel in notes}
     for o, n in p.moves:
         p.warnings += _alias_warnings(texts, o, n)
-    res = _Resolver(notes, p.moves)
+    res = _Resolver(notes, p.moves, p.owners)
+    for o, _n in p.moves:
+        shared = [n for n in notes if normalize(_stem(n)) == normalize(_stem(o))]
+        if len(shared) > 1:
+            by_site = p.owners.get(o) is not None
+            p.rules.append(
+                f"RULE\t{o}\tbare links to {_stem(o)} follow "
+                + (f"the site's link map (it sends them to {p.owners[o]})"
+                   if by_site else
+                   "the same-folder rule (no site to follow)"))
     for rel, text in texts.items():
         if text is None:
-            raw = _raw(vault, rel)
-            if (any(isinstance(res.wiki(rel, m.group(1)), str)
-                    for m in LINK_RE.finditer(raw))
-                    or any(res.markdown(rel, m.group(2)) is not None
-                           for m in MD_LINK_RE.finditer(raw))):
+            hit = res.linked(rel, _raw(vault, rel))
+            if hit:
                 raise RelinkError(f"{rel} is not valid UTF-8 and links to "
-                                  f"{_stem(old)}; fix its encoding first")
+                                  f"{_stem(hit)}; fix its encoding first")
             p.warnings.append(
                 f"{rel} is not UTF-8; links in it were not checked")
             continue
@@ -587,12 +638,10 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     for rel in _walk(vault, ".canvas"):
         text = _read(vault, rel)
         if text is None:
-            raw = _raw(vault, rel)
-            if (any(_canvas_names_old(raw, o) for o, _ in p.moves)
-                    or any(isinstance(res.wiki(rel, m.group(1)), str)
-                           for m in LINK_RE.finditer(raw))):
+            hit = res.linked(rel, _raw(vault, rel), canvas=True)
+            if hit:
                 raise RelinkError(f"{rel} is not valid UTF-8 and links to "
-                                  f"{_stem(old)}; fix its encoding first")
+                                  f"{_stem(hit)}; fix its encoding first")
             p.warnings.append(
                 f"{rel} is not UTF-8; links in it were not checked")
             continue
@@ -664,6 +713,7 @@ def rows(p: Plan, done: bool = False) -> list[str]:
     out += [f"{ful}\t{r}\t{p.old} -> {p.new}" for r in p.republished]
     if p.pin:
         out.append(f"{pin}\t{p.old}\tlive_key: {p.pin}")
+    out += p.rules
     out += [f"UNSURE\t{c.rel}:{c.lineno}\t{c.before} — two notes have "
             f"this name; left as written" for c in p.unsure]
     out += [f"WARNING\t{w}" for w in p.warnings]
@@ -681,7 +731,8 @@ class _Stranded(Exception):
     """The note is parked under a temporary name and could not be put back."""
 
 
-def _move(vault: Path, old: str, new: str) -> None:
+def _move(vault: Path, old: str, new: str) -> list[Path]:
+    """Move the note; the folders it had to create, outermost first."""
     src, dst = vault / old, vault / new
     made: list[Path] = []
     for d in reversed([dst.parent, *dst.parent.parents]):
@@ -708,10 +759,11 @@ def _move(vault: Path, old: str, new: str) -> None:
                         f"rename it back by hand ({e or type(e).__name__})"
                     ) from e
                 raise
-            return
+            return made
         if dst.exists():
             raise OSError(f"{new} appeared since the plan")
         os.rename(src, dst)
+        return made
     except BaseException:
         for d in reversed(made):
             try:
@@ -774,12 +826,13 @@ def apply(p: Plan) -> list[str]:
     """Carry the plan out, or leave the vault exactly as it was."""
     _check_fresh(p)
     written: list[str] = []
+    created: dict[tuple[str, str], list[Path]] = {}
     try:
         for rel in sorted(p.texts):
             written.append(rel)  # before the write: an interrupt mid-write
             write_text_atomic(p.vault / rel, p.texts[rel])
         for old, new in p.moves:
-            _move(p.vault, old, new)
+            created[(old, new)] = _move(p.vault, old, new) or []
     except BaseException as e:
         if _moved(p):
             # Every note is already at its new path, so the rewritten links
@@ -799,6 +852,12 @@ def apply(p: Plan) -> list[str]:
                     _move(p.vault, new, old)
                 except BaseException:
                     unmoved.append(new)
+                    continue
+                for d in reversed(created.get((old, new), [])):
+                    try:
+                        d.rmdir()  # only if empty
+                    except OSError:
+                        pass
         stuck = []
         for rel in written:
             try:

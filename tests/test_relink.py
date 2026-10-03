@@ -1186,5 +1186,158 @@ class CompanionTests(unittest.TestCase):
         self.assertFalse((docs / "characters" / "pcs" / "lord-edmund-blackwood-story.html").exists())
 
 
+SITE_FULL = ("---\npublish:\n  site: true\n  mode: full\n  folder_map:\n"
+             "    Characters/NPCs: characters/npcs\n"
+             "    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n")
+NPC = "Characters/NPCs/Charlotte_Thorne.md"
+PCN = "Characters/PCs/Charlotte_Thorne.md"
+NPC_NEW = "Characters/NPCs/Charlotte_Thorne_NPC.md"
+
+
+def typed(kind, extra=""):
+    return f"---\ntype: {kind}\n{extra}---\n# C\n"
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class SharedNameTests(unittest.TestCase):
+    """A bare name two notes share goes where the site's build sends it."""
+
+    def vault(self, npc_extra="", pc_extra="", config=SITE_FULL):
+        files = {NPC: typed("npc", npc_extra), PCN: typed("pc", pc_extra),
+                 "Sessions/S1.md": "---\ntype: session\n---\nmet [[Charlotte_Thorne]] again\n"}
+        if config:
+            files["_meta/vault-config.md"] = config
+        return make_vault(self, files)
+
+    def test_names_the_build_sends_to_the_renamed_note_are_all_rewritten(self):
+        vault = self.vault(pc_extra="canon_status: SUPERSEDED\n")
+        p = relink.plan(vault, NPC, NPC_NEW)
+        self.assertEqual(p.texts["Sessions/S1.md"],
+                         "---\ntype: session\n---\nmet [[Charlotte_Thorne_NPC]] again\n")
+        self.assertEqual(p.unsure, [])
+        self.assertTrue([r for r in relink.rows(p) if r.startswith("RULE\t")])
+
+    def test_names_the_build_sends_to_the_other_note_are_left_without_a_doubt(self):
+        vault = self.vault(npc_extra="canon_status: SUPERSEDED\n")
+        p = relink.plan(vault, NPC, NPC_NEW)
+        self.assertNotIn("Sessions/S1.md", p.texts)
+        self.assertEqual(p.unsure, [])
+
+    def test_without_a_site_the_same_folder_rule_still_applies(self):
+        vault = self.vault(config=None)
+        p = relink.plan(vault, NPC, NPC_NEW)
+        self.assertEqual(len(p.unsure), 1)
+        self.assertNotIn("Sessions/S1.md", p.texts)
+
+    def test_a_build_before_and_after_links_the_same_page(self):
+        root = Path(tempfile.mkdtemp(prefix="relink-bare-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "vault"
+        shutil.copytree(self.vault(pc_extra="canon_status: SUPERSEDED\n"), vault)
+        import json
+        (root / "config.json").write_text(json.dumps({
+            "vaultPath": str(vault), "outputDir": str(root / "docs"),
+            "attachmentsDir": "_attachments", "siteTitle": "T"}))
+
+        def build():
+            r = subprocess.run(
+                ["node", "-e", "require(process.argv[1]).build({configPath: process.argv[2]})",
+                 str(PUBLISH_TOOL.parent.parent / "lib" / "build.js"),
+                 str(root / "config.json")], capture_output=True, text=True)
+            self.assertEqual(r.returncode, 0, r.stderr)
+            html = (root / "docs" / "sessions" / "s1.html").read_text()
+            import re
+            return sorted(set(re.findall(
+                r'href="[^"]*/(npcs|pcs)/charlotte-thorne[^"]*"', html)))
+        before = build()
+        relink.apply(relink.plan(vault, NPC, NPC_NEW))
+        self.assertEqual(before, ["npcs"])
+        self.assertEqual(build(), ["npcs"])
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class CompanionReviewTests(unittest.TestCase):
+    def vault(self, extra=None):
+        files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n", STORY_OLD: STORY_TEXT,
+                 "_meta/publish-manifest.md": MANIFEST}
+        files.update(extra or {})
+        return make_vault(self, files)
+
+    def snapshot(self, vault):
+        return sorted(p.relative_to(vault).as_posix() + ("/" if p.is_dir() else "")
+                      for p in vault.rglob("*"))
+
+    def test_a_rollback_removes_the_folder_a_completed_move_made(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        real = relink._move
+        calls = []
+
+        def flaky(v, old, new):
+            calls.append(old)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            return real(v, old, new)
+        with mock.patch.object(relink, "_move", flaky):
+            with self.assertRaises(relink.RelinkError):
+                relink.apply(relink.plan(vault, PC_OLD,
+                                         "Retired/Emma_Wentworth_Hale.md"))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_a_malformed_companion_answer_is_not_a_crash(self):
+        lines = vaultlib._LINES_BY_TOOL[vaultlib.PUBLISH_TOOL]
+        for bad in ('{"files": {}, "companions": [{"from": 1}]}',
+                    '{"files": {}, "companions": "x"}',
+                    '{"files": {}, "detaches": 4}',
+                    '{"files": {}, "bareOwner": 4}',
+                    '{"files": {}, "refusal": []}'):
+            with mock.patch.object(lines, "run_once", return_value=bad):
+                with self.assertRaises(vaultlib.PublishToolUnavailable):
+                    vaultlib.publish_rename_refs(self.vault(), PC_OLD, PC_NEW)
+
+    def test_relative_links_between_the_pc_and_its_story_follow_both(self):
+        vault = self.vault({
+            PC_OLD: "---\ntype: pc\n---\n[s](./Emma_Wentworth_Story.md) "
+                    "[[./Emma_Wentworth_Story]]\n",
+            STORY_OLD: STORY_TEXT + "[[./Emma_Wentworth]]\n"})
+        relink.apply(relink.plan(vault, PC_OLD, "Moved/Emma_Wentworth_Hale.md"))
+        self.assertEqual(
+            read(vault, "Moved/Emma_Wentworth_Hale.md"),
+            "---\ntype: pc\nlive_key: emma-wentworth\n---\n[s](Emma_Wentworth_Hale_Story.md) "
+            "[[Moved/Emma_Wentworth_Hale_Story]]\n")
+        self.assertIn("[[Moved/Emma_Wentworth_Hale]]",
+                      read(vault, "Moved/Emma_Wentworth_Hale_Story.md"))
+
+    def test_a_case_only_rename_moves_the_story_too(self):
+        vault = self.vault()
+        relink.apply(relink.plan(vault, PC_OLD, "Characters/PCs/emma_wentworth.md"))
+        names = sorted(p.name for p in (vault / "Characters/PCs").iterdir())
+        self.assertEqual(names, ["emma_wentworth.md", "emma_wentworth_Story.md"])
+
+    def test_canvas_file_nodes_for_both_files_are_rewritten(self):
+        canvas = ('{"nodes":[{"id":"a","type":"file","file":"%s"},'
+                  '{"id":"b","type":"file","file":"%s"}]}')
+        vault = self.vault({"Map.canvas": canvas % (PC_OLD, STORY_OLD)})
+        relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(read(vault, "Map.canvas"), canvas % (PC_NEW, STORY_NEW))
+
+    def test_a_non_utf8_note_linking_the_story_is_named_for_the_story(self):
+        vault = self.vault()
+        (vault / "Bad.md").write_bytes(b"\xff [[Emma_Wentworth_Story]]\n")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertIn("Emma_Wentworth_Story", str(cm.exception))
+
+    def test_a_rename_onto_a_pcs_story_name_is_refused(self):
+        # Beside the PC, the note would be swallowed as its story.
+        vault = make_vault(self, {
+            PC_OLD: "---\ntype: pc\n---\n", "Characters/PCs/Hallam.md": "---\ntype: npc\n---\n",
+            "_meta/publish-manifest.md": MANIFEST})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "Characters/PCs/Hallam.md", STORY_OLD)
+        self.assertIn("would attach to Emma_Wentworth as its story",
+                      str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -68,8 +68,8 @@ describe('manifest rename', () => {
 
   it('prints {"files": {}} when nothing names the note', () => {
     const vault = vaultWith({ '_meta/publish-manifest.md': '## Publishing (1 files)\n\n- [x] Locations/Elsewhere.md\n' });
-    assert.deepStrictEqual(rename(vault), { files: {} });
-    assert.deepStrictEqual(rename(vaultWith({ 'a.md': 'x' })), { files: {} });
+    assert.deepStrictEqual(rename(vault).files, {});
+    assert.deepStrictEqual(rename(vaultWith({ 'a.md': 'x' })).files, {});
   });
 
   it('rewrites a vault-config override path and featured names, byte for byte', () => {
@@ -85,7 +85,7 @@ describe('manifest rename', () => {
   it('leaves a featured name alone when two notes share the old name', () => {
     const cfg = '---\npublish:\n  landing:\n    featured_npcs: [Emma_Wentworth]\n---\n';
     const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n', 'Elsewhere/Emma_Wentworth.md': '---\ntype: npc\n---\n' });
-    assert.deepStrictEqual(rename(vault), { files: {} });
+    assert.deepStrictEqual(rename(vault).files, {});
   });
 
   it('exits non-zero with one stderr line on bad arguments', () => {
@@ -102,7 +102,9 @@ describe('manifest rename', () => {
 describe('manifest rename: the live key', () => {
   it('says what a PC page is keyed by now', () => {
     const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n' });
-    assert.deepStrictEqual(rename(vault), { files: {}, pin: { live_key: 'emma-wentworth' } });
+    const got = rename(vault);
+    assert.deepStrictEqual(got.files, {});
+    assert.deepStrictEqual(got.pin, { live_key: 'emma-wentworth' });
   });
 
   it('has no pin when the rename leaves the key as it is', () => {
@@ -129,16 +131,36 @@ describe('manifest rename: story companions', () => {
   it('lists the story file beside the PC and rewrites its manifest entry too', () => {
     const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: STORY_NOTE, '_meta/publish-manifest.md': manifest });
     const got = rename(vault);
-    assert.deepStrictEqual(got.companions, [{ from: STORY, to: STORY_TO }]);
+    assert.deepStrictEqual(got.companions.map((x) => [x.from, x.to]), [[STORY, STORY_TO]]);
     assert.strictEqual(got.files['_meta/publish-manifest.md'], `## Publishing (2 files)\n\n- [x] ${TO}\n- [x] ${STORY_TO}\n`);
     assert.strictEqual(got.detaches, undefined);
   });
 
-  it('has no companion for a PC with no story, or a story file of the wrong type', () => {
+  it('has no companion for a PC with no story, or an untyped story file the build does not scan', () => {
     const none = vaultWith({ [FROM]: '---\ntype: pc\n---\n' });
     assert.strictEqual(rename(none).companions, undefined);
-    const wrong = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: '---\ntype: npc\n---\n' });
-    assert.strictEqual(rename(wrong).companions, undefined);
+    const untyped = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: 'no frontmatter\n' });
+    assert.strictEqual(rename(untyped).companions, undefined);
+  });
+
+  it('moves any typed <PC>_Story.md beside a PC, as the build hides it whatever its type', () => {
+    const odd = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: '---\ntype: npc\n---\n' });
+    const c = rename(odd).companions;
+    assert.deepStrictEqual(c.map((x) => [x.from, x.to]), [[STORY, STORY_TO]]);
+    assert.match(rename(odd, STORY, 'Characters/PCs/Emma_Tale.md').detaches, /story/);
+  });
+
+  it('refuses a rename onto <PC>_Story.md beside a PC, which the build would swallow as its story', () => {
+    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', 'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n' });
+    const got = rename(vault, 'Characters/NPCs/Hallam.md', STORY);
+    assert.match(got.refusal, /Characters\/PCs\/Emma_Wentworth_Story\.md would attach to Emma_Wentworth as its story/);
+    const fine = rename(vault, 'Characters/NPCs/Hallam.md', 'Characters/NPCs/Hallam_Story.md');
+    assert.strictEqual(fine.refusal, undefined);
+  });
+
+  it('refuses a PC renamed onto a name whose story file is already there', () => {
+    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', 'Characters/PCs/Other_Story.md': STORY_NOTE });
+    assert.match(rename(vault, FROM, 'Characters/PCs/Other.md').refusal, /Other_Story\.md would attach to Other as its story/);
   });
 
   it('says the story alone would detach', () => {
@@ -150,6 +172,48 @@ describe('manifest rename: story companions', () => {
   it('does not call a story with no PC detached', () => {
     const vault = vaultWith({ [STORY]: STORY_NOTE });
     assert.strictEqual(rename(vault, STORY, 'Characters/PCs/Emma_Tale.md').detaches, undefined);
+  });
+});
+
+describe('manifest rename: who a bare name goes to', () => {
+  const SITE = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
+  const NPC = 'Characters/NPCs/Charlotte_Thorne.md';
+  const PC = 'Characters/PCs/Charlotte_Thorne.md';
+  const note = (type, extra = '') => `---\ntype: ${type}\n${extra}---\n# C\n`;
+
+  it('names the note the build links the shared name to, not the other one', () => {
+    const toNpc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc', 'canon_status: SUPERSEDED\n') });
+    assert.strictEqual(rename(toNpc, NPC, 'Characters/NPCs/Charlotte_Thorne_NPC.md').bareOwner, NPC);
+    const toPc = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'canon_status: SUPERSEDED\n'), [PC]: note('pc') });
+    assert.strictEqual(rename(toPc, NPC, 'Characters/NPCs/Charlotte_Thorne_NPC.md').bareOwner, PC);
+  });
+
+  it('answers OLD for a unique stem, and null when the name maps to nothing', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc') });
+    assert.strictEqual(rename(vault, NPC, 'Characters/NPCs/C2.md').bareOwner, NPC);
+    const hidden = vaultWith({ '_meta/vault-config.md': SITE, [NPC]: note('npc', 'publish: false\n') });
+    assert.strictEqual(rename(hidden, NPC, 'Characters/NPCs/C2.md').bareOwner, null);
+  });
+
+  it('agrees with what the build links a bare name to', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bare-owner-'));
+    const vault = path.join(root, 'vault');
+    for (const [rel, text] of Object.entries({
+      '_meta/vault-config.md': SITE, [NPC]: note('npc'), [PC]: note('pc'),
+      'Sessions/S1.md': '---\ntype: session\n---\nSee [[Charlotte_Thorne]].\n',
+    })) {
+      fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+      fs.writeFileSync(path.join(vault, rel), text);
+    }
+    const configPath = path.join(root, 'config.json');
+    fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
+    const real = console.log; console.log = () => {};
+    try { build({ configPath }); } finally { console.log = real; }
+    const html = fs.readFileSync(path.join(root, 'docs', 'sessions', 's1.html'), 'utf8');
+    const href = /href="([^"]*charlotte-thorne[^"]*)"/.exec(html)[1];
+    const owner = rename(vault, NPC, 'Characters/NPCs/Charlotte_Thorne_NPC.md').bareOwner;
+    assert.ok(href.includes(owner === NPC ? 'npcs/' : 'pcs/'), `${href} vs ${owner}`);
+    fs.rmSync(root, { recursive: true, force: true });
   });
 });
 
