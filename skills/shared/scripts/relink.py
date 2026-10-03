@@ -32,7 +32,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, unquote
 
-from vaultlib import LINK_RE, is_skipped_path, normalize, scan_body
+from vaultlib import (
+    LINK_RE,
+    extract_frontmatter,
+    is_skipped_path,
+    link_aliases,
+    normalize,
+    scan_body,
+)
 
 BAD_NAME_CHARS = set("[]#^|")
 INLINE_CODE_RE = re.compile(r"(`+)(?:(?!\1).)+?\1")
@@ -40,8 +47,16 @@ MD_LINK_RE = re.compile(
     r"(!?\[[^\]\n]*\]\()(<[^>\n]+>|(?:[^()\s]|\([^()\s]*\))+)((?:\s+\"[^\"\n]*\")?\))")
 
 
+URI_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
+
+
 class RelinkError(Exception):
-    """A rename refused or failed. The message is one line."""
+    """A rename refused or failed. The message is one line; `usage` marks
+    a bad command line (exit 2) rather than a refusal (exit 1)."""
+
+    def __init__(self, message: str, usage: bool = False) -> None:
+        super().__init__(message)
+        self.usage = usage
 
 
 @dataclass
@@ -156,7 +171,7 @@ class _Resolver:
         """New destination for a markdown link to OLD, else None."""
         wrapped = dest.startswith("<") and dest.endswith(">")
         raw = dest[1:-1] if wrapped else dest
-        if "://" in raw or raw.startswith("mailto:"):
+        if URI_RE.match(raw):
             return None
         path, hashmark, frag = raw.partition("#")
         decoded = unquote(path)
@@ -211,7 +226,7 @@ def _rewrite_note(rel: str, text: str, res: _Resolver,
 
 def _rewrite_wikilinks(rel: str, lineno: int, line: str,
                        spans: list[tuple[int, int]], res: _Resolver,
-                       p: Plan) -> str:
+                       p: Plan, json_escape: bool = False) -> str:
     def sub(m: re.Match[str]) -> str:
         if _inside(m.start(), spans):
             return m.group(0)
@@ -223,6 +238,9 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
             return m.group(0)
         assert isinstance(got, str)
         bang = "!" if m.group(0).startswith("!") else ""
+        if json_escape:
+            # The link sits inside a JSON string in a canvas.
+            got = json.dumps(got, ensure_ascii=False)[1:-1]
         after = f"{bang}[[{got}]]"
         if after == m.group(0):
             return after
@@ -257,16 +275,78 @@ def _vault_rel(vault: Path, raw: str, base: str | None) -> str:
     return posixpath.normpath(rel)
 
 
+def resolve_old(vault: Path, raw: str) -> str:
+    """OLD as a vault-relative path. A bare name must be one note's."""
+    value = raw.replace("\\", "/").strip().strip("/")
+    if "/" in value:
+        return value if value.lower().endswith(".md") else value + ".md"
+    stem = normalize(value[:-3] if value.lower().endswith(".md") else value)
+    found = [n for n in _walk(vault, ".md") if normalize(_stem(n)) == stem]
+    if len(found) == 1:
+        return found[0]
+    if not found:
+        return value if value.lower().endswith(".md") else value + ".md"
+    raise RelinkError(f"{len(found)} notes are named {raw}: "
+                      f"{', '.join(found)}; give the path", usage=True)
+
+
+def _refusal(vault: Path, notes: list[str], old: str, new: str) -> str | None:
+    if is_skipped_path(old):
+        return f"{old} is in a folder the vault scripts skipped"
+    if not (vault / old).is_file():
+        return f"{old} does not exist"
+    if new.startswith("../") or new == ".." or posixpath.isabs(new):
+        return f"{new} is outside the vault"
+    if new == old:
+        return f"{old} and {new} are the same path"
+    if BAD_NAME_CHARS & set(_stem(new)):
+        return (f"a link to {_stem(new)} cannot be written: the name has "
+                f"one of [ ] # ^ |")
+    case_only = new.casefold() == old.casefold()
+    if (vault / new).exists() and not case_only:
+        return f"{new} already exists"
+    clash = [n for n in notes if n != old
+             and normalize(_stem(n)) == normalize(_stem(new))]
+    if clash:
+        return (f"{clash[0]} already has the name {_stem(new)}; links to it "
+                f"would become ambiguous")
+    return None
+
+
+def _alias_warnings(vault: Path, notes: list[str], old: str,
+                    new: str) -> list[str]:
+    want = normalize(_stem(new))
+    out = []
+    for rel in notes:
+        if rel == old:
+            continue
+        text = _read(vault, rel)
+        fm = extract_frontmatter(text or "") or {}
+        if any(normalize(a) == want for a in link_aliases(fm)):
+            out.append(f"{rel} has the alias {_stem(new)}; links to that "
+                       f"name will reach the renamed note, not it")
+    return out
+
+
 def plan(vault: Path, old: str, new: str) -> Plan:
     """Everything a rename of OLD to NEW would change. Writes nothing."""
     notes = _walk(vault, ".md")
     old = _vault_rel(vault, old, None)
     new = _vault_rel(vault, new, posixpath.dirname(old))
+    why = _refusal(vault, notes, old, new)
+    if why:
+        raise RelinkError(why)
     p = Plan(vault, old, new)
+    p.warnings = _alias_warnings(vault, notes, old, new)
     res = _Resolver(notes, old, new)
     for rel in notes:
         text = _read(vault, rel)
         if text is None:
+            raw = (vault / rel).read_bytes().decode("utf-8", "replace")
+            if any(res.wiki(rel, m.group(1)) is not False
+                   for m in LINK_RE.finditer(raw)):
+                raise RelinkError(f"{rel} is not valid UTF-8 and links to "
+                                  f"{_stem(old)}; fix its encoding first")
             p.warnings.append(
                 f"{rel} is not UTF-8; links in it were not checked")
             continue
@@ -294,7 +374,7 @@ def _rewrite_canvas(rel: str, text: str, old: str, new: str,
                     res: _Resolver, p: Plan) -> str:
     # [[wikilinks]] inside text nodes sit in the raw JSON string.
     lines = text.splitlines(keepends=True)
-    text = "".join(_rewrite_wikilinks(rel, n, line, [], res, p)
+    text = "".join(_rewrite_wikilinks(rel, n, line, [], res, p, True)
                    for n, line in enumerate(lines, 1))
     # Writers differ: Obsidian keeps UTF-8 raw, others escape it or `/`.
     seen: set[str] = set()

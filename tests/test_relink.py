@@ -112,7 +112,7 @@ class WikilinkTests(unittest.TestCase):
 
     def test_non_utf8_note_is_warned_about(self):
         vault = make_vault(self, {OLD: "x\n"})
-        (vault / "Bad.md").write_bytes(b"\xff\xfe[[Session_4_Wrapup]]\n")
+        (vault / "Bad.md").write_bytes(b"\xff\xfe[[Other]]\n")
         p = relink.plan(vault, OLD, NEW)
         self.assertEqual(
             p.warnings,
@@ -244,6 +244,92 @@ class MarkdownAndCanvasFixTests(unittest.TestCase):
             with self.subTest(before=before):
                 p = self.plan({OLD: "x\n", "A.md": before})
                 self.assertEqual(p.texts["A.md"], after)
+
+
+class SharedNameTests(unittest.TestCase):
+    def test_same_folder_wins_and_others_are_unsure(self):
+        vault = make_vault(self, {
+            "Ch1/Session_01_Wrap_Up.md": "x\n",
+            "Ch2/Session_01_Wrap_Up.md": "x\n",
+            "Ch1/Plan.md": "[[Session_01_Wrap_Up]]\n",
+            "Ch2/Plan.md": "[[Session_01_Wrap_Up]]\n",
+            "Loose.md": "[[Session_01_Wrap_Up]]\n"})
+        p = relink.plan(vault, "Ch1/Session_01_Wrap_Up.md",
+                        "Ch1/Chapter_01_Session_01_Wrap_Up.md")
+        self.assertEqual(set(p.texts), {"Ch1/Plan.md"})
+        self.assertEqual([c.rel for c in p.unsure], ["Loose.md"])
+
+    def test_path_written_links_are_exact(self):
+        vault = make_vault(self, {
+            "Ch1/S.md": "x\n", "Ch2/S.md": "x\n",
+            "Loose.md": "[[Ch1/S]] [[Ch2/S]]\n"})
+        p = relink.plan(vault, "Ch1/S.md", "Ch1/T.md")
+        self.assertEqual(p.texts["Loose.md"], "[[Ch1/T]] [[Ch2/S]]\n")
+        self.assertEqual(p.unsure, [])
+
+
+class RefusalTests(unittest.TestCase):
+    def refused(self, files, old, new, usage=False):
+        vault = make_vault(self, files)
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, relink.resolve_old(vault, old), new)
+        self.assertEqual(cm.exception.usage, usage)
+        return str(cm.exception)
+
+    def test_refusals(self):
+        base = {OLD: "x\n", "Other/Taken.md": "x\n"}
+        self.assertIn("does not exist",
+                      self.refused(base, "Sessions/Nope.md", "X"))
+        self.assertIn("already",
+                      self.refused(base, OLD, "Sessions/Taken.md"))
+        self.assertIn("already", self.refused(
+            {**base, "Sessions/Taken.md": "x\n"}, OLD, "Sessions/Taken.md"))
+        self.assertIn("outside", self.refused(base, OLD, "../Out.md"))
+        self.assertIn("same", self.refused(base, OLD, OLD))
+        self.assertIn("cannot", self.refused(base, OLD, "Bad|Name"))
+        self.assertIn("skipped", self.refused(
+            {**base, "_Templates/T.md": "x\n"}, "_Templates/T.md", "U"))
+
+    def test_bare_old_name(self):
+        vault = make_vault(self, {OLD: "x\n"})
+        self.assertEqual(relink.resolve_old(vault, "Session_4_Wrapup"), OLD)
+        self.refused({"A/S.md": "x\n", "B/S.md": "x\n"}, "S", "T", usage=True)
+
+    def test_alias_on_another_note_is_a_warning(self):
+        vault = make_vault(self, {
+            OLD: "x\n", "B.md": "---\naliases: [\"Fourth\"]\n---\n"})
+        p = relink.plan(vault, OLD, "Fourth")
+        self.assertTrue(any("B.md" in w for w in p.warnings), p.warnings)
+
+    def test_case_only_rename_is_allowed(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        p = relink.plan(vault, "s4.md", "S4.md")
+        self.assertEqual(p.texts["A.md"], "[[S4]]\n")
+
+    def test_non_utf8_note_that_links_is_refused(self):
+        vault = make_vault(self, {OLD: "x\n"})
+        (vault / "Bad.md").write_bytes(b"\xff [[Session_4_Wrapup]]\n")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, OLD, NEW)
+        self.assertIn("Bad.md", str(cm.exception))
+
+
+class ReviewFixTests(unittest.TestCase):
+    def test_uri_schemes_are_not_rebased_in_a_moved_note(self):
+        new = "Sessions/Sub/Session_4_Wrapup.md"
+        body = "[t](tel:+1555)\n[d](data:image/png;base64,AAAA)\n"
+        vault = make_vault(self, {OLD: body})
+        p = relink.plan(vault, OLD, new)
+        self.assertEqual(p.texts, {})
+
+    def test_canvas_text_node_new_name_is_json_escaped(self):
+        import json
+        canvas = ('{"nodes":[{"id":"1","type":"text",'
+                  '"text":"see [[Session_4_Wrapup]]"}]}')
+        vault = make_vault(self, {OLD: "x\n", "B.canvas": canvas})
+        p = relink.plan(vault, OLD, 'Sessions/Say "hi".md')
+        got = json.loads(p.texts["B.canvas"])
+        self.assertEqual(got["nodes"][0]["text"], 'see [[Say "hi"]]')
 
 
 if __name__ == "__main__":
