@@ -266,6 +266,7 @@ class ApplyTests(unittest.TestCase):
         code, out, _ = call([str(vault), "apply", "--choose", "fonts"], checks)
         self.assertEqual(code, 0)
         self.assertEqual(log, [migrate.REPIN])
+        self.assertNotIn("not offered", out)
         self.assertEqual(stamp_of(vault), "1.10.12")
         self.assertIn("site-repin\tdid site-repin", out)
         self.assertTrue(out.rstrip().endswith(
@@ -279,6 +280,16 @@ class ApplyTests(unittest.TestCase):
         self.assertIn("fonts\tfonts done", out)
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertTrue(out.rstrip().endswith(f"stamped {PLUGIN}"))
+
+    def test_a_pending_repin_with_no_site_check_stamps_in_one_run(self):
+        vault = make_vault(self)
+        log = []
+        code, out, _ = call([str(vault), "apply"],
+                            [will(migrate.REPIN, None, 1, log)])
+        self.assertEqual(code, 0)
+        self.assertEqual(log, [migrate.REPIN])
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertNotIn("run plan again", out)
 
     def test_apply_with_a_current_site_stamps_in_one_run(self):
         vault = make_vault(self)

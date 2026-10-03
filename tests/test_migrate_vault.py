@@ -14,6 +14,9 @@ sys.path.insert(0, str(SCRIPTS))
 import migrate_vault as mv  # noqa: E402
 from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
 
+sys.path.insert(0, str(SCRIPTS.parent.parent.parent / "scripts"))
+import template_history as th  # noqa: E402
+
 SHARED = SCRIPTS.parent
 
 
@@ -161,16 +164,20 @@ class TemplateTests(unittest.TestCase):
     def test_the_history_holds_every_current_template(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         source = SHARED / "templates"
-        systems = {None, "coc-7e-regency"}
-        systems |= {p.stem.removeprefix("pc-") for p in source.glob("pc-*.md")}
-        systems |= {p.stem for p in source.glob("*-stats/*.md")}
-        systems.discard("generic")
-        for system in systems:
+        for system in th.systems_in(source):
             for name, text in mv.templates_for(system).items():
                 self.assertIn(
                     mv.text_hash(text), history.get(name, []),
                     f"{name} ({system}) is not in template-history.json; "
                     f"regenerate it: python3 scripts/template_history.py")
+
+    def test_the_history_script_will_not_drop_released_hashes(self):
+        old = {"a.md": ["h1", "h2"]}
+        self.assertIsNone(th.refusal(old, {"a.md": ["h1", "h2", "h3"]}, ["v1"]))
+        self.assertIn("would be dropped",
+                      th.refusal(old, {"a.md": ["h1"]}, ["v1"]))
+        self.assertIn("would be dropped", th.refusal(old, {}, ["v1"]))
+        self.assertIn("no release tags", th.refusal({}, {"a.md": ["h1"]}, []))
 
     def test_an_unreadable_template_is_a_failed_step(self):
         vault = make_vault(self)

@@ -25,7 +25,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
 from migrate_vault import HISTORY, TEMPLATES, templates_for, text_hash  # noqa: E402
 
-FIRST_TAG = (1, 10, 0)
+FIRST_TAG = (1, 4, 22)   # the first tag with skills/shared/templates/
 SUBPATH = "skills/shared/templates"
 
 
@@ -68,18 +68,42 @@ def tag_templates(tag: str, dest: Path) -> bool:
     return True
 
 
-def build() -> dict[str, list[str]]:
+def build(tags: list[str] | None = None) -> dict[str, list[str]]:
     hashes: dict[str, set[str]] = {}
     collect(TEMPLATES, hashes)
-    for tag in release_tags():
+    for tag in release_tags() if tags is None else tags:
         with tempfile.TemporaryDirectory() as tmp:
             if tag_templates(tag, Path(tmp)):
                 collect(Path(tmp) / SUBPATH, hashes)
     return {name: sorted(hashes[name]) for name in sorted(hashes)}
 
 
+def refusal(old: dict[str, list[str]], new: dict[str, list[str]],
+            tags: list[str]) -> str | None:
+    """Why the new history must not replace the old, or None: a checkout
+    without the release tags would silently drop released hashes."""
+    if not tags:
+        return "no release tags found (shallow clone?): run `git fetch --tags`"
+    dropped = sum(1 for name, hashes in old.items()
+                  for h in hashes if h not in new.get(name, []))
+    if dropped:
+        return (f"{dropped} hash(es) already in the history would be "
+                f"dropped; fetch all release tags and run again")
+    return None
+
+
 def main() -> int:
-    HISTORY.write_text(json.dumps(build(), indent=1) + "\n", encoding="utf-8")
+    tags = release_tags()
+    new = build(tags)
+    try:
+        old = json.loads(HISTORY.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        old = {}
+    problem = refusal(old, new, tags)
+    if problem:
+        print(f"template_history.py: {problem}", file=sys.stderr)
+        return 1
+    HISTORY.write_text(json.dumps(new, indent=1) + "\n", encoding="utf-8")
     print(f"wrote {HISTORY.relative_to(ROOT)}")
     return 0
 

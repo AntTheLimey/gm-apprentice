@@ -168,9 +168,11 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     failed: int | None = None
     error = ""
     repinned = waited = False
+    held: list[str] = []   # choices of the checks that waited
     for n, check in enumerate(todo):
         if check.asks_site and repinned:
             waited = True   # plan did not show its rows: it asks the new tool
+            held.extend(check.choices)
             continue
         try:
             for item in check.find(vault):
@@ -213,6 +215,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             failed = failed if failed is not None else len(todo)
     emit("Did", did)
     for choice in dict.fromkeys(i for i, _v in chosen if i not in used):
+        if _choice_problem(choice, "x", held) is None:
+            continue   # the wait line says why
         print(f"not offered: {choice}")
     if person:
         emit(TITLES[PERSON], person)
