@@ -4270,6 +4270,24 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "Hero.md"))
 
 
+class GmLeakExcludedFolderTests(unittest.TestCase):
+    """A note under `publish.exclude_dirs` is never reached by the publish
+    tool's walk, so gm-leak reports nothing for it; the same heading in a
+    published folder still is."""
+    NOTE = ("---\ntype: npc\n---\n\n# Hero\n\n## Motivations & Secrets\n\n"
+            "He lied.\n")
+
+    def test_an_excluded_folder_is_not_reported(self):
+        vault = make_vault(
+            self, config="---\npublish:\n  exclude_dirs: [_resources]\n---\n")
+        for rel in ("_resources/Hero.md", "Characters/Hero.md"):
+            (vault / rel).parent.mkdir(parents=True, exist_ok=True)
+            (vault / rel).write_text(self.NOTE, encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertTrue(rows_for(rows, "WARNING\tCharacters/Hero.md:"), rows)
+        self.assertFalse(rows_for(rows, "_resources/"), rows)
+
+
 class GmLeakHandoutSectionTests(unittest.TestCase):
     """#280: a handout's Keeper sections outside GM Notes. The publish tool
     says which headings it withholds (`strippedSections`); gm-leak names
