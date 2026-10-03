@@ -411,7 +411,10 @@ class WrapupAddTests(unittest.TestCase):
 
     def test_a_subsection_creates_its_parent(self):
         vault = wrap_vault(self)
-        add(vault, "#### Skipped Prep\n\n- **The warehouse** never fired.\n")
+        code, out = add(
+            vault, "#### Skipped Prep\n\n- **The warehouse** never fired.\n")
+        self.assertLess(out.index("§What Carries Forward\tcreated for "
+                                  "Skipped Prep"), out.index("§Skipped Prep"))
         add(vault, "#### Unresolved Threads\n\n- **Ezra** got away.\n")
         text = read(vault, WRAP_REL)
         self.assertEqual(text.count("### What Carries Forward"), 1)
@@ -545,6 +548,58 @@ class WrapupAddTests(unittest.TestCase):
         findings = vc.wrapup_structure_findings(
             WRAP_REL, read(vault, WRAP_REL), [])
         self.assertEqual([f.row for f in findings if f.level == "ERROR"], [])
+
+    def test_a_duplicate_unknown_h4_needs_replace(self):
+        vault = wrap_vault(self)
+        add(vault, "#### Foo\n\nold\n")
+        before = read(vault, WRAP_REL)
+        code, out = add(vault, "#### Foo\n\nnew\n")
+        self.assertEqual(code, 1)
+        self.assertIn("--replace", out)
+        self.assertEqual(read(vault, WRAP_REL), before)
+        code, out = add(vault, "#### Foo\n\nnew\n", "--replace")
+        self.assertEqual(code, 0, out)
+        text = read(vault, WRAP_REL)
+        self.assertEqual(text.count("#### Foo"), 1)
+        self.assertNotIn("old", text)
+
+    def test_gm_notes_itself_gets_its_own_refusal(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "## GM Notes\n\nx\n")
+        self.assertEqual(code, 1)
+        self.assertIn("container", out)
+        self.assertNotIn("### GM Notes", out)
+
+    def test_crlf_stays_crlf(self):
+        crlf = WRAP.replace("\n", "\r\n")
+        vault = wrap_vault(self, crlf)
+        add(vault, "### World State\n\n- old\n")
+        added = (vault / WRAP_REL).read_bytes().decode()
+        self.assertEqual(added.replace(
+            "\r\n### World State\r\n\r\n- old\r\n", "", 1)
+            .replace("\r\n\r\n<!-- /gm-only", "\r\n<!-- /gm-only"),
+            crlf.replace("\r\n\r\n<!-- /gm-only", "\r\n<!-- /gm-only"))
+        add(vault, "### World State\n\n- new\n", "--replace")
+        raw = (vault / WRAP_REL).read_bytes().decode()
+        self.assertNotIn("\n", raw.replace("\r\n", ""))
+        self.assertIn("- new", raw)
+
+    def test_replacing_the_last_section_keeps_the_blank_before_the_marker(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- old\n")
+        add(vault, "### World State\n\n- new\n", "--replace")
+        self.assertIn("- new\n\n<!-- /gm-only -->", read(vault, WRAP_REL))
+
+    def test_an_h4_lands_in_template_order_among_existing_children(self):
+        vault = wrap_vault(self)
+        add(vault, "#### Unresolved Threads\n\n- a\n")
+        add(vault, "#### Skipped Prep\n\n- c\n")
+        add(vault, "#### Pending Consequences\n\n- b\n")
+        text = read(vault, WRAP_REL)
+        order = [text.index(f"#### {t}") for t in
+                 ("Unresolved Threads", "Pending Consequences",
+                  "Skipped Prep")]
+        self.assertEqual(order, sorted(order))
 
 
 class StripCommentTests(unittest.TestCase):

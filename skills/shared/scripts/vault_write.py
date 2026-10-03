@@ -458,14 +458,19 @@ def _replace(doc: Doc, head: Head, unit: list[str]) -> str:
 
 def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
                 title: str, unit: list[str], replace: bool,
-                after: str | None = None) -> tuple[str, str]:
+                after: str | None = None,
+                made: list[tuple[str, str]] | None = None
+                ) -> tuple[str, str]:
     """(the Wrap-Up's new text, the row's detail). `after` names the
     heading a section the template does not know goes after."""
     doc = parse(text)
     gm_head, opener, closer = gm_region(doc, rel)
     k = key(title)
     if level == 2:
-        if k == GM_NOTES or k in tmap.gm:
+        if k == GM_NOTES:
+            raise WriteError(f"{rel}: '## {title}' is the container: send "
+                             f"its sections as '### ...'")
+        if k in tmap.gm:
             raise WriteError(
                 f"{rel}: '## {title}' is a GM Notes section — write it as "
                 f"'{'#' * (4 if k in tmap.parent else 3)} {title}'")
@@ -479,10 +484,13 @@ def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
             parent = next((h for h in inside
                            if h.level == 3 and key(h.title) == pk), None)
             if parent is None:
-                made, _ = add_section(text, rel, tmap, 3, tmap.titles[pk],
-                                      [f"### {tmap.titles[pk]}"], False)
-                return add_section(made, rel, tmap, level, title, unit,
-                                   replace, after)
+                if made is None:
+                    made = []
+                made.append((tmap.titles[pk], title))
+                grown, _ = add_section(text, rel, tmap, 3, tmap.titles[pk],
+                                       [f"### {tmap.titles[pk]}"], False)
+                return add_section(grown, rel, tmap, level, title, unit,
+                                   replace, after, made)
             stop = section_end(doc, parent)
             scope = [h for h in inside
                      if h.level == 4 and parent.idx < h.idx < stop]
@@ -490,7 +498,7 @@ def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
             later = tmap.later(4, k, {c for c, p in tmap.parent.items()
                                       if p == pk})
         else:
-            scope = [h for h in inside if h.level == 3]
+            scope = [h for h in inside if h.level == level]
             default, later = closer, tmap.later(3, k)
         detail = ""
     found = next((h for h in scope if key(h.title) == k), None)
@@ -520,9 +528,12 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         if level not in (2, 3, 4):
             raise WriteError(f"'{'#' * level} {title}': a Wrap-Up section "
                              f"starts at ##, ### or ####")
+        made: list[tuple[str, str]] = []
         note, detail = add_section(note, rel, tmap, level, title, unit,
-                                   args.replace, args.after)
+                                   args.replace, args.after, made)
         batch.put(rel, note)
+        for parent, child in made:
+            batch.row("WOULD-ADD", rel, f"§{parent}", f"created for {child}")
         batch.row("WOULD-ADD", rel, f"§{title}", detail)
 
 
