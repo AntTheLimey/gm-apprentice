@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   aliased, heading, block and embed links, links in frontmatter,
   markdown links and canvas cards are all covered. If anything fails,
   every file is put back.
+- A PC note can carry `live_key`, the key the site stores that PC's live
+  stats under. `relink.py` writes it when it renames a PC, so a renamed
+  character keeps their current HP/SAN, loadouts and party-board entry.
+  Notes without it behave as before. Publish tool 1.12.3.
 
 ### Changed
 
@@ -29,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Renaming a note with `relink.py` keeps its page on the site's publish
+  list: the list, and the vault settings that name the note, are updated
+  in the same pass. A vault with no site needs no Node.
 - Table links written `[[Name\|Shown]]` now link on the published site
   and are no longer reported broken by `graph_check.py`. A link with an
   empty display name (`[[Name|]]`) shows the name. Publish tool 1.12.3.

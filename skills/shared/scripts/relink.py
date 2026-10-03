@@ -19,6 +19,14 @@ link whose name two notes share is rewritten only when the note being
 renamed is in the linking note's folder; otherwise it is an UNSURE row
 and stays as written.
 
+A vault with a site is also asked, of the publish tool, what the rename
+changes there (it alone knows those formats): the publish list and the
+vault settings that name the note are rewritten in the same apply
+(REPUBLISH), and a PC page, which the site keys its live stats by the
+filename, gets `live_key` pinned first (PIN) so the stats stay with the
+character. A vault with no publish list and no site is not asked and
+needs no Node.
+
 Exit: 0 done or a clean plan; 1 refused or failed (one line why);
 2 usage error.
 """
@@ -37,16 +45,25 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, unquote
 
+import vaultlib
 from migrate_core import StepFailed, write_text_atomic
 from vaultlib import (
     LINK_RE,
+    PublishToolUnavailable,
     extract_frontmatter,
+    frontmatter_span,
+    get_key,
     inline_code_spans,
     inside_spans,
     is_skipped_path,
     link_aliases,
     normalize,
+    publish_rename_refs,
+    scalar_value,
     scan_body,
+    set_key,
+    site_switch,
+    vault_site,
 )
 
 BAD_NAME_CHARS = set("[]#^|")
@@ -84,6 +101,8 @@ class Plan:
     changes: list[Change] = field(default_factory=list)
     unsure: list[Change] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    republished: list[str] = field(default_factory=list)
+    pin: str | None = None
 
 
 def _nfc(s: str) -> str:
@@ -371,6 +390,90 @@ def _alias_warnings(texts: dict[str, str | None], old: str,
     return out
 
 
+MANIFEST_REL = "_meta/publish-manifest.md"
+YAML_WORDS = {"true", "false", "null", "yes", "no", "on", "off", "y", "n"}
+
+
+def _has_site(vault: Path) -> bool:
+    """Whether the vault has a site, asked of the publish tool. A vault
+    with no vault file has none, and nothing is asked. When the tool cannot
+    be asked, the file's own switch is read instead."""
+    if not (vault / "_meta" / "vault-config.md").is_file():
+        return False
+    try:
+        return vault_site(vault)[1]
+    except PublishToolUnavailable:
+        return site_switch(vault) is True
+
+
+def _live_key_text(slug: str) -> str:
+    plain = re.fullmatch(r"[a-z][a-z0-9-]*", slug) and slug not in YAML_WORDS
+    return slug if plain else f'"{slug}"'
+
+
+def _pin_live_key(p: Plan, texts: dict[str, str | None], slug: str) -> None:
+    """Write `live_key` into OLD's frontmatter, on top of whatever the link
+    rewrite did to it, unless the note already pins one."""
+    text = p.texts.get(p.old, texts.get(p.old))
+    if text is None:
+        raise RelinkError(f"{p.old} is not valid UTF-8 and the site keeps "
+                          f"live state for it; nothing was changed")
+    lines = text.splitlines(keepends=True)
+    close, err = frontmatter_span(lines)
+    if err:
+        raise RelinkError(f"{p.old} holds live state on the site but its "
+                          f"frontmatter cannot be edited ({err}); nothing "
+                          f"was changed")
+    eol = "\r\n" if lines[0].endswith("\r\n") else "\n"
+    fm = lines[1:close]
+    if scalar_value(get_key(fm, "live_key") or ""):
+        return
+    set_key(fm, "live_key", _live_key_text(slug), eol)
+    lines[1:close] = fm
+    p.originals.setdefault(p.old, texts[p.old] or "")
+    p.texts[p.old] = "".join(lines)
+    p.pin = slug
+
+
+def _publish_updates(p: Plan, texts: dict[str, str | None]) -> None:
+    """The site's own files that name the note (its publish list, vault
+    settings) and the live key a PC is stored under, as the publish tool
+    says: it alone knows their formats. A vault with no publish list and no
+    site is not asked, so it needs no Node."""
+    listed = (p.vault / MANIFEST_REL).is_file()
+    if not listed and not _has_site(p.vault):
+        return
+    try:
+        answer = publish_rename_refs(p.vault, p.old, p.new)
+    except PublishToolUnavailable:
+        raise RelinkError(
+            f"{p.old} is on the site's publish list and the publish tool "
+            f"could not be asked to update it; nothing was changed"
+            if listed else
+            f"{p.old} belongs to the vault's site and the publish tool "
+            f"could not be asked what a rename changes there; nothing was "
+            f"changed") from None
+    for rel, text in sorted(answer["files"].items()):
+        if rel.startswith("/") or ".." in rel.split("/"):
+            raise RelinkError(f"the publish tool named {rel}, which is not "
+                              f"in the vault; nothing was changed")
+        before = _read(p.vault, rel)
+        if before is None:
+            raise RelinkError(f"{rel} is not valid UTF-8 and names "
+                              f"{_stem(p.old)} for the site; fix its "
+                              f"encoding first")
+        if text == before:
+            continue
+        if rel in p.texts:
+            raise RelinkError(f"{rel} names {p.old} for the site and also "
+                              f"has links to it; nothing was changed")
+        p.originals[rel], p.texts[rel] = before, text
+        p.republished.append(rel)
+    pin = answer.get("pin")
+    if pin:
+        _pin_live_key(p, texts, pin["live_key"])
+
+
 def plan(vault: Path, old: str, new: str) -> Plan:
     """Everything a rename of OLD to NEW would change. Writes nothing."""
     notes = _walk(vault, ".md")
@@ -413,6 +516,7 @@ def plan(vault: Path, old: str, new: str) -> Plan:
         changed = _rewrite_canvas(rel, text, old, new, res, p)
         if changed != text:
             p.originals[rel], p.texts[rel] = text, changed
+    _publish_updates(p, texts)
     return p
 
 
@@ -471,11 +575,19 @@ def rows(p: Plan, done: bool = False) -> list[str]:
     out = [f"{ren}\t{p.old}\t{p.new}"]
     out += [f"{rel}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
             for c in p.changes]
+    ful, pin = ("REPUBLISHED", "PINNED") if done else ("WOULD-REPUBLISH",
+                                                         "WOULD-PIN")
+    out += [f"{ful}\t{r}\t{p.old} -> {p.new}" for r in p.republished]
+    if p.pin:
+        out.append(f"{pin}\t{p.old}\tlive_key: {p.pin}")
     out += [f"UNSURE\t{c.rel}:{c.lineno}\t{c.before} — two notes have "
             f"this name; left as written" for c in p.unsure]
     out += [f"WARNING\t{w}" for w in p.warnings]
     files = len({c.rel for c in p.changes})
     total = (f"# 1 rename, {len(p.changes)} link(s) in {files} note(s)"
+             + (f", {len(p.republished)} publish file(s) updated"
+                if p.republished else "")
+             + (", live key pinned" if p.pin else "")
              + (f", {len(p.unsure)} left as written" if p.unsure else ""))
     return out + [total]
 

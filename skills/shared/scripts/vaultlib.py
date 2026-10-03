@@ -856,6 +856,33 @@ class PublishLines:
                 f"node could not run ({e.__class__.__name__})") from e
         return self._proc
 
+    def run_once(self, args: list[str]) -> str:
+        """One command of the tool, run to its end, and what it printed.
+        Found and run as the `lines` process is: the same Node, the same
+        tool file."""
+        node = shutil.which("node")
+        if not node:
+            raise PublishToolUnavailable("node is not on PATH")
+        if not self.tool.is_file():
+            raise PublishToolUnavailable(
+                f"the publish tool is not at {self.tool.as_posix()}")
+        try:
+            done = subprocess.run(
+                [node, str(self.tool), *args], capture_output=True,
+                timeout=PUBLISH_LINES_TIMEOUT)
+        except subprocess.TimeoutExpired as e:
+            raise PublishToolUnavailable(
+                f"the publish tool did not answer within "
+                f"{PUBLISH_LINES_TIMEOUT}s") from e
+        except OSError as e:
+            raise PublishToolUnavailable(
+                f"node could not run ({e.__class__.__name__})") from e
+        if done.returncode != 0:
+            why = done.stderr.decode("utf-8", "replace").strip()
+            raise PublishToolUnavailable(
+                f"the publish tool refused: {why or done.returncode}")
+        return done.stdout.decode("utf-8", "replace")
+
     def ask(self, request: dict[str, Any]) -> dict[str, Any]:
         proc = self._process()
         assert proc.stdin is not None and proc.stdout is not None
@@ -962,6 +989,33 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
         raise PublishToolUnavailable(
             "the publish tool's answer about the site is not understood")
     return publishes, on, Path(site) if site else None
+
+
+def publish_rename_refs(vault: Path, old: str, new: str) -> dict[str, Any]:
+    """What renaming the note `old` to `new` (vault-relative paths) changes
+    in the files the publish tool owns, asked of the plugin's own tool:
+    `{"files": {path: new text}, "pin": {"live_key": slug}}` (`pin` only
+    for a page the site keeps live state for). Writes nothing. Raises
+    `PublishToolUnavailable` when it cannot be asked."""
+    out = _LINES_BY_TOOL[PUBLISH_TOOL].run_once(
+        ["manifest", "rename", "--vault", str(vault.resolve()),
+         "--from", old, "--to", new, "--json"])
+    try:
+        answer = json.loads(out)
+    except ValueError as e:
+        raise PublishToolUnavailable(
+            "the publish tool's answer was not understood") from e
+    files = answer.get("files") if isinstance(answer, dict) else None
+    pin = answer.get("pin") if isinstance(answer, dict) else None
+    if (not isinstance(files, dict)
+            or not all(isinstance(k, str) and isinstance(v, str)
+                       for k, v in files.items())
+            or not (pin is None or (isinstance(pin, dict) and isinstance(
+                pin.get("live_key"), str) and pin["live_key"]))):
+        raise PublishToolUnavailable(
+            "the publish tool's answer was not understood")
+    assert isinstance(answer, dict)
+    return answer
 
 
 SITE_ON_WORDS = ("true", "yes", "on")

@@ -15,6 +15,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import relink  # noqa: E402
+import vaultlib  # noqa: E402,F401
 
 
 def make_vault(case, files):
@@ -823,6 +824,197 @@ class MovedTests(unittest.TestCase):
         p = relink.Plan(vault, "Sub/a.md", "sub/A.md")
         with self.listing(vault, [], ["A.md"]):
             self.assertTrue(relink._moved(p))
+
+
+PC_OLD = "Characters/PCs/Emma_Wentworth.md"
+PC_NEW = "Characters/PCs/Emma_Wentworth_Hale.md"
+PUBLISH_TOOL = (Path(__file__).resolve().parent.parent
+                / "tools" / "publish" / "bin" / "gm-publish.js")
+MANIFEST = ("---\ngenerated: 2026-10-03\n---\n\n## Publishing (1 files)\n\n"
+            f"- [x] {PC_OLD}\n\n## Excluded (0 files)\n\n")
+SITE_CONFIG = "---\npublish:\n  site: true\n  mode: player\n---\n"
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class PublishListTests(unittest.TestCase):
+    """A rename keeps the page on the site's publish list."""
+
+    def vault(self, extra=None, pc="---\ntype: pc\n---\n# Emma\n"):
+        files = {PC_OLD: pc, "_meta/publish-manifest.md": MANIFEST}
+        files.update(extra or {})
+        return make_vault(self, files)
+
+    def snapshot(self, vault):
+        return {p.relative_to(vault).as_posix(): p.read_bytes()
+                for p in vault.rglob("*") if p.is_file()}
+
+    def test_the_plan_shows_the_manifest_row_and_apply_rewrites_it(self):
+        vault = self.vault()
+        p = relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertIn(f"WOULD-REPUBLISH\t_meta/publish-manifest.md\t"
+                      f"{PC_OLD} -> {PC_NEW}", relink.rows(p))
+        self.assertEqual(read(vault, "_meta/publish-manifest.md"), MANIFEST)
+        rows = relink.apply(p)
+        self.assertIn(f"REPUBLISHED\t_meta/publish-manifest.md\t"
+                      f"{PC_OLD} -> {PC_NEW}", rows)
+        self.assertEqual(read(vault, "_meta/publish-manifest.md"),
+                         MANIFEST.replace(PC_OLD, PC_NEW))
+
+    def test_a_crlf_manifest_stays_crlf(self):
+        crlf = MANIFEST.replace("\n", "\r\n")
+        vault = self.vault({"_meta/publish-manifest.md": crlf})
+        relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(read(vault, "_meta/publish-manifest.md"),
+                         crlf.replace(PC_OLD, PC_NEW))
+
+    def test_a_failure_after_the_manifest_write_restores_it(self):
+        vault = self.vault({"A.md": "[[Emma_Wentworth]]\n"})
+        before = self.snapshot(vault)
+        with mock.patch.object(relink, "_move", side_effect=OSError("full")):
+            with self.assertRaises(relink.RelinkError):
+                relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_an_interrupt_after_the_manifest_write_restores_it(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        with mock.patch.object(relink, "_move", side_effect=KeyboardInterrupt):
+            with self.assertRaises(KeyboardInterrupt):
+                relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_a_tool_that_cannot_be_asked_refuses_and_writes_nothing(self):
+        vault = self.vault()
+        before = self.snapshot(vault)
+        gone = PUBLISH_TOOL.with_name("missing.js")
+        with mock.patch.object(relink.vaultlib._LINES_BY_TOOL[relink.vaultlib.PUBLISH_TOOL],
+                               "tool", gone):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertEqual(
+            str(cm.exception), f"{PC_OLD} is on the site's publish list and the "
+            f"publish tool could not be asked to update it; nothing was changed")
+        self.assertEqual(before, self.snapshot(vault))
+
+    def test_a_vault_with_no_manifest_never_asks_the_tool(self):
+        vault = make_vault(self, {PC_OLD: "---\ntype: pc\n---\n",
+                                  "A.md": "[[Emma_Wentworth]]\n"})
+        with mock.patch.object(relink, "publish_rename_refs") as spy, \
+                mock.patch.object(relink, "vault_site") as site:
+            p = relink.plan(vault, PC_OLD, PC_NEW)
+        spy.assert_not_called()
+        site.assert_not_called()
+        self.assertEqual(set(p.texts), {"A.md"})
+
+    def test_a_manifest_the_links_also_change_is_refused(self):
+        vault = self.vault({"_meta/publish-manifest.md":
+                            MANIFEST + "[[Emma_Wentworth]]\n"})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertIn("nothing was changed", str(cm.exception))
+
+
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class LiveKeyTests(unittest.TestCase):
+    """Renaming a PC pins the key its live state is stored under."""
+
+    def vault(self, pc="---\ntype: pc\nplayer_name: Missy\n---\n# Emma\n",
+              config=SITE_CONFIG):
+        files = {PC_OLD: pc}
+        if config:
+            files["_meta/vault-config.md"] = config
+        return make_vault(self, files)
+
+    def test_the_rename_writes_live_key_in_the_same_apply(self):
+        vault = self.vault()
+        p = relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertIn(f"WOULD-PIN\t{PC_OLD}\tlive_key: emma-wentworth",
+                      relink.rows(p))
+        self.assertNotIn("live_key", read(vault, PC_OLD))
+        rows = relink.apply(p)
+        self.assertIn(f"PINNED\t{PC_OLD}\tlive_key: emma-wentworth", rows)
+        self.assertEqual(
+            read(vault, PC_NEW),
+            "---\ntype: pc\nplayer_name: Missy\nlive_key: emma-wentworth\n---\n# Emma\n")
+
+    def test_a_crlf_pc_note_keeps_its_line_endings(self):
+        vault = self.vault(pc="---\r\ntype: pc\r\n---\r\n# Emma\r\n")
+        relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(
+            read(vault, PC_NEW),
+            "---\r\ntype: pc\r\nlive_key: emma-wentworth\r\n---\r\n# Emma\r\n")
+
+    def test_a_second_rename_keeps_the_first_key(self):
+        vault = self.vault()
+        relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        third = "Characters/PCs/Emma_Hale.md"
+        p = relink.plan(vault, PC_NEW, third)
+        self.assertFalse([r for r in relink.rows(p) if r.startswith("WOULD-PIN")])
+        relink.apply(p)
+        self.assertIn("live_key: emma-wentworth\n", read(vault, third))
+        self.assertEqual(read(vault, third).count("live_key"), 1)
+
+    def test_a_failure_puts_the_note_back_without_the_key(self):
+        vault = self.vault()
+        before = read(vault, PC_OLD)
+        with mock.patch.object(relink, "_move", side_effect=OSError("full")):
+            with self.assertRaises(relink.RelinkError):
+                relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertEqual(read(vault, PC_OLD), before)
+
+    def test_a_note_that_holds_no_live_state_is_not_pinned(self):
+        vault = make_vault(self, {"NPCs/Hallam.md": "---\ntype: npc\n---\n",
+                                  "_meta/vault-config.md": SITE_CONFIG})
+        p = relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
+        self.assertFalse([r for r in relink.rows(p) if "PIN" in r])
+
+    def test_a_vault_without_a_site_is_left_alone(self):
+        vault = self.vault(config="---\npublish:\n  site: false\n---\n")
+        p = relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertFalse([r for r in relink.rows(p) if "PIN" in r])
+
+    def test_a_site_whose_tool_cannot_be_asked_refuses(self):
+        vault = self.vault()
+        gone = PUBLISH_TOOL.with_name("missing.js")
+        real = relink.vault_site
+        # The site question is answered; the rename question is not.
+        with mock.patch.object(relink, "vault_site", return_value=(True, True, None)), \
+                mock.patch.object(relink.vaultlib._LINES_BY_TOOL[relink.vaultlib.PUBLISH_TOOL],
+                                  "tool", gone):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.plan(vault, PC_OLD, PC_NEW)
+        self.assertIn("nothing was changed", str(cm.exception))
+        self.assertIsNotNone(real)
+
+    def test_a_rename_then_a_build_keeps_the_key_at_the_new_address(self):
+        root = Path(tempfile.mkdtemp(prefix="relink-build-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "vault"
+        shutil.copytree(PUBLISH_TOOL.parent.parent / "test" / "fixtures"
+                        / "with-party-roster", vault)
+        cfg = vault / "_meta" / "vault-config.md"
+        cfg.write_bytes(cfg.read_bytes().replace(b"publish:\n", b"publish:\n  site: true\n  live_stats: true\n"))
+        old, new = "Characters/PCs/Karl Brenner.md", "Characters/PCs/Karl_Hale.md"
+        relink.apply(relink.plan(vault, old, new))
+        self.assertIn("live_key: karl-brenner", read(vault, new))
+        (root / "wrangler.toml").write_text(
+            '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n')
+        script = (
+            "const {build}=require(process.argv[1]);"
+            "build({configPath:process.argv[2]});")
+        (root / "config.json").write_text(
+            '{"vaultPath": %s, "outputDir": %s, "attachmentsDir": "_attachments",'
+            '"siteTitle": "Roster Test", "system": "gurps-4e",'
+            '"excludeDirs": ["_meta"], "excludeSections": [],'
+            '"folderMap": {"Characters/PCs": "characters/pcs"}}'
+            % (__import__("json").dumps(str(vault)),
+               __import__("json").dumps(str(root / "docs"))))
+        r = subprocess.run(
+            ["node", "-e", script, str(PUBLISH_TOOL.parent.parent / "lib" / "build.js"),
+             str(root / "config.json")], capture_output=True, text=True)
+        self.assertEqual(r.returncode, 0, r.stderr)
+        page = (root / "docs" / "characters" / "pcs" / "karl-hale.html").read_text()
+        self.assertIn('"pcSlug":"karl-brenner"', page.replace(" ", ""))
 
 
 if __name__ == "__main__":
