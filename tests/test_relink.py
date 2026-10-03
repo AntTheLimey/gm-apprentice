@@ -385,5 +385,149 @@ class FixRound1Tests(unittest.TestCase):
             ["Bad.canvas is not UTF-8; links in it were not checked"])
 
 
+class ApplyTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, {
+            OLD: "[[Session_4_Wrapup#Top]]\n",
+            "A.md": "[[Session_4_Wrapup]]\r\n",
+            "B.md": "see [[Session_4_Wrapup|S4]]\n"})
+
+    def snapshot(self):
+        return {p.relative_to(self.vault).as_posix(): p.read_bytes()
+                for p in self.vault.rglob("*") if p.is_file()}
+
+    def test_apply_moves_and_rewrites(self):
+        rows = relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertFalse((self.vault / OLD).exists())
+        self.assertEqual(read(self.vault, NEW),
+                         "[[Chapter_01_Session_04_Wrap_Up#Top]]\n")
+        self.assertEqual(read(self.vault, "A.md"),
+                         "[[Chapter_01_Session_04_Wrap_Up]]\r\n")
+        self.assertTrue(rows[0].startswith(f"RENAMED\t{OLD}\t{NEW}"), rows)
+
+    def test_a_failed_write_puts_everything_back(self):
+        before = self.snapshot()
+        real = relink.write_text_atomic
+        calls = []
+
+        def flaky(path, text):
+            calls.append(path)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            real(path, text)
+        with mock.patch.object(relink, "write_text_atomic", flaky):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertIn("as it was", str(cm.exception))
+        self.assertEqual(before, self.snapshot())
+
+    def test_a_failed_move_puts_everything_back(self):
+        before = self.snapshot()
+        with mock.patch.object(relink.os, "rename",
+                               side_effect=OSError("locked")):
+            with self.assertRaises(relink.RelinkError):
+                relink.apply(relink.plan(self.vault, OLD, NEW))
+        self.assertEqual(before, self.snapshot())
+
+    def test_a_stale_plan_is_refused(self):
+        p = relink.plan(self.vault, OLD, NEW)
+        (self.vault / "B.md").write_bytes(b"edited [[Session_4_Wrapup]]\n")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.apply(p)
+        self.assertIn("changed since", str(cm.exception))
+        self.assertTrue((self.vault / OLD).exists())
+
+    def test_case_only_rename_applies(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        relink.apply(relink.plan(vault, "s4.md", "S4.md"))
+        self.assertIn("S4.md", os.listdir(vault))
+        self.assertNotIn("s4.md", os.listdir(vault))
+
+    def test_graph_check_agrees_afterwards(self):
+        relink.apply(relink.plan(self.vault, OLD, NEW))
+        out = subprocess.run(
+            [sys.executable, str(SCRIPTS / "graph_check.py"),
+             str(self.vault), "unresolved"],
+            capture_output=True, text=True, check=True).stdout
+        self.assertTrue(out.startswith("# count: 0"), out)
+
+
+class CliTests(unittest.TestCase):
+    def run_cli(self, *args):
+        return subprocess.run(
+            [sys.executable, str(SCRIPTS / "relink.py"), *map(str, args)],
+            capture_output=True, text=True)
+
+    def test_plan_then_apply(self):
+        vault = make_vault(self, {OLD: "x\n", "A.md": "[[Session_4_Wrapup]]\n"})
+        r = self.run_cli(vault, OLD, "Chapter_01_Session_04_Wrap_Up")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn(f"WOULD-RENAME\t{OLD}\t{NEW}", r.stdout)
+        self.assertIn("WOULD-RELINK\tA.md:1\t[[Session_4_Wrapup]] -> "
+                      "[[Chapter_01_Session_04_Wrap_Up]]", r.stdout)
+        self.assertTrue((vault / OLD).exists())
+        r = self.run_cli(vault, OLD, "Chapter_01_Session_04_Wrap_Up", "--apply")
+        self.assertEqual(r.returncode, 0, r.stderr)
+        self.assertIn("RELINKED\tA.md:1", r.stdout)
+        self.assertTrue((vault / NEW).exists())
+
+    def test_exit_codes(self):
+        vault = make_vault(self, {"A/S.md": "x\n", "B/S.md": "x\n"})
+        self.assertEqual(self.run_cli(vault, "S", "T").returncode, 2)
+        self.assertEqual(self.run_cli(vault, "A/S.md", "B/S.md").returncode, 1)
+        self.assertEqual(self.run_cli(vault / "nope", "x", "y").returncode, 2)
+
+
+class ApplyExtraTests(unittest.TestCase):
+    def setUp(self):
+        self.vault = make_vault(self, {
+            OLD: "x\n", "A.md": "[[Session_4_Wrapup]]\n"})
+
+    def test_old_gone_since_plan_is_refused(self):
+        p = relink.plan(self.vault, OLD, NEW)
+        (self.vault / OLD).unlink()
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.apply(p)
+        self.assertIn("changed since", str(cm.exception))
+        self.assertEqual(read(self.vault, "A.md"), "[[Session_4_Wrapup]]\n")
+
+    def test_new_appeared_since_plan_is_refused(self):
+        p = relink.plan(self.vault, OLD, NEW)
+        (self.vault / NEW).write_bytes(b"other\n")
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.apply(p)
+        self.assertIn("changed since", str(cm.exception))
+        self.assertEqual(read(self.vault, "A.md"), "[[Session_4_Wrapup]]\n")
+        self.assertEqual(read(self.vault, NEW), "other\n")
+
+    def test_case_only_move_failure_puts_everything_back(self):
+        vault = make_vault(self, {"s4.md": "x\n", "A.md": "[[s4]]\n"})
+        before = {p.name: p.read_bytes() for p in vault.iterdir()}
+        real = os.rename
+        n = []
+
+        def second_fails(a, b):
+            n.append(1)
+            if len(n) == 2:
+                raise OSError("locked")
+            real(a, b)
+        with mock.patch.object(relink.os, "rename", second_fails):
+            with self.assertRaises(relink.RelinkError):
+                relink.apply(relink.plan(vault, "s4.md", "S4.md"))
+        self.assertEqual(before, {p.name: p.read_bytes()
+                                  for p in vault.iterdir()})
+
+    def test_rows_include_warnings_unsure_and_one_total(self):
+        vault = make_vault(self, {
+            OLD: "x\n", "A.md": "[[Session_4_Wrapup]]\n",
+            "Bad.md": b"\xff".decode("latin-1")})
+        (vault / "Bad.md").write_bytes(b"\xff\xfe")
+        out = relink.rows(relink.plan(vault, OLD, NEW))
+        self.assertTrue(any(r.startswith("WARNING\tBad.md") for r in out), out)
+        self.assertEqual([r for r in out if r.startswith("#")],
+                         ["# 1 rename, 1 link(s) in 1 note(s)"])
+        self.assertTrue(out[-1].startswith("# "))
+
+
 if __name__ == "__main__":
     unittest.main()

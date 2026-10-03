@@ -25,14 +25,18 @@ Exit: 0 done or a clean plan; 1 refused or failed (one line why);
 
 from __future__ import annotations
 
+import argparse
 import json
+import os
 import posixpath
 import re
+import sys
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from urllib.parse import quote, unquote
 
+from migrate_core import write_text_atomic
 from vaultlib import (
     LINK_RE,
     extract_frontmatter,
@@ -419,3 +423,93 @@ def _rewrite_canvas(rel: str, text: str, old: str, new: str,
                     m.group(0), m.group(1) + new_s))
             text = needle.sub(lambda m: m.group(1) + new_s, text)
     return text
+
+
+def rows(p: Plan, done: bool = False) -> list[str]:
+    ren, rel = ("RENAMED", "RELINKED") if done else ("WOULD-RENAME",
+                                                     "WOULD-RELINK")
+    out = [f"{ren}\t{p.old}\t{p.new}"]
+    out += [f"{rel}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
+            for c in p.changes]
+    out += [f"UNSURE\t{c.rel}:{c.lineno}\t{c.before} — two notes have "
+            f"this name; left as written" for c in p.unsure]
+    out += [f"WARNING\t{w}" for w in p.warnings]
+    files = len({c.rel for c in p.changes})
+    total = (f"# 1 rename, {len(p.changes)} link(s) in {files} note(s)"
+             + (f", {len(p.unsure)} left as written" if p.unsure else ""))
+    return out + [total]
+
+
+def _move(vault: Path, old: str, new: str) -> None:
+    src, dst = vault / old, vault / new
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    if old.casefold() == new.casefold():
+        tmp = src.with_name(f".{src.name}.relink")
+        os.rename(src, tmp)
+        try:
+            os.rename(tmp, dst)
+        except OSError:
+            os.rename(tmp, src)
+            raise
+        return
+    if dst.exists():
+        raise OSError(f"{new} appeared since the plan")
+    os.rename(src, dst)
+
+
+def apply(p: Plan) -> list[str]:
+    """Carry the plan out, or leave the vault exactly as it was."""
+    stale = "changed since the plan; nothing was changed, run it again"
+    for rel, text in p.originals.items():
+        if _read(p.vault, rel) != text:
+            raise RelinkError(f"{rel} {stale}")
+    if not (p.vault / p.old).is_file():
+        raise RelinkError(f"{p.old} {stale}")
+    if (p.old.casefold() != p.new.casefold()
+            and (p.vault / p.new).exists()):
+        raise RelinkError(f"{p.new} {stale}")
+    written: list[str] = []
+    try:
+        for rel in sorted(p.texts):
+            write_text_atomic(p.vault / rel, p.texts[rel])
+            written.append(rel)
+        _move(p.vault, p.old, p.new)
+    except OSError as e:
+        stuck = []
+        for rel in written:
+            try:
+                write_text_atomic(p.vault / rel, p.originals[rel])
+            except OSError:
+                stuck.append(rel)
+        if stuck:
+            raise RelinkError(f"{e}; these notes could not be put back and "
+                              f"still have the new links: "
+                              f"{', '.join(stuck)}") from e
+        raise RelinkError(f"{e}; the vault is as it was") from e
+    return rows(p, done=True)
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(
+        description="Rename or move a note and rewrite every link to it.")
+    ap.add_argument("vault", type=Path)
+    ap.add_argument("old")
+    ap.add_argument("new")
+    ap.add_argument("--apply", action="store_true")
+    args = ap.parse_args(argv)
+    if not args.vault.is_dir():
+        print(f"relink.py: not a directory: {args.vault}", file=sys.stderr)
+        return 2
+    try:
+        old = resolve_old(args.vault, args.old)
+        p = plan(args.vault, old, args.new)
+        out = apply(p) if args.apply else rows(p)
+    except RelinkError as e:
+        print(f"relink.py: {e}", file=sys.stderr)
+        return 2 if e.usage else 1
+    print("\n".join(out))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
