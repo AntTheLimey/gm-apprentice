@@ -996,7 +996,12 @@ def apply(p: Plan) -> list[str]:
                     except OSError:
                         pass
         stuck = []
+        # A note whose move back failed is still at its new path: writing
+        # its old text to the old path would make a second copy.
+        left = {old for old, new in p.moves if new in unmoved}
         for rel in written:
+            if rel in left:
+                continue
             try:
                 write_text_atomic(p.vault / rel, p.originals[rel])
             except BaseException:

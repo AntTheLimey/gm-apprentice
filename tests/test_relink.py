@@ -1146,6 +1146,25 @@ class CompanionTests(unittest.TestCase):
                 relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
         self.assertEqual(before, self.snapshot(vault))
 
+    def test_a_failed_move_back_does_not_leave_a_second_copy(self):
+        vault = self.vault()
+        real = relink._move
+        calls = []
+
+        def flaky(v, old, new):
+            calls.append(old)
+            if len(calls) == 2:
+                raise OSError("disk full")
+            if len(calls) == 3:
+                raise OSError("cannot move back")
+            return real(v, old, new)
+        with mock.patch.object(relink, "_move", flaky):
+            with self.assertRaises(relink.RelinkError) as cm:
+                relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
+        self.assertFalse((vault / PC_OLD).exists(), "a second copy was written")
+        self.assertTrue((vault / PC_NEW).is_file())
+        self.assertIn(PC_NEW, str(cm.exception))
+
     def test_a_pc_with_no_story_behaves_as_before(self):
         vault = make_vault(self, {PC_OLD: "---\ntype: pc\n---\n",
                                   "_meta/vault-config.md": SITE_CONFIG,
@@ -1202,7 +1221,7 @@ def typed(kind, extra=""):
 
 
 @unittest.skipUnless(shutil.which("node"), "needs Node")
-class SharedNameTests(unittest.TestCase):
+class SiteSharedNameTests(unittest.TestCase):
     """A bare name two notes share goes where the site's build sends it."""
 
     def vault(self, npc_extra="", pc_extra="", config=SITE_FULL):

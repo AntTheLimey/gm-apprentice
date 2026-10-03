@@ -323,10 +323,11 @@ SUPERSEDED entities also redirect wiki-links to their
 **Page title:** The page title is always derived from the vault
 filename (without the `.md` extension), not from frontmatter. To
 change a page's title, rename the file with
-`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name> --apply`,
-which rewrites every link to it, and keeps a renamed PC's live stats
-and story file with it. To make a page findable
-under alternate names, use the `aliases` field. For a name players
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/relink.py" <vault> <old path> <new name>`
+(a dry run: it shows every change and writes nothing), and after the
+GM's yes run it again with `--apply`. It rewrites every link to the
+note, and keeps a renamed PC's live stats and story file with it. To
+make a page findable under alternate names, use the `aliases` field. For a name players
 mustn't see, use `gm_aliases`.
 
 ---
