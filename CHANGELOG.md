@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.26] — 2026-10-02
+
+### Changed
+
+- **A vault and its site now migrate with one command.** `migrate.py
+  <vault> plan` prints three lists and writes nothing: Will do, Your
+  choice, Needs a person. `migrate.py <vault> apply` does the first,
+  the choices named with `--choose`, and stamps the vault. The site's
+  publish tool is repinned first, on every pass, and cannot be declined
+  for a vault with a site. A step that fails stops the run, and the
+  vault is stamped at the last release that finished, so the next run
+  starts where this one stopped.
+  - Coded from 1.10.12. An older vault is refused with one line.
+  - `--status` and `--dry-run` are gone; `migrate.py <vault>` alone is
+    `plan`.
+  - `migration-procedure.md` is now a short page on how to drive the
+    script. `migrations.md` is a record of what each release changed.
+  - `config-to-vault` runs on every pass: a vault already at 1.10.24
+    or later whose site file still holds campaign settings is offered
+    the move.
+
+### Added
+
+- `gm-apprentice-publish` 1.12.2: `vault-setting` reports whether a
+  default palette is set and which fonts load from Google, and writes
+  `theme.default_mode` and `theme.fonts.source`.
+
+### Fixed
+
+- `update-pin` run from a git checkout did nothing. It now pins the
+  site to that checkout.
+
 ## [1.10.25] — 2026-10-02
 
 ### Fixed
