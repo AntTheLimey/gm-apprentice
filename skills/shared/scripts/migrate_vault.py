@@ -358,7 +358,9 @@ def _wrapup_target(rel: str, text: str) -> str | None:
 def _relink_items(vault: Path, item_id: str, verb: str,
                   moves: list[tuple[str, str | None, str]]) -> list[Item]:
     """One choice for every move relink accepts, and one person row for
-    each it cannot make. `moves` is (from, to or None, why-if-None)."""
+    each it cannot make. `moves` is (from, to or None, why-if-None). A move
+    with a link that could mean either of two notes (or an alias that the
+    new name would capture) is for a person: a rename must not settle it."""
     ok: list[tuple[str, str, int]] = []
     person: list[str] = []
     taken: set[str] = set()
@@ -367,20 +369,39 @@ def _relink_items(vault: Path, item_id: str, verb: str,
             dst, why = None, f"another note would also become {dst}"
         if dst is not None:
             try:
-                n = len(relink.plan(vault, src, dst).changes)
+                plan = relink.plan(vault, src, dst)
             except relink.RelinkError as e:
                 dst, why = None, str(e)
             else:
-                taken.add(relink.name_key(dst))
-                ok.append((src, dst, n))
-                continue
+                alias = [w for w in plan.warnings if "has the alias" in w]
+                if plan.unsure or alias:
+                    dst = None
+                    why = (f"{len(plan.unsure)} link(s) could mean either "
+                           f"note; settle them first, then rename"
+                           if plan.unsure else alias[0])
+                else:
+                    taken.add(relink.name_key(dst))
+                    ok.append((src, dst, len(plan.changes)))
+                    continue
         person.append(f"{src}\t{why}")
 
     def apply(_value: str | None) -> list[str]:
         done = []
-        for src, dst, _n in ok:
+        for src, dst, shown in ok:
+            # Planned again against the vault as the earlier moves left it:
+            # what the GM was shown is what is done, and nothing is claimed
+            # that was not.
             try:
-                relink.apply(relink.plan(vault, src, dst))
+                fresh = relink.plan(vault, src, dst)
+            except relink.RelinkError as e:
+                raise StepFailed(f"{src}: {e}") from e
+            if fresh.unsure or len(fresh.changes) != shown:
+                raise StepFailed(
+                    f"{src}: the links it would change are no longer the "
+                    f"ones shown ({'some could now mean either note' if fresh.unsure else 'the count changed'}); "
+                    f"nothing more was renamed, run the migration again")
+            try:
+                relink.apply(fresh)
             except relink.RelinkError as e:
                 raise StepFailed(f"{src}: {e}") from e
             done.append(f"{verb}d {src} to {dst}")

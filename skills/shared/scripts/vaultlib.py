@@ -993,16 +993,18 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
 
 def publish_rename_refs(vault: Path, old: str, new: str,
                         config: Path | None = None,
-                        names: Iterable[str] = ()) -> dict[str, Any]:
+                        names: Iterable[str] = (),
+                        tool: Path | None = None) -> dict[str, Any]:
     """What renaming the note `old` to `new` (vault-relative paths) changes
     in the files the publish tool owns, asked of the plugin's own tool:
     `{"files": {path: new text}, "pin": {"live_key": slug}, "companions":
     [{"from", "to"}], "owners": {spelling: path or null}}` (`owners`
     only for the `names` asked: where the site's link map sends each
     spelling), or
-    `"detaches"` / `"refusal"` with a reason in place of an answer
+    `"detaches"` / `"refusal"` / `"unpublishes"` with a reason in place of an answer, `"published"` (the notes the site publishes, with `names`)
     (`pin` only for a page the site keeps live state for). `config`, the
-    site's vault.config.json, is read by the tool when given. Writes
+    site's vault.config.json, is read by the tool when given; `tool` is
+    the one to ask (the plugin's own when None). Writes
     nothing. Raises `PublishToolUnavailable` when it cannot be asked or
     its answer is not understood."""
     args = ["manifest", "rename", "--vault", str(vault.resolve()),
@@ -1011,7 +1013,8 @@ def publish_rename_refs(vault: Path, old: str, new: str,
         args += ["--config", str(config)]
     for name in names:
         args += ["--name", name]
-    out = _LINES_BY_TOOL[PUBLISH_TOOL].run_once(args)
+    asked = _LINES_BY_TOOL[PUBLISH_TOOL] if tool is None else PublishLines(tool)
+    out = asked.run_once(args)
     bad = PublishToolUnavailable("the publish tool's answer was not understood")
     try:
         answer = json.loads(out)
@@ -1039,6 +1042,10 @@ def publish_rename_refs(vault: Path, old: str, new: str,
                 and all(isinstance(k, str) and text_or_none(v)
                         for k, v in answer["owners"].items())))
             or not text_or_none(answer.get("detaches"))
+            or not text_or_none(answer.get("unpublishes"))
+            or not (answer.get("published") is None or (
+                isinstance(answer["published"], list)
+                and all(isinstance(x, str) for x in answer["published"])))
             or not text_or_none(answer.get("refusal"))):
         raise bad
     return answer

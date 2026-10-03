@@ -497,6 +497,49 @@ class SmallCheckTests(unittest.TestCase):
         (item,) = mv.find_heritage_notes(vault)
         self.assertIn("heritages/Elves.md", item.lines[0])
 
+    @unittest.skipUnless(shutil.which("node"), "needs Node")
+    def test_a_heritage_move_that_would_unpublish_the_page_is_a_person_row(self):
+        vault = make_vault(self)
+        (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish:\n  site: true\n  mode: full\n  folder_map:\n"
+            "    Cultures: cultures\n---\n", encoding="utf-8")
+        (vault / "Cultures").mkdir()
+        (vault / "Cultures" / "Elves.md").write_text(
+            "---\ntype: culture\n---\n", encoding="utf-8")
+        items = mv.find_heritage_notes(vault)
+        self.assertEqual([i.group for i in items], [PERSON])
+        self.assertIn("folder_map", items[0].lines[0])
+
+    def test_two_wrapups_with_one_name_and_a_link_to_it_are_for_a_person(self):
+        vault = make_vault(self)
+        for n in (1, 2):
+            self.wrap(vault, f"Chapter {n}/Session_04_Wrap_Up.md",
+                      f'session_number: 4\nchapter: "Chapter {n}"\n')
+        (vault / "Note.md").write_text("[[Session_04_Wrap_Up]]\n", encoding="utf-8")
+        items = mv.find_wrapup_filenames(vault)
+        self.assertEqual([i.group for i in items], [PERSON])
+        self.assertTrue(all("could mean either note" in l for l in items[0].lines))
+
+    def test_a_later_move_that_would_now_claim_a_link_stops_the_batch(self):
+        vault = make_vault(self)
+        (vault / "A").mkdir()
+        (vault / "B").mkdir()
+        (vault / "A" / "Old.md").write_text("x\n", encoding="utf-8")
+        (vault / "B" / "Old.md").write_text("y\n", encoding="utf-8")
+        (vault / "B" / "Keep.md").write_text("[[Old]]\n", encoding="utf-8")
+        # The plan the GM saw: B/Old has one certain link (same folder).
+        items = mv._relink_items(vault, "x", "rename",
+                                 [("B/Old.md", "B/New.md", "")])
+        (item,) = items
+        # Before it is applied, A/Old.md leaves: a stranger now claims nothing,
+        # but a new unsure link appears in another note.
+        (vault / "A" / "Old.md").unlink()
+        (vault / "C.md").write_text("[[Old]]\n", encoding="utf-8")
+        (vault / "A" / "Old.md").write_text("x\n", encoding="utf-8")
+        with self.assertRaises(StepFailed):
+            item.apply(None)
+
     def test_heritage_notes_are_a_choice_that_moves_them(self):
         vault = make_vault(self)
         (vault / "_meta" / "mobrpg-map.json").write_text("{}", encoding="utf-8")

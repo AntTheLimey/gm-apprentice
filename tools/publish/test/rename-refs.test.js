@@ -263,6 +263,33 @@ describe('backlinks follow the page a link resolves to', () => {
   });
 });
 
+describe('manifest rename: what the site publishes', () => {
+  const MAP = '---\npublish:\n  mode: full\n  exclude_dirs: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n---\n';
+  const npc = '---\ntype: npc\n---\n# N\n';
+
+  it('lists the notes the site publishes, so links in the rest are not read through its link map', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': npc, 'GM/Hallam.md': npc, 'GM/Plan.md': '---\ntype: session\n---\n[[Hallam]]\n', 'Sessions/S1.md': '---\ntype: session\n---\n[[Hallam]]\n' });
+    const got = rename(vault, 'NPCs/Hallam.md', 'NPCs/Hallam_Reeve.md', ['--name', 'Hallam']);
+    assert.ok(got.published.includes('NPCs/Hallam.md'));
+    assert.ok(got.published.includes('Sessions/S1.md'));
+    assert.ok(!got.published.includes('GM/Plan.md'));
+    assert.ok(!got.published.includes('GM/Hallam.md'));
+  });
+
+  it('says when the new place would take a published page off the site', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': npc, 'Cultures/Elves.md': '---\ntype: culture\n---\n' });
+    assert.match(rename(vault, 'NPCs/Hallam.md', 'Elsewhere/Hallam.md').unpublishes, /Elsewhere\/Hallam\.md.*folder_map/);
+    assert.match(rename(vault, 'NPCs/Hallam.md', 'GM/Hallam.md').unpublishes, /GM\/Hallam\.md.*exclude_dirs/);
+    assert.match(rename(vault, 'Cultures/Elves.md', 'Heritages/Elves.md').unpublishes, /Heritages\/Elves\.md.*folder_map/);
+    assert.strictEqual(rename(vault, 'NPCs/Hallam.md', 'NPCs/Hallam_Reeve.md').unpublishes, undefined);
+  });
+
+  it('does not object when the page was not published to begin with', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': MAP, 'NPCs/Hallam.md': '---\ntype: npc\npublish: false\n---\n' });
+    assert.strictEqual(rename(vault, 'NPCs/Hallam.md', 'Elsewhere/Hallam.md').unpublishes, undefined);
+  });
+});
+
 describe('pcLiveKey', () => {
   it('is the slug of the title when live_key is absent, as before', () => {
     for (const title of ['Emma_Wentworth', 'Renée González', "O'Neil & Sons"]) {

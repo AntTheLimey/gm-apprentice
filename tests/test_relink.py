@@ -1409,6 +1409,55 @@ class CompanionReviewTests(unittest.TestCase):
                       str(cm.exception))
 
 
+@unittest.skipUnless(shutil.which("node"), "needs Node")
+class SitePublishTests(unittest.TestCase):
+    CFG = ("---\npublish:\n  site: true\n  mode: full\n  exclude_dirs: [GM]\n"
+           "  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n"
+           "    Sessions: sessions\n---\n")
+
+    def test_the_site_map_is_not_applied_to_notes_the_site_never_publishes(self):
+        vault = make_vault(self, {
+            "_meta/vault-config.md": self.CFG,
+            "NPCs/Hallam.md": typed("npc"), "GM/Hallam.md": typed("npc"),
+            "GM/Plan.md": "---\ntype: session\n---\n[[Hallam]]\n",
+            "Sessions/S1.md": "---\ntype: session\n---\n[[Hallam]]\n"})
+        p = relink.plan(vault, "GM/Hallam.md", "GM/Hallam_Dossier.md")
+        # In the excluded folder the same-folder rule decides.
+        self.assertEqual(p.texts["GM/Plan.md"],
+                         "---\ntype: session\n---\n[[Hallam_Dossier]]\n")
+        # A published note follows the site: its [[Hallam]] is the NPC's.
+        self.assertNotIn("Sessions/S1.md", p.texts)
+
+    def test_a_move_that_would_unpublish_the_page_is_refused(self):
+        vault = make_vault(self, {
+            "_meta/vault-config.md": self.CFG,
+            "Cultures/Elves.md": "---\ntype: culture\n---\n"})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "Cultures/Elves.md", "Heritages/Elves.md")
+        self.assertIn("folder_map", str(cm.exception))
+        self.assertIn("nothing was changed", str(cm.exception))
+
+    def test_the_sites_own_tool_is_asked_for_a_vault_with_a_site(self):
+        site = Path(tempfile.mkdtemp(prefix="relink-sitetool-"))
+        self.addCleanup(shutil.rmtree, site, ignore_errors=True)
+        (site / "vault.config.json").write_text("{}")
+        tool = site / "node_modules" / "gm-apprentice-publish" / "bin"
+        tool.mkdir(parents=True)
+        (tool / "gm-publish.js").write_text(
+            "console.error('Error: Unknown manifest command: rename');"
+            "process.exit(1);")
+        vault = make_vault(self, {
+            "_meta/vault-config.md": self.CFG.replace(
+                "site: true\n", f"site: true\n  site_dir: {site.as_posix()}\n"),
+            "NPCs/Hallam.md": typed("npc")})
+        with self.assertRaises(relink.RelinkError) as cm:
+            relink.plan(vault, "NPCs/Hallam.md", "NPCs/Hallam_Reeve.md")
+        self.assertEqual(
+            str(cm.exception),
+            "the site's publish tool is older than this rename needs; run the "
+            "migration (`migrate.py <vault> apply`) first")
+
+
 class FinalFixTests(unittest.TestCase):
     def test_an_absolute_new_is_refused_not_rerooted(self):
         vault = make_vault(self, {"A/Old.md": "x\n"})

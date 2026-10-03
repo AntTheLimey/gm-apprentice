@@ -114,6 +114,7 @@ class Plan:
     # linked by: spelling -> vault path, or None for nothing.
     owners: dict[str, str | None] = field(default_factory=dict)
     rules: list[str] = field(default_factory=list)
+    published: set[str] | None = None
 
     @property
     def moves(self) -> list[tuple[str, str]]:
@@ -225,8 +226,8 @@ class _Move:
         return here[0] if len(here) == 1 else None
 
     def wiki(self, src: str, body: str, esc: Callable[[str], str] = _plain,
-             rebase: bool = False,
-             src_new_dir: str = "") -> str | None | bool:
+             rebase: bool = False, src_new_dir: str = "",
+             use_owners: bool = True) -> str | None | bool:
         """New link body, False if not a link to OLD, None if unsure.
         With `rebase`, a relative link of the moved note `src` to some
         other note is rewritten to keep its target."""
@@ -268,7 +269,7 @@ class _Move:
             return f"{esc(self.new_noext)}{suffix}{sub}{alias}"
         if normalize(bare.strip("/")) != self.old_stem:
             return False
-        site_owner = self.owners.get(bare)
+        site_owner = self.owners.get(bare) if use_owners else None
         if site_owner is not None:
             # The site resolves each spelling by its exact key: it is OLD's
             # link only if the site sends it to OLD.
@@ -321,8 +322,12 @@ class _Resolver:
     stay put are rebased."""
 
     def __init__(self, notes: list[str], moves: list[tuple[str, str]],
-                 owners: dict[str, str | None] | None = None) -> None:
+                 owners: dict[str, str | None] | None = None,
+                 published: set[str] | None = None) -> None:
         owners = owners or {}
+        # The notes the site publishes: only links in these are read through
+        # its link map. None when there is no site to follow.
+        self.published = published
         self.moves = {old: _Move(notes, old, new, owners)
                       for old, new in moves}
         self.new_of = dict(moves)
@@ -333,12 +338,13 @@ class _Resolver:
     def wiki(self, src: str, body: str,
              esc: Callable[[str], str] = _plain) -> str | None | bool:
         nd = self._new_dir(src)
+        use = self.published is None or _nfc(src) in self.published
         for m in self.moves.values():
-            got = m.wiki(src, body, esc, False, nd)
+            got = m.wiki(src, body, esc, False, nd, use)
             if got is not False:
                 return got
         if src in self.moves:
-            return self.moves[src].wiki(src, body, esc, True, nd)
+            return self.moves[src].wiki(src, body, esc, True, nd, use)
         return False
 
     def linked(self, src: str, raw: str, canvas: bool = False) -> str | None:
@@ -569,19 +575,41 @@ def _pin_live_key(p: Plan, texts: dict[str, str | None], slug: str) -> None:
     p.pin = slug
 
 
+def _site_tool(vault: Path) -> Path | None:
+    """The publish tool the vault's site builds with, which is the one to
+    ask what a rename changes there. None means the plugin's own, for a
+    vault with no site; a site with no tool to ask is an error."""
+    import vault_check  # the one place that resolves a site's tool
+    if vault_site(vault)[2] is None:
+        return None  # a site still to be set up builds with nothing yet
+    tool, why, _fix, has_site = vault_check._lines_tool(vault)
+    if not has_site:
+        return None
+    if tool is None:
+        raise PublishToolUnavailable(why or "the site's tool cannot be found")
+    return None if tool == vaultlib.PUBLISH_TOOL else tool
+
+
 def _ask_publish(vault: Path, old: str, new: str, listed: bool,
                  site: bool, names: tuple[str, ...] = ()
                  ) -> dict[str, Any] | None:
     """What the publish tool says a rename of OLD changes on the site (and,
     for the bare `names`, where its link map sends each), or None when the
     vault has neither a publish list nor a site, so nothing is asked and no
-    Node is needed."""
+    Node is needed. A vault with a site asks the tool the site builds with."""
     if not listed and not site:
         return None
     try:
+        tool = _site_tool(vault) if site else None
         return publish_rename_refs(vault, old, new, _site_config(vault),
-                                   names)
-    except PublishToolUnavailable:
+                                   names, tool)
+    except PublishToolUnavailable as e:
+        if site and ("Unknown manifest command" in str(e)
+                     or "Unknown argument" in str(e)):
+            raise RelinkError(
+                "the site's publish tool is older than this rename needs; "
+                "run the migration (`migrate.py <vault> apply`) first"
+            ) from None
         raise RelinkError(
             f"{old} is on the site's publish list and the publish tool "
             f"could not be asked to update it; nothing was changed"
@@ -612,6 +640,8 @@ def _companions(vault: Path, notes: list[str], p: Plan,
         return
     if answer.get("detaches"):
         raise RelinkError(f"{answer['detaches']}; nothing was changed")
+    if answer.get("unpublishes"):
+        raise RelinkError(f"{answer['unpublishes']}; nothing was changed")
     if answer.get("refusal"):
         raise RelinkError(f"{answer['refusal']}; nothing was changed")
     for pair in answer.get("companions") or []:
@@ -683,9 +713,10 @@ def plan(vault: Path, old: str, new: str) -> Plan:
             asked = _ask_publish(vault, old, new, listed, site, names)
             if asked is not None and asked.get("owners"):
                 p.owners = dict(asked["owners"])
+                p.published = {_nfc(x) for x in asked.get("published", [])}
     for o, n in p.moves:
         p.warnings += _alias_warnings(texts, o, n)
-    res = _Resolver(notes, p.moves, p.owners)
+    res = _Resolver(notes, p.moves, p.owners, p.published)
     for o, _n in p.moves:
         shared = [n for n in notes if normalize(_stem(n)) == normalize(_stem(o))]
         if len(shared) > 1:

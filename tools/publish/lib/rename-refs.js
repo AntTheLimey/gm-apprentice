@@ -11,6 +11,8 @@
 //          name the note: an `overrides.fields` path, and a `landing` featured_npcs /
 //          featured_locations / quick_links name. Text comes back byte for byte but for
 //          the changed name, line endings kept.
+//   unpublishes  a reason, when `to` would take a page that publishes off the site.
+//   published  with `--name`: the notes the site publishes (vault paths).
 //   owners  with `--name <spelling>` (repeated): where the build's link map sends each spelling,
 //          { spelling: vault path | null }.
 //   pin    present when the note is a PC page, which the site keys live state by (its
@@ -26,6 +28,8 @@ const {
   pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, buildLinkMap,
 } = require('./scanner');
 const { resolveConfig, scanConfigFor, vaultRelPath, loadVaultConfig } = require('./config');
+const { mapFolder, dirIsExcluded } = require('./scanner');
+const { decidePage, publishesPage } = require('./publish-decision');
 const { loadManifest } = require('./manifest');
 const { publishedPages } = require('./published-pages');
 const { splitFrontmatter, locateBlock } = require('./vault-config-edit');
@@ -177,27 +181,54 @@ function companionsOf(vault, from, to) {
   return {};
 }
 
-// The vault path of the note the build's link map gives each spelling, worked out as the
-// build does it (publishedPages, then buildLinkMap's precedence: titles, paths, aliases;
-// NFC); null when the spelling maps to nothing. The site resolves a spelling by exact key,
-// so each spelling a note is linked by is asked, not just the filename. `configPath`, the
-// site's vault.config.json, is read when given, for settings the vault file does not hold.
-function ownersOf(vault, spellings, configPath) {
+// What the site publishes, worked out as the build does it (config as the build reads it,
+// the scan, publishedPages). `configPath`, the site's vault.config.json, is read when given,
+// for settings the vault file does not hold.
+function siteContext(vault, configPath) {
   const raw = configPath && fs.existsSync(configPath) ? loadVaultConfig(configPath) : {};
   const { config, publishConfig } = resolveConfig(raw, vault, () => {});
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig);
   const relOf = (page) => canonicalPath(vaultRelPath(vault, page.sourcePath));
-  const { published } = publishedPages(scanVaultReport(scanConfig).pages, {
-    vaultPath: vault, publishConfig, manifest: loadManifest(vault), relOf,
-  });
-  const linkMap = buildLinkMap(published);
+  const manifest = loadManifest(vault);
+  const pages = scanVaultReport(scanConfig).pages;
+  const { published } = publishedPages(pages, { vaultPath: vault, publishConfig, manifest, relOf });
+  return { scanConfig, publishConfig, manifest, pages, published, relOf };
+}
+
+// The vault path of the note the build's link map gives each spelling (titles, paths,
+// aliases; NFC); null when it maps to nothing. The site resolves a spelling by exact key, so
+// each spelling a note is linked by is asked, not just the filename. Also the notes that
+// publish: a link in any other note is not read through the site's map.
+function ownersOf(ctx, spellings) {
+  const linkMap = buildLinkMap(ctx.published);
   const owners = {};
   for (const spelling of spellings) {
     const out = linkMap[spelling];
-    const page = out === undefined ? null : published.find((p) => p.outputPath === out);
-    owners[spelling] = page ? relOf(page) : null;
+    const page = out === undefined ? null : ctx.published.find((p) => p.outputPath === out);
+    owners[spelling] = page ? ctx.relOf(page) : null;
   }
-  return owners;
+  return { owners, published: ctx.published.map(ctx.relOf) };
+}
+
+// Why `to` would not publish a page that publishes at `from`: a folder the scanner skips (a
+// hidden one, publish.exclude_dirs, one missing from publish.folder_map), or the build's own
+// verdict for the page there. null when the page keeps publishing, or did not to begin with.
+function unpublishReason(ctx, from, to) {
+  const old = ctx.pages.find((p) => ctx.relOf(p) === canonicalPath(from));
+  if (!old || !ctx.published.includes(old)) return null;
+  const dir = path.posix.dirname(to) === '.' ? '' : path.posix.dirname(to);
+  let why = null;
+  if (dir.split('/').some((seg) => seg.startsWith('.'))) why = 'it is in a hidden folder';
+  else if (dir && dirIsExcluded(dir, ctx.publishConfig.exclude_dirs)) why = 'its folder is in publish.exclude_dirs';
+  else if (dir && !mapFolder(dir, ctx.scanConfig.folderMap || {})) why = 'its folder is not in publish.folder_map';
+  if (!why) {
+    const hyp = ctx.manifest ? Object.assign({}, ctx.manifest, {
+      publishing: ctx.manifest.publishing.map((r) => (r === canonicalPath(from) ? canonicalPath(to) : r)),
+    }) : null;
+    const verdict = decidePage(old, { rel: canonicalPath(to), publishConfig: ctx.publishConfig, manifest: hyp });
+    if (!publishesPage(verdict)) why = verdict.reason;
+  }
+  return why ? `${to} would not publish: ${why}` : null;
 }
 
 function renameRefs(vault, from, to, configPath, names) {
@@ -221,7 +252,10 @@ function renameRefs(vault, from, to, configPath, names) {
   if (manifest !== null && manifestText !== manifest) files[MANIFEST_REL] = manifestText;
   if (config !== null && configText !== config) files[CONFIG_REL] = configText;
   const answer = { files };
-  if (names && names.length) answer.owners = ownersOf(vault, names, configPath);
+  const ctx = siteContext(vault, configPath);
+  const unpublishes = unpublishReason(ctx, from, to);
+  if (unpublishes) answer.unpublishes = unpublishes;
+  if (names && names.length) Object.assign(answer, ownersOf(ctx, names));
   if (found.companions) answer.companions = found.companions;
   const pin = pinOf(vault, from, to);
   if (pin) answer.pin = pin;
