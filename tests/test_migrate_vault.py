@@ -130,8 +130,8 @@ class TemplateTests(unittest.TestCase):
         return by_id(mv.find_templates(vault))["template:_Template_Document.md"]
 
     def test_an_untouched_older_template_is_upgraded_without_asking(self):
-        vault = self.older(lambda old: {
-            "_Template_Document.md": [mv.text_hash(old)]})
+        vault = self.older(lambda old: {"coc-7e": {
+            "_Template_Document.md": [mv.text_hash(old)]}})
         item = self.doc(vault)
         self.assertEqual(item.group, WILL)
         self.assertEqual(
@@ -143,8 +143,8 @@ class TemplateTests(unittest.TestCase):
                          by_id(mv.find_templates(vault)))
 
     def test_an_edited_template_is_still_a_choice(self):
-        vault = self.older(lambda old: {
-            "_Template_Document.md": [mv.text_hash(old)]})
+        vault = self.older(lambda old: {"coc-7e": {
+            "_Template_Document.md": [mv.text_hash(old)]}})
         path = vault / "_Templates" / "_Template_Document.md"
         path.write_text(path.read_text(encoding="utf-8") + "\nMy edit\n",
                         encoding="utf-8")
@@ -152,8 +152,11 @@ class TemplateTests(unittest.TestCase):
 
     def test_a_template_in_no_release_is_a_choice(self):
         for history in (lambda old: {},
-                        lambda old: {"_Template_Document.md": ["0" * 64]},
-                        lambda old: {"_Template_Item.md": [mv.text_hash(old)]}):
+                        lambda old: {"coc-7e": {"_Template_Document.md": ["0" * 64]}},
+                        lambda old: {"coc-7e": {
+                            "_Template_Item.md": [mv.text_hash(old)]}},
+                        lambda old: {"gurps-4e": {
+                            "_Template_Document.md": [mv.text_hash(old)]}}):
             self.assertEqual(self.doc(self.older(history)).group, CHOICE)
 
     def test_a_missing_history_file_leaves_every_difference_a_choice(self):
@@ -161,23 +164,45 @@ class TemplateTests(unittest.TestCase):
         with mock.patch.object(mv, "HISTORY", vault / "nope.json"):
             self.assertEqual(self.doc(vault).group, CHOICE)
 
+    def test_another_systems_template_is_not_upgraded_as_untouched(self):
+        # A free-text game_system the aliases do not know reads as generic;
+        # a GURPS stat block there is the GM's, not an old generic text.
+        vault = make_vault(self, None)
+        (vault / "Overview.md").write_text(
+            "---\ntype: campaign_overview\n"
+            "game_system: GURPS 4th Edition\n---\n", encoding="utf-8")
+        self.assertEqual(mv.vault_system(vault), "gurps 4th edition")
+        (vault / "_Templates").mkdir()
+        gurps = mv.templates_for("gurps-4e")
+        for name in ("_Template_NPC.md", "_Template_Creature.md"):
+            (vault / "_Templates" / name).write_text(
+                gurps[name], encoding="utf-8")
+        items = by_id(mv.find_templates(vault))
+        for name in ("_Template_NPC.md", "_Template_Creature.md"):
+            self.assertEqual(items[f"template:{name}"].group, CHOICE)
+
     def test_the_history_holds_every_current_template(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
         source = SHARED / "templates"
         for system in th.systems_in(source):
             for name, text in mv.templates_for(system).items():
                 self.assertIn(
-                    mv.text_hash(text), history.get(name, []),
+                    mv.text_hash(text),
+                    history.get(system or "generic", {}).get(name, []),
                     f"{name} ({system}) is not in template-history.json; "
                     f"regenerate it: python3 scripts/template_history.py")
 
     def test_the_history_script_will_not_drop_released_hashes(self):
-        old = {"a.md": ["h1", "h2"]}
-        self.assertIsNone(th.refusal(old, {"a.md": ["h1", "h2", "h3"]}, ["v1"]))
-        self.assertIn("would be dropped",
-                      th.refusal(old, {"a.md": ["h1"]}, ["v1"]))
+        old = {"generic": {"a.md": ["h1", "h2"]}}
+        self.assertIsNone(th.refusal(
+            old, {"generic": {"a.md": ["h1", "h2", "h3"]}}, ["v1"]))
+        self.assertIn("would be dropped", th.refusal(
+            old, {"generic": {"a.md": ["h1"]}}, ["v1"]))
+        self.assertIn("would be dropped", th.refusal(
+            old, {"gurps-4e": {"a.md": ["h1", "h2"]}}, ["v1"]))
         self.assertIn("would be dropped", th.refusal(old, {}, ["v1"]))
-        self.assertIn("no release tags", th.refusal({}, {"a.md": ["h1"]}, []))
+        self.assertIn("no release tags", th.refusal(
+            {}, {"generic": {"a.md": ["h1"]}}, []))
 
     def test_an_unreadable_template_is_a_failed_step(self):
         vault = make_vault(self)

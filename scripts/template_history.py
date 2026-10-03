@@ -3,11 +3,12 @@
 
     python3 scripts/template_history.py
 
-For the working tree and every git tag from v1.10.0 on, builds the
-templates a vault of each system would have been given (the migration's own
-`templates_for`) and records a hash of each text, keyed by vault filename.
-migrate.py upgrades an untouched `_Templates/` file whose text is in the
-list as Will do instead of asking. Run this whenever a template under
+For the working tree and every git tag from v1.4.22 on (the first with the
+shared templates), builds the templates a vault of each system would have
+been given (the migration's own `templates_for`) and records a hash of each
+text, keyed by system ("generic" for none), then by vault filename.
+migrate.py upgrades an untouched `_Templates/` file whose text is in its own
+system's list as Will do instead of asking. Run this whenever a template under
 skills/shared/templates/ changes; a test fails until you do.
 """
 
@@ -23,7 +24,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
-from migrate_vault import HISTORY, TEMPLATES, templates_for, text_hash  # noqa: E402
+from migrate_vault import GENERIC, HISTORY, TEMPLATES, templates_for, text_hash  # noqa: E402
 
 FIRST_TAG = (1, 4, 22)   # the first tag with skills/shared/templates/
 SUBPATH = "skills/shared/templates"
@@ -40,10 +41,14 @@ def systems_in(source: Path) -> set[str | None]:
     return found
 
 
-def collect(source: Path, into: dict[str, set[str]]) -> None:
+History = dict[str, dict[str, list[str]]]   # system -> filename -> hashes
+
+
+def collect(source: Path, into: dict[str, dict[str, set[str]]]) -> None:
     for system in systems_in(source):
+        names = into.setdefault(system or GENERIC, {})
         for name, text in templates_for(system, source, skip_missing=True).items():
-            into.setdefault(name, set()).add(text_hash(text))
+            names.setdefault(name, set()).add(text_hash(text))
 
 
 def release_tags() -> list[str]:
@@ -68,24 +73,27 @@ def tag_templates(tag: str, dest: Path) -> bool:
     return True
 
 
-def build(tags: list[str] | None = None) -> dict[str, list[str]]:
-    hashes: dict[str, set[str]] = {}
+def build(tags: list[str] | None = None) -> History:
+    hashes: dict[str, dict[str, set[str]]] = {}
     collect(TEMPLATES, hashes)
     for tag in release_tags() if tags is None else tags:
         with tempfile.TemporaryDirectory() as tmp:
             if tag_templates(tag, Path(tmp)):
                 collect(Path(tmp) / SUBPATH, hashes)
-    return {name: sorted(hashes[name]) for name in sorted(hashes)}
+    return {system: {name: sorted(hashes[system][name])
+                     for name in sorted(hashes[system])}
+            for system in sorted(hashes)}
 
 
-def refusal(old: dict[str, list[str]], new: dict[str, list[str]],
-            tags: list[str]) -> str | None:
+def refusal(old: History, new: History, tags: list[str]) -> str | None:
     """Why the new history must not replace the old, or None: a checkout
     without the release tags would silently drop released hashes."""
     if not tags:
         return "no release tags found (shallow clone?): run `git fetch --tags`"
-    dropped = sum(1 for name, hashes in old.items()
-                  for h in hashes if h not in new.get(name, []))
+    dropped = sum(1 for system, names in old.items()
+                  for name, hashes in names.items()
+                  for h in hashes
+                  if h not in new.get(system, {}).get(name, []))
     if dropped:
         return (f"{dropped} hash(es) already in the history would be "
                 f"dropped; fetch all release tags and run again")
@@ -99,6 +107,8 @@ def main() -> int:
         old = json.loads(HISTORY.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         old = {}
+    if not all(isinstance(v, dict) for v in old.values()):
+        old = {}   # the earlier flat shape: nothing to compare per system
     problem = refusal(old, new, tags)
     if problem:
         print(f"template_history.py: {problem}", file=sys.stderr)

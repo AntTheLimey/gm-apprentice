@@ -141,20 +141,28 @@ def _same(a: str, b: str) -> bool:
     return normalise(a) == normalise(b)
 
 
-def _released_hashes() -> dict[str, list[str]]:
-    """template-history.json: vault filename -> hashes of what releases wrote.
-    Missing or unreadable, no template counts as released (all are choices)."""
+GENERIC = "generic"   # the history's key for a vault with no known system
+
+
+def _released_hashes(system: str | None) -> dict[str, list[str]]:
+    """template-history.json: system -> vault filename -> hashes of what
+    releases wrote for that system. A system the history does not know gets
+    the generic templates, so it is read as generic. Missing or unreadable,
+    no template counts as released (all are choices)."""
     try:
         data = json.loads(HISTORY.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
-    return data if isinstance(data, dict) else {}
+    if not isinstance(data, dict):
+        return {}
+    found = data.get(system if system in data else GENERIC)
+    return found if isinstance(found, dict) else {}
 
 
 def find_templates(vault: Path) -> list[Item]:
     folder = vault / "_Templates"
     items: list[Item] = []
-    released = _released_hashes()
+    released = _released_hashes(vault_system(vault))
     for name, text in expected_templates(vault).items():
         path = folder / name
 
