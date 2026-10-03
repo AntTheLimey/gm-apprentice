@@ -392,10 +392,6 @@ class WriteTextAtomicTests(unittest.TestCase):
                          ["vault-config.md"])
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 def map_folder(vault, folder, key):
     """Add `folder: key` to the vault's `publish.folder_map`, so the
     publish tool takes notes from that folder."""
@@ -453,3 +449,7 @@ class RealToolTests(unittest.TestCase):
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertEqual(self.run_real(vault, "plan")[1].splitlines()[1],
                          "up to date")
+
+
+if __name__ == "__main__":
+    unittest.main()
