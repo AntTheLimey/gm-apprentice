@@ -2854,7 +2854,7 @@ QUOTED_LINK_RE = re.compile(r'^(["\'])\[\[[^\[\]]+\]\]\1\s*(?:#.*)?$')
 ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 SESSION_IN_NAME_RE = re.compile(r"session[ _-]?(\d+)", re.IGNORECASE)
 WRAP_FILENAME_RE = re.compile(r"^Chapter_\d{2}_Session_\d{2}_Wrap_Up$")
-CHAPTER_WRAP_FILENAME_RE = re.compile(r"^Chapter_\d+_Wrap_Up$")
+CHAPTER_WRAP_FILENAME_RE = re.compile(r"^Chapter_\d+(?:\.\d+)?_Wrap_Up$")
 RECONSTRUCTION_NOTE_RE = re.compile(
     r"^>\s*\[!\w[\w-]*\]\s*Reconstruction Note", re.IGNORECASE)
 RECONCILED_LINE_RE = re.compile(

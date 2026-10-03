@@ -417,6 +417,23 @@ class SmallCheckTests(unittest.TestCase):
         self.assertIn("Flat/Chapter_02_Session_03_Wrap_Up.md", item.lines[0])
         self.assertIn("Flat/Chapter_04_Session_04_Wrap_Up.md", item.lines[1])
 
+    def test_decimal_chapter_wrap_ups_are_left_alone(self):
+        vault = make_vault(self)
+        for n in ("0.1", "0.5", "0.6"):
+            self.wrap(vault, f"Chapters/Chapter {n} - X/Chapter_{n}_Wrap_Up.md",
+                      f'chapter: "Chapter {n} \u2014 X"\nsession_number: 1\n')
+        self.assertEqual(mv.find_wrapup_filenames(vault), [])
+
+    def test_a_decimal_chapter_cannot_be_named_so_needs_a_person(self):
+        vault = make_vault(self)
+        self.wrap(vault, "Chapters/Chapter 0.1 - X/Old Name.md",
+                  "session_number: 1\n")
+        self.wrap(vault, "Flat/Old2.md",
+                  'session_number: 1\nchapter: "0.1"\n')
+        (item,) = mv.find_wrapup_filenames(vault)
+        self.assertEqual(item.group, PERSON)
+        self.assertEqual(len(item.lines), 2)
+
     def test_a_chapter_with_no_chapter_word_needs_a_person(self):
         vault = make_vault(self)
         self.wrap(vault, "Chapters/The 7 Sisters/Old.md",

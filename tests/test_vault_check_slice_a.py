@@ -3428,6 +3428,13 @@ class WrapupCommandTests(unittest.TestCase):
             f"INFO\t{CHAPTER_LEVEL}\tchapter-level wrap-up filename — "
             f"conformant as-is", self.rows)
 
+    def test_a_decimal_chapter_wrap_up_filename_is_conformant(self):
+        rows = vc.wrapup_filename_findings(
+            "Chapters/Chapter 0.1 - The Beginning/Chapter_0.1_Wrap_Up.md")
+        self.assertEqual([(f.level, f.message) for f in rows],
+                         [("INFO", "chapter-level wrap-up filename — "
+                                   "conformant as-is")])
+
     # ---- the fix -----------------------------------------------------
 
     def test_the_dry_run_writes_nothing(self):

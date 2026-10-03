@@ -345,8 +345,9 @@ def _wrapup_target(rel: str, text: str) -> str | None:
     if session is None:
         session = session_ref_number(fm)
     ch = (chapter_of(rel, fm) or "").strip()
-    chapter = (re.fullmatch(r"(\d+)", ch)
-               or re.search(r"chapter\D{0,3}(\d+)", ch, re.IGNORECASE))
+    chapter = (re.fullmatch(r"(\d+)(?!\.\d)", ch)
+               or re.search(r"chapter\D{0,3}(\d+)(?!\.?\d)", ch,
+                            re.IGNORECASE))
     if session is None or chapter is None:
         return None
     name = (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
