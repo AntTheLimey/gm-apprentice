@@ -121,6 +121,25 @@ class FrontmatterEditorTests(unittest.TestCase):
         lines = "---\ntype: npc\n---\n\nbody\n".splitlines(keepends=True)
         self.assertEqual(vl.frontmatter_span(lines), (2, None))
 
+    def test_frontmatter_span_accepts_nested_keys_with_spaces(self):
+        text = ("---\npublish:\n  folder_map:\n    Factions & Organizations: "
+                "factions\n    Chapters/Chapter 1 - The Far Dark: chronicle\n"
+                "---\n")
+        self.assertEqual(vl.frontmatter_span(text.splitlines(keepends=True)),
+                         (5, None))
+
+    def test_frontmatter_span_rejects_prose_in_the_region(self):
+        text = "---\ntype: npc\n  some stray words\n---\n"
+        idx, err = vl.frontmatter_span(text.splitlines(keepends=True))
+        self.assertEqual(idx, -1)
+        self.assertIn("does not look like YAML", err)
+
+    def test_frontmatter_span_rejects_an_indented_line_with_a_colon_inside_a_word(self):
+        text = "---\ntype: npc\n  Meet at 10:30 sharp\n---\n"
+        idx, err = vl.frontmatter_span(text.splitlines(keepends=True))
+        self.assertEqual(idx, -1)
+        self.assertIn("does not look like YAML", err)
+
     def test_frontmatter_span_rejects_malformed_delimiter(self):
         lines = "---\ntype: npc\n--- \n".splitlines(keepends=True)
         idx, err = vl.frontmatter_span(lines)

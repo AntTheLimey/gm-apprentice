@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy, isText, usable } = require('./config-keys');
-const { editPublishBlock, setPublishKeys, writeAtomic, fillUnset } = require('./vault-config-edit');
+const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
 const { asBool } = require('./switches');
 const { normalizeExcludeDir, stricterCallouts, MERGED_MAPS } = require('./config');
@@ -33,7 +33,7 @@ const oneLine = (s) => String(s).split('\n')[0].trim();
 
 const refuse = (reason) => ({
   applicable: false, refused: true, reason: oneLine(reason),
-  moves: [], merges: [], switches: [], conflicts: [], notes: [], skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [], siteSet: {},
+  moves: [], merges: [], switches: [], conflicts: [], notes: [], skipped: [], leftover: [], vaultSet: {}, vaultLeaves: [], vaultRemove: [], siteRemove: [], siteSet: {},
 });
 
 // The site's vaultPath is resolved against the config file's directory, as build() does.
@@ -80,7 +80,7 @@ function planMigration({ configPath, vaultPath } = {}) {
 
   const plan = {
     applicable: false, moves: [], merges: [], switches: [], conflicts: [], notes: [],
-    skipped: [], leftover: [], vaultSet: {}, vaultRemove: [], siteRemove: [], siteSet: {},
+    skipped: [], leftover: [], vaultSet: {}, vaultLeaves: [], vaultRemove: [], siteRemove: [], siteSet: {},
   };
 
   if (site) {
@@ -187,7 +187,8 @@ function planMigration({ configPath, vaultPath } = {}) {
         }
         const filled = fillUnset(theme || {}, { tagline });
         if (filled) {
-          plan.vaultSet.theme = filled;
+          // Only the tagline line is written: the rest of the theme, comments included, stays.
+          plan.vaultLeaves.push({ path: ['theme', 'tagline'], value: tagline });
           plan.moves.push({ from: 'vault.config.json landingTagline', to: 'publish.theme.tagline', value: tagline });
         } else if (theme.tagline !== tagline) {
           plan.conflicts.push({ key: 'landingTagline', kept: theme.tagline, discarded: tagline });
@@ -249,12 +250,12 @@ function planMigration({ configPath, vaultPath } = {}) {
       plan.notes.push(`publish.${key} is rewritten; comments inside it are not kept`);
     }
   }
-  const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove });
+  const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove, leaves: plan.vaultLeaves });
   if (edit.error) return refuse(`cannot edit ${VAULT_REL}: ${edit.error}`);
   // A key that still holds entries the vault file cannot take stays in the site file.
   plan.siteRemove = plan.siteRemove.filter((k) => !(k in plan.siteSet));
   const siteRewritten = !!site && Object.keys(plan.siteSet).some((k) => !isDeepStrictEqual(site[k], plan.siteSet[k]));
-  plan.applicable = Object.keys(plan.vaultSet).length > 0 || plan.vaultRemove.length > 0 || plan.siteRemove.length > 0 || siteRewritten;
+  plan.applicable = Object.keys(plan.vaultSet).length > 0 || plan.vaultLeaves.length > 0 || plan.vaultRemove.length > 0 || plan.siteRemove.length > 0 || siteRewritten;
   if (!plan.applicable) plan.reason = 'nothing to migrate';
   return plan;
 }
@@ -281,14 +282,14 @@ function applyMigration(plan, { configPath, vaultPath } = {}, deps = {}) {
   const exists = fs.existsSync(vaultFile);
   const before = exists ? fs.readFileSync(vaultFile, 'utf8') : NEW_VAULT_FILE;
   // Known before any backup is written: a refusal here leaves every file as it was.
-  const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove });
+  const edit = editPublishBlock(before, { set: plan.vaultSet, remove: plan.vaultRemove, leaves: plan.vaultLeaves });
   if (edit.error) throw new Error(`cannot edit ${VAULT_REL}: ${edit.error}`);
-  const writeVault = edit.text !== before || (!exists && Object.keys(plan.vaultSet).length > 0);
+  const writeVault = edit.text !== before || (!exists && (Object.keys(plan.vaultSet).length > 0 || plan.vaultLeaves.length > 0));
   const writeSite = !!site && (plan.siteRemove.length > 0 || Object.keys(plan.siteSet || {}).some((k) => !isDeepStrictEqual(site[k], plan.siteSet[k])));
 
   if (writeVault && exists) made.push(backup(vaultFile));
   if (writeSite) made.push(backup(configPath));
-  if (writeVault) setPublishKeys(vault, plan.vaultSet, plan.vaultRemove);
+  if (writeVault) setPublishChanges(vault, { set: plan.vaultSet, remove: plan.vaultRemove, leaves: plan.vaultLeaves });
   if (writeSite) {
     const kept = Object.fromEntries(Object.entries(site).filter(([k]) => !plan.siteRemove.includes(k))
       .map(([k, v]) => [k, k in (plan.siteSet || {}) ? plan.siteSet[k] : v]));

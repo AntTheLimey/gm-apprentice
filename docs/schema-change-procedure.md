@@ -36,6 +36,9 @@ adding a new field, renaming a field, changing a field's type
 
 - [ ] Edit the corresponding template in
   `skills/shared/templates/` so new vaults get the field
+- [ ] Regenerate the template history so vaults holding the old text
+  are upgraded without a question:
+  `python3 scripts/template_history.py` (a test fails until you do)
 - [ ] If no shared template exists for this entity type,
   consider whether one should be created
 
@@ -67,20 +70,36 @@ adding a new field, renaming a field, changing a field's type
   as appropriate)
 - [ ] Run validation against a test vault to confirm
 
-### 7. Add migration entry
+### 7. Add migration check
 
-- [ ] Add an entry to `skills/shared/migrations.md` under
-  the next version number
-- [ ] Describe the change in the appropriate category:
-  - **Structural** — field additions to vault-config or
-    required scaffolding
-  - **Content** — template updates, field additions to entity
-    files (usually opt-in)
-- [ ] For field additions: specify whether existing files
-  should be backfilled (and with what value) or left as-is
-- [ ] For field renames: specify the old→new mapping
-- [ ] For field removals: specify whether the old field
-  should be stripped from existing files
+A migration is code, not prose: `migrate.py` runs it, and
+`shared/migrations.md` only records it.
+
+- [ ] Write a `find_*` function in
+  `skills/shared/scripts/migrate_vault.py` (vault files) or
+  `migrate_site.py` (anything the site's publish tool decides).
+  It returns `Item`s: Will do (one yes covers it), Your choice
+  (the GM picks it by id) or Needs a person (a script cannot
+  settle it)
+- [ ] Add a `Check` entry to that file's check list, with the
+  release that introduces the change (or `None` if it must run
+  on every pass), its `band` (1 repin, 2 config, 3 files, 4 asks
+  the site's tool; this is the run order), and `asks_site=True`
+  when it asks the publish tool, so it waits for the repin
+- [ ] For a Your-choice item, declare its id in the check's
+  `choices` (a trailing `=` marks one that needs a value, a
+  trailing `:` a prefix such as `played:`). An id that is not
+  declared there can never be picked: `--choose` refuses it
+- [ ] For field additions: decide whether existing files are
+  backfilled (and with what value) or left as-is
+- [ ] For field renames: code the old→new mapping
+- [ ] For field removals: decide whether the old field is
+  stripped from existing files
+- [ ] Test the check against a vault that needs it and one
+  that does not, in `tests/test_migrate_vault.py` or
+  `tests/test_migrate_site.py`
+- [ ] Add one row to the table in `skills/shared/migrations.md`:
+  the release, what changes in a vault, and the check id
 
 ### 8. Update tests
 

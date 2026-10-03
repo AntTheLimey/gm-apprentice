@@ -213,6 +213,7 @@ async function runUpdatePin(options, deps) {
   const writeFile = d.writeFile || ((p, c) => fs.writeFileSync(p, c));
   const runCommand = d.runCommand || require('./run-command').runCommand;
   const detect = d.detect || require('./version-check').detectVersionDrift;
+  const exists = d.exists || fs.existsSync;
   const toolDir = d.toolDir || path.join(__dirname, '..');
   const siteDir = path.resolve(opts.siteDir || '.');
   const asJson = !!opts.json;
@@ -224,18 +225,30 @@ async function runUpdatePin(options, deps) {
   };
 
   const cache = detect();
+  // The tool is running from a git checkout when it is in no versioned cache and in
+  // no node_modules folder. A checkout is then the newest tool there is: pin to it.
+  // A copy inside node_modules is a site's own install, and a site is never pinned
+  // to itself.
+  const inNodeModules = toPosix(path.resolve(toolDir)).split('/').includes('node_modules');
+  let checkoutVersion = 'unknown';
   if (!cache) {
-    // A dev checkout, or a tool copied out of the cache. There is no "newest
-    // installed version" to point at, so there is nothing this command can do.
-    let version = 'unknown';
-    try { version = JSON.parse(readFile(path.join(toolDir, 'package.json'))).version; } catch { /* keep 'unknown' */ }
-    if (!asJson) out(`not in a versioned plugin cache — the running tool is ${version}; nothing to repoint`);
+    try { checkoutVersion = JSON.parse(readFile(path.join(toolDir, 'package.json'))).version || 'unknown'; } catch { /* keep 'unknown' */ }
+  }
+  // A git checkout has a `.git` (folder, or file in a worktree) at or above the tool.
+  const inGitCheckout = () => {
+    for (let dir = path.resolve(toolDir); ; dir = path.dirname(dir)) {
+      if (exists(path.join(dir, '.git'))) return true;
+      if (path.dirname(dir) === dir) return false;
+    }
+  };
+  if (!cache && (inNodeModules || checkoutVersion === 'unknown' || !inGitCheckout())) {
+    if (!asJson) out(`not in a versioned plugin cache — the running tool is ${checkoutVersion}; nothing to repoint`);
     return report({
       pinnedBefore: null, pinnedAfter: null, installedBefore: null, installedAfter: null,
-      desired: version, changed: false, ok: true,
+      desired: checkoutVersion, changed: false, ok: true,
     }, 0);
   }
-  const desired = cache.latest;
+  const desired = cache ? cache.latest : checkoutVersion;
 
   const sitePkgPath = path.join(siteDir, 'package.json');
   let sitePkg;
@@ -271,8 +284,6 @@ async function runUpdatePin(options, deps) {
     }, 0);
   }
 
-  const pinnedBefore = pinnedVersionOf(String(spec).slice('file:'.length));
-
   const readInstalled = () => {
     try {
       return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
@@ -285,8 +296,12 @@ async function runUpdatePin(options, deps) {
   // suggestedPath is null whenever detectVersionDrift saw no drift — which happens
   // routinely here, because the tool being run is usually already the newest one and
   // it is the SITE that is stale. Build the path from versionsRoot in that case.
-  const targetPath = cache.suggestedPath
-    || toPosix(path.join(cache.versionsRoot, desired, 'tools', 'publish'));
+  // A checkout is its own target, and "current" then means the spec already names it.
+  const targetPath = !cache
+    ? toPosix(path.resolve(toolDir))
+    : (cache.suggestedPath || toPosix(path.join(cache.versionsRoot, desired, 'tools', 'publish')));
+  const pinnedToTarget = toPosix(String(spec).slice('file:'.length)).replace(/\/+$/, '') === targetPath;
+  const pinnedBefore = cache ? pinnedVersionOf(String(spec).slice('file:'.length)) : (pinnedToTarget ? desired : null);
   // `desired` is the PLUGIN's version (the cache folder's name). The package that folder
   // holds has its own version, and that is what lands in node_modules: plugin 1.10.19
   // holds tool 1.11.41. Comparing the two called every successful install a failure.

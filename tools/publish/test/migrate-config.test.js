@@ -501,15 +501,16 @@ describe('migrate-config', () => {
     assert.ok(lines.includes(`backup ${b.configPath}.pre-migrate`));
   });
 
-  it('a theme block that gets a tagline carries a note saying its comments are lost', () => {
-    const s = makeSite({ site: { landingTagline: 'Hi' }, vaultFile: '---\npublish:\n  theme:\n    # keep\n    genre: noir\n---\n' });
+  it('a theme block that gets a tagline keeps every other line byte for byte', () => {
+    const vaultFile = '---\ntype: meta\npublish:\n  mode: player   # who reads\n  theme:\n    # palette tried 2026-09: too red\n    genre: noir   # the one I like\n    accent: #c0a060\n  footer: F\n---\n\nBody.\n';
+    const s = makeSite({ site: { landingTagline: 'Hi' }, vaultFile });
     const lines = [];
     runMigrateConfig({ configPath: s.configPath, dryRun: true }, { out: (l) => lines.push(l) });
-    assert.ok(lines.includes('note publish.theme is rewritten; comments inside it are not kept'), lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('comments inside it are not kept')), lines.join('\n'));
     migrate(s);
-    assert.deepStrictEqual(publishOf(s.vaultFile).theme, { genre: 'noir', tagline: 'Hi' });
-    const t = makeSite({ site: { landingTagline: 'Hi' } });
-    assert.deepStrictEqual(planMigration({ configPath: t.configPath }).notes, []);
+    const want = vaultFile.replace('    accent: #c0a060\n', '    accent: #c0a060\n    tagline: Hi\n');
+    assert.strictEqual(read(s.vaultFile), want);
+    assert.strictEqual(publishOf(s.vaultFile).theme.tagline, 'Hi');
   });
 
   it('list entries that are not text are skipped and reported, on a merge and on a whole move', () => {

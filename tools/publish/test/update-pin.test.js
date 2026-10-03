@@ -41,6 +41,7 @@ function harness({ files, detect, npm }) {
       return npm ? npm(store) : { code: 0, stdout: '', stderr: '' };
     },
     detect: () => detect,
+    exists: (p) => path.resolve(p) in store,
     toolDir: '/opt/tool',
   };
   return { deps, out, writes, runs, store };
@@ -63,14 +64,65 @@ function siteFiles(spec, installed) {
 }
 
 describe('update-pin', () => {
-  it('says nothing to repoint when the tool is not in a plugin cache', async () => {
+  const CHECKOUT = '/work/gm-apprentice/tools/publish';
+  const checkoutFiles = (installed) => Object.assign(
+    siteFiles('file:/cache/1.10.19/tools/publish', installed),
+    { [path.resolve(CHECKOUT, 'package.json')]: JSON.stringify({ version: '1.12.2' }),
+      [path.resolve('/work/gm-apprentice/.git')]: '' });
+  const installNew = (store) => {
+    store[path.resolve('/site/node_modules/gm-apprentice-publish/package.json')] = installedPkg('1.12.2');
+    return { code: 0, stdout: '', stderr: '' };
+  };
+
+  it('from a checkout, a stale site is pinned to the checkout', async () => {
+    const h = harness({ files: checkoutFiles('1.11.41'), detect: null, npm: installNew });
+    h.deps.toolDir = CHECKOUT;
+    const rc = await runUpdatePin({ siteDir: '/site', json: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    const written = JSON.parse(h.writes[path.resolve('/site/package.json')]);
+    assert.strictEqual(written.dependencies['gm-apprentice-publish'],
+      `file:${path.resolve(CHECKOUT).split(path.sep).join('/')}`);
+    const payload = JSON.parse(h.out.join('\n'));
+    assert.deepStrictEqual(
+      [payload.ok, payload.changed, payload.installedAfter, payload.desired],
+      [true, true, '1.12.2', '1.12.2'],
+    );
+  });
+
+  it('from a checkout, --check reports the drift and writes nothing', async () => {
+    const h = harness({ files: checkoutFiles(null), detect: null });
+    h.deps.toolDir = CHECKOUT;
+    const rc = await runUpdatePin({ siteDir: '/site', json: true, check: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(h.writes, {});
+    assert.deepStrictEqual(h.runs, []);
+    assert.strictEqual(JSON.parse(h.out.join('\n')).ok, false);
+  });
+
+  it('a tool outside any cache with no .git above it repoints nothing', async () => {
+    const dir = '/opt/loose/tools/publish';
     const h = harness({
-      files: { [path.resolve('/opt/tool/package.json')]: JSON.stringify({ version: '9.9.9' }) },
+      files: { [path.resolve(dir, 'package.json')]: JSON.stringify({ version: '1.12.2' }) },
       detect: null,
     });
+    h.deps.toolDir = dir;
     const rc = await runUpdatePin({ siteDir: '/site' }, h.deps);
     assert.strictEqual(rc, 0);
-    assert.match(h.out.join('\n'), /not in a versioned plugin cache — the running tool is 9\.9\.9; nothing to repoint/);
+    assert.match(h.out.join('\n'), /nothing to repoint/);
+    assert.deepStrictEqual(h.writes, {});
+    assert.deepStrictEqual(h.runs, []);
+  });
+
+  it('a tool run from inside a node_modules folder repoints nothing', async () => {
+    const dir = '/site/node_modules/gm-apprentice-publish';
+    const h = harness({
+      files: { [path.resolve(dir, 'package.json')]: JSON.stringify({ version: '1.12.2' }) },
+      detect: null,
+    });
+    h.deps.toolDir = dir;
+    const rc = await runUpdatePin({ siteDir: '/site' }, h.deps);
+    assert.strictEqual(rc, 0);
+    assert.match(h.out.join('\n'), /nothing to repoint/);
     assert.deepStrictEqual(h.writes, {});
   });
 

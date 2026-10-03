@@ -288,7 +288,7 @@ def nested_mapping(text: str, key: str) -> dict[str, str]:
 # the file's own line endings are preserved byte-for-byte.
 # --------------------------------------------------------------------------
 
-YAML_LINE_RE = re.compile(r"^\s*$|^\s*#|^[\w.-]+:|^\s+-\s|^\s+\S+:")
+YAML_LINE_RE = re.compile(r"^\s*$|^\s*#|^[\w.-]+:|^\s+-\s|^\s+[^\s#:][^:]*:(\s|$)")
 
 
 def frontmatter_span(lines: list[str]) -> tuple[int, str | None]:

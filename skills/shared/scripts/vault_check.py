@@ -57,7 +57,9 @@ line as `LEVEL<TAB>path<TAB>message`.
 Levels: ERROR (schema violation), WARNING (needs GM attention),
 INFO (context the auditing skill should triage, not a defect).
 
-`gm-leak` skips by frontmatter, not path: a `type:` of
+`gm-leak` skips a note the publish tool says it does not publish (under
+`publish.exclude_dirs`, no `type:`, a draft), and otherwise by
+frontmatter: a `type:` of
 `session-plan`, `session-play-notes`, `plan`, or `meta` is never
 published and always skipped, even under `_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
@@ -1724,6 +1726,26 @@ def sections_withheld(answer: ToolAnswer
         return None, "explain did not return the expected JSON"
 
 
+def pages_published(answer: ToolAnswer) -> set[str] | None:
+    """The notes (NFC paths) the site publishes, from `explain --all --json`:
+    the pages whose `publishes` is true. A note the tool's walk never reached
+    (under an excluded folder) is not in its list at all, and one it lists
+    with `publishes: false` (no `type:`, a draft, a play-notes page) is
+    withheld; either way nothing in it can reach the players. None when the
+    tool could not be asked, `pages` is missing or not a list, or a page does
+    not give a boolean `publishes` (an older tool): the caller then skips
+    nothing. An empty list is an answer: nothing publishes, so `set()`."""
+    try:
+        pages = answer.data["pages"] if answer.data is not None else None
+        if not isinstance(pages, list) or not all(
+                isinstance(p["publishes"], bool) for p in pages):
+            return None
+        return {unicodedata.normalize("NFC", str(p["path"]))
+                for p in pages if p["publishes"]}
+    except (KeyError, TypeError):
+        return None
+
+
 def publish_switches(answer: ToolAnswer) -> dict[str, bool] | None:
     """The site's resolved switches (`characterSheets`, `liveStats`,
     `inbox`) from `explain --all --json`, or None when the tool could not
@@ -2219,11 +2241,14 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         rows.append(f"INFO\t{VAULT_CONFIG}\tgm-leak assumes the default "
                     f"exclude list: {reason}")
     withheld: set[str] = set()
+    published: set[str] | None = None
+    not_published = 0
     # Headings only the tool withholds (not on the exclude list), per file.
     tool_stripped: dict[str, set[str]] = {}
     sheet_off: dict[str, set[str]] = {}
     if tool is not None:
         sheet_off = sheet_withheld_sections(tool)
+        published = pages_published(tool)
         rows.extend(_tool_used_row(tool.used if tool.data is not None
                                    else None))
         if any(fm.get("type") == "session" for _r, _t, fm in notes):
@@ -2254,6 +2279,12 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
         if entity_type(fm) in GM_LEAK_SKIP_TYPES:
             continue
         if publish_mode(fm) == "none":
+            continue
+        if published is not None and unicodedata.normalize(
+                "NFC", rel) not in published:
+            # The site does not publish this note (an excluded folder, no
+            # `type:`, a draft): nothing in it can reach the players.
+            not_published += 1
             continue
         if unicodedata.normalize("NFC", rel) in withheld:
             # session-hub.js suppressHubBody: the site publishes the
@@ -2323,6 +2354,9 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
                         f"nothing written")
         elif new_text is not None:
             writes.append((rel, new_text, moved))
+    if not_published:
+        rows.append(f"INFO\t(vault)\t{not_published} notes skipped: the site "
+                    f"does not publish them")
     if renest_excludes:
         return rows + renest_excludes_migration(vault, fix, explain)
     mode = "FIXED" if fix else "WOULD-FIX"

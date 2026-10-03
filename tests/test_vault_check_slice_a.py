@@ -145,7 +145,11 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
             if message is not None:
                 page["frontmatterError"] = message
             pages.append(page)
-        answer = {"vaultPath": str(vault), "pages": pages}
+        # no pages at all is an older tool's answer; `pages: []` would say
+        # that nothing publishes
+        answer = {"vaultPath": str(vault)}
+        if pages:
+            answer["pages"] = pages
         if switches is not None:
             answer["switches"] = switches
         if exclude_sections is not None:
@@ -1107,7 +1111,8 @@ class GmLeakCommandTests(unittest.TestCase):
         (vault / "Empty.md").write_text(
             "---\ntype: npc\npublish: stub\n---\n\n"
             "## Keeper Checklist\n\nNothing ships.\n", encoding="utf-8")
-        self.assertEqual(vc.check_gm_leak(vault, None), [])
+        self.assertEqual(vc.check_gm_leak(vault, None), [
+            "INFO\t(vault)\t1 notes skipped: the site does not publish them"])
 
     def test_an_unrecognised_fence_problem_is_never_dropped(self):
         self.assertEqual(
@@ -1961,7 +1966,7 @@ class NoPublishToolTests(unittest.TestCase):
         vault = make_vault(self, "---\npublish:\n  mode: player\n---\n")
         (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
-        self.assertFalse(rows_for(rows, "\t(vault)\t"), rows)
+        self.assertFalse(rows_for(rows, "WARNING\t(vault)\t"), rows)
         self.assertTrue(rows_for(rows, "ERROR\tBob.md"), rows)
 
     def test_without_the_tool_the_switch_is_read_here(self):
@@ -4268,6 +4273,90 @@ class GmLeakSheetsOffTests(unittest.TestCase):
             "[Skills, Background]\n---\n\n## Background\n\nA sailor.\n\n"
             "## Skills\n\n**Keeper-only:** x\n", encoding="utf-8")
         self.assertFalse(rows_for(vc.check_gm_leak(vault, None), "Hero.md"))
+
+
+class GmLeakExcludedFolderTests(unittest.TestCase):
+    """The publish tool says which notes reach the site: one under
+    `publish.exclude_dirs` is not in its list, one without a `type:` is
+    listed as not publishing. gm-leak reports nothing for either; the same
+    heading in a published note still is."""
+    NOTE = ("---\ntype: npc\n---\n\n# Hero\n\n## Motivations & Secrets\n\n"
+            "He lied.\n")
+    UNTYPED = NOTE.replace("type: npc\n", "")
+
+    def rows(self, notes):
+        vault = make_vault(
+            self, config="---\npublish:\n  exclude_dirs: [_resources]\n---\n")
+        for rel, text in notes.items():
+            (vault / rel).parent.mkdir(parents=True, exist_ok=True)
+            (vault / rel).write_text(text, encoding="utf-8")
+        return vc.check_gm_leak(vault, None)
+
+    def test_a_published_note_is_still_reported(self):
+        rows = self.rows({"Characters/NPCs/Hero.md": self.NOTE})
+        self.assertTrue(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
+                        rows)
+
+    def test_an_excluded_folder_is_not_reported(self):
+        rows = self.rows({"_resources/Hero.md": self.NOTE,
+                          "Characters/NPCs/Hero.md": self.NOTE})
+        self.assertFalse(rows_for(rows, "_resources/"), rows)
+        self.assertTrue(rows_for(rows, "Characters/NPCs/Hero.md:"), rows)
+
+    def test_a_note_with_no_type_is_not_reported(self):
+        rows = self.rows({"Characters/NPCs/Plain.md": self.UNTYPED})
+        self.assertFalse(rows_for(rows, "Plain.md"), rows)
+
+    def test_a_skipped_note_is_counted_in_one_info_row(self):
+        rows = self.rows({"_resources/Hero.md": self.NOTE,
+                          "Characters/NPCs/Plain.md": self.UNTYPED})
+        info = rows_for(rows, "INFO\t(vault)\t")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("notes skipped: the site does not publish them", info[0])
+
+    def answered(self, mutate):
+        """gm-leak on a published leaking note, the tool's answer changed by
+        `mutate(pages)`."""
+        vault = make_vault(self)
+        (vault / "Characters/NPCs").mkdir(parents=True)
+        (vault / "Characters/NPCs/Hero.md").write_text(self.NOTE,
+                                                       encoding="utf-8")
+        real = vc.subprocess.run
+
+        def run(cmd, **kw):
+            done = real(cmd, **kw)
+            if "explain" not in cmd:
+                return done
+            answer = json.loads(done.stdout)
+            mutate(answer)
+            return subprocess.CompletedProcess(
+                cmd, done.returncode, json.dumps(answer), done.stderr)
+
+        with mock.patch.object(vc.subprocess, "run", run):
+            return vc.check_gm_leak(vault, None)
+
+    def test_an_answer_without_pages_still_reports(self):
+        rows = self.answered(lambda a: a.pop("pages"))
+        self.assertTrue(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
+                        rows)
+
+    def test_an_answer_that_nothing_publishes_reports_nothing(self):
+        rows = self.answered(lambda a: a.update(pages=[]))
+        self.assertFalse(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
+                         rows)
+        info = rows_for(rows, "INFO\t(vault)\t")
+        self.assertEqual(len(info), 1, rows)
+        self.assertIn("notes skipped: the site does not publish them",
+                      info[0])
+
+    def test_an_answer_without_publishes_still_reports(self):
+        def drop(answer):
+            for page in answer["pages"]:
+                page.pop("publishes")
+        rows = self.answered(drop)
+        self.assertTrue(rows_for(rows, "WARNING\tCharacters/NPCs/Hero.md:"),
+                        rows)
+        self.assertFalse(rows_for(rows, "notes skipped"), rows)
 
 
 class GmLeakHandoutSectionTests(unittest.TestCase):

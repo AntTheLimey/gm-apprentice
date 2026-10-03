@@ -491,19 +491,21 @@ the vault file only.
 ### Moving the settings
 
 From the plugin, run the migration against the vault. Show the GM the
-dry run's lines first, then run it for real:
+plan first, then apply it on their yes:
 
 ```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> --dry-run
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault>
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> plan
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/migrate.py" <vault> apply
 ```
+
+The move is the `config-to-vault` step under Will do. The migration
+offers it whenever the site file still holds campaign settings,
+whatever the vault's version.
 
 It finds the site through `publish.site_dir` in the vault file and
 asks that site's publish tool to do the move (`migrate-config`). Set
 `publish.site_dir` first: without it the migration looks at the vault
-file only and the site file's settings stay where they are. To move
-one site directly, run `node "$TOOL" migrate-config --dry-run --config
-<dir>/vault.config.json`, then again without `--dry-run`. The move:
+file only and the site file's settings stay where they are. The move:
 
 - writes each campaign setting under `publish:` and removes it from
   the site file. Only the old keys in the table above are removed;
@@ -525,18 +527,18 @@ one site directly, run `node "$TOOL" migrate-config --dry-run --config
   is never replaced;
 - changes only the keys it moves in the vault file. Comments and
   layout elsewhere stay as written, with one exception: adding to an
-  existing list or map in the vault file (a merged exclude list, a
-  `theme:` block that gets a tagline) rewrites that block, so
-  comments inside it are lost, and the tool prints a note for each.
+  existing list in the vault file (a merged exclude list) rewrites that
+  list, so comments inside it are lost, and the tool prints a note for
+  each. A `theme:` block that gets a tagline gains only that one line.
   It writes nothing when the vault
   file cannot be edited safely (a `publish: {…}` written on one line,
   tab indentation, mixed line endings, YAML that does not parse).
 
-Running it twice is safe: the second run reports nothing to do.
-`--status` shows whether the step is pending. Exit code 0 means done
-or nothing to do, 1 a step failed, 2 bad arguments. If it stops with
-a message about the publish tool, run `update-pin --site <site-dir>`,
-then `migrate.py` again.
+Running it twice is safe: once the move is done, `plan` no longer
+lists it. Exit code 0 means done or nothing to do, 1 a step failed, 2
+bad arguments or a vault it does not migrate. The migration repins the
+site's publish tool itself, as the first step under Will do, before it
+asks the tool to move anything.
 
 ---
 
