@@ -35,7 +35,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`plan` and `apply` print each check's shared message once.** Rows
   from one check that say the same thing become one line with a count,
   the paths indented under it; paths are relative to the vault or site,
-  backups are one line, and `apply` prints `# N rows unchanged from the
+  backups are one line, and `apply` prints `# N rows already shown in the
   plan` instead of repeating Needs a person rows the plan already
   showed.
 - **Templates the GM never edited are no longer asked about.** A

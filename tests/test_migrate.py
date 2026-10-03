@@ -352,7 +352,7 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(log, [("mode", "dark")])
         self.assertIn("mode\tmode dark", out)
-        self.assertIn("## Needs a person\n# count: 1\n# 1 row unchanged from the plan\n",
+        self.assertIn("## Needs a person\n# count: 1\n# 1 row already shown in the plan\n",
                       out)
         self.assertEqual(stamp_of(vault), PLUGIN)
 
@@ -469,7 +469,7 @@ class ShortOutputTests(unittest.TestCase):
         code, out, _ = call([str(vault), "apply"], checks)
         self.assertEqual(code, 0)
         self.assertIn("## Needs a person\n# count: 4\n"
-                      "# 2 rows unchanged from the plan\n"
+                      "# 2 rows already shown in the plan\n"
                       "later (2): new\n  C.md\n  D.md\n", out)
         self.assertNotIn("A.md", out)
 
@@ -477,7 +477,7 @@ class ShortOutputTests(unittest.TestCase):
         vault = make_vault(self)
         checks = [self.person_check("old", ["A.md\tseen", "B.md\tseen"])]
         _, out, _ = call([str(vault), "apply"], checks)
-        self.assertIn("# count: 2\n# 2 rows unchanged from the plan\n"
+        self.assertIn("# count: 2\n# 2 rows already shown in the plan\n"
                       "stamped", out)
 
 

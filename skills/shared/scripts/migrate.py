@@ -115,7 +115,7 @@ def emit(label: str, rows: list[Row], unchanged: int = 0) -> None:
     print(f"## {label}")
     print(f"# count: {len(rows) + unchanged}")
     if unchanged:
-        print(f"# {unchanged} row{'s' * (unchanged != 1)} unchanged from the plan")
+        print(f"# {unchanged} row{'s' * (unchanged != 1)} already shown in the plan")
     for line in _grouped(rows):
         print(line)
 

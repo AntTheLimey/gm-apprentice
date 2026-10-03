@@ -87,14 +87,6 @@ def _tool_error(vault: Path, why: str) -> str:
     return why
 
 
-def _backup_places(vault: Path) -> str:
-    site, has_config = configured_site(vault)
-    places = [str(vault / "_meta" / "vault-config.md.pre-migrate")]
-    if site is not None and has_config:
-        places.append(f"{site / 'vault.config.json'}.pre-migrate")
-    return " and ".join(places)
-
-
 def _relative(vault: Path, path: str) -> str:
     """`path` as the vault's or the site's own relative path; a site file is
     tagged "site:". Anything else is left as it was."""
@@ -108,6 +100,14 @@ def _relative(vault: Path, path: str) -> str:
             except ValueError:
                 continue
     return path
+
+
+def _backup_places(vault: Path) -> str:
+    site, has_config = configured_site(vault)
+    places = [_relative(vault, str(vault / "_meta" / "vault-config.md.pre-migrate"))]
+    if site is not None and has_config:
+        places.append(_relative(vault, f"{site / 'vault.config.json'}.pre-migrate"))
+    return " and ".join(places)
 
 
 def _backup_line(vault: Path, lines: tuple[str, ...]) -> list[str]:
@@ -238,8 +238,9 @@ def find_site_repin(vault: Path) -> list[Item]:
             raise StepFailed("; ".join(tail))
         if not _pin_check(site)["ok"]:
             raise StepFailed(
-                f"update-pin finished but the site at {site} is still out of "
-                f"date; run update-pin --site {site} by hand to see why")
+                "update-pin finished but the site (publish.site_dir in "
+                "_meta/vault-config.md) is still out of date; run "
+                "update-pin --site <that folder> by hand to see why")
         return lines
 
     return [Item(REPIN, WILL,

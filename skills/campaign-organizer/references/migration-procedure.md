@@ -25,7 +25,7 @@ migration is a script; this file says how to drive it.
    ending "apply stops here until this is fixed" comes first.
    Rows from one check that share a message print it once, as
    `check (N): message`, with the paths indented under it. After an
-   `apply`, `# N rows unchanged from the plan` stands for rows the
+   `apply`, `# N rows already shown in the plan` stands for rows the
    plan already showed; only the rows it could not have shown print.
 5. If it exits 1, give the GM the error line as printed. The vault is
    stamped at the last release that finished (the output says which,
