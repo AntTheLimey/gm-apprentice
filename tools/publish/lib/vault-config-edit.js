@@ -65,22 +65,44 @@ function locateBlock(lines) {
   // The block runs to the next top-level line; trailing blanks and comments are not part of it.
   const stop = lines.findIndex((l, i) => i > start && !isBlank(l) && !isComment(l) && !/^[ \t]/.test(l));
   const limit = stop < 0 ? lines.length : stop;
-  let end = start + 1;
-  for (let i = start + 1; i < limit; i++) if (!isBlank(lines[i]) && !isComment(lines[i])) end = i + 1;
-  const first = lines.slice(start + 1, end).find((l) => !isBlank(l) && !isComment(l));
-  const indent = first === undefined ? 2 : indentOf(first);
-  // Lines indented deeper than the keys (a block scalar ending in a `#` line) belong to the
-  // last key; only comments at the key indent or shallower sit outside the block.
+  const span = spanOf(lines, start + 1, limit);
+  const end = span.end;
+  const indent = span.indent === null ? 2 : span.indent;
+  const scanned = scanKeys(lines, start + 1, end, indent);
+  if (scanned.error) return scanned;
+  return { start, end, indent, keys: scanned.keys };
+}
+
+// Where the entries under a key end. `from` is the line after the key, `limit` one past the
+// last line that may belong to it. Returns { end, indent }: end is one past the last content
+// line (lines indented deeper than the keys, such as a block scalar ending in a `#` line,
+// belong to the last key; only comments at the key indent or shallower sit outside), and
+// indent is the entries' indent, or null when there are none.
+function spanOf(lines, from, limit) {
+  let end = from;
+  let indent = null;
+  for (let i = from; i < limit; i++) {
+    if (isBlank(lines[i]) || isComment(lines[i])) continue;
+    if (indent === null) indent = indentOf(lines[i]);
+    end = i + 1;
+  }
+  if (indent === null) return { end, indent };
   for (let i = end; i < limit; i++) {
     if (isBlank(lines[i])) continue;
     if (indentOf(lines[i]) <= indent) break;
     end = i + 1;
   }
-  for (let i = start + 1; i < end; i++) {
+  return { end, indent };
+}
+
+// The entries [{ key, from, to }] written at `indent` in lines[from, end); to is exclusive,
+// and comments above the next key are left out of a span.
+function scanKeys(lines, from, end, indent) {
+  for (let i = from; i < end; i++) {
     if (/^ *\t/.test(lines[i])) return { error: 'the publish block is indented with a tab' };
   }
   const starts = [];
-  for (let i = start + 1; i < end; i++) {
+  for (let i = from; i < end; i++) {
     if (indentOf(lines[i]) === indent && !isBlank(lines[i]) && !isComment(lines[i])) {
       const found = keyOf(lines[i].slice(indent));
       if (found !== null && found.spaced) return { error: `the key "${found.key}" has a space before its colon` };
@@ -93,7 +115,7 @@ function locateBlock(lines) {
     while (to > s.from + 1 && outside(lines[to - 1]) && n + 1 < starts.length) to--;
     return { key: s.key, from: s.from, to };
   });
-  return { start, end, indent, keys };
+  return { keys };
 }
 
 function dumpAt(key, value, indent) {
@@ -122,26 +144,88 @@ function applyOne(fm, change) {
   return { lines };
 }
 
-function verify(oldData, newData, set, remove) {
+const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+// A nested value for the path `keys` ending in `value`.
+const nestOf = (keys, value) => keys.reduceRight((acc, k) => ({ [k]: acc }), value);
+
+// `data` with the leaf at `keys` set (maps created, a non-map in the way replaced).
+function withLeaf(data, keys, value) {
+  const out = isMap(data) ? { ...data } : {};
+  out[keys[0]] = keys.length === 1 ? value : withLeaf(out[keys[0]], keys.slice(1), value);
+  return out;
+}
+
+// Set the one entry at `keys` inside the map whose entries sit at `indent` in
+// lines[from, end), and touch no other line. `data` is the map as parsed, for the one case
+// (an entry written on one line, `theme: {a: 1}`) where the entry has to be written again.
+function setLeaf(lines, from, end, indent, keys, value, data) {
+  const scanned = scanKeys(lines, from, end, indent);
+  if (scanned.error) return scanned;
+  const [head, ...rest] = keys;
+  const hit = scanned.keys.find((k) => k.key === head);
+  if (!hit) {
+    lines.splice(end, 0, ...dumpAt(head, nestOf(rest, value), indent));
+    return {};
+  }
+  if (!rest.length) {
+    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, value, indent));
+    return {};
+  }
+  if (!/:[ \t]*(#.*)?$/.test(lines[hit.from])) {
+    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, withLeaf(data && data[head], rest, value), indent));
+    return {};
+  }
+  const inner = spanOf(lines, hit.from + 1, hit.to);
+  const innerIndent = inner.indent === null ? indent + 2 : inner.indent;
+  return setLeaf(lines, hit.from + 1, inner.end, innerIndent, rest, value, data && data[head]);
+}
+
+// The publish map as the frontmatter lines now parse (what a one-line entry is rewritten from).
+function publishOf(fm) {
+  const read = readOrReason(fm.head + fm.lines.map((l) => l + fm.eol).join('') + fm.tail);
+  return read.data && isMap(read.data.publish) ? read.data.publish : {};
+}
+
+function applyLeaf(fm, leaf, data) {
+  const lines = fm.lines.slice();
+  let block = locateBlock(lines);
+  if (block.error) return { error: block.error };
+  if (block.absent) {
+    lines.push('publish:');
+    block = locateBlock(lines);
+  }
+  const done = setLeaf(lines, block.start + 1, block.end, block.indent, leaf.path, leaf.value, data);
+  return done.error ? done : { lines };
+}
+
+function verify(oldData, newData, set, remove, leaves = []) {
   const bad = { error: 'the edit did not verify' };
   const oldPub = oldData.publish ?? {};
   const newPub = newData.publish ?? {};
   const rest = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'publish'));
   if (!isDeepStrictEqual(rest(oldData), rest(newData))) return bad;
-  const touched = new Set([...Object.keys(set), ...remove]);
+  const touched = new Set([...Object.keys(set), ...remove, ...leaves.map((l) => l.path[0])]);
   for (const k of new Set([...Object.keys(oldPub), ...Object.keys(newPub)])) {
     if (touched.has(k)) continue;
     if (!isDeepStrictEqual(oldPub[k], newPub[k])) return bad;
   }
   for (const [k, v] of Object.entries(set)) if (!isDeepStrictEqual(newPub[k], v)) return bad;
   for (const k of remove) if (k in newPub) return bad;
+  // A leaf changes its one entry; everything else in its top-level map comes back as it was.
+  let expected = oldPub;
+  for (const { path: keys, value } of leaves) expected = withLeaf(expected, keys, value);
+  for (const { path: keys } of leaves) if (!isDeepStrictEqual(newPub[keys[0]], expected[keys[0]])) return bad;
   return null;
 }
 
-// editPublishBlock(text, { set, remove }) -> { text } | { error }
+// editPublishBlock(text, { set, remove, leaves }) -> { text } | { error }
+// `set` writes a whole top-level key; `leaves` ([{ path: ['theme', 'tagline'], value }])
+// writes one entry inside a map and leaves every other line of it as the GM wrote it.
 function editPublishBlock(text, changes = {}) {
   const set = changes.set || {};
   const remove = changes.remove || [];
+  const leaves = changes.leaves || [];
   try {
     const overlap = remove.find((k) => k in set);
     if (overlap) return { error: `${overlap} is both set and removed` };
@@ -167,11 +251,16 @@ function editPublishBlock(text, changes = {}) {
       if (r.error) return { error: r.error };
       cur = { ...cur, lines: r.lines };
     }
+    for (const leaf of leaves) {
+      const r = applyLeaf(cur, leaf, publishOf(cur));
+      if (r.error) return { error: r.error };
+      cur = { ...cur, lines: r.lines };
+    }
     const next = cur.head + cur.lines.map((l) => l + cur.eol).join('') + cur.tail;
     if (next === text) return { text };
     const after = readOrReason(next);
     if (after.error) return { error: `the edit did not verify (${after.error})` };
-    const bad = verify(old.data, after.data, set, remove);
+    const bad = verify(old.data, after.data, set, remove, leaves);
     if (bad) return bad;
     return { text: next };
   } catch (e) {
@@ -208,15 +297,29 @@ function writeAtomic(link, text, { rename } = {}) {
 // setPublishKeys(vaultPath, set, remove) -> { changed }. Throws Error(reason) on refusal.
 // deps.rename replaces fs.renameSync (tests inject a failing one).
 function setPublishKeys(vaultPath, set, remove = [], deps = {}) {
+  return writeChanges(vaultPath, { set, remove }, deps);
+}
+
+// setPublishLeaves(vaultPath, leaves, deps) -> { changed }: editPublishBlock's `leaves`, written.
+function setPublishLeaves(vaultPath, leaves, deps = {}) {
+  return writeChanges(vaultPath, { leaves }, deps);
+}
+
+// setPublishChanges(vaultPath, { set, remove, leaves }, deps) -> { changed }: all three at once.
+function setPublishChanges(vaultPath, changes, deps = {}) {
+  return writeChanges(vaultPath, changes, deps);
+}
+
+function writeChanges(vaultPath, changes, deps) {
   const file = path.join(vaultPath, CONFIG_REL);
   const exists = fs.existsSync(file);
   const before = exists ? fs.readFileSync(file, 'utf8') : '---\ntype: meta\n---\n';
-  const out = editPublishBlock(before, { set, remove });
+  const out = editPublishBlock(before, changes);
   if (out.error) throw new Error(`cannot edit ${CONFIG_REL}: ${out.error}`);
-  if (out.text === before && (exists || !Object.keys(set).length)) return { changed: false };
+  if (out.text === before && (exists || (!Object.keys(changes.set || {}).length && !(changes.leaves || []).length))) return { changed: false };
   fs.mkdirSync(path.dirname(file), { recursive: true });
   writeAtomic(file, out.text, { rename: deps.rename });
   return { changed: true };
 }
 
-module.exports = { editPublishBlock, setPublishKeys, writeAtomic, fillUnset };
+module.exports = { editPublishBlock, setPublishKeys, setPublishLeaves, setPublishChanges, writeAtomic, fillUnset };

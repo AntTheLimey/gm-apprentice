@@ -57,10 +57,9 @@ function read(options) {
 }
 
 function write(options) {
-  const { setPublishKeys } = require('./vault-config-edit');
+  const { setPublishLeaves } = require('./vault-config-edit');
   const vaultPath = vaultPathOf(options);
-  const publish = rawPublish(vaultPath);
-  const set = {};
+  const leaves = [];
   const written = [];
   for (const pair of options.set) {
     const at = pair.indexOf('=');
@@ -69,22 +68,13 @@ function write(options) {
     let value;
     try { value = JSON.parse(pair.slice(at + 1)); } catch { throw new Error(`the value for ${key} is not JSON`); }
     if (at < 0 || !SETTABLE[key](value)) throw new Error(`${JSON.stringify(value)} is not a value ${key} takes`);
-    const parts = key.split('.');
-    // The whole top-level key is rewritten with the one leaf changed.
-    const top = parts[0];
-    const base = set[top] !== undefined ? set[top] : publish[top];
-    const root = base && typeof base === 'object' && !Array.isArray(base) ? JSON.parse(JSON.stringify(base)) : {};
-    let node = root;
-    for (const part of parts.slice(1, -1)) {
-      if (!node[part] || typeof node[part] !== 'object' || Array.isArray(node[part])) node[part] = {};
-      node = node[part];
-    }
-    node[parts[parts.length - 1]] = value;
-    set[top] = root;
+    leaves.push({ path: key.split('.'), value });
     written.push(key);
   }
-  // Throws Error(reason) on a refusal, with the file untouched.
-  setPublishKeys(vaultPath, set);
+  // Writes only the entry's own line (and any parent key it has to create); the rest of
+  // publish.theme, comments included, stays as the GM wrote it. Throws Error(reason) on a
+  // refusal, with the file untouched.
+  setPublishLeaves(vaultPath, leaves);
   return { written };
 }
 

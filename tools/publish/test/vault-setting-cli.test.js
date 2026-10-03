@@ -75,3 +75,40 @@ test('a vault file the editor refuses exits 1 with one line and is left as it wa
   assert.equal(err.length, 1);
   assert.equal(config(s), before);
 });
+
+const THEME = '  mode: player   # who reads\n  theme:\n    # palette tried 2026-09: too red\n    preset: gothic   # the one I like\n    accent: #c0a060\n    fonts:\n      heading: Cinzel   # display\n      body: system-ui\n  footer: F\n';
+
+test('writing default_mode changes only its own line: comments and an unquoted hex survive', () => {
+  const s = scratch(THEME);
+  const before = config(s);
+  assert.equal(run(s, ['theme.default_mode="dark"']).rc, 0);
+  assert.equal(config(s), before.replace('      body: system-ui\n', '      body: system-ui\n    default_mode: dark\n'));
+});
+
+test('replacing default_mode rewrites that one line and nothing else', () => {
+  const s = scratch(THEME.replace('    accent', '    default_mode: light\n    accent'));
+  const before = config(s);
+  assert.equal(run(s, ['theme.default_mode="dark"']).rc, 0);
+  assert.equal(config(s), before.replace('default_mode: light', 'default_mode: dark'));
+});
+
+test('writing fonts.source goes inside the existing fonts block, comments kept', () => {
+  const s = scratch(THEME);
+  const before = config(s);
+  assert.equal(run(s, ['theme.fonts.source="self-host"']).rc, 0);
+  assert.equal(config(s), before.replace('      body: system-ui\n', '      body: system-ui\n      source: self-host\n'));
+});
+
+test('writing fonts.source creates fonts: only when the theme has none', () => {
+  const s = scratch('  theme:\n    # keep me\n    preset: gothic\n  footer: F\n');
+  const before = config(s);
+  assert.equal(run(s, ['theme.fonts.source="self-host"']).rc, 0);
+  assert.equal(config(s), before.replace('    preset: gothic\n', '    preset: gothic\n    fonts:\n      source: self-host\n'));
+});
+
+test('two settings in one call both land, and a theme written on one line still works', () => {
+  const s = scratch('  theme: {preset: gothic}\n');
+  assert.equal(run(s, ['theme.default_mode="dark"', 'theme.fonts.source="self-host"']).rc, 0);
+  assert.deepEqual(run(s, []).data.defaultModeSet, true);
+  assert.match(config(s), /source: self-host/);
+});

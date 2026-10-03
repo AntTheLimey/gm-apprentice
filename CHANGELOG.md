@@ -46,6 +46,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Writing a theme setting no longer rewrites the whole `publish.theme`
+  block.** The `default-mode` and `fonts-self-host` migration choices,
+  and `migrate-config` moving `landingTagline`, used to write the block
+  again from its parsed values, which dropped the GM's comments and
+  turned an unquoted `accent: #c0a060` into `null`. They now write only
+  the one line, leaving every other line as it was.
 - `update-pin` run from a git checkout did nothing. It now pins the
   site to that checkout.
 

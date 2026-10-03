@@ -527,9 +527,9 @@ file only and the site file's settings stay where they are. The move:
   is never replaced;
 - changes only the keys it moves in the vault file. Comments and
   layout elsewhere stay as written, with one exception: adding to an
-  existing list or map in the vault file (a merged exclude list, a
-  `theme:` block that gets a tagline) rewrites that block, so
-  comments inside it are lost, and the tool prints a note for each.
+  existing list in the vault file (a merged exclude list) rewrites that
+  list, so comments inside it are lost, and the tool prints a note for
+  each. A `theme:` block that gets a tagline gains only that one line.
   It writes nothing when the vault
   file cannot be edited safely (a `publish: {…}` written on one line,
   tab indentation, mixed line endings, YAML that does not parse).

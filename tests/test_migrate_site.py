@@ -34,7 +34,7 @@ MOVES = {"applicable": True,
          "lines": ["move vault.config.json siteTitle -> publish.site_title",
                    'skipped publish.exclude_dirs: not text, so not carried over: 2',
                    'conflict footer: kept "F" from the vault file, discarded "G"',
-                   "note publish.theme is rewritten to add tagline"]}
+                   "note publish.exclude_dirs is rewritten; comments inside it are not kept"]}
 BACKUPS = ["backup /v/_meta/vault-config.md.pre-migrate",
            "backup kept from an earlier run: /s/vault.config.json.pre-migrate"]
 NOTHING = dict(MOVES, applicable=False, moves=[], lines=[],
