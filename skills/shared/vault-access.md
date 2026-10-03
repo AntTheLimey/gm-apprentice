@@ -12,6 +12,7 @@ being open.
 | Exact-term search (names, dates, markers) | Grep |
 | Ranked/prose search | `vault_search.py` |
 | Backlinks, orphans, unresolved/ambiguous links, dead ends | `graph_check.py` |
+| Rename or move a note, rewriting every link to it (dry run first; `--apply` to do it) | `relink.py VAULT OLD NEW` |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `vault_check.py` |
 | Vault/plugin version gate | `vault_check.py version` |
 | Session document chain status | `vault_check.py sessions` |

@@ -24,8 +24,8 @@ them).
 The steps below cover what the script leaves as judgment calls:
 dateless Reconciliation Context, unreconciled promotion, Section
 order drift, Keeper Checklist semantics, PC Carry-Forward format,
-and filename rename with relinks (filename renames are never
-automatic).
+and the filename rename, which `relink.py` does on the GM's yes
+(the migration offers it too).
 
 ### Step 1: Frontmatter Conformance
 
@@ -121,15 +121,10 @@ calls:
 ### Step 3: Filename Conformance
 
 Filename should be `Chapter_CC_Session_NN_Wrap_Up.md`
-(zero-padded, no title). Drifted names — Warning, **opt-in on a
-published vault**: the filename derives the page's site URL, so
-a rename 404s links players have already shared — say so when
-presenting the finding. A confirmed rename must update the
-session index `documents.wrap_up` link and every inbound
-reference in the same fix — plain wiki-links, aliased links
-(`[[X|Alias]]`), embeds (`![[X]]`), and frontmatter link fields
-(basenames resolve vault-wide in Obsidian, so a half-done
-rename breaks links silently).
+(zero-padded, no title). Drifted names — Warning. Rename with `relink.py <vault> <old path>
+Chapter_CC_Session_NN_Wrap_Up` (dry run; add `--apply` on the GM's
+yes): it renames the file and rewrites every link to it, the session
+index's `documents.wrap_up` included, in one pass.
 Chapter-level wrap-ups from ingested back-history
 (`Chapter_N_Wrap_Up.md`, no per-session files) are conformant
 as-is — note them, don't rename.

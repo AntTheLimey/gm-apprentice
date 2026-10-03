@@ -50,5 +50,6 @@ For each similarity found:
 3. Propose a fix:
    - For true duplicates: merge into one file
    - For confusingly similar: suggest a rename for the less
-     established entity
+     established entity; on the GM's yes, `relink.py` renames it
+     and rewrites every link
    - For acceptable similarities: dismiss with note

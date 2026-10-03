@@ -215,9 +215,9 @@ aliases:
 ```
 
 **File has been renamed:**
-If the vault file was renamed but the links were not updated,
-either rename the file back or do a find-and-replace in the
-vault to update all references to the new name.
+If the vault file was renamed without its links, rename it back, then
+rename it with `relink.py <vault> <old path> <new name> --apply`,
+which rewrites every link to it.
 
 ---
 

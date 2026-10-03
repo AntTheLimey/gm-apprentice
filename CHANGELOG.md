@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.27] — 2026-10-03
+
+### Added
+
+- **Rename or move a note without breaking links.** `relink.py <vault>
+  <old> <new>` shows every change first and writes nothing; `--apply`
+  renames the file and rewrites every link to it in one pass. Plain,
+  aliased, heading, block and embed links, links in frontmatter,
+  markdown links and canvas cards are all covered. If anything fails,
+  every file is put back.
+
+### Changed
+
+- The migration renames old-style Wrap-Up filenames, with their links,
+  as one choice, instead of listing them for the GM. mobRPG heritage
+  notes outside `Heritages/` are moved the same way.
+- The Wrap-Up filename warning no longer calls a rename opt-in on a
+  published vault; QA and publish troubleshooting point at `relink.py`
+  instead of a hand find-and-replace.
+
+### Fixed
+
+- Table links written `[[Name\|Shown]]` now link on the published site
+  and are no longer reported broken by `graph_check.py`. A link with an
+  empty display name (`[[Name|]]`) shows the name. Publish tool 1.12.3.
+- `graph_check.py` no longer reports template placeholders, links
+  quoted in code, accented names that macOS stores differently, or
+  images and attachments that exist.
+
+---
+
 ## [1.10.26] — 2026-10-02
 
 ### Changed
