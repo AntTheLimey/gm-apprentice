@@ -134,3 +134,124 @@ def config_text(system: str | None, campaign: str, version: str) -> str:
     body = seed("vault-config.md", campaign).replace("{TREE}",
                                                      structure_tree())
     return "\n".join([*front, "---", "", body.rstrip("\n"), ""])
+
+
+SYSTEMS = ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", "pf2e",
+           "fitd")
+
+# --- the skeleton: the one definition of what a vault is made of ------------
+
+PLAIN_FOLDERS = ("_meta", "_Campaign", "_Templates", "_World", "Chapters",
+                 "Adventures")
+ATTACHMENT_SUBS = ("characters", "locations", "factions", "items",
+                   "creatures", "events", "documents")
+# A type folder counts as present when the vault already keeps a note of one
+# of its types anywhere: that is how a renamed folder is recognised.
+TYPE_FOLDERS: dict[str, frozenset[str]] = {
+    "Characters/PCs": frozenset({"pc"}),
+    "Characters/NPCs": frozenset({"npc"}),
+    "Locations": frozenset({"location"}),
+    "Factions & Organizations": frozenset({
+        "faction", "organization", "government", "corporation", "cult",
+        "guild", "military", "criminal"}),
+    "Items & Artifacts": frozenset({
+        "item", "weapon", "armor", "vehicle", "treasure", "relic", "tool",
+        "consumable"}),
+    "Creatures": frozenset({
+        "creature", "beast", "undead", "construct", "spirit", "deity",
+        "aberration"}),
+    "Heritages": frozenset({"heritage"}),
+    "Events": frozenset({
+        "event", "battle", "ritual", "disaster", "discovery",
+        "betrayal_event", "celebration"}),
+    "Documents": frozenset({
+        "document", "spell", "map", "letter", "prophecy", "contract",
+        "journal"}),
+    "Clues": frozenset({"clue"}),
+}
+INBOX = ("_inbox", "_inbox/_processed")
+# In the layout tree, and deliberately not made here: the midwife makes its
+# own workspace; the inbox is made on request (--inbox).
+NOT_CREATED = ("_midwife", "_inbox")
+
+
+@dataclass(frozen=True)
+class Piece:
+    """One thing to create. `text` is None for a folder; for a file it is
+    called when the file is written."""
+    rel: str
+    text: Callable[[], str] | None = None
+
+
+def shown(piece: Piece) -> str:
+    return piece.rel if piece.text is not None else f"{piece.rel}/"
+
+
+def _types_in(vault: Path) -> set[str]:
+    if not vault.is_dir():
+        return set()
+    return {entity_type(extract_frontmatter(text))
+            for _rel, text in vault_files(vault)} - {""}
+
+
+def _attachments(vault: Path) -> str:
+    named = None
+    if (vault / CONFIG).is_file():
+        named = read_publish_scalar(vault, "attachments_dir")
+    return (named or "").strip().strip("/") or "_attachments"
+
+
+def missing(vault: Path, system: str | None, *, campaign: str, version: str,
+            inbox: bool = False, templates: bool = True,
+            today: str | None = None) -> list[Piece]:
+    """What the vault's skeleton lacks, in the order to create it. Nothing
+    that exists is listed. `templates=False` leaves `_Templates/` files to
+    the update tool's own check."""
+    types = _types_in(vault)
+    day = today or datetime.date.today().isoformat()
+    out: list[Piece] = []
+
+    def folder(rel: str, present: bool = False) -> None:
+        path = vault / rel
+        if path.exists() and not path.is_dir():
+            raise ScaffoldError(f"{rel}: a file is in the way of this folder")
+        if not path.is_dir() and not present:
+            out.append(Piece(rel))
+
+    def file(rel: str, text: Callable[[], str], present: bool = False) -> None:
+        path = vault / rel
+        if path.is_dir():
+            raise ScaffoldError(f"{rel}: a folder is in the way of this file")
+        if not path.exists() and not present:
+            out.append(Piece(rel, text))
+
+    for rel in PLAIN_FOLDERS:
+        folder(rel)
+    attach = _attachments(vault)
+    folder(attach)
+    for sub in ATTACHMENT_SUBS:
+        folder(f"{attach}/{sub}")
+    for rel, held in TYPE_FOLDERS.items():
+        folder(rel, present=bool(held & types))
+    if inbox:
+        for rel in INBOX:
+            folder(rel)
+    if templates:
+        for name, text in mv.templates_for(system).items():
+            file(f"_Templates/{name}", lambda text=text: text)
+    file("_World/world-index.md",
+         lambda: _plugin_text(mv.TEMPLATES / "world-index.md"))
+    file("_World/_flags.md",
+         lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"))
+    file("_Campaign/Timeline.md", lambda: seed("timeline.md", campaign),
+         present="timeline" in types)
+    file("_Campaign/Player Characters.md",
+         lambda: seed("player-characters.md", campaign),
+         present="player-characters" in types)
+    file("_meta/entity-types.md", entity_types_text)
+    file("_meta/relationship-types.md", relationship_types_text)
+    # The index is rendered when it is written, after the files above exist.
+    file("_meta/index.md",
+         lambda: index_build.render(vault, today=day, previous=None))
+    file(CONFIG, lambda: config_text(system, campaign, version))
+    return out
