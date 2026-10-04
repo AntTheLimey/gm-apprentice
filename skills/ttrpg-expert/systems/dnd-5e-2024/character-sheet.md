@@ -2,6 +2,41 @@
 
 Complete sheet reference for the d20 system. Use this to build, audit, or understand any character sheet field.
 
+## Writing the Sheet in the Vault
+
+The PC note's layout is the template's (`shared/templates/pc-dnd-5e-2024.md`). The published page finds each block by its heading and column names, so keep both exactly as the template has them; a renamed one falls out of the sheet into a plain table.
+
+**Numbers.** Do not work a modifier out by hand: a hand sum is right today and stale at the next level-up. Write the scores, the level and the Yes/No proficiency cells, leave the derived cells as they are, then run:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
+```
+
+It prints a row for every derived cell: `SAME`, `FILL` (old -> new) or `KEPT`. Nothing is written yet. Show the GM the `FILL` rows and, on their yes, run it again with `--write`. Do this after building a character, after a level-up, and after any change to a score or a proficiency.
+
+- A number the rules change (an item, a feat, a class feature) is written with its reason: `+7 (cloak of elvenkind)`, `+3 (Alert)`. The tool keeps a cell that has a reason and replaces a bare number, so a hand-set value with no reason is lost at the next fill.
+- AC, HP maximum, Speed and the attack lines are always written by hand, because too many features move them for a sum to be trusted. Say what the AC is made of in `**Armour Class:**` under Defences: `Chain Mail 16 + Shield 2`.
+
+**Class features, species traits, feats.** One row each, `Name | Action | Uses | Used | Recovers | Summary`:
+
+- **Action:** `Action`, `Bonus Action` or `Reaction`; blank for a passive feature. The Combat tab groups by these words.
+- **Uses / Used:** whole numbers; both blank when a feature has no limit.
+- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest`. The page's rest buttons act on exactly these phrases, so do not paraphrase them. A feature that comes back some other way gets what it says (`Dawn`) and is left to the player.
+
+```text
+| Second Wind | Bonus Action | 2 | 0 | 1 Short Rest, all Long Rest | Heal 1d10 + Fighter level |
+```
+
+**Spells.** One row each under `### Spells`, with the key facts: Level is `Cantrip` or `1` to `9`; Tags are comma-separated, `C` for concentration and `R` for ritual, plus anything else worth showing (`Always prepared`).
+
+```text
+| Detect Magic | 1 | Action | Self | V, S | 10 minutes | — | C, R | Sense magic within 30 ft |
+```
+
+**Summaries.** One line, in your own words. Never copy a book's text: the note is published, and rules text is not ours to republish. For anything outside the SRD, summarise only what the GM tells you or shows you; otherwise write the name and a page reference.
+
+**Converting an old-layout PC** (prose features, `### Prepared Spells` lists, no `Save` column): fill the new tables from the old prose, add the sections and columns the template has and the note lacks, keep any prose that is more than a list, then run `dnd_sheet.py`. An old note still publishes with nothing lost, so convert a PC when you next work on that character, not in bulk.
+
 ## Identity Block
 
 | Field | Source |
@@ -145,7 +180,7 @@ Full casters (Bard, Cleric, Druid, Sorcerer, Wizard) use the standard spell slot
 
 ### Prepared Spells
 
-All 2024 classes use a prepared spell model. Number of prepared spells shown in class table. Cantrips are always available (no slot cost).
+Recorded in the note's `### Spells` table (see Writing the Sheet in the Vault). All 2024 classes use a prepared spell model. Number of prepared spells shown in class table. Cantrips are always available (no slot cost).
 
 ## Backstory Fields
 

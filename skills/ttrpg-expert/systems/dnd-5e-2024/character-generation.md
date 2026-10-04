@@ -21,7 +21,7 @@ If `display_meta` is omitted, the publish tool falls back to
 2. **Determine Origin** -- select background and species, choose languages
 3. **Determine Ability Scores** -- generate six scores, assign, adjust
 4. **Choose an Alignment** -- nine alignments (LG/NG/CG/LN/N/CN/LE/NE/CE)
-5. **Fill in Details** -- class features, derived numbers, equipment, spells
+5. **Fill in Details** -- class features, equipment, spells, then the sheet and its numbers
 
 ## Step 1: Choose a Class
 
@@ -119,7 +119,7 @@ Your background lists 3 abilities. Increase one by 2 and a different one by 1, o
 
 ### Ability Modifiers
 
-Formula: `floor((score - 10) / 2)`. See mechanics.md for full table.
+Record the six scores. The modifiers are filled in at Step 5 by `dnd_sheet.py`; mechanics.md has the table if the GM asks how one is reached.
 
 ## Step 4: Choose Alignment
 
@@ -133,19 +133,25 @@ Game assumes PCs are not evil. Check with GM before making an evil character.
 
 ## Step 5: Fill in Details
 
-### Calculate Numbers
+### Write the Sheet and Fill the Numbers
+
+Write the PC note in the template's layout, following "Writing the Sheet in the Vault" in character-sheet.md: scores, level, save and skill proficiencies, one row per feature, trait, feat and spell.
+
+Do not work out or type the modifiers, saves, skill bonuses, passive scores, Initiative, spell attack or spell save DC. One tool owns those sums, so they are right now and stay right at every level-up:
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
+```
+
+Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes.
+
+The tool leaves these to you, because too many features move them. Write them by hand, with Speed and the hit point maximum below:
 
 | Number | Formula |
 |--------|---------|
-| Saving Throws | Ability mod + PB (if proficient) |
-| Skill Modifiers | Ability mod + PB (if proficient) |
-| Passive Perception | 10 + WIS (Perception) mod |
-| Initiative | DEX mod |
-| Armor Class | 10 + DEX mod (unarmored); varies with armor |
-| Melee Attack | STR mod + PB |
+| Armor Class | 10 + DEX mod (unarmored); varies with armor. Note what it is made of in `**Armour Class:**` |
+| Melee Attack | STR mod + PB (or DEX for Finesse) |
 | Ranged Attack | DEX mod + PB |
-| Spell Save DC | 8 + spellcasting ability mod + PB |
-| Spell Attack | Spellcasting ability mod + PB |
 
 ### Level 1 Hit Points
 
@@ -165,7 +171,7 @@ Both background and class provide starting equipment. Coins can be spent on addi
 1. Note spell slots from class table
 2. Note cantrips known
 3. Note prepared spells count
-4. Choose cantrips and prepared spells
+4. Choose cantrips and prepared spells; each gets a row in the note's `### Spells` table
 5. All 2024 classes use prepared spell model
 
 ### Backstory Prompts

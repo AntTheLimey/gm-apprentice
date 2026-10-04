@@ -178,61 +178,102 @@ schema-change-procedure and no entity-template change.
 
 ## 9. D&D 5e PC sheet — structure the publish tool reads
 
-`tools/publish/lib/templates/pc-dnd.js` renders D&D PC pages by parsing
-the markdown body of the PC file, as the CoC renderer does. The shipped
-template (`skills/shared/templates/pc-dnd-5e-2024.md`) must keep this
-structure. If you rename a section, subsection or first-column label,
-update `pc-dnd.js` in the same change. Its tests build a PC from the
+`tools/publish/lib/templates/dnd/` renders D&D PC pages by parsing the
+markdown body of the PC file, as the CoC renderer does (`parse.js` reads
+the note, `blocks/` draws one block each). The shipped template
+(`skills/shared/templates/pc-dnd-5e-2024.md`) must keep this structure.
+If you rename a section, subsection, column or first-column label,
+update `dnd/parse.js` in the same change. Its tests build a PC from the
 real template, so a mismatch fails the suite.
 
 | Section | Subsection | What the renderer reads |
 |---------|-----------|--------------------------|
-| `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
-| | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency` (rows STR/DEX/CON/INT/WIS/CHA) |
-| | `### Combat` | `Attribute \| Value`; `HP (Current)` (or a bare `HP`) and `HP (Max)` merge into one tile, every other row becomes a tile |
-| `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header |
+| `## Stat Sheet` | `### Core` | `Attribute \| Value` (rows Level, XP, Proficiency Bonus, Heroic Inspiration) |
+| | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency \| Save` (rows STR/DEX/CON/INT/WIS/CHA) |
+| | `### Combat` | `Attribute \| Value` (rows AC, Initiative, Speed, Size, `HP (Current)`, `HP (Max)`, `Temp HP`, `Hit Dice (Spent/Max)`, `Death Saves (S/F)`, Exhaustion, Conditions) |
+| | `### Senses` | `Attribute \| Value` (rows Passive Perception, Passive Investigation, Passive Insight, then any special sense) |
+| | `### Defences` | the `**Resistances:**`, `**Immunities:**`, `**Vulnerabilities:**`, `**Condition Immunities:**` and `**Armour Class:**` lines |
+| `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header. The class line carries levels: `Paladin 5 (Oath of Devotion)`, a multiclass joined by `/` |
 | `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
-| `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC) |
-| | `### Spell Slots` | `Level \| Total \| Expended`; a template row with neither Total nor Expended is left out |
-| | `### Prepared Spells` | shown as written |
-| `## Proficiencies` | — | shown as written |
+| `## Class Features`, `## Species Traits`, `## Feats` | — | each `Name \| Action \| Uses \| Used \| Recovers \| Summary` |
+| `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC); a second casting class adds rows labelled with the class |
+| | `### Spell Slots` | `Level \| Total \| Expended`; a warlock adds a row `Pact (3rd)`; a row with neither Total nor Expended is left out |
+| | `### Spells` | `Spell \| Level \| Time \| Range \| Components \| Duration \| Hit / DC \| Tags \| Summary` |
+| `## Proficiencies` | — | shown as written (`**Armor Training:**`, `**Weapons:**`, `**Weapon Mastery:**`, `**Tools:**`, `**Languages:**`) |
+| `## Equipment` | `### Weapons & Damage Cantrips` | `Name \| Atk Bonus / DC \| Damage & Type \| Notes`; this is the attack list |
+| | `### Gear` | `Item \| Qty \| Notes` |
+| | `### Magic Item Attunement` | `Slot \| Item` |
+| | `### Coins` | `CP \| SP \| EP \| GP \| PP`, one row of numbers |
+
+Vocabulary the page acts on:
+
+- **Action**: `Action`, `Bonus Action` or `Reaction`, or blank for a
+  passive feature. These group the Combat tab; any other word is shown
+  as a tag and not grouped.
+- **Uses / Used**: whole numbers. Ten or fewer are drawn as marks,
+  more as `18 / 25`.
+- **Recovers**: `Long Rest`, `Short Rest`, or
+  `1 Short Rest, all Long Rest`. Anything else (`Dawn`) is shown and
+  left to the player. Hit dice and spell slots have no Recovers cell;
+  the `Pact` row is the short-rest one.
+- **Tags** (spells): comma-separated. `C` (concentration) and `R`
+  (ritual) are recognised; the rest are shown (`Always prepared`).
+- **Level** (spells): `Cantrip` or `1` to `9`; the page groups by it.
 
 Notes:
 
-- **Modifiers are the sheet's own.** The renderer shows the Modifier
-  cells as written and computes an ability modifier only when its cell
-  is blank. It never computes a save or skill bonus.
+- **The site does no sums.** Every modifier, save, passive score and DC
+  is shown as the note has it, and a blank cell stays blank.
+  `skills/shared/scripts/dnd_sheet.py` fills the derived cells:
+  Proficiency Bonus, each ability's Modifier and Save, each skill's
+  Modifier, the three passive scores, Initiative, Spell Attack Modifier
+  and Spell Save DC. It maintains a cell that is blank or a bare number
+  and keeps one that carries a reason, `+7 (cloak of elvenkind)`. AC,
+  HP, Speed, attack lines and slot totals are written by hand.
 - **Nothing in a consumed section is dropped.** Stat Sheet, Skills,
-  Spellcasting and Proficiencies leave the accordion list once the
-  sheet renders (`isDndConsumedTitle` in `pc-dnd.js` is the one
-  matcher both sides use), so the renderer shows as written whatever
-  it cannot place: an extra or repeated `###` subsection, a repeated
-  `##` section, prose or a second table beside a parsed table, and
-  any table row it could not read.
-- **Tables are read by position, checked against the header.** A
-  table whose leading header cells are not the ones above is shown
-  whole as a table. So is any single row with text in a further
-  column (a Notes column), a Proficient, Expertise or Save cell that
-  is not a yes or no word, an ability row that is not one of the six,
-  a row with a link or an image in it, and a spell slot row whose
-  Total is not a number or whose Expended exceeds it.
+  Class Features, Species Traits, Feats, Spellcasting, Proficiencies
+  and Equipment leave the accordion list once the sheet renders
+  (`isDndConsumedTitle` in `dnd/index.js` is the one matcher both sides
+  use), so the renderer shows as written whatever it cannot place: an
+  extra or repeated `###` subsection, a repeated `##` section, prose or
+  a second table beside a parsed table, and any table row it could not
+  read.
+- **Tables are read by position, checked against the header.** A table
+  whose leading header cells are not the ones above is shown whole as a
+  table. So is any single row it cannot read: a Proficient, Expertise
+  or Save Proficiency cell that is not a yes or no word, an ability row
+  that is not one of the six, a Uses or Used cell that is not a whole
+  number, a spell whose Level is not `Cantrip` or `1` to `9`, and a
+  slot row whose Total is not a number or whose Expended exceeds it. A
+  feature, spell, attack or gear name may be a wikilink.
+- **The layout before 1.10.33 is still read**, so a note nobody has
+  converted keeps publishing with every line on the page. A
+  four-column ability table (no `Save`) is placed with no save number.
+  `Passive Perception` under Combat is placed with the senses. A
+  `### Prepared Spells` list, prose under Class Features, Species
+  Traits or Feats, and a prose Gear list are shown as written under
+  their own headings; prose features are not grouped on the Combat
+  tab. `dnd_sheet.py` fills the cells such a note has and adds no
+  column.
 - **Background stays an accordion.** The header reads three lines from
   it (`Race` and `Classes` are accepted too); its prose is not on the
   sheet.
-- The template's own `{list}` placeholders and its "Omit this
-  section" note are not content, and a Spellcasting section with
-  nothing filled in is left out. Braces an author wrote are kept.
+- The template's own `{list}` placeholders, its empty table rows and
+  its "Omit this section" note are not content, and a Spellcasting
+  section with nothing filled in is left out, so a non-caster has no
+  Spells tab. Braces an author wrote are kept.
 
 ---
 
 ## 10. PF2e PC sheet — structure the publish tool reads
 
 `tools/publish/lib/templates/pc-pf2e.js` renders PF2e PC pages from the
-body of the PC file, on the same engine as D&D (`d20-sheet.js`), and
-keeps every rule in §9: positional tables checked against their
-header, nothing in a consumed section dropped, Background left as an
-accordion. The shipped template (`skills/shared/templates/pc-pf2e.md`)
-must keep this structure; its tests build a PC from the real template.
+body of the PC file, on its own engine (`d20-sheet.js`, which D&D left
+for §9's renderer), under the same rules as §9: positional tables
+checked against their header, nothing in a consumed section dropped,
+Background left as an accordion. The shipped template
+(`skills/shared/templates/pc-pf2e.md`) must keep this structure; its
+tests build a PC from the real template.
 
 | Section | Subsection | What the renderer reads |
 |---------|-----------|--------------------------|
