@@ -495,7 +495,7 @@ def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
         if k == GM_NOTES:
             raise WriteError(f"{rel}: '## {title}' is the container: send "
                              f"its sections as '### ...'")
-        if k in tmap.gm:
+        if k in tmap.gm or vc.template_keeper_title(title):
             raise WriteError(
                 f"{rel}: '## {title}' is a GM Notes section — write it as "
                 f"'{'#' * (4 if k in tmap.parent else 3)} {title}'")

@@ -474,6 +474,15 @@ class WrapupAddTests(unittest.TestCase):
         self.assertIn("### World State", out)
         self.assertEqual(read(vault, WRAP_REL), WRAP)
 
+    def test_a_decorated_or_unknown_keeper_name_at_h2_is_a_slip(self):
+        vault = wrap_vault(self)
+        for title in ("World State:", "Name Conflicts"):
+            with self.subTest(title=title):
+                code, out = add(vault, f"## {title}\n\n- x\n")
+                self.assertEqual(code, 1)
+                self.assertIn("GM Notes section", out)
+                self.assertEqual(read(vault, WRAP_REL), WRAP)
+
     def test_an_existing_section_needs_replace(self):
         vault = wrap_vault(self)
         add(vault, "### World State\n\n- old\n\n### Quality Notes\n\nFine.\n")

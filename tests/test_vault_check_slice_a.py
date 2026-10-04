@@ -4909,6 +4909,64 @@ class UnderGmNotesOrNotTests(unittest.TestCase):
                 "- b\n\n" + NEW_READING_GM)
         findings = vc.wrapup_structure_findings(NEW_READING_REL, text, [])
         self.assertTrue(any(f.level == "ERROR" for f in findings))
+        fixed = vc.renest_wrapup(text)
+        self.assertIn("### **World State** — after the duel", fixed)
+        self.assertGreater(fixed.index("### **World State**"),
+                           fixed.index("<!-- gm-only -->"))
+
+    def test_every_template_gm_heading_at_h2_is_a_leak_moved_under_gm_notes(
+            self):
+        for title in ("Skipped Prep", "Unresolved Threads", "Name Conflicts",
+                      "World State:", "**Quality Notes:**",
+                      "World State (after the duel)"):
+            with self.subTest(title=title):
+                text = (NEW_READING_HEAD + f"## {title}\n\n- x\n\n"
+                        + NEW_READING_GM)
+                findings = vc.wrapup_structure_findings(
+                    NEW_READING_REL, text, [])
+                self.assertTrue(any(f.level == "ERROR" for f in findings))
+                fixed = vc.renest_wrapup(text)
+                self.assertIn(f"### {title}\n", fixed)
+                self.assertGreater(fixed.index(f"### {title}\n"),
+                                   fixed.index("## GM Notes"))
+                self.assertNotIn(f"\n## {title}\n", fixed)
+
+    def test_near_misses_stay_the_authors(self):
+        for title in ("World State of Play", "Skipped", "Notes on Quality"):
+            with self.subTest(title=title):
+                text = (NEW_READING_HEAD + f"## {title}\n\n- x\n\n"
+                        + NEW_READING_GM)
+                findings = vc.wrapup_structure_findings(
+                    NEW_READING_REL, text, [])
+                self.assertEqual([f.row for f in findings
+                                  if f.level in ("ERROR", "WARNING")], [])
+                self.assertEqual(vc.renest_wrapup(text), text)
+
+    def test_author_sections_keep_their_order_when_a_keeper_h2_moves(self):
+        text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
+                "## Keeper Checklist\n\n- [ ] x\n\n"
+                "## Tim's Toast\n\nCheers.\n\n" + NEW_READING_GM)
+        fixed = vc.renest_wrapup(text)
+        gm = fixed.index("<!-- gm-only -->")
+        order = [fixed.index(h) for h in ("## Narrative Recap",
+                                          "## Letters Home", "## Tim's Toast")]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(order[-1], gm)
+        self.assertGreater(fixed.index("### Keeper Checklist"), gm)
+
+    def test_the_no_recap_row_names_what_each_reading_hides(self):
+        text = ("---\ntype: session_wrap\n---\n\n## Keeper Checklist\n\n"
+                "- x\n")
+        def row(player):
+            return [f.message for f in vc.wrapup_structure_findings(
+                NEW_READING_REL, text, [], player)
+                if f.message.startswith("no ## Narrative Recap")][0]
+        self.assertIn("--fix re-nests the template's GM Notes subsections "
+                      "under ## GM Notes; retitle the player-facing one "
+                      "first", row(None))
+        self.assertIn("--fix re-nests every other H2 under ## GM Notes; "
+                      "retitle the player-facing one first",
+                      row(frozenset()))
 
     def test_an_explicit_set_is_the_reading_before_1_10_28(self):
         text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
@@ -4923,6 +4981,21 @@ class UnderGmNotesOrNotTests(unittest.TestCase):
 
     def test_check_wrapup_no_longer_reads_the_vaults_list(self):
         self.assertFalse(hasattr(vc, "wrap_player_sections"))
+        text = (NEW_READING_HEAD + "## Tim's Toast\n\nCheers.\n\n"
+                + NEW_READING_GM)
+        cfg = ("---\ntype: vault_config\npublish:\n  wrap_up:\n"
+               "    player_sections:\n      - Letters Home\n---\n")
+        results = []
+        for config in (cfg, None):
+            with tempfile.TemporaryDirectory() as tmp:
+                vault = Path(tmp)
+                (vault / "_meta").mkdir()
+                (vault / "Sessions").mkdir()
+                if config:
+                    (vault / "_meta" / "vault-config.md").write_text(config)
+                (vault / NEW_READING_REL).write_bytes(text.encode("utf-8"))
+                results.append(vc.check_wrapup(vault, None, False))
+        self.assertEqual(results[0], results[1])
 
 
 if __name__ == "__main__":

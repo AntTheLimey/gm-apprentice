@@ -91,8 +91,9 @@ fields, or the first body H2 not being `## Stat Sheet`.
 
 `wrapup` checks conformance against `shared/templates/session-wrap.md`:
 frontmatter backfills, an ERROR on a sibling H2 outside the fence that
-the template names a GM Notes subsection (`## World State`, `## Keeper
-Checklist`, ...) and so would publish Keeper content, the single `<!-- gm-only -->` fence around `## GM
+is one of the template's GM Notes headings (`## World State`, `## Keeper
+Checklist`, `## Skipped Prep`, ...), which would publish Keeper content,
+the single `<!-- gm-only -->` fence around `## GM
 Notes`, recap-heading and template-heading variants, and the
 filename pattern. A gm-only fence that is unbalanced or crosses a
 player-facing section boundary gets its frontmatter backfilled and
@@ -2828,6 +2829,40 @@ def _wrap_template_subsections() -> tuple[str, ...]:
 
 WRAP_TEMPLATE_SUBSECTIONS = _wrap_template_subsections()
 
+# Used only when the template is missing: the `####` names it nests under
+# `### What Carries Forward`, on top of the `###` fallback above.
+WRAP_GM_HEADINGS_FALLBACK: tuple[str, ...] = WRAP_SUBSECTIONS_FALLBACK + (
+    "Unresolved Threads", "Player-Stated Intentions",
+    "Pending Consequences", "NPCs Needing Follow-Up", "Skipped Prep",
+)
+
+
+def _wrap_template_gm_headings() -> tuple[str, ...]:
+    """Every `###` and `####` heading below `## GM Notes` in the template.
+
+    These are the names the checker reserves as Keeper when one appears
+    as a `##` outside the fence. A placeholder heading (`#### [[PC Name]]
+    (Player)`) is a pattern, not a name, and is left out.
+    """
+    try:
+        text = WRAP_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return WRAP_GM_HEADINGS_FALLBACK
+    found: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        m = re.match(r"^(#{2,4})\s+(.+?)\s*$", line)
+        if not m:
+            continue
+        if len(m.group(1)) == 2:
+            inside = m.group(2).strip().casefold() == "gm notes"
+        elif inside and not m.group(2).startswith("[["):
+            found.append(m.group(2))
+    return tuple(found) or WRAP_GM_HEADINGS_FALLBACK
+
+
+WRAP_TEMPLATE_GM_HEADINGS = _wrap_template_gm_headings()
+
 NARRATIVE_RECAP = "Narrative Recap"
 MEMORABLE_MOMENTS = "memorable moments"
 GM_NOTES = "gm notes"
@@ -2913,17 +2948,33 @@ def player_section_key(title: str) -> str:
     return " ".join(_plain_title(title).split()).casefold()
 
 
-def _template_keeper_title(title: str) -> bool:
-    """A Wrap-Up H2 titled as one of the template's GM Notes subsections,
-    plain or decorated (`## **World State** — after the duel`)."""
-    names = {player_section_key(n) for n in WRAP_TEMPLATE_SUBSECTIONS}
-    if player_section_key(title) in names:
+def _keeper_key(title: str) -> str:
+    """A heading title reduced for the reserved-name match: emphasis,
+    case, whitespace, trailing punctuation and a trailing parenthetical
+    all ignored."""
+    plain = re.sub(r"\*+|(?<!\w)_+|_+(?!\w)", "", title)
+    plain = re.sub(r"\s*\([^)]*\)\s*$", "", plain.strip())
+    plain = " ".join(plain.split()).strip(" \t:.,;!?-\u2013\u2014")
+    return plain.casefold()
+
+
+def template_keeper_title(title: str) -> bool:
+    """Whether a Wrap-Up `##` title is a name the template reserves for
+    GM Notes: any `###` or `####` heading under `## GM Notes` in
+    `shared/templates/session-wrap.md` (`World State`, `Skipped Prep`,
+    `Name Conflicts`, ...). Matching ignores emphasis, case, whitespace,
+    trailing punctuation and a trailing parenthetical, so `World State:`,
+    `**Quality Notes:**` and `World State (after the duel)` match, as does
+    the decorated form `**World State** — after the duel`; `World State of
+    Play` and `Skipped` do not. Outside the fence such a title is a slip:
+    the re-nest moves it under GM Notes, where it becomes a `###` with its
+    children demoted a level. This is the one definition; `vault_write.py`
+    uses it to refuse the same titles."""
+    names = {_keeper_key(n) for n in WRAP_TEMPLATE_GM_HEADINGS}
+    if _keeper_key(title) in names:
         return True
-    # Emphasis around just the name (`**World State** — ...`) is not
-    # whole-title emphasis, so unwrap it before looking for a qualifier.
-    bare = re.sub(r"^(\*\*|\*|__|_)(.+?)\1", r"\2", title.strip())
-    found = decorated_heading(bare)
-    return found is not None and player_section_key(found[0]) in names
+    found = decorated_heading(re.sub(r"\*+", "", title).strip())
+    return found is not None and _keeper_key(found[0]) in names
 
 
 def is_player_h2(title: str, player: frozenset[str] | None) -> bool:
@@ -2933,7 +2984,7 @@ def is_player_h2(title: str, player: frozenset[str] | None) -> bool:
     the reading before 1.10.28, where only listed titles are; the
     migration's `wrapup-sections` step runs it once."""
     if player is None:
-        return not _template_keeper_title(title)
+        return not template_keeper_title(title)
     return player_section_key(title) in player
 
 
@@ -3408,17 +3459,20 @@ def wrapup_structure_findings(rel: str, text: str,
                 "decorated", (title, name, qualifier)))
 
     if not has_recap and any(f.kind == "keeper-h2" for f in out):
-        # Under the pre-1.10.28 reading (an explicit `player` set) every H2
-        # but the recap and Memorable Moments is Keeper-facing, so a wrap-up
-        # that never names its recap has its whole body re-nested into the
-        # GM block — correct, and a surprise. Say so before the GM confirms
-        # the fix, not after the site loses the session's recap.
+        # A keeper-h2 with no recap. Under the pre-1.10.28 reading (an
+        # explicit `player` set) every H2 but the recap and Memorable
+        # Moments is Keeper-facing, so the whole body is re-nested into the
+        # GM block — correct, and a surprise; the row says "every other H2"
+        # for that reading and names only the template's subsections for
+        # the new one. Say so before the GM confirms the fix, not after the
+        # site loses the session's recap.
         out.append(Finding(
             "WARNING", rel,
             "no ## Narrative Recap — the publish tool lifts that section as "
-            "the session's player-facing recap, and --fix re-nests the "
-            "template's GM Notes subsections under ## GM Notes; retitle "
-            "the player-facing one first"))
+            "the session's player-facing recap, and --fix re-nests "
+            + ("the template's GM Notes subsections"
+               if player is None else "every other H2")
+            + " under ## GM Notes; retitle the player-facing one first"))
     return out
 
 
@@ -3510,9 +3564,12 @@ def _wrap_blocks(states: list[LineState],
     Kinds are the four the template knows — `preamble`, `recap`,
     `moments`, `gm` — plus `second-recap` and `keeper` for everything
     else, `keeper` being a title the template names a GM Notes subsection.
-    Any other H2 (`player=None`) is `player` (published, hoisted after
-    Memorable Moments), or `gm-listed` when the GM fenced it: hidden,
-    kept as an H2 inside the rebuilt fence. With an explicit `player`
+    Any other H2 (`player=None`) is `player` (published; the re-nest
+    keeps these in written order), or `gm-listed` when the GM fenced it:
+    hidden, kept as an H2 inside the rebuilt fence. An author's `##`
+    inside its own separate gm-only pair, beside the GM Notes pair,
+    draws the "openers" WARNING and `--fix` merges it into the single
+    fence, still an H2 and still hidden. With an explicit `player`
     set (the reading before 1.10.28) only the listed titles are
     `player`; every other H2 is `keeper`. A heading
     inside a code fence never starts a block: `scan_body` leaves

@@ -92,12 +92,10 @@ def config(block):
     return f"---\ntype: vault_config\npublish:\n{block}---\n"
 
 
-def make_vault(tmp, body, cfg=None):
+def make_vault(tmp, body):
     vault = Path(tmp)
     (vault / "_meta").mkdir()
     (vault / "Sessions").mkdir()
-    if cfg is not None:
-        (vault / "_meta" / "vault-config.md").write_text(cfg)
     (vault / REL).write_text(body)
     return vault
 
