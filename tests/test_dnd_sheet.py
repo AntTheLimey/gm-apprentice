@@ -6,6 +6,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "skills" / "shared" / "scripts" / "dnd_sheet.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "dnd-pcs"
@@ -140,3 +142,23 @@ def test_multiclass_casting_rows(tmp_path):
                  encoding="utf-8")
     _, out, _ = run(p)
     assert ["FILL", "Spellcasting / Spell Save DC (Wizard)", "12 -> 10"] in rows(out, "FILL")
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="POSIX permission bits")
+def test_write_keeps_the_notes_mode(tmp_path):
+    p = copy(tmp_path, "flawed.md")
+    p.chmod(0o644)
+    run(p, "--write")
+    assert p.stat().st_mode & 0o777 == 0o644
+
+
+def test_write_follows_a_symlinked_note(tmp_path):
+    target = copy(tmp_path, "flawed.md")
+    link = tmp_path / "link.md"
+    try:
+        link.symlink_to(target)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks unavailable")
+    run(link, "--write")
+    assert link.is_symlink()
+    assert "| Proficiency Bonus | +3 |" in target.read_text(encoding="utf-8")

@@ -24,15 +24,14 @@ attacks and slot totals are never touched. Stdlib only.
 """
 
 import argparse
-import os
 import re
 import sys
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_calc as dc  # noqa: E402
+from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 
 HEADING = re.compile(r"^(#{2,3})\s+(.+?)\s*#*\s*$")
 SEPARATOR = re.compile(r"^:?-{2,}:?$")
@@ -288,15 +287,11 @@ def main() -> int:
     count = {s: sum(1 for r in rows if r.status == s) for s in ("SAME", "FILL", "KEPT")}
     if args.write and count["FILL"]:
         new = apply(text, rows)
-        fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".dnd_sheet-")
         try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="") as f:
-                f.write(new)
-            os.replace(tmp, path)
-        except BaseException:
-            if os.path.exists(tmp):
-                os.unlink(tmp)
-            raise
+            write_text_atomic(path, new)
+        except StepFailed as e:
+            print(f"dnd_sheet: {e}", file=sys.stderr)
+            return 2
         count["SAME"] += count["FILL"]
         count["FILL"] = 0
     print(f"# same: {count['SAME']}  fill: {count['FILL']}  kept: {count['KEPT']}")
