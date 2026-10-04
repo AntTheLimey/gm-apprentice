@@ -38,6 +38,8 @@ archives. Work from its rows:
 - `NEAR` rows name the note the link may mean. `same` candidates
   (the names differ only in case, punctuation, accents or emoji) are
   safe: propose them all as one batch and fix them on a single yes.
+  A row that offers more than one candidate is never batched: ask
+  which note is meant.
   `close` (a likely typo) and `part` (extra words before or after)
   are guesses: ask about each, and say what the two names are.
 - `UNWRITTEN` rows are links to things never written. These are the
@@ -45,17 +47,19 @@ archives. Work from its rows:
   written" heading, most-linked first. Do not ask a fix-or-dismiss
   question for each and do not raise their severity.
 - `FILE` rows are links to an attached file (an image, a PDF) that is
-  not in the vault. Neither fix applies: say which note holds the link
-  and ask whether to restore the file or remove the link by hand.
+  not in the vault. Neither fix applies: say which note holds the
+  link and ask whether the GM will restore the file or wants the link
+  removed, then edit the note yourself.
 
 To fix, run `links.py <vault-path> retarget "<name>" "<note>"` (add
 `--keep-text` when the words on the page should stay as written and
 only the link should change, as with a variant spelling in a
-player-facing recap), read the preview, then run it again with
-`--write`. To remove a link the GM does not want (a rules term, a
-passing mention), run `links.py <vault-path> unlink "<name>" ...`
-the same way. An unwritten name that deserves a note is created with
-the organizer's entity workflow, not here.
+player-facing recap). One run covers every spelling shown in the row.
+Read the preview, then run it again with `--write`. To remove a
+link the GM does not want (a rules term, a passing mention), run
+`links.py <vault-path> unlink "<name>" ...` the same way. An
+unwritten name that deserves a note is created with the
+organizer's entity workflow, not here.
 
 **Ambiguous links:** what `graph_check.py ambiguous` reports —
 wiki-links using a bare basename that matches more than one
