@@ -16,8 +16,8 @@ Canon Audit.
 **Preferred procedure:** run `vault_check.py <vault> wrapup`
 (see `shared/vault-access.md`) and present its findings per
 file. For the mechanical set — the
-frontmatter backfills, the Keeper-facing sibling H2 re-nest, the
-`<!-- gm-only -->` fence, and the recap/template heading
+frontmatter backfills, the re-nest of a GM Notes heading found
+outside the fence, the `<!-- gm-only -->` fence, and the recap/template heading
 variants — the dry-run rows print `WOULD-FIX`; on GM
 confirmation, re-run with `wrapup --fix` (`FIXED` rows apply
 them).
@@ -59,34 +59,28 @@ surfaces but doesn't resolve:
 
 ### Step 2: Structure Conformance (publish safety)
 
-Classify every H2 first. **Player-facing H2s are exactly**
-`## Narrative Recap` (and its recap variants) and
-`## Memorable Moments`. **Every other H2 is Keeper-facing by
-default** — including names no list anticipates
-(`## Open Questions for Reconcile`, `## Handoff to Reconcile`,
-`## Combat Snapshot`). Real vaults invent Keeper-facing headings
-faster than any enumeration tracks, and a novel heading is in
-nobody's `exclude_sections` list. If a flagged heading is
-genuinely player-facing, the GM dismisses the finding — that is
-what the fix-or-dismiss walkthrough is for. A vault can declare
-extra player-facing H2s in `publish.wrap_up.player_sections`
-(case-insensitive); those are never flagged or re-nested, and are
-hoisted after `## Memorable Moments` in their original order. One
-the GM fenced inside `<!-- gm-only -->` stays fenced.
+A section is Keeper-facing when it sits under the fenced
+`## GM Notes` and player-facing when it does not. An H2 outside
+the fence is the GM's own, whatever it is called
+(`## What the Party Learned`, `## Letters Home`): never flag or
+move it. The one exception is a heading the template keeps under
+GM Notes (`## World State`, `## Keeper Checklist`,
+`## Skipped Prep`, and close variants such as `## World State:`).
+As an H2 outside the fence that is a slip, and it publishes Keeper
+content.
 
-`vault_check.py wrapup` finds and (with `--fix`) re-nests
-Keeper-facing sibling H2s under `## GM Notes` — hoisting the
-player-facing sections (`## Narrative Recap` then
-`## Memorable Moments`, in that order) to the top **first**,
-since real files interleave them between Keeper H2s and a
-player-facing section must never end up inside the GM block —
-applies the single `<!-- gm-only -->` fence, and normalizes
-decorated and recap heading variants to the template name.
-Severity mirrors what the script emits (ERROR when the heading
-line actually publishes, WARNING when it's already fenced or
-excluded):
+`vault_check.py wrapup` finds those headings and (with `--fix`)
+re-nests them under `## GM Notes`, each demoted a level with its
+children. Player-facing sections are hoisted above the GM block
+**first**, in their written order, since real files interleave
+them between Keeper H2s; one the GM fenced inside
+`<!-- gm-only -->` stays fenced. The script also applies the
+single `<!-- gm-only -->` fence and normalizes decorated and recap
+heading variants to the template name. Severity mirrors what the
+script emits (ERROR when the heading line actually publishes,
+WARNING when it's already fenced or excluded):
 
-- **Keeper-facing sibling H2** already inside a valid
+- **GM Notes heading as a sibling H2** already inside a valid
   `<!-- gm-only -->` fence never publishes — Warning (structure
   drift only). Otherwise read the vault's **effective** exclude
   list (the one the publish tool reports for the build: the

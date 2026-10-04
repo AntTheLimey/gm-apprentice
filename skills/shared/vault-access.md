@@ -13,6 +13,7 @@ being open.
 | Ranked/prose search | `vault_search.py` |
 | Backlinks, orphans, unresolved/ambiguous links, dead ends | `graph_check.py` |
 | Rename or move a note, rewriting every link to it (dry run first; `--apply` to do it) | `relink.py VAULT OLD NEW` |
+| Place text you wrote: start a Wrap-Up, add its sections, story entries, log lines, timeline lines (dry run first; `--write`) | `vault_write.py` |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `vault_check.py` |
 | Vault/plugin version gate | `vault_check.py version` |
 | Session document chain status | `vault_check.py sessions` |

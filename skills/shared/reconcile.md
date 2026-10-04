@@ -194,13 +194,13 @@ Write `### Reconciliation Context`, opening with
 
 Session-prep reads this instead of re-gathering context.
 
-**Where:** always in the Wrap-Up, as a `###` under its `## GM Notes`.
-Nest it there rather than as a top-level `## Reconciliation Context`,
-and never add it to an `exclude_sections` list instead — every item is
-Keeper-facing, and `## GM Notes` is already hidden in every vault's
-config. If the file has no `## GM Notes`, create one wrapped in its
-own `<!-- gm-only -->`/`<!-- /gm-only -->` fence. If the block is
-fenced, insert **before** the `<!-- /gm-only -->` closer. A Plan file
+**Where:** always in the Wrap-Up, under its `## GM Notes` — every
+item is Keeper-facing. Pass the section, heading first, on stdin
+(`<<'EOF'`) to `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
+wrapup-add "<wrap-up>" --write`; a later reconcile sends the whole
+section again with `--replace`. Never a top-level `## Reconciliation
+Context`, and never an `exclude_sections` entry instead. A Plan file
 may get a one-line pointer (`See Wrap-Up for reconciliation context`).
 
 Then run `vault_check.py <vault> wrapup --file "<wrap-up>"`. A missing

@@ -7,23 +7,12 @@ Post-session processor: turns the Play Notes into canon and
 writes the Wrap-Up file that session-prep reads next.
 
 **On first invocation:** read `shared/session-principles.md` and
-`shared/session-document-chain.md` (filename, location, date
-formats, frontmatter).
+run its Version Gate, then read `shared/session-document-chain.md`.
 
-**Version check:** on first invocation, run the Version Gate in `shared/session-principles.md`.
-
-**Wrap-Up file:** read `shared/templates/session-wrap.md` (vault
-copy `_Templates/_Template_Session_WrapUp.md` if present) and
-create the file from it — it is the canonical frontmatter, heading
-set and section order. Fill all its frontmatter. Sections land in
-template order whatever order the steps below visit them. Every
-section not marked optional/conditional is required; omit empty
-optional ones, and leave `### Reconciliation Context` to
-reconcile. Keeper-facing content goes only at `###` under the
-fenced `## GM Notes` — never a new H2 (a sibling H2 publishes to
-player sites; only the recap, Memorable Moments and the vault's
-`publish.wrap_up.player_sections` are player-facing). Filename `Chapter_CC_Session_NN_Wrap_Up.md` in the
-session's own directory — the chapter number is required.
+**Placing text:** `vw` is `python3
+"${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
+<vault>`: you write, it places, text on stdin (`<<'EOF'`). Dry
+run until `--write`.
 
 **Session index:** stamp it (dry-run, then `--write` on
 confirmation):
@@ -39,7 +28,18 @@ Use `play_date`/`in_game_date`, never `planned_date`/`actual_date`.
 The script sets scalars only: edit the index's `scenes:` list by hand
 to the scenes actually played; unplayed ones go under Skipped Prep.
 Leave the index body alone: handoffs and notes for next session go in
-this Wrap-Up's fenced `## GM Notes`.
+this Wrap-Up's GM Notes.
+
+**Wrap-Up file:** with the index stamped, `vw wrapup-new --session
+"<session index>" --source "<the notes' origin>" --write` creates
+it. Sections, per `shared/templates/session-wrap.md`
+(vault copy `_Templates/_Template_Session_WrapUp.md` if present),
+go in with `vw wrapup-add "<wrap-up>" --write`, several per call,
+any order. Those not marked optional/conditional are required;
+omit empty optional ones; `### Reconciliation Context` is
+reconcile's. Add any section the GM or the story calls for: `##`
+is for players, `###` goes under GM Notes. A new `##` is reported
+"players will see this": check it is meant.
 
 **Authoring vs. preserving:** four outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -98,13 +98,10 @@ analysis.
 
 ### 3b. Character Story Entries
 
-Per roster PC, append this session's entry to
-`Characters/PCs/{Name}_Story.md` (create from
-`shared/templates/character-story.md` if absent), following
-`shared/character-story-format.md` — read it. Genre voice comes
-from the campaign overview or world file. Source: Steps 2–3 only.
-Set `canon_status` to mirror the Wrap-Up's. Current session only —
-missing earlier entries are vault-ingest's job.
+Write each roster PC's entry per `shared/character-story-format.md`
+— read it; its Appending command takes 3c's values. Source: Steps
+2–3 only. Current session only — missing earlier entries are
+vault-ingest's job.
 
 ### 3c. PC Sheet Refresh
 
@@ -113,10 +110,9 @@ frontmatter and published `## Current Status` don't fall behind
 the narrative.
 
 1. Stamp all roster PCs in one call — `asOfSession`/`lastUpdated`
-   (same values as 3b) and the chapter tag swapped for the current
-   chapter's, from the session index or campaign overview
-   (non-chapter tags stay). Dry-run, review, then re-run
-   with `--write`:
+   and the chapter tag swapped for the current chapter's, from the
+   session index or campaign overview (non-chapter tags stay).
+   Dry-run, review, then re-run with `--write`:
 
    ```bash
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/stamp_entities.py" \
@@ -179,7 +175,9 @@ creating entities.
   saw it: `- **[[Session link]]** — {what happened}`. Other entity
   types' templates carry no such section — don't add one. Where the
   truth differs, add the matching bullet to its GM Notes `### Behind
-  the Scenes`. Add either section if the file lacks it. Each
+  the Scenes`. `vw log --write` places them all, no note read
+  first: tab-separated rows of note path, section, bullet, the
+  Keeper's section as `GM Notes/Behind the Scenes`. Each
   `(projected)` entry (Behind the Scenes or Under Pressure) on an
   entity that appeared: drop the marker if it played, strike it
   through with `not played` if play went elsewhere, or leave it if
@@ -193,8 +191,10 @@ creating entities.
   child for re-pointing, yes/no each, and set the child's fields per
   `shared/relationship-normalization.md` § Interposing a new
   container.
-- **Timeline:** linked `- **{in_game_date}** — [[Event_Name]] —
-  {summary}`; inline `- **{in_game_date}** — {description}`.
+- **Timeline:** `- **{in_game_date}** — {description}`
+  (`[[Event_Name]] — {summary}` when linked), or the shape this
+  timeline already uses. `vw timeline --under "<its heading for the
+  session, with hashes>" --write` takes them on stdin.
 - **Events:** create an Event file from `_Templates/_Template_Event.md`
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
@@ -223,10 +223,11 @@ under-reported. Don't re-read files to self-check.
 as `## New Entity Files` and `## Updated Entities`, never in the
 Wrap-Up file, which only wiki-links entities.
 
-Step 4's writes are independent: with the Agent tool, run them as
-parallel light-model sub-agents, each returning the vault-relative
-paths it wrote for Validate's `--file` list and cross-check;
-otherwise sequentially.
+Step 4's entity writes are independent: with the Agent tool, run
+them as parallel light-model sub-agents, each returning its log
+bullets and the vault-relative paths it wrote for Validate's
+`--file` list and cross-check; otherwise sequentially. `vw log`
+and `vw timeline` stay with you.
 
 ### 4b. Update Campaign Overview
 

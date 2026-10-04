@@ -561,7 +561,6 @@ Under `publish:`:
 | `site_dir` | string | Path to the site folder (`init` writes an absolute one; a relative one is read relative to the vault). `init` writes it, and `update-pin` adds it to a site made before 1.10.25. It is where the vault finds its site when `site` is on. |
 | `mode` | string | `"player"` or `"full"` — GM-only content visibility |
 | `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
-| `wrap_up` | object | `player_sections`: extra H2 titles on a Wrap-Up that `vault_check wrapup` treats as player-facing (default none) |
 | `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
 | `exclude_callouts` | boolean or array | Strip callouts from output: `true` for all, or an array of callout types (default `false`) |

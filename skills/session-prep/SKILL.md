@@ -254,7 +254,7 @@ ERROR/WARNING report. Fix objective breakage silently, offer to build
 artifacts, raise only genuine craft issues conversationally. Steps
 15–16 are independent — parallelize if sub-agents are available.
 
-**15. Checks** — Run again (the early run caught the shape)
+**15. Checks** — Run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
 (add `--headless` when run without a GM; `--gm-input` when the GM
 supplied intent, scenes and spotlight up front).

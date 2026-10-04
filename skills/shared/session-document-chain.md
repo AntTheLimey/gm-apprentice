@@ -156,13 +156,13 @@ Keep both `session:` (link) and `session_number:` (scalar) —
 consumers key on each.
 
 **Body:** canonical in `shared/templates/session-wrap.md`
-(provisioned as `_Templates/_Template_Session_WrapUp.md`). Two
-player-facing sections — `## Narrative Recap` (the site's session
-recap) and optional `## Memorable Moments` — then one `## GM Notes`
-H2 inside a single `<!-- gm-only -->`/`<!-- /gm-only -->` pair holding
-every Keeper-facing subsection at `###`. Keeper-facing content never
-gets its own top-level H2: a novel H2 name is on no exclude list and
-publishes to player sites.
+(provisioned as `_Templates/_Template_Session_WrapUp.md`). The
+player-facing sections come first — `## Narrative Recap` (the site's
+session recap), optional `## Memorable Moments`, and any other `##`
+the GM or the story calls for — then one `## GM Notes` H2 inside a
+single `<!-- gm-only -->`/`<!-- /gm-only -->` pair holding every
+Keeper-facing subsection at `###`. Keeper-facing content never gets
+its own top-level H2: it would publish to player sites.
 
 A reconstructed session (vault-ingest) opens with a
 `> [!info] Reconstruction Note` callout naming sources, date and gaps.
