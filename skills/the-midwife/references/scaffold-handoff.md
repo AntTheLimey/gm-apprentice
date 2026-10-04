@@ -126,19 +126,20 @@ and what remains.
 
 ### Step 3: Vault Scaffold (greenfield only)
 
-Ask: "Ready to set up the vault for this campaign?"
-If yes:
+Run the preview, show the GM what it will create and ask: "Ready
+to set up the vault for this campaign?"
 
-1. **Build the skeleton.** Preview, then create on the GM's yes:
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
+  <vault> --system <id> --name "<campaign name>"
+```
 
-   ```bash
-   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
-     <vault> --system <id> --name "<campaign name>"
-   ```
+Use `--no-system` when no system was chosen or the plugin does
+not support it. If yes:
 
-   then the same command with `--write`. Use `--no-system` when no
-   system was chosen. It builds around the `Adventures/` and
-   `_World/` files already there and never overwrites them.
+1. **Build the skeleton.** Run the same command with `--write`. It
+   builds around the `Adventures/` and `_World/` files already
+   there and never overwrites them.
 
 2. **Create Campaign Overview** at
    `_Campaign/Campaign Overview.md` from

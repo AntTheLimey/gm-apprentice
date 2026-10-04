@@ -25,7 +25,7 @@ TEMPLATES = SHARED / "templates"
 HISTORY = SHARED / "template-history.json"
 CONFIG = "_meta/vault-config.md"
 
-# shared/templates name -> _Templates name (vault-setup.md, Templates).
+# shared/templates name -> _Templates name: the one definition.
 TEMPLATE_NAMES = {
     "npc.md": "_Template_NPC.md",
     "location.md": "_Template_Location.md",

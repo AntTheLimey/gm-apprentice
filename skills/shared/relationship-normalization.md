@@ -7,10 +7,10 @@ them (campaign-qa graph-health). Prevention and repair read the same
 table, so drift can't reopen.
 
 The authoritative vocabulary is the predicate table in
-`shared/entity-schema.md`; a vault's `_meta/relationship-types.md` is its
-genre-filtered subset. **Only ever write a `type:` that is in that
-vocabulary.** When a play note gives you a narrative verb, do one of three
-things, in order:
+`shared/entity-schema.md`; a new vault's `_meta/relationship-types.md`
+starts with the full list, and older vaults may hold a genre subset.
+**Only ever write a `type:` that is in that vocabulary.** When a play note
+gives you a narrative verb, do one of three things, in order:
 
 1. **Map it** to the nearest sanctioned predicate (below).
 2. **Normalize its direction** if it is an inverse (below) — storage is

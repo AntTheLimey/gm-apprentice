@@ -9,8 +9,9 @@ vocabulary.
 one of the 77 predicates in the table below — the same table as
 `shared/entity-schema.md` ("Relationship Types") and the
 machine-readable `shared/gm-apprentice-ontology.json` that
-`vault_check.py relationships` enforces. A vault's
-`_meta/relationship-types.md` is a genre-filtered subset of it.
+`vault_check.py relationships` enforces. A new vault's
+`_meta/relationship-types.md` starts with the full list; older
+vaults may hold a genre subset.
 Never invent a type; when a play note gives you a narrative verb
 ("reports to", "guards", "lives in"), map it with
 `shared/relationship-normalization.md`.

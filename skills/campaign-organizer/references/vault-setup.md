@@ -18,8 +18,8 @@ runs here — the vault starts at the current version.
    `--system` takes `coc-7e`, `coc-7e-regency`, `gurps-4e`,
    `dnd-5e-2024`, `pf2e`, `fitd` or a common alias (`coc`, `gurps`,
    `dnd`, `pathfinder`, `blades`); `--no-system` gives generic
-   templates. `--inbox` adds `_inbox/` when the GM wants
-   vault-ingest staging.
+   templates, for no system or one not listed. `--inbox` adds
+   `_inbox/` when the GM wants vault-ingest staging.
 3. **Create.** On the GM's yes, run it again with `--write`. It
    creates everything or nothing, never overwrites what is there,
    and stamps the version last. An `ERROR` row says why it refused;
@@ -31,7 +31,3 @@ empty Timeline and Player Characters page. You write the content:
 the Campaign Overview (from `_Templates/_Template_Campaign_Overview.md`),
 the roster, chapters (each with a `Planning/` subfolder) and
 entities. Folders may be added or renamed afterwards.
-
-A template in `_Templates/` equals `shared/templates/` after the
-system's stat block is substituted (the migration diff relies on
-that); the script and the migration share that code.

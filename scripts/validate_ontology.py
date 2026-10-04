@@ -20,8 +20,9 @@ It warns (without failing) when an enum value is unreachable from any predicate
 the enum documents mobRPG's own fixed event types.
 
 Scope: this validates the two in-repo copies. A vault's per-campaign
-`_meta/relationship-types.md` is a genre-filtered subset checked at vault time by
-campaign-qa's graph-health step (issue #120), not here. The mobRPG CLI's derived
+`_meta/relationship-types.md` (the full list in a new vault, a genre subset in
+some older ones) is checked at vault time by campaign-qa's graph-health step
+(issue #120), not here. The mobRPG CLI's derived
 tables live on the (unmerged, gitignored) mobrpg-cli branch and are out of scope.
 """
 
