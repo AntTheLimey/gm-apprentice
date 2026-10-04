@@ -162,3 +162,267 @@ def test_write_follows_a_symlinked_note(tmp_path):
     run(link, "--write")
     assert link.is_symlink()
     assert "| Proficiency Bonus | +3 |" in target.read_text(encoding="utf-8")
+
+
+# --- Bonuses, half proficiency and carrying (the 2026-10-04 amendment) -------
+
+def clean():
+    return (FIXTURES / "clean.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def bonuses():
+    return (FIXTURES / "bonuses.md").read_text(encoding="utf-8").replace("\r\n", "\n")
+
+
+def note(tmp_path, text, name="n.md"):
+    p = tmp_path / name
+    p.write_text(text, encoding="utf-8")
+    return p
+
+
+def with_bonuses(table_rows):
+    """clean.md with a Bonuses table after Senses."""
+    table = "### Bonuses\n\n| Applies To | Bonus | Source |\n|---|---|---|\n" + table_rows + "\n\n## Skills"
+    return clean().replace("## Skills", table, 1)
+
+
+def all_rows(out):
+    return {ln.split("\t")[1]: ln.split("\t") for ln in out.splitlines() if "\t" in ln}
+
+
+def test_bonuses_fixture_has_nothing_to_fill():
+    code, out, _ = run(FIXTURES / "bonuses.md")
+    assert code == 0
+    assert rows(out, "FILL") == [] and rows(out, "ERROR") == []
+    got = all_rows(out)
+    # Ring +1, Stone +1 and the aura's Charisma modifier feed every save.
+    assert got["Stat Sheet / Ability Scores / STR / Save"] == [
+        "SAME", "Stat Sheet / Ability Scores / STR / Save",
+        "+8 (incl. +1 Ring of Protection, +1 Stone of Good Luck, +4 Aura of Protection)"]
+    assert got["Stat Sheet / Ability Scores / CHA / Save"][2].startswith("+14 (incl.")
+    # Ability Checks feeds initiative, and so does the feat's proficiency bonus.
+    assert got["Stat Sheet / Combat / Initiative"][2] == "+6 (incl. +1 Stone of Good Luck, +4 Alert)"
+    # Half proficiency: +1 Dex, half of +4, and the stone.
+    assert got["Skills / Acrobatics / Modifier"][2] == "+4 (incl. +1 Stone of Good Luck)"
+    assert got["Skills / Performance / Modifier"][2] == "+13 (incl. +1 Stone of Good Luck)"
+    # A passive is ten plus the finished skill; the bonus is not counted twice.
+    assert got["Stat Sheet / Senses / Passive Perception"][2] == "13"
+    # A modifier and the casting numbers take no bonus here.
+    assert got["Stat Sheet / Ability Scores / STR / Modifier"][2] == "+2"
+    assert got["Spellcasting / Spell Save DC"][2] == "16"
+
+
+def test_unreadable_bonus_row_is_kept_and_adds_nothing():
+    _, out, _ = run(FIXTURES / "bonuses.md")
+    kept = rows(out, "KEPT")
+    assert kept == [["KEPT", "Stat Sheet / Bonuses / row 5 (Bless)",
+                     "Saves | 1d4; the bonus 1d4 was not understood; it adds nothing"]]
+    assert out.rstrip().splitlines()[-1].endswith("fill: 0  kept: 1")
+
+
+def test_unknown_bonus_target_is_kept_and_no_part_of_the_row_applies(tmp_path):
+    p = note(tmp_path, with_bonuses("| Saves, Luck | +2 | Charm |"))
+    _, out, _ = run(p)
+    assert rows(out, "ERROR") == []
+    assert ["KEPT", "Stat Sheet / Bonuses / row 1 (Charm)",
+            "Saves, Luck | +2; Luck is not something a bonus applies to; it adds nothing"] in rows(out, "KEPT")
+    assert rows(out, "FILL") == []
+
+
+def test_a_bonus_moves_the_cell_and_says_why(tmp_path):
+    p = note(tmp_path, with_bonuses("| saves | +2 | Ring of Protection |"))
+    _, out, _ = run(p)
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Stat Sheet / Ability Scores / WIS / Save"] == "+4 -> +6 (incl. +2 Ring of Protection)"
+    assert len(fills) == 6
+    run(p, "--write")
+    _, again, _ = run(p)
+    assert rows(again, "FILL") == []
+    assert "| WIS | 12 | +1 | Yes | +6 |" in p.read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("applies, bonus, locus, message", [
+    ("Wisdom Save", "+1", "Stat Sheet / Ability Scores / WIS / Save", "+4 -> +5 (incl. +1 X)"),
+    ("WIS save", "1", "Stat Sheet / Ability Scores / WIS / Save", "+4 -> +5 (incl. +1 X)"),
+    ("Stealth", "-2", "Skills / Stealth / Modifier", "+0 -> -2 (incl. -2 X)"),
+    ("Skills", "+1", "Skills / Arcana / Modifier", "-1 -> +0 (incl. +1 X)"),
+    ("Ability Checks", "+1", "Skills / Arcana / Modifier", "-1 -> +0 (incl. +1 X)"),
+    ("Passive Perception", "+5", "Stat Sheet / Senses / Passive Perception", "14 -> 19 (incl. +5 X)"),
+    ("Passive Investigation, Passive Insight", "+5", "Stat Sheet / Senses / Passive Insight", "14 -> 19 (incl. +5 X)"),
+    ("Spell Attack", "+1", "Spellcasting / Spell Attack Modifier", "+6 -> +7 (incl. +1 X)"),
+    ("Spell Save DC", "+1", "Spellcasting / Spell Save DC", "14 -> 15 (incl. +1 X)"),
+    ("Saves", "wis", "Stat Sheet / Ability Scores / STR / Save", "+4 -> +5 (incl. +1 X)"),
+    ("Saves", "Half PB", "Stat Sheet / Ability Scores / STR / Save", "+4 -> +5 (incl. +1 X)"),
+    ("Saves", "pb", "Stat Sheet / Ability Scores / STR / Save", "+4 -> +7 (incl. +3 X)"),
+    ("Saves", "INT", "Stat Sheet / Ability Scores / STR / Save", "+4 -> +3 (incl. -1 X)"),
+])
+def test_bonus_vocabulary(tmp_path, applies, bonus, locus, message):
+    p = note(tmp_path, with_bonuses(f"| {applies} | {bonus} | X |"))
+    _, out, _ = run(p)
+    assert rows(out, "ERROR") == []
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills[locus] == message
+
+
+def test_skills_bonus_leaves_initiative_alone_and_ability_checks_does_not(tmp_path):
+    _, out, _ = run(note(tmp_path, with_bonuses("| Skills | +1 | X |")))
+    assert all_rows(out)["Stat Sheet / Combat / Initiative"][2] == "+3 (Alert); the sum gives +0"
+    text = with_bonuses("| Ability Checks | +1 | X |").replace("| Initiative | +3 (Alert) |", "| Initiative | +0 |")
+    _, out, _ = run(note(tmp_path, text, "b.md"))
+    assert all_rows(out)["Stat Sheet / Combat / Initiative"][2] == "+0 -> +1 (incl. +1 X)"
+
+
+def test_a_skill_bonus_carries_into_its_passive(tmp_path):
+    _, out, _ = run(note(tmp_path, with_bonuses("| Perception | +2 | X |")))
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Skills / Perception / Modifier"] == "+4 -> +6 (incl. +2 X)"
+    assert fills["Stat Sheet / Senses / Passive Perception"] == "14 -> 16"
+
+
+def test_a_reasoned_cell_is_kept_bonuses_or_not(tmp_path):
+    text = with_bonuses("| Saves | +2 | Ring |").replace("| WIS | 12 | +1 | Yes | +4 |", "| WIS | 12 | +1 | Yes | +9 (blessed) |")
+    p = note(tmp_path, text)
+    _, out, _ = run(p, "--write")
+    assert ["KEPT", "Stat Sheet / Ability Scores / WIS / Save",
+            "+9 (blessed); the sum gives +6 (incl. +2 Ring)"] in rows(out, "KEPT")
+    assert "+9 (blessed)" in p.read_text(encoding="utf-8")
+
+
+def test_an_empty_bonuses_row_is_silent(tmp_path):
+    _, out, _ = run(note(tmp_path, with_bonuses("| | | |")))
+    assert rows(out, "FILL") == []
+    assert out.rstrip().splitlines()[-1] == "# same: 36  fill: 0  kept: 1"
+
+
+def test_a_bonus_with_no_source_is_named_by_its_row(tmp_path):
+    _, out, _ = run(note(tmp_path, with_bonuses("| Saves | +1 | |")))
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Stat Sheet / Ability Scores / STR / Save"] == "+4 -> +5 (incl. +1 Bonuses row 1)"
+
+
+def test_half_proficiency(tmp_path):
+    text = clean().replace("| Arcana | INT | No | No | -1 |", "| Arcana | INT | Half | No | -1 |")
+    _, out, _ = run(note(tmp_path, text))
+    assert ["FILL", "Skills / Arcana / Modifier", "-1 -> +0"] in rows(out, "FILL")
+
+
+def test_half_with_expertise_is_not_understood(tmp_path):
+    text = clean().replace("| Perception | WIS | Yes | No | +4 |", "| Perception | WIS | Half | Yes | +4 |")
+    p = note(tmp_path, text)
+    before = p.read_bytes()
+    _, out, _ = run(p, "--write")
+    kept = {r[1]: r[2] for r in rows(out, "KEPT")}
+    assert kept["Skills / Perception / Modifier"] == \
+        "+4; Proficient Half with Expertise Yes was not understood; nothing was changed"
+    # The passive follows the number the note holds.
+    assert rows(out, "FILL") == [] and rows(out, "ERROR") == []
+    assert p.read_bytes() == before
+
+
+EQUIPMENT = """
+## Equipment
+
+### Gear
+
+| Item | Qty | Weight | Notes |
+|------|-----|--------|-------|
+| Chain Mail | 1 | 55 lb | worn |
+| Shield | | 6 | |
+| Javelin | 4 | 2 lb | |
+| [[Rope]] | 1 | | hempen |
+| Tent | 1 | heavy | |
+| Dart | 3 | 1/4 lb | |
+| Holy Symbol | 1 | — | weighs nothing |
+
+### Carrying
+
+| Attribute | Value |
+|-----------|-------|
+| Carried Weight | |
+| Carrying Capacity | |
+| Drag / Lift / Push | |
+| Encumbrance | |
+
+### Coins
+
+| CP | SP | EP | GP | PP |
+|----|----|----|----|----|
+| 10 | 20 | 0 | 1,045 | 0 |
+"""
+
+
+def test_carrying_is_filled_from_gear_coins_size_and_strength(tmp_path):
+    p = note(tmp_path, clean() + EQUIPMENT)
+    _, out, _ = run(p)
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    # 55 + 6 + 8 + 0.75 = 69.75, and 1075 coins are 21.5 lb.
+    assert fills["Equipment / Carrying / Carried Weight"] == \
+        "(blank) -> 91.3 lb (incl. 21.5 lb of coins; no weight: Rope, Tent)"
+    assert fills["Equipment / Carrying / Carrying Capacity"] == "(blank) -> 270 lb"
+    assert fills["Equipment / Carrying / Drag / Lift / Push"] == "(blank) -> 540 lb"
+    assert fills["Equipment / Carrying / Encumbrance"] == "(blank) -> Within capacity"
+    run(p, "--write")
+    text = p.read_text(encoding="utf-8")
+    for line in ("| Carried Weight | 91.3 lb |", "| Carrying Capacity | 270 lb |",
+                 "| Drag / Lift / Push | 540 lb |", "| Encumbrance | Within capacity |"):
+        assert line in text
+    once = p.read_bytes()
+    _, again, _ = run(p, "--write")
+    assert rows(again, "FILL") == [] and p.read_bytes() == once
+    assert ["SAME", "Equipment / Carrying / Encumbrance", "Within capacity"] in rows(again, "SAME")
+
+
+def test_over_capacity_and_size(tmp_path):
+    text = (clean() + EQUIPMENT).replace("| Size | Medium |", "| Size | Tiny |") \
+        .replace("| Encumbrance | |", "| Encumbrance | Within capacity |")
+    _, out, _ = run(note(tmp_path, text))
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Equipment / Carrying / Carrying Capacity"] == "(blank) -> 135 lb"
+    assert fills["Equipment / Carrying / Drag / Lift / Push"] == "(blank) -> 270 lb"
+    text = text.replace("| Chain Mail | 1 | 55 lb |", "| Chain Mail | 2 | 55 lb |")
+    _, out, _ = run(note(tmp_path, text, "o.md"))
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Equipment / Carrying / Encumbrance"] == "Within capacity -> Over capacity (Speed 5 ft)"
+
+
+def test_bare_and_reasoned_carrying_cells(tmp_path):
+    text = (clean() + EQUIPMENT) \
+        .replace("| Carried Weight | |", "| Carried Weight | 91.3 |") \
+        .replace("| Carrying Capacity | |", "| Carrying Capacity | 540 lb (Powerful Build) |") \
+        .replace("| Drag / Lift / Push | |", "| Drag / Lift / Push | 500 lb |") \
+        .replace("| Encumbrance | |", "| Encumbrance | Fine (the mule has it) |")
+    p = note(tmp_path, text)
+    _, out, _ = run(p, "--write")
+    got = all_rows(out)
+    assert got["Equipment / Carrying / Carried Weight"][0] == "SAME"
+    assert got["Equipment / Carrying / Carrying Capacity"] == [
+        "KEPT", "Equipment / Carrying / Carrying Capacity", "540 lb (Powerful Build); the sum gives 270 lb"]
+    assert got["Equipment / Carrying / Drag / Lift / Push"][:1] == ["FILL"]
+    assert got["Equipment / Carrying / Encumbrance"] == [
+        "KEPT", "Equipment / Carrying / Encumbrance", "Fine (the mule has it); the sum gives Within capacity"]
+    out_text = p.read_text(encoding="utf-8")
+    assert "| Carried Weight | 91.3 |" in out_text and "540 lb (Powerful Build)" in out_text
+
+
+def test_a_kept_capacity_is_what_encumbrance_is_measured_against(tmp_path):
+    text = (clean() + EQUIPMENT).replace("| Carrying Capacity | |", "| Carrying Capacity | 60 lb (cursed) |")
+    _, out, _ = run(note(tmp_path, text))
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Equipment / Carrying / Encumbrance"] == "(blank) -> Over capacity (Speed 5 ft)"
+
+
+def test_no_carrying_table_gets_none(tmp_path):
+    text = (clean() + EQUIPMENT).split("### Carrying")[0] + "### Coins" + (clean() + EQUIPMENT).split("### Coins")[1]
+    p = note(tmp_path, text)
+    _, out, _ = run(p, "--write")
+    assert not any("Carrying" in r for r in all_rows(out))
+    assert "### Carrying" not in p.read_text(encoding="utf-8")
+
+
+def test_three_column_gear_counts_nothing_and_says_so(tmp_path):
+    text = clean() + EQUIPMENT.replace("| Item | Qty | Weight | Notes |\n|------|-----|--------|-------|", "| Item | Qty | Notes |\n|---|---|---|") \
+        .replace("| Chain Mail | 1 | 55 lb | worn |", "| Chain Mail | 1 | worn |")
+    _, out, _ = run(note(tmp_path, text))
+    fills = {r[1]: r[2] for r in rows(out, "FILL")}
+    assert fills["Equipment / Carrying / Carried Weight"] == \
+        "(blank) -> 21.5 lb (incl. 21.5 lb of coins; Gear has no Weight column)"

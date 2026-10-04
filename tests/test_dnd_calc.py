@@ -37,6 +37,39 @@ def test_save_and_skill():
     assert dc.skill(1, 3, False, True) == 7   # expertise implies proficiency
 
 
+def test_half_proficiency_rounds_down():
+    assert [dc.half_proficiency(pb) for pb in (2, 3, 4, 5, 6)] == [1, 1, 2, 2, 3]
+    assert dc.skill(1, 3, False, False, half=True) == 2
+    assert dc.skill(-1, 5, False, False, half=True) == 1
+    # A full proficiency is not also halved.
+    assert dc.skill(1, 3, True, False, half=True) == 4
+
+
+def test_carrying_follows_size_and_strength():
+    assert dc.carrying_capacity(15, "Medium") == 225
+    assert dc.carrying_capacity(15, "small") == 225
+    assert dc.drag_lift_push(15, "Medium") == 450
+    assert dc.carrying_capacity(9, "Tiny") == 67.5
+    assert dc.drag_lift_push(9, "Tiny") == 135
+    assert dc.carrying_capacity(20, "Large") == 600
+    assert dc.drag_lift_push(20, "Huge") == 2400
+    assert dc.carrying_capacity(10, "Gargantuan") == 1200
+    # An unknown size is carried as Medium.
+    assert dc.carrying_capacity(10, "enormous") == 150
+    assert dc.carrying_capacity(10, "") == 150
+
+
+def test_coins_weigh_fifty_to_the_pound():
+    assert dc.coin_weight(50) == 1
+    assert dc.coin_weight(125) == 2.5
+    assert dc.coin_weight(0) == 0
+
+
+def test_pounds_are_whole_or_one_decimal():
+    assert [dc.pounds(w) for w in (412, 412.0, 41.5, 0, 0.25, 0.26, 2.04, 67.5)] == \
+        ["412 lb", "412 lb", "41.5 lb", "0 lb", "0.3 lb", "0.3 lb", "2 lb", "67.5 lb"]
+
+
 def test_passive_and_spells():
     assert dc.passive(4) == 14
     assert dc.spell_attack(3, 3) == 6
