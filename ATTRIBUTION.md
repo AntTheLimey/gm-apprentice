@@ -41,6 +41,10 @@ The publish tool's D&D test fixture
 that uses SRD 5.2 names only (class, subclass, species, background,
 feat, spell, skill and equipment names) with no rules text.
 
+The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
+are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no
+rules text.
+
 ### Blades in the Dark / Forged in the Dark
 
 This work is based on Blades in the Dark (found at
