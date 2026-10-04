@@ -677,7 +677,7 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
         items.append(Item(
             "wrapup-sections", CHOICE,
             ["move: put these under GM Notes, hidden from players; "
-             "leave: keep them where players see them", *moves],
+             "leave: keep them where they are", *moves],
             apply, wants="move or leave"))
     if person:
         items.append(Item("wrapup-sections-review", PERSON, person))

@@ -345,9 +345,15 @@ def list_end(doc: Doc, head: Head, end: int, line: str
     section has no list (or no table) to join."""
     states = {s.lineno - 1: s for s in doc.states}
 
+    mine = states.get(head.idx)
+
     def plain(i: int) -> bool:
+        """A line outside code at the heading's own gm-only and spoiler
+        depth: an aside inside the section is not part of its list."""
         st = states.get(i)
-        return st is not None and not st.in_code
+        return (st is not None and not st.in_code and mine is not None
+                and st.gm_depth == mine.gm_depth
+                and st.spoiler_depth == mine.spoiler_depth)
 
     span = range(head.idx + 1, end)
     if line.lstrip().startswith("|"):
@@ -369,7 +375,7 @@ def list_end(doc: Doc, head: Head, end: int, line: str
                 continue
             break
         st = states[j] if j in states else None
-        if (st is None or st.in_code or st.heading or st.marker
+        if (st is None or not plain(j) or st.heading or st.marker
                 or text.lstrip().startswith((">", "```", "~~~"))
                 and not text[:1].isspace()):
             break
@@ -498,7 +504,8 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     documents = vl.nested_mapping(text, "documents")
     link = vl.wikilink_target(documents.get("wrap_up"))
     if link and not is_blank(link):
-        have = batch.with_stem(link)
+        stem_of = re.split(r"[#^]", link, maxsplit=1)[0].replace("\\", "/")
+        have = batch.with_stem(stem_of.rsplit("/", 1)[-1].strip())
         if have:
             raise WriteError(f"{index}: already has a Wrap-Up: {have[0]}")
     notes = documents.get("play_notes") or ""
@@ -649,9 +656,15 @@ def _append(doc: Doc, head: Head, unit: list[str]) -> str:
     while body and not body[0].strip():
         body.pop(0)
     if not body:
-        return "".join(doc.lines)
-    return place(doc, section_end(doc, head), body,
-                 tight=bool(LIST_RE.match(body[0])))
+        raise WriteError(f"nothing to append to '{'#' * head.level} "
+                         f"{head.title}'")
+    end = section_end(doc, head)
+    if not vl.fenced_headings("\n".join(body)):
+        # Text without headings belongs to the section's own content,
+        # ahead of its first deeper heading.
+        end = next((h.idx for h in doc.heads
+                    if head.idx < h.idx < end and h.level > head.level), end)
+    return place(doc, end, body, tight=bool(LIST_RE.match(body[0])))
 
 
 @dataclass
@@ -1090,7 +1103,9 @@ def add_line(text: str, rel: str, section: str, line: str,
     if not name:
         raise WriteError(f"{rel}: the section has no name")
     k = key(name)
-    if not keeper and tmap is not None and k in tmap.gm:
+    if (not keeper and tmap is not None and k in tmap.gm
+            and not any(h.level == 2 and not h.gm and key(h.title) == k
+                        for h in doc.heads)):
         raise WriteError(f"{rel}: '{name}' is a GM Notes section of a "
                          f"{note_type} note: write the section as "
                          f"'GM Notes/{name}'")
@@ -1134,7 +1149,10 @@ def add_line(text: str, rel: str, section: str, line: str,
             later = tmap.later(2, k, public) if tmap else set()
             at = next((h.idx for h in scope if key(h.title) in later),
                       default)
-            return place(doc, at, [f"## {name}", "", line]), PLAYERS_SEE
+            template_public = tmap is not None and any(
+                lvl == 2 and c == k for lvl, c in tmap.order)
+            return (place(doc, at, [f"## {name}", "", line]),
+                    "created" if template_public else PLAYERS_SEE)
         head = found
     end = section_end(doc, head)
     if any(existing.strip() == line.strip()
@@ -1388,7 +1406,9 @@ def build_parser() -> argparse.ArgumentParser:
         formatter_class=raw, description=(
             "stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.\n"
             "SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';\n"
-            "any section name is accepted."))
+            "any section name is accepted. A section the note's template\n"
+            "keeps under GM Notes must be written as 'GM Notes/<Name>'\n"
+            "unless the note already has it as a public section."))
     log.add_argument("--write", action="store_true")
     tl = sub.add_parser(
         "timeline", help="add timeline entries (stdin)",

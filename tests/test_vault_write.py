@@ -1028,7 +1028,8 @@ class LogTests(unittest.TestCase):
         vault = make_vault(self, {NPC_REL: no_log})
         code, out = log(vault, f"{NPC_REL}\tCampaign Log\t{S2}x\n")
         self.assertEqual(code, 0, out)
-        self.assertIn("players will see this", out)
+        self.assertEqual(rows_of(out)[0][3], "created")
+        self.assertNotIn("players will see this", out)
         text = read(vault, NPC_REL)
         self.assertIn("## Campaign Log\n\n" + S2 + "x\n\n<!-- gm-only -->",
                       text)
@@ -1770,6 +1771,100 @@ class Group2Tests(unittest.TestCase):
                                 "Docks\n\nAgain.\n", "--as-of", "x")
         self.assertEqual(code, 1, out)
         self.assertIn("already has", out)
+
+
+class FollowUpTests(unittest.TestCase):
+    # 1
+    def _one(self, note, section="Log", line="- pub"):
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\t{section}\t{line}\n")
+        self.assertEqual(code, 0, out)
+        return read(vault, NPC_REL)
+
+    def test_a_log_line_stays_out_of_a_gm_only_aside(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n\n"
+                "<!-- gm-only -->\n- keeper aside\n<!-- /gm-only -->\n\n"
+                "## Next\n")
+        self.assertIn("- a\n- pub\n\n<!-- gm-only -->", self._one(note))
+
+    def test_a_log_line_stays_out_of_a_spoiler_aside(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n\n"
+                "<!-- spoiler -->\n- hidden\n<!-- /spoiler -->\n\n"
+                "## Next\n")
+        self.assertIn("- a\n- pub\n\n<!-- spoiler -->", self._one(note))
+
+    def test_a_timeline_entry_stays_out_of_a_fenced_bullet(self):
+        tlt = TL.replace("They came.\n", "They came.\n\n<!-- gm-only -->\n"
+                         "- **1 August 1814** \u2014 keeper\n"
+                         "<!-- /gm-only -->\n")
+        vault = make_vault(self, {TL_REL: tlt})
+        tl(vault, "- **4 August 1814** \u2014 Next.\n",
+           "--under", "### Session 1 \u2014 Arrival (3 August)")
+        self.assertIn("They came.\n- **4 August 1814** \u2014 Next.\n\n"
+                      "<!-- gm-only -->\n- **1 August", read(vault, TL_REL))
+
+    def test_a_section_inside_the_fence_gets_its_line_inside(self):
+        text = self._one(NPC, "GM Notes/Behind the Scenes", "- new")
+        self.assertIn("lied.\n- new\n\n<!-- /gm-only -->", text)
+
+    # 2
+    def test_an_already_public_section_takes_a_line_without_refusal(self):
+        note = NPC.replace("## Campaign Log", "## Wants\n\n- public\n\n"
+                           "## Campaign Log")
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tWants\t- more\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("- public\n- more\n", read(vault, NPC_REL))
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, _ = log(vault, f"{NPC_REL}\tWants\t- more\n")
+        self.assertEqual(code, 1)
+
+    # 3
+    def test_a_section_the_template_does_not_know_keeps_the_warning(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        _, out = log(vault, f"{NPC_REL}\tRumours\t- r\n")
+        self.assertIn("new section \u2014 players will see this", out)
+
+    # 4
+    def test_append_goes_before_the_sections_child_headings(self):
+        vault = wrap_vault(self)
+        add(vault, "### What Carries Forward\n\n- own\n\n"
+                   "#### Skipped Prep\n\n- s\n")
+        add(vault, "### What Carries Forward\n\n- stray note\n", "--append")
+        text = read(vault, WRAP_REL)
+        self.assertIn("- own\n- stray note\n\n#### Skipped Prep", text)
+        add(vault, "### What Carries Forward\n\n#### Mine\n\nm\n",
+            "--append")
+        self.assertLess(text.index("#### Skipped Prep"),
+                        read(vault, WRAP_REL).index("#### Mine"))
+
+    def test_append_with_nothing_to_append_is_refused(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- a\n")
+        before = read(vault, WRAP_REL)
+        code, out = add(vault, "### World State\n", "--append")
+        self.assertEqual(code, 1, out)
+        self.assertIn("nothing to append to '### World State'", out)
+        self.assertEqual(read(vault, WRAP_REL), before)
+
+    # 5
+    def test_a_wrap_up_link_with_a_path_or_alias_is_resolved(self):
+        other = "Chapters/Chapter 1 - Arrival/Sessions/Session 02/Recap.md"
+        for link in ("[[Sessions/Recap]]", "[[Sessions/Recap|the wrap]]",
+                     "[[Recap|the wrap]]"):
+            with self.subTest(link):
+                src = INDEX.replace("[[Chapter_01_Session_02_Wrap_Up]]", link)
+                vault = make_vault(self, {INDEX_REL: src, other: "x\n"})
+                code, out = run(vault, "wrapup-new", "--session", INDEX_REL)
+                self.assertEqual(code, 1, out)
+                self.assertIn("already has a Wrap-Up", out)
+
+    # 7
+    def test_log_help_names_the_gm_notes_rule(self):
+        out = io.StringIO()
+        with mock.patch("sys.stdout", out), self.assertRaises(SystemExit):
+            vw.build_parser().parse_args(["v", "log", "--help"])
+        self.assertIn("GM Notes/<Name>", out.getvalue())
 
 
 if __name__ == "__main__":

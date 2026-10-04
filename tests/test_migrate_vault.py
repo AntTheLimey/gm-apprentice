@@ -650,6 +650,8 @@ class WrapupSectionsTests(WrapupFixture):
         self.assertEqual(self.config(vault), WS_CONFIG)
         self.assertEqual(lines, ["left the Wrap-Up headings where they are"])
         self.assertIn("wrapup-sections", by_id(mv.find_wrapup_sections(vault)))
+        item = by_id(mv.find_wrapup_sections(vault))["wrapup-sections"]
+        self.assertIn("leave: keep them where they are", " ".join(item.lines))
 
     def test_any_other_value_is_a_failed_step(self):
         with self.assertRaises(StepFailed):
