@@ -667,7 +667,7 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
             if value not in ("move", "leave"):
                 raise StepFailed("wrapup-sections takes move or leave")
             if value == "leave":
-                return ["left the Wrap-Up headings where players see them"]
+                return ["left the Wrap-Up headings where they are"]
             fixed = [cells(r) for r in check_wrapup(
                 vault, None, True, player=player, renest_only=True)]
             stopped(fixed)

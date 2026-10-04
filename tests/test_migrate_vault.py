@@ -648,7 +648,7 @@ class WrapupSectionsTests(WrapupFixture):
         lines = self.choice(vault).apply("leave")
         self.assertEqual((vault / WS_REL).read_text(encoding="utf-8"), WS_WRAP)
         self.assertEqual(self.config(vault), WS_CONFIG)
-        self.assertIn("left", lines[0])
+        self.assertEqual(lines, ["left the Wrap-Up headings where they are"])
         self.assertIn("wrapup-sections", by_id(mv.find_wrapup_sections(vault)))
 
     def test_any_other_value_is_a_failed_step(self):

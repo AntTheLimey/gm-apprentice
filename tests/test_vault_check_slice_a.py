@@ -3699,12 +3699,26 @@ class WrapupCommandTests(unittest.TestCase):
         vault, rel = self.wrap_file(
             "\n## Session Recap\n\nFirst.\n\n## What Happened\n\nSecond.\n")
         rows = vc.check_wrapup(vault, rel, True)
-        self.assertTrue(rows_for(
-            rows, "'## What Happened' is a second recap-variant heading "
-                  "left as-is — merge by hand"), rows)
+        # Under the current reading it is the author's own section: INFO.
+        hit = rows_for(rows, "'## What Happened' is a second heading titled "
+                             "like a recap; the first is used as the "
+                             "session's recap")
+        self.assertTrue(hit, rows)
+        self.assertTrue(all(r.startswith("INFO") for r in hit), hit)
+        self.assertFalse(rows_for(rows, "merge by hand"), rows)
         text = read(vault, rel)
         self.assertEqual(text.count("## Narrative Recap"), 1)
         self.assertIn("\n## What Happened\n", text)
+
+    def test_a_second_recap_variant_with_an_explicit_set_is_unchanged(self):
+        vault, rel = self.wrap_file(
+            "\n## Session Recap\n\nFirst.\n\n## What Happened\n\nSecond.\n")
+        rows = vc.check_wrapup(vault, rel, True, None,
+                               frozenset({"what happened"}))
+        hit = rows_for(rows, "'## What Happened' is a second recap-variant "
+                             "heading left as-is — merge by hand")
+        self.assertTrue(hit, rows)
+        self.assertTrue(all(r.startswith("WARNING") for r in hit), hit)
 
     # ---- structure-only repairs are reported and applied -------------
 

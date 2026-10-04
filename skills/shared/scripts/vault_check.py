@@ -3455,10 +3455,16 @@ def wrapup_structure_findings(rel: str, text: str,
         where = f"{rel}:{state.lineno}"
         if level == 2:
             if is_recap_title(title) and has_recap:
-                out.append(Finding(
-                    "WARNING", where,
-                    f"'## {title}' is a second recap-variant heading left "
-                    f"as-is — merge by hand"))
+                if player is None:
+                    out.append(Finding(
+                        "INFO", where,
+                        f"'## {title}' is a second heading titled like a "
+                        f"recap; the first is used as the session's recap"))
+                else:
+                    out.append(Finding(
+                        "WARNING", where,
+                        f"'## {title}' is a second recap-variant heading "
+                        f"left as-is — merge by hand"))
                 continue
             has_recap = has_recap or is_recap_title(title)
             out.extend(_wrap_h2_finding(rel, state, where, title, player))
