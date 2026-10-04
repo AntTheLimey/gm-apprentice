@@ -13,9 +13,11 @@ from pathlib import Path
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           edit_frontmatter, write_text_atomic)
-from vault_check import WRAP_TYPES, wrapup_filename_findings
-from vaultlib import (entity_type, extract_frontmatter, read_publish_scalar,
-                      vault_files, wrapup_filename)
+from vault_check import (WRAP_TYPES, check_wrapup, player_section_key,
+                         wrapup_filename_findings)
+from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
+                      extract_frontmatter, parse_publish_list,
+                      read_publish_scalar, vault_files, wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -487,6 +489,146 @@ def find_heritage_notes(vault: Path) -> list[Item]:
     return _relink_items(vault, "heritage-notes", "move", moves)
 
 
+def read_wrap_up_player_sections(vault: Path) -> list[str]:
+    """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
+    extra H2 titles the vault declares player-facing on a Wrap-Up.
+
+    The nested `wrap_up:` block is lifted out and read through
+    `parse_publish_list`, so the list syntax is exactly the one the
+    other publish lists accept. Absent, empty, null, unreadable or not a
+    list all read as no extra sections — the Keeper-facing default.
+    """
+    try:
+        text = (vault / CONFIG).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
+    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
+    start = next((i for i, line in enumerate(lines)
+                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
+    if start is None:
+        return []
+    block: list[str] = []
+    wrap_indent: int | None = None
+    inside = False
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            if inside:
+                block.append(line)
+            continue
+        depth = len(line) - len(line.lstrip())
+        if depth == 0:
+            break                                    # the next top-level key
+        m = _KEY_LINE_RE.match(line)
+        if inside and depth > (wrap_indent or 0):
+            block.append(line)
+            continue
+        inside = False
+        if m and m.group(3) == "wrap_up" and not (m.group(4) or "").strip().split("#")[0].strip():
+            inside, wrap_indent = True, depth
+    if not block:
+        return []
+    cfg = parse_publish_list(["publish:"] + block, "player_sections")
+    return [] if cfg.error else list(cfg.value or [])
+
+
+def _drop_player_sections(fm: list[str], _eol: str) -> None:
+    """Remove `publish.wrap_up.player_sections` (and `wrap_up:` when that
+    leaves it empty) from vault-config's frontmatter lines, keeping every
+    other line as it is. Line endings ride on the lines themselves."""
+    def depth(line: str) -> int:
+        return len(line) - len(line.lstrip())
+
+    def block_end(start: int) -> int:
+        end = start + 1
+        while end < len(fm) and (not fm[end].strip()
+                                 or depth(fm[end]) > depth(fm[start])):
+            end += 1
+        while end > start + 1 and not fm[end - 1].strip():
+            end -= 1
+        return end
+
+    def key_at(name: str, lo: int, hi: int, indented: bool) -> int | None:
+        for i in range(lo, hi):
+            m = _KEY_LINE_RE.match(fm[i].rstrip("\r\n"))
+            if m and m.group(3) == name and bool(m.group(1)) == indented:
+                return i
+        return None
+
+    publish = key_at("publish", 0, len(fm), False)
+    if publish is None:
+        return
+    wrap = key_at("wrap_up", publish + 1, block_end(publish), True)
+    if wrap is None:
+        return
+    key = key_at("player_sections", wrap + 1, block_end(wrap), True)
+    if key is None:
+        return
+    del fm[key:block_end(key)]
+    if block_end(wrap) == wrap + 1:
+        del fm[wrap]
+
+
+def find_wrapup_sections(vault: Path) -> list[Item]:
+    """1.10.28: a Wrap-Up H2 is Keeper-facing only under GM Notes. Under
+    the reading before that, every H2 the vault did not list was Keeper
+    content; those are offered once to be moved under GM Notes, and the
+    list is dropped from vault-config either way.
+
+    The list stays in the config until the choice is applied (the only
+    thing that reads it), so a second look finds the same choice."""
+    listed = read_wrap_up_player_sections(vault)
+    player = frozenset(k for k in map(player_section_key, listed) if k)
+    config = vault / CONFIG
+    has_key = bool(re.search(r"^\s+player_sections\s*:",
+                             _read(config), re.M))
+
+    def drop_key() -> list[str]:
+        if not has_key:
+            return []
+        edit_frontmatter(config, _drop_player_sections)
+        return [f"removed publish.wrap_up.player_sections from {CONFIG}"]
+
+    rows = [r.split("\t", 2) for r in check_wrapup(
+        vault, None, False, player=player, renest_only=True)]
+    rows = [r for r in rows if len(r) == 3 and r[0] in ("ERROR", "WARNING")]
+    # A note the re-nest cannot touch (a fence, a hidden line that would
+    # publish) is for a person, and its headings are not offered to move.
+    blocked = [r for r in rows if not r[2].startswith("Keeper-facing H2")]
+    stuck = {r[1].rpartition(":")[0] or r[1] for r in blocked}
+    moves = [f"{r[1]}: {r[2]}" for r in rows
+             if r[2].startswith("Keeper-facing H2")
+             and (r[1].rpartition(":")[0] or r[1]) not in stuck]
+    items: list[Item] = []
+    if moves:
+        def apply(value: str | None) -> list[str]:
+            if value not in ("move", "leave"):
+                raise StepFailed("wrapup-sections takes move or leave")
+            done: list[str] = []
+            if value == "move":
+                fixed = [r.split("\t", 2) for r in check_wrapup(
+                    vault, None, True, player=player, renest_only=True)]
+                done = [f"{r[1]}: {r[2]}" for r in fixed
+                        if len(r) == 3 and r[0] == "FIXED"]
+            return done + drop_key()
+
+        items.append(Item(
+            "wrapup-sections", CHOICE,
+            ["move: put these under GM Notes, hidden from players; "
+             "leave: keep them where players see them", *moves],
+            apply, wants="move or leave"))
+    elif has_key:
+        items.append(Item(
+            "wrapup-sections-key", WILL,
+            [f"remove publish.wrap_up.player_sections from {CONFIG} "
+             f"(no longer read)"],
+            lambda _value: drop_key()))
+    if blocked:
+        items.append(Item("wrapup-sections-review", PERSON,
+                          [f"{r[1]}\t{r[2]}" for r in blocked]))
+    return items
+
+
 VAULT_CHECKS: list[Check] = [
     Check("templates", None, 3, "templates", find_templates,
           choices=("template:",)),
@@ -499,6 +641,10 @@ VAULT_CHECKS: list[Check] = [
     Check("wrapup-filenames", None, 4, "Wrap-Up filenames",
           find_wrapup_filenames, asks_site=True,
           choices=("wrapup-filenames",)),
+    # Re-nesting changes what the site shows, so it waits for the repin.
+    Check("wrapup-sections", "1.10.28", 4, "Wrap-Up sections",
+          find_wrapup_sections, asks_site=True,
+          choices=("wrapup-sections=",)),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",

@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.27"
+current_version: "1.10.28"
 ---
 
 # Vault Migration Record
@@ -34,3 +34,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.25 | `publish.site` says whether the vault has a site | every pass, see above (`publish-site`) |
 | 1.10.26 | None. Migrations run as `migrate.py plan` and `apply` | |
 | 1.10.27 | None (the two checks above now rename and move) | |
+| 1.10.28 | A Wrap-Up heading is Keeper-facing only under GM Notes: headings the old rule counted as Keeper content are moved there on a yes; `publish.wrap_up.player_sections` removed from vault-config | `wrapup-sections` |

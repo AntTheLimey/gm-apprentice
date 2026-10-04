@@ -4337,7 +4337,8 @@ def apply_frontmatter_fixes(lines: list[str],
 
 def check_wrapup(vault: Path, file: str | None, fix: bool,
                  explain: ExplainAll | None = None,
-                 player: frozenset[str] | None = None) -> list[str]:
+                 player: frozenset[str] | None = None,
+                 *, renest_only: bool = False) -> list[str]:
     """Session Wrap-Up conformance, and the mechanical repairs.
 
     Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
@@ -4357,6 +4358,11 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
     leaves the author's own H2s alone; a frozenset of comparison keys is
     the reading before 1.10.28, which the migration runs once. The
     vault's config is not read here.
+
+    `renest_only` is for the migration: only a wrap-up with a Keeper-facing
+    H2 is looked at, only its Keeper-facing-H2 and fence findings are
+    reported, and the one repair is the re-nest. No frontmatter backfill,
+    no heading rename, no row for any other wrap-up.
 
     Exit code is not a gate here: wrap-up drift is triage, and an
     ordinary vault of ingested back-history would fail every run.
@@ -4391,7 +4397,8 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
                 excludes, no_tool = [], True
         try:
             rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes,
-                                          fix, player, no_tool))
+                                          fix, player, no_tool,
+                                          renest_only=renest_only))
         except PublishToolUnavailable as e:
             rows.append(_tool_gone_row("wrapup", e))
             return rows
@@ -4405,7 +4412,8 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       entries: list[tuple[str, str, dict]],
                       excludes: list[str], fix: bool,
                       player: frozenset[str] | None = None,
-                      no_tool: bool = False) -> list[str]:
+                      no_tool: bool = False, *,
+                      renest_only: bool = False) -> list[str]:
     """One wrap-up: findings, then the plan, then a single write.
     `no_tool`: a vault with no site and no publish tool to ask. The
     check before the write then covers what needs no tool: the fences,
@@ -4433,7 +4441,15 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                              f.where, f.message, f.kind, f.data)
                      for f in structure]
     structure.sort(key=lambda f: _line_of(f.where))
-    findings = fm_findings + structure + wrapup_filename_findings(rel)
+    if renest_only:
+        if not any(f.kind == "keeper-h2" for f in structure):
+            return []
+        fm_findings = []
+        structure = [f for f in structure if f.kind in (
+            "keeper-h2", "fence-crosses", "fence-unbalanced")]
+        findings = structure
+    else:
+        findings = fm_findings + structure + wrapup_filename_findings(rel)
     rows = [f.row for f in findings]
 
     fm_lines = lines[1:close]

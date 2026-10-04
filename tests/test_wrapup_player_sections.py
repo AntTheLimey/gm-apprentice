@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
 import vault_check as vc  # noqa: E402
-from vaultlib import read_wrap_up_player_sections  # noqa: E402
+from migrate_vault import read_wrap_up_player_sections  # noqa: E402
 
 REL = "Sessions/Chapter_01_Session_01_Wrap_Up.md"
 
