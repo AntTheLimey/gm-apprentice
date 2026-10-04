@@ -72,7 +72,7 @@ status: alive
 | Persuasion | CHA | Yes | No | +6 |
 | Religion | INT | No | No | -1 |
 | Sleight of Hand | DEX | No | No | +0 |
-| Stealth | DEX | No | No | +5 (cloak of elvenkind) |
+| Stealth | DEX | No | No | +5 (GM boon) |
 | Survival | WIS | No | No | +1 |
 
 ## Spellcasting

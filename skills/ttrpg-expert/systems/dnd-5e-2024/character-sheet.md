@@ -32,7 +32,7 @@ It prints a row for every derived cell: `SAME`, `FILL` (old -> new), `KEPT`, or 
 
 A bard's Jack of All Trades is not a Bonuses row: write `Half` in the `Proficient` cell of each skill the bard lacks, and the tool adds half the proficiency bonus. In the 2024 rules that feature covers skill checks only, so Initiative gets nothing from it; a table that rules otherwise adds `Initiative | Half PB | Jack of All Trades`.
 
-Write a number by hand, with its reason, only for what that vocabulary cannot say: `+7 (cloak of elvenkind)`. The tool keeps any cell that is not blank or a bare number and replaces a bare one, so a hand-set value with no reason is lost at the next fill. A Bonuses row the tool cannot read is reported `KEPT` and adds nothing; reword it or move the number to its cell with a reason.
+Write a number by hand, with its reason, only for what that vocabulary cannot say: `+7 (GM boon)`. The tool keeps any cell that is not blank or a bare number and replaces a bare one, so a hand-set value with no reason is lost at the next fill. A Bonuses row the tool cannot read is reported `KEPT` and adds nothing; reword it or move the number to its cell with a reason.
 
 **Attack lines** (`### Weapons & Damage Cantrips`) are yours. To hit is the ability modifier plus the proficiency bonus when proficient; damage is the weapon's die plus the same modifier. Strength for melee, Dexterity for ranged; a Finesse weapon takes whichever is better, and a thrown weapon keeps its melee ability. Name the mastery and the range in Notes. A damage cantrip is a row too, so the player sees it beside the weapons. The **Atk Bonus / DC** cell (and a spell's **Hit / DC**) holds a signed number for an attack roll (`+5`) or `DC 13 Wis` for a save, never both and never prose.
 
@@ -58,7 +58,7 @@ Write a number by hand, with its reason, only for what that vocabulary cannot sa
 
 **Magic items, companions.** Every magic item is a row in `### Magic Items` (`Attuned` is `Yes` or `No`; `Charges`, `Used` and `Recovers` work as feature uses do), what it adds to a save or check is a Bonuses row, and a spell it casts is a Spells row with the item as Source. A steed, familiar or other creature that fights beside the PC is a row in `## Companions`, its name linked to the creature's note when there is one.
 
-**Weight.** Everything carried has a `### Gear` row with the weight of one in pounds, weapons and armour included: the attack table lists attacks, not possessions. Weights of SRD items are in `equipment.md`; write `—` for something weightless. The tool totals Gear and coins into `### Carrying` and sets the capacity from Strength and Size.
+**Weight.** Everything carried has a `### Gear` row with the weight of one in pounds, weapons and armour included: the attack table lists attacks, not possessions. Weights of SRD items are in `equipment.md`; write `—` for something weightless. The tool totals Gear and coins into `### Carrying` and sets the capacity from Strength and Size. A magic item's weight counts only when the item also has a Gear row; the Magic Items table adds none.
 
 **Summaries.** One line, in your own words. Never copy a book's text: the note is published, and rules text is not ours to republish. For anything outside the SRD, summarise only what the GM tells you or shows you; otherwise write the name and a page reference.
 

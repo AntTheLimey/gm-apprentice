@@ -3,7 +3,7 @@
 
 The note holds every finished number; this keeps the ones that are plain
 sums right. A cell that is blank or a bare number is this tool's to
-maintain. A cell with anything else in it (`+7 (cloak of elvenkind)`) is
+maintain. A cell with anything else in it (`+7 (GM boon)`) is
 the GM's and is kept.
 
 Usage:
@@ -64,6 +64,10 @@ WEIGHT = r"(\d+(?:\.\d+)?|\d+\s*/\s*\d+)\s*(?:lbs?\.?)?"
 BARE_WEIGHT = re.compile(rf"^{WEIGHT}$", re.I)
 REASONED_WEIGHT = re.compile(rf"^{WEIGHT}\s*\(.+\)$", re.I)
 NO_WEIGHT = re.compile(r"^[—–-]$")
+READ_TABLES = {("skills", ""), ("stat sheet", "core"), ("stat sheet", "ability scores"),
+               ("stat sheet", "combat"), ("stat sheet", "senses"), ("stat sheet", "bonuses"),
+               ("spellcasting", ""), ("equipment", "gear"), ("equipment", "coins"),
+               ("equipment", "carrying")}
 WITHIN, OVER = "Within capacity", "Over capacity (Speed 5 ft)"
 
 
@@ -92,11 +96,14 @@ def split_cells(line: str) -> list[str]:
     return [c.strip() for c in re.split(r"(?<!\\)\|", inner)]
 
 
-def read_tables(lines: list[str]) -> dict[tuple[str, str], list[tuple[int, list[str], list[str]]]]:
+def read_tables(lines: list[str], second: dict | None = None) -> dict[tuple[str, str], list[tuple[int, list[str], list[str]]]]:
     """(h2, h3) lower-cased -> [(line index, header cells, row cells)] for the
-    first table under that heading. Frontmatter and fenced code are skipped."""
+    first table under that heading. Frontmatter and fenced code are skipped.
+    A later table under the same heading is not read; `second`, when given,
+    gets its key -> the heading as written."""
     out: dict = {}
     h2 = h3 = ""
+    raw2 = raw3 = ""
     header: list[str] | None = None
     closed: set = set()
     in_fm = bool(lines) and lines[0].strip() == "---"
@@ -116,12 +123,17 @@ def read_tables(lines: list[str]) -> dict[tuple[str, str], list[tuple[int, list[
         if m:
             if len(m.group(1)) == 2:
                 h2, h3 = m.group(2).strip().lower(), ""
+                raw2, raw3 = m.group(2).strip(), ""
             else:
                 h3 = m.group(2).strip().lower()
+                raw3 = m.group(2).strip()
             header = None
             continue
         key = (h2, h3)
-        if s.startswith("|") and key not in closed:
+        if s.startswith("|") and key in closed:
+            if second is not None:
+                second.setdefault(key, raw3 or raw2)
+        elif s.startswith("|"):
             cells = split_cells(s)
             if header is None:
                 header = cells
@@ -228,6 +240,11 @@ def plain_name(text: str) -> str:
     return re.sub(r"\[\[(?:[^\]|\\]*\\?\|)?([^\]]*)\]\]", r"\1", text).strip()
 
 
+def clean(text: str) -> str:
+    """A label as a name: wikilink brackets and bold or italic marks removed."""
+    return re.sub(r"^[*_]+|[*_]+$", "", plain_name(text).strip()).strip()
+
+
 @dataclass
 class Bonus:
     targets: set[str]
@@ -237,7 +254,7 @@ class Bonus:
 
 def bonus_target(text: str, skills: set[str]) -> str | None:
     """One `Applies To` entry as a key, or None when it is not in the vocabulary."""
-    t = re.sub(r"\s+", " ", text.strip().lower())
+    t = re.sub(r"\s+", " ", clean(text).lower())
     if t in ("saves", "saving throws"):
         return "saves"
     if t in ("ability checks", "skills", "initiative", "spell save dc"):
@@ -295,7 +312,8 @@ def read_bonuses(table: list, mods: dict[str, int], pb: int,
 
 def plan(text: str) -> list[Row]:
     lines = text.splitlines()
-    tables = read_tables(lines)
+    second: dict = {}
+    tables = read_tables(lines, second)
     rows: list[Row] = []
 
     def table(h2: str, h3: str = ""):
@@ -303,7 +321,7 @@ def plan(text: str) -> list[Row]:
 
     def attr(h2: str, h3: str, label: str) -> Cell | None:
         for i, header, cells in table(h2, h3):
-            if cells and cells[0].strip().lower() == label and len(cells) > 1:
+            if cells and clean(cells[0]).lower() == label and len(cells) > 1:
                 return Cell(i, 1, cells[1])
         return None
 
@@ -326,7 +344,7 @@ def plan(text: str) -> list[Row]:
     scores: dict[str, int] = {}
     ability_rows = table("stat sheet", "ability scores")
     for i, header, cells in ability_rows:
-        key = cells[0].strip().upper()[:3] if cells else ""
+        key = clean(cells[0]).upper()[:3] if cells else ""
         if key not in dc.ABILITIES:
             continue
         score = to_int(cells[column(header, r"score$")]) if column(header, r"score$") >= 0 else None
@@ -340,8 +358,8 @@ def plan(text: str) -> list[Row]:
                     f"no row for {', '.join(missing)}; nothing was changed")]
     mods = {key: dc.ability_mod(score) for key, score in scores.items()}
 
-    skill_names = set(SKILLS) | {cells[0].strip().lower() for _i, _h, cells in table("skills")
-                                 if cells and cells[0].strip()}
+    skill_names = set(SKILLS) | {clean(cells[0]).lower() for _i, _h, cells in table("skills")
+                                 if cells and clean(cells[0])}
     bonuses, not_understood = read_bonuses(table("stat sheet", "bonuses"), mods, pb, skill_names)
     rows.extend(not_understood)
 
@@ -352,7 +370,7 @@ def plan(text: str) -> list[Row]:
                 "incl. " + ", ".join(f"{dc.signed(b.amount)} {b.source}" for b in hits) if hits else "")
 
     for i, header, cells in ability_rows:
-        key = cells[0].strip().upper()[:3] if cells else ""
+        key = clean(cells[0]).upper()[:3] if cells else ""
         if key not in dc.ABILITIES:
             continue
         c_mod, c_prof, c_save = column(header, r"mod"), column(header, r"sav.*prof"), column(header, r"save$")
@@ -379,7 +397,7 @@ def plan(text: str) -> list[Row]:
         if min(c_ab, c_mod) < 0 or len(cells) <= max(c_ab, c_mod):
             continue
         ability = cells[c_ab].strip().upper()[:3]
-        name = cells[0].strip()
+        name = clean(cells[0])
         if ability not in mods or not name:
             continue
         yes = lambda c: 0 <= c < len(cells) and bool(YES.match(cells[c].strip()))  # noqa: E731
@@ -405,19 +423,23 @@ def plan(text: str) -> list[Row]:
     # finished skill, so a bonus to the skill has already carried through.
     for h3 in ("senses", "combat"):
         for i, header, cells in table("stat sheet", h3):
-            passive = PASSIVES.get(cells[0].strip().lower()) if cells else None
+            label = clean(cells[0]) if cells else ""
+            passive = PASSIVES.get(label.lower())
             if not passive or len(cells) < 2:
                 continue
+            title = "Senses" if h3 == "senses" else "Combat"
             base = skill_value.get(passive)
             if base is None:
+                rows.append(Row("KEPT", f"Stat Sheet / {title} / {label}",
+                                f"{cells[1].strip() or '(blank)'}; no {passive.title()} skill row to take it from; "
+                                "nothing was changed"))
                 continue
-            title = "Senses" if h3 == "senses" else "Combat"
             extra, why = fed(f"passive:{passive}")
-            rows.append(judge(f"Stat Sheet / {title} / {cells[0].strip()}",
+            rows.append(judge(f"Stat Sheet / {title} / {label}",
                               Cell(i, 1, cells[1]), str(dc.passive(base) + extra), why))
 
     # Spellcasting: one set of rows, or several labelled `(Class)`.
-    casting = {cells[0].strip().lower(): (i, cells) for i, _h, cells in table("spellcasting")
+    casting = {clean(cells[0]).lower(): (i, cells) for i, _h, cells in table("spellcasting")
                if len(cells) > 1}
     for label, (i, cells) in casting.items():
         m = re.fullmatch(r"(spell attack modifier|spell save dc)(\s*\(.+\))?", label)
@@ -433,7 +455,7 @@ def plan(text: str) -> list[Row]:
         else:
             extra, why = fed("spell save dc")
             cast = str(dc.spell_save_dc(mods[ability], pb) + extra)
-        rows.append(judge(f"Spellcasting / {cells[0].strip()}", Cell(i, 1, cells[1]), cast, why))
+        rows.append(judge(f"Spellcasting / {clean(cells[0])}", Cell(i, 1, cells[1]), cast, why))
 
     # Carrying: only when the note has the table.
     if table("equipment", "carrying"):
@@ -470,7 +492,7 @@ def plan(text: str) -> list[Row]:
         cells_by_label: dict[str, Cell | None] = dict.fromkeys(
             ("carried weight", "carrying capacity", "drag / lift / push", "encumbrance"))
         for i, _header, cells in table("equipment", "carrying"):
-            label = re.sub(r"\s*/\s*", " / ", cells[0].strip().lower()) if cells else ""
+            label = re.sub(r"\s*/\s*", " / ", clean(cells[0]).lower()) if cells else ""
             if label in cells_by_label and cells_by_label[label] is None and len(cells) > 1:
                 cells_by_label[label] = Cell(i, 1, cells[1])
         at = "Equipment / Carrying / "
@@ -485,6 +507,9 @@ def plan(text: str) -> list[Row]:
             over = (effective_weight(cells_by_label["carried weight"], carried)
                     > effective_weight(cells_by_label["carrying capacity"], capacity))
             rows.append(judge_encumbrance(at + "Encumbrance", cells_by_label["encumbrance"], OVER if over else WITHIN))
+    for key, heading in second.items():
+        if key in READ_TABLES:
+            rows.append(Row("KEPT", heading, f"second table under {heading} not read"))
     return rows
 
 

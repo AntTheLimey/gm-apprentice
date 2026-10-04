@@ -82,10 +82,10 @@ def test_hand_set_numbers_survive(tmp_path):
     p = copy(tmp_path, "kept.md")
     code, out, _ = run(p, "--write")
     kept = {r[1]: r[2] for r in rows(out, "KEPT")}
-    assert kept["Skills / Stealth / Modifier"] == "+5 (cloak of elvenkind); the sum gives +0"
+    assert kept["Skills / Stealth / Modifier"] == "+5 (GM boon); the sum gives +0"
     assert kept["Stat Sheet / Senses / Passive Insight"] == "about fourteen; not read as a number; the sum gives 14"
     text = p.read_text(encoding="utf-8")
-    assert "+5 (cloak of elvenkind)" in text and "about fourteen" in text
+    assert "+5 (GM boon)" in text and "about fourteen" in text
 
 
 def test_bare_hand_set_number_is_shown_before_it_is_replaced(tmp_path):
@@ -426,3 +426,45 @@ def test_three_column_gear_counts_nothing_and_says_so(tmp_path):
     fills = {r[1]: r[2] for r in rows(out, "FILL")}
     assert fills["Equipment / Carrying / Carried Weight"] == \
         "(blank) -> 21.5 lb (incl. 21.5 lb of coins; Gear has no Weight column)"
+
+
+def test_a_wikilinked_skill_name_is_matched_by_bonuses_and_passives(tmp_path):
+    text = clean().replace("| Perception | WIS", "| [[Perception]] | WIS", 1)
+    text = text.replace("## Skills", "### Bonuses\n\n| Applies To | Bonus | Source |\n|---|---|---|\n"
+                        "| Perception | +2 | Eyes |\n\n## Skills", 1)
+    p = note(tmp_path, text)
+    _, out, _ = run(p)
+    got = all_rows(out)
+    assert got["Skills / Perception / Modifier"][2] == "+4 -> +6 (incl. +2 Eyes)"
+    assert got["Stat Sheet / Senses / Passive Perception"][2] == "14 -> 16"
+
+
+def test_a_bold_or_linked_label_is_still_read(tmp_path):
+    text = clean().replace("| Spell Save DC | 14 |", "| **Spell Save DC** | 10 |", 1)
+    text = text.replace("| WIS |", "| [[Wisdom]] |", 1) if "| WIS |" in text else text
+    p = note(tmp_path, text)
+    _, out, _ = run(p)
+    assert "Spellcasting / Spell Save DC" in all_rows(out)
+    assert rows(out, "ERROR") == []
+
+
+def test_a_passive_with_no_matching_skill_is_kept_not_skipped(tmp_path):
+    text = "\n".join(ln for ln in clean().splitlines() if not ln.startswith("| Perception |"))
+    _, out, _ = run(note(tmp_path, text + "\n"))
+    kept = {r[1]: r[2] for r in rows(out, "KEPT")}
+    assert kept["Stat Sheet / Senses / Passive Perception"] == (
+        "14; no Perception skill row to take it from; nothing was changed")
+
+
+def test_a_second_table_under_one_heading_is_named(tmp_path):
+    text = clean().replace("| Survival | WIS | No | No | +1 |",
+                           "| Survival | WIS | No | No | +1 |\n\n| Skill | Ability | Proficient | Expertise | Modifier |\n"
+                           "|---|---|---|---|---|\n| Stealth | DEX | No | No | +9 |", 1)
+    _, out, _ = run(note(tmp_path, text))
+    assert ["KEPT", "Skills", "second table under Skills not read"] in rows(out, "KEPT")
+    assert rows(out, "FILL") == []
+
+
+def test_one_table_has_no_second_table_row(tmp_path):
+    _, out, _ = run(FIXTURES / "clean.md")
+    assert not [r for r in rows(out, "KEPT") if "second table" in r[2]]

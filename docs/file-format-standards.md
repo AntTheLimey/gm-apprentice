@@ -256,7 +256,7 @@ Notes:
   Modifier, the three passive scores, Initiative, Spell Attack Modifier
   and Spell Save DC, and the four `### Carrying` values when the note
   has that table. It maintains a cell that is blank or a bare number
-  and keeps one that carries a reason, `+7 (cloak of elvenkind)`. AC,
+  and keeps one that carries a reason, `+7 (GM boon)`. AC,
   HP, Speed, attack lines and slot totals are written by hand.
 - **What the tool adds in.** Each readable `### Bonuses` row is added
   to the cells it names, and the report says so
@@ -266,7 +266,8 @@ Notes:
   and adds nothing. A `Half` skill gets half the proficiency bonus,
   rounded down. Carried weight is Qty times Weight over the Gear rows
   (a blank Qty is one; a row with no readable weight counts nothing and
-  is named in the report) plus the coins at fifty to the pound;
+  is named in the report; a magic item's weight counts only when the
+  item also has a Gear row) plus the coins at fifty to the pound;
   capacity and drag, lift or push are the Strength score times the
   SRD 5.2 Carrying Capacity table's factor for the Combat `Size` row
   (Medium when absent). A capacity with a reason
@@ -306,6 +307,12 @@ Notes:
 - **The pinned strip on a phone** (480px and below) is one row of five
   tiles; its chips are shown only when they have something to say (a
   condition, exhaustion above 0, Heroic Inspiration held).
+  The Armour Class reason is left off the strip on a phone when a
+  Defences `Armour Class` line says it again; any other reason stays.
+- **The fill tool reads the first table under a heading.** A second
+  table under the same heading (after a blank line) is not read, and
+  the report says so in a `KEPT` row. Skill and ability names may be
+  wikilinked or bold.
 - **The layout before 1.10.33 is still read**, so a note nobody has
   converted keeps publishing with every line on the page. A
   four-column ability table (no `Save`) is placed with no save number.
