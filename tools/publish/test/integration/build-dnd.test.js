@@ -104,6 +104,13 @@ describe('build integration — D&D PC', () => {
     assert.match(warlock, /<h3>Cantrips<\/h3>/);
   });
 
+  it('the page script opens the Spells tab from #spells on a caster and knows no such tab on a non-caster', () => {
+    const tabList = html => (html.match(/\[((?:'[a-z]+',? ?)+)\]\.includes\(hash\)/) || [])[1] || '';
+    assert.match(tabList(pages['ilse-varn']), /'spells'/);
+    assert.doesNotMatch(tabList(pages['dov-ashgrove']), /'spells'/);
+    assert.match(tabList(pages['dov-ashgrove']), /'combat'/);
+  });
+
   it('consumed sections are not repeated as accordions', () => {
     for (const [slug, html] of Object.entries(pages)) {
       const titles = accordionTitles(html).map(t => t.toLowerCase());
@@ -128,7 +135,7 @@ describe('build integration — D&D PC', () => {
   });
 
   it('shows a hand-set AC with its reason, a pool over ten as a count, and a long item name whole', () => {
-    assert.match(pages['dov-ashgrove'], /dnd5e-num" title="Unarmored Defense">16<\/span><span class="dnd5e-why">Unarmored Defense</);
+    assert.match(pages['dov-ashgrove'], /dnd5e-num" title="Unarmored Defense">16<\/span><span class="dnd5e-why( is-dup)?">Unarmored Defense</);
     assert.match(pages['brannoch-vale'], /dnd5e-count"[^>]*><span class="dnd5e-num">18<\/span> \/ 25/);
     assert.ok(pages['dov-ashgrove'].includes('Brass prayer beads from a hilltop shrine'));
   });

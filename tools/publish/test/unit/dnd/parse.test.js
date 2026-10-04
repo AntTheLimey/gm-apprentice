@@ -285,7 +285,7 @@ describe('parseDnd: review fixes', () => {
 
 describe('splitReason', () => {
   it('splits a value from its reason', () => {
-    assert.deepEqual(splitReason('+7 (cloak of elvenkind)'), { value: '+7', reason: 'cloak of elvenkind' });
+    assert.deepEqual(splitReason('+7 (GM boon)'), { value: '+7', reason: 'GM boon' });
     assert.deepEqual(splitReason('30 ft'), { value: '30 ft', reason: '' });
     assert.deepEqual(splitReason(''), { value: '', reason: '' });
   });

@@ -1,10 +1,10 @@
 const { escapeHtml } = require('../../../processor');
 const { yesNo } = require('../../sheet-parse');
 const { splitReason } = require('../parse');
-const { num } = require('../render');
+const { num, whyOf } = require('../render');
 
-const tile = (label, value) => (value
-  ? `<div class="dnd5e-v"><span class="dnd5e-lbl">${label}</span>${num(value)}</div>` : '');
+const tile = (model, label, value, whyClass) => (value
+  ? `<div class="dnd5e-v"><span class="dnd5e-lbl">${label}</span>${num(value, whyClass, whyOf(model, value))}</div>` : '');
 
 function renderVitals(model) {
   const c = model.combat || {};
@@ -15,15 +15,17 @@ function renderVitals(model) {
   const inspiration = String(model.inspiration || '').trim();
   const inspired = yesNo(inspiration);
   const speeds = c.speeds || [];
+  // The reason in the AC cell is a duplicate when a Defences line says what the armour class is made of.
+  const acReasonShownBelow = (model.defences || []).some(([label]) => /^armou?r class$/i.test(label));
   if (!(c.ac || c.hpCur || c.hpMax || c.initiative || c.speed || speeds.length || model.pb || hasTemp
     || c.conditions || c.exhaustion || inspired !== false)) return null;
   let hp = '';
   if (c.hpCur || c.hpMax || hasTemp) {
     const max = splitReason(c.hpMax);
-    const why = max.reason ? `<span class="dnd5e-why">${escapeHtml(max.reason)}</span>` : '';
+    const why = max.reason ? `<span class="dnd5e-why">${whyOf(model, c.hpMax) || escapeHtml(max.reason)}</span>` : '';
     const of = c.hpMax ? ` <span class="dnd5e-of"${max.reason ? ` title="${escapeHtml(max.reason)}"` : ''}>/ ${escapeHtml(max.value)}</span>${why}` : '';
     const temp = hasTemp ? ` <span class="dnd5e-temp">+ ${escapeHtml(tempText)} temp</span>` : '';
-    hp = `<div class="dnd5e-v dnd5e-hp"><span class="dnd5e-lbl">Hit points</span><span class="dnd5e-hp-line">${num(c.hpCur)}${of}${temp}</span></div>`;
+    hp = `<div class="dnd5e-v dnd5e-hp"><span class="dnd5e-lbl">Hit points</span><span class="dnd5e-hp-line">${num(c.hpCur, '', whyOf(model, c.hpCur))}${of}${temp}</span></div>`;
   }
 
   const chips = [];
@@ -37,10 +39,10 @@ function renderVitals(model) {
   // Speed, with any fly, swim, climb or burrow speed small beneath it.
   const extra = speeds.map(([kind, value]) => `<span class="dnd5e-sub">${escapeHtml(kind)} ${escapeHtml(value)}</span>`).join('');
   const speed = c.speed || extra
-    ? `<div class="dnd5e-v"><span class="dnd5e-lbl">Speed</span>${c.speed ? num(c.speed) : ''}${extra}</div>` : '';
+    ? `<div class="dnd5e-v"><span class="dnd5e-lbl">Speed</span>${c.speed ? num(c.speed, '', whyOf(model, c.speed)) : ''}${extra}</div>` : '';
 
   return '<section class="dnd5e-vitals" aria-label="Vitals">'
-    + `<div class="dnd5e-vrow">${hp}${tile('AC', c.ac)}${tile('Init', c.initiative)}${speed}${tile('Prof', model.pb)}</div>`
+    + `<div class="dnd5e-vrow">${hp}${tile(model, 'AC', c.ac, acReasonShownBelow ? 'is-dup' : '')}${tile(model, 'Init', c.initiative)}${speed}${tile(model, 'Prof', model.pb)}</div>`
     + `<div class="dnd5e-chips${allQuiet ? ' is-quiet' : ''}">${chips.join('')}</div></section>`;
 }
 

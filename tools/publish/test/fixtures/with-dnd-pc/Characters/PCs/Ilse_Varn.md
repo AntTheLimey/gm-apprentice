@@ -192,7 +192,7 @@ relationships: []
 
 | Item | Qty | Weight | Notes |
 |------|-----|--------|-------|
-| Spellbook | 1 | 5 lb | Holds her prepared and known spells |
+| Spellbook | 1 | 3 lb | Holds her prepared and known spells |
 | Satchel of index cards | 1 | 1 lb |  |
 | Ink and quill | 1 | — |  |
 | Book | 14 | 5 lb | Borrowed from the reading room, all overdue |
@@ -203,7 +203,7 @@ relationships: []
 
 | Attribute | Value |
 |-----------|-------|
-| Carried Weight | 123.9 lb |
+| Carried Weight | 121.9 lb |
 | Carrying Capacity | 120 lb |
 | Drag / Lift / Push | 240 lb |
 | Encumbrance | Over capacity (Speed 5 ft) |

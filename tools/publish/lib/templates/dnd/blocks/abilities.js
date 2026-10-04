@@ -1,6 +1,6 @@
 const { escapeHtml } = require('../../../processor');
 const { ABILITIES } = require('../parse');
-const { block, num, asWritten } = require('../render');
+const { block, num, asWritten, whyOf } = require('../render');
 
 function card(key, a) {
   let save = '';
@@ -12,7 +12,7 @@ function card(key, a) {
 
 function renderAbilities(model) {
   const cards = ABILITIES.filter(k => model.abilities[k]).map(k => card(k, model.abilities[k])).join('');
-  const core = model.core.map(([label, value]) => `<div class="dnd5e-v"><span class="dnd5e-lbl">${escapeHtml(label)}</span>${num(value)}</div>`).join('');
+  const core = model.core.map(([label, value]) => `<div class="dnd5e-v"><span class="dnd5e-lbl">${escapeHtml(label)}</span>${num(value, '', whyOf(model, value))}</div>`).join('');
   // Loose prose alone is not an abilities block; the layout places it.
   if (!cards && !core) return null;
   const inner = (cards ? `<div class="dnd5e-abilities">${cards}</div>` : '')

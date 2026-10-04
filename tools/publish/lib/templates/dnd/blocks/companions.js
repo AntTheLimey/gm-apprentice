@@ -5,7 +5,7 @@ const stat = (label, value) => (value ? `<span class="dnd5e-stat"><span class="d
 function renderCompanions(model) {
   const entries = (model.companions || []).map(c => entry({
     nameHtml: c.nameHtml,
-    tags: [c.kind],
+    tags: [/<a[ >]/i.test(c.kindHtml || '') ? { html: c.kindHtml } : c.kind],
     bigHtml: stat('AC', c.ac) + stat('HP', c.hp) + stat('Speed', c.speed),
     summaryHtml: c.notesHtml,
   })).join('');

@@ -10,7 +10,7 @@ function renderAttacks(model) {
     summaryHtml: a.notesHtml,
   })).join('');
   // Attacks per Action and any Save DC row from Combat, as written.
-  const tiles = ((model.combat || {}).attackTiles || []).map(([l, v]) => tile(l, v)).join('');
+  const tiles = ((model.combat || {}).attackTiles || []).map(([l, v]) => tile(l, v, model)).join('');
   return block('attacks', 'Attacks', (tiles ? `<div class="dnd5e-kv">${tiles}</div>` : '') + entries);
 }
 

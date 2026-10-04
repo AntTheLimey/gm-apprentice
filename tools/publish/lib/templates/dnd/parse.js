@@ -48,6 +48,25 @@ function splitReason(text) {
   return m ? { value: m[1], reason: m[2].trim() } : { value: s, reason: '' };
 }
 
+// A link in a cell that is placed by its text: the text is placed, so the row is not left as a raw table.
+const LINKS = { links: true };
+const hasLink = html => /<a[ >]/i.test(html || '');
+
+// Offered to a rich `Attribute | Value` table: a row whose only link sits in the value's trailing
+// `(reason)` is placed, and the reason's html is kept for the page. A link in the label or in the
+// value itself would be lost from a tile, so that row stays as written.
+function keepReasonLink(model, place) {
+  return (cells, h) => {
+    if (hasLink(h[0])) return false;
+    if (hasLink(h[1])) {
+      const m = String(h[1]).match(/^([\s\S]*?\S)\s*\(((?:[^()<]|<[^>]*>)+)\)$/);
+      if (!m || hasLink(m[1]) || !hasLink(m[2])) return false;
+      model.whyHtml.set(cells[1], m[2].trim());
+    }
+    return place(cells, h);
+  };
+}
+
 const wholeNumber = s => (/^\d+$/.test(String(s).trim()) ? parseInt(s, 10) : null);
 
 function stripNotes(html) {
@@ -73,6 +92,8 @@ function firstHeader(html) {
 function countCells(total, spent) {
   const uses = total ? wholeNumber(total) : null;
   const used = spent ? wholeNumber(spent) : null;
+  // A spent `0` with no total counts nothing: it is the same as blank.
+  if (!total && used === 0) return { uses: null, used: null };
   if ((total && uses === null) || (spent && (used === null || !total))) return null;
   return { uses, used };
 }
@@ -93,13 +114,13 @@ function readStatSheet(model, section) {
     seen.add(key);
     let left = '';
     if (key === 'core') {
-      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => {
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => {
         if (/^level$/i.test(label)) model.header.level = filled(value);
         else if (/^proficiency bonus$/i.test(label)) model.pb = filled(value);
         else if (/^heroic inspiration$/i.test(label)) model.inspiration = filled(value);
         else model.core.push([label, filled(value)]);
         return true;
-      });
+      }), LINKS);
     } else if (key === 'ability scores') {
       const place = hasSave => cells => {
         const m = String(cells[0] || '').match(ABILITY_NAME);
@@ -112,9 +133,9 @@ function readStatSheet(model, section) {
       left = consumeTable(sub.html, COLS.abilities, place(true));
       if (Object.keys(model.abilities).length === 0) left = consumeTable(sub.html, COLS.abilitiesOld, place(false));
     } else if (key === 'combat') {
-      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => readCombatRow(model, label, value));
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => readCombatRow(model, label, value)), LINKS);
     } else if (key === 'senses') {
-      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => { model.senses.push([label, filled(value)]); return true; });
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => { model.senses.push([label, filled(value)]); return true; }), LINKS);
     } else if (key === 'bonuses') {
       left = consumeTable(sub.html, COLS.bonuses, (c, h) => {
         if (!c.some(filled)) return true;             // the template's empty row
@@ -130,7 +151,7 @@ function readStatSheet(model, section) {
         // A line holding nothing (blank, a dash, the template's placeholder) is not shown.
         const holdsNothing = /^[—–-]?$/.test(text) || isPlaceholder(text);
         if (text === '' && hasContent(line[1])) continue;   // an image alone: shown as written
-        if (!holdsNothing) model.defences.push([label, text]);
+        if (!holdsNothing) model.defences.push(hasLink(line[1]) ? [label, text, line[1].trim()] : [label, text]);
         left = left.replace(line[0], '');
       }
       left = left.replace(/<p>([\s\S]*?)<\/p>/g, (whole, inner) => (hasContent(inner) ? whole : ''));
@@ -199,10 +220,31 @@ function readFeatures(model, section, list, home) {
     if (!c.some(filled)) return true;             // the template's empty row
     const n = countCells(c[2], c[3]);
     if (!c[0] || !n) return false;
-    model.features[list].push({ name: c[0], nameHtml: h[0], action: c[1], uses: n.uses, used: n.used, recovers: c[4], summaryHtml: h[5] });
+    model.features[list].push({ name: c[0], nameHtml: h[0], action: c[1], uses: n.uses, used: n.used, recovers: c[4], ...(hasLink(h[4]) ? { recoversHtml: h[4] } : {}), summaryHtml: h[5] });
     return true;
   }, { rich: true });
   if (hasContent(left)) model.asWritten[home].push(left);
+}
+
+// A tag cell's html cut at its commas, outside any link. Empty when the cell has no link (the text tags serve).
+function splitTags(html) {
+  if (!/<a[ >]/i.test(html || '')) return [];
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const piece of String(html).split(/(<[^>]*>)/)) {
+    if (/^<a[ >]/i.test(piece)) depth++;
+    else if (/^<\/a>/i.test(piece)) depth = Math.max(0, depth - 1);
+    if (depth === 0 && !piece.startsWith('<') && piece.includes(',')) {
+      const bits = piece.split(',');
+      cur += bits[0];
+      parts.push(cur);
+      for (const b of bits.slice(1, -1)) parts.push(b);
+      cur = bits[bits.length - 1];
+    } else cur += piece;
+  }
+  parts.push(cur);
+  return parts.map(t => t.trim()).filter(t => t && cellText(t));
 }
 
 function spellLevel(text) {
@@ -214,10 +256,10 @@ function spellLevel(text) {
 
 function readSpellcasting(model, section) {
   const top = stripNotes(aboveSubheadings(section.html));
-  const topLeft = consumeTable(top, ATTRIBUTE_COLUMNS, ([label, value]) => {
+  const topLeft = consumeTable(top, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => {
     if (filled(value) || !SPELL_STAT_LABELS.test(label)) model.casting.push([label, filled(value)]);
     return true;
-  });
+  }), LINKS);
   if (hasContent(topLeft)) model.asWritten.spellcasting.push(topLeft);
   const seen = new Set();
   for (const sub of subsections(section.html)) {
@@ -243,7 +285,7 @@ function readSpellcasting(model, section) {
         if (!c[0] || !level) return false;
         model.spells.push({
           name: c[0], nameHtml: h[0], level, time: c[2], range: c[3], components: c[4], duration: c[5], hit: c[6],
-          tags: c[7] ? c[7].split(',').map(t => t.trim()).filter(Boolean) : [],
+          tags: c[7] ? c[7].split(',').map(t => t.trim()).filter(Boolean) : [], ...(hasLink(h[7]) ? { tagsHtml: splitTags(h[7]) } : {}),
           source: withSource ? filled(c[8]) : '', sourceHtml: withSource ? h[8] : '', summaryHtml: h[withSource ? 9 : 8],
         });
         return true;
@@ -285,14 +327,14 @@ function readEquipment(model, section) {
         return true;
       }, { rich: true });
     } else if (key === 'carrying') {
-      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => { if (filled(value)) model.carrying.push([label, value]); return true; });
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => { if (filled(value)) model.carrying.push([label, value]); return true; }), LINKS);
     } else if (key === 'magic items') {
       left = consumeTable(sub.html, COLS.magicItems, (c, h) => {
         if (!c.some(filled)) return true;             // the template's empty row
         const attuned = yesNo(c[1]);
         const n = countCells(c[2], c[3]);
         if (!c[0] || attuned === null || !n) return false;
-        model.magicItems.push({ name: c[0], nameHtml: h[0], attuned, charges: n.uses, used: n.used, recovers: c[4], notesHtml: h[5] });
+        model.magicItems.push({ name: c[0], nameHtml: h[0], attuned, charges: n.uses, used: n.used, recovers: c[4], ...(hasLink(h[4]) ? { recoversHtml: h[4] } : {}), notesHtml: h[5] });
         return true;
       }, { rich: true });
     } else if (key === 'magic item attunement' || key === 'attunement') {
@@ -315,7 +357,7 @@ function readCompanions(model, section) {
   const left = consumeTable(stripNotes(section.html), COLS.companions, (c, h) => {
     if (!c.some(filled)) return true;             // the template's empty row
     if (!c[0]) return false;
-    model.companions.push({ name: c[0], nameHtml: h[0], kind: c[1], ac: filled(c[2]), hp: filled(c[3]), speed: filled(c[4]), notesHtml: h[5] });
+    model.companions.push({ name: c[0], nameHtml: h[0], kind: c[1], ...(hasLink(h[1]) ? { kindHtml: h[1] } : {}), ac: filled(c[2]), hp: filled(c[3]), speed: filled(c[4]), notesHtml: h[5] });
     return true;
   }, { rich: true });
   if (hasContent(left)) model.asWritten.companions.push(left);
@@ -326,7 +368,7 @@ function parseDnd(frontmatter, sections) {
     header: { level: '', classes: '', species: '', background: '' },
     pb: '', inspiration: '', core: [], abilities: {},
     combat: { hitDice: [], other: [], speeds: [], speedsSeen: [], attackTiles: [] },
-    senses: [], bonuses: [], defences: [], skills: [],
+    whyHtml: new Map(), senses: [], bonuses: [], defences: [], skills: [],
     features: { class: [], species: [], feats: [] },
     casting: [], slots: [], spells: [], proficienciesHtml: '',
     attacks: [], gear: [], carrying: [], magicItems: [], attunement: [], coins: [], companions: [],

@@ -19,7 +19,7 @@ function renderTracks(model) {
     if (d.raw !== undefined) rows.push(track('Death saves', escapeHtml(d.raw)));
     else rows.push(saves('Saved', d.s, 'Death saves made'), saves('Failed', d.f, 'Death saves failed'));
   }
-  const tiles = [...(c.other || []), ...(c.size ? [['Size', c.size]] : [])].map(([l, v]) => tile(l, v)).join('');
+  const tiles = [...(c.other || []), ...(c.size ? [['Size', c.size]] : [])].map(([l, v]) => tile(l, v, model)).join('');
   return block('tracks', 'Hit dice and death saves', rows.join('') + (tiles ? `<div class="dnd5e-kv">${tiles}</div>` : ''));
 }
 

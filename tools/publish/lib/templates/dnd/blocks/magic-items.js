@@ -10,7 +10,7 @@ function renderMagicItems(model) {
     nameHtml: i.nameHtml,
     tags: [i.attuned ? 'Attuned' : ''],
     summaryHtml: i.notesHtml,
-    usesHtml: usesHtml({ name: i.name, uses: i.charges, used: i.used, recovers: i.recovers }),
+    usesHtml: usesHtml({ name: i.name, uses: i.charges, used: i.used, recovers: i.recovers, recoversHtml: i.recoversHtml }),
   })).join('');
   return block('magic-items', 'Magic items', entries, `${items.filter(i => i.attuned).length} of ${ATTUNEMENT_SLOTS} attuned`);
 }

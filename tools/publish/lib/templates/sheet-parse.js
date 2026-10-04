@@ -102,7 +102,8 @@ function consumeTable(html, columns, place, opts = {}) {
     if (!hasContent(rowMatch[1])) continue;
     const cells = cellsOf(rowMatch[1]);
     // A tile shows text only, so a row holding a link or an image is not placed.
-    const plain = opts.rich === true || !/<(a|img)[ >]/i.test(rowMatch[1]);
+    // `links` lets a link through (its text is placed; the link itself is not kept); an image never.
+    const plain = opts.rich === true || !(opts.links === true ? /<img[ >]/i : /<(a|img)[ >]/i).test(rowMatch[1]);
     const fits = known && plain && cells.slice(cols).every(c => !c);
     if (!(fits && place(cells.slice(0, cols), htmlCellsOf(rowMatch[1]).slice(0, cols)))) unplaced.push(rowMatch[0]);
   }
