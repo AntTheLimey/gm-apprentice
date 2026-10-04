@@ -53,7 +53,12 @@ CATEGORY_NAMES = {"scifi": "Sci-Fi"}
 
 
 class ScaffoldError(Exception):
-    """A refusal. One line; nothing is written."""
+    """A refusal. One line; nothing is written, unless `left` says the undo
+    could not remove everything this run made."""
+
+    def __init__(self, message: str, *, left: bool = False) -> None:
+        super().__init__(message)
+        self.left = left
 
 
 def _plugin_text(path: Path) -> str:
@@ -145,6 +150,7 @@ SYSTEMS = ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", "pf2e",
 
 PLAIN_FOLDERS = ("_meta", "_Campaign", "_Templates", "_World", "Chapters",
                  "Adventures")
+ATTACHMENTS = "_attachments"
 ATTACHMENT_SUBS = ("characters", "locations", "factions", "items",
                    "creatures", "events", "documents")
 # A type folder counts as present when the vault already keeps a note of one
@@ -199,7 +205,7 @@ def _types_in(vault: Path) -> tuple[set[str], bool]:
     if vault.is_dir():
         for _rel, text in vault_files(vault):
             front = extract_frontmatter(text) or {}
-            kind = entity_type(front)
+            kind = entity_type(front).strip().lower()
             types.add(kind)
             if kind == "world_domain" and (
                     str(front.get("domain", "")).strip().lower() == "index"):
@@ -207,19 +213,26 @@ def _types_in(vault: Path) -> tuple[set[str], bool]:
     return types - {""}, world_index
 
 
-def _attachments(vault: Path) -> str:
+def _attachments(vault: Path) -> str | None:
+    """The vault's attachments folder, or None when the vault names one
+    outside itself: this script creates nothing out there."""
     named = None
     if (vault / CONFIG).is_file():
         named = read_publish_scalar(vault, "attachments_dir")
-    return (named or "").strip().strip("/") or "_attachments"
+    named = (named or "").strip().replace("\\", "/")
+    if (named.startswith("/") or re.match(r"[A-Za-z]:", named)
+            or ".." in named.split("/")):
+        return None
+    return named.strip("/") or ATTACHMENTS
 
 
 def missing(vault: Path, system: str | None, *, campaign: str, version: str,
-            inbox: bool = False, templates: bool = True,
+            inbox: bool = False, templates: bool = True, pages: bool = True,
             today: str | None = None) -> list[Piece]:
     """What the vault's skeleton lacks, in the order to create it. Nothing
     that exists is listed. `templates=False` leaves `_Templates/` files to
-    the update tool's own check."""
+    the update tool's own check; `pages=False` leaves out the four one-off
+    pages (world index, world flags, Timeline, Player Characters)."""
     types, has_world_index = _types_in(vault)
     day = today or datetime.date.today().isoformat()
     out: list[Piece] = []
@@ -241,9 +254,10 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     for rel in PLAIN_FOLDERS:
         folder(rel)
     attach = _attachments(vault)
-    folder(attach)
-    for sub in ATTACHMENT_SUBS:
-        folder(f"{attach}/{sub}")
+    if attach is not None:
+        folder(attach)
+        for sub in ATTACHMENT_SUBS:
+            folder(f"{attach}/{sub}")
     for rel, held in TYPE_FOLDERS.items():
         folder(rel, present=bool(held & types))
     if inbox:
@@ -254,17 +268,18 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
             # Binds this iteration's text; mypy rejects a default-argument
             # lambda here.
             file(f"_Templates/{name}", partial(str, text))
-    file("_World/world-index.md",
-         lambda: _plugin_text(mv.TEMPLATES / "world-index.md"),
-         present=has_world_index)
-    file("_World/_flags.md",
-         lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"),
-         present="world_flags" in types)
-    file("_Campaign/Timeline.md", lambda: seed("timeline.md", campaign),
-         present="timeline" in types)
-    file("_Campaign/Player Characters.md",
-         lambda: seed("player-characters.md", campaign),
-         present=bool(ROSTER_TYPES & types))
+    if pages:
+        file("_World/world-index.md",
+             lambda: _plugin_text(mv.TEMPLATES / "world-index.md"),
+             present=has_world_index)
+        file("_World/_flags.md",
+             lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"),
+             present="world_flags" in types)
+        file("_Campaign/Timeline.md", lambda: seed("timeline.md", campaign),
+             present="timeline" in types)
+        file("_Campaign/Player Characters.md",
+             lambda: seed("player-characters.md", campaign),
+             present=bool(ROSTER_TYPES & types))
     file("_meta/entity-types.md", entity_types_text)
     file("_meta/relationship-types.md", relationship_types_text)
     # The index is rendered when it is written, after the files above exist.
@@ -288,17 +303,22 @@ def _make_folders(path: Path, made: list[Path]) -> None:
         made.append(folder)
 
 
-def _undo(made: list[Path]) -> list[str]:
-    """Remove what this run made, newest first. Returns what would not go."""
+def _undo(vault: Path, made: list[Path]) -> list[str]:
+    """Remove what this run made, newest first. Returns what would not go,
+    as rows show a path: relative to the vault, a folder ending in `/`."""
     left: list[str] = []
     for path in reversed(made):
+        is_dir = path.is_dir()
         try:
-            if path.is_dir():
+            if is_dir:
                 path.rmdir()
             else:
                 path.unlink(missing_ok=True)
         except OSError:
-            left.append(path.name)
+            rel = path.relative_to(vault).as_posix()
+            if rel == ".":
+                rel = vault.name
+            left.append(f"{rel}/" if is_dir else rel)
     return left
 
 
@@ -319,11 +339,11 @@ def build(vault: Path, pieces: list[Piece]) -> None:
             made.append(path)
             write_text_atomic(path, piece.text())
     except BaseException as e:
-        left = _undo(made)
+        left = _undo(vault, made)
         if not isinstance(e, Exception):
             if left:
                 raise ScaffoldError(f"interrupted; could not remove: "
-                                    f"{', '.join(left)}") from e
+                                    f"{', '.join(left)}", left=True) from e
             raise
         name = e.__class__.__name__
         why = str(e) or name
@@ -332,42 +352,59 @@ def build(vault: Path, pieces: list[Piece]) -> None:
             why = f"{name}: {e}"
         if left:
             why = f"{why}; could not remove: {', '.join(left)}"
-        raise ScaffoldError(why) from e
+        raise ScaffoldError(why, left=bool(left)) from e
 
 
 # --- CLI --------------------------------------------------------------------
 
 def resolve_system(vault: Path, given: str | None,
                    no_system: bool) -> str | None:
-    """The system to build for. Never guessed: a new vault with none
-    recorded and no flag is refused."""
+    """The system to build for. Never guessed: a new vault is refused when
+    it records none, or one this script does not know, and no flag settles
+    it; so is a flag that contradicts what the vault records."""
     if no_system:
         return None
     ids = ", ".join(SYSTEMS)
+    recorded = mv.vault_system(vault) if vault.is_dir() else None
     if given is not None:
         found = mv._system_id(given)
         if found not in SYSTEMS:
             raise ScaffoldError(f"unknown system '{given}': use one of "
                                 f"{ids}, or --no-system")
+        if recorded in SYSTEMS and recorded != found:
+            raise ScaffoldError(f"the vault records {recorded}; --system "
+                                f"{found} disagrees")
         return found
-    found = mv.vault_system(vault) if vault.is_dir() else None
-    if found is None and not (vault / CONFIG).is_file():
+    if recorded in SYSTEMS:
+        return recorded
+    if not (vault / CONFIG).is_file():
+        if recorded is None:
+            raise ScaffoldError(
+                f"the game system is not recorded: ask the GM once, then "
+                f"pass --system ID (one of {ids}) or --no-system")
         raise ScaffoldError(
-            f"the game system is not recorded: ask the GM once, then pass "
-            f"--system ID (one of {ids}) or --no-system")
-    # A system the vault names that has no templates here builds generic.
-    return found if found in SYSTEMS else None
+            f"the vault names its system '{recorded}', which is not an id "
+            f"this script knows: pass --system ID (one of {ids}) or "
+            f"--no-system")
+    # A set-up vault with no system, or one with no templates here: generic.
+    return None
 
 
-def _refuse_ahead(vault: Path, plugin: str) -> None:
+def _refuse_unusable_version(vault: Path, plugin: str) -> None:
+    """A vault whose config file carries no version, or a later one than
+    the plugin's, is refused. A vault with no config file is a new one."""
     try:
         fm = extract_frontmatter((vault / CONFIG).read_text(
             encoding="utf-8-sig", errors="replace")) or {}
     except OSError:
         return
     current = fm.get("gm_apprentice_version")
-    if (current and not isinstance(current, list)
-            and parse_version(str(current)) > parse_version(plugin)):
+    if (not current or isinstance(current, list)
+            or not parse_version(str(current))):
+        raise ScaffoldError(
+            f"{CONFIG} has no gm_apprentice_version, so this script cannot "
+            f"tell what set the vault up; it never rewrites that file")
+    if parse_version(str(current)) > parse_version(plugin):
         raise ScaffoldError(f"vault {current} is ahead of plugin {plugin}: "
                             f"update the plugin before touching this vault")
 
@@ -403,7 +440,7 @@ def main(argv: list[str] | None = None) -> int:
             found = plugin_version()
             if found is None:
                 raise ScaffoldError("cannot determine the plugin version")
-            _refuse_ahead(vault, found[0])
+            _refuse_unusable_version(vault, found[0])
             system = resolve_system(vault, args.system, args.no_system)
             campaign = " ".join((args.name or vault.resolve().name).split())
             pieces = missing(vault, system, campaign=campaign,
@@ -414,8 +451,8 @@ def main(argv: list[str] | None = None) -> int:
             raise ScaffoldError("interrupted") from None
     except ScaffoldError as e:
         print(f"ERROR\t{e}")
-        print("# nothing written" if "could not remove" not in str(e)
-              else "# some of this run's files were left: remove them by hand")
+        print("# some of this run's files were left: remove them by hand"
+              if e.left else "# nothing written")
         return 1
     verb = "CREATED" if args.write else "WOULD-CREATE"
     rows = [f"{verb}\t{shown(p)}" for p in pieces]

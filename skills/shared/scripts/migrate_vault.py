@@ -65,11 +65,12 @@ def vault_system(vault: Path) -> str | None:
     found = _system_id(read_publish_scalar(vault, "system"))
     if found:
         return found
-    for wanted, key in (("campaign_overview", "game_system"),
-                        ("adventure_brief", "system")):
+    # The brief's type is written `adventure-brief`; older notes used `_`.
+    for wanted, key in ((("campaign_overview",), "game_system"),
+                        (("adventure-brief", "adventure_brief"), "system")):
         for _rel, text in vault_files(vault):
             fm = extract_frontmatter(text) or {}
-            if entity_type(fm) == wanted and _system_id(fm.get(key)):
+            if entity_type(fm) in wanted and _system_id(fm.get(key)):
                 return _system_id(fm.get(key))
     return None
 
@@ -715,16 +716,19 @@ def find_wrapup_sections_key(vault: Path) -> list[Item]:
 
 
 def find_skeleton(vault: Path) -> list[Item]:
-    """Every pass: the folders and one-off pages a vault's skeleton lacks,
-    as vault_scaffold.py defines it. Only adds. `_Templates/` files are the
-    `templates` check's, and a file that exists is never touched."""
+    """Every pass: the folders and `_meta/` schema files a vault's skeleton
+    lacks, as vault_scaffold.py defines it. Only adds, and a file that
+    exists is never touched. `_Templates/` files are the `templates`
+    check's. The one-off pages are never added here: they can publish, and
+    this step asks nothing."""
     import vault_scaffold as vs    # it imports this module
 
     found = plugin_version()
     try:
         pieces = [p for p in vs.missing(
             vault, vault_system(vault), campaign=vault.resolve().name,
-            version=found[0] if found else "", templates=False)
+            version=found[0] if found else "", templates=False,
+            pages=False)
             if p.rel != vs.CONFIG]
     except vs.ScaffoldError as e:
         raise StepFailed(str(e)) from e

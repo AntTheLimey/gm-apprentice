@@ -56,13 +56,30 @@ class SkeletonTests(unittest.TestCase):
         items = mv.find_skeleton(vault)
         self.assertEqual([i.id for i in items], ["skeleton"])
         self.assertEqual(items[0].group, WILL)
-        self.assertEqual(sorted(items[0].lines),
-                         ["create Heritages/", "create _Campaign/Timeline.md"])
-        done = items[0].apply(None)
-        self.assertEqual(sorted(done), ["created Heritages/",
-                                        "created _Campaign/Timeline.md"])
+        self.assertEqual(items[0].lines, ["create Heritages/"])
+        self.assertEqual(items[0].apply(None), ["created Heritages/"])
         self.assertTrue((vault / "Heritages").is_dir())
+        self.assertFalse((vault / "_Campaign" / "Timeline.md").exists())
         self.assertEqual(mv.find_skeleton(vault), [])
+
+    def test_a_page_that_can_publish_is_never_added(self):
+        vault = whole_vault(self)
+        for rel in ("_World/world-index.md", "_World/_flags.md",
+                    "_Campaign/Timeline.md", "_Campaign/Player Characters.md"):
+            (vault / rel).unlink()
+        self.assertEqual(mv.find_skeleton(vault), [])
+
+    def test_a_failed_build_stops_the_run(self):
+        vault = whole_vault(self)
+        (vault / "_meta" / "entity-types.md").unlink()
+        (vault / "Heritages").rmdir()
+        items = mv.find_skeleton(vault)
+        with mock.patch.object(vs, "write_text_atomic",
+                               side_effect=OSError("disk full")):
+            with self.assertRaisesRegex(StepFailed, "disk full"):
+                items[0].apply(None)
+        self.assertFalse((vault / "Heritages").exists())
+        self.assertFalse((vault / "_meta" / "entity-types.md").exists())
 
     def test_templates_are_left_to_the_templates_check(self):
         vault = whole_vault(self)
@@ -87,7 +104,9 @@ class SkeletonTests(unittest.TestCase):
                          ["create _meta/entity-types.md",
                           "create _meta/relationship-types.md"])
         items[0].apply(None)
-        self.assertTrue((vault / "_meta" / "entity-types.md").is_file())
+        self.assertIn("## Type-Specific Fields",
+                      (vault / "_meta" / "entity-types.md").read_text(
+                          encoding="utf-8"))
         rel = (vault / "_meta" / "relationship-types.md").read_text(
             encoding="utf-8")
         self.assertIn("cloned_from", rel)
@@ -129,6 +148,14 @@ class SystemTests(unittest.TestCase):
             encoding="utf-8")
         self.assertEqual(mv.vault_system(vault), "gurps-4e")
         self.assertIsNone(mv.vault_system(make_vault(self, None)))
+
+    def test_the_adventure_brief_answers_under_either_spelling(self):
+        for kind in ("adventure-brief", "adventure_brief"):
+            vault = make_vault(self, None)
+            (vault / "Brief.md").write_text(
+                f"---\ntype: {kind}\nsystem: gurps\n---\n",
+                encoding="utf-8")
+            self.assertEqual(mv.vault_system(vault), "gurps-4e", kind)
 
 
 class TemplateTests(unittest.TestCase):

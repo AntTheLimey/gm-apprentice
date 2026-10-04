@@ -1304,7 +1304,7 @@ def _flush(above: str, below: str) -> bool:
 def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel = batch.resolve(args.file or TIMELINE)
     if not batch.exists(rel):
-        raise WriteError(f"{rel}: no timeline \u2014 new-vault setup creates it")
+        raise WriteError(f"{rel}: no timeline \u2014 vault_scaffold.py creates it")
     entries = split_timeline(text)
     if not entries:
         raise WriteError("nothing on stdin")

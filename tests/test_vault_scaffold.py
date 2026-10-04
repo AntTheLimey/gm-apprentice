@@ -217,8 +217,75 @@ class PlanTests(unittest.TestCase):
         tops = set(re.findall(r"^[├└]── ([^/\n]+)/", vs.structure_tree(),
                               re.M))
         made = {rel.split("/")[0] for rel in
-                (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, "_attachments")}
+                (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, vs.ATTACHMENTS)}
         self.assertEqual(tops, made | set(vs.NOT_CREATED))
+
+    def test_the_structure_doc_and_the_attachment_folders_agree(self):
+        inside = re.search(
+            rf"^├── {vs.ATTACHMENTS}/[^\n]*\n((?:│   [^\n]*\n)+)",
+            vs.structure_tree(), re.M)
+        self.assertIsNotNone(inside)
+        subs = re.findall(r"^│   [├└]── ([^/\n]+)/", inside.group(1), re.M)
+        self.assertEqual(sorted(subs), sorted(vs.ATTACHMENT_SUBS))
+
+    def test_the_schema_hierarchy_and_the_type_folders_agree(self):
+        text = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+        block = re.search(r"^## Entity Type Hierarchy\n+```text\n(.*?)\n```",
+                          text, re.M | re.S).group(1)
+        family: dict[str, set[str]] = {}
+        at_depth: dict[int, str] = {}
+        for line in block.split("\n"):
+            found = re.match(r"^([│ ]*)[├└]── ([\w-]+)", line)
+            if not found:
+                continue
+            depth = len(found.group(1)) // 4 + 1
+            name = found.group(2)
+            at_depth[depth] = name
+            family.setdefault(name, {name})
+            if depth > 1:
+                family[at_depth[depth - 1]].add(name)
+        for folder, heads in (("Creatures", ("creature",)),
+                              ("Factions & Organizations",
+                               ("faction", "organization")),
+                              ("Items & Artifacts", ("item",)),
+                              ("Documents", ("document",)),
+                              ("Events", ("event",))):
+            wanted = set().union(*(family[h] for h in heads))
+            self.assertGreater(len(wanted), len(heads), folder)
+            self.assertEqual(set(vs.TYPE_FOLDERS[folder]), wanted, folder)
+
+    def test_pages_can_be_left_out(self):
+        got = paths(plan(scratch(self) / "V", pages=False))
+        for page in ("_World/world-index.md", "_World/_flags.md",
+                     "_Campaign/Timeline.md",
+                     "_Campaign/Player Characters.md"):
+            self.assertNotIn(page, got)
+        for kept in ("_World/", "_Campaign/", "Clues/",
+                     "_Templates/_Template_NPC.md", "_meta/entity-types.md",
+                     "_meta/relationship-types.md", "_meta/index.md"):
+            self.assertIn(kept, got)
+
+    def test_a_type_in_capitals_counts(self):
+        vault = scratch(self) / "V"
+        note(vault, "NPCs/Ada.md", "---\ntype: NPC\n---\n")
+        note(vault, "Lore/When.md", "---\ntype: Timeline\n---\n")
+        got = paths(plan(vault))
+        self.assertNotIn("Characters/NPCs/", got)
+        self.assertNotIn("_Campaign/Timeline.md", got)
+
+    def test_an_attachments_folder_outside_the_vault_is_not_made(self):
+        for named in ('"../shared-art"', '"art/../../shared"', '"/srv/art"',
+                      '"C:/art"', r"..\shared-art"):
+            vault = scratch(self) / "V"
+            note(vault, "_meta/vault-config.md",
+                 '---\ngm_apprentice_version: "1.10.29"\npublish:\n'
+                 f'  attachments_dir: {named}\n---\n')
+            got = paths(plan(vault))
+            self.assertIn("Clues/", got)
+            for rel in got:
+                self.assertFalse(rel.startswith(".."), (named, rel))
+                self.assertFalse(rel.startswith(vs.ATTACHMENTS), (named, rel))
+                self.assertNotIn("art", rel, (named, rel))
 
 
 def run(*argv):
@@ -317,9 +384,24 @@ class BuildTests(unittest.TestCase):
         vault = scratch(self) / "V"
         note(vault, "_meta/vault-config.md",
              '---\ngm_apprentice_version: "99.0.0"\n---\n')
+        before = tree(vault)
         code, out = run(vault, "--no-system", "--write")
         self.assertEqual(code, 1)
         self.assertIn("update the plugin", out)
+        self.assertEqual(tree(vault), before)
+
+    def test_a_config_with_no_version_is_a_refusal(self):
+        for front in ("publish:\n  site: true\n",
+                      "gm_apprentice_version:\n",
+                      'gm_apprentice_version: "soon"\n'):
+            vault = scratch(self) / "V"
+            note(vault, "_meta/vault-config.md", f"---\n{front}---\n")
+            before = tree(vault)
+            code, out = run(vault, "--no-system", "--write")
+            self.assertEqual(code, 1, front)
+            self.assertIn("has no gm_apprentice_version", out)
+            self.assertIn("# nothing written", out)
+            self.assertEqual(tree(vault), before)
 
     def test_a_path_that_is_a_file_is_a_refusal(self):
         root = scratch(self)
@@ -390,16 +472,92 @@ class BuildTests(unittest.TestCase):
         self.assertIn("# nothing written", out)
         self.assertEqual(tree(root), {})
 
-    def test_an_unsupported_recorded_system_builds_generic(self):
+    def unrecognised(self):
         vault = scratch(self) / "V"
         note(vault, "_Campaign/Campaign Overview.md",
-             "---\ntype: campaign_overview\ngame_system: Savage Worlds\n---\n")
+             '---\ntype: campaign_overview\n'
+             'game_system: "Call of Cthulhu 7e"\n---\n')
+        return vault
+
+    def test_an_unrecognised_recorded_system_is_a_refusal(self):
+        vault = self.unrecognised()
+        before = tree(vault)
         code, out = run(vault, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the vault names its system 'call of cthulhu 7e'", out)
+        self.assertIn("--system ID (one of coc-7e, ", out)
+        self.assertIn("or --no-system", out)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(tree(vault), before)
+
+    def test_no_system_builds_generic_over_an_unrecognised_one(self):
+        vault = self.unrecognised()
+        code, out = run(vault, "--no-system", "--write")
         self.assertEqual(code, 0, out)
         self.assertIn("pc-generic.md",
                       [p.name for p in (vault / "_Templates").iterdir()])
         self.assertNotIn("system:",
                          (vault / "_meta/vault-config.md").read_text("utf-8"))
+
+    def test_a_given_system_settles_an_unrecognised_one(self):
+        vault = self.unrecognised()
+        code, out = run(vault, "--system", "coc", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn('system: "coc-7e"',
+                      (vault / "_meta/vault-config.md").read_text("utf-8"))
+
+    def test_a_flag_that_disagrees_with_the_vault_is_a_refusal(self):
+        vault = scratch(self) / "V"
+        note(vault, "_Campaign/Campaign Overview.md",
+             "---\ntype: campaign_overview\ngame_system: coc\n---\n")
+        before = tree(vault)
+        code, out = run(vault, "--system", "gurps", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("the vault records coc-7e; --system gurps-4e disagrees",
+                      out)
+        self.assertEqual(tree(vault), before)
+        self.assertEqual(run(vault, "--system", "coc-7e", "--write")[0], 0)
+        self.assertEqual(run(vault, "--no-system")[0], 0)
+
+    def test_a_set_up_vault_naming_an_unsupported_system_needs_no_flag(self):
+        vault = self.unrecognised()
+        self.assertEqual(run(vault, "--no-system", "--write")[0], 0)
+        code, out = run(vault)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("OK\t"), out)
+
+    def test_what_the_undo_cannot_remove_is_named(self):
+        vault = scratch(self) / "V"
+        note(vault, "Locations/Inn.md", "---\ntype: location\n---\n")
+        real_rmdir = Path.rmdir
+
+        def stuck(path):
+            if path.name == "NPCs":
+                raise OSError("in use")
+            real_rmdir(path)
+
+        with mock.patch.object(Path, "rmdir", stuck), \
+                mock.patch.object(vs, "write_text_atomic",
+                                  side_effect=vs.StepFailed("disk full")):
+            code, out = run(vault, "--no-system", "--write")
+        self.assertEqual(code, 1, out)
+        error = next(r for r in out.split("\n") if r.startswith("ERROR\t"))
+        self.assertIn("disk full; could not remove: ", error)
+        self.assertIn("Characters/NPCs/", error)
+        self.assertNotIn("\\", error)
+        self.assertNotIn("# nothing written", out)
+        self.assertIn("# some of this run's files were left", out)
+        self.assertTrue((vault / "Characters" / "NPCs").is_dir())
+        self.assertFalse((vault / "Clues").exists())
+
+    def test_the_closing_line_is_not_chosen_by_the_message(self):
+        vault = scratch(self) / "V"
+        with mock.patch.object(
+                vs, "write_text_atomic",
+                side_effect=vs.StepFailed("could not remove the lock")):
+            code, out = run(vault, "--no-system", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("# nothing written", out)
 
     def test_rows_use_forward_slashes(self):
         _code, out = run(scratch(self) / "V", "--no-system")
