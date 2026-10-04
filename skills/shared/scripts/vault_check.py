@@ -3439,7 +3439,7 @@ def wrapup_structure_findings(rel: str, text: str,
         out.append(Finding(
             "WARNING", f"{rel}:{openers[1].lineno}",
             f"{len(openers)} {GM_ONLY_OPEN} openers outside code — the "
-            f"template uses a single pair", "renest"))
+            f"template uses a single pair", "renest", ("openers",)))
 
     has_recap = False
     for state in states:

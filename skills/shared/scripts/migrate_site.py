@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          edit_frontmatter, plugin_tool)
+                          cells, edit_frontmatter, plugin_tool, stopped)
 from vault_check import (PUBLISH_PACKAGE, ExplainAll, ToolAnswer,
                          ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
@@ -297,20 +297,6 @@ def find_publish_site(vault: Path) -> list[Item]:
     return [Item("publish-site", WILL, [row], apply)]
 
 
-def _cells(row: str) -> tuple[str, str, str]:
-    level, _, rest = row.partition("\t")
-    where, _, message = rest.partition("\t")
-    return level, where, message
-
-
-def _stopped(rows: list[tuple[str, str, str]]) -> None:
-    """A check that could not ask the tool says so in an ERROR on the
-    vault; what it found before that is not the whole answer."""
-    for level, where, message in rows:
-        if level == "ERROR" and where == "(vault)":
-            raise StepFailed(message)
-
-
 LEAK_NOTE = ("these sections no longer publish; if one was meant for "
              "players, say which and it is moved back out of GM Notes under "
              "a new heading")
@@ -345,8 +331,8 @@ def find_gm_leak(vault: Path) -> list[Item]:
     What can be moved is Will do; what the check only reports needs a
     person. Per-note INFO rows (bold labels, callouts) can never be cleared
     and are left out."""
-    rows = [_cells(r) for r in check_gm_leak(vault, None, fix=False)]
-    _stopped(rows)
+    rows = [cells(r) for r in check_gm_leak(vault, None, fix=False)]
+    stopped(rows)
     would = [(where, m) for level, where, m in rows if level == "WOULD-FIX"]
     moved = {(where, _plain(m.split("'")[1])) for where, m in would
              if m.count("'") >= 2}
@@ -364,10 +350,10 @@ def find_gm_leak(vault: Path) -> list[Item]:
     items: list[Item] = []
     if would:
         def apply(_value: str | None) -> list[str]:
-            fixed = [_cells(r) for r in check_gm_leak(vault, None, fix=True)]
-            _stopped(fixed)
-            again = [_cells(r) for r in check_gm_leak(vault, None, fix=False)]
-            _stopped(again)
+            fixed = [cells(r) for r in check_gm_leak(vault, None, fix=True)]
+            stopped(fixed)
+            again = [cells(r) for r in check_gm_leak(vault, None, fix=False)]
+            stopped(again)
             left = [r for r in again if r[0] == "WOULD-FIX"]
             if left:
                 raise StepFailed(
@@ -448,12 +434,12 @@ def _person_rows(vault: Path, rows: list[str], marker: str) -> list[str]:
     vault is not stamped past the release without the check having run."""
     if configured_site(vault)[0] is not None:
         for row in rows:
-            _level, where, message = _cells(row)
+            _level, where, message = cells(row)
             if where == "(vault)" and message.startswith(NOT_CONSULTED):
                 raise StepFailed(message)
     out = []
     for row in rows:
-        _level, where, message = _cells(row)
+        _level, where, message = cells(row)
         if marker in message:
             out.append(f"{where}\t{message}")
     return out
@@ -503,8 +489,8 @@ NO_SHEET = "set sheet_source to where the sheet is kept"
 def find_sheet_source(vault: Path) -> list[Item]:
     """1.10.22: a PC that publishes with no usable sheet. If the sheet is
     kept elsewhere the GM says where, and it is written to sheet_source."""
-    rows = [_cells(r) for r in check_pc_body(vault)]
-    _stopped(rows)
+    rows = [cells(r) for r in check_pc_body(vault)]
+    stopped(rows)
     items: list[Item] = []
     seen: set[str] = set()
     for level, where, message in rows:

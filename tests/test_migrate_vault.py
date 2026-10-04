@@ -811,6 +811,8 @@ class WrapupSectionsReviewTests(WrapupFixture):
         self.assertIn("Secret Plans", person)
         self.assertIn("no recap heading the tool recognises", person)
         self.assertIn("## Narrative Recap", person)
+        self.assertIn("leaves those headings where they are", person)
+        self.assertIn("by hand", person)
         items["wrapup-sections"].apply("move")
         self.assertEqual((vault / WS_REL).read_text(encoding="utf-8"),
                          NO_RECAP)
@@ -911,6 +913,49 @@ class WrapupKeyDetectionTests(WrapupFixture):
             self.assertEqual(self.config(vault),
                              '---\ngm_apprentice_version: "1.10.28"\n'
                              'publish:\n' + want + '---\n')
+
+    def key_config(self, body):
+        return ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                '  wrap_up:\n' + body + '---\n')
+
+    def test_comments_and_blanks_between_list_items_go_with_the_list(self):
+        for between in ("    # c\n", "\n", "    # c\n\n"):
+            vault = self.vault(config=self.key_config(
+                '    player_sections:\n    - A\n' + between
+                + '    - B\n    other: 1\n'))
+            mv.find_wrapup_sections_key(vault)[0].apply(None)
+            self.assertEqual(self.config(vault),
+                             self.key_config('    other: 1\n'), repr(between))
+
+    def test_a_comment_after_the_last_item_stays(self):
+        vault = self.vault(config=self.key_config(
+            '    player_sections:\n    - A\n    - B\n'
+            '    # about other\n    other: 1\n'))
+        mv.find_wrapup_sections_key(vault)[0].apply(None)
+        self.assertEqual(self.config(vault), self.key_config(
+            '    # about other\n    other: 1\n'))
+
+
+class SharedHelperTests(unittest.TestCase):
+    def test_the_row_helpers_live_in_migrate_core(self):
+        import migrate_core as core
+        import migrate_site as ms
+        self.assertEqual(core.cells("ERROR\tw\tm\tx"), ("ERROR", "w", "m\tx"))
+        with self.assertRaises(core.StepFailed):
+            core.stopped([("ERROR", "(vault)", "no tool")])
+        self.assertFalse(hasattr(mv, "_cells") or hasattr(ms, "_stopped"))
+
+
+class TwoHiddenBlocksTests(WrapupFixture):
+    def test_a_second_hidden_block_is_listed_in_plain_words(self):
+        wrap = WS_WRAP.replace(
+            "## Secret Plans\n\nThe Bishop moves.\n\n",
+            "<!-- gm-only -->\n\n## Secret Plans\n\nThe Bishop moves.\n\n"
+            "<!-- /gm-only -->\n\n")
+        lines = by_id(mv.find_wrapup_sections(self.vault(wrap=wrap))
+                      )["wrapup-sections"].lines
+        self.assertIn(f"{WS_REL}: its two hidden blocks become one, "
+                      f"round GM Notes", lines)
 
 
 if __name__ == "__main__":

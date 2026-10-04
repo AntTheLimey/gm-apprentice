@@ -12,8 +12,7 @@ from pathlib import Path
 
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          edit_frontmatter, write_text_atomic)
-from migrate_site import _cells, _stopped
+                          cells, edit_frontmatter, stopped, write_text_atomic)
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
 from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
@@ -563,9 +562,17 @@ def _drop_player_sections(fm: list[str], _eol: str) -> None:
         end = block_end(start)
         m = _KEY_LINE_RE.match(fm[start].rstrip("\r\n"))
         if m and not (m.group(4) or "").split("#")[0].strip():
-            while (end < len(fm) and depth(fm[end]) == depth(fm[start])
-                   and re.match(r"-(\s|$)", fm[end].strip())):
-                end = block_end(end)
+            while True:
+                probe = end
+                while probe < len(fm) and (
+                        not fm[probe].strip()
+                        or fm[probe].lstrip().startswith("#")):
+                    probe += 1
+                if not (probe < len(fm)
+                        and depth(fm[probe]) == depth(fm[start])
+                        and re.match(r"-(\s|$)", fm[probe].strip())):
+                    break
+                end = block_end(probe)
         return end
 
     publish = key_at("publish", 0, len(fm), False)
@@ -600,9 +607,9 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
     listed = read_wrap_up_player_sections(vault)
     player = frozenset(k for k in map(player_section_key, listed) if k)
     seen: list[WrapDetail] = []
-    rows = [_cells(r) for r in check_wrapup(
+    rows = [cells(r) for r in check_wrapup(
         vault, None, False, player=player, renest_only=True, detail=seen)]
-    _stopped(rows)
+    stopped(rows)
     found = {d.finding.row for d in seen}
     by_note: dict[str, list[WrapDetail]] = {}
     for d in seen:
@@ -634,7 +641,9 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
                 f"{rel}\thas no recap heading the tool recognises, so "
                 f"nothing in it was moved ({_name_headings(titles)}): "
                 f"retitle the player-facing section '## Narrative Recap', "
-                f"then run `vault_check.py <vault> wrapup --file {rel}`")
+                f"then run `vault_check.py <vault> wrapup --file {rel}`; it "
+                f"leaves those headings where they are, so move any that are "
+                f"Keeper content under ## GM Notes by hand")
         else:
             for d in ds:
                 f = d.finding
@@ -646,6 +655,9 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
                 elif f.kind == "renest" and f.data == ("unfenced",):
                     moves.append(f"{rel}: GM Notes gets its hidden-markers "
                                  f"(it has none today)")
+                elif f.kind == "renest" and f.data == ("openers",):
+                    moves.append(f"{rel}: its two hidden blocks become one, "
+                                 f"round GM Notes")
                 elif f.kind == "recap":
                     moves.append(f"{rel}: '## {f.data[0]}' is renamed "
                                  f"'## Narrative Recap'")
@@ -656,9 +668,9 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
                 raise StepFailed("wrapup-sections takes move or leave")
             if value == "leave":
                 return ["left the Wrap-Up headings where players see them"]
-            fixed = [_cells(r) for r in check_wrapup(
+            fixed = [cells(r) for r in check_wrapup(
                 vault, None, True, player=player, renest_only=True)]
-            _stopped(fixed)
+            stopped(fixed)
             return [f"{where}: {m}" for level, where, m in fixed
                     if level == "FIXED"]
 
