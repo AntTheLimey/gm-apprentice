@@ -2785,8 +2785,9 @@ def _pc_body(vault: Path, folder: str | None = None,
 # the fence is the author's choice (player-facing), never reported or
 # moved. Only a title that is one of the template's own GM Notes
 # subsections is a slip. Before 1.10.28 every other H2 was Keeper-facing
-# unless the vault listed it in `publish.wrap_up.player_sections`; passing
-# an explicit `player` set keeps that reading for the migration.
+# unless the vault listed it in `publish.wrap_up.player_sections`. That list
+# is retired; an explicit `player` set is that earlier reading, passed in by
+# the migration's one-time step.
 # --------------------------------------------------------------------------
 
 # The three spellings in the wild. Enumeration is by `type:` only —
@@ -2953,8 +2954,10 @@ def is_recap_title(title: str) -> bool:
 
 
 def player_section_key(title: str) -> str:
-    """How a `publish.wrap_up.player_sections` entry and an H2 title are
-    compared: emphasis unwrapped, whitespace collapsed, case folded."""
+    """How an H2 title is compared with an entry of the retired
+    `publish.wrap_up.player_sections` list (the migration's one-time step
+    still reads it): emphasis unwrapped, whitespace collapsed, case
+    folded."""
     return " ".join(_plain_title(title).split()).casefold()
 
 
