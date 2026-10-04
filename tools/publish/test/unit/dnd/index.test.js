@@ -28,6 +28,11 @@ describe('renderDnDSheet', () => {
     assert.equal(out.sheetHtml, null);
     assert.equal(out.combatHtml, undefined);
   });
+  it('still shows loose Stat Sheet prose when other blocks make a sheet', () => {
+    const out = render('## Stat Sheet\n\nSee D&D Beyond.\n\n## Skills\n\n| Skill | Mod |\n|---|---|\n| Arcana (INT) | +7 |\n');
+    if (out.sheetHtml) assert.match(out.sheetHtml, /See D&amp;D Beyond/);
+    else assert.fail('expected a sheet from the skills table');
+  });
   it('names the sections it consumes', () => {
     for (const t of ['Stat Sheet', 'Class Features', 'Species Traits', 'Feats', 'Equipment', 'Spellcasting']) assert.ok(isDndConsumedTitle(t), t);
     for (const t of ['Background', 'Notes', 'Current Status']) assert.ok(!isDndConsumedTitle(t), t);

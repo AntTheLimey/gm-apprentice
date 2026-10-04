@@ -1,5 +1,5 @@
 const { escapeHtml } = require('../../processor');
-const { ABILITIES } = require('./parse');
+const { block, asWritten } = require('./render');
 const { renderVitals } = require('./blocks/vitals');
 const { renderAbilities } = require('./blocks/abilities');
 const { renderSkills } = require('./blocks/skills');
@@ -29,18 +29,18 @@ function headerLine(model) {
 }
 
 function buildSheet(model) {
-  // Loose Stat Sheet prose alone makes the abilities block but no sheet: the
-  // prose stays in its accordion. With any other block it is shown as written.
-  const hasStats = ABILITIES.some(k => model.abilities[k]) || model.core.length > 0;
+  const abilities = renderAbilities(model);
   const blocks = [
-    renderAbilities(model), renderSkills(model), renderSenses(model), renderProficiencies(model),
+    abilities, renderSkills(model), renderSenses(model), renderProficiencies(model),
     renderFeatures(model, 'class', 'Class features'),
     renderFeatures(model, 'species', 'Species traits'),
     renderFeatures(model, 'feats', 'Feats'),
   ].filter(Boolean);
   // A header line alone is not a sheet, nor is loose Stat Sheet prose alone.
-  const real = blocks.length > 1 || (blocks.length === 1 && (hasStats || !blocks[0].includes('dnd5e-blk-abilities')));
-  return real ? wrap('dnd5e-tab-sheet', [headerLine(model), ...blocks]) : null;
+  if (!blocks.length) return null;
+  // Loose Stat Sheet prose with no ability rows is still shown, as written.
+  const loose = abilities ? null : block('statsheet', 'Stat sheet', asWritten(model.asWritten.statSheet));
+  return wrap('dnd5e-tab-sheet', [headerLine(model), loose, ...blocks]);
 }
 
 const buildCombat = model => wrap('dnd5e-tab-combat', [renderAttacks(model), ...renderActions(model), renderDefences(model), renderTracks(model)]);

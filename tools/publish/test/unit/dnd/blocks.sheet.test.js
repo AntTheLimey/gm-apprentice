@@ -92,6 +92,11 @@ describe('renderAbilities', () => {
     assert.match(html, />XP<[\s\S]*900/);
     assert.match(html, /dnd5e-as-written[\s\S]*Luck 3/);
   });
+  it('is null when only loose text was written', () => {
+    const m = empty();
+    m.asWritten.statSheet = ['<p>See D&D Beyond.</p>'];
+    assert.equal(renderAbilities(m), null);
+  });
 });
 
 describe('renderSkills, renderSenses, renderProficiencies', () => {
