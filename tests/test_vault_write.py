@@ -1356,5 +1356,86 @@ class TimelineTests(unittest.TestCase):
         self.assertEqual(read(vault, TL_REL).count("- **1814** — x"), 1)
 
 
+class Group1Tests(unittest.TestCase):
+    def _subprocess_log(self, rel):
+        import os
+        import subprocess
+        vault = make_vault(self, {rel: NPC})
+        env = {**os.environ, "PYTHONIOENCODING": "cp1252"}
+        line = "- **[[Session 02 - The Docks]]** \u2014 caf\u00e9 \u201cquoted\u201d"
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS / "vault_write.py"), str(vault),
+             "log", "--write"],
+            input=f"{rel}\tCampaign Log\t{line}\n".encode("utf-8"),
+            capture_output=True, env=env)
+        self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+        self.assertIn(line.encode("utf-8") + b"\n",
+                      (vault / rel).read_bytes())
+
+    def test_utf8_stdin_survives_a_legacy_code_page(self):
+        self._subprocess_log(NPC_REL)
+
+    def test_a_path_the_code_page_cannot_encode_does_not_crash(self):
+        self._subprocess_log("NPCs/\u014ckami.md")
+
+    def test_a_failed_write_whose_restore_also_fails_changes_nothing(self):
+        vault = make_vault(self, {"a.md": "A\n"})
+        batch = vw.Batch(vault)
+        batch.put("a.md", "A2\n")
+
+        def always(path, text):
+            raise vw.StepFailed("a.md cannot be written (OSError)")
+
+        with mock.patch.object(vw, "write_text_atomic", always):
+            with self.assertRaises(vw.WriteError) as ctx:
+                vw.apply(batch)
+        self.assertNotIsInstance(ctx.exception, vw.RestoreFailed)
+        self.assertEqual(read(vault, "a.md"), "A\n")
+
+    def test_main_says_nothing_written_for_that_failure(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+
+        def always(path, text):
+            raise vw.StepFailed("cannot be written (OSError)")
+
+        with mock.patch.object(vw, "write_text_atomic", always):
+            code, out = log(vault, f"{NPC_REL}\tCampaign Log\t- x\n")
+        self.assertEqual(code, 1)
+        self.assertIn("# nothing written", out)
+        self.assertNotIn("left changed", out)
+
+    def test_an_opener_on_a_text_line_is_a_refusal_not_a_traceback(self):
+        text = WRAP.replace("<!-- gm-only -->\n\n## GM Notes",
+                            "r <!-- gm-only -->\n\n## GM Notes")
+        vault = wrap_vault(self, text)
+        code, out = add(vault, "### World State\n\n- x\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\t", out)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(read(vault, WRAP_REL), text)
+
+    def test_an_unexpected_exception_is_an_error_row(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        with mock.patch.object(vw, "add_line", side_effect=ValueError("boom")):
+            code, out = log(vault, f"{NPC_REL}\tCampaign Log\t- x\n")
+        self.assertEqual(code, 1)
+        self.assertIn("ERROR\tValueError: boom", out)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(read(vault, NPC_REL), NPC)
+
+    def test_bad_utf8_on_stdin_is_a_refusal(self):
+        import subprocess
+        vault = make_vault(self, {NPC_REL: NPC})
+        proc = subprocess.run(
+            [sys.executable, str(SCRIPTS / "vault_write.py"), str(vault),
+             "log"], input=b"\xff\xfe\x00bad\n", capture_output=True)
+        self.assertEqual(proc.returncode, 1)
+        self.assertIn(b"stdin is not UTF-8", proc.stdout)
+
+    def test_the_module_docstring_names_the_reserved_sections_and_help(self):
+        self.assertIn("GM Notes section names", vw.__doc__)
+        self.assertIn("<command> --help", vw.__doc__)
+
+
 if __name__ == "__main__":
     unittest.main()

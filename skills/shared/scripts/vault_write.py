@@ -13,7 +13,9 @@
 Paths are vault-relative. Without --write every command prints its plan and
 writes nothing. The script never writes prose: it places the text on stdin.
 A section is Keeper-facing when it is written under GM Notes and
-player-facing when it is not; any section name is accepted.
+player-facing when it is not; any section name is accepted, except that a
+Wrap-Up reserves its template's GM Notes section names for GM Notes.
+`VAULT <command> --help` gives each command's stdin shape.
 
 Rows are tab-separated: verb, path, §section, detail. WOULD-CREATE and
 WOULD-ADD in a plan, CREATED and ADDED when written, plus SKIP, WARNING and
@@ -29,6 +31,7 @@ import argparse
 import re
 import sys
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -132,6 +135,16 @@ class Batch:
                 if text != self.originals[rel]]
 
 
+def _on_disk(path: Path) -> str | None:
+    """A note's text exactly as stored, or None when it cannot be read (a
+    file that is gone or half-written counts as needing the undo)."""
+    try:
+        with path.open("r", encoding="utf-8", newline="") as f:
+            return f.read()
+    except (OSError, UnicodeDecodeError):
+        return None
+
+
 def apply(batch: Batch) -> list[str]:
     """Write every changed file, or none: a failure part-way puts back the
     files already written, Ctrl-C included."""
@@ -162,7 +175,7 @@ def apply(batch: Batch) -> list[str]:
             try:
                 if before is None:
                     (batch.vault / rel).unlink(missing_ok=True)
-                else:
+                elif _on_disk(batch.vault / rel) != before:
                     write_text_atomic(batch.vault / rel, before)
             except (OSError, StepFailed):
                 unrestored.append(rel)
@@ -497,9 +510,11 @@ def gm_region(doc: Doc, rel: str) -> tuple[Head, int, int]:
                          f"({doc.problems[0]}) — {fix}")
     for h in doc.heads:
         if h.level == 2 and key(h.title) == GM_NOTES and h.gm:
-            opener = max(s.lineno - 1 for s in doc.states
-                         if s.marker == OPEN_GM and s.lineno - 1 < h.idx)
-            return h, opener, section_end(doc, h)
+            openers = [s.lineno - 1 for s in doc.states
+                       if s.marker == OPEN_GM and s.lineno - 1 < h.idx]
+            if not openers:
+                break
+            return h, max(openers), section_end(doc, h)
     raise WriteError(f"{rel}: no fenced ## GM Notes — {fix}")
 
 
@@ -1079,14 +1094,36 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
-COMMANDS: dict[str, object] = {"wrapup-new": cmd_wrapup_new,
-                               "wrapup-add": cmd_wrapup_add,
-                               "story": cmd_story,
-                               "log": cmd_log,
-                               "timeline": cmd_timeline}
+Command = Callable[[Batch, argparse.Namespace, str], None]
+COMMANDS: dict[str, Command] = {"wrapup-new": cmd_wrapup_new,
+                                "wrapup-add": cmd_wrapup_add,
+                                "story": cmd_story,
+                                "log": cmd_log,
+                                "timeline": cmd_timeline}
+
+
+def read_stdin() -> str:
+    """Standard input as UTF-8 text, whatever the system code page is. A
+    leading byte-order mark is dropped."""
+    buffer = getattr(sys.stdin, "buffer", None)
+    if buffer is None:
+        return sys.stdin.read()
+    try:
+        return buffer.read().decode("utf-8-sig")
+    except UnicodeDecodeError:
+        raise WriteError("stdin is not UTF-8") from None
+
+
+def utf8_output() -> None:
+    """Make stdout and stderr write UTF-8 and never raise on a character."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is not None:
+            reconfigure(encoding="utf-8", errors="replace")
 
 
 def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
+    utf8_output()
     ap = build_parser()
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
@@ -1094,11 +1131,17 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
               file=sys.stderr)
         return 2
     needs_stdin = args.command != "wrapup-new"
-    text = (sys.stdin.read() if stdin is None else stdin) if needs_stdin else ""
     batch = Batch(args.vault)
     try:
-        run_command = COMMANDS[args.command]
-        run_command(batch, args, text)  # type: ignore[operator]
+        text = ""
+        if needs_stdin:
+            text = read_stdin() if stdin is None else stdin
+        try:
+            COMMANDS[args.command](batch, args, text)
+        except WriteError:
+            raise
+        except Exception as e:      # a refusal, never a traceback
+            raise WriteError(f"{e.__class__.__name__}: {e}") from e
         check_fences(batch)
         wrote = False
         if args.write:
