@@ -41,6 +41,11 @@ from typing import Any, Iterable, Iterator, Literal
 # --------------------------------------------------------------------------
 
 SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
+
+# Top-level folders whose notes are records of the past (QA reports,
+# archives). Links written in them are not reported as broken; notes in
+# them still count as link targets.
+UNCHECKED_DIRS: tuple[str, ...] = ("_QA", "_archive")
 LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
 FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.DOTALL)
 
@@ -77,6 +82,13 @@ def is_skipped_path(rel: str, skip_dirs: set[str] = SKIP_DIRS) -> bool:
     if any(p.startswith(".") for p in parts):
         return True
     return parts[0] in skip_dirs
+
+
+def is_unchecked_source(rel: str) -> bool:
+    """Is this vault-relative posix path a note whose links are not
+    checked (one under a top-level `UNCHECKED_DIRS` folder)?"""
+    parts = rel.split("/")
+    return len(parts) > 1 and parts[0] in UNCHECKED_DIRS
 
 
 def vault_files(vault: Path, folder: str | None = None,
@@ -527,15 +539,21 @@ def alias_split(raw: str) -> str:
     return target
 
 
-def link_target(raw: str) -> str:
-    """Reduce a wikilink body to its target note name."""
+def link_name(raw: str) -> str:
+    """A wikilink body's target as it was written: no alias, heading,
+    block, folder or `.md`. Not normalised."""
     target = alias_split(raw)
     target = re.split(r"[#^]", target, maxsplit=1)[0]
     # Path-style links resolve by final segment, like Obsidian.
     target = target.rstrip("/").rsplit("/", 1)[-1]
     if target.endswith(".md"):
         target = target[:-3]
-    return normalize(target)
+    return target.strip()
+
+
+def link_target(raw: str) -> str:
+    """Reduce a wikilink body to its target note name."""
+    return normalize(link_name(raw))
 
 
 def wikilink_target(value: Any) -> str:

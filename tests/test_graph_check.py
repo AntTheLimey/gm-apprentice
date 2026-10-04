@@ -11,6 +11,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"))
 
+import graph_check  # noqa: E402
+import vaultlib  # noqa: E402
+
 SCRIPT = (Path(__file__).resolve().parent.parent / "skills" / "shared"
           / "scripts" / "graph_check.py")
 
@@ -102,6 +105,52 @@ class UnresolvedTests(unittest.TestCase):
         self.assertEqual(found, {"ok.png"})
         self.assertNotIn(".git", walked)
         self.assertNotIn("objects", walked)
+
+
+class UncheckedSourceTests(unittest.TestCase):
+    def test_links_from_qa_reports_and_archives_are_not_checked(self):
+        vault = vault_of(self, {
+            "A.md": "[[Gone]]\n",
+            "_QA/Report.md": "[[Gone]] [[Old Name]]\n",
+            "_archive/design/Draft.md": "[[Dropped]]\n"})
+        self.assertEqual(run(vault), ["# count: 1", "gone  <- A.md"])
+
+    def test_a_note_in_an_archive_is_still_a_target(self):
+        vault = vault_of(self, {
+            "A.md": "[[Draft]] [[Report]]\n",
+            "_archive/Draft.md": "x\n", "_QA/Report.md": "x\n"})
+        self.assertEqual(run(vault)[0], "# count: 0")
+
+    def test_only_a_top_level_folder_is_unchecked(self):
+        self.assertTrue(vaultlib.is_unchecked_source("_QA/R.md"))
+        self.assertTrue(vaultlib.is_unchecked_source("_archive/a/b.md"))
+        self.assertFalse(vaultlib.is_unchecked_source("Chapters/_QA/R.md"))
+        self.assertFalse(vaultlib.is_unchecked_source("_QA.md"))
+
+
+class SpellingTests(unittest.TestCase):
+    def test_link_name_keeps_the_spelling(self):
+        cases = {
+            "Bara_Bazaar": "Bara_Bazaar",
+            "Dir/Bara Bazaar.md|B": "Bara Bazaar",
+            "Judo#Rules": "Judo",
+            "Note\\|N": "Note",
+            " Eid al-Fitr ^b1": "Eid al-Fitr",
+        }
+        for raw, want in cases.items():
+            with self.subTest(raw=raw):
+                self.assertEqual(vaultlib.link_name(raw), want)
+                self.assertEqual(vaultlib.link_target(raw),
+                                 vaultlib.normalize(want))
+
+    def test_broken_gives_each_source_its_spelling(self):
+        vault = vault_of(self, {
+            "Real.md": "x\n",
+            "A.md": "[[Bara_Bazaar]] [[Real]] [[bara bazaar|shown]]\n",
+            "_QA/R.md": "[[BARA BAZAAR]]\n"})
+        _notes, names, _outbound, spellings = graph_check.collect(vault, [])
+        self.assertEqual(graph_check.broken(vault, names, spellings), {
+            "bara bazaar": {"A.md": "Bara_Bazaar", "_QA/R.md": "BARA BAZAAR"}})
 
 
 if __name__ == "__main__":
