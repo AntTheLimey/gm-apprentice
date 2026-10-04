@@ -95,8 +95,9 @@ function readStatSheet(model, section) {
         const value = boldField(left, pattern);
         if (!value) continue;
         model.defences.push([label, value]);
-        left = left.replace(new RegExp(`<p>\\s*<strong>\\s*${pattern}\\s*:?\\s*</strong>\\s*:?[^<]*</p>`, 'i'), '');
+        left = left.replace(new RegExp(`<strong>\\s*${pattern}\\s*(?::\\s*</strong>|</strong>\\s*:)[\\s\\S]*?(?=<strong>[^<]*:|<br\\s*/?>|</p>|\\n|$)(?:<br\\s*/?>|\\n)?`, 'i'), '');
       }
+      left = left.replace(/<p>([\s\S]*?)<\/p>/g, (whole, inner) => (hasContent(inner) ? whole : ''));
       left = stripTemplatePlaceholders(left, PLACEHOLDERS);
     }
     keep(sub.title, left);
@@ -216,13 +217,15 @@ function readEquipment(model, section) {
     let left = sub.html;
     if (key === 'weapons & damage cantrips' || key === 'weapons and damage cantrips' || key === 'attacks') {
       left = consumeTable(sub.html, COLS.attacks, (c, h) => {
-        if (!c[0]) return true;                       // the template's empty row
+        if (!c.some(filled)) return true;             // the template's empty row
+        if (!c[0]) return false;
         model.attacks.push({ name: c[0], nameHtml: h[0], hit: c[1], damage: c[2], notesHtml: h[3] });
         return true;
       }, { rich: true });
     } else if (key === 'gear') {
       left = consumeTable(stripPlaceholderParagraphs(sub.html), COLS.gear, (c, h) => {
-        if (!c[0]) return true;
+        if (!c.some(filled)) return true;
+        if (!c[0]) return false;
         model.gear.push({ name: c[0], nameHtml: h[0], qty: c[1], notesHtml: h[2] });
         return true;
       }, { rich: true });

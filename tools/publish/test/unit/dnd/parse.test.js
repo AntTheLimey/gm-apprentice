@@ -249,6 +249,39 @@ describe('parseDnd: equipment', () => {
   });
 });
 
+describe('parseDnd: review fixes', () => {
+  const stat = def => `## Stat Sheet\n\n### ${def}\n`;
+  it('reads consecutive defence lines once', () => {
+    const m = parse(stat('Defences') + '\n**Resistances:** fire\n**Armour Class:** chain 16\n');
+    assert.deepEqual(m.defences, [['Resistances', 'fire'], ['Armour Class', 'chain 16']]);
+    assert.deepEqual(m.asWritten.statSheet, []);
+  });
+  it('reads the Defenses spelling, one line per paragraph', () => {
+    const m = parse(stat('Defenses') + '\n**Resistances:** fire\n\n**Immunities:** poison\n');
+    assert.deepEqual(m.defences, [['Resistances', 'fire'], ['Immunities', 'poison']]);
+    assert.deepEqual(m.asWritten.statSheet, []);
+  });
+  it('keeps other defence content as written', () => {
+    const m = parse(stat('Defences') + '\n**Resistances:** fire\n\nAlso a ward.\n');
+    assert.match(m.asWritten.statSheet.join(''), /Also a ward/);
+    assert.doesNotMatch(m.asWritten.statSheet.join(''), /Resistances/);
+  });
+  it('shows a gear or attack row with no name as written', () => {
+    const m = parse('## Equipment\n\n### Gear\n\n| Item | Qty | Notes |\n|---|---|---|\n| | 4 | arrows |\n\n### Weapons & Damage Cantrips\n\n| Name | Atk Bonus / DC | Damage & Type | Notes |\n|---|---|---|---|\n| | +5 | 1d6 | mystery |\n');
+    assert.deepEqual(m.gear, []);
+    assert.deepEqual(m.attacks, []);
+    const left = m.asWritten.equipment.join('');
+    assert.match(left, /arrows/);
+    assert.match(left, /mystery/);
+  });
+  it('keeps a wikilinked spell row', () => {
+    const m = parse('## Spellcasting\n\n### Spells\n\n| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Summary |\n|---|---|---|---|---|---|---|---|---|\n| [[Bless]] | 1 | Action | 30 ft | V | 1 min | | C | Buff. |\n');
+    assert.equal(m.spells.length, 1);
+    assert.match(m.spells[0].nameHtml, /Bless/);
+    assert.deepEqual(m.asWritten.spellcasting, []);
+  });
+});
+
 describe('splitReason', () => {
   it('splits a value from its reason', () => {
     assert.deepEqual(splitReason('+7 (cloak of elvenkind)'), { value: '+7', reason: 'cloak of elvenkind' });
