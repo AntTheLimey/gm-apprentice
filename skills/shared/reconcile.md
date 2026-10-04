@@ -199,9 +199,10 @@ item is Keeper-facing. Pass the section, heading first, on stdin
 (`<<'EOF'`) to `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
 wrapup-add "<wrap-up>" --write`; a later reconcile adds its
-decisions to the section with `--append`. Never a top-level `## Reconciliation
-Context`, and never an `exclude_sections` entry instead. A Plan file
-may get a one-line pointer (`See Wrap-Up for reconciliation context`).
+decisions to the section with `--append`. Never a top-level
+`## Reconciliation Context`, and never an `exclude_sections` entry
+instead. A Plan file may get a one-line pointer (`See Wrap-Up for
+reconciliation context`).
 
 Then run `vault_check.py <vault> wrapup --file "<wrap-up>"`. A missing
 or wrong-case path exits 2 with a stderr error; the `no wrap-up with

@@ -21,10 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anything that is not a note inside the vault, and refuses a write that
   would leave the hidden-from-players markers unbalanced. It works on
   Windows too.
-- Anything that lands where players can read it is called out with a
-  "players will see this" line in the plan: a new player-facing
-  section, a sub-section inside one, a new public section on an NPC or
-  location, a new timeline heading.
+- Anything new that lands where players can read it is called out with
+  a "players will see this" line in the plan: a new player-facing
+  section in a Wrap-Up, a sub-section inside one, a public section the
+  note's template does not have, a new timeline heading. A standard
+  section the template lists, such as an NPC's Campaign Log, is simply
+  created.
 - session-prep checks a plan's shape as soon as its scenes are outlined,
   while a fix is still cheap.
 
@@ -40,8 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   touching it.
 - On any other note, a log line can go in any section. The one refusal:
   a section that note type's template keeps under GM Notes (an NPC's
-  Behind the Scenes or Secrets) must be named as `GM Notes/…`, so Keeper
-  text cannot be published by a slip.
+  Behind the Scenes or Secrets) must be named as `GM Notes/…`, unless
+  that note already has it as a public section, so Keeper text cannot be
+  published by a slip.
 - Story entries may hold lists and sub-headings, and an entry may carry its
   own heading.
 - Timeline entries are kept exactly as written, sub-lines included.

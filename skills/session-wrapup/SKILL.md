@@ -39,10 +39,10 @@ or the story calls for. `##` is for players and keeps every deeper
 heading sent after it in that call, up to one the template names;
 everything else at `###` or below goes under GM Notes. So send
 Keeper sections first or separately. "players will see this" rows
-(`log` and `timeline` print them too) name what players can read:
-dry-run any call adding a section or sub-section for players, or a
-`log` section new to that note type; tell the GM of any they did
-not ask for before `--write`.
+name what players can read: dry-run any call (`log` and `timeline`
+too) adding a new section or sub-section for players, one the
+template lacks, and tell the GM of any they did not ask for before
+`--write`.
 
 **Authoring vs. preserving:** four outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -163,9 +163,9 @@ creating entities.
   placing an established NPC somewhere new), never fold it silently
   into that entity's file. Ask the GM once per claim. Confirmed →
   write it there and log it under the Wrap-Up's `### Cross-Entity
-  Claims` (`vw wrapup-add --append` adds to it). Unconfirmed or deferred → log it there with `<!--
-  UNVERIFIED: {claim} -->`; reconcile scans the Wrap-Up for these
-  and blocks promotion.
+  Claims` (`vw wrapup-add --append` adds to it). Unconfirmed or
+  deferred → log it there with `<!-- UNVERIFIED: {claim} -->`;
+  reconcile scans the Wrap-Up for these and blocks promotion.
 - **Relationship edges:** every `type:` comes from
   `_meta/relationship-types.md`. Map narrative verbs to the nearest
   sanctioned predicate, store the base direction (`owned_by A→B` →
@@ -177,18 +177,22 @@ creating entities.
   Creature that appeared this session gets one bullet in its
   `## Campaign Log` (a Creature's is `## Encounters`), as the party
   saw it: `- **[[Session link]]** — {what happened}`. Other entity
-  types' templates carry no such section — don't add one. Where the
-  truth differs, add the matching bullet to its GM Notes `### Behind
-  the Scenes`. `vw log --write` places them all, no note read
-  first: rows `<path><TAB>Campaign Log<TAB>{bullet}`, or
-  `GM Notes/Behind the Scenes`. Each `(projected)` entry (Behind
-  the Scenes or Under Pressure) on an entity that appeared: drop the
-  marker if it played, strike it through with `not played` if play
-  went elsewhere, or leave it if still pending. A fork is settled
-  branch by branch: keep the branch that played and strike the other
-  through with `not played`. PCs are exempt from this and from the
-  Related mirror: their body follows `shared/pc-body-structure.md`,
-  and their session record is the Story companion.
+  types' templates carry no such section — don't add one unless the
+  GM asks. Where the truth differs, add the matching bullet to its
+  GM Notes `### Behind the Scenes`. `vw log --write` places them
+  all, no note read first: rows
+  `<path><TAB>Campaign Log<TAB>{bullet}`, or
+  `GM Notes/Behind the Scenes`. If it warns that a GM Notes has no
+  hidden-markers, tell the GM once per wrap-up
+  (`vault_check.py gm-leak --fix` repairs it). Each
+  `(projected)` entry (Behind the Scenes or Under Pressure) on an
+  entity that appeared: drop the marker if it played, strike it
+  through with `not played` if play went elsewhere, or leave it if
+  still pending. A fork is settled branch by branch: keep the branch
+  that played and strike the other through with `not played`. PCs are
+  exempt from this and from the Related mirror: their body follows
+  `shared/pc-body-structure.md`, and their session record is the
+  Story companion.
 - **New container entities** (a district between a station and its
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per
@@ -196,8 +200,9 @@ creating entities.
   container.
 - **Timeline:** `- **{in_game_date}** — {description}`
   (`[[Event_Name]] — {summary}` when linked), or the shape this
-  timeline already uses. `vw timeline --under "<its heading for the
-  session>" --write` places them (`--after` sites a new heading).
+  timeline already uses. `vw timeline --under "<the heading this
+  timeline files the session under>" --write` places them (`--after`
+  sites a new heading).
 - **Events:** create an Event file from `_Templates/_Template_Event.md`
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
