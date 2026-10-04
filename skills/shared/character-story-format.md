@@ -7,20 +7,7 @@ rolling narrative of that character's journey.
 
 `Characters/PCs/{Name}_Story.md`, beside the PC entity file.
 Discovered by naming convention, not a frontmatter pointer.
-
-## Frontmatter
-
-```yaml
----
-type: character-story
-character: "[[{Name}]]"
-campaign: ""
-canon_status: DRAFT
-lastUpdated: ""
-asOfSession: ""
-createdSession: ""
----
-```
+Frontmatter: `shared/templates/character-story.md`.
 
 ## Structure
 

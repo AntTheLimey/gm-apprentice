@@ -198,8 +198,8 @@ Session-prep reads this instead of re-gathering context.
 item is Keeper-facing. Pass the section, heading first, on stdin
 (`<<'EOF'`) to `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
-wrapup-add "<wrap-up>" --write`; a later reconcile sends the whole
-section again with `--replace`. Never a top-level `## Reconciliation
+wrapup-add "<wrap-up>" --write`; a later reconcile adds its
+decisions to the section with `--append`. Never a top-level `## Reconciliation
 Context`, and never an `exclude_sections` entry instead. A Plan file
 may get a one-line pointer (`See Wrap-Up for reconciliation context`).
 

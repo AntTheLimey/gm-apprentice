@@ -62,8 +62,11 @@ surfaces but doesn't resolve:
 A section is Keeper-facing when it sits under the fenced
 `## GM Notes` and player-facing when it does not. An H2 outside
 the fence is the GM's own, whatever it is called
-(`## What the Party Learned`, `## Letters Home`): never flag or
-move it. The one exception is a heading the template keeps under
+(`## What the Party Learned`, `## Letters Home`): never move it or
+treat it as drift. A recap under another title is still renamed to
+`## Narrative Recap`; a second recap-titled section
+(`## What Happened` beside the recap) is noted at INFO and left
+alone. The one heading that moves is one the template keeps under
 GM Notes (`## World State`, `## Keeper Checklist`,
 `## Skipped Prep`, and close variants such as `## World State:`).
 As an H2 outside the fence that is a slip, and it publishes Keeper

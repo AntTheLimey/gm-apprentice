@@ -246,9 +246,11 @@ files are included or excluded through the publish manifest
 
 A Wrap-Up H2 outside the fenced `## GM Notes` is player-facing,
 whatever it is called: it publishes unless `exclude_sections` names
-it. `vault_check wrapup` reports only a heading the template keeps
-under GM Notes (`## World State`, `## Skipped Prep`) found there, and
-`--fix` moves it back. Nothing lists player-facing sections any more:
+it. Of these, `vault_check wrapup --fix` moves only a heading the
+template keeps under GM Notes (`## World State`, `## Skipped Prep`),
+back under it. It also renames a recap under another title to
+`## Narrative Recap`, and notes a second recap-titled section without
+touching it. Nothing lists player-facing sections any more:
 the migration removes the old `publish.wrap_up.player_sections` key.
 
 ## Switches

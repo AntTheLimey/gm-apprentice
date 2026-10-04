@@ -69,6 +69,8 @@ Claude produces a structured package:
 - A carry-forward summary (cliffhangers, consequences, ticking clocks)
 - A keeper checklist of things to prepare for next time
 
+The wrap-up's sections are a starting point, not a limit. Ask for a section of your own — "add a Letters Home section for the players", "keep a Ritual Clock under GM Notes" — and it goes where you say: above GM Notes for players, under it for you. Entity notes take any log section the same way. Before Claude adds a section players can read that you did not ask for, it tells you what they will see.
+
 New entities are created as DRAFT in your vault. Claude shows you exactly what it created and changed in the conversation so you can review — but the review appendices stay in the conversation, not in your session note file.
 
 ## Tips

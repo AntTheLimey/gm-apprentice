@@ -35,11 +35,14 @@ Sections, per `shared/templates/session-wrap.md` (vault copy
 `_Templates/_Template_Session_WrapUp.md` if present), go in with
 `vw wrapup-add "<wrap-up>" --write`, several per call. Those not
 marked optional/conditional are required. Add any section the GM
-or the story calls for: `##` is for players; `###` goes under GM
-Notes, but one sent after a `##` in the same call stays in that
-player section, so send Keeper sections first or separately.
-Dry-run any call adding a new section or sub-section for players;
-read its "players will see this" rows before `--write`.
+or the story calls for. `##` is for players and keeps every deeper
+heading sent after it in that call, up to one the template names;
+everything else at `###` or below goes under GM Notes. So send
+Keeper sections first or separately. "players will see this" rows
+(`log` and `timeline` print them too) name what players can read:
+dry-run any call adding a section or sub-section for players, or a
+`log` section new to that note type; tell the GM of any they did
+not ask for before `--write`.
 
 **Authoring vs. preserving:** four outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -91,10 +94,11 @@ never regenerates it.
 <vault> active-pcs`, minus any PC off-screen this session.
 
 Per active PC, one `#### [[PC Name]] (Player)` block with the
-template's labels (omit empty ones). Focus on player intent — stated plans,
-unfinished actions, shifted NPC ties, exclusive information —
-grounded in observable behaviour, not generated emotional
-analysis.
+template's labels (omit empty ones), under `### PC Carry-Forward`:
+send that heading with its blocks, in its own call or before any
+`##`. Focus on player intent — stated plans, unfinished actions,
+shifted NPC ties, exclusive information — grounded in observable
+behaviour, not generated emotional analysis.
 
 ### 3b. Character Story Entries
 
@@ -159,7 +163,7 @@ creating entities.
   placing an established NPC somewhere new), never fold it silently
   into that entity's file. Ask the GM once per claim. Confirmed →
   write it there and log it under the Wrap-Up's `### Cross-Entity
-  Claims`. Unconfirmed or deferred → log it there with `<!--
+  Claims` (`vw wrapup-add --append` adds to it). Unconfirmed or deferred → log it there with `<!--
   UNVERIFIED: {claim} -->`; reconcile scans the Wrap-Up for these
   and blocks promotion.
 - **Relationship edges:** every `type:` comes from
@@ -178,13 +182,13 @@ creating entities.
   the Scenes`. `vw log --write` places them all, no note read
   first: rows `<path><TAB>Campaign Log<TAB>{bullet}`, or
   `GM Notes/Behind the Scenes`. Each `(projected)` entry (Behind
-  the Scenes or Under Pressure) on an entity that appeared: drop the marker if it played, strike it
-  through with `not played` if play went elsewhere, or leave it if
-  still pending. A fork is settled branch by branch: keep the branch
-  that played and strike the other through with `not played`. PCs are
-  exempt from this and from the Related mirror: their body follows
-  `shared/pc-body-structure.md`, and their session record is the
-  Story companion.
+  the Scenes or Under Pressure) on an entity that appeared: drop the
+  marker if it played, strike it through with `not played` if play
+  went elsewhere, or leave it if still pending. A fork is settled
+  branch by branch: keep the branch that played and strike the other
+  through with `not played`. PCs are exempt from this and from the
+  Related mirror: their body follows `shared/pc-body-structure.md`,
+  and their session record is the Story companion.
 - **New container entities** (a district between a station and its
   venues, a cell between a faction and its members): offer each
   child for re-pointing, yes/no each, and set the child's fields per
@@ -215,8 +219,8 @@ Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and
 never touched again) as a completeness cross-check on the `--file`
 list — a row naming a path that isn't in that list, isn't a 3b/3c
-PC or Story file, the Wrap-Up or a `vw` target means a sub-agent
-under-reported. Don't re-read files to self-check.
+PC or Story file, the Wrap-Up or a note only `vw` wrote means a
+sub-agent under-reported. Don't re-read files to self-check.
 
 **Receipts:** show new/updated entity content in the conversation
 as `## New Entity Files` and `## Updated Entities`, never in the
