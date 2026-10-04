@@ -12,16 +12,16 @@ The PC note's layout is the template's (`shared/templates/pc-dnd-5e-2024.md`). T
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
 ```
 
-It prints a row for every derived cell: `SAME`, `FILL` (old -> new) or `KEPT`. Nothing is written yet. Show the GM the `FILL` rows and, on their yes, run it again with `--write`. Do this after building a character, after a level-up, and after any change to a score or a proficiency.
+It prints a row for every derived cell: `SAME`, `FILL` (old -> new), `KEPT`, or `ERROR` when it cannot read the sheet (nothing is written then; fix the note first). Nothing is written yet. Show the GM the `FILL` rows and, on their yes, run it again with `--write`. Do this after building a character, after a level-up, and after any change to a score or a proficiency.
 
-- A number the rules change (an item, a feat, a class feature) is written with its reason: `+7 (cloak of elvenkind)`, `+3 (Alert)`. The tool keeps a cell that has a reason and replaces a bare number, so a hand-set value with no reason is lost at the next fill.
+- A number the rules change (an item, a feat, a class feature) is written with its reason: `+7 (cloak of elvenkind)`, `+3 (Alert)`. The tool keeps any cell that is not blank or a bare number and replaces a bare number, so a hand-set value with no reason is lost at the next fill.
 - AC, HP maximum, Speed and the attack lines are always written by hand, because too many features move them for a sum to be trusted. Say what the AC is made of in `**Armour Class:**` under Defences: `Chain Mail 16 + Shield 2`.
 
 **Class features, species traits, feats.** One row each, `Name | Action | Uses | Used | Recovers | Summary`:
 
 - **Action:** `Action`, `Bonus Action` or `Reaction`; blank for a passive feature. The Combat tab groups by these words.
 - **Uses / Used:** whole numbers; both blank when a feature has no limit.
-- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest`. The page's rest buttons act on exactly these phrases, so do not paraphrase them. A feature that comes back some other way gets what it says (`Dawn`) and is left to the player.
+- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest`. A later build's rest buttons will act on exactly these phrases, so do not paraphrase them; today the page only shows them. A feature that comes back some other way gets what it says (`Dawn`) and is left to the player.
 
 ```text
 | Second Wind | Bonus Action | 2 | 0 | 1 Short Rest, all Long Rest | Heal 1d10 + Fighter level |

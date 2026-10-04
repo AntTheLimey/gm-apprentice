@@ -243,9 +243,13 @@ Notes:
   table. So is any single row it cannot read: a Proficient, Expertise
   or Save Proficiency cell that is not a yes or no word, an ability row
   that is not one of the six, a Uses or Used cell that is not a whole
-  number, a spell whose Level is not `Cantrip` or `1` to `9`, and a
-  slot row whose Total is not a number or whose Expended exceeds it. A
-  feature, spell, attack or gear name may be a wikilink.
+  number, a Used count with no Uses beside it, a spell whose Level is
+  not `Cantrip` or `1` to `9`, and a slot row whose Total is not a number
+  or whose Expended exceeds it. A feature, spell, attack, gear, skill or
+  attunement item name may be a wikilink.
+- **Extra rows are shown.** Any row in `### Combat` beyond the ones
+  listed above is shown as a tile, with its label and value as written.
+  A Recovers cell is shown whether or not Uses is filled in.
 - **The layout before 1.10.33 is still read**, so a note nobody has
   converted keeps publishing with every line on the page. A
   four-column ability table (no `Save`) is placed with no save number.
@@ -255,6 +259,10 @@ Notes:
   their own headings; prose features are not grouped on the Combat
   tab. `dnd_sheet.py` fills the cells such a note has and adds no
   column.
+- **Other equipment sections ride with Equipment.** A `## Inventory`,
+  `## Gear`, `## Items`, `## Weapons` or `## Armor` section, and a
+  frontmatter `equipment:` list, are shown as written in the Equipment
+  tab after the sheet's own gear.
 - **Background stays an accordion.** The header reads three lines from
   it (`Race` and `Classes` are accepted too); its prose is not on the
   sheet.
