@@ -240,6 +240,13 @@ scenes at any point — confirm understanding, then write. Check
 spotlight balance against the GM's choices and raise gaps as
 questions. → each scene to `## Planned Scenes`
 
+**Check the shape early.** As soon as the scenes agreed so far have
+their headings, **Situation** and **Starts it**, run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
+and fix every ERROR and mechanical WARNING while a fix is one line.
+This is a check, not an order of work: write any scene out in full
+whenever the GM wants it.
+
 ## Phase 2: Verify (assistance, not enforcement)
 
 You run the checks and act on them; the GM never sees an
@@ -247,7 +254,7 @@ ERROR/WARNING report. Fix objective breakage silently, offer to build
 artifacts, raise only genuine craft issues conversationally. Steps
 15–16 are independent — parallelize if sub-agents are available.
 
-**15. Checks** — Run
+**15. Checks** — Run again (the early run caught the shape)
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/plan_check.py" <plan>`
 (add `--headless` when run without a GM; `--gm-input` when the GM
 supplied intent, scenes and spotlight up front).
