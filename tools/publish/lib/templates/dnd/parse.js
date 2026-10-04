@@ -136,13 +136,13 @@ function readCombatRow(model, label, value) {
 }
 
 function readSkills(model, section) {
-  const left = consumeTable(stripNotes(section.html), COLS.skills, ([name, ability, proficient, expertise, modifier]) => {
+  const left = consumeTable(stripNotes(section.html), COLS.skills, ([name, ability, proficient, expertise, modifier], h) => {
     const prof = yesNo(proficient);
     const expert = yesNo(expertise);
     if (!name || prof === null || expert === null) return false;
-    model.skills.push({ name, ability, proficient: prof || expert, expert, modifier });
+    model.skills.push({ name, nameHtml: h[0], ability, proficient: prof || expert, expert, modifier });
     return true;
-  });
+  }, { rich: true });
   if (hasContent(left)) model.asWritten.skills.push(left);
 }
 
@@ -151,7 +151,8 @@ function readFeatures(model, section, list, home) {
     if (!c.some(filled)) return true;             // the template's empty row
     const uses = c[2] ? wholeNumber(c[2]) : null;
     const used = c[3] ? wholeNumber(c[3]) : null;
-    if (!c[0] || (c[2] && uses === null) || (c[3] && used === null)) return false;
+    // A Used count with no Uses to count against is not a mark: the row is shown as written.
+    if (!c[0] || (c[2] && uses === null) || (c[3] && (used === null || !c[2]))) return false;
     model.features[list].push({ name: c[0], nameHtml: h[0], action: c[1], uses, used, recovers: c[4], summaryHtml: h[5] });
     return true;
   }, { rich: true });
@@ -232,7 +233,7 @@ function readEquipment(model, section) {
         return true;
       }, { rich: true });
     } else if (key === 'magic item attunement' || key === 'attunement') {
-      left = consumeTable(sub.html, COLS.attunement, ([slot, item]) => { model.attunement.push([slot, filled(item)]); return true; });
+      left = consumeTable(sub.html, COLS.attunement, ([slot, item], h) => { model.attunement.push([slot, filled(item), h[1]]); return true; }, { rich: true });
     } else if (key === 'coins') {
       const head = [...sub.html.matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => cellText(m[1]));
       const body = (sub.html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i) || [])[1] || '';

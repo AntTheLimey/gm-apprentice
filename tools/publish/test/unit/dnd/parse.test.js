@@ -238,7 +238,8 @@ describe('parseDnd: equipment', () => {
     assert.deepEqual(m.attacks.map(a => [a.name, a.hit, a.damage]), [['Longsword', '+7', '1d8+4 Slashing']]);
     assert.equal(m.gear.length, 2);
     assert.match(m.gear[0].nameHtml, /Amulet of Health/);
-    assert.deepEqual(m.attunement, [['1', 'Amulet of Health'], ['2', '']]);
+    assert.deepEqual(m.attunement.map(([slot, item]) => [slot, item]), [['1', 'Amulet of Health'], ['2', '']]);
+    assert.equal(m.attunement[0][2], 'Amulet of Health');
     assert.deepEqual(m.coins, [['CP', '0'], ['SP', '14'], ['EP', '0'], ['GP', '62'], ['PP', '1']]);
     assert.deepEqual(m.asWritten.equipment, []);
   });

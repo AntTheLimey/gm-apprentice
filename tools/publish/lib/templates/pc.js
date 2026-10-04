@@ -140,17 +140,22 @@ ${journeyContent}
 </div>`;
 }
 
+// The frontmatter `equipment:` list as cards, or '' when the note has none.
+function frontmatterEquipmentHtml(frontmatter) {
+  if (!(Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0)) return '';
+  const items = frontmatter.equipment.map(item => {
+    if (typeof item === 'string') return `<div class="entity-card"><h4>${escapeHtml(item)}</h4></div>`;
+    const name = item.name || 'Unknown';
+    const desc = item.description || item.notes || '';
+    const weight = item.weight ? ` <span class="sidebar-badge">${escapeHtml(String(item.weight))}</span>` : '';
+    return `<div class="entity-card"><h4>${escapeHtml(name)}${weight}</h4>${desc ? `<div class="card-excerpt">${escapeHtml(desc)}</div>` : ''}</div>`;
+  });
+  return `<div class="card-grid">${items.join('\n')}</div>`;
+}
+
 function extractEquipment(frontmatter, sections) {
-  if (Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0) {
-    const items = frontmatter.equipment.map(item => {
-      if (typeof item === 'string') return `<div class="entity-card"><h4>${escapeHtml(item)}</h4></div>`;
-      const name = item.name || 'Unknown';
-      const desc = item.description || item.notes || '';
-      const weight = item.weight ? ` <span class="sidebar-badge">${escapeHtml(String(item.weight))}</span>` : '';
-      return `<div class="entity-card"><h4>${escapeHtml(name)}${weight}</h4>${desc ? `<div class="card-excerpt">${escapeHtml(desc)}</div>` : ''}</div>`;
-    });
-    return `<div class="card-grid">${items.join('\n')}</div>`;
-  }
+  const list = frontmatterEquipmentHtml(frontmatter);
+  if (list) return list;
 
   const equipmentSections = sections.filter(s => EQUIPMENT_SECTION_TITLES.has(s.title.toLowerCase()));
   if (equipmentSections.length > 0) {
@@ -158,6 +163,16 @@ function extractEquipment(frontmatter, sections) {
   }
 
   return '<p class="text-muted">No equipment data available.</p>';
+}
+
+// A sheet that draws `## Equipment` itself still owes the page every other
+// equipment-titled section and the frontmatter list: the Equipment tab is the
+// only place they go, so they follow the sheet's own equipment, as written.
+function unconsumedEquipment(frontmatter, sections, consumes) {
+  const rest = sections
+    .filter(s => EQUIPMENT_SECTION_TITLES.has(s.title.toLowerCase()) && !consumes(s.title))
+    .map(s => `<h3>${escapeHtml(s.title)}</h3>\n${s.html}`);
+  return [frontmatterEquipmentHtml(frontmatter), ...rest].filter(Boolean).join('\n');
 }
 
 function buildRouteMap(page, pages) {
@@ -388,7 +403,11 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // --- Equipment Tab ---
-  const equipmentContent = sheetsOff ? '' : (systemEquipmentHtml || extractEquipment(fm, sections));
+  let equipmentContent;
+  if (sheetsOff) equipmentContent = '';
+  else if (systemEquipmentHtml && sheetConsumes && sheetConsumes('Equipment')) {
+    equipmentContent = [systemEquipmentHtml, unconsumedEquipment(fm, sections, sheetConsumes)].filter(Boolean).join('\n');
+  } else equipmentContent = systemEquipmentHtml || extractEquipment(fm, sections);
 
   // --- Story Tab ---
   const opts = context || {};

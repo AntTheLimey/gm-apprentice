@@ -3743,6 +3743,8 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .dnd5e-lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
 .dnd5e-why { font-size: 0.7rem; color: var(--text-muted); margin-left: 0.3rem; font-weight: 400; }
 .dnd5e-entry-name, .dnd5e-entry-text, .dnd5e-tag, .dnd5e-v { overflow-wrap: anywhere; min-width: 0; }
+/* a long unbroken word in a reason, a damage line, a rest phrase or a track name wraps in its box too */
+.dnd5e-entry-big, .dnd5e-why, .dnd5e-dmg, .dnd5e-recovers, .dnd5e-uses, .dnd5e-track-name, .dnd5e-count { overflow-wrap: anywhere; min-width: 0; }
 .dnd5e-as-written { overflow-x: auto; }
 .dnd5e-recovers, .dnd5e-cap, .dnd5e-of, .dnd5e-temp { color: var(--text-muted); font-size: 0.8rem; font-weight: 400; }
 

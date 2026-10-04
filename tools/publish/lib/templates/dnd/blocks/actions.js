@@ -15,7 +15,7 @@ function renderActions(model) {
       .map(f => entry({ nameHtml: f.nameHtml, summaryHtml: f.summaryHtml, usesHtml: usesHtml(f) }));
     // Spells cast as a plain action are not listed here; they live on the Spells tab.
     const names = kind === 'action' ? [] : (model.spells || [])
-      .filter(s => String(s.time || '').toLowerCase().startsWith(kind))
+      .filter(s => new RegExp(`^(?:1\\s+)?${kind}\\b`).test(String(s.time || '').trim().toLowerCase()))
       .map(s => escapeHtml(s.name));
     if (names.length) parts.push(entry({ nameHtml: 'Spells', summaryHtml: names.join(', ') }));
     return block(key, title, parts.join(''));

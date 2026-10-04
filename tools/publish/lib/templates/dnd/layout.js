@@ -42,7 +42,9 @@ function buildSheet(model) {
   if (!blocks.length) {
     const loose = block('statsheet', 'Stat sheet', asWritten(model.asWritten.statSheet));
     if (loose && /<table[ >]/.test(loose)) return wrap('dnd5e-tab-sheet', [headerLine(model), loose]);
-    return renderVitals(model) ? '<div class="dnd5e-sheet dnd5e-tab-sheet"></div>' : null;
+    if (!renderVitals(model)) return null;
+    // Numbers in the vitals strip make a sheet; the header and any loose prose still go on it.
+    return wrap('dnd5e-tab-sheet', [headerLine(model), loose]) || '<div class="dnd5e-sheet dnd5e-tab-sheet"></div>';
   }
   // Loose Stat Sheet prose with no ability rows is still shown, as written.
   const loose = abilities ? null : block('statsheet', 'Stat sheet', asWritten(model.asWritten.statSheet));

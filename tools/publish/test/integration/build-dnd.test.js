@@ -144,6 +144,24 @@ describe('build integration — D&D PC', () => {
     assert.match(tab, /dnd5e-entry-name"><a href="[^"]*ilse-varn\.html"[^>]*>Ilse Varn<\/a>/);
   });
 
+  it('awkward rows in a consumed section are all on the page', () => {
+    const tamsin = pages['tamsin-reed'];
+    const equip = tamsin.split('id="tab-equipment"')[1].split('id="tab-story"')[0];
+    // an equipment-titled section the sheet does not draw is in the Equipment tab, once, and not an accordion
+    assert.equal((tamsin.match(/shuttered lantern/g) || []).length, 1);
+    assert.ok(equip.includes('shuttered lantern'));
+    assert.ok(!accordionTitles(tamsin).includes('Inventory'));
+    // a linked attunement item is placed, its link works, and the count is the note's
+    assert.match(equip, /<strong>1:<\/strong> <a href="[^"]*"[^>]*>Cloak of Protection<\/a>/);
+    assert.match(equip, /2 of 3 used/);
+    assert.ok(!/<th>Slot<\/th>/.test(equip), 'no raw attunement table');
+    // Recovers with no Uses, and Recovers beside an over-used count
+    assert.match(tamsin, /Arcane Recovery[\s\S]{0,400}dnd5e-recovers">Long Rest/);
+    assert.match(tamsin, /2 used of 1<\/span> <span class="dnd5e-recovers">Short Rest/);
+    // a Used count with no Uses is shown as the row was written
+    assert.match(tamsin, /<td>Naturally Stealthy<\/td>\s*<td><\/td>\s*<td><\/td>\s*<td>1<\/td>/);
+  });
+
   // The completeness gate: every non-blank table cell and every prose line of
   // every consumed section of the note is on the built page.
   describe('nothing in the note is lost', () => {
@@ -163,7 +181,7 @@ describe('build integration — D&D PC', () => {
     const pageRaw = html => html.split('class="dnd5e-vitals"')[1].split('id="tab-story"')[0];
 
     const SKIP = /^(yes|no|—|-|–|)$/i;
-    const cellsOf = line => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split('|').map(c => c.trim());
+    const cellsOf = line => line.replace(/^\s*\|/, '').replace(/\|\s*$/, '').split(/(?<!\\)\|/).map(c => c.replace(/\\\|/g, '|').trim()); // `\|` inside a cell is a pipe
 
     // Returns { tokens: [text...], raw: [exact strings the markup carries instead] }.
     function noteTokens(markdown, consumedTitles) {
@@ -188,6 +206,7 @@ describe('build integration — D&D PC', () => {
             const [name, action, uses, used, recovers, summary] = c;
             add(name, action, recovers, summary);
             if (uses && +uses > 10) tokens.push(norm(`${+uses - (+used || 0)} / ${uses}`));
+            else if (uses && +used > +uses) raw.push(`${used} used of ${uses}`); // an over-count is written out
             else if (uses) raw.push(`${name}: ${+uses - (+used || 0)} of ${uses} left`);
           } else if (h0 === 'spell') { // the level is a heading; C and R are spelled out
             const [name, level, time, range, comps, duration, hit, tags, summary] = c;
@@ -226,7 +245,7 @@ describe('build integration — D&D PC', () => {
 
     for (const slug of PCS) {
       it(slug, () => {
-        const { tokens, raw } = noteTokens(notes[slug], CONSUMED);
+        const { tokens, raw } = noteTokens(notes[slug], [...CONSUMED, 'inventory']);
         assert.ok(tokens.length > 30, 'the gate must actually read the note');
         const text = norm(pageText(pages[slug]));
         const missing = tokens.filter(t => !text.includes(t));

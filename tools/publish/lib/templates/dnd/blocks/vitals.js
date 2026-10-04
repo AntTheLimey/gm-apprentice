@@ -8,11 +8,14 @@ const tile = (label, value) => (value
 
 function renderVitals(model) {
   const c = model.combat || {};
-  if (!(c.ac || c.hpCur || c.hpMax || c.initiative || c.speed)) return null;
-
   // Temp HP as written; only a blank or a plain zero is left off.
   const tempText = String(c.tempHp || '').trim();
   const hasTemp = tempText !== '' && !/^0+$/.test(tempText);
+  // Inspiration as written: Yes is a lit chip, No or blank nothing, anything else is shown as typed.
+  const inspiration = String(model.inspiration || '').trim();
+  const inspired = yesNo(inspiration);
+  if (!(c.ac || c.hpCur || c.hpMax || c.initiative || c.speed || model.pb || hasTemp
+    || c.conditions || c.exhaustion || inspired !== false)) return null;
   let hp = '';
   if (c.hpCur || c.hpMax || hasTemp) {
     const max = splitReason(c.hpMax);
@@ -23,7 +26,8 @@ function renderVitals(model) {
   }
 
   const chips = [];
-  if (yesNo(model.inspiration) === true) chips.push('<span class="dnd5e-chip is-on">Heroic Inspiration</span>');
+  if (inspired === true) chips.push('<span class="dnd5e-chip is-on">Heroic Inspiration</span>');
+  else if (inspired === null) chips.push(`<span class="dnd5e-chip is-on">Heroic Inspiration: ${escapeHtml(inspiration)}</span>`);
   chips.push(`<span class="dnd5e-chip">${c.conditions ? escapeHtml(c.conditions) : 'No conditions'}</span>`);
   if (c.exhaustion) chips.push(`<span class="dnd5e-chip">Exhaustion ${escapeHtml(c.exhaustion)}</span>`);
 

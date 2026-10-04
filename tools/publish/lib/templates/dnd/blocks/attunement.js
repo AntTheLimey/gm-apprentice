@@ -5,7 +5,7 @@ function renderAttunement(model) {
   const rows = model.attunement || [];
   if (!rows.length) return null;
   const used = rows.filter(([, item]) => item).length;
-  const lines = rows.map(([slot, item]) => `<p><strong>${escapeHtml(slot)}:</strong> ${item ? escapeHtml(item) : 'empty'}</p>`).join('');
+  const lines = rows.map(([slot, item, itemHtml]) => `<p><strong>${escapeHtml(slot)}:</strong> ${item ? (itemHtml || escapeHtml(item)) : 'empty'}</p>`).join('');
   return block('attunement', 'Attunement', `<div class="dnd5e-lines">${lines}</div>`, `${used} of ${rows.length} used`);
 }
 

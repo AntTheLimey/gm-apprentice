@@ -19,17 +19,17 @@ function num(text) {
 function marks(max, spent, label) {
   const left = Math.max(0, max - spent);
   const aria = `${label}: ${left} of ${max} left`;
-  if (max > 10) return `<span class="dnd5e-count" aria-label="${escapeHtml(aria)}"><span class="dnd5e-num">${left}</span> / ${max}</span>`;
+  if (max > 10) return `<span class="dnd5e-count" role="img" aria-label="${escapeHtml(aria)}"><span class="dnd5e-num">${left}</span> / ${max}</span>`;
   const one = i => `<span class="dnd5e-mark${i >= left ? ' is-spent' : ''}"></span>`;
   return `<span class="dnd5e-marks" role="img" aria-label="${escapeHtml(aria)}">${Array.from({ length: max }, (_, i) => one(i)).join('')}</span>`;
 }
 
 function usesHtml(f) {
-  if (f.uses === null || f.uses === undefined) return '';
+  const rec = f.recovers ? `<span class="dnd5e-recovers">${escapeHtml(f.recovers)}</span>` : '';
+  if (f.uses === null || f.uses === undefined) return rec;
   const used = f.used || 0;
-  if (used > f.uses) return `<span class="dnd5e-count">${used} used of ${f.uses}</span>`;
-  const rec = f.recovers ? ` <span class="dnd5e-recovers">${escapeHtml(f.recovers)}</span>` : '';
-  return marks(f.uses, used, f.name) + rec;
+  if (used > f.uses) return `<span class="dnd5e-count">${used} used of ${f.uses}</span>${rec ? ' ' + rec : ''}`;
+  return marks(f.uses, used, f.name) + (rec ? ' ' + rec : '');
 }
 
 function entry({ nameHtml, tags = [], bigHtml = '', summaryHtml = '', usesHtml: uses = '' }) {

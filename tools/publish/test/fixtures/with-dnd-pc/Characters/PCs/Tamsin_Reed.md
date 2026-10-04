@@ -116,13 +116,13 @@ relationships: []
 
 | Name | Action | Uses | Used | Recovers | Summary |
 |------|--------|------|------|----------|---------|
-| Second Wind | Bonus Action | 2 | 1 | Short Rest | Heal herself and shake off a hit. |
-| Action Surge |  | 1 | 0 | Short Rest | One extra action on her turn. |
+| Second Wind | Bonus Action | 2 | 1 | 1 Short Rest, all Long Rest | Heal herself and shake off a hit. |
+| Action Surge |  | 1 | 2 | Short Rest | One extra action on her turn (the player over-counted). |
 | Tactical Mind |  |  |  |  | Turns a failed check into a better one by spending Second Wind. |
 | Improved Critical |  |  |  |  | Scores a critical hit on a lower roll. |
 | Weapon Mastery |  |  |  |  | Uses the mastery of three chosen weapons. |
 | Spellcasting |  |  |  |  | Prepares wizard spells from her spellbook. |
-| Arcane Recovery |  | 1 | 0 | Long Rest | Regain a spent slot during a short rest. |
+| Arcane Recovery |  |  |  | Long Rest | Regain a spent slot during a short rest. |
 | Scholar |  |  |  |  | Expertise in one knowledge skill. |
 
 ## Species Traits
@@ -132,7 +132,7 @@ relationships: []
 | Brave |  |  |  |  | Better odds against being frightened. |
 | Halfling Nimbleness |  |  |  |  | Moves through the space of larger creatures. |
 | Luck |  |  |  |  | Rerolls a natural 1 on a d20. |
-| Naturally Stealthy |  |  |  |  | Hides behind larger creatures. |
+| Naturally Stealthy |  |  | 1 | Long Rest | Hides behind larger creatures. |
 
 ## Feats
 
@@ -194,7 +194,7 @@ relationships: []
 |------|----------------|---------------|-------|
 | Shortsword | +6 | 1d6+3 Piercing | Light; Vex mastery |
 | Light Crossbow | +6 | 1d8+3 Piercing | 80/320 ft; Slow mastery |
-| Fire Bolt | +5 | 1d10 Fire | 120 ft |
+| Fire Bolt | +5 | 2d10 Fire | 120 ft |
 
 ### Gear
 
@@ -211,8 +211,8 @@ relationships: []
 
 | Slot | Item |
 |------|------|
-| 1 | — |
-| 2 | — |
+| 1 | [[Ilse_Varn\|Cloak of Protection]] |
+| 2 | Ring of Protection |
 | 3 | — |
 
 ### Coins
@@ -220,6 +220,10 @@ relationships: []
 | CP | SP | EP | GP | PP |
 |----|----|----|----|----|
 | 3 | 9 | 0 | 41 | 0 |
+
+## Inventory
+
+A coil of rope and a shuttered lantern, kept in the ferry's locker.
 
 ## Current Status
 
