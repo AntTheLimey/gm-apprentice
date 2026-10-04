@@ -26,6 +26,26 @@ describe('D&D sheet styles', () => {
     assert.ok(block.length > 500);
     assert.deepEqual(block.match(/#[0-9a-fA-F]{3,8}\b/g) || [], []);
   });
+  // The phone proof's findings (task 11): small labels under a campaign palette, the tall strip, a wrapped track label.
+  const block = () => css.slice(css.indexOf('/* D&D 5e full sheet'), css.indexOf('/* PF2e */'));
+  const rules = () => [...block().matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, sel, body]) => [sel.trim(), body]);
+  it('no sheet text takes the muted or the accent colour: a palette can put either under 4.5:1 at label size', () => {
+    const coloured = rules().filter(([, body]) => /(?:^|[;\s])color:\s*var\(--(?:text-muted|accent|warning)\)/.test(body)).map(([sel]) => sel);
+    assert.deepEqual(coloured, []);
+  });
+  it('a track label has no fixed width to wrap inside', () => {
+    const [, body] = rules().find(([sel]) => sel.endsWith('.dnd5e-track-name') && !sel.includes(','));
+    assert.ok(!/(?:^|[;\s])width:/.test(body) && /min-width:/.test(body));
+  });
+  it('on a phone the strip is one row of five tiles and quiet chips are left out', () => {
+    const phone = block().slice(block().indexOf('@media (max-width: 480px)'));
+    assert.match(phone, /\.dnd5e-vrow \{ grid-template-columns: 1\.7fr 1fr 1fr 1\.2fr 1fr;/);
+    assert.match(phone, /\.dnd5e-chips\.is-quiet, \.dnd5e-chip\.is-quiet \{ display: none; \}/);
+    assert.ok(!/\.dnd5e-hp \{ grid-column/.test(phone), 'the HP tile no longer takes a row of its own');
+  });
+  it('the half-proficient mark and the source tag have rules', () => {
+    for (const c of ['.dnd5e-skill.is-half .dnd5e-dot', '.dnd5e-tag.is-source']) assert.ok(block().includes(c + ' {'), c);
+  });
   it('the existing .dnd- rules Pathfinder uses are still there', () => {
     for (const c of ['.dnd-sheet', '.dnd-ability-card', '.dnd-skill', '.dnd-header']) assert.ok(css.includes(c + ' '), c);
   });

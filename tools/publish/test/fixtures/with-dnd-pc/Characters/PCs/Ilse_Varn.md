@@ -65,13 +65,7 @@ relationships: []
 
 ### Defences
 
-**Resistances:** None
-
-**Immunities:** None
-
-**Vulnerabilities:** None
-
-**Condition Immunities:** None
+**Advantages:** Saves against being charmed
 
 **Armour Class:** Unarmoured, 10 + Dexterity
 
@@ -196,11 +190,23 @@ relationships: []
 
 ### Gear
 
-| Item | Qty | Notes |
-|------|-----|-------|
-| Spellbook | 1 | Holds her prepared and known spells |
-| Satchel of index cards | 1 |  |
-| Ink and quill | 1 |  |
+| Item | Qty | Weight | Notes |
+|------|-----|--------|-------|
+| Spellbook | 1 | 5 lb | Holds her prepared and known spells |
+| Satchel of index cards | 1 | 1 lb |  |
+| Ink and quill | 1 | — |  |
+| Book | 14 | 5 lb | Borrowed from the reading room, all overdue |
+| Chest | 1 | 25 lb | For the books |
+| Scholar's pack | 1 | 22 lb |  |
+
+### Carrying
+
+| Attribute | Value |
+|-----------|-------|
+| Carried Weight | 123.9 lb |
+| Carrying Capacity | 120 lb |
+| Drag / Lift / Push | 240 lb |
+| Encumbrance | Over capacity (Speed 5 ft) |
 
 ### Magic Item Attunement
 

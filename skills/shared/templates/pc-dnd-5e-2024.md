@@ -74,6 +74,12 @@ createdSession: ""
 | Passive Investigation | 10 |
 | Passive Insight | 10 |
 
+### Bonuses
+
+| Applies To | Bonus | Source |
+|------------|-------|--------|
+| | | |
+
 ### Defences
 
 **Resistances:** {list}
@@ -83,6 +89,8 @@ createdSession: ""
 **Vulnerabilities:** {list}
 
 **Condition Immunities:** {list}
+
+**Advantages:** {list}
 
 **Armour Class:** {what it is made of}
 
@@ -167,9 +175,9 @@ createdSession: ""
 
 ### Spells
 
-| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Summary |
-|-------|-------|------|-------|------------|----------|----------|------|---------|
-| | | | | | | | | |
+| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Source | Summary |
+|-------|-------|------|-------|------------|----------|----------|------|--------|---------|
+| | | | | | | | | | |
 
 ## Proficiencies
 
@@ -193,23 +201,38 @@ createdSession: ""
 
 ### Gear
 
-| Item | Qty | Notes |
-|------|-----|-------|
-| | | |
+| Item | Qty | Weight | Notes |
+|------|-----|--------|-------|
+| | | | |
 
-### Magic Item Attunement
+### Carrying
 
-| Slot | Item |
-|------|------|
-| 1 | — |
-| 2 | — |
-| 3 | — |
+| Attribute | Value |
+|-----------|-------|
+| Carried Weight | |
+| Carrying Capacity | |
+| Drag / Lift / Push | |
+| Encumbrance | |
+
+### Magic Items
+
+| Item | Attuned | Charges | Used | Recovers | Notes |
+|------|---------|---------|------|----------|-------|
+| | | | | | |
 
 ### Coins
 
 | CP | SP | EP | GP | PP |
 |----|----|----|----|----|
 | 0 | 0 | 0 | 0 | 0 |
+
+## Companions
+
+> Delete this section if the character has no companion.
+
+| Companion | Kind | AC | HP | Speed | Notes |
+|-----------|------|----|----|-------|-------|
+| | | | | | |
 
 ## Current Status
 

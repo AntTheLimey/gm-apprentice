@@ -31,21 +31,22 @@ relationships: []
 
 | Ability | Score | Modifier | Save Proficiency | Save |
 |---------|-------|----------|------------------|------|
-| STR | 18 | +4 | No | +4 |
-| DEX | 10 | +0 | No | +0 |
-| CON | 14 | +2 | No | +2 |
-| INT | 8 | -1 | No | -1 |
-| WIS | 12 | +1 | Yes | +4 |
-| CHA | 16 | +3 | Yes | +6 |
+| STR | 18 | +4 | No | +5 |
+| DEX | 10 | +0 | No | +1 |
+| CON | 14 | +2 | No | +3 |
+| INT | 8 | -1 | No | +0 |
+| WIS | 12 | +1 | Yes | +5 |
+| CHA | 16 | +3 | Yes | +7 |
 
 ### Combat
 
 | Attribute | Value |
 |-----------|-------|
-| AC | 19 |
-| Initiative | +3 (Alert) |
+| AC | 20 |
+| Initiative | +3 |
 | Speed | 30 ft |
 | Size | Medium |
+| Attacks per Action | 2 |
 | HP (Current) | 38 |
 | HP (Max) | 44 |
 | Temp HP | 0 |
@@ -62,17 +63,16 @@ relationships: []
 | Passive Investigation | 9 |
 | Passive Insight | 14 |
 
+### Bonuses
+
+| Applies To | Bonus | Source |
+|------------|-------|--------|
+| Initiative | PB | Alert |
+| Saves | +1 | Ring of Protection |
+
 ### Defences
 
-**Resistances:** None
-
-**Immunities:** None
-
-**Vulnerabilities:** None
-
-**Condition Immunities:** None
-
-**Armour Class:** Chain mail 16, shield +2, Defense fighting style +1
+**Armour Class:** Chain mail 16, shield +2, Defense fighting style +1, Ring of Protection +1
 
 ## Background
 
@@ -165,19 +165,20 @@ relationships: []
 
 ### Spells
 
-| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Summary |
-|-------|-------|------|-------|------------|----------|----------|------|---------|
-| Bless | 1 | Action | 30 ft | V, S, M | 1 minute |  | C | Three allies add a small die to attacks and saves. |
-| Command | 1 | Action | 60 ft | V | 1 round | WIS 14 |  | A one-word order the target obeys. |
-| Cure Wounds | 1 | Action | Touch | V, S | Instant |  |  | Restore hit points to a creature you touch. |
-| Divine Favor | 1 | Bonus Action | Self | V, S | 1 minute |  | C | Weapon hits carry extra radiant damage. |
-| Divine Smite | 1 | Bonus Action | Self | V | Instant |  | Always prepared | Extra radiant damage on a hit. |
-| Protection from Evil and Good | 1 | Action | Touch | V, S, M | 10 minutes |  | C, Oath | Guards a creature against certain kinds of foes. |
-| Shield of Faith | 1 | Bonus Action | 60 ft | V, S, M | 10 minutes |  | C, Oath | A small armour bonus for one creature. |
-| Aid | 2 | Action | 30 ft | V, S, M | 8 hours |  | Oath | Raises the hit point maximum of up to three creatures. |
-| Find Steed | 2 | Action | 30 ft | V, S | Instant |  | Always prepared | Calls an otherworldly mount. |
-| Lesser Restoration | 2 | Bonus Action | Touch | V, S | Instant |  |  | Ends one common ailment on a creature. |
-| Zone of Truth | 2 | Action | 60 ft | V, S | 10 minutes | CHA 14 | Oath | Creatures inside cannot knowingly lie. |
+| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Source | Summary |
+|-------|-------|------|-------|------------|----------|----------|------|--------|---------|
+| Bless | 1 | Action | 30 ft | V, S, M | 1 minute |  | C | | Three allies add a small die to attacks and saves. |
+| Command | 1 | Action | 60 ft | V | 1 round | DC 14 Wis |  | | A one-word order the target obeys. |
+| Cure Wounds | 1 | Action | Touch | V, S | Instant |  |  | | Restore hit points to a creature you touch. |
+| Divine Favor | 1 | Bonus Action | Self | V, S | 1 minute |  | C | | Weapon hits carry extra radiant damage. |
+| Divine Smite | 1 | Bonus Action | Self | V | Instant |  | Always prepared | | Extra radiant damage on a hit. |
+| Magic Missile | 1 | Action | 120 ft |  | Instant |  | 1 charge | Wand of Magic Missiles | Three darts that strike without a roll; each extra charge adds one. |
+| Protection from Evil and Good | 1 | Action | Touch | V, S, M | 10 minutes |  | C, Oath | | Guards a creature against certain kinds of foes. |
+| Shield of Faith | 1 | Bonus Action | 60 ft | V, S, M | 10 minutes |  | C, Oath | | A small armour bonus for one creature. |
+| Aid | 2 | Action | 30 ft | V, S, M | 8 hours |  | Oath | | Raises the hit point maximum of up to three creatures. |
+| Find Steed | 2 | Action | 30 ft | V, S | Instant |  | Always prepared | | Calls an otherworldly mount. |
+| Lesser Restoration | 2 | Bonus Action | Touch | V, S | Instant |  |  | | Ends one common ailment on a creature. |
+| Zone of Truth | 2 | Action | 60 ft | V, S | 10 minutes | DC 14 Cha | Oath | | Creatures inside cannot knowingly lie. |
 
 ## Proficiencies
 
@@ -203,28 +204,42 @@ relationships: []
 
 ### Gear
 
-| Item | Qty | Notes |
-|------|-----|-------|
-| Chain mail | 1 | Worn; AC 16, disadvantage on Stealth |
-| Shield | 1 | Worn; +2 AC |
-| Longsword | 1 | In hand |
-| Javelin | 4 |  |
-| Holy symbol | 1 | Emblem on the shield |
-| Explorer's pack | 1 | Bedroll, rations, rope, tinderbox, torches, waterskin |
+| Item | Qty | Weight | Notes |
+|------|-----|--------|-------|
+| Chain mail | 1 | 55 lb | Worn; AC 16, disadvantage on Stealth |
+| Shield | 1 | 6 lb | Worn; +2 AC |
+| Longsword | 1 | 3 lb | In hand |
+| Javelin | 4 | 2 lb |  |
+| Holy symbol | 1 | — | Emblem on the shield |
+| Explorer's pack | 1 | 55 lb | Bedroll, rations, rope, tinderbox, torches, waterskin |
 
-### Magic Item Attunement
+### Carrying
 
-| Slot | Item |
-|------|------|
-| 1 | — |
-| 2 | — |
-| 3 | — |
+| Attribute | Value |
+|-----------|-------|
+| Carried Weight | 128.5 lb |
+| Carrying Capacity | 270 lb |
+| Drag / Lift / Push | 540 lb |
+| Encumbrance | Within capacity |
+
+### Magic Items
+
+| Item | Attuned | Charges | Used | Recovers | Notes |
+|------|---------|---------|------|----------|-------|
+| Ring of Protection | Yes |  |  |  | A point of armour class and of every save, already counted. |
+| [[Wand_of_Magic_Missiles\|Wand of Magic Missiles]] | No | 7 | 2 | 1d6+1 at dawn | One to three charges cast Magic Missile. |
 
 ### Coins
 
 | CP | SP | EP | GP | PP |
 |----|----|----|----|----|
 | 0 | 14 | 0 | 62 | 1 |
+
+## Companions
+
+| Companion | Kind | AC | HP | Speed | Notes |
+|-----------|------|----|----|-------|-------|
+| [[Otherworldly_Steed\|Otherworldly Steed]] | Steed | 12 | 25 | 60 ft | Called with Find Steed at 2nd level; acts on Brannoch's turn. |
 
 ## Current Status
 

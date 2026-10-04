@@ -45,6 +45,7 @@ relationships: []
 | AC | 12 |
 | Initiative | +1 |
 | Speed | 30 ft |
+| Fly Speed | 30 ft (Winged Boots) |
 | Size | Medium |
 | HP (Current) | 38 |
 | HP (Max) | 38 |
@@ -66,12 +67,6 @@ relationships: []
 ### Defences
 
 **Resistances:** Fire
-
-**Immunities:** None
-
-**Vulnerabilities:** None
-
-**Condition Immunities:** None
 
 **Armour Class:** Leather armour 11 + Dexterity
 
@@ -212,13 +207,11 @@ relationships: []
 | Arcane focus | 1 | A bone charm |
 | Priest's pack | 1 | Blanket, lamp, oil, rations, tinderbox |
 
-### Magic Item Attunement
+### Magic Items
 
-| Slot | Item |
-|------|------|
-| 1 | — |
-| 2 | — |
-| 3 | — |
+| Item | Attuned | Charges | Used | Recovers | Notes |
+|------|---------|---------|------|----------|-------|
+| Winged Boots | Yes | 4 | 1 | 1d4 at dawn | A charge gives an hour of flight. |
 
 ### Coins
 

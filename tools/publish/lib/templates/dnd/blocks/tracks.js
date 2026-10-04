@@ -1,8 +1,7 @@
 const { escapeHtml } = require('../../../processor');
-const { block, num, marks } = require('../render');
+const { block, marks, tile } = require('../render');
 
 const track = (name, inner) => `<div class="dnd5e-track"><span class="dnd5e-track-name">${escapeHtml(name)}</span>${inner}</div>`;
-const tile = (label, value) => `<div class="dnd5e-v"><span class="dnd5e-lbl">${escapeHtml(label)}</span>${num(value)}</div>`;
 
 // Saves made are the filled marks, so a mark is spent once it is not yet made.
 function saves(name, count, label) {

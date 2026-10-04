@@ -11,8 +11,8 @@ const { build } = require('../../lib/build');
 // tabs, all read from the note, with nothing in a consumed section lost.
 const FIXTURES = path.join(__dirname, '..', 'fixtures');
 const TEMPLATE = path.join(__dirname, '..', '..', '..', '..', 'skills', 'shared', 'templates', 'pc-dnd-5e-2024.md');
-const PCS = ['brannoch-vale', 'ilse-varn', 'oriel-thackeray', 'tamsin-reed', 'dov-ashgrove', 'ilse-varn-old-layout'];
-const CONSUMED = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment'];
+const PCS = ['brannoch-vale', 'ilse-varn', 'oriel-thackeray', 'tamsin-reed', 'dov-ashgrove', 'perrin-lowe', 'ilse-varn-old-layout'];
+const CONSUMED = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment', 'companions'];
 
 const lf = s => s.replace(/\r\n/g, '\n');
 const read = (...p) => lf(fs.readFileSync(path.join(...p), 'utf-8'));
@@ -39,7 +39,7 @@ describe('build integration — D&D PC', () => {
       attachmentsDir: '_attachments', siteTitle: 'D&D Test',
       system: 'dnd-5e-2024',
       excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
-      folderMap: { 'Characters/PCs': 'characters/pcs' },
+      folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
     }, null, 2));
     build({ configPath });
     pages = {}; notes = {};
@@ -74,7 +74,7 @@ describe('build integration — D&D PC', () => {
   });
 
   it('a caster has a Spells tab and a non-caster has none', () => {
-    for (const slug of ['brannoch-vale', 'ilse-varn', 'oriel-thackeray', 'tamsin-reed', 'ilse-varn-old-layout']) {
+    for (const slug of ['brannoch-vale', 'ilse-varn', 'oriel-thackeray', 'tamsin-reed', 'perrin-lowe', 'ilse-varn-old-layout']) {
       assert.ok(pages[slug].includes('id="tab-spells"') && pages[slug].includes('data-tab="spells"'), slug);
     }
     assert.ok(!pages['dov-ashgrove'].includes('id="tab-spells"'));
@@ -162,6 +162,76 @@ describe('build integration — D&D PC', () => {
     assert.match(tamsin, /<td>Naturally Stealthy<\/td>\s*<td><\/td>\s*<td><\/td>\s*<td>1<\/td>/);
   });
 
+  const tab = (slug, id, next) => pages[slug].split(`id="tab-${id}"`)[1].split(`id="tab-${next}"`)[0];
+
+  it('bonuses are a block on the Sheet and the numbers are the note\'s', () => {
+    const sheet = tab('brannoch-vale', 'sheet', 'combat');
+    assert.match(sheet, /dnd5e-blk-bonuses[\s\S]*?Alert<[\s\S]*?dnd5e-tag">Initiative<[\s\S]*?dnd5e-num">PB</);
+    assert.match(sheet, /Ring of Protection<[\s\S]*?dnd5e-tag">Saves<[\s\S]*?dnd5e-num">\+1</);
+    assert.match(sheet, /Save <span class="dnd5e-num">\+5</);   // Strength, as dnd_sheet.py wrote it
+  });
+
+  it('a half-proficient skill has its own mark', () => {
+    const sheet = tab('perrin-lowe', 'sheet', 'combat');
+    assert.equal((sheet.match(/class="dnd5e-skill is-half"/g) || []).length, 12);
+    assert.match(sheet, /is-half"><span class="dnd5e-dot" title="Half proficiency"><\/span><span class="dnd5e-skill-name">Acrobatics/);
+  });
+
+  it('magic items: the attuned count, charges as marks, a linked item, and a spell\'s source', () => {
+    const equip = tab('brannoch-vale', 'equipment', 'story');
+    assert.match(equip, /<h3>Magic items <span class="dnd5e-cap">1 of 3 attuned<\/span><\/h3>/);
+    assert.match(equip, /dnd5e-entry-name"><a href="[^"]*items\/wand-of-magic-missiles\.html"[^>]*>Wand of Magic Missiles<\/a>/);
+    assert.match(equip, /aria-label="Wand of Magic Missiles: 5 of 7 left"/);
+    assert.match(equip, /dnd5e-recovers">1d6\+1 at dawn</);
+    assert.ok(!equip.includes('Attunement'));
+    assert.match(tab('oriel-thackeray', 'equipment', 'story'), /Winged Boots: 3 of 4 left/);
+    const spells = tab('brannoch-vale', 'spells', 'equipment');
+    assert.match(spells, /Magic Missile[\s\S]{0,600}dnd5e-tag">1 charge<\/span><span class="dnd5e-tag is-source">Wand of Magic Missiles</);
+    assert.equal((spells.match(/is-source/g) || []).length, 1);
+    assert.match(tab('perrin-lowe', 'spells', 'equipment'), /is-source">Magic Initiate</);
+  });
+
+  it('extra speeds join the strip; Attacks per Action and a Save DC are tiles on Combat', () => {
+    const strip = pages['oriel-thackeray'].split('class="dnd5e-vitals"')[1].split('class="tab-bar"')[0];
+    assert.match(strip, /Speed<\/span><span class="dnd5e-num">30 ft<\/span><span class="dnd5e-sub">fly 30 ft \(Winged Boots\)</);
+    assert.match(tab('brannoch-vale', 'combat', 'spells'), /dnd5e-blk-attacks[\s\S]*?Attacks per Action<\/span><span class="dnd5e-num">2</);
+    assert.match(tab('dov-ashgrove', 'combat', 'equipment'), /dnd5e-blk-attacks[\s\S]*?Open Hand Save DC<\/span><span class="dnd5e-num">13</);
+  });
+
+  it('a save DC carries no Hit label; an attack roll does', () => {
+    const combat = tab('perrin-lowe', 'combat', 'spells');
+    assert.match(combat, /Dagger[\s\S]*?dnd5e-lbl">Hit<\/span> <span class="dnd5e-num">\+4</);
+    assert.match(combat, /Vicious Mockery<\/span><span class="dnd5e-entry-big"><span class="dnd5e-num">DC 13 Wis</);
+  });
+
+  it('Advantages is a Defences line, and a PC with nothing to list shows no empty line', () => {
+    assert.match(tab('dov-ashgrove', 'combat', 'equipment'), /<strong>Advantages:<\/strong> Saves to avoid or end being poisoned/);
+    for (const [slug, html] of Object.entries(pages)) assert.ok(!/(Resistances|Immunities|Vulnerabilities|Advantages):<\/strong>\s*(—|-|–)?\s*</.test(html), slug);
+  });
+
+  it('companions close the Combat tab, with a link to the creature note, and are not an accordion', () => {
+    const combat = tab('brannoch-vale', 'combat', 'spells');
+    assert.match(combat, /dnd5e-blk-companions[\s\S]*?<a href="[^"]*creatures\/otherworldly-steed\.html"[^>]*>Otherworldly Steed<\/a>[\s\S]*?dnd5e-tag">Steed<[\s\S]*?AC<\/span> <span class="dnd5e-num">12<[\s\S]*?HP<\/span> <span class="dnd5e-num">25</);
+    assert.ok(!combat.split('dnd5e-blk-companions')[1].includes('dnd5e-blk-'), 'companions are the last block');
+    assert.ok(!accordionTitles(pages['brannoch-vale']).includes('Companions'));
+    assert.ok(!pages['dov-ashgrove'].includes('dnd5e-blk-companions'));
+  });
+
+  it('gear shows the weight of one, and Carrying is tiles as written, over capacity included', () => {
+    const equip = tab('brannoch-vale', 'equipment', 'story');
+    assert.match(equip, /Javelin<\/span><span class="dnd5e-tags"><span class="dnd5e-tag">× 4<\/span><span class="dnd5e-tag">2 lb each</);
+    assert.match(equip, /Carried Weight<\/span><span class="dnd5e-num">128\.5 lb</);
+    assert.match(equip, /Encumbrance<\/span><span class="dnd5e-num">Within capacity</);
+    const ilse = tab('ilse-varn', 'equipment', 'story');
+    assert.match(ilse, /Carrying Capacity<\/span><span class="dnd5e-num">120 lb</);
+    assert.match(ilse, /Encumbrance<\/span><span class="dnd5e-num" title="Speed 5 ft">Over capacity<\/span><span class="dnd5e-why">Speed 5 ft</);
+  });
+
+  it('the strip\'s chips are quiet when there is nothing to say', () => {
+    assert.match(pages['dov-ashgrove'], /<div class="dnd5e-chips is-quiet">/);
+    assert.match(pages['brannoch-vale'], /<div class="dnd5e-chips"><span class="dnd5e-chip is-on">Heroic Inspiration/);
+  });
+
   // The completeness gate: every non-blank table cell and every prose line of
   // every consumed section of the note is on the built page.
   describe('nothing in the note is lost', () => {
@@ -209,19 +279,33 @@ describe('build integration — D&D PC', () => {
             else if (uses && +used > +uses) raw.push(`${used} used of ${uses}`); // an over-count is written out
             else if (uses) raw.push(`${name}: ${+uses - (+used || 0)} of ${uses} left`);
           } else if (h0 === 'spell') { // the level is a heading; C and R are spelled out
-            const [name, level, time, range, comps, duration, hit, tags, summary] = c;
-            add(name, time, range, comps, duration, hit, summary);
+            const withSource = /^source$/i.test(header[8] || '');
+            const [name, level, time, range, comps, duration, hit, tags] = c;
+            const summary = c[withSource ? 9 : 8];
+            add(name, time, range, comps, duration, hit, summary, withSource ? c[8] : '');
             for (const t of tags.split(',').map(x => x.trim()).filter(Boolean)) add(t === 'C' ? 'Concentration' : t === 'R' ? 'Ritual' : t);
             const n = /^cantrip/i.test(level) ? 0 : parseInt(level, 10);
             add(n === 0 ? 'Cantrips' : `${n}${['', 'st', 'nd', 'rd'][n] || 'th'} level`);
-          } else if (h0 === 'item') { // a quantity above one is a tag
-            const [item, qty, notes] = c;
-            add(item, notes);
+          } else if (h0 === 'item' && h1 === 'attuned') { // magic items: charges are drawn as marks or a count
+            const [item, attuned, charges, used, recovers, notes] = c;
+            add(item, recovers, notes);
+            if (/^yes$/i.test(attuned)) add('Attuned');
+            const plain = norm(item);
+            if (charges && +charges > 10) tokens.push(norm(`${+charges - (+used || 0)} / ${charges}`));
+            else if (charges) raw.push(`: ${+charges - (+used || 0)} of ${charges} left`), tokens.push(plain);
+          } else if (h0 === 'item') { // a quantity above one is a tag; the weight of one is a tag too
+            const withWeight = h1 === 'qty' && /^weight$/i.test(header[2] || '');
+            const [item, qty] = c;
+            add(item, c[withWeight ? 3 : 2]);
             if (qty && qty !== '1') raw.push(`× ${qty}`);
+            if (withWeight && c[2] && c[2] !== '—') raw.push(`<span class="dnd5e-tag">${c[2]}${qty && qty !== '1' ? ' each' : ''}</span>`);
           } else if (h0 === 'slot') { add(c[1]); }
+          else if (h0 === 'applies to') { for (const t of c[0].split(',')) add(t); add(c[1], c[2]); }
           else if (h0 === 'attribute') { // Core, Combat and the rest: the label is the template's, the value is the note's
             const [label, value] = c;
-            if (sub === 'senses' || section === 'spellcasting') add(label);
+            if (sub === 'senses' || sub === 'carrying' || section === 'spellcasting') add(label);
+            if (/ speed$/i.test(label) && !/^speed$/i.test(label)) add(label.replace(/ speed$/i, ''));
+            if (/^attacks per action$|save dc$/i.test(label)) add(label);
             if (/^hit dice/i.test(label)) {
               const m = value.match(/^(\d+)\s*\/\s*(\d+)$/);
               if (m) raw.push(`${label.replace(/\s*\(\s*spent\s*\/\s*max\s*\)\s*$/i, '')}: ${+m[2] - +m[1]} of ${m[2]} left`); else add(value);

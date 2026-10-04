@@ -3740,13 +3740,16 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .dnd5e-sheet { display: flex; flex-direction: column; gap: 0.9rem; }
 .dnd5e-header { display: flex; flex-wrap: wrap; gap: 0.15rem 0.75rem; font-family: var(--font-heading); font-size: 1.05rem; }
 .dnd5e-num { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
-.dnd5e-lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
-.dnd5e-why { font-size: 0.7rem; color: var(--text-muted); margin-left: 0.3rem; font-weight: 400; }
+/* Small text is the body colour: a palette's muted grey falls under 4.5:1 at this size, so size, weight and spacing carry the hierarchy. */
+.dnd5e-lbl { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text); }
+.dnd5e-why { font-size: 0.7rem; color: var(--text); margin-left: 0.3rem; font-weight: 400; }
 .dnd5e-entry-name, .dnd5e-entry-text, .dnd5e-tag, .dnd5e-v { overflow-wrap: anywhere; min-width: 0; }
 /* a long unbroken word in a reason, a damage line, a rest phrase or a track name wraps in its box too */
 .dnd5e-entry-big, .dnd5e-why, .dnd5e-dmg, .dnd5e-recovers, .dnd5e-uses, .dnd5e-track-name, .dnd5e-count { overflow-wrap: anywhere; min-width: 0; }
 .dnd5e-as-written { overflow-x: auto; }
-.dnd5e-recovers, .dnd5e-cap, .dnd5e-of, .dnd5e-temp { color: var(--text-muted); font-size: 0.8rem; font-weight: 400; }
+.dnd5e-recovers, .dnd5e-cap, .dnd5e-of, .dnd5e-temp { color: var(--text); font-size: 0.8rem; font-weight: 400; }
+/* a fly, swim, climb or burrow speed under the Speed tile's number */
+.dnd5e-sub { font-size: 0.7rem; line-height: 1.25; overflow-wrap: anywhere; min-width: 0; }
 
 /* pinned vitals: sits under the sticky site header (.top-nav, 3.5rem) */
 .dnd5e-vitals {
@@ -3762,35 +3765,37 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .dnd5e-hp .dnd5e-num { font-size: 1.35rem; }
 .dnd5e-chips { display: flex; flex-wrap: wrap; gap: 6px; font-size: 0.8rem; align-items: center; }
 .dnd5e-chip { border: 1px solid var(--border); border-radius: 999px; padding: 2px 10px; background: var(--bg); overflow-wrap: anywhere; min-width: 0; }
-.dnd5e-chip.is-on { border-color: var(--accent); color: var(--accent); background: var(--accent-dim); }
+/* lit by its border and fill; the text stays the body colour, which an accent on its own tint cannot match for contrast */
+.dnd5e-chip.is-on { border-color: var(--accent); background: var(--accent-dim); font-weight: 700; }
 
 /* blocks */
 .dnd5e-blk { background: var(--bg-card); border-radius: 8px; padding: 12px; min-width: 0; }
-.dnd5e-blk > h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin: 0 0 8px; font-weight: 700; }
+.dnd5e-blk > h3 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text); margin: 0 0 8px; font-weight: 700; }
 .dnd5e-blk > h3 .dnd5e-cap { text-transform: none; letter-spacing: 0; }
 
 .dnd5e-abilities { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .dnd5e-ab { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; text-align: center; padding: 8px 4px; display: flex; flex-direction: column; gap: 1px; min-width: 0; }
 .dnd5e-ab-mod { font-family: var(--font-mono); font-weight: 700; font-size: 1.5rem; line-height: 1.1; }
-.dnd5e-ab-score { color: var(--text-muted); font-size: 0.8rem; }
+.dnd5e-ab-score { color: var(--text); font-size: 0.8rem; }
 .dnd5e-ab-save { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); font-size: 0.8rem; }
 .dnd5e-ab.is-prof { border-color: var(--accent); }
-.dnd5e-ab.is-prof .dnd5e-ab-save { color: var(--accent); }
+.dnd5e-ab.is-prof .dnd5e-ab-save { border-top-color: var(--accent); font-weight: 700; }
 .dnd5e-abilities + .dnd5e-kv { margin-top: 8px; }
 
 .dnd5e-skills { list-style: none; margin: 0; padding: 0; columns: 2 14rem; column-gap: 20px; }
-.dnd5e-skill { display: grid; grid-template-columns: 12px 1fr auto 2.4rem; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); break-inside: avoid; color: var(--text-muted); }
-.dnd5e-skill.is-prof, .dnd5e-skill.is-expert { color: var(--text); font-weight: 600; }
+.dnd5e-skill { display: grid; grid-template-columns: 12px 1fr auto 2.4rem; gap: 8px; align-items: center; padding: 4px 0; border-bottom: 1px solid var(--border); break-inside: avoid; color: var(--text); }
+.dnd5e-skill.is-prof, .dnd5e-skill.is-expert { font-weight: 700; }
 .dnd5e-skill-name { overflow-wrap: anywhere; min-width: 0; }
 .dnd5e-dot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--text-muted); }
 .dnd5e-skill.is-prof .dnd5e-dot, .dnd5e-skill.is-expert .dnd5e-dot { background: var(--accent); border-color: var(--accent); }
 .dnd5e-skill.is-expert .dnd5e-dot { box-shadow: 0 0 0 2px var(--bg-card), 0 0 0 3px var(--accent); }
+.dnd5e-skill.is-half .dnd5e-dot { border-color: var(--accent); background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
 .dnd5e-skill .dnd5e-num { text-align: right; }
 
 .dnd5e-kv { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: 6px; }
 .dnd5e-kv .dnd5e-v { text-align: left; padding-inline: 10px; }
 .dnd5e-lines p { margin: 0 0 4px; font-size: 0.92rem; overflow-wrap: anywhere; }
-.dnd5e-lines strong { color: var(--text-muted); font-weight: 600; }
+.dnd5e-lines strong { color: var(--text); font-weight: 700; }
 
 /* one entry shape for features, actions, attacks, spells and gear */
 .dnd5e-entry { padding: 9px 0; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 3px; min-width: 0; }
@@ -3800,26 +3805,40 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .dnd5e-entry-name { font-weight: 700; }
 .dnd5e-entry-big { margin-left: auto; display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline; }
 .dnd5e-dmg { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-weight: 700; }
-.dnd5e-entry-text { font-size: 0.88rem; color: var(--text-muted); }
+.dnd5e-entry-text { font-size: 0.88rem; color: var(--text); }
 .dnd5e-entry-text p { margin: 0; }
 .dnd5e-tags { display: flex; flex-wrap: wrap; gap: 4px; min-width: 0; }
-.dnd5e-tag { font-size: 0.7rem; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; color: var(--text-muted); }
-.dnd5e-tag.is-conc { border-color: var(--warning); color: var(--warning); }
+.dnd5e-tag { font-size: 0.7rem; border: 1px solid var(--border); border-radius: 4px; padding: 0 6px; color: var(--text); }
+.dnd5e-tag.is-conc { border-color: var(--warning); }
+/* where a spell comes from when it is not the class's own: an item, a feat, a species trait */
+.dnd5e-tag.is-source { border-style: dashed; border-color: var(--accent); }
+.dnd5e-tag a, .dnd5e-entry-name a { overflow-wrap: anywhere; }
+.dnd5e-stat { display: inline-flex; align-items: baseline; gap: 4px; }
 
 /* marks are read from the note, not tapped */
 .dnd5e-marks { display: inline-flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .dnd5e-mark { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--accent); background: var(--accent); padding: 0; }
 .dnd5e-mark.is-spent { background: transparent; border-color: var(--text-muted); }
-.dnd5e-count { font-size: 0.85rem; color: var(--text-muted); }
-.dnd5e-uses { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text-muted); }
+.dnd5e-count { font-size: 0.85rem; color: var(--text); }
+.dnd5e-uses { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text); }
 .dnd5e-track { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0; }
-.dnd5e-track-name { width: 3.2rem; font-weight: 700; flex: none; }
+/* a track's label keeps to one line ("Hit Dice"); only a word too long for the block breaks */
+.dnd5e-track-name { min-width: 4.5rem; max-width: 100%; font-weight: 700; flex: 0 1 auto; }
 .dnd5e-coins { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
 
 @media (max-width: 480px) {
   .dnd5e-abilities { grid-template-columns: repeat(3, 1fr); }
-  .dnd5e-vrow { grid-template-columns: repeat(4, 1fr); }
-  .dnd5e-hp { grid-column: 1 / -1; }
+  /* the pinned strip on a phone: one row of small tiles, and chips only when they have something to say */
+  .dnd5e-vitals { padding: 6px; gap: 6px; }
+  .dnd5e-vrow { grid-template-columns: 1.7fr 1fr 1fr 1.2fr 1fr; gap: 4px; }
+  .dnd5e-vitals .dnd5e-v { padding: 4px 2px; }
+  .dnd5e-vitals .dnd5e-hp { padding-inline: 6px; }
+  .dnd5e-vitals .dnd5e-lbl { font-size: 0.56rem; letter-spacing: 0.04em; }
+  .dnd5e-vitals .dnd5e-v .dnd5e-num { font-size: 0.95rem; }
+  .dnd5e-vitals .dnd5e-hp .dnd5e-num { font-size: 1.05rem; }
+  .dnd5e-vitals .dnd5e-of, .dnd5e-vitals .dnd5e-temp { font-size: 0.72rem; }
+  .dnd5e-vitals .dnd5e-why, .dnd5e-vitals .dnd5e-sub { margin-left: 0; font-size: 0.62rem; line-height: 1.15; }
+  .dnd5e-chips.is-quiet, .dnd5e-chip.is-quiet { display: none; }
 }
 @media print { .dnd5e-vitals { position: static; box-shadow: none; } }
 

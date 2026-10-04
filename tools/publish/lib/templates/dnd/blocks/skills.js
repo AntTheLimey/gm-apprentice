@@ -3,8 +3,8 @@ const { block, num, asWritten } = require('../render');
 
 function renderSkills(model) {
   const items = model.skills.map((s) => {
-    const cls = `dnd5e-skill${s.proficient ? ' is-prof' : ''}${s.expert ? ' is-expert' : ''}`;
-    const title = s.expert ? ' title="Expertise"' : s.proficient ? ' title="Proficient"' : '';
+    const cls = `dnd5e-skill${s.proficient ? ' is-prof' : ''}${s.expert ? ' is-expert' : ''}${s.half ? ' is-half' : ''}`;
+    const title = s.expert ? ' title="Expertise"' : s.proficient ? ' title="Proficient"' : s.half ? ' title="Half proficiency"' : '';
     return `<li class="${cls}"><span class="dnd5e-dot"${title}></span><span class="dnd5e-skill-name">${s.nameHtml || escapeHtml(s.name)}</span>`
       + `<span class="dnd5e-lbl">${escapeHtml(s.ability)}</span>${num(s.modifier)}</li>`;
   }).join('');

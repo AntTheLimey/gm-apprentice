@@ -32,8 +32,22 @@ function usesHtml(f) {
   return marks(f.uses, used, f.name) + (rec ? ' ' + rec : '');
 }
 
+// A tag is text, or `{ html, cls }` for one that carries a link or its own state class.
+function tag(t) {
+  if (typeof t === 'object') return `<span class="dnd5e-tag${t.cls ? ' ' + t.cls : ''}">${t.html}</span>`;
+  return `<span class="dnd5e-tag${t === 'C' ? ' is-conc' : ''}">${escapeHtml(t === 'C' ? 'Concentration' : t === 'R' ? 'Ritual' : t)}</span>`;
+}
+
+// `Hit` names a signed number (an attack roll). A save DC or anything else says what it is itself.
+function hitHtml(text) {
+  const { value } = splitReason(text);
+  return (/^[+\-−]\d/.test(value) ? '<span class="dnd5e-lbl">Hit</span> ' : '') + num(text);
+}
+
+const tile = (label, value) => `<div class="dnd5e-v"><span class="dnd5e-lbl">${escapeHtml(label)}</span>${num(value)}</div>`;
+
 function entry({ nameHtml, tags = [], bigHtml = '', summaryHtml = '', usesHtml: uses = '' }) {
-  const tagHtml = tags.filter(Boolean).map(t => `<span class="dnd5e-tag${t === 'C' ? ' is-conc' : ''}">${escapeHtml(t === 'C' ? 'Concentration' : t === 'R' ? 'Ritual' : t)}</span>`).join('');
+  const tagHtml = tags.filter(Boolean).map(tag).join('');
   return `<div class="dnd5e-entry"><div class="dnd5e-entry-top"><span class="dnd5e-entry-name">${nameHtml}</span>`
     + (tagHtml ? `<span class="dnd5e-tags">${tagHtml}</span>` : '')
     + (bigHtml ? `<span class="dnd5e-entry-big">${bigHtml}</span>` : '')
@@ -48,4 +62,4 @@ function asWritten(fragments) {
   return html ? `<div class="dnd5e-as-written">${html}</div>` : '';
 }
 
-module.exports = { block, num, marks, usesHtml, entry, asWritten };
+module.exports = { block, num, marks, usesHtml, entry, asWritten, hitHtml, tile };

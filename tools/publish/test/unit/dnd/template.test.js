@@ -29,7 +29,7 @@ function replace(body, from, to) {
 }
 
 const EMPTY_FEATURE = '| | | | | | |';
-const EMPTY_SPELL = '| | | | | | | | | |';
+const EMPTY_SPELL = '| | | | | | | | | | |';
 
 // A 3rd-level wizard, filled in the way a GM fills the template.
 function wizardBody() {
@@ -60,9 +60,9 @@ function wizardBody() {
   // The template's three feature tables are alike; fill the first (Class Features).
   b = replace(b, EMPTY_FEATURE, '| Arcane Recovery | | 1 | 0 | Long Rest | Regain some spent slots after a short rest. |');
   b = replace(b, EMPTY_SPELL, [
-    '| Fire Bolt | Cantrip | Action | 120 ft | V, S | Instant | +5 | | A bolt of flame. |',
-    '| Magic Missile | 1 | Action | 120 ft | V, S | Instant | | | Darts that always hit. |',
-    '| Shield | 1 | Reaction | Self | V, S | 1 round | | | A brief barrier. |',
+    '| Fire Bolt | Cantrip | Action | 120 ft | V, S | Instant | +5 | | | A bolt of flame. |',
+    '| Magic Missile | 1 | Action | 120 ft | V, S | Instant | | | | Darts that always hit. |',
+    '| Shield | 1 | Reaction | Self | V, S | 1 round | | | | A brief barrier. |',
   ].join('\n'));
   return b;
 }
@@ -81,6 +81,9 @@ describe('the real D&D template', () => {
       assert.ok(!(part || '').includes('dnd5e-as-written'), 'template content was not placed');
     }
     assert.equal(out.spellsHtml, null); // an unfilled Spellcasting section is no spellcasting
+    // The optional tables and the Companions section, untouched, add no block and no warning.
+    assert.ok(!/Companion|Bonuses|Carrying|Magic items|Attunement/.test(everything(out)), 'an unfilled optional table became a block');
+    assert.deepEqual(out.warnings, []);
   });
 
   it('every Stat Sheet, Skills and Equipment label in the template is read', () => {
@@ -103,6 +106,26 @@ describe('the real D&D template', () => {
     // and the same rows in a note that also has real rows add nothing
     const filled = render(wizardBody());
     assert.equal((filled.sheetHtml.match(/dnd5e-entry"/g) || []).length, 1);
+  });
+
+  it('each table the template gained is read once it is filled', () => {
+    let b = templateBody();
+    b = replace(b, '| | | |\n\n### Defences', '| Saves | +1 | Ring of Protection |\n\n### Defences');
+    b = replace(b, '**Advantages:** {list}', '**Advantages:** saves against poison');
+    b = replace(b, '| | | | |\n\n### Carrying', '| Rope | 1 | 5 lb | hempen |\n\n### Carrying');
+    b = setRow(b, 'Carried Weight', ['5 lb']);
+    b = setRow(b, 'Encumbrance', ['Within capacity']);
+    b = replace(b, '| | | | | | |\n\n### Coins', '| Wand of Magic Missiles | No | 7 | 1 | 1d6+1 at dawn | |\n\n### Coins');
+    b = replace(b, '| | | | | | |\n\n## Current Status', '| Warhorse | Steed | 11 | 19 | 60 ft | |\n\n## Current Status');
+    b = replace(b, EMPTY_SPELL, '| Magic Missile | 1 | Action | 120 ft | V, S | Instant | | 1 charge | Wand of Magic Missiles | Darts that always hit. |');
+    const out = render(b);
+    assert.ok(!everything(out).includes('dnd5e-as-written'), 'a filled template row was not placed');
+    assert.match(out.sheetHtml, /dnd5e-blk-bonuses[\s\S]*Ring of Protection/);
+    assert.match(out.combatHtml, /Advantages:<\/strong> saves against poison/);
+    assert.match(out.combatHtml, /dnd5e-blk-companions[\s\S]*Warhorse/);
+    assert.match(out.equipmentHtml, /dnd5e-tag">5 lb<[\s\S]*dnd5e-blk-carrying[\s\S]*Within capacity[\s\S]*dnd5e-blk-magic-items[\s\S]*0 of 3 attuned/);
+    assert.match(out.spellsHtml, /is-source">Wand of Magic Missiles</);
+    assert.ok(!everything(out).includes('Delete this section'));
   });
 
   it('with no Spellcasting section at all, there is no spells part', () => {

@@ -5,7 +5,7 @@ const { consumedTitleMatcher } = require('../sheet-parse');
 // `## ` sections the sheet takes over from the accordion list. Each is on the
 // page in full once the sheet renders (sheet-parse.js). Background is read for
 // the header and stays in Story.
-const CONSUMED_TITLES = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment'];
+const CONSUMED_TITLES = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment', 'companions'];
 const isDndConsumedTitle = consumedTitleMatcher(CONSUMED_TITLES);
 
 function renderDnDSheet(frontmatter, sections) {

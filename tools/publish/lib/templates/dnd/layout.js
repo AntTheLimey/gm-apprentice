@@ -16,6 +16,10 @@ const { renderSpells } = require('./blocks/spells');
 const { renderGear } = require('./blocks/gear');
 const { renderAttunement } = require('./blocks/attunement');
 const { renderCoins } = require('./blocks/coins');
+const { renderBonuses } = require('./blocks/bonuses');
+const { renderMagicItems } = require('./blocks/magic-items');
+const { renderCarrying } = require('./blocks/carrying');
+const { renderCompanions } = require('./blocks/companions');
 
 const wrap = (cls, parts) => {
   const kept = parts.filter(Boolean);
@@ -31,7 +35,7 @@ function headerLine(model) {
 function buildSheet(model) {
   const abilities = renderAbilities(model);
   const blocks = [
-    abilities, renderSkills(model), renderSenses(model), renderProficiencies(model),
+    abilities, renderSkills(model), renderSenses(model), renderBonuses(model), renderProficiencies(model),
     renderFeatures(model, 'class', 'Class features'),
     renderFeatures(model, 'species', 'Species traits'),
     renderFeatures(model, 'feats', 'Feats'),
@@ -51,10 +55,10 @@ function buildSheet(model) {
   return wrap('dnd5e-tab-sheet', [headerLine(model), loose, ...blocks]);
 }
 
-const buildCombat = model => wrap('dnd5e-tab-combat', [renderAttacks(model), ...renderActions(model), renderDefences(model), renderTracks(model)]);
+const buildCombat = model => wrap('dnd5e-tab-combat', [renderAttacks(model), ...renderActions(model), renderDefences(model), renderTracks(model), renderCompanions(model)]);
 const buildSpells = model => (model.hasSpellcasting
   ? wrap('dnd5e-tab-spells', [renderCasting(model), renderSlots(model), ...renderSpells(model)]) : null);
-const buildEquipment = model => wrap('dnd5e-tab-equipment', [renderGear(model), renderAttunement(model), renderCoins(model)]);
+const buildEquipment = model => wrap('dnd5e-tab-equipment', [renderGear(model), renderCarrying(model), renderMagicItems(model), renderAttunement(model), renderCoins(model)]);
 const buildVitals = model => renderVitals(model);
 
 module.exports = { buildSheet, buildCombat, buildSpells, buildEquipment, buildVitals };

@@ -46,6 +46,7 @@ relationships: []
 | Initiative | +3 |
 | Speed | 40 ft |
 | Size | Medium |
+| Open Hand Save DC | 13 |
 | HP (Current) | 35 |
 | HP (Max) | 35 |
 | Temp HP | 0 |
@@ -67,11 +68,7 @@ relationships: []
 
 **Resistances:** Poison
 
-**Immunities:** None
-
-**Vulnerabilities:** None
-
-**Condition Immunities:** None
+**Advantages:** Saves to avoid or end being poisoned
 
 **Armour Class:** Unarmored Defense: 10 + Dexterity + Wisdom
 

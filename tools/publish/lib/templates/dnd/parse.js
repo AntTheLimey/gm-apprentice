@@ -5,7 +5,7 @@
 // is sheet-parse.js's: what cannot be placed goes to `asWritten`.
 const { escapeHtml } = require('../../processor');
 const {
-  ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, filled, hasContent, yesNo,
+  ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, filled, hasContent, yesNo, isPlaceholder,
   subsections, consumeTable, stripTemplatePlaceholders, boldField, sectionReader,
 } = require('../sheet-parse');
 
@@ -21,13 +21,23 @@ const COLS = {
   attacks: [/^name$/i, /^(atk|attack|hit)/i, /^damage/i, /^notes?$/i],
   gear: [/^item$/i, /^(qty|quantity)$/i, /^notes?$/i],
   attunement: [/^slot$/i, /^item$/i],
+  bonuses: [/^appl/i, /^bonus$/i, /^source$/i],
+  magicItems: [/^item$/i, /^attuned$/i, /^charges$/i, /^used$/i, /^recovers?$/i, /^notes?$/i],
+  companions: [/^(companion|name)$/i, /^kind$/i, /^ac$/i, /^hp$/i, /^speed$/i, /^notes?$/i],
 };
+// The tables that gained a column keep their earlier shape too: the header says which it is.
+const SOURCE_COLUMN = /^source$/i;
+const WEIGHT_COLUMN = /^weight$/i;
+COLS.spellsWithSource = [...COLS.spells.slice(0, 8), SOURCE_COLUMN, COLS.spells[8]];
+COLS.gearWithWeight = [COLS.gear[0], COLS.gear[1], WEIGHT_COLUMN, COLS.gear[2]];
 const DEFENCE_FIELDS = [
   ['Resistances', 'Resistances'], ['Immunities', 'Immunities'], ['Vulnerabilities', 'Vulnerabilities'],
-  ['Condition Immunities', 'Condition Immunities'], ['Armour Class', 'Armou?r Class'],
+  ['Condition Immunities', 'Condition Immunities'], ['Advantages', 'Advantages'], ['Armour Class', 'Armou?r Class'],
 ];
+const EXTRA_SPEED = /^(fly|swim|climb|burrow)(?:ing)? speed$/i;
 const SPELL_STAT_LABELS = /^(spellcasting ability|spell attack modifier|spell save dc)(\s*\(.+\))?$/i;
-const TEMPLATE_NOTES = [/^Omit this section if the character has no spellcasting\.?$/i];
+const TEMPLATE_NOTES = [/^Omit this section if the character has no spellcasting\.?$/i,
+  /^Delete this section if the character has no companion\.?$/i];
 const PLACEHOLDERS = ['list', 'Continue per level as needed.', 'Selected class features by level.',
   'Species features and traits.', 'Selected feats with descriptions.', 'Item list', 'what it is made of'];
 const FEATURE_SECTIONS = [['class features', 'class', 'classFeatures'], ['species traits', 'species', 'speciesTraits'], ['feats', 'feats', 'feats']];
@@ -51,6 +61,22 @@ function stripPlaceholderParagraphs(html) {
     (whole, inner) => (PLACEHOLDERS.includes(inner.trim()) ? '' : whole));
 }
 
+// The header cells of a fragment's first table, as text.
+function firstHeader(html) {
+  const head = (String(html || '').match(/<table[^>]*>[\s\S]*?<\/table>/i) || [''])[0].match(/<thead[^>]*>[\s\S]*?<\/thead>/i);
+  return head ? [...head[0].matchAll(/<th[^>]*>([\s\S]*?)<\/th>/gi)].map(m => cellText(m[1])) : [];
+}
+
+// A counted thing (feature uses, item charges): whole numbers or blank. Null
+// when the cells are not a count the sheet can draw: text in either, or a Used
+// count with nothing to count against. The row is then shown as written.
+function countCells(total, spent) {
+  const uses = total ? wholeNumber(total) : null;
+  const used = spent ? wholeNumber(spent) : null;
+  if ((total && uses === null) || (spent && (used === null || !total))) return null;
+  return { uses, used };
+}
+
 const titled = (title, html, tag = 'h3') => `<${tag}>${escapeHtml(title)}</${tag}>\n${html}`;
 
 function readStatSheet(model, section) {
@@ -60,7 +86,7 @@ function readStatSheet(model, section) {
   const seen = new Set();
   for (const sub of subsections(html)) {
     const key = sub.title.toLowerCase().replace('defenses', 'defences');
-    if (seen.has(key) || !['core', 'ability scores', 'combat', 'senses', 'defences'].includes(key)) {
+    if (seen.has(key) || !['core', 'ability scores', 'combat', 'senses', 'bonuses', 'defences'].includes(key)) {
       keep(sub.title, sub.html);
       continue;
     }
@@ -89,13 +115,23 @@ function readStatSheet(model, section) {
       left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => readCombatRow(model, label, value));
     } else if (key === 'senses') {
       left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => { model.senses.push([label, filled(value)]); return true; });
+    } else if (key === 'bonuses') {
+      left = consumeTable(sub.html, COLS.bonuses, (c, h) => {
+        if (!c.some(filled)) return true;             // the template's empty row
+        model.bonuses.push({ applies: c[0], bonus: c[1], source: c[2], sourceHtml: h[2] });
+        return true;
+      }, { rich: true });
     } else {
       left = sub.html;
       for (const [label, pattern] of DEFENCE_FIELDS) {
-        const value = boldField(left, pattern);
-        if (!value) continue;
-        model.defences.push([label, value]);
-        left = left.replace(new RegExp(`<strong>\\s*${pattern}\\s*(?::\\s*</strong>|</strong>\\s*:)[\\s\\S]*?(?=<strong>[^<]*:|<br\\s*/?>|</p>|\\n|$)(?:<br\\s*/?>|\\n)?`, 'i'), '');
+        const line = left.match(new RegExp(`<strong>\\s*${pattern}\\s*(?::\\s*</strong>|</strong>\\s*:)([\\s\\S]*?)(?=<strong>[^<]*:|<br\\s*/?>|</p>|\\n|$)(?:<br\\s*/?>|\\n)?`, 'i'));
+        if (!line) continue;
+        const text = cellText(line[1]);
+        // A line holding nothing (blank, a dash, the template's placeholder) is not shown.
+        const holdsNothing = /^[—–-]?$/.test(text) || isPlaceholder(text);
+        if (text === '' && hasContent(line[1])) continue;   // an image alone: shown as written
+        if (!holdsNothing) model.defences.push([label, text]);
+        left = left.replace(line[0], '');
       }
       left = left.replace(/<p>([\s\S]*?)<\/p>/g, (whole, inner) => (hasContent(inner) ? whole : ''));
       left = stripTemplatePlaceholders(left, PLACEHOLDERS);
@@ -112,6 +148,16 @@ function readCombatRow(model, label, value) {
   if (/^ac$|^armou?r class$/i.test(l)) return once('ac');
   if (/^initiative$/i.test(l)) return once('initiative');
   if (/^speed$/i.test(l)) return once('speed');
+  const extra = l.match(EXTRA_SPEED);
+  if (extra) {
+    const kind = extra[1].toLowerCase();
+    if (c.speedsSeen.includes(kind)) return false;
+    c.speedsSeen.push(kind);
+    if (v) c.speeds.push([kind, v]);
+    return true;
+  }
+  // What a turn is made of sits with the attacks: Attacks per Action, and any feature's Save DC.
+  if (/^attacks per action$/i.test(l) || /\bsave dc$/i.test(l)) { c.attackTiles.push([l, v]); return true; }
   if (/^size$/i.test(l)) return once('size');
   if (/^HP\s*(\(\s*cur(r(ent)?)?\.?\s*\))?$/i.test(l)) return once('hpCur');
   if (/^HP\s*\(\s*max(imum)?\.?\s*\)$/i.test(l)) return once('hpMax');
@@ -137,10 +183,12 @@ function readCombatRow(model, label, value) {
 
 function readSkills(model, section) {
   const left = consumeTable(stripNotes(section.html), COLS.skills, ([name, ability, proficient, expertise, modifier], h) => {
-    const prof = yesNo(proficient);
+    const half = /^half$/i.test(proficient);
+    const prof = half ? false : yesNo(proficient);
     const expert = yesNo(expertise);
-    if (!name || prof === null || expert === null) return false;
-    model.skills.push({ name, nameHtml: h[0], ability, proficient: prof || expert, expert, modifier });
+    // Half proficiency with expertise is not a state the sheet has a mark for.
+    if (!name || prof === null || expert === null || (half && expert)) return false;
+    model.skills.push({ name, nameHtml: h[0], ability, proficient: prof || expert, expert, half, modifier });
     return true;
   }, { rich: true });
   if (hasContent(left)) model.asWritten.skills.push(left);
@@ -149,11 +197,9 @@ function readSkills(model, section) {
 function readFeatures(model, section, list, home) {
   const left = consumeTable(stripPlaceholderParagraphs(section.html), COLS.features, (c, h) => {
     if (!c.some(filled)) return true;             // the template's empty row
-    const uses = c[2] ? wholeNumber(c[2]) : null;
-    const used = c[3] ? wholeNumber(c[3]) : null;
-    // A Used count with no Uses to count against is not a mark: the row is shown as written.
-    if (!c[0] || (c[2] && uses === null) || (c[3] && (used === null || !c[2]))) return false;
-    model.features[list].push({ name: c[0], nameHtml: h[0], action: c[1], uses, used, recovers: c[4], summaryHtml: h[5] });
+    const n = countCells(c[2], c[3]);
+    if (!c[0] || !n) return false;
+    model.features[list].push({ name: c[0], nameHtml: h[0], action: c[1], uses: n.uses, used: n.used, recovers: c[4], summaryHtml: h[5] });
     return true;
   }, { rich: true });
   if (hasContent(left)) model.asWritten[home].push(left);
@@ -189,13 +235,16 @@ function readSpellcasting(model, section) {
         return true;
       });
     } else if (key === 'spells' && first) {
-      left = consumeTable(sub.html, COLS.spells, (c, h) => {
+      // Ten columns with Source before Summary, or the nine before it.
+      const withSource = SOURCE_COLUMN.test(firstHeader(sub.html)[8] || '');
+      left = consumeTable(sub.html, withSource ? COLS.spellsWithSource : COLS.spells, (c, h) => {
         if (!c.some(filled)) return true;             // the template's empty row
         const level = spellLevel(c[1]);
         if (!c[0] || !level) return false;
         model.spells.push({
           name: c[0], nameHtml: h[0], level, time: c[2], range: c[3], components: c[4], duration: c[5], hit: c[6],
-          tags: c[7] ? c[7].split(',').map(t => t.trim()).filter(Boolean) : [], summaryHtml: h[8],
+          tags: c[7] ? c[7].split(',').map(t => t.trim()).filter(Boolean) : [],
+          source: withSource ? filled(c[8]) : '', sourceHtml: withSource ? h[8] : '', summaryHtml: h[withSource ? 9 : 8],
         });
         return true;
       }, { rich: true });
@@ -226,10 +275,24 @@ function readEquipment(model, section) {
         return true;
       }, { rich: true });
     } else if (key === 'gear') {
-      left = consumeTable(stripPlaceholderParagraphs(sub.html), COLS.gear, (c, h) => {
+      // `Item | Qty | Weight | Notes`, or the three columns before Weight.
+      const body = stripPlaceholderParagraphs(sub.html);
+      const withWeight = WEIGHT_COLUMN.test(firstHeader(body)[2] || '');
+      left = consumeTable(body, withWeight ? COLS.gearWithWeight : COLS.gear, (c, h) => {
         if (!c.some(filled)) return true;
         if (!c[0]) return false;
-        model.gear.push({ name: c[0], nameHtml: h[0], qty: c[1], notesHtml: h[2] });
+        model.gear.push({ name: c[0], nameHtml: h[0], qty: c[1], weight: withWeight ? filled(c[2]) : '', notesHtml: h[withWeight ? 3 : 2] });
+        return true;
+      }, { rich: true });
+    } else if (key === 'carrying') {
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, ([label, value]) => { if (filled(value)) model.carrying.push([label, value]); return true; });
+    } else if (key === 'magic items') {
+      left = consumeTable(sub.html, COLS.magicItems, (c, h) => {
+        if (!c.some(filled)) return true;             // the template's empty row
+        const attuned = yesNo(c[1]);
+        const n = countCells(c[2], c[3]);
+        if (!c[0] || attuned === null || !n) return false;
+        model.magicItems.push({ name: c[0], nameHtml: h[0], attuned, charges: n.uses, used: n.used, recovers: c[4], notesHtml: h[5] });
         return true;
       }, { rich: true });
     } else if (key === 'magic item attunement' || key === 'attunement') {
@@ -248,16 +311,26 @@ function readEquipment(model, section) {
   }
 }
 
+function readCompanions(model, section) {
+  const left = consumeTable(stripNotes(section.html), COLS.companions, (c, h) => {
+    if (!c.some(filled)) return true;             // the template's empty row
+    if (!c[0]) return false;
+    model.companions.push({ name: c[0], nameHtml: h[0], kind: c[1], ac: filled(c[2]), hp: filled(c[3]), speed: filled(c[4]), notesHtml: h[5] });
+    return true;
+  }, { rich: true });
+  if (hasContent(left)) model.asWritten.companions.push(left);
+}
+
 function parseDnd(frontmatter, sections) {
   const model = {
     header: { level: '', classes: '', species: '', background: '' },
     pb: '', inspiration: '', core: [], abilities: {},
-    combat: { hitDice: [], other: [] },
-    senses: [], defences: [], skills: [],
+    combat: { hitDice: [], other: [], speeds: [], speedsSeen: [], attackTiles: [] },
+    senses: [], bonuses: [], defences: [], skills: [],
     features: { class: [], species: [], feats: [] },
     casting: [], slots: [], spells: [], proficienciesHtml: '',
-    attacks: [], gear: [], attunement: [], coins: [],
-    asWritten: { statSheet: [], skills: [], classFeatures: [], speciesTraits: [], feats: [], spellcasting: [], proficiencies: [], equipment: [] },
+    attacks: [], gear: [], carrying: [], magicItems: [], attunement: [], coins: [], companions: [],
+    asWritten: { statSheet: [], skills: [], classFeatures: [], speciesTraits: [], feats: [], spellcasting: [], proficiencies: [], equipment: [], companions: [] },
     hasSpellcasting: false, warnings: [],
   };
   const reader = sectionReader(sections);
@@ -283,6 +356,7 @@ function parseDnd(frontmatter, sections) {
     if (hasContent(body)) model.proficienciesHtml = body;
   }, 'proficiencies');
   read('equipment', s => readEquipment(model, s), 'equipment');
+  read('companions', s => readCompanions(model, s), 'companions');
 
   for (const key of ['ac', 'initiative', 'speed', 'size', 'hpCur', 'hpMax', 'tempHp', 'exhaustion', 'conditions']) {
     if (model.combat[key] === undefined) model.combat[key] = '';

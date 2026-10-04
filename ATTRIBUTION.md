@@ -37,14 +37,20 @@ monster stat blocks (ability scores, attacks, damage dice, save
 DCs, traits, legendary actions) for 235 creatures.
 
 The publish tool's D&D test fixtures
-(`tools/publish/test/fixtures/with-dnd-pc/`) are six original
+(`tools/publish/test/fixtures/with-dnd-pc/`) are seven original
 characters (Brannoch Vale, Ilse Varn, Oriel Thackeray, Tamsin Reed,
-Dov Ashgrove, and Ilse Varn in the layout before 1.10.33). They use
-SRD 5.2 names and numbers only (class, subclass, species, background,
-feat, spell, skill and equipment names; ability scores, proficiency,
-spell levels, ranges, durations and hit dice), CC-BY 4.0. Every
-summary line is written in our own words; no rules text is copied.
-The derived numbers were filled in by `dnd_sheet.py`.
+Dov Ashgrove, Perrin Lowe, and Ilse Varn in the layout before
+1.10.33), with one creature note (the Otherworldly Steed that Find
+Steed calls) and one item note (a Wand of Magic Missiles) for their
+links. They use SRD 5.2 names and numbers only (class, subclass,
+species, background, feat, spell, skill, equipment and magic item
+names; ability scores, proficiency, spell levels, ranges, durations,
+hit dice, item weights, item charges and the steed's armour class,
+hit points and speed), CC-BY 4.0. Every summary line is written in
+our own words; no rules text is copied. The derived numbers,
+carried weights and carrying capacities were filled in by
+`dnd_sheet.py`, whose carrying factors are the SRD 5.2 Carrying
+Capacity table's.
 
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
 are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no
