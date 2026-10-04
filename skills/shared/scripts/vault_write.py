@@ -2,7 +2,8 @@
 """vault_write.py: place text the apprentice wrote into vault notes.
 
     vault_write.py VAULT wrapup-new --session INDEX [--source TEXT] [--write]
-    vault_write.py VAULT wrapup-add WRAPUP [--replace] [--after HEADING]
+    vault_write.py VAULT wrapup-add WRAPUP [--replace | --append]
+                               [--after HEADING]
                                [--write]                                < markdown
     vault_write.py VAULT story --wrapup WRAPUP [--label TEXT] [--as-of TEXT]
                                [--date YYYY-MM-DD] [--write]            < entries
@@ -33,6 +34,7 @@ import sys
 import unicodedata
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 
 import vault_check as vc
@@ -41,6 +43,10 @@ from migrate_core import StepFailed, write_text_atomic
 from vaultlib import LineState, scan_body
 
 OPEN_GM, CLOSE_GM = "open-gm", "close-gm"
+# Spoiler blocks hide text like gm-only blocks, so a section ends at them
+# by the same rule.
+OPENERS = frozenset({OPEN_GM, "open-spoiler"})
+CLOSERS = frozenset({CLOSE_GM, "close-spoiler"})
 LIST_RE = re.compile(r"^\s*[-*+] ")
 VERBS = {"WOULD-CREATE": "CREATED", "WOULD-ADD": "ADDED"}
 
@@ -87,12 +93,22 @@ class Batch:
         self.guard(rel)
         if rel in self.texts or (self.vault / rel).is_file():
             return rel
+        return self._files().get(nfc(rel), rel)
+
+    def _files(self) -> dict[str, str]:
         if self._listing is None:
             self._listing = {
                 nfc(p.relative_to(self.vault).as_posix()):
                     p.relative_to(self.vault).as_posix()
                 for p in self.vault.rglob("*.md")}
-        return self._listing.get(nfc(rel), rel)
+        return self._listing
+
+    def with_stem(self, stem: str) -> list[str]:
+        """Vault-relative paths of the notes whose file name (without .md)
+        is `stem`, compared NFC and case-folded."""
+        want = nfc(stem).casefold()
+        return sorted(rel for rel in self._files().values()
+                      if nfc(Path(rel).stem).casefold() == want)
 
     def exists(self, rel: str) -> bool:
         return rel in self.texts or (self.vault / rel).is_file()
@@ -189,13 +205,20 @@ def apply(batch: Batch) -> list[str]:
     return changed
 
 
-def check_fences(batch: Batch) -> None:
-    """Refuse a write that would leave a gm-only fence unbalanced."""
+GM_MARKER_RE = re.compile(r"<!--\s*/?\s*gm-only\s*-->")
+
+
+def check_fences(batch: Batch, given: str = "") -> None:
+    """Refuse a write that would leave a gm-only fence unbalanced. `given`
+    is the text the caller sent: when it holds a gm-only marker, the
+    message says the marker is there and not in the note."""
     for rel in batch.changed():
         _states, problems = scan_body(batch.texts[rel], ())
         if problems:
+            where = ("; the gm-only markers are in the text given, not in "
+                     "the note" if GM_MARKER_RE.search(given) else "")
             raise WriteError(f"{rel}: this would leave a gm-only fence "
-                             f"unbalanced ({problems[0]})")
+                             f"unbalanced ({problems[0]}){where}")
 
 
 def emit(batch: Batch, wrote: bool) -> str:
@@ -253,9 +276,9 @@ def key(title: str) -> str:
 
 def section_end(doc: Doc, head: Head) -> int:
     """The line index one past the section `head` opens: the next heading
-    of its level or higher, the gm-only marker that closes the block it
-    sits in, the opener of a block that holds such a heading, or the end
-    of the file. A gm-only aside wholly inside the section does not end
+    of its level or higher, the gm-only or spoiler marker that closes the
+    block it sits in, the opener of a block that holds such a heading, or
+    the end of the file. An aside wholly inside the section does not end
     it."""
     nest = 0
     opener: int | None = None
@@ -263,11 +286,11 @@ def section_end(doc: Doc, head: Head) -> int:
         i = s.lineno - 1
         if i <= head.idx:
             continue
-        if s.marker == OPEN_GM:
+        if s.marker in OPENERS:
             if nest == 0:
                 opener = i
             nest += 1
-        elif s.marker == CLOSE_GM:
+        elif s.marker in CLOSERS:
             if nest == 0:
                 return i
             nest -= 1
@@ -276,11 +299,20 @@ def section_end(doc: Doc, head: Head) -> int:
     return len(doc.lines)
 
 
-def place(doc: Doc, at: int, block: list[str], tight: bool = False) -> str:
+def _tight_with(above: str, first: str) -> bool:
+    """Whether `first` follows `above` with no blank line between: a list
+    item under a list item, or a table row under a table row."""
+    return bool(LIST_RE.match(above)
+                or (above.lstrip().startswith("|")
+                    and first.lstrip().startswith("|")))
+
+
+def place(doc: Doc, at: int, block: list[str], tight: bool = False,
+          glue: bool = False) -> str:
     """The note's text with `block` (lines without endings) put after the
     last non-blank line before index `at`. A blank line separates it from
-    what is above, unless `tight` and that line is a list item. No
-    existing byte is removed."""
+    what is above, unless `glue`, or `tight` and that line is a list item
+    (or a table row above a table row). No existing byte is removed."""
     lines = list(doc.lines)
     j = at
     while j > 0 and lines[j - 1].strip() == "":
@@ -288,12 +320,79 @@ def place(doc: Doc, at: int, block: list[str], tight: bool = False) -> str:
     if j > 0 and not lines[j - 1].endswith(("\n", "\r")):
         lines[j - 1] += doc.eol
     new = [b + doc.eol for b in block]
-    if j > 0 and not (tight and LIST_RE.match(lines[j - 1])):
+    if j > 0 and not (glue or (tight and _tight_with(lines[j - 1], block[0]))):
         new.insert(0, doc.eol)
-    if j == at and at < len(lines):
+    if j == at and at < len(lines) and lines[at].strip():
         new.append(doc.eol)
     lines[j:j] = new
     return "".join(lines)
+
+
+def _listy(line: str) -> bool:
+    """Whether `line` opens a list item or a table row."""
+    return bool(LIST_RE.match(line) or line.lstrip().startswith("|"))
+
+
+TOP_LIST_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s")
+
+
+def list_end(doc: Doc, head: Head, end: int, line: str
+             ) -> tuple[int, bool] | None:
+    """(where `line` goes, whether it sits flush against the line above)
+    in the section `head` opens, which ends at `end`: after the last
+    top-level list item and what continues it, or, for a table row, after
+    the last table row. Lines in code fences do not count. None when the
+    section has no list (or no table) to join."""
+    states = {s.lineno - 1: s for s in doc.states}
+
+    def plain(i: int) -> bool:
+        st = states.get(i)
+        return st is not None and not st.in_code
+
+    span = range(head.idx + 1, end)
+    if line.lstrip().startswith("|"):
+        rows = [i for i in span if plain(i)
+                and doc.lines[i].lstrip().startswith("|")]
+        return (rows[-1] + 1, True) if rows else None
+    items = [i for i in span if plain(i) and TOP_LIST_RE.match(doc.lines[i])]
+    if not items:
+        return None
+    j = items[-1] + 1
+    while j < end:
+        text = doc.lines[j]
+        if not text.strip():
+            k = j
+            while k < end and not doc.lines[k].strip():
+                k += 1
+            if k < end and plain(k) and doc.lines[k][:1] in (" ", "\t"):
+                j = k + 1
+                continue
+            break
+        st = states[j] if j in states else None
+        if (st is None or st.in_code or st.heading or st.marker
+                or text.lstrip().startswith((">", "```", "~~~"))
+                and not text[:1].isspace()):
+            break
+        j += 1
+    return j, bool(LIST_RE.match(line))
+
+
+def added_states(old: str, new: str) -> list[LineState]:
+    """The states of the non-blank, non-marker body lines of `new` that
+    `old` does not have: the one block a placement inserted."""
+    a = old.splitlines(keepends=True)
+    b = new.splitlines(keepends=True)
+    head = 0
+    while head < min(len(a), len(b)) and a[head] == b[head]:
+        head += 1
+    tail = 0
+    while (tail < min(len(a), len(b)) - head
+           and a[-1 - tail] == b[-1 - tail]):
+        tail += 1
+    fresh = set(range(head, len(b) - tail))
+    return [st for st in scan_body(new, ())[0]
+            if st.lineno - 1 in fresh and st.line.strip()
+            and st.marker is None]
 
 
 SHARED_TEMPLATES = Path(__file__).resolve().parent.parent / "templates"
@@ -373,6 +472,12 @@ def find_play_notes(batch: Batch, index: str, stem: str) -> list[str]:
     return out
 
 
+def is_blank(value: str) -> bool:
+    """Whether a frontmatter value says nothing: empty, null, ~ or an empty
+    link."""
+    return value.strip().strip("\"'").strip() in ("", "null", "~", "[[]]")
+
+
 def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     index = batch.resolve(args.session)
     text = batch.read(index)
@@ -390,7 +495,15 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     rel = f"{folder}/{name}" if folder else name
     stem = Path(index).stem
     title = stem.split(" - ", 1)[1] if " - " in stem else stem
-    notes = vl.nested_mapping(text, "documents").get("play_notes") or ""
+    documents = vl.nested_mapping(text, "documents")
+    link = vl.wikilink_target(documents.get("wrap_up"))
+    if link and not is_blank(link):
+        have = batch.with_stem(link)
+        if have:
+            raise WriteError(f"{index}: already has a Wrap-Up: {have[0]}")
+    notes = documents.get("play_notes") or ""
+    if is_blank(notes):
+        notes = ""
     notes_warning = ""
     if not notes:
         hits = find_play_notes(batch, index, stem)
@@ -518,84 +631,208 @@ def gm_region(doc: Doc, rel: str) -> tuple[Head, int, int]:
     raise WriteError(f"{rel}: no fenced ## GM Notes — {fix}")
 
 
-def _replace(doc: Doc, head: Head, unit: list[str]) -> str:
+def _replace(doc: Doc, head: Head, unit: list[str]) -> tuple[str, int]:
+    """(the text with `head`'s section replaced by `unit`, how many lines
+    the old section had)."""
     end = section_end(doc, head)
     while end > head.idx + 1 and not doc.lines[end - 1].strip():
         end -= 1
     new = [line + doc.eol for line in unit]
-    return "".join(doc.lines[:head.idx] + new + doc.lines[end:])
+    return ("".join(doc.lines[:head.idx] + new + doc.lines[end:]),
+            end - head.idx)
 
 
-def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
-                title: str, unit: list[str], replace: bool,
-                after: str | None = None,
-                made: list[tuple[str, str]] | None = None
-                ) -> tuple[str, str]:
-    """(the Wrap-Up's new text, the row's detail). `after` names the
-    heading a section the template does not know goes after."""
-    doc = parse(text)
-    gm_head, opener, closer = gm_region(doc, rel)
+def _append(doc: Doc, head: Head, unit: list[str]) -> str:
+    """The text with `unit`'s body (its heading line left out) added at the
+    end of the section `head` opens."""
+    body = unit[1:]
+    while body and not body[0].strip():
+        body.pop(0)
+    if not body:
+        return "".join(doc.lines)
+    return place(doc, section_end(doc, head), body,
+                 tight=bool(LIST_RE.match(body[0])))
+
+
+@dataclass
+class Landed:
+    text: str                   # the Wrap-Up's new text
+    detail: str                 # the row's detail
+    parent: str | None = None   # the ### a #### went under
+    at: int | None = None       # line index the block was placed at
+
+
+@lru_cache(maxsize=1)
+def plugin_player_keys() -> frozenset[str]:
+    """Keys of the player-facing sections the plugin's own template has."""
+    try:
+        tmap = read_template_map((SHARED_TEMPLATES / "session-wrap.md")
+                                 .read_text(encoding="utf-8"))
+    except OSError:
+        return frozenset({"narrative recap", "memorable moments"})
+    return frozenset(c for lvl, c in tmap.order if lvl == 2)
+
+
+def sibling_at(doc: Doc, scope: list[Head], k: str, order: list[str],
+               default: int) -> int:
+    """Where a section goes among its siblings `scope`. `order` is the
+    template's order for this kind of sibling. A name the template does
+    not know goes at `default` (the end of the container). A known one goes
+    after the last existing sibling that is earlier in the template; else
+    before the first existing one that is later; else before the first
+    sibling of any kind; else at `default`."""
+    if k not in order:
+        return default
+    i = order.index(k)
+    earlier, later = set(order[:i]), set(order[i + 1:])
+    before = [h for h in scope if key(h.title) in earlier]
+    if before:
+        return max(section_end(doc, h) for h in before)
+    after = next((h for h in scope if key(h.title) in later), None)
+    if after is not None:
+        return after.idx
+    return scope[0].idx if scope else default
+
+
+def _land(doc: Doc, rel: str, tmap: TemplateMap, level: int, title: str,
+          unit: list[str], mode: str, after: str | None, scope: list[Head],
+          order: list[str], default: int, detail: str = "") -> Landed:
+    """Put `unit` among its siblings `scope`: replace, append to or refuse
+    a section that is already there, else place a new one."""
     k = key(title)
-    if level == 2:
-        if k == GM_NOTES:
-            raise WriteError(f"{rel}: '## {title}' is the container: send "
-                             f"its sections as '### ...'")
-        if k in tmap.gm or vc.template_keeper_title(title):
-            raise WriteError(
-                f"{rel}: '## {title}' is a GM Notes section — write it as "
-                f"'{'#' * (4 if k in tmap.parent else 3)} {title}'")
-        scope = [h for h in doc.heads if h.level == 2 and not h.gm]
-        default, detail = opener, "" if k in tmap.titles else PLAYERS_SEE
-        public = {c for _l, c in tmap.order} - tmap.gm
-        later = tmap.later(2, k, public)
-        earlier = {c for lvl, c in tmap.order if lvl == 2 and c in public
-                   } - later - {k}
-    else:
-        inside = [h for h in doc.heads if gm_head.idx < h.idx < closer]
-        pk = tmap.parent.get(k) if level == 4 else None
-        if pk is not None:
-            parent = next((h for h in inside
-                           if h.level == 3 and key(h.title) == pk), None)
-            if parent is None:
-                if made is None:
-                    made = []
-                made.append((tmap.titles[pk], title))
-                grown, _ = add_section(text, rel, tmap, 3, tmap.titles[pk],
-                                       [f"### {tmap.titles[pk]}"], False)
-                return add_section(grown, rel, tmap, level, title, unit,
-                                   replace, after, made)
-            stop = section_end(doc, parent)
-            scope = [h for h in inside
-                     if h.level == 4 and parent.idx < h.idx < stop]
-            default = stop
-            later = tmap.later(4, k, {c for c, p in tmap.parent.items()
-                                      if p == pk})
-        else:
-            scope = [h for h in inside if h.level == level]
-            default, later = closer, tmap.later(3, k)
-        detail = ""
     found = next((h for h in scope if key(h.title) == k), None)
     if found is not None:
-        if not replace:
-            raise WriteError(f"{rel}: already has '{'#' * level} {title}' "
-                             f"— --replace to replace it")
-        return _replace(doc, found, unit), "replaced"
+        if mode == "replace":
+            text, count = _replace(doc, found, unit)
+            return Landed(text, f"replaced ({count} lines)")
+        if mode == "append":
+            return Landed(_append(doc, found, unit), "appended")
+        raise WriteError(f"{rel}: already has '{'#' * level} {title}' "
+                         f"\u2014 --replace to replace it, --append to add "
+                         f"to it")
     if after and k not in tmap.titles:
         want = key(after.lstrip("#").strip())
         anchor = next((h for h in scope if key(h.title) == want), None)
         if anchor is None:
             raise WriteError(f"{rel}: no heading '{after}' to go after")
-        return place(doc, section_end(doc, anchor), unit), detail
-    if level == 2 and k in tmap.titles:
-        before = [h for h in scope if key(h.title) in earlier]
-        if before:
-            return place(doc, max(section_end(doc, h) for h in before),
-                         unit), detail
-        default = next((h.idx for h in scope if key(h.title) in later),
-                       scope[0].idx if scope else default)
-        return place(doc, default, unit), detail
-    at = next((h.idx for h in scope if key(h.title) in later), default)
-    return place(doc, at, unit), detail
+        at = section_end(doc, anchor)
+    else:
+        at = sibling_at(doc, scope, k, order, default)
+    return Landed(place(doc, at, unit), detail, at=at)
+
+
+def _add_player(doc: Doc, rel: str, tmap: TemplateMap, title: str,
+                unit: list[str], mode: str, after: str | None,
+                opener: int) -> Landed:
+    """A `##` section: player-facing, before the GM Notes fence."""
+    k = key(title)
+    if k == GM_NOTES:
+        raise WriteError(f"{rel}: '## {title}' is the container: send "
+                         f"its sections as '### ...'")
+    if k in tmap.gm or vc.template_keeper_title(title):
+        raise WriteError(
+            f"{rel}: '## {title}' is a GM Notes section \u2014 write it as "
+            f"'{'#' * (4 if k in tmap.parent else 3)} {title}'")
+    scope = [h for h in doc.heads if h.level == 2 and not h.gm]
+    order = [c for lvl, c in tmap.order if lvl == 2]
+    detail = "" if k in plugin_player_keys() else PLAYERS_SEE
+    return _land(doc, rel, tmap, 2, title, unit, mode, after, scope, order,
+                 opener, detail)
+
+
+def _add_keeper3(doc: Doc, rel: str, tmap: TemplateMap, title: str,
+                 unit: list[str], mode: str, after: str | None,
+                 inside: list[Head], closer: int) -> Landed:
+    """A `###` section under GM Notes."""
+    scope = [h for h in inside if h.level == 3]
+    order = [c for lvl, c in tmap.order if lvl == 3 and c in tmap.gm]
+    return _land(doc, rel, tmap, 3, title, unit, mode, after, scope, order,
+                 closer)
+
+
+def h4_parent(tmap: TemplateMap, k: str, title: str, prev: str | None,
+              first: bool) -> str | None:
+    """The `###` an unplaced `####` belongs under: its template parent;
+    else the `###` the unit before it in the same stdin went under; else,
+    for a first unit shaped like a PC block (`[[Name]] (Player)`), PC
+    Carry-Forward; else None (the end of GM Notes)."""
+    pk = tmap.parent.get(k)
+    if pk is not None:
+        return tmap.titles[pk]
+    if prev is not None:
+        return prev
+    if first and title.startswith("[["):
+        return tmap.titles.get("pc carry-forward", "PC Carry-Forward")
+    return None
+
+
+def _add_keeper4(text: str, doc: Doc, rel: str, tmap: TemplateMap,
+                 title: str, unit: list[str], mode: str, after: str | None,
+                 inside: list[Head], closer: int, prev: str | None,
+                 first: bool, made: list[tuple[str, str]]) -> Landed:
+    """A `####` section under GM Notes."""
+    k = key(title)
+    ptitle = h4_parent(tmap, k, title, prev, first)
+    if ptitle is None:
+        scope = [h for h in inside if h.level == 4]
+        landed = _land(doc, rel, tmap, 4, title, unit, mode, after, scope,
+                       [], closer)
+        if landed.at is not None and not landed.detail:
+            under = [h for h in inside if h.level == 3 and h.idx < landed.at]
+            landed.detail = (f"under '### {under[-1].title}'" if under
+                             else "at the end of GM Notes")
+        return landed
+    pk = key(ptitle)
+    parent = next((h for h in inside
+                   if h.level == 3 and key(h.title) == pk), None)
+    if parent is None:
+        made.append((ptitle, title))
+        grown = add_section(text, rel, tmap, 3, ptitle, [f"### {ptitle}"],
+                            "").text
+        return add_section(grown, rel, tmap, 4, title, unit, mode, after,
+                           prev, first, made)
+    stop = section_end(doc, parent)
+    scope = [h for h in inside
+             if h.level == 4 and parent.idx < h.idx < stop]
+    order = [c for lvl, c in tmap.order
+             if lvl == 4 and tmap.parent.get(c) == pk]
+    landed = _land(doc, rel, tmap, 4, title, unit, mode, after, scope, order,
+                   stop)
+    landed.parent = parent.title
+    return landed
+
+
+def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
+                title: str, unit: list[str], mode: str = "",
+                after: str | None = None, prev: str | None = None,
+                first: bool = False,
+                made: list[tuple[str, str]] | None = None) -> Landed:
+    """Place one section in a Wrap-Up. `mode` is "", "replace" or "append";
+    `after` names the heading a section the template does not know goes
+    after; `prev` is the `###` the unit before this one in the same stdin
+    went under and `first` says this is the stdin's first unit (both steer
+    an unplaced `####`). A parent `###` created on the way is added to
+    `made`."""
+    doc = parse(text)
+    gm_head, opener, closer = gm_region(doc, rel)
+    if level == 2:
+        return _add_player(doc, rel, tmap, title, unit, mode, after, opener)
+    inside = [h for h in doc.heads if gm_head.idx < h.idx < closer]
+    if level == 3:
+        return _add_keeper3(doc, rel, tmap, title, unit, mode, after,
+                            inside, closer)
+    return _add_keeper4(text, doc, rel, tmap, title, unit, mode, after,
+                        inside, closer, prev, first,
+                        [] if made is None else made)
+
+
+def require_hidden(old: str, new: str, rel: str, level: int,
+                   title: str) -> None:
+    """Refuse a Keeper section whose text would sit outside the hidden
+    block (stdin that closes the block and opens it again, for one)."""
+    if any(st.gm_depth == 0 for st in added_states(old, new)):
+        raise WriteError(f"{rel}: this would put '{'#' * level} {title}' "
+                         f"outside the hidden block")
 
 
 def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
@@ -615,21 +852,29 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         batch.put(rel, note)
         batch.row("WOULD-ADD", rel, "\u00a7GM Notes",
                   "created (the Wrap-Up had none)")
-    for level, title, unit in units:
+    mode = "replace" if args.replace else "append" if args.append else ""
+    prev: str | None = None
+    for n, (level, title, unit) in enumerate(units):
         if level not in (2, 3, 4):
             raise WriteError(f"'{'#' * level} {title}': a Wrap-Up section "
                              f"starts at ##, ### or ####")
         made: list[tuple[str, str]] = []
-        note, detail = add_section(note, rel, tmap, level, title, unit,
-                                   args.replace, args.after, made)
+        before = note
+        landed = add_section(note, rel, tmap, level, title, unit, mode,
+                             args.after, prev, n == 0, made)
+        note = landed.text
+        if level != 2:
+            require_hidden(before, note, rel, level, title)
+        prev = (landed.parent if level == 4
+                else title if level == 3 else None)
         batch.put(rel, note)
         for parent, child in made:
-            batch.row("WOULD-ADD", rel, f"§{parent}", f"created for {child}")
-        batch.row("WOULD-ADD", rel, f"§{title}", detail)
+            batch.row("WOULD-ADD", rel, f"\u00a7{parent}", f"created for {child}")
+        batch.row("WOULD-ADD", rel, f"\u00a7{title}", landed.detail)
         if level == 2:
             for _i, sub_level, sub in vl.fenced_headings("\n".join(unit)):
-                if sub_level == 3:
-                    batch.row("WOULD-ADD", rel, f"§{title} \u203a {sub}",
+                if sub_level >= 3:
+                    batch.row("WOULD-ADD", rel, f"\u00a7{title} \u203a {sub}",
                               "inside a player section \u2014 players will "
                               "see this")
 
@@ -639,6 +884,11 @@ PC_LINE_RE = re.compile(
     r"^#\s+(?:\[\[)?([^\]\[|#]+?)(?:\|[^\]]*)?(?:\]\])?\s*$")
 LABEL_RE = re.compile(r"^(.*?\bSession\s+)(\d+)\s*$", re.IGNORECASE)
 DASH = " \u2014 "
+
+
+def dash_key(title: str) -> str:
+    """`key` with the hyphen, en dash and em dash read as one."""
+    return key(re.sub(r"[\u2013\u2014]", "-", title))
 
 
 def find_pc(batch: Batch, name: str) -> str:
@@ -758,7 +1008,7 @@ def cmd_story(batch: Batch, args: argparse.Namespace, text: str) -> None:
             if not closer.endswith(("\n", "\r")):
                 closer += eol
             fm_lines, tail = lines[1:end], "".join(lines[end + 1:])
-            if any(h.level == 2 and key(h.title) == key(heading[3:])
+            if any(h.level == 2 and dash_key(h.title) == dash_key(heading[3:])
                    for h in parse(existing).heads):
                 raise WriteError(f"{rel}: already has '{heading}'")
         old_as_of = vl.get_key(fm_lines, "asOfSession")
@@ -814,8 +1064,19 @@ def _gm_notes_head(doc: Doc) -> Head | None:
                  if h.level == 2 and key(h.title) == GM_NOTES), None)
 
 
+def split_section(section: str) -> tuple[bool, str]:
+    """(whether it names a Keeper section, the section's name): `Name` is a
+    public `##`, `GM Notes/Name` a `###` under GM Notes. Leading hashes and
+    spaces are dropped from either part."""
+    plain = section.strip().lstrip("#").strip()
+    head, slash, rest = plain.partition("/")
+    if slash and key(head) == GM_NOTES:
+        return True, rest.strip().lstrip("#").strip()
+    return False, plain
+
+
 def add_line(text: str, rel: str, section: str, line: str,
-             tmap: TemplateMap | None, fenced: bool
+             tmap: TemplateMap | None, fenced: bool, note_type: str = ""
              ) -> tuple[str | None, str]:
     """(the note's new text, the row's detail), or (None, why) when `line`
     is already in the section. `section` is `Name` for a public `##` or
@@ -825,11 +1086,14 @@ def add_line(text: str, rel: str, section: str, line: str,
     if doc.problems:
         raise WriteError(f"{rel}: gm-only fence is unbalanced "
                          f"({doc.problems[0]})")
-    keeper = "/" in section and key(section.split("/", 1)[0]) == GM_NOTES
-    name = section.split("/", 1)[1].strip() if keeper else section.strip()
+    keeper, name = split_section(section)
     if not name:
         raise WriteError(f"{rel}: the section has no name")
     k = key(name)
+    if not keeper and tmap is not None and k in tmap.gm:
+        raise WriteError(f"{rel}: '{name}' is a GM Notes section of a "
+                         f"{note_type} note: write the section as "
+                         f"'GM Notes/{name}'")
     gm = _gm_notes_head(doc)
     if keeper or k == GM_NOTES:
         if gm is None:
@@ -850,9 +1114,9 @@ def add_line(text: str, rel: str, section: str, line: str,
                      if h.level == 3 and gm.idx < h.idx < stop]
             found = next((h for h in scope if key(h.title) == k), None)
             if found is None:
-                later = tmap.later(3, k) if tmap else set()
-                at = next((h.idx for h in scope if key(h.title) in later),
-                          stop)
+                order = ([c for lvl, c in tmap.order
+                          if lvl == 3 and c in tmap.gm] if tmap else [])
+                at = sibling_at(doc, scope, k, order, stop)
                 return place(doc, at, [f"### {name}", "", line]), \
                     "new section"
             head = found
@@ -876,7 +1140,8 @@ def add_line(text: str, rel: str, section: str, line: str,
     if any(existing.strip() == line.strip()
            for existing in doc.lines[head.idx + 1:end]):
         return None, "already there"
-    return place(doc, end, [line], tight=True), ""
+    at, glue = list_end(doc, head, end, line) or (end, False)
+    return place(doc, at, [line], tight=_listy(line), glue=glue), ""
 
 
 def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
@@ -894,14 +1159,20 @@ def cmd_log(batch: Batch, _args: argparse.Namespace, text: str) -> None:
         if note_type not in templates:
             templates[note_type] = type_template(note_type)
         tmap, fenced = templates[note_type]
-        new, detail = add_line(note, rel, cells[1], cells[2].strip(),
-                               tmap, fenced)
-        where = f"§{cells[1].strip()}"
+        keeper, name = split_section(cells[1])
+        where = f"\u00a7{'GM Notes/' if keeper else ''}{name}"
+        new, detail = add_line(note, rel, cells[1], cells[2], tmap, fenced,
+                               note_type)
         if new is None:
             batch.row("SKIP", rel, where, detail)
-        else:
-            batch.put(rel, new)
-            batch.row("WOULD-ADD", rel, where, detail)
+            continue
+        batch.put(rel, new)
+        batch.row("WOULD-ADD", rel, where, detail)
+        if (keeper or key(name) == GM_NOTES) and any(
+                st.gm_depth == 0 for st in added_states(note, new)):
+            batch.row("WARNING", rel, where,
+                      "GM Notes has no hidden-markers here: only the "
+                      "site's settings keep it from players")
 
 
 # --- timeline ----------------------------------------------------------------
@@ -923,9 +1194,9 @@ def split_timeline(text: str) -> list[list[str]]:
     entries: list[list[str]] = []
     for line in text.replace("\r\n", "\n").replace("\r", "\n").split("\n"):
         if line.strip() and not line[0].isspace():
-            entries.append([line.rstrip()])
+            entries.append([line])
         elif entries:
-            entries[-1].append(line.rstrip())
+            entries[-1].append(line)
         elif line.strip():
             raise WriteError("stdin must start with an entry at the margin "
                              "(the first line is indented)")
@@ -978,6 +1249,14 @@ def _last_gm_opener(doc: Doc) -> int | None:
     return opener
 
 
+def _flush(above: str, below: str) -> bool:
+    """Whether two entries sit on adjacent lines: two list items, or two
+    table rows."""
+    return bool((LIST_RE.match(above) and LIST_RE.match(below))
+                or (above.lstrip().startswith("|")
+                    and below.lstrip().startswith("|")))
+
+
 def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel = batch.resolve(args.file or TIMELINE)
     if not batch.exists(rel):
@@ -993,6 +1272,13 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
         raise WriteError(f"{rel}: gm-only fence is unbalanced "
                          f"({doc.problems[0]})")
     if _find(doc, level, title) is None:
+        other = next((h for h in doc.heads if key(h.title) == key(title)),
+                     None)
+        if other is not None:
+            raise WriteError(
+                f"{rel}: has '{'#' * other.level} {other.title}' \u2014 a "
+                f"second heading with that title would be a duplicate: use "
+                f"--under '{'#' * other.level} {other.title}'")
         if args.after:
             after = _find(doc, *_heading_arg(args.after, "--after"))
             if after is None:
@@ -1007,20 +1293,39 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
                          "the end")
         note = place(doc, at, [f"{'#' * level} {title}"])
         batch.put(rel, note)
+        seen_by = ("hidden" if _need(parse(note), level, title).gm
+                   else "players will see this")
         batch.row("WOULD-ADD", rel, where,
-                  f"new heading between '{before}' and '{following}'")
+                  f"new heading between '{before}' and '{following}' "
+                  f"\u2014 {seen_by}")
+    doc = parse(note)
+    head = _need(doc, level, title)
+    end = section_end(doc, head)
+    known = {line.strip() for line in doc.lines[head.idx + 1:end]}
+    plan: list[tuple[list[str], bool]] = []
     for entry in entries:
-        doc = parse(note)
-        head = _need(doc, level, title)
-        end = section_end(doc, head)
-        if any(existing.strip() == entry[0].strip()
-               for existing in doc.lines[head.idx + 1:end]):
+        fresh = entry[0].strip() not in known
+        known.add(entry[0].strip())
+        plan.append((entry, fresh))
+    new_entries = [entry for entry, fresh in plan if fresh]
+    at = end
+    if new_entries:
+        block: list[str] = []
+        block_first = ""
+        for entry in new_entries:
+            if block and not _flush(block_first, entry[0]):
+                block.append("")
+            block += entry
+            block_first = entry[0]
+        at, glue = list_end(doc, head, end, new_entries[0][0]) or (end, False)
+        note = place(doc, at, block, glue=glue, tight=_listy(block[0]))
+        batch.put(rel, note)
+    child = next((h for h in reversed(doc.heads) if head.idx < h.idx < at),
+                 None)
+    for entry, fresh in plan:
+        if not fresh:
             batch.row("SKIP", rel, where, "already there")
             continue
-        note = place(doc, end, entry, tight=bool(LIST_RE.match(entry[0])))
-        batch.put(rel, note)
-        child = next((h for h in reversed(doc.heads)
-                      if head.idx < h.idx < end), None)
         detail = entry[0][:60]
         if child is not None:
             detail = f"under '{'#' * child.level} {child.title}': {detail}"
@@ -1031,10 +1336,10 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
             continue        # undated, or a label like "Session 2"
         if TIME_OF_DAY_RE.search(date):
             batch.row("WARNING", rel, where, f"'{date}' has a time of day: "
-                      f"the site's timeline will not sort it")
+                      f"a published timeline cannot sort it")
         elif not YEAR_RE.search(date):
             batch.row("WARNING", rel, where, f"'{date}' has no 4-digit "
-                      f"year: the site's timeline will not sort it")
+                      f"year: a published timeline cannot sort it")
 
 
 # --- CLI ---------------------------------------------------------------------
@@ -1059,8 +1364,12 @@ def build_parser() -> argparse.ArgumentParser:
             "or #### section goes under GM Notes, unless it is written\n"
             "inside a ## section, where it stays and players see it."))
     add.add_argument("wrapup", help="the Wrap-Up, vault-relative")
-    add.add_argument("--replace", action="store_true",
+    how = add.add_mutually_exclusive_group()
+    how.add_argument("--replace", action="store_true",
                      help="replace a section that already exists")
+    how.add_argument("--append", action="store_true",
+                     help="add the text to the end of a section that "
+                          "already exists")
     add.add_argument("--after", help="the heading a new section goes after")
     add.add_argument("--write", action="store_true")
     story = sub.add_parser(
@@ -1142,7 +1451,7 @@ def main(argv: list[str] | None = None, stdin: str | None = None) -> int:
             raise
         except Exception as e:      # a refusal, never a traceback
             raise WriteError(f"{e.__class__.__name__}: {e}") from e
-        check_fences(batch)
+        check_fences(batch, text)
         wrote = False
         if args.write:
             apply(batch)

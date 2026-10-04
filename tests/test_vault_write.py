@@ -520,10 +520,13 @@ class WrapupAddTests(unittest.TestCase):
         text = read(vault, WRAP_REL)
         self.assertLess(text.index("### Ritual Clock"),
                         text.index("<!-- gm-only -->"))
+        # A heading of any depth inside a player section is reported.
         code, out = run(vault, "wrapup-add", WRAP_REL,
                         stdin="## Narrative Recap\n\nx\n\n#### Deep\n\ny\n")
-        self.assertNotIn("Deep\t", out)
-        self.assertEqual(out.count("WOULD-ADD"), 1, out)
+        self.assertIn("\u00a7Narrative Recap \u203a Deep\t"
+                      "inside a player section \u2014 players will see this",
+                      out)
+        self.assertEqual(out.count("WOULD-ADD"), 2, out)
 
     def test_a_lone_unknown_subheading_goes_to_gm_notes_without_a_row(self):
         vault = wrap_vault(self)
@@ -696,11 +699,13 @@ class WrapupAddTests(unittest.TestCase):
 
     def test_a_duplicate_unknown_h4_needs_replace(self):
         vault = wrap_vault(self)
-        add(vault, "#### Foo\n\nold\n")
+        _, out = add(vault, "#### Foo\n\nold\n")
+        self.assertIn("at the end of GM Notes", out)
         before = read(vault, WRAP_REL)
         code, out = add(vault, "#### Foo\n\nnew\n")
         self.assertEqual(code, 1)
         self.assertIn("--replace", out)
+        self.assertIn("--append", out)
         self.assertEqual(read(vault, WRAP_REL), before)
         code, out = add(vault, "#### Foo\n\nnew\n", "--replace")
         self.assertEqual(code, 0, out)
@@ -1252,7 +1257,7 @@ class TimelineTests(unittest.TestCase):
                        "--under", "### Session 1 — Arrival (3 August)")
         self.assertEqual(code, 0, out)
         self.assertEqual(out.count("WARNING\t"), 3)
-        self.assertIn("will not sort", out)
+        self.assertIn("a published timeline cannot sort it", out)
         self.assertIn("- **3rd of Harvestmoon** — C.\n", read(vault, TL_REL))
 
     def test_a_repeat_is_a_skip(self):
@@ -1308,7 +1313,8 @@ class TimelineTests(unittest.TestCase):
                       read(vault, TL_REL))
         tl(vault, "- **1814** — b\n",
            "--under", "### Session 1 — Arrival (3 August)")
-        self.assertIn("Plain paragraph.\n\n- **1814** — b\n",
+        # 2.8: a bullet joins the list, ahead of the paragraph after it.
+        self.assertIn("They came.\n- **1814** — b\n\nPlain paragraph.\n",
                       read(vault, TL_REL))
         vault = make_vault(self, {TL_REL: TL})
         tl(vault, "- **1814** — a\n- **1814** — b\n",
@@ -1435,6 +1441,335 @@ class Group1Tests(unittest.TestCase):
     def test_the_module_docstring_names_the_reserved_sections_and_help(self):
         self.assertIn("GM Notes section names", vw.__doc__)
         self.assertIn("<command> --help", vw.__doc__)
+
+
+def rows_of(out, verb="ADDED"):
+    return [r.split("\t") for r in out.splitlines()
+            if r.startswith(verb + "\t")]
+
+
+class Group2Tests(unittest.TestCase):
+    # 2.1
+    def test_every_heading_inside_a_player_section_gets_a_row(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "## Narrative Recap\n\nThey ran.\n\n"
+                               "#### [[Eleanor Voss]] (Sarah)\n\n- a\n")
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any("› [[Eleanor Voss]] (Sarah)" in r[2]
+                            and "players will see this" in r[3]
+                            for r in rows_of(out)), out)
+
+    # 2.2
+    def test_an_unknown_h4_after_a_known_one_joins_its_parent(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "### What Carries Forward\n\n"
+                               "#### Skipped Prep\n\n- a\n\n"
+                               "#### The Dynamite Question\n\n- b\n")
+        self.assertEqual(code, 0, out)
+        add(vault, "### World State\n\n- w\n")
+        heads = heading_lines(read(vault, WRAP_REL))
+        self.assertEqual(heads[heads.index("### What Carries Forward"):][:4], [
+            "### What Carries Forward", "#### Skipped Prep",
+            "#### The Dynamite Question", "### World State"])
+
+    def test_a_lone_pc_block_goes_under_pc_carry_forward(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "#### [[Rock Lavey]] (Sam)\n\n- go\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("§PC Carry-Forward\tcreated for [[Rock Lavey]] "
+                      "(Sam)", out)
+        code, out = add(vault, "#### [[Vint]] (Kim)\n\n- go\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("created for", out)
+        add(vault, "### World State\n\n- w\n")
+        heads = heading_lines(read(vault, WRAP_REL))
+        self.assertEqual(heads[heads.index("### PC Carry-Forward"):][:3], [
+            "### PC Carry-Forward", "#### [[Rock Lavey]] (Sam)",
+            "#### [[Vint]] (Kim)", "### World State"][:3])
+        self.assertEqual(heads[-2], "### World State")
+
+    def test_a_lone_odd_h4_row_says_where_it_landed(self):
+        vault = wrap_vault(self)
+        _, out = add(vault, "#### Odd\n\nx\n")
+        self.assertIn("at the end of GM Notes", out)
+        add(vault, "### World State\n\n- w\n")
+        _, out = add(vault, "#### Odder\n\nx\n")
+        self.assertIn("under '### World State'", out)
+
+    # 2.3
+    def test_known_keeper_sections_keep_their_place_among_the_authors(self):
+        vault = wrap_vault(self)
+        for chunk in ("### Table Chatter\n\nx\n", "### World State\n\n- w\n",
+                      "### Quick Bullets\n\n- q\n",
+                      "### Handoff to session-prep\n\nDawn.\n"):
+            code, out = add(vault, chunk)
+            self.assertEqual(code, 0, out)
+        self.assertEqual(
+            [h for h in heading_lines(read(vault, WRAP_REL))
+             if h.startswith("###")],
+            ["### Quick Bullets", "### World State",
+             "### Handoff to session-prep", "### Table Chatter"])
+
+    def test_known_h4_keeps_its_place_among_the_authors(self):
+        vault = wrap_vault(self)
+        add(vault, "### What Carries Forward\n\n#### Mine\n\nx\n")
+        add(vault, "#### Skipped Prep\n\n- s\n")
+        add(vault, "#### Unresolved Threads\n\n- u\n")
+        self.assertEqual(
+            [h for h in heading_lines(read(vault, WRAP_REL))
+             if h.startswith("####")],
+            ["#### Unresolved Threads", "#### Skipped Prep", "#### Mine"])
+
+    # 2.4
+    def test_a_section_only_the_vault_template_knows_is_flagged(self):
+        tmpl = ("---\ntype: session_wrap\n---\n\n## Narrative Recap\n\n"
+                "## Cast List\n\n<!-- gm-only -->\n\n## GM Notes\n\n"
+                "### World State\n\n<!-- /gm-only -->\n")
+        vault = make_vault(self, {
+            WRAP_REL: WRAP, "_Templates/_Template_Session_WrapUp.md": tmpl})
+        _, out = add(vault, "## Cast List\n\n- x\n")
+        self.assertIn("players will see this", rows_of(out)[0][3])
+        _, out = add(vault, "## Narrative Recap\n\nx\n")
+        self.assertEqual(rows_of(out)[0][3], "")
+
+    # 2.5
+    def test_a_reversed_marker_pair_is_refused(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "### Quality Notes\n\nsafe\n"
+                               "<!-- /gm-only -->\npublic?\n"
+                               "<!-- gm-only -->\nmore\n")
+        self.assertEqual(code, 1, out)
+        self.assertIn("outside the hidden block", out)
+        self.assertIn("### Quality Notes", out)
+        self.assertEqual(read(vault, WRAP_REL), WRAP)
+        code, out = add(vault, "## Aside\n\nx\n<!-- gm-only -->\nsecret\n"
+                               "<!-- /gm-only -->\n")
+        self.assertEqual(code, 0, out)
+
+    # 2.6
+    def _log_gm(self, note, rel, section="GM Notes/Behind the Scenes"):
+        vault = make_vault(self, {rel: note})
+        code, out = log(vault, f"{rel}\t{section}\t- x\n")
+        self.assertEqual(code, 0, out)
+        return out
+
+    def test_log_into_a_gm_notes_that_is_not_hidden_warns(self):
+        warn = "GM Notes has no hidden-markers here"
+        unfenced = ("---\ntype: npc\n---\n\n# H\n\n## GM Notes\n\n"
+                    "### Behind the Scenes\n\n- a\n")
+        late = ("---\ntype: npc\n---\n\n# H\n\n## GM Notes\n\n"
+                "### Behind the Scenes\n\n- a\n\n<!-- gm-only -->\n\n"
+                "### Wants\n\nw\n\n<!-- /gm-only -->\n")
+        faction = "---\ntype: faction\n---\n\n# H\n\ntext\n"
+        for name, note in (("unfenced", unfenced), ("late", late),
+                           ("faction", faction)):
+            with self.subTest(name):
+                out = self._log_gm(note, NPC_REL)
+                self.assertIn("WARNING\t" + NPC_REL, out)
+                self.assertIn(warn, out)
+        self.assertNotIn("WARNING\t", self._log_gm(NPC, NPC_REL))
+
+    # 2.7
+    def test_a_public_name_the_template_keeps_hidden_is_refused(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        for name in ("Behind the Scenes", "Secrets", "Wants"):
+            with self.subTest(name):
+                code, out = log(vault, f"{NPC_REL}\t{name}\t- x\n")
+                self.assertEqual(code, 1, out)
+                self.assertIn(f"'{name}' is a GM Notes section of a npc "
+                              f"note: write the section as "
+                              f"'GM Notes/{name}'", out)
+        self.assertEqual(read(vault, NPC_REL), NPC)
+        code, out = log(vault, f"{NPC_REL}\tRumours\t- r\n")
+        self.assertEqual(code, 0, out)
+
+    def test_leading_hashes_on_a_section_are_dropped(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        code, out = log(vault,
+                        f"{NPC_REL}\t## Campaign Log\t- a\n"
+                        f"{NPC_REL}\tGM Notes/### Behind the Scenes\t- b\n")
+        self.assertEqual(code, 0, out)
+        text = read(vault, NPC_REL)
+        self.assertEqual(text.count("Campaign Log"), 1)
+        self.assertEqual(text.count("Behind the Scenes"), 1)
+        self.assertIn("- a\n", text)
+        self.assertIn("- b\n", text)
+
+    # 2.8
+    def test_a_log_line_goes_after_the_list_not_after_the_block(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n- b\n\n"
+                "```dataview\nTABLE x\n```\n\n## Next\n")
+        callout = note.replace("```dataview\nTABLE x\n```", "> [!note]\n> hi")
+        for text in (note, callout):
+            vault = make_vault(self, {NPC_REL: text})
+            code, out = log(vault, f"{NPC_REL}\tLog\t- new\n")
+            self.assertEqual(code, 0, out)
+            self.assertIn("- a\n- b\n- new\n\n", read(vault, NPC_REL))
+
+    def test_a_log_line_keeps_a_nested_continuation_with_its_item(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n  - sub\n"
+                "  more\n\n> [!note]\n> hi\n")
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tLog\t- new\n")
+        self.assertIn("  - sub\n  more\n- new\n\n> [!note]",
+                      read(vault, NPC_REL))
+
+    def test_a_table_line_joins_the_table(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n| d | e |\n"
+                "|---|---|\n| 1 | a |\n\nafter\n")
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tLog\t| 2 | b |\n")
+        self.assertIn("| 1 | a |\n| 2 | b |\n\nafter\n", read(vault, NPC_REL))
+
+    def test_a_section_without_a_list_takes_the_line_at_its_end(self):
+        note = "---\ntype: zzz\n---\n\n# H\n\n## Log\n\ntext\n\n## Next\n"
+        vault = make_vault(self, {NPC_REL: note})
+        log(vault, f"{NPC_REL}\tLog\t- new\n")
+        self.assertIn("text\n\n- new\n\n## Next", read(vault, NPC_REL))
+
+    def test_a_timeline_entry_goes_after_the_list(self):
+        tlt = TL.replace("They came.\n", "They came.\n\n```dataview\nx\n```\n")
+        vault = make_vault(self, {TL_REL: tlt})
+        tl(vault, "- **4 August 1814** — Next.\n",
+           "--under", "### Session 1 — Arrival (3 August)")
+        self.assertIn("They came.\n- **4 August 1814** — Next.\n\n```",
+                      read(vault, TL_REL))
+
+    # 2.9
+    def test_under_a_title_at_another_level_is_refused(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **1814** — x\n",
+                       "--under", "## Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 1, out)
+        self.assertIn("'### Session 1 — Arrival (3 August)'", out)
+        self.assertEqual(read(vault, TL_REL), TL)
+
+    def test_a_new_timeline_heading_says_who_will_see_it(self):
+        vault = make_vault(self, {TL_REL: TL})
+        _, out = tl(vault, "- **5 August 1814** — D.\n",
+                    "--under", "### Session 2")
+        self.assertIn("'Future Events' — players will see this", out)
+        both = TL.replace("<!-- gm-only -->", "<!-- gm-only -->\n\n"
+                          "## Hidden Chapter\n\n<!-- /gm-only -->\n\n"
+                          "<!-- gm-only -->")
+        vault = make_vault(self, {TL_REL: both})
+        _, out = tl(vault, "- **5 August 1814** — D.\n",
+                    "--under", "### Secret Plot",
+                    "--after", "## Hidden Chapter")
+        self.assertIn("— hidden", out)
+
+    def test_timeline_entries_keep_trailing_spaces(self):
+        vault = make_vault(self, {TL_REL: TL})
+        tl(vault, "- **4 August 1814** — a  \n  - sub \t\n",
+           "--under", "### Session 1 — Arrival (3 August)")
+        self.assertIn("- **4 August 1814** — a  \n  - sub \t\n",
+                      read(vault, TL_REL))
+
+    def test_timeline_entries_land_as_one_block_in_stdin_order(self):
+        vault = make_vault(self, {TL_REL: TL})
+        code, out = tl(vault, "- **4 August 1814** — one\n"
+                              "- **3 August 1814** — [[The Arrival]] — "
+                              "They came.\n"
+                              "- **5 August 1814** — three\n",
+                       "--under", "### Session 1 — Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        text = read(vault, TL_REL)
+        self.assertLess(text.index("— one"), text.index("— three"))
+        self.assertEqual(text.count("They came."), 1)
+        self.assertIn("They came.\n- **4 August 1814** — one\n"
+                      "- **5 August 1814** — three\n\n<!-- gm-only",
+                      text)
+
+    def test_a_log_line_keeps_its_leading_spaces(self):
+        vault = make_vault(self, {NPC_REL: NPC})
+        log(vault, f"{NPC_REL}\tCampaign Log\t  - indented \n")
+        self.assertIn("party.\n  - indented \n", read(vault, NPC_REL))
+
+    # 2.10
+    def test_section_end_ignores_spoiler_markers_like_gm_markers(self):
+        text = ("# T\n\n## Log\n\n- a\n\n<!-- spoiler -->\n\n## Secret\n\n"
+                "x\n\n<!-- /spoiler -->\n")
+        doc = vw.parse(text)
+        log_head = next(h for h in doc.heads if h.title == "Log")
+        self.assertEqual(doc.lines[vw.section_end(doc, log_head)].strip(),
+                         "<!-- spoiler -->")
+        wrapped = ("# T\n\n<!-- spoiler -->\n\n## Log\n\n- a\n\n"
+                   "<!-- /spoiler -->\n\n## Next\n")
+        doc = vw.parse(wrapped)
+        log_head = next(h for h in doc.heads if h.title == "Log")
+        self.assertEqual(doc.lines[vw.section_end(doc, log_head)].strip(),
+                         "<!-- /spoiler -->")
+
+    # 2.11
+    def test_append_adds_to_an_existing_section(self):
+        vault = wrap_vault(self)
+        add(vault, "## Narrative Recap\n\nThey ran.\n\n## Memorable "
+                   "Moments\n\nx\n")
+        code, out = add(vault, "## Narrative Recap\n\nThen they hid.\n",
+                        "--append")
+        self.assertEqual(code, 0, out)
+        self.assertIn("\tappended", out)
+        text = read(vault, WRAP_REL)
+        self.assertEqual(text.count("## Narrative Recap"), 1)
+        self.assertIn("They ran.\n\nThen they hid.\n\n## Memorable", text)
+        add(vault, "### World State\n\n- a\n")
+        add(vault, "### World State\n\n- b\n", "--append")
+        self.assertIn("- a\n- b\n\n<!-- /gm-only -->",
+                      read(vault, WRAP_REL))
+
+    def test_append_and_replace_exclude_each_other(self):
+        vault = wrap_vault(self)
+        with self.assertRaises(SystemExit):
+            run(vault, "wrapup-add", WRAP_REL, "--append", "--replace",
+                stdin="### World State\n\nx\n")
+
+    def test_replace_says_how_many_lines_it_replaced(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- a\n- b\n")
+        code, out = add(vault, "### World State\n\n- c\n", "--replace")
+        self.assertIn("replaced (4 lines)", out)
+
+    def test_a_marker_in_the_text_given_is_named_as_such(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "## Aside\n\nx\n<!-- gm-only -->\n")
+        self.assertEqual(code, 1)
+        self.assertIn("in the text given, not in the note", out)
+
+    # 2.12
+    def test_a_null_play_notes_is_absent(self):
+        for value in ("null", "~", '""', '"[[]]"'):
+            with self.subTest(value):
+                src = INDEX.replace(
+                    'play_notes: "[[Session 02 - The Docks - Play Notes]]"',
+                    f"play_notes: {value}")
+                notes, body = WrapupNewTests._notes(
+                    None, "Session 02 - The Docks - Play Notes")
+                vault = make_vault(self, {INDEX_REL: src, notes: body})
+                code, out = run(vault, "wrapup-new", "--session", INDEX_REL,
+                                "--write")
+                self.assertEqual(code, 0, out)
+                self.assertIn('source_document: "[[Session 02 - The Docks '
+                              '- Play Notes]]"\n', read(vault, WRAP_REL))
+
+    def test_an_existing_wrap_up_under_another_name_is_refused(self):
+        other = "Chapters/Chapter 1 - Arrival/Sessions/Session 02/Recap.md"
+        src = INDEX.replace("[[Chapter_01_Session_02_Wrap_Up]]", "[[Recap]]")
+        vault = make_vault(self, {INDEX_REL: src, other: "x\n"})
+        code, out = run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn(f"already has a Wrap-Up: {other}", out)
+        self.assertFalse((vault / WRAP_REL).exists())
+
+    # 2.13
+    def test_story_dash_forms_are_one_heading(self):
+        vault = story_vault(self, {})
+        code, out = tell(vault, "# [[Rock Lavey]]\n\n## Session 2 - The "
+                                "Docks\n\nText.\n")
+        self.assertEqual(code, 0, out)
+        code, out = tell(vault, "# [[Rock Lavey]]\n\n## Session 2 — The "
+                                "Docks\n\nAgain.\n", "--as-of", "x")
+        self.assertEqual(code, 1, out)
+        self.assertIn("already has", out)
 
 
 if __name__ == "__main__":
