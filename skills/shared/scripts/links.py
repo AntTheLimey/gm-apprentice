@@ -64,7 +64,6 @@ from relink import (
 from vaultlib import (
     LINK_RE,
     UNCHECKED_DIRS,
-    frontmatter_span,
     inline_code_spans,
     inside_spans,
     is_unchecked_source,
@@ -188,7 +187,8 @@ def report(vault: Path) -> tuple[list[Row], int]:
         found = candidates(spelt[0], index)
         rows.append(Row("NEAR" if found else "UNWRITTEN", spelt,
                         sorted(sources), found))
-    rows.sort(key=lambda r: (("NEAR", "UNWRITTEN", "FILE").index(r.kind), -len(r.sources),
+    order = ("NEAR", "UNWRITTEN", "FILE")
+    rows.sort(key=lambda r: (order.index(r.kind), -len(r.sources),
                              r.spellings[0].casefold()))
     return rows, unchecked
 
@@ -251,7 +251,7 @@ def _retarget(new: str, keep_text: bool) -> Fix:
         dest, sub, shown = parsed
         if keep_text and not shown and not embed and not in_fm:
             # In a table cell a bare pipe would end the cell.
-            pipe = "\\|" if line.lstrip().startswith("|") else "|"
+            pipe = "\\|" if line.lstrip(" \t>").startswith("|") else "|"
             shown = pipe + link_name(dest)
         return f"{'!' if embed else ''}[[{new}{sub}{shown}]]", ""
     return fix
@@ -271,15 +271,17 @@ def _unlink(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
 def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
              p: Plan) -> str:
     lines = text.splitlines(keepends=True)
-    fm_end, _ = frontmatter_span(lines)
     states, _ = scan_body(text)
     code = {s.lineno for s in states if s.in_code}
+    # Everything before the first body line is frontmatter, by scan_body's
+    # own rule; a note that is only frontmatter has no body line at all.
+    body_start = states[0].lineno if states else len(lines) + 1
     out: list[str] = []
     for lineno, line in enumerate(lines, 1):
         if lineno in code:
             out.append(line)
             continue
-        in_fm = lineno <= fm_end + 1
+        in_fm = lineno < body_start
         spans = [] if in_fm else inline_code_spans(line)
 
         def sub(m: re.Match[str], lineno: int = lineno, line: str = line,

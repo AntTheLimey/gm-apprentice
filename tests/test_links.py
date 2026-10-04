@@ -164,6 +164,8 @@ class ReportTests(unittest.TestCase):
 
 
 NOTE = "Locations/Barabazar.md"
+# Frontmatter with a line that is not `key: value` shaped.
+ODD_FM = '---\nfoo bar baz\nloc: "[[Bara Bazaar]]"\n---\n[[Bara Bazaar]]\n'
 
 
 class RetargetTests(unittest.TestCase):
@@ -198,10 +200,19 @@ class RetargetTests(unittest.TestCase):
             "[[Bara Bazaar|the market]]": "[[Barabazar|the market]]",
             "| a | [[Bara Bazaar]] |": "| a | [[Barabazar\\|Bara Bazaar]] |",
             "![[Bara Bazaar]]": "![[Barabazar]]",
+            "> | a | [[Bara Bazaar]] |": "> | a | [[Barabazar\\|Bara Bazaar]] |",
         }
         for line, want in cases.items():
             with self.subTest(line=line):
                 self.assertEqual(self.after(line, keep_text=True), want)
+
+    def test_unusual_frontmatter_is_still_frontmatter(self):
+        vault = make_vault(self, {NOTE: "x\n", "A.md": ODD_FM})
+        p = links.plan_retarget(vault, "Bara Bazaar", NOTE, keep_text=True)
+        self.assertEqual(
+            p.texts["A.md"],
+            '---\nfoo bar baz\nloc: "[[Barabazar]]"\n---\n'
+            '[[Barabazar|Bara Bazaar]]\n')
 
     def test_frontmatter_links_are_retargeted_without_display_text(self):
         vault = make_vault(self, {
@@ -314,6 +325,16 @@ class UnlinkTests(unittest.TestCase):
         p = links.plan_unlink(vault, ["Judo"])
         self.assertEqual(sorted(p.texts), ["B.md"])
         self.assertEqual(p.kept, [("A.md", 2, "[[Judo]]", "frontmatter")])
+
+    def test_unusual_frontmatter_is_still_frontmatter(self):
+        vault = make_vault(self, {"A.md": (
+            '---\ndescription: a long\n  wrapped value\nfoo bar baz\n'
+            'skills: ["[[Judo]]"]\n---\n[[Judo]]\n')})
+        p = links.plan_unlink(vault, ["Judo"])
+        self.assertEqual(p.texts["A.md"], (
+            '---\ndescription: a long\n  wrapped value\nfoo bar baz\n'
+            'skills: ["[[Judo]]"]\n---\nJudo\n'))
+        self.assertEqual(p.kept, [("A.md", 5, "[[Judo]]", "frontmatter")])
 
     def test_several_names_at_once(self):
         vault = make_vault(self, {"A.md": "[[Judo]], [[Signature Gear]]\n"})
