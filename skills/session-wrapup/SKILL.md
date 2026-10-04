@@ -9,10 +9,9 @@ writes the Wrap-Up file that session-prep reads next.
 **On first invocation:** read `shared/session-principles.md` and
 run its Version Gate, then read `shared/session-document-chain.md`.
 
-**Placing text:** `vw` is `python3
+**Placing:** `vw` is `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py"
-<vault>`: you write, it places, text on stdin (`<<'EOF'`). Dry
-run until `--write`.
+<vault>`: you write, it places, text on stdin (`<<'EOF'`).
 
 **Session index:** stamp it (dry-run, then `--write` on
 confirmation):
@@ -30,16 +29,17 @@ to the scenes actually played; unplayed ones go under Skipped Prep.
 Leave the index body alone: handoffs and notes for next session go in
 this Wrap-Up's GM Notes.
 
-**Wrap-Up file:** with the index stamped, `vw wrapup-new --session
-"<session index>" --source "<the notes' origin>" --write` creates
-it. Sections, per `shared/templates/session-wrap.md`
-(vault copy `_Templates/_Template_Session_WrapUp.md` if present),
-go in with `vw wrapup-add "<wrap-up>" --write`, several per call,
-any order. Those not marked optional/conditional are required;
-omit empty optional ones; `### Reconciliation Context` is
-reconcile's. Add any section the GM or the story calls for: `##`
-is for players, `###` goes under GM Notes. A new `##` is reported
-"players will see this": check it is meant.
+**Wrap-Up file:** after the stamp, `vw wrapup-new --session
+"<session index>" --source "<notes' origin>" --write` creates it.
+Sections, per `shared/templates/session-wrap.md` (vault copy
+`_Templates/_Template_Session_WrapUp.md` if present), go in with
+`vw wrapup-add "<wrap-up>" --write`, several per call. Those not
+marked optional/conditional are required. Add any section the GM
+or the story calls for: `##` is for players; `###` goes under GM
+Notes, but one sent after a `##` in the same call stays in that
+player section, so send Keeper sections first or separately.
+Dry-run any call adding a new section or sub-section for players;
+read its "players will see this" rows before `--write`.
 
 **Authoring vs. preserving:** four outputs are authoring
 exceptions to `shared/content-fidelity.md`, because the source is
@@ -176,10 +176,9 @@ creating entities.
   types' templates carry no such section — don't add one. Where the
   truth differs, add the matching bullet to its GM Notes `### Behind
   the Scenes`. `vw log --write` places them all, no note read
-  first: tab-separated rows of note path, section, bullet, the
-  Keeper's section as `GM Notes/Behind the Scenes`. Each
-  `(projected)` entry (Behind the Scenes or Under Pressure) on an
-  entity that appeared: drop the marker if it played, strike it
+  first: rows `<path><TAB>Campaign Log<TAB>{bullet}`, or
+  `GM Notes/Behind the Scenes`. Each `(projected)` entry (Behind
+  the Scenes or Under Pressure) on an entity that appeared: drop the marker if it played, strike it
   through with `not played` if play went elsewhere, or leave it if
   still pending. A fork is settled branch by branch: keep the branch
   that played and strike the other through with `not played`. PCs are
@@ -194,7 +193,7 @@ creating entities.
 - **Timeline:** `- **{in_game_date}** — {description}`
   (`[[Event_Name]] — {summary}` when linked), or the shape this
   timeline already uses. `vw timeline --under "<its heading for the
-  session, with hashes>" --write` takes them on stdin.
+  session>" --write` places them (`--after` sites a new heading).
 - **Events:** create an Event file from `_Templates/_Template_Event.md`
   (dated with `in_game_date:`) when a moment meets its threshold — see
   `shared/templates/event.md`'s comment if the vault copy lacks one.
@@ -216,7 +215,7 @@ Step 4 ran as sub-agents, also run `relationships` once more with
 `--newer-than <session index>` (stamped once, before Step 1, and
 never touched again) as a completeness cross-check on the `--file`
 list — a row naming a path that isn't in that list, isn't a 3b/3c
-PC or Story file and isn't the Wrap-Up means a sub-agent
+PC or Story file, the Wrap-Up or a `vw` target means a sub-agent
 under-reported. Don't re-read files to self-check.
 
 **Receipts:** show new/updated entity content in the conversation
@@ -226,8 +225,8 @@ Wrap-Up file, which only wiki-links entities.
 Step 4's entity writes are independent: with the Agent tool, run
 them as parallel light-model sub-agents, each returning its log
 bullets and the vault-relative paths it wrote for Validate's
-`--file` list and cross-check; otherwise sequentially. `vw log`
-and `vw timeline` stay with you.
+`--file` list and cross-check; otherwise sequentially. The `vw`
+calls stay with you.
 
 ### 4b. Update Campaign Overview
 

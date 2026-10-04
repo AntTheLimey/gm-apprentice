@@ -69,21 +69,13 @@ voice).
 
 ## Appending
 
-Write the entries, then place them all in one call, each under a
-`# [[PC Name]]` line:
+Write the entries, then place them all in one call, on stdin
+(`<<'EOF'`), each under a `# [[PC Name]]` line:
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" \
   <vault> story --wrapup "<wrap-up>" --as-of "<asOfSession value>" \
-  --date YYYY-MM-DD --write <<'EOF'
-# [[PC Name]]
-
-{entry}
-
-# [[Next PC]]
-
-{entry}
-EOF
+  --date YYYY-MM-DD --write
 ```
 
 It creates a missing story file, appends at the bottom, stamps the
