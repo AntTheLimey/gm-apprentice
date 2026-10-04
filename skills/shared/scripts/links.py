@@ -1,0 +1,182 @@
+#!/usr/bin/env python3
+"""links.py: list a vault's broken links by kind, and fix them.
+
+    links.py VAULT
+    links.py VAULT retarget NAME NOTE [--keep-text] [--write]
+    links.py VAULT unlink NAME [NAME ...] [--write]
+
+With no command it prints a report and writes nothing: a header line, then
+one tab-separated row per broken name.
+
+    NEAR       an existing note may be what was meant. Up to three
+               candidates, best first, each tagged `same` (equal once
+               case, spaces, punctuation, accents and emoji are dropped),
+               `close` (a likely typo) or `part` (one name is the other
+               with extra words before or after).
+    UNWRITTEN  nothing like it exists. Spellings that differ only as
+               `same` does share a row.
+
+Links written in notes under `_QA` and `_archive` are not reported; the
+header counts the names broken only there.
+
+`retarget` rewrites every link to NAME to point at NOTE (a vault path, or
+a filename only one note has). The misspelt name is replaced unless
+--keep-text keeps the words on the page as the link's display text. A
+link's heading, block and display text are kept.
+
+`unlink` turns every link to NAME into its words. A link in frontmatter
+and an embed are left alone and listed as KEPT.
+
+Both fixes print what they would change and write nothing without
+--write. With --write every note is written or none is. Links in a code
+fence or inline code are never touched.
+
+Exit: 0 done or a clean preview; 1 refused or failed (one line why);
+2 usage error.
+"""
+
+from __future__ import annotations
+
+import argparse
+import difflib
+import re
+import sys
+import unicodedata
+from dataclasses import dataclass
+from pathlib import Path
+
+import graph_check
+from vaultlib import UNCHECKED_DIRS, is_unchecked_source
+
+TAGS = ("same", "close", "part")
+Index = list[tuple[str, list[str], set[str]]]
+
+
+def _fold(name: str) -> str:
+    """Lower case, accents dropped."""
+    return "".join(c for c in unicodedata.normalize("NFKD", name)
+                   if not unicodedata.combining(c)).casefold()
+
+
+def squash(name: str) -> str:
+    """A name with case, spaces, punctuation, accents and emoji dropped."""
+    return "".join(c for c in _fold(name) if c.isalnum())
+
+
+def _words(name: str) -> list[str]:
+    return [w for w in re.split(r"[\W_]+", _fold(name)) if w]
+
+
+def _part(a: list[str], b: list[str]) -> bool:
+    """One name is the other with extra words before or after."""
+    short, long = (a, b) if len(a) < len(b) else (b, a)
+    if len(short) == len(long) or len("".join(short)) < 4:
+        return False
+    return long[:len(short)] == short or long[-len(short):] == short
+
+
+def _index(names: dict[str, set[str]]) -> Index:
+    """Every name and alias a note answers to: (squashed, words, notes)."""
+    return [(squash(known), _words(known), rels)
+            for known, rels in names.items() if squash(known)]
+
+
+def candidates(name: str, index: Index) -> list[tuple[str, str]]:
+    """Up to three notes `name` may mean, best first: (path, tag)."""
+    sq, words = squash(name), _words(name)
+    rank: dict[str, int] = {}
+    by_squash: dict[str, set[str]] = {}
+
+    def offer(rels: set[str], r: int) -> None:
+        for rel in rels:
+            rank[rel] = min(rank.get(rel, r), r)
+
+    for known_sq, known_words, rels in index:
+        by_squash.setdefault(known_sq, set()).update(rels)
+        if known_sq == sq:
+            offer(rels, 0)
+        elif _part(words, known_words):
+            offer(rels, 2)
+    if sq:
+        for near in difflib.get_close_matches(sq, list(by_squash), n=3,
+                                              cutoff=0.85):
+            offer(by_squash[near], 1)
+    best = sorted(rank.items(), key=lambda kv: (kv[1], kv[0]))[:3]
+    return [(rel, TAGS[r]) for rel, r in best]
+
+
+@dataclass
+class Row:
+    kind: str
+    spellings: list[str]
+    sources: list[str]
+    candidates: list[tuple[str, str]]
+
+
+def report(vault: Path) -> tuple[list[Row], int]:
+    """The broken links of checked notes, grouped, and how many names are
+    broken only in unchecked folders."""
+    _notes, names, _outbound, spellings = graph_check.collect(vault, [])
+    index = _index(names)
+    groups: dict[str, dict[str, dict[str, str]]] = {}
+    unchecked = 0
+    for target, srcs in graph_check.broken(vault, names, spellings).items():
+        checked = {s: sp for s, sp in srcs.items()
+                   if not is_unchecked_source(s)}
+        if not checked:
+            unchecked += 1
+            continue
+        groups.setdefault(squash(target) or target, {})[target] = checked
+    rows = []
+    for group in groups.values():
+        spelt: list[str] = []
+        sources: set[str] = set()
+        for target in sorted(group):
+            srcs = group[target]
+            first = srcs[min(srcs)]
+            if first not in spelt:
+                spelt.append(first)
+            sources |= set(srcs)
+        found = candidates(spelt[0], index)
+        rows.append(Row("NEAR" if found else "UNWRITTEN", spelt,
+                        sorted(sources), found))
+    rows.sort(key=lambda r: (r.kind != "NEAR", -len(r.sources),
+                             r.spellings[0].casefold()))
+    return rows, unchecked
+
+
+def report_lines(rows: list[Row], unchecked: int) -> list[str]:
+    notes = {s for r in rows for s in r.sources}
+    out = [f"# broken: {len(rows)} names in {len(notes)} notes; not checked: "
+           f"{', '.join(UNCHECKED_DIRS)} ({unchecked} names)"]
+    for r in rows:
+        cols = [r.kind, " | ".join(r.spellings)]
+        if r.candidates:
+            cols.append("-> " + "; ".join(f"{rel} ({tag})"
+                                          for rel, tag in r.candidates))
+        n, more = len(r.sources), len(r.sources) - 5
+        cols.append(f"{n} note{'' if n == 1 else 's'}: "
+                    + ", ".join(r.sources[:5])
+                    + (f", +{more} more" if more > 0 else ""))
+        out.append("\t".join(cols))
+    return out
+
+
+def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
+    ap = argparse.ArgumentParser(
+        description="List a vault's broken links by kind, and fix them.")
+    ap.add_argument("vault", type=Path)
+    args = ap.parse_args(argv)
+    if not args.vault.is_dir():
+        print(f"links.py: not a directory: {args.vault.as_posix()}",
+              file=sys.stderr)
+        return 2
+    print("\n".join(report_lines(*report(args.vault))))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
