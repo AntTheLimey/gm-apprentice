@@ -129,9 +129,20 @@ and what remains.
 Ask: "Ready to set up the vault for this campaign?"
 If yes:
 
-1. **Create Campaign Overview** at
-   `_Campaign/Campaign Overview.md` using the template from
-   `shared/templates/campaign-overview.md`. Populate from the
+1. **Build the skeleton.** Preview, then create on the GM's yes:
+
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
+     <vault> --system <id> --name "<campaign name>"
+   ```
+
+   then the same command with `--write`. Use `--no-system` when no
+   system was chosen. It builds around the `Adventures/` and
+   `_World/` files already there and never overwrites them.
+
+2. **Create Campaign Overview** at
+   `_Campaign/Campaign Overview.md` from
+   `_Templates/_Template_Campaign_Overview.md`. Populate from the
    adventure brief conversation:
    - `campaign`: adventure/campaign name
    - `game_system`: system chosen (or empty if undecided)
@@ -149,11 +160,6 @@ If yes:
    - GM Notes section: empty (a bare `## GM Notes` heading — the
      canonical single heading for whole-section GM-only content,
      see `shared/entity-schema.md`)
-
-2. **Hand off** to campaign-organizer with the adventure
-   brief as context. campaign-organizer builds the vault
-   around the existing `Adventures/`, `_Campaign/`, and (when
-   world facts emerged in Step 2c) `_World/` folders.
 
 ### Step 4: Update Status
 

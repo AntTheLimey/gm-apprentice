@@ -56,7 +56,8 @@ On first contact with a vault:
 1. **`_meta/` exists** → read all four files; they are the live
    schema. Don't assume defaults. Then run the version check.
 2. **`_meta/` missing** → first-time setup: read
-   `references/vault-setup.md`. No version check.
+   `references/vault-setup.md` (it runs `vault_scaffold.py`). No
+   version check.
 
 **Version check** (once per session): run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
