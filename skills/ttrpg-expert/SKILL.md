@@ -188,6 +188,7 @@ investigation. No keyword or tag → base files only.
 | Feats | `feats.md` | feat |
 | Conditions / rules | `conditions-rules.md` | condition |
 | Combat / actions | `rules-reference.md` | |
+| Converting an old-layout PC note | `sheet-conversion.md` | |
 
 ### PF2e Remaster (`systems/pf2e/`)
 

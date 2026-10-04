@@ -135,23 +135,29 @@ Game assumes PCs are not evil. Check with GM before making an evil character.
 
 ### Write the Sheet and Fill the Numbers
 
-Write the PC note in the template's layout, following "Writing the Sheet in the Vault" in character-sheet.md: scores, level, save and skill proficiencies, one row per feature, trait, feat and spell.
+Write the PC note in the template's layout, following "Writing the Sheet in the Vault" in character-sheet.md. The order matters, because the attack lines are built from numbers the tool fills:
 
-Do not work out or type the modifiers, saves, skill bonuses, passive scores, Initiative, spell attack or spell save DC. One tool owns those sums, so they are right now and stay right at every level-up:
+1. Write the level, the scores, the save and skill proficiencies, and one row per feature, trait, feat and spell. An item, feat or feature that adds to saves, checks, initiative or the spell numbers goes in `### Bonuses`, not into a hand sum.
+2. Run the tool. Do not work out or type the modifiers, saves, skill bonuses, passive scores, Initiative, spell attack or spell save DC: one tool owns those sums, so they are right now and stay right at every level-up.
 
-```bash
-python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
-```
+   ```bash
+   python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
+   ```
 
-Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes.
+   Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes.
+3. Read the modifiers and the proficiency bonus it filled, and write what it leaves to you (too many features move these for a sum to be trusted):
 
-The tool leaves these to you, because too many features move them. Write them by hand, with Speed and the hit point maximum below:
+   | Number | How it is made |
+   |--------|----------------|
+   | Armor Class | 10 + DEX mod (unarmored); varies with armor. Note what it is made of in `**Armour Class:**` |
+   | Melee attack | STR mod + PB to hit (DEX if better, for a Finesse weapon); weapon die + the same modifier for damage |
+   | Ranged attack | DEX mod + PB to hit; weapon die + DEX mod for damage. A thrown weapon keeps its melee ability |
+   | Damage cantrip | its own row: spell attack modifier, or `DC 13 Wis` when the target saves |
+   | Hit point maximum, Speed | the tables below and the species |
 
-| Number | Formula |
-|--------|---------|
-| Armor Class | 10 + DEX mod (unarmored); varies with armor. Note what it is made of in `**Armour Class:**` |
-| Melee Attack | STR mod + PB (or DEX for Finesse) |
-| Ranged Attack | DEX mod + PB |
+4. Give every carried thing a `### Gear` row with the weight of one (weights are in equipment.md), then run the tool again: it totals the weight and sets the Carrying values.
+
+An unused `## Spellcasting` or `## Companions` section is deleted, and so are slot rows above the character's highest slot level.
 
 ### Level 1 Hit Points
 
@@ -164,14 +170,14 @@ The tool leaves these to you, because too many features move them. Write them by
 
 ### Equipment
 
-Both background and class provide starting equipment. Coins can be spent on additional gear from equipment tables.
+Both background and class provide starting equipment. Coins can be spent on additional gear from equipment tables. Each item, weapons and armour included, is a `### Gear` row with its weight; a magic item is also a `### Magic Items` row.
 
 ### Spellcasting (if applicable)
 
 1. Note spell slots from class table
 2. Note cantrips known
 3. Note prepared spells count
-4. Choose cantrips and prepared spells; each gets a row in the note's `### Spells` table
+4. Choose cantrips and prepared spells; each gets a row in the note's `### Spells` table (the player's choices: ask, do not pick for them). A spell from a feat, species trait or item names it in `Source`
 5. All 2024 classes use prepared spell model
 
 ### Backstory Prompts

@@ -190,20 +190,23 @@ real template, so a mismatch fails the suite.
 |---------|-----------|--------------------------|
 | `## Stat Sheet` | `### Core` | `Attribute \| Value` (rows Level, XP, Proficiency Bonus, Heroic Inspiration) |
 | | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency \| Save` (rows STR/DEX/CON/INT/WIS/CHA) |
-| | `### Combat` | `Attribute \| Value` (rows AC, Initiative, Speed, Size, `HP (Current)`, `HP (Max)`, `Temp HP`, `Hit Dice (Spent/Max)`, `Death Saves (S/F)`, Exhaustion, Conditions) |
+| | `### Combat` | `Attribute \| Value` (rows AC, Initiative, Speed, Size, `HP (Current)`, `HP (Max)`, `Temp HP`, `Hit Dice (Spent/Max)`, `Death Saves (S/F)`, Exhaustion, Conditions; optional rows `Fly Speed`, `Swim Speed`, `Climb Speed`, `Burrow Speed`, `Attacks per Action`, and any row whose label ends `Save DC`) |
 | | `### Senses` | `Attribute \| Value` (rows Passive Perception, Passive Investigation, Passive Insight, then any special sense) |
-| | `### Defences` | the `**Resistances:**`, `**Immunities:**`, `**Vulnerabilities:**`, `**Condition Immunities:**` and `**Armour Class:**` lines |
+| | `### Bonuses` | `Applies To \| Bonus \| Source` |
+| | `### Defences` | the `**Resistances:**`, `**Immunities:**`, `**Vulnerabilities:**`, `**Condition Immunities:**`, `**Advantages:**` and `**Armour Class:**` lines |
 | `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header. The class line carries levels: `Paladin 5 (Oath of Devotion)`, a multiclass joined by `/` |
-| `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
+| `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier`; `Proficient` is `Yes`, `No` or `Half` |
 | `## Class Features`, `## Species Traits`, `## Feats` | — | each `Name \| Action \| Uses \| Used \| Recovers \| Summary` |
 | `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC); a second casting class adds rows labelled with the class |
 | | `### Spell Slots` | `Level \| Total \| Expended`; a warlock adds a row `Pact (3rd)`; a row with neither Total nor Expended is left out |
-| | `### Spells` | `Spell \| Level \| Time \| Range \| Components \| Duration \| Hit / DC \| Tags \| Summary` |
+| | `### Spells` | `Spell \| Level \| Time \| Range \| Components \| Duration \| Hit / DC \| Tags \| Source \| Summary` (the nine columns without `Source` are still read) |
 | `## Proficiencies` | — | shown as written (`**Armor Training:**`, `**Weapons:**`, `**Weapon Mastery:**`, `**Tools:**`, `**Languages:**`) |
 | `## Equipment` | `### Weapons & Damage Cantrips` | `Name \| Atk Bonus / DC \| Damage & Type \| Notes`; this is the attack list |
-| | `### Gear` | `Item \| Qty \| Notes` |
-| | `### Magic Item Attunement` | `Slot \| Item` |
+| | `### Gear` | `Item \| Qty \| Weight \| Notes`, the weight of one in pounds (the three columns without `Weight` are still read) |
+| | `### Carrying` | `Attribute \| Value` (rows Carried Weight, Carrying Capacity, `Drag / Lift / Push`, Encumbrance) |
+| | `### Magic Items` | `Item \| Attuned \| Charges \| Used \| Recovers \| Notes` (the earlier `### Magic Item Attunement`, `Slot \| Item`, is still read) |
 | | `### Coins` | `CP \| SP \| EP \| GP \| PP`, one row of numbers |
+| `## Companions` | — | `Companion \| Kind \| AC \| HP \| Speed \| Notes`; optional, deleted when unused |
 
 Vocabulary the page acts on:
 
@@ -219,6 +222,30 @@ Vocabulary the page acts on:
 - **Tags** (spells): comma-separated. `C` (concentration) and `R`
   (ritual) are recognised; the rest are shown (`Always prepared`).
 - **Level** (spells): `Cantrip` or `1` to `9`; the page groups by it.
+- **Source** (spells): blank for a class spell, otherwise the item, feat
+  or species trait that grants it; shown as a tag. A cost in charges
+  goes in Tags.
+- **Hit / DC** (spells) and **Atk Bonus / DC** (attacks): a signed
+  number is an attack roll and is labelled `Hit`; `DC 13 Wis` or
+  anything else is shown as written with no label.
+- **Proficient** (skills): `Yes`, `No` or `Half`. Half proficiency has
+  its own mark. `Half` beside `Expertise: Yes` is not a state the sheet
+  has, and the row is shown as written.
+- **Bonuses**, read by `dnd_sheet.py` and only shown by the page.
+  `Applies To`, comma-separated and case-insensitive: `Saves`,
+  `Ability Checks` (every skill and Initiative), `Skills`, `Initiative`,
+  one ability's save (`Wisdom Save`), a skill name,
+  `Passive Perception` / `Passive Investigation` / `Passive Insight`,
+  `Spell Attack`, `Spell Save DC`. `Bonus`: a signed whole number, an
+  ability (its modifier, as it is), `PB`, or `Half PB` (rounded down).
+- **Attuned** (magic items): `Yes`, `No` or blank. The block's caption
+  counts the `Yes` rows against three. **Charges / Used / Recovers**
+  work as a feature's Uses, Used and Recovers do.
+- **Weight** (gear): a number with an optional `lb`, for one item; `—`
+  for something weightless.
+- **Carrying**: `Carried Weight`, `Carrying Capacity` and
+  `Drag / Lift / Push` are a number with ` lb`; `Encumbrance` is
+  `Within capacity` or `Over capacity (Speed 5 ft)`.
 
 Notes:
 
@@ -227,12 +254,27 @@ Notes:
   `skills/shared/scripts/dnd_sheet.py` fills the derived cells:
   Proficiency Bonus, each ability's Modifier and Save, each skill's
   Modifier, the three passive scores, Initiative, Spell Attack Modifier
-  and Spell Save DC. It maintains a cell that is blank or a bare number
+  and Spell Save DC, and the four `### Carrying` values when the note
+  has that table. It maintains a cell that is blank or a bare number
   and keeps one that carries a reason, `+7 (cloak of elvenkind)`. AC,
   HP, Speed, attack lines and slot totals are written by hand.
+- **What the tool adds in.** Each readable `### Bonuses` row is added
+  to the cells it names, and the report says so
+  (`+7 -> +9 (incl. +2 Ring of Protection)`). A passive score is ten
+  plus the finished skill, so a skill's bonus carries into it, plus any
+  bonus naming the passive. A row it cannot read is reported `KEPT`
+  and adds nothing. A `Half` skill gets half the proficiency bonus,
+  rounded down. Carried weight is Qty times Weight over the Gear rows
+  (a blank Qty is one; a row with no readable weight counts nothing and
+  is named in the report) plus the coins at fifty to the pound;
+  capacity and drag, lift or push are the Strength score times the
+  SRD 5.2 Carrying Capacity table's factor for the Combat `Size` row
+  (Medium when absent). A capacity with a reason
+  (`300 lb (Powerful Build)`) is kept, and Encumbrance is measured
+  against it. A note with no `### Carrying` table gets none added.
 - **Nothing in a consumed section is dropped.** Stat Sheet, Skills,
-  Class Features, Species Traits, Feats, Spellcasting, Proficiencies
-  and Equipment leave the accordion list once the sheet renders
+  Class Features, Species Traits, Feats, Spellcasting, Proficiencies,
+  Equipment and Companions leave the accordion list once the sheet renders
   (`isDndConsumedTitle` in `dnd/index.js` is the one matcher both sides
   use), so the renderer shows as written whatever it cannot place: an
   extra or repeated `###` subsection, a repeated `##` section, prose or
@@ -242,14 +284,28 @@ Notes:
   whose leading header cells are not the ones above is shown whole as a
   table. So is any single row it cannot read: a Proficient, Expertise
   or Save Proficiency cell that is not a yes or no word, an ability row
-  that is not one of the six, a Uses or Used cell that is not a whole
-  number, a Used count with no Uses beside it, a spell whose Level is
+  that is not one of the six, a Uses, Used or Charges cell that is not a whole
+  number, a Used count with no Uses or Charges beside it, an Attuned
+  cell that is not a yes or no word, a spell whose Level is
   not `Cantrip` or `1` to `9`, and a slot row whose Total is not a number
-  or whose Expended exceeds it. A feature, spell, attack, gear, skill or
-  attunement item name may be a wikilink.
-- **Extra rows are shown.** Any row in `### Combat` beyond the ones
-  listed above is shown as a tile, with its label and value as written.
-  A Recovers cell is shown whether or not Uses is filled in.
+  or whose Expended exceeds it. A feature, spell, attack, gear, skill,
+  magic item, companion or bonus source name may be a wikilink.
+- **Where the optional Combat rows go.** The four extra speeds join
+  the pinned strip's Speed tile, small beneath the number.
+  `Attacks per Action` and each `Save DC` row are tiles at the top of
+  the Combat tab's Attacks block. Any other row in `### Combat` is
+  shown as a tile under the hit dice, with its label and value as
+  written. A Recovers cell is shown whether or not Uses is filled in.
+- **What goes where.** Bonuses are a block on the Sheet tab. Companions
+  close the Combat tab. Carrying and Magic Items are on the Equipment
+  tab; an item's charges are not grouped under an action on Combat.
+- **A line that holds nothing is not shown.** A Defences line whose
+  value is blank or a dash, a Carrying row with no value, and a
+  Companions section left as the template has it add nothing to the
+  page.
+- **The pinned strip on a phone** (480px and below) is one row of five
+  tiles; its chips are shown only when they have something to say (a
+  condition, exhaustion above 0, Heroic Inspiration held).
 - **The layout before 1.10.33 is still read**, so a note nobody has
   converted keeps publishing with every line on the page. A
   four-column ability table (no `Save`) is placed with no save number.
@@ -267,7 +323,7 @@ Notes:
   it (`Race` and `Classes` are accepted too); its prose is not on the
   sheet.
 - The template's own `{list}` placeholders, its empty table rows and
-  its "Omit this section" note are not content, and a Spellcasting
+  its "Omit this section" and "Delete this section" notes are not content, and a Spellcasting
   section with nothing filled in is left out, so a non-caster has no
   Spells tab. Braces an author wrote are kept.
 

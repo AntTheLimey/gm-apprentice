@@ -6,36 +6,63 @@ Complete sheet reference for the d20 system. Use this to build, audit, or unders
 
 The PC note's layout is the template's (`shared/templates/pc-dnd-5e-2024.md`). The published page finds each block by its heading and column names, so keep both exactly as the template has them; a renamed one falls out of the sheet into a plain table.
 
-**Numbers.** Do not work a modifier out by hand: a hand sum is right today and stale at the next level-up. Write the scores, the level and the Yes/No proficiency cells, leave the derived cells as they are, then run:
+**Order of work.** The tool owns the sums, so let it do them first and build on what it wrote:
+
+1. Write the level, the six scores, the save and skill proficiency cells, and any `### Bonuses` rows. Leave every derived cell blank or as it was.
+2. Run the tool and show the GM its `FILL` rows; on their yes, run it again with `--write`.
+3. Read the modifiers and proficiency bonus it filled, then write what it leaves to you: the attack lines, AC, the hit point maximum and Speed.
+4. Add Gear with weights, then run the tool once more so the Carrying values are filled.
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
 ```
 
-It prints a row for every derived cell: `SAME`, `FILL` (old -> new), `KEPT`, or `ERROR` when it cannot read the sheet (nothing is written then; fix the note first). Nothing is written yet. Show the GM the `FILL` rows and, on their yes, run it again with `--write`. Do this after building a character, after a level-up, and after any change to a score or a proficiency.
+It prints a row for every derived cell: `SAME`, `FILL` (old -> new), `KEPT`, or `ERROR` when it cannot read the sheet (nothing is written then; fix the note first). Run it after building a character, after a level-up, and after any change to a score, a proficiency, a bonus or the gear.
 
-- A number the rules change (an item, a feat, a class feature) is written with its reason: `+7 (cloak of elvenkind)`, `+3 (Alert)`. The tool keeps any cell that is not blank or a bare number and replaces a bare number, so a hand-set value with no reason is lost at the next fill.
-- AC, HP maximum, Speed and the attack lines are always written by hand, because too many features move them for a sum to be trusted. Say what the AC is made of in `**Armour Class:**` under Defences: `Chain Mail 16 + Shield 2`.
+**Bonuses, not hand sums.** A hand sum is right today and stale at the next level-up. An item, feat or feature that adds to saves, checks, initiative or the spell numbers gets one row in `### Bonuses` (`Applies To | Bonus | Source`); the tool adds it in and says so in its report, and the cell it feeds stays a bare number.
+
+- **Applies To**, comma-separated: `Saves`, `Ability Checks` (every skill and Initiative), `Skills`, `Initiative`, one save (`Wisdom Save`), a skill name, `Passive Perception` / `Passive Investigation` / `Passive Insight`, `Spell Attack`, `Spell Save DC`.
+- **Bonus:** a signed number, an ability (`CHA`: that modifier, as it is), `PB`, or `Half PB` (rounded down).
+
+```text
+| Saves      | +1  | Ring of Protection |
+| Initiative | PB  | Alert              |
+| Saves      | CHA | Aura of Protection |
+```
+
+A bard's Jack of All Trades is not a Bonuses row: write `Half` in the `Proficient` cell of each skill the bard lacks, and the tool adds half the proficiency bonus. In the 2024 rules that feature covers skill checks only, so Initiative gets nothing from it; a table that rules otherwise adds `Initiative | Half PB | Jack of All Trades`.
+
+Write a number by hand, with its reason, only for what that vocabulary cannot say: `+7 (cloak of elvenkind)`. The tool keeps any cell that is not blank or a bare number and replaces a bare one, so a hand-set value with no reason is lost at the next fill. A Bonuses row the tool cannot read is reported `KEPT` and adds nothing; reword it or move the number to its cell with a reason.
+
+**Attack lines** (`### Weapons & Damage Cantrips`) are yours. To hit is the ability modifier plus the proficiency bonus when proficient; damage is the weapon's die plus the same modifier. Strength for melee, Dexterity for ranged; a Finesse weapon takes whichever is better, and a thrown weapon keeps its melee ability. Name the mastery and the range in Notes. A damage cantrip is a row too, so the player sees it beside the weapons. The **Atk Bonus / DC** cell (and a spell's **Hit / DC**) holds a signed number for an attack roll (`+5`) or `DC 13 Wis` for a save, never both and never prose.
+
+**AC, HP maximum, Speed** are also yours, because too many features move them for a sum to be trusted. Say what the AC is made of in `**Armour Class:**` under Defences: `Chain Mail 16 + Shield 2`. Other movement goes in its own Combat row (`Fly Speed`, `Swim Speed`, `Climb Speed`, `Burrow Speed`) and joins the Speed tile. `Attacks per Action` and any feature's own DC (a row whose label ends `Save DC`) are Combat rows too.
+
+**Empty values.** Write what an empty thing looks like, not a dash the page would have to print: hit dice `0/3` (none spent of three), death saves `0/0`, `HP (Current)` equal to the maximum when the note gives only one number. Leave a Defences line out when there is nothing to list. Delete the slot rows above the character's highest slot level, and delete the whole Spellcasting or Companions section when it is unused.
 
 **Class features, species traits, feats.** One row each, `Name | Action | Uses | Used | Recovers | Summary`:
 
 - **Action:** `Action`, `Bonus Action` or `Reaction`; blank for a passive feature. The Combat tab groups by these words.
-- **Uses / Used:** whole numbers; both blank when a feature has no limit.
-- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest`. A later build's rest buttons will act on exactly these phrases, so do not paraphrase them; today the page only shows them. A feature that comes back some other way gets what it says (`Dawn`) and is left to the player.
+- **Uses / Used:** whole numbers; both blank when a feature has no limit. A pool is `Uses` with the pool's size (Lay on Hands at level 5 is `25`), and `Used` counts points spent.
+- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest` (one use back on a short rest, all on a long one). A later build's rest buttons will act on exactly these phrases, so do not paraphrase them; today the page only shows them. Anything else gets what it says (`Dawn`) and is left to the player.
 
 ```text
 | Second Wind | Bonus Action | 2 | 0 | 1 Short Rest, all Long Rest | Heal 1d10 + Fighter level |
 ```
 
-**Spells.** One row each under `### Spells`, with the key facts: Level is `Cantrip` or `1` to `9`; Tags are comma-separated, `C` for concentration and `R` for ritual, plus anything else worth showing (`Always prepared`).
+**Spells.** One row each under `### Spells`: Level is `Cantrip` or `1` to `9`; Tags are comma-separated, `C` for concentration and `R` for ritual, plus anything else worth showing (`Always prepared`). **Source** is blank for a class spell; a spell an item, feat or species trait grants names it there, and its cost in charges goes in Tags (`1 charge`).
 
 ```text
-| Detect Magic | 1 | Action | Self | V, S | 10 minutes | — | C, R | Sense magic within 30 ft |
+| Detect Magic | 1 | Action | Self | V, S | 10 minutes | | C, R | | Sense magic within 30 ft |
 ```
+
+**Magic items, companions.** Every magic item is a row in `### Magic Items` (`Attuned` is `Yes` or `No`; `Charges`, `Used` and `Recovers` work as feature uses do), what it adds to a save or check is a Bonuses row, and a spell it casts is a Spells row with the item as Source. A steed, familiar or other creature that fights beside the PC is a row in `## Companions`, its name linked to the creature's note when there is one.
+
+**Weight.** Everything carried has a `### Gear` row with the weight of one in pounds, weapons and armour included: the attack table lists attacks, not possessions. Weights of SRD items are in `equipment.md`; write `—` for something weightless. The tool totals Gear and coins into `### Carrying` and sets the capacity from Strength and Size.
 
 **Summaries.** One line, in your own words. Never copy a book's text: the note is published, and rules text is not ours to republish. For anything outside the SRD, summarise only what the GM tells you or shows you; otherwise write the name and a page reference.
 
-**Converting an old-layout PC** (prose features, `### Prepared Spells` lists, no `Save` column): fill the new tables from the old prose, add the sections and columns the template has and the note lacks, keep any prose that is more than a list, then run `dnd_sheet.py`. An old note still publishes with nothing lost, so convert a PC when you next work on that character, not in bulk.
+**Converting an old-layout PC** (prose features, `### Prepared Spells` lists, stats in frontmatter): read `sheet-conversion.md` beside this file first. An old note still publishes with nothing lost, so convert a PC when you next work on that character, not in bulk.
 
 ## Identity Block
 

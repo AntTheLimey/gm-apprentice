@@ -39,4 +39,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.30 | None. Broken links are listed and fixed with `links.py`; nothing is changed without a yes | |
 | 1.10.31 | None. A new vault's roster page is `type: pc_roster`; a roster written as `player-characters` is left as it is and still works (publish tool 1.12.4) | |
 | 1.10.32 | A vault with no Timeline page is given an empty one, so session timeline entries have somewhere to go | every pass, see above (`timeline-page`) |
-| 1.10.33 | D&D PC template: saving-throw numbers, Senses and Defences, features and spells as tables (copied by every-pass `templates`); existing PC notes are not changed | — |
+| 1.10.33 | D&D PC template: saving-throw numbers, Senses, Bonuses and Defences, features and spells as tables (spells with a Source), Gear with weights, Carrying, Magic Items in place of the attunement slots, and an optional Companions section (copied by every-pass `templates`); existing PC notes are not changed | — |
