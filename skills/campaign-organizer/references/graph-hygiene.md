@@ -13,7 +13,7 @@ that's discoverable by traversal — don't add `associated_with`.
 most specific relationship type. Flag generic types.
 
 **Vocabulary.** Every `type:` must be a predicate in
-`_meta/relationship-types.md` (subset of `shared/entity-schema.md`).
+`_meta/relationship-types.md` (see `shared/entity-schema.md`).
 To place or repair an edge from a narrative verb, map it and
 normalize its direction with `shared/relationship-normalization.md`
 (`owned_by A→B` becomes `owns B→A`; store single-direction). An

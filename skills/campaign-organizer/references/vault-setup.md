@@ -6,7 +6,10 @@ runs here — the vault starts at the current version.
 1. **Know the system.** It is `publish.system` in
    `_meta/vault-config.md`, else the Campaign Overview's
    `game_system`, else the adventure brief's `system`; the script
-   reads all three itself. If none is set, ask the GM once.
+   reads all three itself. If none is set, ask the GM once. If the
+   vault names a system in words the script does not recognise, it
+   refuses and names what it found: pass the matching id, or
+   `--no-system`.
 2. **Preview.** Run the script without `--write` and show the GM
    what it will create:
 

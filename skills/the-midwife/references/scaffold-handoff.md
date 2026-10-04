@@ -22,8 +22,7 @@ not re-voice writing that is already written.
   updates the adventure implies.
 - **Greenfield:** Write to CWD. The adventure brief is
   written to `Adventures/{adventure-name}/{adventure-name}.md`
-  relative to CWD — campaign-organizer will wrap the vault
-  around it.
+  relative to CWD — Step 3 builds the vault around it.
 
 ### Step 2: Entity & Plan Promotion
 
@@ -39,7 +38,7 @@ Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
 auto-promote — the GM chooses. Any `relationships:` edge on a
 promoted entity takes its `type:` from the vocabulary in
-`_meta/relationship-types.md` (subset of `shared/entity-schema.md`);
+`_meta/relationship-types.md` (see `shared/entity-schema.md`);
 map narrative verbs and normalize inverses via
 `shared/relationship-normalization.md` — never invent a predicate.
 
@@ -108,10 +107,9 @@ through Woven Worldbuilding (Phases 1-3) to their `_World/`
 domain files. These were confirmed at capture time — one
 question per trigger — so file them without re-asking:
 
-1. If `_World/` doesn't exist, create it with `world-index.md`
-   and `_flags.md` stubs first (greenfield: campaign-organizer
-   wraps the vault around `_World/` just as it does
-   `Adventures/`)
+1. If `_World/` doesn't exist, create it (Step 3's script adds
+   the `world-index.md` and `_flags.md` stubs when they are
+   missing)
 2. Write each fact to its domain file, creating a stub from
    `shared/templates/world-domain.md` when the domain is new
 3. Unresolved three-state flags (deferred heritage prompts and
@@ -134,8 +132,11 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
   <vault> --system <id> --name "<campaign name>"
 ```
 
-Use `--no-system` when no system was chosen or the plugin does
-not support it.
+`<id>` is `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`,
+`pf2e` or `fitd`. Use `--no-system` when no system was chosen or
+the plugin does not support it. A system name the script does not
+recognise is refused with the list: pass the matching id or
+`--no-system`.
 
 If the GM said yes to that question:
 

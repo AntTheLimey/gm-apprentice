@@ -19,8 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   started is built around. It asks for the game system instead of
   guessing; "no particular system" is a valid answer.
 - The update fills gaps in an existing vault's skeleton: a missing
-  standard folder or page is created. A folder you renamed counts as
-  present, and extra folders are never reported.
+  standard folder or schema file is created. It never adds a page to a
+  vault that already exists. A folder you renamed counts as present, and
+  extra folders are never reported.
 
 ### Changed
 
@@ -28,8 +29,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the script. The midwife no longer hands off to the organizer for it.
 - A new vault starts with the full list of relationship types instead
   of a subset chosen by genre. Existing vaults keep their lists.
-- A vault whose notes name a game system the plugin does not support is
-  set up with the generic templates.
+- When a vault's notes name a game system the script does not
+  recognise, it asks rather than guesses. For a system the plugin does
+  not support, the apprentice answers "no particular system".
 
 ---
 
