@@ -1,6 +1,9 @@
 # Default Vault Structure
 
-Written to `_meta/vault-config.md` on first setup.
+`vault_scaffold.py` creates this layout and writes the tree into
+`_meta/vault-config.md` on first setup; a test holds the tree and
+the script in step. `_midwife/` and `_inbox/` are made on demand.
+Folders may be added or renamed afterwards.
 
 ```text
 {Campaign Name}/

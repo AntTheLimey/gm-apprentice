@@ -29,9 +29,12 @@ strong ideas beat six half-formed ones.
 
 When you're happy with the shape of it, the midwife writes an **adventure
 brief** and **scaffolds your vault** — the folder structure, config, and
-the Session 0 entities — ready to play. Starting fresh, building on an
-existing campaign, or adding a new chapter all work; point it at an
-existing vault and it will build on your canon instead.
+the Session 0 entities — ready to play. Before it creates anything it
+shows you the list of folders and templates it will add; say yes and they
+are all made in one step, and nothing already in the folder is ever
+overwritten. Starting fresh, building on an existing campaign, or adding
+a new chapter all work; point it at an existing vault and it will build
+on your canon instead.
 
 ## 2. Build out the world — ttrpg-expert
 

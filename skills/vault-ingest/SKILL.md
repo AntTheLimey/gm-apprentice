@@ -32,12 +32,13 @@ PDF, images, CSV/Excel, chat/VTT exports.
 
 On invocation, check for a vault (`_meta/`). If none:
 
-> "I don't see a campaign vault here. Want me to hand off to
-> campaign-organizer to set one up first, or point me to your
-> vault's location?"
+> "I don't see a campaign vault here. Want me to set one up, or
+> point me to your vault's location?"
 
-Do not proceed without a vault — entities need its folders,
-templates and `_meta/` schema to file correctly.
+To set one up, ask where it should live, then follow
+`campaign-organizer/references/vault-setup.md` with `--inbox`. Do
+not proceed without a vault — entities need its folders, templates
+and `_meta/` schema to file correctly.
 
 **Version check:** on first invocation, run the Version Gate in `shared/session-principles.md`.
 

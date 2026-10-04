@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.28"
+current_version: "1.10.29"
 ---
 
 # Vault Migration Record
@@ -19,7 +19,7 @@ every-pass check runs on every migration, whatever the vault's version.
 
 | Release | What changes in a vault | Check |
 |---|---|---|
-| every pass | Site's publish tool repinned; missing templates copied; templates still holding an earlier release's text updated, other changed templates and the schema mirror offered; settings left in the site's `vault.config.json` moved into the vault file; `publish.site` written; withheld sections nested under GM Notes; old Wrap-Up filenames renamed, with every link, on a yes; the retired `publish.wrap_up.player_sections` setting removed once the vault is at 1.10.28 | `site-repin`, `config-to-vault`, `templates`, `schema-mirror`, `publish-site`, `gm-leak`, `wrapup-filenames`, `wrapup-sections-key` |
+| every pass | Missing skeleton folders and schema files created (only adds); site's publish tool repinned; missing templates copied; templates still holding an earlier release's text updated, other changed templates and the schema mirror offered; settings left in the site's `vault.config.json` moved into the vault file; `publish.site` written; withheld sections nested under GM Notes; old Wrap-Up filenames renamed, with every link, on a yes; the retired `publish.wrap_up.player_sections` setting removed once the vault is at 1.10.28 | `skeleton`, `site-repin`, `config-to-vault`, `templates`, `schema-mirror`, `publish-site`, `gm-leak`, `wrapup-filenames`, `wrapup-sections-key` |
 | 1.10.13 | Faction template writes `faction_type` (offered by every-pass `templates`); mobRPG keeps Campaign Log and Encounters in the vault | `mobrpg-sections` |
 | 1.10.14 | None | |
 | 1.10.15 | mobRPG heritage notes moved into `Heritages/`, with every link, on a yes | `heritage-notes` |
@@ -35,3 +35,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.26 | None. Migrations run as `migrate.py plan` and `apply` | |
 | 1.10.27 | None (the two checks above now rename and move) | |
 | 1.10.28 | A Wrap-Up heading is Keeper-facing only under GM Notes: headings the old rule counted as Keeper content are moved under GM Notes on a yes | `wrapup-sections` |
+| 1.10.29 | None. New vaults are built by `vault_scaffold.py`; gaps in an existing vault's skeleton are filled | every pass, see above (`skeleton`) |

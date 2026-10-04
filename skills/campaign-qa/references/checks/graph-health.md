@@ -138,8 +138,9 @@ most recent `type: session_wrap` file).
 
 **Vocabulary conformance (strict):** Every `relationships[].type`
 in the vault must be a predicate listed in
-`_meta/relationship-types.md` (the genre-filtered projection of
-`shared/entity-schema.md`'s vocabulary). This is separate from,
+`_meta/relationship-types.md` (`shared/entity-schema.md`'s
+vocabulary: the full list in a new vault, a genre subset in some
+older ones). This is separate from,
 and more fundamental than, the vagueness check below — an
 invented predicate is worse than a vague one because no query,
 inverse-inference, or publish step knows about it.
@@ -159,8 +160,8 @@ Walk each ERROR row with the GM fix-or-dismiss: rename to the
 suggested predicate, re-store an inverse on the other endpoint, or
 drop the edge if it is not entity-to-entity.
 
-The check enforces the **full** vocabulary, not the campaign's
-genre-filtered subset — a predicate that is globally sanctioned but
+The check enforces the **full** vocabulary, not a genre subset an
+older vault may hold — a predicate that is globally sanctioned but
 absent from this vault's `_meta/relationship-types.md` passes the
 tool and still breaks the rule above. Silence means "no invented
 predicates", not "genre-appropriate": scan the surviving types

@@ -22,8 +22,7 @@ not re-voice writing that is already written.
   updates the adventure implies.
 - **Greenfield:** Write to CWD. The adventure brief is
   written to `Adventures/{adventure-name}/{adventure-name}.md`
-  relative to CWD — campaign-organizer will wrap the vault
-  around it.
+  relative to CWD — Step 3 builds the vault around it.
 
 ### Step 2: Entity & Plan Promotion
 
@@ -39,7 +38,7 @@ Approved entities are filed by campaign-organizer to the
 correct vault folders with proper frontmatter. Do not
 auto-promote — the GM chooses. Any `relationships:` edge on a
 promoted entity takes its `type:` from the vocabulary in
-`_meta/relationship-types.md` (subset of `shared/entity-schema.md`);
+`_meta/relationship-types.md` (see `shared/entity-schema.md`);
 map narrative verbs and normalize inverses via
 `shared/relationship-normalization.md` — never invent a predicate.
 
@@ -109,9 +108,8 @@ domain files. These were confirmed at capture time — one
 question per trigger — so file them without re-asking:
 
 1. If `_World/` doesn't exist, create it with `world-index.md`
-   and `_flags.md` stubs first (greenfield: campaign-organizer
-   wraps the vault around `_World/` just as it does
-   `Adventures/`)
+   and `_flags.md` copied from `shared/templates/world-index.md`
+   and `shared/templates/world-flags.md`
 2. Write each fact to its domain file, creating a stub from
    `shared/templates/world-domain.md` when the domain is new
 3. Unresolved three-state flags (deferred heritage prompts and
@@ -126,12 +124,29 @@ and what remains.
 
 ### Step 3: Vault Scaffold (greenfield only)
 
-Ask: "Ready to set up the vault for this campaign?"
-If yes:
+Run the preview, show the GM what it will create and ask: "Ready
+to set up the vault for this campaign?"
 
-1. **Create Campaign Overview** at
-   `_Campaign/Campaign Overview.md` using the template from
-   `shared/templates/campaign-overview.md`. Populate from the
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
+  <vault> --system <id> --name "<campaign name>"
+```
+
+`<id>` is `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`,
+`pf2e` or `fitd`. Use `--no-system` when no system was chosen or
+the plugin does not support it. A system name the script does not
+recognise is refused with the list: pass the matching id or
+`--no-system`.
+
+If the GM said yes to that question:
+
+1. **Build the skeleton.** Run the same command with `--write`. It
+   builds around the `Adventures/` and `_World/` files already
+   there and never overwrites them.
+
+2. **Create Campaign Overview** at
+   `_Campaign/Campaign Overview.md` from
+   `_Templates/_Template_Campaign_Overview.md`. Populate from the
    adventure brief conversation:
    - `campaign`: adventure/campaign name
    - `game_system`: system chosen (or empty if undecided)
@@ -149,11 +164,6 @@ If yes:
    - GM Notes section: empty (a bare `## GM Notes` heading — the
      canonical single heading for whole-section GM-only content,
      see `shared/entity-schema.md`)
-
-2. **Hand off** to campaign-organizer with the adventure
-   brief as context. campaign-organizer builds the vault
-   around the existing `Adventures/`, `_Campaign/`, and (when
-   world facts emerged in Step 2c) `_World/` folders.
 
 ### Step 4: Update Status
 

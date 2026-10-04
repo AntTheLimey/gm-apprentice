@@ -60,7 +60,7 @@ New campaigns usually start in **the-midwife**, which scaffolds the vault and ha
 
 ## What to Expect
 
-When scaffolding a new vault, Claude creates the `_meta/` schema layer (entity types, relationship types, vault config, index), the folder structure for entity types, and template files. It will ask which game system you're using.
+When scaffolding a new vault, Claude creates the `_meta/` schema layer (entity types, relationship types, vault config, index), the folder structure for entity types, and template files. It asks which game system you're using only if your notes don't already say, then shows you a preview of the folders and templates it will create. On your yes it creates them all in one step, and it never overwrites anything already in the folder.
 
 When processing existing content, Claude reads your documents, identifies entities, classifies them by type, and creates individual notes with frontmatter, wiki-links, and relationship blocks. It never deletes your original content.
 
