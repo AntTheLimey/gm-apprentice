@@ -343,6 +343,23 @@ def raw_value(text: str, name: str) -> str | None:
     return None if value is None else strip_comment(value).strip()
 
 
+def find_play_notes(batch: Batch, index: str, stem: str) -> list[str]:
+    """Stems of the Play Notes notes in the index's own folder whose
+    `session:` link names this index."""
+    folder = index.rpartition("/")[0]
+    types = vc.SESSION_DOC_TYPES["play_notes"][1]
+    want = vl.normalize(stem)
+    out = []
+    for rel, text in vl.vault_files(batch.vault, folder or None):
+        if rel.rpartition("/")[0] != folder:
+            continue
+        fm = vl.extract_frontmatter(text) or {}
+        if (vl.entity_type(fm) in types and vl.normalize(
+                vl.wikilink_target(fm.get("session"))) == want):
+            out.append(Path(rel).stem)
+    return out
+
+
 def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     index = batch.resolve(args.session)
     text = batch.read(index)
@@ -361,6 +378,17 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     stem = Path(index).stem
     title = stem.split(" - ", 1)[1] if " - " in stem else stem
     notes = vl.nested_mapping(text, "documents").get("play_notes") or ""
+    notes_warning = ""
+    if not notes:
+        found = find_play_notes(batch, index, stem)
+        if len(found) == 1:
+            notes = f"[[{found[0]}]]"
+        else:
+            notes_warning = (
+                "no Play Notes found for this session: source_document "
+                "left blank" if not found else
+                "several Play Notes notes link this session: "
+                "source_document left blank")
     values = {
         "session": f'"[[{stem}]]"',
         "session_number": str(number),
@@ -389,6 +417,8 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     batch.create(rel, "---\n" + "".join(fm_lines) + "---\n"
                  + "\n".join(body) + "\n")
     batch.row("WOULD-CREATE", rel, "", f"from {index}")
+    if notes_warning:
+        batch.row("WARNING", rel, "", notes_warning)
 
 
 GM_NOTES = "gm notes"
@@ -443,7 +473,7 @@ def split_units(text: str, known: set[str]
         lines.pop()
     if not lines:
         raise WriteError("nothing on stdin")
-    heads = vl._fenced_headings("\n".join(lines))
+    heads = vl.fenced_headings("\n".join(lines))
     if not heads or any(line.strip() for line in lines[:heads[0][0]]):
         raise WriteError("stdin must start with a heading")
     starts: list[tuple[int, int, str]] = []
@@ -501,7 +531,10 @@ def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
                 f"'{'#' * (4 if k in tmap.parent else 3)} {title}'")
         scope = [h for h in doc.heads if h.level == 2 and not h.gm]
         default, detail = opener, "" if k in tmap.titles else PLAYERS_SEE
-        later = tmap.later(2, k, {c for _l, c in tmap.order} - tmap.gm)
+        public = {c for _l, c in tmap.order} - tmap.gm
+        later = tmap.later(2, k, public)
+        earlier = {c for lvl, c in tmap.order if lvl == 2 and c in public
+                   } - later - {k}
     else:
         inside = [h for h in doc.heads if gm_head.idx < h.idx < closer]
         pk = tmap.parent.get(k) if level == 4 else None
@@ -538,6 +571,14 @@ def add_section(text: str, rel: str, tmap: TemplateMap, level: int,
         if anchor is None:
             raise WriteError(f"{rel}: no heading '{after}' to go after")
         return place(doc, section_end(doc, anchor), unit), detail
+    if level == 2 and k in tmap.titles:
+        before = [h for h in scope if key(h.title) in earlier]
+        if before:
+            return place(doc, max(section_end(doc, h) for h in before),
+                         unit), detail
+        default = next((h.idx for h in scope if key(h.title) in later),
+                       scope[0].idx if scope else default)
+        return place(doc, default, unit), detail
     at = next((h.idx for h in scope if key(h.title) in later), default)
     return place(doc, at, unit), detail
 
@@ -549,7 +590,17 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         raise WriteError(f"{rel}: not a Wrap-Up")
     tmap = read_template_map(
         template_text(batch.vault, WRAP_TEMPLATES, "session-wrap.md"))
-    for level, title, unit in split_units(text, set(tmap.titles)):
+    units = split_units(text, set(tmap.titles))
+    doc = parse(note)
+    if not doc.problems and not any(
+            h.level == 2 and key(h.title) == GM_NOTES for h in doc.heads):
+        note = place(doc, len(doc.lines),
+                     ["<!-- gm-only -->", "", "## GM Notes", "",
+                      "<!-- /gm-only -->"])
+        batch.put(rel, note)
+        batch.row("WOULD-ADD", rel, "\u00a7GM Notes",
+                  "created (the Wrap-Up had none)")
+    for level, title, unit in units:
         if level not in (2, 3, 4):
             raise WriteError(f"'{'#' * level} {title}': a Wrap-Up section "
                              f"starts at ##, ### or ####")
@@ -560,6 +611,12 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
         for parent, child in made:
             batch.row("WOULD-ADD", rel, f"§{parent}", f"created for {child}")
         batch.row("WOULD-ADD", rel, f"§{title}", detail)
+        if level == 2:
+            for _i, sub_level, sub in vl.fenced_headings("\n".join(unit)):
+                if sub_level == 3:
+                    batch.row("WOULD-ADD", rel, f"§{title} \u203a {sub}",
+                              "inside a player section \u2014 players will "
+                              "see this")
 
 
 STORY_TEMPLATES = ("character-story.md", "_Template_Character_Story.md")
@@ -622,7 +679,7 @@ def split_entries(text: str) -> list[tuple[str, str | None, list[str]]]:
                 body.pop(0)
         if not body:
             raise WriteError(f"PC '{name}': the entry is empty")
-        if any(h[1] <= 2 for h in vl._fenced_headings("\n".join(body))):
+        if any(h[1] <= 2 for h in vl.fenced_headings("\n".join(body))):
             raise WriteError(f"PC '{name}': an entry cannot hold a # or ## "
                              f"heading after its own (it would read as "
                              f"another session)")
@@ -978,21 +1035,42 @@ def build_parser() -> argparse.ArgumentParser:
                      help="the session index, vault-relative")
     new.add_argument("--source", help="text of the Source callout")
     new.add_argument("--write", action="store_true")
-    add = sub.add_parser("wrapup-add", help="place Wrap-Up sections (stdin)")
+    raw = argparse.RawDescriptionHelpFormatter
+    add = sub.add_parser(
+        "wrapup-add", help="place Wrap-Up sections (stdin)",
+        formatter_class=raw, description=(
+            "stdin: markdown sections, each starting with a heading.\n"
+            "A ## section is player-facing and goes before GM Notes; a ###\n"
+            "or #### section goes under GM Notes, unless it is written\n"
+            "inside a ## section, where it stays and players see it."))
     add.add_argument("wrapup", help="the Wrap-Up, vault-relative")
     add.add_argument("--replace", action="store_true",
                      help="replace a section that already exists")
     add.add_argument("--after", help="the heading a new section goes after")
     add.add_argument("--write", action="store_true")
-    story = sub.add_parser("story", help="append story entries (stdin)")
+    story = sub.add_parser(
+        "story", help="append story entries (stdin)",
+        formatter_class=raw, description=(
+            "stdin: entries, each opened by a '# [[PC Name]]' line.\n"
+            "An entry may open with its own '## ' heading; otherwise it\n"
+            "gets '## Session N - Title'. An entry holds no # or ## after that."))
     story.add_argument("--wrapup", required=True)
     story.add_argument("--label", help="the entry heading's label")
     story.add_argument("--as-of", dest="as_of", help="asOfSession value")
     story.add_argument("--date", help="lastUpdated value, YYYY-MM-DD")
     story.add_argument("--write", action="store_true")
-    log = sub.add_parser("log", help="add log lines to notes (stdin rows)")
+    log = sub.add_parser(
+        "log", help="add log lines to notes (stdin rows)",
+        formatter_class=raw, description=(
+            "stdin: one row per line, PATH<TAB>SECTION<TAB>LINE.\n"
+            "SECTION is 'Campaign Log' or 'GM Notes/Behind the Scenes';\n"
+            "any section name is accepted."))
     log.add_argument("--write", action="store_true")
-    tl = sub.add_parser("timeline", help="add timeline entries (stdin)")
+    tl = sub.add_parser(
+        "timeline", help="add timeline entries (stdin)",
+        formatter_class=raw, description=(
+            "stdin: entries exactly as they should read. A line at the\n"
+            "margin opens an entry; indented lines belong to it."))
     tl.add_argument("--under", required=True,
                     help="the heading to add under, with its hashes")
     tl.add_argument("--after", help="where a new heading goes")

@@ -712,7 +712,7 @@ def section(text: str, heading: str) -> str | None:
 _SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
-def _fenced_headings(text: str) -> list[tuple[int, int, str]]:
+def fenced_headings(text: str) -> list[tuple[int, int, str]]:
     """(0-based line index, level, title) for every heading outside a
     code fence. Shared walk behind `sections` and `h3_blocks` — both need
     the same "don't mistake a fenced example for a real heading" fence
@@ -740,6 +740,9 @@ def _fenced_headings(text: str) -> list[tuple[int, int, str]]:
         if m:
             heads.append((i, len(m.group(1)), m.group(2).strip()))
     return heads
+
+
+_fenced_headings = fenced_headings
 
 
 def sections(text: str) -> list[tuple[int, int, str, str]]:

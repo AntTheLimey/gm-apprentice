@@ -345,6 +345,44 @@ class WrapupNewTests(unittest.TestCase):
         code, _ = run(vault, "wrapup-new", "--session", "nope.md")
         self.assertEqual(code, 1)
 
+    def _no_notes_index(self):
+        return INDEX.replace(
+            '  play_notes: "[[Session 02 - The Docks - Play Notes]]"\n', "")
+
+    def _notes(self, name, link="[[Session 02 - The Docks]]", kind="session-play-notes"):
+        return (f"Chapters/Chapter 1 - Arrival/Sessions/Session 02/{name}.md",
+                f'---\ntype: {kind}\nsession: "{link}"\n---\n\n# n\n')
+
+    def test_play_notes_found_beside_the_index_when_the_index_lists_none(self):
+        rel, text = self._notes("Session 02 - The Docks - Play Notes")
+        other_rel, other = self._notes("Other", "[[Session 03 - Else]]")
+        vault = make_vault(self, {INDEX_REL: self._no_notes_index(),
+                                  rel: text, other_rel: other})
+        code, out = run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn('source_document: "[[Session 02 - The Docks - Play Notes]]"\n',
+                      read(vault, WRAP_REL))
+        self.assertNotIn("WARNING", out)
+
+    def test_no_play_notes_found_warns_and_leaves_source_blank(self):
+        vault = make_vault(self, {INDEX_REL: self._no_notes_index()})
+        code, out = run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("no Play Notes found for this session: "
+                      "source_document left blank", out)
+        self.assertIn('source_document: "[[]]"\n', read(vault, WRAP_REL))
+
+    def test_several_play_notes_found_warns_and_leaves_source_blank(self):
+        a = self._notes("A - Play Notes")
+        b = self._notes("B - Play Notes")
+        vault = make_vault(self, {INDEX_REL: self._no_notes_index(),
+                                  a[0]: a[1], b[0]: b[1]})
+        code, out = run(vault, "wrapup-new", "--session", INDEX_REL, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("several Play Notes notes link this session: "
+                      "source_document left blank", out)
+        self.assertIn('source_document: "[[]]"\n', read(vault, WRAP_REL))
+
     def test_the_name_passes_the_checkers_pattern(self):
         import vault_check as vc
         self.assertRegex(Path(WRAP_REL).stem, vc.WRAP_FILENAME_RE)
@@ -466,6 +504,104 @@ class WrapupAddTests(unittest.TestCase):
                         text.index("### World State"))
         code, _ = add(vault, "### Tides\n\nx\n", "--after", "### Nope")
         self.assertEqual(code, 1)
+
+    def test_a_subheading_inside_a_player_section_is_reported(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "## Letters Home\n\nDear all.\n\n"
+                               "### Ritual Clock\n\nThree nights.\n")
+        self.assertEqual(code, 0, out)
+        rows = [r for r in out.splitlines() if r.startswith("ADDED")]
+        self.assertEqual(len(rows), 2, out)
+        self.assertIn("Ritual Clock", rows[1])
+        self.assertIn("\u00a7Letters Home \u203a Ritual Clock", rows[1])
+        self.assertIn("inside a player section \u2014 players will see this",
+                      rows[1])
+        self.assertIn("create: 0  add: 2", out)
+        text = read(vault, WRAP_REL)
+        self.assertLess(text.index("### Ritual Clock"),
+                        text.index("<!-- gm-only -->"))
+        code, out = run(vault, "wrapup-add", WRAP_REL,
+                        stdin="## Narrative Recap\n\nx\n\n#### Deep\n\ny\n")
+        self.assertNotIn("Deep\t", out)
+        self.assertEqual(out.count("WOULD-ADD"), 1, out)
+
+    def test_a_lone_unknown_subheading_goes_to_gm_notes_without_a_row(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "### Ritual Clock\n\nThree nights.\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("players will see this", out)
+        text = read(vault, WRAP_REL)
+        self.assertGreater(text.index("### Ritual Clock"),
+                           text.index("## GM Notes"))
+
+    def test_a_template_known_player_section_reports_its_subheading_too(self):
+        vault = wrap_vault(self)
+        code, out = run(vault, "wrapup-add", WRAP_REL,
+                        stdin="## Narrative Recap\n\nx\n\n### Aside\n\ny\n")
+        self.assertIn("\u00a7Narrative Recap \u203a Aside", out)
+
+    def test_no_gm_notes_at_all_one_is_created(self):
+        bare = WRAP.split("<!-- gm-only -->")[0].rstrip("\n") + "\n"
+        vault = wrap_vault(self, bare)
+        code, out = add(vault, "## Narrative Recap\n\nThey ran.\n\n"
+                               "### World State\n\n- x\n")
+        self.assertEqual(code, 0, out)
+        self.assertIn("ADDED\t" + WRAP_REL + "\t\u00a7GM Notes\t"
+                      "created (the Wrap-Up had none)", out)
+        text = read(vault, WRAP_REL)
+        self.assertTrue(text.endswith(
+            "<!-- gm-only -->\n\n## GM Notes\n\n### World State\n\n- x\n\n"
+            "<!-- /gm-only -->\n"), text)
+        self.assertLess(text.index("They ran."), text.index("<!-- gm-only"))
+
+    def test_gm_notes_outside_a_fence_or_a_broken_fence_is_still_refused(self):
+        loose = WRAP.replace("<!-- gm-only -->\n\n", "").replace(
+            "\n<!-- /gm-only -->\n", "")
+        broken = WRAP.replace("<!-- /gm-only -->\n", "")
+        for text in (loose, broken):
+            vault = wrap_vault(self, text)
+            code, out = run(vault, "wrapup-add", WRAP_REL, "--write",
+                            stdin="## Narrative Recap\n\nx\n")
+            self.assertEqual(code, 1, out)
+            self.assertEqual(read(vault, WRAP_REL), text)
+
+    def test_a_known_player_section_goes_before_the_authors_own(self):
+        for calls in ((("## Letters Home\n\nDear all.\n",),
+                       ("## Narrative Recap\n\nThey ran.\n",)),
+                      (("## Letters Home\n\nDear all.\n\n"
+                        "## Narrative Recap\n\nThey ran.\n",),)):
+            vault = wrap_vault(self)
+            for (chunk,) in calls:
+                code, out = add(vault, chunk)
+                self.assertEqual(code, 0, out)
+            text = read(vault, WRAP_REL)
+            self.assertLess(text.index("## Narrative Recap"),
+                            text.index("## Letters Home"))
+            self.assertLess(text.index("## Letters Home"),
+                            text.index("<!-- gm-only -->"))
+
+    def test_a_known_section_follows_the_earlier_template_section(self):
+        vault = wrap_vault(self)
+        add(vault, "## Narrative Recap\n\nThey ran.\n")
+        add(vault, "## Letters Home\n\nDear all.\n", "--after",
+            "## Narrative Recap")
+        code, out = add(vault, "## Memorable Moments\n\n**The chase.**\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual([h for h in heading_lines(read(vault, WRAP_REL))
+                          if h.startswith("## ")],
+                         ["## Narrative Recap", "## Memorable Moments",
+                          "## Letters Home", "## GM Notes"])
+
+    def test_help_states_each_commands_stdin(self):
+        for cmd, phrase in (("wrapup-add", "player-facing"),
+                            ("story", "# [[PC Name]]"),
+                            ("log", "PATH<TAB>SECTION<TAB>LINE"),
+                            ("timeline", "indented")):
+            out = io.StringIO()
+            with mock.patch("sys.stdout", out), self.assertRaises(SystemExit) as cm:
+                vw.build_parser().parse_args(["v", cmd, "--help"])
+            self.assertEqual(cm.exception.code, 0)
+            self.assertIn(phrase, out.getvalue(), cmd)
 
     def test_a_template_keeper_heading_at_h2_is_a_slip(self):
         vault = wrap_vault(self)
@@ -1181,7 +1317,7 @@ class TimelineTests(unittest.TestCase):
                       read(vault, TL_REL))
 
     def test_row_says_when_entries_land_in_a_child_section(self):
-        note = TL.replace("### Session 1", "### Session 1").replace(
+        note = TL.replace(
             "<!-- gm-only -->", "#### Scene A\n\n- x\n\n<!-- gm-only -->", 1)
         vault = make_vault(self, {TL_REL: note})
         code, out = tl(vault, "- **1814** — y\n",
