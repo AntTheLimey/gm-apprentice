@@ -17,7 +17,8 @@ from vault_check import (WRAP_TYPES, check_wrapup, player_section_key,
                          wrapup_filename_findings)
 from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
                       extract_frontmatter, parse_publish_list,
-                      read_publish_scalar, vault_files, wrapup_filename)
+                      parse_version, read_publish_scalar, vault_files,
+                      wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -572,61 +573,77 @@ def _drop_player_sections(fm: list[str], _eol: str) -> None:
 def find_wrapup_sections(vault: Path) -> list[Item]:
     """1.10.28: a Wrap-Up H2 is Keeper-facing only under GM Notes. Under
     the reading before that, every H2 the vault did not list was Keeper
-    content; those are offered once to be moved under GM Notes, and the
-    list is dropped from vault-config either way.
+    content; those are offered once to be moved under GM Notes.
 
-    The list stays in the config until the choice is applied (the only
-    thing that reads it), so a second look finds the same choice."""
+    The list is read here and never removed here: it must still be there
+    when the choice is applied, and when this is asked again before the
+    vault is stamped. `find_wrapup_sections_key` drops it a release later."""
     listed = read_wrap_up_player_sections(vault)
     player = frozenset(k for k in map(player_section_key, listed) if k)
-    config = vault / CONFIG
-    has_key = bool(re.search(r"^\s+player_sections\s*:",
-                             _read(config), re.M))
-
-    def drop_key() -> list[str]:
-        if not has_key:
-            return []
-        edit_frontmatter(config, _drop_player_sections)
-        return [f"removed publish.wrap_up.player_sections from {CONFIG}"]
-
     rows = [r.split("\t", 2) for r in check_wrapup(
         vault, None, False, player=player, renest_only=True)]
-    rows = [r for r in rows if len(r) == 3 and r[0] in ("ERROR", "WARNING")]
+    rows = [r for r in rows if len(r) == 3]
     # A note the re-nest cannot touch (a fence, a hidden line that would
     # publish) is for a person, and its headings are not offered to move.
-    blocked = [r for r in rows if not r[2].startswith("Keeper-facing H2")]
-    stuck = {r[1].rpartition(":")[0] or r[1] for r in blocked}
+    blocked = [r for r in rows if r[0] in ("ERROR", "WARNING")
+               and not r[2].startswith("Keeper-facing H2")]
+
+    def note(where: str) -> str:
+        return where.rpartition(":")[0] or where
+
+    stuck = {note(r[1]) for r in blocked}
     moves = [f"{r[1]}: {r[2]}" for r in rows
-             if r[2].startswith("Keeper-facing H2")
-             and (r[1].rpartition(":")[0] or r[1]) not in stuck]
+             if r[0] in ("ERROR", "WARNING")
+             and r[2].startswith("Keeper-facing H2")
+             and note(r[1]) not in stuck]
+    # The re-nest also renames a recap heading to Narrative Recap.
+    moves += [f"{r[1]}: {r[2]}" for r in rows
+              if r[0] == "WOULD-FIX" and r[2].startswith("renamed heading")
+              and r[1] not in stuck]
     items: list[Item] = []
-    if moves:
+    if any("Keeper-facing H2" in m for m in moves):
         def apply(value: str | None) -> list[str]:
             if value not in ("move", "leave"):
                 raise StepFailed("wrapup-sections takes move or leave")
-            done: list[str] = []
-            if value == "move":
-                fixed = [r.split("\t", 2) for r in check_wrapup(
-                    vault, None, True, player=player, renest_only=True)]
-                done = [f"{r[1]}: {r[2]}" for r in fixed
-                        if len(r) == 3 and r[0] == "FIXED"]
-            return done + drop_key()
+            if value == "leave":
+                return ["left the Wrap-Up headings where players see them"]
+            fixed = [r.split("\t", 2) for r in check_wrapup(
+                vault, None, True, player=player, renest_only=True)]
+            return [f"{r[1]}: {r[2]}" for r in fixed
+                    if len(r) == 3 and r[0] == "FIXED"]
 
         items.append(Item(
             "wrapup-sections", CHOICE,
             ["move: put these under GM Notes, hidden from players; "
              "leave: keep them where players see them", *moves],
             apply, wants="move or leave"))
-    elif has_key:
-        items.append(Item(
-            "wrapup-sections-key", WILL,
-            [f"remove publish.wrap_up.player_sections from {CONFIG} "
-             f"(no longer read)"],
-            lambda _value: drop_key()))
     if blocked:
         items.append(Item("wrapup-sections-review", PERSON,
                           [f"{r[1]}\t{r[2]}" for r in blocked]))
     return items
+
+
+def find_wrapup_sections_key(vault: Path) -> list[Item]:
+    """Every pass: `publish.wrap_up.player_sections` is no longer read.
+    It goes once the vault is stamped 1.10.28 or later, so the migration
+    that stamps 1.10.28 could still read it."""
+    config = vault / CONFIG
+    text = _read(config)
+    fm = extract_frontmatter(text.removeprefix("\ufeff")) or {}
+    stamp = fm.get("gm_apprentice_version")
+    if (not stamp or isinstance(stamp, list)
+            or parse_version(str(stamp)) < parse_version("1.10.28")):
+        return []
+    if not re.search(r"^\s+player_sections\s*:", text, re.M):
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        edit_frontmatter(config, _drop_player_sections)
+        return [f"removed publish.wrap_up.player_sections from {CONFIG}"]
+
+    return [Item("wrapup-sections-key", WILL,
+                 [f"remove publish.wrap_up.player_sections from {CONFIG} "
+                  f"(no longer read)"], apply)]
 
 
 VAULT_CHECKS: list[Check] = [
@@ -645,6 +662,8 @@ VAULT_CHECKS: list[Check] = [
     Check("wrapup-sections", "1.10.28", 4, "Wrap-Up sections",
           find_wrapup_sections, asks_site=True,
           choices=("wrapup-sections=",)),
+    Check("wrapup-sections-key", None, 2, "the retired player-sections list",
+          find_wrapup_sections_key),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
