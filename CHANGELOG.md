@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.31] — 2026-10-04
+
+### Fixed
+
+- The Story menu in a site's top bar stays open. Its heading was a link
+  to the Story page, so the click that opened the menu also loaded that
+  page and the menu could never be used. The heading now only opens the
+  menu, and the Story page is the menu's first entry, "Story so far" (#296).
+- A Timeline page with nothing on it for players no longer replaces the
+  Events index. Events is sent to an authored Timeline only when the
+  page has something besides its title and headings once Keeper-only
+  text is removed (#301).
+- A roster page is `type: pc_roster` everywhere. The schema listed it as
+  `player-characters` while the site only recognised `pc_roster`, so a
+  roster made by new-vault setup was published as an ordinary page. New
+  vaults are seeded with `pc_roster`, and the site treats a roster
+  written with the older name the same way (#300).
+
+Publish tool 1.12.4.
+
+---
+
 ## [1.10.30] — 2026-10-04
 
 ### Added

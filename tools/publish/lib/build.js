@@ -11,6 +11,7 @@ const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require
 const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
+const { isRoster } = require('./templates/nav');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { loadManifest } = require('./manifest');
@@ -700,8 +701,12 @@ function build(options = {}) {
   const { buildTimelineData, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
   const timelineData = buildTimelineData(pages);
   const generatesTimeline = timelineData.events.length > 0;
-  const authoredTimeline = pages.find(p => p.frontmatter.type === 'timeline')
-    || pages.find(p => p.outputPath.split('/').pop() === 'timeline.html');
+  // An authored Timeline takes Events over only when players would find something on it:
+  // a title and bare headings (what a new vault starts with) would hide the list of events.
+  const hasEntries = (p) => playerSafeMarkdown(p.markdown, { excludeCallouts, excludeSections, frontmatter: p.sourceFrontmatter || p.frontmatter }).text
+    .split('\n').some(line => line.trim() && !/^#{1,6}\s/.test(line.trim()));
+  const authoredTimeline = pages.find(p => p.frontmatter.type === 'timeline' && hasEntries(p))
+    || pages.find(p => p.outputPath.split('/').pop() === 'timeline.html' && hasEntries(p));
   const timelineHref = generatesTimeline
     ? 'timeline.html'
     : (authoredTimeline ? authoredTimeline.outputPath : null);
@@ -830,7 +835,7 @@ function build(options = {}) {
       logWarnings(page.outputPath, processed.warnings);
       let html;
 
-      if (page.frontmatter.type === 'pc_roster') { deferredRosters.push({ page, processed }); continue; }
+      if (isRoster(page)) { deferredRosters.push({ page, processed }); continue; }
 
       switch (page.frontmatter.type) {
         case 'pc': {
@@ -1164,7 +1169,7 @@ function build(options = {}) {
 
   publishConfig._banners = buildBanners(Object.keys(DIR_LABELS));
 
-  const pcRoster = pages.find(p => p.frontmatter.type === 'pc_roster');
+  const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
   for (const [dir, label] of Object.entries(DIR_LABELS)) {

@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.30"
+current_version: "1.10.31"
 ---
 
 # Vault Migration Record
@@ -37,3 +37,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.28 | A Wrap-Up heading is Keeper-facing only under GM Notes: headings the old rule counted as Keeper content are moved under GM Notes on a yes | `wrapup-sections` |
 | 1.10.29 | None. New vaults are built by `vault_scaffold.py`; gaps in an existing vault's skeleton are filled | every pass, see above (`skeleton`) |
 | 1.10.30 | None. Broken links are listed and fixed with `links.py`; nothing is changed without a yes | |
+| 1.10.31 | None. A new vault's roster page is `type: pc_roster`; a roster written as `player-characters` is left as it is and still works (publish tool 1.12.4) | |

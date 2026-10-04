@@ -1,5 +1,5 @@
 ---
-type: player-characters
+type: pc_roster
 campaign: "The Ashford Case"
 canon_status: AUTHORITATIVE
 asOfSession: "Session 2"

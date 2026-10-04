@@ -23,7 +23,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed, edit_frontmatter, write_text_atomic)
 from site_fixture import give_site  # noqa: E402
 
-PLUGIN = "1.10.30"
+PLUGIN = "1.10.31"
 
 
 def make_vault(case, version="1.10.12", eol="\n"):
@@ -451,7 +451,7 @@ class ApplyTests(unittest.TestCase):
         vault = make_vault(self)
         log = []
         code, out, _ = call([str(vault), "apply"],
-                            [will("future", "1.10.31", log=log)])
+                            [will("future", "99.0.0", log=log)])
         self.assertEqual(code, 0)
         self.assertEqual(log, [])
 

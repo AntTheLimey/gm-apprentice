@@ -53,13 +53,17 @@ test('wikiTemplate without party context renders no board or live scripts', () =
 // Build the with-party-roster fixture and return the rendered roster HTML.
 // Gate under test: build() only wires the live party board when live_stats
 // is on — the board polls /api/loadout-list, a KV backend absent on a static site.
-function buildRosterHtml(statusBar) {
+function buildRosterHtml(statusBar, rosterType) {
   const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-roster-'));
   try {
     const configPath = path.join(outputDir, 'config.json');
     // The switch lives in the vault file, and a wired KV store is what lets it take effect.
     const vault = path.join(outputDir, 'vault');
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
+    if (rosterType) {
+      const roster = path.join(vault, 'Characters', 'PCs', 'Player Characters.md');
+      fs.writeFileSync(roster, fs.readFileSync(roster, 'utf-8').replace('type: pc_roster', 'type: ' + rosterType));
+    }
     if (statusBar) setPublishKeys(vault, { live_stats: true });
     fs.writeFileSync(path.join(outputDir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
     fs.writeFileSync(configPath, JSON.stringify({
@@ -96,6 +100,12 @@ test('build() wires the live party board on the roster when live_stats is on', (
   assert.ok(html.includes(marker), 'party-board island present when statusBar on');
   assert.match(html, /class="gl-party"/);
   assert.match(html, /js\/gurps-party\.js/);
+});
+
+test('build() treats a roster written with the older type name as a roster (#300)', () => {
+  const html = buildRosterHtml(false, 'player-characters');
+  assert.match(html, /class="gl-party"/);
+  assert.match(html, /gl-party-table/);
 });
 
 test('build() leaves out-of-play PCs off the party board (#265)', () => {

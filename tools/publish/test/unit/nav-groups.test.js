@@ -91,14 +91,29 @@ describe('generateNav', () => {
     assert.match(html, /<h3><a href="story\.html">Story<\/a><\/h3>/);
   });
 
-  it('does not add a duplicate Story entry when a Story group already exists', () => {
+  it('keeps the Story group a menu, with the landing as its first entry (#296)', () => {
     const pages = [{ outputPath: 'chapters/c1.html', outputDir: 'chapters', frontmatter: { type: 'chapter' } }];
-    const navFor = generateNav(pages, { hasStory: true });
-    const html = navFor('index.html', { siteTitle: 'T' });
-    // exactly one desktop story.html link in the top nav-groups (not two)
-    const desktopMatches = (html.match(/class="nav-group-toggle"[^>]*href="story\.html"/g) || []).length;
-    assert.strictEqual(desktopMatches, 1);
+    const html = generateNav(pages, { hasStory: true })('index.html', { siteTitle: 'T' });
+    const desktop = html.slice(html.indexOf('<nav class="nav-groups">'), html.indexOf('</nav>'));
+    // A link here would load the landing on the click that opens the menu.
+    assert.match(desktop, /<button class="nav-group-toggle">Story<\/button>/);
+    assert.doesNotMatch(desktop, /<a class="nav-group-toggle"/);
+    assert.match(desktop, /<div class="nav-dropdown">\s*<a href="story\.html">Story so far<\/a>\s*<a href="chapters\/index\.html">/);
+    assert.strictEqual((desktop.match(/href="story\.html"/g) || []).length, 1);
   });
+});
+
+describe('generateNavGroups roster target (#300)', () => {
+  for (const type of ['pc_roster', 'player-characters']) {
+    it(`points Player Characters at a roster of type ${type}`, () => {
+      const pages = [
+        { outputDir: 'characters/pcs', outputPath: 'characters/pcs/hero.html', frontmatter: { type: 'pc' } },
+        { outputDir: 'campaign', outputPath: 'campaign/player-characters.html', frontmatter: { type } },
+      ];
+      const chars = generateNavGroups(pages).find(g => g.name === 'Characters');
+      assert.strictEqual(chars.links.find(l => l.href.includes('player-characters')).href, 'campaign/player-characters.html');
+    });
+  }
 });
 
 describe('generateNavGroups timeline target (issue #83)', () => {

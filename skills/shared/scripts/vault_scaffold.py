@@ -177,8 +177,9 @@ TYPE_FOLDERS: dict[str, frozenset[str]] = {
         "journal"}),
     "Clues": frozenset({"clue"}),
 }
-# Both roster type names are in use in real vaults.
-ROSTER_TYPES = frozenset({"player-characters", "pc_roster"})
+# `pc_roster` is the name; `player-characters` is an older one still found
+# in vaults.
+ROSTER_TYPES = frozenset({"pc_roster", "player-characters"})
 INBOX = ("_inbox", "_inbox/_processed")
 # In the layout tree, and deliberately not made here: the midwife makes its
 # own workspace; the inbox is made on request (--inbox).
