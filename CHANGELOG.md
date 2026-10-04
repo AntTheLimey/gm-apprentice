@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.28] — 2026-10-03
+
+### Added
+
+- `vault_write.py`: places the text the apprentice writes at the end of a
+  session. It starts the Wrap-Up from the session's own page, puts each
+  section where the template has it, appends story entries, and adds log
+  and timeline lines to many notes in one call. Every command is a dry run
+  until you add `--write`, then writes everything or nothing. It refuses to
+  write to anything that is not a note inside the vault, and refuses a
+  write that would leave the hidden-from-players markers unbalanced.
+- session-prep checks a plan's shape as soon as its scenes are outlined,
+  while a fix is still cheap.
+
+### Changed
+
+- A Wrap-Up section is Keeper-facing when it is under GM Notes and
+  player-facing when it is not. New sections are welcome on either side.
+  The only names reserved are the Wrap-Up template's own GM Notes section
+  names (and close variants), which cannot head a player-facing section.
+  `vault_check.py wrapup` reports a heading outside GM Notes only when it
+  is one of those.
+- Story entries may hold lists and sub-headings, and an entry may carry its
+  own heading.
+- Timeline entries are kept exactly as written, sub-lines included.
+
+### Removed
+
+- `publish.wrap_up.player_sections`. When you update to 1.10.28 you are
+  offered, once, the choice to move headings the old rule counted as Keeper
+  content under GM Notes, or to leave them where they are. A wrap-up with no
+  recognisable recap heading is never moved; it is listed for you instead.
+  The setting itself is removed from the vault's config on the following
+  update.
+
+---
+
 ## [1.10.27] — 2026-10-03
 
 ### Added
