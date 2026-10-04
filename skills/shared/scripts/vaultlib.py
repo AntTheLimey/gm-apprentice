@@ -32,6 +32,7 @@ import subprocess
 import sys
 import threading
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
@@ -41,6 +42,11 @@ from typing import Any, Iterable, Iterator, Literal
 # --------------------------------------------------------------------------
 
 SKIP_DIRS = {"_Templates", "_templates", "_inbox"}
+
+# Top-level folders whose notes are records of the past (QA reports,
+# archives). Links written in them are not reported as broken; notes in
+# them still count as link targets.
+UNCHECKED_DIRS: tuple[str, ...] = ("_QA", "_archive")
 LINK_RE = re.compile(r"!?\[\[([^\[\]]+?)\]\]")
 FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)\r?\n---(?:\r?\n|$)", re.DOTALL)
 
@@ -77,6 +83,13 @@ def is_skipped_path(rel: str, skip_dirs: set[str] = SKIP_DIRS) -> bool:
     if any(p.startswith(".") for p in parts):
         return True
     return parts[0] in skip_dirs
+
+
+def is_unchecked_source(rel: str) -> bool:
+    """Is this vault-relative posix path a note whose links are not
+    checked (one under a top-level `UNCHECKED_DIRS` folder)?"""
+    parts = rel.split("/")
+    return len(parts) > 1 and parts[0] in UNCHECKED_DIRS
 
 
 def vault_files(vault: Path, folder: str | None = None,
@@ -527,15 +540,21 @@ def alias_split(raw: str) -> str:
     return target
 
 
-def link_target(raw: str) -> str:
-    """Reduce a wikilink body to its target note name."""
+def link_name(raw: str) -> str:
+    """A wikilink body's target as it was written: no alias, heading,
+    block, folder or `.md`. Not normalised."""
     target = alias_split(raw)
     target = re.split(r"[#^]", target, maxsplit=1)[0]
     # Path-style links resolve by final segment, like Obsidian.
     target = target.rstrip("/").rsplit("/", 1)[-1]
     if target.endswith(".md"):
         target = target[:-3]
-    return normalize(target)
+    return target.strip()
+
+
+def link_target(raw: str) -> str:
+    """Reduce a wikilink body to its target note name."""
+    return normalize(link_name(raw))
 
 
 def wikilink_target(value: Any) -> str:
@@ -1311,6 +1330,57 @@ def scan_body(text: str,
         for lineno in open_lines[name]:
             problems.append(f"line {lineno}: <!-- {word} --> never closed")
     return states, problems
+
+
+@dataclass(frozen=True)
+class LinkLine:
+    """One line of a note, as everything that reads or rewrites its links
+    must see it."""
+
+    lineno: int
+    line: str  # with its line ending
+    in_code: bool  # in a code fence: nothing on it is a link
+    in_frontmatter: bool
+    # Inline code spans, where a link is quoted, not made. Empty in
+    # frontmatter: a backtick there is YAML, not code.
+    spans: list[tuple[int, int]]
+
+
+def link_lines(text: str) -> Iterator[LinkLine]:
+    """Every line of a note, in order, classified for link work. The one
+    definition of which lines hold live links: `graph_check.py` reads them,
+    `relink.py` and `links.py` rewrite them, and the three must agree or a
+    link one reports is a link another skips.
+
+    Frontmatter is everything before `scan_body`'s first body line; a note
+    that is only frontmatter has no body line at all."""
+    lines = text.splitlines(keepends=True)
+    states, _ = scan_body(text)
+    code = {s.lineno for s in states if s.in_code}
+    body_start = states[0].lineno if states else len(lines) + 1
+    for lineno, line in enumerate(lines, 1):
+        in_fm = lineno < body_start
+        yield LinkLine(lineno, line, lineno in code, in_fm,
+                       [] if in_fm else inline_code_spans(line))
+
+
+def live_wikilinks(line: str,
+                   spans: list[tuple[int, int]]) -> Iterator[re.Match[str]]:
+    """The wikilinks on a line that are links: not inside an inline code
+    span."""
+    for m in LINK_RE.finditer(line):
+        if not inside_spans(m.start(), spans):
+            yield m
+
+
+def sub_wikilinks(line: str, spans: list[tuple[int, int]],
+                  replace: Callable[[re.Match[str]], str]) -> str:
+    """The line with each live wikilink replaced by `replace(match)`; a
+    link inside an inline code span is left as written."""
+    return LINK_RE.sub(
+        lambda m: m.group(0) if inside_spans(m.start(), spans) else replace(m),
+        line)
+
 
 
 # --------------------------------------------------------------------------

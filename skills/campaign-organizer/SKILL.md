@@ -188,8 +188,9 @@ wiki-links; entity notes link back to sessions in their
 
 **Use when:** checking graph quality without adding content.
 
-1. **Structural:** run `graph_check.py all` and
-   `vault_check.py all` (see `shared/vault-access.md`), then
+1. **Structural:** run `graph_check.py all`, `links.py` and
+   `vault_check.py all` (see `shared/vault-access.md`; `links.py`
+   sorts the broken links and fixes the misspelt ones on a yes), then
    interpret on top of their orphan/ambiguity/schema output: type
    pair violations, missing required relationships, mirrored edges
    (one fact stored on both endpoints — storage is

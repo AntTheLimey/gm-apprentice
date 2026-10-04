@@ -22,7 +22,8 @@ A link to an existing image or other non-note file counts as resolved. A
 table link `[[Name\\|alias]]` counts as `[[Name|alias]]`. Links quoted in
 code fences or inline code are not links. Like every other vault script it
 skips hidden folders and the `_Templates`, `_templates` and `_inbox`
-folders.
+folders. Links written in notes under `_QA` and `_archive` (old reports,
+archives) are not reported as unresolved; notes there still count as targets.
 """
 
 import argparse
@@ -33,44 +34,36 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vaultlib import (  # noqa: E402
-    LINK_RE,
     frontmatter_aliases,
-    inline_code_spans,
-    inside_spans,
     is_skipped_path,
+    is_unchecked_source,
+    link_lines,
+    link_name,
     link_target,
+    live_wikilinks,
     normalize,
-    scan_body,
 )
 
 
 def body_links(text: str) -> list[str]:
     """Wikilink bodies that are links: frontmatter ones too, but not those
     quoted in a code fence or an inline code span."""
-    states, _ = scan_body(text)
-    code = {s.lineno for s in states if s.in_code}
-    body_start = states[0].lineno if states else 1
-    found: list[str] = []
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if lineno in code:
-            continue
-        spans = inline_code_spans(line) if lineno >= body_start else []
-        for m in LINK_RE.finditer(line):
-            if not inside_spans(m.start(), spans):
-                found.append(m.group(1))
-    return found
+    return [m.group(1) for ll in link_lines(text) if not ll.in_code
+            for m in live_wikilinks(ll.line, ll.spans)]
 
 
 def collect(vault: Path, excludes: list[str]):
-    """Scan the vault once; return (notes, names, outbound).
+    """Scan the vault once; return (notes, names, outbound, spellings).
 
     notes: relpath -> normalized basename
     names: normalized name/alias -> set of relpaths it resolves to
     outbound: relpath -> set of normalized link targets
+    spellings: relpath -> {normalized link target: as first written there}
     """
     notes: dict[str, str] = {}
     names: dict[str, set[str]] = {}
     outbound: dict[str, set[str]] = {}
+    spellings: dict[str, dict[str, str]] = {}
     for path in sorted(vault.rglob("*.md")):
         rel = path.relative_to(vault).as_posix()
         parts = rel.split("/")
@@ -89,8 +82,12 @@ def collect(vault: Path, excludes: list[str]):
         names.setdefault(base, set()).add(rel)
         for alias in frontmatter_aliases(text):
             names.setdefault(normalize(alias), set()).add(rel)
-        outbound[rel] = {link_target(b) for b in body_links(text)}
-    return notes, names, outbound
+        written: dict[str, str] = {}
+        for b in body_links(text):
+            written.setdefault(link_target(b), link_name(b))
+        outbound[rel] = set(written)
+        spellings[rel] = written
+    return notes, names, outbound, spellings
 
 
 def attachment_names(vault: Path) -> set[str]:
@@ -109,6 +106,20 @@ def attachment_names(vault: Path) -> set[str]:
             if (Path(root) / name).is_file():
                 found.add(normalize(name))
     return found
+
+
+def broken(vault: Path, names: dict[str, set[str]],
+           spellings: dict[str, dict[str, str]]) -> dict[str, dict[str, str]]:
+    """Links with no note or file behind them: normalized target ->
+    {source relpath: the spelling written there}. Every source is here;
+    the caller drops the ones `is_unchecked_source` names."""
+    known = set(names) | attachment_names(vault)
+    missing: dict[str, dict[str, str]] = {}
+    for src, written in spellings.items():
+        for target, spelling in written.items():
+            if target and target not in known:
+                missing.setdefault(target, {})[src] = spelling
+    return missing
 
 
 def inbound_map(notes, names, outbound):
@@ -154,7 +165,7 @@ def main() -> int:
         print("error: backlinks requires NAME", file=sys.stderr)
         return 2
 
-    notes, names, outbound = collect(args.vault, args.exclude)
+    notes, names, outbound, spellings = collect(args.vault, args.exclude)
     inbound = inbound_map(notes, names, outbound)
 
     def orphans():
@@ -162,14 +173,12 @@ def main() -> int:
                       if not srcs and in_folder(r, args.folder))
 
     def unresolved():
-        known = set(names) | attachment_names(args.vault)
-        missing: dict[str, set[str]] = {}
-        for src, targets in outbound.items():
-            for t in targets:
-                if t and t not in known:
-                    missing.setdefault(t, set()).add(src)
-        return sorted(f"{t}  <- {', '.join(sorted(srcs))}"
-                      for t, srcs in missing.items())
+        rows = []
+        for target, srcs in broken(args.vault, names, spellings).items():
+            checked = sorted(s for s in srcs if not is_unchecked_source(s))
+            if checked:
+                rows.append(f"{target}  <- {', '.join(checked)}")
+        return sorted(rows)
 
     def deadends():
         return sorted(r for r, targets in outbound.items()

@@ -11,8 +11,9 @@ being open.
 | Read / list / write / edit files and frontmatter | Read, Glob, Write, Edit |
 | Exact-term search (names, dates, markers) | Grep |
 | Ranked/prose search | `vault_search.py` |
-| Backlinks, orphans, unresolved/ambiguous links, dead ends | `graph_check.py` |
+| Backlinks, orphans, ambiguous links, dead ends | `graph_check.py` |
 | Rename or move a note, rewriting every link to it (dry run first; `--apply` to do it) | `relink.py VAULT OLD NEW` |
+| Broken links by kind, with the note each may mean; point a misspelt link at the right note, or turn a link into plain words (dry run first; `--write`) | `links.py VAULT`, `links.py VAULT retarget NAME NOTE`, `links.py VAULT unlink NAME...` |
 | Place text you wrote: start a Wrap-Up, add its sections, story entries, log lines, timeline lines (dry run first; `--write`) | `vault_write.py` |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `vault_check.py` |
 | Vault/plugin version gate | `vault_check.py version` |

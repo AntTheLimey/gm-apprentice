@@ -62,12 +62,13 @@ from vaultlib import (
     inside_spans,
     is_skipped_path,
     link_aliases,
+    link_lines,
     normalize,
     publish_rename_refs,
     scalar_value,
-    scan_body,
     set_key,
     site_unasked,
+    sub_wikilinks,
     vault_site,
 )
 
@@ -381,19 +382,15 @@ class _Resolver:
 
 def _rewrite_note(rel: str, text: str, res: _Resolver,
                   p: Plan) -> str:
-    states, _ = scan_body(text)
-    code = {s.lineno for s in states if s.in_code}
-    body_start = states[0].lineno if states else 1
     out: list[str] = []
-    for lineno, line in enumerate(text.splitlines(keepends=True), 1):
-        if lineno in code:
-            out.append(line)
+    for ll in link_lines(text):
+        if ll.in_code:
+            out.append(ll.line)
             continue
-        in_body = lineno >= body_start
-        new_line = _rewrite_wikilinks(
-            rel, lineno, line, inline_code_spans(line) if in_body else [], res, p)
-        spans = inline_code_spans(new_line) if in_body else []
-        new_line = _rewrite_markdown(rel, lineno, new_line, spans, res, p)
+        new_line = _rewrite_wikilinks(rel, ll.lineno, ll.line, ll.spans,
+                                      res, p)
+        spans = [] if ll.in_frontmatter else inline_code_spans(new_line)
+        new_line = _rewrite_markdown(rel, ll.lineno, new_line, spans, res, p)
         out.append(new_line)
     return "".join(out)
 
@@ -402,8 +399,6 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
                        spans: list[tuple[int, int]], res: _Resolver,
                        p: Plan, json_escape: bool = False) -> str:
     def sub(m: re.Match[str]) -> str:
-        if inside_spans(m.start(), spans):
-            return m.group(0)
         got = res.wiki(rel, m.group(1), _json_inner if json_escape else _plain)
         if got is False:
             return m.group(0)
@@ -417,7 +412,7 @@ def _rewrite_wikilinks(rel: str, lineno: int, line: str,
             return after
         p.changes.append(Change(rel, lineno, m.group(0), after))
         return after
-    return LINK_RE.sub(sub, line)
+    return sub_wikilinks(line, spans, sub)
 
 
 def _rewrite_markdown(rel: str, lineno: int, line: str,
