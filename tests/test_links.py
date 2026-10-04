@@ -470,6 +470,27 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(read(vault, "A.md"), "[[Bara Bazaar]]\n")
         self.assertEqual(read(vault, "B.md"), "[[Bara Bazaar]]\n")
 
+    def test_rollback_leaves_a_note_something_else_edited(self):
+        vault = make_vault(self, self.FILES)
+        p = links.plan_retarget(vault, "Bara Bazaar", NOTE)
+        real = links.write_text_atomic
+
+        def flaky(path, text):
+            if path.name == "B.md":
+                # Another editor saves A.md after this run rewrote it.
+                (vault / "A.md").write_bytes(b"synced edit\n")
+                raise links.StepFailed("B.md cannot be written")
+            real(path, text)
+
+        with mock.patch.object(links, "write_text_atomic", flaky):
+            with self.assertRaises(links.LinksError) as cm:
+                links.apply(p)
+        self.assertIn("A.md", str(cm.exception))
+        self.assertIn("changed by something else", str(cm.exception))
+        self.assertNotIn("the vault is as it was", str(cm.exception))
+        self.assertEqual(read(vault, "A.md"), "synced edit\n")
+        self.assertEqual(read(vault, "B.md"), "[[Bara Bazaar]]\n")
+
     def test_an_interrupt_puts_every_note_back(self):
         vault = make_vault(self, self.FILES)
         p = links.plan_retarget(vault, "Bara Bazaar", NOTE)

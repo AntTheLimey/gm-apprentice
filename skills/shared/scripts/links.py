@@ -366,18 +366,28 @@ def apply(p: Plan) -> None:
             written.append(rel)  # before the write: an interrupt mid-write
             write_text_atomic(p.vault / rel, p.texts[rel])
     except BaseException as e:
-        stuck = []
+        stuck, edited = [], []
         for rel in written:
             try:
-                if _read(p.vault, rel) == p.originals[rel]:
+                now = _read(p.vault, rel)
+                if now == p.originals[rel]:
                     continue  # never changed: nothing to put back
+                if now != p.texts[rel]:
+                    edited.append(rel)  # not this run's text: not ours to undo
+                    continue
                 write_text_atomic(p.vault / rel, p.originals[rel])
             except BaseException:
                 stuck.append(rel)
-        said = (str(e) or type(e).__name__) + (
-            f"; these notes could not be put back and still have the new "
-            f"links: {', '.join(stuck)}" if stuck
-            else "; the vault is as it was")
+        said = str(e) or type(e).__name__
+        if stuck:
+            said += (f"; these notes could not be put back and still have "
+                     f"the new links: {', '.join(stuck)}")
+        if edited:
+            said += (f"; these notes were changed by something else while "
+                     f"the fix ran and were left as they are: "
+                     f"{', '.join(edited)}")
+        if not stuck and not edited:
+            said += "; the vault is as it was"
         if isinstance(e, KeyboardInterrupt):
             raise KeyboardInterrupt(said) from None
         raise LinksError(said) from e
