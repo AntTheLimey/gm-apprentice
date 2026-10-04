@@ -336,6 +336,20 @@ def _listy(line: str) -> bool:
 TOP_LIST_RE = re.compile(r"^(?:[-*+]|\d+[.)])\s")
 
 
+def own_lines(doc: Doc, head: Head, end: int) -> list[int]:
+    """The lines of the section `head` opens (ending at `end`) that are
+    outside code and at the heading's own gm-only and spoiler depth: an
+    aside inside the section is not part of it."""
+    states = {s.lineno - 1: s for s in doc.states}
+    mine = states.get(head.idx)
+    if mine is None:
+        return []
+    return [i for i in range(head.idx + 1, end)
+            if (st := states.get(i)) is not None and not st.in_code
+            and st.gm_depth == mine.gm_depth
+            and st.spoiler_depth == mine.spoiler_depth]
+
+
 def list_end(doc: Doc, head: Head, end: int, line: str
              ) -> tuple[int, bool] | None:
     """(where `line` goes, whether it sits flush against the line above)
@@ -343,24 +357,13 @@ def list_end(doc: Doc, head: Head, end: int, line: str
     top-level list item and what continues it, or, for a table row, after
     the last table row. Lines in code fences do not count. None when the
     section has no list (or no table) to join."""
+    own = own_lines(doc, head, end)
+    mine = set(own)
     states = {s.lineno - 1: s for s in doc.states}
-
-    mine = states.get(head.idx)
-
-    def plain(i: int) -> bool:
-        """A line outside code at the heading's own gm-only and spoiler
-        depth: an aside inside the section is not part of its list."""
-        st = states.get(i)
-        return (st is not None and not st.in_code and mine is not None
-                and st.gm_depth == mine.gm_depth
-                and st.spoiler_depth == mine.spoiler_depth)
-
-    span = range(head.idx + 1, end)
     if line.lstrip().startswith("|"):
-        rows = [i for i in span if plain(i)
-                and doc.lines[i].lstrip().startswith("|")]
+        rows = [i for i in own if doc.lines[i].lstrip().startswith("|")]
         return (rows[-1] + 1, True) if rows else None
-    items = [i for i in span if plain(i) and TOP_LIST_RE.match(doc.lines[i])]
+    items = [i for i in own if TOP_LIST_RE.match(doc.lines[i])]
     if not items:
         return None
     j = items[-1] + 1
@@ -370,12 +373,12 @@ def list_end(doc: Doc, head: Head, end: int, line: str
             k = j
             while k < end and not doc.lines[k].strip():
                 k += 1
-            if k < end and plain(k) and doc.lines[k][:1] in (" ", "\t"):
+            if k < end and k in mine and doc.lines[k][:1] in (" ", "\t"):
                 j = k + 1
                 continue
             break
-        st = states[j] if j in states else None
-        if (st is None or not plain(j) or st.heading or st.marker
+        st = states.get(j)
+        if (st is None or j not in mine or st.heading or st.marker
                 or text.lstrip().startswith((">", "```", "~~~"))
                 and not text[:1].isspace()):
             break
@@ -1178,14 +1181,8 @@ def add_line(text: str, rel: str, section: str, line: str,
                     "created" if template_public else PLAYERS_SEE)
         head = found
     end = section_end(doc, head)
-    states = {st.lineno - 1: st for st in doc.states}
-    mine = states.get(head.idx)
-    if any(existing.strip() == line.strip()
-           for i, existing in enumerate(doc.lines[head.idx + 1:end],
-                                        head.idx + 1)
-           if mine is not None and i in states
-           and states[i].gm_depth == mine.gm_depth
-           and states[i].spoiler_depth == mine.spoiler_depth):
+    if any(doc.lines[i].strip() == line.strip()
+           for i in own_lines(doc, head, end)):
         return None, "already there"
     at, glue = list_end(doc, head, end, line) or (end, False)
     return place(doc, at, [line], tight=_listy(line), glue=glue), ""
@@ -1348,7 +1345,7 @@ def cmd_timeline(batch: Batch, args: argparse.Namespace, text: str) -> None:
     doc = parse(note)
     head = _need(doc, level, title)
     end = section_end(doc, head)
-    known = {line.strip() for line in doc.lines[head.idx + 1:end]}
+    known = {doc.lines[i].strip() for i in own_lines(doc, head, end)}
     plan: list[tuple[list[str], bool]] = []
     for entry in entries:
         fresh = entry[0].strip() not in known

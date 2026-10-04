@@ -1912,6 +1912,26 @@ class FollowUp2Tests(unittest.TestCase):
         self.assertNotIn("SKIP", out)
         self.assertIn("- a\n- pub\n\n<!-- gm-only -->", read(vault, NPC_REL))
 
+    def test_the_timeline_duplicate_check_ignores_a_hidden_aside(self):
+        entry = "- **4 August 1814** \u2014 Next."
+        tlt = TL.replace("They came.\n", "They came.\n\n<!-- gm-only -->\n"
+                         f"{entry}\n<!-- /gm-only -->\n")
+        vault = make_vault(self, {TL_REL: tlt})
+        code, out = tl(vault, entry + "\n",
+                       "--under", "### Session 1 \u2014 Arrival (3 August)")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("SKIP", out)
+        self.assertIn(f"They came.\n{entry}\n\n<!-- gm-only -->",
+                      read(vault, TL_REL))
+
+    def test_the_duplicate_check_ignores_a_code_fence(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n\n"
+                "```\n- pub\n```\n\n## Next\n")
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tLog\t- pub\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("SKIP", out)
+
 
 if __name__ == "__main__":
     unittest.main()
