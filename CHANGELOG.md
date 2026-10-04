@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.33] — 2026-10-04
+
+### Added
+
+- A full D&D 5e character page. The vitals stay pinned at the top, with
+  Sheet, Combat, Spells and Equipment tabs below. It shows saving-throw
+  numbers, attacks, actions grouped by action, bonus action and reaction,
+  and limited uses, spell slots, hit dice and death saves as marks. Spells
+  are listed by level with their key facts.
+- `dnd_sheet.py` reports and fills a D&D sheet's derived numbers, and
+  keeps any number a GM set by hand with a reason beside it.
+
+### Changed
+
+- The D&D PC template has new tables for saving throws, senses and
+  defences, features and spells (see `docs/file-format-standards.md` §9).
+  The site no longer computes a blank ability modifier. D&D notes in the
+  earlier layout still publish in full. Publish tool 1.13.0.
+
+---
+
 ## [1.10.32] — 2026-10-04
 
 ### Changed
