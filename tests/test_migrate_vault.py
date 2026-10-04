@@ -45,6 +45,42 @@ def whole_vault(case, system="coc-7e"):
     return vault
 
 
+class TimelinePageTests(unittest.TestCase):
+    def test_a_vault_with_no_timeline_is_given_one(self):
+        vault = whole_vault(self)
+        (vault / "_Campaign" / "Timeline.md").unlink()
+        self.assertEqual(mv.find_skeleton(vault), [])
+        items = mv.find_timeline_page(vault)
+        self.assertEqual([i.id for i in items], ["timeline-page"])
+        self.assertEqual(items[0].group, WILL)
+        items[0].apply(None)
+        text = (vault / "_Campaign" / "Timeline.md").read_text(encoding="utf-8")
+        self.assertIn("type: timeline", text)
+        self.assertEqual(mv.find_timeline_page(vault), [])
+
+    def test_a_timeline_under_another_name_counts(self):
+        vault = whole_vault(self)
+        (vault / "_Campaign" / "Timeline.md").rename(vault / "When.md")
+        self.assertEqual(mv.find_timeline_page(vault), [])
+
+    def test_no_other_page_is_added(self):
+        vault = whole_vault(self)
+        for rel in ("_Campaign/Timeline.md", "_Campaign/Player Characters.md",
+                    "_World/world-index.md", "_World/_flags.md"):
+            (vault / rel).unlink()
+        self.assertEqual(mv.find_skeleton(vault), [])
+        items = mv.find_timeline_page(vault)
+        self.assertEqual(items[0].lines,
+                         ["create _Campaign/Timeline.md (empty, for session "
+                          "timeline entries)"])
+
+    def test_it_waits_for_the_site_tool(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "timeline-page")
+        self.assertIsNone(check.release)
+        self.assertTrue(check.asks_site)
+        self.assertEqual(check.band, 4)
+
+
 class SkeletonTests(unittest.TestCase):
     def test_a_whole_vault_is_offered_nothing(self):
         self.assertEqual(mv.find_skeleton(whole_vault(self)), [])

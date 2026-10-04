@@ -25,7 +25,7 @@ describe('generateNavGroups', () => {
     const groups = generateNavGroups(pages);
     const story = groups.find(g => g.name === 'Story');
     const labels = story.links.map(l => l.label);
-    assert.ok(labels.includes('Story'));
+    assert.ok(labels.includes('Chapters'));
     assert.ok(labels.includes('Events'));
   });
 
@@ -98,7 +98,7 @@ describe('generateNav', () => {
     // A link here would load the landing on the click that opens the menu.
     assert.match(desktop, /<button class="nav-group-toggle">Story<\/button>/);
     assert.doesNotMatch(desktop, /<a class="nav-group-toggle"/);
-    assert.match(desktop, /<div class="nav-dropdown">\s*<a href="story\.html">Story so far<\/a>\s*<a href="chapters\/index\.html">/);
+    assert.match(desktop, /<div class="nav-dropdown">\s*<a href="story\.html">Story so far<\/a>\s*<a href="chapters\/index\.html">Chapters<\/a>/);
     assert.strictEqual((desktop.match(/href="story\.html"/g) || []).length, 1);
   });
 });
