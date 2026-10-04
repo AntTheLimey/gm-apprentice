@@ -380,13 +380,13 @@ def cmd_wrapup_new(batch: Batch, args: argparse.Namespace, _text: str) -> None:
     notes = vl.nested_mapping(text, "documents").get("play_notes") or ""
     notes_warning = ""
     if not notes:
-        found = find_play_notes(batch, index, stem)
-        if len(found) == 1:
-            notes = f"[[{found[0]}]]"
+        hits = find_play_notes(batch, index, stem)
+        if len(hits) == 1:
+            notes = f"[[{hits[0]}]]"
         else:
             notes_warning = (
                 "no Play Notes found for this session: source_document "
-                "left blank" if not found else
+                "left blank" if not hits else
                 "several Play Notes notes link this session: "
                 "source_document left blank")
     values = {
