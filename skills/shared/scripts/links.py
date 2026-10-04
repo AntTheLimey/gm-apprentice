@@ -27,6 +27,10 @@ a filename only one note has). The misspelt name is replaced unless
 --keep-text keeps the words on the page as the link's display text. A
 link's heading, block and display text are kept.
 
+NAME is any one spelling from a report row, read the way a link is read
+(a folder, #heading and .md are dropped). The fix covers the row's other
+spellings too, but not a name that differs by a number.
+
 `unlink` turns every link to NAME into its words. A link in frontmatter
 and an embed are left alone and listed as KEPT.
 
@@ -100,6 +104,13 @@ def _numbers(name: str) -> list[int]:
     return [int(d) for d in re.findall(r"\d+", _fold(name))]
 
 
+def _group_key(name: str) -> tuple[str, tuple[int, ...]]:
+    """Spellings with one key share a row, and one fix covers them all:
+    the same letters and the same numbers. A name that squashes to nothing
+    keeps its own row."""
+    return squash(name) or name, tuple(_numbers(name))
+
+
 def _count(n: int, noun: str) -> str:
     return f"{n} {noun}{'' if n == 1 else 's'}"
 
@@ -138,7 +149,7 @@ def candidates(name: str, index: Index) -> list[tuple[str, str]]:
         if known_numbers == numbers:
             by_squash.setdefault(known_sq, set()).update(rels)
         if known_sq == sq:
-            offer(rels, 0)
+            offer(rels, 0 if known_numbers == numbers else 1)
         elif _part(words, known_words):
             offer(rels, 2)
     if sq:
@@ -162,7 +173,7 @@ def report(vault: Path) -> tuple[list[Row], int]:
     broken only in unchecked folders."""
     _notes, names, _outbound, spellings = graph_check.collect(vault, [])
     index = _index(names)
-    groups: dict[str, dict[str, dict[str, str]]] = {}
+    groups: dict[tuple[str, tuple[int, ...]], dict[str, dict[str, str]]] = {}
     unchecked = 0
     for target, srcs in graph_check.broken(vault, names, spellings).items():
         checked = {s: sp for s, sp in srcs.items()
@@ -170,7 +181,7 @@ def report(vault: Path) -> tuple[list[Row], int]:
         if not checked:
             unchecked += 1
             continue
-        groups.setdefault(squash(target) or target, {})[target] = checked
+        groups.setdefault(_group_key(target), {})[target] = checked
     rows = []
     for group in groups.values():
         spelt: list[str] = []
@@ -231,7 +242,6 @@ class Plan:
     changes: list[Change] = field(default_factory=list)
     # (note, line, the link, why): links a fix leaves as written.
     kept: list[tuple[str, int, str, str]] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
 
 
 # (destination, #heading or ^block, |display), is it an embed, is it in
@@ -309,9 +319,11 @@ def _plan(vault: Path, targets: set[str], fix: Fix) -> Plan:
     for rel in _walk(vault, ".md"):
         text = _read(vault, rel)
         if text is None:
-            if any(link_target(b) in targets
-                   for b in LINK_RE.findall(_raw(vault, rel))):
-                p.warnings.append(f"{rel} is not valid UTF-8; left alone")
+            for body in LINK_RE.findall(_raw(vault, rel)):
+                if link_target(body) in targets:
+                    raise LinksError(
+                        f"{rel} is not valid UTF-8 and links to "
+                        f"{link_name(body)}; fix its encoding first")
             continue
         new = _rewrite(rel, text, targets, fix, p)
         if new != text:
@@ -320,14 +332,18 @@ def _plan(vault: Path, targets: set[str], fix: Fix) -> Plan:
 
 
 def _broken_names(vault: Path, names: list[str]) -> set[str]:
-    """The names as link targets; refuses one that is not a broken link."""
+    """The names as link targets, widened to every broken spelling in the
+    same row; refuses one that is not a broken link."""
     _notes, known, _outbound, spellings = graph_check.collect(vault, [])
     missing = graph_check.broken(vault, known, spellings)
+    asked = set()
     for name in names:
-        if normalize(name) not in missing:
+        target = link_target(name)
+        if target not in missing:
             raise LinksError(f"{name} is not a broken link: nothing links "
                              f"to it, or a note already answers to it")
-    return {normalize(name) for name in names}
+        asked.add(_group_key(target))
+    return {t for t in missing if _group_key(t) in asked}
 
 
 def plan_retarget(vault: Path, name: str, note: str,
@@ -363,6 +379,8 @@ def apply(p: Plan) -> None:
         stuck = []
         for rel in written:
             try:
+                if _read(p.vault, rel) == p.originals[rel]:
+                    continue  # never changed: nothing to put back
                 write_text_atomic(p.vault / rel, p.originals[rel])
             except BaseException:
                 stuck.append(rel)
@@ -381,7 +399,6 @@ def rows(p: Plan, done: bool = False) -> list[str]:
            for c in p.changes]
     out += [f"KEPT\t{rel}:{lineno}\t{link}\t{KEPT[why]}"
             for rel, lineno, link, why in p.kept]
-    out += [f"WARNING\t{w}" for w in p.warnings]
     return out + [f"# {len(p.changes)} link(s) in {len(p.texts)} note(s)"
                   + (f", {len(p.kept)} left as written" if p.kept else "")]
 

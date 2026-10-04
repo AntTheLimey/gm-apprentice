@@ -75,6 +75,21 @@ class ReportTests(unittest.TestCase):
                         "A.md": "[[Session_02_Plan]]\n"})
         self.assertEqual(row.candidates, [("S/Session 2 Plan.md", "close")])
 
+    def test_same_letters_but_different_numbers_is_close_not_same(self):
+        cases = [("Chapter_05_Overview.md", "Chapter 0.5 Overview"),
+                 ("Scene 11.md", "Scene 1.1"),
+                 ("Session 12 Plan.md", "Session 1-2 Plan")]
+        for filename, link in cases:
+            with self.subTest(link=link):
+                row = self.one({filename: "x\n", "A.md": f"[[{link}]]\n"})
+                self.assertEqual(row.candidates, [(filename, "close")])
+
+    def test_names_that_differ_by_number_are_separate_rows(self):
+        rows, _ = links.report(make_vault(self, {
+            "A.md": "[[Chapter 0.5]]\n", "B.md": "[[Chapter 05]]\n"}))
+        self.assertEqual([(r.kind, r.spellings) for r in rows], [
+            ("UNWRITTEN", ["Chapter 0.5"]), ("UNWRITTEN", ["Chapter 05"])])
+
     def test_an_archived_note_is_not_a_candidate(self):
         row = self.one({"_archive/old/the-secret.md": "x\n",
                         "_QA/Secret Report.md": "x\n",
@@ -345,6 +360,35 @@ class UnlinkTests(unittest.TestCase):
         got, _ = self.after("`[[Judo]]` [[Judo]]")
         self.assertEqual(got, "`[[Judo]]` Judo")
 
+    def test_name_is_read_the_way_a_link_is_read(self):
+        for name in ("Rules/Judo", "Judo#Rules", "Judo.md"):
+            with self.subTest(name=name):
+                vault = make_vault(self, {"A.md": "[[Judo]]\n"})
+                p = links.plan_unlink(vault, [name])
+                self.assertEqual(p.texts["A.md"], "Judo\n")
+
+    def test_a_fix_covers_every_spelling_in_the_row(self):
+        vault = make_vault(self, {"S1.md": "[[Bobs Bar]]\n",
+                                  "S2.md": "[[Bob's Bar]]\n"})
+        p = links.plan_unlink(vault, ["Bob's Bar"])
+        self.assertEqual((p.texts["S1.md"], p.texts["S2.md"]),
+                         ("Bobs Bar\n", "Bob's Bar\n"))
+
+    def test_retarget_covers_every_spelling_in_the_row(self):
+        vault = make_vault(self, {
+            "Events/Eid.md": "x\n", "A.md": "[[Eid al-Fitr]]\n",
+            "B.md": "[[Eid al Fitr]]\n", "C.md": "[[Eid al Fitr 2]]\n"})
+        p = links.plan_retarget(vault, "Eid al-Fitr", "Events/Eid.md")
+        self.assertEqual((p.texts["A.md"], p.texts["B.md"]),
+                         ("[[Eid]]\n", "[[Eid]]\n"))
+        self.assertNotIn("C.md", p.texts)
+
+    def test_a_name_differing_only_by_number_is_not_touched(self):
+        vault = make_vault(self, {"A.md": "[[Chapter 0.5]]\n",
+                                  "B.md": "[[Chapter 05]]\n"})
+        p = links.plan_unlink(vault, ["Chapter 0.5"])
+        self.assertEqual(sorted(p.texts), ["A.md"])
+
     def test_a_name_that_resolves_is_refused(self):
         vault = make_vault(self, {"Real.md": "x\n", "A.md": "[[Real]] [[Judo]]\n"})
         with self.assertRaises(links.LinksError) as cm:
@@ -452,12 +496,40 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(read(vault, "A.md"), "[[Bara Bazaar]]\n")
         self.assertEqual(read(vault, "B.md"), "[[Bara Bazaar]] edited\n")
 
-    def test_a_note_that_is_not_utf8_is_warned_about(self):
+    def test_a_non_utf8_note_holding_the_link_refuses_the_fix(self):
         vault = make_vault(self, self.FILES)
         (vault / "C.md").write_bytes(b"[[Bara Bazaar]] \xff\n")
+        with self.assertRaises(links.LinksError) as cm:
+            links.plan_retarget(vault, "Bara Bazaar", NOTE)
+        self.assertIn("C.md is not valid UTF-8 and links to Bara Bazaar",
+                      str(cm.exception))
+        got = cli(vault, "retarget", "Bara Bazaar", NOTE, "--write")
+        self.assertEqual(got.returncode, 1)
+        self.assertEqual(read(vault, "A.md"), "[[Bara Bazaar]]\n")
+
+    def test_a_non_utf8_note_without_the_link_is_ignored(self):
+        vault = make_vault(self, self.FILES)
+        (vault / "C.md").write_bytes(b"[[Elsewhere]] \xff\n")
         p = links.plan_retarget(vault, "Bara Bazaar", NOTE)
-        self.assertEqual(p.warnings, ["C.md is not valid UTF-8; left alone"])
-        self.assertNotIn("C.md", p.texts)
+        self.assertEqual(sorted(p.texts), ["A.md", "B.md"])
+
+    def test_a_note_that_was_never_written_is_not_reported_stuck(self):
+        vault = make_vault(self, self.FILES)
+        p = links.plan_retarget(vault, "Bara Bazaar", NOTE)
+        real = links.write_text_atomic
+
+        def refuse_b(path, text):
+            if path.name == "B.md":
+                raise links.StepFailed("B.md cannot be written")
+            real(path, text)
+
+        with mock.patch.object(links, "write_text_atomic", refuse_b):
+            with self.assertRaises(links.LinksError) as cm:
+                links.apply(p)
+        self.assertTrue(str(cm.exception).endswith("the vault is as it was"),
+                        str(cm.exception))
+        self.assertNotIn("could not be put back", str(cm.exception))
+        self.assertEqual(read(vault, "A.md"), "[[Bara Bazaar]]\n")
 
 
 if __name__ == "__main__":
