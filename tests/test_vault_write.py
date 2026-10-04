@@ -1844,7 +1844,7 @@ class FollowUpTests(unittest.TestCase):
         before = read(vault, WRAP_REL)
         code, out = add(vault, "### World State\n", "--append")
         self.assertEqual(code, 1, out)
-        self.assertIn("nothing to append to '### World State'", out)
+        self.assertIn("nothing to add", out)  # bare-heading rule
         self.assertEqual(read(vault, WRAP_REL), before)
 
     # 5
@@ -1865,6 +1865,52 @@ class FollowUpTests(unittest.TestCase):
         with mock.patch("sys.stdout", out), self.assertRaises(SystemExit):
             vw.build_parser().parse_args(["v", "log", "--help"])
         self.assertIn("GM Notes/<Name>", out.getvalue())
+
+
+class FollowUp2Tests(unittest.TestCase):
+    def test_a_known_child_under_an_existing_parent_needs_no_flag(self):
+        for flags in ((), ("--append",), ("--replace",)):
+            with self.subTest(flags):
+                vault = wrap_vault(self)
+                add(vault, "### What Carries Forward\n\n#### Skipped Prep\n\n"
+                           "- s\n")
+                code, out = add(vault, "### What Carries Forward\n\n"
+                                       "#### NPCs Needing Follow-Up\n\n- n\n",
+                                *flags)
+                self.assertEqual(code, 0, out)
+                self.assertEqual(out.count("ADDED\t"), 1, out)
+                text = read(vault, WRAP_REL)
+                self.assertEqual(text.count("### What Carries Forward"), 1)
+                self.assertLess(text.index("#### NPCs Needing Follow-Up"),
+                                text.index("#### Skipped Prep"))
+
+    def test_a_lone_bare_heading_for_an_existing_section_adds_nothing(self):
+        vault = wrap_vault(self)
+        add(vault, "### World State\n\n- a\n")
+        before = read(vault, WRAP_REL)
+        for flags in ((), ("--append",)):
+            code, out = add(vault, "### World State\n", *flags)
+            self.assertEqual(code, 1, out)
+            self.assertIn("nothing to add", out)
+            self.assertEqual(read(vault, WRAP_REL), before)
+
+    def test_a_bare_heading_for_a_missing_parent_is_still_created(self):
+        vault = wrap_vault(self)
+        code, out = add(vault, "### What Carries Forward\n\n"
+                               "#### Skipped Prep\n\n- s\n")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out.count("ADDED\t"), 2, out)
+        self.assertIn("### What Carries Forward\n\n#### Skipped Prep",
+                      read(vault, WRAP_REL))
+
+    def test_the_duplicate_check_ignores_a_hidden_aside(self):
+        note = ("---\ntype: zzz\n---\n\n# H\n\n## Log\n\n- a\n\n"
+                "<!-- gm-only -->\n- pub\n<!-- /gm-only -->\n\n## Next\n")
+        vault = make_vault(self, {NPC_REL: note})
+        code, out = log(vault, f"{NPC_REL}\tLog\t- pub\n")
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("SKIP", out)
+        self.assertIn("- a\n- pub\n\n<!-- gm-only -->", read(vault, NPC_REL))
 
 
 if __name__ == "__main__":

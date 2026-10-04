@@ -848,6 +848,20 @@ def require_hidden(old: str, new: str, rel: str, level: int,
                          f"outside the hidden block")
 
 
+def section_exists(note: str, rel: str, level: int, title: str) -> bool:
+    """Whether the Wrap-Up already has a section of this level and title
+    where `wrapup-add` would put one."""
+    doc = parse(note)
+    gm_head, _opener, closer = gm_region(doc, rel)
+    k = key(title)
+    if level == 2:
+        pool = [h for h in doc.heads if h.level == 2 and not h.gm]
+    else:
+        pool = [h for h in doc.heads
+                if h.level == level and gm_head.idx < h.idx < closer]
+    return any(key(h.title) == k for h in pool)
+
+
 def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
     rel = batch.resolve(args.wrapup)
     note = batch.read(rel)
@@ -867,10 +881,17 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
                   "created (the Wrap-Up had none)")
     mode = "replace" if args.replace else "append" if args.append else ""
     prev: str | None = None
+    placed = 0
     for n, (level, title, unit) in enumerate(units):
         if level not in (2, 3, 4):
             raise WriteError(f"'{'#' * level} {title}': a Wrap-Up section "
                              f"starts at ##, ### or ####")
+        if len(unit) == 1 and section_exists(note, rel, level, title):
+            # A heading and nothing else, for a section the note has: the
+            # parent's marker for the units after it, not a second copy.
+            prev = title if level == 3 else None
+            continue
+        placed += 1
         made: list[tuple[str, str]] = []
         before = note
         landed = add_section(note, rel, tmap, level, title, unit, mode,
@@ -890,6 +911,8 @@ def cmd_wrapup_add(batch: Batch, args: argparse.Namespace, text: str) -> None:
                     batch.row("WOULD-ADD", rel, f"\u00a7{title} \u203a {sub}",
                               "inside a player section \u2014 players will "
                               "see this")
+    if not placed:
+        raise WriteError(f"{rel}: nothing to add")
 
 
 STORY_TEMPLATES = ("character-story.md", "_Template_Character_Story.md")
@@ -1155,8 +1178,14 @@ def add_line(text: str, rel: str, section: str, line: str,
                     "created" if template_public else PLAYERS_SEE)
         head = found
     end = section_end(doc, head)
+    states = {st.lineno - 1: st for st in doc.states}
+    mine = states.get(head.idx)
     if any(existing.strip() == line.strip()
-           for existing in doc.lines[head.idx + 1:end]):
+           for i, existing in enumerate(doc.lines[head.idx + 1:end],
+                                        head.idx + 1)
+           if mine is not None and i in states
+           and states[i].gm_depth == mine.gm_depth
+           and states[i].spoiler_depth == mine.spoiler_depth):
         return None, "already there"
     at, glue = list_end(doc, head, end, line) or (end, False)
     return place(doc, at, [line], tight=_listy(line), glue=glue), ""
