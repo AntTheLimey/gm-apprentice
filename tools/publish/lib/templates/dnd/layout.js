@@ -1,0 +1,52 @@
+const { escapeHtml } = require('../../processor');
+const { ABILITIES } = require('./parse');
+const { renderVitals } = require('./blocks/vitals');
+const { renderAbilities } = require('./blocks/abilities');
+const { renderSkills } = require('./blocks/skills');
+const { renderSenses } = require('./blocks/senses');
+const { renderProficiencies } = require('./blocks/proficiencies');
+const { renderFeatures } = require('./blocks/features');
+const { renderAttacks } = require('./blocks/attacks');
+const { renderActions } = require('./blocks/actions');
+const { renderDefences } = require('./blocks/defences');
+const { renderTracks } = require('./blocks/tracks');
+const { renderCasting } = require('./blocks/casting');
+const { renderSlots } = require('./blocks/slots');
+const { renderSpells } = require('./blocks/spells');
+const { renderGear } = require('./blocks/gear');
+const { renderAttunement } = require('./blocks/attunement');
+const { renderCoins } = require('./blocks/coins');
+
+const wrap = (cls, parts) => {
+  const kept = parts.filter(Boolean);
+  return kept.length ? `<div class="dnd5e-sheet ${cls}">${kept.join('\n')}</div>` : null;
+};
+
+function headerLine(model) {
+  const h = model.header;
+  const bits = [h.level ? `Level ${h.level}` : '', h.classes, h.species, h.background].filter(Boolean);
+  return bits.length ? `<div class="dnd5e-header">${bits.map(b => `<span>${escapeHtml(b)}</span>`).join('')}</div>` : '';
+}
+
+function buildSheet(model) {
+  // Loose Stat Sheet prose alone makes the abilities block but no sheet: the
+  // prose stays in its accordion. With any other block it is shown as written.
+  const hasStats = ABILITIES.some(k => model.abilities[k]) || model.core.length > 0;
+  const blocks = [
+    renderAbilities(model), renderSkills(model), renderSenses(model), renderProficiencies(model),
+    renderFeatures(model, 'class', 'Class features'),
+    renderFeatures(model, 'species', 'Species traits'),
+    renderFeatures(model, 'feats', 'Feats'),
+  ].filter(Boolean);
+  // A header line alone is not a sheet, nor is loose Stat Sheet prose alone.
+  const real = blocks.length > 1 || (blocks.length === 1 && (hasStats || !blocks[0].includes('dnd5e-blk-abilities')));
+  return real ? wrap('dnd5e-tab-sheet', [headerLine(model), ...blocks]) : null;
+}
+
+const buildCombat = model => wrap('dnd5e-tab-combat', [renderAttacks(model), ...renderActions(model), renderDefences(model), renderTracks(model)]);
+const buildSpells = model => (model.hasSpellcasting
+  ? wrap('dnd5e-tab-spells', [renderCasting(model), renderSlots(model), ...renderSpells(model)]) : null);
+const buildEquipment = model => wrap('dnd5e-tab-equipment', [renderGear(model), renderAttunement(model), renderCoins(model)]);
+const buildVitals = model => renderVitals(model);
+
+module.exports = { buildSheet, buildCombat, buildSpells, buildEquipment, buildVitals };
