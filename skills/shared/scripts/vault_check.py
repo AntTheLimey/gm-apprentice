@@ -2918,6 +2918,16 @@ class Finding:
 
 
 @dataclass
+class WrapDetail:
+    """One finding of a wrap-up, and whether that note publishes at all
+    (it does not under `publish: none` or in a vault with no site)."""
+
+    rel: str
+    finding: Finding
+    publishes: bool
+
+
+@dataclass
 class WrapContext:
     """What one wrap-up's fixes can be derived from.
 
@@ -3472,7 +3482,8 @@ def wrapup_structure_findings(rel: str, text: str,
             "the session's player-facing recap, and --fix re-nests "
             + ("the template's GM Notes subsections"
                if player is None else "every other H2")
-            + " under ## GM Notes; retitle the player-facing one first"))
+            + " under ## GM Notes; retitle the player-facing one first",
+            "no-recap"))
     return out
 
 
@@ -3526,7 +3537,7 @@ def _wrap_h2_finding(rel: str, state: LineState, where: str,
             return []
         return [Finding("WARNING", where,
                         f"## GM Notes is not inside a {GM_ONLY_OPEN} pair",
-                        "renest")]
+                        "renest", ("unfenced",))]
     if is_player_h2(title, player):
         # Player-facing under the reading in force; one the GM fenced is
         # deliberately hidden and stays where it is.
@@ -4338,7 +4349,8 @@ def apply_frontmatter_fixes(lines: list[str],
 def check_wrapup(vault: Path, file: str | None, fix: bool,
                  explain: ExplainAll | None = None,
                  player: frozenset[str] | None = None,
-                 *, renest_only: bool = False) -> list[str]:
+                 *, renest_only: bool = False,
+                 detail: list[WrapDetail] | None = None) -> list[str]:
     """Session Wrap-Up conformance, and the mechanical repairs.
 
     Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
@@ -4362,7 +4374,11 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
     `renest_only` is for the migration: only a wrap-up with a Keeper-facing
     H2 is looked at, only its Keeper-facing-H2 and fence findings are
     reported, and the one repair is the re-nest. No frontmatter backfill,
-    no heading rename, no row for any other wrap-up.
+    no heading rename, no row for any other wrap-up. A wrap-up with no
+    recap heading the tool recognises is reported and never moved: under
+    the old reading its whole body would count as Keeper content. `detail`
+    collects each finding of the wrap-ups looked at, so the caller reads
+    level, kind and data rather than the row's words.
 
     Exit code is not a gate here: wrap-up drift is triage, and an
     ordinary vault of ingested back-history would fail every run.
@@ -4398,7 +4414,8 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
         try:
             rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes,
                                           fix, player, no_tool,
-                                          renest_only=renest_only))
+                                          renest_only=renest_only,
+                                          detail=detail))
         except PublishToolUnavailable as e:
             rows.append(_tool_gone_row("wrapup", e))
             return rows
@@ -4413,7 +4430,8 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       excludes: list[str], fix: bool,
                       player: frozenset[str] | None = None,
                       no_tool: bool = False, *,
-                      renest_only: bool = False) -> list[str]:
+                      renest_only: bool = False,
+                      detail: list[WrapDetail] | None = None) -> list[str]:
     """One wrap-up: findings, then the plan, then a single write.
     `no_tool`: a vault with no site and no publish tool to ask. The
     check before the write then covers what needs no tool: the fences,
@@ -4446,11 +4464,17 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
             return []
         fm_findings = []
         structure = [f for f in structure if f.kind in (
-            "keeper-h2", "fence-crosses", "fence-unbalanced")]
+            "keeper-h2", "fence-crosses", "fence-unbalanced", "renest",
+            "recap", "no-recap")]
         findings = structure
+        if detail is not None:
+            shown = publish_mode(fm) != "none" and not no_tool
+            detail.extend(WrapDetail(rel, f, shown) for f in findings)
     else:
         findings = fm_findings + structure + wrapup_filename_findings(rel)
     rows = [f.row for f in findings]
+    if renest_only and any(f.kind == "no-recap" for f in findings):
+        return rows
 
     fm_lines = lines[1:close]
     actions = apply_frontmatter_fixes(

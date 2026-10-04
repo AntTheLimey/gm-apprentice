@@ -13,10 +13,11 @@ from pathlib import Path
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           edit_frontmatter, write_text_atomic)
-from vault_check import (WRAP_TYPES, check_wrapup, player_section_key,
-                         wrapup_filename_findings)
+from migrate_site import _cells, _stopped
+from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
+                         player_section_key, wrapup_filename_findings)
 from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
-                      extract_frontmatter, parse_publish_list,
+                      extract_frontmatter, frontmatter_span, parse_publish_list,
                       parse_version, read_publish_scalar, vault_files,
                       wrapup_filename)
 
@@ -556,6 +557,17 @@ def _drop_player_sections(fm: list[str], _eol: str) -> None:
                 return i
         return None
 
+    def list_end(start: int) -> int:
+        """The key's block; a block list written at the key's own indent
+        belongs to it too."""
+        end = block_end(start)
+        m = _KEY_LINE_RE.match(fm[start].rstrip("\r\n"))
+        if m and not (m.group(4) or "").split("#")[0].strip():
+            while (end < len(fm) and depth(fm[end]) == depth(fm[start])
+                   and re.match(r"-(\s|$)", fm[end].strip())):
+                end = block_end(end)
+        return end
+
     publish = key_at("publish", 0, len(fm), False)
     if publish is None:
         return
@@ -565,9 +577,13 @@ def _drop_player_sections(fm: list[str], _eol: str) -> None:
     key = key_at("player_sections", wrap + 1, block_end(wrap), True)
     if key is None:
         return
-    del fm[key:block_end(key)]
+    del fm[key:list_end(key)]
     if block_end(wrap) == wrap + 1:
         del fm[wrap]
+
+
+def _name_headings(titles: list[str]) -> str:
+    return ", ".join(f"'## {t}'" for t in titles)
 
 
 def find_wrapup_sections(vault: Path) -> list[Item]:
@@ -577,64 +593,104 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
 
     The list is read here and never removed here: it must still be there
     when the choice is applied, and when this is asked again before the
-    vault is stamped. `find_wrapup_sections_key` drops it a release later."""
+    vault is stamped. `find_wrapup_sections_key` drops it a release later.
+    A note with a fence the re-nest cannot handle, one the checker refuses
+    to write, or one with no recap heading it recognises is never moved:
+    it is for a person."""
     listed = read_wrap_up_player_sections(vault)
     player = frozenset(k for k in map(player_section_key, listed) if k)
-    rows = [r.split("\t", 2) for r in check_wrapup(
-        vault, None, False, player=player, renest_only=True)]
-    rows = [r for r in rows if len(r) == 3]
-    # A note the re-nest cannot touch (a fence, a hidden line that would
-    # publish) is for a person, and its headings are not offered to move.
-    blocked = [r for r in rows if r[0] in ("ERROR", "WARNING")
-               and not r[2].startswith("Keeper-facing H2")]
-
-    def note(where: str) -> str:
-        return where.rpartition(":")[0] or where
-
-    stuck = {note(r[1]) for r in blocked}
-    moves = [f"{r[1]}: {r[2]}" for r in rows
-             if r[0] in ("ERROR", "WARNING")
-             and r[2].startswith("Keeper-facing H2")
-             and note(r[1]) not in stuck]
-    # The re-nest also renames a recap heading to Narrative Recap.
-    moves += [f"{r[1]}: {r[2]}" for r in rows
-              if r[0] == "WOULD-FIX" and r[2].startswith("renamed heading")
-              and r[1] not in stuck]
+    seen: list[WrapDetail] = []
+    rows = [_cells(r) for r in check_wrapup(
+        vault, None, False, player=player, renest_only=True, detail=seen)]
+    _stopped(rows)
+    found = {d.finding.row for d in seen}
+    by_note: dict[str, list[WrapDetail]] = {}
+    for d in seen:
+        by_note.setdefault(d.rel, []).append(d)
+    # A row the checker printed that is not a finding: a refusal to write.
+    refused = {where.rpartition(":")[0] or where: m
+               for level, where, m in rows
+               if level == "ERROR" and f"{level}\t{where}\t{m}" not in found}
+    moves: list[str] = []
+    person: list[str] = []
+    for rel, ds in by_note.items():
+        titles = [d.finding.data[0] for d in ds
+                  if d.finding.kind == "keeper-h2"]
+        if not titles:
+            continue
+        fence = next((d.finding for d in ds if d.finding.kind in (
+            "fence-crosses", "fence-unbalanced")), None)
+        if fence is not None or rel in refused:
+            why = fence.message if fence is not None else refused[rel]
+            person.append(f"{rel}\t{why}")
+            person.append(
+                f"{rel}\t{_name_headings(titles)} would have moved; after "
+                f"it is repaired `vault_check.py <vault> wrapup --file "
+                f"{rel} --fix` will not move them (the new rule leaves "
+                f"them), so move them under ## GM Notes by hand if they "
+                f"are Keeper content")
+        elif any(d.finding.kind == "no-recap" for d in ds):
+            person.append(
+                f"{rel}\thas no recap heading the tool recognises, so "
+                f"nothing in it was moved ({_name_headings(titles)}): "
+                f"retitle the player-facing section '## Narrative Recap', "
+                f"then run `vault_check.py <vault> wrapup --file {rel}`")
+        else:
+            for d in ds:
+                f = d.finding
+                if f.kind == "keeper-h2":
+                    state = ("not published" if not d.publishes
+                             else "players can see it today"
+                             if f.level == "ERROR" else "already hidden")
+                    moves.append(f"{rel}: '## {f.data[0]}' — {state}")
+                elif f.kind == "renest" and f.data == ("unfenced",):
+                    moves.append(f"{rel}: GM Notes gets its hidden-markers "
+                                 f"(it has none today)")
+                elif f.kind == "recap":
+                    moves.append(f"{rel}: '## {f.data[0]}' is renamed "
+                                 f"'## Narrative Recap'")
     items: list[Item] = []
-    if any("Keeper-facing H2" in m for m in moves):
+    if moves:
         def apply(value: str | None) -> list[str]:
             if value not in ("move", "leave"):
                 raise StepFailed("wrapup-sections takes move or leave")
             if value == "leave":
                 return ["left the Wrap-Up headings where players see them"]
-            fixed = [r.split("\t", 2) for r in check_wrapup(
+            fixed = [_cells(r) for r in check_wrapup(
                 vault, None, True, player=player, renest_only=True)]
-            return [f"{r[1]}: {r[2]}" for r in fixed
-                    if len(r) == 3 and r[0] == "FIXED"]
+            _stopped(fixed)
+            return [f"{where}: {m}" for level, where, m in fixed
+                    if level == "FIXED"]
 
         items.append(Item(
             "wrapup-sections", CHOICE,
             ["move: put these under GM Notes, hidden from players; "
              "leave: keep them where players see them", *moves],
             apply, wants="move or leave"))
-    if blocked:
-        items.append(Item("wrapup-sections-review", PERSON,
-                          [f"{r[1]}\t{r[2]}" for r in blocked]))
+    if person:
+        items.append(Item("wrapup-sections-review", PERSON, person))
     return items
 
 
 def find_wrapup_sections_key(vault: Path) -> list[Item]:
     """Every pass: `publish.wrap_up.player_sections` is no longer read.
     It goes once the vault is stamped 1.10.28 or later, so the migration
-    that stamps 1.10.28 could still read it."""
+    that stamps 1.10.28 could still read it. Offered only when removing it
+    would change the file."""
     config = vault / CONFIG
-    text = _read(config)
-    fm = extract_frontmatter(text.removeprefix("\ufeff")) or {}
-    stamp = fm.get("gm_apprentice_version")
+    text = _read(config).removeprefix("\ufeff")
+    stamp = (extract_frontmatter(text) or {}).get("gm_apprentice_version")
     if (not stamp or isinstance(stamp, list)
             or parse_version(str(stamp)) < parse_version("1.10.28")):
         return []
-    if not re.search(r"^\s+player_sections\s*:", text, re.M):
+    lines = text.splitlines(keepends=True)
+    end, error = frontmatter_span(lines)
+    if error:
+        return []
+    fm = lines[1:end]
+    after = list(fm)
+    _drop_player_sections(after, "")
+    if after == fm:
         return []
 
     def apply(_value: str | None) -> list[str]:

@@ -793,5 +793,125 @@ class WrapupSectionsKeyTests(WrapupFixture):
         self.assertEqual((check.release, check.asks_site), (None, False))
 
 
+NO_RECAP = WS_WRAP.replace("## Narrative Recap", "## Summary")
+OTHER_REL = "Sessions/Chapter_01_Session_02_Wrap_Up.md"
+
+
+class WrapupSectionsReviewTests(WrapupFixture):
+    def test_a_wrap_up_with_no_recap_is_not_moved_and_is_for_a_person(self):
+        vault = self.vault(wrap=NO_RECAP)
+        other = vault / OTHER_REL
+        other.write_text(WS_WRAP, encoding="utf-8")
+        items = by_id(mv.find_wrapup_sections(vault))
+        shown = "\n".join(items["wrapup-sections"].lines)
+        self.assertIn(OTHER_REL, shown)
+        self.assertNotIn(WS_REL, shown)
+        person = "\n".join(items["wrapup-sections-review"].lines)
+        self.assertIn(WS_REL, person)
+        self.assertIn("Secret Plans", person)
+        self.assertIn("no recap heading the tool recognises", person)
+        self.assertIn("## Narrative Recap", person)
+        items["wrapup-sections"].apply("move")
+        self.assertEqual((vault / WS_REL).read_text(encoding="utf-8"),
+                         NO_RECAP)
+        self.assertIn("### Secret Plans",
+                      other.read_text(encoding="utf-8"))
+
+    def test_only_a_no_recap_wrap_up_offers_no_choice(self):
+        items = by_id(mv.find_wrapup_sections(self.vault(wrap=NO_RECAP)))
+        self.assertNotIn("wrapup-sections", items)
+        self.assertIn("wrapup-sections-review", items)
+
+    def test_choice_lines_are_plain_words(self):
+        wrap = WS_WRAP.replace("## Narrative Recap", "## Session Recap").replace(
+            "<!-- gm-only -->\n\n## GM Notes", "## GM Notes").replace(
+            "<!-- /gm-only -->\n", "")
+        shown = self.vault(wrap=wrap)
+        lines = by_id(mv.find_wrapup_sections(shown))["wrapup-sections"].lines
+        self.assertIn(f"{WS_REL}: '## Secret Plans' \u2014 not published", lines)
+        self.assertIn(f"{WS_REL}: GM Notes gets its hidden-markers "
+                      f"(it has none today)", lines)
+        self.assertIn(f"{WS_REL}: '## Session Recap' is renamed "
+                      f"'## Narrative Recap'", lines)
+        joined = "\n".join(lines)
+        self.assertNotIn("re-nest", joined)
+        self.assertNotIn("Keeper-facing H2", joined)
+
+    def test_published_and_hidden_headings_are_told_apart(self):
+        import vault_check as vc
+        keeper = lambda lvl, t: vc.Finding(  # noqa: E731
+            lvl, f"{WS_REL}:9", "x", "keeper-h2", (t,))
+
+        def fake(vault, file, fix, explain=None, player=None, **kw):
+            kw["detail"].extend([
+                vc.WrapDetail(WS_REL, keeper("ERROR", "Seen"), True),
+                vc.WrapDetail(WS_REL, keeper("WARNING", "Fenced"), True)])
+            return []
+        with mock.patch.object(mv, "check_wrapup", side_effect=fake):
+            lines = mv.find_wrapup_sections(self.vault())[0].lines
+        self.assertIn(f"{WS_REL}: '## Seen' \u2014 players can see it today", lines)
+        self.assertIn(f"{WS_REL}: '## Fenced' \u2014 already hidden", lines)
+
+    def test_a_blocked_note_row_names_the_headings_and_the_fix_gap(self):
+        vault = self.vault(wrap=WS_WRAP.replace("<!-- /gm-only -->\n", ""))
+        rows = by_id(mv.find_wrapup_sections(vault))[
+            "wrapup-sections-review"].lines
+        self.assertTrue(all(r.startswith(WS_REL + "\t") for r in rows))
+        text = "\n".join(rows)
+        self.assertIn("'## Secret Plans'", text)
+        self.assertIn("will not move them", text)
+
+    def test_a_site_tool_that_cannot_answer_stops_the_finder(self):
+        row = "ERROR\t(vault)\twrapup could not ask the publish tool"
+        with mock.patch.object(mv, "check_wrapup", return_value=[row]):
+            with self.assertRaises(StepFailed):
+                mv.find_wrapup_sections(self.vault())
+
+    def test_a_tool_that_stops_during_move_fails_the_step(self):
+        vault = self.vault()
+        choice = by_id(mv.find_wrapup_sections(vault))["wrapup-sections"]
+        row = "ERROR\t(vault)\tthe publish tool stopped answering"
+        with mock.patch.object(mv, "check_wrapup", return_value=[row]):
+            with self.assertRaises(StepFailed):
+                choice.apply("move")
+
+
+class WrapupKeyDetectionTests(WrapupFixture):
+    def test_a_key_of_the_same_name_under_another_parent_is_not_offered(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                  '  other:\n    player_sections: [A]\n---\n')
+        self.assertEqual(mv.find_wrapup_sections_key(self.vault(config=config)), [])
+
+    def test_key_text_in_the_body_is_not_offered(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\n---\n\n'
+                  '  player_sections: [A]\n')
+        self.assertEqual(mv.find_wrapup_sections_key(self.vault(config=config)), [])
+
+    def test_a_quoted_key_is_removed(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                  '  wrap_up:\n    "player_sections": [A]\n    other: 1\n---\n')
+        vault = self.vault(config=config)
+        mv.find_wrapup_sections_key(vault)[0].apply(None)
+        self.assertEqual(self.config(vault),
+                         '---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                         '  wrap_up:\n    other: 1\n---\n')
+
+    def test_1_10_9_is_below_1_10_28(self):
+        self.assertEqual(mv.find_wrapup_sections_key(
+            self.vault(config=stamped(WS_CONFIG, "1.10.9"))), [])
+
+    def test_a_block_list_at_the_keys_own_indent_goes_whole(self):
+        for tail, want in (("    other: 1\n", "  wrap_up:\n    other: 1\n"),
+                           ("", "")):
+            config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                      '  wrap_up:\n    player_sections:\n    - A\n'
+                      '    - B\n' + tail + '---\n')
+            vault = self.vault(config=config)
+            mv.find_wrapup_sections_key(vault)[0].apply(None)
+            self.assertEqual(self.config(vault),
+                             '---\ngm_apprentice_version: "1.10.28"\n'
+                             'publish:\n' + want + '---\n')
+
+
 if __name__ == "__main__":
     unittest.main()
