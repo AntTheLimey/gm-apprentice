@@ -27,6 +27,7 @@ import re
 import sys
 from collections.abc import Callable
 from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
 
 import index_build
@@ -239,7 +240,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
             folder(rel)
     if templates:
         for name, text in mv.templates_for(system).items():
-            file(f"_Templates/{name}", lambda text=text: text)
+            file(f"_Templates/{name}", partial(str, text))
     file("_World/world-index.md",
          lambda: _plugin_text(mv.TEMPLATES / "world-index.md"))
     file("_World/_flags.md",

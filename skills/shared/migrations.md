@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.28"
+current_version: "1.10.29"
 ---
 
 # Vault Migration Record
@@ -35,3 +35,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.26 | None. Migrations run as `migrate.py plan` and `apply` | |
 | 1.10.27 | None (the two checks above now rename and move) | |
 | 1.10.28 | A Wrap-Up heading is Keeper-facing only under GM Notes: headings the old rule counted as Keeper content are moved under GM Notes on a yes | `wrapup-sections` |
+| 1.10.29 | None. New vaults are built by `vault_scaffold.py`; gaps in an existing vault's skeleton are filled | every pass, see above (`skeleton`) |

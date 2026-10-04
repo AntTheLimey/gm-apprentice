@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.29] — 2026-10-04
+
+### Added
+
+- `vault_scaffold.py`: sets up a new vault in one step. It shows what it
+  will create (the standard folders, the templates for the game system,
+  the schema files, the world stubs, an empty Timeline and Player
+  Characters page), then creates all of it or none of it. It never
+  overwrites anything already in the folder, so a vault the midwife has
+  started is built around. It asks for the game system instead of
+  guessing; "no particular system" is a valid answer.
+- The update fills gaps in an existing vault's skeleton: a missing
+  standard folder or page is created. A folder you renamed counts as
+  present, and extra folders are never reported.
+
+### Changed
+
+- campaign-organizer, the-midwife and vault-ingest set a vault up with
+  the script. The midwife no longer hands off to the organizer for it.
+- A new vault starts with the full list of relationship types instead
+  of a subset chosen by genre. Existing vaults keep their lists.
+- A vault whose notes name a game system the plugin does not support is
+  set up with the generic templates.
+
+---
+
 ## [1.10.28] — 2026-10-03
 
 ### Added
