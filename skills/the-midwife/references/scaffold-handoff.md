@@ -107,9 +107,9 @@ through Woven Worldbuilding (Phases 1-3) to their `_World/`
 domain files. These were confirmed at capture time — one
 question per trigger — so file them without re-asking:
 
-1. If `_World/` doesn't exist, create it (Step 3's script adds
-   the `world-index.md` and `_flags.md` stubs when they are
-   missing)
+1. If `_World/` doesn't exist, create it with `world-index.md`
+   and `_flags.md` copied from `shared/templates/world-index.md`
+   and `shared/templates/world-flags.md`
 2. Write each fact to its domain file, creating a stub from
    `shared/templates/world-domain.md` when the domain is new
 3. Unresolved three-state flags (deferred heritage prompts and
