@@ -154,6 +154,26 @@ class PlanTests(unittest.TestCase):
         self.assertNotIn("_Campaign/Timeline.md", got)
         self.assertNotIn("_Campaign/Player Characters.md", got)
 
+    def test_a_world_index_under_another_name_counts(self):
+        vault = scratch(self) / "V"
+        note(vault, "_World/index.md",
+             "---\ntype: world_domain\ndomain: index\n---\n")
+        self.assertNotIn("_World/world-index.md", paths(plan(vault)))
+        other = scratch(self) / "W"
+        note(other, "_World/geo.md",
+             "---\ntype: world_domain\ndomain: geography\n---\n")
+        self.assertIn("_World/world-index.md", paths(plan(other)))
+
+    def test_world_flags_under_another_name_count(self):
+        vault = scratch(self) / "V"
+        note(vault, "Lore/flags.md", "---\ntype: world_flags\n---\n")
+        self.assertNotIn("_World/_flags.md", paths(plan(vault)))
+
+    def test_a_roster_of_either_type_counts(self):
+        vault = scratch(self) / "V"
+        note(vault, "Lore/Party.md", "---\ntype: pc_roster\n---\n")
+        self.assertNotIn("_Campaign/Player Characters.md", paths(plan(vault)))
+
     def test_templates_do_not_count_as_notes(self):
         vault = scratch(self) / "V"
         note(vault, "_Templates/_Template_NPC.md", "---\ntype: npc\n---\n")

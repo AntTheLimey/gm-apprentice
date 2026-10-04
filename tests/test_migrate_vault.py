@@ -78,6 +78,21 @@ class SkeletonTests(unittest.TestCase):
         self.assertEqual(mv.find_skeleton(vault), [])
         self.assertEqual(path.read_text(encoding="utf-8"), "my subset\n")
 
+    def test_a_missing_schema_file_is_recreated_from_the_seed(self):
+        vault = whole_vault(self)
+        (vault / "_meta" / "entity-types.md").unlink()
+        (vault / "_meta" / "relationship-types.md").unlink()
+        items = mv.find_skeleton(vault)
+        self.assertEqual(sorted(items[0].lines),
+                         ["create _meta/entity-types.md",
+                          "create _meta/relationship-types.md"])
+        items[0].apply(None)
+        self.assertTrue((vault / "_meta" / "entity-types.md").is_file())
+        rel = (vault / "_meta" / "relationship-types.md").read_text(
+            encoding="utf-8")
+        self.assertIn("cloned_from", rel)
+        self.assertEqual(mv.find_skeleton(vault), [])
+
     def test_a_renamed_folder_is_not_offered(self):
         vault = whole_vault(self)
         (vault / "Characters" / "NPCs").rmdir()

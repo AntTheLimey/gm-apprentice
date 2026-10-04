@@ -171,6 +171,8 @@ TYPE_FOLDERS: dict[str, frozenset[str]] = {
         "journal"}),
     "Clues": frozenset({"clue"}),
 }
+# Both roster type names are in use in real vaults.
+ROSTER_TYPES = frozenset({"player-characters", "pc_roster"})
 INBOX = ("_inbox", "_inbox/_processed")
 # In the layout tree, and deliberately not made here: the midwife makes its
 # own workspace; the inbox is made on request (--inbox).
@@ -189,11 +191,20 @@ def shown(piece: Piece) -> str:
     return piece.rel if piece.text is not None else f"{piece.rel}/"
 
 
-def _types_in(vault: Path) -> set[str]:
-    if not vault.is_dir():
-        return set()
-    return {entity_type(extract_frontmatter(text))
-            for _rel, text in vault_files(vault)} - {""}
+def _types_in(vault: Path) -> tuple[set[str], bool]:
+    """One walk of the vault: the note types it keeps, and whether one of
+    them is a world index (`type: world_domain`, `domain: index`)."""
+    types: set[str] = set()
+    world_index = False
+    if vault.is_dir():
+        for _rel, text in vault_files(vault):
+            front = extract_frontmatter(text) or {}
+            kind = entity_type(front)
+            types.add(kind)
+            if kind == "world_domain" and (
+                    str(front.get("domain", "")).strip().lower() == "index"):
+                world_index = True
+    return types - {""}, world_index
 
 
 def _attachments(vault: Path) -> str:
@@ -209,7 +220,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     """What the vault's skeleton lacks, in the order to create it. Nothing
     that exists is listed. `templates=False` leaves `_Templates/` files to
     the update tool's own check."""
-    types = _types_in(vault)
+    types, has_world_index = _types_in(vault)
     day = today or datetime.date.today().isoformat()
     out: list[Piece] = []
 
@@ -240,16 +251,20 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
             folder(rel)
     if templates:
         for name, text in mv.templates_for(system).items():
+            # Binds this iteration's text; mypy rejects a default-argument
+            # lambda here.
             file(f"_Templates/{name}", partial(str, text))
     file("_World/world-index.md",
-         lambda: _plugin_text(mv.TEMPLATES / "world-index.md"))
+         lambda: _plugin_text(mv.TEMPLATES / "world-index.md"),
+         present=has_world_index)
     file("_World/_flags.md",
-         lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"))
+         lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"),
+         present="world_flags" in types)
     file("_Campaign/Timeline.md", lambda: seed("timeline.md", campaign),
          present="timeline" in types)
     file("_Campaign/Player Characters.md",
          lambda: seed("player-characters.md", campaign),
-         present="player-characters" in types)
+         present=bool(ROSTER_TYPES & types))
     file("_meta/entity-types.md", entity_types_text)
     file("_meta/relationship-types.md", relationship_types_text)
     # The index is rendered when it is written, after the files above exist.

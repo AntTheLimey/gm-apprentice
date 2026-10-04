@@ -135,7 +135,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_scaffold.py" \
 ```
 
 Use `--no-system` when no system was chosen or the plugin does
-not support it. If yes:
+not support it.
+
+If the GM said yes to that question:
 
 1. **Build the skeleton.** Run the same command with `--write`. It
    builds around the `Adventures/` and `_World/` files already
