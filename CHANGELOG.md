@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.30] — 2026-10-04
+
+### Added
+
+- `links.py`: lists a vault's broken links sorted by kind. A link that
+  looks like a misspelling of a note that exists is shown with that
+  note; a link to something never written is listed as a to-do. A link
+  to a missing image or other attached file is listed separately.
+  `retarget` points every link with a misspelt name at the right note,
+  and `unlink` turns a link (a rules term, a passing mention) into plain
+  words. Both show what they would change first and then change every
+  note or none.
+
+### Changed
+
+- Links written in old QA reports (`_QA/`) and archives (`_archive/`)
+  are no longer reported as broken, by `links.py` or by
+  `graph_check.py unresolved`. Notes in those folders still count as
+  link targets.
+- campaign-qa and campaign-organizer work from `links.py` for broken
+  links. A link to something not yet written is listed once and is not
+  a finding to fix or dismiss.
+
+---
+
 ## [1.10.29] — 2026-10-04
 
 ### Added

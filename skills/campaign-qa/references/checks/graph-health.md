@@ -13,7 +13,7 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/graph_check.py" \
   <vault-path> all
 ```
 
-It reports orphans, unresolved links, dead ends, and
+It reports orphans, dead ends, and
 ambiguous bare links in one pass (`graph_check.py --help`
 for `--folder` and `--exclude`).
 
@@ -31,11 +31,31 @@ Read all entity files in scope. For each, extract:
 (what `graph_check.py orphans` reports). These are disconnected
 from the graph and probably forgotten.
 
-**Broken links:** what `graph_check.py unresolved` reports —
-wiki-links that point to files that don't exist. The script
-already skips templates, links quoted in code, and links to
-images and attachments that exist, so report its rows as they
-come.
+**Broken links:** run `links.py <vault-path>`. It lists every link
+with no note behind it, already sorted, and skips old QA reports and
+archives. Work from its rows:
+
+- `NEAR` rows name the note the link may mean. `same` candidates
+  (the names differ only in case, punctuation, accents or emoji) are
+  safe: propose them all as one batch and fix them on a single yes.
+  `close` (a likely typo) and `part` (extra words before or after)
+  are guesses: ask about each, and say what the two names are.
+- `UNWRITTEN` rows are links to things never written. These are the
+  GM's to-do list, not defects. List them once under a "Not yet
+  written" heading, most-linked first. Do not ask a fix-or-dismiss
+  question for each and do not raise their severity.
+- `FILE` rows are links to an attached file (an image, a PDF) that is
+  not in the vault. Neither fix applies: say which note holds the link
+  and ask whether to restore the file or remove the link by hand.
+
+To fix, run `links.py <vault-path> retarget "<name>" "<note>"` (add
+`--keep-text` when the words on the page should stay as written and
+only the link should change, as with a variant spelling in a
+player-facing recap), read the preview, then run it again with
+`--write`. To remove a link the GM does not want (a rules term, a
+passing mention), run `links.py <vault-path> unlink "<name>" ...`
+the same way. An unwritten name that deserves a note is created with
+the organizer's entity workflow, not here.
 
 **Ambiguous links:** what `graph_check.py ambiguous` reports —
 wiki-links using a bare basename that matches more than one
@@ -254,8 +274,8 @@ For each issue:
    violations; Info for quality improvements)
 3. Propose a fix:
    - For orphans: suggest connections or mark for retirement
-   - For broken links: suggest the correct target or flag
-     for creation
+   - For broken links: the `links.py` fix for the row's kind (see
+     Step 2); an unwritten name is a to-do, not a finding
    - For ambiguous links: identify which file the GM meant from
      context, then either fix that one link, or — if the
      collision is structural (e.g., unmigrated Wrap-Up
