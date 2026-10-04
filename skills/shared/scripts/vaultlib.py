@@ -731,6 +731,28 @@ def section(text: str, heading: str) -> str | None:
 _SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
+def fence_step(line: str, fence_delim: str | None) -> tuple[str | None, bool]:
+    """One step of the code-fence walk. Given a line and the delimiter of
+    the fence currently open (None outside one), return (new delimiter,
+    whether this line opens or closes a fence). A closing fence must use the
+    same marker character, be at least as long as the opener and carry no
+    info string; a backtick opener's info string may not contain a backtick.
+    A line inside a fence is code whenever the returned delimiter is not None
+    or the flag is set."""
+    fence = FENCE_RE.match(line)
+    if not fence:
+        return fence_delim, False
+    delim, info = fence.group(1), fence.group(2)
+    if fence_delim is None:
+        if delim[0] != "`" or "`" not in info:
+            return delim, True
+    elif (delim[0] == fence_delim[0]
+          and len(delim) >= len(fence_delim)
+          and info.strip() == ""):
+        return None, True
+    return fence_delim, False
+
+
 def fenced_headings(text: str) -> list[tuple[int, int, str]]:
     """(0-based line index, level, title) for every heading outside a
     code fence. Shared walk behind `sections` and `h3_blocks` — both need
@@ -741,19 +763,8 @@ def fenced_headings(text: str) -> list[tuple[int, int, str]]:
     fence_delim: str | None = None
     heads: list[tuple[int, int, str]] = []
     for i, line in enumerate(lines):
-        fence = FENCE_RE.match(line)
-        if fence:
-            delim, info = fence.group(1), fence.group(2)
-            if fence_delim is None:
-                if delim[0] != "`" or "`" not in info:
-                    fence_delim = delim
-                    continue
-            elif (delim[0] == fence_delim[0]
-                  and len(delim) >= len(fence_delim)
-                  and info.strip() == ""):
-                fence_delim = None
-                continue
-        if fence_delim is not None:
+        fence_delim, is_fence_line = fence_step(line, fence_delim)
+        if is_fence_line or fence_delim is not None:
             continue
         m = _SECTION_HEADING_RE.match(line)
         if m:

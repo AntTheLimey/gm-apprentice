@@ -140,17 +140,22 @@ ${journeyContent}
 </div>`;
 }
 
+// The frontmatter `equipment:` list as cards, or '' when the note has none.
+function frontmatterEquipmentHtml(frontmatter) {
+  if (!(Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0)) return '';
+  const items = frontmatter.equipment.map(item => {
+    if (typeof item === 'string') return `<div class="entity-card"><h4>${escapeHtml(item)}</h4></div>`;
+    const name = item.name || 'Unknown';
+    const desc = item.description || item.notes || '';
+    const weight = item.weight ? ` <span class="sidebar-badge">${escapeHtml(String(item.weight))}</span>` : '';
+    return `<div class="entity-card"><h4>${escapeHtml(name)}${weight}</h4>${desc ? `<div class="card-excerpt">${escapeHtml(desc)}</div>` : ''}</div>`;
+  });
+  return `<div class="card-grid">${items.join('\n')}</div>`;
+}
+
 function extractEquipment(frontmatter, sections) {
-  if (Array.isArray(frontmatter.equipment) && frontmatter.equipment.length > 0) {
-    const items = frontmatter.equipment.map(item => {
-      if (typeof item === 'string') return `<div class="entity-card"><h4>${escapeHtml(item)}</h4></div>`;
-      const name = item.name || 'Unknown';
-      const desc = item.description || item.notes || '';
-      const weight = item.weight ? ` <span class="sidebar-badge">${escapeHtml(String(item.weight))}</span>` : '';
-      return `<div class="entity-card"><h4>${escapeHtml(name)}${weight}</h4>${desc ? `<div class="card-excerpt">${escapeHtml(desc)}</div>` : ''}</div>`;
-    });
-    return `<div class="card-grid">${items.join('\n')}</div>`;
-  }
+  const list = frontmatterEquipmentHtml(frontmatter);
+  if (list) return list;
 
   const equipmentSections = sections.filter(s => EQUIPMENT_SECTION_TITLES.has(s.title.toLowerCase()));
   if (equipmentSections.length > 0) {
@@ -158,6 +163,16 @@ function extractEquipment(frontmatter, sections) {
   }
 
   return '<p class="text-muted">No equipment data available.</p>';
+}
+
+// A sheet that draws `## Equipment` itself still owes the page every other
+// equipment-titled section and the frontmatter list: the Equipment tab is the
+// only place they go, so they follow the sheet's own equipment, as written.
+function unconsumedEquipment(frontmatter, sections, consumes) {
+  const rest = sections
+    .filter(s => EQUIPMENT_SECTION_TITLES.has(s.title.toLowerCase()) && !consumes(s.title))
+    .map(s => `<h3>${escapeHtml(s.title)}</h3>\n${s.html}`);
+  return [frontmatterEquipmentHtml(frontmatter), ...rest].filter(Boolean).join('\n');
 }
 
 function buildRouteMap(page, pages) {
@@ -200,7 +215,15 @@ function buildRouteMap(page, pages) {
   return `<div class="relationship-graph" style="margin-bottom:2rem"><h3>Campaign Route</h3>${svg}</div>`;
 }
 
-const ALL_TABS = ['sheet', 'combat', 'equipment', 'story', 'journey'];
+const ALL_TABS = ['sheet', 'combat', 'spells', 'equipment', 'story', 'journey'];
+
+// The tab ids the inline script answers to. Spells joins only when a system
+// supplies it, so a page without one keeps the list it always had.
+function pageTabs(hasSpells, sheetsOff) {
+  return ALL_TABS.filter(t => !(
+    (t === 'spells' && !hasSpells)
+    || (sheetsOff && (t === 'combat' || t === 'equipment' || t === 'spells'))));
+}
 
 function tabScript(tabs = ALL_TABS) {
   return `
@@ -289,6 +312,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemHtml = fromSystem('systemSheetHtml');
   const systemCombatHtml = fromSystem('systemCombatHtml');
   const systemEquipmentHtml = fromSystem('systemEquipmentHtml');
+  const systemSpellsHtml = fromSystem('systemSpellsHtml');
+  const systemVitalsHtml = fromSystem('systemVitalsHtml');
   const systemLiveData = fromSystem('systemLiveData');
   const systemStatusPanelHtml = fromSystem('systemStatusPanelHtml');
   const systemRecordHtml = fromSystem('systemRecordHtml');
@@ -378,7 +403,11 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   }
 
   // --- Equipment Tab ---
-  const equipmentContent = sheetsOff ? '' : (systemEquipmentHtml || extractEquipment(fm, sections));
+  let equipmentContent;
+  if (sheetsOff) equipmentContent = '';
+  else if (systemEquipmentHtml && sheetConsumes && sheetConsumes('Equipment')) {
+    equipmentContent = [systemEquipmentHtml, unconsumedEquipment(fm, sections, sheetConsumes)].filter(Boolean).join('\n');
+  } else equipmentContent = systemEquipmentHtml || extractEquipment(fm, sections);
 
   // --- Story Tab ---
   const opts = context || {};
@@ -399,6 +428,12 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     ? `\n  <button class="pc-tab" data-tab="combat" onclick="switchTab('combat')">Combat</button>` : '';
   const combatPanel = systemCombatHtml
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
+
+  // --- Spells Tab (system-provided, optional) ---
+  const spellsTabButton = systemSpellsHtml
+    ? `\n  <button class="pc-tab" data-tab="spells" onclick="switchTab('spells')">Spells</button>` : '';
+  const spellsPanel = systemSpellsHtml
+    ? `\n<div class="tab-panel" id="tab-spells">\n${systemSpellsHtml}\n</div>` : '';
 
   // --- Equipment Tab (none without a sheet) ---
   const equipmentTabButton = sheetsOff ? ''
@@ -459,14 +494,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const body = `${crWidget}
 ${heroBanner}
 ${epithet}
-${statusPanel ? statusPanel + '\n' : ''}<div class="tab-bar">
-  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">${sheetsOff ? 'Character' : 'Character Sheet'}</button>${combatTabButton}${equipmentTabButton}
+${statusPanel ? statusPanel + '\n' : ''}${systemVitalsHtml ? systemVitalsHtml + '\n' : ''}<div class="tab-bar">
+  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">${sheetsOff ? 'Character' : 'Character Sheet'}</button>${combatTabButton}${spellsTabButton}${equipmentTabButton}
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
   <button class="pc-tab" data-tab="journey" onclick="switchTab('journey')">Journey</button>
 </div>
 <div class="tab-panel active" id="tab-sheet">
 ${sheetContent}
-</div>${combatPanel}${equipmentPanel}
+</div>${combatPanel}${spellsPanel}${equipmentPanel}
 <div class="tab-panel" id="tab-story">
   <div class="story-prose">
     ${storyContent}
@@ -475,7 +510,7 @@ ${sheetContent}
 <div class="tab-panel" id="tab-journey">
 ${journeyContent}
 </div>
-${tabScript(sheetsOff ? ALL_TABS.filter(t => t !== 'combat' && t !== 'equipment') : ALL_TABS)}`;
+${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
 
   return baseShell({
     title: page.displayTitle,
@@ -496,4 +531,4 @@ ${tabScript(sheetsOff ? ALL_TABS.filter(t => t !== 'combat' && t !== 'equipment'
   });
 }
 
-module.exports = { pcTemplate };
+module.exports = { pageTabs, pcTemplate };

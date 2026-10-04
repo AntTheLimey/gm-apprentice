@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.33] — 2026-10-04
+
+### Added
+
+- A full D&D 5e character page. The vitals stay pinned at the top, with
+  Sheet, Combat, Spells and Equipment tabs below. It shows saving-throw
+  numbers, attacks, actions grouped by action, bonus action and reaction,
+  and limited uses, spell slots, hit dice and death saves as marks. Spells
+  are listed by level with their key facts.
+- `dnd_sheet.py` reports and fills a D&D sheet's derived numbers, and
+  keeps any number a GM set by hand with a reason beside it.
+- A D&D note's `### Bonuses` table: an item, feat or feature bonus to
+  saves, checks, initiative or the spell numbers is written once and
+  `dnd_sheet.py` adds it in, saying so in its report. A skill's
+  `Proficient` cell takes `Half`.
+- Carried weight and encumbrance. Gear rows carry a weight, and
+  `dnd_sheet.py` fills the `### Carrying` table: carried weight (gear
+  plus coins), carrying capacity and drag, lift or push from Strength
+  and Size, and whether the character is over capacity.
+- Magic items with charges and an attuned count, a spell's source (an
+  item, feat or species trait), fly, swim, climb and burrow speeds
+  beside Speed, an `Attacks per Action` tile and feature save DCs on the
+  Combat tab, conditional advantages under Defences, and a Companions
+  section for a steed or familiar.
+- `sheet-conversion.md` in the D&D rules reference: how to bring an
+  old-layout PC note into the template, writing only what the note says.
+
+### Changed
+
+- The D&D PC template has new tables for saving throws, senses,
+  bonuses and defences, features, spells, gear weights, carrying, magic
+  items and companions (see `docs/file-format-standards.md` §9). Magic
+  Items replaces the three attunement slots; the earlier table is still
+  read. The site no longer computes a blank ability modifier. D&D notes
+  in the earlier layout still publish in full. Publish tool 1.13.0.
+- On a phone the D&D page's pinned strip is one row of tiles, and its
+  chips show only when there is a condition, exhaustion or inspiration
+  to report. A save DC is no longer labelled "Hit", an empty Defences
+  line is not printed, and the sheet's small labels use the body text
+  colour so they stay readable under a campaign palette.
+
+---
+
 ## [1.10.32] — 2026-10-04
 
 ### Changed

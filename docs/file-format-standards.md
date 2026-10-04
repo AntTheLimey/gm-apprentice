@@ -178,61 +178,173 @@ schema-change-procedure and no entity-template change.
 
 ## 9. D&D 5e PC sheet — structure the publish tool reads
 
-`tools/publish/lib/templates/pc-dnd.js` renders D&D PC pages by parsing
-the markdown body of the PC file, as the CoC renderer does. The shipped
-template (`skills/shared/templates/pc-dnd-5e-2024.md`) must keep this
-structure. If you rename a section, subsection or first-column label,
-update `pc-dnd.js` in the same change. Its tests build a PC from the
+`tools/publish/lib/templates/dnd/` renders D&D PC pages by parsing the
+markdown body of the PC file, as the CoC renderer does (`parse.js` reads
+the note, `blocks/` draws one block each). The shipped template
+(`skills/shared/templates/pc-dnd-5e-2024.md`) must keep this structure.
+If you rename a section, subsection, column or first-column label,
+update `dnd/parse.js` in the same change. Its tests build a PC from the
 real template, so a mismatch fails the suite.
 
 | Section | Subsection | What the renderer reads |
 |---------|-----------|--------------------------|
-| `## Stat Sheet` | `### Core` | `Attribute \| Value`; `Level` goes to the header, every other row becomes a tile |
-| | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency` (rows STR/DEX/CON/INT/WIS/CHA) |
-| | `### Combat` | `Attribute \| Value`; `HP (Current)` (or a bare `HP`) and `HP (Max)` merge into one tile, every other row becomes a tile |
-| `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header |
-| `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier` |
-| `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC) |
-| | `### Spell Slots` | `Level \| Total \| Expended`; a template row with neither Total nor Expended is left out |
-| | `### Prepared Spells` | shown as written |
-| `## Proficiencies` | — | shown as written |
+| `## Stat Sheet` | `### Core` | `Attribute \| Value` (rows Level, XP, Proficiency Bonus, Heroic Inspiration) |
+| | `### Ability Scores` | `Ability \| Score \| Modifier \| Save Proficiency \| Save` (rows STR/DEX/CON/INT/WIS/CHA) |
+| | `### Combat` | `Attribute \| Value` (rows AC, Initiative, Speed, Size, `HP (Current)`, `HP (Max)`, `Temp HP`, `Hit Dice (Spent/Max)`, `Death Saves (S/F)`, Exhaustion, Conditions; optional rows `Fly Speed`, `Swim Speed`, `Climb Speed`, `Burrow Speed`, `Attacks per Action`, and any row whose label ends `Save DC`) |
+| | `### Senses` | `Attribute \| Value` (rows Passive Perception, Passive Investigation, Passive Insight, then any special sense) |
+| | `### Bonuses` | `Applies To \| Bonus \| Source` |
+| | `### Defences` | the `**Resistances:**`, `**Immunities:**`, `**Vulnerabilities:**`, `**Condition Immunities:**`, `**Advantages:**` and `**Armour Class:**` lines |
+| `## Background` | — | the `**Species:**`, `**Class/Subclass:**` and `**Background:**` lines, for the header. The class line carries levels: `Paladin 5 (Oath of Devotion)`, a multiclass joined by `/` |
+| `## Skills` | — | `Skill \| Ability \| Proficient \| Expertise \| Modifier`; `Proficient` is `Yes`, `No` or `Half` |
+| `## Class Features`, `## Species Traits`, `## Feats` | — | each `Name \| Action \| Uses \| Used \| Recovers \| Summary` |
+| `## Spellcasting` | — | `Attribute \| Value` (ability, attack modifier, save DC); a second casting class adds rows labelled with the class |
+| | `### Spell Slots` | `Level \| Total \| Expended`; a warlock adds a row `Pact (3rd)`; a row with neither Total nor Expended is left out |
+| | `### Spells` | `Spell \| Level \| Time \| Range \| Components \| Duration \| Hit / DC \| Tags \| Source \| Summary` (the nine columns without `Source` are still read) |
+| `## Proficiencies` | — | shown as written (`**Armor Training:**`, `**Weapons:**`, `**Weapon Mastery:**`, `**Tools:**`, `**Languages:**`) |
+| `## Equipment` | `### Weapons & Damage Cantrips` | `Name \| Atk Bonus / DC \| Damage & Type \| Notes`; this is the attack list |
+| | `### Gear` | `Item \| Qty \| Weight \| Notes`, the weight of one in pounds (the three columns without `Weight` are still read) |
+| | `### Carrying` | `Attribute \| Value` (rows Carried Weight, Carrying Capacity, `Drag / Lift / Push`, Encumbrance) |
+| | `### Magic Items` | `Item \| Attuned \| Charges \| Used \| Recovers \| Notes` (the earlier `### Magic Item Attunement`, `Slot \| Item`, is still read) |
+| | `### Coins` | `CP \| SP \| EP \| GP \| PP`, one row of numbers |
+| `## Companions` | — | `Companion \| Kind \| AC \| HP \| Speed \| Notes`; optional, deleted when unused |
+
+Vocabulary the page acts on:
+
+- **Action**: `Action`, `Bonus Action` or `Reaction`, or blank for a
+  passive feature. These group the Combat tab; any other word is shown
+  as a tag and not grouped.
+- **Uses / Used**: whole numbers. Ten or fewer are drawn as marks,
+  more as `18 / 25`.
+- **Recovers**: `Long Rest`, `Short Rest`, or
+  `1 Short Rest, all Long Rest`. Anything else (`Dawn`) is shown and
+  left to the player. Hit dice and spell slots have no Recovers cell;
+  the `Pact` row is the short-rest one.
+- **Tags** (spells): comma-separated. `C` (concentration) and `R`
+  (ritual) are recognised; the rest are shown (`Always prepared`).
+- **Level** (spells): `Cantrip` or `1` to `9`; the page groups by it.
+- **Source** (spells): blank for a class spell, otherwise the item, feat
+  or species trait that grants it; shown as a tag. A cost in charges
+  goes in Tags.
+- **Hit / DC** (spells) and **Atk Bonus / DC** (attacks): a signed
+  number is an attack roll and is labelled `Hit`; `DC 13 Wis` or
+  anything else is shown as written with no label.
+- **Proficient** (skills): `Yes`, `No` or `Half`. Half proficiency has
+  its own mark. `Half` beside `Expertise: Yes` is not a state the sheet
+  has, and the row is shown as written.
+- **Bonuses**, read by `dnd_sheet.py` and only shown by the page.
+  `Applies To`, comma-separated and case-insensitive: `Saves`,
+  `Ability Checks` (every skill and Initiative), `Skills`, `Initiative`,
+  one ability's save (`Wisdom Save`), a skill name,
+  `Passive Perception` / `Passive Investigation` / `Passive Insight`,
+  `Spell Attack`, `Spell Save DC`. `Bonus`: a signed whole number, an
+  ability (its modifier, as it is), `PB`, or `Half PB` (rounded down).
+- **Attuned** (magic items): `Yes`, `No` or blank. The block's caption
+  counts the `Yes` rows against three. **Charges / Used / Recovers**
+  work as a feature's Uses, Used and Recovers do.
+- **Weight** (gear): a number with an optional `lb`, for one item; `—`
+  for something weightless.
+- **Carrying**: `Carried Weight`, `Carrying Capacity` and
+  `Drag / Lift / Push` are a number with ` lb`; `Encumbrance` is
+  `Within capacity` or `Over capacity (Speed 5 ft)`.
 
 Notes:
 
-- **Modifiers are the sheet's own.** The renderer shows the Modifier
-  cells as written and computes an ability modifier only when its cell
-  is blank. It never computes a save or skill bonus.
+- **The site does no sums.** Every modifier, save, passive score and DC
+  is shown as the note has it, and a blank cell stays blank.
+  `skills/shared/scripts/dnd_sheet.py` fills the derived cells:
+  Proficiency Bonus, each ability's Modifier and Save, each skill's
+  Modifier, the three passive scores, Initiative, Spell Attack Modifier
+  and Spell Save DC, and the four `### Carrying` values when the note
+  has that table. It maintains a cell that is blank or a bare number
+  and keeps one that carries a reason, `+7 (GM boon)`. AC,
+  HP, Speed, attack lines and slot totals are written by hand.
+- **What the tool adds in.** Each readable `### Bonuses` row is added
+  to the cells it names, and the report says so
+  (`+7 -> +9 (incl. +2 Ring of Protection)`). A passive score is ten
+  plus the finished skill, so a skill's bonus carries into it, plus any
+  bonus naming the passive. A row it cannot read is reported `KEPT`
+  and adds nothing. A `Half` skill gets half the proficiency bonus,
+  rounded down. Carried weight is Qty times Weight over the Gear rows
+  (a blank Qty is one; a row with no readable weight counts nothing and
+  is named in the report; a magic item's weight counts only when the
+  item also has a Gear row) plus the coins at fifty to the pound;
+  capacity and drag, lift or push are the Strength score times the
+  SRD 5.2 Carrying Capacity table's factor for the Combat `Size` row
+  (Medium when absent). A capacity with a reason
+  (`300 lb (Powerful Build)`) is kept, and Encumbrance is measured
+  against it. A note with no `### Carrying` table gets none added.
 - **Nothing in a consumed section is dropped.** Stat Sheet, Skills,
-  Spellcasting and Proficiencies leave the accordion list once the
-  sheet renders (`isDndConsumedTitle` in `pc-dnd.js` is the one
-  matcher both sides use), so the renderer shows as written whatever
-  it cannot place: an extra or repeated `###` subsection, a repeated
-  `##` section, prose or a second table beside a parsed table, and
-  any table row it could not read.
-- **Tables are read by position, checked against the header.** A
-  table whose leading header cells are not the ones above is shown
-  whole as a table. So is any single row with text in a further
-  column (a Notes column), a Proficient, Expertise or Save cell that
-  is not a yes or no word, an ability row that is not one of the six,
-  a row with a link or an image in it, and a spell slot row whose
-  Total is not a number or whose Expended exceeds it.
+  Class Features, Species Traits, Feats, Spellcasting, Proficiencies,
+  Equipment and Companions leave the accordion list once the sheet renders
+  (`isDndConsumedTitle` in `dnd/index.js` is the one matcher both sides
+  use), so the renderer shows as written whatever it cannot place: an
+  extra or repeated `###` subsection, a repeated `##` section, prose or
+  a second table beside a parsed table, and any table row it could not
+  read.
+- **Tables are read by position, checked against the header.** A table
+  whose leading header cells are not the ones above is shown whole as a
+  table. So is any single row it cannot read: a Proficient, Expertise
+  or Save Proficiency cell that is not a yes or no word, an ability row
+  that is not one of the six, a Uses, Used or Charges cell that is not a whole
+  number, a Used count with no Uses or Charges beside it, an Attuned
+  cell that is not a yes or no word, a spell whose Level is
+  not `Cantrip` or `1` to `9`, and a slot row whose Total is not a number
+  or whose Expended exceeds it. A feature, spell, attack, gear, skill,
+  magic item, companion or bonus source name may be a wikilink.
+- **Where the optional Combat rows go.** The four extra speeds join
+  the pinned strip's Speed tile, small beneath the number.
+  `Attacks per Action` and each `Save DC` row are tiles at the top of
+  the Combat tab's Attacks block. Any other row in `### Combat` is
+  shown as a tile under the hit dice, with its label and value as
+  written. A Recovers cell is shown whether or not Uses is filled in.
+- **What goes where.** Bonuses are a block on the Sheet tab. Companions
+  close the Combat tab. Carrying and Magic Items are on the Equipment
+  tab; an item's charges are not grouped under an action on Combat.
+- **A line that holds nothing is not shown.** A Defences line whose
+  value is blank or a dash, a Carrying row with no value, and a
+  Companions section left as the template has it add nothing to the
+  page.
+- **The pinned strip on a phone** (480px and below) is one row of five
+  tiles; its chips are shown only when they have something to say (a
+  condition, exhaustion above 0, Heroic Inspiration held).
+  The Armour Class reason is left off the strip on a phone when a
+  Defences `Armour Class` line says it again; any other reason stays.
+- **The fill tool reads the first table under a heading.** A second
+  table under the same heading (after a blank line) is not read, and
+  the report says so in a `KEPT` row. Skill and ability names may be
+  wikilinked or bold.
+- **The layout before 1.10.33 is still read**, so a note nobody has
+  converted keeps publishing with every line on the page. A
+  four-column ability table (no `Save`) is placed with no save number.
+  `Passive Perception` under Combat is placed with the senses. A
+  `### Prepared Spells` list, prose under Class Features, Species
+  Traits or Feats, and a prose Gear list are shown as written under
+  their own headings; prose features are not grouped on the Combat
+  tab. `dnd_sheet.py` fills the cells such a note has and adds no
+  column.
+- **Other equipment sections ride with Equipment.** A `## Inventory`,
+  `## Gear`, `## Items`, `## Weapons` or `## Armor` section, and a
+  frontmatter `equipment:` list, are shown as written in the Equipment
+  tab after the sheet's own gear.
 - **Background stays an accordion.** The header reads three lines from
   it (`Race` and `Classes` are accepted too); its prose is not on the
   sheet.
-- The template's own `{list}` placeholders and its "Omit this
-  section" note are not content, and a Spellcasting section with
-  nothing filled in is left out. Braces an author wrote are kept.
+- The template's own `{list}` placeholders, its empty table rows and
+  its "Omit this section" and "Delete this section" notes are not content, and a Spellcasting
+  section with nothing filled in is left out, so a non-caster has no
+  Spells tab. Braces an author wrote are kept.
 
 ---
 
 ## 10. PF2e PC sheet — structure the publish tool reads
 
 `tools/publish/lib/templates/pc-pf2e.js` renders PF2e PC pages from the
-body of the PC file, on the same engine as D&D (`d20-sheet.js`), and
-keeps every rule in §9: positional tables checked against their
-header, nothing in a consumed section dropped, Background left as an
-accordion. The shipped template (`skills/shared/templates/pc-pf2e.md`)
-must keep this structure; its tests build a PC from the real template.
+body of the PC file, on its own engine (`d20-sheet.js`, which D&D left
+for §9's renderer), under the same rules as §9: positional tables
+checked against their header, nothing in a consumed section dropped,
+Background left as an accordion. The shipped template
+(`skills/shared/templates/pc-pf2e.md`) must keep this structure; its
+tests build a PC from the real template.
 
 | Section | Subsection | What the renderer reads |
 |---------|-----------|--------------------------|

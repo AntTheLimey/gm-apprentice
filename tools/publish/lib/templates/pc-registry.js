@@ -1,6 +1,6 @@
 const { renderCoCSheet } = require('./coc/index');
 const { renderGURPSSheet } = require('./gurps/index');
-const { renderDnDSheet, isDndConsumedTitle } = require('./pc-dnd');
+const { renderDnDSheet, isDndConsumedTitle } = require('./dnd/index');
 const { renderFitDSheet, isFitDConsumedTitle } = require('./pc-fitd');
 const { renderPF2eSheet, isPF2eConsumedTitle } = require('./pc-pf2e');
 

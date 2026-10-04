@@ -1,0 +1,52 @@
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const fs = require('node:fs');
+const path = require('node:path');
+
+const css = fs.readFileSync(path.join(__dirname, '../../../css/style.css'), 'utf8');
+const lib = path.join(__dirname, '../../../lib/templates/dnd');
+const sources = [...fs.readdirSync(lib), ...fs.readdirSync(path.join(lib, 'blocks')).map(f => 'blocks/' + f)]
+  .filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(lib, f), 'utf8')).join('\n');
+
+describe('D&D sheet styles', () => {
+  it('every dnd5e class the renderer writes has a rule', () => {
+    const used = new Set([...sources.matchAll(/dnd5e-[a-z0-9-]+/g)].map(m => m[0]));
+    // Modifier-built names: `dnd5e-blk-${key}`, `dnd5e-tab-${name}` need no rule of their own.
+    const missing = [...used].filter(c => !/^dnd5e-(blk|tab)-/.test(c) && !new RegExp(`\\.${c}(?![\\w-])`).test(css));
+    assert.deepEqual(missing, []);
+  });
+  it('the pieces that carry a note\'s own words wrap a long unbroken word', () => {
+    // A rule that lists the class and sets overflow-wrap; selectors are split on commas.
+    const wraps = cls => [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .some(([, sel, body]) => sel.split(',').some(x => x.trim() === cls) && /overflow-wrap:\s*anywhere/.test(body));
+    for (const c of ['.dnd5e-entry-name', '.dnd5e-tag', '.dnd5e-entry-text', '.dnd5e-v', '.dnd5e-why', '.dnd5e-recovers', '.dnd5e-skill-name', '.dnd5e-chip']) assert.ok(wraps(c), c);
+  });
+  it('uses only the site tokens for colour', () => {
+    const block = css.slice(css.indexOf('.dnd5e-'), css.indexOf('/* PF2e */'));
+    assert.ok(block.length > 500);
+    assert.deepEqual(block.match(/#[0-9a-fA-F]{3,8}\b/g) || [], []);
+  });
+  // The phone proof's findings (task 11): small labels under a campaign palette, the tall strip, a wrapped track label.
+  const block = () => css.slice(css.indexOf('/* D&D 5e full sheet'), css.indexOf('/* PF2e */'));
+  const rules = () => [...block().matchAll(/([^{}]+)\{([^}]*)\}/g)].map(([, sel, body]) => [sel.trim(), body]);
+  it('no sheet text takes the muted or the accent colour: a palette can put either under 4.5:1 at label size', () => {
+    const coloured = rules().filter(([, body]) => /(?:^|[;\s])color:\s*var\(--(?:text-muted|accent|warning)\)/.test(body)).map(([sel]) => sel);
+    assert.deepEqual(coloured, []);
+  });
+  it('a track label has no fixed width to wrap inside', () => {
+    const [, body] = rules().find(([sel]) => sel.endsWith('.dnd5e-track-name') && !sel.includes(','));
+    assert.ok(!/(?:^|[;\s])width:/.test(body) && /min-width:/.test(body));
+  });
+  it('on a phone the strip is one row of five tiles and quiet chips are left out', () => {
+    const phone = block().slice(block().indexOf('@media (max-width: 480px)'));
+    assert.match(phone, /\.dnd5e-vrow \{ grid-template-columns: 1\.7fr 1fr 1fr 1\.2fr 1fr;/);
+    assert.match(phone, /\.dnd5e-chips\.is-quiet, \.dnd5e-chip\.is-quiet \{ display: none; \}/);
+    assert.ok(!/\.dnd5e-hp \{ grid-column/.test(phone), 'the HP tile no longer takes a row of its own');
+  });
+  it('the half-proficient mark and the source tag have rules', () => {
+    for (const c of ['.dnd5e-skill.is-half .dnd5e-dot', '.dnd5e-tag.is-source']) assert.ok(block().includes(c + ' {'), c);
+  });
+  it('the existing .dnd- rules Pathfinder uses are still there', () => {
+    for (const c of ['.dnd-sheet', '.dnd-ability-card', '.dnd-skill', '.dnd-header']) assert.ok(css.includes(c + ' '), c);
+  });
+});

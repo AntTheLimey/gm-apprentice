@@ -41,14 +41,14 @@ createdSession: ""
 
 ### Ability Scores
 
-| Ability | Score | Modifier | Save Proficiency |
-|---------|-------|----------|-----------------|
-| STR | 10 | +0 | No |
-| DEX | 10 | +0 | No |
-| CON | 10 | +0 | No |
-| INT | 10 | +0 | No |
-| WIS | 10 | +0 | No |
-| CHA | 10 | +0 | No |
+| Ability | Score | Modifier | Save Proficiency | Save |
+|---------|-------|----------|------------------|------|
+| STR | 10 | +0 | No | +0 |
+| DEX | 10 | +0 | No | +0 |
+| CON | 10 | +0 | No | +0 |
+| INT | 10 | +0 | No | +0 |
+| WIS | 10 | +0 | No | +0 |
+| CHA | 10 | +0 | No | +0 |
 
 ### Combat
 
@@ -58,11 +58,41 @@ createdSession: ""
 | Initiative | +0 |
 | Speed | 30 ft |
 | Size | Medium |
-| Passive Perception | 10 |
 | HP (Current) | |
 | HP (Max) | |
+| Temp HP | 0 |
 | Hit Dice (Spent/Max) | 0/1 |
 | Death Saves (S/F) | 0/0 |
+| Exhaustion | 0 |
+| Conditions | — |
+
+### Senses
+
+| Attribute | Value |
+|-----------|-------|
+| Passive Perception | 10 |
+| Passive Investigation | 10 |
+| Passive Insight | 10 |
+
+### Bonuses
+
+| Applies To | Bonus | Source |
+|------------|-------|--------|
+| | | |
+
+### Defences
+
+**Resistances:** {list}
+
+**Immunities:** {list}
+
+**Vulnerabilities:** {list}
+
+**Condition Immunities:** {list}
+
+**Advantages:** {list}
+
+**Armour Class:** {what it is made of}
 
 ## Background
 
@@ -103,15 +133,21 @@ createdSession: ""
 
 ## Class Features
 
-{Selected class features by level.}
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| | | | | | |
 
 ## Species Traits
 
-{Species features and traits.}
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| | | | | | |
 
 ## Feats
 
-{Selected feats with descriptions.}
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| | | | | | |
 
 ## Spellcasting
 
@@ -137,19 +173,19 @@ createdSession: ""
 | 8th | | |
 | 9th | | |
 
-### Prepared Spells
+### Spells
 
-**Cantrips:** {list}
-
-**1st Level:** {list}
-
-{Continue per level as needed.}
+| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Source | Summary |
+|-------|-------|------|-------|------------|----------|----------|------|--------|---------|
+| | | | | | | | | | |
 
 ## Proficiencies
 
 **Armor Training:** {list}
 
 **Weapons:** {list}
+
+**Weapon Mastery:** {list}
 
 **Tools:** {list}
 
@@ -165,21 +201,38 @@ createdSession: ""
 
 ### Gear
 
-{Item list}
+| Item | Qty | Weight | Notes |
+|------|-----|--------|-------|
+| | | | |
 
-### Magic Item Attunement
+### Carrying
 
-| Slot | Item |
-|------|------|
-| 1 | — |
-| 2 | — |
-| 3 | — |
+| Attribute | Value |
+|-----------|-------|
+| Carried Weight | |
+| Carrying Capacity | |
+| Drag / Lift / Push | |
+| Encumbrance | |
+
+### Magic Items
+
+| Item | Attuned | Charges | Used | Recovers | Notes |
+|------|---------|---------|------|----------|-------|
+| | | | | | |
 
 ### Coins
 
 | CP | SP | EP | GP | PP |
 |----|----|----|----|----|
 | 0 | 0 | 0 | 0 | 0 |
+
+## Companions
+
+> Delete this section if the character has no companion.
+
+| Companion | Kind | AC | HP | Speed | Notes |
+|-----------|------|----|----|-------|-------|
+| | | | | | |
 
 ## Current Status
 
