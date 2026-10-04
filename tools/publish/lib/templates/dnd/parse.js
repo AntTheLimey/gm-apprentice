@@ -29,7 +29,7 @@ const DEFENCE_FIELDS = [
 const SPELL_STAT_LABELS = /^(spellcasting ability|spell attack modifier|spell save dc)(\s*\(.+\))?$/i;
 const TEMPLATE_NOTES = [/^Omit this section if the character has no spellcasting\.?$/i];
 const PLACEHOLDERS = ['list', 'Continue per level as needed.', 'Selected class features by level.',
-  'Species features and traits.', 'Selected feats with descriptions.', 'Item list'];
+  'Species features and traits.', 'Selected feats with descriptions.', 'Item list', 'what it is made of'];
 const FEATURE_SECTIONS = [['class features', 'class', 'classFeatures'], ['species traits', 'species', 'speciesTraits'], ['feats', 'feats', 'feats']];
 
 function splitReason(text) {
@@ -148,6 +148,7 @@ function readSkills(model, section) {
 
 function readFeatures(model, section, list, home) {
   const left = consumeTable(stripPlaceholderParagraphs(section.html), COLS.features, (c, h) => {
+    if (!c.some(filled)) return true;             // the template's empty row
     const uses = c[2] ? wholeNumber(c[2]) : null;
     const used = c[3] ? wholeNumber(c[3]) : null;
     if (!c[0] || (c[2] && uses === null) || (c[3] && used === null)) return false;
@@ -188,6 +189,7 @@ function readSpellcasting(model, section) {
       });
     } else if (key === 'spells' && first) {
       left = consumeTable(sub.html, COLS.spells, (c, h) => {
+        if (!c.some(filled)) return true;             // the template's empty row
         const level = spellLevel(c[1]);
         if (!c[0] || !level) return false;
         model.spells.push({

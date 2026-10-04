@@ -36,10 +36,15 @@ descriptions, magic item indexes and descriptions, and full
 monster stat blocks (ability scores, attacks, damage dice, save
 DCs, traits, legendary actions) for 235 creatures.
 
-The publish tool's D&D test fixture
-(`tools/publish/test/fixtures/with-dnd-pc/`) is an original character
-that uses SRD 5.2 names only (class, subclass, species, background,
-feat, spell, skill and equipment names) with no rules text.
+The publish tool's D&D test fixtures
+(`tools/publish/test/fixtures/with-dnd-pc/`) are six original
+characters (Brannoch Vale, Ilse Varn, Oriel Thackeray, Tamsin Reed,
+Dov Ashgrove, and Ilse Varn in the layout before 1.10.33). They use
+SRD 5.2 names and numbers only (class, subclass, species, background,
+feat, spell, skill and equipment names; ability scores, proficiency,
+spell levels, ranges, durations and hit dice), CC-BY 4.0. Every
+summary line is written in our own words; no rules text is copied.
+The derived numbers were filled in by `dnd_sheet.py`.
 
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
 are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no

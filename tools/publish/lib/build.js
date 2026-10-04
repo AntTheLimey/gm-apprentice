@@ -873,7 +873,7 @@ function build(options = {}) {
               .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           };
           const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
-          // A renderer returns an object, or (D&D, PF2e, FitD) the sheet as a string.
+          // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.
           // A string sheet that is only passed-through text placed no stats.
           const systemOut = (rendered && typeof rendered === 'object')
             ? rendered
@@ -928,6 +928,8 @@ function build(options = {}) {
             systemSheetHtml: systemOut.sheetHtml || null,
             systemCombatHtml: systemOut.combatHtml || null,
             systemEquipmentHtml: systemOut.equipmentHtml || null,
+            systemSpellsHtml: systemOut.spellsHtml || null,
+            systemVitalsHtml: systemOut.vitalsHtml || null,
             systemLiveData: systemOut.liveData || null,
             systemStatusPanelHtml: systemOut.statusPanelHtml || null,
             systemRecordHtml: systemOut.recordHtml || null,

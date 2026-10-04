@@ -305,3 +305,30 @@ describe('consumeTable rich option', () => {
     assert.equal(left, '');
   });
 });
+
+// The template's own empty row in each new table is placed (read as nothing),
+// so it is neither a model entry nor left over as written.
+describe('the template\'s untouched empty row', () => {
+  const FEATURE_ROW = '| Name | Action | Uses | Used | Recovers | Summary |\n|---|---|---|---|---|---|\n| | | | | | |';
+  it('is placed in each feature table', () => {
+    const m = parse(`## Class Features\n\n${FEATURE_ROW}\n\n## Species Traits\n\n${FEATURE_ROW}\n\n## Feats\n\n${FEATURE_ROW}\n`);
+    for (const list of ['class', 'species', 'feats']) assert.deepEqual(m.features[list], [], list);
+    for (const home of ['classFeatures', 'speciesTraits', 'feats']) assert.deepEqual(m.asWritten[home], [], home);
+  });
+  it('is placed in the spells table', () => {
+    const m = parse('## Spellcasting\n\n### Spells\n\n| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Summary |\n|---|---|---|---|---|---|---|---|---|\n| | | | | | | | | |\n');
+    assert.deepEqual(m.spells, []);
+    assert.deepEqual(m.asWritten.spellcasting, []);
+    assert.equal(m.hasSpellcasting, false);
+  });
+  it('is placed in the gear table', () => {
+    const m = parse('## Equipment\n\n### Gear\n\n| Item | Qty | Notes |\n|---|---|---|\n| | | |\n');
+    assert.deepEqual(m.gear, []);
+    assert.deepEqual(m.asWritten.equipment, []);
+  });
+  it('is not a row with data in other cells', () => {
+    const m = parse(`## Feats\n\n${FEATURE_ROW.replace('| | | | | | |', '| | | | | | A stray summary. |')}\n`);
+    assert.equal(m.features.feats.length, 0);
+    assert.match(m.asWritten.feats.join(''), /A stray summary/);
+  });
+});

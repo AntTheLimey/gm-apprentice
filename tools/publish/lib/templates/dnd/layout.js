@@ -37,7 +37,13 @@ function buildSheet(model) {
     renderFeatures(model, 'feats', 'Feats'),
   ].filter(Boolean);
   // A header line alone is not a sheet, nor is loose Stat Sheet prose alone.
-  if (!blocks.length) return null;
+  // A table of the author's own, or numbers placed in the vitals strip, are
+  // something the page can show (as before 1.13.0), so the note has a sheet.
+  if (!blocks.length) {
+    const loose = block('statsheet', 'Stat sheet', asWritten(model.asWritten.statSheet));
+    if (loose && /<table[ >]/.test(loose)) return wrap('dnd5e-tab-sheet', [headerLine(model), loose]);
+    return renderVitals(model) ? '<div class="dnd5e-sheet dnd5e-tab-sheet"></div>' : null;
+  }
   // Loose Stat Sheet prose with no ability rows is still shown, as written.
   const loose = abilities ? null : block('statsheet', 'Stat sheet', asWritten(model.asWritten.statSheet));
   return wrap('dnd5e-tab-sheet', [headerLine(model), loose, ...blocks]);

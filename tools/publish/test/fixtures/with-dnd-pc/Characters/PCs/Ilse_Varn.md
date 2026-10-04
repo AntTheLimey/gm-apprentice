@@ -1,6 +1,6 @@
 ---
 type: pc
-canon_status: AUTHORITATIVE
+canon_status: DRAFT
 aliases: []
 tags: []
 campaign: "Fixture"
@@ -29,14 +29,14 @@ relationships: []
 
 ### Ability Scores
 
-| Ability | Score | Modifier | Save Proficiency |
-|---------|-------|----------|-----------------|
-| STR | 8 | -1 | No |
-| DEX | 14 | +2 | No |
-| CON | 13 | +1 | No |
-| INT | 17 | +3 | Yes |
-| WIS | 12 | +1 | Yes |
-| CHA | 10 | +0 | No |
+| Ability | Score | Modifier | Save Proficiency | Save |
+|---------|-------|----------|------------------|------|
+| STR | 8 | -1 | No | -1 |
+| DEX | 14 | +2 | No | +2 |
+| CON | 13 | +1 | No | +1 |
+| INT | 17 | +3 | Yes | +5 |
+| WIS | 12 | +1 | Yes | +3 |
+| CHA | 10 | +0 | No | +0 |
 
 ### Combat
 
@@ -46,17 +46,40 @@ relationships: []
 | Initiative | +2 |
 | Speed | 30 ft |
 | Size | Medium |
-| Passive Perception | 13 |
 | HP (Current) | 14 |
 | HP (Max) | 17 |
+| Temp HP | 0 |
 | Hit Dice (Spent/Max) | 1/3 |
 | Death Saves (S/F) | 0/0 |
+| Exhaustion | 0 |
+| Conditions | — |
+
+### Senses
+
+| Attribute | Value |
+|-----------|-------|
+| Passive Perception | 13 |
+| Passive Investigation | 15 |
+| Passive Insight | 13 |
+| Darkvision | 60 ft |
+
+### Defences
+
+**Resistances:** None
+
+**Immunities:** None
+
+**Vulnerabilities:** None
+
+**Condition Immunities:** None
+
+**Armour Class:** Unarmoured, 10 + Dexterity
 
 ## Background
 
 **Species:** Elf
 
-**Class/Subclass:** Wizard (Evoker)
+**Class/Subclass:** Wizard 3 (Evoker)
 
 **Background:** Sage
 
@@ -91,15 +114,29 @@ relationships: []
 
 ## Class Features
 
-Spellcasting, Ritual Adept, Arcane Recovery, Scholar.
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| Spellcasting |  |  |  |  | Prepares spells from her spellbook. |
+| Ritual Adept |  |  |  |  | Casts ritual spells from the book without preparing them. |
+| Arcane Recovery |  | 1 | 0 | Long Rest | Regain some spent slots during a short rest. |
+| Scholar |  |  |  |  | Expertise in one knowledge skill, here Arcana. |
+| Evocation Savant |  |  |  |  | Copying evocation spells into the book costs less. |
+| Potent Cantrip |  |  |  |  | A saved-against cantrip still does some damage on a success. |
 
 ## Species Traits
 
-Darkvision, Fey Ancestry, Keen Senses, Trance.
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| Darkvision |  |  |  |  | Sees in dim light at a distance. |
+| Fey Ancestry |  |  |  |  | Better odds against being charmed. |
+| Keen Senses |  |  |  |  | Proficiency in Perception. |
+| Trance |  |  |  |  | Rests by meditating instead of sleeping. |
 
 ## Feats
 
-Magic Initiate.
+| Name | Action | Uses | Used | Recovers | Summary |
+|------|--------|------|------|----------|---------|
+| Magic Initiate |  |  |  |  | Two cantrips and a spell from another class list. |
 
 ## Spellcasting
 
@@ -115,27 +152,34 @@ Magic Initiate.
 |-------|-------|----------|
 | 1st | 4 | 1 |
 | 2nd | 2 | 0 |
-| 3rd | | |
-| 4th | | |
-| 5th | | |
-| 6th | | |
-| 7th | | |
-| 8th | | |
-| 9th | | |
+| 3rd |  |  |
+| 4th |  |  |
+| 5th |  |  |
+| 6th |  |  |
+| 7th |  |  |
+| 8th |  |  |
+| 9th |  |  |
 
-### Prepared Spells
+### Spells
 
-**Cantrips:** Fire Bolt, Light, Mage Hand
-
-**1st Level:** Detect Magic, Magic Missile, Shield
-
-**2nd Level:** Misty Step, Scorching Ray
+| Spell | Level | Time | Range | Components | Duration | Hit / DC | Tags | Summary |
+|-------|-------|------|-------|------------|----------|----------|------|---------|
+| Fire Bolt | Cantrip | Action | 120 ft | V, S | Instant | +5 |  | A hurled mote of flame. |
+| Light | Cantrip | Action | Touch | V, M | 1 hour |  |  | An object sheds bright light. |
+| Mage Hand | Cantrip | Action | 30 ft | V, S | 1 minute |  |  | A spectral hand carries small things. |
+| Detect Magic | 1 | Action | Self | V, S | 10 minutes |  | C, R | Senses nearby magic. |
+| Magic Missile | 1 | Action | 120 ft | V, S | Instant |  |  | Darts that do not miss. |
+| Shield | 1 | Reaction | Self | V, S | 1 round |  |  | A brief boost to armour class. |
+| Misty Step | 2 | Bonus Action | Self | V | Instant |  |  | A short teleport. |
+| Scorching Ray | 2 | Action | 120 ft | V, S | Instant | +5 |  | Three rays of fire. |
 
 ## Proficiencies
 
 **Armor Training:** None
 
 **Weapons:** Simple weapons
+
+**Weapon Mastery:** None
 
 **Tools:** Calligrapher's Supplies
 
@@ -152,7 +196,19 @@ Magic Initiate.
 
 ### Gear
 
-Spellbook, satchel of index cards, ink and quill.
+| Item | Qty | Notes |
+|------|-----|-------|
+| Spellbook | 1 | Holds her prepared and known spells |
+| Satchel of index cards | 1 |  |
+| Ink and quill | 1 |  |
+
+### Magic Item Attunement
+
+| Slot | Item |
+|------|------|
+| 1 | — |
+| 2 | — |
+| 3 | — |
 
 ### Coins
 

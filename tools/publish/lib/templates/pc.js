@@ -200,7 +200,7 @@ function buildRouteMap(page, pages) {
   return `<div class="relationship-graph" style="margin-bottom:2rem"><h3>Campaign Route</h3>${svg}</div>`;
 }
 
-const ALL_TABS = ['sheet', 'combat', 'equipment', 'story', 'journey'];
+const ALL_TABS = ['sheet', 'combat', 'spells', 'equipment', 'story', 'journey'];
 
 function tabScript(tabs = ALL_TABS) {
   return `
@@ -289,6 +289,8 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemHtml = fromSystem('systemSheetHtml');
   const systemCombatHtml = fromSystem('systemCombatHtml');
   const systemEquipmentHtml = fromSystem('systemEquipmentHtml');
+  const systemSpellsHtml = fromSystem('systemSpellsHtml');
+  const systemVitalsHtml = fromSystem('systemVitalsHtml');
   const systemLiveData = fromSystem('systemLiveData');
   const systemStatusPanelHtml = fromSystem('systemStatusPanelHtml');
   const systemRecordHtml = fromSystem('systemRecordHtml');
@@ -400,6 +402,12 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const combatPanel = systemCombatHtml
     ? `\n<div class="tab-panel" id="tab-combat">\n${systemCombatHtml}\n</div>` : '';
 
+  // --- Spells Tab (system-provided, optional) ---
+  const spellsTabButton = systemSpellsHtml
+    ? `\n  <button class="pc-tab" data-tab="spells" onclick="switchTab('spells')">Spells</button>` : '';
+  const spellsPanel = systemSpellsHtml
+    ? `\n<div class="tab-panel" id="tab-spells">\n${systemSpellsHtml}\n</div>` : '';
+
   // --- Equipment Tab (none without a sheet) ---
   const equipmentTabButton = sheetsOff ? ''
     : `\n  <button class="pc-tab" data-tab="equipment" onclick="switchTab('equipment')">Equipment</button>`;
@@ -459,14 +467,14 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const body = `${crWidget}
 ${heroBanner}
 ${epithet}
-${statusPanel ? statusPanel + '\n' : ''}<div class="tab-bar">
-  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">${sheetsOff ? 'Character' : 'Character Sheet'}</button>${combatTabButton}${equipmentTabButton}
+${statusPanel ? statusPanel + '\n' : ''}${systemVitalsHtml ? systemVitalsHtml + '\n' : ''}<div class="tab-bar">
+  <button class="pc-tab active" data-tab="sheet" onclick="switchTab('sheet')">${sheetsOff ? 'Character' : 'Character Sheet'}</button>${combatTabButton}${spellsTabButton}${equipmentTabButton}
   <button class="pc-tab" data-tab="story" onclick="switchTab('story')">Story</button>
   <button class="pc-tab" data-tab="journey" onclick="switchTab('journey')">Journey</button>
 </div>
 <div class="tab-panel active" id="tab-sheet">
 ${sheetContent}
-</div>${combatPanel}${equipmentPanel}
+</div>${combatPanel}${spellsPanel}${equipmentPanel}
 <div class="tab-panel" id="tab-story">
   <div class="story-prose">
     ${storyContent}
@@ -475,7 +483,9 @@ ${sheetContent}
 <div class="tab-panel" id="tab-journey">
 ${journeyContent}
 </div>
-${tabScript(sheetsOff ? ALL_TABS.filter(t => t !== 'combat' && t !== 'equipment') : ALL_TABS)}`;
+${tabScript(ALL_TABS.filter(t => !(
+  (t === 'combat' && !systemCombatHtml) || (t === 'spells' && !systemSpellsHtml)
+  || (sheetsOff && (t === 'combat' || t === 'equipment' || t === 'spells')))))}`;
 
   return baseShell({
     title: page.displayTitle,

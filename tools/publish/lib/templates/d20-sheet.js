@@ -1,7 +1,7 @@
-// The sheet engine shared by the d20 systems (D&D 5e, PF2e), whose PC templates
-// have the same shape: `## Stat Sheet` (Core, an abilities table, Combat),
+// The Pathfinder 2e sheet engine (D&D 5e moved to dnd/ in 1.13.0). Its PC template
+// has the shape D&D's once had: `## Stat Sheet` (Core, an abilities table, Combat),
 // `## Skills`, `## Spellcasting`, `## Proficiencies`, and labelled lines in
-// `## Background`. Each system supplies a config; see pc-dnd.js and pc-pf2e.js.
+// `## Background`. Pathfinder supplies the config; see pc-pf2e.js.
 // The no-loss contract is sheet-parse.js's.
 const { escapeHtml } = require('../processor');
 const {

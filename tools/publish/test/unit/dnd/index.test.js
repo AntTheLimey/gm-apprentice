@@ -28,6 +28,13 @@ describe('renderDnDSheet', () => {
     assert.equal(out.sheetHtml, null);
     assert.equal(out.combatHtml, undefined);
   });
+  it('has a sheet when the Stat Sheet holds only an author table, or only a Combat table', () => {
+    const table = render('## Stat Sheet\n\n| Thing | Amount |\n|---|---|\n| Grit | high |\n');
+    assert.match(table.sheetHtml, /Grit/);
+    const combat = render('## Stat Sheet\n\n### Combat\n\n| Attribute | Value |\n|---|---|\n| AC | 15 |\n');
+    assert.ok(combat.sheetHtml);
+    assert.match(combat.vitalsHtml, /15/);
+  });
   it('still shows loose Stat Sheet prose when other blocks make a sheet', () => {
     const out = render('## Stat Sheet\n\nSee D&D Beyond.\n\n## Skills\n\n| Skill | Mod |\n|---|---|\n| Arcana (INT) | +7 |\n');
     if (out.sheetHtml) assert.match(out.sheetHtml, /See D&amp;D Beyond/);
