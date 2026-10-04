@@ -360,6 +360,27 @@ class BuildTests(unittest.TestCase):
         self.assertIn("# nothing written", out)
         self.assertEqual(tree(root), {})
 
+    def test_any_failure_while_writing_is_a_refusal(self):
+        root = scratch(self)
+        with mock.patch.object(vs.index_build, "render",
+                               side_effect=ValueError("boom")):
+            code, out = run(root / "V", "--no-system", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertRegex(out, r"ERROR\t.*boom")
+        self.assertIn("# nothing written", out)
+        self.assertEqual(tree(root), {})
+
+    def test_an_unsupported_recorded_system_builds_generic(self):
+        vault = scratch(self) / "V"
+        note(vault, "_Campaign/Campaign Overview.md",
+             "---\ntype: campaign_overview\ngame_system: Savage Worlds\n---\n")
+        code, out = run(vault, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("pc-generic.md",
+                      [p.name for p in (vault / "_Templates").iterdir()])
+        self.assertNotIn("system:",
+                         (vault / "_meta/vault-config.md").read_text("utf-8"))
+
     def test_rows_use_forward_slashes(self):
         _code, out = run(scratch(self) / "V", "--no-system")
         self.assertNotIn("\\", out)

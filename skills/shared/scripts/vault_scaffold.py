@@ -304,13 +304,19 @@ def build(vault: Path, pieces: list[Piece]) -> None:
             write_text_atomic(path, piece.text())
     except BaseException as e:
         left = _undo(made)
-        why = str(e) or e.__class__.__name__
+        if not isinstance(e, Exception):
+            if left:
+                raise ScaffoldError(f"interrupted; could not remove: "
+                                    f"{', '.join(left)}") from e
+            raise
+        name = e.__class__.__name__
+        why = str(e) or name
+        if str(e) and not isinstance(e, (StepFailed, OSError,
+                                         ScaffoldError)):
+            why = f"{name}: {e}"
         if left:
-            raise ScaffoldError(f"{why}; could not remove: "
-                                f"{', '.join(left)}") from e
-        if isinstance(e, (StepFailed, OSError)):
-            raise ScaffoldError(why) from e
-        raise
+            why = f"{why}; could not remove: {', '.join(left)}"
+        raise ScaffoldError(why) from e
 
 
 # --- CLI --------------------------------------------------------------------
@@ -333,7 +339,8 @@ def resolve_system(vault: Path, given: str | None,
         raise ScaffoldError(
             f"the game system is not recorded: ask the GM once, then pass "
             f"--system ID (one of {ids}) or --no-system")
-    return found
+    # A system the vault names that has no templates here builds generic.
+    return found if found in SYSTEMS else None
 
 
 def _refuse_ahead(vault: Path, plugin: str) -> None:
