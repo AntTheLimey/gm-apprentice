@@ -353,3 +353,18 @@ describe('pcTemplate with a D&D sheet', () => {
     assert.ok(accordionTitles(html).includes('Spellcasting'));
   });
 });
+
+// A page whose system supplies no Spells tab keeps exactly the inline tab list
+// it had before the Spells tab existed (the built Pathfinder, FitD, GURPS, CoC
+// and generic pages are byte-identical to 1.12).
+describe('the inline tab list', () => {
+  const { pageTabs } = require('../../../lib/templates/pc');
+  it('is the pre-Spells literal when no system supplies spells', () => {
+    assert.deepEqual(pageTabs(false, false), ['sheet', 'combat', 'equipment', 'story', 'journey']);
+    assert.deepEqual(pageTabs(false, true), ['sheet', 'story', 'journey']);
+  });
+  it('gains spells, after combat, only when a system supplies it', () => {
+    assert.deepEqual(pageTabs(true, false), ['sheet', 'combat', 'spells', 'equipment', 'story', 'journey']);
+    assert.deepEqual(pageTabs(true, true), ['sheet', 'story', 'journey']);
+  });
+});

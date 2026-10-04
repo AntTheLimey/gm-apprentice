@@ -202,6 +202,14 @@ function buildRouteMap(page, pages) {
 
 const ALL_TABS = ['sheet', 'combat', 'spells', 'equipment', 'story', 'journey'];
 
+// The tab ids the inline script answers to. Spells joins only when a system
+// supplies it, so a page without one keeps the list it always had.
+function pageTabs(hasSpells, sheetsOff) {
+  return ALL_TABS.filter(t => !(
+    (t === 'spells' && !hasSpells)
+    || (sheetsOff && (t === 'combat' || t === 'equipment' || t === 'spells'))));
+}
+
 function tabScript(tabs = ALL_TABS) {
   return `
 <script>
@@ -483,9 +491,7 @@ ${sheetContent}
 <div class="tab-panel" id="tab-journey">
 ${journeyContent}
 </div>
-${tabScript(ALL_TABS.filter(t => !(
-  (t === 'combat' && !systemCombatHtml) || (t === 'spells' && !systemSpellsHtml)
-  || (sheetsOff && (t === 'combat' || t === 'equipment' || t === 'spells')))))}`;
+${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
 
   return baseShell({
     title: page.displayTitle,
@@ -506,4 +512,4 @@ ${tabScript(ALL_TABS.filter(t => !(
   });
 }
 
-module.exports = { pcTemplate };
+module.exports = { pageTabs, pcTemplate };

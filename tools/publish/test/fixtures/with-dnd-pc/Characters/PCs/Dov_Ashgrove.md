@@ -123,7 +123,6 @@ relationships: []
 | Uncanny Metabolism |  | 1 | 0 | Long Rest | Roll initiative to regain focus points and some hit points. |
 | Deflect Attacks | Reaction |  |  |  | Reduce the damage of one incoming attack. |
 | Open Hand Technique |  |  |  |  | Flurry of Blows hits can push, topple or deny reactions. |
-| Stunning Strike |  |  |  |  | Spend a focus point on a hit to try to stun. |
 
 ## Species Traits
 
