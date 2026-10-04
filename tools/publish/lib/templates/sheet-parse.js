@@ -63,11 +63,13 @@ function subsections(sectionHtml) {
 //             leading columns are something else is not this table: no row
 //             is offered and it is shown whole. A row with text beyond the
 //             columns read (a Notes column, say) is never offered either.
-//   place   — (cells) => true when the sheet placed the row.
+//   place   — (cells) => true when the sheet placed the row. With
+//             `opts.rich`, linked rows are offered too, and place also gets
+//             the cells' inner HTML: (cells, htmlCells).
 // Returns what is left: the rows nobody placed (as a table, under the original
 // header, with their markup intact) followed by the fragment minus the table.
 // Empty string when there is nothing left to show.
-function consumeTable(html, columns, place) {
+function consumeTable(html, columns, place, opts = {}) {
   const cols = columns.length;
   const source = String(html || '');
   const tableMatch = source.match(/<table[^>]*>([\s\S]*?)<\/table>/i);
@@ -83,6 +85,13 @@ function consumeTable(html, columns, place) {
     while ((cellMatch = cellRe.exec(rowHtml)) !== null) cells.push(cellText(cellMatch[1]));
     return cells;
   };
+  const htmlCellsOf = rowHtml => {
+    const cells = [];
+    const cellRe = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let cellMatch;
+    while ((cellMatch = cellRe.exec(rowHtml)) !== null) cells.push(cellMatch[1].trim());
+    return cells;
+  };
   const header = theadMatch ? cellsOf(theadMatch[0]) : null;
   const known = !header || columns.every((pattern, i) => pattern.test(header[i] || ''));
 
@@ -93,9 +102,9 @@ function consumeTable(html, columns, place) {
     if (!hasContent(rowMatch[1])) continue;
     const cells = cellsOf(rowMatch[1]);
     // A tile shows text only, so a row holding a link or an image is not placed.
-    const plain = !/<(a|img)[ >]/i.test(rowMatch[1]);
+    const plain = opts.rich === true || !/<(a|img)[ >]/i.test(rowMatch[1]);
     const fits = known && plain && cells.slice(cols).every(c => !c);
-    if (!(fits && place(cells.slice(0, cols)))) unplaced.push(rowMatch[0]);
+    if (!(fits && place(cells.slice(0, cols), htmlCellsOf(rowMatch[1]).slice(0, cols)))) unplaced.push(rowMatch[0]);
   }
 
   const rest = source.replace(tableMatch[0], '');
