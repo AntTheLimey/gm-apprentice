@@ -719,8 +719,8 @@ def find_skeleton(vault: Path) -> list[Item]:
     """Every pass: the folders and `_meta/` schema files a vault's skeleton
     lacks, as vault_scaffold.py defines it. Only adds, and a file that
     exists is never touched. `_Templates/` files are the `templates`
-    check's. The one-off pages are never added here: they can publish, and
-    this step asks nothing."""
+    check's. The one-off pages are not added here: they can publish. The
+    Timeline is `find_timeline_page`'s; the others are never added."""
     import vault_scaffold as vs    # it imports this module
 
     found = plugin_version()
@@ -746,6 +746,36 @@ def find_skeleton(vault: Path) -> list[Item]:
                  [f"create {vs.shown(p)}" for p in pieces], apply)]
 
 
+def find_timeline_page(vault: Path) -> list[Item]:
+    """Every pass: the Timeline page, for a vault with no page of
+    `type: timeline`. `vault_write.py timeline` needs one to write to. The
+    page starts empty, and a site's publish tool before 1.12.4 sends Events
+    to an empty Timeline, so this waits for the repin."""
+    import vault_scaffold as vs    # it imports this module
+
+    found = plugin_version()
+    try:
+        pieces = [p for p in vs.missing(
+            vault, vault_system(vault), campaign=vault.resolve().name,
+            version=found[0] if found else "", templates=False)
+            if p.rel == vs.TIMELINE]
+    except vs.ScaffoldError as e:
+        raise StepFailed(str(e)) from e
+    if not pieces:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        try:
+            vs.build(vault, pieces)
+        except vs.ScaffoldError as e:
+            raise StepFailed(str(e)) from e
+        return [f"created {vs.TIMELINE}"]
+
+    return [Item("timeline-page", WILL,
+                 [f"create {vs.TIMELINE} (empty, for session timeline "
+                  f"entries)"], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -754,6 +784,10 @@ VAULT_CHECKS: list[Check] = [
           "sheet_source in PC templates", find_pc_template_field),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,
           choices=("schema-mirror",)),
+    # An empty Timeline changes what an older publish tool shows, so it waits
+    # for the repin: band 4, asks_site.
+    Check("timeline-page", None, 4, "the Timeline page", find_timeline_page,
+          asks_site=True),
     # A rename asks the site's publish tool (what it changes on the site), so
     # it waits for the repin: band 4, asks_site.
     Check("wrapup-filenames", None, 4, "Wrap-Up filenames",

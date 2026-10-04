@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.32] — 2026-10-04
+
+### Changed
+
+- A site's Story menu lists the chapter index as "Chapters", the name
+  that page already carries. It was "Story", next to "Story so far".
+  Publish tool 1.12.5.
+- Updating a vault that has no Timeline page adds an empty one, so
+  session timeline entries have somewhere to go. For a vault with a
+  site, this happens only after the site's publish tool has been
+  brought up to date: an older tool sent Events to an empty Timeline.
+  The other one-off pages (roster, world index, world flags) are still
+  never added to an existing vault.
+
+---
+
 ## [1.10.31] — 2026-10-04
 
 ### Fixed

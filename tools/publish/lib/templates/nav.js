@@ -6,7 +6,7 @@ const NAV_GROUPS = [
   {
     name: 'Story',
     dirs: ['chapters', 'sessions', 'events'],
-    labels: { chapters: 'Story', sessions: 'Sessions', events: 'Events' },
+    labels: { chapters: 'Chapters', sessions: 'Sessions', events: 'Events' },
   },
   {
     name: 'Characters',

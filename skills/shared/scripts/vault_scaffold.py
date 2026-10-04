@@ -43,6 +43,7 @@ SCHEMA = SHARED / "entity-schema.md"
 ONTOLOGY = SHARED / "gm-apprentice-ontology.json"
 STRUCTURE = SHARED / "vault-structure.md"
 CONFIG = "_meta/vault-config.md"
+TIMELINE = "_Campaign/Timeline.md"
 
 # The sections of entity-schema.md a vault's `_meta/entity-types.md` starts
 # with, in this order.
@@ -276,7 +277,7 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
         file("_World/_flags.md",
              lambda: _plugin_text(mv.TEMPLATES / "world-flags.md"),
              present="world_flags" in types)
-        file("_Campaign/Timeline.md", lambda: seed("timeline.md", campaign),
+        file(TIMELINE, lambda: seed("timeline.md", campaign),
              present="timeline" in types)
         file("_Campaign/Player Characters.md",
              lambda: seed("player-characters.md", campaign),

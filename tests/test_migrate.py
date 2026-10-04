@@ -23,7 +23,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed, edit_frontmatter, write_text_atomic)
 from site_fixture import give_site  # noqa: E402
 
-PLUGIN = "1.10.31"
+PLUGIN = "1.10.32"
 
 
 def make_vault(case, version="1.10.12", eol="\n"):
