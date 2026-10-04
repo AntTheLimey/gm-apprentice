@@ -18,6 +18,7 @@ import migrate  # noqa: E402
 import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
+from schema_rules import REQUIRED_FIELDS  # noqa: E402
 from vaultlib import extract_frontmatter  # noqa: E402
 
 SHARED = SCRIPTS.parent
@@ -71,6 +72,11 @@ class TextTests(unittest.TestCase):
         bare = vs.config_text(None, "Ashford", "1.10.29")
         self.assertNotIn("system:", bare)
         self.assertIn("  site: false\n", bare)
+
+    def test_the_seeded_roster_has_the_type_a_site_recognises(self):
+        fm = extract_frontmatter(vs.seed("player-characters.md", "X"))
+        self.assertEqual(fm["type"], "pc_roster")
+        self.assertIn("pc_roster", REQUIRED_FIELDS)
 
     def test_a_missing_seed_is_a_refusal(self):
         with mock.patch.object(vs, "SEEDS", SHARED / "no-such-folder"):

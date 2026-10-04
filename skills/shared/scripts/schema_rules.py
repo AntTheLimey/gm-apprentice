@@ -82,6 +82,8 @@ REQUIRED_FIELDS = {
     "chapter": ["type"],
     "meta": ["type"],
     "timeline": ["type"],
+    "pc_roster": ["type"],
+    # An older name for pc_roster, still accepted.
     "player-characters": ["type"],
     "character-story": ["type", "canon_status"],
     "campaign_overview": ["type", "canon_status"],

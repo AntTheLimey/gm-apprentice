@@ -25,13 +25,17 @@ const NAV_GROUPS = [
   },
 ];
 
+// `pc_roster` is the name; `player-characters` is an older one still found in vaults.
+const ROSTER_TYPES = new Set(['pc_roster', 'player-characters']);
+const isRoster = (page) => !!page.frontmatter && ROSTER_TYPES.has(page.frontmatter.type);
+
 function generateNavGroups(pages, options = {}) {
   const populated = new Set();
   for (const page of pages) {
     populated.add(page.outputDir);
   }
 
-  const pcRoster = pages.find(p => p.frontmatter && p.frontmatter.type === 'pc_roster');
+  const pcRoster = pages.find(isRoster);
   // Only aim the Events link at the timeline when a timeline page is actually written, and
   // at wherever it is written. The timeline is generated at the root only when dated events
   // exist; otherwise it may be an authored page under its own folder — or absent, in which
@@ -68,17 +72,18 @@ function renderTopNav(pages, currentOutputPath, config, options = {}) {
   const storyHref = encodeHref(relativePath(currentDir, 'story.html'));
 
   const desktopGroupsHtml = groups.map(group => {
-    const linksHtml = group.links.map(link => {
+    // The Story landing is the menu's first entry. The toggle stays a button: as a link
+    // it loaded the landing on the click that opened the menu, so the menu never stayed open.
+    const links = options.hasStory && group.name === 'Story'
+      ? [{ label: 'Story so far', href: 'story.html' }, ...group.links]
+      : group.links;
+    const linksHtml = links.map(link => {
       const href = encodeHref(relativePath(currentDir, link.href));
       return `        <a href="${href}">${escapeHtml(link.label)}</a>`;
     }).join('\n');
 
-    const toggle = options.hasStory && group.name === 'Story'
-      ? `<a class="nav-group-toggle" href="${encodeHref(relativePath(currentDir, 'story.html'))}">${escapeHtml(group.name)}</a>`
-      : `<button class="nav-group-toggle">${escapeHtml(group.name)}</button>`;
-
     return `      <div class="nav-group">
-        ${toggle}
+        <button class="nav-group-toggle">${escapeHtml(group.name)}</button>
         <div class="nav-dropdown">
 ${linksHtml}
         </div>
@@ -100,8 +105,8 @@ ${linksHtml}
       const href = encodeHref(relativePath(currentDir, link.href));
       return `    <li><a href="${href}">${escapeHtml(link.label)}</a></li>`;
     }).join('\n');
-    // Mirror the desktop behavior: when a Story section exists, the Story heading links to
-    // the landing (desktop makes the group toggle a link; give mobile the same reach).
+    // When a Story section exists, the Story heading links to the landing (desktop reaches
+    // it from the menu's first entry; a mobile heading opens nothing, so it can be the link).
     const heading = options.hasStory && group.name === 'Story'
       ? `<h3><a href="${storyHref}">${escapeHtml(group.name)}</a></h3>`
       : `<h3>${escapeHtml(group.name)}</h3>`;
@@ -141,4 +146,4 @@ function generateNav(pages, options = {}) {
   };
 }
 
-module.exports = { generateNav, generateNavGroups, renderTopNav, NAV_GROUPS };
+module.exports = { generateNav, generateNavGroups, renderTopNav, NAV_GROUPS, isRoster };

@@ -139,6 +139,7 @@ scene: [type, canon_status, scene_type, status]
 chapter: [type]
 meta: [type]
 timeline: [type]
+pc_roster: [type]
 player-characters: [type]
 character-story: [type, canon_status]
 campaign_overview: [type, canon_status]
@@ -147,6 +148,9 @@ plan: [type, canon_status, plan_type, chapter]
 world_domain: [type, canon_status, domain, status]
 world_flags: [type]
 ```
+
+The roster page is `pc_roster`. `player-characters` is an older name
+for it, still accepted; write `pc_roster`.
 
 A `type:` outside this list is a custom type: `vault_check.py
 frontmatter` surfaces it as INFO ("no schema rules applied") rather

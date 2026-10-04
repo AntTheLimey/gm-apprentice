@@ -1,5 +1,5 @@
 ---
-type: player-characters
+type: pc_roster
 ---
 
 # Player Characters

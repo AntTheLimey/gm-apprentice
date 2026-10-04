@@ -1617,6 +1617,21 @@ describe('build integration', () => {
       }
     });
 
+    it('keeps the events index when the authored timeline has nothing to show (#301)', () => {
+      const docs = buildFixture('empty-timeline', { Events: 'events', _Campaign: 'campaign' });
+      try {
+        assert.ok(fs.existsSync(path.join(docs, 'campaign', 'timeline.html')), 'the page itself is still published');
+        const index = fs.readFileSync(path.join(docs, 'events', 'index.html'), 'utf-8');
+        assert.ok(!index.includes('http-equiv="refresh"'), 'should not redirect to an empty timeline');
+        assert.ok(index.includes('Undated Event'));
+
+        const eventPage = fs.readFileSync(path.join(docs, 'events', 'undated-event.html'), 'utf-8');
+        assert.ok(eventPage.includes('href="index.html"'), 'nav Events should point at the events index');
+      } finally {
+        fs.rmSync(path.dirname(docs), { recursive: true, force: true });
+      }
+    });
+
     it('gives events a real index when there is no timeline at all', () => {
       const docs = buildFixture('no-timeline', { Events: 'events' });
       try {
