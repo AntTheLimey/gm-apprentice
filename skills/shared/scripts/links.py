@@ -15,6 +15,9 @@ one tab-separated row per broken name.
                with extra words before or after).
     UNWRITTEN  nothing like it exists. Spellings that differ only as
                `same` does share a row.
+    FILE       a link to an attached file (an image, a PDF) that is not
+               in the vault. Listed last; neither fix applies to it
+               sensibly, so restore the file or remove the link by hand.
 
 Links written in notes under `_QA` and `_archive` are not reported; the
 header counts the names broken only there.
@@ -49,7 +52,11 @@ import graph_check
 from vaultlib import UNCHECKED_DIRS, is_unchecked_source
 
 TAGS = ("same", "close", "part")
-Index = list[tuple[str, list[str], set[str]]]
+Index = list[tuple[str, list[str], list[int], set[str]]]
+# A link to one of these is to an attached file, never to a note.
+FILE_RE = re.compile(
+    r"\.(png|jpe?g|webp|gif|svg|bmp|pdf|mp3|m4a|wav|ogg|mp4|mov|webm|canvas)$",
+    re.IGNORECASE)
 
 
 def _fold(name: str) -> str:
@@ -67,6 +74,14 @@ def _words(name: str) -> list[str]:
     return [w for w in re.split(r"[\W_]+", _fold(name)) if w]
 
 
+def _numbers(name: str) -> list[int]:
+    return [int(d) for d in re.findall(r"\d+", _fold(name))]
+
+
+def _count(n: int, noun: str) -> str:
+    return f"{n} {noun}{'' if n == 1 else 's'}"
+
+
 def _part(a: list[str], b: list[str]) -> bool:
     """One name is the other with extra words before or after."""
     short, long = (a, b) if len(a) < len(b) else (b, a)
@@ -76,14 +91,20 @@ def _part(a: list[str], b: list[str]) -> bool:
 
 
 def _index(names: dict[str, set[str]]) -> Index:
-    """Every name and alias a note answers to: (squashed, words, notes)."""
-    return [(squash(known), _words(known), rels)
-            for known, rels in names.items() if squash(known)]
+    """Every name and alias a live note answers to: (squashed, words,
+    numbers, notes). Notes in unchecked folders are records, never
+    candidates."""
+    out: Index = []
+    for known, rels in names.items():
+        live = {r for r in rels if not is_unchecked_source(r)}
+        if live and squash(known):
+            out.append((squash(known), _words(known), _numbers(known), live))
+    return out
 
 
 def candidates(name: str, index: Index) -> list[tuple[str, str]]:
     """Up to three notes `name` may mean, best first: (path, tag)."""
-    sq, words = squash(name), _words(name)
+    sq, words, numbers = squash(name), _words(name), _numbers(name)
     rank: dict[str, int] = {}
     by_squash: dict[str, set[str]] = {}
 
@@ -91,8 +112,9 @@ def candidates(name: str, index: Index) -> list[tuple[str, str]]:
         for rel in rels:
             rank[rel] = min(rank.get(rel, r), r)
 
-    for known_sq, known_words, rels in index:
-        by_squash.setdefault(known_sq, set()).update(rels)
+    for known_sq, known_words, known_numbers, rels in index:
+        if known_numbers == numbers:
+            by_squash.setdefault(known_sq, set()).update(rels)
         if known_sq == sq:
             offer(rels, 0)
         elif _part(words, known_words):
@@ -137,25 +159,29 @@ def report(vault: Path) -> tuple[list[Row], int]:
             if first not in spelt:
                 spelt.append(first)
             sources |= set(srcs)
+        if FILE_RE.search(spelt[0]):
+            rows.append(Row("FILE", spelt, sorted(sources), []))
+            continue
         found = candidates(spelt[0], index)
         rows.append(Row("NEAR" if found else "UNWRITTEN", spelt,
                         sorted(sources), found))
-    rows.sort(key=lambda r: (r.kind != "NEAR", -len(r.sources),
+    rows.sort(key=lambda r: (("NEAR", "UNWRITTEN", "FILE").index(r.kind), -len(r.sources),
                              r.spellings[0].casefold()))
     return rows, unchecked
 
 
 def report_lines(rows: list[Row], unchecked: int) -> list[str]:
     notes = {s for r in rows for s in r.sources}
-    out = [f"# broken: {len(rows)} names in {len(notes)} notes; not checked: "
-           f"{', '.join(UNCHECKED_DIRS)} ({unchecked} names)"]
+    out = [f"# broken: {_count(len(rows), 'name')} in "
+           f"{_count(len(notes), 'note')}; not checked: "
+           f"{', '.join(UNCHECKED_DIRS)} ({_count(unchecked, 'name')})"]
     for r in rows:
         cols = [r.kind, " | ".join(r.spellings)]
         if r.candidates:
             cols.append("-> " + "; ".join(f"{rel} ({tag})"
                                           for rel, tag in r.candidates))
-        n, more = len(r.sources), len(r.sources) - 5
-        cols.append(f"{n} note{'' if n == 1 else 's'}: "
+        more = len(r.sources) - 5
+        cols.append(f"{_count(len(r.sources), 'note')}: "
                     + ", ".join(r.sources[:5])
                     + (f", +{more} more" if more > 0 else ""))
         out.append("\t".join(cols))

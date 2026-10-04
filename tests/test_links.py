@@ -64,10 +64,29 @@ class ReportTests(unittest.TestCase):
                         "A.md": "[[Captain Thomas Wyndham]]\n"})
         self.assertEqual(row.candidates, [("NPCs/Thomas Wyndham.md", "part")])
 
-    def test_a_copy_suffix_reads_as_a_typo(self):
+    def test_a_copy_suffix_is_a_part_not_a_typo(self):
         row = self.one({"Vienna Summary.md": "x\n",
                         "A.md": "[[Vienna Summary 1]]\n"})
-        self.assertEqual(row.candidates, [("Vienna Summary.md", "close")])
+        self.assertEqual(row.candidates, [("Vienna Summary.md", "part")])
+
+    def test_a_different_number_is_not_close(self):
+        row = self.one({"S/Session_10_Plan.md": "x\n", "S/Session_12_Plan.md": "x\n",
+                        "S/Session 2 Plan.md": "x\n",
+                        "A.md": "[[Session_02_Plan]]\n"})
+        self.assertEqual(row.candidates, [("S/Session 2 Plan.md", "close")])
+
+    def test_an_archived_note_is_not_a_candidate(self):
+        row = self.one({"_archive/old/the-secret.md": "x\n",
+                        "_QA/Secret Report.md": "x\n",
+                        "A.md": "[[Secret]]\n"})
+        self.assertEqual((row.kind, row.candidates), ("UNWRITTEN", []))
+
+    def test_a_missing_attachment_is_a_file_row_listed_last(self):
+        rows, _ = links.report(make_vault(self, {
+            "NPCs/Marquise.md": "![[Marquise .PNG]]\n[[Bath Abbey]]\n"}))
+        self.assertEqual([(r.kind, r.spellings, r.candidates) for r in rows], [
+            ("UNWRITTEN", ["Bath Abbey"], []),
+            ("FILE", ["Marquise .PNG"], [])])
 
     def test_a_short_name_is_not_a_part(self):
         row = self.one({"NPCs/Al.md": "x\n", "A.md": "[[Al Fitr]]\n"})
@@ -118,7 +137,7 @@ class ReportTests(unittest.TestCase):
         files["N0.md"] = "[[Bath Abbey]] [[Bara Bazaar]]\n"
         rows, unchecked = links.report(make_vault(self, files))
         self.assertEqual(links.report_lines(rows, unchecked), [
-            "# broken: 2 names in 7 notes; not checked: _QA, _archive (1 names)",
+            "# broken: 2 names in 7 notes; not checked: _QA, _archive (1 name)",
             "NEAR\tBara Bazaar\t-> Locations/Barabazar.md (close)\t1 note: N0.md",
             "UNWRITTEN\tBath Abbey\t7 notes: N0.md, N1.md, N2.md, N3.md, N4.md,"
             " +2 more"])
@@ -128,8 +147,15 @@ class ReportTests(unittest.TestCase):
         got = cli(vault)
         self.assertEqual(got.returncode, 0, got.stderr)
         self.assertEqual(got.stdout.splitlines(), [
-            "# broken: 1 names in 1 notes; not checked: _QA, _archive (0 names)",
+            "# broken: 1 name in 1 note; not checked: _QA, _archive (0 names)",
             "UNWRITTEN\tBath Abbey\t1 note: A.md"])
+
+    def test_cli_prints_accents_and_emoji(self):
+        vault = make_vault(self, {"A.md": "[[🩸 Émile]]\n"})
+        got = cli(vault)
+        self.assertEqual(got.returncode, 0, got.stderr)
+        self.assertEqual(got.stdout.splitlines()[1],
+                         "UNWRITTEN\t🩸 Émile\t1 note: A.md")
 
     def test_cli_refuses_a_missing_vault(self):
         got = cli(Path("/no/such/vault"))
