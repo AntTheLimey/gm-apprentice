@@ -342,6 +342,14 @@ class SmallCheckTests(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(f"---\ntype: session_wrap\n{fm}---\n", encoding="utf-8")
 
+    def test_wrapup_filename_lives_in_vaultlib(self):
+        import vaultlib
+        fm = {"session_number": 7, "chapter": "[[Chapter 3 - Vienna]]"}
+        self.assertEqual(
+            vaultlib.wrapup_filename("Chapters/Chapter 3 - Vienna/x.md", fm),
+            "Chapter_03_Session_07_Wrap_Up.md")
+        self.assertIsNone(vaultlib.wrapup_filename("x.md", {}))
+
     def test_old_wrap_up_filenames_are_a_choice_that_renames(self):
         vault = make_vault(self)
         self.wrap(vault, "Chapters/Chapter 1/Session 03 - Ball - Wrap-Up.md",
@@ -576,6 +584,380 @@ class SmallCheckTests(unittest.TestCase):
         self.assertTrue((vault / "Heritages" / "Elves.md").is_file())
         self.assertEqual((vault / "A.md").read_text(encoding="utf-8"),
                          "[[Heritages/Elves]]\n")
+
+
+WS_REL = "Sessions/Chapter_01_Session_01_Wrap_Up.md"
+WS_WRAP = (
+    '---\ntype: session_wrap\nsession: "[[Session 01 - Start]]"\n'
+    'session_number: 1\ncanon_status: DRAFT\nreconciled: null\n---\n\n'
+    '# Chapter 01 · Session 01 — Start — Wrap-Up\n\n'
+    '## Narrative Recap\n\nThe party arrived.\n\n'
+    '## What the Party Learned\n\nA name.\n\n'
+    '## Secret Plans\n\nThe Bishop moves.\n\n'
+    '<!-- gm-only -->\n\n## GM Notes\n\n### World State\n\n- a\n\n'
+    '<!-- /gm-only -->\n')
+WS_CONFIG = ('---\ngm_apprentice_version: "1.10.27"\npublish:\n'
+             '  system: coc-7e\n  wrap_up:\n'
+             '    player_sections: ["What the Party Learned"]\n---\n')
+
+
+class WrapupFixture(unittest.TestCase):
+    def vault(self, wrap=WS_WRAP, config=WS_CONFIG):
+        vault = make_vault(self)
+        (vault / "_meta" / "vault-config.md").write_text(config,
+                                                         encoding="utf-8")
+        path = vault / WS_REL
+        path.parent.mkdir(parents=True)
+        path.write_text(wrap, encoding="utf-8")
+        return vault
+
+    def config(self, vault):
+        return (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+
+
+class WrapupSectionsTests(WrapupFixture):
+    def choice(self, vault):
+        return by_id(mv.find_wrapup_sections(vault))["wrapup-sections"]
+
+    def test_an_unlisted_h2_is_one_choice_naming_file_and_heading(self):
+        choice = self.choice(self.vault())
+        self.assertEqual(choice.group, CHOICE)
+        self.assertEqual(choice.wants, "move or leave")
+        shown = "\n".join(choice.lines)
+        self.assertIn(WS_REL, shown)
+        self.assertIn("Secret Plans", shown)
+        self.assertNotIn("What the Party Learned", shown)
+
+    def test_move_renests_exactly_the_unlisted_and_keeps_the_key(self):
+        vault = self.vault()
+        self.choice(vault).apply("move")
+        text = (vault / WS_REL).read_text(encoding="utf-8")
+        self.assertIn("### Secret Plans", text)
+        self.assertIn("\n## What the Party Learned\n", text)
+        self.assertLess(text.index("## What the Party Learned"),
+                        text.index("<!-- gm-only -->"))
+        self.assertEqual(self.config(vault), WS_CONFIG)
+
+    def test_after_move_the_listed_section_is_never_offered(self):
+        vault = self.vault()
+        self.choice(vault).apply("move")
+        self.assertEqual(mv.find_wrapup_sections(vault), [])
+
+    def test_leave_changes_nothing_and_says_so(self):
+        vault = self.vault()
+        lines = self.choice(vault).apply("leave")
+        self.assertEqual((vault / WS_REL).read_text(encoding="utf-8"), WS_WRAP)
+        self.assertEqual(self.config(vault), WS_CONFIG)
+        self.assertEqual(lines, ["left the Wrap-Up headings where they are"])
+        self.assertIn("wrapup-sections", by_id(mv.find_wrapup_sections(vault)))
+        item = by_id(mv.find_wrapup_sections(vault))["wrapup-sections"]
+        self.assertIn("leave: keep them where they are", " ".join(item.lines))
+
+    def test_any_other_value_is_a_failed_step(self):
+        with self.assertRaises(StepFailed):
+            self.choice(self.vault()).apply("maybe")
+
+    def test_nothing_to_move_plans_nothing_from_this_check(self):
+        vault = self.vault(wrap=WS_WRAP.replace(
+            "## Secret Plans\n\nThe Bishop moves.\n\n", ""))
+        self.assertEqual(mv.find_wrapup_sections(vault), [])
+
+    def test_asking_twice_without_applying_finds_the_same_choice(self):
+        vault = self.vault()
+        first = mv.find_wrapup_sections(vault)
+        second = mv.find_wrapup_sections(vault)
+        self.assertEqual([(i.id, i.group, i.lines) for i in first],
+                         [(i.id, i.group, i.lines) for i in second])
+        self.assertEqual(self.config(vault), WS_CONFIG)
+
+    def test_a_fence_the_re_nest_cannot_handle_needs_a_person(self):
+        vault = self.vault(wrap=WS_WRAP.replace("<!-- /gm-only -->\n", ""))
+        groups = {i.group for i in mv.find_wrapup_sections(vault)}
+        self.assertIn(PERSON, groups)
+
+    def test_a_recap_rename_is_listed_in_the_choice(self):
+        vault = self.vault(wrap=WS_WRAP.replace("## Narrative Recap",
+                                                "## Session Recap"))
+        shown = "\n".join(self.choice(vault).lines)
+        self.assertIn("Session Recap", shown)
+        self.assertIn("Narrative Recap", shown)
+        self.choice(vault).apply("move")
+        text = (vault / WS_REL).read_text(encoding="utf-8")
+        self.assertIn("## Narrative Recap", text)
+
+    def test_it_is_a_1_10_28_check_that_waits_for_the_sites_tool(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "wrapup-sections")
+        self.assertEqual((check.release, check.band, check.asks_site),
+                         ("1.10.28", 4, True))
+
+    def test_move_adds_no_frontmatter_and_leaves_other_wrap_ups_alone(self):
+        vault = self.vault()
+        other = vault / "Sessions" / "Chapter_01_Session_02_Wrap_Up.md"
+        body = WS_WRAP.replace("## Secret Plans\n\nThe Bishop moves.\n\n", "")
+        other.write_text(body, encoding="utf-8")
+        self.choice(vault).apply("move")
+        self.assertEqual(other.read_text(encoding="utf-8"), body)
+        head = (vault / WS_REL).read_text(encoding="utf-8").split("\n---\n")[0]
+        self.assertEqual(head, WS_WRAP.split("\n---\n")[0])
+
+    def test_a_blocked_wrap_up_is_untouched_by_move(self):
+        broken = WS_WRAP.replace("<!-- /gm-only -->\n", "")
+        vault = self.vault(wrap=broken)
+        other = vault / "Sessions" / "Chapter_01_Session_02_Wrap_Up.md"
+        other.write_text(WS_WRAP, encoding="utf-8")
+        items = by_id(mv.find_wrapup_sections(vault))
+        shown = "\n".join(items["wrapup-sections"].lines)
+        self.assertNotIn("Session_01", shown)
+        self.assertIn("Session_02", shown)
+        self.assertIn("wrapup-sections-review", items)
+        items["wrapup-sections"].apply("move")
+        self.assertEqual((vault / WS_REL).read_text(encoding="utf-8"), broken)
+
+
+def stamped(config, version):
+    return config.replace('gm_apprentice_version: "1.10.27"',
+                          f'gm_apprentice_version: "{version}"')
+
+
+class WrapupSectionsKeyTests(WrapupFixture):
+    """The every-pass removal of the retired list."""
+
+    def run_key(self, vault):
+        items = mv.find_wrapup_sections_key(vault)
+        self.assertEqual([(i.id, i.group) for i in items],
+                         [("wrapup-sections-key", WILL)])
+        items[0].apply(None)
+
+    def test_at_1_10_27_it_waits(self):
+        self.assertEqual(
+            mv.find_wrapup_sections_key(self.vault()), [])
+
+    def test_at_1_10_28_and_later_it_removes_the_key(self):
+        for version in ("1.10.28", "1.11.0"):
+            vault = self.vault(config=stamped(WS_CONFIG, version))
+            self.run_key(vault)
+            self.assertNotIn("player_sections", self.config(vault))
+            self.assertNotIn("wrap_up", self.config(vault))
+            self.assertIn("system: coc-7e", self.config(vault))
+            self.assertEqual(mv.find_wrapup_sections_key(vault), [])
+
+    def test_no_key_plans_nothing(self):
+        vault = self.vault(config='---\ngm_apprentice_version: "1.10.28"\n---\n')
+        self.assertEqual(mv.find_wrapup_sections_key(vault), [])
+
+    def test_a_missing_version_plans_nothing(self):
+        vault = self.vault(config=WS_CONFIG.replace(
+            'gm_apprentice_version: "1.10.27"\n', ""))
+        self.assertEqual(mv.find_wrapup_sections_key(vault), [])
+
+    def test_a_sibling_key_under_wrap_up_survives(self):
+        vault = self.vault(config=stamped(WS_CONFIG, "1.10.28").replace(
+            '    player_sections: ["What the Party Learned"]\n',
+            '    player_sections:\n      - What the Party Learned\n'
+            '    other: 1\n'))
+        self.run_key(vault)
+        self.assertIn("  wrap_up:\n    other: 1\n", self.config(vault))
+        self.assertNotIn("player_sections", self.config(vault))
+
+    def test_flow_list_and_crlf_config_keep_every_other_byte(self):
+        config = stamped(WS_CONFIG, "1.10.28").replace("\n", "\r\n").replace(
+            "  system: coc-7e\r\n", "  system: coc-7e\r\n  note: keep\r\n")
+        vault = self.vault(config=config)
+        self.run_key(vault)
+        raw = (vault / "_meta" / "vault-config.md").read_bytes().decode()
+        self.assertEqual(raw, config.replace(
+            '  wrap_up:\r\n    player_sections: ["What the Party Learned"]\r\n',
+            ""))
+
+    def test_block_list_with_blank_and_following_top_level_key(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                  '  wrap_up:\n    player_sections:\n'
+                  '      - What the Party Learned\n\n  system: coc-7e\n'
+                  'other: 1\n---\n')
+        vault = self.vault(config=config)
+        self.run_key(vault)
+        self.assertEqual(self.config(vault),
+                         '---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                         '\n  system: coc-7e\nother: 1\n---\n')
+
+    def test_the_only_key_under_wrap_up_and_publish_leaves_publish(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                  '  wrap_up:\n    player_sections: [What the Party Learned]\n'
+                  '---\n')
+        vault = self.vault(config=config)
+        self.run_key(vault)
+        self.assertEqual(self.config(vault),
+                         '---\ngm_apprentice_version: "1.10.28"\npublish:\n---\n')
+
+    def test_it_runs_every_pass_without_the_site(self):
+        check = next(c for c in mv.VAULT_CHECKS
+                     if c.name == "wrapup-sections-key")
+        self.assertEqual((check.release, check.asks_site), (None, False))
+
+
+NO_RECAP = WS_WRAP.replace("## Narrative Recap", "## Summary")
+OTHER_REL = "Sessions/Chapter_01_Session_02_Wrap_Up.md"
+
+
+class WrapupSectionsReviewTests(WrapupFixture):
+    def test_a_wrap_up_with_no_recap_is_not_moved_and_is_for_a_person(self):
+        vault = self.vault(wrap=NO_RECAP)
+        other = vault / OTHER_REL
+        other.write_text(WS_WRAP, encoding="utf-8")
+        items = by_id(mv.find_wrapup_sections(vault))
+        shown = "\n".join(items["wrapup-sections"].lines)
+        self.assertIn(OTHER_REL, shown)
+        self.assertNotIn(WS_REL, shown)
+        person = "\n".join(items["wrapup-sections-review"].lines)
+        self.assertIn(WS_REL, person)
+        self.assertIn("Secret Plans", person)
+        self.assertIn("no recap heading the tool recognises", person)
+        self.assertIn("## Narrative Recap", person)
+        self.assertIn("leaves those headings where they are", person)
+        self.assertIn("by hand", person)
+        items["wrapup-sections"].apply("move")
+        self.assertEqual((vault / WS_REL).read_text(encoding="utf-8"),
+                         NO_RECAP)
+        self.assertIn("### Secret Plans",
+                      other.read_text(encoding="utf-8"))
+
+    def test_only_a_no_recap_wrap_up_offers_no_choice(self):
+        items = by_id(mv.find_wrapup_sections(self.vault(wrap=NO_RECAP)))
+        self.assertNotIn("wrapup-sections", items)
+        self.assertIn("wrapup-sections-review", items)
+
+    def test_choice_lines_are_plain_words(self):
+        wrap = WS_WRAP.replace("## Narrative Recap", "## Session Recap").replace(
+            "<!-- gm-only -->\n\n## GM Notes", "## GM Notes").replace(
+            "<!-- /gm-only -->\n", "")
+        shown = self.vault(wrap=wrap)
+        lines = by_id(mv.find_wrapup_sections(shown))["wrapup-sections"].lines
+        self.assertIn(f"{WS_REL}: '## Secret Plans' \u2014 not published", lines)
+        self.assertIn(f"{WS_REL}: GM Notes gets its hidden-markers "
+                      f"(it has none today)", lines)
+        self.assertIn(f"{WS_REL}: '## Session Recap' is renamed "
+                      f"'## Narrative Recap'", lines)
+        joined = "\n".join(lines)
+        self.assertNotIn("re-nest", joined)
+        self.assertNotIn("Keeper-facing H2", joined)
+
+    def test_published_and_hidden_headings_are_told_apart(self):
+        import vault_check as vc
+        keeper = lambda lvl, t: vc.Finding(  # noqa: E731
+            lvl, f"{WS_REL}:9", "x", "keeper-h2", (t,))
+
+        def fake(vault, file, fix, explain=None, player=None, **kw):
+            kw["detail"].extend([
+                vc.WrapDetail(WS_REL, keeper("ERROR", "Seen"), True),
+                vc.WrapDetail(WS_REL, keeper("WARNING", "Fenced"), True)])
+            return []
+        with mock.patch.object(mv, "check_wrapup", side_effect=fake):
+            lines = mv.find_wrapup_sections(self.vault())[0].lines
+        self.assertIn(f"{WS_REL}: '## Seen' \u2014 players can see it today", lines)
+        self.assertIn(f"{WS_REL}: '## Fenced' \u2014 already hidden", lines)
+
+    def test_a_blocked_note_row_names_the_headings_and_the_fix_gap(self):
+        vault = self.vault(wrap=WS_WRAP.replace("<!-- /gm-only -->\n", ""))
+        rows = by_id(mv.find_wrapup_sections(vault))[
+            "wrapup-sections-review"].lines
+        self.assertTrue(all(r.startswith(WS_REL + "\t") for r in rows))
+        text = "\n".join(rows)
+        self.assertIn("'## Secret Plans'", text)
+        self.assertIn("will not move them", text)
+
+    def test_a_site_tool_that_cannot_answer_stops_the_finder(self):
+        row = "ERROR\t(vault)\twrapup could not ask the publish tool"
+        with mock.patch.object(mv, "check_wrapup", return_value=[row]):
+            with self.assertRaises(StepFailed):
+                mv.find_wrapup_sections(self.vault())
+
+    def test_a_tool_that_stops_during_move_fails_the_step(self):
+        vault = self.vault()
+        choice = by_id(mv.find_wrapup_sections(vault))["wrapup-sections"]
+        row = "ERROR\t(vault)\tthe publish tool stopped answering"
+        with mock.patch.object(mv, "check_wrapup", return_value=[row]):
+            with self.assertRaises(StepFailed):
+                choice.apply("move")
+
+
+class WrapupKeyDetectionTests(WrapupFixture):
+    def test_a_key_of_the_same_name_under_another_parent_is_not_offered(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                  '  other:\n    player_sections: [A]\n---\n')
+        self.assertEqual(mv.find_wrapup_sections_key(self.vault(config=config)), [])
+
+    def test_key_text_in_the_body_is_not_offered(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\n---\n\n'
+                  '  player_sections: [A]\n')
+        self.assertEqual(mv.find_wrapup_sections_key(self.vault(config=config)), [])
+
+    def test_a_quoted_key_is_removed(self):
+        config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                  '  wrap_up:\n    "player_sections": [A]\n    other: 1\n---\n')
+        vault = self.vault(config=config)
+        mv.find_wrapup_sections_key(vault)[0].apply(None)
+        self.assertEqual(self.config(vault),
+                         '---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                         '  wrap_up:\n    other: 1\n---\n')
+
+    def test_1_10_9_is_below_1_10_28(self):
+        self.assertEqual(mv.find_wrapup_sections_key(
+            self.vault(config=stamped(WS_CONFIG, "1.10.9"))), [])
+
+    def test_a_block_list_at_the_keys_own_indent_goes_whole(self):
+        for tail, want in (("    other: 1\n", "  wrap_up:\n    other: 1\n"),
+                           ("", "")):
+            config = ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                      '  wrap_up:\n    player_sections:\n    - A\n'
+                      '    - B\n' + tail + '---\n')
+            vault = self.vault(config=config)
+            mv.find_wrapup_sections_key(vault)[0].apply(None)
+            self.assertEqual(self.config(vault),
+                             '---\ngm_apprentice_version: "1.10.28"\n'
+                             'publish:\n' + want + '---\n')
+
+    def key_config(self, body):
+        return ('---\ngm_apprentice_version: "1.10.28"\npublish:\n'
+                '  wrap_up:\n' + body + '---\n')
+
+    def test_comments_and_blanks_between_list_items_go_with_the_list(self):
+        for between in ("    # c\n", "\n", "    # c\n\n"):
+            vault = self.vault(config=self.key_config(
+                '    player_sections:\n    - A\n' + between
+                + '    - B\n    other: 1\n'))
+            mv.find_wrapup_sections_key(vault)[0].apply(None)
+            self.assertEqual(self.config(vault),
+                             self.key_config('    other: 1\n'), repr(between))
+
+    def test_a_comment_after_the_last_item_stays(self):
+        vault = self.vault(config=self.key_config(
+            '    player_sections:\n    - A\n    - B\n'
+            '    # about other\n    other: 1\n'))
+        mv.find_wrapup_sections_key(vault)[0].apply(None)
+        self.assertEqual(self.config(vault), self.key_config(
+            '    # about other\n    other: 1\n'))
+
+
+class SharedHelperTests(unittest.TestCase):
+    def test_the_row_helpers_live_in_migrate_core(self):
+        import migrate_core as core
+        import migrate_site as ms
+        self.assertEqual(core.cells("ERROR\tw\tm\tx"), ("ERROR", "w", "m\tx"))
+        with self.assertRaises(core.StepFailed):
+            core.stopped([("ERROR", "(vault)", "no tool")])
+        self.assertFalse(hasattr(mv, "_cells") or hasattr(ms, "_stopped"))
+
+
+class TwoHiddenBlocksTests(WrapupFixture):
+    def test_a_second_hidden_block_is_listed_in_plain_words(self):
+        wrap = WS_WRAP.replace(
+            "## Secret Plans\n\nThe Bishop moves.\n\n",
+            "<!-- gm-only -->\n\n## Secret Plans\n\nThe Bishop moves.\n\n"
+            "<!-- /gm-only -->\n\n")
+        lines = by_id(mv.find_wrapup_sections(self.vault(wrap=wrap))
+                      )["wrapup-sections"].lines
+        self.assertIn(f"{WS_REL}: its two hidden blocks become one, "
+                      f"round GM Notes", lines)
 
 
 if __name__ == "__main__":

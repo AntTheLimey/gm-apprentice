@@ -45,7 +45,6 @@ publish:
 | Inbox | `publish.inbox` | Switch (default: off). See § Switches |
 | PC prose sections | `publish.pc_prose_sections` | Extra `##` headings a PC page keeps when character sheets are off (default: none). See § Switches |
 | Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
-| Wrap-Up player sections | `publish.wrap_up.player_sections` | Extra H2 titles on a Wrap-Up that count as player-facing, next to `## Narrative Recap` and `## Memorable Moments` (default: none). Read by `vault_check wrapup` only; see below |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`). Spelling is normalized (trailing `/`, leading `./`, backslashes, an absolute path inside the vault) and matched case-insensitively, so `"NPCs/Hidden/"` and `"npcs/hidden"` exclude the same folder |
@@ -243,25 +242,16 @@ files are included or excluded through the publish manifest
 `content-filtering.md`. A build warns on any other
 `publish.overrides.*` key rather than ignoring it silently.
 
-### Extra player-facing Wrap-Up sections
+### Player-facing Wrap-Up sections
 
-`vault_check wrapup` treats every Wrap-Up H2 except the recap and
-`## Memorable Moments` as Keeper-facing and, with `--fix`, re-nests it
-under the fenced `## GM Notes`. A vault whose recaps carry more
-player-facing sections lists their titles:
-
-```yaml
-publish:
-  wrap_up:
-    player_sections: ["What the Party Learned", "Where We Left Off"]
-```
-
-Titles match case-insensitively, ignoring bold or italic wrapping. A
-listed H2 is never flagged or moved, and `--fix` keeps it after
-Memorable Moments in its original order; one the GM already fenced
-stays fenced. The list does not change what the site strips: hide
-sections with `exclude_sections` as before. Absent or empty means
-only the two default sections are player-facing.
+A Wrap-Up H2 outside the fenced `## GM Notes` is player-facing,
+whatever it is called: it publishes unless `exclude_sections` names
+it. Of these, `vault_check wrapup --fix` moves only a heading the
+template keeps under GM Notes (`## World State`, `## Skipped Prep`),
+back under it. It also renames a recap under another title to
+`## Narrative Recap`, and notes a second recap-titled section without
+touching it. Nothing lists player-facing sections any more:
+the migration removes the old `publish.wrap_up.player_sections` key.
 
 ## Switches
 

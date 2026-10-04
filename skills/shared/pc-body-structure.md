@@ -124,4 +124,4 @@ campaign-qa (Current Status consistency check).
 Every PC entity `Characters/PCs/{Name}.md` may have a companion
 story file `Characters/PCs/{Name}_Story.md`; `campaign-qa`
 validates that every active PC has one. Frontmatter, naming and the
-append protocol: `shared/character-story-format.md`.
+Appending command: `shared/character-story-format.md`.

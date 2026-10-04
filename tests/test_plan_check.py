@@ -900,5 +900,29 @@ class MinimumContingencyTests(unittest.TestCase):
         self.assertIn("**Trigger:**", rows[0].message)
 
 
+class SkeletonTests(unittest.TestCase):
+    """session-prep runs the checker on the skeleton, before the prose."""
+
+    SKELETON = Path(__file__).resolve().parent / "fixtures" / "plan-skeleton.md"
+
+    def test_a_valid_skeleton_has_no_error_or_warning(self):
+        loud = [f for f in findings_for(self.SKELETON)
+                if f.level in ("ERROR", "WARNING")]
+        self.assertEqual(loud, [])
+
+    def test_a_skeleton_with_a_misspelt_label_is_caught(self):
+        # The template's intro prose also names the label; break the
+        # last one, which belongs to a scene.
+        head, _, tail = self.SKELETON.read_bytes().decode(
+            "utf-8").rpartition("**Starts it:**")
+        broken = head + "**Starts It**:" + tail
+        with tempfile.TemporaryDirectory() as tmp:
+            bad = Path(tmp) / "plan.md"
+            bad.write_bytes(broken.encode("utf-8"))
+            found = findings_for(bad)
+        self.assertTrue(any(f.level == "ERROR" and f.id == "scene-labels"
+                            for f in found), found)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

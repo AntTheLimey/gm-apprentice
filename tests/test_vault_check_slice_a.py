@@ -3341,15 +3341,16 @@ class WrapupCommandTests(unittest.TestCase):
             f"first line", self.rows)
 
     def test_a_wrap_up_with_no_recap_heading_warns_before_the_fix(self):
-        # Every H2 but the recap and Memorable Moments is Keeper-facing by
-        # default, so a wrap-up that never names its recap has its whole
-        # body re-nested — right, and worth saying out loud first.
+        # Under the reading before 1.10.28 (an explicit `player` set) every
+        # H2 but the recap and Memorable Moments is Keeper-facing, so a
+        # wrap-up that never names its recap has its whole body re-nested
+        # — right, and worth saying out loud first.
         vault = make_vault(self)
         (vault / "Chapter_01_Session_01_Wrap_Up.md").write_text(
             "---\ntype: session_wrap\n---\n\n## Session Summary\n\nIt "
             "happened.\n\n## Open Threads\n\nThe door.\n", encoding="utf-8")
         self.assertTrue(rows_for(
-            vc.check_wrapup(vault, None, False),
+            vc.check_wrapup(vault, None, False, player=frozenset()),
             "no ## Narrative Recap — the publish tool lifts that section"))
 
     def test_a_conformant_wrap_up_never_gets_the_missing_recap_row(self):
@@ -3698,12 +3699,26 @@ class WrapupCommandTests(unittest.TestCase):
         vault, rel = self.wrap_file(
             "\n## Session Recap\n\nFirst.\n\n## What Happened\n\nSecond.\n")
         rows = vc.check_wrapup(vault, rel, True)
-        self.assertTrue(rows_for(
-            rows, "'## What Happened' is a second recap-variant heading "
-                  "left as-is — merge by hand"), rows)
+        # Under the current reading it is the author's own section: INFO.
+        hit = rows_for(rows, "'## What Happened' is a second heading titled "
+                             "like a recap; the first is used as the "
+                             "session's recap")
+        self.assertTrue(hit, rows)
+        self.assertTrue(all(r.startswith("INFO") for r in hit), hit)
+        self.assertFalse(rows_for(rows, "merge by hand"), rows)
         text = read(vault, rel)
         self.assertEqual(text.count("## Narrative Recap"), 1)
         self.assertIn("\n## What Happened\n", text)
+
+    def test_a_second_recap_variant_with_an_explicit_set_is_unchanged(self):
+        vault, rel = self.wrap_file(
+            "\n## Session Recap\n\nFirst.\n\n## What Happened\n\nSecond.\n")
+        rows = vc.check_wrapup(vault, rel, True, None,
+                               frozenset({"what happened"}))
+        hit = rows_for(rows, "'## What Happened' is a second recap-variant "
+                             "heading left as-is — merge by hand")
+        self.assertTrue(hit, rows)
+        self.assertTrue(all(r.startswith("WARNING") for r in hit), hit)
 
     # ---- structure-only repairs are reported and applied -------------
 
@@ -4856,6 +4871,145 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
             with self.subTest(text=text):
                 vault = make_vault(self, text)
                 self.assertEqual(vc.publish_block_inline(vault), want)
+
+
+NEW_READING_HEAD = (
+    '---\ntype: session_wrap\nsession: "[[Session 01 - Start]]"\n'
+    'session_number: 1\ncanon_status: DRAFT\nreconciled: null\n---\n\n'
+    '# Chapter 01 · Session 01 — Start — Wrap-Up\n\n'
+    '## Narrative Recap\n\nThe party arrived.\n\n')
+NEW_READING_GM = ('<!-- gm-only -->\n\n## GM Notes\n\n### World State\n\n'
+                  '- a\n\n<!-- /gm-only -->\n')
+NEW_READING_REL = "Sessions/Chapter_01_Session_01_Wrap_Up.md"
+
+
+class UnderGmNotesOrNotTests(unittest.TestCase):
+    def test_a_new_player_h2_is_not_reported_and_not_moved(self):
+        text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
+                + NEW_READING_GM)
+        findings = vc.wrapup_structure_findings(NEW_READING_REL, text, [])
+        self.assertEqual([f.row for f in findings
+                          if f.level in ("ERROR", "WARNING")], [])
+        self.assertEqual(vc.renest_wrapup(text), text)
+
+    def test_many_author_h2s_outside_the_fence_come_back_byte_identical(self):
+        text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
+                "## Memorable Moments\n\nA beat.\n\n"
+                "## Tim's Toast\n\nCheers.\n\n" + NEW_READING_GM)
+        self.assertEqual(vc.renest_wrapup(text), text)
+
+    def test_an_unknown_h2_the_author_fenced_stays_where_it_is(self):
+        text = (NEW_READING_HEAD
+                + "<!-- gm-only -->\n\n## GM Notes\n\n### World State\n\n"
+                "- a\n\n<!-- /gm-only -->\n")
+        fenced = text.replace("<!-- /gm-only -->",
+                              "## Secret Letters\n\nHush.\n\n<!-- /gm-only -->")
+        findings = vc.wrapup_structure_findings(NEW_READING_REL, fenced, [])
+        self.assertEqual([f.row for f in findings
+                          if f.level in ("ERROR", "WARNING")], [])
+        self.assertEqual(vc.renest_wrapup(fenced), fenced)
+
+    def test_a_template_keeper_heading_at_h2_is_still_a_leak(self):
+        text = (NEW_READING_HEAD + "## Keeper Checklist\n\n- [ ] x\n\n"
+                + NEW_READING_GM)
+        findings = vc.wrapup_structure_findings(NEW_READING_REL, text, [])
+        self.assertTrue(any(f.level == "ERROR" for f in findings))
+        fixed = vc.renest_wrapup(text)
+        self.assertIn("### Keeper Checklist", fixed)
+        self.assertNotIn("## Keeper Checklist\n", fixed.replace("###", ""))
+
+    def test_a_decorated_template_heading_is_still_keeper(self):
+        text = (NEW_READING_HEAD + "## **World State** — after the duel\n\n"
+                "- b\n\n" + NEW_READING_GM)
+        findings = vc.wrapup_structure_findings(NEW_READING_REL, text, [])
+        self.assertTrue(any(f.level == "ERROR" for f in findings))
+        fixed = vc.renest_wrapup(text)
+        self.assertIn("### **World State** — after the duel", fixed)
+        self.assertGreater(fixed.index("### **World State**"),
+                           fixed.index("<!-- gm-only -->"))
+
+    def test_every_template_gm_heading_at_h2_is_a_leak_moved_under_gm_notes(
+            self):
+        for title in ("Skipped Prep", "Unresolved Threads", "Name Conflicts",
+                      "World State:", "**Quality Notes:**",
+                      "World State (after the duel)"):
+            with self.subTest(title=title):
+                text = (NEW_READING_HEAD + f"## {title}\n\n- x\n\n"
+                        + NEW_READING_GM)
+                findings = vc.wrapup_structure_findings(
+                    NEW_READING_REL, text, [])
+                self.assertTrue(any(f.level == "ERROR" for f in findings))
+                fixed = vc.renest_wrapup(text)
+                self.assertIn(f"### {title}\n", fixed)
+                self.assertGreater(fixed.index(f"### {title}\n"),
+                                   fixed.index("## GM Notes"))
+                self.assertNotIn(f"\n## {title}\n", fixed)
+
+    def test_near_misses_stay_the_authors(self):
+        for title in ("World State of Play", "Skipped", "Notes on Quality"):
+            with self.subTest(title=title):
+                text = (NEW_READING_HEAD + f"## {title}\n\n- x\n\n"
+                        + NEW_READING_GM)
+                findings = vc.wrapup_structure_findings(
+                    NEW_READING_REL, text, [])
+                self.assertEqual([f.row for f in findings
+                                  if f.level in ("ERROR", "WARNING")], [])
+                self.assertEqual(vc.renest_wrapup(text), text)
+
+    def test_author_sections_keep_their_order_when_a_keeper_h2_moves(self):
+        text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
+                "## Keeper Checklist\n\n- [ ] x\n\n"
+                "## Tim's Toast\n\nCheers.\n\n" + NEW_READING_GM)
+        fixed = vc.renest_wrapup(text)
+        gm = fixed.index("<!-- gm-only -->")
+        order = [fixed.index(h) for h in ("## Narrative Recap",
+                                          "## Letters Home", "## Tim's Toast")]
+        self.assertEqual(order, sorted(order))
+        self.assertLess(order[-1], gm)
+        self.assertGreater(fixed.index("### Keeper Checklist"), gm)
+
+    def test_the_no_recap_row_names_what_each_reading_hides(self):
+        text = ("---\ntype: session_wrap\n---\n\n## Keeper Checklist\n\n"
+                "- x\n")
+        def row(player):
+            return [f.message for f in vc.wrapup_structure_findings(
+                NEW_READING_REL, text, [], player)
+                if f.message.startswith("no ## Narrative Recap")][0]
+        self.assertIn("--fix re-nests the template's GM Notes subsections "
+                      "under ## GM Notes; retitle the player-facing one "
+                      "first", row(None))
+        self.assertIn("--fix re-nests every other H2 under ## GM Notes; "
+                      "retitle the player-facing one first",
+                      row(frozenset()))
+
+    def test_an_explicit_set_is_the_reading_before_1_10_28(self):
+        text = (NEW_READING_HEAD + "## Letters Home\n\nDear all.\n\n"
+                + NEW_READING_GM)
+        findings = vc.wrapup_structure_findings(
+            NEW_READING_REL, text, [], frozenset())
+        self.assertTrue(any(f.level == "ERROR" for f in findings))
+        self.assertIn("### Letters Home",
+                      vc.renest_wrapup(text, frozenset()))
+        listed = frozenset({vc.player_section_key("Letters Home")})
+        self.assertEqual(vc.renest_wrapup(text, listed), text)
+
+    def test_check_wrapup_no_longer_reads_the_vaults_list(self):
+        self.assertFalse(hasattr(vc, "wrap_player_sections"))
+        text = (NEW_READING_HEAD + "## Tim's Toast\n\nCheers.\n\n"
+                + NEW_READING_GM)
+        cfg = ("---\ntype: vault_config\npublish:\n  wrap_up:\n"
+               "    player_sections:\n      - Letters Home\n---\n")
+        results = []
+        for config in (cfg, None):
+            with tempfile.TemporaryDirectory() as tmp:
+                vault = Path(tmp)
+                (vault / "_meta").mkdir()
+                (vault / "Sessions").mkdir()
+                if config:
+                    (vault / "_meta" / "vault-config.md").write_text(config)
+                (vault / NEW_READING_REL).write_bytes(text.encode("utf-8"))
+                results.append(vc.check_wrapup(vault, None, False))
+        self.assertEqual(results[0], results[1])
 
 
 if __name__ == "__main__":

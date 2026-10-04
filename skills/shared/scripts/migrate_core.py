@@ -138,3 +138,17 @@ def plugin_tool(args: list[str]) -> tuple[int, str, str]:
         raise StepFailed(f"node could not run "
                          f"({e.__class__.__name__})") from e
     return proc.returncode, proc.stdout, proc.stderr
+
+
+def cells(row: str) -> tuple[str, str, str]:
+    level, _, rest = row.partition("\t")
+    where, _, message = rest.partition("\t")
+    return level, where, message
+
+
+def stopped(rows: list[tuple[str, str, str]]) -> None:
+    """A check that could not ask the tool says so in an ERROR on the
+    vault; what it found before that is not the whole answer."""
+    for level, where, message in rows:
+        if level == "ERROR" and where == "(vault)":
+            raise StepFailed(message)

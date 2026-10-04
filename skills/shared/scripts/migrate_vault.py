@@ -12,11 +12,13 @@ from pathlib import Path
 
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          edit_frontmatter, write_text_atomic)
-from vault_check import WRAP_TYPES, wrapup_filename_findings
-from vaultlib import (chapter_of, entity_type, extract_frontmatter,
-                      parse_session_number, read_publish_scalar,
-                      session_ref_number, vault_files)
+                          cells, edit_frontmatter, stopped, write_text_atomic)
+from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
+                         player_section_key, wrapup_filename_findings)
+from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
+                      extract_frontmatter, frontmatter_span, parse_publish_list,
+                      parse_version, read_publish_scalar, vault_files,
+                      wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -340,19 +342,8 @@ def find_schema_mirror(vault: Path) -> list[Item]:
 
 def _wrapup_target(rel: str, text: str) -> str | None:
     """Chapter_CC_Session_NN_Wrap_Up.md beside the note, or None."""
-    fm = extract_frontmatter(text) or {}
-    session = parse_session_number(fm.get("session_number"))
-    if session is None:
-        session = session_ref_number(fm)
-    ch = (chapter_of(rel, fm) or "").strip()
-    chapter = (re.fullmatch(r"(\d+)(?!\.\d)", ch)
-               or re.search(r"chapter\D{0,3}(\d+)(?!\.?\d)", ch,
-                            re.IGNORECASE))
-    if session is None or chapter is None:
-        return None
-    name = (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
-            f"_Wrap_Up.md")
-    return posixpath.join(posixpath.dirname(rel), name)
+    name = wrapup_filename(rel, extract_frontmatter(text) or {})
+    return posixpath.join(posixpath.dirname(rel), name) if name else None
 
 
 def _relink_items(vault: Path, item_id: str, verb: str,
@@ -499,6 +490,230 @@ def find_heritage_notes(vault: Path) -> list[Item]:
     return _relink_items(vault, "heritage-notes", "move", moves)
 
 
+def read_wrap_up_player_sections(vault: Path) -> list[str]:
+    """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
+    extra H2 titles the vault declares player-facing on a Wrap-Up.
+
+    The nested `wrap_up:` block is lifted out and read through
+    `parse_publish_list`, so the list syntax is exactly the one the
+    other publish lists accept. Absent, empty, null, unreadable or not a
+    list all read as no extra sections — the Keeper-facing default.
+    """
+    try:
+        text = (vault / CONFIG).read_text(encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return []
+    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
+    start = next((i for i, line in enumerate(lines)
+                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
+    if start is None:
+        return []
+    block: list[str] = []
+    wrap_indent: int | None = None
+    inside = False
+    for line in lines[start + 1:]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            if inside:
+                block.append(line)
+            continue
+        depth = len(line) - len(line.lstrip())
+        if depth == 0:
+            break                                    # the next top-level key
+        m = _KEY_LINE_RE.match(line)
+        if inside and depth > (wrap_indent or 0):
+            block.append(line)
+            continue
+        inside = False
+        if m and m.group(3) == "wrap_up" and not (m.group(4) or "").strip().split("#")[0].strip():
+            inside, wrap_indent = True, depth
+    if not block:
+        return []
+    cfg = parse_publish_list(["publish:"] + block, "player_sections")
+    return [] if cfg.error else list(cfg.value or [])
+
+
+def _drop_player_sections(fm: list[str], _eol: str) -> None:
+    """Remove `publish.wrap_up.player_sections` (and `wrap_up:` when that
+    leaves it empty) from vault-config's frontmatter lines, keeping every
+    other line as it is. Line endings ride on the lines themselves."""
+    def depth(line: str) -> int:
+        return len(line) - len(line.lstrip())
+
+    def block_end(start: int) -> int:
+        end = start + 1
+        while end < len(fm) and (not fm[end].strip()
+                                 or depth(fm[end]) > depth(fm[start])):
+            end += 1
+        while end > start + 1 and not fm[end - 1].strip():
+            end -= 1
+        return end
+
+    def key_at(name: str, lo: int, hi: int, indented: bool) -> int | None:
+        for i in range(lo, hi):
+            m = _KEY_LINE_RE.match(fm[i].rstrip("\r\n"))
+            if m and m.group(3) == name and bool(m.group(1)) == indented:
+                return i
+        return None
+
+    def list_end(start: int) -> int:
+        """The key's block; a block list written at the key's own indent
+        belongs to it too."""
+        end = block_end(start)
+        m = _KEY_LINE_RE.match(fm[start].rstrip("\r\n"))
+        if m and not (m.group(4) or "").split("#")[0].strip():
+            while True:
+                probe = end
+                while probe < len(fm) and (
+                        not fm[probe].strip()
+                        or fm[probe].lstrip().startswith("#")):
+                    probe += 1
+                if not (probe < len(fm)
+                        and depth(fm[probe]) == depth(fm[start])
+                        and re.match(r"-(\s|$)", fm[probe].strip())):
+                    break
+                end = block_end(probe)
+        return end
+
+    publish = key_at("publish", 0, len(fm), False)
+    if publish is None:
+        return
+    wrap = key_at("wrap_up", publish + 1, block_end(publish), True)
+    if wrap is None:
+        return
+    key = key_at("player_sections", wrap + 1, block_end(wrap), True)
+    if key is None:
+        return
+    del fm[key:list_end(key)]
+    if block_end(wrap) == wrap + 1:
+        del fm[wrap]
+
+
+def _name_headings(titles: list[str]) -> str:
+    return ", ".join(f"'## {t}'" for t in titles)
+
+
+def find_wrapup_sections(vault: Path) -> list[Item]:
+    """1.10.28: a Wrap-Up H2 is Keeper-facing only under GM Notes. Under
+    the reading before that, every H2 the vault did not list was Keeper
+    content; those are offered once to be moved under GM Notes.
+
+    The list is read here and never removed here: it must still be there
+    when the choice is applied, and when this is asked again before the
+    vault is stamped. `find_wrapup_sections_key` drops it a release later.
+    A note with a fence the re-nest cannot handle, one the checker refuses
+    to write, or one with no recap heading it recognises is never moved:
+    it is for a person."""
+    listed = read_wrap_up_player_sections(vault)
+    player = frozenset(k for k in map(player_section_key, listed) if k)
+    seen: list[WrapDetail] = []
+    rows = [cells(r) for r in check_wrapup(
+        vault, None, False, player=player, renest_only=True, detail=seen)]
+    stopped(rows)
+    found = {d.finding.row for d in seen}
+    by_note: dict[str, list[WrapDetail]] = {}
+    for d in seen:
+        by_note.setdefault(d.rel, []).append(d)
+    # A row the checker printed that is not a finding: a refusal to write.
+    refused = {where.rpartition(":")[0] or where: m
+               for level, where, m in rows
+               if level == "ERROR" and f"{level}\t{where}\t{m}" not in found}
+    moves: list[str] = []
+    person: list[str] = []
+    for rel, ds in by_note.items():
+        titles = [d.finding.data[0] for d in ds
+                  if d.finding.kind == "keeper-h2"]
+        if not titles:
+            continue
+        fence = next((d.finding for d in ds if d.finding.kind in (
+            "fence-crosses", "fence-unbalanced")), None)
+        if fence is not None or rel in refused:
+            why = fence.message if fence is not None else refused[rel]
+            person.append(f"{rel}\t{why}")
+            person.append(
+                f"{rel}\t{_name_headings(titles)} would have moved; after "
+                f"it is repaired `vault_check.py <vault> wrapup --file "
+                f"{rel} --fix` will not move them (the new rule leaves "
+                f"them), so move them under ## GM Notes by hand if they "
+                f"are Keeper content")
+        elif any(d.finding.kind == "no-recap" for d in ds):
+            person.append(
+                f"{rel}\thas no recap heading the tool recognises, so "
+                f"nothing in it was moved ({_name_headings(titles)}): "
+                f"retitle the player-facing section '## Narrative Recap', "
+                f"then run `vault_check.py <vault> wrapup --file {rel}`; it "
+                f"leaves those headings where they are, so move any that are "
+                f"Keeper content under ## GM Notes by hand")
+        else:
+            for d in ds:
+                f = d.finding
+                if f.kind == "keeper-h2":
+                    state = ("not published" if not d.publishes
+                             else "players can see it today"
+                             if f.level == "ERROR" else "already hidden")
+                    moves.append(f"{rel}: '## {f.data[0]}' — {state}")
+                elif f.kind == "renest" and f.data == ("unfenced",):
+                    moves.append(f"{rel}: GM Notes gets its hidden-markers "
+                                 f"(it has none today)")
+                elif f.kind == "renest" and f.data == ("openers",):
+                    moves.append(f"{rel}: its two hidden blocks become one, "
+                                 f"round GM Notes")
+                elif f.kind == "recap":
+                    moves.append(f"{rel}: '## {f.data[0]}' is renamed "
+                                 f"'## Narrative Recap'")
+    items: list[Item] = []
+    if moves:
+        def apply(value: str | None) -> list[str]:
+            if value not in ("move", "leave"):
+                raise StepFailed("wrapup-sections takes move or leave")
+            if value == "leave":
+                return ["left the Wrap-Up headings where they are"]
+            fixed = [cells(r) for r in check_wrapup(
+                vault, None, True, player=player, renest_only=True)]
+            stopped(fixed)
+            return [f"{where}: {m}" for level, where, m in fixed
+                    if level == "FIXED"]
+
+        items.append(Item(
+            "wrapup-sections", CHOICE,
+            ["move: put these under GM Notes, hidden from players; "
+             "leave: keep them where they are", *moves],
+            apply, wants="move or leave"))
+    if person:
+        items.append(Item("wrapup-sections-review", PERSON, person))
+    return items
+
+
+def find_wrapup_sections_key(vault: Path) -> list[Item]:
+    """Every pass: `publish.wrap_up.player_sections` is no longer read.
+    It goes once the vault is stamped 1.10.28 or later, so the migration
+    that stamps 1.10.28 could still read it. Offered only when removing it
+    would change the file."""
+    config = vault / CONFIG
+    text = _read(config).removeprefix("\ufeff")
+    stamp = (extract_frontmatter(text) or {}).get("gm_apprentice_version")
+    if (not stamp or isinstance(stamp, list)
+            or parse_version(str(stamp)) < parse_version("1.10.28")):
+        return []
+    lines = text.splitlines(keepends=True)
+    end, error = frontmatter_span(lines)
+    if error:
+        return []
+    fm = lines[1:end]
+    after = list(fm)
+    _drop_player_sections(after, "")
+    if after == fm:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        edit_frontmatter(config, _drop_player_sections)
+        return [f"removed publish.wrap_up.player_sections from {CONFIG}"]
+
+    return [Item("wrapup-sections-key", WILL,
+                 [f"remove publish.wrap_up.player_sections from {CONFIG} "
+                  f"(no longer read)"], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("templates", None, 3, "templates", find_templates,
           choices=("template:",)),
@@ -511,6 +726,12 @@ VAULT_CHECKS: list[Check] = [
     Check("wrapup-filenames", None, 4, "Wrap-Up filenames",
           find_wrapup_filenames, asks_site=True,
           choices=("wrapup-filenames",)),
+    # Re-nesting changes what the site shows, so it waits for the repin.
+    Check("wrapup-sections", "1.10.28", 4, "Wrap-Up sections",
+          find_wrapup_sections, asks_site=True,
+          choices=("wrapup-sections=",)),
+    Check("wrapup-sections-key", None, 2, "the retired player-sections list",
+          find_wrapup_sections_key),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",

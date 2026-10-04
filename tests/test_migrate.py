@@ -578,6 +578,47 @@ class ApplyGuardTests(unittest.TestCase):
         self.assertEqual(stamp_of(vault).lstrip("\ufeff"), PLUGIN)
 
 
+class WrapupSectionsEngineTests(unittest.TestCase):
+    def test_choice_stamp_then_key_removal_end_to_end(self):
+        import migrate_vault as mv
+        vault = make_vault(self, "1.10.27")
+        cfg = vault / "_meta" / "vault-config.md"
+        cfg.write_text(
+            '---\ngm_apprentice_version: "1.10.27"\npublish:\n'
+            '  wrap_up:\n    player_sections: [What the Party Learned]\n'
+            '---\n', encoding="utf-8")
+        note = vault / "Sessions" / "Chapter_01_Session_01_Wrap_Up.md"
+        note.parent.mkdir()
+        note.write_text(
+            '---\ntype: session_wrap\nsession_number: 1\n---\n\n'
+            '# W\n\n## Narrative Recap\n\nr\n\n'
+            '## What the Party Learned\n\na\n\n## Secret\n\nb\n\n'
+            '<!-- gm-only -->\n\n## GM Notes\n\n### S\n\n- x\n\n'
+            '<!-- /gm-only -->\n', encoding="utf-8")
+        checks = [c for c in mv.VAULT_CHECKS
+                  if c.name in ("wrapup-sections", "wrapup-sections-key")]
+        code, out, _ = call([str(vault), "plan"], checks)
+        self.assertEqual(code, 0)
+        self.assertIn("wrapup-sections=<move or leave>", out)
+        self.assertNotIn("wrapup-sections-key\tremove", out)
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "wrapup-sections=move"], checks)
+        self.assertEqual(code, 0, out)
+        text = note.read_text(encoding="utf-8")
+        self.assertIn("### Secret", text)
+        self.assertIn("\n## What the Party Learned\n", text)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        code, out, _ = call([str(vault), "plan"], checks)
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertEqual(code, 0)
+        self.assertIn("wrapup-sections-key\tremove", out)
+        code, out, _ = call([str(vault), "apply"], checks)
+        self.assertEqual(code, 0, out)
+        self.assertNotIn("player_sections", cfg.read_text(encoding="utf-8"))
+        code, out, _ = call([str(vault), "plan"], checks)
+        self.assertIn("up to date", out)
+
+
 class EditFrontmatterTests(unittest.TestCase):
     def test_failure_leaves_the_note_and_no_temp_file(self):
         vault = make_vault(self)

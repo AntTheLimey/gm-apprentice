@@ -19,8 +19,8 @@ tags: []
 chapter number, C = the chapter's real (unpadded) number as used in
 folder names; {braces} = replace with content. Sections marked
 optional/conditional are omitted entirely when empty — never leave
-an empty heading. A vault can declare extra player-facing H2s in
-`publish.wrap_up.player_sections` (vault-config). -->
+an empty heading. A section the template lacks is welcome: `##` is
+for players, `###` under GM Notes is not. -->
 
 # Chapter CC · Session NN — {Title} — Wrap-Up
 

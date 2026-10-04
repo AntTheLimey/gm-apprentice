@@ -90,8 +90,10 @@ duplicated H2; INFO is the block missing, having no labelled
 fields, or the first body H2 not being `## Stat Sheet`.
 
 `wrapup` checks conformance against `shared/templates/session-wrap.md`:
-frontmatter backfills, an ERROR on a Keeper-facing sibling H2 that
-would publish, the single `<!-- gm-only -->` fence around `## GM
+frontmatter backfills, an ERROR on a sibling H2 outside the fence that
+is one of the template's GM Notes headings (`## World State`, `## Keeper
+Checklist`, `## Skipped Prep`, ...), which would publish Keeper content,
+the single `<!-- gm-only -->` fence around `## GM
 Notes`, recap-heading and template-heading variants, and the
 filename pattern. A gm-only fence that is unbalanced or crosses a
 player-facing section boundary gets its frontmatter backfilled and
@@ -185,7 +187,6 @@ from vaultlib import (  # noqa: F401
     strip_comment_spans,
     read_publish_list,
     read_publish_scalar,
-    read_wrap_up_player_sections,
     resolve_exclude_sections,
     frontmatter_span,
     get_key,
@@ -2779,6 +2780,14 @@ def _pc_body(vault: Path, folder: str | None = None,
 # prose is reworded, nothing is deleted except a legacy date key whose
 # value has been carried across intact, and a conformant file comes back
 # byte-identical.
+#
+# Under GM Notes or not is the only rule: from 1.10.28 a novel H2 outside
+# the fence is the author's choice (player-facing), never reported or
+# moved. Only a title that is one of the template's own GM Notes
+# subsections is a slip. Before 1.10.28 every other H2 was Keeper-facing
+# unless the vault listed it in `publish.wrap_up.player_sections`. That list
+# is retired; an explicit `player` set is that earlier reading, passed in by
+# the migration's one-time step.
 # --------------------------------------------------------------------------
 
 # The three spellings in the wild. Enumeration is by `type:` only —
@@ -2820,6 +2829,40 @@ def _wrap_template_subsections() -> tuple[str, ...]:
 
 
 WRAP_TEMPLATE_SUBSECTIONS = _wrap_template_subsections()
+
+# Used only when the template is missing: the `####` names it nests under
+# `### What Carries Forward`, on top of the `###` fallback above.
+WRAP_GM_HEADINGS_FALLBACK: tuple[str, ...] = WRAP_SUBSECTIONS_FALLBACK + (
+    "Unresolved Threads", "Player-Stated Intentions",
+    "Pending Consequences", "NPCs Needing Follow-Up", "Skipped Prep",
+)
+
+
+def _wrap_template_gm_headings() -> tuple[str, ...]:
+    """Every `###` and `####` heading below `## GM Notes` in the template.
+
+    These are the names the checker reserves as Keeper when one appears
+    as a `##` outside the fence. A placeholder heading (`#### [[PC Name]]
+    (Player)`) is a pattern, not a name, and is left out.
+    """
+    try:
+        text = WRAP_TEMPLATE_PATH.read_text(encoding="utf-8")
+    except OSError:
+        return WRAP_GM_HEADINGS_FALLBACK
+    found: list[str] = []
+    inside = False
+    for line in text.splitlines():
+        m = re.match(r"^(#{2,4})\s+(.+?)\s*$", line)
+        if not m:
+            continue
+        if len(m.group(1)) == 2:
+            inside = m.group(2).strip().casefold() == "gm notes"
+        elif inside and not m.group(2).startswith("[["):
+            found.append(m.group(2))
+    return tuple(found) or WRAP_GM_HEADINGS_FALLBACK
+
+
+WRAP_TEMPLATE_GM_HEADINGS = _wrap_template_gm_headings()
 
 NARRATIVE_RECAP = "Narrative Recap"
 MEMORABLE_MOMENTS = "memorable moments"
@@ -2876,6 +2919,16 @@ class Finding:
 
 
 @dataclass
+class WrapDetail:
+    """One finding of a wrap-up, and whether that note publishes at all
+    (it does not under `publish: none` or in a vault with no site)."""
+
+    rel: str
+    finding: Finding
+    publishes: bool
+
+
+@dataclass
 class WrapContext:
     """What one wrap-up's fixes can be derived from.
 
@@ -2901,15 +2954,51 @@ def is_recap_title(title: str) -> bool:
 
 
 def player_section_key(title: str) -> str:
-    """How a `publish.wrap_up.player_sections` entry and an H2 title are
-    compared: emphasis unwrapped, whitespace collapsed, case folded."""
+    """How an H2 title is compared with an entry of the retired
+    `publish.wrap_up.player_sections` list (the migration's one-time step
+    still reads it): emphasis unwrapped, whitespace collapsed, case
+    folded."""
     return " ".join(_plain_title(title).split()).casefold()
 
 
-def wrap_player_sections(vault: Path) -> frozenset[str]:
-    """The vault's extra player-facing Wrap-Up H2s, as comparison keys."""
-    return frozenset(k for k in map(player_section_key,
-                                    read_wrap_up_player_sections(vault)) if k)
+def _keeper_key(title: str) -> str:
+    """A heading title reduced for the reserved-name match: emphasis,
+    case, whitespace, trailing punctuation and a trailing parenthetical
+    all ignored."""
+    plain = re.sub(r"\*+|(?<!\w)_+|_+(?!\w)", "", title)
+    plain = re.sub(r"\s*\([^)]*\)\s*$", "", plain.strip())
+    plain = " ".join(plain.split()).strip(" \t:.,;!?-\u2013\u2014")
+    return plain.casefold()
+
+
+def template_keeper_title(title: str) -> bool:
+    """Whether a Wrap-Up `##` title is a name the template reserves for
+    GM Notes: any `###` or `####` heading under `## GM Notes` in
+    `shared/templates/session-wrap.md` (`World State`, `Skipped Prep`,
+    `Name Conflicts`, ...). Matching ignores emphasis, case, whitespace,
+    trailing punctuation and a trailing parenthetical, so `World State:`,
+    `**Quality Notes:**` and `World State (after the duel)` match, as does
+    the decorated form `**World State** — after the duel`; `World State of
+    Play` and `Skipped` do not. Outside the fence such a title is a slip:
+    the re-nest moves it under GM Notes, where it becomes a `###` with its
+    children demoted a level. This is the one definition; `vault_write.py`
+    uses it to refuse the same titles."""
+    names = {_keeper_key(n) for n in WRAP_TEMPLATE_GM_HEADINGS}
+    if _keeper_key(title) in names:
+        return True
+    found = decorated_heading(re.sub(r"\*+", "", title).strip())
+    return found is not None and _keeper_key(found[0]) in names
+
+
+def is_player_h2(title: str, player: frozenset[str] | None) -> bool:
+    """Whether a Wrap-Up H2 that is not the recap, Memorable Moments or GM
+    Notes is player-facing. `None`: it is, unless the template names it a
+    GM Notes subsection (under GM Notes or not is the only rule). A set:
+    the reading before 1.10.28, where only listed titles are; the
+    migration's `wrapup-sections` step runs it once."""
+    if player is None:
+        return not template_keeper_title(title)
+    return player_section_key(title) in player
 
 
 def decorated_heading(title: str) -> tuple[str, str] | None:
@@ -3289,14 +3378,17 @@ def _reconciled_findings(rel: str, text: str,
 
 def wrapup_structure_findings(rel: str, text: str,
                               exclude: list[str],
-                              player: frozenset[str] = frozenset()
+                              player: frozenset[str] | None = None
                               ) -> list[Finding]:
-    """Step 3 — publish safety. Every H2 is Keeper-facing by default.
+    """Step 3 — publish safety. Under GM Notes or not is the rule.
 
-    Player-facing H2s are exactly the recap and `## Memorable Moments`,
-    plus any the vault lists in `publish.wrap_up.player_sections`
-    (`player`, as comparison keys); anything else beside them is drift
-    the re-nest repairs. The level
+    An H2 outside the fence is player-facing, the author's own: the
+    recap, `## Memorable Moments` and any other. Only a title the
+    template names a GM Notes subsection (`## World State`, plain or
+    decorated) is drift the re-nest repairs. `player=None` is that
+    reading; a frozenset of comparison keys is the reading before
+    1.10.28, where only the recap, Memorable Moments and the listed
+    titles are player-facing and every other H2 is drift. The level
     says what it costs today: an ERROR publishes, a WARNING is already
     hidden by a fence or by the vault's effective exclude list and is
     structure drift only. A heading quoted inside a code fence is
@@ -3350,7 +3442,7 @@ def wrapup_structure_findings(rel: str, text: str,
         out.append(Finding(
             "WARNING", f"{rel}:{openers[1].lineno}",
             f"{len(openers)} {GM_ONLY_OPEN} openers outside code — the "
-            f"template uses a single pair", "renest"))
+            f"template uses a single pair", "renest", ("openers",)))
 
     has_recap = False
     for state in states:
@@ -3363,10 +3455,16 @@ def wrapup_structure_findings(rel: str, text: str,
         where = f"{rel}:{state.lineno}"
         if level == 2:
             if is_recap_title(title) and has_recap:
-                out.append(Finding(
-                    "WARNING", where,
-                    f"'## {title}' is a second recap-variant heading left "
-                    f"as-is — merge by hand"))
+                if player is None:
+                    out.append(Finding(
+                        "INFO", where,
+                        f"'## {title}' is a second heading titled like a "
+                        f"recap; the first is used as the session's recap"))
+                else:
+                    out.append(Finding(
+                        "WARNING", where,
+                        f"'## {title}' is a second recap-variant heading "
+                        f"left as-is — merge by hand"))
                 continue
             has_recap = has_recap or is_recap_title(title)
             out.extend(_wrap_h2_finding(rel, state, where, title, player))
@@ -3380,22 +3478,27 @@ def wrapup_structure_findings(rel: str, text: str,
                 "decorated", (title, name, qualifier)))
 
     if not has_recap and any(f.kind == "keeper-h2" for f in out):
-        # Every H2 but the recap and Memorable Moments is Keeper-facing by
-        # default, so a wrap-up that never names its recap has its whole
-        # body re-nested into the GM block — correct, and a surprise. Say
-        # so before the GM confirms the fix, not after the site loses the
-        # session's recap.
+        # A keeper-h2 with no recap. Under the pre-1.10.28 reading (an
+        # explicit `player` set) every H2 but the recap and Memorable
+        # Moments is Keeper-facing, so the whole body is re-nested into the
+        # GM block — correct, and a surprise; the row says "every other H2"
+        # for that reading and names only the template's subsections for
+        # the new one. Say so before the GM confirms the fix, not after the
+        # site loses the session's recap.
         out.append(Finding(
             "WARNING", rel,
             "no ## Narrative Recap — the publish tool lifts that section as "
-            "the session's player-facing recap, and --fix re-nests every "
-            "other H2 under ## GM Notes; retitle the player-facing one first"))
+            "the session's player-facing recap, and --fix re-nests "
+            + ("the template's GM Notes subsections"
+               if player is None else "every other H2")
+            + " under ## GM Notes; retitle the player-facing one first",
+            "no-recap"))
     return out
 
 
 def _fenced_heading_finding(rel: str, state: LineState,
                             info: str,
-                            player: frozenset[str] = frozenset()
+                            player: frozenset[str] | None = None
                             ) -> list[Finding]:
     """A Keeper-facing H2 quoted inside a code fence — never re-nested.
 
@@ -3417,7 +3520,7 @@ def _fenced_heading_finding(rel: str, state: LineState,
     if is_recap_title(title) or title.casefold() in (MEMORABLE_MOMENTS,
                                                      GM_NOTES):
         return []
-    if player_section_key(title) in player:
+    if is_player_h2(title, player):
         return []
     return [Finding("WARNING", f"{rel}:{state.lineno}",
                     f"Keeper-facing H2 '## {title}' is inside a code fence — "
@@ -3426,7 +3529,7 @@ def _fenced_heading_finding(rel: str, state: LineState,
 
 def _wrap_h2_finding(rel: str, state: LineState, where: str,
                      title: str,
-                     player: frozenset[str] = frozenset()
+                     player: frozenset[str] | None = None
                      ) -> list[Finding]:
     """One H2, classified. Player, GM Notes, or Keeper-facing drift."""
     if is_recap_title(title):
@@ -3438,16 +3541,16 @@ def _wrap_h2_finding(rel: str, state: LineState, where: str,
     low = title.casefold()
     if low == MEMORABLE_MOMENTS:
         return []
-    if player_section_key(title) in player:
-        # The vault declared it player-facing; one the GM fenced is
-        # deliberately hidden and stays where it is.
-        return []
     if low == GM_NOTES:
         if state.gm_depth:
             return []
         return [Finding("WARNING", where,
                         f"## GM Notes is not inside a {GM_ONLY_OPEN} pair",
-                        "renest")]
+                        "renest", ("unfenced",))]
+    if is_player_h2(title, player):
+        # Player-facing under the reading in force; one the GM fenced is
+        # deliberately hidden and stays where it is.
+        return []
     if state.published:
         return [Finding("ERROR", where,
                         f"Keeper-facing H2 '## {title}' publishes — re-nest "
@@ -3474,17 +3577,21 @@ def wrapup_filename_findings(rel: str) -> list[Finding]:
 
 
 def _wrap_blocks(states: list[LineState],
-                 player: frozenset[str] = frozenset()
+                 player: frozenset[str] | None = None
                  ) -> list[tuple[str, str, list[LineState]]]:
     """(kind, title, lines) for the preamble and every H2 block.
 
     Kinds are the four the template knows — `preamble`, `recap`,
     `moments`, `gm` — plus `second-recap` and `keeper` for everything
-    else, `keeper` being the default because real vaults invent
-    Keeper-facing headings faster than any enumeration tracks. A title
-    the vault lists in `player` is `player` (published, hoisted after
-    Memorable Moments), or `gm-listed` when the GM fenced it: hidden,
-    kept as an H2 inside the rebuilt fence. A heading
+    else, `keeper` being a title the template names a GM Notes subsection.
+    Any other H2 (`player=None`) is `player` (published; the re-nest
+    keeps these in written order), or `gm-listed` when the GM fenced it:
+    hidden, kept as an H2 inside the rebuilt fence. An author's `##`
+    inside its own separate gm-only pair, beside the GM Notes pair,
+    draws the "openers" WARNING and `--fix` merges it into the single
+    fence, still an H2 and still hidden. With an explicit `player`
+    set (the reading before 1.10.28) only the listed titles are
+    `player`; every other H2 is `keeper`. A heading
     inside a code fence never starts a block: `scan_body` leaves
     `heading` unset there.
 
@@ -3509,7 +3616,7 @@ def _wrap_blocks(states: list[LineState],
                 kind = "moments"
             elif low == GM_NOTES:
                 kind = "gm"
-            elif player_section_key(title) in player:
+            elif is_player_h2(title, player):
                 kind = "gm-listed" if _depth(state) else "player"
             else:
                 kind = "keeper"
@@ -3527,7 +3634,7 @@ PLAYER_BLOCK_KINDS = ("preamble", "recap", "second-recap", "moments",
                       "player")
 
 
-def _gm_pair_plan(states: list[LineState], player: frozenset[str]
+def _gm_pair_plan(states: list[LineState], player: frozenset[str] | None
                   ) -> tuple[set[int], list[int]]:
     """(marker lines to keep verbatim, marker lines that cross a boundary).
 
@@ -3643,7 +3750,7 @@ def _trim(lines: list[str]) -> list[str]:
 
 
 def renest_wrapup(text: str,
-                  player: frozenset[str] = frozenset()) -> str:
+                  player: frozenset[str] | None = None) -> str:
     """The 1.9.5 migration's structural step, as a pure transform.
 
     Player-facing sections are hoisted above the GM block first — real
@@ -3657,9 +3764,12 @@ def renest_wrapup(text: str,
     leak caused by the repair. Content is never reordered inside a
     block and never reworded; a conformant file comes back
     byte-identical, and a file whose fences cross a section boundary
-    comes back untouched. Sections the vault lists in `player` are
-    hoisted after Memorable Moments in their original order, or, when
-    the GM fenced one, kept as an H2 inside the rebuilt fence.
+    comes back untouched. Any H2 that is not a template GM Notes
+    subsection (`player=None`; with a set, only the titles in it) is
+    hoisted above the GM block, or, when the GM fenced it, kept as an
+    H2 inside the rebuilt fence. With `player=None` the player-facing
+    sections keep their written order; with a set they are ordered
+    recap, Memorable Moments, then the listed ones in written order.
     """
     states, _problems = scan_body(text, ())
     if not states:
@@ -3678,6 +3788,10 @@ def renest_wrapup(text: str,
     preamble: list[str] = []
     gm_content: list[str] = []
     keeper: list[list[str]] = []
+    # `player=None`: the author's own player-facing sections keep the order
+    # they were written in, so a file with only its own H2s outside the
+    # fence comes back byte-identical.
+    in_order: list[list[str]] = []
     for kind, _title, block_states in _wrap_blocks(states, player):
         group = [s for s in block_states
                  if s.marker not in GM_MARKERS or s.lineno in preserved]
@@ -3686,12 +3800,16 @@ def renest_wrapup(text: str,
         elif kind == "recap":
             recap.append([f"## {NARRATIVE_RECAP}"]
                          + [s.line for s in group[1:]])
+            in_order.append(recap[-1])
         elif kind == "second-recap":
             extra_recaps.append([s.line for s in group])
+            in_order.append(extra_recaps[-1])
         elif kind == "moments":
             moments.append([s.line for s in group])
+            in_order.append(moments[-1])
         elif kind == "player":
             listed.append([s.line for s in group])
+            in_order.append(listed[-1])
         elif kind == "gm":
             gm_content.extend(_trim([s.line for s in group[1:]]))
         elif kind == "gm-listed":
@@ -3699,7 +3817,10 @@ def renest_wrapup(text: str,
         else:
             keeper.append([_demoted(s) for s in group])
 
-    ordered = (preamble, *recap, *extra_recaps, *moments, *listed)
+    if player is None:
+        ordered = (preamble, *in_order)
+    else:
+        ordered = (preamble, *recap, *extra_recaps, *moments, *listed)
     parts = [t for t in (_trim(p) for p in ordered) if t]
     if gm_content or keeper:
         block = [GM_ONLY_OPEN, "", "## GM Notes"] + _trim(gm_content)
@@ -4235,7 +4356,10 @@ def apply_frontmatter_fixes(lines: list[str],
 
 
 def check_wrapup(vault: Path, file: str | None, fix: bool,
-                 explain: ExplainAll | None = None) -> list[str]:
+                 explain: ExplainAll | None = None,
+                 player: frozenset[str] | None = None,
+                 *, renest_only: bool = False,
+                 detail: list[WrapDetail] | None = None) -> list[str]:
     """Session Wrap-Up conformance, and the mechanical repairs.
 
     Without `--fix` this is a dry run: the findings, then a `WOULD-FIX`
@@ -4251,10 +4375,23 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
     built — but its structure findings are capped at WARNING: nothing in
     it publishes, so a Keeper-facing H2 there is drift, not a leak.
 
+    `player` is how an H2 outside the fence is read: `None` (the default)
+    leaves the author's own H2s alone; a frozenset of comparison keys is
+    the reading before 1.10.28, which the migration runs once. The
+    vault's config is not read here.
+
+    `renest_only` is for the migration: only a wrap-up with a Keeper-facing
+    H2 is looked at, only its Keeper-facing-H2 and fence findings are
+    reported, and the one repair is the re-nest. No frontmatter backfill,
+    no heading rename, no row for any other wrap-up. A wrap-up with no
+    recap heading the tool recognises is reported and never moved: under
+    the old reading its whole body would count as Keeper content. `detail`
+    collects each finding of the wrap-ups looked at, so the caller reads
+    level, kind and data rather than the row's words.
+
     Exit code is not a gate here: wrap-up drift is triage, and an
     ordinary vault of ingested back-history would fail every run.
     """
-    player = wrap_player_sections(vault)
     entries = [(rel, text, extract_frontmatter(text) or {})
                for rel, text in vault_files(vault)]
     # The build's exclude list from the publish tool (asked only when there
@@ -4285,7 +4422,9 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
                 excludes, no_tool = [], True
         try:
             rows.extend(_check_one_wrapup(vault, rel, fm, entries, excludes,
-                                          fix, player, no_tool))
+                                          fix, player, no_tool,
+                                          renest_only=renest_only,
+                                          detail=detail))
         except PublishToolUnavailable as e:
             rows.append(_tool_gone_row("wrapup", e))
             return rows
@@ -4298,8 +4437,10 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
 def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                       entries: list[tuple[str, str, dict]],
                       excludes: list[str], fix: bool,
-                      player: frozenset[str] = frozenset(),
-                      no_tool: bool = False) -> list[str]:
+                      player: frozenset[str] | None = None,
+                      no_tool: bool = False, *,
+                      renest_only: bool = False,
+                      detail: list[WrapDetail] | None = None) -> list[str]:
     """One wrap-up: findings, then the plan, then a single write.
     `no_tool`: a vault with no site and no publish tool to ask. The
     check before the write then covers what needs no tool: the fences,
@@ -4327,8 +4468,22 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
                              f.where, f.message, f.kind, f.data)
                      for f in structure]
     structure.sort(key=lambda f: _line_of(f.where))
-    findings = fm_findings + structure + wrapup_filename_findings(rel)
+    if renest_only:
+        if not any(f.kind == "keeper-h2" for f in structure):
+            return []
+        fm_findings = []
+        structure = [f for f in structure if f.kind in (
+            "keeper-h2", "fence-crosses", "fence-unbalanced", "renest",
+            "recap", "no-recap")]
+        findings = structure
+        if detail is not None:
+            shown = publish_mode(fm) != "none" and not no_tool
+            detail.extend(WrapDetail(rel, f, shown) for f in findings)
+    else:
+        findings = fm_findings + structure + wrapup_filename_findings(rel)
     rows = [f.row for f in findings]
+    if renest_only and any(f.kind == "no-recap" for f in findings):
+        return rows
 
     fm_lines = lines[1:close]
     actions = apply_frontmatter_fixes(
@@ -4373,7 +4528,7 @@ def _check_one_wrapup(vault: Path, rel: str, fm: dict,
 
 
 def _renest_actions(before: str, after: str,
-                    player: frozenset[str] = frozenset()) -> list[str]:
+                    player: frozenset[str] | None = None) -> list[str]:
     """What the re-nest did, as fix rows — read off the two texts.
 
     Derived, never predicted. The rows worded from the *findings* claimed

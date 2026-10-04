@@ -658,6 +658,23 @@ def chapter_key(rel: str, fm: dict[str, Any]) -> str | None:
     return c.casefold() if c else None
 
 
+def wrapup_filename(rel: str, fm: dict[str, Any]) -> str | None:
+    """`Chapter_CC_Session_NN_Wrap_Up.md` for the session a note at `rel`
+    with frontmatter `fm` belongs to, or None when its chapter or session
+    number cannot be read. A decimal chapter (0.5) has no such name."""
+    session = parse_session_number(fm.get("session_number"))
+    if session is None:
+        session = session_ref_number(fm)
+    ch = (chapter_of(rel, fm) or "").strip()
+    chapter = (re.fullmatch(r"(\d+)(?!\.\d)", ch)
+               or re.search(r"chapter\D{0,3}(\d+)(?!\.?\d)", ch,
+                            re.IGNORECASE))
+    if session is None or chapter is None:
+        return None
+    return (f"Chapter_{int(chapter.group(1)):02d}_Session_{session:02d}"
+            f"_Wrap_Up.md")
+
+
 # Every `type:` spelling a Session Wrap-Up is written with in the wild.
 # One definition, because a script that knows only two of the three finds
 # a vault's wrap-ups and another one silently does not: `vault_check
@@ -695,7 +712,7 @@ def section(text: str, heading: str) -> str | None:
 _SECTION_HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
 
 
-def _fenced_headings(text: str) -> list[tuple[int, int, str]]:
+def fenced_headings(text: str) -> list[tuple[int, int, str]]:
     """(0-based line index, level, title) for every heading outside a
     code fence. Shared walk behind `sections` and `h3_blocks` — both need
     the same "don't mistake a fenced example for a real heading" fence
@@ -723,6 +740,9 @@ def _fenced_headings(text: str) -> list[tuple[int, int, str]]:
         if m:
             heads.append((i, len(m.group(1)), m.group(2).strip()))
     return heads
+
+
+_fenced_headings = fenced_headings
 
 
 def sections(text: str) -> list[tuple[int, int, str, str]]:
@@ -1586,49 +1606,6 @@ def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
     if fm is None:
         return ExcludeListConfig()
     return parse_publish_list(fm, key)
-
-
-def read_wrap_up_player_sections(vault: Path) -> list[str]:
-    """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
-    extra H2 titles the vault declares player-facing on a Wrap-Up.
-
-    The nested `wrap_up:` block is lifted out and read through
-    `parse_publish_list`, so the list syntax is exactly the one the
-    other publish lists accept. Absent, empty, null, unreadable or not a
-    list all read as no extra sections — the Keeper-facing default.
-    """
-    try:
-        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return []
-    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
-    start = next((i for i, line in enumerate(lines)
-                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
-    if start is None:
-        return []
-    block: list[str] = []
-    wrap_indent: int | None = None
-    inside = False
-    for line in lines[start + 1:]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            if inside:
-                block.append(line)
-            continue
-        depth = len(line) - len(line.lstrip())
-        if depth == 0:
-            break                                    # the next top-level key
-        m = _KEY_LINE_RE.match(line)
-        if inside and depth > (wrap_indent or 0):
-            block.append(line)
-            continue
-        inside = False
-        if m and m.group(3) == "wrap_up" and not (m.group(4) or "").strip().split("#")[0].strip():
-            inside, wrap_indent = True, depth
-    if not block:
-        return []
-    cfg = parse_publish_list(["publish:"] + block, "player_sections")
-    return [] if cfg.error else list(cfg.value or [])
 
 
 def _publish_scalar(vault: Path, key: str) -> tuple[bool, str | None]:
