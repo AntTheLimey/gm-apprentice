@@ -468,3 +468,31 @@ def test_a_second_table_under_one_heading_is_named(tmp_path):
 def test_one_table_has_no_second_table_row(tmp_path):
     _, out, _ = run(FIXTURES / "clean.md")
     assert not [r for r in rows(out, "KEPT") if "second table" in r[2]]
+
+
+# --- Fenced blocks are skipped by the shared fence rule ----------------------
+
+FAKE_ABILITIES = ("| Ability | Score | Modifier | Save Proficiency | Save |\n"
+                  "|---|---|---|---|---|\n"
+                  "| STR | 8 | +9 | No | +9 |\n")
+
+
+def fenced_note(outer, inner):
+    block = f"{outer}\n{inner}\n{FAKE_ABILITIES}{outer}\n\n"
+    text = clean().replace("### Ability Scores\n\n", "### Ability Scores\n\n" + block, 1)
+    return text, block
+
+
+@pytest.mark.parametrize("outer,inner", [("````", "```"), ("~~~", "```"), ("````", "~~~")])
+def test_a_fenced_block_with_a_shorter_or_other_fence_inside_is_not_read(tmp_path, outer, inner):
+    text, block = fenced_note(outer, inner)
+    p = note(tmp_path, text)
+    code, out, _ = run(p)
+    assert code == 0
+    assert rows(out, "FILL") == []
+    assert rows(out, "ERROR") == []
+    assert "+9" not in out
+    before = p.read_bytes()
+    run(p, "--write")
+    assert p.read_bytes() == before
+    assert block in p.read_text(encoding="utf-8")

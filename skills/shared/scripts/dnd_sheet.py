@@ -43,6 +43,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_calc as dc  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
+from vaultlib import fence_step  # noqa: E402
 
 HEADING = re.compile(r"^(#{2,3})\s+(.+?)\s*#*\s*$")
 SEPARATOR = re.compile(r"^:?-{2,}:?$")
@@ -107,17 +108,15 @@ def read_tables(lines: list[str], second: dict | None = None) -> dict[tuple[str,
     header: list[str] | None = None
     closed: set = set()
     in_fm = bool(lines) and lines[0].strip() == "---"
-    fence = False
+    fence: str | None = None
     for i, raw in enumerate(lines):
         s = raw.strip()
         if in_fm:
             if i > 0 and s == "---":
                 in_fm = False
             continue
-        if s.startswith("```") or s.startswith("~~~"):
-            fence = not fence
-            continue
-        if fence:
+        fence, is_fence_line = fence_step(raw, fence)
+        if is_fence_line or fence is not None:
             continue
         m = HEADING.match(s)
         if m:
