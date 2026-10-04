@@ -32,6 +32,7 @@ from pathlib import Path
 import index_build
 import migrate_vault as mv
 from migrate_core import StepFailed, write_text_atomic
+from vault_write import utf8_output
 from vaultlib import (entity_type, extract_frontmatter, parse_version,
                       plugin_version, read_publish_scalar, vault_files)
 
@@ -255,3 +256,151 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
          lambda: index_build.render(vault, today=day, previous=None))
     file(CONFIG, lambda: config_text(system, campaign, version))
     return out
+
+
+# --- writing ----------------------------------------------------------------
+
+def _make_folders(path: Path, made: list[Path]) -> None:
+    """Create `path` and any missing parents, one at a time, recording each
+    so the undo removes exactly what this run made."""
+    todo: list[Path] = []
+    while not path.exists():
+        todo.append(path)
+        path = path.parent
+    for folder in reversed(todo):
+        folder.mkdir()
+        made.append(folder)
+
+
+def _undo(made: list[Path]) -> list[str]:
+    """Remove what this run made, newest first. Returns what would not go."""
+    left: list[str] = []
+    for path in reversed(made):
+        try:
+            if path.is_dir():
+                path.rmdir()
+            else:
+                path.unlink(missing_ok=True)
+        except OSError:
+            left.append(path.name)
+    return left
+
+
+def build(vault: Path, pieces: list[Piece]) -> None:
+    """Create every piece, or none: a failure part-way, Ctrl-C included,
+    removes what this run made and nothing else."""
+    made: list[Path] = []
+    try:
+        for piece in pieces:
+            path = vault / piece.rel
+            if piece.text is None:
+                _make_folders(path, made)
+                continue
+            _make_folders(path.parent, made)
+            if path.exists():
+                raise ScaffoldError(f"{piece.rel}: appeared since the plan "
+                                    f"was made")
+            made.append(path)
+            write_text_atomic(path, piece.text())
+    except BaseException as e:
+        left = _undo(made)
+        why = str(e) or e.__class__.__name__
+        if left:
+            raise ScaffoldError(f"{why}; could not remove: "
+                                f"{', '.join(left)}") from e
+        if isinstance(e, (StepFailed, OSError)):
+            raise ScaffoldError(why) from e
+        raise
+
+
+# --- CLI --------------------------------------------------------------------
+
+def resolve_system(vault: Path, given: str | None,
+                   no_system: bool) -> str | None:
+    """The system to build for. Never guessed: a new vault with none
+    recorded and no flag is refused."""
+    if no_system:
+        return None
+    ids = ", ".join(SYSTEMS)
+    if given is not None:
+        found = mv._system_id(given)
+        if found not in SYSTEMS:
+            raise ScaffoldError(f"unknown system '{given}': use one of "
+                                f"{ids}, or --no-system")
+        return found
+    found = mv.vault_system(vault) if vault.is_dir() else None
+    if found is None and not (vault / CONFIG).is_file():
+        raise ScaffoldError(
+            f"the game system is not recorded: ask the GM once, then pass "
+            f"--system ID (one of {ids}) or --no-system")
+    return found
+
+
+def _refuse_ahead(vault: Path, plugin: str) -> None:
+    try:
+        fm = extract_frontmatter((vault / CONFIG).read_text(
+            encoding="utf-8-sig", errors="replace")) or {}
+    except OSError:
+        return
+    current = fm.get("gm_apprentice_version")
+    if (current and not isinstance(current, list)
+            and parse_version(str(current)) > parse_version(plugin)):
+        raise ScaffoldError(f"vault {current} is ahead of plugin {plugin}: "
+                            f"update the plugin before touching this vault")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    ap = argparse.ArgumentParser(
+        prog="vault_scaffold.py", description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("vault", type=Path)
+    which = ap.add_mutually_exclusive_group()
+    which.add_argument("--system", metavar="ID",
+                       help=f"one of {', '.join(SYSTEMS)}, or an alias")
+    which.add_argument("--no-system", action="store_true",
+                       help="no particular system: generic templates")
+    ap.add_argument("--name", metavar="TEXT",
+                    help="campaign name for page titles (default: the "
+                         "vault folder's name)")
+    ap.add_argument("--inbox", action="store_true",
+                    help="also create _inbox/ for vault-ingest")
+    ap.add_argument("--write", action="store_true",
+                    help="create it (default: print the plan)")
+    return ap
+
+
+def main(argv: list[str] | None = None) -> int:
+    utf8_output()
+    args = build_parser().parse_args(argv)
+    vault: Path = args.vault
+    try:
+        try:
+            if vault.exists() and not vault.is_dir():
+                raise ScaffoldError(f"{vault.name}: not a folder")
+            found = plugin_version()
+            if found is None:
+                raise ScaffoldError("cannot determine the plugin version")
+            _refuse_ahead(vault, found[0])
+            system = resolve_system(vault, args.system, args.no_system)
+            campaign = " ".join((args.name or vault.resolve().name).split())
+            pieces = missing(vault, system, campaign=campaign,
+                             version=found[0], inbox=args.inbox)
+            if args.write:
+                build(vault, pieces)
+        except KeyboardInterrupt:
+            raise ScaffoldError("interrupted") from None
+    except ScaffoldError as e:
+        print(f"ERROR\t{e}")
+        print("# nothing written" if "could not remove" not in str(e)
+              else "# some of this run's files were left: remove them by hand")
+        return 1
+    verb = "CREATED" if args.write else "WOULD-CREATE"
+    rows = [f"{verb}\t{shown(p)}" for p in pieces]
+    if not rows:
+        rows = ["OK\t(vault)\tnothing missing"]
+    print("\n".join([*rows, f"# create: {len(pieces)}"]))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -14,7 +14,9 @@ from unittest import mock
 SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import migrate  # noqa: E402
 import migrate_vault as mv  # noqa: E402
+import vault_check as vc  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 from vaultlib import extract_frontmatter  # noqa: E402
 
@@ -197,6 +199,179 @@ class PlanTests(unittest.TestCase):
         made = {rel.split("/")[0] for rel in
                 (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, "_attachments")}
         self.assertEqual(tops, made | set(vs.NOT_CREATED))
+
+
+def run(*argv):
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        code = vs.main([str(a) for a in argv])
+    return code, out.getvalue()
+
+
+def tree(root):
+    """Every path under root with a file's bytes, for before/after checks."""
+    return {p.relative_to(root).as_posix():
+            (p.read_bytes() if p.is_file() else None)
+            for p in sorted(root.rglob("*"))}
+
+
+class BuildTests(unittest.TestCase):
+    def test_a_preview_writes_nothing(self):
+        root = scratch(self)
+        code, out = run(root / "V", "--system", "coc")
+        self.assertEqual(code, 0, out)
+        self.assertIn("WOULD-CREATE\t_meta/vault-config.md", out)
+        self.assertIn("WOULD-CREATE\tClues/", out)
+        self.assertRegex(out, r"# create: \d+\n$")
+        self.assertEqual(tree(root), {})
+
+    def test_write_then_a_second_run_finds_nothing(self):
+        vault = scratch(self) / "V"
+        code, out = run(vault, "--system", "coc", "--write")
+        self.assertEqual(code, 0, out)
+        self.assertIn("CREATED\tClues/", out)
+        self.assertNotIn("WOULD-CREATE", out)
+        code, out = run(vault, "--write")
+        self.assertEqual(code, 0, out)
+        self.assertEqual(out, "OK\t(vault)\tnothing missing\n# create: 0\n")
+
+    def test_a_fresh_vault_is_whole_for_every_system(self):
+        for flags in (*(("--system", s) for s in vs.SYSTEMS),
+                      ("--no-system",)):
+            vault = scratch(self) / "V"
+            code, out = run(vault, *flags, "--write")
+            self.assertEqual(code, 0, out)
+            rows, exit_code = vc.check_version(vault)
+            self.assertTrue(rows[0].startswith("OK\t"), rows)
+            self.assertEqual(exit_code, 0)
+            shown = io.StringIO()
+            with contextlib.redirect_stdout(shown):
+                self.assertEqual(migrate.run_plan(vault), 0)
+            self.assertIn("up to date", shown.getvalue(), flags)
+            errors = [r for r in vc.check_frontmatter(vault, None)
+                      if r.startswith("ERROR")]
+            self.assertEqual(errors, [], flags)
+            self.assertEqual([r for r in vc.check_index(vault)
+                              if r.startswith(("ERROR", "WARNING"))], [],
+                             flags)
+
+    def test_what_the_midwife_made_is_kept_byte_for_byte(self):
+        vault = scratch(self) / "V"
+        note(vault, "_Campaign/Campaign Overview.md",
+             "---\ntype: campaign_overview\ngame_system: gurps\n---\nMine\r\n")
+        note(vault, "Adventures/Heist/Heist.md", "brief")
+        note(vault, "_World/geography-climate.md", "hills")
+        before = tree(vault)
+        code, out = run(vault, "--write")
+        self.assertEqual(code, 0, out)
+        after = tree(vault)
+        for rel, data in before.items():
+            self.assertEqual(after[rel], data, rel)
+        self.assertIn("pc-gurps-4e.md",
+                      [p.name for p in (vault / "_Templates").iterdir()])
+        self.assertIn('system: "gurps-4e"',
+                      (vault / "_meta/vault-config.md").read_text("utf-8"))
+
+    def test_no_system_and_no_flag_is_a_refusal(self):
+        root = scratch(self)
+        code, out = run(root / "V", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("ERROR\t", out)
+        self.assertIn("--system", out)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(tree(root), {})
+
+    def test_an_unknown_system_is_a_refusal(self):
+        code, out = run(scratch(self) / "V", "--system", "savage-worlds")
+        self.assertEqual(code, 1)
+        self.assertIn("coc-7e", out)
+
+    def test_a_set_up_vault_with_no_system_needs_no_flag(self):
+        vault = scratch(self) / "V"
+        self.assertEqual(run(vault, "--no-system", "--write")[0], 0)
+        code, out = run(vault)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(out.startswith("OK\t"), out)
+
+    def test_a_vault_ahead_of_the_plugin_is_a_refusal(self):
+        vault = scratch(self) / "V"
+        note(vault, "_meta/vault-config.md",
+             '---\ngm_apprentice_version: "99.0.0"\n---\n')
+        code, out = run(vault, "--no-system", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("update the plugin", out)
+
+    def test_a_path_that_is_a_file_is_a_refusal(self):
+        root = scratch(self)
+        (root / "V").write_text("x", encoding="utf-8")
+        code, out = run(root / "V", "--no-system", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("not a folder", out)
+
+    def test_an_unreadable_plugin_version_is_a_refusal(self):
+        with mock.patch.object(vs, "plugin_version", return_value=None):
+            code, out = run(scratch(self) / "V", "--no-system")
+        self.assertEqual(code, 1)
+        self.assertIn("plugin version", out)
+
+    def test_the_inbox_flag(self):
+        vault = scratch(self) / "V"
+        self.assertEqual(run(vault, "--no-system", "--inbox", "--write")[0], 0)
+        self.assertTrue((vault / "_inbox" / "_processed").is_dir())
+
+    def test_the_name_flag_titles_the_pages(self):
+        vault = scratch(self) / "V"
+        run(vault, "--no-system", "--name", "The  Ashford\nCase", "--write")
+        self.assertIn("# The Ashford Case — Timeline",
+                      (vault / "_Campaign/Timeline.md").read_text("utf-8"))
+
+    def test_a_failed_write_removes_a_vault_folder_it_made(self):
+        root = scratch(self)
+        real = vs.write_text_atomic
+
+        def fail_late(path, text):
+            if path.name == "vault-config.md":
+                raise vs.StepFailed("vault-config.md cannot be written")
+            real(path, text)
+
+        with mock.patch.object(vs, "write_text_atomic", fail_late):
+            code, out = run(root / "V", "--no-system", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("cannot be written", out)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(tree(root), {})
+
+    def test_a_failed_write_leaves_an_existing_vault_as_it_was(self):
+        vault = scratch(self) / "V"
+        note(vault, "Locations/Inn.md", "---\ntype: location\n---\n")
+        before = tree(vault)
+        with mock.patch.object(vs, "write_text_atomic",
+                               side_effect=vs.StepFailed("disk full")):
+            code, _out = run(vault, "--no-system", "--write")
+        self.assertEqual(code, 1)
+        self.assertEqual(tree(vault), before)
+
+    def test_ctrl_c_part_way_removes_what_was_made(self):
+        root = scratch(self)
+        with mock.patch.object(vs, "write_text_atomic",
+                               side_effect=KeyboardInterrupt):
+            code, out = run(root / "V", "--no-system", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(tree(root), {})
+
+    def test_rows_use_forward_slashes(self):
+        _code, out = run(scratch(self) / "V", "--no-system")
+        self.assertNotIn("\\", out)
+
+    def test_a_parent_that_is_a_file_leaves_nothing_behind(self):
+        vault = scratch(self) / "V"
+        note(vault, "Characters", "not a folder")
+        before = tree(vault)
+        code, out = run(vault, "--no-system", "--write")
+        self.assertEqual(code, 1, out)
+        self.assertIn("ERROR\t", out)
+        self.assertEqual(tree(vault), before)
 
 
 if __name__ == "__main__":
