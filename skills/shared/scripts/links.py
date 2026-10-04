@@ -45,11 +45,34 @@ import difflib
 import re
 import sys
 import unicodedata
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import graph_check
-from vaultlib import UNCHECKED_DIRS, is_unchecked_source
+from migrate_core import StepFailed, write_text_atomic
+from relink import (
+    RelinkError,
+    _nfc,
+    _parse_link,
+    _raw,
+    _read,
+    _stem,
+    _walk,
+    resolve_old,
+)
+from vaultlib import (
+    LINK_RE,
+    UNCHECKED_DIRS,
+    frontmatter_span,
+    inline_code_spans,
+    inside_spans,
+    is_unchecked_source,
+    link_name,
+    link_target,
+    normalize,
+    scan_body,
+)
 
 TAGS = ("same", "close", "part")
 Index = list[tuple[str, list[str], list[int], set[str]]]
@@ -188,6 +211,179 @@ def report_lines(rows: list[Row], unchecked: int) -> list[str]:
     return out
 
 
+class LinksError(Exception):
+    """A fix refused or failed. The message is one line."""
+
+
+@dataclass
+class Change:
+    rel: str
+    lineno: int
+    before: str
+    after: str
+
+
+@dataclass
+class Plan:
+    vault: Path
+    originals: dict[str, str] = field(default_factory=dict)
+    texts: dict[str, str] = field(default_factory=dict)
+    changes: list[Change] = field(default_factory=list)
+    # (note, line, the link, why): links a fix leaves as written.
+    kept: list[tuple[str, int, str, str]] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
+
+
+# (destination, #heading or ^block, |display), is it an embed, is it in
+# frontmatter, the whole line -> the replacement, or (None, why kept).
+Fix = Callable[[tuple[str, str, str], bool, bool, str],
+               tuple["str | None", str]]
+
+KEPT = {
+    "frontmatter": "a frontmatter link is relationship data; left as written",
+    "embed": "an embed has no words to leave; left as written",
+}
+
+
+def _retarget(new: str, keep_text: bool) -> Fix:
+    def fix(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
+            line: str) -> tuple[str | None, str]:
+        dest, sub, shown = parsed
+        if keep_text and not shown and not embed and not in_fm:
+            # In a table cell a bare pipe would end the cell.
+            pipe = "\\|" if line.lstrip().startswith("|") else "|"
+            shown = pipe + link_name(dest)
+        return f"{'!' if embed else ''}[[{new}{sub}{shown}]]", ""
+    return fix
+
+
+def _unlink(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
+            line: str) -> tuple[str | None, str]:
+    if in_fm:
+        return None, "frontmatter"
+    if embed:
+        return None, "embed"
+    dest, _sub, shown = parsed
+    words = shown.lstrip("\\")[1:].strip() if shown else ""
+    return words or link_name(dest), ""
+
+
+def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
+             p: Plan) -> str:
+    lines = text.splitlines(keepends=True)
+    fm_end, _ = frontmatter_span(lines)
+    states, _ = scan_body(text)
+    code = {s.lineno for s in states if s.in_code}
+    out: list[str] = []
+    for lineno, line in enumerate(lines, 1):
+        if lineno in code:
+            out.append(line)
+            continue
+        in_fm = lineno <= fm_end + 1
+        spans = [] if in_fm else inline_code_spans(line)
+
+        def sub(m: re.Match[str], lineno: int = lineno, line: str = line,
+                in_fm: bool = in_fm,
+                spans: list[tuple[int, int]] = spans) -> str:
+            if (inside_spans(m.start(), spans)
+                    or link_target(m.group(1)) not in targets):
+                return m.group(0)
+            parsed = _parse_link(m.group(1))
+            if parsed is None:
+                return m.group(0)
+            after, why = fix(parsed, m.group(0).startswith("!"), in_fm, line)
+            if after is None:
+                p.kept.append((rel, lineno, m.group(0), why))
+                return m.group(0)
+            if after != m.group(0):
+                p.changes.append(Change(rel, lineno, m.group(0), after))
+            return after
+        out.append(LINK_RE.sub(sub, line))
+    return "".join(out)
+
+
+def _plan(vault: Path, targets: set[str], fix: Fix) -> Plan:
+    p = Plan(vault)
+    for rel in _walk(vault, ".md"):
+        text = _read(vault, rel)
+        if text is None:
+            if any(link_target(b) in targets
+                   for b in LINK_RE.findall(_raw(vault, rel))):
+                p.warnings.append(f"{rel} is not valid UTF-8; left alone")
+            continue
+        new = _rewrite(rel, text, targets, fix, p)
+        if new != text:
+            p.originals[rel], p.texts[rel] = text, new
+    return p
+
+
+def _broken_names(vault: Path, names: list[str]) -> set[str]:
+    """The names as link targets; refuses one that is not a broken link."""
+    _notes, known, _outbound, spellings = graph_check.collect(vault, [])
+    missing = graph_check.broken(vault, known, spellings)
+    for name in names:
+        if normalize(name) not in missing:
+            raise LinksError(f"{name} is not a broken link: nothing links "
+                             f"to it, or a note already answers to it")
+    return {normalize(name) for name in names}
+
+
+def plan_retarget(vault: Path, name: str, note: str,
+                  keep_text: bool = False) -> Plan:
+    targets = _broken_names(vault, [name])
+    notes = _walk(vault, ".md")
+    asked = _nfc(resolve_old(vault, note))
+    found = [n for n in notes if _nfc(n) == asked]
+    if not found:
+        raise LinksError(f"there is no note {note}")
+    rel = found[0]
+    sharing = [n for n in notes
+               if normalize(_stem(n)) == normalize(_stem(rel))]
+    new = _stem(rel) if len(sharing) == 1 else rel[:-3]
+    return _plan(vault, targets, _retarget(new, keep_text))
+
+
+def plan_unlink(vault: Path, names: list[str]) -> Plan:
+    return _plan(vault, _broken_names(vault, names), _unlink)
+
+
+def apply(p: Plan) -> None:
+    """Write every note of the plan, or leave the vault exactly as it was."""
+    written: list[str] = []
+    try:
+        for rel in sorted(p.texts):
+            if _read(p.vault, rel) != p.originals[rel]:
+                raise LinksError(f"{rel} changed while the fix was being "
+                                 f"made; run it again")
+            written.append(rel)  # before the write: an interrupt mid-write
+            write_text_atomic(p.vault / rel, p.texts[rel])
+    except BaseException as e:
+        stuck = []
+        for rel in written:
+            try:
+                write_text_atomic(p.vault / rel, p.originals[rel])
+            except BaseException:
+                stuck.append(rel)
+        said = (str(e) or type(e).__name__) + (
+            f"; these notes could not be put back and still have the new "
+            f"links: {', '.join(stuck)}" if stuck
+            else "; the vault is as it was")
+        if isinstance(e, KeyboardInterrupt):
+            raise KeyboardInterrupt(said) from None
+        raise LinksError(said) from e
+
+
+def rows(p: Plan, done: bool = False) -> list[str]:
+    verb = "CHANGED" if done else "WOULD-CHANGE"
+    out = [f"{verb}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
+           for c in p.changes]
+    out += [f"KEPT\t{rel}:{lineno}\t{link}\t{KEPT[why]}"
+            for rel, lineno, link, why in p.kept]
+    out += [f"WARNING\t{w}" for w in p.warnings]
+    return out + [f"# {len(p.changes)} link(s) in {len(p.texts)} note(s)"
+                  + (f", {len(p.kept)} left as written" if p.kept else "")]
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -195,12 +391,49 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="List a vault's broken links by kind, and fix them.")
     ap.add_argument("vault", type=Path)
+    ap.add_argument("command", nargs="?", choices=["retarget", "unlink"])
+    ap.add_argument("names", nargs="*")
+    ap.add_argument("--keep-text", action="store_true")
+    ap.add_argument("--write", action="store_true")
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"links.py: not a directory: {args.vault.as_posix()}",
               file=sys.stderr)
         return 2
-    print("\n".join(report_lines(*report(args.vault))))
+    usage = None
+    if args.command is None and (args.write or args.keep_text):
+        usage = "--write and --keep-text go with retarget or unlink"
+    elif args.command == "retarget" and len(args.names) != 2:
+        usage = "retarget takes NAME and NOTE"
+    elif args.command == "unlink" and not args.names:
+        usage = "unlink takes one or more NAMEs"
+    elif args.command == "unlink" and args.keep_text:
+        usage = "--keep-text goes with retarget"
+    if usage:
+        print(f"links.py: {usage}", file=sys.stderr)
+        return 2
+    try:
+        if args.command is None:
+            print("\n".join(report_lines(*report(args.vault))))
+            return 0
+        if args.command == "retarget":
+            p = plan_retarget(args.vault, args.names[0], args.names[1],
+                              args.keep_text)
+        else:
+            p = plan_unlink(args.vault, args.names)
+        if args.write:
+            apply(p)
+        print("\n".join(rows(p, done=args.write)))
+    except RelinkError as e:
+        print(f"links.py: {e}", file=sys.stderr)
+        return 2 if e.usage else 1
+    except (LinksError, StepFailed) as e:
+        print(f"links.py: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt as e:
+        print(f"links.py: interrupted; {e}" if str(e)
+              else "links.py: interrupted", file=sys.stderr)
+        return 130
     return 0
 
 
