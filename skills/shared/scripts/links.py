@@ -68,13 +68,13 @@ from relink import (
 from vaultlib import (
     LINK_RE,
     UNCHECKED_DIRS,
-    inline_code_spans,
-    inside_spans,
+    LinkLine,
     is_unchecked_source,
+    link_lines,
     link_name,
     link_target,
     normalize,
-    scan_body,
+    sub_wikilinks,
 )
 
 TAGS = ("same", "close", "part")
@@ -280,37 +280,27 @@ def _unlink(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
 
 def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
              p: Plan) -> str:
-    lines = text.splitlines(keepends=True)
-    states, _ = scan_body(text)
-    code = {s.lineno for s in states if s.in_code}
-    # Everything before the first body line is frontmatter, by scan_body's
-    # own rule; a note that is only frontmatter has no body line at all.
-    body_start = states[0].lineno if states else len(lines) + 1
     out: list[str] = []
-    for lineno, line in enumerate(lines, 1):
-        if lineno in code:
-            out.append(line)
+    for ll in link_lines(text):
+        if ll.in_code:
+            out.append(ll.line)
             continue
-        in_fm = lineno < body_start
-        spans = [] if in_fm else inline_code_spans(line)
 
-        def sub(m: re.Match[str], lineno: int = lineno, line: str = line,
-                in_fm: bool = in_fm,
-                spans: list[tuple[int, int]] = spans) -> str:
-            if (inside_spans(m.start(), spans)
-                    or link_target(m.group(1)) not in targets):
+        def sub(m: re.Match[str], ll: LinkLine = ll) -> str:
+            if link_target(m.group(1)) not in targets:
                 return m.group(0)
             parsed = _parse_link(m.group(1))
             if parsed is None:
                 return m.group(0)
-            after, why = fix(parsed, m.group(0).startswith("!"), in_fm, line)
+            after, why = fix(parsed, m.group(0).startswith("!"),
+                             ll.in_frontmatter, ll.line)
             if after is None:
-                p.kept.append((rel, lineno, m.group(0), why))
+                p.kept.append((rel, ll.lineno, m.group(0), why))
                 return m.group(0)
             if after != m.group(0):
-                p.changes.append(Change(rel, lineno, m.group(0), after))
+                p.changes.append(Change(rel, ll.lineno, m.group(0), after))
             return after
-        out.append(LINK_RE.sub(sub, line))
+        out.append(sub_wikilinks(ll.line, ll.spans, sub))
     return "".join(out)
 
 

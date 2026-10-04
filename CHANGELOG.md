@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - campaign-qa and campaign-organizer work from `links.py` for broken
   links. A link to something not yet written is listed once and is not
   a finding to fix or dismiss.
+- The link checker, the rename tool and the link fixer read a note's
+  links through one shared walk, so they cannot disagree about which
+  links are real. A link inside backticks in the frontmatter of a note
+  with no body is now a link for all three.
 
 ---
 

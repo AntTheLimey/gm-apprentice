@@ -813,5 +813,62 @@ class StripCommentSpansTests(unittest.TestCase):
         self.assertEqual(kept, ["one ", " two", "three"])
 
 
+class LinkLinesTests(unittest.TestCase):
+    NOTE = ("---\ntype: npc\n---\n"
+            "Quoted `[[A]]` and [[B]].\n"
+            "```\n[[C]]\n```\n")
+
+    def test_every_line_classified(self):
+        got = [(ll.lineno, ll.in_code, ll.in_frontmatter)
+               for ll in vl.link_lines(self.NOTE)]
+        self.assertEqual(got, [
+            (1, False, True), (2, False, True), (3, False, True),
+            (4, False, False), (5, True, False), (6, True, False),
+            (7, True, False)])
+
+    def test_spans_and_live_links(self):
+        lines = list(vl.link_lines(self.NOTE))
+        for ll in lines[:3]:
+            self.assertEqual(ll.spans, [])
+        body = lines[3]
+        self.assertEqual(len(body.spans), 1)
+        self.assertEqual(
+            [m.group(1) for m in vl.live_wikilinks(body.line, body.spans)],
+            ["B"])
+
+    def test_backtick_in_frontmatter_is_not_code(self):
+        text = '---\nrel: "`[[A]]`"\n---\nbody\n'
+        fm = list(vl.link_lines(text))[1]
+        self.assertEqual(fm.spans, [])
+        self.assertEqual(
+            [m.group(1) for m in vl.live_wikilinks(fm.line, fm.spans)], ["A"])
+
+    def test_frontmatter_only_note_is_all_frontmatter(self):
+        got = list(vl.link_lines('---\nx: "[[A]]"\n---\n'))
+        self.assertEqual(len(got), 3)
+        self.assertTrue(all(ll.in_frontmatter for ll in got))
+
+    def test_no_frontmatter(self):
+        got = list(vl.link_lines("one\ntwo [[A]]\n"))
+        self.assertEqual(len(got), 2)
+        self.assertFalse(any(ll.in_frontmatter for ll in got))
+
+    def test_frontmatter_need_not_be_strict_yaml(self):
+        got = list(vl.link_lines("---\nfoo bar baz\n---\nbody\n"))
+        self.assertEqual([ll.in_frontmatter for ll in got],
+                         [True, True, True, False])
+
+    def test_crlf_text_round_trips(self):
+        text = "---\r\na: 1\r\n---\r\nbody [[A]]\r\n"
+        self.assertEqual("".join(ll.line for ll in vl.link_lines(text)), text)
+
+    def test_sub_wikilinks_leaves_inline_code(self):
+        line = "`[[A]]` [[A]]"
+        self.assertEqual(
+            vl.sub_wikilinks(line, vl.inline_code_spans(line),
+                             lambda m: "X"),
+            "`[[A]]` X")
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

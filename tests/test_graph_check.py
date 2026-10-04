@@ -153,5 +153,17 @@ class SpellingTests(unittest.TestCase):
             "bara bazaar": {"A.md": "Bara_Bazaar", "_QA/R.md": "BARA BAZAAR"}})
 
 
+class FrontmatterOnlyTests(unittest.TestCase):
+    def test_backticked_link_in_a_frontmatter_only_note_is_a_link(self):
+        vault = vault_of(self, {"A.md": '---\nrel: "`[[Gone]]`"\n---\n'})
+        self.assertEqual(run(vault)[0], "# count: 1")
+        self.assertIn("gone", run(vault)[1])
+
+    def test_same_link_in_a_note_with_a_body_is_a_link_too(self):
+        vault = vault_of(self, {"A.md": '---\nrel: "`[[Gone]]`"\n---\nx\n'})
+        self.assertEqual(run(vault)[0], "# count: 1")
+        self.assertIn("gone", run(vault)[1])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -73,6 +73,12 @@ class WikilinkTests(unittest.TestCase):
                   "---\nbody\n")
         self.assertEqual([c.lineno for c in p.changes], [2, 4])
 
+    def test_backticked_frontmatter_link_in_a_frontmatter_only_note(self):
+        text, p = self.rewrite('---\nrel: "`[[Session_4_Wrapup]]`"\n---')
+        self.assertEqual(
+            text, '---\nrel: "`[[Chapter_01_Session_04_Wrap_Up]]`"\n---\n')
+        self.assertEqual([c.lineno for c in p.changes], [2])
+
     def test_left_alone(self):
         for line in ("```\n[[Session_4_Wrapup]]\n```",
                      "use `[[Session_4_Wrapup]]` like this",

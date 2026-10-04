@@ -34,34 +34,22 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vaultlib import (  # noqa: E402
-    LINK_RE,
     frontmatter_aliases,
-    inline_code_spans,
-    inside_spans,
     is_skipped_path,
     is_unchecked_source,
+    link_lines,
     link_name,
     link_target,
+    live_wikilinks,
     normalize,
-    scan_body,
 )
 
 
 def body_links(text: str) -> list[str]:
     """Wikilink bodies that are links: frontmatter ones too, but not those
     quoted in a code fence or an inline code span."""
-    states, _ = scan_body(text)
-    code = {s.lineno for s in states if s.in_code}
-    body_start = states[0].lineno if states else 1
-    found: list[str] = []
-    for lineno, line in enumerate(text.splitlines(), 1):
-        if lineno in code:
-            continue
-        spans = inline_code_spans(line) if lineno >= body_start else []
-        for m in LINK_RE.finditer(line):
-            if not inside_spans(m.start(), spans):
-                found.append(m.group(1))
-    return found
+    return [m.group(1) for ll in link_lines(text) if not ll.in_code
+            for m in live_wikilinks(ll.line, ll.spans)]
 
 
 def collect(vault: Path, excludes: list[str]):
