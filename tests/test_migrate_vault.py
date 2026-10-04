@@ -12,6 +12,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import migrate_vault as mv  # noqa: E402
+import vault_scaffold as vs  # noqa: E402
 from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
 
 sys.path.insert(0, str(SCRIPTS.parent.parent.parent / "scripts"))
@@ -33,6 +34,69 @@ def make_vault(case, system="coc-7e"):
 
 def by_id(items):
     return {item.id: item for item in items}
+
+
+def whole_vault(case, system="coc-7e"):
+    """A vault with its full skeleton, at the plugin's version."""
+    vault = Path(tempfile.mkdtemp(prefix="migv-")) / "V"
+    case.addCleanup(shutil.rmtree, vault.parent, ignore_errors=True)
+    vs.build(vault, vs.missing(vault, system, campaign="V",
+                               version=vs.plugin_version()[0]))
+    return vault
+
+
+class SkeletonTests(unittest.TestCase):
+    def test_a_whole_vault_is_offered_nothing(self):
+        self.assertEqual(mv.find_skeleton(whole_vault(self)), [])
+
+    def test_gaps_are_offered_as_one_automatic_step(self):
+        vault = whole_vault(self)
+        (vault / "Heritages").rmdir()
+        (vault / "_Campaign" / "Timeline.md").unlink()
+        items = mv.find_skeleton(vault)
+        self.assertEqual([i.id for i in items], ["skeleton"])
+        self.assertEqual(items[0].group, WILL)
+        self.assertEqual(sorted(items[0].lines),
+                         ["create Heritages/", "create _Campaign/Timeline.md"])
+        done = items[0].apply(None)
+        self.assertEqual(sorted(done), ["created Heritages/",
+                                        "created _Campaign/Timeline.md"])
+        self.assertTrue((vault / "Heritages").is_dir())
+        self.assertEqual(mv.find_skeleton(vault), [])
+
+    def test_templates_are_left_to_the_templates_check(self):
+        vault = whole_vault(self)
+        (vault / "_Templates" / "_Template_NPC.md").unlink()
+        self.assertEqual(mv.find_skeleton(vault), [])
+        self.assertIn("template:_Template_NPC.md",
+                      by_id(mv.find_templates(vault)))
+
+    def test_an_existing_schema_file_is_never_touched(self):
+        vault = whole_vault(self)
+        path = vault / "_meta" / "relationship-types.md"
+        path.write_text("my subset\n", encoding="utf-8")
+        self.assertEqual(mv.find_skeleton(vault), [])
+        self.assertEqual(path.read_text(encoding="utf-8"), "my subset\n")
+
+    def test_a_renamed_folder_is_not_offered(self):
+        vault = whole_vault(self)
+        (vault / "Characters" / "NPCs").rmdir()
+        (vault / "NPCs").mkdir()
+        (vault / "NPCs" / "Ada.md").write_text("---\ntype: npc\n---\n",
+                                               encoding="utf-8")
+        self.assertEqual(mv.find_skeleton(vault), [])
+
+    def test_something_in_the_way_stops_the_run(self):
+        vault = whole_vault(self)
+        (vault / "Clues").rmdir()
+        (vault / "Clues").write_text("x", encoding="utf-8")
+        with self.assertRaises(StepFailed):
+            mv.find_skeleton(vault)
+
+    def test_the_check_is_looked_at_on_every_pass(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "skeleton")
+        self.assertIsNone(check.release)
+        self.assertEqual(mv.VAULT_CHECKS[0].name, "skeleton")
 
 
 class SystemTests(unittest.TestCase):

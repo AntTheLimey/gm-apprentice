@@ -17,8 +17,8 @@ from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
 from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
                       extract_frontmatter, frontmatter_span, parse_publish_list,
-                      parse_version, read_publish_scalar, vault_files,
-                      wrapup_filename)
+                      parse_version, plugin_version, read_publish_scalar,
+                      vault_files, wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -714,7 +714,36 @@ def find_wrapup_sections_key(vault: Path) -> list[Item]:
                   f"(no longer read)"], apply)]
 
 
+def find_skeleton(vault: Path) -> list[Item]:
+    """Every pass: the folders and one-off pages a vault's skeleton lacks,
+    as vault_scaffold.py defines it. Only adds. `_Templates/` files are the
+    `templates` check's, and a file that exists is never touched."""
+    import vault_scaffold as vs    # it imports this module
+
+    found = plugin_version()
+    try:
+        pieces = [p for p in vs.missing(
+            vault, vault_system(vault), campaign=vault.resolve().name,
+            version=found[0] if found else "", templates=False)
+            if p.rel != vs.CONFIG]
+    except vs.ScaffoldError as e:
+        raise StepFailed(str(e)) from e
+    if not pieces:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        try:
+            vs.build(vault, pieces)
+        except vs.ScaffoldError as e:
+            raise StepFailed(str(e)) from e
+        return [f"created {vs.shown(p)}" for p in pieces]
+
+    return [Item("skeleton", WILL,
+                 [f"create {vs.shown(p)}" for p in pieces], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
+    Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
           choices=("template:",)),
     Check("pc-template-sheet-source", "1.10.22", 3,
