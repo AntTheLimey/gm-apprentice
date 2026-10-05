@@ -55,8 +55,9 @@ saying so and reads nothing from KV.
   or no word. A link in a Combat or Core row (other than inside a reason),
   or anywhere in a slot row, also leaves that row as written. A linked
   feature or item name is fine.
-- **Of two rows with the same name in one table, only the first is live.**
-  The second is never written.
+- **A name belongs to its first row.** Of two rows with the same name in
+  one table, a later one is never live and never written, even when the
+  first is itself not live (a `Used` over its `Uses`).
 - **A value with no cell is skipped and named**, on a line under the PC's
   own:
   `Mara Voss — no cell in the note for: temp, slot:pact (3rd), class:second wind`.

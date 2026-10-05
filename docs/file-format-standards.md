@@ -361,8 +361,10 @@ differs.
   `HP (Max)` is not a whole number, and any row the renderer shows as
   written (see "Tables are read by position" above). The page never
   invents a maximum.
-- **Of two rows with the same name in one table, only the first is
-  live.** The build warns, and the second row is never written.
+- **A name belongs to its first row.** Of two rows with the same name
+  in one table, a later one is never live and never written, even when
+  the first is itself not live (a `Used` over its `Uses`). The build
+  warns.
 - **A row is matched by the name the page shows**, so a linked feature
   or item name works: `[[Target|Shown]]` by `Shown`, `[[Ilse_Varn]]` by
   its file name with underscores as spaces. Capitals do not matter.

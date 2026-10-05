@@ -44,7 +44,7 @@ Write a number by hand, with its reason, only for what that vocabulary cannot sa
 
 - **Action:** `Action`, `Bonus Action` or `Reaction`; blank for a passive feature. The Combat tab groups by these words.
 - **Uses / Used:** whole numbers; both blank when a feature has no limit. A pool is `Uses` with the pool's size (Lay on Hands at level 5 is `25`), and `Used` counts points spent.
-- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest` (one use back on a short rest, all on a long one). The live sheet's rest buttons act on exactly these three phrases, whatever their capitals, so do not paraphrase them. Anything else (`Dawn`, `1d6+1 at dawn`) or a blank is shown as written and left to the player: no rest button touches it. Hit dice and spell slots need no `Recovers`: both return on a long rest, and a slot row whose level starts `Pact` returns on a short rest too.
+- **Recovers:** `Long Rest`, `Short Rest`, or `1 Short Rest, all Long Rest` (one use back on a short rest, all on a long one). The live sheet's rest buttons act on exactly these three phrases, whatever their capitals, so do not paraphrase them. Anything else (`Dawn`, `1d6+1 at dawn`) or a blank is shown as written and left to the player: no rest button touches it. Hit dice and spell slots need no `Recovers`: both return on a long rest (a short rest is when the player spends hit dice), and a slot row whose level starts `Pact` returns on a short rest too.
 
 ```text
 | Second Wind | Bonus Action | 2 | 0 | 1 Short Rest, all Long Rest | Heal 1d10 + Fighter level |
@@ -60,13 +60,13 @@ Write a number by hand, with its reason, only for what that vocabulary cannot sa
 
 **Weight.** Everything carried has a `### Gear` row with the weight of one in pounds, weapons and armour included: the attack table lists attacks, not possessions. Weights of SRD items are in `equipment.md`; write `—` for something weightless. The tool totals Gear and coins into `### Carrying` and sets the capacity from Strength and Size. A magic item's weight counts only when the item also has a Gear row; the Magic Items table adds none.
 
-**Live sheet.** On a site with live stats on, the player runs the PC from the page: damage, healing and temporary hit points entered as amounts; marks for death saves, hit dice, spell slots, feature uses and item charges; conditions, exhaustion, Heroic Inspiration and Concentrating; and a Short Rest and a Long Rest button. The page rolls nothing and does no sums. A rest never sets Heroic Inspiration. What this means for the note:
+**Live sheet.** On a site with live stats on, the player runs the PC from the page: damage, healing and temporary hit points entered as amounts; marks for death saves, hit dice, spell slots, feature uses and item charges; conditions, exhaustion, Heroic Inspiration and Concentrating; and a Short Rest and a Long Rest button. The page rolls nothing and works out no modifiers, saves or bonuses. A rest never sets Heroic Inspiration. What this means for the note:
 
 - The numbers return to the note at wrap-up, each into its own cell (`HP (Current)`, `Temp HP`, the spent half of hit dice, `Death Saves (S/F)`, `Conditions`, `Exhaustion`, `Heroic Inspiration`, `Expended`, `Used`). Concentrating is never saved to the note.
-- Until then, and for 30 days, the value saved on the site wins over the note's cell. So a value in that list is changed by the player on their sheet, not by editing the note mid-campaign: the edit would not show.
+- The value saved on the site wins over the note's cell for 30 days, whether or not wrap-up has run: writing the numbers back does not clear it. So a value in that list is changed by the player on their sheet, not by editing the note mid-campaign: the edit would not show.
 - Every maximum comes from the note (`HP (Max)`, `Uses`, `Charges`, a slot `Total`, the maximum half of hit dice). A level-up is a note edit, and the page fits its saved counts to the new numbers.
 - A cell the page cannot read is not live and is never written back. Keep them exact: `HP (Current)`, `HP (Max)`, `Temp HP` and `Exhaustion` a whole number, with a reason in brackets after it if you want one (`31 (after the fall)`); hit dice `spent/max` (`2/5`); death saves `0/0` up to `3/3`; `Used` and `Expended` bare whole numbers no larger than their total.
-- Give each row in a table its own name. Of two rows with the same name, only the first is live.
+- Give each row in a table its own name. The page follows the first row with a name; a later row with the same name is never live, even when the first is itself not live (a `Used` over its `Uses`), and the build warns.
 
 **Summaries.** One line, in your own words. Never copy a book's text: the note is published, and rules text is not ours to republish. For anything outside the SRD, summarise only what the GM tells you or shows you; otherwise write the name and a page reference.
 
