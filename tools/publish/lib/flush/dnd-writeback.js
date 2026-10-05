@@ -66,11 +66,16 @@ function applyDnDFlush(markdown, blob) {
   const skipped = [];
   if (!blob || typeof blob !== 'object') return { markdown, changes, skipped };
   const used = (blob.used && typeof blob.used === 'object') ? blob.used : {};
-  const has = k => typeof used[k] === 'number';
+  // A saved number is fitted to the note as the page fits it (fit in js/dnd-live.js): a whole
+  // number, never below 0, never above the cell's own maximum. A record saved before a
+  // level-up must not leave a row over-spent: the build draws such a row as written.
+  const number = v => typeof v === 'number' && Number.isFinite(v);
+  const fitted = (v, max) => Math.max(0, Math.min(max, Math.round(v)));
+  const has = k => number(used[k]);
   const carries = {
-    hp: typeof blob.hp === 'number',
-    temp: typeof blob.temp === 'number',
-    exhaustion: typeof blob.exhaustion === 'number',
+    hp: number(blob.hp),
+    temp: number(blob.temp),
+    exhaustion: number(blob.exhaustion),
     conditions: Array.isArray(blob.conditions),
     inspiration: typeof blob.inspiration === 'boolean',
   };
@@ -151,15 +156,16 @@ function applyDnDFlush(markdown, blob) {
   const firstRow = re => combat.find(r => re.test(r.label));
 
   // Scalars.
-  const scalar = (key, re, dflt) => {
+  const scalar = (key, re, dflt, most) => {
     const hit = firstRow(re);
     if (!hit || !carries[key]) return;
     const r = readNumber(hit.raw);
     if (r.other) return;
     const current = r.blank ? dflt : (key === 'exhaustion' ? Math.min(r.value, 6) : r.value);
     okScalar.add(key);
-    if (blob[key] === current) return;
-    if (!putNumber(hit.row, 1, hit.label, blob[key], hit.raw)) okScalar.delete(key);
+    const to = fitted(blob[key], most);
+    if (to === current) return;
+    if (!putNumber(hit.row, 1, hit.label, to, hit.raw)) okScalar.delete(key);
   };
   const maxRow = firstRow(/^HP\s*\(\s*max(imum)?\.?\s*\)$/i);
   const hpMax = maxRow && readNumber(maxRow.raw).value !== undefined ? readNumber(maxRow.raw).value : null;
@@ -170,12 +176,13 @@ function applyDnDFlush(markdown, blob) {
       if (!r.other) {
         const current = r.blank ? hpMax : Math.min(r.value, hpMax);
         okScalar.add('hp');
-        if (blob.hp !== current) { if (!putNumber(hit.row, 1, hit.label, blob.hp, hit.raw)) okScalar.delete('hp'); }
+        const to = fitted(blob.hp, hpMax);
+        if (to !== current) { if (!putNumber(hit.row, 1, hit.label, to, hit.raw)) okScalar.delete('hp'); }
       }
     }
   }
-  scalar('temp', /^temp(orary)? HP$/i, 0);
-  scalar('exhaustion', /^exhaustion$/i, 0);
+  scalar('temp', /^temp(orary)? HP$/i, 0, 9999);
+  scalar('exhaustion', /^exhaustion$/i, 0, 6);
 
   const cond = firstRow(/^conditions?$/i);
   if (cond && carries.conditions) {
@@ -202,8 +209,9 @@ function applyDnDFlush(markdown, blob) {
     claimed.add(key);
     if (!trackable(max, spent)) return;
     if (!has(key)) return;
-    if (used[key] === spent) { resolved.add(key); return; }
-    if (putNumber(row, idx, label, used[key], raw)) resolved.add(key);
+    const to = fitted(used[key], max);
+    if (to === spent) { resolved.add(key); return; }
+    if (putNumber(row, idx, label, to, raw)) resolved.add(key);
   };
 
   const hitDiceSeen = new Set();
@@ -216,8 +224,9 @@ function applyDnDFlush(markdown, blob) {
       hitDiceSeen.add(key);
       if (!trackable(+m[2], +m[1])) continue;
       if (!has(key)) continue;
-      if (used[key] === +m[1]) { resolved.add(key); continue; }
-      const to = swapDigits(raw, [used[key]]);
+      const spent = fitted(used[key], +m[2]);
+      if (spent === +m[1]) { resolved.add(key); continue; }
+      const to = swapDigits(raw, [spent]);
       if (to === null) continue;
       resolved.add(key);
       write(row, 1, label, to);
@@ -227,9 +236,10 @@ function applyDnDFlush(markdown, blob) {
   if (ds) {
     const m = filled(plain(ds.raw)).match(/^(\d+)\s*\/\s*(\d+)$/);
     if (m && +m[1] <= 3 && +m[2] <= 3 && has('ds:s') && has('ds:f')) {
-      if (used['ds:s'] === +m[1] && used['ds:f'] === +m[2]) { resolved.add('ds:s'); resolved.add('ds:f'); }
+      const made = fitted(used['ds:s'], 3), failed = fitted(used['ds:f'], 3);
+      if (made === +m[1] && failed === +m[2]) { resolved.add('ds:s'); resolved.add('ds:f'); }
       else {
-        const to = swapDigits(ds.raw, [used['ds:s'], used['ds:f']]);
+        const to = swapDigits(ds.raw, [made, failed]);
         if (to !== null) { resolved.add('ds:s'); resolved.add('ds:f'); write(ds.row, 1, ds.label, to); }
       }
     }

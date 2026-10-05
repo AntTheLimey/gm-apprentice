@@ -86,9 +86,9 @@ test('a blank Used cell and a count of 0 is no change', () => {
 
 test('a sparse old-layout note changes only where cells exist; every missing cell is named', () => {
   const old = note('Ilse_Varn_Old_Layout.md');
-  const r = applyDnDFlush(old, blob({ used: { 'class:no such feature': 1, 'slot:pact (3rd)': 2 } }));
+  const r = applyDnDFlush(old, blob({ hp: 9, used: { 'class:no such feature': 1, 'slot:pact (3rd)': 2 } }));
   assert.equal(r.markdown.split('\n').length, old.split('\n').length);
-  assert.match(row(r.markdown, /^\| HP \(Current\)/), /\| 31 \|/);
+  assert.match(row(r.markdown, /^\| HP \(Current\)/), /\| 9 \|/);
   assert.doesNotMatch(r.markdown, /Temp HP|Exhaustion|Conditions/);
   assert.deepEqual(r.skipped.slice().sort(), ['class:no such feature', 'conditions', 'exhaustion', 'slot:pact (3rd)', 'temp']);
   assert.deepEqual(r.changes.map(c => c.field).sort(), ['HP (Current)', 'Heroic Inspiration']);
@@ -232,4 +232,33 @@ test('markup that only renders as a number is skipped and named', () => {
   const r = applyDnDFlush(md, { hp: 31, used: { 'class:rage': 1 } });
   assert.equal(r.markdown, md);
   assert.deepEqual(r.skipped.sort(), ['class:rage', 'hp']);
+});
+
+// A level-up between sessions: the record was saved against the old sheet. The page cuts a
+// saved count to the note's maximum when it reads it; flush does the same, or it would leave
+// the row over-spent, which the next build draws as written and no longer tracks.
+test('a saved count above the note\'s maximum is cut to it, as the page does', () => {
+  const md = note('Brannoch_Vale.md');
+  const r = applyDnDFlush(md, blob({ hp: 99, exhaustion: 9, used: { 'slot:1st': 9, 'hd:hit dice': 8, 'class:lay on hands': 40,
+    'item:wand of magic missiles': 12, 'ds:s': 5, 'ds:f': 4 } }));
+  assert.match(row(r.markdown, /^\| HP \(Current\)/), /\| 44 \|/);
+  assert.match(row(r.markdown, /^\| Exhaustion/), /\| 6 \|/);
+  assert.match(row(r.markdown, /^\| 1st/), /^\| 1st \| 4 \| 4 \|/);
+  assert.match(row(r.markdown, /^\| Hit Dice/), /\| 5\/5 \|/);
+  assert.match(row(r.markdown, /^\| Death Saves/), /\| 3\/3 \|/);
+  assert.match(row(r.markdown, /^\| Lay on Hands/), /\| 25 \| 25 \|/);
+  assert.match(row(r.markdown, /^\| \[\[Wand_of_Magic_Missiles/), /\| 7 \| 7 \|/);
+  assert.deepEqual(r.skipped, []);
+  // What it wrote, the build still reads as live: every key keeps its track.
+  const live = text => buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(text)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }).tracks.map(t => t.key).sort();
+  assert.deepEqual(live(r.markdown), live(md));
+});
+
+test('a saved number that is not whole, or below nothing, is fitted as the page fits it', () => {
+  const r = applyDnDFlush(note('Brannoch_Vale.md'), blob({ hp: -3, temp: 2.6, exhaustion: -1, used: { 'slot:1st': -2, 'hd:hit dice': 1.4 } }));
+  assert.match(row(r.markdown, /^\| HP \(Current\)/), /\| 0 \|/);
+  assert.match(row(r.markdown, /^\| Temp HP/), /\| 3 \|/);
+  assert.match(row(r.markdown, /^\| Exhaustion/), /\| 0 \|/);
+  assert.match(row(r.markdown, /^\| 1st/), /^\| 1st \| 4 \| 0 \|/);
+  assert.match(row(r.markdown, /^\| Hit Dice/), /\| 1\/5 \|/);
 });
