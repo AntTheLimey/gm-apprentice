@@ -1,9 +1,9 @@
 'use strict';
 
 const { splitTableRow } = require('../wikilink');
-const { findHeadings } = require('../processor');
+const { findHeadings, renderInline } = require('../processor');
 const { splitReason, COLS, countCells, wholeNumber } = require('../templates/dnd/parse');
-const { ATTRIBUTE_COLUMNS, filled, yesNo } = require('../templates/sheet-parse');
+const { ATTRIBUTE_COLUMNS, cellText, filled, yesNo } = require('../templates/sheet-parse');
 const { normalizeTitle } = require('../templates/gurps/tables');
 const { liveKey, shown, trackable } = require('../templates/dnd/live-key');
 
@@ -19,10 +19,9 @@ const { liveKey, shown, trackable } = require('../templates/dnd/live-key');
 
 const FEATURE_SECTIONS = [['class features', 'class'], ['species traits', 'species'], ['feats', 'feat']];
 
-// A cell as the page shows it: links as their shown text, emphasis marks gone.
-const plain = cell => shown(String(cell == null ? '' : cell))
-  .replace(/\\\|/g, '|').replace(/\[([^\]]*)\]\([^)]*\)/g, '$1').replace(/<[^>]+>/g, '')
-  .replace(/(\*\*|__|~~|[*`])/g, '').trim();
+// A cell as the build's parser sees it: the cell rendered by the build's own markdown
+// instance (links, emphasis, the typographer's quotes), then its text.
+const plain = cell => cellText(renderInline(shown(String(cell == null ? '' : cell))));
 const hasLink = raw => /\[\[|\]\(/.test(raw);
 
 // The note's sections, subsections and tables, found as the build finds them: headings
