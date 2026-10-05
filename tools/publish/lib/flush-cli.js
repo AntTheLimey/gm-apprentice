@@ -41,6 +41,12 @@ function summarize(changes) {
   }).join(', ');
 }
 
+// A PC slug comes from a KV key a player's browser chose. It is printed only when it is plain
+// (no control or line-separator character, a sensible length); otherwise a fixed word stands in.
+function safeSlug(slug) {
+  return /^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]{1,80}$/.test(slug) ? slug : '(unrecognised name)';
+}
+
 // Which writer a PC's note takes. A PC's own frontmatter.system wins; otherwise the
 // campaign system decides (publishConfig.system, resolved as build.js does). CoC is
 // the default, as it always was: old CoC sites carry no system.
@@ -124,14 +130,14 @@ async function runFlush(deps) {
   }
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
-  const bySlug = {};
+  const bySlug = Object.create(null);
   for (const p of scan()) {
     if (p.frontmatter && p.frontmatter.type === 'pc') bySlug[pcLiveKey(p.frontmatter, p.title)] = p;
   }
 
   for (const slug of Object.keys(latest)) {
     const page = bySlug[slug];
-    if (!page) { out('⚠ ' + slug + ' — in KV but no matching vault sheet (skipped)'); continue; }
+    if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
     const name = page.displayTitle || page.title;
     const raw = readFile(page.sourcePath);
     const res = WRITERS[resolveSystem(page.frontmatter, campaignSystem)](raw, latest[slug], page, out);

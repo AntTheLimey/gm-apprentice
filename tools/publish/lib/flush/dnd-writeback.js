@@ -25,6 +25,10 @@ const { fitConditions } = require('../../js/dnd-live');
 // is never written back as markdown: a cell holding anything else is left exactly as it is.
 // No KV, no fs, no config.
 
+const MAX_NAMED = 20;
+const KEY_SHAPE = /^(?:hd|slot|class|species|feat|item|ds):[^\u0000-\u001f\u007f-\u009f\u2028\u2029]{1,80}$/;
+const wellFormedKey = k => KEY_SHAPE.test(k);
+
 const FEATURE_SECTIONS = [['class features', 'class'], ['species traits', 'species'], ['feats', 'feat']];
 
 // A cell as the build's parser sees it: the cell rendered by the build's own markdown
@@ -309,7 +313,16 @@ function applyDnDFlush(markdown, blob) {
   // Named: a value the record carries that the note could not take. A count of 0 with no
   // live row to hold it has lost nothing (a renamed feature, a row the page shows as written).
   for (const k of ['hp', 'temp', 'exhaustion', 'conditions', 'inspiration']) if (carries[k] && !okScalar.has(k)) skipped.push(k);
-  for (const k of Object.keys(used)) if (has(k) && !resolved.has(k) && (tried.has(k) || Math.round(used[k]) > 0)) skipped.push(k);
+  // A key is named only when it has the shape of a real one (the kinds live-key.js makes, a
+  // short name with no control or line-separator character). The record is public, so any
+  // other key is only counted, and past MAX_NAMED the rest are counted too: no text from the
+  // record reaches the report except a well-formed key.
+  const unplaced = Object.keys(used).filter(k => has(k) && !resolved.has(k) && (tried.has(k) || Math.round(used[k]) > 0));
+  const named = unplaced.filter(wellFormedKey);
+  const unrecognised = unplaced.length - named.length;
+  skipped.push(...named.slice(0, MAX_NAMED));
+  if (named.length > MAX_NAMED) skipped.push(`and ${named.length - MAX_NAMED} more`);
+  if (unrecognised) skipped.push(`${unrecognised} unrecognised ${unrecognised === 1 ? 'entry' : 'entries'}`);
   return { markdown: changes.length ? lines.join('\n') : markdown, changes, skipped };
 }
 
