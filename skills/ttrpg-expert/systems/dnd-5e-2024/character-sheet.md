@@ -73,6 +73,20 @@ Write a number by hand, with its reason, only for what that vocabulary cannot sa
 
 **Converting an old-layout PC** (prose features, `### Prepared Spells` lists, stats in frontmatter): read `sheet-conversion.md` beside this file first. An old note still publishes with nothing lost, so convert a PC when you next work on that character, not in bulk.
 
+### Rules checks
+
+The same run ends with the rules checks: slips in the numbers, never
+whether a choice is allowed. They never change the note.
+
+| Row | Means | Do |
+|-----|-------|----|
+| `WRONG` | The sheet contradicts itself: class levels, hit dice, attunement, more spent than owned | Fix the note, or ask the GM which number is right |
+| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `5 (ring of spell storing)`, and the row goes away |
+| `CANTCHECK` | A class is outside the free rules, the class line cannot be read, or slot totals differ for a class with no spells of its own | Mention it once. It is not a fault |
+
+Not checked: armour class, attacks, skill counts, and whether a spell,
+feat or skill pick is allowed.
+
 ## Identity Block
 
 | Field | Source |

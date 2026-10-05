@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.34"
+current_version: "1.10.35"
 ---
 
 # Vault Migration Record
@@ -41,3 +41,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.32 | A vault with no Timeline page is given an empty one, so session timeline entries have somewhere to go | every pass, see above (`timeline-page`) |
 | 1.10.33 | D&D PC template: saving-throw numbers, Senses, Bonuses and Defences, features and spells as tables (spells with a Source), Gear with weights, Carrying, Magic Items in place of the attunement slots, and an optional Companions section (copied by every-pass `templates`); existing PC notes are not changed | — |
 | 1.10.34 | D&D live sheet: no vault change. A D&D PC note is read as it is; nothing is added to it | — |
+| 1.10.35 | D&D rules checks: no vault change. The fill tool reports slips and never writes for them | — |

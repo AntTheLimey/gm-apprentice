@@ -158,6 +158,11 @@ checks, also:
   (`references/checks/wrapup-conformance.md`), not part of Graph
   Health
 
+### D&D Sheets — `references/checks/dnd-sheets.md`
+
+D&D 5e (2024) vaults only: slips in every PC's numbers (levels, hit
+dice, slots, attunement, more spent than owned), from one call.
+
 ### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`
 
 DRAFT entities left unreviewed for 3+ sessions.
@@ -178,7 +183,7 @@ entity dates vs history-timeline eras, and deferred-flag review.
 
 Run in order, reading each check file as you go: Canon Audit →
 Timeline Validation → Name Similarity → Clue Redundancy → Graph
-Health → Legacy Canon Field Repair → Stale DRAFT Detection →
+Health → D&D Sheets (D&D vaults only) → Legacy Canon Field Repair → Stale DRAFT Detection →
 Wrap-Up Conformance → World Consistency (if `_World/` exists) →
 Open Spoilers. Deduplicate across checks; present one report
 grouped by severity (Critical, Warning, Info), not by mode.

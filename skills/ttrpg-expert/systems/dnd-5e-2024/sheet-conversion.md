@@ -50,7 +50,9 @@ Things an old note usually does not say, and so must be asked:
    number across. An old `Initiative +5` on a character with Alert
    becomes a blank Initiative cell and an `Initiative | PB | Alert` row.
 7. **Run `dnd_sheet.py`**, show the GM the `FILL` rows, and write on
-   their yes. Then write the attack lines, AC, hit point maximum and
+   their yes. Then read the rules-check rows at the end of the output
+   (character-sheet.md, "Rules checks"): fix a `WRONG`, tell the GM each
+   `LOOK`. Then write the attack lines, AC, hit point maximum and
    Speed from the numbers it filled, add Gear with weights, and run it
    again.
 8. **Delete the retired frontmatter stat fields** (`ability_scores`,

@@ -260,6 +260,21 @@ Notes:
   has that table. It maintains a cell that is blank or a bare number
   and keeps one that carries a reason, `+7 (GM boon)`. AC,
   HP, Speed, attack lines and slot totals are written by hand.
+- **Rules checks.** The same tool then reports slips, and never writes
+  for them. `WRONG`: class levels that do not add up to Level, hit dice
+  that do not match the class levels, more than three attuned items,
+  Expertise without proficiency, more spent than owned, a score over 30.
+  `LOOK`, against the SRD 5.2 table for the class and level: slot
+  totals, a spell above the highest level the class prepares, more
+  cantrips or prepared spells than allowed (the cantrip allowance
+  includes the most a class option in the SRD can add), a score over 20,
+  `HP (Max)` outside what the dice allow, the class's saving throws
+  unmarked. A reason in brackets beside a number settles its `LOOK`.
+  `CANTCHECK`: a class outside the SRD. A spell whose `Source` is not
+  blank, or whose Tags include `Always prepared`, is not counted against
+  the class. When the class levels do not add up to Level, the slot,
+  spell and hit point checks are skipped. `dnd_sheet.py --party VAULT`
+  runs the checks on every PC and prints only findings.
 - **What the tool adds in.** Each readable `### Bonuses` row is added
   to the cells it names, and the report says so
   (`+7 -> +9 (incl. +2 Ring of Protection)`). A passive score is ten
