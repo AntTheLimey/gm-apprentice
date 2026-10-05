@@ -159,7 +159,8 @@ def test_cells_that_are_not_numbers_are_skipped():
 
 SLOTS = "Spellcasting / Spell Slots"
 SPELLS = "Spellcasting / Spells"
-NO_SOURCE = "; this note has no Source column, so spells from feats and items are counted too"
+NO_SOURCE = ("; this note has no Source column, so a spell from a feat or item is counted "
+             "unless its Tags name the source (`Item: …`)")
 
 
 def test_slot_totals_against_the_table():
@@ -384,3 +385,30 @@ def test_two_casters_add_their_cantrip_allowances():
     assert found(sheet(spells=cantrips(7), **base)) == []      # 3 + 3 + Thaumaturge 1
     assert found(sheet(spells=cantrips(8), **base)) == [
         ("LOOK", SPELLS, "8 cantrips; Cleric 3 / Wizard 2 allows 7")]
+
+
+# --- fix round 2 ------------------------------------------------------
+
+def test_tags_name_an_items_spells_when_there_is_no_source_column():
+    nine = spells_of(1, 9)
+    wand = (("Fireball", "3", "Item: Wand of Fireballs", ""), ("Fireball ", "3", "Item: Wand of Fireballs", ""))
+    assert found(sheet(spells=nine + wand, source_column=False)) == []
+    staff = (("Cure Wounds", "1", "C, item: Staff of Healing", ""),)
+    assert found(sheet(spells=nine + staff, source_column=False)) == []
+
+
+def test_a_colon_in_tags_means_nothing_beside_a_source_column():
+    ten = spells_of(1, 9) + (("Spell 9", "1", "Item: x", ""),)
+    assert found(sheet(spells=ten)) == [("LOOK", SPELLS, "10 spells of level 1 and up; Wizard 5 allows 9")]
+
+
+def test_a_repeated_spell_name_is_counted_once():
+    nine = spells_of(1, 9)
+    assert found(sheet(spells=nine + (("spell 3", "1", "", ""),))) == []
+    assert found(sheet(spells=spells_of(1, 10) + (("Spell 3", "1", "", ""),))) == [
+        ("LOOK", SPELLS, "10 spells of level 1 and up; Wizard 5 allows 9")]
+    four = cantrips(4) + (("Cantrip 1", "Cantrip", "", ""),)
+    assert found(sheet(spells=four)) == []
+    high = (("Cone of Cold", "5", "", ""), ("Cone of Cold", "5", "", ""))
+    assert [r[2] for r in found(sheet(spells=high))] == [
+        "level 5; the highest Wizard 5 can prepare is level 3"]

@@ -250,13 +250,19 @@ def casting(s: Sheet) -> list[Finding]:
         return out
     table = s.note.table("spellcasting", "spells")
     no_source = bool(table) and column(table[0][1], r"source$") < 0
-    said = ("; this note has no Source column, so spells from feats and items are counted too"
-            if no_source else "")
+    said = ("; this note has no Source column, so a spell from a feat or item is counted "
+            "unless its Tags name the source (`Item: …`)" if no_source else "")
     top = max(dt.max_spell_level(c.name.lower(), c.level) for c, _info in casters)
     cantrips = prepared = 0
+    counted: set[str] = set()
     for name, (level, tags, source) in s.rows("spellcasting", "spells", r"level$", r"tags$", r"source$"):
         if (source and not NOTHING.match(source)) or "always prepared" in (tags or "").lower():
             continue
+        if no_source and any(":" in tag for tag in (tags or "").split(",")):
+            continue
+        if clean(name).lower() in counted:
+            continue
+        counted.add(clean(name).lower())
         at_level = 0 if (level or "").lower() == "cantrip" else to_int(level or "")
         if at_level is None or not 0 <= at_level <= 9:
             continue
