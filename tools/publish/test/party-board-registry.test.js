@@ -23,7 +23,7 @@ test('boardFor maps CoC / Regency aliases to the CoC skin', () => {
 });
 
 test('boardFor returns null for unknown/absent systems', () => {
-  assert.equal(boardFor('dnd-5e-2024'), null);
+  assert.equal(boardFor('pf2e'), null);
   assert.equal(boardFor(null), null);
   assert.equal(boardFor(undefined), null);
 });

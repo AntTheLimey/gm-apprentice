@@ -10,6 +10,7 @@ function site(liveStats, mutate) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-dnd-live-'));
   const vault = path.join(work, 'vault');
   fs.cpSync(path.join(FIXTURES, 'with-dnd-pc'), vault, { recursive: true });
+  fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Player Characters.md'), '---\ntype: pc_roster\ncanon_status: AUTHORITATIVE\n---\n\n# Player Characters\n\nThe party.\n');
   if (mutate) mutate(vault);
   if (liveStats) {
     const cfg = path.join(vault, '_meta', 'vault-config.md');
@@ -26,7 +27,8 @@ function site(liveStats, mutate) {
   console.warn = (...a) => { warned.push(a.join(' ')); };
   try { build({ configPath, assumeKv: true }); } finally { console.warn = realWarn; }
   const page = slug => fs.readFileSync(path.join(work, 'docs', 'characters', 'pcs', slug + '.html'), 'utf8');
-  return { work, page, warned };
+  const roster = () => fs.readFileSync(path.join(work, 'docs', 'characters', 'pcs', 'player-characters.html'), 'utf8');
+  return { work, page, roster, warned };
 }
 const islandOf = html => JSON.parse(html.match(/<script type="application\/json" id="dnd-live-data">([\s\S]*?)<\/script>/)[1].replace(/\\u003c/g, '<'));
 
@@ -79,6 +81,16 @@ describe('build integration: D&D live sheet', () => {
     assert.ok(item, 'a magic item track');
     assert.doesNotMatch(item.key, /\[|\||\\/);
     assert.ok(html.includes(`data-live="${item.key}"`), `no hook for ${item.key}`);
+  });
+
+  it('the party page: a board with a row per PC; the live layer only when live is on', () => {
+    const live = on.roster(), still = off.roster();
+    assert.match(live, /data-gl-party="brannoch-vale"/);
+    assert.match(live, /id="dnd-party-data"/);
+    assert.ok(live.indexOf('js/party-core.js') < live.indexOf('js/dnd-live.js'));
+    assert.ok(live.indexOf('js/dnd-live.js') < live.indexOf('js/dnd-party.js'));
+    assert.match(still, /data-gl-party="brannoch-vale"/);
+    assert.doesNotMatch(still, /dnd-party-data|dnd-party\.js/);
   });
 
   it('live off: no hook, no island, no script', () => {

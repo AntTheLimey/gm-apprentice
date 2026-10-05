@@ -63,7 +63,9 @@ describe('buildDndLiveData', () => {
     const d = island('Brannoch_Vale.md');
     assert.equal(d.system, 'dnd');
     assert.equal(d.campaignId, 'camp');
-    assert.equal(typeof d.hpMax, 'number');
+    assert.equal(d.hpMax, 44);
+    assert.deepEqual(d.defaults, { hp: 38, temp: 0, exhaustion: 0, inspiration: true, concentrating: false, conditions: [], used: d.defaults.used });
+    assert.equal(d.defaults.used['hd:hit dice'], 1);
     assert.deepEqual(track(d, 'hd:hit dice'), { key: 'hd:hit dice', label: 'Hit Dice', max: 5, used: 1, rest: 'long' });
     assert.equal(track(d, 'class:channel divinity').rest, 'short1');
     assert.equal(track(d, 'class:channel divinity').used, 1);
@@ -108,7 +110,40 @@ describe('buildDndLiveData', () => {
   });
   it('board facts are the note\'s own words', () => {
     const d = island('Brannoch_Vale.md');
-    assert.equal(typeof d.board.ac, 'string');
-    assert.ok(d.board.who.length > 0);
+    assert.deepEqual(d.board, { who: 'Paladin 5 (Oath of Devotion)', ac: '20', pp: '14', dc: '14' });
+    assert.equal(d.defaults.hp, 38);
+    assert.equal(d.hpMax, 44);
+  });
+  it('who is the class text alone when it carries its level, with the level when it does not', () => {
+    assert.equal(island('Tamsin_Reed.md').board.who, 'Fighter 3 (Champion) / Wizard 2');
+    assert.equal(island('Perrin_Lowe.md').board.who, 'Bard 2');
+    assert.equal(island('Ilse_Varn_Old_Layout.md').board.who, 'Level 3 Wizard (Evoker)');
+  });
+  it('the first Spell Save DC row is the spell DC, even with a class in brackets', () => {
+    const md = '## Spellcasting\n\n| Attribute | Value |\n|---|---|\n| Spellcasting Ability | INT |\n| Spell Save DC (Wizard) | 13 |\n| Spell Save DC (Cleric) | 15 |\n';
+    const m = parseDnd({ type: 'pc' }, sectionsFromMarkdown(md));
+    m.combat = { hpMax: '10' };
+    assert.equal(buildDndLiveData(m, META).board.dc, '13');
+  });
+  describe('defaults from the note', () => {
+    const withCombat = combat => {
+      const m = parseDnd({ type: 'pc' }, sectionsFromMarkdown('## Notes\n\nNothing here.\n'));
+      Object.assign(m.combat, combat);
+      return buildDndLiveData(m, META);
+    };
+    it('current hit points above the maximum are cut to the maximum', () => {
+      const d = withCombat({ hpCur: '60', hpMax: '44' });
+      assert.equal(d.defaults.hp, 44);
+    });
+    it('temporary hit points default to 0 and are read when given', () => {
+      assert.equal(withCombat({ hpMax: '44' }).defaults.temp, 0);
+      assert.equal(withCombat({ hpMax: '44', tempHp: '5' }).defaults.temp, 5);
+    });
+    it('exhaustion is cut to 6', () => {
+      assert.equal(withCombat({ hpMax: '44', exhaustion: '9' }).defaults.exhaustion, 6);
+    });
+    it('conditions are read from the note', () => {
+      assert.deepEqual(withCombat({ hpMax: '44', conditions: 'Poisoned, Prone' }).defaults.conditions, ['Poisoned', 'Prone']);
+    });
   });
 });

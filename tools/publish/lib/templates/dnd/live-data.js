@@ -22,7 +22,16 @@ function whole(text) {
   return /^\d+$/.test(value.trim()) ? Number(value) : null;
 }
 
-const firstValue = (rows, re) => { const row = (rows || []).find(([label]) => re.test(label)); return row ? String(row[1] || '') : ''; };
+const firstValue = (rows, re) => { const row = (rows || []).find(([label]) => re.test(shown(label))); return row ? String(row[1] || '') : ''; };
+
+// A class text such as "Paladin 5 (Oath of Devotion)" already carries its level; one such as
+// "Wizard (Evoker)" does not, so the character level goes in front.
+function whoOf(header) {
+  const classes = String(header.classes || '').trim();
+  if (!classes) return header.level ? `Level ${header.level}` : '';
+  if (/\d/.test(classes) || !header.level) return classes;
+  return `Level ${header.level} ${classes}`;
+}
 
 function buildDndLiveData(model, meta) {
   const c = model.combat || {};
@@ -76,10 +85,10 @@ function buildDndLiveData(model, meta) {
     },
     tracks,
     board: {
-      who: [model.header.level ? `Level ${model.header.level}` : '', model.header.classes].filter(Boolean).join(' '),
+      who: whoOf(model.header),
       ac: splitReason(c.ac).value,
       pp: splitReason(firstValue(model.senses, /^passive perception$/i)).value,
-      dc: splitReason(firstValue(model.casting, /spell save dc$/i)).value,
+      dc: splitReason(firstValue(model.casting, /^spell save dc(\s*\(.+\))?$/i)).value,
     },
     warnings,
   };
