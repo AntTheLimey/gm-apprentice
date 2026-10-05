@@ -121,6 +121,51 @@ describe('build integration: D&D live sheet', () => {
     }
   });
 
+  it('of two rows with one name only the first is tappable; the second is drawn as the note has it', () => {
+    // Channel Divinity (2 uses, 1 used) twice, the second with 5 uses and none used; and two 1st-level slot rows.
+    const dup = vault => {
+      const f = path.join(vault, 'Characters', 'PCs', 'Brannoch_Vale.md');
+      let text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+      const cd = text.split('\n').find(l => l.startsWith('| Channel Divinity |'));
+      assert.ok(cd && cd.includes('| 2 | 1 |'), 'fixture row changed');
+      text = text.replace(cd, cd + '\n' + cd.replace('| 2 | 1 |', '| 5 | 0 |'));
+      const slot = text.split('\n').find(l => l.startsWith('| 1st | 4 | 1 |'));
+      assert.ok(slot, 'fixture row changed');
+      text = text.replace(slot, slot + '\n| 1st | 3 | 0 |');
+      fs.writeFileSync(f, text);
+    };
+    const s = site(true, dup);
+    try {
+      const html = s.page('brannoch-vale');
+      const d = islandOf(html);
+      assert.equal(d.tracks.filter(t => t.key === 'class:channel divinity').length, 1);
+      assert.equal(d.tracks.find(t => t.key === 'class:channel divinity').max, 2);
+      for (const [key, max] of [['class:channel divinity', 2], ['slot:1st', 4]]) {
+        const hooked = [...html.matchAll(new RegExp(`<span class="dnd5e-marks dnd5e-live" data-live="${key}"[^>]*>((?:<button[^>]*></button>)*)</span>`, 'g'))];
+        assert.ok(hooked.length >= 1, key);
+        for (const h of hooked) assert.equal((h[1].match(/<button/g) || []).length, max, `${key}: a hooked group has the first row's marks`);
+      }
+      // The later rows are on the page, as marks nobody can tap.
+      assert.match(html, /<span class="dnd5e-marks" role="img" aria-label="Channel Divinity: 5 of 5 left">/);
+      assert.match(html, /<span class="dnd5e-marks" role="img" aria-label="Spell slots, 1st: 3 of 3 left">/);
+    } finally { fs.rmSync(s.work, { recursive: true, force: true }); }
+  });
+
+  it('a Conditions cell that says None is no condition, on the page and on the party board', () => {
+    const none = vault => {
+      const f = path.join(vault, 'Characters', 'PCs', 'Brannoch_Vale.md');
+      const text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+      assert.match(text, /^\| Conditions \|[^|]*\|$/m);
+      fs.writeFileSync(f, text.replace(/^\| Conditions \|[^|]*\|$/m, '| Conditions | None |'));
+    };
+    const s = site(true, none);
+    try {
+      assert.deepEqual(islandOf(s.page('brannoch-vale')).defaults.conditions, []);
+      const row = s.roster().match(/<tr class="gl-party-row[^"]*" data-gl-party="brannoch-vale">[\s\S]*?<\/tr>/)[0];
+      assert.doesNotMatch(row, /None|cond-wound/);
+    } finally { fs.rmSync(s.work, { recursive: true, force: true }); }
+  });
+
   it('a duplicate-named live row warns only when live is on', () => {
     const dup = vault => {
       const f = path.join(vault, 'Characters', 'PCs', 'Brannoch_Vale.md');
@@ -131,8 +176,8 @@ describe('build integration: D&D live sheet', () => {
     const withLive = site(true, dup);
     const without = site(false, dup);
     try {
-      assert.ok(withLive.warned.some(w => /share one count/.test(w)));
-      assert.ok(!without.warned.some(w => /share one count/.test(w)));
+      assert.ok(withLive.warned.some(w => /only the first is live/.test(w)));
+      assert.ok(!without.warned.some(w => /only the first is live/.test(w)));
     } finally {
       for (const s of [withLive, without]) fs.rmSync(s.work, { recursive: true, force: true });
     }

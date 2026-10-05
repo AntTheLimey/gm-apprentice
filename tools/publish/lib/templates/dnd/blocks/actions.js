@@ -17,7 +17,7 @@ function renderActions(model) {
   return GROUPS.map(([kind, key, title]) => {
     const parts = features
       .filter(([f]) => String(f.action || '').trim().toLowerCase() === kind)
-      .map(([f, from]) => entry({ nameHtml: f.nameHtml, summaryHtml: f.summaryHtml, usesHtml: usesHtml(f, liveOf(model, liveKey(from, shown(f.name)))) }));
+      .map(([f, from]) => entry({ nameHtml: f.nameHtml, summaryHtml: f.summaryHtml, usesHtml: usesHtml(f, liveOf(model, liveKey(from, shown(f.name)), undefined, f)) }));
     // Spells cast as a plain action are not listed here; they live on the Spells tab.
     const names = kind === 'action' ? [] : (model.spells || [])
       .filter(s => new RegExp(`^(?:1\\s+)?${kind}\\b`).test(String(s.time || '').trim().toLowerCase()))

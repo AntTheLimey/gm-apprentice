@@ -17,9 +17,12 @@ function renderDnDSheet(frontmatter, sections, meta) {
   if (liveData) {
     // Only a site that turned live on is told about its live rows.
     if (meta.live) model.warnings.push(...liveData.warnings);
+    const liveRows = liveData.rows;
     delete liveData.warnings;
+    delete liveData.rows;
     if (meta.live) {
       model.liveKeys = new Set(liveData.tracks.map(t => t.key));
+      model.liveRows = liveRows;
       model.liveHp = liveData.hpMax !== null;
     }
   }

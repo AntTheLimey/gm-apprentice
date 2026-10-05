@@ -4,8 +4,11 @@
 const liveKey = (kind, name) => `${kind}:${String(name || '').trim().replace(/\s+/g, ' ').toLowerCase()}`;
 
 // What a block passes to `marks` so a mark is drawn tappable. Undefined unless
-// the page is live and this key has a track.
-const liveOf = (model, key, fill) => (model && model.liveKeys && model.liveKeys.has(key) ? { key, fill } : undefined);
+// the page is live and this key has a track. Given the row it is drawing (`row`, the
+// model's own object), a block gets an answer only for the row that owns the key: a
+// later row of the same name is drawn as the note has it.
+const liveOf = (model, key, fill, row) => (model && model.liveKeys && model.liveKeys.has(key)
+  && (row === undefined || (model.liveRows && model.liveRows.has(row))) ? { key, fill } : undefined);
 
 // The text a name shows on the page. The write-back matches rows with this too.
 // [[Target|Shown]] and [[Target\|Shown]] give Shown; [[Ilse_Varn]] gives its file
@@ -20,4 +23,8 @@ const shown = name => String(name || '').replace(/\[\[([^\]]*)\]\]/g, (_, inner)
 // Anything else is drawn as written, so the write-back leaves its cell alone.
 const trackable = (max, used) => max > 0 && used <= max;
 
-module.exports = { liveKey, liveOf, shown, trackable };
+// A cell that holds nothing: blank, or a dash of any length typed to say so. The build's
+// live data and the write-back both read a number cell and a Conditions cell with this.
+const holdsNothing = text => /^[—–-]?$/.test(String(text == null ? '' : text).trim());
+
+module.exports = { liveKey, liveOf, shown, trackable, holdsNothing };

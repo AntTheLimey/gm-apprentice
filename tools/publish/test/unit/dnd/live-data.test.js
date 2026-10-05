@@ -23,6 +23,12 @@ describe('liveKey', () => {
     assert.deepEqual(liveOf({ liveKeys: new Set(['ds:s']) }, 'ds:s', 'made'), { key: 'ds:s', fill: 'made' });
     assert.equal(liveOf({ liveKeys: new Set(['ds:s']) }, 'ds:f'), undefined);
   });
+  it('liveOf, given the row, answers only for the row that owns the key', () => {
+    const first = {}, second = {};
+    const m = { liveKeys: new Set(['class:rage']), liveRows: new Set([first]) };
+    assert.deepEqual(liveOf(m, 'class:rage', undefined, first), { key: 'class:rage', fill: undefined });
+    assert.equal(liveOf(m, 'class:rage', undefined, second), undefined);
+  });
 });
 
 describe('shown', () => {
@@ -51,6 +57,11 @@ describe('conditionsOf', () => {
     assert.deepEqual(conditionsOf('Poisoned,  Cursed by the well'), ['Poisoned', 'Cursed by the well']);
     assert.deepEqual(conditionsOf('—'), []);
     assert.deepEqual(conditionsOf(''), []);
+  });
+  it('a cell that says there are none holds no condition', () => {
+    for (const t of ['None', 'none', 'NONE', 'N/A', 'n/a', 'No', '-', '–', '—', ' none ']) assert.deepEqual(conditionsOf(t), [], t);
+    assert.deepEqual(conditionsOf('None, Prone'), ['Prone']);
+    assert.deepEqual(conditionsOf('Nonesuch, No sleep'), ['Nonesuch', 'No sleep']);
   });
   it('there are 14 standard conditions and Exhaustion is not one', () => {
     assert.equal(STANDARD_CONDITIONS.length, 14);
@@ -106,11 +117,19 @@ describe('buildDndLiveData', () => {
   it('nothing readable: no island', () => {
     assert.equal(buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown('## Notes\n\nNothing here.\n')), META), null);
   });
-  it('two rows with one name share a count and say so', () => {
+  it('two rows with one name: one track, and the build says so', () => {
     const md = '## Class Features\n\n| Name | Action | Uses | Used | Recovers | Summary |\n|---|---|---|---|---|---|\n| Rage |  | 2 | 0 | Long Rest | a |\n| Rage |  | 3 | 1 | Long Rest | b |\n';
     const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), META);
     assert.equal(d.tracks.filter(t => t.key === 'class:rage').length, 1);
     assert.match(d.warnings[0], /Rage/);
+    assert.match(d.warnings[0], /only the first is live/);
+  });
+  it('the rows that own a key are told apart from a later row of the same name', () => {
+    const md = '## Class Features\n\n| Name | Action | Uses | Used | Recovers | Summary |\n|---|---|---|---|---|---|\n| Rage |  | 2 | 0 | Long Rest | a |\n| Rage |  | 3 | 1 | Long Rest | b |\n';
+    const m = parseDnd({ type: 'pc' }, sectionsFromMarkdown(md));
+    const d = buildDndLiveData(m, META);
+    assert.equal(d.rows.has(m.features.class[0]), true);
+    assert.equal(d.rows.has(m.features.class[1]), false);
   });
   it('a name whose first row is not live keeps the key: a later row of it is not live either', () => {
     const md = '## Class Features\n\n| Name | Action | Uses | Used | Recovers | Summary |\n|---|---|---|---|---|---|\n| Rage |  | 2 | 3 | Long Rest | a |\n| Rage |  | 3 | 1 | Long Rest | b |\n';
@@ -132,6 +151,40 @@ describe('buildDndLiveData', () => {
     }
     for (const t of [undefined, '', '  ', '0', '5', '5 (false life)']) assert.equal(tempLive(t), true, String(t));
     for (const t of ['2d4', 'lots', '5 temp']) assert.equal(tempLive(t), false, t);
+  });
+  const bare = combat => {
+    const m = parseDnd({ type: 'pc' }, sectionsFromMarkdown('## Class Features\n\n| Name | Action | Uses | Used | Recovers | Summary |\n|---|---|---|---|---|---|\n| Rage |  | 2 | 0 | Long Rest | a |\n'));
+    Object.assign(m.combat, combat);
+    return buildDndLiveData(m, META);
+  };
+  it('a hyphen or a dash in Temp HP, Exhaustion or HP (Current) reads as blank', () => {
+    for (const dash of ['-', '–', '—']) {
+      const d = bare({ hpMax: '44', hpCur: dash, tempHp: dash, exhaustion: dash });
+      assert.equal(d.hpMax, 44, dash);
+      assert.equal(d.defaults.hp, 44, dash);
+      assert.equal(d.tempLive, true, dash);
+      assert.equal(d.defaults.temp, 0, dash);
+      assert.equal(d.exhaustionLive, true, dash);
+      assert.equal(d.defaults.exhaustion, 0, dash);
+    }
+  });
+  it('words in HP (Current) are shown as written: hit points are not live, and the page invents no number', () => {
+    const d = bare({ hpMax: '44', hpCur: 'about half' });
+    assert.equal(d.hpMax, null);
+    assert.equal(d.defaults.hp, null);
+    assert.ok(d.tracks.length > 0);
+    // With nothing else to follow there is no island at all.
+    const m = parseDnd({ type: 'pc' }, sectionsFromMarkdown('## Notes\n\nNothing here.\n'));
+    Object.assign(m.combat, { hpMax: '44', hpCur: 'about half' });
+    assert.equal(buildDndLiveData(m, META), null);
+  });
+  it('with no hit point tile there is nowhere to set temporary hit points, so they are not live', () => {
+    for (const combat of [{ hpMax: 'see GM' }, { hpMax: '' }, { hpMax: '44', hpCur: 'about half' }]) {
+      const d = bare(Object.assign({ tempHp: '5' }, combat));
+      assert.equal(d.hpMax, null);
+      assert.equal(d.tempLive, false, JSON.stringify(combat));
+    }
+    assert.equal(bare({ hpMax: '44', tempHp: '5' }).tempLive, true);
   });
   it('board facts are the note\'s own words', () => {
     const d = island('Brannoch_Vale.md');

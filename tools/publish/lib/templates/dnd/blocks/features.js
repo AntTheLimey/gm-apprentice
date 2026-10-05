@@ -6,7 +6,7 @@ const HOME = { class: 'classFeatures', species: 'speciesTraits', feats: 'feats' 
 
 function renderFeatures(model, list, title) {
   const entries = (model.features[list] || []).map(f => entry({
-    nameHtml: f.nameHtml, tags: [f.action], summaryHtml: f.summaryHtml, usesHtml: usesHtml(f, liveOf(model, liveKey(KIND[list], shown(f.name)))),
+    nameHtml: f.nameHtml, tags: [f.action], summaryHtml: f.summaryHtml, usesHtml: usesHtml(f, liveOf(model, liveKey(KIND[list], shown(f.name)), undefined, f)),
   })).join('');
   return block(`features-${list}`, title, entries + asWritten(model.asWritten[HOME[list]]));
 }

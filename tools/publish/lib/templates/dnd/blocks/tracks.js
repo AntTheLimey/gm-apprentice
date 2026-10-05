@@ -14,7 +14,7 @@ function saves(name, count, label, live) {
 function renderTracks(model) {
   const c = model.combat || {};
   const rows = (c.hitDice || []).map(h => track(h.label, h.raw !== undefined
-    ? escapeHtml(h.raw) : marks(h.max, h.spent, h.label, liveOf(model, liveKey('hd', shown(h.label))))));
+    ? escapeHtml(h.raw) : marks(h.max, h.spent, h.label, liveOf(model, liveKey('hd', shown(h.label)), undefined, h))));
   const d = c.deathSaves;
   if (d) {
     if (d.raw !== undefined) rows.push(track('Death saves', escapeHtml(d.raw)));
