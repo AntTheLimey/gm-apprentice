@@ -272,7 +272,10 @@ Notes:
   includes the most a class option in the SRD can add), a score over 20,
   `HP (Max)` outside what the dice allow, the class's saving throws
   unmarked. A reason in brackets beside a number settles its `LOOK` for a
-  slot total, a score over 20 and `HP (Max)` only. A spell whose `Source`
+  score over 20 and `HP (Max)` only; the page reads a slot Total only as
+  a bare number, so a slot total that is right is left as it is. A
+  Warlock's `Pact (3rd)` row is held to the Warlock's own count and slot
+  level. A spell whose `Source`
   is not blank, or whose Tags include `Always prepared`, is not counted
   against the class; in a note with no `Source` column, a Tags entry with
   a colon (`Item: Staff of Healing`) marks the source; a spell listed

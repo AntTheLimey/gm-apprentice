@@ -82,27 +82,37 @@ report has an `ERROR` row, the rules checks do not run: fix the note first.
 
 | Row | Means | Do |
 |-----|-------|----|
-| `WRONG` | The sheet contradicts itself: class levels, hit dice, more than three attuned items (a `LOOK` when the class is outside the free rules), more spent than owned, current hit points above the maximum, a death-save count above 3 | Fix the note, or ask the GM which number is right |
-| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `5 (ring of spell storing)`, and the row goes away (only for slot totals, a score over 20 and `HP (Max)`; see below) |
+| `WRONG` | The sheet contradicts itself: class levels, hit dice, Expertise without proficiency, more spent than owned, current hit points above the maximum, a death-save count above 3, a score over 30, more than three attuned items (`WRONG` when every class is in the free rules; a `LOOK` whenever the class line cannot be read or names a class outside them) | Fix the note, or ask the GM which number is right |
+| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `22 (belt of giant strength)`, and the row goes away. That works for a score over 20 and for `HP (Max)` only; the other `LOOK` rows are handled as listed below |
 | `CANTCHECK` | A class is outside the free rules, the class line cannot be read, or slot totals differ for a class with no spells of its own | Mention it once. It is not a fault |
 
 Other `LOOK` rows have no cell for a reason:
 
+- Slot totals: a Warlock's `Pact (3rd)` row is held to the Warlock's own
+  count and slot level, and the numbered rows to the rest. The page reads
+  a slot Total only as a bare number, so a reason in brackets there would
+  take that row off the live sheet. If the total is right for the
+  character, tell the GM once and leave the row.
 - Cantrip or prepared-spell counts, or a spell above what the class can
   prepare: a spell from an item, feat or species trait is left out of the
   count when its `Source` cell says so; one the character always has
   prepared is left out when its Tags include `Always prepared`. In a note
   with the earlier nine-column spell table (no `Source` column), a Tags
   entry with a colon, `Item: Staff of Healing`, marks the source. A spell
-  listed twice counts once. If the count is still over and the GM allows
-  it, write nothing: tell the GM once and leave it.
+  listed twice counts once. Spells the character always has from a
+  subclass (a Paladin's oath spells, a Cleric's domain spells) need
+  `Always prepared` in Tags; spells from a feature that grants them apart
+  from the class's own list (a Warlock's Pact of the Tome rituals) take
+  the feature's name in `Source`. If the count is still over and the GM
+  allows it, write nothing: tell the GM once and leave it.
 - The saving-throws row: correct the Save Proficiency marks, or leave it
   if the GM says the character is built that way.
 
 Known limits: a Wizard whose Spells table lists the whole spellbook, not
 only what is prepared, shows a prepared-count `LOOK`. A multiclass
 character's hit point and spell-level ranges are the widest its classes
-allow, so some slips pass.
+allow, so some slips pass. A Paladin/Ranger multiclass with both levels
+odd may show a slot `LOOK` (the free rules can be read two ways).
 
 Not checked: armour class, attacks, skill counts, and whether a spell,
 feat or skill pick is allowed.

@@ -144,7 +144,7 @@ Write the PC note in the template's layout, following "Writing the Sheet in the 
    python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "path/to/PC.md"
    ```
 
-   Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes. Then read the rules-check rows at the end of the output (character-sheet.md, "Rules checks"): fix a `WRONG`, tell the GM each `LOOK`.
+   Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes.
 3. Read the modifiers and the proficiency bonus it filled, and write what it leaves to you (too many features move these for a sum to be trusted):
 
    | Number | How it is made |
@@ -155,7 +155,7 @@ Write the PC note in the template's layout, following "Writing the Sheet in the 
    | Damage cantrip | its own row: spell attack modifier, or `DC 13 Wis` when the target saves |
    | Hit point maximum, Speed | the tables below and the species |
 
-4. Give every carried thing a `### Gear` row with the weight of one (weights are in equipment.md), then run the tool again: it totals the weight and sets the Carrying values.
+4. Give every carried thing a `### Gear` row with the weight of one (weights are in equipment.md), then run the tool again: it totals the weight and sets the Carrying values. The sheet is now complete, so read the rules-check rows at the end of this run (character-sheet.md, "Rules checks"): fix a `WRONG`, tell the GM each `LOOK`.
 
 An unused `## Spellcasting` or `## Companions` section is deleted, and so are slot rows above the character's highest slot level.
 

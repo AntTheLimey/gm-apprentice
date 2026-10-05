@@ -18,8 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   maximum, a death-save count above 3; and, against the free
   rules' table for the class and level, slot totals, a spell too high to
   prepare, too many cantrips or prepared spells, a score over 20, hit
-  points outside what the dice allow, and the class's saving throws. A
-  reason in brackets beside a number settles it. A class outside the free
+  points outside what the dice allow, and the class's saving throws,
+  including a Warlock's `Pact` slot row. A reason in brackets beside a
+  score over 20 or `HP (Max)` settles it. A class outside the free
   rules is named once and never called wrong. `--party` checks every
   character in a vault in one call, and campaign QA uses it.
 
