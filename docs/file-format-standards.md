@@ -216,9 +216,11 @@ Vocabulary the page acts on:
 - **Uses / Used**: whole numbers. Ten or fewer are drawn as marks,
   more as `18 / 25`.
 - **Recovers**: `Long Rest`, `Short Rest`, or
-  `1 Short Rest, all Long Rest`. Anything else (`Dawn`) is shown and
-  left to the player. Hit dice and spell slots have no Recovers cell;
-  the `Pact` row is the short-rest one.
+  `1 Short Rest, all Long Rest`, matched whatever their capitals. The
+  live sheet's rest buttons act on these three. Anything else (`Dawn`)
+  or a blank is shown and left to the player. Hit dice and spell slots
+  have no Recovers cell: both return on a long rest, and a slot row
+  whose level starts `Pact` returns on a short rest too.
 - **Tags** (spells): comma-separated. `C` (concentration) and `R`
   (ritual) are recognised; the rest are shown (`Always prepared`).
 - **Level** (spells): `Cantrip` or `1` to `9`; the page groups by it.
@@ -333,6 +335,47 @@ Notes:
   its "Omit this section" and "Delete this section" notes are not content, and a Spellcasting
   section with nothing filled in is left out, so a non-caster has no
   Spells tab. Braces an author wrote are kept.
+
+### Cells the live sheet writes back
+
+With live stats on, a player changes these values on the page, the site
+saves them, and `gm-apprentice-publish flush` writes them into the note
+(`tools/publish/lib/flush/dnd-writeback.js`). Only the cell changes: no
+row or column is added, and a cell is written only when the value
+differs.
+
+| Cell | Where | Format |
+|------|-------|--------|
+| `HP (Current)` | `### Combat` | a whole number; a reason in brackets after it is kept (`31 (after the fall)`). Blank reads as the maximum |
+| `Temp HP` | `### Combat` | a whole number, a reason kept; blank reads as 0 |
+| `Hit Dice (Spent/Max)` | `### Combat`, each `Hit Dice` row | `s/m`; only `s` is written |
+| `Death Saves (S/F)` | `### Combat` | `s/f`, each 0 to 3 |
+| `Exhaustion` | `### Combat` | a whole number, 0 to 6, a reason kept; blank reads as 0 |
+| `Conditions` | `### Combat` | names joined by `, `; `—` for none |
+| `Heroic Inspiration` | `### Core` | `Yes` or `No` |
+| `Expended` | `### Spell Slots` | a whole number, no more than `Total`; blank reads as 0 |
+| `Used` | `## Class Features`, `## Species Traits`, `## Feats`, `### Magic Items` | a whole number, no more than `Uses` or `Charges`; blank reads as 0 |
+
+- **A cell the page could not read is not live and is never written.**
+  That is any cell above that is not in its format, `HP (Current)` when
+  `HP (Max)` is not a whole number, and any row the renderer shows as
+  written (see "Tables are read by position" above). The page never
+  invents a maximum.
+- **Of two rows with the same name in one table, only the first is
+  live.** The build warns, and the second row is never written.
+- **A row is matched by the name the page shows**, so a linked feature
+  or item name works: `[[Target|Shown]]` by `Shown`, `[[Ilse_Varn]]` by
+  its file name with underscores as spaces. Capitals do not matter.
+- **Concentrating is never saved to the note**, and a rest never sets
+  Heroic Inspiration.
+- **A value with no cell to take it is skipped**, and `flush` names it
+  (`no cell in the note for: ...`). An old-layout note is written only
+  where its cells exist.
+- **The saved value wins over the note for 30 days.** While it lasts,
+  editing one of these cells in the note does not change the page. The
+  maxima (`HP (Max)`, `Uses`, `Charges`, `Total`, the maximum half of
+  hit dice) always come from the note, and a saved count above a new
+  maximum is cut to it.
 
 ---
 

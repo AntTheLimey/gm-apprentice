@@ -26,9 +26,9 @@ does the waiting, and you only wake when a request actually arrives.
     "When character sheets are off" below.
   - The command fails: act as if character sheets are on, and tell the GM
     you could not check.
-- With character sheets on, the system is GURPS 4e or CoC 7e (including
-  Regency Cthulhu). For any other system, stop and tell the GM sheet
-  changes aren't supported yet. With character sheets off this gate does
+- With character sheets on, the system is GURPS 4e, CoC 7e (including
+  Regency Cthulhu) or D&D 5e (2024). For any other system, stop and tell
+  the GM sheet changes aren't supported yet. With character sheets off this gate does
   not apply: the loop is a question channel for every system.
 
 ## Start
@@ -170,7 +170,8 @@ first from the PC's `.md`:
 2. **Change → apply, or refuse only when you must.** Default to trusting the
    player. **CoC 7e:** follow "CoC 7e changes" below instead of the GURPS
    cost checks; the grant, override and ambiguity rules in this step still
-   apply. **GURPS 4e:** validate spends against GURPS costs using `ttrpg-expert`'s references
+   apply. **D&D 5e:** follow "D&D 5e changes" below; there is no cost to
+   check, and the ambiguity rule in this step still applies. **GURPS 4e:** validate spends against GURPS costs using `ttrpg-expert`'s references
    (`systems/gurps-4e/character-generation.md`, `character-sheet.md`,
    `skills-*.md`, `traits-*.md`). Attributes: ST/HT 10/level, DX/IQ 20/level;
    skills/traits per those references. Then:
@@ -279,8 +280,8 @@ only GURPS and CoC. The Start, watcher, failure and Stop sections apply
 unchanged. "When a batch arrives" changes:
 
 - **Every request is a question.** Step 0 (resolve the `character`) still
-  applies. Skip step 1's classification, step 2 and "CoC 7e changes"
-  entirely, whatever the system.
+  applies. Skip step 1's classification, step 2, "CoC 7e changes" and
+  "D&D 5e changes" entirely, whatever the system.
 - **Never edit a PC note.** Apply no edit of any kind to a PC's `.md`. That
   includes the Notes and Current Status self-service that is applied when
   sheets are on. Do not track a running value, and never finalize with
@@ -360,6 +361,78 @@ ask which.
   end-of-session improvement rolls, which the GM runs. Apply nothing,
   finalize with **`rejected`** saying so, and log a `⚠` line.
 
+## D&D 5e changes
+
+D&D has no points pool, so nothing is costed: the table has already made the
+ruling and you record it. Everything else (roster match, questions, the
+ambiguity rule, the one deploy per batch, replies) is the same as for GURPS.
+The note's layout, and how each cell is written, is in `ttrpg-expert`'s
+`systems/dnd-5e-2024/character-sheet.md` under "Writing the Sheet in the
+Vault". Follow it; it is not repeated here.
+
+- **Notes and Current Status: always apply.** As for CoC.
+- **Check whether the sheet is live-tracked.** Look at what the site built,
+  not the config: the PC's built page in the site's output folder contains
+  `id="dnd-live-data"` when it is live.
+- **Values the live sheet holds:** hit points, temporary hit points, death
+  saves, hit dice spent, spell slots expended, a feature's uses, a magic
+  item's charges, conditions, exhaustion, Heroic Inspiration, and a short or
+  long rest ("took 9 damage", "used a 2nd-level slot", "I'm poisoned", "we
+  took a long rest").
+  - **Live-tracked:** the player changes these on their own sheet and they
+    save at once. The value saved on the site wins over the note's cell for
+    30 days, so an edit to the note would be silently ignored. Apply nothing
+    and finalize with **`advice`**:
+
+    ```bash
+    npx gm-apprentice-publish inbox reply <id> advice "That's live on your sheet: change it there and it saves straight away. Hit points, slots, uses, conditions and both rests are on the page."
+    ```
+
+    One exception: a thing the page shows as plain text with nothing to tap
+    is not live, because its cell could not be read (hit dice not written
+    `2/5`, a `Used` above its `Uses`). Nothing is saved for it, so fix the
+    cell in the note so that it reads, then treat it as a sheet change below.
+  - **Not live-tracked:** the page shows these as the note has them. Edit
+    the cell and collect the request into the applied batch. Keep hit
+    points between 0 and `HP (Max)`, and a `Used` or `Expended` count
+    between 0 and its total. For a rest, change only the cells the player
+    lists; do not work out what a rest restores.
+- **Any other sheet change** (a level-up, a new spell, feature or feat, new
+  gear or a magic item, an ability score, a proficiency) is made in the note,
+  live-tracked or not. Every maximum on the page comes from the note, and
+  the live sheet fits its saved counts to the new ones.
+  1. Edit the note. Leave the derived cells alone. On a live-tracked PC
+     also leave the live cells as they are (`HP (Current)`, `Used`,
+     `Expended`, and the rest): raise `HP (Max)`, `Uses` or `Total` only. A
+     new row starts with `Used` at `0`.
+  2. Preview the sums, read the report, then write them:
+
+     ```bash
+     python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "<path to the PC note>"
+     python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "<path to the PC note>" --write
+     ```
+
+     An `ERROR` row means nothing will be written: fix the note and run it
+     again. If you cannot, undo your edit, keep the request out of the
+     applied batch and log **`⚠ NEEDS YOU`**.
+  3. Collect the request into the applied batch; step 4 builds and deploys.
+- **A level-up needs the player's choices.** The new level and class, the
+  hit points gained, and anything picked (a subclass, a feat, spells). What
+  the class gives at that level comes from `ttrpg-expert`'s
+  `systems/dnd-5e-2024/` references. A choice the request does not make is
+  ambiguous: ask, don't guess.
+- **Summaries are your own words.** A new feature, spell or item row gets a
+  one-line summary written by you. Never copy rules text into the note: it
+  is published. That includes text the player pasted into the request. For
+  anything outside the SRD, write the name and a page reference (leave the
+  reference out if you do not know it), unless the GM has told you what it
+  does.
+- **`Recovers` cells.** Write `Long Rest`, `Short Rest` or
+  `1 Short Rest, all Long Rest`, exactly: the sheet's rest buttons act on
+  these three and nothing else. For any other recovery, say what happens in
+  plain words (`Dawn`, `1d6+1 at dawn`); the page shows it and leaves it to
+  the player.
+
 ## When the watcher reports failure
 
 Either mode can wake you with a failure signal instead of a batch — the
@@ -398,6 +471,7 @@ One line per request so a glance tells the whole story:
 ⚠ 14:33  Cy  — spend 20 pts on DX         needs 40, has 15 · NEEDS YOU
 ✓ 21:05  Iris — SAN 55→49                 recorded (sheet not live)
 ⚠ 21:05  Iris — lost 6 SAN at once        possible temporary insanity · NEEDS YOU
+✓ 22:40  Mara — level 5→6, +7 HP max      applied · live
 ```
 
 ## Stop
@@ -456,7 +530,8 @@ it. Locate unspent/earned points and the relevant section by reading the file
 (GURPS sheets carry an Identity block with Point Total / Unspent Points / Total
 Points Earned, plus Attributes, Skills, and an equipment list; CoC sheets
 carry `## Stat Sheet` with `### Derived` (Max and Current columns) and
-`### Status` checkboxes, which the site shows only when live-tracked). A crash between
+`### Status` checkboxes, which the site shows only when live-tracked; for
+D&D sheets see "D&D 5e changes"). A crash between
 editing a `.md` and the deploy leaves the entry `pending`, so the next watcher
 cycle pulls it again. Before applying any request, first check whether its
 change is already present in the `.md` (the attribute is already at the target
