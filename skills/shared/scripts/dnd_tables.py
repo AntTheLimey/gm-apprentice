@@ -79,6 +79,13 @@ CANTRIP_OPTIONS: dict[str, tuple[int, int]] = {
 }
 
 
+# Scores a class's own level-20 feature raises past 20: class -> (class level,
+# the abilities, the most). Barbarian Primal Champion, Monk Body and Mind.
+LEVEL_20_SCORES: dict[str, tuple[int, tuple[str, ...], int]] = {
+    "barbarian": (20, ("STR", "CON"), 25), "monk": (20, ("DEX", "WIS"), 25),
+}
+
+
 def known(name: str) -> ClassInfo | None:
     return CLASSES.get(name.strip().lower())
 
@@ -95,14 +102,24 @@ def caster_level(levels: dict[str, int]) -> int:
     return total
 
 
+def numbered_slots(levels: dict[str, int]) -> list[int]:
+    """Slot totals for spell levels 1-9 from the casting classes, without pact slots."""
+    at = min(caster_level(levels), 20)
+    return list(SLOTS[at - 1]) if at else [0] * 9
+
+
+def pact_slots(levels: dict[str, int]) -> tuple[int, int] | None:
+    """(how many, their spell level) for the Warlock levels, or None."""
+    lock = levels.get("warlock", 0)
+    return PACT_SLOTS[lock - 1] if lock else None
+
+
 def slots_for(levels: dict[str, int]) -> list[int]:
     """Slot totals for spell levels 1-9, pact slots added to their level."""
-    at = min(caster_level(levels), 20)
-    row = list(SLOTS[at - 1]) if at else [0] * 9
-    lock = levels.get("warlock", 0)
-    if lock:
-        count, slot_level = PACT_SLOTS[lock - 1]
-        row[slot_level - 1] += count
+    row = numbered_slots(levels)
+    pact = pact_slots(levels)
+    if pact:
+        row[pact[1] - 1] += pact[0]
     return row
 
 

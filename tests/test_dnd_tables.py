@@ -149,4 +149,19 @@ def test_allowances():
 
 def test_known_ignores_case_and_spaces():
     assert dt.known(" Bard ").name == "Bard"
-    assert dt.known("Artificer") is None
+    assert dt.known("Tinker") is None
+
+
+def test_numbered_and_pact_slots_apart():
+    levels = {"bard": 5, "warlock": 3}
+    assert dt.pact_slots(levels) == (2, 2)
+    assert dt.pact_slots({"bard": 5}) is None
+    assert dt.numbered_slots(levels) == [4, 3, 2, 0, 0, 0, 0, 0, 0]
+    assert dt.numbered_slots({"warlock": 5}) == [0] * 9
+    assert dt.slots_for(levels) == [4, 5, 2, 0, 0, 0, 0, 0, 0]
+
+
+def test_level_20_scores():
+    assert dt.LEVEL_20_SCORES["barbarian"] == (20, ("STR", "CON"), 25)
+    assert dt.LEVEL_20_SCORES["monk"] == (20, ("DEX", "WIS"), 25)
+    assert set(dt.LEVEL_20_SCORES) <= set(dt.CLASSES)

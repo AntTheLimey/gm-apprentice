@@ -443,8 +443,8 @@ def party(vault: Path) -> int:
         return 2
     system = vault_system(vault)
     if system != SYSTEM:
-        print(f"dnd_sheet: this vault's system is {system or 'not recorded'}, not {SYSTEM}; "
-              "nothing was checked")
+        said = f"is {system}, not {SYSTEM}" if system else "is not recorded"
+        print(f"dnd_sheet: this vault's system {said}; nothing was checked")
         return 0
     tally = dict.fromkeys(("WRONG", "LOOK", "CANTCHECK"), 0)
     sheets = 0

@@ -621,3 +621,12 @@ def test_a_sheet_or_a_party_but_not_neither_or_both(tmp_path):
     assert party()[0] == 2
     vault = make_vault(tmp_path)
     assert party(str(vault / "x.md"), "--party", str(vault))[0] == 2
+
+
+def test_party_on_a_vault_with_no_recorded_system_says_so(tmp_path):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "PCs").mkdir(parents=True)
+    (vault / "Characters" / "PCs" / "Ada.md").write_text(sheet(), encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    assert out.strip() == "dnd_sheet: this vault's system is not recorded; nothing was checked"

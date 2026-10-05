@@ -4,7 +4,8 @@
 Read-only. `check(text)` returns findings; dnd_sheet.py prints them.
   WRONG      the sheet contradicts itself, whatever books are in use
   LOOK       a number differs from the SRD 5.2 table for the class and
-             level; a reason in brackets beside the number settles it
+             level; a reason in brackets beside a score over 20 or
+             `HP (Max)` settles it
   CANTCHECK  a class is not in SRD 5.2, so its tables cannot be consulted
 
 Not checked: whether a choice is allowed (spell lists, feat requirements,
@@ -21,6 +22,8 @@ import dnd_calc as dc  # noqa: E402
 import dnd_tables as dt  # noqa: E402
 from dnd_note import PLACEHOLDER, YES, Note, clean, column, number, to_int  # noqa: E402
 
+PACT_ROW = re.compile(r"^pact\b", re.I)
+SLOT_TOTAL, SLOT_USED = r"(total|max)", r"(expended|used)"
 ORDER = {"WRONG": 0, "LOOK": 1, "CANTCHECK": 2}
 CLASS = "Background / Class/Subclass"
 COMBAT = "Stat Sheet / Combat"
@@ -50,10 +53,19 @@ class ClassLevel:
     subclass: str
 
 
+def num(text: str | None) -> tuple[int | None, bool]:
+    """dnd_note.number, reading `**60**` or `*3*` as its number."""
+    return number(re.sub(r"[*_]", "", text or ""))
+
+
+def plain(text: str | None) -> str:
+    return re.sub(r"[*_]", "", text or "").strip()
+
+
 def read_classes(raw: str | None, level: int) -> list[ClassLevel] | None:
     """`Paladin 5 (Oath of Devotion) / Sorcerer 3`, or None when it cannot be
     read. One class with no number takes the character's level."""
-    text = clean(raw or "")
+    text = re.sub(r"[*_]", "", clean(raw or "")).strip()
     if not text or PLACEHOLDER.match(text):
         return None
     parts = [p.strip() for p in SLASH.split(text)]
@@ -116,11 +128,20 @@ def levels(s: Sheet) -> list[Finding]:
     return []
 
 
+def spell_level(text: str | None) -> int | None:
+    """`Cantrip`, `Cantrips`, `3` or `3rd` as 0 to 9."""
+    t = plain(text).lower()
+    if t in ("cantrip", "cantrips"):
+        return 0
+    m = re.fullmatch(r"([1-9])(?:st|nd|rd|th)", t)
+    return int(m.group(1)) if m else to_int(t)
+
+
 def hit_dice(s: Sheet) -> list[Finding]:
     out: list[Finding] = []
     rows: dict[int | None, int] = {}
     for name, (value,) in s.rows("stat sheet", "combat", r"value"):
-        m, pair = HIT_DICE.match(name), PAIR.match(value or "")
+        m, pair = HIT_DICE.match(name), PAIR.match(plain(value))
         if not m or not pair:
             continue
         die = int(m.group(1)) if m.group(1) else None
@@ -128,7 +149,7 @@ def hit_dice(s: Sheet) -> list[Finding]:
         if spent > most:
             out.append(Finding("WRONG", f"{COMBAT} / Hit Dice{f' d{die}' if die else ''}",
                                f"{spent} spent of {most}"))
-        rows[die] = most
+        rows[die] = rows.get(die, 0) + most
     if list(rows) == [None]:
         if rows[None] != s.level:
             out.append(Finding("WRONG", f"{COMBAT} / Hit Dice",
@@ -172,11 +193,11 @@ def over_spent(s: Sheet) -> list[Finding]:
     out: list[Finding] = []
 
     def over(locus: str, used: str | None, owned: str | None, words: str) -> None:
-        u, o = number(used or "")[0], number(owned or "")[0]
+        u, o = num(used)[0], num(owned)[0]
         if u is not None and o is not None and u > o:
             out.append(Finding("WRONG", locus, words.format(u, o)))
 
-    for name, (total, spent) in s.rows("spellcasting", "spell slots", r"total", r"expended"):
+    for name, (total, spent) in s.rows("spellcasting", "spell slots", SLOT_TOTAL, SLOT_USED):
         over(f"Spellcasting / Spell Slots / {name}", spent, total, "{} expended of {}")
     for h2, title in (("class features", "Class Features"), ("species traits", "Species Traits"),
                       ("feats", "Feats")):
@@ -188,23 +209,34 @@ def over_spent(s: Sheet) -> list[Finding]:
     if now and most:
         over(f"{COMBAT} / HP (Current)", now.text, most.text, "{} is above HP (Max) {}")
     death = s.note.attr("stat sheet", "combat", "death saves (s/f)")
-    shown = death.text.strip() if death else ""
-    pair = PAIR.match(shown)
+    shown = plain(death.text) if death else ""
+    pair = PAIR.match(plain(shown))
     if pair and max(int(pair.group(1)), int(pair.group(2))) > 3:
         out.append(Finding("WRONG", f"{COMBAT} / Death Saves (S/F)", f"{shown}; a count cannot pass 3"))
     return out
+
+
+def score_cap(s: Sheet, key: str) -> int:
+    """20, or 25 where a class's own level-20 feature raises that score."""
+    cap = 20
+    for c, _info in s.infos:
+        at, abilities, top = dt.LEVEL_20_SCORES.get(c.name.lower(), (21, (), 20))
+        if c.level >= at and key in abilities:
+            cap = max(cap, top)
+    return cap
 
 
 def scores(s: Sheet) -> list[Finding]:
     out: list[Finding] = []
     for name, (cell,) in s.rows("stat sheet", "ability scores", r"score$"):
         key = name.upper()[:3]
-        value, reasoned = number(cell or "")
+        value, reasoned = num(cell)
         if key not in dc.ABILITIES or value is None:
             continue
+        cap = score_cap(s, key)
         if value > 30:
             out.append(Finding("WRONG", f"{SCORES} / {key}", f"{value}; a score cannot pass 30"))
-        elif value > 20 and not reasoned:
+        elif value > cap and not reasoned:
             out.append(Finding("LOOK", f"{SCORES} / {key}",
                                f"{value}; a score over 20 needs a reason beside it"))
     return out
@@ -216,22 +248,43 @@ def casting(s: Sheet) -> list[Finding]:
     if not s.known or sum(c.level for c, _info in s.infos) != s.level:
         return []
     out: list[Finding] = []
-    want = dt.slots_for(s.levels)
-    differ: list[tuple[int, str]] = []
+    slot_rows = s.rows("spellcasting", "spell slots", SLOT_TOTAL)
+    pact_rows = [(n, tot) for n, (tot,) in slot_rows if PACT_ROW.match(n)]
+    pact = dt.pact_slots(s.levels)
+    want = dt.numbered_slots(s.levels) if pact_rows else dt.slots_for(s.levels)
+    differ: list[tuple[int, str, str, str]] = []     # (order, row, the note has, the table gives)
     seen: set[int] = set()
-    for name, (total,) in s.rows("spellcasting", "spell slots", r"total"):
+    for name, (total,) in slot_rows:
         m = re.match(r"^(?:level\s+)?([1-9])", name, re.I)
         if not m:
             continue
         at = int(m.group(1))
         seen.add(at)
-        have, reasoned = number(total or "")
-        blank = not (total or "") or bool(PLACEHOLDER.match(total or ""))
+        have, reasoned = num(total)
+        blank = not plain(total) or bool(PLACEHOLDER.match(plain(total)))
         if reasoned or (have is None and not blank):
             continue
         if (have or 0) != want[at - 1]:
-            differ.append((at, "blank" if have is None else str(have)))
-    differ += [(at, "no row") for at in range(1, 10) if at not in seen and want[at - 1]]
+            differ.append((at, ORDINALS[at - 1], "(blank)" if have is None else str(have), str(want[at - 1])))
+    differ += [(at, ORDINALS[at - 1], "no row", str(want[at - 1]))
+               for at in range(1, 10) if at not in seen and want[at - 1]]
+    expected = sum(1 for n in want if n)
+    if pact_rows:
+        label, total = pact_rows[0]
+        if pact is None:
+            out.append(Finding("LOOK", f"{SLOT_LOCUS} / {label}", f"a Pact row, but {s.who} has no Warlock levels"))
+        else:
+            expected += 1
+            count, slot_level = pact
+            have, reasoned = num(total)
+            blank = not plain(total) or bool(PLACEHOLDER.match(plain(total)))
+            digit = re.search(r"\d", label)
+            at_level = int(digit.group()) if digit else None
+            if not reasoned and (have is not None or blank) and (
+                    (have or 0) != count or (at_level is not None and at_level != slot_level)):
+                said = "(blank)" if have is None else str(have)
+                differ.append((10, label, said + (f" at level {at_level}" if at_level else ""),
+                               f"{count} at level {slot_level}"))
     differ.sort()
     without = [c.name for c, info in s.infos if info.caster == dt.NONE]
     if differ and without:
@@ -239,12 +292,11 @@ def casting(s: Sheet) -> list[Finding]:
                         f"the totals differ from the table for {s.who}; {', '.join(without)} may cast "
                         "through a subclass the free rules do not cover, so slots and spell counts "
                         "were not checked")]
-    if any(want) and all(have in ("blank", "no row") for _at, have in differ) \
-            and len(differ) == sum(1 for n in want if n):
+    if expected and len(differ) == expected and all(d[2] in ("(blank)", "no row") for d in differ):
         out.append(Finding("LOOK", SLOT_LOCUS, f"no slot totals in the note; {s.who} has slots"))
     else:
-        out += [Finding("LOOK", f"{SLOT_LOCUS} / {ORDINALS[at - 1]}",
-                        f"the note has {have}; {s.who} gives {want[at - 1]}") for at, have in differ]
+        out += [Finding("LOOK", f"{SLOT_LOCUS} / {row}", f"the note has {have}; {s.who} gives {gives}")
+                for _order, row, have, gives in differ]
     casters = [(c, info) for c, info in s.infos if info.caster != dt.NONE]
     if not casters:
         return out
@@ -263,7 +315,7 @@ def casting(s: Sheet) -> list[Finding]:
         if clean(name).lower() in counted:
             continue
         counted.add(clean(name).lower())
-        at_level = 0 if (level or "").lower() == "cantrip" else to_int(level or "")
+        at_level = spell_level(level)
         if at_level is None or not 0 <= at_level <= 9:
             continue
         if at_level == 0:
@@ -286,8 +338,8 @@ def casting(s: Sheet) -> list[Finding]:
 def hit_points(s: Sheet) -> list[Finding]:
     """The widest range the dice allow: the note does not say which class came first."""
     cell = s.note.attr("stat sheet", "combat", "hp (max)")
-    have, reasoned = number(cell.text) if cell else (None, False)
-    con = next((number(c or "")[0] for name, (c,) in s.rows("stat sheet", "ability scores", r"score$")
+    have, reasoned = num(cell.text) if cell else (None, False)
+    con = next((num(c)[0] for name, (c,) in s.rows("stat sheet", "ability scores", r"score$")
                 if name.upper()[:3] == "CON"), None)
     if not s.known or have is None or reasoned or con is None or s.level is None:
         return []
@@ -304,7 +356,8 @@ def hit_points(s: Sheet) -> list[Finding]:
     most = max(least, sum(max(1, info.die + mod) * c.level for c, info in s.infos) + extra)
     if least <= have <= most:
         return []
-    return [Finding("LOOK", f"{COMBAT} / HP (Max)", f"{have}; the dice allow {least} to {most} for {s.who}")]
+    allow = f"exactly {least}" if least == most else f"{least} to {most}"
+    return [Finding("LOOK", f"{COMBAT} / HP (Max)", f"{have}; the dice allow {allow} for {s.who}")]
 
 
 def saves(s: Sheet) -> list[Finding]:
