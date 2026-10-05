@@ -17,6 +17,10 @@ Output: one row per derived cell, `STATUS<TAB>locus<TAB>message`, then
   KEPT   hand-set: the cell, and what the sum gives
   ERROR  the sheet cannot be read; nothing is written
 
+Then the rules checks (dnd_rules.py), which never write:
+`WRONG | LOOK | CANTCHECK<TAB>locus<TAB>message` and
+`# wrong: N  look: N  cantcheck: N`.
+
 Owned cells: Proficiency Bonus; each ability's Modifier and Save; each
 skill's Modifier; Passive Perception / Investigation / Insight;
 Initiative; Spell Attack Modifier and Spell Save DC; and the four
@@ -42,6 +46,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_calc as dc  # noqa: E402
+import dnd_rules as dr  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from dnd_note import (BARE, HALF, PLACEHOLDER, REASONED, YES, Cell, Note,  # noqa: E402
                       clean, column, plain_name, to_int)
@@ -452,6 +457,11 @@ def main() -> int:
         count["SAME"] += count["FILL"]
         count["FILL"] = 0
     print(f"# same: {count['SAME']}  fill: {count['FILL']}  kept: {count['KEPT']}")
+    found = dr.check(text)
+    for item in found:
+        print(f"{item.status}\t{item.locus}\t{item.message}")
+    tally = {s: sum(1 for item in found if item.status == s) for s in ("WRONG", "LOOK", "CANTCHECK")}
+    print(f"# wrong: {tally['WRONG']}  look: {tally['LOOK']}  cantcheck: {tally['CANTCHECK']}")
     return 0
 
 

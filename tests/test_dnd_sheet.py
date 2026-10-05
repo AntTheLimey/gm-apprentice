@@ -12,6 +12,13 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "skills" / "shared" / "scripts" / "dnd_sheet.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "dnd-pcs"
 
+sys.path.insert(0, str(ROOT / "tests"))
+from dnd_builder import sheet  # noqa: E402
+
+
+def summary(out, prefix="# same:"):
+    return next(ln for ln in out.splitlines() if ln.startswith(prefix))
+
 
 def run(path, *args):
     p = subprocess.run([sys.executable, str(SCRIPT), str(path), *args],
@@ -36,7 +43,7 @@ def test_clean_sheet_has_nothing_to_fill():
     assert rows(out, "ERROR") == []
     # Initiative carries a reason, so it is kept, and the sum is shown.
     assert ["KEPT", "Stat Sheet / Combat / Initiative", "+3 (Alert); the sum gives +0"] in rows(out, "KEPT")
-    assert out.rstrip().splitlines()[-1] == "# same: 36  fill: 0  kept: 1"
+    assert summary(out) == "# same: 36  fill: 0  kept: 1"
 
 
 def test_flawed_sheet_lists_each_fill_with_old_and_new():
@@ -217,7 +224,7 @@ def test_unreadable_bonus_row_is_kept_and_adds_nothing():
     kept = rows(out, "KEPT")
     assert kept == [["KEPT", "Stat Sheet / Bonuses / row 5 (Bless)",
                      "Saves | 1d4; the bonus 1d4 was not understood; it adds nothing"]]
-    assert out.rstrip().splitlines()[-1].endswith("fill: 0  kept: 1")
+    assert summary(out).endswith("fill: 0  kept: 1")
 
 
 def test_unknown_bonus_target_is_kept_and_no_part_of_the_row_applies(tmp_path):
@@ -291,7 +298,7 @@ def test_a_reasoned_cell_is_kept_bonuses_or_not(tmp_path):
 def test_an_empty_bonuses_row_is_silent(tmp_path):
     _, out, _ = run(note(tmp_path, with_bonuses("| | | |")))
     assert rows(out, "FILL") == []
-    assert out.rstrip().splitlines()[-1] == "# same: 36  fill: 0  kept: 1"
+    assert summary(out) == "# same: 36  fill: 0  kept: 1"
 
 
 def test_a_bonus_with_no_source_is_named_by_its_row(tmp_path):
@@ -496,3 +503,39 @@ def test_a_fenced_block_with_a_shorter_or_other_fence_inside_is_not_read(tmp_pat
     run(p, "--write")
     assert p.read_bytes() == before
     assert block in p.read_text(encoding="utf-8")
+
+
+def test_checks_follow_the_fill_summary(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
+    code, out, _ = run(p)
+    assert code == 0
+    lines = out.rstrip().splitlines()
+    assert lines[-2] == "WRONG\tStat Sheet / Combat / Hit Dice d6\tthe note has 4; Wizard 5 gives 5"
+    assert lines[-1] == "# wrong: 1  look: 0  cantcheck: 0"
+    assert lines.index(summary(out)) == len(lines) - 3
+
+
+def test_a_correct_sheet_ends_with_a_zero_summary(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(), encoding="utf-8")
+    _, out, _ = run(p)
+    assert out.rstrip().splitlines()[-1] == "# wrong: 0  look: 0  cantcheck: 0"
+
+
+def test_an_unreadable_sheet_prints_no_checks(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(level="five"), encoding="utf-8")
+    _, out, _ = run(p)
+    assert rows(out, "ERROR") != []
+    assert "# wrong:" not in out
+
+
+def test_write_does_not_touch_what_a_check_found(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
+    run(p, "--write")
+    after = p.read_text(encoding="utf-8")
+    assert "| Hit Dice d6 (Spent/Max) | 0/4 |" in after
+    _, out, _ = run(p)
+    assert out.rstrip().splitlines()[-1] == "# wrong: 1  look: 0  cantcheck: 0"
