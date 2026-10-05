@@ -549,3 +549,75 @@ def test_a_reasoned_score_is_read_as_its_number(tmp_path):
     assert rows(out, "ERROR") == []
     after = p.read_text(encoding="utf-8")
     assert "| INT | 22 (tome of clear thought) | +6 |" in after
+
+
+def party(*args):
+    p = subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True)
+    return p.returncode, p.stdout.replace("\r\n", "\n"), p.stderr
+
+
+def make_vault(tmp_path, system="dnd-5e-2024"):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "PCs").mkdir(parents=True)
+    (vault / "Campaign Overview.md").write_text(
+        f"---\ntype: campaign_overview\ngame_system: {system}\n---\n\n# Campaign\n", encoding="utf-8")
+    return vault
+
+
+def test_party_prints_only_findings_with_the_note_name(tmp_path):
+    vault = make_vault(tmp_path)
+    pcs = vault / "Characters" / "PCs"
+    (pcs / "Ada.md").write_text(sheet(), encoding="utf-8")
+    (pcs / "Bryn.md").write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
+    (pcs / "Player Characters.md").write_text("---\ntype: pc_roster\n---\n\n# Party\n", encoding="utf-8")
+    (pcs / "Cass.md").write_text("---\ntype: pc\nsheet_source: paper\n---\n\n## Notes\n", encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    assert out.splitlines() == [
+        "WRONG\tBryn: Stat Sheet / Combat / Hit Dice d6\tthe note has 4; Wizard 5 gives 5",
+        "# wrong: 1  look: 0  cantcheck: 0  sheets: 2",
+    ]
+
+
+def test_party_never_writes(tmp_path):
+    vault = make_vault(tmp_path)
+    note = vault / "Characters" / "PCs" / "Ada.md"
+    note.write_text(sheet(), encoding="utf-8")
+    before = note.read_bytes()
+    party("--party", str(vault))
+    assert note.read_bytes() == before
+    code, _, err = party("--party", str(vault), "--write")
+    assert code == 2
+    assert "--party" in err
+    assert note.read_bytes() == before
+
+
+def test_party_reports_a_sheet_it_cannot_read(tmp_path):
+    vault = make_vault(tmp_path)
+    (vault / "Characters" / "PCs" / "Dax.md").write_text(sheet(level="five"), encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    lines = out.splitlines()
+    assert lines[0].startswith("CANTCHECK\tDax: Stat Sheet / Core / Level\tthe sheet cannot be read: ")
+    assert lines[-1] == "# wrong: 0  look: 0  cantcheck: 1  sheets: 1"
+
+
+def test_party_on_another_system_says_so(tmp_path):
+    vault = make_vault(tmp_path, system="gurps-4e")
+    (vault / "Characters" / "PCs" / "Ada.md").write_text(sheet(), encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    assert out.strip() == ("dnd_sheet: this vault's system is gurps-4e, not dnd-5e-2024; "
+                           "nothing was checked")
+
+
+def test_party_needs_a_real_folder(tmp_path):
+    code, _, err = party("--party", str(tmp_path / "missing"))
+    assert code == 2
+    assert "not a folder" in err
+
+
+def test_a_sheet_or_a_party_but_not_neither_or_both(tmp_path):
+    assert party()[0] == 2
+    vault = make_vault(tmp_path)
+    assert party(str(vault / "x.md"), "--party", str(vault))[0] == 2

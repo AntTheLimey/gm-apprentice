@@ -9,6 +9,7 @@ the GM's and is kept.
 Usage:
   dnd_sheet.py SHEET.md            report (nothing is written)
   dnd_sheet.py SHEET.md --write    apply every FILL row, all or none
+  dnd_sheet.py --party VAULT       rules checks on every PC; only findings
 
 Output: one row per derived cell, `STATUS<TAB>locus<TAB>message`, then
 `# same: N  fill: N  kept: N`.
@@ -429,11 +430,53 @@ def apply(text: str, rows: list[Row]) -> str:
     return "".join(lines)
 
 
+SYSTEM = "dnd-5e-2024"
+
+
+def party(vault: Path) -> int:
+    """The rules checks on every PC note in a vault. Prints only findings."""
+    from migrate_vault import vault_system
+    from vaultlib import entity_type, extract_frontmatter, vault_files
+
+    if not vault.is_dir():
+        print(f"dnd_sheet: {vault.as_posix()} is not a folder", file=sys.stderr)
+        return 2
+    system = vault_system(vault)
+    if system != SYSTEM:
+        print(f"dnd_sheet: this vault's system is {system or 'not recorded'}, not {SYSTEM}; "
+              "nothing was checked")
+        return 0
+    tally = dict.fromkeys(("WRONG", "LOOK", "CANTCHECK"), 0)
+    sheets = 0
+    for rel, text in vault_files(vault):
+        if entity_type(extract_frontmatter(text) or {}) != "pc":
+            continue
+        errors = [r for r in plan(text) if r.status == "ERROR"]
+        if any(r.locus == "Stat Sheet" for r in errors):
+            continue           # no sheet in the note: vault_check.py pc-body reports that
+        sheets += 1
+        found = [dr.Finding("CANTCHECK", r.locus, "the sheet cannot be read: "
+                            + r.message.removesuffix("; nothing was changed")) for r in errors]
+        for item in found or dr.check(text):
+            tally[item.status] += 1
+            print(f"{item.status}\t{Path(rel).stem}: {item.locus}\t{item.message}")
+    print(f"# wrong: {tally['WRONG']}  look: {tally['LOOK']}  cantcheck: {tally['CANTCHECK']}  sheets: {sheets}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("sheet")
+    ap.add_argument("sheet", nargs="?")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--party", metavar="VAULT",
+                    help="run the rules checks on every PC note in a vault; never writes")
     args = ap.parse_args()
+    if bool(args.sheet) == bool(args.party):
+        ap.error("give one sheet, or --party VAULT")
+    if args.party:
+        if args.write:
+            ap.error("--party never writes; run --write on one sheet")
+        return party(Path(args.party))
     path = Path(args.sheet)
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
