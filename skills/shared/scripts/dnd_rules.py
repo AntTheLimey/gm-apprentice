@@ -213,14 +213,14 @@ def scores(s: Sheet) -> list[Finding]:
 def casting(s: Sheet) -> list[Finding]:
     """Slot totals, then the spell list. A class with no spells of its own
     that has slots is beyond the free rules: one CANTCHECK, nothing else."""
-    if not s.known:
+    if not s.known or sum(c.level for c, _info in s.infos) != s.level:
         return []
     out: list[Finding] = []
     want = dt.slots_for(s.levels)
     differ: list[tuple[int, str]] = []
     seen: set[int] = set()
     for name, (total,) in s.rows("spellcasting", "spell slots", r"total"):
-        m = re.match(r"^([1-9])", name)
+        m = re.match(r"^(?:level\s+)?([1-9])", name, re.I)
         if not m:
             continue
         at = int(m.group(1))
@@ -286,14 +286,16 @@ def hit_points(s: Sheet) -> list[Finding]:
     if not s.known or have is None or reasoned or con is None or s.level is None:
         return []
     total = sum(c.level for c, _info in s.infos)
+    if total != s.level:
+        return []
     mod = dc.ability_mod(con)
     extra = 0
     if clean(s.note.bold("species") or "").lower().split()[-1:] == ["dwarf"]:
         extra += total
     extra += sum(c.level for c, _info in s.infos
                  if c.name.lower() == "sorcerer" and c.subclass.lower() == "draconic sorcery" and c.level >= 3)
-    least = max(total, min(info.die for _c, info in s.infos) + (total - 1) + mod * total) + extra
-    most = max(least, sum(info.die * c.level for c, info in s.infos) + mod * total + extra)
+    least = min(info.die for _c, info in s.infos) + mod + (total - 1) * max(1, 1 + mod) + extra
+    most = max(least, sum(max(1, info.die + mod) * c.level for c, info in s.infos) + extra)
     if least <= have <= most:
         return []
     return [Finding("LOOK", f"{COMBAT} / HP (Max)", f"{have}; the dice allow {least} to {most} for {s.who}")]

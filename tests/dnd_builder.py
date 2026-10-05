@@ -13,7 +13,7 @@ def sheet(level=5, classes="Wizard 5 (Evoker)", species="Human", scores=None,
           saves=("INT", "WIS"), hp_now="22", hp_max="22", hit_dice=(("d6", "0/5"),),
           death="0/0", slots=WIZARD_5_SLOTS, spells=(), features=(), feats=(),
           items=(), old_items=None, skills=(("Arcana", "INT", "Yes", "No"),),
-          source_column=True, save_column=True):
+          source_column=True, save_column=True, slot_label="{o}"):
     """spells: (name, level, tags, source). features and feats: (name, uses, used).
     items: (name, attuned, charges, used). old_items: item names for the earlier
     `### Magic Item Attunement` table, used instead of `items`.
@@ -44,7 +44,7 @@ def sheet(level=5, classes="Wizard 5 (Evoker)", species="Human", scores=None,
     out += ["", "## Spellcasting", "", "| Attribute | Value |", "|---|---|",
             "| Spellcasting Ability | INT |", "", "### Spell Slots", "",
             "| Level | Total | Expended |", "|---|---|---|"]
-    out += [f"| {o} | {slots.get(i, ('', ''))[0]} | {slots.get(i, ('', ''))[1]} |"
+    out += [f"| {slot_label.format(o=o, n=i)} | {slots.get(i, ('', ''))[0]} | {slots.get(i, ('', ''))[1]} |"
             for i, o in enumerate(ORDINALS, 1)]
     out += ["", "### Spells", ""]
     if source_column:

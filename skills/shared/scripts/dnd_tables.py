@@ -71,6 +71,14 @@ PACT_SLOTS: tuple[tuple[int, int], ...] = (
 ARCANUM = (11, 13, 15, 17)
 
 
+# Cantrips a class option can add: class -> (class level it arrives, most it adds).
+# Cleric Thaumaturge, Druid Magician, Paladin Blessed Warrior, Ranger Druidic
+# Warrior, Warlock Pact of the Tome.
+CANTRIP_OPTIONS: dict[str, tuple[int, int]] = {
+    "cleric": (1, 1), "druid": (1, 1), "paladin": (2, 2), "ranger": (2, 2), "warlock": (1, 3),
+}
+
+
 def known(name: str) -> ClassInfo | None:
     return CLASSES.get(name.strip().lower())
 
@@ -114,7 +122,9 @@ def max_spell_level(name: str, level: int) -> int:
 
 
 def cantrips_allowed(name: str, level: int) -> int:
-    return CLASSES[name].cantrips[level - 1]
+    # The most the class's options can give, whether or not the character took them.
+    arrives, extra = CANTRIP_OPTIONS.get(name, (21, 0))
+    return CLASSES[name].cantrips[level - 1] + (extra if level >= arrives else 0)
 
 
 def prepared_allowed(name: str, level: int) -> int:

@@ -274,8 +274,10 @@ def test_hit_point_additions_the_free_rules_name():
 
 
 def test_a_low_constitution_never_drops_below_one_a_level():
-    text = sheet(scores={"CON": "3"}, hp_now="5", hp_max="5")     # modifier -4
-    assert found(text) == []
+    # modifier -4: Wizard 5 least is 6 - 4 = 2 for the first level, then 1 a level: 2 + 4 = 6.
+    assert found(sheet(scores={"CON": "3"}, hp_now="6", hp_max="6")) == []
+    assert found(sheet(scores={"CON": "3"}, hp_now="5", hp_max="5")) == [
+        ("LOOK", "Stat Sheet / Combat / HP (Max)", "5; the dice allow 6 to 30 for Wizard 5")]
 
 
 def test_the_classes_saving_throws():
@@ -301,3 +303,84 @@ def test_an_unknown_class_skips_every_table_check():
     text = sheet(classes="Artificer 5 (Alchemist)", saves=(), hp_now="99", hp_max="99",
                  slots={1: ("9", "0")}, spells=(("Wish", "9", "", ""),))
     assert [r[0] for r in found(text)] == ["CANTCHECK"]
+
+
+# --- fix round 1 ------------------------------------------------------
+
+def cantrips(n):
+    return tuple((f"Cantrip {i}", "Cantrip", "", "") for i in range(n))
+
+
+def spells_of(level, n, start=0):
+    return tuple((f"Spell {start + i}", str(level), "", "") for i in range(n))
+
+
+CLERIC_1 = dict(level=1, classes="Cleric 1 (Life Domain)", saves=("WIS", "CHA"), hp_now="10", hp_max="10",
+                hit_dice=(("d8", "0/1"),), slots={1: ("2", "0")})
+DRUID_1 = dict(level=1, classes="Druid 1 (Land)", saves=("INT", "WIS"), hp_now="10", hp_max="10",
+               hit_dice=(("d8", "0/1"),), slots={1: ("2", "0")})
+PALADIN_2 = dict(level=2, classes="Paladin 2", saves=("WIS", "CHA"), hp_now="20", hp_max="20",
+                 hit_dice=(("d10", "0/2"),), slots={1: ("2", "0")})
+RANGER_2 = dict(level=2, classes="Ranger 2", saves=("STR", "DEX"), hp_now="20", hp_max="20",
+                hit_dice=(("d10", "0/2"),), slots={1: ("2", "0")})
+WARLOCK_1 = dict(level=1, classes="Warlock 1 (Fiend Patron)", saves=("WIS", "CHA"), hp_now="10", hp_max="10",
+                 hit_dice=(("d8", "0/1"),), slots={1: ("1", "0")})
+
+
+def test_cantrips_from_class_options_are_allowed():
+    assert found(sheet(spells=cantrips(4), **CLERIC_1)) == []          # Thaumaturge: 3 + 1
+    assert found(sheet(spells=cantrips(3), **DRUID_1)) == []           # Magician: 2 + 1
+    assert found(sheet(spells=cantrips(2), **PALADIN_2)) == []         # Blessed Warrior
+    assert found(sheet(spells=cantrips(2), **RANGER_2)) == []          # Druidic Warrior
+    assert found(sheet(spells=cantrips(5), **WARLOCK_1)) == []         # Pact of the Tome: 2 + 3
+
+
+def test_one_cantrip_over_the_option_allowance_is_a_look():
+    assert found(sheet(spells=cantrips(5), **CLERIC_1)) == [
+        ("LOOK", SPELLS, "5 cantrips; Cleric 1 allows 4")]
+    assert found(sheet(spells=cantrips(3), **PALADIN_2)) == [
+        ("LOOK", SPELLS, "3 cantrips; Paladin 2 allows 2")]
+    assert found(sheet(spells=cantrips(6), **WARLOCK_1)) == [
+        ("LOOK", SPELLS, "6 cantrips; Warlock 1 allows 5")]
+
+
+def test_levels_that_do_not_add_up_leave_only_the_levels_row():
+    text = sheet(classes="Wizard 4 (Evoker)", hit_dice=(("d6", "0/4"),), hp_now="99", hp_max="99",
+                 slots={1: ("9", "0")}, spells=spells_of(9, 20))
+    assert [(r[0], r[1]) for r in found(text)] == [("WRONG", CLASS)]
+
+
+def test_slot_rows_labelled_level_n_are_read():
+    wrong = {1: ("4", "0"), 2: ("3", "0"), 3: ("3", "0")}
+    assert found(sheet(slots=wrong, slot_label="Level {n}")) == [
+        ("LOOK", f"{SLOTS} / 3rd", "the note has 3; Wizard 5 gives 2")]
+    assert found(sheet(slot_label="Level {n}")) == []
+    assert found(sheet(slot_label="{n}")) == []
+
+
+def test_half_casters_correct_characters_have_no_finding():
+    paladin = sheet(level=5, classes="Paladin 5 (Oath of Devotion)", saves=("WIS", "CHA"),
+                    hp_now="40", hp_max="40", hit_dice=(("d10", "0/5"),),
+                    slots={1: ("4", "0"), 2: ("2", "0")}, spells=spells_of(1, 3) + spells_of(2, 3, 3))
+    assert found(paladin) == []
+    ranger = sheet(level=2, classes="Ranger 2", saves=("STR", "DEX"), hp_now="20", hp_max="20",
+                   hit_dice=(("d10", "0/2"),), slots={1: ("2", "0")}, spells=spells_of(1, 3))
+    assert found(ranger) == []
+
+
+def test_a_warlock_11_with_a_mystic_arcanum_spell():
+    base = dict(level=11, classes="Warlock 11 (Fiend Patron)", saves=("WIS", "CHA"), hp_now="60", hp_max="60",
+                hit_dice=(("d8", "0/11"),), slots={5: ("3", "0")})
+    twelve = spells_of(5, 11) + (("Arcanum", "6", "", ""),)
+    assert found(sheet(spells=twelve, **base)) == []
+    assert found(sheet(spells=twelve + (("Extra", "1", "", ""),), **base)) == [
+        ("LOOK", SPELLS, "13 spells of level 1 and up; Warlock 11 allows 12")]
+
+
+def test_two_casters_add_their_cantrip_allowances():
+    base = dict(level=5, classes="Cleric 3 (Life Domain) / Wizard 2 (Evoker)", saves=("WIS", "CHA"),
+                hp_now="30", hp_max="30", hit_dice=(("d8", "0/3"), ("d6", "0/2")),
+                slots={1: ("4", "0"), 2: ("3", "0"), 3: ("2", "0")})
+    assert found(sheet(spells=cantrips(7), **base)) == []      # 3 + 3 + Thaumaturge 1
+    assert found(sheet(spells=cantrips(8), **base)) == [
+        ("LOOK", SPELLS, "8 cantrips; Cleric 3 / Wizard 2 allows 7")]

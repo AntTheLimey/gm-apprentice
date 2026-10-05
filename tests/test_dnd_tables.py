@@ -130,7 +130,15 @@ def test_max_spell_level():
 
 def test_allowances():
     assert dt.cantrips_allowed("wizard", 5) == 4
-    assert dt.cantrips_allowed("paladin", 5) == 0
+    assert dt.cantrips_allowed("paladin", 5) == 2
+    assert dt.cantrips_allowed("paladin", 1) == 0
+    assert dt.cantrips_allowed("paladin", 2) == 2
+    assert dt.cantrips_allowed("ranger", 2) == 2
+    assert dt.cantrips_allowed("ranger", 1) == 0
+    assert dt.cantrips_allowed("cleric", 1) == 4
+    assert dt.cantrips_allowed("druid", 1) == 3
+    assert dt.cantrips_allowed("warlock", 1) == 5
+    assert dt.cantrips_allowed("fighter", 5) == 0
     assert dt.prepared_allowed("wizard", 5) == 9
     assert dt.prepared_allowed("sorcerer", 1) == 2
     assert dt.prepared_allowed("warlock", 10) == 10
