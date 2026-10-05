@@ -6,10 +6,11 @@ const { build } = require('../../lib/build');
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures');
 
-function site(liveStats) {
+function site(liveStats, mutate) {
   const work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-dnd-live-'));
   const vault = path.join(work, 'vault');
   fs.cpSync(path.join(FIXTURES, 'with-dnd-pc'), vault, { recursive: true });
+  if (mutate) mutate(vault);
   if (liveStats) {
     const cfg = path.join(vault, '_meta', 'vault-config.md');
     fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace('system: dnd-5e-2024', 'system: dnd-5e-2024\n  live_stats: true'));
@@ -20,9 +21,12 @@ function site(liveStats) {
     system: 'dnd-5e-2024', excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs', Creatures: 'creatures', Items: 'items' },
   }, null, 2));
-  build({ configPath, assumeKv: true });
+  const warned = [];
+  const realWarn = console.warn;
+  console.warn = (...a) => { warned.push(a.join(' ')); };
+  try { build({ configPath, assumeKv: true }); } finally { console.warn = realWarn; }
   const page = slug => fs.readFileSync(path.join(work, 'docs', 'characters', 'pcs', slug + '.html'), 'utf8');
-  return { work, page };
+  return { work, page, warned };
 }
 const islandOf = html => JSON.parse(html.match(/<script type="application\/json" id="dnd-live-data">([\s\S]*?)<\/script>/)[1].replace(/\\u003c/g, '<'));
 
@@ -82,6 +86,23 @@ describe('build integration: D&D live sheet', () => {
       const html = off.page(slug);
       assert.doesNotMatch(html, /data-live|dnd-live|live-state\.js/);
       assert.match(html, /<span class="dnd5e-mark/);
+    }
+  });
+
+  it('a duplicate-named live row warns only when live is on', () => {
+    const dup = vault => {
+      const f = path.join(vault, 'Characters', 'PCs', 'Brannoch_Vale.md');
+      const text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+      const row = text.split('\n').find(l => l.startsWith('| [[Wand_of_Magic_Missiles'));
+      fs.writeFileSync(f, text.replace(row, row + '\n' + row));
+    };
+    const withLive = site(true, dup);
+    const without = site(false, dup);
+    try {
+      assert.ok(withLive.warned.some(w => /share one count/.test(w)));
+      assert.ok(!without.warned.some(w => /share one count/.test(w)));
+    } finally {
+      for (const s of [withLive, without]) fs.rmSync(s.work, { recursive: true, force: true });
     }
   });
 });

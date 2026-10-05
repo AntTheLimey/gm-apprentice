@@ -30,12 +30,13 @@ function marks(max, spent, label, live) {
       ? `<button type="button" class="dnd5e-count dnd5e-live"${hook} aria-label="${escapeHtml(aria)}">${inner}</button>`
       : `<span class="dnd5e-count" role="img" aria-label="${escapeHtml(aria)}">${inner}</span>`;
   }
-  if (live) {
-    const one = i => `<button type="button" class="dnd5e-mark${i >= left ? ' is-spent' : ''}" aria-label="${i >= left ? 'Spent' : 'Available'}"></button>`;
-    return `<span class="dnd5e-marks dnd5e-live"${hook} role="group" aria-label="${escapeHtml(label)}">${Array.from({ length: max }, (_, i) => one(i)).join('')}</span>`;
-  }
-  const one = i => `<span class="dnd5e-mark${i >= left ? ' is-spent' : ''}"></span>`;
-  return `<span class="dnd5e-marks" role="img" aria-label="${escapeHtml(aria)}">${Array.from({ length: max }, (_, i) => one(i)).join('')}</span>`;
+  const one = live
+    ? i => `<button type="button" class="dnd5e-mark${i >= left ? ' is-spent' : ''}" aria-label="${i >= left ? 'Spent' : 'Available'}"></button>`
+    : i => `<span class="dnd5e-mark${i >= left ? ' is-spent' : ''}"></span>`;
+  const all = Array.from({ length: max }, (_, i) => one(i)).join('');
+  return live
+    ? `<span class="dnd5e-marks dnd5e-live"${hook} role="group" aria-label="${escapeHtml(label)}">${all}</span>`
+    : `<span class="dnd5e-marks" role="img" aria-label="${escapeHtml(aria)}">${all}</span>`;
 }
 
 // A cell's html when it holds a link, else its text escaped: a link is kept, nothing else changes.

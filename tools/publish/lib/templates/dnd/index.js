@@ -15,7 +15,8 @@ function renderDnDSheet(frontmatter, sections, meta) {
   // with live off too; the marks are drawn tappable only when live is on.
   const liveData = meta ? buildDndLiveData(model, meta) : null;
   if (liveData) {
-    model.warnings.push(...liveData.warnings);
+    // Only a site that turned live on is told about its live rows.
+    if (meta.live) model.warnings.push(...liveData.warnings);
     delete liveData.warnings;
     if (meta.live) {
       model.liveKeys = new Set(liveData.tracks.map(t => t.key));
