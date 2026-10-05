@@ -70,7 +70,8 @@ function build(options = {}) {
   const rawConfig = loadVaultConfig(resolvedConfigPath);
   rawConfig.vaultPath = path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
-  const outputDir = path.resolve(configDir, config.outputDir);
+  // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
+  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
   const off = siteOff(publishConfig.switches);
   if (off) throw new Error(off);
 

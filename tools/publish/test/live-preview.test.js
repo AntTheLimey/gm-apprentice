@@ -4,6 +4,12 @@ const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { createPreview, refusal } = require('../scripts/live-preview');
 
+// build() narrates every file it writes; keep that out of the test output. Errors still throw.
+async function quietly(fn) {
+  const log = console.log;
+  console.log = () => {};
+  try { return await fn(); } finally { console.log = log; }
+}
 const FIXTURES = path.join(__dirname, 'fixtures');
 let work, configPath, preview, base;
 
@@ -24,7 +30,7 @@ function scratch(fixture, extra) {
 
 before(async () => {
   ({ dir: work, p: configPath } = scratch());
-  preview = await createPreview({ configPath });
+  preview = await quietly(() => createPreview({ configPath }));
   await new Promise(r => preview.server.listen(0, '127.0.0.1', r));
   base = 'http://127.0.0.1:' + preview.server.address().port;
 });
@@ -60,6 +66,31 @@ test('createPreview throws on a deployable site and builds nothing', async () =>
   } finally { fs.rmSync(h.dir, { recursive: true, force: true }); }
 });
 
+test('a real site\'s output directory is left alone', async () => {
+  const { dir, p } = scratch();
+  const docs = path.join(dir, 'docs');
+  fs.mkdirSync(docs);
+  fs.writeFileSync(path.join(docs, 'marker.txt'), 'keep');
+  const pv = await quietly(() => createPreview({ configPath: p }));
+  const built = pv.outputDir;
+  try {
+    await new Promise(r => pv.server.listen(0, '127.0.0.1', r));
+    const res = await fetch('http://127.0.0.1:' + pv.server.address().port + '/characters/pcs/brannoch-vale.html');
+    assert.equal(res.status, 200);
+    assert.notEqual(path.resolve(built), path.resolve(docs));
+  } finally {
+    await new Promise(r => pv.server.close(r));
+  }
+  assert.deepEqual(fs.readdirSync(docs), ['marker.txt']);
+  assert.equal(fs.readFileSync(path.join(docs, 'marker.txt'), 'utf8'), 'keep');
+  assert.equal(fs.existsSync(built), false, 'temp site removed on close');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('a malformed percent-encoding in the path is a 400', async () => {
+  assert.equal((await fetch(base + '/%E0%A4%A')).status, 400);
+});
+
 test('the script never reads wrangler.toml or runs wrangler', () => {
   const src = fs.readFileSync(path.join(__dirname, '..', 'scripts', 'live-preview.js'), 'utf8');
   assert.equal(/readFileSync\([^)]*wrangler/.test(src), false);
@@ -68,7 +99,7 @@ test('the script never reads wrangler.toml or runs wrangler', () => {
 
 test('it serves a GURPS site too, with nothing live in the pages', async () => {
   const g = scratch('with-gurps-pc');
-  const gp = await createPreview({ configPath: g.p });
+  const gp = await quietly(() => createPreview({ configPath: g.p }));
   await new Promise(r => gp.server.listen(0, '127.0.0.1', r));
   try {
     const res = await fetch('http://127.0.0.1:' + gp.server.address().port + '/');

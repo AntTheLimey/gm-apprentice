@@ -2,4 +2,4 @@ test/
 docs/
 .github/
 *.test.js
-scripts/
+/scripts/

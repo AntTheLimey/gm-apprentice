@@ -7,6 +7,7 @@
 // could be deployed. Dev only: not a gm-publish command.
 const fs = require('fs');
 const http = require('http');
+const os = require('os');
 const path = require('path');
 const { build } = require('../lib/build');
 const { runFlush } = require('../lib/flush-cli');
@@ -50,9 +51,15 @@ async function createPreview({ configPath }) {
   const no = refusal(configPath);
   if (no) throw new Error(no);
   const resolved = path.resolve(configPath);
-  const raw = JSON.parse(fs.readFileSync(resolved, 'utf8'));
-  const outputDir = path.resolve(path.dirname(resolved), raw.outputDir || 'docs');
-  build({ configPath: resolved, assumeKv: true });
+  // Build into a fresh temp directory, never the site's own output directory: a real site's
+  // docs/ must not be wiped or filled with pages built as if a store were wired.
+  const outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-preview-site-'));
+  try {
+    build({ configPath: resolved, assumeKv: true, outputDirOverride: outputDir });
+  } catch (e) {
+    fs.rmSync(outputDir, { recursive: true, force: true });
+    throw e;
+  }
 
   const kv = memoryKv();
   const env = { INBOX: kv };
@@ -86,7 +93,8 @@ async function createPreview({ configPath }) {
       }
       if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/__')) { res.writeHead(404); return res.end(); }
 
-      let rel = decodeURIComponent(url.pathname);
+      let rel;
+      try { rel = decodeURIComponent(url.pathname); } catch { res.writeHead(400); return res.end('Bad request'); }
       if (rel.endsWith('/')) rel += 'index.html';
       const file = path.resolve(outputDir, '.' + rel);
       if (file !== outputDir && !file.startsWith(outputDir + path.sep)) { res.writeHead(404); return res.end(); }
@@ -98,6 +106,7 @@ async function createPreview({ configPath }) {
       res.end(String(e && e.message || e));
     }
   });
+  server.on('close', () => fs.rmSync(outputDir, { recursive: true, force: true }));
   return { server, kv, outputDir };
 }
 
@@ -108,6 +117,7 @@ if (require.main === module) {
   const configPath = arg('--config') || './vault.config.json';
   const port = Number(arg('--port') || 8788);
   createPreview({ configPath }).then(({ server }) => {
+    for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => server.close(() => process.exit(0)));
     server.listen(port, '127.0.0.1', () => {
       console.log('Live preview at http://127.0.0.1:' + port + '/  (store in memory; nothing leaves this machine)');
       console.log('  Flush the store to the vault:  curl -X POST http://127.0.0.1:' + port + '/__flush   (add ?dry=1 to preview)');
