@@ -916,14 +916,14 @@ function build(options = {}) {
           }
           // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
           // off the roster's Party Status board (#265).
-          if (systemOut.liveData && !isOutOfPlay(page.frontmatter)) {
+          if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter)) {
             // Root-relative output path of the PC portrait, for the party-board
             // thumbnail. Resolved the same way portraitImg does (imageMap keyed
             // by bare basename → the scanner's relPath under images/).
             const pBase = portraitBasename(page.frontmatter);
             const pEntry = pBase && imageMap ? imageMap[pBase] : null;
             const portrait = pEntry ? 'images/' + pEntry.relPath : null;
-            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData });
+            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData || systemOut.boardOnly });
           }
           html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
             publishConfig,

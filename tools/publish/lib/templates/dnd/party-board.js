@@ -13,8 +13,9 @@ function buildDndPartyManifest(campaignId, entries) {
       name: e.name,
       outputPath: e.outputPath,
       portrait: e.portrait != null ? e.portrait : null,
-      hpMax: e.data.hpMax,
-      defaults: e.data.defaults,
+      hpMax: e.data.hpMax === undefined ? null : e.data.hpMax,
+      defaults: e.data.defaults || null,
+      ...(e.data.unreadable ? { unreadable: true } : {}),
       tracks: (e.data.tracks || []).filter(t => t.key === 'ds:s' || t.key === 'ds:f'),
       board: e.data.board || {},
     }))

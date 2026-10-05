@@ -28,6 +28,10 @@
 
   // The note's values (pc) with the saved record (state) fitted over them.
   function dndRowCells(pc, state) {
+    if (pc.unreadable) {   // nothing live in this note: the note's facts and dashes, whatever the store holds
+      var b = pc.board || {};
+      return { rowClass: '', who: b.who ? esc(b.who) : '', ac: plain(b.ac), hp: plain(''), pp: plain(b.pp), dc: plain(b.dc), status: plain('') };
+    }
     var s = live.fit(state, pc);
     var bits = live.statusBits(s);
     var board = pc.board || {};
@@ -55,7 +59,7 @@
       var latest = core.groupLatestByPc(statesByKey || {});
       manifest.pcs.forEach(function (pc) {
         var row = document.querySelector('[data-gl-party="' + pc.pcSlug.replace(/["\\]/g, '\\$&') + '"]');
-        if (!row) return;
+        if (!row || pc.unreadable) return;
         var cells = dndRowCells(pc, latest[pc.pcSlug] || null);
         row.className = 'gl-party-row ' + cells.rowClass;
         ['hp', 'status'].forEach(function (f) {

@@ -33,6 +33,18 @@ function whoOf(header) {
   return `Level ${header.level} ${classes}`;
 }
 
+// The four facts the party board shows, read from the note alone: the island carries them, and so
+// does a PC whose note gives nothing live (no island).
+function boardOf(model) {
+  const c = model.combat || {};
+  return {
+    who: whoOf(model.header),
+    ac: splitReason(c.ac).value,
+    pp: splitReason(firstValue(model.senses, /^passive perception$/i)).value,
+    dc: splitReason(firstValue(model.casting, /^spell save dc(\s*\(.+\))?$/i)).value,
+  };
+}
+
 function buildDndLiveData(model, meta) {
   const c = model.combat || {};
   const tracks = [];
@@ -99,14 +111,9 @@ function buildDndLiveData(model, meta) {
       used,
     },
     tracks,
-    board: {
-      who: whoOf(model.header),
-      ac: splitReason(c.ac).value,
-      pp: splitReason(firstValue(model.senses, /^passive perception$/i)).value,
-      dc: splitReason(firstValue(model.casting, /^spell save dc(\s*\(.+\))?$/i)).value,
-    },
+    board: boardOf(model),
     warnings,
   };
 }
 
-module.exports = { STANDARD_CONDITIONS, recoveryKind, conditionsOf, buildDndLiveData };
+module.exports = { STANDARD_CONDITIONS, recoveryKind, conditionsOf, boardOf, buildDndLiveData };

@@ -93,6 +93,26 @@ describe('build integration: D&D live sheet', () => {
     assert.doesNotMatch(still, /dnd-party-data|dnd-party\.js/);
   });
 
+  it('a PC whose note gives nothing live still has a party row, sorted by name, with dashes and nothing live', () => {
+    const bare = '---\ntype: pc\ncanon_status: DRAFT\nstatus: alive\n---\n\n# Aaron Bare\n\n## Stat Sheet\n\n### Combat\n\n| Attribute | Value |\n|---|---|\n| AC | 15 |\n';
+    const withBare = v => fs.writeFileSync(path.join(v, 'Characters', 'PCs', 'Aaron_Bare.md'), bare);
+    const a = site(true, withBare), b = site(false, withBare);
+    try {
+      for (const s of [a, b]) {
+        assert.equal(s.page('aaron-bare').includes('dnd-live-data'), false);
+        const html = s.roster();
+        assert.ok(html.indexOf('data-gl-party="aaron-bare"') > 0 && html.indexOf('data-gl-party="aaron-bare"') < html.indexOf('data-gl-party="brannoch-vale"'));
+        const row = html.match(/<tr class="gl-party-row[^>]*data-gl-party="aaron-bare">[\s\S]*?<\/tr>/)[0];
+        assert.match(row, /data-gl-party-field="ac"><span class="gl-vnum">15</);
+        assert.match(row, /data-gl-party-field="hp"><span class="gl-vnum">—</);
+        assert.doesNotMatch(row, /Dying|Fine/);
+      }
+      const manifest = JSON.parse(a.roster().match(/id="dnd-party-data">([\s\S]*?)<\/script>/)[1].replace(/\\u003c/g, '<'));
+      assert.equal(manifest.pcs.find(p => p.pcSlug === 'aaron-bare').unreadable, true);
+      assert.equal(manifest.pcs.find(p => p.pcSlug === 'brannoch-vale').unreadable, undefined);
+    } finally { for (const s of [a, b]) fs.rmSync(s.work, { recursive: true, force: true }); }
+  });
+
   it('live off: no hook, no island, no script', () => {
     for (const slug of ['brannoch-vale', 'tamsin-reed', 'ilse-varn-old-layout']) {
       const html = off.page(slug);

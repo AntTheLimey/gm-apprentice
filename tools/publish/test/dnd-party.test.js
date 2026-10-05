@@ -88,3 +88,15 @@ test('the registry knows D&D, and still not Pathfinder', () => {
   assert.equal(boardFor('dnd'), b);
   assert.equal(boardFor('pf2e'), null);
 });
+
+test('an unreadable PC keeps its note facts and dashes whatever the store holds', () => {
+  const pc = buildDndPartyManifest('camp', [{ name: 'Bare', outputPath: 'characters/pcs/bare.html', portrait: null,
+    data: { pcSlug: 'bare', unreadable: true, board: { who: 'Level 3 Rogue', ac: '15', pp: '', dc: '' } } }]).pcs[0];
+  assert.equal(pc.unreadable, true);
+  const saved = { hp: 0, temp: 5, conditions: ['Prone'], used: { 'ds:s': 1, 'ds:f': 3 } };
+  const c = dndRowCells(pc, saved);
+  assert.deepEqual(c, dndRowCells(pc, null));
+  assert.match(c.ac, />15</);
+  assert.match(c.hp, /—/);
+  assert.doesNotMatch(c.status + c.rowClass, /Dying|Fine|hurt|Prone/);
+});

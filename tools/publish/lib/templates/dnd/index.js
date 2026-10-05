@@ -1,6 +1,6 @@
 const { parseDnd } = require('./parse');
 const { buildSheet, buildCombat, buildSpells, buildEquipment, buildVitals } = require('./layout');
-const { buildDndLiveData } = require('./live-data');
+const { buildDndLiveData, boardOf } = require('./live-data');
 const { consumedTitleMatcher } = require('../sheet-parse');
 
 // `## ` sections the sheet takes over from the accordion list. Each is on the
@@ -34,6 +34,8 @@ function renderDnDSheet(frontmatter, sections, meta) {
     equipmentHtml: buildEquipment(model),
     vitalsHtml: buildVitals(model),
     liveData,
+    // A PC with nothing live still gets its party row: the note's own facts, no island, nothing to follow.
+    ...(meta && !liveData ? { boardOnly: { pcSlug: meta.pcSlug, board: boardOf(model), unreadable: true } } : {}),
     warnings: model.warnings,
   };
 }
