@@ -153,3 +153,151 @@ def test_cells_that_are_not_numbers_are_skipped():
                  items=(("Wand", "Yes", "2d4", "1"),), hit_dice=(("d6", "0/5 (rested)"),),
                  hp_now="", death="—")
     assert found(text) == []
+
+
+# --- LOOK -------------------------------------------------------------
+
+SLOTS = "Spellcasting / Spell Slots"
+SPELLS = "Spellcasting / Spells"
+NO_SOURCE = "; this note has no Source column, so spells from feats and items are counted too"
+
+
+def test_slot_totals_against_the_table():
+    assert found(sheet(slots={1: ("4", "0"), 2: ("3", "0"), 3: ("3", "0")})) == [
+        ("LOOK", f"{SLOTS} / 3rd", "the note has 3; Wizard 5 gives 2")]
+    assert found(sheet(slots={1: ("4", "0"), 2: ("3", "0")})) == [
+        ("LOOK", f"{SLOTS} / 3rd", "the note has blank; Wizard 5 gives 2")]
+    assert found(sheet(slots={1: ("4", "0"), 2: ("3", "0"), 3: ("2", "0"), 4: ("1", "0")})) == [
+        ("LOOK", f"{SLOTS} / 4th", "the note has 1; Wizard 5 gives 0")]
+
+
+def test_a_reason_beside_a_slot_total_settles_it():
+    assert found(sheet(slots={1: ("5 (ring of spell storing)", "0"), 2: ("3", "0"), 3: ("2", "0")})) == []
+
+
+def test_a_caster_with_no_slot_totals_is_one_look():
+    assert found(sheet(slots={})) == [("LOOK", SLOTS, "no slot totals in the note; Wizard 5 has slots")]
+
+
+def test_multiclass_slots_use_the_combined_level():
+    text = sheet(level=8, classes="Paladin 5 (Oath of Devotion) / Sorcerer 3 (Draconic Sorcery)",
+                 saves=("WIS", "CHA"), hp_now="60", hp_max="60",
+                 hit_dice=(("d10", "0/5"), ("d6", "0/3")),
+                 slots={1: ("4", "0"), 2: ("3", "0"), 3: ("3", "0")})
+    assert found(text) == []
+
+
+def test_pact_slots_sit_at_their_level():
+    alone = sheet(classes="Warlock 5 (Fiend Patron)", saves=("WIS", "CHA"),
+                  hit_dice=(("d8", "0/5"),), slots={3: ("2", "0")})
+    assert found(alone) == []
+    mixed = sheet(classes="Warlock 2 (Fiend Patron) / Bard 3 (College of Lore)", saves=("DEX", "CHA"),
+                  hit_dice=(("d8", "0/5"),), slots={1: ("6", "0"), 2: ("2", "0")})
+    assert found(mixed) == []
+
+
+def test_a_class_with_no_spells_that_has_slots_is_a_cantcheck():
+    knight = sheet(classes="Fighter 5 (Eldritch Knight)", saves=("STR", "CON"), hp_now="30", hp_max="30",
+                   hit_dice=(("d10", "0/5"),), slots={1: ("3", "0")},
+                   spells=tuple((f"Cantrip {i}", "Cantrip", "", "") for i in range(9)))
+    rows = found(knight)
+    assert [(r[0], r[1]) for r in rows] == [("CANTCHECK", SLOTS)]
+    assert "Fighter" in rows[0][2]
+    plain = sheet(classes="Fighter 5 (Champion)", saves=("STR", "CON"), hp_now="30", hp_max="30",
+                  hit_dice=(("d10", "0/5"),), slots={})
+    assert found(plain) == []
+
+
+def test_a_mixed_character_is_checked_only_when_the_totals_match():
+    two = "Fighter 2 (Champion) / Wizard 3 (Evoker)"
+    base = dict(classes=two, saves=("STR", "CON"), hp_now="30", hp_max="30",
+                hit_dice=(("d10", "0/2"), ("d6", "0/3")))
+    assert found(sheet(slots={1: ("4", "0"), 2: ("2", "0")}, **base)) == []
+    rows = found(sheet(slots={1: ("4", "0"), 2: ("3", "0")}, **base))
+    assert [(r[0], r[1]) for r in rows] == [("CANTCHECK", SLOTS)]
+
+
+def test_a_spell_above_what_the_class_can_prepare():
+    text = sheet(spells=(("Fireball", "3", "", ""), ("Cone of Cold", "5", "", ""),
+                         ("Wish", "9", "", "Scroll")))
+    assert found(text) == [
+        ("LOOK", f"{SPELLS} / Cone of Cold", "level 5; the highest Wizard 5 can prepare is level 3")]
+
+
+def test_too_many_cantrips():
+    five = tuple((f"Cantrip {i}", "Cantrip", "", "") for i in range(5))
+    assert found(sheet(spells=five)) == [("LOOK", SPELLS, "5 cantrips; Wizard 5 allows 4")]
+    one_from_a_feat = five[:4] + (("Guidance", "Cantrip", "", "Magic Initiate"),)
+    assert found(sheet(spells=one_from_a_feat)) == []
+
+
+def test_too_many_prepared_spells():
+    ten = tuple((f"Spell {i}", "1", "", "") for i in range(10))
+    assert found(sheet(spells=ten)) == [("LOOK", SPELLS, "10 spells of level 1 and up; Wizard 5 allows 9")]
+    one_always = ten[:9] + (("Spell 9", "1", "C, Always prepared", ""),)
+    assert found(sheet(spells=one_always)) == []
+    assert found(sheet(spells=ten[:3])) == []     # fewer is not a slip
+
+
+def test_a_note_with_no_source_column_says_so():
+    five = tuple((f"Cantrip {i}", "Cantrip", "", "") for i in range(5))
+    assert found(sheet(spells=five, source_column=False)) == [
+        ("LOOK", SPELLS, "5 cantrips; Wizard 5 allows 4" + NO_SOURCE)]
+
+
+def test_scores_over_twenty():
+    assert found(sheet(scores={"INT": "22"})) == [
+        ("LOOK", "Stat Sheet / Ability Scores / INT", "22; a score over 20 needs a reason beside it")]
+    assert found(sheet(scores={"INT": "22 (tome of clear thought)"})) == []
+    assert found(sheet(scores={"INT": "31"})) == [
+        ("WRONG", "Stat Sheet / Ability Scores / INT", "31; a score cannot pass 30")]
+    assert found(sheet(scores={"INT": "20"})) == []
+
+
+def test_hit_points_outside_what_the_dice_allow():
+    # Wizard 5, CON 14: least 6 + 4 + 10 = 20, most 30 + 10 = 40.
+    assert found(sheet(hp_now="41", hp_max="41")) == [
+        ("LOOK", "Stat Sheet / Combat / HP (Max)", "41; the dice allow 20 to 40 for Wizard 5")]
+    assert found(sheet(hp_now="19", hp_max="19")) == [
+        ("LOOK", "Stat Sheet / Combat / HP (Max)", "19; the dice allow 20 to 40 for Wizard 5")]
+    assert found(sheet(hp_now="40", hp_max="40")) == []
+    assert found(sheet(hp_now="41", hp_max="41 (boon)")) == []
+
+
+def test_hit_point_additions_the_free_rules_name():
+    assert found(sheet(species="Dwarf", hp_now="45", hp_max="45")) == []
+    assert found(sheet(species="[[Mountain Dwarf]]", hp_now="45", hp_max="45")) == []
+    assert found(sheet(species="Dwarf", hp_now="46", hp_max="46")) == [
+        ("LOOK", "Stat Sheet / Combat / HP (Max)", "46; the dice allow 25 to 45 for Wizard 5")]
+    dragon = sheet(classes="Sorcerer 5 (Draconic Sorcery)", saves=("CON", "CHA"), hp_now="45", hp_max="45")
+    assert found(dragon) == []
+
+
+def test_a_low_constitution_never_drops_below_one_a_level():
+    text = sheet(scores={"CON": "3"}, hp_now="5", hp_max="5")     # modifier -4
+    assert found(text) == []
+
+
+def test_the_classes_saving_throws():
+    assert found(sheet(saves=("INT",))) == [
+        ("LOOK", "Stat Sheet / Ability Scores", "Wizard 5 is proficient in INT and WIS; the note marks INT")]
+    assert found(sheet(saves=())) == [
+        ("LOOK", "Stat Sheet / Ability Scores", "Wizard 5 is proficient in INT and WIS; the note marks none")]
+    assert found(sheet(saves=("INT", "WIS", "CON"))) == []
+    two = sheet(classes="Fighter 2 (Champion) / Wizard 3 (Evoker)", saves=("INT", "WIS"),
+                hp_now="30", hp_max="30", hit_dice=(("d10", "0/2"), ("d6", "0/3")),
+                slots={1: ("4", "0"), 2: ("2", "0")})
+    assert found(two) == []
+
+
+def test_the_earlier_layout_alone_causes_no_finding():
+    text = sheet(save_column=False, source_column=False, hit_dice=(("", "0/5"),),
+                 old_items=("Ring", "Cloak"),
+                 spells=(("Fire Bolt", "Cantrip", "", ""), ("Shield", "1", "", "")))
+    assert found(text) == []
+
+
+def test_an_unknown_class_skips_every_table_check():
+    text = sheet(classes="Artificer 5 (Alchemist)", saves=(), hp_now="99", hp_max="99",
+                 slots={1: ("9", "0")}, spells=(("Wish", "9", "", ""),))
+    assert [r[0] for r in found(text)] == ["CANTCHECK"]

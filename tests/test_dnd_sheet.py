@@ -539,3 +539,13 @@ def test_write_does_not_touch_what_a_check_found(tmp_path):
     assert "| Hit Dice d6 (Spent/Max) | 0/4 |" in after
     _, out, _ = run(p)
     assert out.rstrip().splitlines()[-1] == "# wrong: 1  look: 0  cantcheck: 0"
+
+
+def test_a_reasoned_score_is_read_as_its_number(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(scores={"INT": "22 (tome of clear thought)"}), encoding="utf-8")
+    code, out, _ = run(p, "--write")
+    assert code == 0
+    assert rows(out, "ERROR") == []
+    after = p.read_text(encoding="utf-8")
+    assert "| INT | 22 (tome of clear thought) | +6 |" in after

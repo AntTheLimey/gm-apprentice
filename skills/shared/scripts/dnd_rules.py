@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import dnd_calc as dc  # noqa: E402
 import dnd_tables as dt  # noqa: E402
 from dnd_note import PLACEHOLDER, YES, Note, clean, column, number, to_int  # noqa: E402
 
@@ -29,6 +30,10 @@ SLASH = re.compile(r"/(?![^(]*\))")       # a slash that is not inside brackets
 HIT_DICE = re.compile(r"^hit dice(?:\s+d(\d+))?\s*\(spent\s*/\s*max\)$", re.I)
 PAIR = re.compile(r"^(\d+)\s*/\s*(\d+)$")
 NOTHING = re.compile(r"^(|[—–-]|none|n/a)$", re.I)
+ORDINALS = ("1st", "2nd", "3rd", "4th", "5th", "6th", "7th", "8th", "9th")
+SLOT_LOCUS = "Spellcasting / Spell Slots"
+SPELL_LOCUS = "Spellcasting / Spells"
+SCORES = "Stat Sheet / Ability Scores"
 
 
 @dataclass
@@ -190,7 +195,125 @@ def over_spent(s: Sheet) -> list[Finding]:
     return out
 
 
-CHECKS = [class_line, levels, hit_dice, attunement, expertise, over_spent]
+def scores(s: Sheet) -> list[Finding]:
+    out: list[Finding] = []
+    for name, (cell,) in s.rows("stat sheet", "ability scores", r"score$"):
+        key = name.upper()[:3]
+        value, reasoned = number(cell or "")
+        if key not in dc.ABILITIES or value is None:
+            continue
+        if value > 30:
+            out.append(Finding("WRONG", f"{SCORES} / {key}", f"{value}; a score cannot pass 30"))
+        elif value > 20 and not reasoned:
+            out.append(Finding("LOOK", f"{SCORES} / {key}",
+                               f"{value}; a score over 20 needs a reason beside it"))
+    return out
+
+
+def casting(s: Sheet) -> list[Finding]:
+    """Slot totals, then the spell list. A class with no spells of its own
+    that has slots is beyond the free rules: one CANTCHECK, nothing else."""
+    if not s.known:
+        return []
+    out: list[Finding] = []
+    want = dt.slots_for(s.levels)
+    differ: list[tuple[int, str]] = []
+    seen: set[int] = set()
+    for name, (total,) in s.rows("spellcasting", "spell slots", r"total"):
+        m = re.match(r"^([1-9])", name)
+        if not m:
+            continue
+        at = int(m.group(1))
+        seen.add(at)
+        have, reasoned = number(total or "")
+        blank = not (total or "") or bool(PLACEHOLDER.match(total or ""))
+        if reasoned or (have is None and not blank):
+            continue
+        if (have or 0) != want[at - 1]:
+            differ.append((at, "blank" if have is None else str(have)))
+    differ += [(at, "no row") for at in range(1, 10) if at not in seen and want[at - 1]]
+    differ.sort()
+    without = [c.name for c, info in s.infos if info.caster == dt.NONE]
+    if differ and without:
+        return [Finding("CANTCHECK", SLOT_LOCUS,
+                        f"the totals differ from the table for {s.who}; {', '.join(without)} may cast "
+                        "through a subclass the free rules do not cover, so slots and spell counts "
+                        "were not checked")]
+    if any(want) and all(have in ("blank", "no row") for _at, have in differ) \
+            and len(differ) == sum(1 for n in want if n):
+        out.append(Finding("LOOK", SLOT_LOCUS, f"no slot totals in the note; {s.who} has slots"))
+    else:
+        out += [Finding("LOOK", f"{SLOT_LOCUS} / {ORDINALS[at - 1]}",
+                        f"the note has {have}; {s.who} gives {want[at - 1]}") for at, have in differ]
+    casters = [(c, info) for c, info in s.infos if info.caster != dt.NONE]
+    if not casters:
+        return out
+    table = s.note.table("spellcasting", "spells")
+    no_source = bool(table) and column(table[0][1], r"source$") < 0
+    said = ("; this note has no Source column, so spells from feats and items are counted too"
+            if no_source else "")
+    top = max(dt.max_spell_level(c.name.lower(), c.level) for c, _info in casters)
+    cantrips = prepared = 0
+    for name, (level, tags, source) in s.rows("spellcasting", "spells", r"level$", r"tags$", r"source$"):
+        if (source and not NOTHING.match(source)) or "always prepared" in (tags or "").lower():
+            continue
+        at_level = 0 if (level or "").lower() == "cantrip" else to_int(level or "")
+        if at_level is None or not 0 <= at_level <= 9:
+            continue
+        if at_level == 0:
+            cantrips += 1
+            continue
+        prepared += 1
+        if at_level > top:
+            out.append(Finding("LOOK", f"{SPELL_LOCUS} / {name}",
+                               f"level {at_level}; the highest {s.who} can prepare is level {top}"))
+    may_cantrips = sum(dt.cantrips_allowed(c.name.lower(), c.level) for c, _info in casters)
+    may_prepare = sum(dt.prepared_allowed(c.name.lower(), c.level) for c, _info in casters)
+    if cantrips > may_cantrips:
+        out.append(Finding("LOOK", SPELL_LOCUS, f"{cantrips} cantrips; {s.who} allows {may_cantrips}{said}"))
+    if prepared > may_prepare:
+        out.append(Finding("LOOK", SPELL_LOCUS,
+                           f"{prepared} spells of level 1 and up; {s.who} allows {may_prepare}{said}"))
+    return out
+
+
+def hit_points(s: Sheet) -> list[Finding]:
+    """The widest range the dice allow: the note does not say which class came first."""
+    cell = s.note.attr("stat sheet", "combat", "hp (max)")
+    have, reasoned = number(cell.text) if cell else (None, False)
+    con = next((number(c or "")[0] for name, (c,) in s.rows("stat sheet", "ability scores", r"score$")
+                if name.upper()[:3] == "CON"), None)
+    if not s.known or have is None or reasoned or con is None or s.level is None:
+        return []
+    total = sum(c.level for c, _info in s.infos)
+    mod = dc.ability_mod(con)
+    extra = 0
+    if clean(s.note.bold("species") or "").lower().split()[-1:] == ["dwarf"]:
+        extra += total
+    extra += sum(c.level for c, _info in s.infos
+                 if c.name.lower() == "sorcerer" and c.subclass.lower() == "draconic sorcery" and c.level >= 3)
+    least = max(total, min(info.die for _c, info in s.infos) + (total - 1) + mod * total) + extra
+    most = max(least, sum(info.die * c.level for c, info in s.infos) + mod * total + extra)
+    if least <= have <= most:
+        return []
+    return [Finding("LOOK", f"{COMBAT} / HP (Max)", f"{have}; the dice allow {least} to {most} for {s.who}")]
+
+
+def saves(s: Sheet) -> list[Finding]:
+    table = s.note.table("stat sheet", "ability scores")
+    if not s.known or not table or column(table[0][1], r"sav.*prof") < 0:
+        return []
+    marked = [name.upper()[:3] for name, (p,) in s.rows("stat sheet", "ability scores", r"sav.*prof")
+              if p and YES.match(p)]
+    if any(set(info.saves) <= set(marked) for _c, info in s.infos):
+        return []
+    pairs = list(dict.fromkeys(f"{info.saves[0]} and {info.saves[1]}" for _c, info in s.infos))
+    return [Finding("LOOK", SCORES, f"{s.who} is proficient in {' or '.join(pairs)}; "
+                                    f"the note marks {', '.join(marked) or 'none'}")]
+
+
+CHECKS = [class_line, levels, hit_dice, attunement, expertise, over_spent,
+          scores, casting, hit_points, saves]
 
 
 def check(text: str) -> list[Finding]:

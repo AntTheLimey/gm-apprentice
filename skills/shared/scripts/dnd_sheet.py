@@ -49,7 +49,7 @@ import dnd_calc as dc  # noqa: E402
 import dnd_rules as dr  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from dnd_note import (BARE, HALF, PLACEHOLDER, REASONED, YES, Cell, Note,  # noqa: E402
-                      clean, column, plain_name, to_int)
+                      clean, column, number, plain_name, to_int)
 
 PASSIVES = {"passive perception": "perception",
             "passive investigation": "investigation",
@@ -249,7 +249,7 @@ def plan(text: str) -> list[Row]:
         key = clean(cells[0]).upper()[:3] if cells else ""
         if key not in dc.ABILITIES:
             continue
-        score = to_int(cells[column(header, r"score$")]) if column(header, r"score$") >= 0 else None
+        score = number(cells[column(header, r"score$")])[0] if column(header, r"score$") >= 0 else None
         if score is None:
             return [Row("ERROR", f"Stat Sheet / Ability Scores / {key}",
                         "the score is not a number; nothing was changed")]
@@ -312,9 +312,9 @@ def plan(text: str) -> list[Row]:
             rows.append(Row("KEPT", locus, f"{held or '(blank)'}; Proficient Half with Expertise Yes "
                                            "was not understood; nothing was changed"))
             m = REASONED.match(held)
-            number = to_int(m.group(1) if m else held)
-            if number is not None:
-                skill_value[name.lower()] = number
+            held_value = to_int(m.group(1) if m else held)
+            if held_value is not None:
+                skill_value[name.lower()] = held_value
             continue
         extra, why = fed("ability checks", "skills", f"skill:{name.lower()}")
         want = dc.skill(mods[ability], pb, yes(c_pr), yes(c_ex), half) + extra
