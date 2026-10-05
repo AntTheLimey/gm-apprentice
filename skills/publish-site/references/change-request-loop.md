@@ -388,54 +388,50 @@ Vault". Follow it; it is not repeated here.
   saves, hit dice spent, spell slots expended, a feature's uses, a magic
   item's charges, conditions, exhaustion, Heroic Inspiration, and a short or
   long rest ("took 9 damage", "used a 2nd-level slot", "I'm poisoned", "we
-  took a long rest"). What you do depends on the tests above:
-  - **The thing is live:** the player changes it on their own sheet and it
-    saves at once. The value saved on the site wins over the note's cell for
-    30 days, so an edit to the note would be silently ignored. Apply nothing
-    and finalize with **`advice`**:
+  took a long rest"). Find the cell in the note, then take the first case
+  that fits:
+  - **The thing is live** (the tests above): the player changes it on
+    their own sheet and it saves at once. The value saved on the site wins
+    over the note's cell for 30 days, so an edit to the note would be
+    silently ignored. Apply nothing and finalize with **`advice`**:
 
     ```bash
     npx gm-apprentice-publish inbox reply <id> advice "That's live on your sheet: change it there and it saves straight away. Hit points, slots, uses, conditions and both rests are on the page."
     ```
 
-  - **The page is live but the thing is not, because its cell could not
-    be read.** The page shows it as written and saves nothing for it. A
-    cell cannot be read when:
-    - `HP (Current)`, `HP (Max)`, `Temp HP` or `Exhaustion` is not a whole
-      number with an optional reason in brackets (`31 (after the fall)`).
-      A blank `Temp HP` or `Exhaustion` reads as 0 and is live. With no
-      readable `HP (Max)`, hit points are not live at all;
-    - hit dice are not written `spent/max` (`2/5`);
-    - death saves are not `s/f`, or either number is over 3;
-    - a `Used` is over its `Uses` or `Charges`, or an `Expended` is over
-      its `Total`;
-    - `Heroic Inspiration` is not a yes or no word.
-
-    Edit that cell only when the request itself states the new value
-    outright ("my hit dice are 2 spent of 5", "the wand has used 3 of 7
-    charges"). Write it in the format above and collect the request into
-    the applied batch. A request that gives a change but not the value
-    ("used a charge") is ambiguous: ask for the value, by the ambiguity
-    rule in step 2. Never guess a number to make a cell readable.
-  - **The thing is a second row with the same name as an earlier row in
-    its table.** The key belongs to the first row of that name, so a later
-    one is never live, and no cell edit changes that; only renaming the
-    row does. Apply nothing, log **`⚠ NEEDS YOU`** naming both rows, and
-    still reply to the player:
+  - **On a live page, the row's name is held by an earlier row.** Look in
+    the note for an earlier row in the same table with the same name as
+    the page shows it. If that row holds the name (`live-state-flush.md`,
+    "A name belongs to one row"), this one is never live, and no cell edit
+    changes that; only renaming the row does. Apply nothing, log
+    **`⚠ NEEDS YOU`** naming both rows, and still reply to the player:
 
     ```bash
     npx gm-apprentice-publish inbox reply <id> rejected "Two rows on your sheet share that name, so the page can only track the first. Nothing was changed, and the GM has been told."
     ```
 
-  - **The PC is not live:** the page shows these as the note has them. Edit
-    the cell and collect the request into the applied batch. Keep hit
-    points between 0 and `HP (Max)`, and a `Used` or `Expended` count
-    between 0 and its total. Damage comes off temporary hit points first
-    only if the player says so; if the PC has temporary hit points and the
-    request does not say, ask. For a rest, change only the cells the
-    player lists, and do not work out a rest by hand. A bare "we took a
-    long rest" with nothing listed is ambiguous: ask which numbers
-    changed.
+  - **The cell cannot be read**, whether or not the PC is live. The full
+    list of what the page cannot read is in `live-state-flush.md` under
+    "D&D 5e: what the page cannot read"; check the cell against it. The
+    page shows such a cell as written and saves nothing for it. Edit it
+    only when the request states the new value outright ("my hit dice are
+    2 spent of 5"). An amount left counts as stating it when the row's
+    maximum in the note is a whole number: "4 charges left" of `7` is a
+    `Used` of `3`. Write the cell in its format and collect the request
+    into the applied batch. When the request gives only a change ("used a
+    charge"), or the maximum cannot be read either, it is ambiguous: ask
+    for the value, by the ambiguity rule in step 2. Never guess a number to
+    make a cell readable. Where the list says only the GM can mend it (no
+    readable `HP (Max)`), also log **`⚠ NEEDS YOU`**.
+  - **The cell reads and the PC is not live:** the page shows it as the
+    note has it. Edit the cell and collect the request into the applied
+    batch. Keep hit points between 0 and `HP (Max)`, and a `Used` or
+    `Expended` count between 0 and its total. Damage comes off temporary
+    hit points first only if the player says so; if the PC has temporary
+    hit points and the request does not say, ask. For a rest, change only
+    the cells the player lists, and do not work out a rest by hand. A bare
+    "we took a long rest" with nothing listed is ambiguous: ask which
+    numbers changed.
 - **Any other sheet change** (a level-up, a new spell, feature or feat, new
   gear or a magic item, an ability score, a proficiency) is made in the note,
   live-tracked or not. Every maximum on the page comes from the note, and
@@ -447,16 +443,17 @@ Vault". Follow it; it is not repeated here.
      python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "<path to the PC note>"
      ```
 
-     An `ERROR` row here was in the note before you touched it: leave the
-     note untouched and go to "When the tool reports `ERROR`" below.
+     If the tool fails here (see "When the tool fails" below), the fault
+     was there before you touched the note: leave the note untouched and
+     end the request as that paragraph says.
   2. Edit the note. Leave the derived cells alone. On a live-tracked PC
      also leave the live cells as they are (`HP (Current)`, `Used`,
      `Expended`, and the rest), except a cell the page could not read,
      handled as above: raise `HP (Max)`, `Uses` or `Total` only. A new row
      starts with `Used` at `0`.
   3. Run the preview again and read the report. A `KEPT` row is a value
-     the GM set by hand: leave it as it is. With no `ERROR` row, write the
-     sums:
+     the GM set by hand: leave it as it is. If the tool did not fail, write
+     the sums:
 
      ```bash
      python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_sheet.py" "<path to the PC note>" --write
@@ -465,13 +462,16 @@ Vault". Follow it; it is not repeated here.
   4. Collect the request into the applied batch; step 4 of "When a batch
      arrives" builds and deploys.
 
-  **When the tool reports `ERROR`.** The tool writes nothing while an
-  `ERROR` row stands, and a request left without a reply is pulled again
-  on the next cycle, so end it here. If the `ERROR` came from your edit and
-  you can see the mistake, fix it and run the preview again. Otherwise:
-  put the note back to the text you read before the edit, keep the request
-  out of the applied batch, log **`⚠ NEEDS YOU`** with the `ERROR` row,
-  and reply once, with no sheet detail:
+  **When the tool fails.** The tool has failed when it prints an `ERROR`
+  row, or when it exits with a code other than 0 (it then prints a message
+  and no rows: it could not read or write the note). This holds for all
+  three runs, `--write` included. Nothing is written while it fails, and
+  a request left without a reply is pulled again on the next cycle, so end
+  it here. If an `ERROR` row came from your edit and you can see the
+  mistake, fix it and run the preview again. Otherwise: put the note back
+  to the text you read before the edit, keep the request out of the
+  applied batch, log **`⚠ NEEDS YOU`** with what the tool printed, and
+  reply once, with no sheet detail:
 
   ```bash
   npx gm-apprentice-publish inbox reply <id> rejected "I couldn't update your sheet this time. Nothing was changed, and the GM has been told."

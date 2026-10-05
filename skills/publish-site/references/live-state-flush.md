@@ -45,19 +45,8 @@ saying so and reads nothing from KV.
   `Expended` read as 0, and a blank `HP (Current)` reads as the maximum. A
   blank cell is filled in only when the live value differs from that.
 - **A cell the page could not read is not live, and is never written.**
-  That is a number cell holding anything but a whole number with an optional
-  reason in brackets; `HP (Current)` when `HP (Max)` is not such a number;
-  hit dice or death saves not written as two whole numbers with a slash
-  (death saves over 3 included); a `Used` over its `Uses` or `Charges`, or
-  with none beside it; an `Expended` over its `Total`; a `Used` or
-  `Expended` cell holding more than digits; a `Heroic Inspiration` cell
-  that is not a yes or no word; a magic item whose `Attuned` is not a yes
-  or no word. A link in a Combat or Core row (other than inside a reason),
-  or anywhere in a slot row, also leaves that row as written. A linked
-  feature or item name is fine.
-- **A name belongs to its first row.** Of two rows with the same name in
-  one table, a later one is never live and never written, even when the
-  first is itself not live (a `Used` over its `Uses`).
+  The list, and the rule for two rows with one name, are in "D&D 5e: what
+  the page cannot read" below.
 - **A value with no cell is skipped and named**, on a line under the PC's
   own:
   `Mara Voss — no cell in the note for: temp, slot:pact (3rd), class:second wind`.
@@ -65,12 +54,56 @@ saying so and reads nothing from KV.
   `inspiration`, `ds:s` and `ds:f` (death saves), and `hd:`, `slot:`,
   `class:`, `species:`, `feat:` or `item:` with the row's name in lower
   case. It means the row is missing, was renamed or deleted since the count
-  was saved, or holds a cell from the list above. Tell the GM which; do not
+  was saved, or holds a cell the page cannot read (below). Tell the GM which; do not
   add the row yourself. Nothing else on that PC is held back.
 - **An old-layout note** (prose features, no `Temp HP` row) is written only
   where its cells exist, and the rest is named as above. Converting the
   note gives the missing cells a home (`ttrpg-expert`'s
   `systems/dnd-5e-2024/sheet-conversion.md`).
+
+## D&D 5e: what the page cannot read
+
+The page shows these as written, with nothing to tap. They are not live,
+the site saves nothing for them, and `flush` never writes them. This is the
+whole list.
+
+- **Hit points:** `HP (Max)` is not a whole number (a reason in brackets
+  may follow, as in `38 (Tough)`). Then hit points are not live at all, and
+  editing `HP (Current)` does not change that: the GM must fix `HP (Max)`.
+  With a readable maximum, an `HP (Current)` that is not such a number or
+  blank is shown at the maximum and is never written.
+- **`Temp HP`, `Exhaustion`:** anything but a whole number (a reason may
+  follow) or blank.
+- **`Heroic Inspiration`:** not a yes or no word. Blank reads as no.
+- **Death saves:** not two whole numbers with a slash (`1/2`), or either
+  over 3.
+- **Hit dice:** not `spent/max` (`2/5`), or spent over max, or a max of 0.
+- **A spell slot row:** a `Total` that is not a whole number or is 0, an
+  `Expended` that is not a whole number or blank, or `Expended` over
+  `Total`.
+- **A feature or magic item row:** a `Uses`, `Charges` or `Used` that is
+  not a whole number or blank (a reason in brackets is not allowed here);
+  a `Used` above 0 with no `Uses` or `Charges` beside it; `Uses` or
+  `Charges` of 0; `Used` over `Uses` or `Charges`. A row with `Uses` blank
+  has nothing to count, which is not a fault.
+- **A magic item row** whose `Attuned` is not a yes or no word (blank
+  reads as no).
+- **A link in the wrong place:** in the label or value of a `### Core` or
+  `### Combat` row (a link inside a trailing reason is fine), or anywhere
+  in a slot row. A linked feature or item name is fine.
+
+`flush` also leaves alone a `Used` or `Expended` cell with markup around
+the number (bold, say), and names it as skipped: keep these cells bare.
+
+**A name belongs to one row.** Two rows in one table cannot share a live
+count. The name is held by the first row that carries a count: for a
+feature or magic item, the first row of that name with a whole-number
+`Uses` or `Charges`, even when it cannot be marked (`Used` over `Uses`, or
+`Uses` of 0); for hit dice, the first row written `s/m`; for a slot, the
+first row with a whole-number `Total` and an `Expended` not over it. A
+later row with that name is never live and never written, and the build
+warns. A first row that does not hold the name (`Uses` blank or not a
+number, a slot row with `Expended` over `Total`) leaves it to the next.
 
 ## When to run it
 

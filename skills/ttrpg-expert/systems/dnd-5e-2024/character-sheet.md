@@ -66,7 +66,7 @@ Write a number by hand, with its reason, only for what that vocabulary cannot sa
 - The value saved on the site wins over the note's cell for 30 days, whether or not wrap-up has run: writing the numbers back does not clear it. So a value in that list is changed by the player on their sheet, not by editing the note mid-campaign: the edit would not show.
 - Every maximum comes from the note (`HP (Max)`, `Uses`, `Charges`, a slot `Total`, the maximum half of hit dice). A level-up is a note edit, and the page fits its saved counts to the new numbers.
 - A cell the page cannot read is not live and is never written back. Keep them exact: `HP (Current)`, `HP (Max)`, `Temp HP` and `Exhaustion` a whole number, with a reason in brackets after it if you want one (`31 (after the fall)`); hit dice `spent/max` (`2/5`); death saves `0/0` up to `3/3`; `Used` and `Expended` bare whole numbers no larger than their total.
-- Give each row in a table its own name. The page follows the first row with a name; a later row with the same name is never live, even when the first is itself not live (a `Used` over its `Uses`), and the build warns.
+- Give each row in a table its own name. Two rows with one name cannot both be live, and the build warns.
 
 **Summaries.** One line, in your own words. Never copy a book's text: the note is published, and rules text is not ours to republish. For anything outside the SRD, summarise only what the GM tells you or shows you; otherwise write the name and a page reference.
 

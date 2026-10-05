@@ -357,14 +357,38 @@ differs.
 | `Used` | `## Class Features`, `## Species Traits`, `## Feats`, `### Magic Items` | a whole number, no more than `Uses` or `Charges`; blank reads as 0 |
 
 - **A cell the page could not read is not live and is never written.**
-  That is any cell above that is not in its format, `HP (Current)` when
-  `HP (Max)` is not a whole number, and any row the renderer shows as
-  written (see "Tables are read by position" above). The page never
-  invents a maximum.
-- **A name belongs to its first row.** Of two rows with the same name
-  in one table, a later one is never live and never written, even when
-  the first is itself not live (a `Used` over its `Uses`). The build
-  warns.
+  The page shows it as written and never invents a maximum. The whole
+  list:
+  - `HP (Max)` not a whole number (a reason in brackets may follow):
+    hit points are not live at all, whatever `HP (Current)` holds. With
+    a readable maximum, an `HP (Current)` that is not such a number or
+    blank is shown at the maximum and never written.
+  - `Temp HP` or `Exhaustion` holding anything but a whole number (a
+    reason may follow) or blank.
+  - `Heroic Inspiration` not a yes or no word (blank reads as no).
+  - Death saves not `s/f`, or either number over 3.
+  - Hit dice not `s/m`, or `s` over `m`, or `m` of 0.
+  - A slot row whose `Total` is not a whole number or is 0, whose
+    `Expended` is not a whole number or blank, or is over `Total`.
+  - A feature or magic item row whose `Uses`, `Charges` or `Used` is
+    not a whole number or blank; a `Used` above 0 with no `Uses` or
+    `Charges`; `Uses` or `Charges` of 0; `Used` over `Uses` or
+    `Charges`.
+  - A magic item row whose `Attuned` is not a yes or no word.
+  - A link in the label or value of a `### Core` or `### Combat` row
+    (a link inside a trailing reason is fine), or anywhere in a slot
+    row.
+
+  `flush` also leaves alone a `Used` or `Expended` cell with markup
+  around the number; keep them bare.
+- **A name belongs to one row.** The name is held by the first row that
+  carries a count: for a feature or magic item, the first row of that
+  name with a whole-number `Uses` or `Charges`, even when it cannot be
+  marked (`Used` over `Uses`, `Uses` of 0); for hit dice, the first row
+  written `s/m`; for a slot, the first row with a whole-number `Total`
+  and an `Expended` not over it. A later row with that name in the same
+  table is never live and never written, and the build warns. A first
+  row that does not hold the name leaves it to the next.
 - **A row is matched by the name the page shows**, so a linked feature
   or item name works: `[[Target|Shown]]` by `Shown`, `[[Ilse_Varn]]` by
   its file name with underscores as spaces. Capitals do not matter.
