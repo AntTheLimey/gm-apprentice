@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.34] — 2026-10-04
+
+### Added
+
+- A D&D character page can be played on. With live stats on, a player
+  taps the marks for spell slots, hit dice, death saves, class, species,
+  feat and item uses, and enters damage and healing on the hit point
+  tile, which shows a bar and a "tap to change" hint. Temporary hit
+  points, conditions, exhaustion, inspiration and concentration are set
+  from the page. Short and long rest buttons restore what each rest
+  restores, with an undo. What a player sets is kept on their own device
+  and survives a reload. A cell the page cannot read as a number, such as
+  a Temp HP cell reading "2d4", is left as written and is not live. Of
+  two rows with the same name, only the first is live.
+- A D&D party board on the roster page: each character's armour class,
+  hit points, passive Perception, spell save DC and status, updating as
+  the players play. A character whose note gives nothing readable still
+  gets a row, with dashes.
+- Players' changes reach the vault. A player's request to change their
+  sheet is handled by the apprentice, and at wrap-up `flush` writes the
+  live numbers back to the D&D note, keeping a reason written beside a
+  number, and names every value it had no cell for.
+- A local live preview for developers, `live-preview.js` in the publish
+  tool's scripts. It builds a site into a temporary folder and never
+  touches the site's own output, and it is not shipped in the npm
+  package.
+
+### Changed
+
+- `flush` sends a D&D note to its own writer. Before, any note that was
+  not GURPS went to the Call of Cthulhu writer.
+- A D&D party page shows a Party Status table.
+- Publish tool 1.14.0. With live stats off, every page is the same as
+  before.
+
+---
+
 ## [1.10.33] — 2026-10-04
 
 ### Added
