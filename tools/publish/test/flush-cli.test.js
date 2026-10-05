@@ -255,3 +255,46 @@ test('flush finds a renamed PC by its pinned live_key', async () => {
   assert.equal(await r.promise, 0);
   assert.match(r.writes['/vault/PCs/Jane_Hale.md'], /\| HP \| 11 \| 7 \|/);
 });
+
+test('resolveSystem: GURPS, D&D, and CoC as the default', () => {
+  const { resolveSystem } = require('../lib/flush-cli');
+  assert.equal(resolveSystem({}, 'gurps-4e'), 'gurps');
+  assert.equal(resolveSystem({}, 'dnd-5e-2024'), 'dnd');
+  assert.equal(resolveSystem({ system: 'dnd' }, 'coc-7e'), 'dnd');
+  assert.equal(resolveSystem({}, 'coc-7e'), 'coc');
+  assert.equal(resolveSystem({}, undefined), 'coc');
+  assert.equal(resolveSystem({}, 'pf2e'), 'coc');
+});
+
+test('routes a D&D PC to the D&D writeback; dry run writes nothing; missing cells are named', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const BRANNOCH = fs.readFileSync(path.join(__dirname, 'fixtures/with-dnd-pc/Characters/PCs/Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n');
+  const go = async (dryRun) => {
+    const writes = {};
+    const lines = [];
+    const adapter = fakeAdapter({
+      'roster:dnd-camp': JSON.stringify(['loadout:dnd-camp:brannoch-vale:ABCD']),
+      'loadout:dnd-camp:brannoch-vale:ABCD': JSON.stringify({ v: 1, hp: 20, used: { 'slot:1st': 3, 'class:no such feature': 1 }, updatedAt: 1 }),
+    });
+    const rc = await runFlush({
+      dryRun,
+      config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
+      publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
+      adapter,
+      scan: () => [{ sourcePath: '/vault/PCs/Brannoch.md', title: 'Brannoch_Vale', displayTitle: 'Brannoch Vale', frontmatter: { type: 'pc' } }],
+      readFile: () => BRANNOCH,
+      writeFile: (p, s) => { writes[p] = s; },
+      out: (m) => lines.push(String(m)),
+    });
+    assert.strictEqual(rc, 0);
+    return { writes, lines };
+  };
+  const real = await go(false);
+  assert.match(real.writes['/vault/PCs/Brannoch.md'], /\| HP \(Current\) \| 20 \|/);
+  assert.match(real.lines.find(l => l.startsWith('✓')), /HP \(Current\)/);
+  assert.ok(real.lines.some(l => /no cell in the note for: class:no such feature/.test(l)));
+  const dry = await go(true);
+  assert.deepEqual(dry.writes, {});
+  assert.match(dry.lines.find(l => l.startsWith('✓')), /would write/);
+});
