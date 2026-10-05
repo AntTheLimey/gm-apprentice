@@ -36,6 +36,9 @@ function copyAndBuild(sourceVault, mutate) {
   return { work, vault, island };
 }
 
+// Fixture notes that have no live island on purpose. Any other note without one is a failure.
+const NO_ISLAND = [];
+
 describe('D&D flush round trip, every fixture note', () => {
   let first, second;
   const files = fs.readdirSync(path.join(FIXTURES, 'with-dnd-pc', PCS)).filter(f => f.endsWith('.md'));
@@ -63,7 +66,10 @@ describe('D&D flush round trip, every fixture note', () => {
   after(() => { for (const s of [first, second]) if (s) fs.rmSync(s.work, { recursive: true, force: true }); });
 
   it('covers every D&D PC fixture note that goes live', () => {
-    assert.ok(Object.keys(flushed).length >= 5, Object.keys(flushed).join(','));
+    assert.equal(files.length, 7, 'a fixture note was added or removed: say whether it goes live');
+    const dark = files.filter(f => !flushed[f]).sort();
+    assert.deepEqual(dark, NO_ISLAND.slice().sort(), 'a note without an island must be listed in NO_ISLAND');
+    assert.equal(Object.keys(flushed).length, files.length - NO_ISLAND.length);
   });
 
   for (const file of files) {

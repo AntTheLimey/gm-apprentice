@@ -87,6 +87,16 @@ test('a real site\'s output directory is left alone', async () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('a failure after the build removes the temp site', async () => {
+  const { dir, p } = scratch();
+  const sites = () => new Set(fs.readdirSync(os.tmpdir()).filter(n => n.startsWith('gm-publish-preview-site-')));
+  const was = sites();
+  try {
+    await assert.rejects(quietly(() => createPreview({ configPath: p, handlers: async () => { throw new Error('handlers broke'); } })), /handlers broke/);
+    assert.deepEqual([...sites()].filter(n => !was.has(n)), []);
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
 test('a malformed percent-encoding in the path is a 400', async () => {
   assert.equal((await fetch(base + '/%E0%A4%A')).status, 400);
 });

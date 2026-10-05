@@ -3,6 +3,9 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 const { applyDnDFlush } = require('../../lib/flush/dnd-writeback');
+const { parseDnd } = require('../../lib/templates/dnd/parse');
+const { buildDndLiveData } = require('../../lib/templates/dnd/live-data');
+const { sectionsFromMarkdown } = require('../helpers/sections');
 
 const PCS = path.join(__dirname, '../fixtures/with-dnd-pc/Characters/PCs');
 const note = file => fs.readFileSync(path.join(PCS, file), 'utf8').replace(/\r\n/g, '\n');
@@ -174,4 +177,29 @@ test('a ~~~ fence closed by a ``` line stays open', () => {
   const r = applyDnDFlush(md, { hp: 4 });
   assert.match(r.markdown, /\| HP \(Current\) \| 9 \|/);
   assert.deepEqual(r.skipped, ['hp']);
+});
+
+test('a second row of a name whose first row is not live is not written either', () => {
+  // The build gives the key to the first Rage row; it is over-spent, so the page draws both rows as written.
+  const md = mini(['| HP (Max) | 20 |'], ['| Rage |  | 2 | 3 | Long Rest | a |', rage(1)]);
+  const r = applyDnDFlush(md, { used: { 'class:rage': 0 } });
+  assert.equal(r.markdown, md);
+  assert.deepEqual(r.changes, []);
+  assert.deepEqual(r.skipped, ['class:rage']);
+});
+
+test('when the first row of a name is live, it alone is written', () => {
+  const md = mini(['| HP (Max) | 20 |'], [rage(1), rage(2)]);
+  const r = applyDnDFlush(md, { used: { 'class:rage': 0 } });
+  assert.equal(r.markdown.split('\n').filter(l => /^\| Rage \|/.test(l)).map(l => l.split('|')[4].trim()).join(','), '0,2');
+});
+
+test('the row live on the page is the row flush writes, with a duplicate name', () => {
+  const live = md => buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  const over = mini(['| HP (Max) | 20 |'], ['| Rage |  | 2 | 3 | Long Rest | a |', rage(1)]);
+  assert.equal(live(over).tracks.some(t => t.key === 'class:rage'), false);
+  assert.deepEqual(applyDnDFlush(over, { used: { 'class:rage': 0 } }).changes, []);
+  const fine = mini(['| HP (Max) | 20 |'], [rage(1), rage(2)]);
+  assert.equal(live(fine).defaults.used['class:rage'], 1);
+  assert.equal(applyDnDFlush(fine, { used: { 'class:rage': 0 } }).changes.length, 1);
 });

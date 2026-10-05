@@ -38,22 +38,35 @@ function buildDndLiveData(model, meta) {
   const tracks = [];
   const seen = new Set();
   const warnings = [];
+  // The key belongs to the first row of that name, trackable or not: a later row of the same
+  // name is never live, so the row the page follows is the row flush writes.
   const add = (key, label, max, used, rest, extra) => {
-    if (!trackable(max, used)) return;        // nothing to mark, or shown as written
     if (seen.has(key)) { warnings.push(`Two live rows are named "${label}"; they share one count.`); return; }
     seen.add(key);
+    if (!trackable(max, used)) return;        // nothing to mark, or shown as written
     tracks.push({ key, label, max, used, rest, ...extra });
   };
 
-  for (const h of c.hitDice || []) if (h.raw === undefined) add(liveKey('hd', shown(h.label)), shown(h.label), h.max, h.spent, 'long');
-  for (const s of model.slots || []) add(liveKey('slot', shown(s.level)), shown(s.level), s.total, s.expended, /^pact\b/i.test(shown(s.level)) ? 'short' : 'long');
+  for (const h of c.hitDice || []) {
+    if (h.raw !== undefined) continue;
+    const label = shown(h.label);
+    add(liveKey('hd', label), label, h.max, h.spent, 'long');
+  }
+  for (const s of model.slots || []) {
+    const label = shown(s.level);
+    add(liveKey('slot', label), label, s.total, s.expended, /^pact\b/i.test(label) ? 'short' : 'long');
+  }
   for (const [list, kind] of [['class', 'class'], ['species', 'species'], ['feats', 'feat']]) {
     for (const f of model.features[list] || []) {
-      if (Number.isInteger(f.uses)) add(liveKey(kind, shown(f.name)), shown(f.name), f.uses, f.used || 0, recoveryKind(f.recovers));
+      if (!Number.isInteger(f.uses)) continue;
+      const label = shown(f.name);
+      add(liveKey(kind, label), label, f.uses, f.used || 0, recoveryKind(f.recovers));
     }
   }
   for (const i of model.magicItems || []) {
-    if (Number.isInteger(i.charges)) add(liveKey('item', shown(i.name)), shown(i.name), i.charges, i.used || 0, recoveryKind(i.recovers));
+    if (!Number.isInteger(i.charges)) continue;
+    const label = shown(i.name);
+    add(liveKey('item', label), label, i.charges, i.used || 0, recoveryKind(i.recovers));
   }
   const d = c.deathSaves;
   if (d && d.raw === undefined && d.s <= 3 && d.f <= 3) {
@@ -65,6 +78,7 @@ function buildDndLiveData(model, meta) {
   if (hpMax === null && !tracks.length) return null;
   const hpCur = whole(c.hpCur);
   const exhaustion = whole(c.exhaustion);
+  const tempHp = whole(c.tempHp);
   const inspired = yesNo(model.inspiration);
   const used = {};
   for (const t of tracks) used[t.key] = t.used;
@@ -73,10 +87,11 @@ function buildDndLiveData(model, meta) {
     system: 'dnd', campaignId: meta.campaignId, pcSlug: meta.pcSlug, buildVersion: meta.buildVersion,
     hpMax,
     exhaustionLive: exhaustion !== null || String(c.exhaustion || '').trim() === '',
+    tempLive: tempHp !== null || String(c.tempHp || '').trim() === '',
     inspirationLive: inspired !== null,
     defaults: {
       hp: hpMax === null ? null : Math.min(hpCur === null ? hpMax : hpCur, hpMax),
-      temp: whole(c.tempHp) || 0,
+      temp: tempHp || 0,
       exhaustion: Math.min(exhaustion || 0, 6),
       inspiration: inspired === true,
       concentrating: false,

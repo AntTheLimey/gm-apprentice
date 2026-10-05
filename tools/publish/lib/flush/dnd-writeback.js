@@ -11,7 +11,7 @@ const { liveKey, shown, trackable } = require('../templates/dnd/live-key');
 // table cells. The principle: it changes only a cell the build treated as live. So it
 // finds the sections, the table and the rows the way the build's parser does (the
 // first section of a title, the first table in it, a row only when the parser would
-// place it, a key only at its first trackable row) and reads a cell with the build's
+// place it, a key only at its first row) and reads a cell with the build's
 // own rules (whole numbers, splitReason, countCells, trackable, yesNo). A cell the
 // build drew as written is left alone and named in `skipped`; a missing cell is
 // skipped and named, never added. Concentrating is never written.
@@ -177,11 +177,13 @@ function applyDnDFlush(markdown, blob) {
     }
   }
 
-  // Counts: the first trackable row of a key is the live one.
+  // Counts: the first row of a key is the live one, as the build has it; if that row is not
+  // trackable the key is not live and no later row of the name takes it over.
   const claimed = new Set();
   const count = (key, label, row, idx, max, spent, raw) => {
-    if (!trackable(max, spent) || claimed.has(key)) return;
+    if (claimed.has(key)) return;
     claimed.add(key);
+    if (!trackable(max, spent)) return;
     if (!has(key)) return;
     if (!/^\d*$/.test(raw.trim())) return;
     resolved.add(key);
@@ -195,8 +197,9 @@ function applyDnDFlush(markdown, blob) {
       if (!m) continue;
       const key = liveKey('hd', shown(label.replace(/\s*\(\s*spent\s*\/\s*max\s*\)\s*$/i, '')));
       const cell = raw.trim().match(/^(\d+)(\s*\/\s*\d+)$/);
-      if (!trackable(+m[2], +m[1]) || hitDiceSeen.has(key)) continue;
+      if (hitDiceSeen.has(key)) continue;
       hitDiceSeen.add(key);
+      if (!trackable(+m[2], +m[1])) continue;
       if (!has(key)) continue;
       if (!cell) continue;
       resolved.add(key);

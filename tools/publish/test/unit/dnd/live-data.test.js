@@ -64,8 +64,12 @@ describe('buildDndLiveData', () => {
     assert.equal(d.system, 'dnd');
     assert.equal(d.campaignId, 'camp');
     assert.equal(d.hpMax, 44);
-    assert.deepEqual(d.defaults, { hp: 38, temp: 0, exhaustion: 0, inspiration: true, concentrating: false, conditions: [], used: d.defaults.used });
-    assert.equal(d.defaults.used['hd:hit dice'], 1);
+    // The counts the fixture note itself gives: Hit Dice 1/5, Lay on Hands 7, Channel Divinity 1,
+    // Divine Smite 0, Faithful Steed 1, 1st slots 1, 2nd slots 0, the wand 2, no death saves.
+    assert.deepEqual(d.defaults, { hp: 38, temp: 0, exhaustion: 0, inspiration: true, concentrating: false, conditions: [], used: {
+      'hd:hit dice': 1, 'class:lay on hands': 7, 'class:channel divinity': 1, 'class:divine smite': 0, 'class:faithful steed': 1,
+      'slot:1st': 1, 'slot:2nd': 0, 'item:wand of magic missiles': 2, 'ds:s': 0, 'ds:f': 0,
+    } });
     assert.deepEqual(track(d, 'hd:hit dice'), { key: 'hd:hit dice', label: 'Hit Dice', max: 5, used: 1, rest: 'long' });
     assert.equal(track(d, 'class:channel divinity').rest, 'short1');
     assert.equal(track(d, 'class:channel divinity').used, 1);
@@ -107,6 +111,27 @@ describe('buildDndLiveData', () => {
     const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), META);
     assert.equal(d.tracks.filter(t => t.key === 'class:rage').length, 1);
     assert.match(d.warnings[0], /Rage/);
+  });
+  it('a name whose first row is not live keeps the key: a later row of it is not live either', () => {
+    const md = '## Class Features\n\n| Name | Action | Uses | Used | Recovers | Summary |\n|---|---|---|---|---|---|\n| Rage |  | 2 | 3 | Long Rest | a |\n| Rage |  | 3 | 1 | Long Rest | b |\n';
+    const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), META);
+    assert.equal(d, null);   // nothing else readable, so no live row slipped through
+    const withHp = parseDnd({ type: 'pc' }, sectionsFromMarkdown(md));
+    withHp.combat.hpMax = '10';
+    const e = buildDndLiveData(withHp, META);
+    assert.equal(track(e, 'class:rage'), undefined);
+    assert.equal(e.defaults.used['class:rage'], undefined);
+    assert.match(e.warnings[0], /Rage/);
+  });
+  it('tempLive: a whole number, a number with a reason, or blank is live; dice are not', () => {
+    const tempLive = tempHp => withHpMax(tempHp).tempLive;
+    function withHpMax(tempHp) {
+      const m = parseDnd({ type: 'pc' }, sectionsFromMarkdown('## Notes\n\nNothing here.\n'));
+      Object.assign(m.combat, { hpMax: '44' }, tempHp === undefined ? {} : { tempHp });
+      return buildDndLiveData(m, META);
+    }
+    for (const t of [undefined, '', '  ', '0', '5', '5 (false life)']) assert.equal(tempLive(t), true, String(t));
+    for (const t of ['2d4', 'lots', '5 temp']) assert.equal(tempLive(t), false, t);
   });
   it('board facts are the note\'s own words', () => {
     const d = island('Brannoch_Vale.md');

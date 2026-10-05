@@ -48,7 +48,19 @@ test('a row follows the saved state: temporary hit points, dying, conditions', (
 
 test('a condition typed in the note cannot inject markup', () => {
   const pc = buildDndPartyManifest('camp', [entry('B', 'b')]).pcs[0];
-  assert.doesNotMatch(dndRowCells(pc, { conditions: ['<img src=x>'] }).status, /<img/);
+  const status = dndRowCells(pc, { conditions: ['<img src=x>'] }).status;
+  assert.doesNotMatch(status, /<img/);
+  assert.match(status, /&lt;img src=x&gt;/);
+});
+
+test('a rubbish record paints no NaN, keeps hit points inside 0..max, and escapes its text', () => {
+  const pc = buildDndPartyManifest('camp', [entry('B', 'b')]).pcs[0];
+  const c = dndRowCells(pc, { hp: 'x', temp: -3, exhaustion: 99, conditions: [7, '<b>'], used: { 'ds:s': 'a' } });
+  for (const k of ['hp', 'status', 'ac', 'pp', 'dc', 'who']) assert.doesNotMatch(String(c[k]), /NaN/, k);
+  const shownHp = Number(c.hp.match(/gl-vnum[^>]*>(\d+)</)[1]);
+  assert.ok(shownHp >= 0 && shownHp <= 44, String(shownHp));
+  assert.match(c.status, /&lt;b&gt;/);
+  assert.doesNotMatch(c.status, /<b>/);
 });
 
 test('no hit point maximum, no spell DC: dashes', () => {

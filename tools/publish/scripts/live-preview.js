@@ -47,7 +47,13 @@ function readBody(req) {
   });
 }
 
-async function createPreview({ configPath }) {
+const loadHandlers = async () => ({
+  loadout: await import('../templates-scaffold/functions/api/loadout.js'),
+  list: await import('../templates-scaffold/functions/api/loadout-list.js'),
+});
+
+// `handlers` is a seam for tests; the real handlers are the default.
+async function createPreview({ configPath, handlers = loadHandlers }) {
   const no = refusal(configPath);
   if (no) throw new Error(no);
   const resolved = path.resolve(configPath);
@@ -63,8 +69,13 @@ async function createPreview({ configPath }) {
 
   const kv = memoryKv();
   const env = { INBOX: kv };
-  const loadout = await import('../templates-scaffold/functions/api/loadout.js');
-  const list = await import('../templates-scaffold/functions/api/loadout-list.js');
+  let loadout, list;
+  try {
+    ({ loadout, list } = await handlers());
+  } catch (e) {
+    fs.rmSync(outputDir, { recursive: true, force: true });   // nothing else owns it yet
+    throw e;
+  }
 
   async function send(res, response) {
     res.writeHead(response.status, Object.fromEntries(response.headers));
