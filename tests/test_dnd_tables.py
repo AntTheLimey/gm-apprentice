@@ -134,8 +134,8 @@ def test_allowances():
     assert dt.prepared_allowed("wizard", 5) == 9
     assert dt.prepared_allowed("sorcerer", 1) == 2
     assert dt.prepared_allowed("warlock", 10) == 10
-    assert dt.prepared_allowed("warlock", 11) == 11
-    assert dt.prepared_allowed("warlock", 17) == 14
+    assert dt.prepared_allowed("warlock", 11) == 12
+    assert dt.prepared_allowed("warlock", 17) == 18
     assert dt.prepared_allowed("fighter", 5) == 0
 
 

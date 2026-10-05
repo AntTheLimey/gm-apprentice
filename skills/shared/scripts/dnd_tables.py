@@ -67,8 +67,7 @@ PACT_SLOTS: tuple[tuple[int, int], ...] = (
     (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (3, 5), (4, 5), (4, 5), (4, 5), (4, 5),
 )
 # Warlock levels that each add one Mystic Arcanum spell, of level 6, 7, 8
-# and 9 in turn. The SRD's Prepared Spells column already counts them: it
-# rises by one at exactly these levels, so they are not added again.
+# and 9 in turn.
 ARCANUM = (11, 13, 15, 17)
 
 
@@ -119,4 +118,7 @@ def cantrips_allowed(name: str, level: int) -> int:
 
 
 def prepared_allowed(name: str, level: int) -> int:
-    return CLASSES[name].prepared[level - 1]
+    # Mystic Arcanum spells are chosen apart from the prepared list, but a
+    # sheet lists them with the rest, so they are allowed on top.
+    extra = _arcanum(level) if CLASSES[name].caster == PACT else 0
+    return CLASSES[name].prepared[level - 1] + extra
