@@ -203,3 +203,33 @@ test('the row live on the page is the row flush writes, with a duplicate name', 
   assert.equal(live(fine).defaults.used['class:rage'], 1);
   assert.equal(applyDnDFlush(fine, { used: { 'class:rage': 0 } }).changes.length, 1);
 });
+
+// What the page reads through the renderer, flush writes: emphasis round a number is kept.
+for (const [name, open, close] of [['bold', '**', '**'], ['italic', '*', '*']]) {
+  test(`${name} numbers are written, the emphasis and a reason kept`, () => {
+    const md = mini([`| HP (Current) | ${open}38${close} (after the fall) |`, '| HP (Max) | 44 |', `| Temp HP | ${open}0${close} |`,
+      `| Exhaustion | ${open}1${close} |`, `| Hit Dice (Spent/Max) | ${open}1/5${close} |`, `| Death Saves (S/F) | ${open}0${close}/${open}1${close} |`],
+    [rage(`${open}1${close}`)]);
+    const r = applyDnDFlush(md, { hp: 31, temp: 4, exhaustion: 2, used: { 'hd:hit dice': 3, 'ds:s': 2, 'ds:f': 1, 'class:rage': 2 } });
+    assert.deepEqual(r.skipped, []);
+    const row = re => r.markdown.split('\n').find(l => re.test(l));
+    assert.match(row(/^\| HP \(Current\)/), new RegExp(`\\| \\${open}31\\${close.split('').join('\\')} \\(after the fall\\) \\|`));
+    assert.equal(row(/^\| Temp HP/), `| Temp HP | ${open}4${close} |`);
+    assert.equal(row(/^\| Exhaustion/), `| Exhaustion | ${open}2${close} |`);
+    assert.equal(row(/^\| Hit Dice/), `| Hit Dice (Spent/Max) | ${open}3/5${close} |`);
+    assert.equal(row(/^\| Death Saves/), `| Death Saves (S/F) | ${open}2${close}/${open}1${close} |`);
+    assert.equal(row(/^\| Rage/), `| Rage |  | 2 | ${open}2${close} | Long Rest | a |`);
+  });
+}
+
+test('a bold number with a reason keeps both', () => {
+  const md = mini(['| HP (Current) | **38** (after the fall) |', '| HP (Max) | 44 |'], []);
+  assert.equal(applyDnDFlush(md, { hp: 31 }).markdown.split('\n').find(l => /^\| HP \(C/.test(l)), '| HP (Current) | **31** (after the fall) |');
+});
+
+test('markup that only renders as a number is skipped and named', () => {
+  const md = mini(['| HP (Current) | <span>38</span> |', '| HP (Max) | 44 |'], [rage('[[Two|2]]')]);
+  const r = applyDnDFlush(md, { hp: 31, used: { 'class:rage': 1 } });
+  assert.equal(r.markdown, md);
+  assert.deepEqual(r.skipped.sort(), ['class:rage', 'hp']);
+});

@@ -39,13 +39,36 @@ function copyAndBuild(sourceVault, mutate) {
 // Fixture notes that have no live island on purpose. Any other note without one is a failure.
 const NO_ISLAND = [];
 
+// A PC whose live cells are all emphasised or carry a reason: the page reads them, so flush must write them.
+const EMPHASIS = [
+  ['| HP (Current) | 38 |', '| HP (Current) | **38** (after the fall) |'],
+  ['| Temp HP | 0 |', '| Temp HP | *0* |'],
+  ['| Exhaustion | 0 |', '| Exhaustion | **0** |'],
+  ['| Hit Dice (Spent/Max) | 1/5 |', '| Hit Dice (Spent/Max) | **1/5** |'],
+  ['| Death Saves (S/F) | 0/0 |', '| Death Saves (S/F) | *0*/*0* |'],
+  ['| Lay on Hands | Bonus Action | 25 | 7 |', '| Lay on Hands | Bonus Action | 25 | **7** |'],
+  ['| Channel Divinity |  | 2 | 1 |', '| Channel Divinity |  | 2 | *1* |'],
+  ['| 1st | 4 | 1 |', '| 1st | 4 | **1** |'],
+  ['| 2nd | 2 | 0 |', '| 2nd | 2 | *0* |'],
+  ['| No | 7 | 2 |', '| No | 7 | **2** |'],
+];
+const EMPHASIS_FILE = 'Emphasis_Test.md';
+function addEmphasis(vault) {
+  let text = fs.readFileSync(path.join(vault, PCS, 'Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n');
+  for (const [from, to] of EMPHASIS) {
+    assert.ok(text.includes(from), `fixture no longer has ${from}`);
+    text = text.replace(from, to);
+  }
+  fs.writeFileSync(path.join(vault, PCS, EMPHASIS_FILE), text.replace(/^player_name: .*$/m, 'player_name: "Kit"'));
+}
+
 describe('D&D flush round trip, every fixture note', () => {
   let first, second;
-  const files = fs.readdirSync(path.join(FIXTURES, 'with-dnd-pc', PCS)).filter(f => f.endsWith('.md'));
+  const files = fs.readdirSync(path.join(FIXTURES, 'with-dnd-pc', PCS)).filter(f => f.endsWith('.md')).concat(EMPHASIS_FILE);
   const flushed = {};
   const blobs = {};
   before(() => {
-    first = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'));
+    first = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), addEmphasis);
     for (const file of files) {
       const d = first.island(file);
       if (!d) continue;
@@ -60,13 +83,15 @@ describe('D&D flush round trip, every fixture note', () => {
       flushed[file] = { note, island: d, result: applyDnDFlush(note, b) };
     }
     second = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => {
+      addEmphasis(vault);
       for (const file of files) if (flushed[file]) fs.writeFileSync(path.join(vault, PCS, file), flushed[file].result.markdown);
     });
   });
   after(() => { for (const s of [first, second]) if (s) fs.rmSync(s.work, { recursive: true, force: true }); });
 
   it('covers every D&D PC fixture note that goes live', () => {
-    assert.equal(files.length, 7, 'a fixture note was added or removed: say whether it goes live');
+    assert.equal(files.length, 7 + 1,  // the seven fixtures and the generated emphasised note
+       'a fixture note was added or removed: say whether it goes live');
     const dark = files.filter(f => !flushed[f]).sort();
     assert.deepEqual(dark, NO_ISLAND.slice().sort(), 'a note without an island must be listed in NO_ISLAND');
     assert.equal(Object.keys(flushed).length, files.length - NO_ISLAND.length);

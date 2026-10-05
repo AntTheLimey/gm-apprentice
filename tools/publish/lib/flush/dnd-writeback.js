@@ -118,12 +118,30 @@ function applyDnDFlush(markdown, blob) {
     const v = splitReason(t).value;
     return /^\d+$/.test(v) ? { value: Number(v) } : { other: true };
   };
-  const swapLeading = (raw, n) => { const m = raw.trim().match(/^(\d+)([\s\S]*)$/); return m ? String(n) + m[2] : null; };
-  const putNumber = (r, idx, label, n, raw) => {
-    if (r.blank) { write(r.row, idx, label, String(n)); return true; }
-    const to = swapLeading(raw, n);
+  // Change only the digits of a raw cell, keeping emphasis marks, a reason, spacing. The digit
+  // runs the page reads (from the rendered text) must be the raw cell's own first runs, with
+  // nothing but emphasis marks before them (and a slash between a pair); a link or markup that
+  // merely renders as a number is not mappable and gives null. A blank cell takes the digits.
+  const swapDigits = (raw, values) => {
+    const r = raw.trim();
+    if (r === '') return values.join('/');
+    const want = plain(r).match(/\d+/g) || [];
+    const have = [...r.matchAll(/\d+/g)];
+    if (have.length < values.length || want.length < values.length) return null;
+    if (!values.every((_, i) => have[i][0] === want[i])) return null;
+    if (!/^[\s*_~`]*$/.test(r.slice(0, have[0].index))) return null;
+    if (values.length === 2) {
+      const between = r.slice(have[0].index + have[0][0].length, have[1].index);
+      if (!/^[\s*_~`]*\/[\s*_~`]*$/.test(between)) return null;
+    }
+    let out = r;
+    for (let i = values.length - 1; i >= 0; i--) out = out.slice(0, have[i].index) + values[i] + out.slice(have[i].index + have[i][0].length);
+    return out;
+  };
+  const putNumber = (row, idx, label, n, raw) => {
+    const to = swapDigits(raw, [n]);
     if (to === null) return false;
-    write(r.row, idx, label, to);
+    write(row, idx, label, to);
     return true;
   };
 
@@ -141,8 +159,7 @@ function applyDnDFlush(markdown, blob) {
     const current = r.blank ? dflt : (key === 'exhaustion' ? Math.min(r.value, 6) : r.value);
     okScalar.add(key);
     if (blob[key] === current) return;
-    r.row = hit.row;
-    if (!putNumber(r, 1, hit.label, blob[key], hit.raw)) okScalar.delete(key);
+    if (!putNumber(hit.row, 1, hit.label, blob[key], hit.raw)) okScalar.delete(key);
   };
   const maxRow = firstRow(/^HP\s*\(\s*max(imum)?\.?\s*\)$/i);
   const hpMax = maxRow && readNumber(maxRow.raw).value !== undefined ? readNumber(maxRow.raw).value : null;
@@ -153,7 +170,7 @@ function applyDnDFlush(markdown, blob) {
       if (!r.other) {
         const current = r.blank ? hpMax : Math.min(r.value, hpMax);
         okScalar.add('hp');
-        if (blob.hp !== current) { r.row = hit.row; if (!putNumber(r, 1, hit.label, blob.hp, hit.raw)) okScalar.delete('hp'); }
+        if (blob.hp !== current) { if (!putNumber(hit.row, 1, hit.label, blob.hp, hit.raw)) okScalar.delete('hp'); }
       }
     }
   }
@@ -185,9 +202,8 @@ function applyDnDFlush(markdown, blob) {
     claimed.add(key);
     if (!trackable(max, spent)) return;
     if (!has(key)) return;
-    if (!/^\d*$/.test(raw.trim())) return;
-    resolved.add(key);
-    if (used[key] !== spent) write(row, idx, label, String(used[key]));
+    if (used[key] === spent) { resolved.add(key); return; }
+    if (putNumber(row, idx, label, used[key], raw)) resolved.add(key);
   };
 
   const hitDiceSeen = new Set();
@@ -196,23 +212,26 @@ function applyDnDFlush(markdown, blob) {
       const m = filled(plain(raw)).match(/^(\d+)\s*\/\s*(\d+)$/);
       if (!m) continue;
       const key = liveKey('hd', shown(label.replace(/\s*\(\s*spent\s*\/\s*max\s*\)\s*$/i, '')));
-      const cell = raw.trim().match(/^(\d+)(\s*\/\s*\d+)$/);
       if (hitDiceSeen.has(key)) continue;
       hitDiceSeen.add(key);
       if (!trackable(+m[2], +m[1])) continue;
       if (!has(key)) continue;
-      if (!cell) continue;
+      if (used[key] === +m[1]) { resolved.add(key); continue; }
+      const to = swapDigits(raw, [used[key]]);
+      if (to === null) continue;
       resolved.add(key);
-      if (used[key] !== +m[1]) write(row, 1, label, used[key] + cell[2]);
+      write(row, 1, label, to);
     }
   }
   const ds = combat.find(r => /^death saves/i.test(r.label));
   if (ds) {
     const m = filled(plain(ds.raw)).match(/^(\d+)\s*\/\s*(\d+)$/);
-    const cell = ds.raw.trim().match(/^(\d+)(\s*\/\s*)(\d+)$/);
-    if (m && +m[1] <= 3 && +m[2] <= 3 && has('ds:s') && has('ds:f') && cell) {
-      resolved.add('ds:s'); resolved.add('ds:f');
-      if (used['ds:s'] !== +m[1] || used['ds:f'] !== +m[2]) write(ds.row, 1, ds.label, `${used['ds:s']}${cell[2]}${used['ds:f']}`);
+    if (m && +m[1] <= 3 && +m[2] <= 3 && has('ds:s') && has('ds:f')) {
+      if (used['ds:s'] === +m[1] && used['ds:f'] === +m[2]) { resolved.add('ds:s'); resolved.add('ds:f'); }
+      else {
+        const to = swapDigits(ds.raw, [used['ds:s'], used['ds:f']]);
+        if (to !== null) { resolved.add('ds:s'); resolved.add('ds:f'); write(ds.row, 1, ds.label, to); }
+      }
     }
   }
 
