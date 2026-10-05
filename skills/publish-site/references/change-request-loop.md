@@ -276,7 +276,7 @@ lost reports `status: gone` to the widget, which tells the player to resend.
 With `publish.character_sheets` off (`switches.characterSheets` is `false`
 in the Prerequisites check), the site carries no sheet and the widget is a
 question channel labelled "Ask the GM". This holds for every system, not
-only GURPS and CoC. The Start, watcher, failure and Stop sections apply
+only GURPS, CoC and D&D. The Start, watcher, failure and Stop sections apply
 unchanged. "When a batch arrives" changes:
 
 - **Every request is a question.** Step 0 (resolve the `character`) still
