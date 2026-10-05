@@ -76,13 +76,33 @@ Write a number by hand, with its reason, only for what that vocabulary cannot sa
 ### Rules checks
 
 The same run ends with the rules checks: slips in the numbers, never
-whether a choice is allowed. They never change the note.
+whether a choice is allowed. They never change the note. After the rows
+comes a tally line, `# wrong: N  look: N  cantcheck: N`. When the fill
+report has an `ERROR` row, the rules checks do not run: fix the note first.
 
 | Row | Means | Do |
 |-----|-------|----|
-| `WRONG` | The sheet contradicts itself: class levels, hit dice, attunement, more spent than owned | Fix the note, or ask the GM which number is right |
-| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `5 (ring of spell storing)`, and the row goes away |
+| `WRONG` | The sheet contradicts itself: class levels, hit dice, more than three attuned items (a `LOOK` when the class is outside the free rules), more spent than owned, current hit points above the maximum, a death-save count above 3 | Fix the note, or ask the GM which number is right |
+| `LOOK` | A number differs from the free rules' table for the class and level | Tell the GM. If the number is right (an item, a boon, a house rule), write the reason in brackets beside it, `5 (ring of spell storing)`, and the row goes away (only for slot totals, a score over 20 and `HP (Max)`; see below) |
 | `CANTCHECK` | A class is outside the free rules, the class line cannot be read, or slot totals differ for a class with no spells of its own | Mention it once. It is not a fault |
+
+Other `LOOK` rows have no cell for a reason:
+
+- Cantrip or prepared-spell counts, or a spell above what the class can
+  prepare: a spell from an item, feat or species trait is left out of the
+  count when its `Source` cell says so; one the character always has
+  prepared is left out when its Tags include `Always prepared`. In a note
+  with the earlier nine-column spell table (no `Source` column), a Tags
+  entry with a colon, `Item: Staff of Healing`, marks the source. A spell
+  listed twice counts once. If the count is still over and the GM allows
+  it, write nothing: tell the GM once and leave it.
+- The saving-throws row: correct the Save Proficiency marks, or leave it
+  if the GM says the character is built that way.
+
+Known limits: a Wizard whose Spells table lists the whole spellbook, not
+only what is prepared, shows a prepared-count `LOOK`. A multiclass
+character's hit point and spell-level ranges are the widest its classes
+allow, so some slips pass.
 
 Not checked: armour class, attacks, skill counts, and whether a spell,
 feat or skill pick is allowed.

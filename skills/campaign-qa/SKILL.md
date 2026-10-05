@@ -183,10 +183,11 @@ entity dates vs history-timeline eras, and deferred-flag review.
 
 Run in order, reading each check file as you go: Canon Audit →
 Timeline Validation → Name Similarity → Clue Redundancy → Graph
-Health → D&D Sheets (D&D vaults only) → Legacy Canon Field Repair → Stale DRAFT Detection →
-Wrap-Up Conformance → World Consistency (if `_World/` exists) →
-Open Spoilers. Deduplicate across checks; present one report
-grouped by severity (Critical, Warning, Info), not by mode.
+Health → D&D Sheets (D&D vaults only) → Legacy Canon Field Repair →
+Stale DRAFT Detection → Wrap-Up Conformance → World Consistency (if
+`_World/` exists) → Open Spoilers. Deduplicate across checks;
+present one report grouped by severity (Critical, Warning, Info), not by
+mode.
 
 ## The Fix Workflow
 
