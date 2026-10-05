@@ -12,6 +12,8 @@
   }
   function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
   function amount(n) { var x = Math.floor(Number(n)); return (isFinite(x) && x > 0) ? x : 0; }
+  // The most a typed amount or a temporary hit point total can be.
+  var MOST = 9999;
   function copy(s) {
     var out = {}, k;
     for (k in s) if (Object.prototype.hasOwnProperty.call(s, k)) out[k] = s[k];
@@ -30,14 +32,20 @@
     var savedUsed = (s.used && typeof s.used === 'object') ? s.used : {};
     var out = { v: 1 };
     out.hp = data.hpMax == null ? null : clamp(int(s.hp, d.hp), 0, data.hpMax);
-    out.temp = Math.max(0, int(s.temp, d.temp || 0));
-    out.exhaustion = clamp(int(s.exhaustion, d.exhaustion || 0), 0, 6);
+    // A cell the note wrote in words is not live: the page holds no number for it.
+    out.temp = data.tempLive === false ? 0 : clamp(int(s.temp, d.temp || 0), 0, MOST);
+    out.exhaustion = data.exhaustionLive === false ? 0 : clamp(int(s.exhaustion, d.exhaustion || 0), 0, 6);
     out.inspiration = typeof s.inspiration === 'boolean' ? s.inspiration : !!d.inspiration;
     out.concentrating = s.concentrating === true;
     var conds = Array.isArray(s.conditions) ? s.conditions : (d.conditions || []);
     out.conditions = [];
+    // One of each whatever its capitals; the first spelling is kept.
+    var seen = {};
     conds.forEach(function (c) {
-      if (typeof c === 'string' && c.trim() && out.conditions.indexOf(c.trim()) === -1) out.conditions.push(c.trim());
+      var name = typeof c === 'string' ? c.trim() : '';
+      if (!name || seen[name.toLowerCase()]) return;
+      seen[name.toLowerCase()] = true;
+      out.conditions.push(name);
     });
     out.used = {};
     (data.tracks || []).forEach(function (t) { out.used[t.key] = clamp(int(savedUsed[t.key], t.used), 0, t.max); });
@@ -68,7 +76,7 @@
     return { state: s, gained: s.hp - before, clearedDeath: cleared };
   }
 
-  function setTemp(state, n) { var s = copy(state); s.temp = amount(n); return s; }
+  function setTemp(state, n) { var s = copy(state); s.temp = Math.min(amount(n), MOST); return s; }
 
   function setUsed(state, track, n) {
     var s = copy(state);
@@ -108,11 +116,13 @@
     return s;
   }
 
-  // Labels of the spent things a rest would bring back, in sheet order.
+  // Labels of the spent things a rest would bring back, in sheet order. A long
+  // rest also clears death saves, so marked ones are named.
   function comesBack(state, data, rest) {
     return (data.tracks || []).filter(function (t) {
-      if (!state.used[t.key] || t.rest === 'reset' || t.rest === 'none') return false;
-      return rest === 'long' ? true : (t.rest === 'short' || t.rest === 'short1');
+      if (!state.used[t.key] || t.rest === 'none') return false;
+      if (rest === 'long') return true;
+      return t.rest === 'short' || t.rest === 'short1';
     }).map(function (t) { return t.label; });
   }
   function leftAlone(data) {
@@ -140,9 +150,10 @@
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__dndLive = api;
 
+
   // --- DOM part (browser only) ---
   // It reads taps and paints. Every decision is in the functions above, and the
-  // page is always drawn from `state`, never read back from the DOM.
+  // page is always drawn from the state, never read back from the DOM.
   if (typeof document === 'undefined') return;
 
   function el(tag, cls, text) {
@@ -159,6 +170,7 @@
     return b;
   }
   function each(list, fn) { Array.prototype.forEach.call(list, fn); }
+  function empty(node) { while (node.firstChild) node.removeChild(node.firstChild); }
   function same(a, b) { return String(a).toLowerCase() === String(b).toLowerCase(); }
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -173,6 +185,9 @@
     data.tracks.forEach(function (t) { trackOf[t.key] = t; });
     var hitDice = data.tracks.filter(isHitDie);
     var hasDeath = !!(trackOf['ds:s'] || trackOf['ds:f']);
+    // Temporary hit points and exhaustion the note wrote in words stay as written.
+    var tempLive = data.tempLive !== false;
+    var exhaustionLive = !!data.exhaustionLive;
 
     var vitals = document.querySelector('[data-live="vitals"]');
     var hpTile = (vitals && data.hpMax != null) ? vitals.querySelector('[data-live="hp"]') : null;
@@ -180,11 +195,11 @@
 
     var state = fit(store.readCache(), data);
     var undo = null;        // the state before the last rest, until the next change
-    var open = null;        // the open drawer: { name, key }
+    var open = null;        // the open drawer: { name, key, update }
     var opener = null;      // what opened it, to hand focus back
     var fields = {};        // the open drawer's number inputs
     var condChip = null, inspChip = null, concChip = null;
-    var deathRow = null, drawerBox = null, saidBox = null, saidText = null, undoBtn = null;
+    var hpBar = null, deathRow = null, drawerBox = null, saidBox = null, saidText = null, undoBtn = null;
 
     // A track's name in a sentence. A slot row's label is only its level.
     function nameOf(t) { return t.key.indexOf('slot:') === 0 ? t.label + ' spell slots' : t.label; }
@@ -209,14 +224,30 @@
       return g;
     }
 
+    function buildHp() {
+      hpTile.setAttribute('role', 'button');
+      hpTile.setAttribute('tabindex', '0');
+      var line = hpTile.querySelector('.dnd5e-hp-line') || hpTile;
+      // The build draws temporary hit points last on the line; a note with none gets the same place.
+      if (tempLive && !line.querySelector('.dnd5e-temp')) line.appendChild(el('span', 'dnd5e-temp'));
+      var hint = el('span', 'dnd5e-tap', 'tap to change');
+      hint.setAttribute('aria-hidden', 'true');
+      line.appendChild(hint);
+      var bar = el('span', 'dnd5e-bar');
+      bar.setAttribute('aria-hidden', 'true');
+      hpBar = el('span', 'dnd5e-bar-fill');
+      bar.appendChild(hpBar);
+      hpTile.appendChild(bar);
+    }
+
     function buildChips() {
       // What the note wrote that the page cannot hold as a yes or a number stays as written.
       var built = Array.prototype.slice.call(chipRow.children);
       var keep = [];
       var hadInspiration = built.length && built[0].classList.contains('is-on');
       if (hadInspiration && !data.inspirationLive) keep.push(built[0]);
-      if (!data.exhaustionLive && built.length > (hadInspiration ? 2 : 1)) keep.push(built[built.length - 1]);
-      while (chipRow.firstChild) chipRow.removeChild(chipRow.firstChild);
+      if (!exhaustionLive && built.length > (hadInspiration ? 2 : 1)) keep.push(built[built.length - 1]);
+      empty(chipRow);
       chipRow.classList.remove('is-quiet');
 
       if (data.inspirationLive) { inspChip = button('dnd5e-chip', 'Heroic Inspiration', 'inspiration'); chipRow.appendChild(inspChip); }
@@ -233,10 +264,7 @@
 
     function buildStrip() {
       if (!vitals) return;
-      if (hpTile) {
-        hpTile.setAttribute('role', 'button');
-        hpTile.setAttribute('tabindex', '0');
-      }
+      if (hpTile) buildHp();
       if (hpTile && hasDeath) {
         deathRow = el('div', 'dnd5e-death');
         deathRow.hidden = true;
@@ -255,41 +283,41 @@
       drawerBox.hidden = true;
       drawerBox.setAttribute('role', 'group');
       vitals.appendChild(drawerBox);
-      saidBox = el('div', 'dnd5e-said');
-      saidBox.hidden = true;
+      // The message line is in the page from the start and never hidden from a screen
+      // reader, so its first message is announced; while empty it only takes no room.
+      saidBox = el('div', 'dnd5e-said is-empty');
       saidText = el('span', 'dnd5e-said-text');
       saidText.setAttribute('role', 'status');
       undoBtn = button('dnd5e-btn is-quiet', 'Undo', 'undo');
+      undoBtn.hidden = true;
       saidBox.appendChild(saidText);
       saidBox.appendChild(undoBtn);
       vitals.appendChild(saidBox);
     }
 
     // ---- drawers: one place in the strip for every question the sheet asks ----
+    // Each builder draws what does not change and returns a function that fills in
+    // what follows the state. A drawer is built once per opening and only updated
+    // after that, so a field keeps its focus and what was typed in it.
     function title(text) {
       var h = el('h4', 'dnd5e-drawer-title', text);
       drawerBox.appendChild(h);
       drawerBox.setAttribute('aria-label', text);
+      return h;
     }
     function row() { var r = el('div', 'dnd5e-frow'); drawerBox.appendChild(r); return r; }
-    function numberField(name, max) {
+    function numberField(name) {
       var input = el('input', 'dnd5e-field');
       input.type = 'number';
       input.min = '0';
-      if (max != null) input.max = String(max);
+      input.max = String(MOST);
       input.setAttribute('inputmode', 'numeric');
       input.placeholder = '0';
       input.name = 'dnd5e-' + name.replace(/[^a-z0-9]+/gi, '-');
       fields[name] = input;
       return input;
     }
-    function ask(label, name, max) {
-      var l = el('label', 'dnd5e-ask');
-      l.appendChild(el('span', '', label));
-      l.appendChild(numberField(name, max));
-      return l;
-    }
-    function read(name) { return fields[name] ? amount(fields[name].value) : 0; }
+    function read(name) { return fields[name] ? Math.min(amount(fields[name].value), MOST) : 0; }
 
     var DRAWERS = {
       hp: function () {
@@ -300,101 +328,133 @@
         r.appendChild(input);
         r.appendChild(button('dnd5e-btn is-damage', 'Damage', 'damage'));
         r.appendChild(button('dnd5e-btn is-heal', 'Heal', 'heal'));
-        r.appendChild(button('dnd5e-btn', 'Temporary', 'temp'));
+        if (tempLive) r.appendChild(button('dnd5e-btn', 'Temporary', 'temp'));
         r.appendChild(button('dnd5e-btn is-quiet', 'Close', 'close'));
-        drawerBox.appendChild(el('p', '', 'Damage comes off temporary hit points first. Temporary sets your temporary hit points to the amount.'));
+        drawerBox.appendChild(el('p', '', tempLive
+          ? 'Damage comes off temporary hit points first. Temporary sets your temporary hit points to the amount.'
+          : 'Your temporary hit points are as the note has them. Take them off yourself before you enter damage.'));
+        return function () {};
       },
       pool: function (key) {
         var t = trackOf[key];
-        title(t.label + ': ' + left(t) + ' of ' + t.max + ' left');
+        var h = title('');
         var r = row();
-        var input = numberField('amt', t.max);
+        var input = numberField('amt');
         input.setAttribute('aria-label', 'Amount');
         r.appendChild(input);
         r.appendChild(button('dnd5e-btn', 'Spend', 'spend'));
         r.appendChild(button('dnd5e-btn is-quiet', 'Put back', 'putback'));
         r.appendChild(button('dnd5e-btn is-quiet', 'Close', 'close'));
+        return function () {
+          h.textContent = t.label + ': ' + left(t) + ' of ' + t.max + ' left';
+          drawerBox.setAttribute('aria-label', h.textContent);
+        };
       },
       cond: function () {
         title('Conditions');
         var chips = el('div', 'dnd5e-chips');
-        // The standard list, then any condition of the GM's own, so it can be seen and turned off.
-        var names = CONDITIONS.slice();
-        state.conditions.forEach(function (c) {
-          if (!names.some(function (n) { return same(n, c); })) names.push(c);
-        });
-        names.forEach(function (n) { chips.appendChild(button('dnd5e-chip', n, 'cond', n)); });
+        CONDITIONS.forEach(function (n) { chips.appendChild(button('dnd5e-chip', n, 'cond', n)); });
         drawerBox.appendChild(chips);
-        var r = row();
-        if (data.exhaustionLive) {
+        var r = row(), count = null;
+        if (exhaustionLive) {
           r.appendChild(el('span', '', 'Exhaustion'));
           var step = el('span', 'dnd5e-stepper');
           var less = button('dnd5e-btn is-quiet', '−', 'exhaustion', '-1');
           less.setAttribute('aria-label', 'Less exhaustion');
           var more = button('dnd5e-btn is-quiet', '+', 'exhaustion', '1');
           more.setAttribute('aria-label', 'More exhaustion');
+          count = el('span', 'dnd5e-num');
           step.appendChild(less);
-          step.appendChild(el('span', 'dnd5e-num'));
+          step.appendChild(count);
           step.appendChild(more);
           r.appendChild(step);
         }
         r.appendChild(button('dnd5e-btn is-quiet dnd5e-end', 'Done', 'close'));
+        return function () {
+          // A condition of the GM's own gets a chip, so it can be seen and turned off;
+          // it stays listed while the drawer is open, so a slip can be taken back.
+          state.conditions.forEach(function (c) {
+            var listed = false;
+            each(chips.children, function (chip) { if (same(chip.getAttribute('data-arg'), c)) listed = true; });
+            if (!listed) chips.appendChild(button('dnd5e-chip', c, 'cond', c));
+          });
+          each(chips.children, function (chip) {
+            var on = conditionAt(chip.getAttribute('data-arg')) !== -1;
+            chip.classList.toggle('is-on', on);
+            chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+          });
+          if (count) count.textContent = state.exhaustion;
+        };
       },
       short: function () {
         title('Short rest');
-        var r = row();
-        hitDice.forEach(function (t) { r.appendChild(ask(t.label + ' spent (' + left(t) + ' left)', 'dice:' + t.key, left(t))); });
-        if (state.hp != null) r.appendChild(ask('Hit points you rolled', 'amt'));
-        var back = backFrom('short').map(function (t) { return t.rest === 'short1' ? 'one ' + nameOf(t) + ' use' : nameOf(t); });
-        drawerBox.appendChild(el('p', '', (back.length ? 'Comes back: ' + back.join(', ') + '.' : 'Nothing else comes back on a short rest right now.')
-          + (hitDice.length && state.hp != null ? ' Roll your own dice and add your Constitution for each.' : '')));
+        var r = row(), asks = [];
+        function ask(name) {
+          var l = el('label', 'dnd5e-ask'), words = el('span');
+          l.appendChild(words);
+          l.appendChild(numberField(name));
+          r.appendChild(l);
+          return words;
+        }
+        hitDice.forEach(function (t) { asks.push({ track: t, words: ask('dice:' + t.key) }); });
+        if (state.hp != null) ask('amt').textContent = 'Hit points you rolled';
+        var back = el('p');
+        drawerBox.appendChild(back);
         r = row();
         r.appendChild(button('dnd5e-btn', 'Take the short rest', 'shortrest'));
         r.appendChild(button('dnd5e-btn is-quiet', 'Cancel', 'close'));
+        return function () {
+          asks.forEach(function (a) {
+            a.words.textContent = a.track.label + ' spent (' + left(a.track) + ' left)';
+            fields['dice:' + a.track.key].max = String(left(a.track));
+          });
+          var names = backFrom('short').map(function (t) { return t.rest === 'short1' ? 'one ' + nameOf(t) + ' use' : nameOf(t); });
+          back.textContent = (names.length ? 'Comes back: ' + names.join(', ') + '.' : 'Nothing else comes back on a short rest right now.')
+            + (hitDice.length && state.hp != null ? ' Roll your own dice and add your Constitution for each.' : '');
+        };
       },
       long: function () {
         title('Long rest');
-        var lines = [];
-        if (state.hp != null) lines.push('Hit points to ' + data.hpMax);
-        backFrom('long').forEach(function (t) { lines.push(nameOf(t)); });
-        if (state.temp) lines.push('Temporary hit points end');
-        if (state.exhaustion) lines.push('Exhaustion drops to ' + (state.exhaustion - 1));
-        if (state.concentrating) lines.push('Concentration ends');
-        var ul = el('ul');
-        lines.forEach(function (l) { ul.appendChild(el('li', '', l)); });
-        if (lines.length) drawerBox.appendChild(ul);
-        else drawerBox.appendChild(el('p', '', 'Nothing is spent: there is nothing to bring back.'));
+        var list = el('div');
+        drawerBox.appendChild(list);
         drawerBox.appendChild(el('p', '', 'Left alone: ' + leftAlone(data).concat(['your conditions', 'Heroic Inspiration']).join(', ') + '.'));
         var r = row();
         r.appendChild(button('dnd5e-btn', 'Take the long rest', 'longrest'));
         r.appendChild(button('dnd5e-btn is-quiet', 'Cancel', 'close'));
+        return function () {
+          var lines = [], death = false;
+          if (state.hp != null) lines.push('Hit points to ' + data.hpMax);
+          backFrom('long').forEach(function (t) { if (t.rest === 'reset') death = true; else lines.push(nameOf(t)); });
+          if (death) lines.push('Death saves cleared');
+          if (state.temp) lines.push('Temporary hit points end');
+          if (exhaustionLive && state.exhaustion) lines.push('Exhaustion drops to ' + (state.exhaustion - 1));
+          if (state.concentrating) lines.push('Concentration ends');
+          empty(list);
+          if (!lines.length) { list.appendChild(el('p', '', 'Nothing is spent: there is nothing to bring back.')); return; }
+          var ul = el('ul');
+          lines.forEach(function (l) { ul.appendChild(el('li', '', l)); });
+          list.appendChild(ul);
+        };
       },
     };
 
-    // Build (or rebuild) the open drawer, keeping anything already typed.
-    function fillDrawer() {
-      var typed = {}, k;
-      for (k in fields) if (Object.prototype.hasOwnProperty.call(fields, k)) typed[k] = fields[k].value;
-      fields = {};
-      while (drawerBox.firstChild) drawerBox.removeChild(drawerBox.firstChild);
-      DRAWERS[open.name](open.key);
-      for (k in fields) if (typed[k]) fields[k].value = typed[k];
-    }
-    function drawer(name, key, from) {
+    // `refocus` hands focus back to what opened the drawer even when focus was elsewhere.
+    function drawer(name, key, from, refocus) {
       if (!drawerBox) return;
-      var hadFocus = drawerBox.contains(document.activeElement);
+      var back = (refocus || drawerBox.contains(document.activeElement)) ? opener : null;
       fields = {};
+      empty(drawerBox);
       if (!name || (name === 'pool' && !trackOf[key])) {
         open = null;
-        drawerBox.hidden = true;
-        while (drawerBox.firstChild) drawerBox.removeChild(drawerBox.firstChild);
-        if (hadFocus && opener && document.contains(opener)) opener.focus();
         opener = null;
+        drawerBox.hidden = true;
+        if (back && document.contains(back)) back.focus();
       } else {
-        open = { name: name, key: key || null };
+        open = { name: name, key: key || null, update: null };
         opener = from || null;
         drawerBox.hidden = false;
-        fillDrawer();
+        open.update = DRAWERS[name](open.key);
+        open.update();
         for (var first in fields) { fields[first].focus(); break; }
       }
       paintOpen();
@@ -432,14 +492,12 @@
       var line = hpTile.querySelector('.dnd5e-hp-line') || hpTile;
       var num = line.querySelector('.dnd5e-num');
       if (num) num.textContent = state.hp;
-      var temp = line.querySelector('.dnd5e-temp');
-      if (!temp) {
-        temp = el('span', 'dnd5e-temp');
-        var of = line.querySelector('.dnd5e-of');
-        line.insertBefore(temp, of ? of.nextSibling : null);
+      if (tempLive) {
+        var temp = line.querySelector('.dnd5e-temp');
+        temp.textContent = '+ ' + state.temp + ' temp';
+        temp.hidden = !state.temp;
       }
-      temp.textContent = '+ ' + state.temp + ' temp';
-      temp.hidden = !state.temp;
+      hpBar.style.width = (data.hpMax > 0 ? Math.round(state.hp / data.hpMax * 100) : 0) + '%';
       hpTile.setAttribute('aria-label', 'Change hit points: ' + state.hp + ' of ' + data.hpMax
         + (state.temp ? ', ' + state.temp + ' temporary' : ''));
     }
@@ -453,26 +511,19 @@
       concChip.classList.toggle('is-on', state.concentrating);
       concChip.setAttribute('aria-pressed', state.concentrating ? 'true' : 'false');
       var bits = state.conditions.slice();
-      if (state.exhaustion) bits.push('Exhaustion ' + state.exhaustion);
+      if (exhaustionLive && state.exhaustion) bits.push('Exhaustion ' + state.exhaustion);
       condChip.textContent = bits.length ? bits.join(', ') : 'No conditions';
       condChip.classList.toggle('is-bad', bits.length > 0);
     }
 
-    // What the open drawer shows of the state, and which control it belongs to.
+    // Which control the open drawer belongs to, and what it shows of the state.
     function paintOpen() {
       if (!drawerBox) return;
       each(vitals.querySelectorAll('[data-act="open"]'), function (b) {
         b.setAttribute('aria-expanded', open && open.name === b.getAttribute('data-arg') ? 'true' : 'false');
       });
       if (hpTile) hpTile.setAttribute('aria-expanded', open && open.name === 'hp' ? 'true' : 'false');
-      if (!open || open.name !== 'cond') return;
-      each(drawerBox.querySelectorAll('[data-act="cond"]'), function (chip) {
-        var on = conditionAt(chip.getAttribute('data-arg')) !== -1;
-        chip.classList.toggle('is-on', on);
-        chip.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
-      var n = drawerBox.querySelector('.dnd5e-stepper .dnd5e-num');
-      if (n) n.textContent = state.exhaustion;
+      if (open && open.update) open.update();
     }
 
     function paint() {
@@ -486,8 +537,8 @@
 
     function say(message) {
       if (!saidBox) return;
+      saidBox.classList.remove('is-empty');
       saidText.textContent = message;
-      saidBox.hidden = false;
     }
 
     // Every change goes through here. `undoTo` is the state a rest can be undone to;
@@ -526,6 +577,7 @@
         commit(r.state, 'Regained ' + plural(r.gained, 'hit point', 'hit points') + '.' + (r.clearedDeath ? ' Death saves cleared.' : ''));
       },
       temp: function () {
+        if (!tempLive) return;
         var n = read('amt');
         drawer(null);
         commit(setTemp(state, n), n ? plural(n, 'temporary hit point', 'temporary hit points') + '.' : 'Temporary hit points cleared.');
@@ -539,6 +591,7 @@
         }));
       },
       exhaustion: function (step) {
+        if (!exhaustionLive) return;
         commit(change(function (s) { s.exhaustion = clamp(s.exhaustion + Number(step), 0, 6); }));
       },
       shortrest: function () {
@@ -591,7 +644,14 @@
       if (hook === hpTile && !target.closest('a')) toggleDrawer('hp', null, hpTile);
     });
     document.addEventListener('keydown', function (e) {
-      if (e.target !== hpTile || !hpTile) return;
+      if (e.defaultPrevented) return;
+      if (e.key === 'Escape' || e.key === 'Esc') {
+        // Only when the key was pressed on the sheet: the site's search and menus have their own Escape.
+        var at = document.activeElement;
+        if (open && (!at || at === document.body || at === opener || (vitals && vitals.contains(at)))) drawer(null, null, null, true);
+        return;
+      }
+      if (!hpTile || e.target !== hpTile) return;
       if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') { e.preventDefault(); toggleDrawer('hp', null, hpTile); }
     });
 
@@ -601,7 +661,6 @@
     store.hydrate(function (remote) {
       state = fit(remote, data);
       undo = null;
-      if (open) fillDrawer();
       paint();
     });
   });

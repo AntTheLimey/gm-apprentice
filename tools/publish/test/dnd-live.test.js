@@ -149,6 +149,62 @@ test('comesBack names only what is spent and would return', () => {
   assert.deepEqual(L.leftAlone(DATA()), ['Wand']);
 });
 
+test('comesBack: a long rest names marked death saves, a short rest does not', () => {
+  const s = fresh();
+  s.used['ds:f'] = 2;
+  assert.deepEqual(L.comesBack(s, DATA(), 'long'), ['Hit Dice', '1st', 'Pact (3rd)', 'Channel Divinity', 'Second Wind', 'Death saves failed']);
+  assert.deepEqual(L.comesBack(s, DATA(), 'short'), ['Pact (3rd)', 'Channel Divinity', 'Second Wind']);
+});
+
+test('fit: one of each condition whatever its capitals, the first spelling kept', () => {
+  const s = L.fit({ conditions: ['Poisoned', 'poisoned', ' PRONE ', 'Prone', 'Hexed'] }, DATA());
+  assert.deepEqual(s.conditions, ['Poisoned', 'PRONE', 'Hexed']);
+  const d = DATA(); d.defaults.conditions = ['hexed', 'Hexed'];
+  assert.deepEqual(L.fit(null, d).conditions, ['hexed']);
+});
+
+test('fit and setTemp: temporary hit points stop at 9999', () => {
+  assert.equal(L.fit({ temp: 1e21 }, DATA()).temp, 9999);
+  assert.equal(L.setTemp(fresh(), 1e21).temp, 9999);
+  assert.equal(L.setTemp(fresh(), 9999).temp, 9999);
+});
+
+test('fit: temporary hit points or exhaustion the note wrote in words hold no number', () => {
+  const d = Object.assign(DATA(), { tempLive: false, exhaustionLive: false });
+  const s = L.fit({ temp: 7, exhaustion: 3 }, d);
+  assert.equal(s.temp, 0);
+  assert.equal(s.exhaustion, 0);
+  assert.deepEqual(L.damage(Object.assign(s, { hp: 20 }), 5), { state: Object.assign(L.fit({ hp: 15 }, d)), fromTemp: 0, fromHp: 5 });
+  // Missing flags mean live, as before.
+  assert.equal(L.fit({ temp: 7, exhaustion: 3 }, DATA()).temp, 7);
+  assert.equal(L.fit({ temp: 7, exhaustion: 3 }, DATA()).exhaustion, 3);
+});
+
+test('no hit point maximum: heal and a long rest leave hit points alone', () => {
+  const d = Object.assign(DATA(), { hpMax: null });
+  const s = L.fit({ temp: 4 }, d);
+  const h = L.heal(s, 9, d);
+  assert.equal(h.state.hp, null);
+  assert.equal(h.gained, 0);
+  assert.equal(h.clearedDeath, false);
+  const r = L.longRest(s, d);
+  assert.equal(r.hp, null);
+  assert.equal(r.temp, 0);
+  assert.equal(r.used['slot:1st'], 0);
+});
+
+test('short rest: hit points rolled from 0 clear death saves; none rolled leaves them', () => {
+  const s = Object.assign(fresh(), { hp: 0 });
+  s.used['ds:s'] = 1; s.used['ds:f'] = 2;
+  const up = L.shortRest(s, DATA(), {}, 6);
+  assert.equal(up.hp, 6);
+  assert.equal(up.used['ds:s'], 0);
+  assert.equal(up.used['ds:f'], 0);
+  const still = L.shortRest(s, DATA(), {}, 0);
+  assert.equal(still.hp, 0);
+  assert.equal(still.used['ds:f'], 2);
+});
+
 test('statusBits: dying first, then conditions, exhaustion, concentrating, inspired', () => {
   const s = Object.assign(fresh(), { hp: 0, exhaustion: 1, concentrating: true, conditions: ['Prone'] });
   s.used['ds:s'] = 1; s.used['ds:f'] = 2;
