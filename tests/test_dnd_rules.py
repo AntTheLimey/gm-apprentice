@@ -576,3 +576,10 @@ def test_hit_points_with_one_possible_figure():
     one = dict(level=1, classes="Wizard 1", hit_dice=(("d6", "0/1"),), slots={1: ("2", "0")})
     assert found(sheet(hp_now="9", hp_max="9", **one)) == [
         ("LOOK", "Stat Sheet / Combat / HP (Max)", "9; the dice allow exactly 8 for Wizard 1")]
+
+
+def test_a_spent_header_is_read_like_expended():
+    heads = ("Max", "Spent")
+    assert found(sheet(slot_headers=heads)) == []
+    assert found(sheet(slot_headers=heads, slots={1: ("4", "5"), 2: ("3", "0"), 3: ("2", "0")})) == [
+        ("WRONG", f"{SLOTS} / 1st", "5 expended of 4")]

@@ -23,7 +23,7 @@ import dnd_tables as dt  # noqa: E402
 from dnd_note import PLACEHOLDER, YES, Note, clean, column, number, to_int  # noqa: E402
 
 PACT_ROW = re.compile(r"^pact\b", re.I)
-SLOT_TOTAL, SLOT_USED = r"(total|max)", r"(expended|used)"
+SLOT_TOTAL, SLOT_USED = r"(total|max)$", r"(expended|used|spent)$"
 ORDER = {"WRONG": 0, "LOOK": 1, "CANTCHECK": 2}
 CLASS = "Background / Class/Subclass"
 COMBAT = "Stat Sheet / Combat"
