@@ -406,4 +406,4 @@ function parseDnd(frontmatter, sections) {
   return model;
 }
 
-module.exports = { parseDnd, splitReason, ABILITIES };
+module.exports = { parseDnd, splitReason, ABILITIES, COLS, countCells, wholeNumber };

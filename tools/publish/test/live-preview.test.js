@@ -139,16 +139,22 @@ test('the store round-trips through the real handlers, and the list sees it', as
   assert.equal((await fetch(base + '/api/loadout?key=bad')).status, 400);
 });
 
-// D&D write-back is Task 5: until it lands, flush reads the store, finds the PC, and changes nothing.
-test('flush reads the in-memory store and reports on the PC; a dry run says so and writes nothing', async () => {
+// The store above holds hp 20 and one 1st-level slot more spent; flush writes them into the note.
+test('flush writes the store into the note; a dry run says so and writes nothing', async () => {
   const note = path.join(work, 'vault', 'Characters', 'PCs', 'Brannoch_Vale.md');
   const before = fs.readFileSync(note, 'utf8');
   const dry = await (await fetch(base + '/__flush?dry=1', { method: 'POST' })).text();
   assert.match(dry, /DRY RUN/);
+  assert.match(dry, /✓ Brannoch Vale/);
   assert.equal(fs.readFileSync(note, 'utf8'), before);
   const report = await (await fetch(base + '/__flush', { method: 'POST' })).text();
-  assert.match(report, /Brannoch Vale/);
+  assert.match(report, /✓ Brannoch Vale/);
+  assert.match(report, /HP \(Current\)/);
   assert.doesNotMatch(report, /DRY RUN|✖/);
+  const after = fs.readFileSync(note, 'utf8');
+  assert.match(after, /\| HP \(Current\) \| 20 \|/);
+  assert.match(after, /\| 1st \| 4 \| 3 \|/);
+  assert.equal(after.split('\n').length, before.split('\n').length);
 });
 
 test('the change-request inbox is not there', async () => {

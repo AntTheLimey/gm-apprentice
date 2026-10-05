@@ -16,4 +16,8 @@ const shown = name => String(name || '').replace(/\[\[([^\]]*)\]\]/g, (_, inner)
   return parts[0].split('#')[0].split('/').pop().replace(/_/g, ' ').trim();
 });
 
-module.exports = { liveKey, liveOf, shown };
+// A count the page can mark: it has something to count, and no more spent than there is.
+// Anything else is drawn as written, so the write-back leaves its cell alone.
+const trackable = (max, used) => max > 0 && used <= max;
+
+module.exports = { liveKey, liveOf, shown, trackable };
