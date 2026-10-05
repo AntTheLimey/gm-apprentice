@@ -17,24 +17,37 @@ function num(text, whyClass = '', whyHtml = '') {
 }
 
 // `max` things of which `spent` are used up. Marks up to ten, a count above.
-function marks(max, spent, label) {
+// `live` (`{ key }`, from live-key.js liveOf) draws them tappable for js/dnd-live.js;
+// without it the output is what it has always been.
+function marks(max, spent, label, live) {
   const left = Math.max(0, max - spent);
   const aria = `${label}: ${left} of ${max} left`;
+  const hook = live ? ` data-live="${escapeHtml(live.key)}"` : '';
   // Nothing to draw marks for: say so as a count, so the row is not empty.
-  if (max > 10 || max === 0) return `<span class="dnd5e-count" role="img" aria-label="${escapeHtml(aria)}"><span class="dnd5e-num">${left}</span> / ${max}</span>`;
-  const one = i => `<span class="dnd5e-mark${i >= left ? ' is-spent' : ''}"></span>`;
-  return `<span class="dnd5e-marks" role="img" aria-label="${escapeHtml(aria)}">${Array.from({ length: max }, (_, i) => one(i)).join('')}</span>`;
+  if (max > 10 || max === 0) {
+    const inner = `<span class="dnd5e-num">${left}</span> / ${max}`;
+    return live
+      ? `<button type="button" class="dnd5e-count dnd5e-live"${hook} aria-label="${escapeHtml(aria)}">${inner}</button>`
+      : `<span class="dnd5e-count" role="img" aria-label="${escapeHtml(aria)}">${inner}</span>`;
+  }
+  const one = live
+    ? i => `<button type="button" class="dnd5e-mark${i >= left ? ' is-spent' : ''}" aria-label="${i >= left ? 'Spent' : 'Available'}"></button>`
+    : i => `<span class="dnd5e-mark${i >= left ? ' is-spent' : ''}"></span>`;
+  const all = Array.from({ length: max }, (_, i) => one(i)).join('');
+  return live
+    ? `<span class="dnd5e-marks dnd5e-live"${hook} role="group" aria-label="${escapeHtml(label)}">${all}</span>`
+    : `<span class="dnd5e-marks" role="img" aria-label="${escapeHtml(aria)}">${all}</span>`;
 }
 
 // A cell's html when it holds a link, else its text escaped: a link is kept, nothing else changes.
 const linkOr = (html, text) => (/<a[ >]/i.test(html || '') ? html : escapeHtml(text));
 
-function usesHtml(f) {
+function usesHtml(f, live) {
   const rec = f.recovers ? `<span class="dnd5e-recovers">${linkOr(f.recoversHtml, f.recovers)}</span>` : '';
   if (f.uses === null || f.uses === undefined) return rec;
   const used = f.used || 0;
   if (used > f.uses) return `<span class="dnd5e-count">${used} used of ${f.uses}</span>${rec ? ' ' + rec : ''}`;
-  return marks(f.uses, used, f.name) + (rec ? ' ' + rec : '');
+  return marks(f.uses, used, f.name, live) + (rec ? ' ' + rec : '');
 }
 
 // A tag is text, or `{ html, cls }` for one that carries a link or its own state class.

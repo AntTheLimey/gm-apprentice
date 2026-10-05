@@ -1,5 +1,6 @@
 const { parseDnd } = require('./parse');
 const { buildSheet, buildCombat, buildSpells, buildEquipment, buildVitals } = require('./layout');
+const { buildDndLiveData, boardOf } = require('./live-data');
 const { consumedTitleMatcher } = require('../sheet-parse');
 
 // `## ` sections the sheet takes over from the accordion list. Each is on the
@@ -8,8 +9,23 @@ const { consumedTitleMatcher } = require('../sheet-parse');
 const CONSUMED_TITLES = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment', 'companions'];
 const isDndConsumedTitle = consumedTitleMatcher(CONSUMED_TITLES);
 
-function renderDnDSheet(frontmatter, sections) {
+function renderDnDSheet(frontmatter, sections, meta) {
   const model = parseDnd(frontmatter, sections);
+  // What the page can keep live, worked out from the note. It rides the party board
+  // with live off too; the marks are drawn tappable only when live is on.
+  const liveData = meta ? buildDndLiveData(model, meta) : null;
+  if (liveData) {
+    // Only a site that turned live on is told about its live rows.
+    if (meta.live) model.warnings.push(...liveData.warnings);
+    const liveRows = liveData.rows;
+    delete liveData.warnings;
+    delete liveData.rows;
+    if (meta.live) {
+      model.liveKeys = new Set(liveData.tracks.map(t => t.key));
+      model.liveRows = liveRows;
+      model.liveHp = liveData.hpMax !== null;
+    }
+  }
   const sheetHtml = buildSheet(model);
   // Combat, spells and equipment ride the sheet: with no sheet their sections
   // stay where the page puts them today.
@@ -20,6 +36,9 @@ function renderDnDSheet(frontmatter, sections) {
     spellsHtml: buildSpells(model),
     equipmentHtml: buildEquipment(model),
     vitalsHtml: buildVitals(model),
+    liveData,
+    // A PC with nothing live still gets its party row: the note's own facts, no island, nothing to follow.
+    ...(meta && !liveData ? { boardOnly: { pcSlug: meta.pcSlug, board: boardOf(model), unreadable: true } } : {}),
     warnings: model.warnings,
   };
 }

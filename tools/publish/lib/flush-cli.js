@@ -10,6 +10,7 @@ const { scanVault, slugify, pcLiveKey } = require('./scanner');
 const { readNamespaceId, makeAdapter } = require('./inbox-wrangler');
 const { latestStateByPcSlug } = require('./flush/reconcile');
 const { applyCoCFlush } = require('./flush/coc-writeback');
+const { applyDnDFlush } = require('./flush/dnd-writeback');
 const { applyGURPSFlush } = require('./flush/gurps-writeback');
 const { deriveGurpsMax } = require('./flush/gurps-max');
 const { resolveConfig, loadVaultConfig } = require('./config');
@@ -40,14 +41,41 @@ function summarize(changes) {
   }).join(', ');
 }
 
-// The only two live-state systems are GURPS and CoC. Anything not GURPS routes
-// to the CoC writeback — the historical default (legacy CoC sites carry no
-// system). A PC's own frontmatter.system wins; otherwise the campaign system
-// decides. The campaign system is publishConfig.system, resolved as build.js does.
+// A PC slug comes from a KV key a player's browser chose. It is printed only when it is plain
+// (no control or line-separator character, a sensible length); otherwise a fixed word stands in.
+function safeSlug(slug) {
+  return /^[^\u0000-\u001f\u007f-\u009f\u2028\u2029]{1,80}$/.test(slug) ? slug : '(unrecognised name)';
+}
+
+// Which writer a PC's note takes. A PC's own frontmatter.system wins; otherwise the
+// campaign system decides (publishConfig.system, resolved as build.js does). CoC is
+// the default, as it always was: old CoC sites carry no system.
 function resolveSystem(frontmatter, campaignSystem) {
   const s = String((frontmatter && frontmatter.system) || campaignSystem || '').toLowerCase();
-  return s.indexOf('gurps') !== -1 ? 'gurps' : 'coc';
+  if (s.indexOf('gurps') !== -1) return 'gurps';
+  if (/^dnd/.test(s) || /^d&d/.test(s)) return 'dnd';
+  return 'coc';
 }
+
+// One writer per system: (raw note, stored record, page, out) -> { markdown, changes, skipped? },
+// or null to skip the note after saying why.
+const WRITERS = {
+  gurps: function (raw, rec, page, out) {
+    // GURPS flush edits the body `## Current Status` block, but the parser
+    // reads HP/FP from frontmatter when `status:` is authored as a YAML
+    // object — so a body rewrite would report a phantom success the build
+    // ignores. Skip and tell the GM to move the vitals out of frontmatter.
+    const fmStatus = page.frontmatter && page.frontmatter.status;
+    if (fmStatus && typeof fmStatus === 'object' && !Array.isArray(fmStatus)) {
+      out('⚠ ' + (page.displayTitle || page.title) + ' — HP/FP are pinned in frontmatter (status:); flush edits the body block, which the build ignores. Move them out of frontmatter to sync.');
+      return null;
+    }
+    const { maxHp, maxFp } = deriveGurpsMax(raw, page.frontmatter);
+    return applyGURPSFlush(raw, rec, { maxHp: maxHp, maxFp: maxFp });
+  },
+  dnd: function (raw, rec) { return applyDnDFlush(raw, rec); },
+  coc: function (raw, rec) { return applyCoCFlush(raw, rec); },
+};
 
 async function runFlush(deps) {
   deps = deps || {};
@@ -102,32 +130,18 @@ async function runFlush(deps) {
   }
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
-  const bySlug = {};
+  const bySlug = Object.create(null);
   for (const p of scan()) {
     if (p.frontmatter && p.frontmatter.type === 'pc') bySlug[pcLiveKey(p.frontmatter, p.title)] = p;
   }
 
   for (const slug of Object.keys(latest)) {
     const page = bySlug[slug];
-    if (!page) { out('⚠ ' + slug + ' — in KV but no matching vault sheet (skipped)'); continue; }
+    if (!page) { out('⚠ ' + safeSlug(slug) + ' — in KV but no matching vault sheet (skipped)'); continue; }
     const name = page.displayTitle || page.title;
     const raw = readFile(page.sourcePath);
-    let res;
-    if (resolveSystem(page.frontmatter, campaignSystem) === 'gurps') {
-      // GURPS flush edits the body `## Current Status` block, but the parser
-      // reads HP/FP from frontmatter when `status:` is authored as a YAML
-      // object — so a body rewrite would report a phantom success the build
-      // ignores. Skip and tell the GM to move the vitals out of frontmatter.
-      const fmStatus = page.frontmatter && page.frontmatter.status;
-      if (fmStatus && typeof fmStatus === 'object' && !Array.isArray(fmStatus)) {
-        out('⚠ ' + name + ' — HP/FP are pinned in frontmatter (status:); flush edits the body block, which the build ignores. Move them out of frontmatter to sync.');
-        continue;
-      }
-      const { maxHp, maxFp } = deriveGurpsMax(raw, page.frontmatter);
-      res = applyGURPSFlush(raw, latest[slug], { maxHp: maxHp, maxFp: maxFp });
-    } else {
-      res = applyCoCFlush(raw, latest[slug]);
-    }
+    const res = WRITERS[resolveSystem(page.frontmatter, campaignSystem)](raw, latest[slug], page, out);
+    if (!res) continue;
     if (res.changes.length) {
       if (dryRun) {
         out('✓ ' + name + ' — ' + summarize(res.changes) + '  (would write)');
@@ -138,8 +152,9 @@ async function runFlush(deps) {
     } else {
       out('· ' + name + ' — no change');
     }
+    if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
   }
   return 0;
 }
 
-module.exports = { runFlush, defaultRunWrangler, WRANGLER_TIMEOUT_MS };
+module.exports = { runFlush, resolveSystem, defaultRunWrangler, WRANGLER_TIMEOUT_MS };

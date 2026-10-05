@@ -216,9 +216,11 @@ Vocabulary the page acts on:
 - **Uses / Used**: whole numbers. Ten or fewer are drawn as marks,
   more as `18 / 25`.
 - **Recovers**: `Long Rest`, `Short Rest`, or
-  `1 Short Rest, all Long Rest`. Anything else (`Dawn`) is shown and
-  left to the player. Hit dice and spell slots have no Recovers cell;
-  the `Pact` row is the short-rest one.
+  `1 Short Rest, all Long Rest`, matched whatever their capitals. The
+  live sheet's rest buttons act on these three. Anything else (`Dawn`)
+  or a blank is shown and left to the player. Hit dice and spell slots
+  have no Recovers cell: both return on a long rest, and a slot row
+  whose level starts `Pact` returns on a short rest too.
 - **Tags** (spells): comma-separated. `C` (concentration) and `R`
   (ritual) are recognised; the rest are shown (`Always prepared`).
 - **Level** (spells): `Cantrip` or `1` to `9`; the page groups by it.
@@ -333,6 +335,81 @@ Notes:
   its "Omit this section" and "Delete this section" notes are not content, and a Spellcasting
   section with nothing filled in is left out, so a non-caster has no
   Spells tab. Braces an author wrote are kept.
+
+### Cells the live sheet writes back
+
+With live stats on, a player changes these values on the page, the site
+saves them, and `gm-apprentice-publish flush` writes them into the note
+(`tools/publish/lib/flush/dnd-writeback.js`). Only the cell changes: no
+row or column is added, and a cell is written only when the value
+differs.
+
+| Cell | Where | Format |
+|------|-------|--------|
+| `HP (Current)` | `### Combat` | a whole number; a reason in brackets after it is kept (`31 (after the fall)`). Blank or a dash reads as the maximum |
+| `Temp HP` | `### Combat` | a whole number, a reason kept; blank, a dash or `None` reads as 0 |
+| `Hit Dice (Spent/Max)` | `### Combat`, each `Hit Dice` row | `s/m`; only `s` is written |
+| `Death Saves (S/F)` | `### Combat` | `s/f`, each 0 to 3 |
+| `Exhaustion` | `### Combat` | a whole number, 0 to 6, a reason kept; blank, a dash or `None` reads as 0 |
+| `Conditions` | `### Combat` | names joined by `, `; `—` for none (`None`, `N/A`, `No` and a hyphen read as none too). A name is letters, digits, spaces, apostrophes, hyphens and round brackets, 1 to 60 characters |
+| `Heroic Inspiration` | `### Core` | `Yes` or `No` |
+| `Expended` | `### Spell Slots` | a whole number, no more than `Total`; blank reads as 0 |
+| `Used` | `## Class Features`, `## Species Traits`, `## Feats`, `### Magic Items` | a whole number, no more than `Uses` or `Charges`; blank reads as 0 |
+
+- **A cell the page could not read is not live and is never written.**
+  The page shows it as written and never invents a maximum. A row the
+  renderer leaves as written is one such case (see "Tables are read by
+  position" above). The usual cell-level reasons:
+  - `HP (Max)` not a whole number (a reason in brackets may follow), or
+    `HP (Current)` holding text that is not a number: hit points are not
+    live, and both cells stay as written. A blank `HP (Current)` is
+    fine.
+  - `Temp HP` or `Exhaustion` holding anything but a whole number (a
+    reason may follow) or blank. Temporary hit points are also not live
+    whenever hit points are not.
+  - `Heroic Inspiration` not a yes or no word (blank reads as no).
+  - `Conditions`: a name written as a link, in bold or italic, or with a
+    character that is not a letter, a digit, a space, an apostrophe, a
+    hyphen or a round bracket; a name over 60 characters; the same name
+    twice; more than 20 names. Conditions are then not live: the page
+    shows the cell as written and offers no conditions drawer, and
+    `flush` never rewrites the cell.
+  - Death saves not `s/f`, or either number over 3.
+  - Hit dice not `s/m`, or `s` over `m`, or `m` of 0.
+  - A slot row whose `Total` is not a whole number or is 0, whose
+    `Expended` is not a whole number or blank, or is over `Total`.
+  - A feature or magic item row whose `Uses`, `Charges` or `Used` is
+    not a whole number or blank; a `Used` above 0 with no `Uses` or
+    `Charges`; `Uses` or `Charges` of 0; `Used` over `Uses` or
+    `Charges`.
+  - A magic item row whose `Attuned` is not a yes or no word.
+  - A link in the label or value of a `### Core` or `### Combat` row
+    (a link inside a trailing reason is fine), or anywhere in a slot
+    row.
+- **Two rows with one name in a table cannot both be live.** The first
+  row of the name owns it; a later row is shown as the note has it. If
+  the page cannot read the first row, no row of that name is live. Give
+  each row its own name; the build warns when two rows share one.
+- **A row is matched by the name the page shows**, so a linked feature
+  or item name works: `[[Target|Shown]]` by `Shown`, `[[Ilse_Varn]]` by
+  its file name with underscores as spaces. Capitals do not matter.
+- **Concentrating is never saved to the note**, and a rest never sets
+  Heroic Inspiration.
+- **A value with no cell to take it is skipped**, and `flush` names it
+  (`not written, no cell in the note can hold: ...`). That covers a
+  missing row and a row typed without its last cells; no cell is ever
+  added. A value that is what a missing cell already means (0, no
+  conditions, `No`) is not named. An old-layout note is written only
+  where its cells exist.
+- **A number is written through emphasis.** `**38**` becomes `**31**`.
+- **A live value is changed on the PC's page (from any device), not in
+  the note.** For 30 days after a player last saved, `flush` writes that
+  saved value over the note's cell, so a number typed into one of these
+  cells between sessions can be replaced by an older one at the next
+  `flush`. A device using the same session code shows the saved value;
+  one with no session code or a different one shows the note. The maxima (`HP (Max)`, `Uses`, `Charges`,
+  `Total`, the maximum half of hit dice) always come from the note, and
+  a saved count above a new maximum is cut to it.
 
 ---
 

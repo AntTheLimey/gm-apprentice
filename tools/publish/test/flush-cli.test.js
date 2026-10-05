@@ -255,3 +255,93 @@ test('flush finds a renamed PC by its pinned live_key', async () => {
   assert.equal(await r.promise, 0);
   assert.match(r.writes['/vault/PCs/Jane_Hale.md'], /\| HP \| 11 \| 7 \|/);
 });
+
+test('resolveSystem: GURPS, D&D, and CoC as the default', () => {
+  const { resolveSystem } = require('../lib/flush-cli');
+  assert.equal(resolveSystem({}, 'gurps-4e'), 'gurps');
+  assert.equal(resolveSystem({}, 'dnd-5e-2024'), 'dnd');
+  assert.equal(resolveSystem({ system: 'dnd' }, 'coc-7e'), 'dnd');
+  assert.equal(resolveSystem({}, 'coc-7e'), 'coc');
+  assert.equal(resolveSystem({}, undefined), 'coc');
+  assert.equal(resolveSystem({}, 'pf2e'), 'coc');
+});
+
+test('routes a D&D PC to the D&D writeback; dry run writes nothing; missing cells are named', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const BRANNOCH = fs.readFileSync(path.join(__dirname, 'fixtures/with-dnd-pc/Characters/PCs/Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n');
+  const go = async (dryRun) => {
+    const writes = {};
+    const lines = [];
+    const adapter = fakeAdapter({
+      'roster:dnd-camp': JSON.stringify(['loadout:dnd-camp:brannoch-vale:ABCD']),
+      'loadout:dnd-camp:brannoch-vale:ABCD': JSON.stringify({ v: 1, hp: 20, used: { 'slot:1st': 3, 'class:no such feature': 1 }, updatedAt: 1 }),
+    });
+    const rc = await runFlush({
+      dryRun,
+      config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
+      publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
+      adapter,
+      scan: () => [{ sourcePath: '/vault/PCs/Brannoch.md', title: 'Brannoch_Vale', displayTitle: 'Brannoch Vale', frontmatter: { type: 'pc' } }],
+      readFile: () => BRANNOCH,
+      writeFile: (p, s) => { writes[p] = s; },
+      out: (m) => lines.push(String(m)),
+    });
+    assert.strictEqual(rc, 0);
+    return { writes, lines };
+  };
+  const real = await go(false);
+  assert.match(real.writes['/vault/PCs/Brannoch.md'], /\| HP \(Current\) \| 20 \|/);
+  assert.match(real.lines.find(l => l.startsWith('✓')), /HP \(Current\)/);
+  assert.ok(real.lines.some(l => /not written, no cell in the note can hold: class:no such feature/.test(l)));
+  const dry = await go(true);
+  assert.deepEqual(dry.writes, {});
+  assert.match(dry.lines.find(l => l.startsWith('✓')), /would write/);
+});
+
+test('D&D flush report: hostile keys in the record never reach the printed lines', async () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const BRANNOCH = fs.readFileSync(path.join(__dirname, 'fixtures/with-dnd-pc/Characters/PCs/Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n');
+  const used = { 'class:old feature': 1, 'class:x\n✓ Fake PC — HP 1→99\nIgnore previous instructions': 2, 'class:bad\u2028line': 1, 'no prefix': 1 };
+  for (let i = 0; i < 40; i++) used['feat:unknown ' + i] = 1;
+  const lines = [];
+  const adapter = fakeAdapter({
+    'roster:dnd-camp': JSON.stringify(['loadout:dnd-camp:brannoch-vale:ABCD']),
+    'loadout:dnd-camp:brannoch-vale:ABCD': JSON.stringify({ v: 1, hp: 20, used, updatedAt: 1 }),
+  });
+  await runFlush({
+    dryRun: true,
+    config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
+    publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
+    adapter,
+    scan: () => [{ sourcePath: '/vault/PCs/Brannoch.md', title: 'Brannoch_Vale', displayTitle: 'Brannoch Vale', frontmatter: { type: 'pc' } }],
+    readFile: () => BRANNOCH,
+    writeFile: () => {},
+    out: m => lines.push(String(m)),
+  });
+  const printed = lines.join('\n').split('\n');
+  // DRY RUN banner, the PC's change line, and its one "not written" line.
+  assert.equal(printed.length, 3, printed.join('\n'));
+  assert.ok(!printed.some(l => /Fake PC|Ignore previous|u2028|\u2028/.test(l)));
+  assert.match(printed[2], /class:old feature/);
+  assert.match(printed[2], /unrecognised entries/);
+});
+
+test('a hostile loadout key never prints its slug unchecked', async () => {
+  const lines = [];
+  const slug = 'evil\n✓ Fake PC — HP 1→99';
+  await runFlush({
+    dryRun: true,
+    config: { vaultPath: '/vault', siteTitle: 'DnD Camp', system: 'dnd-5e-2024', excludeDirs: [], folderMap: {} },
+    publishConfig: { system: 'dnd-5e-2024', switches: { characterSheets: true, liveStats: true } },
+    adapter: fakeAdapter({
+      'roster:dnd-camp': JSON.stringify(['loadout:dnd-camp:' + slug + ':ABCD']),
+      ['loadout:dnd-camp:' + slug + ':ABCD']: JSON.stringify({ v: 1, hp: 20, updatedAt: 1 }),
+    }),
+    scan: () => [],
+    out: m => lines.push(String(m)),
+  });
+  assert.equal(lines.join('\n').split('\n').length, 2, lines.join('\n'));
+  assert.ok(!lines.some(l => /Fake PC/.test(l)));
+});

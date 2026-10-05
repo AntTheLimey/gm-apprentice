@@ -70,7 +70,8 @@ function build(options = {}) {
   const rawConfig = loadVaultConfig(resolvedConfigPath);
   rawConfig.vaultPath = path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
-  const outputDir = path.resolve(configDir, config.outputDir);
+  // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
+  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
   const off = siteOff(publishConfig.switches);
   if (off) throw new Error(off);
 
@@ -88,7 +89,8 @@ function build(options = {}) {
   // nothing else, so this must run before any page renders. A switch on without a KV
   // store is withheld and said so.
   const switches = publishConfig.switches || {};
-  const kvWired = hasRealKvId(configDir);
+  // `assumeKv` is the local preview's (scripts/live-preview.js): a store that is in memory, with no wrangler.toml.
+  const kvWired = options.assumeKv === true || hasRealKvId(configDir);
   publishConfig.live = {
     stats: switches.liveStats === true && kvWired,
     inbox: switches.inbox === true && kvWired,
@@ -871,6 +873,7 @@ function build(options = {}) {
             pcSlug: pcLiveKey(page.sourceFrontmatter || page.frontmatter, page.title),
             buildVersion: require('crypto').createHash('sha1')
               .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
+            live: publishConfig.live.stats === true,
           };
           const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
           // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.
@@ -913,14 +916,14 @@ function build(options = {}) {
           }
           // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
           // off the roster's Party Status board (#265).
-          if (systemOut.liveData && !isOutOfPlay(page.frontmatter)) {
+          if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter)) {
             // Root-relative output path of the PC portrait, for the party-board
             // thumbnail. Resolved the same way portraitImg does (imageMap keyed
             // by bare basename → the scanner's relPath under images/).
             const pBase = portraitBasename(page.frontmatter);
             const pEntry = pBase && imageMap ? imageMap[pBase] : null;
             const portrait = pEntry ? 'images/' + pEntry.relPath : null;
-            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData });
+            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData || systemOut.boardOnly });
           }
           html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
             publishConfig,

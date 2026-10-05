@@ -6,6 +6,7 @@
 const { buildPartyManifest } = require('./party-manifest');
 const { renderPartyBoard } = require('./templates/gurps/party-board');
 const { buildCoCPartyManifest, renderCoCBoard } = require('./templates/coc/party-board');
+const { buildDndPartyManifest, renderDndBoard } = require('./templates/dnd/party-board');
 
 const GURPS = {
   buildManifest: buildPartyManifest,
@@ -19,9 +20,16 @@ const COC = {
   scriptId: 'coc-party-data',
   clientScripts: ['party-core.js', 'coc-party.js'],
 };
+const DND = {
+  buildManifest: buildDndPartyManifest,
+  renderBoard: renderDndBoard,
+  scriptId: 'dnd-party-data',
+  clientScripts: ['party-core.js', 'dnd-live.js', 'dnd-party.js'],
+};
 const REGISTRY = {
   'gurps': GURPS, 'gurps-4e': GURPS,
   'coc': COC, 'coc-7e': COC, 'regency-cthulhu': COC, 'coc-7e-regency': COC,
+  'dnd': DND, 'dnd-5e': DND, 'dnd-5e-2024': DND,
 };
 
 function boardFor(system) {

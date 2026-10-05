@@ -133,7 +133,16 @@ function readStatSheet(model, section) {
       left = consumeTable(sub.html, COLS.abilities, place(true));
       if (Object.keys(model.abilities).length === 0) left = consumeTable(sub.html, COLS.abilitiesOld, place(false));
     } else if (key === 'combat') {
-      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => readCombatRow(model, label, value)), LINKS);
+      const placeRow = keepReasonLink(model, ([label, value]) => readCombatRow(model, label, value));
+      left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, (cells, h) => {
+        const placed = placeRow(cells, h);
+        // The first Conditions row: is it plain text the sheet placed? Markup in it, or a link
+        // that left the row as written, makes its words the GM's own (live-data.js reads this).
+        if (/^conditions?$/i.test(String(cells[0] || '').trim()) && model.combat.conditionsPlain === undefined) {
+          model.combat.conditionsPlain = placed && !/</.test(h[1] || '');
+        }
+        return placed;
+      }, LINKS);
     } else if (key === 'senses') {
       left = consumeTable(sub.html, ATTRIBUTE_COLUMNS, keepReasonLink(model, ([label, value]) => { model.senses.push([label, filled(value)]); return true; }), LINKS);
     } else if (key === 'bonuses') {
@@ -406,4 +415,4 @@ function parseDnd(frontmatter, sections) {
   return model;
 }
 
-module.exports = { parseDnd, splitReason, ABILITIES };
+module.exports = { parseDnd, splitReason, ABILITIES, COLS, countCells, wholeNumber };
