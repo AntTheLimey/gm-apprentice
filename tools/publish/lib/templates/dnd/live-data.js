@@ -1,6 +1,6 @@
 const { splitReason } = require('./parse');
 const { yesNo } = require('../sheet-parse');
-const { liveKey, shown } = require('./live-key');
+const { liveKey, shown, trackable } = require('./live-key');
 
 const STANDARD_CONDITIONS = ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible',
   'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious'];
@@ -39,7 +39,7 @@ function buildDndLiveData(model, meta) {
   const seen = new Set();
   const warnings = [];
   const add = (key, label, max, used, rest, extra) => {
-    if (!(max > 0) || used > max) return;        // nothing to mark, or shown as written
+    if (!trackable(max, used)) return;        // nothing to mark, or shown as written
     if (seen.has(key)) { warnings.push(`Two live rows are named "${label}"; they share one count.`); return; }
     seen.add(key);
     tracks.push({ key, label, max, used, rest, ...extra });
