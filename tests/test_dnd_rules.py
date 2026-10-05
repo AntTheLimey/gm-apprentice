@@ -277,7 +277,7 @@ def test_a_low_constitution_never_drops_below_one_a_level():
     # modifier -4: Wizard 5 least is 6 - 4 = 2 for the first level, then 1 a level: 2 + 4 = 6.
     assert found(sheet(scores={"CON": "3"}, hp_now="6", hp_max="6")) == []
     assert found(sheet(scores={"CON": "3"}, hp_now="5", hp_max="5")) == [
-        ("LOOK", "Stat Sheet / Combat / HP (Max)", "5; the dice allow 6 to 30 for Wizard 5")]
+        ("LOOK", "Stat Sheet / Combat / HP (Max)", "5; the dice allow 6 to 10 for Wizard 5")]
 
 
 def test_the_classes_saving_throws():
