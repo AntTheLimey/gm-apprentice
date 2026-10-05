@@ -5,6 +5,13 @@
 // API with the site's own function handlers over a store that lives in memory.
 // It never reads the deploy config, never starts a deploy tool, and refuses a site that
 // could be deployed. Dev only: not a gm-publish command.
+//
+// /__flush and /__store write to or reveal the vault, so they need a token made at start-up
+// (printed once by the command line, never served) in an X-Preview-Token header:
+//   curl -X POST -H "X-Preview-Token: <token>" http://127.0.0.1:<port>/__flush?dry=1
+//   curl -X POST -H "X-Preview-Token: <token>" http://127.0.0.1:<port>/__flush
+// Every request must also name this server in Host and, if it sends Origin, be same-origin.
+const crypto = require('crypto');
 const fs = require('fs');
 const http = require('http');
 const os = require('os');
@@ -67,6 +74,11 @@ async function createPreview({ configPath, handlers = loadHandlers }) {
     throw e;
   }
 
+  const token = crypto.randomBytes(16).toString('hex');
+  const tokenOk = (given) => {
+    const a = Buffer.from(String(given || '')), b = Buffer.from(token);
+    return a.length === b.length && crypto.timingSafeEqual(a, b);
+  };
   const kv = memoryKv();
   const env = { INBOX: kv };
   let loadout, list;
@@ -84,6 +96,12 @@ async function createPreview({ configPath, handlers = loadHandlers }) {
 
   const server = http.createServer(async (req, res) => {
     try {
+      // DNS rebinding and cross-origin pages: only this server's own names and origin get through.
+      const port = server.address().port;
+      const hosts = ['127.0.0.1:' + port, 'localhost:' + port];
+      const forbid = () => { res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' }); return res.end('Forbidden'); };
+      if (!hosts.includes(req.headers.host || '')) return forbid();
+      if (req.headers.origin !== undefined && !hosts.some(h => req.headers.origin === 'http://' + h)) return forbid();
       const url = new URL(req.url, 'http://127.0.0.1');
       const body = (req.method === 'PUT' || req.method === 'POST') ? await readBody(req) : undefined;
       // Only the content type is passed on: Node's own hop-by-hop headers are not the handlers' business.
@@ -92,6 +110,7 @@ async function createPreview({ configPath, handlers = loadHandlers }) {
       if (url.pathname === '/api/loadout' && req.method === 'GET') return send(res, await loadout.onRequestGet({ request, env }));
       if (url.pathname === '/api/loadout' && req.method === 'PUT') return send(res, await loadout.onRequestPut({ request, env }));
       if (url.pathname === '/api/loadout-list' && req.method === 'GET') return send(res, await list.onRequestGet({ request, env }));
+      if ((url.pathname === '/__store' || url.pathname === '/__flush') && !tokenOk(req.headers['x-preview-token'])) return forbid();
       if (url.pathname === '/__store') {
         res.writeHead(200, { 'content-type': 'application/json' });
         return res.end(JSON.stringify(Object.fromEntries(kv.store)));
@@ -118,7 +137,7 @@ async function createPreview({ configPath, handlers = loadHandlers }) {
     }
   });
   server.on('close', () => fs.rmSync(outputDir, { recursive: true, force: true }));
-  return { server, kv, outputDir };
+  return { server, kv, outputDir, token };
 }
 
 module.exports = { createPreview, refusal };
@@ -127,11 +146,13 @@ if (require.main === module) {
   const arg = name => { const i = process.argv.indexOf(name); return i === -1 ? null : process.argv[i + 1]; };
   const configPath = arg('--config') || './vault.config.json';
   const port = Number(arg('--port') || 8788);
-  createPreview({ configPath }).then(({ server }) => {
+  createPreview({ configPath }).then(({ server, token }) => {
     for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => server.close(() => process.exit(0)));
     server.listen(port, '127.0.0.1', () => {
       console.log('Live preview at http://127.0.0.1:' + port + '/  (store in memory; nothing leaves this machine)');
-      console.log('  Flush the store to the vault:  curl -X POST http://127.0.0.1:' + port + '/__flush   (add ?dry=1 to preview)');
+      console.log('  Preview token (needed for flush; shown once, kept in memory only): ' + token);
+      console.log('  Dry run:  curl -X POST -H "X-Preview-Token: ' + token + '" "http://127.0.0.1:' + port + '/__flush?dry=1"');
+      console.log('  Flush:    curl -X POST -H "X-Preview-Token: ' + token + '" http://127.0.0.1:' + port + '/__flush');
     });
   }).catch((e) => { console.error(e.message); process.exit(1); });
 }

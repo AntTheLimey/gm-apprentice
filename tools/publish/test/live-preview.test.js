@@ -11,7 +11,7 @@ async function quietly(fn) {
   try { return await fn(); } finally { console.log = log; }
 }
 const FIXTURES = path.join(__dirname, 'fixtures');
-let work, configPath, preview, base;
+let work, configPath, preview, base, token;
 
 function scratch(fixture, extra) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-preview-'));
@@ -33,6 +33,7 @@ before(async () => {
   preview = await quietly(() => createPreview({ configPath }));
   await new Promise(r => preview.server.listen(0, '127.0.0.1', r));
   base = 'http://127.0.0.1:' + preview.server.address().port;
+  token = preview.token;
 });
 after(async () => {
   await new Promise(r => preview.server.close(r));
@@ -145,7 +146,7 @@ test('the store round-trips through the real handlers, and the list sees it', as
   assert.equal(typeof got.state.updatedAt, 'number');
   const list = await (await fetch(base + '/api/loadout-list?campaign=' + campaign)).json();
   assert.equal(list.states[key].hp, 20);
-  assert.ok(key in await (await fetch(base + '/__store')).json());
+  assert.ok(key in await (await fetch(base + '/__store', { headers: { 'x-preview-token': token } })).json());
   assert.equal((await fetch(base + '/api/loadout?key=bad')).status, 400);
 });
 
@@ -153,11 +154,11 @@ test('the store round-trips through the real handlers, and the list sees it', as
 test('flush writes the store into the note; a dry run says so and writes nothing', async () => {
   const note = path.join(work, 'vault', 'Characters', 'PCs', 'Brannoch_Vale.md');
   const before = fs.readFileSync(note, 'utf8');
-  const dry = await (await fetch(base + '/__flush?dry=1', { method: 'POST' })).text();
+  const dry = await (await fetch(base + '/__flush?dry=1', { method: 'POST', headers: { 'x-preview-token': token } })).text();
   assert.match(dry, /DRY RUN/);
   assert.match(dry, /✓ Brannoch Vale/);
   assert.equal(fs.readFileSync(note, 'utf8'), before);
-  const report = await (await fetch(base + '/__flush', { method: 'POST' })).text();
+  const report = await (await fetch(base + '/__flush', { method: 'POST', headers: { 'x-preview-token': token } })).text();
   assert.match(report, /✓ Brannoch Vale/);
   assert.match(report, /HP \(Current\)/);
   assert.doesNotMatch(report, /DRY RUN|✖/);
@@ -165,6 +166,66 @@ test('flush writes the store into the note; a dry run says so and writes nothing
   assert.match(after, /\| HP \(Current\) \| 20 \|/);
   assert.match(after, /\| 1st \| 4 \| 3 \|/);
   assert.equal(after.split('\n').length, before.split('\n').length);
+});
+
+test('flush without the token, or with a wrong one, is 403 and runs nothing', async () => {
+  const note = path.join(work, 'vault', 'Characters', 'PCs', 'Brannoch_Vale.md');
+  const was = fs.readFileSync(note, 'utf8');
+  for (const headers of [{}, { 'x-preview-token': 'nope' }, { 'x-preview-token': 'a'.repeat(token.length) }]) {
+    for (const p of ['/__flush', '/__flush?dry=1']) {
+      assert.equal((await fetch(base + p, { method: 'POST', headers })).status, 403);
+    }
+    assert.equal((await fetch(base + '/__store', { headers })).status, 403);
+  }
+  assert.equal(fs.readFileSync(note, 'utf8'), was);
+  assert.match(token, /^[0-9a-f]{32,}$/);
+});
+
+test('a request for a foreign Host is 403', async () => {
+  const http = require('http');
+  const port = preview.server.address().port;
+  const status = await new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: '/', headers: { Host: 'evil.example' } }, r => { r.resume(); resolve(r.statusCode); }).on('error', reject);
+  });
+  assert.equal(status, 403);
+  const ok = await new Promise((resolve, reject) => {
+    http.get({ host: '127.0.0.1', port, path: '/', headers: { Host: 'localhost:' + port } }, r => { r.resume(); resolve(r.statusCode); }).on('error', reject);
+  });
+  assert.equal(ok, 200);
+});
+
+test('a cross-origin write is 403 and stores nothing; the own origin and no origin work', async () => {
+  const http = require('http');
+  const port = preview.server.address().port;
+  const put = (origin, key) => new Promise((resolve, reject) => {
+    const body = JSON.stringify({ key, state: { v: 1, hp: 7 } });
+    const headers = { 'content-type': 'application/json', 'content-length': Buffer.byteLength(body) };
+    if (origin) headers.Origin = origin;
+    const r = http.request({ host: '127.0.0.1', port, path: '/api/loadout', method: 'PUT', headers }, res => { res.resume(); resolve(res.statusCode); });
+    r.on('error', reject); r.end(body);
+  });
+  const k = n => 'loadout:camp:x:' + n;
+  assert.equal(await put('http://evil.example', k('evil')), 403);
+  assert.equal(await put('null', k('null')), 403);
+  assert.equal(await put('http://127.0.0.1:' + port, k('own')), 200);
+  assert.equal(await put(null, k('none')), 200);
+  const store = await (await fetch(base + '/__store', { headers: { 'x-preview-token': token } })).json();
+  assert.equal(k('evil') in store, false);
+  assert.equal(k('null') in store, false);
+  assert.ok(k('own') in store && k('none') in store);
+});
+
+test('the token is in no served file', async () => {
+  const page = await (await fetch(base + '/characters/pcs/brannoch-vale.html')).text();
+  assert.match(page, /id="dnd-live-data"/);
+  assert.equal(page.includes(token), false);
+  const srcs = [...page.matchAll(/src="([^"]+\.js[^"]*)"/g)].map(m => m[1]);
+  for (const s of srcs) {
+    const res = await fetch(new URL(s, base + '/characters/pcs/'));
+    assert.equal((await res.text()).includes(token), false);
+  }
+  const walk = d => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
+  for (const f of walk(preview.outputDir)) assert.equal(fs.readFileSync(f).includes(token), false, f);
 });
 
 test('the change-request inbox is not there', async () => {
