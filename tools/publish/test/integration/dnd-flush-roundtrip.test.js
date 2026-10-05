@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
 const { applyDnDFlush } = require('../../lib/flush/dnd-writeback');
+const { fit } = require('../../js/dnd-live');
 
 // The write-back must find, in the note, every cell the build made live. For every D&D PC
 // fixture: build, change everything live, flush, rebuild from the flushed note, compare.
@@ -79,13 +80,24 @@ function addShort(vault) {
   fs.writeFileSync(path.join(vault, PCS, SHORT_FILE), text.replace(/^player_name: .*$/m, 'player_name: "Sam"'));
 }
 
+// A PC whose Conditions cell is the GM's own writing (square brackets), and whose Temp HP says None.
+const ODD_FILE = 'Odd_Conditions_Test.md';
+function addOdd(vault) {
+  let text = fs.readFileSync(path.join(vault, PCS, 'Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n');
+  for (const [from, to] of [['| Conditions | — |', '| Conditions | Hexed [Bob], Prone |'], ['| Temp HP | 0 |', '| Temp HP | None |']]) {
+    assert.ok(text.includes(from), `fixture no longer has ${from}`);
+    text = text.replace(from, to);
+  }
+  fs.writeFileSync(path.join(vault, PCS, ODD_FILE), text.replace(/^player_name: .*$/m, 'player_name: "Odd"'));
+}
+
 describe('D&D flush round trip, every fixture note', () => {
-  let first, second, short;
+  let first, second, short, odd;
   const files = fs.readdirSync(path.join(FIXTURES, 'with-dnd-pc', PCS)).filter(f => f.endsWith('.md')).concat(EMPHASIS_FILE);
   const flushed = {};
   const blobs = {};
   before(() => {
-    first = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => { addEmphasis(vault); addShort(vault); });
+    first = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => { addEmphasis(vault); addShort(vault); addOdd(vault); });
     for (const file of files) {
       const d = first.island(file);
       if (!d) continue;
@@ -106,10 +118,19 @@ describe('D&D flush round trip, every fixture note', () => {
       for (const t of island.tracks) b.used[t.key] = (t.used + 1) % (t.max + 1);
       short = { island, note, blob: b, result: applyDnDFlush(note, b) };
     }
+    {
+      const island = first.island(ODD_FILE);
+      const note = fs.readFileSync(path.join(first.vault, PCS, ODD_FILE), 'utf8').replace(/\r\n/g, '\n');
+      // What the page would save after a session: its own fit of a record that tried to change conditions.
+      const b = fit({ hp: island.defaults.hp - 2, temp: 3, conditions: ['Stunned'] }, island);
+      odd = { island, note, blob: b, result: applyDnDFlush(note, b) };
+    }
     second = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => {
       addEmphasis(vault);
       addShort(vault);
       fs.writeFileSync(path.join(vault, PCS, SHORT_FILE), short.result.markdown);
+      addOdd(vault);
+      fs.writeFileSync(path.join(vault, PCS, ODD_FILE), odd.result.markdown);
       for (const file of files) if (flushed[file]) fs.writeFileSync(path.join(vault, PCS, file), flushed[file].result.markdown);
     });
   });
@@ -166,5 +187,24 @@ describe('D&D flush round trip, every fixture note', () => {
     const again = applyDnDFlush(short.result.markdown, short.blob);
     assert.deepEqual(again.changes, []);
     assert.deepEqual(again.skipped.slice().sort(), keys.slice().sort());
+  });
+
+  it('conditions the page shows as written: held to the note on the page, left alone by flush, the rest still written', () => {
+    assert.equal(odd.island.conditionsLive, false);
+    assert.deepEqual(odd.island.defaults.conditions, ['Hexed [Bob]', 'Prone']);
+    assert.deepEqual(odd.blob.conditions, ['Hexed [Bob]', 'Prone']);
+    assert.deepEqual(odd.result.skipped, []);
+    const lines = odd.result.markdown.split('\n');
+    assert.ok(lines.includes('| Conditions | Hexed [Bob], Prone |'));
+    assert.ok(lines.includes('| Temp HP | 3 |'));
+    assert.deepEqual(odd.result.changes.map(c => c.field).sort(), ['HP (Current)', 'Temp HP']);
+    const d2 = second.island(ODD_FILE);
+    assert.equal(d2.conditionsLive, false);
+    assert.deepEqual(d2.defaults.conditions, ['Hexed [Bob]', 'Prone']);
+    assert.equal(d2.defaults.temp, 3);
+    assert.equal(d2.defaults.hp, odd.blob.hp);
+    const again = applyDnDFlush(odd.result.markdown, odd.blob);
+    assert.deepEqual(again.changes, []);
+    assert.deepEqual(again.skipped, []);
   });
 });

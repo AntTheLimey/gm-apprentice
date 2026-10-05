@@ -292,13 +292,64 @@ test('a Conditions cell that says None, or holds a hyphen, is no conditions: not
   }
 });
 
-test('words of the GM\'s own that the site cannot carry stay in the Conditions cell', () => {
-  const long = 'Cursed by the drowned bell until the tide turns three times over the bar';
-  assert.ok(long.length > 60);
-  const md = mini([`| Conditions | ${long}, Prone |`, '| HP (Max) | 20 |'], []);
-  assert.equal(applyDnDFlush(md, { conditions: ['Prone'] }).markdown, md);
-  assert.equal(row(applyDnDFlush(md, { conditions: ['Stunned'] }).markdown, /^\| Conditions/), `| Conditions | ${long}, Stunned |`);
-  assert.equal(row(applyDnDFlush(md, { conditions: [] }).markdown, /^\| Conditions/), `| Conditions | ${long} |`);
+// Conditions follow the rule of everything else here: a cell the page shows as written is not live
+// and is never rewritten. Flush writes names that pass the rule, and never rendered text.
+const condNote = cell => mini([`| Conditions | ${cell} |`, '| HP (Max) | 20 |'], []);
+const flushes = (md, record, times) => { const out = []; let text = md; for (let i = 0; i < times; i++) { const r = applyDnDFlush(text, record); out.push(r); text = r.markdown; } return out; };
+
+for (const hostile of ['x&#10;&#10;## Injected&#10;&#10;y', 'a &#124; b', 'a &vert; b', '&lt;script&gt;alert(1)&lt;/script&gt;', '&#91;x&#93;(y)',
+  '&#91;&#91;Secret_Note&#93;&#93;', 'A &amp; B', 'A & B']) {
+  test(`a character reference in a saved condition never reaches the note, however often flush runs: ${hostile}`, () => {
+    const md = condNote('—');
+    const [one, two, three] = flushes(md, { conditions: [hostile, 'Stunned'] }, 3);
+    assert.equal(one.markdown, md.replace('| Conditions | — |', '| Conditions | Stunned |'));
+    assert.deepEqual(two.changes, []);
+    assert.equal(three.markdown, one.markdown);
+    assert.equal(three.markdown.split('\n').length, md.split('\n').length);
+    // And with nothing else in the record the cell is not touched at all.
+    for (const r of flushes(md, { conditions: [hostile] }, 3)) { assert.equal(r.markdown, md); assert.deepEqual(r.skipped, []); }
+  });
+}
+
+for (const cell of ['[[Poisoned]]', 'Hexed [Bob]', 'A\\|B', '**Hexed**', 'Hexed, [see notes](http://example.test)', 'x&#10;y', 'Prone, prone',
+  'Cursed by the drowned bell until the tide turns three times over the bar']) {
+  test(`a Conditions cell the page shows as written is never rewritten: ${cell}`, () => {
+    const md = condNote(cell);
+    // The page holds such conditions to the note's own, so that is what it saves: nothing to name.
+    const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+    assert.equal(d.conditionsLive, false);
+    // (A real build resolves a wikilink first: one to a missing note reaches the page as its plain text.)
+    const held = cell === '[[Poisoned]]' ? ['Poisoned'] : d.defaults.conditions;
+    for (const record of [{ conditions: held }, { conditions: [] }]) {
+      for (const r of flushes(md, record, 3)) { assert.equal(r.markdown, md); assert.deepEqual(r.skipped, []); }
+    }
+    // A record that says otherwise is named, and still nothing is written.
+    for (const r of flushes(md, { conditions: ['Stunned'] }, 3)) { assert.equal(r.markdown, md); assert.deepEqual(r.skipped, ['conditions']); }
+  });
+}
+
+test('plain names with an apostrophe, a hyphen and round brackets are live, kept, and written back the same', () => {
+  const md = condNote('Hexed (Bob\'s curse), Half-blind');
+  const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.equal(d.conditionsLive, true);
+  assert.deepEqual(d.defaults.conditions, ['Hexed (Bob\u2019s curse)', 'Half-blind']);
+  // What the page saves for an untouched sheet changes nothing, though the page shows a curly apostrophe.
+  for (const r of flushes(md, { conditions: d.defaults.conditions }, 2)) { assert.equal(r.markdown, md); assert.deepEqual(r.skipped, []); }
+  // A tap adds a name; the others are written as the page holds them, and it is stable.
+  const [one, two] = flushes(md, { conditions: d.defaults.conditions.concat('Prone') }, 2);
+  assert.equal(row(one.markdown, /^\| Conditions/), '| Conditions | Hexed (Bob\u2019s curse), Half-blind, Prone |');
+  assert.deepEqual(two.changes, []);
+  const again = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(one.markdown)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.deepEqual(again.defaults.conditions, ['Hexed (Bob\u2019s curse)', 'Half-blind', 'Prone']);
+});
+
+test('the word None in Temp HP or Exhaustion is a blank: it is written over', () => {
+  const md = mini(['| HP (Current) | 9 |', '| HP (Max) | 20 |', '| Temp HP | None |', '| Exhaustion | n/a |'], []);
+  assert.deepEqual(applyDnDFlush(md, { hp: 9, temp: 0, exhaustion: 0 }).changes, []);
+  const r = applyDnDFlush(md, { hp: 9, temp: 5, exhaustion: 2 });
+  assert.equal(row(r.markdown, /^\| Temp HP/), '| Temp HP | 5 |');
+  assert.equal(row(r.markdown, /^\| Exhaustion/), '| Exhaustion | 2 |');
+  assert.deepEqual(r.skipped, []);
 });
 
 // A row short of its last cell is live on the page (the renderer pads it). Flush adds no cell,

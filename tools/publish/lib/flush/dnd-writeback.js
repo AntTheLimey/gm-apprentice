@@ -5,7 +5,7 @@ const { findHeadings, renderInline } = require('../processor');
 const { splitReason, COLS, countCells, wholeNumber } = require('../templates/dnd/parse');
 const { ATTRIBUTE_COLUMNS, cellText, filled, yesNo } = require('../templates/sheet-parse');
 const { normalizeTitle } = require('../templates/gurps/tables');
-const { liveKey, shown, trackable, holdsNothing } = require('../templates/dnd/live-key');
+const { liveKey, shown, trackable, holdsNothing, saysNone } = require('../templates/dnd/live-key');
 const { conditionsOf } = require('../templates/dnd/live-data');
 const { fitConditions } = require('../../js/dnd-live');
 
@@ -18,9 +18,11 @@ const { fitConditions } = require('../../js/dnd-live');
 // build drew as written is left alone; a missing cell is never added. A saved value that
 // could not be written is named in `skipped`, unless it is what its missing cell already
 // means (0, none, No), when nothing is lost. Concentrating is never written.
-// A saved record can be sent by anyone: a number is fitted before it is written, and a
-// condition passes the page's own rule (fitConditions), so no text of the record's can
-// leave its cell.
+// A saved record can be sent by anyone. A number is fitted before it is written. A
+// condition is written only when it passes the page's own rule (fitConditions: letters,
+// digits, spaces, apostrophes, hyphens, round brackets), and only into a Conditions cell
+// that already holds nothing but such names. Text read from the note through the renderer
+// is never written back as markdown: a cell holding anything else is left exactly as it is.
 // No KV, no fs, no config.
 
 const FEATURE_SECTIONS = [['class features', 'class'], ['species traits', 'species'], ['feats', 'feat']];
@@ -113,11 +115,12 @@ function applyDnDFlush(markdown, blob) {
 
   // A table's rows the build would place, for an `Attribute | Value` table. The first
   // table of the subsection; none when its header is not that shape.
-  const attributeRows = (sec, key) => {
+  const attributeRows = (sec, key, everyRow) => {
     const table = subsection(sec, key) && subsection(sec, key).tables[0];
     if (!table || !ATTRIBUTE_COLUMNS.every((p, i) => p.test(table.header[i] || ''))) return [];
     return table.rows.filter(row => {
       if (!row.cells.some(c => plain(c))) return false;
+      if (everyRow) return true;
       if (row.cells.slice(2).some(c => plain(c))) return false;
       if (hasLink(row.cells[0] || '')) return false;
       const value = row.cells[1] || '';
@@ -129,9 +132,10 @@ function applyDnDFlush(markdown, blob) {
     }).map(row => ({ row, label: plain(row.cells[0]), raw: row.cells[1] || '' }));
   };
   // A cell read as the build reads a number: blank, a whole number (a reason may follow), or other.
-  const readNumber = raw => {
+  // `words`: a word that says none (None, N/A) is a blank too, as for Temp HP and Exhaustion.
+  const readNumber = (raw, words) => {
     const t = filled(plain(raw));
-    if (holdsNothing(t)) return { blank: true };
+    if (words ? saysNone(t) : holdsNothing(t)) return { blank: true };
     const v = splitReason(t).value;
     return /^\d+$/.test(v) ? { value: Number(v) } : { other: true };
   };
@@ -156,8 +160,8 @@ function applyDnDFlush(markdown, blob) {
     return out;
   };
   // True when the cell now holds `n`. A cell that reads as blank (a dash, a placeholder) takes the number whole.
-  const putNumber = (row, idx, label, n, raw) => {
-    const to = readNumber(raw).blank ? String(n) : swapDigits(raw, [n]);
+  const putNumber = (row, idx, label, n, raw, words) => {
+    const to = readNumber(raw, words).blank ? String(n) : swapDigits(raw, [n]);
     return to !== null && write(row, idx, label, to);
   };
 
@@ -173,10 +177,10 @@ function applyDnDFlush(markdown, blob) {
     if (!carries[key]) return;
     const to = fitted(blob[key], most);
     const hit = firstRow(re);
-    const r = hit ? readNumber(hit.raw) : { blank: true };
+    const r = hit ? readNumber(hit.raw, true) : { blank: true };
     if (!live || r.other) { if (to === dflt) okScalar.add(key); return; }
     const current = r.blank ? dflt : Math.min(r.value, most);
-    if (to === current || (hit && putNumber(hit.row, 1, hit.label, to, hit.raw))) okScalar.add(key);
+    if (to === current || (hit && putNumber(hit.row, 1, hit.label, to, hit.raw, true))) okScalar.add(key);
   };
   // Hit points are live when the maximum is a number and the current cell is a number or
   // holds nothing, as the build has it (live-data.js); a missing current row reads as the maximum.
@@ -194,15 +198,26 @@ function applyDnDFlush(markdown, blob) {
   scalar('temp', /^temp(orary)? HP$/i, 0, 9999, hpMax !== null);
   scalar('exhaustion', /^exhaustion$/i, 0, 6, true);
 
-  // Conditions: the names the page may carry (fitConditions), read from the cell as the build
-  // reads them. Words in the cell that the site cannot carry are the GM's and stay in it.
+  // Conditions. The first Conditions row is live when the build placed it, it is plain text (no
+  // link, no markup), and every name in it passes the rule; the same test as live-data.js. A live
+  // cell is written with names that pass the rule, joined by `, `, or a dash for none. A cell that
+  // is not live is the GM's own writing and is never rewritten: the page holds such conditions to
+  // the note's, so the record is named only when it says something else.
   if (carries.conditions) {
-    const want = fitConditions(blob.conditions);
-    const cond = firstRow(/^conditions?$/i);
-    const all = cond ? conditionsOf(filled(plain(cond.raw))) : [];
-    const kept = all.filter(name => !fitConditions([name]).length);
-    if (fitConditions(all).join('\n') === want.join('\n')
-      || (cond && write(cond.row, 1, cond.label, kept.concat(want).join(', ') || '—'))) okScalar.add('conditions');
+    const isCond = r => /^conditions?$/i.test(r.label);
+    const first = stat ? attributeRows({ subs: firstOfEach(stat.subs) }, 'combat', true).find(isCond) : undefined;
+    const cond = combat.find(isCond);
+    const names = row => conditionsOf(filled(plain(row.raw)));
+    const all = cond ? names(cond) : [];
+    const plainCell = !first || (cond && cond.row === first.row && !hasLink(cond.raw) && !/</.test(renderInline(shown(cond.raw))));
+    const live = plainCell && fitConditions(all).join('\n') === all.join('\n');
+    const said = blob.conditions.filter(c => typeof c === 'string');
+    if (!live) {
+      if (!said.length || said.join('\n') === all.join('\n') || (first && said.join('\n') === names(first).join('\n'))) okScalar.add('conditions');
+    } else {
+      const want = fitConditions(blob.conditions);
+      if (want.join('\n') === all.join('\n') || (cond && write(cond.row, 1, cond.label, want.join(', ') || '—'))) okScalar.add('conditions');
+    }
   }
 
   // The last placed Heroic Inspiration row is the one the build reads. A cell in words is not live.
