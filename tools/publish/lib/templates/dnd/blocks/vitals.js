@@ -8,6 +8,8 @@ const tile = (model, label, value, whyClass) => (value
 
 function renderVitals(model) {
   const c = model.combat || {};
+  const live = !!model.liveKeys;
+  const hook = name => (live ? ` data-live="${name}"` : '');
   // Temp HP as written; only a blank or a plain zero is left off.
   const tempText = String(c.tempHp || '').trim();
   const hasTemp = tempText !== '' && !/^0+$/.test(tempText);
@@ -17,7 +19,7 @@ function renderVitals(model) {
   const speeds = c.speeds || [];
   // The reason in the AC cell is a duplicate when a Defences line says what the armour class is made of.
   const acReasonShownBelow = (model.defences || []).some(([label]) => /^armou?r class$/i.test(label));
-  if (!(c.ac || c.hpCur || c.hpMax || c.initiative || c.speed || speeds.length || model.pb || hasTemp
+  if (!live && !(c.ac || c.hpCur || c.hpMax || c.initiative || c.speed || speeds.length || model.pb || hasTemp
     || c.conditions || c.exhaustion || inspired !== false)) return null;
   let hp = '';
   if (c.hpCur || c.hpMax || hasTemp) {
@@ -25,7 +27,7 @@ function renderVitals(model) {
     const why = max.reason ? `<span class="dnd5e-why">${whyOf(model, c.hpMax) || escapeHtml(max.reason)}</span>` : '';
     const of = c.hpMax ? ` <span class="dnd5e-of"${max.reason ? ` title="${escapeHtml(max.reason)}"` : ''}>/ ${escapeHtml(max.value)}</span>${why}` : '';
     const temp = hasTemp ? ` <span class="dnd5e-temp">+ ${escapeHtml(tempText)} temp</span>` : '';
-    hp = `<div class="dnd5e-v dnd5e-hp"><span class="dnd5e-lbl">Hit points</span><span class="dnd5e-hp-line">${num(c.hpCur, '', whyOf(model, c.hpCur))}${of}${temp}</span></div>`;
+    hp = `<div class="dnd5e-v dnd5e-hp"${model.liveHp ? hook('hp') : ''}><span class="dnd5e-lbl">Hit points</span><span class="dnd5e-hp-line">${num(c.hpCur, '', whyOf(model, c.hpCur))}${of}${temp}</span></div>`;
   }
 
   const chips = [];
@@ -41,9 +43,9 @@ function renderVitals(model) {
   const speed = c.speed || extra
     ? `<div class="dnd5e-v"><span class="dnd5e-lbl">Speed</span>${c.speed ? num(c.speed, '', whyOf(model, c.speed)) : ''}${extra}</div>` : '';
 
-  return '<section class="dnd5e-vitals" aria-label="Vitals">'
+  return `<section class="dnd5e-vitals" aria-label="Vitals"${hook('vitals')}>`
     + `<div class="dnd5e-vrow">${hp}${tile(model, 'AC', c.ac, acReasonShownBelow ? 'is-dup' : '')}${tile(model, 'Init', c.initiative)}${speed}${tile(model, 'Prof', model.pb)}</div>`
-    + `<div class="dnd5e-chips${allQuiet ? ' is-quiet' : ''}">${chips.join('')}</div></section>`;
+    + `<div class="dnd5e-chips${allQuiet ? ' is-quiet' : ''}"${hook('chips')}>${chips.join('')}</div></section>`;
 }
 
 module.exports = { renderVitals };

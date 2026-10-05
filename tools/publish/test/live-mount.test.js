@@ -12,7 +12,8 @@ test('clientFor maps GURPS and CoC system ids to their clients', () => {
 
 test('clientFor is case-insensitive and null for unknown systems', () => {
   assert.deepEqual(lm.clientFor('CoC-7e'), { script: 'coc-live.js', domId: 'coc-live-data' });
-  assert.equal(lm.clientFor('dnd-5e'), null);
+  assert.deepEqual(lm.clientFor('dnd-5e'), { script: 'dnd-live.js', domId: 'dnd-live-data' });
+  assert.equal(lm.clientFor('pf2e'), null);
   assert.equal(lm.clientFor(null), null);
 });
 
@@ -21,5 +22,6 @@ test('liveScriptHrefs orders live-state before the system client', () => {
 });
 
 test('liveScriptHrefs is empty for a system without a live client', () => {
-  assert.deepEqual(lm.liveScriptHrefs('../', 'dnd-5e'), []);
+  assert.deepEqual(lm.liveScriptHrefs('../', 'dnd-5e'), ['../js/live-state.js', '../js/dnd-live.js']);
+  assert.deepEqual(lm.liveScriptHrefs('../', 'pf2e'), []);
 });

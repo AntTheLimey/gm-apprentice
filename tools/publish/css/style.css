@@ -3823,6 +3823,7 @@ details.rules-ref > summary::-webkit-details-marker { display: none; }
 .dnd5e-marks { display: inline-flex; flex-wrap: wrap; gap: 5px; align-items: center; }
 .dnd5e-mark { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--accent); background: var(--accent); padding: 0; }
 .dnd5e-mark.is-spent { background: transparent; border-color: var(--text-muted); }
+.dnd5e-live { cursor: pointer; }
 .dnd5e-count { font-size: 0.85rem; color: var(--text); }
 .dnd5e-uses { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 0.8rem; color: var(--text); }
 .dnd5e-track { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; padding: 6px 0; }

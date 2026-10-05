@@ -1,4 +1,5 @@
 const { block, entry, usesHtml } = require('../render');
+const { liveKey, liveOf, shown } = require('../live-key');
 
 const ATTUNEMENT_SLOTS = 3;
 
@@ -10,7 +11,7 @@ function renderMagicItems(model) {
     nameHtml: i.nameHtml,
     tags: [i.attuned ? 'Attuned' : ''],
     summaryHtml: i.notesHtml,
-    usesHtml: usesHtml({ name: i.name, uses: i.charges, used: i.used, recovers: i.recovers, recoversHtml: i.recoversHtml }),
+    usesHtml: usesHtml({ name: i.name, uses: i.charges, used: i.used, recovers: i.recovers, recoversHtml: i.recoversHtml }, liveOf(model, liveKey('item', shown(i.name)))),
   })).join('');
   return block('magic-items', 'Magic items', entries, `${items.filter(i => i.attuned).length} of ${ATTUNEMENT_SLOTS} attuned`);
 }
