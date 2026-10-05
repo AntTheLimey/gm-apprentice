@@ -45,7 +45,7 @@ saying so and reads nothing from KV.
   `Expended` read as 0, and a blank `HP (Current)` reads as the maximum. A
   blank cell is filled in only when the live value differs from that. In
   `HP (Current)`, `Temp HP` and `Exhaustion` a dash (`—`, `–`, `-`) is a
-  blank.
+  blank, and so is `None`, `N/A` or `No` in `Temp HP` and `Exhaustion`.
 - **A number is written through emphasis.** `**38**` becomes `**31**`.
 - **A cell the page could not read is not live, and is never written.**
   The usual reasons are in "D&D 5e: why the page cannot read a cell"
@@ -64,14 +64,15 @@ saying so and reads nothing from KV.
   already means (no temporary hit points, no exhaustion, no conditions, no
   inspiration, a count of 0) is not named. So a line under a PC's name
   always means a real number did not reach the note.
-- **A condition is a short plain name.** A saved condition is written only
-  when it is text of 60 characters or fewer with none of `|`, `,`, `[`,
-  `]`, `<`, `>`, a backtick, a backslash or a line break, and at most 20
-  are written. Anything else in a saved record is dropped: the site's
-  store can be written by anyone who knows the site's address. Words in
-  the note's own `Conditions` cell that fail that test are the GM's: the
-  page does not show them as a condition, and `flush` leaves them in the
-  cell.
+- **A condition is a short plain name.** A name is letters (of any
+  language), digits, spaces, apostrophes, hyphens and round brackets, 1 to
+  60 characters, and nothing else. `flush` writes only names that pass
+  that test, joined by `, `, and at most 20. Anything else in a saved
+  record is dropped, because the site's store can be written by anyone who
+  knows the site's address.
+- **A `Conditions` cell that holds anything else is never rewritten.** It
+  is the GM's own writing, and conditions are then not live for that PC
+  (below). `flush` leaves the cell exactly as it is.
 - **An old-layout note** (prose features, no `Temp HP` row) is written only
   where its cells exist, and a real value with no cell is named as above. Converting the
   note gives the missing cells a home (`ttrpg-expert`'s
@@ -90,8 +91,9 @@ note.
   away next session; `flush` at wrap-up writes the 3 that player saved a
   fortnight ago. GURPS and CoC live values behave the same way.
 - What the page shows depends on the device. A device that saved the
-  value shows the saved one. A new session code, another device or a
-  cleared browser has nothing saved, so that page shows the note.
+  value shows the saved one, and so does any device using the same
+  session code. A device with no session code or a different one, or a
+  cleared browser, has nothing saved, so that page shows the note.
 - To change a live value between sessions, open that PC's page and change
   it there. That saves a newer record, which is the one `flush` writes.
 - The maxima are different: `HP (Max)`, `Uses`, `Charges`, `Total` and the
@@ -118,6 +120,12 @@ written.
 - **`Exhaustion`:** anything but a whole number (a reason may follow) or
   blank.
 - **`Heroic Inspiration`:** not a yes or no word. Blank reads as no.
+- **`Conditions`:** a name written as a link, in bold or italic, or with a
+  character that is not a letter, a digit, a space, an apostrophe, a hyphen
+  or a round bracket; a name over 60 characters; the same name twice; more
+  than 20 names. Conditions are then not live: the page shows the cell as
+  written and offers no conditions drawer, and `flush` never rewrites the
+  cell.
 - **Death saves:** not two whole numbers with a slash (`1/2`), or either
   over 3.
 - **Hit dice:** not `spent/max` (`2/5`), or spent over max, or a max of 0.

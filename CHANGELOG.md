@@ -40,8 +40,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   live numbers back to the D&D note, keeping a reason written beside a
   number, and names every value the note had no cell for. A value that
   is nothing (no temporary hit points, no conditions, a count of 0) is
-  not named. A condition is written only when it is a short plain name,
-  so nothing sent to the site's store can add lines to a note.
+  not named. A condition is written only when it is a plain name of
+  letters, digits, spaces, apostrophes, hyphens and round brackets, and a
+  `Conditions` cell holding a link or anything else is shown as written
+  and never rewritten.
 - A local live preview for developers, `live-preview.js` in the publish
   tool's scripts. It builds a site into a temporary folder and never
   touches the site's own output, and it is not shipped in the npm

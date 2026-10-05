@@ -347,11 +347,11 @@ differs.
 | Cell | Where | Format |
 |------|-------|--------|
 | `HP (Current)` | `### Combat` | a whole number; a reason in brackets after it is kept (`31 (after the fall)`). Blank or a dash reads as the maximum |
-| `Temp HP` | `### Combat` | a whole number, a reason kept; blank or a dash reads as 0 |
+| `Temp HP` | `### Combat` | a whole number, a reason kept; blank, a dash or `None` reads as 0 |
 | `Hit Dice (Spent/Max)` | `### Combat`, each `Hit Dice` row | `s/m`; only `s` is written |
 | `Death Saves (S/F)` | `### Combat` | `s/f`, each 0 to 3 |
-| `Exhaustion` | `### Combat` | a whole number, 0 to 6, a reason kept; blank or a dash reads as 0 |
-| `Conditions` | `### Combat` | names joined by `, `; `—` for none (`None`, `N/A`, `No` and a hyphen read as none too). A name is plain text of 60 characters or fewer, with none of `\|`, `[`, `]`, `<`, `>`, a backtick or a backslash; the live sheet does not carry anything else, and `flush` leaves it in the cell |
+| `Exhaustion` | `### Combat` | a whole number, 0 to 6, a reason kept; blank, a dash or `None` reads as 0 |
+| `Conditions` | `### Combat` | names joined by `, `; `—` for none (`None`, `N/A`, `No` and a hyphen read as none too). A name is letters, digits, spaces, apostrophes, hyphens and round brackets, 1 to 60 characters |
 | `Heroic Inspiration` | `### Core` | `Yes` or `No` |
 | `Expended` | `### Spell Slots` | a whole number, no more than `Total`; blank reads as 0 |
 | `Used` | `## Class Features`, `## Species Traits`, `## Feats`, `### Magic Items` | a whole number, no more than `Uses` or `Charges`; blank reads as 0 |
@@ -368,6 +368,12 @@ differs.
     reason may follow) or blank. Temporary hit points are also not live
     whenever hit points are not.
   - `Heroic Inspiration` not a yes or no word (blank reads as no).
+  - `Conditions`: a name written as a link, in bold or italic, or with a
+    character that is not a letter, a digit, a space, an apostrophe, a
+    hyphen or a round bracket; a name over 60 characters; the same name
+    twice; more than 20 names. Conditions are then not live: the page
+    shows the cell as written and offers no conditions drawer, and
+    `flush` never rewrites the cell.
   - Death saves not `s/f`, or either number over 3.
   - Hit dice not `s/m`, or `s` over `m`, or `m` of 0.
   - A slot row whose `Total` is not a whole number or is 0, whose
@@ -400,8 +406,8 @@ differs.
   the note.** For 30 days after a player last saved, `flush` writes that
   saved value over the note's cell, so a number typed into one of these
   cells between sessions can be replaced by an older one at the next
-  `flush`. A device with nothing saved (a new session code, another
-  device) shows the note. The maxima (`HP (Max)`, `Uses`, `Charges`,
+  `flush`. A device using the same session code shows the saved value;
+  one with no session code or a different one shows the note. The maxima (`HP (Max)`, `Uses`, `Charges`,
   `Total`, the maximum half of hit dice) always come from the note, and
   a saved count above a new maximum is cut to it.
 

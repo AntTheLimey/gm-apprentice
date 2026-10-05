@@ -400,7 +400,11 @@ Vault". Follow it; it is not repeated here.
   - **Hit points** are live when `hpMax` is not `null`; temporary hit
     points when `tempLive` is `true`; exhaustion when `exhaustionLive`;
     Heroic Inspiration when `inspirationLive`.
-  - **Conditions, and both rests,** are live on any live page.
+  - **Conditions** are live unless `conditionsLive` is `false` (a name
+    written as a link or with unusual characters; the reasons are in
+    `live-state-flush.md`). When it is `false` the `Conditions` cell is
+    the GM's own writing: a request to change conditions is case 2.
+  - **Both rests** are live on any live page.
 
   **What to do.** Take these in order and stop at the first that fits:
 
