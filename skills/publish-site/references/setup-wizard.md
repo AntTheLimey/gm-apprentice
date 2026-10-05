@@ -790,10 +790,11 @@ them the URL and the refresh line:
 named, independent** opt-ins. Neither is required for a working site,
 and each can be set up later:
 
-- **Live status bar** — players see and update their HP/FP (and similar
-  live stats) from their phones during play, in real time. (The roster page
-  already shows a static initiative table at Tier 1 — this is what makes it
-  live.)
+- **Live status bar** — players see and update their hit points and the
+  like (HP and FP in GURPS; hit points, Sanity and Luck in Call of Cthulhu;
+  hit points, spell slots and uses in D&D) from their phones during play,
+  in real time. (The roster page already shows a static party table at
+  Tier 1 — this is what makes it live.)
 - **At-table change-request inbox** — players submit sheet edits and
   questions from their phones during a session; you review and apply
   them.
@@ -801,8 +802,8 @@ and each can be set up later:
 > "Your site works great as-is. Two optional add-ons you can turn on now
 > or any time later — they're independent, so you can take one, both, or
 > neither:
-> - a **live status bar** so players can update HP/FP from their phones,
->   and
+> - a **live status bar** so players can update their hit points and the
+>   like from their phones, and
 > - an **at-table change-request inbox** for sheet edits during play.
 > Want to set up either now?"
 

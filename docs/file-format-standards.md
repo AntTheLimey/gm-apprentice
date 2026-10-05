@@ -346,12 +346,12 @@ differs.
 
 | Cell | Where | Format |
 |------|-------|--------|
-| `HP (Current)` | `### Combat` | a whole number; a reason in brackets after it is kept (`31 (after the fall)`). Blank reads as the maximum |
-| `Temp HP` | `### Combat` | a whole number, a reason kept; blank reads as 0 |
+| `HP (Current)` | `### Combat` | a whole number; a reason in brackets after it is kept (`31 (after the fall)`). Blank or a dash reads as the maximum |
+| `Temp HP` | `### Combat` | a whole number, a reason kept; blank or a dash reads as 0 |
 | `Hit Dice (Spent/Max)` | `### Combat`, each `Hit Dice` row | `s/m`; only `s` is written |
 | `Death Saves (S/F)` | `### Combat` | `s/f`, each 0 to 3 |
-| `Exhaustion` | `### Combat` | a whole number, 0 to 6, a reason kept; blank reads as 0 |
-| `Conditions` | `### Combat` | names joined by `, `; `—` for none |
+| `Exhaustion` | `### Combat` | a whole number, 0 to 6, a reason kept; blank or a dash reads as 0 |
+| `Conditions` | `### Combat` | names joined by `, `; `—` for none (`None`, `N/A`, `No` and a hyphen read as none too). A name is plain text of 60 characters or fewer, with none of `\|`, `[`, `]`, `<`, `>`, a backtick or a backslash; the live sheet does not carry anything else, and `flush` leaves it in the cell |
 | `Heroic Inspiration` | `### Core` | `Yes` or `No` |
 | `Expended` | `### Spell Slots` | a whole number, no more than `Total`; blank reads as 0 |
 | `Used` | `## Class Features`, `## Species Traits`, `## Feats`, `### Magic Items` | a whole number, no more than `Uses` or `Charges`; blank reads as 0 |
@@ -360,13 +360,13 @@ differs.
   The page shows it as written and never invents a maximum. A row the
   renderer leaves as written is one such case (see "Tables are read by
   position" above). The usual cell-level reasons:
-  - `HP (Max)` not a whole number (a reason in brackets may follow):
-    hit points are not live at all, whatever `HP (Current)` holds. With
-    a readable maximum, hit points are live even when `HP (Current)` is
-    not such a number or blank: the page starts at the maximum, and
-    `flush` cannot write the cell until it holds a number.
+  - `HP (Max)` not a whole number (a reason in brackets may follow), or
+    `HP (Current)` holding text that is not a number: hit points are not
+    live, and both cells stay as written. A blank `HP (Current)` is
+    fine.
   - `Temp HP` or `Exhaustion` holding anything but a whole number (a
-    reason may follow) or blank.
+    reason may follow) or blank. Temporary hit points are also not live
+    whenever hit points are not.
   - `Heroic Inspiration` not a yes or no word (blank reads as no).
   - Death saves not `s/f`, or either number over 3.
   - Hit dice not `s/m`, or `s` over `m`, or `m` of 0.
@@ -380,22 +380,30 @@ differs.
   - A link in the label or value of a `### Core` or `### Combat` row
     (a link inside a trailing reason is fine), or anywhere in a slot
     row.
-- **Two rows with one name in a table cannot both be live.** Which one
-  the page counts depends on which it can read. Give each row its own
-  name; the build warns when two live rows share one.
+- **Two rows with one name in a table cannot both be live.** The first
+  row of the name owns it; a later row is shown as the note has it. If
+  the page cannot read the first row, no row of that name is live. Give
+  each row its own name; the build warns when two rows share one.
 - **A row is matched by the name the page shows**, so a linked feature
   or item name works: `[[Target|Shown]]` by `Shown`, `[[Ilse_Varn]]` by
   its file name with underscores as spaces. Capitals do not matter.
 - **Concentrating is never saved to the note**, and a rest never sets
   Heroic Inspiration.
 - **A value with no cell to take it is skipped**, and `flush` names it
-  (`no cell in the note for: ...`). An old-layout note is written only
+  (`not written, no cell in the note can hold: ...`). That covers a
+  missing row and a row typed without its last cells; no cell is ever
+  added. A value that is what a missing cell already means (0, no
+  conditions, `No`) is not named. An old-layout note is written only
   where its cells exist.
-- **The saved value wins over the note for 30 days.** While it lasts,
-  editing one of these cells in the note does not change the page. The
-  maxima (`HP (Max)`, `Uses`, `Charges`, `Total`, the maximum half of
-  hit dice) always come from the note, and a saved count above a new
-  maximum is cut to it.
+- **A number is written through emphasis.** `**38**` becomes `**31**`.
+- **A live value is changed on the PC's page (from any device), not in
+  the note.** For 30 days after a player last saved, `flush` writes that
+  saved value over the note's cell, so a number typed into one of these
+  cells between sessions can be replaced by an older one at the next
+  `flush`. A device with nothing saved (a new session code, another
+  device) shows the note. The maxima (`HP (Max)`, `Uses`, `Charges`,
+  `Total`, the maximum half of hit dice) always come from the note, and
+  a saved count above a new maximum is cut to it.
 
 ---
 

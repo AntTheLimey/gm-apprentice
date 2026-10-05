@@ -33,7 +33,7 @@ saying so and reads nothing from KV.
 | Spell slots | `### Spell Slots`, `Expended` (a `Pact` row included) |
 | Feature uses | `Used`, in `## Class Features`, `## Species Traits`, `## Feats` |
 | Magic item charges | `### Magic Items`, `Used` |
-| Conditions | `### Combat`, `Conditions`: names joined by `, `, or `—` for none |
+| Conditions | `### Combat`, `Conditions`: names joined by `, `, or `—` for none. `None`, `N/A`, `No` or a dash in the cell reads as none |
 | Exhaustion | `### Combat`, `Exhaustion` |
 | Heroic Inspiration | `### Core`, `Heroic Inspiration`: `Yes` or `No` |
 | Concentrating | never written; it lasts only on the site |
@@ -43,23 +43,61 @@ saying so and reads nothing from KV.
 - **A reason is kept.** `38 (after the fall)` becomes `31 (after the fall)`.
 - **A blank cell has a value.** Blank `Temp HP`, `Exhaustion`, `Used` and
   `Expended` read as 0, and a blank `HP (Current)` reads as the maximum. A
-  blank cell is filled in only when the live value differs from that.
+  blank cell is filled in only when the live value differs from that. In
+  `HP (Current)`, `Temp HP` and `Exhaustion` a dash (`—`, `–`, `-`) is a
+  blank.
+- **A number is written through emphasis.** `**38**` becomes `**31**`.
 - **A cell the page could not read is not live, and is never written.**
   The usual reasons are in "D&D 5e: why the page cannot read a cell"
   below.
-- **A value with no cell is skipped and named**, on a line under the PC's
+- **A value the note could not take is named**, on a line under the PC's
   own:
-  `Mara Voss — no cell in the note for: temp, slot:pact (3rd), class:second wind`.
+  `Mara Voss — not written, no cell in the note can hold: temp, slot:pact (3rd), class:second wind`.
   The names are the site's keys: `hp`, `temp`, `exhaustion`, `conditions`,
   `inspiration`, `ds:s` and `ds:f` (death saves), and `hd:`, `slot:`,
   `class:`, `species:`, `feat:` or `item:` with the row's name in lower
   case. It means the row is missing, was renamed or deleted since the count
-  was saved, or holds a cell the page cannot read (below). Tell the GM which; do not
-  add the row yourself. Nothing else on that PC is held back.
+  was saved, stops short of the cell (a row typed without its last cells),
+  or holds a cell the page cannot read (below). Tell the GM which; do not
+  add the row or the cell yourself. Nothing else on that PC is held back.
+- **Nothing lost, nothing named.** A value that is what a missing cell
+  already means (no temporary hit points, no exhaustion, no conditions, no
+  inspiration, a count of 0) is not named. So a line under a PC's name
+  always means a real number did not reach the note.
+- **A condition is a short plain name.** A saved condition is written only
+  when it is text of 60 characters or fewer with none of `|`, `,`, `[`,
+  `]`, `<`, `>`, a backtick, a backslash or a line break, and at most 20
+  are written. Anything else in a saved record is dropped: the site's
+  store can be written by anyone who knows the site's address. Words in
+  the note's own `Conditions` cell that fail that test are the GM's: the
+  page does not show them as a condition, and `flush` leaves them in the
+  cell.
 - **An old-layout note** (prose features, no `Temp HP` row) is written only
-  where its cells exist, and the rest is named as above. Converting the
+  where its cells exist, and a real value with no cell is named as above. Converting the
   note gives the missing cells a home (`ttrpg-expert`'s
   `systems/dnd-5e-2024/sheet-conversion.md`).
+
+## D&D 5e: the saved value and the note
+
+A live value is changed on the PC's page (from any device), not in the
+note.
+
+- The site keeps what a player last saved for 30 days. For those 30 days
+  `flush` writes that saved value over the note's cell, every time it
+  runs, whether or not the player was at the session.
+- So a number typed into a live cell between sessions does not last. The
+  GM sets `HP (Current)` to 17 after an off-screen rest; the player is
+  away next session; `flush` at wrap-up writes the 3 that player saved a
+  fortnight ago. GURPS and CoC live values behave the same way.
+- What the page shows depends on the device. A device that saved the
+  value shows the saved one. A new session code, another device or a
+  cleared browser has nothing saved, so that page shows the note.
+- To change a live value between sessions, open that PC's page and change
+  it there. That saves a newer record, which is the one `flush` writes.
+- The maxima are different: `HP (Max)`, `Uses`, `Charges`, `Total` and the
+  maximum half of hit dice always come from the note. Edit those in the
+  note; a saved count above a new maximum is cut to it, on the page and
+  by `flush`.
 
 ## D&D 5e: why the page cannot read a cell
 
@@ -69,14 +107,16 @@ cell. They are not every reason: an unusual table can also leave a row as
 written.
 
 - **Hit points:** `HP (Max)` is not a whole number (a reason in brackets
-  may follow, as in `38 (Tough)`). Then hit points are not live at all, and
-  editing `HP (Current)` does not change that: the GM must fix `HP (Max)`.
-  With a readable maximum, hit points are live even when `HP (Current)`
-  is not such a number or blank: the page starts them at the maximum and
-  the site saves them, but `flush` cannot write that cell until it holds
-  a number.
-- **`Temp HP`, `Exhaustion`:** anything but a whole number (a reason may
-  follow) or blank.
+  may follow, as in `38 (Tough)`), or `HP (Current)` holds text that is
+  not a number (`about half`). Either way hit points are not live, the
+  page shows both cells as written, and `flush` writes neither. A blank
+  `HP (Current)` is fine: it reads as the maximum, and `flush` fills it
+  in.
+- **`Temp HP`:** anything but a whole number (a reason may follow) or
+  blank. Temporary hit points are set from the hit point tile, so they
+  are also not live whenever hit points are not.
+- **`Exhaustion`:** anything but a whole number (a reason may follow) or
+  blank.
 - **`Heroic Inspiration`:** not a yes or no word. Blank reads as no.
 - **Death saves:** not two whole numbers with a slash (`1/2`), or either
   over 3.
@@ -95,8 +135,15 @@ written.
   `### Combat` row (a link inside a trailing reason is fine), or anywhere
   in a slot row. A linked feature or item name is fine.
 
-Two rows with one name in a table cannot both be live. Which one the page
-counts depends on which it can read, so give each row its own name.
+Two rows with one name in a table cannot both be live. The first row of
+the name owns it: if the page can read that row it is the live one, and a
+later row of the name is shown as the note has it, never tapped and never
+written. If the page cannot read the first row, no row of that name is
+live. Give each row its own name.
+
+A cell the page cannot read is not reported at every flush. The page
+saves nothing for a value it does not track, so there is nothing to
+report until the cell is fixed.
 
 ## When to run it
 

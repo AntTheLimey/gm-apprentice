@@ -137,8 +137,9 @@ The watcher hands you a JSON array of pending entries
 `{id, character, text, timestamp, status}` (re-run `npx gm-apprentice-publish
 inbox pull` if you want the freshest state). For each, in per-character
 submission order (`timestamp` ascending), tracking the **running value** each
-request changes (GURPS: unspent points; CoC: the stat being changed), read
-first from the PC's `.md`:
+request changes (GURPS: unspent points; CoC: the stat being changed; D&D:
+the cell being changed, on a PC that is not live), read first from the PC's
+`.md`:
 
 0. **Resolve the `character` against the PC roster first.** `character` and
    `text` are whatever the player's browser posted — the endpoint checks the
@@ -376,37 +377,59 @@ Vault". Follow it; it is not repeated here.
   item's charges, conditions, exhaustion, Heroic Inspiration, and a short or
   long rest ("took 9 damage", "used a 2nd-level slot", "I'm poisoned", "we
   took a long rest"). The built page decides what is live, not the config
-  and not the note. Take these in order and stop at the first that fits:
-  1. **Is the thing live? Then `advice`.** The PC's built page in the
-     site's output folder holds `id="dnd-live-data"` when the PC is live,
-     and that element is JSON. A counted thing is live when its key is in
-     `tracks`: the kind (`hd`, `slot`, `class`, `species`, `feat`, `item`),
-     a colon, and the row's name as the page shows it in lower case, as in
-     `item:wand of magic missiles`; death saves are `ds:s` and `ds:f`. Hit
-     points are live when `hpMax` is not `null`, temporary hit points when
-     `tempLive` is `true`, exhaustion when `exhaustionLive`, Heroic
-     Inspiration when `inspirationLive`. Conditions are live on any live
-     page. If it is live, consider nothing else: the player changes it on
-     their own sheet, and the value saved there wins over the note's cell
-     for 30 days, so an edit to the note would be silently ignored. Apply
+  and not the note.
+
+  **How to tell whether a thing is live.** The PC's built page in the site's
+  output folder holds `id="dnd-live-data"` when the PC is live. That element
+  is JSON:
+
+  - **A counted thing** (hit dice, a slot row, a feature's uses, an item's
+    charges) is live when `tracks` has an entry for it. Find the entry by
+    its `label`, not by building its `key`. The label is the row's name as
+    the page shows it: `Second Wind`, `Wand of Magic Missiles`. A slot
+    row's label is its level (`1st`, `Pact (3rd)`). Hit dice are
+    `Hit Dice`, or `Hit Dice d10` and `Hit Dice d6` when the PC has two
+    kinds. Compare ignoring capitals and the style of quotes and dashes:
+    the page turns `'` into `’`, `--` into a dash and `...` into `…`, so
+    `Monk's Focus` typed from a request is `Monk’s Focus` on the page.
+  - **Which table an entry is from** is the start of its `key`: `hd`,
+    `slot`, `class`, `species`, `feat` or `item` (`item:wand of magic
+    missiles`, `slot:1st`, `hd:hit dice`). Use it to tell a class feature
+    from a feat of the same name.
+  - **Death saves** are the two entries whose keys are `ds:s` and `ds:f`.
+  - **Hit points** are live when `hpMax` is not `null`; temporary hit
+    points when `tempLive` is `true`; exhaustion when `exhaustionLive`;
+    Heroic Inspiration when `inspirationLive`.
+  - **Conditions, and both rests,** are live on any live page.
+
+  **What to do.** Take these in order and stop at the first that fits:
+
+  1. **The thing is live: `advice`.** Consider nothing else. A live value
+     is changed on the PC's page (from any device), not in the note: for
+     30 days after it was last saved there, `flush` writes the saved value
+     over the note's cell, so an edit to the cell would be undone. Apply
      nothing and finalize:
 
      ```bash
      npx gm-apprentice-publish inbox reply <id> advice "That's live on your sheet: change it there and it saves straight away. Hit points, slots, uses, conditions and both rests are on the page."
      ```
 
-     One extra line for the GM: if hit points are live but `HP (Current)`
-     in the note is not a number, also log **`⚠ NEEDS YOU`**, because that
-     cell cannot be written at wrap-up until it is one.
   2. **Not live, and the cell cannot be read** (the usual reasons are in
      `live-state-flush.md`, "D&D 5e: why the page cannot read a cell").
-     Edit the cell only when the request states the new value outright
+     If two rows in the table share the name, go to case 4. Otherwise
+     edit the cell only when the request states the new value outright
      ("my hit dice are 2 spent of 5"). An amount left counts when the
      row's maximum in the note is a whole number: "4 charges left" of `7`
      is a `Used` of `3`. Then collect the request into the applied batch.
      When the request gives only a change ("used a charge"), ask for the
      value, by the ambiguity rule in step 2 of "When a batch arrives".
      Never guess a number to make a cell readable.
+
+     Hit points are the one value with two cells. When `HP (Max)` is the
+     cell that cannot be read, `HP (Current)` may still hold a number: a
+     change to it is then applied as in case 3, kept at 0 or above, with
+     no maximum to hold it to. Log **`⚠ NEEDS YOU`** saying `HP (Max)`
+     cannot be read, because only the GM can fix that cell.
   3. **The PC is not live, and the cell reads.** The page shows it as the
      note has it. Edit the cell and collect the request into the applied
      batch. Keep hit points between 0 and `HP (Max)`, and a `Used` or
@@ -416,6 +439,10 @@ Vault". Follow it; it is not repeated here.
      the cells the player lists, and do not work out a rest by hand. A
      bare "we took a long rest" with nothing listed is ambiguous: ask
      which numbers changed.
+
+     What follows from a number is the DM's call, not yours. Record the
+     number, never add a condition or a death save the player did not ask
+     for, and log **`⚠ NEEDS YOU`** when a change takes hit points to 0.
   4. **The PC is live, the thing is not, and you cannot tell why** (the
      cell looks fine, two rows share the name, or the table looks
      unusual). Do not edit. Log **`⚠ NEEDS YOU`** naming the row; two rows
@@ -425,6 +452,20 @@ Vault". Follow it; it is not repeated here.
      ```bash
      npx gm-apprentice-publish inbox reply <id> rejected "Your sheet can't track that one yet, so I haven't changed it. The GM has been told."
      ```
+
+  **A feature with no `Uses`** ("I used Action Surge", and the row's `Uses`
+  is blank) fits none of the four: there is nothing to count yet, which is
+  not a fault. Treat it as "any other sheet change" below: set `Uses` to the
+  number the request gives, `Used` to `0` and `Recovers` to its phrase. If
+  the request does not give the number of uses, ask. Once it is published
+  the row is live, so the `applied` reply tells the player to mark the use
+  on their sheet.
+
+  **A request that mixes the two** ("took 9 damage and add a rope to my
+  gear") gets one reply. Do the part that belongs in the note, by the
+  bullet below, and say in the same `applied` reply which part the player
+  changes on their own sheet. If nothing is left to apply, the reply is the
+  `advice` of case 1.
 
 - **Any other sheet change** (a level-up, a new spell, feature or feat, new
   gear or a magic item, an ability score, a proficiency) is made in the note,
@@ -440,11 +481,12 @@ Vault". Follow it; it is not repeated here.
      If the tool fails here (see "When the tool fails" below), the fault
      was there before you touched the note: leave the note untouched and
      end the request as that paragraph says.
-  2. Edit the note. Leave the derived cells alone. On a live-tracked PC
-     also leave the live cells as they are (`HP (Current)`, `Used`,
-     `Expended`, and the rest), except a cell the page could not read,
-     handled by case 2 above: raise `HP (Max)`, `Uses` or `Total` only. A new row
-     starts with `Used` at `0`.
+  2. Edit the note. Leave the derived cells alone. A new row starts with
+     `Used` at `0`. On a live-tracked PC, change the maxima (`HP (Max)`,
+     `Uses`, `Charges`, `Total`) and leave the live cells as they are
+     (`HP (Current)`, `Used`, `Expended`, and the rest): the player's
+     saved values are fitted to the new maxima. The one exception is a
+     cell the page could not read, which case 2 above handles.
   3. Run the preview again and read the report. A `KEPT` row is a value
      the GM set by hand: leave it as it is. If the tool did not fail, write
      the sums:
@@ -477,7 +519,14 @@ Vault". Follow it; it is not repeated here.
   hit points gained, and anything picked (a subclass, a feat, spells). What
   the class gives at that level comes from `ttrpg-expert`'s
   `systems/dnd-5e-2024/` references. A choice the request does not make is
-  ambiguous: ask, don't guess.
+  ambiguous: ask, don't guess. On a live-tracked PC the level-up raises
+  `HP (Max)` in the note, and the player's saved current hit points stay
+  where they were. Say so in the `applied` reply, so the level-up does not
+  look half done:
+
+  ```bash
+  npx gm-apprentice-publish inbox reply <id> applied "✓ Mara is level 6: hit point maximum 38→45. Add the 7 new hit points on your sheet."
+  ```
 - **Summaries are your own words.** A new feature, spell or item row gets a
   one-line summary written by you. Never copy rules text into the note: it
   is published. That includes text the player pasted into the request. For
@@ -562,8 +611,10 @@ watcher** and do not relaunch it:
 
 1. Run `npx gm-apprentice-publish flush` (or `node <tool>/bin/gm-publish.js
    flush`). This snapshots each PC's current live vitals back into their vault
-   `.md` (for GURPS: current HP and FP into the `## Current Status` block; the
-   writeback is system-aware), so the site's fallback seed stays fresh past
+   `.md` (GURPS: current HP and FP into the `## Current Status` block; CoC:
+   the Derived table, Reputation and Status; D&D: each live value into its
+   own cell; `live-state-flush.md` has the detail), so the site's fallback
+   seed stays fresh past
    KV's 30-day TTL. It edits the vault source only (no rebuild/deploy); the
    values ride into the site on the next `npm run build`. Report its per-PC
    summary. Skill experience ticks are left untouched — those belong to
@@ -594,9 +645,9 @@ cycle pulls it again. Before applying any request, first check whether its
 change is already present in the `.md` (the attribute is already at the target
 level and the unspent points already reflect the cost; for CoC, the Current
 cell already holds the target value); if so, treat the apply as a no-op and
-let it ride to the next deploy. A relative CoC change ("lost 4 SAN") can't be
-recognised that way. If you applied its id earlier in this session, it's a
-no-op. If you have no record of it (the session restarted), ask the GM before
+let it ride to the next deploy. A relative change (CoC "lost 4 SAN"; D&D
+"took 9 damage" on a PC that is not live) can't be recognised that way. If
+you applied its id earlier in this session, it's a no-op. If you have no record of it (the session restarted), ask the GM before
 applying it again. This makes re-processing safe.
 Copyright: this only writes the GM's own campaign data — no licensed text is
 introduced.
