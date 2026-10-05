@@ -371,67 +371,61 @@ The note's layout, and how each cell is written, is in `ttrpg-expert`'s
 Vault". Follow it; it is not repeated here.
 
 - **Notes and Current Status: always apply.** As for CoC.
-- **The built page decides whether a PC is live.** Not the config and not
-  the note: the PC's built page in the site's output folder contains
-  `id="dnd-live-data"` when it is live. That element holds JSON; read it
-  for the next test.
-- **On a live page, each thing is live or not.** Check the JSON:
-  - Hit points: `hpMax` is not `null`. Temporary hit points: `tempLive` is
-    `true`. Exhaustion: `exhaustionLive`. Heroic Inspiration:
-    `inspirationLive`. Conditions are always live.
-  - Anything counted: its key is in `tracks`. A key is the kind, a colon,
-    and the row's name as the page shows it, in lower case:
-    `item:wand of magic missiles`, `class:second wind`, `slot:1st`,
-    `hd:hit dice`. The kinds are `hd`, `slot`, `class`, `species`, `feat`
-    and `item`; death saves are `ds:s` and `ds:f`.
 - **Values the live sheet holds:** hit points, temporary hit points, death
   saves, hit dice spent, spell slots expended, a feature's uses, a magic
   item's charges, conditions, exhaustion, Heroic Inspiration, and a short or
   long rest ("took 9 damage", "used a 2nd-level slot", "I'm poisoned", "we
-  took a long rest"). Find the cell in the note, then take the first case
-  that fits:
-  - **The thing is live** (the tests above): the player changes it on
-    their own sheet and it saves at once. The value saved on the site wins
-    over the note's cell for 30 days, so an edit to the note would be
-    silently ignored. Apply nothing and finalize with **`advice`**:
+  took a long rest"). The built page decides what is live, not the config
+  and not the note. Take these in order and stop at the first that fits:
+  1. **Is the thing live? Then `advice`.** The PC's built page in the
+     site's output folder holds `id="dnd-live-data"` when the PC is live,
+     and that element is JSON. A counted thing is live when its key is in
+     `tracks`: the kind (`hd`, `slot`, `class`, `species`, `feat`, `item`),
+     a colon, and the row's name as the page shows it in lower case, as in
+     `item:wand of magic missiles`; death saves are `ds:s` and `ds:f`. Hit
+     points are live when `hpMax` is not `null`, temporary hit points when
+     `tempLive` is `true`, exhaustion when `exhaustionLive`, Heroic
+     Inspiration when `inspirationLive`. Conditions are live on any live
+     page. If it is live, consider nothing else: the player changes it on
+     their own sheet, and the value saved there wins over the note's cell
+     for 30 days, so an edit to the note would be silently ignored. Apply
+     nothing and finalize:
 
-    ```bash
-    npx gm-apprentice-publish inbox reply <id> advice "That's live on your sheet: change it there and it saves straight away. Hit points, slots, uses, conditions and both rests are on the page."
-    ```
+     ```bash
+     npx gm-apprentice-publish inbox reply <id> advice "That's live on your sheet: change it there and it saves straight away. Hit points, slots, uses, conditions and both rests are on the page."
+     ```
 
-  - **On a live page, the row's name is held by an earlier row.** Look in
-    the note for an earlier row in the same table with the same name as
-    the page shows it. If that row holds the name (`live-state-flush.md`,
-    "A name belongs to one row"), this one is never live, and no cell edit
-    changes that; only renaming the row does. Apply nothing, log
-    **`⚠ NEEDS YOU`** naming both rows, and still reply to the player:
+     One extra line for the GM: if hit points are live but `HP (Current)`
+     in the note is not a number, also log **`⚠ NEEDS YOU`**, because that
+     cell cannot be written at wrap-up until it is one.
+  2. **Not live, and the cell cannot be read** (the usual reasons are in
+     `live-state-flush.md`, "D&D 5e: why the page cannot read a cell").
+     Edit the cell only when the request states the new value outright
+     ("my hit dice are 2 spent of 5"). An amount left counts when the
+     row's maximum in the note is a whole number: "4 charges left" of `7`
+     is a `Used` of `3`. Then collect the request into the applied batch.
+     When the request gives only a change ("used a charge"), ask for the
+     value, by the ambiguity rule in step 2 of "When a batch arrives".
+     Never guess a number to make a cell readable.
+  3. **The PC is not live, and the cell reads.** The page shows it as the
+     note has it. Edit the cell and collect the request into the applied
+     batch. Keep hit points between 0 and `HP (Max)`, and a `Used` or
+     `Expended` count between 0 and its total. Damage comes off temporary
+     hit points first only if the player says so; if the PC has temporary
+     hit points and the request does not say, ask. For a rest, change only
+     the cells the player lists, and do not work out a rest by hand. A
+     bare "we took a long rest" with nothing listed is ambiguous: ask
+     which numbers changed.
+  4. **The PC is live, the thing is not, and you cannot tell why** (the
+     cell looks fine, two rows share the name, or the table looks
+     unusual). Do not edit. Log **`⚠ NEEDS YOU`** naming the row; two rows
+     with one name is the usual cause, so say so when you see it. Reply
+     once:
 
-    ```bash
-    npx gm-apprentice-publish inbox reply <id> rejected "Two rows on your sheet share that name, so the page can only track the first. Nothing was changed, and the GM has been told."
-    ```
+     ```bash
+     npx gm-apprentice-publish inbox reply <id> rejected "Your sheet can't track that one yet, so I haven't changed it. The GM has been told."
+     ```
 
-  - **The cell cannot be read**, whether or not the PC is live. The full
-    list of what the page cannot read is in `live-state-flush.md` under
-    "D&D 5e: what the page cannot read"; check the cell against it. The
-    page shows such a cell as written and saves nothing for it. Edit it
-    only when the request states the new value outright ("my hit dice are
-    2 spent of 5"). An amount left counts as stating it when the row's
-    maximum in the note is a whole number: "4 charges left" of `7` is a
-    `Used` of `3`. Write the cell in its format and collect the request
-    into the applied batch. When the request gives only a change ("used a
-    charge"), or the maximum cannot be read either, it is ambiguous: ask
-    for the value, by the ambiguity rule in step 2. Never guess a number to
-    make a cell readable. Where the list says only the GM can mend it (no
-    readable `HP (Max)`), also log **`⚠ NEEDS YOU`**.
-  - **The cell reads and the PC is not live:** the page shows it as the
-    note has it. Edit the cell and collect the request into the applied
-    batch. Keep hit points between 0 and `HP (Max)`, and a `Used` or
-    `Expended` count between 0 and its total. Damage comes off temporary
-    hit points first only if the player says so; if the PC has temporary
-    hit points and the request does not say, ask. For a rest, change only
-    the cells the player lists, and do not work out a rest by hand. A bare
-    "we took a long rest" with nothing listed is ambiguous: ask which
-    numbers changed.
 - **Any other sheet change** (a level-up, a new spell, feature or feat, new
   gear or a magic item, an ability score, a proficiency) is made in the note,
   live-tracked or not. Every maximum on the page comes from the note, and
@@ -449,7 +443,7 @@ Vault". Follow it; it is not repeated here.
   2. Edit the note. Leave the derived cells alone. On a live-tracked PC
      also leave the live cells as they are (`HP (Current)`, `Used`,
      `Expended`, and the rest), except a cell the page could not read,
-     handled as above: raise `HP (Max)`, `Uses` or `Total` only. A new row
+     handled by case 2 above: raise `HP (Max)`, `Uses` or `Total` only. A new row
      starts with `Used` at `0`.
   3. Run the preview again and read the report. A `KEPT` row is a value
      the GM set by hand: leave it as it is. If the tool did not fail, write
@@ -463,9 +457,8 @@ Vault". Follow it; it is not repeated here.
      arrives" builds and deploys.
 
   **When the tool fails.** The tool has failed when it prints an `ERROR`
-  row, or when it exits with a code other than 0 (it then prints a message
-  and no rows: it could not read or write the note). This holds for all
-  three runs, `--write` included. Nothing is written while it fails, and
+  row, or when it exits with an error (any exit code other than 0). This
+  holds for all three runs, `--write` included. Nothing is written while it fails, and
   a request left without a reply is pulled again on the next cycle, so end
   it here. If an `ERROR` row came from your edit and you can see the
   mistake, fix it and run the preview again. Otherwise: put the note back
@@ -476,6 +469,9 @@ Vault". Follow it; it is not repeated here.
   ```bash
   npx gm-apprentice-publish inbox reply <id> rejected "I couldn't update your sheet this time. Nothing was changed, and the GM has been told."
   ```
+
+  If the note itself cannot be written, so you cannot put it back either,
+  say so in the `⚠ NEEDS YOU` line and still send the one reply.
 
 - **A level-up needs the player's choices.** The new level and class, the
   hit points gained, and anything picked (a subclass, a feat, spells). What

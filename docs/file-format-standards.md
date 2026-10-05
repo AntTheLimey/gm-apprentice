@@ -357,12 +357,14 @@ differs.
 | `Used` | `## Class Features`, `## Species Traits`, `## Feats`, `### Magic Items` | a whole number, no more than `Uses` or `Charges`; blank reads as 0 |
 
 - **A cell the page could not read is not live and is never written.**
-  The page shows it as written and never invents a maximum. The whole
-  list:
+  The page shows it as written and never invents a maximum. A row the
+  renderer leaves as written is one such case (see "Tables are read by
+  position" above). The usual cell-level reasons:
   - `HP (Max)` not a whole number (a reason in brackets may follow):
     hit points are not live at all, whatever `HP (Current)` holds. With
-    a readable maximum, an `HP (Current)` that is not such a number or
-    blank is shown at the maximum and never written.
+    a readable maximum, hit points are live even when `HP (Current)` is
+    not such a number or blank: the page starts at the maximum, and
+    `flush` cannot write the cell until it holds a number.
   - `Temp HP` or `Exhaustion` holding anything but a whole number (a
     reason may follow) or blank.
   - `Heroic Inspiration` not a yes or no word (blank reads as no).
@@ -378,17 +380,9 @@ differs.
   - A link in the label or value of a `### Core` or `### Combat` row
     (a link inside a trailing reason is fine), or anywhere in a slot
     row.
-
-  `flush` also leaves alone a `Used` or `Expended` cell with markup
-  around the number; keep them bare.
-- **A name belongs to one row.** The name is held by the first row that
-  carries a count: for a feature or magic item, the first row of that
-  name with a whole-number `Uses` or `Charges`, even when it cannot be
-  marked (`Used` over `Uses`, `Uses` of 0); for hit dice, the first row
-  written `s/m`; for a slot, the first row with a whole-number `Total`
-  and an `Expended` not over it. A later row with that name in the same
-  table is never live and never written, and the build warns. A first
-  row that does not hold the name leaves it to the next.
+- **Two rows with one name in a table cannot both be live.** Which one
+  the page counts depends on which it can read. Give each row its own
+  name; the build warns when two live rows share one.
 - **A row is matched by the name the page shows**, so a linked feature
   or item name works: `[[Target|Shown]]` by `Shown`, `[[Ilse_Varn]]` by
   its file name with underscores as spaces. Capitals do not matter.

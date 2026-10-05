@@ -45,8 +45,8 @@ saying so and reads nothing from KV.
   `Expended` read as 0, and a blank `HP (Current)` reads as the maximum. A
   blank cell is filled in only when the live value differs from that.
 - **A cell the page could not read is not live, and is never written.**
-  The list, and the rule for two rows with one name, are in "D&D 5e: what
-  the page cannot read" below.
+  The usual reasons are in "D&D 5e: why the page cannot read a cell"
+  below.
 - **A value with no cell is skipped and named**, on a line under the PC's
   own:
   `Mara Voss — no cell in the note for: temp, slot:pact (3rd), class:second wind`.
@@ -61,17 +61,20 @@ saying so and reads nothing from KV.
   note gives the missing cells a home (`ttrpg-expert`'s
   `systems/dnd-5e-2024/sheet-conversion.md`).
 
-## D&D 5e: what the page cannot read
+## D&D 5e: why the page cannot read a cell
 
-The page shows these as written, with nothing to tap. They are not live,
-the site saves nothing for them, and `flush` never writes them. This is the
-whole list.
+The built page decides what is live. These are the usual reasons a thing
+is shown as written, with nothing to tap; `flush` never writes such a
+cell. They are not every reason: an unusual table can also leave a row as
+written.
 
 - **Hit points:** `HP (Max)` is not a whole number (a reason in brackets
   may follow, as in `38 (Tough)`). Then hit points are not live at all, and
   editing `HP (Current)` does not change that: the GM must fix `HP (Max)`.
-  With a readable maximum, an `HP (Current)` that is not such a number or
-  blank is shown at the maximum and is never written.
+  With a readable maximum, hit points are live even when `HP (Current)`
+  is not such a number or blank: the page starts them at the maximum and
+  the site saves them, but `flush` cannot write that cell until it holds
+  a number.
 - **`Temp HP`, `Exhaustion`:** anything but a whole number (a reason may
   follow) or blank.
 - **`Heroic Inspiration`:** not a yes or no word. Blank reads as no.
@@ -92,18 +95,8 @@ whole list.
   `### Combat` row (a link inside a trailing reason is fine), or anywhere
   in a slot row. A linked feature or item name is fine.
 
-`flush` also leaves alone a `Used` or `Expended` cell with markup around
-the number (bold, say), and names it as skipped: keep these cells bare.
-
-**A name belongs to one row.** Two rows in one table cannot share a live
-count. The name is held by the first row that carries a count: for a
-feature or magic item, the first row of that name with a whole-number
-`Uses` or `Charges`, even when it cannot be marked (`Used` over `Uses`, or
-`Uses` of 0); for hit dice, the first row written `s/m`; for a slot, the
-first row with a whole-number `Total` and an `Expended` not over it. A
-later row with that name is never live and never written, and the build
-warns. A first row that does not hold the name (`Uses` blank or not a
-number, a slot row with `Expended` over `Total`) leaves it to the next.
+Two rows with one name in a table cannot both be live. Which one the page
+counts depends on which it can read, so give each row its own name.
 
 ## When to run it
 
