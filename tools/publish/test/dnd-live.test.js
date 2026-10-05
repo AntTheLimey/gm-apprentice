@@ -224,6 +224,12 @@ test('fitConditions: strings only, trimmed, one of each, nothing that could brea
   assert.deepEqual(L.fitConditions([' Prone ', 'prone', 7, null, {}, '', 'Hexed']), ['Prone', 'Hexed']);
   assert.deepEqual(L.fitConditions(['a|b', 'x\ny', 'x\ry', 'tab\there', 'Poisoned']), ['Poisoned']);
   assert.deepEqual(L.fitConditions(['[click](http://evil.example)', '<b>bold</b>', '[[Note]]', '`code`', 'back\\slash', 'one, two', 'Stunned']), ['Stunned']);
+  // A name is letters, digits, spaces, apostrophes, hyphens and round brackets, and nothing else:
+  // no `&`, `#` or `;`, so no character reference can ride in and turn into markup when the note is next read.
+  assert.deepEqual(L.fitConditions(['x&#10;&#10;## Injected&#10;&#10;y', 'a &#124; b', 'a &vert; b', '&lt;script&gt;alert(1)&lt;/script&gt;',
+    '&#91;click&#93;(http://evil.example)', 'A &amp; B', 'A & B', 'a;b', 'a#b', 'a/b', 'a:b', 'a.b', 'a_b', 'a*b', 'a~b', 'a=b', 'a"b', 'a\u00a0b', 'Dazed']), ['Dazed']);
+  assert.deepEqual(L.fitConditions(['Hexed (Bob\'s curse)', 'Bob\u2019s curse', 'Half-blind', 'Level 2 hex', 'Отравлен', '中毒', 'Épuisé']),
+    ['Hexed (Bob\'s curse)', 'Bob\u2019s curse', 'Half-blind', 'Level 2 hex', 'Отравлен', '中毒', 'Épuisé']);
   assert.deepEqual(L.fitConditions(['x'.repeat(60), 'y'.repeat(61)]), ['x'.repeat(60)]);
   assert.deepEqual(L.fitConditions('Prone'), []);
   assert.deepEqual(L.fitConditions(null), []);
@@ -256,4 +262,13 @@ test('typed: an empty field is not a 0', () => {
   assert.equal(L.typed('7'), 7);
   assert.equal(L.typed('-4'), 0);
   assert.equal(L.typed('1e21'), 9999);
+});
+
+test('fit: conditions the note wrote in words the sheet cannot carry are held to the note\'s', () => {
+  const d = Object.assign(DATA(), { conditionsLive: false });
+  d.defaults.conditions = ['Hexed [Bob]', 'A|B'];
+  assert.deepEqual(L.fit({ conditions: ['Prone'] }, d).conditions, ['Hexed [Bob]', 'A|B']);
+  assert.deepEqual(L.fit(null, d).conditions, ['Hexed [Bob]', 'A|B']);
+  // A missing flag means live, as before.
+  assert.deepEqual(L.fit({ conditions: ['Prone'] }, DATA()).conditions, ['Prone']);
 });

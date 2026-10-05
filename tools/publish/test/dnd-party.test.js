@@ -49,18 +49,26 @@ test('a row follows the saved state: temporary hit points, dying, conditions', (
 test('a condition typed in the note cannot inject markup', () => {
   const pc = buildDndPartyManifest('camp', [entry('B', 'b')]).pcs[0];
   // Markup is not a condition at all (fitConditions); what is left is still escaped.
-  const status = dndRowCells(pc, { conditions: ['<img src=x>', 'Hexed & "marked"'] }).status;
-  assert.doesNotMatch(status, /<img|&lt;img/);
-  assert.match(status, /Hexed &amp; &quot;marked&quot;/);
+  const status = dndRowCells(pc, { conditions: ['<img src=x>', 'Hexed & "marked"', 'Dazed'] }).status;
+  assert.doesNotMatch(status, /<img|&lt;img|marked/);
+  assert.match(status, /Dazed/);
+  // The note's own words, when the sheet cannot carry them, are shown as the note has them, escaped.
+  const asWritten = buildDndPartyManifest('camp', [entry('B', 'b', { conditionsLive: false,
+    defaults: { hp: 38, temp: 0, exhaustion: 0, inspiration: false, concentrating: false, conditions: ['<img src=x>', 'Hexed & "marked"'], used: {} } })]).pcs[0];
+  assert.equal(asWritten.conditionsLive, false);
+  const shownAs = dndRowCells(asWritten, { conditions: ['Prone'] }).status;
+  assert.match(shownAs, /&lt;img src=x&gt;/);
+  assert.match(shownAs, /Hexed &amp; &quot;marked&quot;/);
+  assert.doesNotMatch(shownAs, /<img|Prone/);
 });
 
 test('a rubbish record paints no NaN, keeps hit points inside 0..max, and escapes its text', () => {
   const pc = buildDndPartyManifest('camp', [entry('B', 'b')]).pcs[0];
-  const c = dndRowCells(pc, { hp: 'x', temp: -3, exhaustion: 99, conditions: [7, '<b>', 'A & B'], used: { 'ds:s': 'a' } });
+  const c = dndRowCells(pc, { hp: 'x', temp: -3, exhaustion: 99, conditions: [7, '<b>', 'A B'], used: { 'ds:s': 'a' } });
   for (const k of ['hp', 'status', 'ac', 'pp', 'dc', 'who']) assert.doesNotMatch(String(c[k]), /NaN/, k);
   const shownHp = Number(c.hp.match(/gl-vnum[^>]*>(\d+)</)[1]);
   assert.ok(shownHp >= 0 && shownHp <= 44, String(shownHp));
-  assert.match(c.status, /A &amp; B/);
+  assert.match(c.status, /A B/);
   assert.doesNotMatch(c.status, /<b>|&lt;b&gt;/);
 });
 

@@ -14,18 +14,23 @@
   function amount(n) { var x = Math.floor(Number(n)); return (isFinite(x) && x > 0) ? x : 0; }
   // The most a typed amount or a temporary hit point total can be.
   var MOST = 9999;
-  // What a condition may be, wherever one is read: on the page, on the party board, and by
-  // flush before it writes a name into the note (lib/flush/dnd-writeback.js uses this very
-  // function). A saved record can be sent by anyone, so a name is a short piece of plain
-  // text: a string, trimmed, one of each whatever its capitals (the first spelling kept),
-  // and never one that could leave its table cell or turn into markup there.
+  // What a condition may be, wherever one is read: on the page, on the party board, by the
+  // build when it decides whether a note's Conditions cell is live, and by flush before it
+  // writes a name into the note (lib/flush/dnd-writeback.js uses this very function). A
+  // saved record can be sent by anyone, so a name is only what is listed here: letters of
+  // any language, digits, spaces, apostrophes (straight or curly), hyphens and round
+  // brackets, 1 to 60 characters. Nothing else gets in: no `&`, `#` or `;` (so no character
+  // reference that the note's renderer would turn into markup), no pipe, no bracket of any
+  // other kind, no line break. One of each whatever its capitals; the first spelling is kept.
   var MOST_CONDITIONS = 20, LONGEST_CONDITION = 60;
-  var NOT_A_NAME = /[|,\[\]<>`\\\u0000-\u001f\u007f\u2028\u2029]/;
+  var A_NAME;
+  try { A_NAME = new RegExp('^[\\p{L}\\p{M}\\p{N} \'\u2019()-]+$', 'u'); }
+  catch (e) { A_NAME = /^[A-Za-z0-9\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u024F '\u2019()-]+$/; }   // a browser without \p{..}: Latin letters only
   function fitConditions(list) {
     var out = [], seen = {};
     (Array.isArray(list) ? list : []).forEach(function (c) {
       var name = typeof c === 'string' ? c.trim() : '';
-      if (!name || name.length > LONGEST_CONDITION || NOT_A_NAME.test(name)) return;
+      if (!name || name.length > LONGEST_CONDITION || !A_NAME.test(name)) return;
       var k = ' ' + name.toLowerCase();
       if (seen[k] || out.length >= MOST_CONDITIONS) return;
       seen[k] = true;
@@ -57,7 +62,10 @@
     out.exhaustion = data.exhaustionLive === false ? 0 : clamp(int(s.exhaustion, d.exhaustion || 0), 0, 6);
     out.inspiration = typeof s.inspiration === 'boolean' ? s.inspiration : !!d.inspiration;
     out.concentrating = s.concentrating === true;
-    out.conditions = fitConditions(Array.isArray(s.conditions) ? s.conditions : d.conditions);
+    // Words in the note that are not plain names are not live: the note's own stay, as written.
+    out.conditions = data.conditionsLive === false
+      ? (d.conditions || []).filter(function (c) { return typeof c === 'string'; })
+      : fitConditions(Array.isArray(s.conditions) ? s.conditions : d.conditions);
     out.used = {};
     (data.tracks || []).forEach(function (t) { out.used[t.key] = clamp(int(savedUsed[t.key], t.used), 0, t.max); });
     return out;
@@ -212,6 +220,8 @@
     // Temporary hit points and exhaustion the note wrote in words stay as written.
     var tempLive = data.tempLive !== false;
     var exhaustionLive = !!data.exhaustionLive;
+    // Conditions the note wrote with a link or unusual characters stay as the build drew them.
+    var conditionsLive = data.conditionsLive !== false;
 
     var vitals = document.querySelector('[data-live="vitals"]');
     var hpTile = (vitals && data.hpMax != null) ? vitals.querySelector('[data-live="hp"]') : null;
@@ -271,14 +281,19 @@
       var hadInspiration = built.length && built[0].classList.contains('is-on');
       if (hadInspiration && !data.inspirationLive) keep.push(built[0]);
       if (!exhaustionLive && built.length > (hadInspiration ? 2 : 1)) keep.push(built[built.length - 1]);
+      var writtenConditions = conditionsLive ? null : built[hadInspiration ? 1 : 0];
       empty(chipRow);
       chipRow.classList.remove('is-quiet');
 
       if (data.inspirationLive) { inspChip = button('dnd5e-chip', 'Heroic Inspiration', 'inspiration'); chipRow.appendChild(inspChip); }
       concChip = button('dnd5e-chip', 'Concentrating', 'concentrating');
       chipRow.appendChild(concChip);
-      condChip = button('dnd5e-chip', '', 'open', 'cond');
-      chipRow.appendChild(condChip);
+      if (writtenConditions) chipRow.appendChild(writtenConditions);
+      // The chip opens the conditions drawer; with conditions as written it is only the exhaustion control.
+      if (conditionsLive || exhaustionLive) {
+        condChip = button('dnd5e-chip', '', 'open', 'cond');
+        chipRow.appendChild(condChip);
+      }
       keep.forEach(function (k) { k.classList.remove('is-quiet'); chipRow.appendChild(k); });
       var rest = el('span', 'dnd5e-rest');
       rest.appendChild(button('dnd5e-btn', 'Short rest', 'open', 'short'));
@@ -375,10 +390,12 @@
         };
       },
       cond: function () {
-        title('Conditions');
+        title(conditionsLive ? 'Conditions' : 'Exhaustion');
         var chips = el('div', 'dnd5e-chips');
-        CONDITIONS.forEach(function (n) { chips.appendChild(button('dnd5e-chip', n, 'cond', n)); });
-        drawerBox.appendChild(chips);
+        if (conditionsLive) {
+          CONDITIONS.forEach(function (n) { chips.appendChild(button('dnd5e-chip', n, 'cond', n)); });
+          drawerBox.appendChild(chips);
+        }
         var r = row(), count = null;
         if (exhaustionLive) {
           r.appendChild(el('span', '', 'Exhaustion'));
@@ -397,7 +414,7 @@
         return function () {
           // A condition of the GM's own gets a chip, so it can be seen and turned off;
           // it stays listed while the drawer is open, so a slip can be taken back.
-          state.conditions.forEach(function (c) {
+          if (conditionsLive) state.conditions.forEach(function (c) {
             var listed = false;
             each(chips.children, function (chip) { if (same(chip.getAttribute('data-arg'), c)) listed = true; });
             if (!listed) chips.appendChild(button('dnd5e-chip', c, 'cond', c));
@@ -528,16 +545,17 @@
     }
 
     function paintChips() {
-      if (!condChip) return;
+      if (!concChip) return;
       if (inspChip) {
         inspChip.classList.toggle('is-on', state.inspiration);
         inspChip.setAttribute('aria-pressed', state.inspiration ? 'true' : 'false');
       }
       concChip.classList.toggle('is-on', state.concentrating);
       concChip.setAttribute('aria-pressed', state.concentrating ? 'true' : 'false');
-      var bits = state.conditions.slice();
+      if (!condChip) return;
+      var bits = conditionsLive ? state.conditions.slice() : [];
       if (exhaustionLive && state.exhaustion) bits.push('Exhaustion ' + state.exhaustion);
-      condChip.textContent = bits.length ? bits.join(', ') : 'No conditions';
+      condChip.textContent = bits.length ? bits.join(', ') : (conditionsLive ? 'No conditions' : 'Exhaustion 0');
       condChip.classList.toggle('is-bad', bits.length > 0);
     }
 
@@ -560,7 +578,8 @@
       if (undoBtn) undoBtn.hidden = !undo;
     }
 
-    // The line holds what the last tap did, and nothing once that is no longer the last tap.
+    // The line holds what the last tap did, and nothing once that is no longer the last thing
+    // that happened: the next tap, an opened drawer, or the saved state arriving all clear it.
     function say(message) {
       if (!saidBox) return;
       saidBox.classList.toggle('is-empty', !message);
@@ -612,6 +631,7 @@
       spend: function () { pool(1); },
       putback: function () { pool(-1); },
       cond: function (name) {
+        if (!conditionsLive) return;
         commit(change(function (s) {
           var at = conditionAt(name);
           if (at === -1) s.conditions.push(name); else s.conditions.splice(at, 1);
@@ -689,6 +709,7 @@
       state = fit(remote, data);
       undo = null;
       paint();
+      say('');
     });
   });
 })(typeof window !== 'undefined' ? window : globalThis);
