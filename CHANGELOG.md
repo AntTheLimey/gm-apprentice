@@ -17,10 +17,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tile, which shows a bar and a "tap to change" hint. Temporary hit
   points, conditions, exhaustion, inspiration and concentration are set
   from the page. Short and long rest buttons restore what each rest
-  restores, with an undo. What a player sets is kept on their own device
-  and survives a reload. A cell the page cannot read as a number, such as
-  a Temp HP cell reading "2d4", is left as written and is not live. Of
-  two rows with the same name, only the first is live.
+  restores, with an undo. What a player sets is saved to the site, so it
+  survives a reload and shows on another device with the same session
+  code; when the site cannot be reached it is kept on the device. A cell
+  the page cannot read as a number, such as a Temp HP cell reading "2d4"
+  or an `HP (Current)` cell in words, is left as written and is not
+  live. Of two rows with the same name, only the first is live; the
+  second is shown as the note has it. A `Conditions` cell that says
+  `None` reads as no conditions.
+- Three things a GM will meet on a live D&D sheet. A live value is
+  changed on the character's page, not in the note: for 30 days after a
+  player last saved, `flush` writes that saved value over the note's
+  cell. The rest buttons act only on a `Recovers` cell that reads
+  `Long Rest`, `Short Rest` or `1 Short Rest, all Long Rest`; anything
+  else is left to the player. Concentrating is never saved to the note.
 - A D&D party board on the roster page: each character's armour class,
   hit points, passive Perception, spell save DC and status, updating as
   the players play. A character whose note gives nothing readable still
@@ -28,7 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Players' changes reach the vault. A player's request to change their
   sheet is handled by the apprentice, and at wrap-up `flush` writes the
   live numbers back to the D&D note, keeping a reason written beside a
-  number, and names every value it had no cell for.
+  number, and names every value the note had no cell for. A value that
+  is nothing (no temporary hit points, no conditions, a count of 0) is
+  not named. A condition is written only when it is a short plain name,
+  so nothing sent to the site's store can add lines to a note.
 - A local live preview for developers, `live-preview.js` in the publish
   tool's scripts. It builds a site into a temporary folder and never
   touches the site's own output, and it is not shipped in the npm
@@ -38,9 +51,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `flush` sends a D&D note to its own writer. Before, any note that was
   not GURPS went to the Call of Cthulhu writer.
-- A D&D party page shows a Party Status table.
-- Publish tool 1.14.0. With live stats off, every page is the same as
-  before.
+- A D&D party page shows a Party Status table, with live stats on or
+  off.
+- Publish tool 1.14.0. With live stats off, every character page is the
+  same as before.
 
 ---
 
