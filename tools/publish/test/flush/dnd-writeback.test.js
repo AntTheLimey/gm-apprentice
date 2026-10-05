@@ -129,7 +129,7 @@ const rage = (used, name = 'Rage') => `| ${name} |  | 2 | ${used} | Long Rest | 
 
 test('a cell that is not a plain number is left alone and named', () => {
   const md = mini(['| HP (Current) | 20 / 20 |', '| HP (Max) | 20 |', '| Temp HP | 3d4 |', '| Exhaustion | 2 levels |'], []);
-  const r = applyDnDFlush(md, { hp: 5, temp: 2, exhaustion: 0 });
+  const r = applyDnDFlush(md, { hp: 5, temp: 2, exhaustion: 1 });
   assert.equal(r.markdown, md);
   assert.deepEqual(r.skipped, ['hp', 'temp', 'exhaustion']);
 });
@@ -182,10 +182,12 @@ test('a ~~~ fence closed by a ``` line stays open', () => {
 test('a second row of a name whose first row is not live is not written either', () => {
   // The build gives the key to the first Rage row; it is over-spent, so the page draws both rows as written.
   const md = mini(['| HP (Max) | 20 |'], ['| Rage |  | 2 | 3 | Long Rest | a |', rage(1)]);
-  const r = applyDnDFlush(md, { used: { 'class:rage': 0 } });
+  const r = applyDnDFlush(md, { used: { 'class:rage': 2 } });
   assert.equal(r.markdown, md);
   assert.deepEqual(r.changes, []);
   assert.deepEqual(r.skipped, ['class:rage']);
+  // A saved 0 for a row the page does not track has lost nothing, so it is not named.
+  assert.deepEqual(applyDnDFlush(md, { used: { 'class:rage': 0 } }), { markdown: md, changes: [], skipped: [] });
 });
 
 test('when the first row of a name is live, it alone is written', () => {
@@ -194,7 +196,7 @@ test('when the first row of a name is live, it alone is written', () => {
   assert.equal(r.markdown.split('\n').filter(l => /^\| Rage \|/.test(l)).map(l => l.split('|')[4].trim()).join(','), '0,2');
 });
 
-test('the row live on the page is the row flush writes, with a duplicate name', () => {
+test('the row the island counts is the row flush writes, with a duplicate name', () => {
   const live = md => buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
   const over = mini(['| HP (Max) | 20 |'], ['| Rage |  | 2 | 3 | Long Rest | a |', rage(1)]);
   assert.equal(live(over).tracks.some(t => t.key === 'class:rage'), false);
@@ -261,4 +263,113 @@ test('a saved number that is not whole, or below nothing, is fitted as the page 
   assert.match(row(r.markdown, /^\| Exhaustion/), /\| 0 \|/);
   assert.match(row(r.markdown, /^\| 1st/), /^\| 1st \| 4 \| 0 \|/);
   assert.match(row(r.markdown, /^\| Hit Dice/), /\| 1\/5 \|/);
+});
+
+// ---- the fix wave after the two whole-branch reviews ----
+
+// A saved record can be sent by anyone (the endpoint is public), and conditions are the one
+// place its text reaches the note. They pass the page's own rule (fitConditions in js/dnd-live.js).
+test('condition text from the store cannot leave its cell', () => {
+  const md = note('Brannoch_Vale.md');
+  const r = applyDnDFlush(md, blob({ conditions: ['Prone |', 'x\n\n## Injected heading\n\n[click](http://evil.example)', '<script>alert(1)</script>', 'Stunned', '[[Secret]]', 'a, b'] }));
+  assert.equal(r.markdown.split('\n').length, md.split('\n').length);
+  assert.equal(row(r.markdown, /^\| Conditions/), '| Conditions | Stunned |');
+  assert.doesNotMatch(r.markdown, /Injected|evil\.example|<script>|Secret/);
+});
+
+test('conditions that are not text, or are said twice, are not written', () => {
+  const r = applyDnDFlush(note('Brannoch_Vale.md'), blob({ conditions: [1, null, {}, ' Prone ', 'prone', 'x'.repeat(61)] }));
+  assert.equal(row(r.markdown, /^\| Conditions/), '| Conditions | Prone |');
+});
+
+test('a Conditions cell that says None, or holds a hyphen, is no conditions: nothing to write', () => {
+  for (const cell of ['None', 'none', 'N/A', '-', '–', '—', '']) {
+    const md = mini([`| Conditions | ${cell} |`, '| HP (Max) | 20 |'], []);
+    const r = applyDnDFlush(md, { conditions: [] });
+    assert.equal(r.markdown, md, cell);
+    assert.deepEqual(r.skipped, [], cell);
+    assert.equal(row(applyDnDFlush(md, { conditions: ['Prone'] }).markdown, /^\| Conditions/), '| Conditions | Prone |', cell);
+  }
+});
+
+test('words of the GM\'s own that the site cannot carry stay in the Conditions cell', () => {
+  const long = 'Cursed by the drowned bell until the tide turns three times over the bar';
+  assert.ok(long.length > 60);
+  const md = mini([`| Conditions | ${long}, Prone |`, '| HP (Max) | 20 |'], []);
+  assert.equal(applyDnDFlush(md, { conditions: ['Prone'] }).markdown, md);
+  assert.equal(row(applyDnDFlush(md, { conditions: ['Stunned'] }).markdown, /^\| Conditions/), `| Conditions | ${long}, Stunned |`);
+  assert.equal(row(applyDnDFlush(md, { conditions: [] }).markdown, /^\| Conditions/), `| Conditions | ${long} |`);
+});
+
+// A row short of its last cell is live on the page (the renderer pads it). Flush adds no cell,
+// so the value has nowhere to go: it is named, never silently dropped.
+test('a row short of its last cell is named, not silently skipped', () => {
+  const short = ['## Stat Sheet', '', '### Combat', '', '| Attribute | Value |', '|---|---|', '| HP (Current) |', '| HP (Max) | 44 |', '| Temp HP |',
+    '| Exhaustion |', '| Conditions |', '', '## Class Features', '', '| Name | Action | Uses | Used | Recovers | Summary |', '|---|---|---|---|---|---|',
+    '| Second Wind | Bonus Action | 3 |', '', '## Spellcasting', '', '### Spell Slots', '', '| Level | Total | Expended |', '|---|---|---|', '| 1st | 4 |', '',
+    '## Equipment', '', '### Magic Items', '', '| Item | Attuned | Charges | Used | Recovers | Notes |', '|---|---|---|---|---|---|', '| Wand | No | 7 |', ''].join('\n');
+  // The page does make every one of these live.
+  const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(short)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.deepEqual(d.tracks.map(t => t.key).sort(), ['class:second wind', 'item:wand', 'slot:1st']);
+  assert.equal(d.hpMax, 44);
+  const r = applyDnDFlush(short, { hp: 30, temp: 5, exhaustion: 2, conditions: ['Prone'], used: { 'class:second wind': 2, 'slot:1st': 1, 'item:wand': 3 } });
+  assert.equal(r.markdown, short);
+  assert.deepEqual(r.changes, []);
+  assert.deepEqual(r.skipped.slice().sort(), ['class:second wind', 'conditions', 'exhaustion', 'hp', 'item:wand', 'slot:1st', 'temp']);
+  // With nothing to save (every value is what a blank cell means) there is nothing to name.
+  assert.deepEqual(applyDnDFlush(short, { hp: 44, temp: 0, exhaustion: 0, conditions: [], used: { 'class:second wind': 0, 'slot:1st': 0, 'item:wand': 0 } }).skipped, []);
+});
+
+test('a table whose separator has fewer cells than its header is not a table, as the renderer has it', () => {
+  const broken = ['## Class Features', '', '| Name | Action | Uses | Used | Recovers | Summary |', '|---|---|---|', rage(1), '',
+    '| Name | Action | Uses | Used | Recovers | Summary |', '|---|---|---|---|---|---|', rage(0), ''].join('\n');
+  const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(broken)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.equal(d.defaults.used['class:rage'], 0);    // the build reads the real table
+  const r = applyDnDFlush(broken, { used: { 'class:rage': 2 } });
+  assert.deepEqual(r.skipped, []);
+  const lines = r.markdown.split('\n');
+  assert.equal(lines[4], rage(1));                   // the broken copy is left alone
+  assert.equal(lines[8], rage(2));
+});
+
+test('a dash in a number cell is a blank: it is written over', () => {
+  for (const dash of ['—', '–', '-']) {
+    const md = mini([`| HP (Current) | ${dash} |`, '| HP (Max) | 44 |', `| Temp HP | ${dash} |`, `| Exhaustion | ${dash} |`], []);
+    assert.deepEqual(applyDnDFlush(md, { hp: 44, temp: 0, exhaustion: 0 }).changes, [], dash);
+    const r = applyDnDFlush(md, { hp: 30, temp: 5, exhaustion: 2 });
+    assert.deepEqual(r.skipped, [], dash);
+    assert.equal(row(r.markdown, /^\| HP \(C/), '| HP (Current) | 30 |');
+    assert.equal(row(r.markdown, /^\| Temp HP/), '| Temp HP | 5 |');
+    assert.equal(row(r.markdown, /^\| Exhaustion/), '| Exhaustion | 2 |');
+  }
+});
+
+// The line under a PC's name is for a value that was lost. A note with no cell, and a saved
+// value that is what no cell means, has lost nothing.
+test('a value that is nothing is not named when its cell is missing or in words', () => {
+  const old = note('Ilse_Varn_Old_Layout.md');
+  assert.deepEqual(applyDnDFlush(old, { hp: 9, temp: 0, exhaustion: 0, conditions: [], inspiration: false, used: { 'class:gone': 0 } }).skipped, []);
+  assert.deepEqual(applyDnDFlush(old, { hp: 9, temp: 0, exhaustion: 0, conditions: ['Prone'], inspiration: false, used: { 'class:gone': 2 } }).skipped.sort(), ['class:gone', 'conditions']);
+  const words = mini(['| HP (Current) | 9 |', '| HP (Max) | 20 |', '| Temp HP | 2d4 |', '| Exhaustion | two levels |'], []);
+  assert.deepEqual(applyDnDFlush(words, { hp: 9, temp: 0, exhaustion: 0 }).skipped, []);
+  assert.deepEqual(applyDnDFlush(words, { hp: 9, temp: 3, exhaustion: 1 }).skipped, ['temp', 'exhaustion']);
+});
+
+test('hit points the page does not track are not written, and temporary hit points go with them', () => {
+  // Words in HP (Current), or no readable maximum: no hit point tile, so no temporary hit points either.
+  for (const combat of [['| HP (Current) | about half |', '| HP (Max) | 44 |', '| Temp HP | 5 |'], ['| HP (Current) | 12 |', '| HP (Max) | see GM |', '| Temp HP | 5 |']]) {
+    const md = mini(combat, [rage(0)]);
+    const d = buildDndLiveData(parseDnd({ type: 'pc' }, sectionsFromMarkdown(md)), { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+    assert.equal(d.hpMax, null);
+    assert.equal(d.tempLive, false);
+    // What that page saves: no hit points, and 0 for the temporary hit points it does not hold.
+    const r = applyDnDFlush(md, { hp: null, temp: 0, used: { 'class:rage': 1 } });
+    assert.equal(row(r.markdown, /^\| Temp HP/), '| Temp HP | 5 |');
+    assert.deepEqual(r.changes.map(c => c.field), ['Rage']);
+    assert.deepEqual(r.skipped, []);
+    // A record made by hand is still named, never written.
+    const forced = applyDnDFlush(md, { hp: 3, temp: 9 });
+    assert.equal(forced.markdown, md);
+    assert.deepEqual(forced.skipped, ['hp', 'temp']);
+  }
 });

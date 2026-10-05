@@ -293,7 +293,7 @@ test('routes a D&D PC to the D&D writeback; dry run writes nothing; missing cell
   const real = await go(false);
   assert.match(real.writes['/vault/PCs/Brannoch.md'], /\| HP \(Current\) \| 20 \|/);
   assert.match(real.lines.find(l => l.startsWith('✓')), /HP \(Current\)/);
-  assert.ok(real.lines.some(l => /no cell in the note for: class:no such feature/.test(l)));
+  assert.ok(real.lines.some(l => /not written, no cell in the note can hold: class:no such feature/.test(l)));
   const dry = await go(true);
   assert.deepEqual(dry.writes, {});
   assert.match(dry.lines.find(l => l.startsWith('✓')), /would write/);

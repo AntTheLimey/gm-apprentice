@@ -5,7 +5,9 @@ const { findHeadings, renderInline } = require('../processor');
 const { splitReason, COLS, countCells, wholeNumber } = require('../templates/dnd/parse');
 const { ATTRIBUTE_COLUMNS, cellText, filled, yesNo } = require('../templates/sheet-parse');
 const { normalizeTitle } = require('../templates/gurps/tables');
-const { liveKey, shown, trackable } = require('../templates/dnd/live-key');
+const { liveKey, shown, trackable, holdsNothing } = require('../templates/dnd/live-key');
+const { conditionsOf } = require('../templates/dnd/live-data');
+const { fitConditions } = require('../../js/dnd-live');
 
 // Pure D&D vault-sheet write-back: put a live record's numbers into the note's own
 // table cells. The principle: it changes only a cell the build treated as live. So it
@@ -13,8 +15,12 @@ const { liveKey, shown, trackable } = require('../templates/dnd/live-key');
 // first section of a title, the first table in it, a row only when the parser would
 // place it, a key only at its first row) and reads a cell with the build's
 // own rules (whole numbers, splitReason, countCells, trackable, yesNo). A cell the
-// build drew as written is left alone and named in `skipped`; a missing cell is
-// skipped and named, never added. Concentrating is never written.
+// build drew as written is left alone; a missing cell is never added. A saved value that
+// could not be written is named in `skipped`, unless it is what its missing cell already
+// means (0, none, No), when nothing is lost. Concentrating is never written.
+// A saved record can be sent by anyone: a number is fitted before it is written, and a
+// condition passes the page's own rule (fitConditions), so no text of the record's can
+// leave its cell.
 // No KV, no fs, no config.
 
 const FEATURE_SECTIONS = [['class features', 'class'], ['species traits', 'species'], ['feats', 'feat']];
@@ -46,10 +52,12 @@ function readNote(lines) {
       continue;
     }
     if (!sec || inCode.has(i) || !/^\s*\|/.test(clean[i]) || i + 1 >= clean.length) continue;
-    const sepCells = splitTableRow(clean[i + 1]).slice(1, -1);
-    if (!/^\s*\|/.test(clean[i + 1]) || !sepCells.length || !sepCells.every(c => /^\s*:?-+:?\s*$/.test(c))) continue;
     const cellsOf = line => { const segs = splitTableRow(line); return (/\|\s*$/.test(line) ? segs.slice(1, -1) : segs.slice(1)).map(c => c.trim()); };
-    const table = { header: cellsOf(clean[i]).map(plain), rows: [] };
+    // A table as the renderer has it: a line of dashes under the header, one for each header cell.
+    const headCells = cellsOf(clean[i]);
+    const sepCells = cellsOf(clean[i + 1]);
+    if (!/^\s*\|/.test(clean[i + 1]) || !sepCells.length || sepCells.length !== headCells.length || !sepCells.every(c => /^:?-+:?$/.test(c))) continue;
+    const table = { header: headCells.map(plain), rows: [] };
     let j = i + 2;
     for (; j < clean.length && /^\s*\|/.test(clean[j]) && !inCode.has(j) && !headingAt.has(j); j++) {
       table.rows.push({ i: j, cells: cellsOf(clean[j]), trailing: /\|\s*$/.test(clean[j]) });
@@ -85,18 +93,22 @@ function applyDnDFlush(markdown, blob) {
   const subsection = (sec, key) => sec && sec.subs.find(s => s.key === key);
 
   const resolved = new Set();   // blob.used keys whose cell was read and is now right
+  const tried = new Set();      // blob.used keys with a live row whose cell could not take the value
   const okScalar = new Set();
 
   // Rewrite content cell `idx` of a row to `to`; no change when it already reads so.
+  // False when the row is short of that cell: the renderer pads such a row, so the page
+  // shows it, but a cell is never added, and the caller names the value instead.
   const write = (row, idx, field, to) => {
     const segs = splitTableRow(lines[row.i]);
     const at = idx + 1;
-    if (at >= segs.length - (row.trailing ? 1 : 0)) return;
+    if (at >= segs.length - (row.trailing ? 1 : 0)) return false;
     const inner = segs[at].trim();
-    if (to === inner) return;
+    if (to === inner) return true;
     segs[at] = inner ? segs[at].replace(inner, () => to) : ` ${to} `;
     lines[row.i] = segs.join('|');
     changes.push({ field, from: inner === '' ? null : inner, to });
+    return true;
   };
 
   // A table's rows the build would place, for an `Attribute | Value` table. The first
@@ -119,7 +131,7 @@ function applyDnDFlush(markdown, blob) {
   // A cell read as the build reads a number: blank, a whole number (a reason may follow), or other.
   const readNumber = raw => {
     const t = filled(plain(raw));
-    if (t === '') return { blank: true };
+    if (holdsNothing(t)) return { blank: true };
     const v = splitReason(t).value;
     return /^\d+$/.test(v) ? { value: Number(v) } : { other: true };
   };
@@ -143,11 +155,10 @@ function applyDnDFlush(markdown, blob) {
     for (let i = values.length - 1; i >= 0; i--) out = out.slice(0, have[i].index) + values[i] + out.slice(have[i].index + have[i][0].length);
     return out;
   };
+  // True when the cell now holds `n`. A cell that reads as blank (a dash, a placeholder) takes the number whole.
   const putNumber = (row, idx, label, n, raw) => {
-    const to = swapDigits(raw, [n]);
-    if (to === null) return false;
-    write(row, idx, label, to);
-    return true;
+    const to = readNumber(raw).blank ? String(n) : swapDigits(raw, [n]);
+    return to !== null && write(row, idx, label, to);
   };
 
   const stat = section('stat sheet');
@@ -155,50 +166,51 @@ function applyDnDFlush(markdown, blob) {
   const core = stat ? attributeRows({ subs: firstOfEach(stat.subs) }, 'core') : [];
   const firstRow = re => combat.find(r => re.test(r.label));
 
-  // Scalars.
-  const scalar = (key, re, dflt, most) => {
-    const hit = firstRow(re);
-    if (!hit || !carries[key]) return;
-    const r = readNumber(hit.raw);
-    if (r.other) return;
-    const current = r.blank ? dflt : (key === 'exhaustion' ? Math.min(r.value, 6) : r.value);
-    okScalar.add(key);
+  // Scalars. `live` is whether the page tracks the value at all; a cell in words is not live
+  // either. A value is settled (not named) when its cell now holds it, or when it is what a
+  // blank or missing cell already means: the page saves that for a value it does not track.
+  const scalar = (key, re, dflt, most, live) => {
+    if (!carries[key]) return;
     const to = fitted(blob[key], most);
-    if (to === current) return;
-    if (!putNumber(hit.row, 1, hit.label, to, hit.raw)) okScalar.delete(key);
+    const hit = firstRow(re);
+    const r = hit ? readNumber(hit.raw) : { blank: true };
+    if (!live || r.other) { if (to === dflt) okScalar.add(key); return; }
+    const current = r.blank ? dflt : Math.min(r.value, most);
+    if (to === current || (hit && putNumber(hit.row, 1, hit.label, to, hit.raw))) okScalar.add(key);
   };
+  // Hit points are live when the maximum is a number and the current cell is a number or
+  // holds nothing, as the build has it (live-data.js); a missing current row reads as the maximum.
   const maxRow = firstRow(/^HP\s*\(\s*max(imum)?\.?\s*\)$/i);
-  const hpMax = maxRow && readNumber(maxRow.raw).value !== undefined ? readNumber(maxRow.raw).value : null;
-  if (hpMax !== null) {
-    const hit = firstRow(/^HP\s*(\(\s*cur(r(ent)?)?\.?\s*\))?$/i);
-    if (hit && carries.hp) {
-      const r = readNumber(hit.raw);
-      if (!r.other) {
-        const current = r.blank ? hpMax : Math.min(r.value, hpMax);
-        okScalar.add('hp');
-        const to = fitted(blob.hp, hpMax);
-        if (to !== current) { if (!putNumber(hit.row, 1, hit.label, to, hit.raw)) okScalar.delete('hp'); }
-      }
-    }
+  const maxRead = maxRow ? readNumber(maxRow.raw) : {};
+  const curRow = firstRow(/^HP\s*(\(\s*cur(r(ent)?)?\.?\s*\))?$/i);
+  const cur = curRow ? readNumber(curRow.raw) : { blank: true };
+  const hpMax = maxRead.value !== undefined && !cur.other ? maxRead.value : null;
+  if (hpMax !== null && carries.hp) {
+    const current = cur.blank ? hpMax : Math.min(cur.value, hpMax);
+    const to = fitted(blob.hp, hpMax);
+    if (to === current || (curRow && putNumber(curRow.row, 1, curRow.label, to, curRow.raw))) okScalar.add('hp');
   }
-  scalar('temp', /^temp(orary)? HP$/i, 0, 9999);
-  scalar('exhaustion', /^exhaustion$/i, 0, 6);
+  // Temporary hit points are set from the hit point tile: without one they are not live.
+  scalar('temp', /^temp(orary)? HP$/i, 0, 9999, hpMax !== null);
+  scalar('exhaustion', /^exhaustion$/i, 0, 6, true);
 
-  const cond = firstRow(/^conditions?$/i);
-  if (cond && carries.conditions) {
-    okScalar.add('conditions');
-    const now = filled(plain(cond.raw)).split(',').map(t => t.trim()).filter(t => t && !/^[—–-]$/.test(t));
-    if (now.join('\n') !== blob.conditions.join('\n')) write(cond.row, 1, cond.label, blob.conditions.length ? blob.conditions.join(', ') : '—');
+  // Conditions: the names the page may carry (fitConditions), read from the cell as the build
+  // reads them. Words in the cell that the site cannot carry are the GM's and stay in it.
+  if (carries.conditions) {
+    const want = fitConditions(blob.conditions);
+    const cond = firstRow(/^conditions?$/i);
+    const all = cond ? conditionsOf(filled(plain(cond.raw))) : [];
+    const kept = all.filter(name => !fitConditions([name]).length);
+    if (fitConditions(all).join('\n') === want.join('\n')
+      || (cond && write(cond.row, 1, cond.label, kept.concat(want).join(', ') || '—'))) okScalar.add('conditions');
   }
 
-  // The last placed Heroic Inspiration row is the one the build reads.
-  const insp = core.filter(r => /^heroic inspiration$/i.test(r.label)).pop();
-  if (insp && carries.inspiration) {
-    const now = yesNo(filled(plain(insp.raw)));
-    if (now !== null) {
-      okScalar.add('inspiration');
-      if (now !== blob.inspiration) write(insp.row, 1, insp.label, blob.inspiration ? 'Yes' : 'No');
-    }
+  // The last placed Heroic Inspiration row is the one the build reads. A cell in words is not live.
+  if (carries.inspiration) {
+    const insp = core.filter(r => /^heroic inspiration$/i.test(r.label)).pop();
+    const now = insp ? yesNo(filled(plain(insp.raw))) : false;
+    if (now === blob.inspiration || (now === null && !blob.inspiration)
+      || (insp && now !== null && write(insp.row, 1, insp.label, blob.inspiration ? 'Yes' : 'No'))) okScalar.add('inspiration');
   }
 
   // Counts: the first row of a key is the live one, as the build has it; if that row is not
@@ -210,8 +222,8 @@ function applyDnDFlush(markdown, blob) {
     if (!trackable(max, spent)) return;
     if (!has(key)) return;
     const to = fitted(used[key], max);
-    if (to === spent) { resolved.add(key); return; }
-    if (putNumber(row, idx, label, to, raw)) resolved.add(key);
+    if (to === spent || putNumber(row, idx, label, to, raw)) resolved.add(key);
+    else tried.add(key);
   };
 
   const hitDiceSeen = new Set();
@@ -227,9 +239,8 @@ function applyDnDFlush(markdown, blob) {
       const spent = fitted(used[key], +m[2]);
       if (spent === +m[1]) { resolved.add(key); continue; }
       const to = swapDigits(raw, [spent]);
-      if (to === null) continue;
-      resolved.add(key);
-      write(row, 1, label, to);
+      if (to !== null && write(row, 1, label, to)) resolved.add(key);
+      else tried.add(key);
     }
   }
   const ds = combat.find(r => /^death saves/i.test(r.label));
@@ -240,7 +251,8 @@ function applyDnDFlush(markdown, blob) {
       if (made === +m[1] && failed === +m[2]) { resolved.add('ds:s'); resolved.add('ds:f'); }
       else {
         const to = swapDigits(ds.raw, [made, failed]);
-        if (to !== null) { resolved.add('ds:s'); resolved.add('ds:f'); write(ds.row, 1, ds.label, to); }
+        if (to !== null && write(ds.row, 1, ds.label, to)) { resolved.add('ds:s'); resolved.add('ds:f'); }
+        else { tried.add('ds:s'); tried.add('ds:f'); }
       }
     }
   }
@@ -279,8 +291,10 @@ function applyDnDFlush(markdown, blob) {
     count(liveKey('item', shown(c[0])), c[0], row, 3, n.uses, n.used || 0, row.cells[3] || '');
   }
 
+  // Named: a value the record carries that the note could not take. A count of 0 with no
+  // live row to hold it has lost nothing (a renamed feature, a row the page shows as written).
   for (const k of ['hp', 'temp', 'exhaustion', 'conditions', 'inspiration']) if (carries[k] && !okScalar.has(k)) skipped.push(k);
-  for (const k of Object.keys(used)) if (has(k) && !resolved.has(k)) skipped.push(k);
+  for (const k of Object.keys(used)) if (has(k) && !resolved.has(k) && (tried.has(k) || Math.round(used[k]) > 0)) skipped.push(k);
   return { markdown: changes.length ? lines.join('\n') : markdown, changes, skipped };
 }
 

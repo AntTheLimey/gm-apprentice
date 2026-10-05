@@ -62,13 +62,30 @@ function addEmphasis(vault) {
   fs.writeFileSync(path.join(vault, PCS, EMPHASIS_FILE), text.replace(/^player_name: .*$/m, 'player_name: "Kit"'));
 }
 
+// A PC whose rows stop short of the cell flush would write. The renderer pads a short row, so
+// the page makes each of these live; flush adds no cell, so each value must be named.
+const SHORT = [
+  ['| Temp HP | 0 |', '| Temp HP |', 'temp'],
+  ['| Channel Divinity |  | 2 | 1 | 1 Short Rest, all Long Rest | Fuels Divine Sense and Sacred Weapon. |', '| Channel Divinity |  | 2 |', 'class:channel divinity'],
+  ['| 1st | 4 | 1 |', '| 1st | 4 |', 'slot:1st'],
+];
+const SHORT_FILE = 'Short_Rows_Test.md';
+function addShort(vault) {
+  let text = fs.readFileSync(path.join(vault, PCS, 'Brannoch_Vale.md'), 'utf8').replace(/\r\n/g, '\n');
+  for (const [from, to] of SHORT) {
+    assert.ok(text.includes(from), `fixture no longer has ${from}`);
+    text = text.replace(from, to);
+  }
+  fs.writeFileSync(path.join(vault, PCS, SHORT_FILE), text.replace(/^player_name: .*$/m, 'player_name: "Sam"'));
+}
+
 describe('D&D flush round trip, every fixture note', () => {
-  let first, second;
+  let first, second, short;
   const files = fs.readdirSync(path.join(FIXTURES, 'with-dnd-pc', PCS)).filter(f => f.endsWith('.md')).concat(EMPHASIS_FILE);
   const flushed = {};
   const blobs = {};
   before(() => {
-    first = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), addEmphasis);
+    first = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => { addEmphasis(vault); addShort(vault); });
     for (const file of files) {
       const d = first.island(file);
       if (!d) continue;
@@ -82,8 +99,17 @@ describe('D&D flush round trip, every fixture note', () => {
       blobs[file] = b;
       flushed[file] = { note, island: d, result: applyDnDFlush(note, b) };
     }
+    {
+      const island = first.island(SHORT_FILE);
+      const note = fs.readFileSync(path.join(first.vault, PCS, SHORT_FILE), 'utf8').replace(/\r\n/g, '\n');
+      const b = { v: 1, hp: island.defaults.hp - 1, temp: 3, exhaustion: 1, inspiration: !island.defaults.inspiration, conditions: ['Prone'], used: {} };
+      for (const t of island.tracks) b.used[t.key] = (t.used + 1) % (t.max + 1);
+      short = { island, note, blob: b, result: applyDnDFlush(note, b) };
+    }
     second = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => {
       addEmphasis(vault);
+      addShort(vault);
+      fs.writeFileSync(path.join(vault, PCS, SHORT_FILE), short.result.markdown);
       for (const file of files) if (flushed[file]) fs.writeFileSync(path.join(vault, PCS, file), flushed[file].result.markdown);
     });
   });
@@ -117,4 +143,28 @@ describe('D&D flush round trip, every fixture note', () => {
       assert.equal(again.markdown, f.result.markdown);
     });
   }
+
+  it('a row short of its last cell: live on the page, named by flush, never given a cell, and the rest still written', () => {
+    const keys = SHORT.map(x => x[2]);
+    // The page: every short row is live, starting from what a blank cell means.
+    assert.equal(short.island.tempLive, true);
+    assert.equal(short.island.defaults.temp, 0);
+    for (const k of keys.slice(1)) assert.equal(short.island.tracks.find(t => t.key === k).used, 0, k);
+    // Flush: exactly those are named; no line gains a cell; every other value lands.
+    assert.deepEqual(short.result.skipped.slice().sort(), keys.slice().sort());
+    const before = short.note.split('\n'), after = short.result.markdown.split('\n');
+    assert.equal(after.length, before.length);
+    for (const [, line] of SHORT) assert.ok(after.includes(line), line);
+    // The rebuilt page: the named values are still the note's; the rest is what was saved.
+    const d2 = second.island(SHORT_FILE);
+    assert.equal(d2.defaults.temp, 0);
+    assert.equal(d2.defaults.hp, short.blob.hp);
+    assert.equal(d2.defaults.exhaustion, 1);
+    assert.deepEqual(d2.defaults.conditions, ['Prone']);
+    for (const t of d2.tracks) assert.equal(t.used, keys.includes(t.key) ? 0 : short.blob.used[t.key], t.key);
+    assert.deepEqual(d2.tracks.map(t => t.key), short.island.tracks.map(t => t.key));
+    const again = applyDnDFlush(short.result.markdown, short.blob);
+    assert.deepEqual(again.changes, []);
+    assert.deepEqual(again.skipped.slice().sort(), keys.slice().sort());
+  });
 });

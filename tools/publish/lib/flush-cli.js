@@ -146,7 +146,7 @@ async function runFlush(deps) {
     } else {
       out('· ' + name + ' — no change');
     }
-    if (res.skipped && res.skipped.length) out('  ' + name + ' — no cell in the note for: ' + res.skipped.join(', '));
+    if (res.skipped && res.skipped.length) out('  ' + name + ' — not written, no cell in the note can hold: ' + res.skipped.join(', '));
   }
   return 0;
 }
