@@ -52,6 +52,11 @@ carried weights and carrying capacities were filled in by
 `dnd_sheet.py`, whose carrying factors are the SRD 5.2 Carrying
 Capacity table's.
 
+`skills/shared/scripts/dnd_tables.py` holds numbers from the D&D 5.2
+SRD (CC-BY 4.0) for the rules checks: each class's hit die, saving
+throws, cantrips and prepared spells by level, the spell slot table and
+the Warlock's pact slots. Numbers only; no rules text is copied.
+
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
 are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no
 rules text.
