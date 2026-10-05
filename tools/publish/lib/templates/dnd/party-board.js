@@ -15,6 +15,9 @@ function buildDndPartyManifest(campaignId, entries) {
       portrait: e.portrait != null ? e.portrait : null,
       hpMax: e.data.hpMax === undefined ? null : e.data.hpMax,
       defaults: e.data.defaults || null,
+      // What the note wrote in words is not live on the PC's page, so the board holds no number for it either.
+      tempLive: e.data.tempLive !== false,
+      exhaustionLive: e.data.exhaustionLive !== false,
       ...(e.data.unreadable ? { unreadable: true } : {}),
       tracks: (e.data.tracks || []).filter(t => t.key === 'ds:s' || t.key === 'ds:f'),
       board: e.data.board || {},

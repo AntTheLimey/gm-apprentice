@@ -14,6 +14,26 @@
   function amount(n) { var x = Math.floor(Number(n)); return (isFinite(x) && x > 0) ? x : 0; }
   // The most a typed amount or a temporary hit point total can be.
   var MOST = 9999;
+  // What a condition may be, wherever one is read: on the page, on the party board, and by
+  // flush before it writes a name into the note (lib/flush/dnd-writeback.js uses this very
+  // function). A saved record can be sent by anyone, so a name is a short piece of plain
+  // text: a string, trimmed, one of each whatever its capitals (the first spelling kept),
+  // and never one that could leave its table cell or turn into markup there.
+  var MOST_CONDITIONS = 20, LONGEST_CONDITION = 60;
+  var NOT_A_NAME = /[|,\[\]<>`\\\u0000-\u001f\u007f\u2028\u2029]/;
+  function fitConditions(list) {
+    var out = [], seen = {};
+    (Array.isArray(list) ? list : []).forEach(function (c) {
+      var name = typeof c === 'string' ? c.trim() : '';
+      if (!name || name.length > LONGEST_CONDITION || NOT_A_NAME.test(name)) return;
+      var k = ' ' + name.toLowerCase();
+      if (seen[k] || out.length >= MOST_CONDITIONS) return;
+      seen[k] = true;
+      out.push(name);
+    });
+    return out;
+  }
+
   function copy(s) {
     var out = {}, k;
     for (k in s) if (Object.prototype.hasOwnProperty.call(s, k)) out[k] = s[k];
@@ -37,16 +57,7 @@
     out.exhaustion = data.exhaustionLive === false ? 0 : clamp(int(s.exhaustion, d.exhaustion || 0), 0, 6);
     out.inspiration = typeof s.inspiration === 'boolean' ? s.inspiration : !!d.inspiration;
     out.concentrating = s.concentrating === true;
-    var conds = Array.isArray(s.conditions) ? s.conditions : (d.conditions || []);
-    out.conditions = [];
-    // One of each whatever its capitals; the first spelling is kept.
-    var seen = {};
-    conds.forEach(function (c) {
-      var name = typeof c === 'string' ? c.trim() : '';
-      if (!name || seen[name.toLowerCase()]) return;
-      seen[name.toLowerCase()] = true;
-      out.conditions.push(name);
-    });
+    out.conditions = fitConditions(Array.isArray(s.conditions) ? s.conditions : d.conditions);
     out.used = {};
     (data.tracks || []).forEach(function (t) { out.used[t.key] = clamp(int(savedUsed[t.key], t.used), 0, t.max); });
     return out;
@@ -74,6 +85,19 @@
     var cleared = before === 0 && s.hp > 0;
     if (cleared) clearDeath(s);
     return { state: s, gained: s.hp - before, clearedDeath: cleared };
+  }
+
+  // What a number field holds: null when nothing was typed, so an empty field is never a 0.
+  function typed(value) {
+    if (value == null || String(value).trim() === '') return null;
+    return Math.min(amount(value), MOST);
+  }
+
+  // What damage did, in a sentence. A part that took nothing is left out.
+  function tookText(n, fromTemp, fromHp) {
+    if (!fromTemp) return 'Took ' + n + '.';
+    if (!fromHp) return 'Took ' + fromTemp + ' from temporary hit points.';
+    return 'Took ' + n + ': ' + fromTemp + ' from temporary hit points, ' + fromHp + ' from hit points.';
   }
 
   function setTemp(state, n) { var s = copy(state); s.temp = Math.min(amount(n), MOST); return s; }
@@ -144,7 +168,7 @@
   var CONDITIONS = ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible',
     'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious'];
 
-  var api = { fit: fit, damage: damage, heal: heal, setTemp: setTemp, setUsed: setUsed, toggleMark: toggleMark,
+  var api = { fit: fit, fitConditions: fitConditions, typed: typed, tookText: tookText, damage: damage, heal: heal, setTemp: setTemp, setUsed: setUsed, toggleMark: toggleMark,
     filledMarks: filledMarks, shortRest: shortRest, longRest: longRest, comesBack: comesBack, leftAlone: leftAlone,
     statusBits: statusBits, CONDITIONS: CONDITIONS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -331,7 +355,7 @@
         if (tempLive) r.appendChild(button('dnd5e-btn', 'Temporary', 'temp'));
         r.appendChild(button('dnd5e-btn is-quiet', 'Close', 'close'));
         drawerBox.appendChild(el('p', '', tempLive
-          ? 'Damage comes off temporary hit points first. Temporary sets your temporary hit points to the amount.'
+          ? 'Damage comes off temporary hit points first. Temporary sets them to the number you type; type 0 to clear them. An empty box does nothing.'
           : 'Your temporary hit points are as the note has them. Take them off yourself before you enter damage.'));
         return function () {};
       },
@@ -410,7 +434,7 @@
           });
           var names = backFrom('short').map(function (t) { return t.rest === 'short1' ? 'one ' + nameOf(t) + ' use' : nameOf(t); });
           back.textContent = (names.length ? 'Comes back: ' + names.join(', ') + '.' : 'Nothing else comes back on a short rest right now.')
-            + (hitDice.length && state.hp != null ? ' Roll your own dice and add your Constitution for each.' : '');
+            + (hitDice.length && state.hp != null ? ' Roll your own dice and add your Constitution modifier for each.' : '');
         };
       },
       long: function () {
@@ -452,6 +476,7 @@
       } else {
         open = { name: name, key: key || null, update: null };
         opener = from || null;
+        if (!undo) say('');
         drawerBox.hidden = false;
         open.update = DRAWERS[name](open.key);
         open.update();
@@ -535,10 +560,11 @@
       if (undoBtn) undoBtn.hidden = !undo;
     }
 
+    // The line holds what the last tap did, and nothing once that is no longer the last tap.
     function say(message) {
       if (!saidBox) return;
-      saidBox.classList.remove('is-empty');
-      saidText.textContent = message;
+      saidBox.classList.toggle('is-empty', !message);
+      saidText.textContent = message || '';
     }
 
     // Every change goes through here. `undoTo` is the state a rest can be undone to;
@@ -548,7 +574,7 @@
       state = next;
       store.save(state);
       paint();
-      if (message) say(message);
+      say(message);
     }
 
     // ---- what a tap does ----
@@ -564,7 +590,7 @@
         var n = read('amt');
         if (!n) return;
         var r = damage(state, n);
-        var msg = 'Took ' + n + (r.fromTemp ? ': ' + r.fromTemp + ' from temporary hit points, ' + r.fromHp + ' from hit points.' : '.');
+        var msg = tookText(n, r.fromTemp, r.fromHp);
         if (r.state.hp === 0) msg += hasDeath ? ' You are at 0: mark your death saves above.' : ' You are at 0 hit points.';
         drawer(null);
         commit(r.state, msg);
@@ -577,8 +603,9 @@
         commit(r.state, 'Regained ' + plural(r.gained, 'hit point', 'hit points') + '.' + (r.clearedDeath ? ' Death saves cleared.' : ''));
       },
       temp: function () {
-        if (!tempLive) return;
-        var n = read('amt');
+        // Nothing typed is not a 0: the button sits beside Close, and nothing here can be undone.
+        var n = tempLive && fields.amt ? typed(fields.amt.value) : null;
+        if (n === null) return;
         drawer(null);
         commit(setTemp(state, n), n ? plural(n, 'temporary hit point', 'temporary hit points') + '.' : 'Temporary hit points cleared.');
       },

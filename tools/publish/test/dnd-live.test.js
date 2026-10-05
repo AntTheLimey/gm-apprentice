@@ -217,3 +217,43 @@ test('statusBits: dying first, then conditions, exhaustion, concentrating, inspi
   ]);
   assert.deepEqual(L.statusBits(Object.assign(fresh(), { inspiration: false })), []);
 });
+
+// One rule for what a condition may be, used by the page, the party board and flush
+// (lib/flush/dnd-writeback.js): a saved record is public, and a name ends up in a GM's note.
+test('fitConditions: strings only, trimmed, one of each, nothing that could break out of a table cell', () => {
+  assert.deepEqual(L.fitConditions([' Prone ', 'prone', 7, null, {}, '', 'Hexed']), ['Prone', 'Hexed']);
+  assert.deepEqual(L.fitConditions(['a|b', 'x\ny', 'x\ry', 'tab\there', 'Poisoned']), ['Poisoned']);
+  assert.deepEqual(L.fitConditions(['[click](http://evil.example)', '<b>bold</b>', '[[Note]]', '`code`', 'back\\slash', 'one, two', 'Stunned']), ['Stunned']);
+  assert.deepEqual(L.fitConditions(['x'.repeat(60), 'y'.repeat(61)]), ['x'.repeat(60)]);
+  assert.deepEqual(L.fitConditions('Prone'), []);
+  assert.deepEqual(L.fitConditions(null), []);
+  // A name a GM might type is kept as typed.
+  assert.deepEqual(L.fitConditions(['Poisoned (until dawn)', 'Cursed by the well', 'constructor']), ['Poisoned (until dawn)', 'Cursed by the well', 'constructor']);
+});
+
+test('fitConditions: no more than 20', () => {
+  const many = Array.from({ length: 30 }, (_, i) => 'Condition ' + i);
+  assert.deepEqual(L.fitConditions(many), many.slice(0, 20));
+});
+
+test('fit: conditions from the store and from the note pass the one rule', () => {
+  assert.deepEqual(L.fit({ conditions: ['Prone |', 'x\n\n## Injected', 'Stunned'] }, DATA()).conditions, ['Stunned']);
+  const d = DATA(); d.defaults.conditions = ['Hexed', 'a|b'];
+  assert.deepEqual(L.fit(null, d).conditions, ['Hexed']);
+});
+
+test('tookText: a part that is 0 is left out', () => {
+  assert.equal(L.tookText(9, 0, 9), 'Took 9.');
+  assert.equal(L.tookText(3, 3, 0), 'Took 3 from temporary hit points.');
+  assert.equal(L.tookText(9, 5, 4), 'Took 9: 5 from temporary hit points, 4 from hit points.');
+});
+
+test('typed: an empty field is not a 0', () => {
+  assert.equal(L.typed(''), null);
+  assert.equal(L.typed('   '), null);
+  assert.equal(L.typed(undefined), null);
+  assert.equal(L.typed('0'), 0);
+  assert.equal(L.typed('7'), 7);
+  assert.equal(L.typed('-4'), 0);
+  assert.equal(L.typed('1e21'), 9999);
+});

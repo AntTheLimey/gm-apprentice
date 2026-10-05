@@ -18,12 +18,14 @@
 
   var BADGE = { dying: 'gl-badge cond-dying', bad: 'gl-badge cond-wound', conc: 'gl-badge', good: 'gl-badge ok' };
 
+  // Hit points have no one-third line, so the bar is the sheet's own (css: .dnd5e-bar) with no
+  // tick, and the number is marked only at 0.
   function hpCell(state, max) {
     if (max == null || state.hp == null) return plain('');
     var pct = max > 0 ? Math.max(0, Math.min(100, Math.round((state.hp / max) * 100))) : 0;
-    return '<span class="gl-vnum' + (3 * state.hp < max ? ' gl-low' : '') + '">' + esc(state.hp) +
+    return '<span class="gl-vnum' + (state.hp === 0 ? ' gl-low' : '') + '">' + esc(state.hp) +
       '<span class="gl-max">/' + esc(max) + '</span>' + (state.temp ? ' <span class="gl-max">+' + esc(state.temp) + ' temp</span>' : '') + '</span>' +
-      '<span class="gl-bar gl-bar-hp"><i style="width:' + pct + '%"></i><span class="gl-third"></span></span>';
+      '<span class="dnd5e-bar"><span class="dnd5e-bar-fill" style="width:' + pct + '%"></span></span>';
   }
 
   // The note's values (pc) with the saved record (state) fitted over them.
