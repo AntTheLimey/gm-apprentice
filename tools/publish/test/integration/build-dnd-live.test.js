@@ -166,6 +166,43 @@ describe('build integration: D&D live sheet', () => {
     } finally { fs.rmSync(s.work, { recursive: true, force: true }); }
   });
 
+  it('a Conditions cell with a link, markup or unusual characters is not live: the page draws it as with live off', () => {
+    const cells = { 'Brannoch_Vale.md': 'Hexed [Bob]', 'Oriel_Thackeray.md': '[[Wand_of_Magic_Missiles]]', 'Tamsin_Reed.md': '**Hexed**',
+      'Dov_Ashgrove.md': 'A\\|B', 'Perrin_Lowe.md': '[[No Such Note]]', 'Ilse_Varn.md': 'Hexed (Bob\'s curse), Half-blind' };
+    const odd = vault => {
+      for (const [file, cell] of Object.entries(cells)) {
+        const f = path.join(vault, 'Characters', 'PCs', file);
+        const text = fs.readFileSync(f, 'utf8').replace(/\r\n/g, '\n');
+        assert.match(text, /^\| Conditions \|[^|]*\|$/m, file);
+        fs.writeFileSync(f, text.replace(/^\| Conditions \|[^|]*\|$/m, () => `| Conditions | ${cell} |`));
+      }
+    };
+    const live = site(true, odd);
+    const dead = site(false, odd);
+    const chips = html => html.match(/<div class="dnd5e-chips[^"]*"[^>]*>(.*?)<\/div>/)[1];
+    try {
+      for (const slug of ['brannoch-vale', 'oriel-thackeray', 'tamsin-reed', 'dov-ashgrove']) {
+        const html = live.page(slug);
+        assert.equal(islandOf(html).conditionsLive, false, slug);
+        assert.equal(chips(html), chips(dead.page(slug)), `${slug}: the chips are build one's`);
+      }
+      assert.deepEqual(islandOf(live.page('brannoch-vale')).defaults.conditions, ['Hexed [Bob]']);
+      assert.deepEqual(islandOf(live.page('dov-ashgrove')).defaults.conditions, ['A|B']);
+      // A link to a note that exists leaves the row as a table, as build one has it; the sheet holds no condition for it.
+      assert.deepEqual(islandOf(live.page('oriel-thackeray')).defaults.conditions, []);
+      assert.match(live.page('oriel-thackeray'), /<td>Conditions<\/td>\s*<td><a /);
+      // The party board shows the note's own words, escaped.
+      assert.match(live.roster().match(/data-gl-party="brannoch-vale">[\s\S]*?<\/tr>/)[0], /Hexed \[Bob\]/);
+      // Plain names, with an apostrophe, a hyphen and round brackets, are live and shown.
+      const ilse = islandOf(live.page('ilse-varn'));
+      assert.equal(ilse.conditionsLive, true);
+      assert.deepEqual(ilse.defaults.conditions, ['Hexed (Bob\u2019s curse)', 'Half-blind']);
+      // A link to a note that does not exist reaches the sheet as plain text, which is all the build can see.
+      assert.equal(islandOf(live.page('perrin-lowe')).conditionsLive, true);
+      assert.deepEqual(islandOf(live.page('perrin-lowe')).defaults.conditions, ['No Such Note']);
+    } finally { for (const s of [live, dead]) fs.rmSync(s.work, { recursive: true, force: true }); }
+  });
+
   it('a duplicate-named live row warns only when live is on', () => {
     const dup = vault => {
       const f = path.join(vault, 'Characters', 'PCs', 'Brannoch_Vale.md');

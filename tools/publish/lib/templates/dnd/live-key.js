@@ -27,4 +27,8 @@ const trackable = (max, used) => max > 0 && used <= max;
 // live data and the write-back both read a number cell and a Conditions cell with this.
 const holdsNothing = text => /^[—–-]?$/.test(String(text == null ? '' : text).trim());
 
-module.exports = { liveKey, liveOf, shown, trackable, holdsNothing };
+// The same, or a word typed to say there is none. For Temp HP, Exhaustion and a name in a
+// Conditions cell; not for HP (Current), where a word is not a number of hit points.
+const saysNone = text => holdsNothing(text) || /^(none|n\/a|no)$/i.test(String(text).trim());
+
+module.exports = { liveKey, liveOf, shown, trackable, holdsNothing, saysNone };

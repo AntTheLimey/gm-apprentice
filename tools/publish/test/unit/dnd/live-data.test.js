@@ -178,6 +178,27 @@ describe('buildDndLiveData', () => {
     Object.assign(m.combat, { hpMax: '44', hpCur: 'about half' });
     assert.equal(buildDndLiveData(m, META), null);
   });
+  it('the word None in Temp HP or Exhaustion reads as blank; in HP (Current) it is words', () => {
+    for (const none of ['None', 'none', 'N/A', 'No']) {
+      const d = bare({ hpMax: '44', hpCur: '30', tempHp: none, exhaustion: none });
+      assert.equal(d.tempLive, true, none);
+      assert.equal(d.exhaustionLive, true, none);
+      assert.equal(d.defaults.temp, 0, none);
+    }
+    assert.equal(bare({ hpMax: '44', hpCur: 'None' }).hpMax, null);
+  });
+  it('conditions are live when every name in the cell is a plain name, and as written otherwise', () => {
+    const cond = (text, extra) => bare(Object.assign({ hpMax: '44', conditions: text }, extra));
+    for (const t of ['', 'Prone', 'Hexed (Bob\u2019s curse), Half-blind', 'Отравлен']) assert.equal(cond(t).conditionsLive, true, t);
+    for (const t of ['Hexed [Bob]', 'A|B', '[[Poisoned]]', 'HP < half', 'Prone, prone', 'x'.repeat(61), 'Shaken; rattled']) {
+      const d = cond(t);
+      assert.equal(d.conditionsLive, false, t);
+      assert.equal(d.defaults.conditions.join(', '), t, t);   // the note's own words, for the party board
+    }
+    // Markup in the cell, or a row the sheet could not place (a link), is the GM's own writing too.
+    assert.equal(cond('Hexed', { conditionsPlain: false }).conditionsLive, false);
+    assert.equal(cond('', { conditionsPlain: false }).conditionsLive, false);
+  });
   it('with no hit point tile there is nowhere to set temporary hit points, so they are not live', () => {
     for (const combat of [{ hpMax: 'see GM' }, { hpMax: '' }, { hpMax: '44', hpCur: 'about half' }]) {
       const d = bare(Object.assign({ tempHp: '5' }, combat));

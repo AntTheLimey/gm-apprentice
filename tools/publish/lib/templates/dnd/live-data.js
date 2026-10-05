@@ -1,6 +1,7 @@
 const { splitReason } = require('./parse');
 const { yesNo } = require('../sheet-parse');
-const { liveKey, shown, trackable, holdsNothing } = require('./live-key');
+const { liveKey, shown, trackable, holdsNothing, saysNone } = require('./live-key');
+const { fitConditions } = require('../../../js/dnd-live');
 
 const STANDARD_CONDITIONS = ['Blinded', 'Charmed', 'Deafened', 'Frightened', 'Grappled', 'Incapacitated', 'Invisible',
   'Paralyzed', 'Petrified', 'Poisoned', 'Prone', 'Restrained', 'Stunned', 'Unconscious'];
@@ -15,7 +16,7 @@ function recoveryKind(text) {
 }
 
 // The names in a Conditions cell. A dash, or a word that says there are none, is not a name.
-const conditionsOf = text => String(text || '').split(',').map(t => t.trim()).filter(t => !holdsNothing(t) && !/^(none|n\/a|no)$/i.test(t));
+const conditionsOf = text => String(text || '').split(',').map(t => t.trim()).filter(t => !saysNone(t));
 
 // A whole number the note gave, with or without a reason after it; null when it is anything else.
 function whole(text) {
@@ -97,15 +98,21 @@ function buildDndLiveData(model, meta) {
   const exhaustion = whole(c.exhaustion);
   const tempHp = whole(c.tempHp);
   const inspired = yesNo(model.inspiration);
+  // Conditions are live when the cell is plain text and every name in it is one the sheet can
+  // carry (fitConditions, the rule flush writes by). A link, markup or an unusual character
+  // makes the cell the GM's own writing: shown as written, never tapped, never rewritten.
+  const conditions = conditionsOf(c.conditions);
+  const conditionsLive = c.conditionsPlain !== false && fitConditions(conditions).join('\n') === conditions.join('\n');
   const used = {};
   for (const t of tracks) used[t.key] = t.used;
 
   return {
     system: 'dnd', campaignId: meta.campaignId, pcSlug: meta.pcSlug, buildVersion: meta.buildVersion,
     hpMax,
-    exhaustionLive: exhaustion !== null || holdsNothing(c.exhaustion),
+    exhaustionLive: exhaustion !== null || saysNone(c.exhaustion),
     // Temporary hit points are set from the hit point tile: with no tile they are not live.
-    tempLive: hpMax !== null && (tempHp !== null || holdsNothing(c.tempHp)),
+    tempLive: hpMax !== null && (tempHp !== null || saysNone(c.tempHp)),
+    conditionsLive,
     inspirationLive: inspired !== null,
     defaults: {
       hp: hpMax === null ? null : Math.min(hpCur === null ? hpMax : hpCur, hpMax),
@@ -113,7 +120,7 @@ function buildDndLiveData(model, meta) {
       exhaustion: Math.min(exhaustion || 0, 6),
       inspiration: inspired === true,
       concentrating: false,
-      conditions: conditionsOf(c.conditions),
+      conditions,
       used,
     },
     tracks,
