@@ -260,6 +260,32 @@ Notes:
   has that table. It maintains a cell that is blank or a bare number
   and keeps one that carries a reason, `+7 (GM boon)`. AC,
   HP, Speed, attack lines and slot totals are written by hand.
+- **Rules checks.** The same tool then reports slips, and never writes
+  for them. `WRONG`: class levels that do not add up to Level, hit dice
+  that do not match the class levels, more than three attuned items (a
+  `LOOK` when the class is outside the SRD), Expertise without
+  proficiency, more spent than owned, current hit points above the
+  maximum, a death-save count above 3, a score over 30.
+  `LOOK`, against the SRD 5.2 table for the class and level: slot
+  totals, a spell above the highest level the class prepares, more
+  cantrips or prepared spells than allowed (the cantrip allowance
+  includes the most a class option in the SRD can add), a score over 20,
+  `HP (Max)` outside what the dice allow, the class's saving throws
+  unmarked. A reason in brackets beside a number settles its `LOOK` for a
+  score over 20 and `HP (Max)` only; the page reads a slot Total only as
+  a bare number, so a slot total that is right is left as it is. A
+  Warlock's `Pact (3rd)` row is held to the Warlock's own count and slot
+  level. A spell whose `Source`
+  is not blank, or whose Tags include `Always prepared`, is not counted
+  against the class; in a note with no `Source` column, a Tags entry with
+  a colon (`Item: Staff of Healing`) marks the source; a spell listed
+  twice counts once. The saving-throws `LOOK` is settled by correcting
+  the marks. `CANTCHECK`: a class outside the SRD, or a class line that
+  cannot be read. When the class levels do not add up to Level, the slot,
+  spell and hit point checks are skipped. `dnd_sheet.py --party VAULT`
+  runs the checks on every PC and prints only findings, then one tally
+  line; a sheet it cannot read appears as a `CANTCHECK` row, and a vault
+  that is not D&D 5e (2024) gets one line saying nothing was checked.
 - **What the tool adds in.** Each readable `### Bonuses` row is added
   to the cells it names, and the report says so
   (`+7 -> +9 (incl. +2 Ring of Protection)`). A passive score is ten

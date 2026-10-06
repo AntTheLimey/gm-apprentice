@@ -52,7 +52,9 @@ Things an old note usually does not say, and so must be asked:
 7. **Run `dnd_sheet.py`**, show the GM the `FILL` rows, and write on
    their yes. Then write the attack lines, AC, hit point maximum and
    Speed from the numbers it filled, add Gear with weights, and run it
-   again.
+   again. With those numbers in, read the rules-check rows at the end of
+   that run (character-sheet.md, "Rules checks"): fix a `WRONG`, tell the
+   GM each `LOOK`.
 8. **Delete the retired frontmatter stat fields** (`ability_scores`,
    `proficiencies`, `class_features`, `spell_slots`) once every value
    in them is in the sheet. The page no longer reads them, the build

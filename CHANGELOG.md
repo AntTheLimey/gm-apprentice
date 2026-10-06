@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.35] — 2026-10-05
+
+### Added
+
+- D&D rules checks. The tool that fills a D&D sheet's sums now also
+  reports slips in its numbers, and never changes the note for them:
+  class levels that do not add up, hit dice that do not match, more than
+  three attuned items, more spent than owned, current hit points above the
+  maximum, a death-save count above 3; and, against the free
+  rules' table for the class and level, slot totals (including a
+  Warlock's `Pact` slot row), a spell too high to
+  prepare, too many cantrips or prepared spells, a score over 20, hit
+  points outside what the dice allow, and the class's saving throws. A reason in brackets beside a
+  score over 20 or `HP (Max)` settles it. A class outside the free
+  rules is named once and never called wrong. `--party` checks every
+  character in a vault in one call, and campaign QA uses it.
+
+### Changed
+
+- A D&D ability score with a reason beside it, `22 (belt of giant
+  strength)`, is read as its number instead of stopping the fill tool.
+
 ## [1.10.34] — 2026-10-04
 
 ### Added

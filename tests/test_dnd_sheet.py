@@ -12,6 +12,13 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "skills" / "shared" / "scripts" / "dnd_sheet.py"
 FIXTURES = ROOT / "tests" / "fixtures" / "dnd-pcs"
 
+sys.path.insert(0, str(ROOT / "tests"))
+from dnd_builder import sheet  # noqa: E402
+
+
+def summary(out, prefix="# same:"):
+    return next(ln for ln in out.splitlines() if ln.startswith(prefix))
+
 
 def run(path, *args):
     p = subprocess.run([sys.executable, str(SCRIPT), str(path), *args],
@@ -36,7 +43,7 @@ def test_clean_sheet_has_nothing_to_fill():
     assert rows(out, "ERROR") == []
     # Initiative carries a reason, so it is kept, and the sum is shown.
     assert ["KEPT", "Stat Sheet / Combat / Initiative", "+3 (Alert); the sum gives +0"] in rows(out, "KEPT")
-    assert out.rstrip().splitlines()[-1] == "# same: 36  fill: 0  kept: 1"
+    assert summary(out) == "# same: 36  fill: 0  kept: 1"
 
 
 def test_flawed_sheet_lists_each_fill_with_old_and_new():
@@ -217,7 +224,7 @@ def test_unreadable_bonus_row_is_kept_and_adds_nothing():
     kept = rows(out, "KEPT")
     assert kept == [["KEPT", "Stat Sheet / Bonuses / row 5 (Bless)",
                      "Saves | 1d4; the bonus 1d4 was not understood; it adds nothing"]]
-    assert out.rstrip().splitlines()[-1].endswith("fill: 0  kept: 1")
+    assert summary(out).endswith("fill: 0  kept: 1")
 
 
 def test_unknown_bonus_target_is_kept_and_no_part_of_the_row_applies(tmp_path):
@@ -291,7 +298,7 @@ def test_a_reasoned_cell_is_kept_bonuses_or_not(tmp_path):
 def test_an_empty_bonuses_row_is_silent(tmp_path):
     _, out, _ = run(note(tmp_path, with_bonuses("| | | |")))
     assert rows(out, "FILL") == []
-    assert out.rstrip().splitlines()[-1] == "# same: 36  fill: 0  kept: 1"
+    assert summary(out) == "# same: 36  fill: 0  kept: 1"
 
 
 def test_a_bonus_with_no_source_is_named_by_its_row(tmp_path):
@@ -496,3 +503,130 @@ def test_a_fenced_block_with_a_shorter_or_other_fence_inside_is_not_read(tmp_pat
     run(p, "--write")
     assert p.read_bytes() == before
     assert block in p.read_text(encoding="utf-8")
+
+
+def test_checks_follow_the_fill_summary(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
+    code, out, _ = run(p)
+    assert code == 0
+    lines = out.rstrip().splitlines()
+    assert lines[-2] == "WRONG\tStat Sheet / Combat / Hit Dice d6\tthe note has 4; Wizard 5 gives 5"
+    assert lines[-1] == "# wrong: 1  look: 0  cantcheck: 0"
+    assert lines.index(summary(out)) == len(lines) - 3
+
+
+def test_a_correct_sheet_ends_with_a_zero_summary(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(), encoding="utf-8")
+    _, out, _ = run(p)
+    assert out.rstrip().splitlines()[-1] == "# wrong: 0  look: 0  cantcheck: 0"
+
+
+def test_an_unreadable_sheet_prints_no_checks(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(level="five"), encoding="utf-8")
+    _, out, _ = run(p)
+    assert rows(out, "ERROR") != []
+    assert "# wrong:" not in out
+
+
+def test_write_does_not_touch_what_a_check_found(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
+    run(p, "--write")
+    after = p.read_text(encoding="utf-8")
+    assert "| Hit Dice d6 (Spent/Max) | 0/4 |" in after
+    _, out, _ = run(p)
+    assert out.rstrip().splitlines()[-1] == "# wrong: 1  look: 0  cantcheck: 0"
+
+
+def test_a_reasoned_score_is_read_as_its_number(tmp_path):
+    p = tmp_path / "pc.md"
+    p.write_text(sheet(scores={"INT": "22 (tome of clear thought)"}), encoding="utf-8")
+    code, out, _ = run(p, "--write")
+    assert code == 0
+    assert rows(out, "ERROR") == []
+    after = p.read_text(encoding="utf-8")
+    assert "| INT | 22 (tome of clear thought) | +6 |" in after
+
+
+def party(*args):
+    p = subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True, text=True)
+    return p.returncode, p.stdout.replace("\r\n", "\n"), p.stderr
+
+
+def make_vault(tmp_path, system="dnd-5e-2024"):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "PCs").mkdir(parents=True)
+    (vault / "Campaign Overview.md").write_text(
+        f"---\ntype: campaign_overview\ngame_system: {system}\n---\n\n# Campaign\n", encoding="utf-8")
+    return vault
+
+
+def test_party_prints_only_findings_with_the_note_name(tmp_path):
+    vault = make_vault(tmp_path)
+    pcs = vault / "Characters" / "PCs"
+    (pcs / "Ada.md").write_text(sheet(), encoding="utf-8")
+    (pcs / "Bryn.md").write_text(sheet(hit_dice=(("d6", "0/4"),)), encoding="utf-8")
+    (pcs / "Player Characters.md").write_text("---\ntype: pc_roster\n---\n\n# Party\n", encoding="utf-8")
+    (pcs / "Cass.md").write_text("---\ntype: pc\nsheet_source: paper\n---\n\n## Notes\n", encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    assert out.splitlines() == [
+        "WRONG\tBryn: Stat Sheet / Combat / Hit Dice d6\tthe note has 4; Wizard 5 gives 5",
+        "# wrong: 1  look: 0  cantcheck: 0  sheets: 2",
+    ]
+
+
+def test_party_never_writes(tmp_path):
+    vault = make_vault(tmp_path)
+    note = vault / "Characters" / "PCs" / "Ada.md"
+    note.write_text(sheet(), encoding="utf-8")
+    before = note.read_bytes()
+    party("--party", str(vault))
+    assert note.read_bytes() == before
+    code, _, err = party("--party", str(vault), "--write")
+    assert code == 2
+    assert "--party" in err
+    assert note.read_bytes() == before
+
+
+def test_party_reports_a_sheet_it_cannot_read(tmp_path):
+    vault = make_vault(tmp_path)
+    (vault / "Characters" / "PCs" / "Dax.md").write_text(sheet(level="five"), encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    lines = out.splitlines()
+    assert lines[0].startswith("CANTCHECK\tDax: Stat Sheet / Core / Level\tthe sheet cannot be read: ")
+    assert lines[-1] == "# wrong: 0  look: 0  cantcheck: 1  sheets: 1"
+
+
+def test_party_on_another_system_says_so(tmp_path):
+    vault = make_vault(tmp_path, system="gurps-4e")
+    (vault / "Characters" / "PCs" / "Ada.md").write_text(sheet(), encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    assert out.strip() == ("dnd_sheet: this vault's system is gurps-4e, not dnd-5e-2024; "
+                           "nothing was checked")
+
+
+def test_party_needs_a_real_folder(tmp_path):
+    code, _, err = party("--party", str(tmp_path / "missing"))
+    assert code == 2
+    assert "not a folder" in err
+
+
+def test_a_sheet_or_a_party_but_not_neither_or_both(tmp_path):
+    assert party()[0] == 2
+    vault = make_vault(tmp_path)
+    assert party(str(vault / "x.md"), "--party", str(vault))[0] == 2
+
+
+def test_party_on_a_vault_with_no_recorded_system_says_so(tmp_path):
+    vault = tmp_path / "vault"
+    (vault / "Characters" / "PCs").mkdir(parents=True)
+    (vault / "Characters" / "PCs" / "Ada.md").write_text(sheet(), encoding="utf-8")
+    code, out, _ = party("--party", str(vault))
+    assert code == 0
+    assert out.strip() == "dnd_sheet: this vault's system is not recorded; nothing was checked"

@@ -52,9 +52,18 @@ carried weights and carrying capacities were filled in by
 `dnd_sheet.py`, whose carrying factors are the SRD 5.2 Carrying
 Capacity table's.
 
+`skills/shared/scripts/dnd_tables.py` holds numbers from the D&D 5.2
+SRD (CC-BY 4.0) for the rules checks: each class's hit die, saving
+throws, cantrips and prepared spells by level, the spell slot table, the
+Warlock's pact slots, the Warlock levels at which a spell of level 6 to 9
+is gained, the most cantrips a class option adds, and the level-20 ability
+score caps of the Barbarian and Monk. Numbers only; no rules text is
+copied.
+
 The Python tools' D&D test characters (`tests/fixtures/dnd-pcs/*.md`)
 are built from SRD 5.2 names and numbers only (CC-BY 4.0), with no
-rules text.
+rules text. `tests/dnd_builder.py` and the D&D rules tests are built the
+same way, with invented names for anything meant to be outside the SRD.
 
 ### Blades in the Dark / Forged in the Dark
 

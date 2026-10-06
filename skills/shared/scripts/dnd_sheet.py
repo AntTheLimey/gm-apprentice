@@ -9,6 +9,7 @@ the GM's and is kept.
 Usage:
   dnd_sheet.py SHEET.md            report (nothing is written)
   dnd_sheet.py SHEET.md --write    apply every FILL row, all or none
+  dnd_sheet.py --party VAULT       rules checks on every PC; only findings
 
 Output: one row per derived cell, `STATUS<TAB>locus<TAB>message`, then
 `# same: N  fill: N  kept: N`.
@@ -16,6 +17,10 @@ Output: one row per derived cell, `STATUS<TAB>locus<TAB>message`, then
   FILL   blank or a bare number that differs: `old -> new`
   KEPT   hand-set: the cell, and what the sum gives
   ERROR  the sheet cannot be read; nothing is written
+
+Then the rules checks (dnd_rules.py), which never write:
+`WRONG | LOOK | CANTCHECK<TAB>locus<TAB>message` and
+`# wrong: N  look: N  cantcheck: N`.
 
 Owned cells: Proficiency Bonus; each ability's Modifier and Save; each
 skill's Modifier; Passive Perception / Investigation / Insight;
@@ -42,16 +47,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_calc as dc  # noqa: E402
+import dnd_rules as dr  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
-from vaultlib import fence_step  # noqa: E402
+from dnd_note import (BARE, HALF, PLACEHOLDER, REASONED, YES, Cell, Note,  # noqa: E402
+                      clean, column, number, plain_name, to_int)
 
-HEADING = re.compile(r"^(#{2,3})\s+(.+?)\s*#*\s*$")
-SEPARATOR = re.compile(r"^:?-{2,}:?$")
-BARE = re.compile(r"^[+\-−]?\d+$")
-REASONED = re.compile(r"^([+\-−]?\d+)\s*\(.+\)$")
-PLACEHOLDER = re.compile(r"^\{[^}]*\}$")
-YES = re.compile(r"^(yes|y|true|x|\[x\]|✓|✔|●|1|p|prof|proficient|e|expert|expertise)$", re.I)
-HALF = re.compile(r"^half$", re.I)
 PASSIVES = {"passive perception": "perception",
             "passive investigation": "investigation",
             "passive insight": "insight"}
@@ -73,13 +73,6 @@ WITHIN, OVER = "Within capacity", "Over capacity (Speed 5 ft)"
 
 
 @dataclass
-class Cell:
-    line: int          # index into the note's lines
-    col: int           # index into the row's cells
-    text: str
-
-
-@dataclass
 class Row:
     status: str
     locus: str
@@ -87,76 +80,6 @@ class Row:
     line: int = -1
     col: int = -1
     new: str = ""
-
-
-def split_cells(line: str) -> list[str]:
-    """Cells of a `| a | b |` line, honouring `\\|`."""
-    inner = line.strip()
-    inner = inner[1:] if inner.startswith("|") else inner
-    inner = inner[:-1] if inner.endswith("|") and not inner.endswith("\\|") else inner
-    return [c.strip() for c in re.split(r"(?<!\\)\|", inner)]
-
-
-def read_tables(lines: list[str], second: dict | None = None) -> dict[tuple[str, str], list[tuple[int, list[str], list[str]]]]:
-    """(h2, h3) lower-cased -> [(line index, header cells, row cells)] for the
-    first table under that heading. Frontmatter and fenced code are skipped.
-    A later table under the same heading is not read; `second`, when given,
-    gets its key -> the heading as written."""
-    out: dict = {}
-    h2 = h3 = ""
-    raw2 = raw3 = ""
-    header: list[str] | None = None
-    closed: set = set()
-    in_fm = bool(lines) and lines[0].strip() == "---"
-    fence: str | None = None
-    for i, raw in enumerate(lines):
-        s = raw.strip()
-        if in_fm:
-            if i > 0 and s == "---":
-                in_fm = False
-            continue
-        fence, is_fence_line = fence_step(raw, fence)
-        if is_fence_line or fence is not None:
-            continue
-        m = HEADING.match(s)
-        if m:
-            if len(m.group(1)) == 2:
-                h2, h3 = m.group(2).strip().lower(), ""
-                raw2, raw3 = m.group(2).strip(), ""
-            else:
-                h3 = m.group(2).strip().lower()
-                raw3 = m.group(2).strip()
-            header = None
-            continue
-        key = (h2, h3)
-        if s.startswith("|") and key in closed:
-            if second is not None:
-                second.setdefault(key, raw3 or raw2)
-        elif s.startswith("|"):
-            cells = split_cells(s)
-            if header is None:
-                header = cells
-                out[key] = []
-            elif all(SEPARATOR.match(c) for c in cells if c):
-                continue
-            else:
-                out[key].append((i, header, cells))
-        elif header is not None:
-            closed.add(key)       # a blank or other line ends the first table
-            header = None
-    return out
-
-
-def to_int(text: str) -> int | None:
-    t = text.strip().replace("−", "-")
-    return int(t) if re.fullmatch(r"[+\-]?\d+", t) else None
-
-
-def column(header: list[str], pattern: str) -> int:
-    for i, h in enumerate(header):
-        if re.match(pattern, h.strip(), re.I):
-            return i
-    return -1
 
 
 def judge(locus: str, cell: Cell, want: str, note: str = "") -> Row:
@@ -234,16 +157,6 @@ def judge_encumbrance(locus: str, cell: Cell, want: str) -> Row:
     return Row("KEPT", locus, f"{text}; the sum gives {want}")
 
 
-def plain_name(text: str) -> str:
-    """A cell's name without wikilink brackets: `[[Rope\\|rope]]` -> `rope`."""
-    return re.sub(r"\[\[(?:[^\]|\\]*\\?\|)?([^\]]*)\]\]", r"\1", text).strip()
-
-
-def clean(text: str) -> str:
-    """A label as a name: wikilink brackets and bold or italic marks removed."""
-    return re.sub(r"^[*_]+|[*_]+$", "", plain_name(text).strip()).strip()
-
-
 @dataclass
 class Bonus:
     targets: set[str]
@@ -310,19 +223,10 @@ def read_bonuses(table: list, mods: dict[str, int], pb: int,
 
 
 def plan(text: str) -> list[Row]:
-    lines = text.splitlines()
-    second: dict = {}
-    tables = read_tables(lines, second)
+    note = Note(text)
+    tables, second = note.tables, note.second
     rows: list[Row] = []
-
-    def table(h2: str, h3: str = ""):
-        return tables.get((h2, h3), [])
-
-    def attr(h2: str, h3: str, label: str) -> Cell | None:
-        for i, header, cells in table(h2, h3):
-            if cells and clean(cells[0]).lower() == label and len(cells) > 1:
-                return Cell(i, 1, cells[1])
-        return None
+    table, attr = note.table, note.attr
 
     if not any(k[0] == "stat sheet" for k in tables):
         return [Row("ERROR", "Stat Sheet", "no Stat Sheet section with tables; nothing was changed")]
@@ -346,7 +250,7 @@ def plan(text: str) -> list[Row]:
         key = clean(cells[0]).upper()[:3] if cells else ""
         if key not in dc.ABILITIES:
             continue
-        score = to_int(cells[column(header, r"score$")]) if column(header, r"score$") >= 0 else None
+        score = number(cells[column(header, r"score$")])[0] if column(header, r"score$") >= 0 else None
         if score is None:
             return [Row("ERROR", f"Stat Sheet / Ability Scores / {key}",
                         "the score is not a number; nothing was changed")]
@@ -409,9 +313,9 @@ def plan(text: str) -> list[Row]:
             rows.append(Row("KEPT", locus, f"{held or '(blank)'}; Proficient Half with Expertise Yes "
                                            "was not understood; nothing was changed"))
             m = REASONED.match(held)
-            number = to_int(m.group(1) if m else held)
-            if number is not None:
-                skill_value[name.lower()] = number
+            held_value = to_int(m.group(1) if m else held)
+            if held_value is not None:
+                skill_value[name.lower()] = held_value
             continue
         extra, why = fed("ability checks", "skills", f"skill:{name.lower()}")
         want = dc.skill(mods[ability], pb, yes(c_pr), yes(c_ex), half) + extra
@@ -526,11 +430,53 @@ def apply(text: str, rows: list[Row]) -> str:
     return "".join(lines)
 
 
+SYSTEM = "dnd-5e-2024"
+
+
+def party(vault: Path) -> int:
+    """The rules checks on every PC note in a vault. Prints only findings."""
+    from migrate_vault import vault_system
+    from vaultlib import entity_type, extract_frontmatter, vault_files
+
+    if not vault.is_dir():
+        print(f"dnd_sheet: {vault.as_posix()} is not a folder", file=sys.stderr)
+        return 2
+    system = vault_system(vault)
+    if system != SYSTEM:
+        said = f"is {system}, not {SYSTEM}" if system else "is not recorded"
+        print(f"dnd_sheet: this vault's system {said}; nothing was checked")
+        return 0
+    tally = dict.fromkeys(("WRONG", "LOOK", "CANTCHECK"), 0)
+    sheets = 0
+    for rel, text in vault_files(vault):
+        if entity_type(extract_frontmatter(text) or {}) != "pc":
+            continue
+        errors = [r for r in plan(text) if r.status == "ERROR"]
+        if any(r.locus == "Stat Sheet" for r in errors):
+            continue           # no sheet in the note: vault_check.py pc-body reports that
+        sheets += 1
+        found = [dr.Finding("CANTCHECK", r.locus, "the sheet cannot be read: "
+                            + r.message.removesuffix("; nothing was changed")) for r in errors]
+        for item in found or dr.check(text):
+            tally[item.status] += 1
+            print(f"{item.status}\t{Path(rel).stem}: {item.locus}\t{item.message}")
+    print(f"# wrong: {tally['WRONG']}  look: {tally['LOOK']}  cantcheck: {tally['CANTCHECK']}  sheets: {sheets}")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
-    ap.add_argument("sheet")
+    ap.add_argument("sheet", nargs="?")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--party", metavar="VAULT",
+                    help="run the rules checks on every PC note in a vault; never writes")
     args = ap.parse_args()
+    if bool(args.sheet) == bool(args.party):
+        ap.error("give one sheet, or --party VAULT")
+    if args.party:
+        if args.write:
+            ap.error("--party never writes; run --write on one sheet")
+        return party(Path(args.party))
     path = Path(args.sheet)
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
@@ -554,6 +500,11 @@ def main() -> int:
         count["SAME"] += count["FILL"]
         count["FILL"] = 0
     print(f"# same: {count['SAME']}  fill: {count['FILL']}  kept: {count['KEPT']}")
+    found = dr.check(text)
+    for item in found:
+        print(f"{item.status}\t{item.locus}\t{item.message}")
+    tally = {s: sum(1 for item in found if item.status == s) for s in ("WRONG", "LOOK", "CANTCHECK")}
+    print(f"# wrong: {tally['WRONG']}  look: {tally['LOOK']}  cantcheck: {tally['CANTCHECK']}")
     return 0
 
 
