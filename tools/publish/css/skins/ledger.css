@@ -14,7 +14,10 @@ main.content[data-skin="ledger"] {
   --sk-c1: #3d6630; --sk-c2: #7a4f0e; --sk-c3: #8a3f1c; --sk-c4: #2f4a6b; --sk-c5: #5a3a66; --sk-c6: #2a5f66; --sk-c7: #5a4a3a; --sk-c8: #8f2a1c;
 }
 main.content[data-skin="ledger"] :is(.hero-cinematic h1, .masthead h1) { font-weight: 600; letter-spacing: .03em; }
-main.content[data-skin="ledger"] .dnd5e-blk { padding-left: 26px; background-image: var(--sk-card-img), linear-gradient(90deg, transparent 11px, color-mix(in srgb, var(--danger) 40%, transparent) 11px, color-mix(in srgb, var(--danger) 40%, transparent) 12px, transparent 12px, transparent 14px, color-mix(in srgb, var(--danger) 40%, transparent) 14px, color-mix(in srgb, var(--danger) 40%, transparent) 15px, transparent 15px); }
+main.content[data-skin="ledger"]:not([data-skin=plain]) .dnd5e-blk { padding-left: 26px; background-image: var(--sk-card-img), linear-gradient(90deg, transparent 11px, color-mix(in srgb, var(--danger) 40%, transparent) 11px, color-mix(in srgb, var(--danger) 40%, transparent) 12px, transparent 12px, transparent 14px, color-mix(in srgb, var(--danger) 40%, transparent) 14px, color-mix(in srgb, var(--danger) 40%, transparent) 15px, transparent 15px); }
+/* :not() lifts these above the layer's tile rule, which also sets background-image */
+main.content[data-skin="ledger"]:not([data-skin=plain]) :is(.pf2e-sheet, .fitd-sheet) { background-image: var(--sk-card-img), linear-gradient(90deg, transparent 11px, color-mix(in srgb, var(--danger) 40%, transparent) 11px, color-mix(in srgb, var(--danger) 40%, transparent) 12px, transparent 12px, transparent 14px, color-mix(in srgb, var(--danger) 40%, transparent) 14px, color-mix(in srgb, var(--danger) 40%, transparent) 15px, transparent 15px); }
+main.content[data-skin="ledger"] :is(.pf2e-sheet :is(h3, h4), .fitd-sheet h3) { color: var(--accent); }
 main.content[data-skin="ledger"] .dnd5e-blk > h3 { color: var(--accent); font-size: .95rem; text-transform: none; letter-spacing: .05em; font-weight: 600; padding-bottom: 3px; border-bottom: 3px double var(--border); }
 main.content[data-skin="ledger"] .blk h2 { font-size: 13px; text-transform: none; letter-spacing: .06em; }
 main.content[data-skin="ledger"] .pc-tab { font-size: 1rem; }

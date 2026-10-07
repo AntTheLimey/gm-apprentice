@@ -13,6 +13,7 @@ main.content[data-skin="parchment"] :is(.hero-cinematic h1, .masthead h1) { font
 main.content[data-skin="parchment"] :is(.hero-cinematic h1, .masthead h1)::first-letter { color: var(--accent); font-size: 1.4em; }
 main.content[data-skin="parchment"] .dnd5e-blk > h3 { color: var(--accent); font-size: 1rem; text-transform: none; letter-spacing: .04em; font-weight: 400; padding-bottom: 4px; border-bottom: 1px solid var(--border); }
 main.content[data-skin="parchment"] .dnd5e-blk { padding: 16px; }
+main.content[data-skin="parchment"] :is(.pf2e-sheet :is(h3, h4), .fitd-sheet h3) { color: var(--accent); }
 main.content[data-skin="parchment"] :is(.blk, .wide) { box-shadow: none; border: 3px double var(--border); }
 main.content[data-skin="parchment"] :is(.blk, .wide) h2 { font-size: 14px; text-transform: none; font-weight: 400; letter-spacing: .05em; }
 main.content[data-skin="parchment"] .pc-tab { font-size: 1.05rem; font-weight: 400; }

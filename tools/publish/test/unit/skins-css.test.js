@@ -7,6 +7,19 @@ const { SKINS, skinsCss } = require('../../lib/skins');
 const { scopeColorScheme } = require('../../lib/color-mode');
 const dir = path.join(__dirname, '../../css/skins');
 const read = (f) => fs.readFileSync(path.join(dir, f), 'utf8').replace(/\r\n/g, '\n');
+// every top-level selector of every rule (a comma inside :is() or () does not split)
+function selectorsOf(css) {
+  const out = [];
+  for (const m of css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/url\("data:[^"]*"\)/g, '').matchAll(/(?:^|[{}])\s*([^@{}\s][^{}]*)\{/g)) {
+    let depth = 0; let cur = '';
+    for (const ch of m[1]) {
+      if (ch === '(') depth++; else if (ch === ')') depth--;
+      if (ch === ',' && depth === 0) { out.push(cur.trim()); cur = ''; } else cur += ch;
+    }
+    out.push(cur.trim());
+  }
+  return out.filter(Boolean);
+}
 const SET = ['--bg', '--bg-card', '--sk-well', '--text', '--text-muted', '--accent', '--accent-dim', '--border', '--danger', '--warning', '--success',
   '--font-heading', '--font-body', '--font-mono', '--sk-c1', '--sk-c2', '--sk-c3', '--sk-c4', '--sk-c5', '--sk-c6', '--sk-c7', '--sk-c8'];
 const COLOURS = ['--bg', '--bg-card', '--sk-well', '--text', '--text-muted', '--accent', '--accent-dim', '--border', '--danger', '--warning', '--success'];
@@ -28,8 +41,8 @@ describe('skins: css', () => {
     const layer = read('_layer.css').replace(/\/\*[\s\S]*?\*\//g, '');
     assert.strictEqual((layer.match(/@media \(prefers-color-scheme: light\)/g) || []).length, 1);
     assert.match(layer, /@media \(prefers-color-scheme: light\) \{[\s\S]*\}\s*$/);
-    for (const line of layer.split('\n').filter((l) => /[.]fitd-|[.]skill-|[.]dnd-ability|[.]dnd-header|[.]pf2e-sheet/.test(l))) {
-      assert.match(line, /main\.content\[data-skin\]:not\(\[data-skin=plain\]\)/, line.slice(0, 80));
+    for (const sel of selectorsOf(layer).filter((x) => /[.]fitd-|[.]skill-|[.]dnd-ability|[.]dnd-header|[.]pf2e-sheet/.test(x))) {
+      assert.match(sel, /^main\.content\[data-skin\]:not\(\[data-skin=plain\]\)/, sel.slice(0, 80));
     }
   });
   for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
@@ -42,10 +55,7 @@ describe('skins: css', () => {
       for (const name of COLOURS) assert.match(light[1], new RegExp(name.replace(/-/g, '\\-') + '\\s*:'), `${id} light ${name}`);
       assert.doesNotMatch(css, /data-mode|#stage/);
       // every selector is scoped to this skin
-      for (const sel of css.replace(/\/\*[\s\S]*?\*\//g, '').match(/(^|\})\s*([^@{}\s][^{}]*)\{/g) || []) {
-        if (/^\}?\s*$/.test(sel)) continue;
-        assert.match(sel, new RegExp(`main\\.content\\[data-skin="${id}"\\]`), sel);
-      }
+      for (const sel of selectorsOf(css)) assert.match(sel, new RegExp(`^main\\.content\\[data-skin="${id}"\\]`), sel);
     });
   }
   it('assembles in registry order and survives the reader light/dark transform', () => {

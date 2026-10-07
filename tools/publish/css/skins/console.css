@@ -12,9 +12,10 @@ main.content[data-skin="console"] {
   --sk-c1: #0b7a55; --sk-c2: #8a5b00; --sk-c3: #a34a10; --sk-c4: #2d55b8; --sk-c5: #6a3fb3; --sk-c6: #006d85; --sk-c7: #4c6370; --sk-c8: #b3261e;
   background-size: 28px 28px;
 }
-main.content[data-skin="console"] :is(.dnd5e-vitals, .dnd5e-blk, .blk, .hero-cinematic, .tab-bar, .gl-status-panel, .coc-sheet-root) { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+main.content[data-skin="console"] :is(.dnd5e-vitals, .dnd5e-blk, .blk, .hero-cinematic, .tab-bar, .gl-status-panel, .coc-sheet-root, .pf2e-sheet, .fitd-sheet) { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
 main.content[data-skin="console"] :is(.hero-cinematic h1, .masthead h1) { text-transform: uppercase; letter-spacing: .06em; }
 main.content[data-skin="console"] .dnd5e-blk > h3 { color: var(--accent); letter-spacing: .16em; }
+main.content[data-skin="console"] :is(.pf2e-sheet :is(h3, h4), .fitd-sheet h3) { color: var(--accent); }
 main.content[data-skin="console"] .dnd5e-blk > h3::before { content: ""; display: inline-block; width: 7px; height: 7px; background: var(--accent); margin-right: 8px; }
 main.content[data-skin="console"] .pc-tab { text-transform: uppercase; letter-spacing: .1em; font-size: .82rem; }
 main.content[data-skin="console"] .pc-tab.active { background: var(--accent-dim); }
@@ -25,7 +26,7 @@ main.content[data-skin="console"] .dnd5e-mark:not(.is-spent) { box-shadow: 0 0 7
 main.content[data-skin="console"] .coc-sheet-root :is(.corner, .fleuron) { display: none; }
 /* The clipped tab bar and tiles would cut a ring drawn outside a control that sits against their edge. */
 main.content[data-skin="console"] :is(.pc-tab, #gl-reset):focus-visible { outline-offset: -3px; }
-@media (max-width: 480px) {
+@media (max-width: 480px), (pointer: coarse) {
   main.content[data-skin="console"] .dnd5e-live .dnd5e-mark { height: 24px; }
 }
 @media (prefers-color-scheme: light) {
