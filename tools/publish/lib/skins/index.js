@@ -1,5 +1,9 @@
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+const { statements } = require('../color-mode');
+
 // Sheet skins and frames: the one place a PC page's look is decided.
 // A skin is CSS settings (css/skins/<id>.css); a frame is an inline SVG (frames.js).
 const SKINS = {
@@ -43,4 +47,36 @@ function resolveLook(fm, site) {
 
 const isDressed = (look) => look.skin !== 'plain' || look.frame !== 'none';
 
-module.exports = { SKINS, FRAME_IDS, siteLook, resolveLook, isDressed };
+const CSS_DIR = path.join(__dirname, '../../css/skins');
+const LIGHT_BLOCK = /^@media\s*\(\s*prefers-color-scheme\s*:\s*light\s*\)$/i;
+
+// One skin file as { base, light }. A file is written dark-first with at most one trailing
+// `@media (prefers-color-scheme: light) { ... }`; both parts are returned as bare rules.
+function splitLight(css, name) {
+  const sts = statements(css);
+  const at = sts.map((st, i) => (st.kind === 'at' && LIGHT_BLOCK.test(st.prelude) ? i : -1)).filter((i) => i >= 0);
+  if (!at.length) return { base: css, light: null };
+  const i = at[0];
+  const after = sts.slice(i + 1).map((st) => st.text).join('').replace(/\/\*[\s\S]*?\*\//g, '');
+  if (at.length > 1 || after.trim()) {
+    throw new Error(`${name}: a light-mode block must be the last thing in the file, and there may be only one`);
+  }
+  const offset = sts.slice(0, i).reduce((n, st) => n + st.text.length, 0);
+  return { base: css.slice(0, offset), light: sts[i].body };
+}
+
+// The layer, then each skin in use, in registry order. Plain has no file. Every file goes
+// under `@media screen`, its light block under the screen light query, so the build's
+// scopeColorScheme can give the reader's light/dark choice to it and print is left alone.
+function skinsCss(ids, dir = CSS_DIR) {
+  const used = Object.keys(SKINS).filter((id) => id !== 'plain' && ids.includes(id));
+  return ['_layer', ...used].map((id) => {
+    const name = id + '.css';
+    const { base, light } = splitLight(fs.readFileSync(path.join(dir, name), 'utf8'), name);
+    let out = `@media screen {\n${base.trim()}\n}\n`;
+    if (light !== null) out += `@media screen and (prefers-color-scheme: light) {\n${light.trim()}\n}\n`;
+    return out;
+  }).join('\n');
+}
+
+module.exports = { SKINS, FRAME_IDS, siteLook, resolveLook, isDressed, skinsCss };

@@ -1,0 +1,18 @@
+/* Sheet skins: the frame and portrait rules every skin shares. No colour of its own;
+   it reads the site's custom properties, which a skin file overrides on main.content. */
+main.content .sk-portrait { position: relative; width: 6.5rem; height: 6.5rem; flex: 0 0 auto; background: none; border-radius: 0; overflow: visible; margin: 0 auto .75rem; }
+.sk-pic { position: absolute; inset: 12%; }
+.sk-pic img { width: 100%; height: 100%; object-fit: cover; object-position: top center; display: block; }
+.sk-initials { display: flex; width: 100%; height: 100%; align-items: center; justify-content: center; font-weight: 700; font-size: 2rem; color: var(--accent); background: var(--bg-header); }
+.sk-frame { display: block; position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; --frame: var(--accent); }
+.sk-frame .s1 { fill: none; stroke: var(--frame); stroke-width: 1.2; }
+.sk-frame .s3 { fill: none; stroke: var(--frame); stroke-width: 3; }
+.sk-frame .s4 { fill: none; stroke: var(--frame); stroke-width: 4.5; }
+.sk-frame .f { fill: var(--frame); }
+.sk-frame .hi { fill: none; stroke: var(--bg-card); stroke-width: 1; opacity: .55; }
+.sk-frame .jewel { fill: var(--bg-card); stroke: var(--frame); stroke-width: 1.5; }
+.sk-frame .plate { fill: var(--border); stroke: var(--frame); stroke-width: 1.2; }
+.hero-cinematic-framed .sk-portrait { width: 9rem; height: 9rem; margin: 0; }
+@media (max-width: 600px) { .hero-cinematic-framed .sk-portrait { width: 6.5rem; height: 6.5rem; margin: 0 auto; } }
+.coc-sheet-root .sk-portrait { width: 152px; height: 152px; margin: 0 auto; }
+@media (min-width: 721px) { .coc-sheet-root .portrait-row:has(.sk-portrait) { grid-template-columns: 1fr 152px; } }

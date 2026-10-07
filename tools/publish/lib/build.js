@@ -14,6 +14,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
+const { isDressed, skinsCss } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -98,6 +99,9 @@ function build(options = {}) {
   for (const note of switches.notes || []) {
     const label = note.key.startsWith('vault.config.json') ? note.key : `publish.${note.key}`;
     console.warn(`  WARNING: ${label} ${note.problem}`);
+  }
+  for (const note of (publishConfig.sheetLook || {}).notes || []) {
+    console.warn(`  WARNING: publish.${note.key} ${JSON.stringify(note.value)} ${note.problem}; ignored`);
   }
   if (!kvWired) {
     if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
@@ -826,6 +830,8 @@ function build(options = {}) {
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
+  const dressedSkins = new Set();
+  let anyDressed = false;
   for (const page of pages) {
     try {
       if (page.frontmatter.type === 'world_flags') continue;
@@ -939,6 +945,10 @@ function build(options = {}) {
             systemStatusBarHtml: systemOut.statusBarHtml || null,
             identity,
             sheetsOff,
+            onLook: (look, p) => {
+              for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(n.value)} ${n.problem}; using the campaign's`);
+              if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
+            },
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
@@ -1034,6 +1044,14 @@ function build(options = {}) {
       errorCount++;
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
     }
+  }
+
+  // Written only when a PC page was dressed; an untouched site gets no skins.css.
+  if (anyDressed) {
+    const dest = path.join(outputDir, 'css/skins.css');
+    ensureDir(dest);
+    fs.writeFileSync(dest, scopeColorScheme(skinsCss([...dressedSkins])));
+    console.log('  wrote css/skins.css');
   }
 
   if (deferredRosters.length) {
