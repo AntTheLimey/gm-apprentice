@@ -67,6 +67,8 @@ publish:
 | Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
 | Locations grouping | `publish.locations` | Pivot the Locations index on a `location_type` (default: genre-derived) |
 | CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists. Campaign-wide — there is no per-PC override |
+| Sheet skin | `publish.sheet_skin` | The look of every PC page: `plain` (the default), `parchment`, `case-file`, `console` or `ledger`. A PC note may set its own. See § Sheet skins and frames |
+| Sheet frame | `publish.sheet_frame` | The ornament round each PC's portrait: a frame id, or `none` (default: the skin's own frame). A PC note may set its own. See § Sheet skins and frames |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
 > **Landing page state.** The landing hero (in-game date, session count) and the
@@ -106,6 +108,133 @@ Valid keys: `locations`, `factions`, `items`, `creatures`.
 supplies the palette and fonts; a custom `publish.theme.palette`
 overrides the preset colors. A live gallery of all presets built over
 the same campaign is published from the repo's theme-showcase workflow.
+
+### Sheet skins and frames
+
+A campaign picks a look for its character sheets, and any character
+can have its own. A look is two choices. A **skin** is the dress of
+the PC page: its colours, lettering, edging and the shape of its
+marks. A **frame** is the ornament drawn round the portrait. Neither
+moves anything: every sheet keeps its layout, on all five systems.
+
+| Where | Key | Values | Absent means |
+|-------|-----|--------|--------------|
+| `_meta/vault-config.md`, under `publish:` | `sheet_skin` | a skin id | `plain` |
+| same | `sheet_frame` | a frame id, or `none` | the skin's own frame |
+| a `type: pc` note's frontmatter | `sheet_skin` | a skin id | the campaign's |
+| same | `sheet_frame` | a frame id, or `none` | the campaign's, else the skin's own |
+
+```yaml
+publish:
+  sheet_skin: ledger
+  sheet_frame: thorns
+```
+
+**Skins.** Plain is the default: a site that sets nothing builds the
+same pages as before.
+
+| Skin id | What it looks like | Suits | Its own frame |
+|---------|--------------------|-------|---------------|
+| `plain` | The sheet as it has always been, in the site's own colours and fonts | Any game | `none` |
+| `parchment` | Aged vellum and dark ink, with a red first letter, red headings, double-ruled boxes and old book lettering | Fantasy, myth and medieval games | `laurel` |
+| `case-file` | Typing paper in a manila folder: typewriter lettering, folder tabs and a red rubber stamp | Investigation, horror, espionage and modern games | `corners` |
+| `console` | An instrument panel on a faint grid: boxes with cut corners, a lit top edge, squared lettering and glowing bar marks | Science fiction, cyberpunk and near-future games | `hex` |
+| `ledger` | Cream pages bound in leather, with brass corners, an account book's ruled margin and small-capital serif lettering | Heists, intrigue, trade and period drama | `gilt` |
+
+**Frames.** Any frame goes with any skin, Plain included. A frame
+takes its colours from the skin (on Plain, from the site's theme), so
+one drawing serves all of them.
+
+| Frame id | Picture shape | What it looks like |
+|----------|---------------|--------------------|
+| `ring` | Circle | Two plain rings |
+| `laurel` | Circle | A wreath of leaves |
+| `thorns` | Circle | A ring of spikes |
+| `gilt` | Circle | A beaded ring set with four jewels |
+| `steel` | Octagon | A riveted plate |
+| `corners` | Square | A thin rule with four solid corner pieces |
+| `hex` | Hexagon | A double hexagon with tick marks |
+| `cracked` | Circle | A broken ring with cracks running off it |
+| `none` | As today | No frame. A choice in its own right: it turns off a skin's own frame |
+
+Inside a frame the portrait is cropped square, on every system; a PC
+with no portrait shows their initials there. With `none` the portrait
+is left as it was, CoC's tall photograph included.
+
+**Which look a PC gets.** The PC note's value, else the campaign's,
+else the default. Skin and frame are settled separately, so a PC note
+may set either key alone:
+
+```yaml
+---
+type: pc
+sheet_frame: cracked
+---
+```
+
+That PC keeps the campaign's skin and wears the cracked frame. A PC
+note that sets only `sheet_skin` gets that skin with the campaign's
+frame, or the skin's own frame when the campaign names none.
+
+**Setting it.** The GM asks in their own words ("give the sheets a
+parchment look", "Mara wants thorns round her picture"). You set the
+value and rebuild; the GM is never asked to edit a file or run a
+command. For the campaign, from the site directory:
+
+```bash
+npx gm-apprentice-publish vault-setting --set sheet_skin='"parchment"'
+npx gm-apprentice-publish vault-setting --set sheet_frame='"thorns"'
+```
+
+Each writes its one line under `publish:` and leaves the rest of the
+file as written. The command takes the exact id, lower-case, and
+refuses anything else without writing. To go back to the skin's own
+frame, remove the `sheet_frame` line. For one character, add or change
+the two lines in that PC note's frontmatter. Then `npm run build` and
+deploy as usual. If the GM is unsure which to pick, offer the skin
+that suits the game from the table and say what it looks like.
+
+**A value that is not a known id** is warned about once and ignored:
+that setting falls back one step (a PC's to the campaign's, the
+campaign's to the default). The build matches ids after trimming
+spaces and lower-casing, so `Ledger` is read as `ledger`.
+
+```text
+WARNING: publish.sheet_skin "vellum" is not a known skin; ignored
+WARNING: Characters/PCs/Mara.md: sheet_frame "spikes" is not a known frame; using the campaign's
+```
+
+**Light and dark.** Each skin brings its own colours for both, and
+follows the reader's light or dark choice like the rest of the site.
+
+**Typefaces.** Each skin other than Plain has its own lettering. The
+first build that uses a skin downloads its typefaces once into the
+vault's `_meta/font-cache/` and serves them from the site, whatever
+`publish.theme.fonts.source` says, so a reader's browser never
+contacts Google. That first build needs network. Without it the skin
+still builds, in fallback lettering, and the build warns once:
+
+```text
+WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. Rebuild with network access.
+```
+
+Rebuild with network and the lettering is right from then on.
+
+**Known limits.** Tell the GM the one that applies when they choose:
+
+- A skin dresses PC pages only. NPC pages, the roster and the party
+  board keep the site's theme, and so do the nav and footer round a
+  PC page.
+- A skin is for the screen. A printed sheet looks as it did before.
+- Console cuts the corners off each box, so anything that hangs over
+  a box's corner is clipped there.
+- On a CoC sheet, the corner and flourish ornaments are hidden under
+  Console and Case file, and kept under Parchment and Ledger.
+- On a GURPS sheet, the eight category colours are muted to suit each
+  skin. They stay eight distinct colours, but sit closer together
+  than in Plain.
+- The set is fixed: five skins and eight frames. A GM cannot add
+  their own, and there is no per-character colour.
 
 ### Image optimization
 
@@ -475,8 +604,8 @@ Two rows behave differently:
 
 Settings that never had a site-file form (`mode`, `exclude_drafts`,
 `theme`, `four_oh_four`, `overrides`, `section_titles`,
-`pc_prose_sections`, `character_sheets`, `setting_year`) are read from
-the vault file only.
+`pc_prose_sections`, `character_sheets`, `sheet_skin`, `sheet_frame`,
+`setting_year`) are read from the vault file only.
 
 ### Moving the settings
 

@@ -460,6 +460,31 @@ ever requests fonts.googleapis.com or fonts.gstatic.com. Without a
 font falls back to the next family in its own stack (a condensed
 system font, then `sans-serif`) rather than rendering as Rajdhani.
 
+### Sheet skins and frames
+
+A PC page can be dressed in a skin (colours, lettering, edging, the
+shape of its marks) and its portrait set in a frame. Neither changes a
+sheet's layout. Set them for the campaign under `publish:` in
+`_meta/vault-config.md`, or for one character in a `type: pc` note's
+frontmatter; the character's value wins, and skin and frame are
+settled separately.
+
+```yaml
+publish:
+  sheet_skin: ledger      # plain (default), parchment, case-file, console, ledger
+  sheet_frame: thorns     # ring, laurel, thorns, gilt, steel, corners, hex, cracked, none
+```
+
+With no `sheet_frame` a skin wears its own frame (`plain` has none).
+`vault-setting --set sheet_skin='"ledger"'` writes the campaign's
+value. A value that is not a known id gives one build warning and is
+ignored. The build writes `css/skins.css` only when a PC page is
+dressed, and serves a skin's typefaces from the site: it fetches them
+once into the vault's `_meta/font-cache/`, and with no network on that
+first build it warns once and uses fallback type. Skins apply to PC
+pages on screen only; every other page, and print, keep the site's
+theme.
+
 ### Image optimization
 
 Off by default: images are copied byte-for-byte. Turn it on in

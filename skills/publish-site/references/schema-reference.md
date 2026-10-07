@@ -29,6 +29,8 @@ These entity types have purpose-built page layouts.
 | `live_key` | Optional | Written by `relink.py` when it renames a PC, so the PC keeps their live stats on the site. Leave it alone |
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
+| `sheet_skin` | Optional | This character's own look; see `configuration.md` § Sheet skins and frames. Absent, the PC takes the campaign's |
+| `sheet_frame` | Optional | This character's own portrait frame, or `none`; see `configuration.md` § Sheet skins and frames. Absent, the PC takes the campaign's, else the skin's own |
 
 **Layout — single panel vs. tabbed:** When no story companion file
 exists, the PC template renders body content as collapsible accordion
@@ -369,6 +371,8 @@ and affect the whole site rather than individual entity pages. See
 | `live_stats` | `publish.live_stats` | switch | off | The live status bar on each PC sheet and the live party board. Needs a KV store wired in the site's `wrangler.toml` |
 | `inbox` | `publish.inbox` | switch | off | The change-request widget on each PC page. Needs a KV store wired in the site's `wrangler.toml` |
 | `pc_prose_sections` | `publish.pc_prose_sections` | list of heading titles | empty | Extra `##` sections a PC page keeps when `character_sheets` is off, on top of the built-in list |
+| `sheet_skin` | `publish.sheet_skin` | a skin id | `plain` | The look of every PC page. A PC note's own `sheet_skin` wins. Ids in `configuration.md` § Sheet skins and frames |
+| `sheet_frame` | `publish.sheet_frame` | a frame id, or `none` | the skin's own frame | The ornament round each PC's portrait. A PC note's own `sheet_frame` wins |
 
 A switch takes `true`/`false` or the words `yes`, `no`, `on`, `off`
 (any case). Any other value, or a key left empty, counts as off and
