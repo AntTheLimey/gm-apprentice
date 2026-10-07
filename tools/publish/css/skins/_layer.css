@@ -27,7 +27,7 @@ main.content[data-skin]:where(:not([data-skin=plain])) {
   border-radius: 12px; margin-top: 1rem;
 }
 /* tiles: D&D blocks and strip, GURPS blocks and status panel, the Pathfinder and FitD sheets, the shared hero and tab bar */
-main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet) {
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet, details.rules-ref) {
   --bg: var(--sk-well); color: var(--text); background-color: var(--bg-card); background-image: var(--sk-card-img, none);
   border: var(--sk-edge, 1px solid var(--border)); border-radius: var(--sk-r, 8px); box-shadow: var(--sk-inner, none);
 }
@@ -52,9 +52,13 @@ main.content[data-skin]:where(:not([data-skin=plain])) .fitd-sheet .fitd-box { b
 main.content[data-skin]:where(:not([data-skin=plain])) .pf2e-sheet .dnd-skill.is-proficient .skill-mark, main.content[data-skin]:where(:not([data-skin=plain])) .fitd-sheet :is(.fitd-dot, .fitd-box).filled { background: var(--sk-pip-on, var(--accent)); }
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.pf2e-sheet :is(h3, h4, .dnd-header), .fitd-sheet h3, .fitd-attribute h4) { font-family: var(--font-heading); }
 main.content[data-skin]:where(:not([data-skin=plain])) .dnd5e-header { color: var(--sk-g-text, var(--text)); }
-main.content[data-skin]:where(:not([data-skin=plain])) :is(.breadcrumbs, .pull-quote, .tab-panel > .text-muted, .sheet-withheld) { color: var(--sk-g-muted, var(--text-muted)); }
-main.content[data-skin]:where(:not([data-skin=plain])) :is(.breadcrumbs a, .pc-identity .label) { color: var(--sk-g-accent, var(--accent)); }
-main.content[data-skin]:where(:not([data-skin=plain])) .tab-panel > h3 { color: var(--sk-g-text, var(--text)); }
+/* ground inks: each rule is a direct child chain from main.content, so it can only reach text that sits on the ground (CoC's folio panels are tab-panels inside a tile and are not matched) */
+main.content[data-skin]:where(:not([data-skin=plain])) > :is(.breadcrumbs, .pull-quote) { color: var(--sk-g-muted, var(--text-muted)); }
+main.content[data-skin]:where(:not([data-skin=plain])) > .breadcrumbs a { color: var(--sk-g-accent, var(--accent)); }
+main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(h3, h4, p, ul, ol, table, blockquote, pre, .story-prose), main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(ul, ol, table, blockquote, pre, .story-prose) :is(h1, h2, h3, h4, p, li, td, strong, em, code) { color: var(--sk-g-text, var(--text)); }
+main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(p, ul, ol, table, blockquote, .story-prose) a { color: var(--sk-g-accent, var(--accent)); }
+main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(.text-muted, .sheet-withheld) { color: var(--sk-g-muted, var(--text-muted)); }
+main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > .pc-identity .label { color: var(--sk-g-accent, var(--accent)); }
 main.content[data-skin]:where(:not([data-skin=plain])) .hero-cinematic h1 { color: var(--text); }
 main.content[data-skin]:where(:not([data-skin=plain])) .sk-frame { --frame: var(--accent); }
 /* GURPS category colours: eight pigments per skin, lightened for dark, tinted for the row stripes */

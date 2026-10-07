@@ -1,6 +1,6 @@
 /* Case file: manila, typing paper, carbon ink. Dark is the base; light is the trailing block. */
 main.content[data-skin="case-file"] {
-  --bg: #24201a; --bg-card: #322d24; --sk-well: #29241c; --text: #e6dfcf; --text-muted: #a39a86;
+  --bg: #24201a; --bg-card: #322d24; --sk-well: #29241c; --text: #e6dfcf; --text-muted: #a49b87;
   --accent: #9dbde6; --accent-dim: #9dbde621; --border: #554c3c;
   --danger: #e58373; --warning: #dcae52; --success: #8fbf8c; --sk-g-muted: #a39a86;
   --font-body: "Courier Prime", "Courier New", monospace; --font-mono: "Courier Prime", "Courier New", monospace; --font-heading: "Special Elite", "Courier New", monospace;
@@ -8,7 +8,7 @@ main.content[data-skin="case-file"] {
   --sk-card-img: var(--sk-grain);
   --sk-r: 1px; --sk-r-ctl: 0; --sk-r-pip: 1px;
   --sk-edge: 0 solid transparent; --sk-inner: 1px 2px 0 rgba(0,0,0,.22);
-  --sk-c1: #356941; --sk-c2: #7a5a12; --sk-c3: #914e1d; --sk-c4: #3462a0; --sk-c5: #695297; --sk-c6: #226977; --sk-c7: #605c53; --sk-c8: #ce3223;
+  --sk-c1: #356941; --sk-c2: #7a5a12; --sk-c3: #9b531f; --sk-c4: #33609d; --sk-c5: #685297; --sk-c6: #226977; --sk-c7: #605c53; --sk-c8: #c33521;
 }
 main.content[data-skin="case-file"] :is(.hero-cinematic h1, .masthead h1) { font-weight: 400; letter-spacing: .02em; }
 main.content[data-skin="case-file"] .hero-cinematic { position: relative; }
