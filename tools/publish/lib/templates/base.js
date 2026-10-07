@@ -49,7 +49,7 @@ function configureColorMode(head) { colorModeHead = head || ''; }
 function colorModeHeadHtml() { return colorModeHead ? `\n  ${colorModeHead}` : ''; }
 function colorModeEnabled() { return Boolean(colorModeHead); }
 
-function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts }) {
+function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, footer, genrePreset, overridesCss, breadcrumbsHtml, scripts, mainAttrs, extraCss }) {
   const footerHtml = footer ? `<footer class="site-footer">${escapeHtml(footer)}</footer>` : '';
   const themeCssHref = cssHref.replace('style.css', 'theme.css');
   const genreCssHref = genrePreset
@@ -64,6 +64,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
   const overridesLinkTag = overridesCss
     ? `\n  <link rel="stylesheet" href="${cssHref.replace('style.css', 'overrides.css')}">`
     : '';
+  const extraLinks = (extraCss || []).map(h => `\n  <link rel="stylesheet" href="${h}">`).join('');
   const breadcrumbs = breadcrumbsHtml || '';
   const scriptTags = scripts
     ? scripts.map(s => `<script src="${s}"></script>`).join('\n')
@@ -75,13 +76,13 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
   <meta name="viewport" content="width=device-width, initial-scale=1.0">${colorModeHeadHtml()}
   <title>${escapeHtml(title)} — ${escapeHtml(siteTitle)}</title>
   <link rel="stylesheet" href="${cssHref}">${genreLinkTag}
-  <link rel="stylesheet" href="${themeCssHref}">${overridesLinkTag}
+  <link rel="stylesheet" href="${themeCssHref}">${extraLinks}${overridesLinkTag}
 </head>
 <body>
 
 ${navHtml}
 
-<main class="content">
+<main class="content"${mainAttrs || ''}>
 ${breadcrumbs}
 ${content}
 </main>

@@ -14,6 +14,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
+const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -98,6 +99,9 @@ function build(options = {}) {
   for (const note of switches.notes || []) {
     const label = note.key.startsWith('vault.config.json') ? note.key : `publish.${note.key}`;
     console.warn(`  WARNING: ${label} ${note.problem}`);
+  }
+  for (const note of (publishConfig.sheetLook || {}).notes || []) {
+    console.warn(`  WARNING: publish.${note.key} ${JSON.stringify(clipValue(note.value))} ${note.problem}; ignored`);
   }
   if (!kvWired) {
     if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
@@ -238,13 +242,17 @@ function build(options = {}) {
     console.warn(`  WARNING: ${fontsLib.GOOGLE_WARNING(names.join(', '))}`);
   }
 
-  function copySelfHostedFonts() {
-    for (const f of selfHostedFonts().files) {
+  function copyFontFiles(files) {
+    for (const f of files) {
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
       fs.copyFileSync(f.from, dest);
       console.log(`  wrote fonts/${f.rel}`);
     }
+  }
+
+  function copySelfHostedFonts() {
+    copyFontFiles(selfHostedFonts().files);
   }
 
   function writeThemeCSS() {
@@ -826,6 +834,8 @@ function build(options = {}) {
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
+  const dressedSkins = new Set();
+  let anyDressed = false;
   for (const page of pages) {
     try {
       if (page.frontmatter.type === 'world_flags') continue;
@@ -939,6 +949,10 @@ function build(options = {}) {
             systemStatusBarHtml: systemOut.statusBarHtml || null,
             identity,
             sheetsOff,
+            onLook: (look, p) => {
+              for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
+              if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
+            },
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
           });
           break;
@@ -1034,6 +1048,24 @@ function build(options = {}) {
       errorCount++;
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
     }
+  }
+
+  // Written only when a PC page was dressed; an untouched site gets no skins.css.
+  if (anyDressed) {
+    const dest = path.join(outputDir, 'css/skins.css');
+    ensureDir(dest);
+    // The skins' typefaces come from the vault's font cache and are served from the site,
+    // whatever theme.fonts.source says. The @font-face rules sit outside every @media
+    // block; a miss warns once and the skins keep their fallback stacks.
+    let warned = false;
+    const faces = fontsLib.selfHostedFontFaces(config.vaultPath, fontFamiliesFor([...dressedSkins]), () => {
+      if (warned) return;
+      warned = true;
+      console.warn("  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. Rebuild with network access.");
+    });
+    fs.writeFileSync(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
+    console.log('  wrote css/skins.css');
+    copyFontFiles(faces.files);
   }
 
   if (deferredRosters.length) {

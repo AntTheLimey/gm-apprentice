@@ -67,6 +67,8 @@ publish:
 | Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
 | Locations grouping | `publish.locations` | Pivot the Locations index on a `location_type` (default: genre-derived) |
 | CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists. Campaign-wide — there is no per-PC override |
+| Sheet skin | `publish.sheet_skin` | The look of every PC page (default: `plain`). See `sheet-skins.md` |
+| Sheet frame | `publish.sheet_frame` | The ornament round each PC's portrait. See `sheet-skins.md` |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
 > **Landing page state.** The landing hero (in-game date, session count) and the
@@ -475,8 +477,8 @@ Two rows behave differently:
 
 Settings that never had a site-file form (`mode`, `exclude_drafts`,
 `theme`, `four_oh_four`, `overrides`, `section_titles`,
-`pc_prose_sections`, `character_sheets`, `setting_year`) are read from
-the vault file only.
+`pc_prose_sections`, `character_sheets`, `sheet_skin`, `sheet_frame`,
+`setting_year`) are read from the vault file only.
 
 ### Moving the settings
 

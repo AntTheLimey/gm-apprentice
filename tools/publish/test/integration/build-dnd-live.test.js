@@ -102,7 +102,7 @@ describe('build integration: D&D live sheet', () => {
         assert.equal(s.page('aaron-bare').includes('dnd-live-data'), false);
         const html = s.roster();
         assert.ok(html.indexOf('data-gl-party="aaron-bare"') > 0 && html.indexOf('data-gl-party="aaron-bare"') < html.indexOf('data-gl-party="brannoch-vale"'));
-        const row = html.match(/<tr class="gl-party-row[^>]*data-gl-party="aaron-bare">[\s\S]*?<\/tr>/)[0];
+        const row = html.match(/<tr[^>]* class="gl-party-row[^>]*data-gl-party="aaron-bare">[\s\S]*?<\/tr>/)[0];
         assert.match(row, /data-gl-party-field="ac"><span class="gl-vnum">15</);
         assert.match(row, /data-gl-party-field="hp"><span class="gl-vnum">—</);
         assert.doesNotMatch(row, /Dying|Fine/);
@@ -161,7 +161,7 @@ describe('build integration: D&D live sheet', () => {
     const s = site(true, none);
     try {
       assert.deepEqual(islandOf(s.page('brannoch-vale')).defaults.conditions, []);
-      const row = s.roster().match(/<tr class="gl-party-row[^"]*" data-gl-party="brannoch-vale">[\s\S]*?<\/tr>/)[0];
+      const row = s.roster().match(/<tr[^>]* class="gl-party-row[^"]*" data-gl-party="brannoch-vale">[\s\S]*?<\/tr>/)[0];
       assert.doesNotMatch(row, /None|cond-wound/);
     } finally { fs.rmSync(s.work, { recursive: true, force: true }); }
   });

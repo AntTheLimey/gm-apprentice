@@ -13,15 +13,15 @@ function renderPartyBoard(manifest, rosterOutputPath, { live = true } = {}) {
     const c = rowCells(view);
     const href = encodeHref(relativeHref(rosterOutputPath, pc.outputPath));
     const speed = pc.basicSpeed != null ? Number(pc.basicSpeed).toFixed(2) : '—';
-    return `<tr class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
-  <td class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub" data-gl-party-field="enc">${c.enc}</span></span></a></td>
-  <td class="gl-speed">${escapeHtml(speed)}</td>
-  <td class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
-  <td class="gl-vital" data-gl-party-field="fp">${c.fp}</td>
-  <td class="gl-stat" data-gl-party-field="move">${c.move}</td>
-  <td class="gl-stat" data-gl-party-field="dodge">${c.dodge}</td>
-  <td class="gl-stat gl-col-st" data-gl-party-field="st">${c.st}</td>
-  <td class="gl-status" data-gl-party-field="status">${c.status}</td>
+    return `<tr role="row" class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
+  <td role="cell" class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub" data-gl-party-field="enc">${c.enc}</span></span></a></td>
+  <td role="cell" class="gl-speed">${escapeHtml(speed)}</td>
+  <td role="cell" class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
+  <td role="cell" class="gl-vital" data-gl-party-field="fp">${c.fp}</td>
+  <td role="cell" class="gl-stat" data-gl-party-field="move">${c.move}</td>
+  <td role="cell" class="gl-stat" data-gl-party-field="dodge">${c.dodge}</td>
+  <td role="cell" class="gl-stat gl-col-st" data-gl-party-field="st">${c.st}</td>
+  <td role="cell" class="gl-status" data-gl-party-field="status">${c.status}</td>
 </tr>`;
   }).join('\n');
 
@@ -34,9 +34,9 @@ function renderPartyBoard(manifest, rosterOutputPath, { live = true } = {}) {
     ${liveIndicator}
   </div>
   <div class="gl-party-scroll">
-  <table class="gl-party-table">
-    <thead><tr><th class="gl-pc">Character</th><th class="gl-col-speed">Speed</th><th>HP</th><th>FP</th><th>Move</th><th>Dodge</th><th class="gl-col-st">ST</th><th>Status</th></tr></thead>
-    <tbody>
+  <table class="gl-party-table" role="table">
+    <thead role="rowgroup"><tr role="row"><th role="columnheader" class="gl-pc">Character</th><th role="columnheader" class="gl-col-speed">Speed</th><th role="columnheader">HP</th><th role="columnheader">FP</th><th role="columnheader">Move</th><th role="columnheader">Dodge</th><th role="columnheader" class="gl-col-st">ST</th><th role="columnheader">Status</th></tr></thead>
+    <tbody role="rowgroup">
 ${rows}
     </tbody>
   </table>

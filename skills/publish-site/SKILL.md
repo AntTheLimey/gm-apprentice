@@ -1,6 +1,6 @@
 ---
 name: publish-site
-description: "Publish a gm-apprentice campaign vault as a static site on GitHub Pages or Cloudflare Pages, and run the at-table change-request loop that lets players request sheet edits during play. Use to build, publish, update or rebuild a campaign website, share a campaign with players, set up GitHub Pages or Cloudflare Pages, troubleshoot a broken build, migrate the site to a new vault schema, or watch for player sheet change requests during a session. Trigger on 'publish my campaign', 'build the site', 'campaign website', 'GitHub Pages', 'Cloudflare', 'Cloudflare Pages', 'deploy my site', 'site is broken', 'portraits not showing', 'update my site', 'start your checking loop', 'pick up the change requests', 'open the inbox', or any request to turn vault content into a shareable static site."
+description: "Publish a gm-apprentice campaign vault as a static site on GitHub Pages or Cloudflare Pages, and run the at-table change-request loop that lets players request sheet edits during play. Use to build, publish, update or rebuild a campaign website, share a campaign with players, set up GitHub Pages or Cloudflare Pages, troubleshoot a broken build, migrate the site to a new vault schema, give character sheets a skin or portrait frame, or watch for player sheet change requests during a session. Trigger on 'publish my campaign', 'build the site', 'campaign website', 'GitHub Pages', 'Cloudflare', 'Cloudflare Pages', 'deploy my site', 'site is broken', 'portraits not showing', 'update my site', 'character sheet look', 'sheet skin', 'portrait frame', 'start your checking loop', 'pick up the change requests', 'open the inbox', or any request to turn vault content into a shareable static site."
 ---
 
 # Publish Site
@@ -213,6 +213,8 @@ infra only; the at-table session is capability 7.
   `vault.config.json` holds only the six deployment keys. § Switches
   covers `character_sheets`, `live_stats` and `inbox` (on/off, and
   what a PC page shows with sheets off).
+- `references/sheet-skins.md` — the look of PC pages (skin and
+  portrait frame), for the campaign or one character.
 - `references/schema-reference.md` — which fields each entity type
   renders.
 - `references/cloudflare-pages.md` — Cloudflare token, credentials

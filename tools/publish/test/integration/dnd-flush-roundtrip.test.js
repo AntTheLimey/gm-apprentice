@@ -208,3 +208,37 @@ describe('D&D flush round trip, every fixture note', () => {
     assert.deepEqual(again.skipped, []);
   });
 });
+
+// A skin and a frame change the page's dress, never its live cells: the island, the note and
+// what flush writes are the same on a skinned site.
+describe('D&D flush round trip on a skinned site', () => {
+  const skinIt = (vault) => {
+    const cfg = path.join(vault, '_meta', 'vault-config.md');
+    fs.writeFileSync(cfg, fs.readFileSync(cfg, 'utf8').replace(/(publish:\r?\n)/, (m) => m + '  sheet_skin: ledger\n  sheet_frame: thorns\n'));
+  };
+  let plain, skinned, rebuilt;
+  before(() => {
+    plain = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'));
+    skinned = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), skinIt);
+  });
+  after(() => { for (const s of [plain, skinned, rebuilt]) if (s) fs.rmSync(s.work, { recursive: true, force: true }); });
+
+  it('builds the same live cells, and flushing a skinned page\'s save rebuilds to it', () => {
+    const file = 'Brannoch_Vale.md';
+    const html = fs.readFileSync(path.join(skinned.work, 'docs', 'characters', 'pcs', 'brannoch-vale.html'), 'utf8');
+    assert.match(html, /<main class="content" data-skin="ledger"/);
+    assert.match(html, /data-frame="thorns"/);
+    assert.deepEqual(skinned.island(file), plain.island(file));
+    const d = skinned.island(file);
+    const note = fs.readFileSync(path.join(skinned.vault, PCS, file), 'utf8').replace(/\r\n/g, '\n');
+    const blob = { v: 1, used: {}, concentrating: false, conditions: ['Prone'], hp: d.defaults.hp - 1, temp: d.defaults.temp + 1 };
+    for (const t of d.tracks) blob.used[t.key] = (t.used + 1) % (t.max + 1);
+    const result = applyDnDFlush(note, blob);
+    assert.deepEqual(result.skipped, []);
+    rebuilt = copyAndBuild(path.join(FIXTURES, 'with-dnd-pc'), (vault) => { skinIt(vault); fs.writeFileSync(path.join(vault, PCS, file), result.markdown); });
+    const d2 = rebuilt.island(file);
+    assert.equal(d2.defaults.hp, blob.hp);
+    assert.equal(d2.defaults.temp, blob.temp);
+    assert.deepEqual(d2.defaults.used, blob.used);
+  });
+});

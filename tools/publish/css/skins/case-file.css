@@ -1,0 +1,36 @@
+/* Case file: manila, typing paper, carbon ink. Dark is the base; light is the trailing block. */
+main.content[data-skin="case-file"] {
+  --bg: #24201a; --bg-card: #322d24; --sk-well: #29241c; --text: #e6dfcf; --text-muted: #aaa18e;
+  --accent: #9dbde6; --accent-dim: #9dbde614; --border: #554c3c;
+  --danger: #e58373; --warning: #dcae52; --success: #8fbf8c; --sk-g-muted: #a39a86;
+  --font-body: "Courier Prime", "Courier New", monospace; --font-mono: "Courier Prime", "Courier New", monospace; --font-heading: "Special Elite", "Courier New", monospace;
+  --sk-ground-img: var(--sk-grain); --sk-hint-fill: var(--bg);
+  --sk-card-img: var(--sk-grain);
+  --sk-r: 1px; --sk-r-ctl: 0; --sk-r-pip: 1px;
+  --sk-edge: 0 solid transparent; --sk-inner: 1px 2px 0 rgba(0,0,0,.22);
+  --sk-c1: #356941; --sk-c2: #7a5a12; --sk-c3: #9b531f; --sk-c4: #33609d; --sk-c5: #685297; --sk-c6: #216674; --sk-c7: #605c53; --sk-c8: #c33521;
+}
+main.content[data-skin="case-file"] :is(.hero-cinematic h1, .masthead h1) { font-weight: 400; letter-spacing: .02em; }
+main.content[data-skin="case-file"] .hero-cinematic { position: relative; }
+main.content[data-skin="case-file"] .hero-cinematic::after { content: "ACTIVE"; position: absolute; right: 1.2rem; top: 1.1rem; font-family: var(--font-heading); font-size: 1.1rem; letter-spacing: .12em; color: var(--danger); border: 3px double var(--danger); padding: 4px 10px 1px; transform: rotate(-7deg); opacity: .8; }
+/* the stamp sits over the hero's top right: a long name wraps before it instead of running under it (the stamp is gone from 560px down) */
+@media (min-width: 561px) { main.content[data-skin="case-file"] .hero-cinematic h1 { padding-right: 7.5rem; } }
+/* the typewriter face is wide: skill names are set smaller so fewer are cut at the column's edge (as many as Console cuts) */
+main.content[data-skin="case-file"] .coc-sheet-root .sname { letter-spacing: 0; font-size: .76rem; }
+main.content[data-skin="case-file"] .dnd5e-blk > h3 { font-weight: 400; font-size: .85rem; letter-spacing: .06em; text-decoration: underline; text-underline-offset: 3px; }
+main.content[data-skin="case-file"] .blk h2 { font-weight: 400; }
+main.content[data-skin="case-file"] .tab-bar { background: none; box-shadow: none; gap: 3px; padding-left: 6px; border-bottom: 1px solid var(--border); border-radius: 0; }
+main.content[data-skin="case-file"] .pc-tab { background: var(--sk-well); color: var(--text-muted); border: 1px solid var(--border); border-bottom: 0; border-radius: 9px 9px 0 0; font-weight: 400; }
+main.content[data-skin="case-file"] .pc-tab.active { background: var(--bg-card); color: var(--text); }
+main.content[data-skin="case-file"] .coc-sheet-root :is(.corner, .fleuron) { display: none; }
+@media (max-width: 600px) { main.content[data-skin="case-file"] .tab-bar { background: var(--sk-hint); background-attachment: local, local, scroll, scroll; } }
+@media (max-width: 560px) { main.content[data-skin="case-file"] .hero-cinematic::after { display: none; } }
+@media (prefers-color-scheme: light) {
+  main.content[data-skin="case-file"] {
+    --bg: #cdb98c; --bg-card: #f3eedf; --sk-well: #e7e0cc; --text: #1d1b18; --text-muted: #5a5548;
+    --accent: #1f3a5f; --accent-dim: #1f3a5f1a; --border: #a89f88;
+    --danger: #a3261c; --warning: #7a5200; --success: #2f6534; --sk-g-muted: #453f33; --sk-g-danger: #8f2119;
+    --sk-c1: #2f5d3a; --sk-c3: #8a4a1c; --sk-c4: #1f3a5f; --sk-c5: #4a3a6b; --sk-c6: #1d5a66; --sk-c7: #4a4740; --sk-c8: #8f2318;
+    --sk-ground-img: var(--sk-grain), linear-gradient(180deg, rgba(255,255,255,.18), transparent 120px);
+  }
+}

@@ -73,7 +73,9 @@ function mapFolder(vaultRelPath, folderMap) {
 // NOT turn into a page. scanVault() prints those as warnings and throws the detail
 // away; `manifest diff`, `doctor --site` and `explain` need the detail itself, so
 // the walk reports and the printing lives one level up.
-function scanVaultReport(config) {
+// `quiet` skips the one warning printed during the walk (a page-slug collision) for a
+// caller that only needs the pages and will have the build report it.
+function scanVaultReport(config, { quiet = false } = {}) {
   const { vaultPath, excludeDirs, folderMap } = config;
   const pages = [];
   // Vault-relative paths of .md files carrying no `type:`. They never publish,
@@ -138,7 +140,7 @@ function scanVaultReport(config) {
           : slug + '.html';
 
         if (claimedOutputPaths.has(outputPath)) {
-          console.warn(
+          if (!quiet) console.warn(
             `scanner: page slug collision — "${outputPath}" is produced by both ` +
             `"${claimedOutputPaths.get(outputPath)}" and "${relPath}". The latter will be used. ` +
             `Rename one of the files so they slugify apart.`

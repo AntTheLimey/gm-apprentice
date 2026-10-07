@@ -460,6 +460,20 @@ ever requests fonts.googleapis.com or fonts.gstatic.com. Without a
 font falls back to the next family in its own stack (a condensed
 system font, then `sans-serif`) rather than rendering as Rajdhani.
 
+### Sheet skins and frames
+
+A PC page can wear a skin, and its portrait a frame. Set them under
+`publish:` in `_meta/vault-config.md` for the campaign, or in a
+`type: pc` note's frontmatter for one character (which wins).
+
+```yaml
+publish:
+  sheet_skin: ledger      # plain (default), parchment, case-file, console, ledger
+  sheet_frame: thorns     # ring, laurel, thorns, gilt, steel, corners, hex, cracked, none
+```
+
+With no `sheet_frame` a skin wears its own frame.
+
 ### Image optimization
 
 Off by default: images are copied byte-for-byte. Turn it on in

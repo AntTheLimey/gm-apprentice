@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.35"
+current_version: "1.10.36"
 ---
 
 # Vault Migration Record
@@ -42,3 +42,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.33 | D&D PC template: saving-throw numbers, Senses, Bonuses and Defences, features and spells as tables (spells with a Source), Gear with weights, Carrying, Magic Items in place of the attunement slots, and an optional Companions section (copied by every-pass `templates`); existing PC notes are not changed | — |
 | 1.10.34 | D&D live sheet: no vault change. A D&D PC note is read as it is; nothing is added to it | — |
 | 1.10.35 | D&D rules checks: no vault change. The fill tool reports slips and never writes for them | — |
+| 1.10.36 | Sheet skins and frames: no vault change. A vault that sets no skin builds as before. The site's publish tool is repinned to 1.15.0 by the every-pass repin | — |

@@ -180,6 +180,12 @@ the cell being changed, on a PC that is not live), read first from the PC's
      own pool ("add 5 xp", "give me 3 points") or editing notes/current-status is
      trusted self-service: apply it, never flag it. An XP grant raises Unspent
      Points (and Total Points Earned). Collect into the applied batch; log a `✓`.
+   - **A look for their own sheet — apply, whatever the system.** A player's
+     request for a different skin or frame on their own sheet ("give me the
+     thorns frame") is set as `sheet_skin` / `sheet_frame` in that PC's
+     frontmatter (ids in `sheet-skins.md`) and
+     collected into the applied batch, which rebuilds the site; it needs no GM
+     ruling unless the GM has said looks are theirs to choose.
    - **Affordable & unambiguous spend — apply.** Edit the `.md`, decrement running
      unspent points, collect into the applied batch; log a `✓`.
    - **Player override — apply even if unaffordable.** If the request carries a

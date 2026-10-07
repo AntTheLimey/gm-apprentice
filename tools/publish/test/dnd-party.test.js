@@ -85,7 +85,7 @@ test('the board: one row per PC, hooked for the live paint, live mark only when 
   assert.match(on, /data-gl-party="brannoch"/);
   for (const f of ['ac', 'hp', 'pp', 'dc', 'status']) assert.match(on, new RegExp(`data-gl-party-field="${f}"`));
   assert.match(on, /gl-party-live/);
-  assert.match(on, /<th>Spell DC<\/th>/);
+  assert.match(on, /<th[^>]*>Spell DC<\/th>/);
   assert.doesNotMatch(renderDndBoard(m, 'characters/pcs/index.html', { live: false }), /gl-party-live/);
   assert.equal(renderDndBoard(null, 'x.html', {}), null);
 });

@@ -26,7 +26,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'] });
+  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -64,6 +64,65 @@ test('refuses a key or a value it does not know, and writes nothing', () => {
     assert.equal(err.length, 1, set);
     assert.equal(config(s), before, set);
   }
+});
+
+test('sets the campaign sheet skin under publish and keeps the rest', () => {
+  const s = scratch('  mode: player   # who reads\n  theme:\n    genre: horror\n');
+  const before = config(s);
+  const { rc, data } = run(s, ['sheet_skin="ledger"']);
+  assert.equal(rc, 0);
+  assert.deepEqual(data, { written: ['sheet_skin'] });
+  assert.match(config(s), /^ {2}sheet_skin: ledger$/m);
+  assert.equal(config(s).replace(/^ {2}sheet_skin: ledger\n/m, ''), before);
+});
+
+test('sheet_frame takes none, and a skin and a frame land in one call', () => {
+  const s = scratch('  mode: player\n');
+  assert.equal(run(s, ['sheet_frame="none"']).rc, 0);
+  assert.match(config(s), /^ {2}sheet_frame: none$/m);
+  assert.deepEqual(run(s, ['sheet_skin="case-file"', 'sheet_frame="thorns"']).data, { written: ['sheet_skin', 'sheet_frame'] });
+  assert.match(config(s), /^ {2}sheet_skin: case-file$/m);
+  assert.match(config(s), /^ {2}sheet_frame: thorns$/m);
+  assert.ok(!/sheet_frame: none/.test(config(s)));
+});
+
+// Driven from the registry, so a skin or frame added there is settable with no edit here,
+// and read back through the build's own reader, so what is written is what the build takes.
+test('every skin and every frame in the registry, and none, is accepted and reads back', () => {
+  const { SKINS, FRAME_IDS, siteLook } = require('../lib/skins');
+  const { parseNote } = require('../lib/frontmatter');
+  const look = (s) => siteLook(parseNote(config(s)).data.publish);
+  const skins = Object.keys(SKINS);
+  const frames = [...FRAME_IDS, 'none'];
+  assert.ok(skins.length > 1 && frames.length > 1);
+  const s = scratch('  mode: player\n');
+  for (const id of skins) {
+    assert.equal(run(s, [`sheet_skin=${JSON.stringify(id)}`]).rc, 0, id);
+    assert.deepEqual(look(s), { skin: id, frame: null, notes: [] }, id);
+  }
+  for (const id of frames) {
+    assert.equal(run(s, [`sheet_frame=${JSON.stringify(id)}`]).rc, 0, id);
+    assert.deepEqual(look(s), { skin: skins[skins.length - 1], frame: id, notes: [] }, id);
+  }
+});
+
+test('refuses a skin or a frame that is not an exact id, and writes nothing', () => {
+  const s = scratch('  mode: player\n');
+  const before = config(s);
+  const refused = [
+    ['sheet_skin', '"vellum"'], ['sheet_frame', '"plain"'], ['sheet_skin', '"none"'], ['sheet_skin', '"laurel"'],
+    ['sheet_skin', '"Ledger"'], ['sheet_skin', '" ledger"'], ['sheet_frame', '"Ring"'], ['sheet_frame', '""'],
+    ['sheet_skin', '"constructor"'], ['sheet_skin', 'null'], ['sheet_frame', '["ring"]'], ['sheet_frame', '0'],
+  ];
+  for (const [key, json] of refused) {
+    const { rc, err } = run(s, [`${key}=${json}`]);
+    assert.equal(rc, 1, `${key}=${json}`);
+    assert.deepEqual(err, [`Error: ${json} is not a value ${key} takes`], `${key}=${json}`);
+    assert.equal(config(s), before, `${key}=${json}`);
+  }
+  // One bad value refuses the whole call: the good one is not written either.
+  assert.equal(run(s, ['sheet_skin="ledger"', 'sheet_frame="vellum"']).rc, 1);
+  assert.equal(config(s), before);
 });
 
 test('a vault file the editor refuses exits 1 with one line and is left as it was', () => {
@@ -131,4 +190,11 @@ test('a multi-line string is written on one line and parses back equal', () => {
   const pub = parseNote(out.text).data.publish;
   assert.equal(pub.footer, footer);
   assert.equal(pub.nested.note, 'a\nb');
+});
+
+test('reports the two sheet-look lines as written, and null when they are not there', () => {
+  const s = scratch('  mode: player\n  sheet_skin: ledger\n');
+  assert.deepEqual([run(s, []).data.sheetSkin, run(s, []).data.sheetFrame], ['ledger', null]);
+  assert.equal(run(s, ['sheet_frame="thorns"']).rc, 0);
+  assert.deepEqual([run(s, []).data.sheetSkin, run(s, []).data.sheetFrame], ['ledger', 'thorns']);
 });

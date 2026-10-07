@@ -267,10 +267,22 @@ async function prefetchForConfig(configPath, opts = {}) {
   const config = loadVaultConfig(resolved);
   const vaultPath = path.resolve(path.dirname(resolved), config.vaultPath);
   // The build resolves the same config next and reports its warnings; say nothing twice.
-  const { publishConfig } = resolveConfig(config, vaultPath, () => {});
+  const { config: siteConfig, publishConfig } = resolveConfig(config, vaultPath, () => {});
   const fonts = publishConfig.theme.fonts || {};
-  if (fonts.source !== 'self-host') return;
-  await ensureFontCache(vaultPath, selfHostFamilies(fonts, presetFamiliesFor(publishConfig.theme)), opts);
+  if (fonts.source === 'self-host') {
+    await ensureFontCache(vaultPath, selfHostFamilies(fonts, presetFamiliesFor(publishConfig.theme)), opts);
+  }
+  await prefetchSkinFonts(siteConfig, vaultPath, publishConfig, opts);
+}
+
+// A sheet skin's typefaces are always served from the site, whatever theme.fonts.source says.
+// The build reports a miss once, so this pass stays quiet about it.
+async function prefetchSkinFonts(config, vaultPath, publishConfig, opts) {
+  const { scanConfigFor } = require('./config');
+  const { fontFamiliesFor, skinsInVault } = require('./skins');
+  const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath }), publishConfig);
+  const families = fontFamiliesFor(skinsInVault(scanConfig, publishConfig.sheetLook));
+  if (families.length) await ensureFontCache(vaultPath, families, Object.assign({}, opts, { warn: () => {} }));
 }
 
 async function buildWithFonts(options = {}, opts = {}) {

@@ -241,4 +241,4 @@ const TOGGLE_BUTTON = '<button class="nav-color-mode-btn" type="button" onclick=
 const MOBILE_TOGGLE = '<button class="mobile-color-mode-btn" type="button" onclick="window.gmToggleColorMode&&gmToggleColorMode()">'
   + '<span class="to-light">&#9728; Light mode</span><span class="to-dark">&#9790; Dark mode</span></button>';
 
-module.exports = { scopeColorScheme, normalizeDefaultMode, headScript, storageKey, TOGGLE_BUTTON, MOBILE_TOGGLE, MODES };
+module.exports = { scopeColorScheme, statements, normalizeDefaultMode, headScript, storageKey, TOGGLE_BUTTON, MOBILE_TOGGLE, MODES };
