@@ -26,12 +26,14 @@ light or dark choice. Describe both; the GM may be seeing either.
 | `parchment` | An old manuscript: double-ruled boxes, old book lettering, a coloured first letter. Light: cream vellum, dark ink, deep red. Dark: dark brown, pale ink, soft terracotta | Fantasy, myth and medieval games | `laurel` |
 | `case-file` | A folder of typed pages: typewriter lettering, folder tabs, a red stamp. Light: off-white pages on manila, navy accents. Dark: brown-grey pages on a darker folder, pale ink, pale blue accents | Investigation, horror, espionage and modern games | `corners` |
 | `console` | An instrument panel on a faint grid: boxes with cut corners and a lit top edge, squared lettering, bar-shaped marks. Dark: near-black with cyan, and the marks glow. Light: pale grey with teal, no glow | Science fiction, cyberpunk and near-future games | `hex` |
-| `ledger` | An account book: brass corners, a ruled margin, small-capital serif lettering. Light: cream pages on brown leather. Dark: dark brown pages on near-black leather, pale ink, brass-gold accents | Heists, intrigue, trade and period drama | `gilt` |
+| `ledger` | An account book: brass corners on every box, a ruled margin down the D&D, Pathfinder and FitD boxes, small-capital serif lettering. Light: cream pages on brown leather. Dark: dark brown pages on near-black leather, pale ink, brass-gold accents | Heists, intrigue, trade and period drama | `gilt` |
 
 A skin's typefaces are downloaded once, by the first build that uses
 it, and served from the site (readers never contact Google). With no
 network that build uses fallback lettering and warns once; rebuild
-with network to put it right.
+with network to put it right. The typefaces are kept in the vault's
+`_meta/font-cache/` folder (about 1.4 MB for all four skins), so a
+vault held in git or a sync service will show them as new files.
 
 ## Frames
 
@@ -81,8 +83,13 @@ to the default). The build ignores case and surrounding spaces.
 Tell the GM the one that applies when they choose:
 
 - A skin dresses PC pages only, on screen only. NPC pages, the roster,
-  the party board, the nav and footer keep the site's theme; print is
-  unchanged.
+  the party board, the nav and footer keep the site's theme. On paper
+  a sheet prints as it always has, and a framed portrait prints
+  without its ornament, as the plain portrait.
+- A dialog opened from the site's own controls (History) keeps the
+  site's theme, so it can open light over a dark skin.
+- A rule in the GM's own `overrides.css` that restyles a sheet box may
+  lose to a skin on a dressed page.
 - Console cuts the corners off each box; anything hanging over a
   corner is clipped.
 - CoC's corner and flourish ornaments are hidden under Console and

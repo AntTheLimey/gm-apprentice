@@ -23,7 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   FitD. It is dress only, with no layout changes. A framed portrait is
   cropped square. A skin's typefaces are fetched once at build time and
   served from the site. A site that sets nothing builds as before.
-  `vault-setting` sets the two campaign keys; guidance is in
+  On paper a framed portrait prints without its ornament, as the plain
+  portrait does. `vault-setting` sets the two campaign keys and reports
+  their current values; guidance is in
   `skills/publish-site/references/sheet-skins.md`.
 - Publish tool 1.15.0.
 
@@ -44,6 +46,15 @@ site, skinned or not.
   more tabs to scroll to.
 - A wide table in a PC tab no longer makes the page scroll sideways on a
   phone.
+- On the D&D sheet the placeholder in a number field is thinned from the
+  text colour instead of the browser's own grey, so it can be read on
+  every palette, at every width.
+- On a phone the CoC weapons table is set in smaller type, and a wide
+  table inside a CoC accordion scrolls within its box instead of running
+  past the panel.
+- On a phone a long name on the party board wraps at spaces and hyphens
+  and breaks inside a word only when that one word is wider than its
+  column.
 
 ---
 
