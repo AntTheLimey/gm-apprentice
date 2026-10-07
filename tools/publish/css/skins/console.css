@@ -26,6 +26,9 @@ main.content[data-skin="console"] .dnd5e-mark:not(.is-spent) { box-shadow: 0 0 7
 main.content[data-skin="console"] .coc-sheet-root :is(.corner, .fleuron) { display: none; }
 /* The clipped tab bar and tiles would cut a ring drawn outside a control that sits against their edge. */
 main.content[data-skin="console"] :is(.pc-tab, #gl-reset):focus-visible { outline-offset: -3px; }
+@media (max-width: 600px) {
+  main.content[data-skin="console"] .tab-bar { background-image: var(--sk-card-img), var(--sk-hint); background-attachment: scroll, scroll, local, local, scroll, scroll; }
+}
 @media (max-width: 480px), (pointer: coarse) {
   main.content[data-skin="console"] .dnd5e-live .dnd5e-mark { height: 24px; }
 }
@@ -34,6 +37,7 @@ main.content[data-skin="console"] :is(.pc-tab, #gl-reset):focus-visible { outlin
     --bg: #dfe5e8; --bg-card: #f2f5f6; --sk-well: #e3e9ec; --text: #0f2230; --text-muted: #4c6370;
     --accent: #006d85; --accent-dim: #006d851a; --border: #a3b3bc;
     --danger: #b3261e; --warning: #7d5300; --success: #0b6e44;
+    --sk-c1: #0a724f; --sk-c2: #895a00; --sk-c3: #a24a10; --sk-c6: #006c84;
     --sk-ground-img: linear-gradient(rgba(0,60,80,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,60,80,.07) 1px, transparent 1px);
     --sk-pip-on: var(--accent);
   }

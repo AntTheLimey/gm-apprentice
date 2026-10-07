@@ -46,12 +46,14 @@ function modes(id) {
 }
 
 // The two constants the pairs depend on come from the layer, so the test and the layer cannot drift.
+// They are read through functions so a changed layer fails a named test instead of crashing the file.
 const layer = read('_layer.css');
 const layerLightAt = layer.indexOf(LIGHT);
-const CMIX = { dark: +layer.slice(0, layerLightAt).match(/--sk-cmix:\s*(\d+)%/)[1] / 100, light: +layer.slice(layerLightAt).match(/--sk-cmix:\s*(\d+)%/)[1] / 100 };
+const cmixOf = (css) => { const m = css.match(/--sk-cmix:\s*(\d+)%/); return m ? +m[1] / 100 : NaN; };
+const CMIX = { dark: cmixOf(layer.slice(0, Math.max(layerLightAt, 0))), light: cmixOf(layer.slice(Math.max(layerLightAt, 0))) };
 const tintPcts = [...layer.matchAll(/color-mix\(in srgb, var\(--sk-c([1-8])\) (\d+)%, var\(--bg-card\)\)/g)];
 const inkExprs = [...layer.matchAll(/color-mix\(in srgb, var\(--sk-c([1-8])\) var\(--sk-cmix\), var\(--text\)\)/g)];
-const TINT = +tintPcts[0][2] / 100;
+const TINT = tintPcts.length ? +tintPcts[0][2] / 100 : NaN;
 
 describe('skins: contrast model matches the layer', () => {
   it('the category ink is each pigment mixed into the text colour, by the layer\'s --sk-cmix', () => {
@@ -62,6 +64,18 @@ describe('skins: contrast model matches the layer', () => {
     assert.strictEqual(tintPcts.length, 8, 'eight tint mixes, each "in srgb, pigment N%, tile"');
     assert.ok(tintPcts.every((m) => m[2] === tintPcts[0][2]), 'one percentage for all eight');
     assert.strictEqual(TINT, 0.13);
+  });
+  it('each skin file has exactly one light block, and it trails the file', () => {
+    for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
+      const css = read(id + '.css');
+      assert.strictEqual(css.split(LIGHT).length - 1, 1, id + ': one light block');
+      let depth = 0, end = -1;
+      for (let i = css.indexOf(LIGHT); i < css.length && end < 0; i++) {
+        if (css[i] === '{') depth++;
+        else if (css[i] === '}' && --depth === 0) end = i;
+      }
+      assert.ok(end > 0 && css.slice(end + 1).trim() === '', id + ': nothing follows the light block');
+    }
   });
   it('an eight-digit hex is never read as a six-digit colour', () => {
     assert.deepStrictEqual(tokens('--accent-dim: #e58a6d24;'), {});
@@ -97,7 +111,9 @@ describe('skins: contrast', () => {
       for (let n = 1; n <= 8; n++) {
         const ink = mix(t['--sk-c' + n], t['--text'], cmix);
         const tint = mix(t['--sk-c' + n], tile, TINT);
-        pairs.push([`category ${n} ink on tile`, ink, tile, 4.5], [`text on category ${n} tint`, t['--text'], tint, 4.5]);
+        pairs.push([`category ${n} ink on tile`, ink, tile, 4.5], [`category ${n} ink on its own tint`, ink, tint, 4.5], [`text on category ${n} tint`, t['--text'], tint, 4.5]);
+        // the Points Summary block (cat-points) tints its even rows with category 7; its unspent row is coloured with category 1's ink
+        if (n === 1) pairs.push(['attribute ink (unspent row) on the points tint', ink, mix(t['--sk-c7'], tile, TINT), 4.5]);
       }
       for (const [name, fg, bg, min] of pairs) {
         it(`${id} ${mode}: ${name} is at least ${min}:1`, () => {

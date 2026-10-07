@@ -31,6 +31,14 @@ main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e
   --bg: var(--sk-well); color: var(--text); background-color: var(--bg-card); background-image: var(--sk-card-img, none);
   border: var(--sk-edge, 1px solid var(--border)); border-radius: var(--sk-r, 8px); box-shadow: var(--sk-inner, none);
 }
+/* The tab bar's "more tabs this way" hint on a phone (style.css paints it with a background shorthand this layer's tile rule replaces): two covers that move with the tabs and hide the two edge shadows once an end is reached. A skin whose bar sits on the ground sets --sk-hint-fill; one with a card image of its own re-orders the layers (see its file). */
+main.content[data-skin]:where(:not([data-skin=plain])) {
+  --sk-hint: linear-gradient(to right, var(--sk-hint-fill, var(--bg-card)) 1rem, transparent 2.5rem), linear-gradient(to left, var(--sk-hint-fill, var(--bg-card)) 1rem, transparent 2.5rem),
+    linear-gradient(to right, color-mix(in srgb, var(--text) 40%, transparent), transparent .9rem), linear-gradient(to left, color-mix(in srgb, var(--text) 40%, transparent), transparent .9rem);
+}
+@media (max-width: 600px) {
+  main.content[data-skin]:where(:not([data-skin=plain])) .tab-bar { background-image: var(--sk-hint), var(--sk-card-img, none); background-attachment: local, local, scroll, scroll, scroll, scroll; background-size: auto; background-position: 0 0; background-repeat: repeat; }
+}
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-v, .dnd5e-ab, .dnd5e-btn, .dnd5e-chip, .dnd5e-tag, .gl-step, .gl-vital-input, .gl-badge, .dnd5e-field) { border-radius: var(--sk-r-ctl, 6px); }
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-mark, .coc-sheet-root .pips .pip) { border-radius: var(--sk-r-pip, 50%); transform: var(--sk-pip-turn, none); }
 main.content[data-skin]:where(:not([data-skin=plain])) .dnd5e-mark:not(.is-spent) { background: var(--sk-pip-on, var(--accent)); }
@@ -44,8 +52,9 @@ main.content[data-skin]:where(:not([data-skin=plain])) .fitd-sheet .fitd-box { b
 main.content[data-skin]:where(:not([data-skin=plain])) .pf2e-sheet .dnd-skill.is-proficient .skill-mark, main.content[data-skin]:where(:not([data-skin=plain])) .fitd-sheet :is(.fitd-dot, .fitd-box).filled { background: var(--sk-pip-on, var(--accent)); }
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.pf2e-sheet :is(h3, h4, .dnd-header), .fitd-sheet h3, .fitd-attribute h4) { font-family: var(--font-heading); }
 main.content[data-skin]:where(:not([data-skin=plain])) .dnd5e-header { color: var(--sk-g-text, var(--text)); }
-main.content[data-skin]:where(:not([data-skin=plain])) :is(.breadcrumbs, .pull-quote, .tab-panel > .text-muted) { color: var(--sk-g-muted, var(--text-muted)); }
-main.content[data-skin]:where(:not([data-skin=plain])) .breadcrumbs a { color: var(--sk-g-accent, var(--accent)); }
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.breadcrumbs, .pull-quote, .tab-panel > .text-muted, .sheet-withheld) { color: var(--sk-g-muted, var(--text-muted)); }
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.breadcrumbs a, .pc-identity .label) { color: var(--sk-g-accent, var(--accent)); }
+main.content[data-skin]:where(:not([data-skin=plain])) .tab-panel > h3 { color: var(--sk-g-text, var(--text)); }
 main.content[data-skin]:where(:not([data-skin=plain])) .hero-cinematic h1 { color: var(--text); }
 main.content[data-skin]:where(:not([data-skin=plain])) .sk-frame { --frame: var(--accent); }
 /* GURPS category colours: eight pigments per skin, lightened for dark, tinted for the row stripes */

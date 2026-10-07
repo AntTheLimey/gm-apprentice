@@ -22,6 +22,9 @@ main.content[data-skin="ledger"] .blk h2 { font-size: 13px; text-transform: none
 main.content[data-skin="ledger"] .pc-tab { font-size: 1rem; }
 main.content[data-skin="ledger"] .dnd5e-mark { border-width: 1px; }
 main.content[data-skin="ledger"] .dnd5e-mark.is-spent { border-style: dashed; }
+@media (max-width: 600px) {
+  main.content[data-skin="ledger"] .tab-bar { background-image: var(--sk-card-img), var(--sk-hint); background-attachment: scroll, scroll, local, local, scroll, scroll; }
+}
 @media (prefers-color-scheme: light) {
   main.content[data-skin="ledger"] {
     --bg: #45302a; --bg-card: #f1e8d3; --sk-well: #e5d9bc; --text: #2a1f17; --text-muted: #675641;
@@ -30,5 +33,6 @@ main.content[data-skin="ledger"] .dnd5e-mark.is-spent { border-style: dashed; }
     --sk-g-text: #f1e4c8; --sk-g-muted: #cbb893; --sk-g-accent: #dfbf78;
     --sk-brass: #b08a3e;
     --sk-pip-on: radial-gradient(circle at 35% 30%, #9d7515, #8a6a22 55%, #6d4f17);
+    --sk-c1: #3d6530;
   }
 }
