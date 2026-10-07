@@ -23,6 +23,11 @@ main.content[data-skin="console"] .dnd5e-live .dnd5e-mark { width: 30px; height:
 main.content[data-skin="console"] .dnd5e-mark { width: 22px; height: 12px; }
 main.content[data-skin="console"] .dnd5e-mark:not(.is-spent) { box-shadow: 0 0 7px rgba(90,209,230,.55); }
 main.content[data-skin="console"] .coc-sheet-root :is(.corner, .fleuron) { display: none; }
+/* The clipped tab bar and tiles would cut a ring drawn outside a control that sits against their edge. */
+main.content[data-skin="console"] :is(.pc-tab, #gl-reset):focus-visible { outline-offset: -3px; }
+@media (max-width: 480px) {
+  main.content[data-skin="console"] .dnd5e-live .dnd5e-mark { height: 24px; }
+}
 @media (prefers-color-scheme: light) {
   main.content[data-skin="console"] {
     --bg: #dfe5e8; --bg-card: #f2f5f6; --sk-well: #e3e9ec; --text: #0f2230; --text-muted: #4c6370;
