@@ -79,4 +79,31 @@ function skinsCss(ids, dir = CSS_DIR) {
   }).join('\n');
 }
 
-module.exports = { SKINS, FRAME_IDS, siteLook, resolveLook, isDressed, skinsCss };
+// The typefaces the skins in use name, once each, in registry order.
+function fontFamiliesFor(ids) {
+  const out = [];
+  for (const id of Object.keys(SKINS)) {
+    if (ids.includes(id)) for (const f of SKINS[id].fonts) if (!out.includes(f)) out.push(f);
+  }
+  return out;
+}
+
+// Which skins a vault uses, found before the build so its typefaces can be fetched: the
+// campaign's own and each PC's own. It reads the pages through the same scan the build
+// uses (scanAllNotes does not parse frontmatter), so a PC the build never sees is not
+// counted. It is a superset of what the build dresses: it ignores the manifest and draft
+// filters, because fetching one face too many is harmless and missing one is not.
+// `scanConfig` is what scanConfigFor returns; `site` is siteLook's answer (the resolved
+// config carries it as publishConfig.sheetLook).
+function skinsInVault(scanConfig, site) {
+  const { scanVaultReport } = require('../scanner');
+  const ids = new Set(site.skin ? [site.skin] : []);
+  for (const page of scanVaultReport(scanConfig).pages) {
+    const fm = page.frontmatter || {};
+    if (fm.type === 'pc') ids.add(resolveLook(fm, site).skin);
+  }
+  ids.delete('plain');
+  return [...ids];
+}
+
+module.exports = { SKINS, FRAME_IDS, siteLook, resolveLook, isDressed, skinsCss, fontFamiliesFor, skinsInVault };

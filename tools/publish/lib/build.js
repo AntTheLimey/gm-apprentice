@@ -14,7 +14,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
-const { isDressed, skinsCss } = require('./skins');
+const { isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -242,13 +242,17 @@ function build(options = {}) {
     console.warn(`  WARNING: ${fontsLib.GOOGLE_WARNING(names.join(', '))}`);
   }
 
-  function copySelfHostedFonts() {
-    for (const f of selfHostedFonts().files) {
+  function copyFontFiles(files) {
+    for (const f of files) {
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
       fs.copyFileSync(f.from, dest);
       console.log(`  wrote fonts/${f.rel}`);
     }
+  }
+
+  function copySelfHostedFonts() {
+    copyFontFiles(selfHostedFonts().files);
   }
 
   function writeThemeCSS() {
@@ -1050,8 +1054,18 @@ function build(options = {}) {
   if (anyDressed) {
     const dest = path.join(outputDir, 'css/skins.css');
     ensureDir(dest);
-    fs.writeFileSync(dest, scopeColorScheme(skinsCss([...dressedSkins])));
+    // The skins' typefaces come from the vault's font cache and are served from the site,
+    // whatever theme.fonts.source says. The @font-face rules sit outside every @media
+    // block; a miss warns once and the skins keep their fallback stacks.
+    let warned = false;
+    const faces = fontsLib.selfHostedFontFaces(config.vaultPath, fontFamiliesFor([...dressedSkins]), () => {
+      if (warned) return;
+      warned = true;
+      console.warn("  WARNING: the typefaces for the sheet skins are not in the vault's font cache and could not be downloaded; the skins use fallback type. Rebuild with network access.");
+    });
+    fs.writeFileSync(dest, faces.css + scopeColorScheme(skinsCss([...dressedSkins])));
     console.log('  wrote css/skins.css');
+    copyFontFiles(faces.files);
   }
 
   if (deferredRosters.length) {
