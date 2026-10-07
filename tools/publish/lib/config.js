@@ -461,6 +461,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     },
     section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
     switches: resolveSwitches(publish, jsonConfigFallback),
+    sheetLook: require('./skins').siteLook(publish),
     setting_year: settingYear,
   };
 

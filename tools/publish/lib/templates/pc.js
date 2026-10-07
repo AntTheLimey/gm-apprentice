@@ -9,6 +9,8 @@ const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher } = require('./pc-registry');
 const { sheetSourceOf } = require('../sheet-source');
+const { resolveLook, isDressed } = require('../skins');
+const { framedPortrait } = require('../skins/portrait');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -64,12 +66,16 @@ function cocSystemLabel(publishConfig) {
 // so the parchment-scoped .cr-* rules apply.
 function buildCocBody(opts) {
   const { page, fm, publishConfig, displayTitle, sheetHtml, recordHtml, statusBarHtml,
-    portraitUrl, sealUrl, crWidget, equipmentContent, storyContent, journeyContent, leftoverSections } = opts;
+    portraitUrl, sealUrl, crWidget, equipmentContent, storyContent, journeyContent, leftoverSections, look } = opts;
 
   // Portrait: the sheet carries an empty <img class="portrait" data-portrait> slot.
   // Inject the resolved src, or drop the framed box entirely when absent.
   let sheet = sheetHtml || '';
-  if (portraitUrl) {
+  const slot = /<img class="portrait" data-portrait[^>]*>/;
+  if (look && look.frame !== 'none') {
+    const framed = framedPortrait({ frame: look.frame, imgUrl: portraitUrl || '', alt: displayTitle, initials: getInitials(displayTitle) });
+    sheet = sheet.replace(slot, () => framed);
+  } else if (portraitUrl) {
     sheet = sheet.replace(/<img class="portrait" data-portrait[^>]*>/,
       `<img class="portrait" src="${portraitUrl}" alt="${escapeHtml(displayTitle)}">`);
   } else {
@@ -270,6 +276,12 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // no sheet content of any kind reaches the page, whatever else the caller passed.
   const sheetsOff = (context || {}).sheetsOff === true;
   const showStatusBar = live.stats === true && !sheetsOff;
+  const look = resolveLook(fm, publishConfig.sheetLook);
+  if (context && context.onLook) context.onLook(look, page);
+  const dressed = isDressed(look) ? {
+    mainAttrs: ` data-skin="${look.skin}"`,
+    extraCss: [cssPath(page.outputPath).replace('style.css', 'skins.css')],
+  } : {};
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
@@ -278,11 +290,30 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const hasPortrait = fm.portrait && imageMap && imageMap[String(fm.portrait).split('/').pop()];
   const metaSpans = renderMetaSpans(fm);
 
-  let heroBanner;
+  let imgUrl = '';
   if (hasPortrait) {
     const imgTag = portraitImg(fm, page.outputPath, imageMap || {});
     const imgMatch = (imgTag || '').match(/src="([^"]+)"/);
-    const imgUrl = imgMatch ? imgMatch[1] : '';
+    imgUrl = imgMatch ? imgMatch[1] : '';
+  }
+  const framed = look.frame === 'none' ? '' : framedPortrait({
+    frame: look.frame, imgUrl: hasPortrait ? imgUrl : '', alt: page.displayTitle, initials: getInitials(page.displayTitle),
+  });
+
+  let heroBanner;
+  if (framed) {
+    heroBanner = `<div class="hero-cinematic hero-cinematic-framed">
+  ${framed}
+  <div class="hero-cinematic-overlay">
+    <h1>${escapeHtml(page.displayTitle)}</h1>
+    <div class="meta">
+      <span><span class="label">Player</span> ${escapeHtml(fm.player_name || '')}</span>
+      ${metaSpans}
+      <span><span class="label">Status</span> ${escapeHtml(fm.status || 'active')}</span>
+    </div>
+  </div>
+</div>`;
+  } else if (hasPortrait) {
     heroBanner = `<div class="hero-cinematic">
   <img class="hero-cinematic-img" src="${imgUrl}" alt="${escapeHtml(page.displayTitle)}">
   <div class="hero-cinematic-overlay">
@@ -467,7 +498,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       sheetHtml: systemHtml,
       recordHtml: systemRecordHtml,
       statusBarHtml: statusBar,
-      portraitUrl, sealUrl, crWidget,
+      portraitUrl, sealUrl, crWidget, look,
       equipmentContent, storyContent, journeyContent,
       leftoverSections: sheetSections,
     }) + cocIsland;
@@ -481,6 +512,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
       footer: config.footer,
       genrePreset: publishConfig._genrePreset,
       overridesCss: publishConfig._overridesCss,
+      ...dressed,
       breadcrumbsHtml,
       scripts: [
         ...clientScripts(page.outputPath),
@@ -522,6 +554,7 @@ ${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,
+    ...dressed,
     breadcrumbsHtml,
     scripts: [
       ...clientScripts(page.outputPath),
