@@ -59,8 +59,11 @@ describe('skinsCss', () => {
 
   it('throws naming the file when a skin file is missing', () => {
     fs.rmSync(path.join(dir, 'ledger.css'));
-    assert.throws(() => skinsCss(['ledger'], dir), /ledger\.css/);
-    write('ledger', 'main.content[data-skin="ledger"] { --bg: #222; }\n');
+    try {
+      assert.throws(() => skinsCss(['ledger'], dir), /ledger\.css/);
+    } finally {
+      write('ledger', 'main.content[data-skin="ledger"] { --bg: #222; }\n');
+    }
   });
 
   it('throws naming the file when a light block is repeated or not last', () => {

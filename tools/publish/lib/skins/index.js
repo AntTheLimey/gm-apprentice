@@ -98,7 +98,7 @@ function fontFamiliesFor(ids) {
 function skinsInVault(scanConfig, site) {
   const { scanVaultReport } = require('../scanner');
   const ids = new Set(site.skin ? [site.skin] : []);
-  for (const page of scanVaultReport(scanConfig).pages) {
+  for (const page of scanVaultReport(scanConfig, { quiet: true }).pages) {
     const fm = page.frontmatter || {};
     if (fm.type === 'pc') ids.add(resolveLook(fm, site).skin);
   }

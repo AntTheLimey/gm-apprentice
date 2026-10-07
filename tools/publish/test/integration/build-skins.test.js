@@ -12,9 +12,8 @@ const { resolveConfig, loadVaultConfig, scanConfigFor } = require('../../lib/con
 const fixturesDir = path.join(__dirname, '..', 'fixtures');
 const tmpRoots = [];
 
-// Copy a fixture, let `edit(vaultDir)` change it, build it, and return the output dir and
-// whatever the build wrote through console.warn.
-function buildFixture(fixture, edit, fetchImpl) {
+// Copy a fixture, let `edit(vaultDir)` change it, and write the site config for it.
+function setUpFixture(fixture, edit) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-skins-'));
   tmpRoots.push(root);
   const vault = path.join(root, 'vault');
@@ -30,32 +29,31 @@ function buildFixture(fixture, edit, fetchImpl) {
     excludeSections: [],
     folderMap: { 'Characters/PCs': 'characters/pcs' },
   }, null, 2));
+  return { out: path.join(root, 'docs'), vault, configPath };
+}
+
+// Build a fixture and return the output dir and whatever the build wrote through console.warn.
+function buildFixture(fixture, edit) {
+  const site = setUpFixture(fixture, edit);
   const warnings = [];
   const realWarn = console.warn;
   console.warn = (...a) => { warnings.push(a.join(' ')); };
-  try { build({ configPath }); } finally { console.warn = realWarn; }
-  return { out: path.join(root, 'docs'), warnings, vault, configPath };
+  try { build({ configPath: site.configPath }); } finally { console.warn = realWarn; }
+  return Object.assign(site, { warnings });
 }
 
 // The same build with the typeface prefetch the CLI runs first, on a stubbed network.
 async function buildFixtureWithFonts(fixture, edit, fetchImpl) {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-skins-'));
-  tmpRoots.push(root);
-  const vault = path.join(root, 'vault');
-  fs.cpSync(path.join(fixturesDir, fixture), vault, { recursive: true });
-  if (edit) edit(vault);
-  const configPath = path.join(root, 'config.json');
-  fs.writeFileSync(configPath, JSON.stringify({
-    vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'Skin Test',
-    excludeDirs: ['_meta', '_Templates'], excludeSections: [], folderMap: { 'Characters/PCs': 'characters/pcs' },
-  }, null, 2));
+  const site = setUpFixture(fixture, edit);
   const warnings = [];
   const realWarn = console.warn;
   const realLog = console.log;
   console.warn = (...a) => { warnings.push(a.join(' ')); };
   console.log = () => {};
-  try { await buildWithFonts({ configPath }, { fetch: fetchImpl, log: () => {}, warn: (m) => warnings.push(m) }); } finally { console.warn = realWarn; console.log = realLog; }
-  return { out: path.join(root, 'docs'), warnings, vault, configPath };
+  try {
+    await buildWithFonts({ configPath: site.configPath }, { fetch: fetchImpl, log: () => {}, warn: (m) => warnings.push(m) });
+  } finally { console.warn = realWarn; console.log = realLog; }
+  return Object.assign(site, { warnings });
 }
 
 const WOFF2 = Buffer.concat([Buffer.from('wOF2'), Buffer.from('fake-font-bytes')]);
@@ -80,7 +78,8 @@ function stripSheetLines(vault) {
   for (const f of fs.readdirSync(pcs)) files.push(path.join(pcs, f));
   for (const f of files) {
     const s = fs.readFileSync(f, 'utf8');
-    fs.writeFileSync(f, s.split(/\r?\n/).filter((l) => !/^\s*sheet_(skin|frame):/.test(l)).join('\n'));
+    const eol = s.includes('\r\n') ? '\r\n' : '\n';
+    fs.writeFileSync(f, s.split(/\r?\n/).filter((l) => !/^\s*sheet_(skin|frame):/.test(l)).join(eol));
   }
 }
 
@@ -238,6 +237,17 @@ describe('build integration: sheet skins and frames', () => {
       const { publishConfig } = resolveConfig(config, vault, () => {});
       const found = skinsInVault(scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig), publishConfig.sheetLook);
       assert.deepStrictEqual([...found].sort(), pcSkinsOf(out));
+    }
+  });
+
+  it('prints a page-slug collision once, with and without skins, through the prefetch', async () => {
+    const collide = (v) => {
+      fs.writeFileSync(path.join(v, 'Characters/PCs/Foo Bar.md'), '---\ntype: pc\n---\n\n# Foo Bar\n');
+      fs.writeFileSync(path.join(v, 'Characters/PCs/foo-bar.md'), '---\ntype: pc\n---\n\n# foo-bar\n');
+    };
+    for (const edit of [collide, (v) => { stripSheetLines(v); collide(v); }]) {
+      const { warnings } = await buildFixtureWithFonts('with-skins', edit, stubFetch([]));
+      assert.strictEqual(warnings.filter((w) => /page slug collision/.test(w)).length, 1);
     }
   });
 });
