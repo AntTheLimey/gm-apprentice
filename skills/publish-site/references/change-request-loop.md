@@ -183,7 +183,7 @@ the cell being changed, on a PC that is not live), read first from the PC's
    - **A look for their own sheet — apply, whatever the system.** A player's
      request for a different skin or frame on their own sheet ("give me the
      thorns frame") is set as `sheet_skin` / `sheet_frame` in that PC's
-     frontmatter (ids in `configuration.md` § Sheet skins and frames) and
+     frontmatter (ids in `sheet-skins.md`) and
      collected into the applied batch, which rebuilds the site; it needs no GM
      ruling unless the GM has said looks are theirs to choose.
    - **Affordable & unambiguous spend — apply.** Edit the `.md`, decrement running

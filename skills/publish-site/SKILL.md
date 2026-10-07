@@ -212,8 +212,9 @@ infra only; the at-table session is capability 7.
   publishes lives under `publish:` in `_meta/vault-config.md`;
   `vault.config.json` holds only the six deployment keys. § Switches
   covers `character_sheets`, `live_stats` and `inbox` (on/off, and
-  what a PC page shows with sheets off). § Sheet skins and frames
-  covers the look of PC pages, for the campaign or one character.
+  what a PC page shows with sheets off).
+- `references/sheet-skins.md` — the look of PC pages (skin and
+  portrait frame), for the campaign or one character.
 - `references/schema-reference.md` — which fields each entity type
   renders.
 - `references/cloudflare-pages.md` — Cloudflare token, credentials
