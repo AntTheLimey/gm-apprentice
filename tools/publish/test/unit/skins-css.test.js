@@ -20,6 +20,31 @@ function selectorsOf(css) {
   }
   return out.filter(Boolean);
 }
+// Selector weight as [ids, classes/attributes/pseudo-classes, elements]. :where() weighs nothing,
+// :not() and :is() weigh their heaviest argument.
+function specificity(sel) {
+  const w = [0, 0, 0];
+  const add = (x) => { w[0] += x[0]; w[1] += x[1]; w[2] += x[2]; };
+  const heaviest = (args) => args.map(specificity).sort((a, b) => a[0] - b[0] || a[1] - b[1] || a[2] - b[2]).pop() || [0, 0, 0];
+  let rest = sel;
+  for (;;) {
+    const m = rest.match(/:(where|not|is)\(/);
+    if (!m) break;
+    let depth = 1; let i = m.index + m[0].length; let cur = ''; const args = [];
+    for (; i < rest.length && depth > 0; i++) {
+      const ch = rest[i];
+      if (ch === '(') depth++; else if (ch === ')') { depth--; if (depth === 0) break; }
+      if (ch === ',' && depth === 1) { args.push(cur); cur = ''; } else cur += ch;
+    }
+    args.push(cur);
+    if (m[1] !== 'where') add(heaviest(args));
+    rest = rest.slice(0, m.index) + ' ' + rest.slice(i + 1);
+  }
+  w[0] += (rest.match(/#[\w-]+/g) || []).length;
+  w[1] += (rest.match(/\.[\w-]+|\[[^\]]*\]|:(?!:)[\w-]+/g) || []).length;
+  w[2] += (rest.match(/(^|[\s>+~])[a-z][\w-]*/gi) || []).length;
+  return w;
+}
 const SET = ['--bg', '--bg-card', '--sk-well', '--text', '--text-muted', '--accent', '--accent-dim', '--border', '--danger', '--warning', '--success',
   '--font-heading', '--font-body', '--font-mono', '--sk-c1', '--sk-c2', '--sk-c3', '--sk-c4', '--sk-c5', '--sk-c6', '--sk-c7', '--sk-c8'];
 const COLOURS = ['--bg', '--bg-card', '--sk-well', '--text', '--text-muted', '--accent', '--accent-dim', '--border', '--danger', '--warning', '--success'];
@@ -42,7 +67,21 @@ describe('skins: css', () => {
     assert.strictEqual((layer.match(/@media \(prefers-color-scheme: light\)/g) || []).length, 1);
     assert.match(layer, /@media \(prefers-color-scheme: light\) \{[\s\S]*\}\s*$/);
     for (const sel of selectorsOf(layer).filter((x) => /[.]fitd-|[.]skill-|[.]dnd-ability|[.]dnd-header|[.]pf2e-sheet/.test(x))) {
-      assert.match(sel, /^main\.content\[data-skin\]:not\(\[data-skin=plain\]\)/, sel.slice(0, 80));
+      assert.match(sel, /^main\.content\[data-skin\]:where\(:not\(\[data-skin=plain\]\)\)/, sel.slice(0, 80));
+    }
+  });
+  it("the layer's prefix weighs the same as a skin's, so a skin's later rule wins a tie", () => {
+    const layer = 'main.content[data-skin]:where(:not([data-skin=plain]))';
+    assert.deepStrictEqual(specificity(layer), specificity('main.content[data-skin="ledger"]'));
+    assert.deepStrictEqual(specificity(layer), [0, 2, 1]);
+    assert.deepStrictEqual(specificity('main.content[data-skin]:not([data-skin=plain])'), [0, 3, 1]);
+    for (const sel of selectorsOf(read('_layer.css')).filter((x) => x.startsWith('main.content[data-skin]:where('))) {
+      assert.deepStrictEqual(specificity(sel).slice(0, 1), [0], sel);
+    }
+  });
+  it('no skin selector uses :not() on the skin attribute, which would out-weigh the layer', () => {
+    for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
+      for (const sel of selectorsOf(read(id + '.css'))) assert.doesNotMatch(sel, /:not\([^)]*data-skin/, sel);
     }
   });
   for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
