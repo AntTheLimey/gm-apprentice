@@ -26,7 +26,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'] });
+  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -190,4 +190,11 @@ test('a multi-line string is written on one line and parses back equal', () => {
   const pub = parseNote(out.text).data.publish;
   assert.equal(pub.footer, footer);
   assert.equal(pub.nested.note, 'a\nb');
+});
+
+test('reports the two sheet-look lines as written, and null when they are not there', () => {
+  const s = scratch('  mode: player\n  sheet_skin: ledger\n');
+  assert.deepEqual([run(s, []).data.sheetSkin, run(s, []).data.sheetFrame], ['ledger', null]);
+  assert.equal(run(s, ['sheet_frame="thorns"']).rc, 0);
+  assert.deepEqual([run(s, []).data.sheetSkin, run(s, []).data.sheetFrame], ['ledger', 'thorns']);
 });

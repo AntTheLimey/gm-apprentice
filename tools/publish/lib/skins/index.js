@@ -15,6 +15,9 @@ const SKINS = {
 };
 const FRAME_IDS = ['ring', 'laurel', 'thorns', 'gilt', 'steel', 'corners', 'hex', 'cracked'];
 
+// An unknown value as a warning shows it: a very long one is cut to 60 characters.
+const clipValue = (v) => (typeof v === 'string' && v.length > 60 ? v.slice(0, 60) + '…' : v);
+
 const unset = (v) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
 const idOf = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : null);
 
@@ -23,7 +26,9 @@ function pick(raw, key, known, notes) {
   if (unset(raw)) return null;
   const id = idOf(raw);
   if (id && known(id)) return id;
-  notes.push({ key, value: raw, problem: 'is not a known ' + (key === 'sheet_skin' ? 'skin' : 'frame') });
+  const isSkin = key === 'sheet_skin';
+  const valid = isSkin ? Object.keys(SKINS) : ['none', ...FRAME_IDS];
+  notes.push({ key, value: raw, problem: `is not a known ${isSkin ? 'skin' : 'frame'} (use ${valid.join(', ')})` });
   return null;
 }
 const knownSkin = (id) => Object.prototype.hasOwnProperty.call(SKINS, id);
@@ -65,18 +70,23 @@ function splitLight(css, name) {
   return { base: css.slice(0, offset), light: sts[i].body };
 }
 
-// The layer, then each skin in use, in registry order. Plain has no file. Every file goes
-// under `@media screen`, its light block under the screen light query, so the build's
-// scopeColorScheme can give the reader's light/dark choice to it and print is left alone.
+// The layer, then each skin in use, in registry order, then the portrait's print rules. Plain
+// has no file. Every skin file goes under `@media screen`, its light block under the screen
+// light query, so the build's scopeColorScheme can give the reader's light/dark choice to it.
+// The print rules (_print.css) go under `@media print` instead: the framed portrait's markup is
+// on the page whatever the medium, and that is all they lay out. scopeColorScheme leaves a
+// print block with no light query alone.
 function skinsCss(ids, dir = CSS_DIR) {
   const used = Object.keys(SKINS).filter((id) => id !== 'plain' && ids.includes(id));
-  return ['_layer', ...used].map((id) => {
+  const read = (name) => fs.readFileSync(path.join(dir, name), 'utf8');
+  const screen = ['_layer', ...used].map((id) => {
     const name = id + '.css';
-    const { base, light } = splitLight(fs.readFileSync(path.join(dir, name), 'utf8'), name);
+    const { base, light } = splitLight(read(name), name);
     let out = `@media screen {\n${base.trim()}\n}\n`;
     if (light !== null) out += `@media screen and (prefers-color-scheme: light) {\n${light.trim()}\n}\n`;
     return out;
-  }).join('\n');
+  });
+  return [...screen, `@media print {\n${read('_print.css').trim()}\n}\n`].join('\n');
 }
 
 // The typefaces the skins in use name, once each, in registry order.
@@ -106,4 +116,4 @@ function skinsInVault(scanConfig, site) {
   return [...ids];
 }
 
-module.exports = { SKINS, FRAME_IDS, siteLook, resolveLook, isDressed, skinsCss, fontFamiliesFor, skinsInVault };
+module.exports = { clipValue, SKINS, FRAME_IDS, siteLook, resolveLook, isDressed, skinsCss, fontFamiliesFor, skinsInVault };

@@ -12,6 +12,7 @@ describe('skinsCss', () => {
   before(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-skins-css-'));
     write('_layer', '.sk-frame { fill: none; }\n@media (max-width: 600px) { .sk-frame { width: 1px; } }\n');
+    write('_print', '.sk-frame { display: none; }\n@media (min-width: 721px) { .sk-pic { width: 100%; } }\n');
     write('parchment', '/* parchment */\nmain.content[data-skin="parchment"] { --bg: #111; }\n@media (prefers-color-scheme: light) {\n  main.content[data-skin="parchment"] { --bg: #eee; }\n}\n');
     write('console', 'main.content[data-skin="console"] { --bg: #000; }\n');
     write('ledger', 'main.content[data-skin="ledger"] { --bg: #222; }\n');
@@ -19,19 +20,29 @@ describe('skinsCss', () => {
   });
   after(() => fs.rmSync(dir, { recursive: true, force: true }));
 
-  it('wraps every file in @media screen, so nothing sits at the top level', () => {
+  it('wraps every skin file in @media screen and puts the portrait print rules last, in @media print', () => {
     const css = skinsCss(['parchment', 'console'], dir);
-    for (const st of statements(css)) {
-      if (!st.text.trim()) continue;
-      assert.strictEqual(st.kind, 'at', st.text);
-      assert.match(st.prelude, /^@media screen\b/, st.prelude);
+    const blocks = statements(css).filter((st) => st.text.trim());
+    for (const st of blocks) assert.strictEqual(st.kind, 'at', st.text);
+    const last = blocks[blocks.length - 1];
+    assert.match(last.prelude, /^@media print$/);
+    assert.match(last.body, /\.sk-frame \{ display: none; \}/);
+    for (const st of blocks.slice(0, -1)) assert.match(st.prelude, /^@media screen\b/, st.prelude);
+  });
+
+  it('after scopeColorScheme the only print block is the portrait\'s, and there is no bare light query', () => {
+    for (const ids of [['parchment'], []]) {
+      const out = scopeColorScheme(skinsCss(ids, dir));
+      assert.strictEqual((out.match(/@media print/g) || []).length, 1);
+      assert.match(out, /@media print \{\s*\.sk-frame \{ display: none; \}/);
+      assert.doesNotMatch(out, /@media \(prefers-color-scheme: light\) \{/);
     }
   });
 
-  it('after scopeColorScheme there is no print block and no bare light query', () => {
-    const out = scopeColorScheme(skinsCss(['parchment'], dir));
-    assert.doesNotMatch(out, /@media print/);
-    assert.doesNotMatch(out, /@media \(prefers-color-scheme: light\) \{/);
+  it('leaves the print block exactly as written when the colour-mode transform runs', () => {
+    const css = skinsCss(['parchment'], dir);
+    const printBlock = css.slice(css.indexOf('@media print'));
+    assert.ok(scopeColorScheme(css).endsWith(printBlock));
   });
 
   it('gives a light rule to the OS query and to a reader who chose light', () => {
@@ -73,9 +84,10 @@ describe('skinsCss', () => {
     assert.throws(() => skinsCss(['case-file'], dir), /case-file\.css.*last/);
   });
 
-  it('reads the real layer and the three stub skins', () => {
+  it('reads the real layer, the real print rules and the three stub skins', () => {
     const css = skinsCss(['parchment', 'console', 'ledger']);
     assert.match(css, /\.sk-frame/);
+    assert.match(css, /@media print \{[\s\S]*\.sk-frame \{[^}]*display: none/);
     for (const id of ['parchment', 'console', 'ledger']) assert.match(css, new RegExp(`data-skin="${id}"`));
   });
 });

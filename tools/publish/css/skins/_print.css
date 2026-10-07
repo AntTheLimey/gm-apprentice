@@ -1,0 +1,16 @@
+/* Sheet skins on paper. The skins are screen only; the framed portrait's markup is on the page
+   whatever the medium, so these rules lay it out as the unframed portrait is printed today: the
+   frame drawing is left off, and the picture (or the initials) takes the old portrait's size,
+   shape and border. No colour of its own: it reads the site's custom properties. */
+.sk-frame { display: none; }
+.sk-pic { position: static; width: 100%; height: 100%; clip-path: none !important; display: flex; align-items: center; justify-content: center; }
+.sk-pic img { width: 100%; height: 100%; object-fit: cover; }
+/* D&D, GURPS, Pathfinder, FitD: the hero's picture (10rem wide, as tall as the picture is) or the 5rem circle of initials */
+.hero-cinematic-framed .sk-portrait { width: 5rem; height: 5rem; margin: 0 0 1rem; font-size: 2rem; flex-shrink: 0; }
+.hero-cinematic-framed .sk-portrait:has(img) { display: block; width: 10rem; height: auto; margin: .75rem 0; border-radius: .25rem; }
+.hero-cinematic-framed .sk-portrait:has(img) .sk-pic, .hero-cinematic-framed .sk-portrait:has(img) img { height: auto; }
+/* CoC: a picture sits in its own column with the old border; with no picture the old page shows nothing there, so initials are left off */
+.coc-sheet-root .sk-portrait:not(:has(img)) { display: none; }
+.coc-sheet-root .sk-portrait { width: 100%; height: auto; aspect-ratio: 3 / 4; margin: .75rem 0; border-radius: .25rem; border: 6px solid var(--box); box-shadow: 0 2px 10px color-mix(in srgb, var(--ink) 40%, transparent), 0 0 0 1px var(--rule); filter: sepia(.12); }
+.coc-sheet-root .sk-portrait img { object-position: top center; }
+@media (min-width: 721px) { .coc-sheet-root .portrait-row:has(.sk-portrait img) { grid-template-columns: 1fr 152px; } }

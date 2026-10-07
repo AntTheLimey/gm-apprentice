@@ -4,7 +4,7 @@
 // the one place outside `init` and `migrate-config` that writes them. migrate.py asks
 // this rather than read the theme or decide which fonts come from Google itself.
 //
-//   vault-setting --json                      -> { defaultModeSet, fontSource, googleFonts }
+//   vault-setting --json                      -> { defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame }
 //   vault-setting --set <key>=<json> --json   -> { written: [keys] }
 const fs = require('fs');
 const path = require('path');
@@ -38,6 +38,8 @@ function rawPublish(vaultPath) {
   return publish && typeof publish === 'object' && !Array.isArray(publish) ? publish : {};
 }
 
+const asString = (v) => (typeof v === 'string' && v.trim() ? v : null);
+
 function read(options) {
   const { resolveConfig, loadVaultConfig } = require('./config');
   const fontsLib = require('./fonts');
@@ -58,6 +60,9 @@ function read(options) {
     defaultModeSet: asked.default_mode !== undefined && asked.default_mode !== null,
     fontSource: askedFonts.source || null,
     googleFonts: names.filter((v, i, a) => a.indexOf(v) === i),
+    // The two sheet-look lines as written (null when the line is not there).
+    sheetSkin: asString(rawPublish(vaultPath).sheet_skin),
+    sheetFrame: asString(rawPublish(vaultPath).sheet_frame),
   };
 }
 

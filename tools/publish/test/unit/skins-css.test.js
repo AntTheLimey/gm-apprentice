@@ -55,6 +55,11 @@ describe('skins: css', () => {
     assert.doesNotMatch(layer, /#[0-9a-fA-F]{3,8}\b|rgba?\(/);
     assert.doesNotMatch(layer, /data-skin="/);
   });
+  it('the print rules hold no colour literal, name no skin and have no light block', () => {
+    const print = read('_print.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.doesNotMatch(print, /#[0-9a-fA-F]{3,8}\b|rgba?\(|hsla?\(/);
+    assert.doesNotMatch(print, /data-skin|@media print|prefers-color-scheme/);
+  });
   it('the layer names every Pathfinder and FitD sheet class it dresses', () => {
     const layer = read('_layer.css');
     for (const c of ['pf2e-sheet', 'fitd-sheet', 'dnd-ability-card', 'stat-item', 'dnd-proficiency', 'skill-rank', 'skill-mark', 'dnd-header',

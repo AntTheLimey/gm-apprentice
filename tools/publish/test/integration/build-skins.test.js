@@ -95,6 +95,21 @@ function addPublishKey(vault, line) {
   fs.writeFileSync(f, fs.readFileSync(f, 'utf8').replace(/(publish:\r?\n)/, (m) => m + '  ' + line + '\n'));
 }
 
+// The D&D fixture dressed by the setting: the campaign's skin and each PC's own look (one
+// padded and cased, one unknown, one set to plain and none), then whatever `edit` changes.
+function skinned(edit) {
+  const pc = (name) => 'Characters/PCs/' + name + '.md';
+  return (vault) => {
+    addPublishKey(vault, 'sheet_skin: parchment');
+    addToNote(vault, pc('Dov_Ashgrove'), 'sheet_skin: "  Ledger "');
+    addToNote(vault, pc('Ilse_Varn'), 'sheet_skin: console');
+    addToNote(vault, pc('Oriel_Thackeray'), 'sheet_skin: vellum');
+    addToNote(vault, pc('Perrin_Lowe'), 'sheet_skin: plain\nsheet_frame: none');
+    addToNote(vault, pc('Tamsin_Reed'), 'sheet_frame: thorns');
+    if (edit) edit(vault);
+  };
+}
+
 const pageIn = (out, slug) => fs.readFileSync(path.join(out, 'characters/pcs', slug + '.html'), 'utf8');
 const lookIn = (out, slug) => {
   const p = pageIn(out, slug);
@@ -118,13 +133,13 @@ const pcSkinsOf = (out) => {
 describe('build integration: sheet skins and frames', () => {
   let main, plain, siteNoSkin, sheetsOff;
   before(() => {
-    main = buildFixture('with-skins');
-    plain = buildFixture('with-skins', stripSheetLines);
-    siteNoSkin = buildFixture('with-skins', (v) => {
+    main = buildFixture('with-dnd-pc', skinned());
+    plain = buildFixture('with-dnd-pc', skinned(stripSheetLines));
+    siteNoSkin = buildFixture('with-dnd-pc', skinned((v) => {
       stripSheetLines(v);
       addToNote(v, 'Characters/PCs/Tamsin_Reed.md', 'sheet_frame: thorns');
-    });
-    sheetsOff = buildFixture('with-skins', (v) => addPublishKey(v, 'character_sheets: false'));
+    }));
+    sheetsOff = buildFixture('with-dnd-pc', skinned((v) => addPublishKey(v, 'character_sheets: false')));
   });
   after(() => { for (const r of tmpRoots) fs.rmSync(r, { recursive: true, force: true }); });
 
@@ -146,6 +161,33 @@ describe('build integration: sheet skins and frames', () => {
     const css = fs.readFileSync(path.join(main.out, 'css/skins.css'), 'utf8');
     for (const id of ['parchment', 'console', 'ledger']) assert.match(css, new RegExp(`data-skin="${id}"`));
     assert.doesNotMatch(css, /data-skin="case-file"/);
+  });
+
+  it('writes skins.css through the colour-mode transform, so a reader who chose light gets the light skin', () => {
+    const css = fs.readFileSync(path.join(main.out, 'css/skins.css'), 'utf8');
+    assert.doesNotMatch(css, /@media \(prefers-color-scheme: light\)/);
+    assert.match(css, /@media screen and \(prefers-color-scheme: light\) \{\s*:where\(:root:not\(\[data-theme="dark"\]\)\) main\.content\[data-skin="parchment"\]/);
+    assert.match(css, /:where\(:root\[data-theme="light"\]\) main\.content\[data-skin="parchment"\]/);
+  });
+
+  it('writes the framed portrait\'s print rules, which hide the frame drawing', () => {
+    const css = fs.readFileSync(path.join(main.out, 'css/skins.css'), 'utf8');
+    const printAt = css.indexOf('@media print');
+    assert.ok(printAt > 0);
+    assert.strictEqual((css.match(/@media print/g) || []).length, 1);
+    assert.match(css.slice(printAt), /\.sk-frame \{ display: none; \}/);
+    // a frame-only site has the print rules too
+    const frameOnly = fs.readFileSync(path.join(siteNoSkin.out, 'css/skins.css'), 'utf8');
+    assert.match(frameOnly, /@media print \{[\s\S]*\.sk-frame \{ display: none; \}/);
+  });
+
+  it('dresses a Call of Cthulhu sheet: the skin attribute, the stylesheet link and the framed portrait in its cell', () => {
+    const { out } = buildFixture('with-coc-pc', (v) => addPublishKey(v, 'sheet_skin: ledger'));
+    const page = fs.readFileSync(path.join(out, 'characters/pcs/jane-ashford.html'), 'utf8');
+    assert.match(page, /<main class="content" data-skin="ledger"/);
+    assert.match(page, /<link rel="stylesheet" href="[^"]*css\/skins\.css">/);
+    assert.match(page, /class="portrait-row"[^]*?<div class="pc-portrait sk-portrait" data-frame="gilt">/);
+    assert.ok(fs.existsSync(path.join(out, 'css/skins.css')));
   });
 
   it('warns once about the unknown skin, naming the note and the value', () => {
@@ -172,8 +214,24 @@ describe('build integration: sheet skins and frames', () => {
     assert.doesNotMatch(pageIn(sheetsOff.out, 'brannoch-vale'), /dnd5e-vitals/);
   });
 
+  it('says "ignored" in both warnings and cuts a very long unknown value', () => {
+    const long = 'v'.repeat(500);
+    const bad = buildFixture('with-dnd-pc', (v) => {
+      addPublishKey(v, 'sheet_skin: ' + long);
+      addToNote(v, 'Characters/PCs/Tamsin_Reed.md', 'sheet_frame: wreath');
+    });
+    const campaign = bad.warnings.filter((w) => /publish\.sheet_skin/.test(w));
+    const pc = bad.warnings.filter((w) => /Tamsin_Reed/.test(w));
+    assert.strictEqual(campaign.length, 1);
+    assert.strictEqual(pc.length, 1);
+    assert.match(campaign[0], /; ignored$/);
+    assert.match(pc[0], /; ignored$/);
+    assert.match(pc[0], /\(use none, ring,/);
+    assert.ok(campaign[0].length < 260, campaign[0].length + ' characters');
+  });
+
   it('prints each campaign-level problem once, not once per PC', () => {
-    const bad = buildFixture('with-skins', (v) => { stripSheetLines(v); addPublishKey(v, 'sheet_skin: vellum'); });
+    const bad = buildFixture('with-dnd-pc', skinned((v) => { stripSheetLines(v); addPublishKey(v, 'sheet_skin: vellum'); }));
     assert.strictEqual(bad.warnings.filter((w) => /publish\.sheet_skin/.test(w)).length, 1);
   });
 
@@ -190,7 +248,7 @@ describe('build integration: sheet skins and frames', () => {
 
   it('serves skin typefaces from the site and never links to Google', async () => {
     const calls = [];
-    const { out, warnings } = await buildFixtureWithFonts('with-skins', null, stubFetch(calls));
+    const { out, warnings } = await buildFixtureWithFonts('with-dnd-pc', skinned(), stubFetch(calls));
     const css = fs.readFileSync(path.join(out, 'css/skins.css'), 'utf8');
     assert.match(css, /^@font-face \{/);
     assert.match(css, /@font-face \{\s*font-family: 'Alegreya'/);
@@ -206,17 +264,17 @@ describe('build integration: sheet skins and frames', () => {
   });
 
   it('keeps the skin faces on the site when the theme itself loads fonts from Google', async () => {
-    const { out } = await buildFixtureWithFonts('with-skins', (v) => addPublishKey(v, 'theme:\n    fonts:\n      heading: Cinzel'), stubFetch([]));
+    const { out } = await buildFixtureWithFonts('with-dnd-pc', skinned((v) => addPublishKey(v, 'theme:\n    fonts:\n      heading: Cinzel')), stubFetch([]));
     const skins = fs.readFileSync(path.join(out, 'css/skins.css'), 'utf8');
     assert.match(skins, /url\('\.\.\/fonts\/alegreya\//);
     // Google appears only where the GM's own theme asked for it, never in skins.css or a page
-    const touching = siteTouches(out).map((f) => path.relative(out, f));
+    const touching = siteTouches(out).map((f) => path.relative(out, f).split(path.sep).join('/'));
     assert.deepStrictEqual(touching, ['css/theme.css']);
   });
 
   it('warns once and falls back when the faces cannot be fetched', async () => {
     const offline = async () => { throw new Error('offline'); };
-    const { out, warnings } = await buildFixtureWithFonts('with-skins', null, offline);
+    const { out, warnings } = await buildFixtureWithFonts('with-dnd-pc', skinned(), offline);
     const css = fs.readFileSync(path.join(out, 'css/skins.css'), 'utf8');
     assert.doesNotMatch(css, /@font-face/);
     assert.match(css, /Georgia, serif/);
@@ -227,14 +285,14 @@ describe('build integration: sheet skins and frames', () => {
 
   it('fetches no skin typeface for a site with no skin', async () => {
     const calls = [];
-    const { out } = await buildFixtureWithFonts('with-skins', stripSheetLines, stubFetch(calls));
+    const { out } = await buildFixtureWithFonts('with-dnd-pc', skinned(stripSheetLines), stubFetch(calls));
     assert.deepStrictEqual(calls, []);
     assert.ok(!fs.existsSync(path.join(out, 'fonts')));
   });
 
   it('finds the same skins before the build as the build dresses', () => {
     for (const edit of [null, (v) => addPublishKey(v, 'character_sheets: false'), stripSheetLines]) {
-      const { out, vault, configPath } = buildFixture('with-skins', edit);
+      const { out, vault, configPath } = buildFixture('with-dnd-pc', skinned(edit));
       const config = loadVaultConfig(configPath);
       const { publishConfig } = resolveConfig(config, vault, () => {});
       const found = skinsInVault(scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig), publishConfig.sheetLook);
@@ -248,7 +306,7 @@ describe('build integration: sheet skins and frames', () => {
       fs.writeFileSync(path.join(v, 'Characters/PCs/foo-bar.md'), '---\ntype: pc\n---\n\n# foo-bar\n');
     };
     for (const edit of [collide, (v) => { stripSheetLines(v); collide(v); }]) {
-      const { warnings } = await buildFixtureWithFonts('with-skins', edit, stubFetch([]));
+      const { warnings } = await buildFixtureWithFonts('with-dnd-pc', skinned(edit), stubFetch([]));
       assert.strictEqual(warnings.filter((w) => /page slug collision/.test(w)).length, 1);
     }
   });

@@ -14,7 +14,7 @@ const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate
 const { isRoster } = require('./templates/nav');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
-const { isDressed, skinsCss, fontFamiliesFor } = require('./skins');
+const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
@@ -101,7 +101,7 @@ function build(options = {}) {
     console.warn(`  WARNING: ${label} ${note.problem}`);
   }
   for (const note of (publishConfig.sheetLook || {}).notes || []) {
-    console.warn(`  WARNING: publish.${note.key} ${JSON.stringify(note.value)} ${note.problem}; ignored`);
+    console.warn(`  WARNING: publish.${note.key} ${JSON.stringify(clipValue(note.value))} ${note.problem}; ignored`);
   }
   if (!kvWired) {
     if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
@@ -950,7 +950,7 @@ function build(options = {}) {
             identity,
             sheetsOff,
             onLook: (look, p) => {
-              for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(n.value)} ${n.problem}; using the campaign's`);
+              for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
               if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
             },
             storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,

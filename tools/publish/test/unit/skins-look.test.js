@@ -1,7 +1,7 @@
 // tools/publish/test/unit/skins-look.test.js
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { SKINS, FRAME_IDS, resolveLook, siteLook, isDressed } = require('../../lib/skins');
+const { SKINS, FRAME_IDS, resolveLook, siteLook, isDressed, clipValue } = require('../../lib/skins');
 
 describe('skins: resolveLook', () => {
   const none = { skin: null, frame: null, notes: [] };
@@ -72,5 +72,20 @@ describe('skins: isDressed', () => {
     assert.strictEqual(isDressed({ skin: 'plain', frame: 'none' }), false);
     assert.strictEqual(isDressed({ skin: 'plain', frame: 'ring' }), true);
     assert.strictEqual(isDressed({ skin: 'ledger', frame: 'none' }), true);
+  });
+});
+
+describe('skins: a warning for an unknown value', () => {
+  it('names the valid ids, and does not treat none as a skin', () => {
+    const skin = resolveLook({ sheet_skin: 'none' }, { skin: null, frame: null, notes: [] });
+    assert.strictEqual(skin.skin, 'plain');
+    assert.match(skin.notes[0].problem, /is not a known skin \(use plain, parchment, case-file, console, ledger\)/);
+    const frame = resolveLook({ sheet_frame: 'wreath' }, { skin: null, frame: null, notes: [] });
+    assert.match(frame.notes[0].problem, /is not a known frame \(use none, ring, laurel, thorns, gilt, steel, corners, hex, cracked\)/);
+  });
+  it('cuts a long value to 60 characters for the warning, and leaves short and non-text values alone', () => {
+    assert.strictEqual(clipValue('x'.repeat(5000)).length, 61);
+    assert.strictEqual(clipValue('vellum'), 'vellum');
+    assert.strictEqual(clipValue(12), 12);
   });
 });

@@ -253,7 +253,8 @@ withholds because its Wrap-Up publishes.
 gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <path>] [--vault <dir>]
 
 With no --set, reports what the vault file says: whether theme.default_mode is
-set, the font source, and the fonts the site would load from Google. With --set,
+set, the font source, the fonts the site would load from Google, and the
+sheet_skin and sheet_frame lines (null when a line is not there). With --set,
 writes one of: theme.default_mode ("dark", "light", "system"),
 theme.fonts.source ("self-host"), sheet_skin (a skin id) or sheet_frame (a frame
 id, or "none"). Used by migrate.py, and to set a campaign's sheet look.

@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const css = fs.readFileSync(path.join(__dirname, '../../../css/style.css'), 'utf8');
+const css = fs.readFileSync(path.join(__dirname, '../../../css/style.css'), 'utf8').replace(/\r\n/g, '\n');
 const lib = path.join(__dirname, '../../../lib/templates/dnd');
 const sources = [...fs.readdirSync(lib), ...fs.readdirSync(path.join(lib, 'blocks')).map(f => 'blocks/' + f)]
   .filter(f => f.endsWith('.js')).map(f => fs.readFileSync(path.join(lib, f), 'utf8')).join('\n');
