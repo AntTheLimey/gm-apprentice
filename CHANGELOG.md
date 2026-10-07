@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.36] — 2026-10-06
+
+### Added
+
+- Sheet skins and frames. A campaign picks a look for its character
+  sheets with `publish.sheet_skin` and `publish.sheet_frame` in
+  `_meta/vault-config.md`, and any character can have its own with
+  `sheet_skin` and `sheet_frame` in the PC note. There are four skins,
+  Parchment, Case file, Console and Ledger, plus Plain, which is today's
+  look and the default; and eight portrait frames (ring, laurel, thorns,
+  gilt, steel, corners, hex, cracked) and `none`. Each skin has a light
+  and a dark look and follows the reader's light/dark choice. It works
+  on the PC pages of all five systems: D&D, GURPS, CoC, Pathfinder and
+  FitD. It is dress only, with no layout changes. A framed portrait is
+  cropped square. A skin's typefaces are fetched once at build time and
+  served from the site. A site that sets nothing builds as before.
+  `vault-setting` sets the two campaign keys; guidance is in
+  `skills/publish-site/references/sheet-skins.md`.
+- Publish tool 1.15.0.
+
+### Fixed
+
+These change `css/style.css` and the party page, so they apply to every
+site, skinned or not.
+
+- On a phone the party board's Status sits under each character's name
+  instead of off screen, on the D&D, GURPS and CoC boards. Column
+  headings sit over their numbers. The GURPS board hides Speed and the
+  CoC board hides Reputation at phone width. Screen readers announce the
+  board as a table at every width.
+- The CoC investigator sheet fits a phone; it was cut off on the right.
+- The GURPS sheet's encumbrance line is spaced and its Reset button is
+  styled.
+- On a phone the PC tab bar shows a shadow at the edge when there are
+  more tabs to scroll to.
+- A wide table in a PC tab no longer makes the page scroll sideways on a
+  phone.
+
+---
+
 ## [1.10.35] — 2026-10-05
 
 ### Added

@@ -157,7 +157,7 @@ Every non-trivial change follows this sequence:
 
 **Test requirements:** at minimum, run `python3 scripts/validate_schema.py`
 and verify markdown lint passes. For script or tooling changes, verify the
-scripts work locally (e.g., `./scripts/build-skill-zips.sh` produces 8
+scripts work locally (e.g., `./scripts/build-skill-zips.sh` produces 9
 valid zips). For publish tool changes, run the publish tool test suite.
 
 ## Skill edits
