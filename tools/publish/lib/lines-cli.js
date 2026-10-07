@@ -20,8 +20,8 @@
 //                            withholds it, or null
 //   {"op":"stub","text":…,"include":[…],"excludeSections":[…]}
 //       -> {"kept":[…]}      per line of `text`: whether a `publish: stub` page with
-//                            these `publish_include_sections` keeps it. A line inside a
-//                            hidden block opened outside the kept sections is not kept;
+//                            these `publish_include_sections` keeps it. A line in a
+//                            gm-only block, a spoiler block or a comment is not kept;
 //                            nor, when `excludeSections` is given, one it withholds
 //
 //   {"op":"site","vault":…}

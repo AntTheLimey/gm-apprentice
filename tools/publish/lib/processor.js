@@ -418,40 +418,53 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
 // section added later is suppressed until the GM names it, rather than
 // appearing the moment someone writes it.
 //
-// This runs BEFORE the strips, and it drops whatever is outside a kept section: the
-// `## GM Notes` over a kept title, the `<!-- gm-only -->` that opened above one. The
-// strips then meet a body with nothing left to tell them it was hidden (#320). So a
-// line is kept only when the whole note would have published it: not under a withheld
-// section (`withhold.excludeSections`, and `withhold.frontmatter` for a document
-// page's own), and not inside a gm-only block, a spoiler block or a comment whose
-// opening line is not itself kept. A block opened inside a kept section is left to the
-// strips, markers and all.
+// This runs BEFORE the build's strips, and cutting a note down drops the very things
+// that hide its text: the `## GM Notes` over a kept title, the `<!-- gm-only -->` that
+// opened above one (#320). So the cut is made on what the WHOLE note publishes: the
+// gm-only, spoiler and comment strips run first, then the exclude list
+// (`withhold.excludeSections`, and `withhold.frontmatter` for a document page's own
+// sections), in the order playerSafeMarkdown runs them, and only then are the named
+// sections kept. What comes back holds no marker and nothing those four withhold.
+// `withhold.warn` hears the strips' warnings (an unclosed marker), which no later
+// pass can give: the markers are gone by then.
 function keepOnlySections(markdown, includeSections = [], withhold = {}) {
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
-  const flags = keptSectionFlags(markdown, includeSections, withhold);
-  return lines.filter((_, i) => flags[i]).join('\n');
+  return stubView(markdown, includeSections, withhold).kept.join('\n');
 }
 
-// keepOnlySections by line: whether each line of `markdown` is kept.
+// keepOnlySections by line: whether each line of `markdown` is kept, whole or in part.
 function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  return stubView(markdown, includeSections, withhold).flags;
+}
+
+function stubView(markdown, includeSections, withhold) {
+  const source = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  const flags = source.map(() => false);
   const wanted = (Array.isArray(includeSections) ? includeSections : [])
     .filter(s => typeof s === 'string')
     .map(s => s.toLowerCase());
-  if (wanted.length === 0) return lines.map(() => false);
+  if (wanted.length === 0) return { kept: [], flags };
+
+  // What the whole note publishes, each line with the line of the note it came from.
+  let lines = source;
+  let from = source.map((_, i) => i);
+  for (const strip of [(t) => markedBlocks(t, 'gm-only'), (t) => markedBlocks(t, 'spoiler'), htmlComments]) {
+    const result = strip(lines.join('\n'));
+    const before = from;
+    lines = result.lines;
+    from = result.from.map(i => before[i]);
+    if (typeof withhold.warn === 'function') result.warnings.forEach(w => withhold.warn(w));
+  }
+  const { withheldBy } = walkExcludeList(lines, withhold.excludeSections || [], withhold.frontmatter || null, { warn: withhold.warn });
+  from = from.filter((_, i) => withheldBy[i] === null);
+  lines = lines.filter((_, i) => withheldBy[i] === null);
+
   let headingAt;
   try {
     ({ headingAt } = findHeadings(lines.join('\n')));
   } catch (err) {
-    return lines.map(() => false);
+    return { kept: [], flags };
   }
-  const text = lines.join('\n');
-  const { withheldBy } = walkExcludeList(lines, withhold.excludeSections || [], withhold.frontmatter || null, {});
-  // Per line, the line that opened the hidden block it starts inside, or -1.
-  const openers = [markedBlocks(text, 'gm-only'), markedBlocks(text, 'spoiler'), htmlComments(text)]
-    .map(found => found.openedAt);
-  const flags = [];
-  const hidden = (i) => withheldBy[i] !== null || openers.some(at => at[i] !== -1 && !flags[at[i]]);
+  const kept = [];
   let keeping = false;
   let keepLevel = 0;
 
@@ -472,8 +485,7 @@ function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
     // (`## Overview ##` is not "Overview" here); the parser's part is to say the
     // line is a real heading, at that level, and not code.
     const written = hashes ? hashes[2].trim().toLowerCase() : null;
-    const isHidden = hidden(i);
-    if (!isHidden && h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written)) {
+    if (h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written)) {
       keeping = true;
       keepLevel = h.level;
     } else if (keeping) {
@@ -483,9 +495,12 @@ function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
         if (seen && wanted.includes(seen.title.toLowerCase())) keepLevel = Math.max(keepLevel, seen.level);
       }
     }
-    flags.push(keeping && !isHidden);
+    if (keeping) {
+      kept.push(lines[i]);
+      flags[from[i]] = true;
+    }
   }
-  return flags;
+  return { kept, flags };
 }
 
 function stripDataview(markdown) {
@@ -509,8 +524,7 @@ function stripMarkedBlocks(markdown, markerName) {
   return warnings.length > 0 ? { text, warnings } : text;
 }
 
-// The strip, and with it `openedAt`: for each line, the line of the outermost block
-// still open where that line starts, or -1.
+// The strip as lines, and `from`: the line of `markdown` each of them came from.
 function markedBlocks(markdown, markerName) {
   // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
   const markerRe = new RegExp(`<!--\\s*(/?)${markerName}\\s*-->`, 'g');
@@ -521,7 +535,8 @@ function markedBlocks(markdown, markerName) {
   const result = [];
   const warnings = [];
   const stack = [];
-  const openedAt = [];
+  const from = [];
+  const keep = (text, i) => { result.push(text); from.push(i); };
   let depth = 0;
   let orphanClosers = 0;
   // The open fence's delimiter, or null outside a fence. Tracking the actual
@@ -540,7 +555,6 @@ function markedBlocks(markdown, markerName) {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    openedAt.push(stack.length > 0 ? stack[0].line : -1);
 
     // up to 3 leading spaces; 4+ would be an indented code block, not a fence
     const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
@@ -562,7 +576,7 @@ function markedBlocks(markdown, markerName) {
     }
 
     if (fenceDelim !== null || isFenceLine) {
-      if (depth === 0) result.push(line);
+      if (depth === 0) keep(line, i);
       continue;
     }
 
@@ -571,7 +585,7 @@ function markedBlocks(markdown, markerName) {
     // per line. Text outside every block is kept; a line that held only markers
     // and blank leftovers collapses (one blank stands in for a whole block).
     if (!markerRe.test(line)) {
-      if (depth === 0) result.push(line);
+      if (depth === 0) keep(line, i);
       continue;
     }
     markerRe.lastIndex = 0;
@@ -602,8 +616,8 @@ function markedBlocks(markdown, markerName) {
     }
     if (depth === 0) kept += line.slice(last);
     markerRe.lastIndex = 0;
-    if (kept.trim() !== '') result.push(kept);
-    else if (opened) result.push('');
+    if (kept.trim() !== '') keep(kept, i);
+    else if (opened) keep('', i);
   }
 
   if (depth > 0) {
@@ -617,7 +631,7 @@ function markedBlocks(markdown, markerName) {
       + `without a matching <!-- ${markerName} --> — check the block boundaries`);
   }
 
-  return { text: result.join('\n'), warnings, openedAt };
+  return { text: result.join('\n'), warnings, lines: result, from };
 }
 
 function stripGmOnly(markdown) {
@@ -678,14 +692,12 @@ function stripHtmlComments(markdown) {
   return warnings.length > 0 ? { text, warnings } : text;
 }
 
-// The strip, and with it `openedAt`: for each line, the line that opened the comment
-// still open where that line starts, or -1.
+// The strip as lines, and `from`: the line of `markdown` each of them came from.
 function htmlComments(markdown) {
   const lines = String(markdown || '').split('\n');
   const result = [];
   const warnings = [];
-  const openedAt = [];
-  let openLine = -1;
+  const from = [];
   // Track which marker opened the fence: a ``` line inside a ~~~ block is content, not a
   // close, and must not toggle the fence off and expose the rest of the block to stripping.
   let fenceMarker = null;
@@ -693,7 +705,6 @@ function htmlComments(markdown) {
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
-    openedAt.push(inComment ? openLine : -1);
     const fence = inComment ? null : /^\s*(```|~~~)/.exec(line);
     if (fence) {
       if (fenceMarker === null) fenceMarker = fence[1];
@@ -702,6 +713,7 @@ function htmlComments(markdown) {
     // Inside a fence, or on the line that opened or closed one: pass through verbatim.
     if (fenceMarker !== null || fence) {
       result.push(line);
+      from.push(n);
       continue;
     }
 
@@ -718,20 +730,20 @@ function htmlComments(markdown) {
         if (start === -1) { kept += line.slice(i); break; }
         kept += line.slice(i, start);
         inComment = true;
-        openLine = n;
         i = start + 4;
       }
     }
 
     if (kept.trim() === '' && line.trim() !== '') continue;
     result.push(kept);
+    from.push(n);
   }
 
   if (inComment) {
     warnings.push('unclosed <!-- comment --> — content stripped to end of file');
   }
 
-  return { text: result.join('\n'), warnings, openedAt };
+  return { text: result.join('\n'), warnings, lines: result, from };
 }
 
 // Strip a single leading H1 from the markdown body. Templates inject their own H1

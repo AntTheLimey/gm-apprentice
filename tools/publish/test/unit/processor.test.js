@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter, playerSafeMarkdown } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, keptSectionFlags, publishedFrontmatter, playerSafeMarkdown } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -703,9 +703,9 @@ describe('keepOnlySections (#167)', () => {
   });
 });
 
-// The stub reduction runs before the strips, and it drops whatever sits outside a kept
-// section: a withheld parent heading, the opener of a hidden block. A kept line must be
-// one the whole note would have published.
+// The stub reduction runs before the build's strips, and cutting first drops whatever
+// sits outside a kept section: a withheld parent heading, the opener of a hidden block.
+// So it withholds on the whole note, then cuts.
 describe('keepOnlySections never keeps what the whole note withholds (#320)', () => {
   const withhold = { excludeSections: ['GM Notes'] };
   const published = (text, include, fm) => playerSafeMarkdown(
@@ -742,12 +742,51 @@ describe('keepOnlySections never keeps what the whole note withholds (#320)', ()
       assert.ok(!published(text, ['Appearance']).includes('SECRET'));
     });
 
-    it(`a ${marker} block wholly inside a kept section is still the strip's to remove`, () => {
+    it(`a ${marker} block inside a kept section goes, markers and all`, () => {
       const text = `## Appearance\nseen\n<!-- ${marker} -->\nSECRET\n<!-- /${marker} -->\nalso seen\n`;
-      assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), text);
-      assert.strictEqual(published(text, ['Appearance']), '## Appearance\nseen\n\nalso seen\n');
+      assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), '## Appearance\nseen\n\nalso seen\n');
+    });
+
+    it(`a ${marker} block around a withheld subsection takes nothing after it`, () => {
+      const text = `## Appearance\nTall.\n\n<!-- ${marker} -->\n### GM Notes\nSECRET\n<!-- /${marker} -->\n\n### Scars\nA burn.`;
+      assert.strictEqual(published(text, ['Appearance']), playerSafeMarkdown(text, withhold).text);
+      assert.ok(published(text, ['Appearance']).includes('A burn.'));
+    });
+
+    it(`a ${marker} block opened in one kept section and closed in a dropped one leaves the next kept one`, () => {
+      const text = `## Appearance\nseen\n<!-- ${marker} -->\nSECRET\n## Prep\nno\n<!-- /${marker} -->\n## Scars\nA burn.`;
+      assert.strictEqual(keepOnlySections(text, ['Appearance', 'Scars'], withhold), '## Appearance\nseen\n\n## Scars\nA burn.');
     });
   }
+
+  // A heading inside a hidden block is not there to end a withheld section.
+  for (const [name, open, close] of [['comment', '<!--', '-->'], ['gm-only block', '<!-- gm-only -->', '<!-- /gm-only -->'], ['spoiler block', '<!-- spoiler -->', '<!-- /spoiler -->']]) {
+    it(`a heading in a ${name} does not end the withheld section around it`, () => {
+      const inKept = `# Brother Aldous\nA tall monk.\n\n## GM Notes\nKILLER\n${open}\n## Old draft\nscrapped\n${close}\nKNIFE`;
+      assert.strictEqual(published(inKept, ['Brother Aldous']), playerSafeMarkdown(inKept, withhold).text);
+      assert.ok(!published(inKept, ['Brother Aldous']).includes('KNIFE'));
+      const sameName = `## Appearance\nseen\n\n## GM Notes\n${open}\n## Old draft\n${close}\n### Appearance\nSECRET`;
+      assert.ok(!published(sameName, ['Appearance']).includes('SECRET'));
+      assert.ok(published(sameName, ['Appearance']).includes('seen'));
+    });
+  }
+
+  it('the strips run in the build\'s order: a gm-only marker inside a comment does not close it', () => {
+    const text = '## Prep\n<!-- draft\n<!-- gm-only -->\nx\n<!-- /gm-only -->\n## Appearance\nSECRET\n-->\n';
+    assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), '');
+  });
+
+  it('an unclosed marker is reported, since no later pass can see it', () => {
+    const heard = [];
+    keepOnlySections('## Appearance\nseen\n<!-- gm-only -->\nSECRET', ['Appearance'], { warn: (w) => heard.push(w) });
+    assert.strictEqual(heard.length, 1);
+    assert.match(heard[0], /unclosed <!-- gm-only -->/);
+  });
+
+  it('flags by line follow the note\'s own lines', () => {
+    const text = 'intro\n<!-- gm-only -->\nx\n<!-- /gm-only -->\n## Appearance\nseen <!-- aside -->\n## GM Notes\nno';
+    assert.deepStrictEqual(keptSectionFlags(text, ['Appearance'], withhold), [false, false, false, false, true, true, false, false]);
+  });
 
   it('a kept title inside a comment opened outside any kept section stays hidden', () => {
     const text = '<!--\n## Appearance\nSECRET\n\n## Other\n-->\n## Appearance\npublic\n';

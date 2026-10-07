@@ -214,7 +214,7 @@ vault_check uses it instead of keeping a copy of the build's filters.
       -> {"text":"…"}          the body the site renders
   {"op":"sections","text":"…","excludeSections":["GM Notes"]}
       -> {"withheldBy":[…]}    per line: the excluded section withholding it, or null
-  {"op":"stub","text":"…","include":["Overview"]}
+  {"op":"stub","text":"…","include":["Overview"],"excludeSections":["GM Notes"]}
       -> {"kept":[…]}          per line: whether a publish: stub page keeps it
   {"op":"site","vault":"/path/to/vault"}
       -> {"publishes":…,"site":…,"siteDir":…}  the vault's publish: block, whether its site is on, and the site folder

@@ -528,9 +528,11 @@ function build(options = {}) {
       const include = Array.isArray(page.frontmatter.publish_include_sections)
         ? page.frontmatter.publish_include_sections
         : [];
-      // What the whole note withholds stays withheld: the reduction drops the heading
-      // or marker that hid it, so the strips below could not (#320).
-      const withhold = { excludeSections, frontmatter: page.frontmatter };
+      // The cut is made on what the whole note publishes: cut first, and the heading or
+      // marker that hid a line goes with it, so the strips below could not (#320). Their
+      // warnings come from here; nothing later sees a marker on a stub page.
+      const withhold = { excludeSections, frontmatter: page.frontmatter,
+        warn: (message) => console.warn(`  WARNING: ${page.outputPath}: ${message}`) };
       page.markdown = keepOnlySections(page.markdown || '', include, withhold);
       // A PC's story companion is a SEPARATE file paired in by the scanner and
       // rendered on its own page. Reducing only page.markdown left a stubbed PC

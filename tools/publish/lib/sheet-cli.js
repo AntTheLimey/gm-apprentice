@@ -52,13 +52,10 @@ function findPc(pcs, wanted) {
 // and is shared with build.js's PC path, so a strip step added to the build cannot
 // miss this view.
 //
-// The `publish: stub` reduction runs FIRST, over page.markdown, in the same order
-// build.js:319 applies it — before its own chain. Order is not cosmetic here: an
-// unclosed `<!-- gm-only -->` opener inside an included section makes stripGmOnly
-// cascade to the end of whatever it is given, so reducing first strips to the end
-// of the stub and reducing last strips through sections the build had already
-// dropped. Running them in the other order printed a section the site does not
-// ship, which is the one thing this view exists not to do.
+// The `publish: stub` reduction runs FIRST, over page.markdown, as the build applies
+// it, and with what the build gives it: keepOnlySections withholds on the whole note
+// before it cuts, so a block opened in one section and closed in another hides the
+// same lines here as on the site.
 //
 // stripLeadingH1 is deliberately NOT applied: the site drops the H1 because the
 // page template prints the name in a header, but this is a text view with no
@@ -70,7 +67,7 @@ function playerSafeBody(page, publishConfig, warnings) {
       ? page.frontmatter.publish_include_sections
       : [];
     markdown = keepOnlySections(markdown || '', include,
-      { excludeSections: publishConfig.exclude_sections, frontmatter: page.frontmatter });
+      { excludeSections: publishConfig.exclude_sections, frontmatter: page.frontmatter, warn: (w) => warnings.push(w) });
   }
   const result = playerSafeMarkdown(markdown, {
     excludeCallouts: publishConfig.exclude_callouts,

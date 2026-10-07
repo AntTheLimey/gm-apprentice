@@ -18,10 +18,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sections before anything was withheld, and the `## GM Notes` heading
   went with the cut. The same happened to a named heading inside a
   `<!-- gm-only -->` block, a `<!-- spoiler -->` block or a comment that
-  opened outside the named sections. A stub page now keeps a line only
-  when the whole note would have published it. The page, its story
-  companion, the search index, `sheet show --player-safe` and the
-  `lines` command all take the fix (#320).
+  opened outside the named sections. A stub page now withholds on the
+  whole note first, as any other page does, and then keeps its named
+  sections. The page, its story companion, the search index,
+  `sheet show --player-safe` and the `lines` command all take the fix
+  (#320).
+- On a stub page, a hidden block opened in one named section and closed
+  in a section that is not named no longer hides the named sections
+  after it.
 - Pressing Escape with the keyboard focus inside an open menu closes the
   menu and puts the focus back on the button that opened it, for the
   top menus and the phone menu. The focus was left on a hidden link
