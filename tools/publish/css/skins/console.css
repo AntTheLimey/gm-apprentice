@@ -1,7 +1,7 @@
 /* Console: an instrument panel, cut corners, lit edge. Dark is the base; light is the trailing block. */
 main.content[data-skin="console"] {
   --bg: #070b10; --bg-card: #0d151d; --sk-well: #09111a; --text: #cfe8f0; --text-muted: #7693a0;
-  --accent: #5ad1e6; --accent-dim: #5ad1e61f; --border: #1f3644;
+  --accent: #5ad1e6; --accent-dim: #5ad1e61d; --border: #1f3644;
   --danger: #ff6b6b; --warning: #f2b84b; --success: #5fe0a0;
   --font-body: "Chakra Petch", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace; --font-heading: "Chakra Petch", system-ui, sans-serif;
   --sk-ground-img: linear-gradient(rgba(90,209,230,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(90,209,230,.06) 1px, transparent 1px);
@@ -24,8 +24,9 @@ main.content[data-skin="console"] .dnd5e-live .dnd5e-mark { width: 30px; height:
 main.content[data-skin="console"] .dnd5e-mark { width: 22px; height: 12px; }
 main.content[data-skin="console"] .dnd5e-mark:not(.is-spent) { box-shadow: 0 0 7px rgba(90,209,230,.55); }
 main.content[data-skin="console"] .coc-sheet-root :is(.corner, .fleuron) { display: none; }
-/* The clipped tab bar and tiles would cut a ring drawn outside a control that sits against their edge. */
-main.content[data-skin="console"] :is(.pc-tab, #gl-reset):focus-visible { outline-offset: -3px; }
+/* The clipped tab bar and tiles would cut a ring drawn outside a control that sits against their edge, and the 10px corner cut reaches a ring's own corner unless it is drawn far enough inside: a tab is flush with the bar's corner, the strip's tiles and buttons sit a few pixels in. */
+main.content[data-skin="console"] :is(#gl-reset, .dnd5e-vitals :is(.dnd5e-v, .dnd5e-btn, .dnd5e-chip, .dnd5e-field)):focus-visible { outline-offset: -3px; }
+main.content[data-skin="console"] .pc-tab:focus-visible { outline-offset: -6px; }
 @media (max-width: 600px) {
   main.content[data-skin="console"] .tab-bar { background-image: var(--sk-card-img), var(--sk-hint); background-attachment: scroll, scroll, local, local, scroll, scroll; }
 }
@@ -35,9 +36,9 @@ main.content[data-skin="console"] :is(.pc-tab, #gl-reset):focus-visible { outlin
 @media (prefers-color-scheme: light) {
   main.content[data-skin="console"] {
     --bg: #dfe5e8; --bg-card: #f2f5f6; --sk-well: #e3e9ec; --text: #0f2230; --text-muted: #4c6370;
-    --accent: #00687f; --accent-dim: #00687f1a; --border: #a3b3bc;
+    --accent: #00687f; --accent-dim: #00687f12; --border: #a3b3bc;
     --danger: #b3261e; --warning: #7d5300; --success: #0b6e44;
-    --sk-c1: #0a724f; --sk-c2: #895b00;
+    --sk-c1: #0a7250; --sk-c2: #895b00;
     --sk-ground-img: linear-gradient(rgba(0,60,80,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,60,80,.07) 1px, transparent 1px);
     --sk-pip-on: var(--accent);
   }

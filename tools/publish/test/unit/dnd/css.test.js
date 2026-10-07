@@ -33,6 +33,32 @@ describe('D&D sheet styles', () => {
     const coloured = rules().filter(([, body]) => /(?:^|[;\s])color:\s*var\(--(?:text-muted|accent|warning)\)/.test(body)).map(([sel]) => sel);
     assert.deepEqual(coloured, []);
   });
+  it('a number field\'s placeholder is the text colour thinned towards the field, and meets 4.5:1 on the default palette and every preset', () => {
+    const rule = rules().find(([sel]) => sel.endsWith('.dnd5e-field::placeholder'));
+    assert.ok(rule, 'the placeholder has a rule: the browser\'s own grey is under 4.5:1');
+    const m = rule[1].match(/color:\s*color-mix\(in srgb, var\(--text\) (\d+)%, var\(--bg\)\)/);
+    assert.ok(m, rule[1]);
+    assert.match(rule[1], /opacity:\s*1/);
+    assert.match(block(), /\.dnd5e-field \{[^}]*background:\s*var\(--bg\)/, 'the field paints --bg, which the mix thins towards');
+    const share = +m[1] / 100;
+    const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16));
+    const lum = (c) => c.map((v) => { const x = v / 255; return x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4; }).reduce((a, x, i) => a + x * [0.2126, 0.7152, 0.0722][i], 0);
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const token = (s, n) => { const k = s.match(new RegExp(n + ':\\s*(#[0-9a-fA-F]{6})')); return k && hex(k[1]); };
+    const palettes = [['default', css.slice(0, css.indexOf('html {'))]];
+    const dir = path.join(__dirname, '../../../css/themes');
+    for (const f of fs.readdirSync(dir)) {
+      const s = fs.readFileSync(path.join(dir, f), 'utf8'); const at = s.indexOf('prefers-color-scheme: light');
+      palettes.push([f + ' dark', s.slice(0, at)], [f + ' light', s.slice(at)]);
+    }
+    assert.ok(palettes.length >= 11);
+    for (const [name, s] of palettes) {
+      const text = token(s, '--text'), bg = token(s, '--bg');
+      assert.ok(text && bg, name);
+      const ph = text.map((v, i) => v * share + bg[i] * (1 - share));
+      assert.ok(ratio(ph, bg) >= 4.5, `${name}: ${ratio(ph, bg).toFixed(2)}:1`);
+    }
+  });
   it('a track label has no fixed width to wrap inside', () => {
     const [, body] = rules().find(([sel]) => sel.endsWith('.dnd5e-track-name') && !sel.includes(','));
     assert.ok(!/(?:^|[;\s])width:/.test(body) && /min-width:/.test(body));

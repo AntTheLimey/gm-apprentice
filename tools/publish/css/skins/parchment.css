@@ -1,7 +1,7 @@
 /* Parchment: vellum, ink, rubric red. Dark is the base; light is the trailing block. */
 main.content[data-skin="parchment"] {
   --bg: #1d160f; --bg-card: #2a2117; --sk-well: #221a12; --text: #e8d9b8; --text-muted: #a8956f;
-  --accent: #e58a6d; --accent-dim: #e58a6d24; --border: #4d3c27;
+  --accent: #e58a6d; --accent-dim: #e58a6d1b; --border: #4d3c27;
   --danger: #f07a68; --warning: #e0b050; --success: #93bb76;
   --font-body: "Alegreya", Georgia, serif; --font-mono: "Alegreya", Georgia, serif; --font-heading: "IM Fell English SC", "Alegreya", Georgia, serif;
   --sk-ground-img: var(--sk-grain), radial-gradient(ellipse at 20% 0%, rgba(255,190,110,.1), transparent 60%);
@@ -20,9 +20,9 @@ main.content[data-skin="parchment"] .pc-tab { font-size: 1.05rem; font-weight: 4
 @media (prefers-color-scheme: light) {
   main.content[data-skin="parchment"] {
     --bg: #e6d7b5; --bg-card: #f4ead2; --sk-well: #eadcbb; --text: #2b2118; --text-muted: #65543f;
-    --accent: #8c1c13; --accent-dim: #8c1c131a; --border: #b79f72;
+    --accent: #8c1c13; --accent-dim: #8c1c1313; --border: #b79f72;
     --danger: #a01818; --warning: #7d5200; --success: #3f6b2a;
-    --sk-c1: #2d674c; --sk-c2: #835500; --sk-c5: #6b2f7a; --sk-c6: #1e667b; --sk-c8: #8c1c13;
+    --sk-c1: #2e684d; --sk-c2: #835500; --sk-c5: #6b2f7a; --sk-c6: #1e667c; --sk-c8: #8c1c13;
     --sk-ground-img: var(--sk-grain), radial-gradient(ellipse at 20% 0%, rgba(255,250,230,.5), transparent 60%), radial-gradient(ellipse at 100% 100%, rgba(120,80,30,.18), transparent 55%);
   }
 }

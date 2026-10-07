@@ -1,14 +1,14 @@
 /* Case file: manila, typing paper, carbon ink. Dark is the base; light is the trailing block. */
 main.content[data-skin="case-file"] {
-  --bg: #24201a; --bg-card: #322d24; --sk-well: #29241c; --text: #e6dfcf; --text-muted: #a49b87;
-  --accent: #9dbde6; --accent-dim: #9dbde621; --border: #554c3c;
+  --bg: #24201a; --bg-card: #322d24; --sk-well: #29241c; --text: #e6dfcf; --text-muted: #aaa18e;
+  --accent: #9dbde6; --accent-dim: #9dbde614; --border: #554c3c;
   --danger: #e58373; --warning: #dcae52; --success: #8fbf8c; --sk-g-muted: #a39a86;
   --font-body: "Courier Prime", "Courier New", monospace; --font-mono: "Courier Prime", "Courier New", monospace; --font-heading: "Special Elite", "Courier New", monospace;
   --sk-ground-img: var(--sk-grain); --sk-hint-fill: var(--bg);
   --sk-card-img: var(--sk-grain);
   --sk-r: 1px; --sk-r-ctl: 0; --sk-r-pip: 1px;
   --sk-edge: 0 solid transparent; --sk-inner: 1px 2px 0 rgba(0,0,0,.22);
-  --sk-c1: #356941; --sk-c2: #7a5a12; --sk-c3: #9b531f; --sk-c4: #33609d; --sk-c5: #685297; --sk-c6: #226977; --sk-c7: #605c53; --sk-c8: #c33521;
+  --sk-c1: #356941; --sk-c2: #7a5a12; --sk-c3: #9b531f; --sk-c4: #33609d; --sk-c5: #685297; --sk-c6: #216674; --sk-c7: #605c53; --sk-c8: #c33521;
 }
 main.content[data-skin="case-file"] :is(.hero-cinematic h1, .masthead h1) { font-weight: 400; letter-spacing: .02em; }
 main.content[data-skin="case-file"] .hero-cinematic { position: relative; }
@@ -25,7 +25,7 @@ main.content[data-skin="case-file"] .coc-sheet-root :is(.corner, .fleuron) { dis
   main.content[data-skin="case-file"] {
     --bg: #cdb98c; --bg-card: #f3eedf; --sk-well: #e7e0cc; --text: #1d1b18; --text-muted: #5a5548;
     --accent: #1f3a5f; --accent-dim: #1f3a5f1a; --border: #a89f88;
-    --danger: #a3261c; --warning: #7a5200; --success: #2f6534; --sk-g-muted: #453f33;
+    --danger: #a3261c; --warning: #7a5200; --success: #2f6534; --sk-g-muted: #453f33; --sk-g-danger: #8f2119;
     --sk-c1: #2f5d3a; --sk-c3: #8a4a1c; --sk-c4: #1f3a5f; --sk-c5: #4a3a6b; --sk-c6: #1d5a66; --sk-c7: #4a4740; --sk-c8: #8f2318;
     --sk-ground-img: var(--sk-grain), linear-gradient(180deg, rgba(255,255,255,.18), transparent 120px);
   }

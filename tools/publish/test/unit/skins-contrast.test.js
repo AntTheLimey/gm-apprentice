@@ -30,8 +30,8 @@ const deltaE = (a, b) => Math.hypot(...lab(a).map((v, i) => v - lab(b)[i]));
 // Floor for any two of a skin's eight category inks as rendered. The accepted mock-up has 224 pairs (28 x 8 skin-modes): 219 are at ΔE 10 or more,
 // its closest are 8.1 (parchment dark and ledger dark, 3 vs 8). 10 is well above what two patches need to be told apart and is what small coloured text wants.
 const MIN_INK_DELTA_E = 10;
-// Where each tinted row can hold text coloured with the accent (.nm: skills, melee/ranged, grimoire, social, reactions, points) or the muted ink (.rel, sup.fn): tints by category number.
-const ACCENT_TINTS = [1, 2, 4, 5, 6, 7], MUTED_TINTS = [1, 2, 4, 5, 6, 7, 8];
+// Where each tinted row can hold text coloured with the accent (.nm: skills, melee/ranged, grimoire, social, reactions, points) or the muted ink (.rel, sup.fn, and .cost, the point cost beside every trait, so category 3 too): tints by category number.
+const ACCENT_TINTS = [1, 2, 4, 5, 6, 7], MUTED_TINTS = [1, 2, 3, 4, 5, 6, 7, 8];
 // Six- or three-digit hex only. An eight-digit value (the translucent --accent-dim) must not match, or its
 // first six digits would be read as an opaque colour; the `;` anchor after the alternation guarantees that.
 const HEX_DECL = /(--[a-z0-9-]+)\s*:\s*(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3}))\s*;/g;
@@ -104,9 +104,11 @@ describe('skins: contrast', () => {
   for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
     for (const [mode, t] of Object.entries(modes(id))) {
       const ground = t['--bg'], tile = t['--bg-card'], well = t['--sk-well'];
-      const gText = t['--sk-g-text'] || t['--text'], gMuted = t['--sk-g-muted'] || t['--text-muted'], gAccent = t['--sk-g-accent'] || t['--accent'];
-      const dim = t.alpha !== undefined && tile && t['--accent'] ? mix(t['--accent'], tile, t.alpha) : undefined;
-      const dimWell = t.alpha !== undefined && well && t['--accent'] ? mix(t['--accent'], well, t.alpha) : undefined;
+      // What the layer paints on the ground: a skin's ground ink, or the tile's where the skin sets none (the layer's --sk-gx-* fallbacks).
+      const gText = t['--sk-g-text'] || t['--text'], gMuted = t['--sk-g-muted'] || t['--text-muted'], gAccent = t['--sk-g-accent'] || t['--accent'], gDanger = t['--sk-g-danger'] || t['--danger'];
+      const dimOver = (bg) => (t.alpha !== undefined && bg && t['--accent'] ? mix(t['--accent'], bg, t.alpha) : undefined);
+      // --accent-dim is one translucent value everywhere: a striped table row or a chip shows it over whatever it sits on
+      const dim = dimOver(tile), dimWell = dimOver(well), dimGround = dimOver(ground);
       const pairs = [
         ['text on tile', t['--text'], tile, 4.5], ['muted on tile', t['--text-muted'], tile, 4.5], ['text on well', t['--text'], well, 4.5],
         ['muted on well', t['--text-muted'], well, 4.5], ['accent on tile', t['--accent'], tile, 4.5], ['accent on well', t['--accent'], well, 4.5],
@@ -122,6 +124,15 @@ describe('skins: contrast', () => {
         ['text on accent-dim fill', t['--text'], dim, 4.5], ['accent on accent-dim fill', t['--accent'], dim, 4.5],
         // the same fill over a well (a Pathfinder or FitD tag sits in a well)
         ['text on accent-dim fill over well', t['--text'], dimWell, 4.5], ['accent on accent-dim fill over well', t['--accent'], dimWell, 4.5],
+        // a striped table row (style.css: tr:nth-child(even)) holding muted text: CoC's "not recorded" cells and note tables, in a tile or a well
+        ['muted on accent-dim fill', t['--text-muted'], dim, 4.5], ['muted on accent-dim fill over well', t['--text-muted'], dimWell, 4.5],
+        // the same stripe in a table that sits on the ground (a note's own table in a tab or an accordion body), under the ground inks
+        ['ground text on accent-dim fill over ground', gText, dimGround, 4.5], ['ground muted on accent-dim fill over ground', gMuted, dimGround, 4.5],
+        ['ground link on accent-dim fill over ground', gAccent, dimGround, 4.5],
+        // a refused change request is listed in the danger colour, on the ground
+        ['ground danger', gDanger, ground, 4.5],
+        // a number field's placeholder (style.css: .dnd5e-field::placeholder is the muted ink at full strength) on the field, which paints the well; on a tile it is "muted on tile" above
+        ['placeholder (muted) on a field in a well', t['--text-muted'], well, 4.5],
       ];
       // a filled mark (spent is the hollow one): every colour stop of its fill must stand off the tile and the well
       t.pip.forEach((p, i) => pairs.push([`filled mark colour ${i + 1} on tile`, p, tile, 3], [`filled mark colour ${i + 1} on well`, p, well, 3]));
