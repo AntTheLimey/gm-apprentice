@@ -1,0 +1,399 @@
+#!/usr/bin/env python3
+"""Tests for dnd_ddb.py: a D&D note's single cells and labelled lines brought up to date."""
+
+import dataclasses
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
+sys.path.insert(0, str(ROOT / "tests"))
+
+import dnd_builder  # noqa: E402
+import dnd_rules  # noqa: E402
+from ddb_builder import character  # noqa: E402
+from dnd_ddb import Edit, plan_cells, write_edits  # noqa: E402
+from dnd_ddb_read import read  # noqa: E402
+
+TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
+
+
+def got(**kw):
+    return read(character(**kw))
+
+
+def edits(text, c=None):
+    return {e.locus: e for e in plan_cells(text, c or got())}
+
+
+def one(text, locus, c=None):
+    return edits(text, c)[locus]
+
+
+def written(text, c=None):
+    return write_edits(text, plan_cells(text, c or got()))
+
+
+def swap(text, old, new):
+    assert old in text
+    return text.replace(old, new, 1)
+
+
+# --- numbers --------------------------------------------------------------
+
+def test_level_five_to_six():
+    text = dnd_builder.sheet(level=5)
+    c = got(classes=(("Wizard", 6, "Evoker", 4),))
+    e = one(text, "Stat Sheet / Core / Level", c)
+    assert (e.status, e.message) == ("WRITE", "5 -> 6")
+    assert "| Level | 6 |" in write_edits(text, [e])
+
+
+def test_level_the_same_is_same():
+    e = one(dnd_builder.sheet(level=5), "Stat Sheet / Core / Level")
+    assert (e.status, e.message) == ("SAME", "5")
+
+
+def test_signed_and_plain_numbers_are_the_same():
+    text = swap(TEMPLATE, "| Level | 1 |", "| Level | +5 |")
+    assert one(text, "Stat Sheet / Core / Level").status == "SAME"
+
+
+def test_xp_written_and_a_comma_number_read():
+    text = swap(TEMPLATE, "| XP | 0 |", "| XP | 6,500 |")
+    assert one(text, "Stat Sheet / Core / XP").status == "SAME"
+    e = one(TEMPLATE, "Stat Sheet / Core / XP")
+    assert (e.status, e.message) == ("WRITE", "0 -> 6500")
+    assert "| XP | 6500 |" in write_edits(TEMPLATE, [e])
+
+
+def test_blank_and_placeholder_are_written():
+    text = swap(TEMPLATE, "| Level | 1 |", "| Level |  |")
+    assert one(text, "Stat Sheet / Core / Level").message == "(blank) -> 5"
+    text = swap(TEMPLATE, "| Level | 1 |", "| Level | {level} |")
+    e = one(text, "Stat Sheet / Core / Level")
+    assert (e.status, e.message) == ("WRITE", "(blank) -> 5")
+
+
+def test_a_score_with_a_reason_is_kept():
+    text = swap(TEMPLATE, "| INT | 10 | +0 |", "| INT | 18 (tome) | +0 |")
+    e = one(text, "Stat Sheet / Ability Scores / INT / Score")
+    assert (e.status, e.message) == ("KEPT", "18 (tome); D&D Beyond gives 16")
+    assert "18 (tome)" in written(text)
+
+
+def test_scores_written_for_all_six():
+    c = got()
+    es = edits(TEMPLATE, c)
+    for key, value in c.scores.items():
+        e = es[f"Stat Sheet / Ability Scores / {key} / Score"]
+        assert (e.status, e.new) == (("SAME", "") if value == 10 else ("WRITE", str(value)))
+    out = written(TEMPLATE, c)
+    assert "| INT | 16 | +0 |" in out and "| STR | 8 | +0 |" in out
+
+
+def test_save_proficiency_yes_no():
+    c = got(modifiers=(("class", "proficiency", "intelligence-saving-throws", None),))
+    es = edits(TEMPLATE, c)
+    assert es["Stat Sheet / Ability Scores / INT / Save Proficiency"].new == "Yes"
+    assert es["Stat Sheet / Ability Scores / STR / Save Proficiency"].status == "SAME"
+    assert "| INT | 16 | +0 | Yes | +0 |" in written(TEMPLATE, c)
+
+
+def test_save_proficiency_cell_with_another_spelling_of_yes_is_same():
+    text = swap(TEMPLATE, "| INT | 10 | +0 | No |", "| INT | 10 | +0 | yes |")
+    c = got(modifiers=(("class", "proficiency", "intelligence-saving-throws", None),))
+    assert one(text, "Stat Sheet / Ability Scores / INT / Save Proficiency", c).status == "SAME"
+
+
+def test_an_old_table_with_no_save_proficiency_column_is_skipped():
+    es = edits(dnd_builder.sheet(save_column=False))
+    assert not [k for k in es if "Save Proficiency" in k]
+    assert "Stat Sheet / Ability Scores / STR / Score" in es
+
+
+# --- combat -----------------------------------------------------------------
+
+def test_size_written():
+    text = swap(TEMPLATE, "| Size | Medium |", "| Size | {size} |")
+    c = got(size="Small")
+    assert "| Size | Small |" in written(text, c)
+    assert one(TEMPLATE, "Stat Sheet / Combat / Size").status == "SAME"
+
+
+def test_speed_blank_is_filled_and_an_existing_speed_is_left():
+    blank = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed |  |")
+    c = got(speed=35)
+    e = one(blank, "Stat Sheet / Combat / Speed", c)
+    assert (e.status, e.message) == ("WRITE", "(blank) -> 35 ft")
+    assert "| Speed | 35 ft |" in write_edits(blank, [e])
+    placeholder = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | {speed} |")
+    assert one(placeholder, "Stat Sheet / Combat / Speed", c).status == "WRITE"
+    forty = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | 40 ft |")
+    e = one(forty, "Stat Sheet / Combat / Speed", c)
+    assert (e.status, e.message) == ("KEPT", "40 ft; D&D Beyond gives 35 ft")
+    assert "| Speed | 40 ft |" in written(forty, c)
+    assert one(forty, "Stat Sheet / Combat / Speed", got(speed=40)).status == "SAME"
+
+
+def test_hit_dice_keeps_spent_and_replaces_max():
+    text = dnd_builder.sheet(hit_dice=(("", "2/5"),))
+    c = got(classes=(("Wizard", 6, "Evoker", 4),))
+    e = one(text, "Stat Sheet / Combat / Hit Dice", c)
+    assert (e.status, e.message) == ("WRITE", "2/5 -> 2/6")
+    assert "| Hit Dice (Spent/Max) | 2/6 |" in write_edits(text, [e])
+    assert one(text, "Stat Sheet / Combat / Hit Dice").status == "SAME"
+
+
+def test_hit_dice_not_shaped_n_over_n_is_kept():
+    text = swap(TEMPLATE, "| Hit Dice (Spent/Max) | 0/1 |", "| Hit Dice (Spent/Max) | all |")
+    e = one(text, "Stat Sheet / Combat / Hit Dice")
+    assert e.status == "KEPT" and e.message.startswith("all;")
+
+
+def test_hit_dice_split_by_die_is_kept_as_one_row():
+    text = dnd_builder.sheet(hit_dice=(("d6", "0/3"), ("d8", "1/2")))
+    es = [e for e in plan_cells(text, got()) if e.locus == "Stat Sheet / Combat / Hit Dice"]
+    assert [(e.status, e.message) for e in es] == [("KEPT", "hit dice are split by die; check them")]
+
+
+def test_one_die_row_for_a_multiclass_character_is_kept():
+    text = dnd_builder.sheet(hit_dice=(("d6", "0/5"),))
+    c = got(classes=(("Wizard", 3, "", 4), ("Fighter", 3, "", None)))
+    assert one(text, "Stat Sheet / Combat / Hit Dice", c).status == "KEPT"
+
+
+# --- skills -------------------------------------------------------------------
+
+def test_skill_rows():
+    c = got(modifiers=(("class", "proficiency", "arcana", None), ("class", "expertise", "arcana", None),
+                       ("class", "proficiency", "history", None),
+                       ("class", "half-proficiency", "nature", None)))
+    es = edits(TEMPLATE, c)
+    assert (es["Skills / Arcana / Proficient"].new, es["Skills / Arcana / Expertise"].new) == ("Yes", "Yes")
+    assert es["Skills / History / Proficient"].new == "Yes" and es["Skills / History / Expertise"].status == "SAME"
+    assert es["Skills / Nature / Proficient"].new == "Half" and es["Skills / Nature / Expertise"].status == "SAME"
+    assert (es["Skills / Stealth / Proficient"].status, es["Skills / Stealth / Expertise"].status) == ("SAME", "SAME")
+    out = written(TEMPLATE, c)
+    assert "| Arcana | INT | Yes | Yes | +0 |" in out
+    assert "| Nature | INT | Half | No | +0 |" in out
+
+
+def test_skill_row_with_no_entry_is_no_no():
+    text = dnd_builder.sheet(skills=(("Stealth", "DEX", "Yes", "Yes"),))
+    es = edits(text)
+    assert es["Skills / Stealth / Proficient"].message == "Yes -> No"
+    assert write_edits(text, plan_cells(text, got())).count("| Stealth | DEX | No | No | |") == 1
+
+
+def test_skill_cell_with_a_reason_is_kept():
+    text = swap(TEMPLATE, "| Arcana | INT | No |", "| Arcana | INT | Yes (boon) |")
+    c = got(modifiers=(("class", "proficiency", "arcana", None),))
+    e = one(text, "Skills / Arcana / Proficient", c)
+    assert (e.status, e.message) == ("KEPT", "Yes (boon); D&D Beyond gives Yes")
+
+
+# --- spellcasting -------------------------------------------------------------
+
+def test_spellcasting_ability_blank_is_filled():
+    text = swap(TEMPLATE, "| Spellcasting Ability | |", "| Spellcasting Ability |  |")
+    c = got()
+    e = one(text, "Spellcasting / Spellcasting Ability", c)
+    assert (e.status, e.message) == ("WRITE", "(blank) -> INT")
+    assert "| Spellcasting Ability | INT |" in write_edits(text, [e])
+
+
+def test_spellcasting_ability_written_name_is_same():
+    text = dnd_builder.sheet()
+    assert one(text, "Spellcasting / Spellcasting Ability").status == "SAME"
+    text = text.replace("| Spellcasting Ability | INT |", "| Spellcasting Ability | Intelligence |")
+    assert one(text, "Spellcasting / Spellcasting Ability").status == "SAME"
+
+
+MULTI = (("Wizard", 3, "", 4), ("Cleric", 2, "", 5))
+
+
+def test_two_casting_classes_labelled_rows_each_get_their_own():
+    text = swap(TEMPLATE, "| Spellcasting Ability | |",
+                "| Spellcasting Ability (Wizard) | |\n| Spellcasting Ability (Cleric) | |")
+    es = edits(text, got(classes=MULTI))
+    assert es["Spellcasting / Spellcasting Ability (Wizard)"].new == "INT"
+    assert es["Spellcasting / Spellcasting Ability (Cleric)"].new == "WIS"
+    out = written(text, got(classes=MULTI))
+    assert "| Spellcasting Ability (Cleric) | WIS |" in out
+
+
+def test_two_casting_classes_unlabelled_row_is_kept():
+    e = one(TEMPLATE, "Spellcasting / Spellcasting Ability", got(classes=MULTI))
+    assert e.status == "KEPT"
+
+
+def test_a_non_caster_has_no_spellcasting_edit():
+    c = got(classes=(("Fighter", 5, "", None),))
+    assert "Spellcasting / Spellcasting Ability" not in edits(TEMPLATE, c)
+
+
+# --- labelled lines -----------------------------------------------------------
+
+def test_background_lines_written_from_placeholders():
+    c = got(species="Dwarf", background="Soldier", alignment_id=2)
+    es = edits(TEMPLATE, c)
+    assert es["Background / Species"].message == "(blank) -> Dwarf"
+    out = written(TEMPLATE, c)
+    for line in ("**Species:** Dwarf", "**Background:** Soldier", "**Alignment:** Neutral Good"):
+        assert line + "\n" in out
+
+
+def test_bare_species_is_replaced_when_different_and_same_when_equal():
+    text = swap(TEMPLATE, "**Species:** {Species name}", "**Species:** elf")
+    e = one(text, "Background / Species", got(species="Elf"))
+    assert e.status == "SAME"
+    e = one(text, "Background / Species", got(species="Dwarf"))
+    assert (e.status, e.message) == ("WRITE", "elf -> Dwarf")
+
+
+def test_line_with_a_reason_is_kept():
+    text = swap(TEMPLATE, "**Species:** {Species name}", "**Species:** Elf (wood elf)")
+    e = one(text, "Background / Species", got(species="Dwarf"))
+    assert (e.status, e.message) == ("KEPT", "Elf (wood elf); D&D Beyond gives Dwarf")
+    assert "**Species:** Elf (wood elf)\n" in written(text, got(species="Dwarf"))
+
+
+def test_class_subclass_line_for_two_classes_round_trips_through_the_reader():
+    c = got(classes=(("Paladin", 5, "Oath of Devotion", 6), ("Sorcerer", 3, "", 6)))
+    e = one(TEMPLATE, "Background / Class/Subclass", c)
+    assert e.status == "WRITE"
+    assert e.new == "**Class/Subclass:** Paladin 5 (Oath of Devotion) / Sorcerer 3"
+    out = write_edits(TEMPLATE, [e])
+    line = next(x for x in out.splitlines() if x.startswith("**Class/Subclass:**"))
+    back = dnd_rules.read_classes(line.split(":**", 1)[1].strip(), c.level)
+    assert back is not None
+    assert [(x.name, x.level, x.subclass) for x in back] == [
+        ("Paladin", 5, "Oath of Devotion"), ("Sorcerer", 3, "")]
+
+
+def test_class_line_that_says_the_same_in_another_shape_is_same():
+    text = swap(TEMPLATE, "**Class/Subclass:** {Class (Subclass)}", "**Class/Subclass:** Wizard (Evoker)")
+    assert one(text, "Background / Class/Subclass").status == "SAME"
+    text = swap(TEMPLATE, "**Class/Subclass:** {Class (Subclass)}", "**Class/Subclass:** Wizard 5 (Evoker)")
+    assert one(text, "Background / Class/Subclass").status == "SAME"
+
+
+def test_class_line_that_differs_is_written_and_one_with_a_reason_kept():
+    text = swap(TEMPLATE, "**Class/Subclass:** {Class (Subclass)}", "**Class/Subclass:** Wizard 4 (Evoker)")
+    e = one(text, "Background / Class/Subclass")
+    assert (e.status, e.message) == ("WRITE", "Wizard 4 (Evoker) -> Wizard 5 (Evoker)")
+    text = swap(TEMPLATE, "**Class/Subclass:** {Class (Subclass)}",
+                "**Class/Subclass:** Wizard 5 (Evoker) (homebrew)")
+    assert one(text, "Background / Class/Subclass").status == "KEPT"
+
+
+def test_line_the_note_lacks_is_skipped():
+    text = swap(TEMPLATE, "**Alignment:** {Alignment}\n\n", "")
+    assert "Background / Alignment" not in edits(text)
+
+
+def test_an_unset_alignment_writes_nothing():
+    c = got(alignment_id=None)
+    assert "Background / Alignment" not in edits(TEMPLATE, c)
+
+
+def test_defence_lines():
+    c = got(modifiers=(("race", "resistance", "fire", None), ("class", "immunity", "poison", None)))
+    es = edits(TEMPLATE, c)
+    assert es["Stat Sheet / Defences / Resistances"].message == "(blank) -> Fire"
+    assert es["Stat Sheet / Defences / Immunities"].new == "**Immunities:** Poison"
+    assert es["Stat Sheet / Defences / Vulnerabilities"].new == "**Vulnerabilities:** —"
+    assert es["Stat Sheet / Defences / Condition Immunities"].new == "**Condition Immunities:** —"
+    assert "**Advantages:** {list}" in written(TEMPLATE, c)
+
+
+def test_a_reasoned_entry_stays_in_the_line_after_the_new_names():
+    text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire, Cold (ring of warmth)")
+    c = got(modifiers=(("race", "resistance", "poison", None),))
+    e = one(text, "Stat Sheet / Defences / Resistances", c)
+    assert e.status == "WRITE"
+    assert e.message == "Fire, Cold (ring of warmth) -> Poison, Cold (ring of warmth)"
+    assert "**Resistances:** Poison, Cold (ring of warmth)\n" in write_edits(text, [e])
+
+
+def test_a_list_line_is_same_when_the_result_equals_the_old():
+    text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Poison, Cold (ring of warmth)")
+    c = got(modifiers=(("race", "resistance", "poison", None),))
+    assert one(text, "Stat Sheet / Defences / Resistances", c).status == "SAME"
+
+
+def test_commas_inside_brackets_do_not_split_an_entry():
+    text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Cold (ring, worn), Fire")
+    c = got(modifiers=(("race", "resistance", "poison", None),))
+    e = one(text, "Stat Sheet / Defences / Resistances", c)
+    assert e.new == "**Resistances:** Poison, Cold (ring, worn)"
+
+
+def test_a_kept_entry_is_not_repeated_by_the_same_name_from_d_and_d_beyond():
+    text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire (ring)")
+    c = got(modifiers=(("race", "resistance", "fire", None),))
+    assert one(text, "Stat Sheet / Defences / Resistances", c).status == "SAME"
+
+
+def test_all_gone_gives_a_dash():
+    text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire")
+    e = one(text, "Stat Sheet / Defences / Resistances")
+    assert e.new == "**Resistances:** —"
+
+
+def test_proficiency_lines():
+    c = got(modifiers=(
+        ("class", "proficiency", "light-armor", None),
+        ("class", "proficiency", "simple-weapons", None),
+        ("background", "proficiency", "thieves-tools", None, {"friendlySubtypeName": "Thieves' Tools"}),
+        ("race", "language", "common", None)))
+    es = edits(TEMPLATE, c)
+    assert es["Proficiencies / Armor Training"].new == "**Armor Training:** Light Armor"
+    assert es["Proficiencies / Weapons"].new.startswith("**Weapons:** ")
+    assert es["Proficiencies / Tools"].new == "**Tools:** Thieves' Tools"
+    assert es["Proficiencies / Languages"].new == "**Languages:** Common"
+    assert "Proficiencies / Weapon Mastery" not in es
+    assert "**Weapon Mastery:** {list}" in written(TEMPLATE, c)
+
+
+# --- the note's shape -----------------------------------------------------------
+
+def test_crlf_note_keeps_crlf_on_every_line():
+    crlf = TEMPLATE.replace("\n", "\r\n")
+    c = got(species="Dwarf", modifiers=(("race", "resistance", "fire", None),))
+    out = written(crlf, c)
+    assert out != crlf
+    assert out.count("\r\n") == crlf.count("\r\n") and "\n" not in out.replace("\r\n", "")
+    assert "**Species:** Dwarf\r\n" in out and "**Resistances:** Fire\r\n" in out
+    assert "| Level | 5 |\r\n" in out
+
+
+def test_a_fenced_example_above_the_real_table_is_not_written():
+    fenced = ("## Stat Sheet\n\n```\n### Core\n\n| Attribute | Value |\n|---|---|\n| Level | 1 |\n"
+              "**Species:** example\n```\n\n")
+    text = swap(TEMPLATE, "## Stat Sheet\n\n", fenced)
+    out = written(text)
+    assert "| Level | 1 |\n**Species:** example\n```" in out
+    assert "| Level | 5 |" in out and "**Species:** Human\n" in out
+
+
+def test_nothing_changed_means_nothing_to_write():
+    first = written(TEMPLATE)
+    again = plan_cells(first, got())
+    assert not [e for e in again if e.status == "WRITE"]
+    assert write_edits(first, again) == first
+
+
+def test_a_newline_or_pipe_in_a_name_becomes_a_space():
+    c = dataclasses.replace(got(), species="Dwarf\nmountain | hill", size="Me|dium x")
+    out = written(TEMPLATE, c)
+    assert "**Species:** Dwarf mountain   hill\n" in out
+    assert "| Size | Me dium x |" in out
+    c = dataclasses.replace(got(), resistances=["Fi\nre"])
+    assert "**Resistances:** Fi re\n" in written(TEMPLATE, c)
+
+
+def test_edit_is_a_plain_dataclass_with_the_contract_fields():
+    e = Edit("SAME", "x", "y")
+    assert (e.line, e.col, e.new) == (-1, -1, "")

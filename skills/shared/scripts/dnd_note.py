@@ -140,6 +140,11 @@ class Note:
 
     def bold(self, label: str) -> str | None:
         """The text after the first `**Label:**` line outside frontmatter and code."""
+        found = self.bold_at(label)
+        return found[1] if found else None
+
+    def bold_at(self, label: str) -> tuple[int, str] | None:
+        """(line index, text) of the first `**Label:**` line outside frontmatter and code."""
         in_fm = bool(self.lines) and self.lines[0].strip() == "---"
         fence: str | None = None
         for i, raw in enumerate(self.lines):
@@ -153,5 +158,5 @@ class Note:
                 continue
             m = BOLD_LINE.match(s)
             if m and m.group(1).strip().lower() == label:
-                return m.group(2).strip()
+                return i, m.group(2).strip()
         return None
