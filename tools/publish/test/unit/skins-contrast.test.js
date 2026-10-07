@@ -9,7 +9,7 @@ const { SKINS } = require('../../lib/skins');
 
 const SKIN_DIR = path.join(__dirname, '../../css/skins');
 const stripComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, '');
-const read = (f) => stripComments(fs.readFileSync(path.join(SKIN_DIR, f), 'utf8'));
+const read = (f) => stripComments(fs.readFileSync(path.join(SKIN_DIR, f), 'utf8').replace(/\r\n/g, '\n'));
 const LIGHT = '@media (prefers-color-scheme: light)';
 
 const hex = (h) => { const s = h.replace('#', ''); const f = s.length === 3 ? s.replace(/./g, '$&$&') : s; return [0, 2, 4].map((i) => parseInt(f.slice(i, i + 2), 16)); };
@@ -67,6 +67,9 @@ const cmixOf = (css) => { const m = css.match(/--sk-cmix:\s*(\d+)%/); return m ?
 const CMIX = { dark: cmixOf(layer.slice(0, Math.max(layerLightAt, 0))), light: cmixOf(layer.slice(Math.max(layerLightAt, 0))) };
 const tintPcts = [...layer.matchAll(/color-mix\(in srgb, var\(--sk-c([1-8])\) (\d+)%, var\(--bg-card\)\)/g)];
 const inkExprs = [...layer.matchAll(/color-mix\(in srgb, var\(--sk-c([1-8])\) var\(--sk-cmix\), var\(--text\)\)/g)];
+// the GURPS REELING / TIRED badges: the skin's danger / warning ink over a tint of itself on the tile, the percentage read from the layer
+const badgeTint = (name, token) => { const m = layer.match(new RegExp('\\.gl-badge-' + name + ' \\{ color: var\\(--' + token + '\\); background: color-mix\\(in srgb, var\\(--' + token + '\\) (\\d+)%, var\\(--bg-card\\)\\); \\}')); return m ? +m[1] / 100 : NaN; };
+const BADGE_TINT = { reeling: badgeTint('reeling', 'danger'), tired: badgeTint('tired', 'warning') };
 const TINT = tintPcts.length ? +tintPcts[0][2] / 100 : NaN;
 
 describe('skins: contrast model matches the layer', () => {
@@ -78,6 +81,10 @@ describe('skins: contrast model matches the layer', () => {
     assert.strictEqual(tintPcts.length, 8, 'eight tint mixes, each "in srgb, pigment N%, tile"');
     assert.ok(tintPcts.every((m) => m[2] === tintPcts[0][2]), 'one percentage for all eight');
     assert.strictEqual(TINT, 0.13);
+  });
+  it('the REELING and TIRED badges take the skin\'s danger and warning over a tint of themselves, which the model reads', () => {
+    assert.ok(BADGE_TINT.reeling > 0 && BADGE_TINT.reeling < 0.5, 'reeling tint');
+    assert.ok(BADGE_TINT.tired > 0 && BADGE_TINT.tired < 0.5, 'tired tint');
   });
   it('each skin file has exactly one light block, and it trails the file', () => {
     for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
@@ -144,6 +151,8 @@ describe('skins: contrast', () => {
         // the Points Summary block (cat-points) tints its even rows with category 7; its unspent row is coloured with category 1's ink
         if (n === 1) pairs.push(['attribute ink (unspent row) on the points tint', ink, mix(t['--sk-c7'], tile, TINT), 4.5]);
       }
+      pairs.push(['REELING badge text on its own tint', t['--danger'], t['--danger'] && tile && mix(t['--danger'], tile, BADGE_TINT.reeling), 4.5],
+        ['TIRED badge text on its own tint', t['--warning'], t['--warning'] && tile && mix(t['--warning'], tile, BADGE_TINT.tired), 4.5]);
       for (const n of ACCENT_TINTS) pairs.push([`accent on category ${n} tint`, t['--accent'], mix(t['--sk-c' + n], tile, TINT), 4.5]);
       for (const n of MUTED_TINTS) pairs.push([`muted on category ${n} tint`, t['--text-muted'], mix(t['--sk-c' + n], tile, TINT), 4.5]);
       for (const [name, fg, bg, min] of pairs) {

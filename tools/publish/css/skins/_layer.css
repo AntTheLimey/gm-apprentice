@@ -12,9 +12,6 @@ main.content .sk-portrait { position: relative; width: 6.5rem; height: 6.5rem; f
 .sk-frame .hi { fill: none; stroke: var(--bg-card); stroke-width: 1; opacity: .55; }
 .sk-frame .jewel { fill: var(--bg-card); stroke: var(--frame); stroke-width: 1.5; }
 .sk-frame .plate { fill: var(--border); stroke: var(--frame); stroke-width: 1.2; }
-.hero-cinematic-framed .sk-portrait { width: 9rem; height: 9rem; margin: 0; }
-@media (max-width: 600px) { .hero-cinematic-framed .sk-portrait { width: 6.5rem; height: 6.5rem; margin: 0 auto; } }
-.coc-sheet-root .sk-portrait { width: 152px; height: 152px; margin: 0 auto; }
 @media (min-width: 721px) { .coc-sheet-root .portrait-row:has(.sk-portrait) { grid-template-columns: 1fr 152px; } }
 
 /* ===== the shared layer: what every skin sets, and where each sheet reads it =====
@@ -81,6 +78,9 @@ main.content[data-skin]:where(:not([data-skin=plain])) .coc-sheet-root .masthead
 /* GURPS Points Summary: a value cell that carries a remark ("+0 (not present)") is set not to wrap, and in a wide face it ran under the block's edge */
 main.content[data-skin]:where(:not([data-skin=plain])) .cat-points td.num { white-space: normal; }
 main.content[data-skin]:where(:not([data-skin=plain])) .sk-frame { --frame: var(--accent); }
+/* GURPS status badges: style.css gives REELING and TIRED fixed colours that fail on a light tile; they take the skin's own danger and warning, over a tint of the same colour on the tile */
+main.content[data-skin]:where(:not([data-skin=plain])) .gl-badge-reeling { color: var(--danger); background: color-mix(in srgb, var(--danger) 5%, var(--bg-card)); }
+main.content[data-skin]:where(:not([data-skin=plain])) .gl-badge-tired { color: var(--warning); background: color-mix(in srgb, var(--warning) 5%, var(--bg-card)); }
 /* GURPS category colours: eight pigments per skin, lightened for dark, tinted for the row stripes */
 main.content[data-skin]:where(:not([data-skin=plain])), main.content[data-skin]:where(:not([data-skin=plain])) [class*="cat-"] {
   --gc-attr: color-mix(in srgb, var(--sk-c1) var(--sk-cmix), var(--text)); --gc-attr-bg: color-mix(in srgb, var(--sk-c1) 13%, var(--bg-card));

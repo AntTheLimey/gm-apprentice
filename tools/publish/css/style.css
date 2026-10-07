@@ -3147,6 +3147,8 @@ tr:nth-child(even) {
 @media (max-width:720px){
   .coc-sheet-root .grid-main, .coc-sheet-root .skills-wrap, .coc-sheet-root .identity, .coc-sheet-root .portrait-row, .coc-sheet-root .backstory{ grid-template-columns:minmax(0,1fr);}
   .coc-sheet-root .sb-grid{ grid-template-columns:repeat(2,minmax(0,1fr));}
+  /* A wide table in an accordion scrolls inside its body instead of running past the panel. */
+  .coc-sheet-root .acc-body{ overflow-x:auto;}
   /* Seven weapon columns share about 245px: headers in lower case, tighter cells, long words may break. */
   .coc-sheet-root table.weap{ font-size:.7rem;}
   .coc-sheet-root table.weap th{ font-size:.6rem; letter-spacing:0; text-transform:none; padding:.28rem .15rem;}
@@ -4349,7 +4351,8 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
   .gl-party-table td[data-gl-party-field="status"] { flex: 0 0 100%; text-align: left; padding: 0 4px 10px; }
   .gl-party-table .gl-vital, .gl-party-table .gl-stat { min-width: 0; }
   .gl-party-table .gl-vital .gl-max, .gl-party-table .gl-stat .gl-of { display: block; }
-  .gl-party-table .gl-pc-name { overflow-wrap: anywhere; }
+  .gl-party-table .gl-pc-txt { min-width: 0; }
+  .gl-party-table .gl-pc-name { overflow-wrap: break-word; }
   .gl-party-table .gl-av { width: 28px; height: 28px; font-size: 0.7rem; }
   .gl-party-table td.gl-pc a { gap: 6px; }
   .gl-party-table .gl-speed, .gl-party-table th.gl-col-speed,

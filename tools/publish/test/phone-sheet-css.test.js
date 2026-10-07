@@ -34,3 +34,10 @@ test('a table written straight into a tab wraps to the panel on a phone and stay
   assert.match(m[2], /overflow-wrap:\s*anywhere/);
   assert.doesNotMatch(flat, /\.tab-panel > table\s*\{[^}]*display:\s*block/, 'a block display would drop the table role');
 });
+
+test('a wide table in a CoC accordion scrolls inside its body on a phone, and the desktop body is untouched', () => {
+  const flat = css.replace(/\s+/g, ' ');
+  assert.match(flat, /@media\s*\(max-width:\s*720px\)\s*\{[^@]*\.coc-sheet-root \.acc-body\s*\{\s*overflow-x:\s*auto;?\s*\}/);
+  assert.match(flat, /\.coc-sheet-root \.acc-body\s*\{\s*padding:[^}]*\}/);
+  assert.doesNotMatch(flat.replace(/@media\s*\(max-width:\s*720px\)\s*\{[^@]*\}/g, ''), /\.coc-sheet-root \.acc-body\s*\{[^}]*overflow/);
+});
