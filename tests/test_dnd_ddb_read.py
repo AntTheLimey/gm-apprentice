@@ -189,6 +189,27 @@ def test_the_sites_bookkeeping_features_are_not_listed(name):
     assert [f.name for f in c.species_traits] == ["Real Trait"]
 
 
+def test_a_level_prefix_is_removed_and_same_named_entries_merge_keeping_the_uses():
+    c = got(class_features=(("4: Weapon Mastery", None, None), ("Weapon Mastery", 2, 2), ("8: Ability Score Improvement", None, None),
+                            ("3: Keen Eye", 1, 1), ("Keen Eye", None, None)))
+    assert [(f.name, f.uses, f.recovers) for f in c.class_features] == [
+        ("Weapon Mastery", 2, "Long Rest"), ("Keen Eye", 1, "Short Rest")]
+
+
+@pytest.mark.parametrize("name", ["Skills", "Tool Proficiency", "Bonus Proficiency", "Extra Language", "Feat",
+                                  "Spellcasting", "Pact Magic", "Core Barbarian Traits", "core Gloomwright traits",
+                                  "Barbarian Subclass", "Zzyx Subclass"])
+def test_more_bookkeeping_rows_are_not_listed(name):
+    c = got(class_features=((name, None, None), ("Real Feature", None, None)))
+    assert [f.name for f in c.class_features] == ["Real Feature"]
+
+
+def test_weapon_mastery_and_the_subclass_choice_rows_are_kept():
+    names = ["Weapon Mastery", "Divine Domain", "Sacred Oath", "Sorcerous Origin", "Otherworldly Patron", "Core Values"]
+    c = got(class_features=tuple((n, None, None) for n in names))
+    assert [f.name for f in c.class_features] == names
+
+
 def test_a_feature_listed_twice_is_kept_once():
     c = got(class_features=(("Rage Test", None, None, 1, True), ("Rage Test", 3, 2), ("Rage Test", None, None)))
     assert [(f.name, f.uses) for f in c.class_features] == [("Rage Test", 3)]

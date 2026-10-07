@@ -10,6 +10,7 @@ uses); anything not in the data raises `Unreadable` or is skipped, never
 guessed. Stdlib only.
 """
 
+import re
 from dataclasses import dataclass
 from fractions import Fraction
 
@@ -38,7 +39,10 @@ NAME_LIMIT = 80
 # The site's own bookkeeping rows; the sheet already shows these facts.
 BOOKKEEPING = frozenset((
     "proficiencies", "hit points", "ability score improvement", "ability score increase",
-    "ability score increases", "equipment", "languages", "age", "size", "speed", "alignment", "creature type"))
+    "ability score increases", "equipment", "languages", "age", "size", "speed", "alignment", "creature type",
+    "skills", "tool proficiency", "bonus proficiency", "extra language", "feat", "spellcasting", "pact magic"))
+BOOKKEEPING_PATTERN = re.compile(r"core .+ traits|.+ subclass", re.I)
+LEVEL_PREFIX = re.compile(r"^\d+:\s*")
 KEPT_IN_NAMES = frozenset("'-,./+():&")
 
 
@@ -435,11 +439,16 @@ def _recovery(use: dict) -> str:
 def _features(defs: list[dict], uses: dict[tuple[int, int], dict], scores: dict[str, int], pb: int) -> list[Feature]:
     out: dict[str, Feature] = {}
     for fd in defs:
-        name = safe_name(fd.get("name"))
-        if not name or name in out or name.lower() in BOOKKEEPING:
+        name = LEVEL_PREFIX.sub("", safe_name(fd.get("name")))
+        if not name or name.lower() in BOOKKEEPING or BOOKKEEPING_PATTERN.fullmatch(name):
             continue
         use = uses.get((_int(fd.get("id"), -1), _int(fd.get("entityTypeId"), -1)))
-        out[name] = Feature(name, _max_uses(use, scores, pb) if use else None, _recovery(use) if use else "")
+        feature = Feature(name, _max_uses(use, scores, pb) if use else None, _recovery(use) if use else "")
+        seen = out.get(name)
+        if seen is None:
+            out[name] = feature
+        elif seen.uses is None and feature.uses is not None:
+            seen.uses, seen.recovers = feature.uses, feature.recovers
     return list(out.values())
 
 
