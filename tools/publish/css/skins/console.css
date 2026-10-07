@@ -1,2 +1,35 @@
-/* console: filled in by the skin work */
-main.content[data-skin="console"] { }
+/* Console: an instrument panel, cut corners, lit edge. Dark is the base; light is the trailing block. */
+main.content[data-skin="console"] {
+  --bg: #070b10; --bg-card: #0d151d; --sk-well: #09111a; --text: #cfe8f0; --text-muted: #7693a0;
+  --accent: #5ad1e6; --accent-dim: #5ad1e61f; --border: #1f3644;
+  --danger: #ff6b6b; --warning: #f2b84b; --success: #5fe0a0;
+  --font-body: "Chakra Petch", system-ui, sans-serif; --font-mono: "IBM Plex Mono", ui-monospace, monospace; --font-heading: "Chakra Petch", system-ui, sans-serif;
+  --sk-ground-img: linear-gradient(rgba(90,209,230,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(90,209,230,.06) 1px, transparent 1px);
+  --sk-card-img: linear-gradient(135deg, var(--border) 8.4px, transparent 8.5px), linear-gradient(315deg, var(--border) 8.4px, transparent 8.5px);
+  --sk-r: 0; --sk-r-ctl: 0; --sk-r-pip: 1px;
+  --sk-edge: 1px solid var(--border); --sk-inner: inset 0 2px 0 var(--accent);
+  --sk-pip-on: linear-gradient(180deg, #a8f0fb, #5ad1e6);
+  --sk-c1: #0b7a55; --sk-c2: #8a5b00; --sk-c3: #a34a10; --sk-c4: #2d55b8; --sk-c5: #6a3fb3; --sk-c6: #006d85; --sk-c7: #4c6370; --sk-c8: #b3261e;
+  background-size: 28px 28px;
+}
+main.content[data-skin="console"] :is(.dnd5e-vitals, .dnd5e-blk, .blk, .hero-cinematic, .tab-bar, .gl-status-panel, .coc-sheet-root) { clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+main.content[data-skin="console"] :is(.hero-cinematic h1, .masthead h1) { text-transform: uppercase; letter-spacing: .06em; }
+main.content[data-skin="console"] .dnd5e-blk > h3 { color: var(--accent); letter-spacing: .16em; }
+main.content[data-skin="console"] .dnd5e-blk > h3::before { content: ""; display: inline-block; width: 7px; height: 7px; background: var(--accent); margin-right: 8px; }
+main.content[data-skin="console"] .pc-tab { text-transform: uppercase; letter-spacing: .1em; font-size: .82rem; }
+main.content[data-skin="console"] .pc-tab.active { background: var(--accent-dim); }
+main.content[data-skin="console"] .dnd5e-lbl { letter-spacing: .14em; }
+main.content[data-skin="console"] .dnd5e-live .dnd5e-mark { width: 30px; height: 16px; }
+main.content[data-skin="console"] .dnd5e-mark { width: 22px; height: 12px; }
+main.content[data-skin="console"] .dnd5e-mark:not(.is-spent) { box-shadow: 0 0 7px rgba(90,209,230,.55); }
+main.content[data-skin="console"] .coc-sheet-root :is(.corner, .fleuron) { display: none; }
+@media (prefers-color-scheme: light) {
+  main.content[data-skin="console"] {
+    --bg: #dfe5e8; --bg-card: #f2f5f6; --sk-well: #e3e9ec; --text: #0f2230; --text-muted: #4c6370;
+    --accent: #006d85; --accent-dim: #006d851a; --border: #a3b3bc;
+    --danger: #b3261e; --warning: #7d5300; --success: #0b6e44;
+    --sk-ground-img: linear-gradient(rgba(0,60,80,.07) 1px, transparent 1px), linear-gradient(90deg, rgba(0,60,80,.07) 1px, transparent 1px);
+    --sk-pip-on: var(--accent);
+  }
+  main.content[data-skin="console"] .dnd5e-mark:not(.is-spent) { box-shadow: none; }
+}

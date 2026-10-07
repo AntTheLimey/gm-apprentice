@@ -16,3 +16,60 @@ main.content .sk-portrait { position: relative; width: 6.5rem; height: 6.5rem; f
 @media (max-width: 600px) { .hero-cinematic-framed .sk-portrait { width: 6.5rem; height: 6.5rem; margin: 0 auto; } }
 .coc-sheet-root .sk-portrait { width: 152px; height: 152px; margin: 0 auto; }
 @media (min-width: 721px) { .coc-sheet-root .portrait-row:has(.sk-portrait) { grid-template-columns: 1fr 152px; } }
+
+/* ===== the shared layer: what every skin sets, and where each sheet reads it ===== */
+main.content[data-skin] { --sk-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E"); }
+main.content[data-skin]:not([data-skin=plain]) {
+  color-scheme: dark; --sk-cmix: 52%; --bg-header: var(--sk-well); --surface: var(--bg-card); --font-serif: var(--font-body);
+  background-color: var(--bg); background-image: var(--sk-ground-img, none); color: var(--sk-g-text, var(--text)); font-family: var(--font-body);
+  border-radius: 12px; margin-top: 1rem;
+}
+/* tiles: D&D blocks and strip, GURPS blocks and status panel, the shared hero and tab bar */
+main.content[data-skin]:not([data-skin=plain]) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel) {
+  --bg: var(--sk-well); color: var(--text); background-color: var(--bg-card); background-image: var(--sk-card-img, none);
+  border: var(--sk-edge, 1px solid var(--border)); border-radius: var(--sk-r, 8px); box-shadow: var(--sk-inner, none);
+}
+main.content[data-skin]:not([data-skin=plain]) :is(.dnd5e-v, .dnd5e-ab, .dnd5e-btn, .dnd5e-chip, .dnd5e-tag, .gl-step, .gl-vital-input, .gl-badge, .dnd5e-field) { border-radius: var(--sk-r-ctl, 6px); }
+main.content[data-skin]:not([data-skin=plain]) :is(.dnd5e-mark, .coc-sheet-root .pips .pip) { border-radius: var(--sk-r-pip, 50%); transform: var(--sk-pip-turn, none); }
+main.content[data-skin]:not([data-skin=plain]) .dnd5e-mark:not(.is-spent) { background: var(--sk-pip-on, var(--accent)); }
+main.content[data-skin]:not([data-skin=plain]) .dnd5e-marks.is-fail .dnd5e-mark:not(.is-spent) { background: var(--danger); }
+main.content[data-skin]:not([data-skin=plain]) :is(h1, .dnd5e-blk > h3, .blk h2, .wide h2, .pc-tab, .dnd5e-drawer-title) { font-family: var(--font-heading); }
+main.content[data-skin]:not([data-skin=plain]) .dnd5e-header { color: var(--sk-g-text, var(--text)); }
+main.content[data-skin]:not([data-skin=plain]) :is(.breadcrumbs, .pull-quote, .tab-panel > .text-muted) { color: var(--sk-g-muted, var(--text-muted)); }
+main.content[data-skin]:not([data-skin=plain]) .breadcrumbs a { color: var(--sk-g-accent, var(--accent)); }
+main.content[data-skin]:not([data-skin=plain]) .hero-cinematic h1 { color: var(--text); }
+main.content[data-skin]:not([data-skin=plain]) .sk-frame { --frame: var(--accent); }
+/* GURPS category colours: eight pigments per skin, lightened for dark, tinted for the row stripes */
+main.content[data-skin]:not([data-skin=plain]), main.content[data-skin]:not([data-skin=plain]) [class*="cat-"] {
+  --gc-attr: color-mix(in srgb, var(--sk-c1) var(--sk-cmix), var(--text)); --gc-attr-bg: color-mix(in srgb, var(--sk-c1) 13%, var(--bg-card));
+  --gc-social: color-mix(in srgb, var(--sk-c2) var(--sk-cmix), var(--text)); --gc-social-bg: color-mix(in srgb, var(--sk-c2) 13%, var(--bg-card));
+  --gc-trait: color-mix(in srgb, var(--sk-c3) var(--sk-cmix), var(--text)); --gc-trait-bg: color-mix(in srgb, var(--sk-c3) 13%, var(--bg-card));
+  --gc-skill: color-mix(in srgb, var(--sk-c4) var(--sk-cmix), var(--text)); --gc-skill-bg: color-mix(in srgb, var(--sk-c4) 13%, var(--bg-card));
+  --gc-spell: color-mix(in srgb, var(--sk-c5) var(--sk-cmix), var(--text)); --gc-spell-bg: color-mix(in srgb, var(--sk-c5) 13%, var(--bg-card));
+  --gc-table: color-mix(in srgb, var(--sk-c6) var(--sk-cmix), var(--text)); --gc-table-bg: color-mix(in srgb, var(--sk-c6) 13%, var(--bg-card));
+  --gc-points: color-mix(in srgb, var(--sk-c7) var(--sk-cmix), var(--text)); --gc-points-bg: color-mix(in srgb, var(--sk-c7) 13%, var(--bg-card));
+  --gc-def: color-mix(in srgb, var(--sk-c8) var(--sk-cmix), var(--text)); --gc-def-bg: color-mix(in srgb, var(--sk-c8) 13%, var(--bg-card));
+}
+/* CoC: its own paper-and-ink names, pointed at the skin */
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root {
+  --paper: var(--sk-well); --paper-2: var(--bg-card); --box: var(--bg-card);
+  --ink: var(--text); --ink-soft: var(--text-muted); --ink-mid: var(--text-muted);
+  --rule: var(--text-muted); --rule-soft: var(--border); --oxblood: var(--accent); --oxblood-2: var(--accent); --seal: var(--danger);
+  --didone: var(--font-heading); --body: var(--font-body);
+  background: var(--sk-card-img, none), var(--sk-well); border-radius: var(--sk-r, 8px);
+}
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root { border-color: var(--border); }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root :is(.statusbar, .foliopanel, .cr-bar, .cr-text) { background: var(--bg-card); box-shadow: none; }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root :is(.statusbar, .foliopanel) { border-radius: var(--sk-r, 6px); }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .foliotab { background: var(--sk-well); box-shadow: none; }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .foliotab.active { background: var(--bg-card); }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root details.acc { background: var(--sk-well); }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .masthead h1 { text-shadow: none; }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .char { box-shadow: none; }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .sanbar { background: var(--sk-well); }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .sanbar .fill { background: repeating-linear-gradient(45deg, var(--accent) 0 6px, color-mix(in srgb, var(--accent) 70%, var(--bg-card)) 6px 12px); }
+main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root :is(.cond-chip.on, .badge-insane, .cr-send, .step:hover) { color: var(--bg-card); }
+@media (max-width: 720px) { main.content[data-skin]:not([data-skin=plain]) .coc-sheet-root .foliotab.active { background: var(--accent); color: var(--bg-card); } }
+@media (prefers-color-scheme: light) {
+  main.content[data-skin]:not([data-skin=plain]) { color-scheme: light; --sk-cmix: 100%; }
+}
