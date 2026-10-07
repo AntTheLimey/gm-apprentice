@@ -767,6 +767,19 @@ h3 {
   color: var(--accent);
   border-bottom-color: var(--accent);
 }
+/* On a phone the bar scrolls sideways and the last tabs sit off screen with nothing to say so.
+   An edge shadow shows on whichever side has more to scroll to and disappears at the end
+   (the "local" layers cover the "scroll" shadows once that edge is reached). */
+@media (max-width: 600px) {
+  .tab-bar {
+    background:
+      linear-gradient(to right, var(--bg-card) 30%, transparent) 0 0 / 2.5rem 100% no-repeat local,
+      linear-gradient(to left, var(--bg-card) 30%, transparent) 100% 0 / 2.5rem 100% no-repeat local,
+      radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.3), transparent) 0 0 / 0.9rem 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.3), transparent) 100% 0 / 0.9rem 100% no-repeat scroll,
+      var(--bg-card);
+  }
+}
 .tab-panel {
   display: none;
 }
@@ -3119,6 +3132,19 @@ tr:nth-child(even) {
   .coc-sheet-root table.weap{ font-size:.72rem;} .coc-sheet-root table.weap th,.coc-sheet-root table.weap td{ padding:.28rem .3rem;}
 }
 
+/* The phone's single-column grids used bare 1fr, which cannot shrink below its content's
+   minimum width: the characteristic boxes and skill columns held the column wider than the
+   sheet and the overflow was clipped on the right. minmax(0, 1fr) lets the column be the
+   sheet's width. */
+@media (max-width:720px){
+  .coc-sheet-root .grid-main, .coc-sheet-root .skills-wrap, .coc-sheet-root .identity, .coc-sheet-root .portrait-row, .coc-sheet-root .backstory{ grid-template-columns:minmax(0,1fr);}
+  .coc-sheet-root .sb-grid{ grid-template-columns:repeat(2,minmax(0,1fr));}
+  /* Seven weapon columns share about 245px: headers in lower case, tighter cells, long words may break. */
+  .coc-sheet-root table.weap{ font-size:.7rem;}
+  .coc-sheet-root table.weap th{ font-size:.6rem; letter-spacing:0; text-transform:none; padding:.28rem .15rem;}
+  .coc-sheet-root table.weap td{ padding:.28rem .15rem; overflow-wrap:anywhere;}
+}
+
 /* ===== GURPS 4e — Modern Sheet ===== */
 
 /* Category hue tokens — dark mode defaults.
@@ -3468,6 +3494,15 @@ tr:nth-child(even) {
   border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer;
 }
 .gl-step:hover { background: var(--accent-dim); }
+/* Encumbrance footer: the four readouts were bare inline spans (no gap, so "Carried: 43 lbEnc: Light..."
+   ran together) and Reset was an unstyled browser button. Space them and style Reset like the step buttons. */
+.gl-readout { display: flex; flex-wrap: wrap; align-items: center; gap: 0.35rem 1rem; padding: 0.5rem 0.75rem; }
+.gl-readout[hidden] { display: none; }
+#gl-reset {
+  font: inherit; font-size: 0.85em; line-height: 1; padding: 4px 10px; border: 1px solid var(--border);
+  border-radius: 4px; background: var(--bg); color: var(--text); cursor: pointer;
+}
+#gl-reset:hover { background: var(--accent-dim); }
 .gl-badge {
   font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
   padding: 1px 7px; border-radius: 999px;
@@ -4279,3 +4314,26 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
 .gl-party-row.mad  { background: linear-gradient(90deg, rgba(157,123,216,0.14), transparent 60%); }
 .gl-party-row.hurt { background: linear-gradient(90deg, rgba(192,57,43,0.15), transparent 60%); }
 .gl-party-row.mad.hurt { background: linear-gradient(90deg, rgba(192,57,43,0.15), rgba(157,123,216,0.14) 70%); }
+
+/* Party board on a phone: the table's width is its content's width, which is wider than
+   the screen, so the Status column (always last) sat off the right edge. Each row becomes a
+   flex line: name, then the numbers sharing the width evenly (header and body rows use the
+   same rules so they stay aligned), then Status on a full-width line of its own under the
+   row. The Status header is hidden; the line carries its own badge. */
+@media (max-width: 600px) {
+  .gl-party-scroll { overflow-x: visible; }
+  .gl-party-table, .gl-party-table thead, .gl-party-table tbody { display: block; }
+  .gl-party-table tr { display: flex; flex-wrap: wrap; align-items: center; padding-right: 6px; }
+  .gl-party-table th, .gl-party-table td { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; box-sizing: border-box; }
+  .gl-party-table th.gl-pc, .gl-party-table td.gl-pc { flex: 2.9 1 0; }
+  .gl-party-table thead th { white-space: normal; letter-spacing: 0.04em; font-size: 0.56rem; }
+  .gl-party-table thead tr { align-items: stretch; }
+  .gl-party-table thead th.gl-pc { letter-spacing: 0; font-size: 0.52rem; }
+  .gl-party-table th.gl-pc, .gl-party-table td.gl-pc, .gl-party-table td[data-gl-party-field="status"] { padding-left: 8px; }
+  .gl-party-table th:last-child { display: none; }
+  .gl-party-table td[data-gl-party-field="status"] { flex: 0 0 100%; text-align: left; padding-top: 0; }
+  .gl-party-table .gl-vital, .gl-party-table .gl-stat { min-width: 0; }
+  .gl-party-table tbody tr { border-bottom: 1px solid var(--border); }
+  .gl-party-table tbody tr:last-child { border-bottom: 0; }
+  .gl-party-table td { border-bottom: 0; }
+}
