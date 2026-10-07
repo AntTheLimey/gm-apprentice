@@ -33,13 +33,13 @@ function renderDndBoard(manifest, rosterOutputPath, { live = true } = {}) {
   const rows = manifest.pcs.map((pc) => {
     const c = dndRowCells(pc, null);   // the note's values; the script paints over them
     const href = encodeHref(relativeHref(rosterOutputPath, pc.outputPath));
-    return `<tr class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
-  <td class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub">${c.who}</span></span></a></td>
-  <td data-gl-party-field="ac">${c.ac}</td>
-  <td class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
-  <td data-gl-party-field="pp">${c.pp}</td>
-  <td data-gl-party-field="dc">${c.dc}</td>
-  <td data-gl-party-field="status">${c.status}</td>
+    return `<tr role="row" class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
+  <td role="cell" class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub">${c.who}</span></span></a></td>
+  <td role="cell" data-gl-party-field="ac">${c.ac}</td>
+  <td role="cell" class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
+  <td role="cell" data-gl-party-field="pp">${c.pp}</td>
+  <td role="cell" data-gl-party-field="dc">${c.dc}</td>
+  <td role="cell" data-gl-party-field="status">${c.status}</td>
 </tr>`;
   }).join('\n');
   const liveIndicator = live
@@ -51,9 +51,9 @@ function renderDndBoard(manifest, rosterOutputPath, { live = true } = {}) {
     ${liveIndicator}
   </div>
   <div class="gl-party-scroll">
-  <table class="gl-party-table">
-    <thead><tr><th class="gl-pc">Character</th><th>AC</th><th>Hit points</th><th>Passive Perc.</th><th>Spell DC</th><th>Status</th></tr></thead>
-    <tbody>
+  <table class="gl-party-table" role="table">
+    <thead role="rowgroup"><tr role="row"><th role="columnheader" class="gl-pc">Character</th><th role="columnheader">AC</th><th role="columnheader">Hit points</th><th role="columnheader">Passive Perc.</th><th role="columnheader">Spell DC</th><th role="columnheader">Status</th></tr></thead>
+    <tbody role="rowgroup">
 ${rows}
     </tbody>
   </table>

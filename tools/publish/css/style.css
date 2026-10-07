@@ -775,10 +775,15 @@ h3 {
     background:
       linear-gradient(to right, var(--bg-card) 30%, transparent) 0 0 / 2.5rem 100% no-repeat local,
       linear-gradient(to left, var(--bg-card) 30%, transparent) 100% 0 / 2.5rem 100% no-repeat local,
-      radial-gradient(farthest-side at 0 50%, rgba(0, 0, 0, 0.3), transparent) 0 0 / 0.9rem 100% no-repeat scroll,
-      radial-gradient(farthest-side at 100% 50%, rgba(0, 0, 0, 0.3), transparent) 100% 0 / 0.9rem 100% no-repeat scroll,
+      radial-gradient(farthest-side at 0 50%, color-mix(in srgb, var(--text) 40%, transparent), transparent) 0 0 / 0.9rem 100% no-repeat scroll,
+      radial-gradient(farthest-side at 100% 50%, color-mix(in srgb, var(--text) 40%, transparent), transparent) 100% 0 / 0.9rem 100% no-repeat scroll,
       var(--bg-card);
   }
+}
+/* A wide table written straight into a tab (the PF2e Strikes table, five no-wrap headers) is wider than a phone and
+   made the whole page scroll sideways; on a phone it scrolls inside its own box. */
+@media (max-width: 600px) {
+  .tab-panel > table { display: block; overflow-x: auto; max-width: 100%; }
 }
 .tab-panel {
   display: none;
@@ -4317,23 +4322,32 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
 
 /* Party board on a phone: the table's width is its content's width, which is wider than
    the screen, so the Status column (always last) sat off the right edge. Each row becomes a
-   flex line: name, then the numbers sharing the width evenly (header and body rows use the
-   same rules so they stay aligned), then Status on a full-width line of its own under the
-   row. The Status header is hidden; the line carries its own badge. */
+   flex line: the name, then the numbers sharing the rest evenly, then Status on a full-width
+   line of its own under the row. Header and body cells carry identical sizing and padding so
+   every header sits over its column; the name column is a fixed share, the others equal.
+   The table roles are written in the markup because these display types drop them. A
+   vital's maximum drops under its current value so three-digit pairs fit a narrow column.
+   Speed (GURPS) and Rep (CoC) are the columns left out, as ST already is below 640px. */
 @media (max-width: 600px) {
   .gl-party-scroll { overflow-x: visible; }
   .gl-party-table, .gl-party-table thead, .gl-party-table tbody { display: block; }
-  .gl-party-table tr { display: flex; flex-wrap: wrap; align-items: center; padding-right: 6px; }
-  .gl-party-table th, .gl-party-table td { flex: 1 1 0; min-width: 0; padding-left: 4px; padding-right: 4px; box-sizing: border-box; }
-  .gl-party-table th.gl-pc, .gl-party-table td.gl-pc { flex: 2.9 1 0; }
-  .gl-party-table thead th { white-space: normal; letter-spacing: 0.04em; font-size: 0.56rem; }
+  .gl-party-table tr { display: flex; flex-wrap: wrap; align-items: center; padding: 0 6px; }
+  .gl-party-table thead { background: var(--bg-card); }
   .gl-party-table thead tr { align-items: stretch; }
-  .gl-party-table thead th.gl-pc { letter-spacing: 0; font-size: 0.52rem; }
-  .gl-party-table th.gl-pc, .gl-party-table td.gl-pc, .gl-party-table td[data-gl-party-field="status"] { padding-left: 8px; }
+  .gl-party-table th, .gl-party-table td { flex: 1 1 0; min-width: 0; box-sizing: border-box; padding: 10px 2px; text-align: center; border-bottom: 0; }
+  .gl-party-table thead th { white-space: normal; letter-spacing: 0.02em; font-size: 0.62rem; padding: 8px 2px; text-align: center; }
+  .gl-party-table thead th.gl-pc { text-align: left; padding-left: 4px; padding-right: 4px; }
+  .gl-party-table th.gl-pc, .gl-party-table td.gl-pc { flex: 0 0 38%; text-align: left; padding-left: 4px; padding-right: 4px; }
+  .gl-party-table th.gl-pc { letter-spacing: 0; }
   .gl-party-table th:last-child { display: none; }
-  .gl-party-table td[data-gl-party-field="status"] { flex: 0 0 100%; text-align: left; padding-top: 0; }
+  .gl-party-table td[data-gl-party-field="status"] { flex: 0 0 100%; text-align: left; padding: 0 4px 10px; }
   .gl-party-table .gl-vital, .gl-party-table .gl-stat { min-width: 0; }
+  .gl-party-table .gl-vital .gl-max, .gl-party-table .gl-stat .gl-of { display: block; }
+  .gl-party-table .gl-pc-name { overflow-wrap: anywhere; }
+  .gl-party-table .gl-av { width: 28px; height: 28px; font-size: 0.7rem; }
+  .gl-party-table td.gl-pc a { gap: 6px; }
+  .gl-party-table .gl-speed, .gl-party-table th.gl-col-speed,
+  .gl-party-table td[data-gl-party-field="rep"], .gl-party-table th.gl-col-rep { display: none; }
   .gl-party-table tbody tr { border-bottom: 1px solid var(--border); }
   .gl-party-table tbody tr:last-child { border-bottom: 0; }
-  .gl-party-table td { border-bottom: 0; }
 }

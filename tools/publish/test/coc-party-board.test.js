@@ -37,8 +37,8 @@ test('buildCoCPartyManifest returns null for no entries', () => {
 test('renderCoCBoard emits the columns, the DEX-70 leader, and the insanity badge', () => {
   const html = renderCoCBoard(buildCoCPartyManifest('canticle', CANTICLE), 'player-characters.html');
   assert.match(html, /class="gl-party"/);
-  assert.match(html, /<th>DEX<\/th><th>HP<\/th><th>SAN<\/th><th>MP<\/th><th>Luck<\/th>/);
-  assert.match(html, /<th>Rep<\/th>/);                       // Regency has rep
+  assert.match(html, /<th[^>]*>DEX<\/th><th[^>]*>HP<\/th><th[^>]*>SAN<\/th><th[^>]*>MP<\/th><th[^>]*>Luck<\/th>/);
+  assert.match(html, /<th[^>]*>Rep<\/th>/);                       // Regency has rep
   assert.match(html, /data-gl-party="emma-wentworth"/);
   assert.match(html, /gl-party-row mad/);
   assert.match(html, /cond-insanity">Indefinite Insanity/);
@@ -51,7 +51,7 @@ test('renderCoCBoard emits the columns, the DEX-70 leader, and the insanity badg
 test('renderCoCBoard omits the Rep column when no PC has reputation', () => {
   const noRep = CANTICLE.map((e) => ({ ...e, data: { ...e.data, rep: null } }));
   const html = renderCoCBoard(buildCoCPartyManifest('c', noRep), 'player-characters.html');
-  assert.doesNotMatch(html, /<th>Rep<\/th>/);
+  assert.doesNotMatch(html, /<th[^>]*>Rep<\/th>/);
   assert.doesNotMatch(html, /data-gl-party-field="rep"/);
 });
 

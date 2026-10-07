@@ -38,19 +38,19 @@ function renderCoCBoard(manifest, rosterOutputPath, { live = true } = {}) {
   const rows = manifest.pcs.map((pc) => {
     const c = cocRowCells(pc, null);   // authored-default initial render
     const href = encodeHref(relativeHref(rosterOutputPath, pc.outputPath));
-    const repTd = showRep ? `\n  <td data-gl-party-field="rep">${c.rep}</td>` : '';
-    return `<tr class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
-  <td class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub">${c.player}</span></span></a></td>
-  <td data-gl-party-field="dex">${c.dex}</td>
-  <td class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
-  <td class="gl-vital" data-gl-party-field="san">${c.san}</td>
-  <td class="gl-vital" data-gl-party-field="mp">${c.mp}</td>
-  <td data-gl-party-field="luck">${c.luck}</td>${repTd}
-  <td data-gl-party-field="status">${c.status}</td>
+    const repTd = showRep ? `\n  <td role="cell" data-gl-party-field="rep">${c.rep}</td>` : '';
+    return `<tr role="row" class="gl-party-row ${c.rowClass}" data-gl-party="${escapeHtml(pc.pcSlug)}">
+  <td role="cell" class="gl-pc"><a href="${escapeHtml(href)}">${avatarHtml(pc, rosterOutputPath)}<span class="gl-pc-txt"><span class="gl-pc-name">${escapeHtml(pc.name)}</span><span class="gl-pc-sub">${c.player}</span></span></a></td>
+  <td role="cell" data-gl-party-field="dex">${c.dex}</td>
+  <td role="cell" class="gl-vital" data-gl-party-field="hp">${c.hp}</td>
+  <td role="cell" class="gl-vital" data-gl-party-field="san">${c.san}</td>
+  <td role="cell" class="gl-vital" data-gl-party-field="mp">${c.mp}</td>
+  <td role="cell" data-gl-party-field="luck">${c.luck}</td>${repTd}
+  <td role="cell" data-gl-party-field="status">${c.status}</td>
 </tr>`;
   }).join('\n');
 
-  const repTh = showRep ? '<th>Rep</th>' : '';
+  const repTh = showRep ? '<th role="columnheader" class="gl-col-rep">Rep</th>' : '';
   const liveIndicator = live
     ? '<span class="gl-party-live"><span class="gl-party-dot"></span><span class="gl-party-live-time">live</span></span>'
     : '';
@@ -60,9 +60,9 @@ function renderCoCBoard(manifest, rosterOutputPath, { live = true } = {}) {
     ${liveIndicator}
   </div>
   <div class="gl-party-scroll">
-  <table class="gl-party-table">
-    <thead><tr><th class="gl-pc">Investigator</th><th>DEX</th><th>HP</th><th>SAN</th><th>MP</th><th>Luck</th>${repTh}<th>Status</th></tr></thead>
-    <tbody>
+  <table class="gl-party-table" role="table">
+    <thead role="rowgroup"><tr role="row"><th role="columnheader" class="gl-pc">Investigator</th><th role="columnheader">DEX</th><th role="columnheader">HP</th><th role="columnheader">SAN</th><th role="columnheader">MP</th><th role="columnheader">Luck</th>${repTh}<th role="columnheader">Status</th></tr></thead>
+    <tbody role="rowgroup">
 ${rows}
     </tbody>
   </table>
