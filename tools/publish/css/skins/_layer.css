@@ -19,18 +19,41 @@ main.content .sk-portrait { position: relative; width: 6.5rem; height: 6.5rem; f
 
 /* ===== the shared layer: what every skin sets, and where each sheet reads it =====
    The plain exclusion is inside :where(), so a layer rule weighs the same as a skin's own rule
-   on main.content, and the skin, which comes later in the built file, wins a tie. */
+   on main.content, and the skin, which comes later in the built file, wins a tie.
+
+   Ground and tiles. A skin file sets the site's names (--text, --text-muted, --accent) to the TILE's inks and may set
+   ground inks (--sk-g-text, --sk-g-muted, --sk-g-accent, --sk-g-danger). main.content keeps both sets under private names; its children
+   are given the ground's, so everything on the ground inherits them without being named; whatever paints a tile or card
+   colour takes the tile's back, with --bg as the well. An element new to the ground needs no rule here. One that paints
+   --bg-card (or another surface colour) on the ground joins the tile list (dressed as a tile) or the card list (inks only). */
 main.content[data-skin] { --sk-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='220'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .5 0'/%3E%3C/filter%3E%3Crect width='220' height='220' filter='url(%23n)' opacity='.22'/%3E%3C/svg%3E"); }
 main.content[data-skin]:where(:not([data-skin=plain])) {
   color-scheme: dark; --sk-cmix: 52%; --bg-header: var(--sk-well); --surface: var(--bg-card); --font-serif: var(--font-body);
-  background-color: var(--bg); background-image: var(--sk-ground-img, none); color: var(--sk-g-text, var(--text)); font-family: var(--font-body);
+  --sk-t-text: var(--text); --sk-t-muted: var(--text-muted); --sk-t-accent: var(--accent); --sk-t-danger: var(--danger);
+  --sk-gx-text: var(--sk-g-text, var(--text)); --sk-gx-muted: var(--sk-g-muted, var(--text-muted)); --sk-gx-accent: var(--sk-g-accent, var(--accent)); --sk-gx-danger: var(--sk-g-danger, var(--danger));
+  background-color: var(--bg); background-image: var(--sk-ground-img, none); color: var(--sk-gx-text); font-family: var(--font-body);
   border-radius: 12px; margin-top: 1rem;
 }
-/* tiles: D&D blocks and strip, GURPS blocks and status panel, the Pathfinder and FitD sheets, the shared hero and tab bar */
-main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet, details.rules-ref) {
-  --bg: var(--sk-well); color: var(--text); background-color: var(--bg-card); background-image: var(--sk-card-img, none);
+main.content[data-skin]:where(:not([data-skin=plain])) > * { --text: var(--sk-gx-text); --text-muted: var(--sk-gx-muted); --accent: var(--sk-gx-accent); --danger: var(--sk-gx-danger); }
+/* tiles: D&D blocks and strip, GURPS blocks and status panel, the Pathfinder and FitD sheets, the shared hero and tab bar. Every name is one class, so this rule weighs what a skin's own rule on a tile weighs. */
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet, .rules-ref) {
+  color: var(--text); background-color: var(--bg-card); background-image: var(--sk-card-img, none);
   border: var(--sk-edge, 1px solid var(--border)); border-radius: var(--sk-r, 8px); box-shadow: var(--sk-inner, none);
 }
+/* style.css gives these three no border, so a skin's edge is drawn inside their box and takes no room: the block and its content keep the plain page's size */
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-blk, .pf2e-sheet, .fitd-sheet) { border: 0; outline: var(--sk-edge, 1px solid var(--border)); outline-offset: -1px; }
+/* the tile's inks, for the tiles above, the CoC sheet, and the cards: whatever else paints a tile colour where it can sit on the ground */
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet, .rules-ref, .coc-sheet-root,
+  .callout, th, .accordion-header, .section-nav, .entity-card, .rel-card, .stat-block, .event-outcome, .cr-text, .cr-code, .cr-send) {
+  --bg: var(--sk-well); --text: var(--sk-t-text); --text-muted: var(--sk-t-muted); --accent: var(--sk-t-accent); --danger: var(--sk-t-danger);
+}
+/* a card with no colour of its own in style.css would inherit the ground's; this weighs nothing, so any rule there still wins */
+:where(main.content[data-skin]:where(:not([data-skin=plain]))) :where(.callout, th, .accordion-header, .section-nav, .entity-card, .rel-card, .stat-block, .event-outcome) { color: var(--text); }
+main.content[data-skin]:where(:not([data-skin=plain])) .cr-send { color: var(--bg-card); }
+/* the change-request code box has no rule of its own in style.css, so under a skin's colour scheme it would be the browser's field */
+main.content[data-skin]:where(:not([data-skin=plain])) .cr-code { background-color: var(--bg-card); color: var(--text); }
+/* every field's placeholder is the muted ink at full strength, on the tile or well the field paints */
+main.content[data-skin]:where(:not([data-skin=plain])) :is(input, textarea)::placeholder { color: var(--text-muted); opacity: 1; }
 /* The tab bar's "more tabs this way" hint on a phone (style.css paints it with a background shorthand this layer's tile rule replaces): two covers that move with the tabs and hide the two edge shadows once an end is reached. A skin whose bar sits on the ground sets --sk-hint-fill; one with a card image of its own re-orders the layers (see its file). */
 main.content[data-skin]:where(:not([data-skin=plain])) {
   --sk-hint: linear-gradient(to right, var(--sk-hint-fill, var(--bg-card)) 1rem, transparent 2.5rem), linear-gradient(to left, var(--sk-hint-fill, var(--bg-card)) 1rem, transparent 2.5rem),
@@ -51,15 +74,12 @@ main.content[data-skin]:where(:not([data-skin=plain])) .pf2e-sheet .skill-mark, 
 main.content[data-skin]:where(:not([data-skin=plain])) .fitd-sheet .fitd-box { border-radius: var(--sk-r-ctl, 2px); }
 main.content[data-skin]:where(:not([data-skin=plain])) .pf2e-sheet .dnd-skill.is-proficient .skill-mark, main.content[data-skin]:where(:not([data-skin=plain])) .fitd-sheet :is(.fitd-dot, .fitd-box).filled { background: var(--sk-pip-on, var(--accent)); }
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.pf2e-sheet :is(h3, h4, .dnd-header), .fitd-sheet h3, .fitd-attribute h4) { font-family: var(--font-heading); }
-main.content[data-skin]:where(:not([data-skin=plain])) .dnd5e-header { color: var(--sk-g-text, var(--text)); }
-/* ground inks: each rule is a direct child chain from main.content, so it can only reach text that sits on the ground (CoC's folio panels are tab-panels inside a tile and are not matched) */
-main.content[data-skin]:where(:not([data-skin=plain])) > :is(.breadcrumbs, .pull-quote) { color: var(--sk-g-muted, var(--text-muted)); }
-main.content[data-skin]:where(:not([data-skin=plain])) > .breadcrumbs a { color: var(--sk-g-accent, var(--accent)); }
-main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(h3, h4, p, ul, ol, table, blockquote, pre, .story-prose), main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(ul, ol, table, blockquote, pre, .story-prose) :is(h1, h2, h3, h4, p, li, td, strong, em, code) { color: var(--sk-g-text, var(--text)); }
-main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(p, ul, ol, table, blockquote, .story-prose) a { color: var(--sk-g-accent, var(--accent)); }
-main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > :is(.text-muted, .sheet-withheld) { color: var(--sk-g-muted, var(--text-muted)); }
-main.content[data-skin]:where(:not([data-skin=plain])) > .tab-panel > .pc-identity .label { color: var(--sk-g-accent, var(--accent)); }
 main.content[data-skin]:where(:not([data-skin=plain])) .hero-cinematic h1 { color: var(--text); }
+/* a long name: a skin's heading face is wider than the page's own, so a word that cannot fit breaks inside its tile instead of running under a cut corner or off the page, and the CoC masthead's large type follows a narrow screen down (3rem from 511px up, as on the plain page) */
+main.content[data-skin]:where(:not([data-skin=plain])) :is(.hero-cinematic h1, .masthead h1) { overflow-wrap: anywhere; }
+main.content[data-skin]:where(:not([data-skin=plain])) .coc-sheet-root .masthead h1 { font-size: min(3rem, 9.4vw); }
+/* GURPS Points Summary: a value cell that carries a remark ("+0 (not present)") is set not to wrap, and in a wide face it ran under the block's edge */
+main.content[data-skin]:where(:not([data-skin=plain])) .cat-points td.num { white-space: normal; }
 main.content[data-skin]:where(:not([data-skin=plain])) .sk-frame { --frame: var(--accent); }
 /* GURPS category colours: eight pigments per skin, lightened for dark, tinted for the row stripes */
 main.content[data-skin]:where(:not([data-skin=plain])), main.content[data-skin]:where(:not([data-skin=plain])) [class*="cat-"] {
