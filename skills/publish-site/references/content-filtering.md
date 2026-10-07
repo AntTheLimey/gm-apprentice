@@ -32,8 +32,8 @@ All campaign content falls into three categories:
   its relationship graph, and the search index.
 - On a `publish: stub` file, everything except the sections named in
   `publish_include_sections`. Everything in this list is withheld
-  first, so a named section under a withheld heading or inside a fenced
-  block stays withheld.
+  first, so a named section under a withheld heading, or inside a
+  `gm-only` block, a spoiler block or an HTML comment, stays withheld.
 
 ### Frontmatter is not covered by the fence
 
