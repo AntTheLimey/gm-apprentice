@@ -35,6 +35,10 @@ ARMOR_TYPES, WEAPON_TYPES, TOOL_TYPES = {174869515}, {1782728300, 660121713}, {2
 CLASS_FEATURE, RACIAL_TRAIT, FEAT = 12168134, 1960452172, 1088085227
 BASE_CAP, ABSOLUTE_MAX = 20, 30
 NAME_LIMIT = 80
+# The site's own bookkeeping rows; the sheet already shows these facts.
+BOOKKEEPING = frozenset((
+    "proficiencies", "hit points", "ability score improvement", "ability score increase",
+    "ability score increases", "equipment", "languages", "age", "size", "speed", "alignment", "creature type"))
 KEPT_IN_NAMES = frozenset("'-,./+():&")
 
 
@@ -432,7 +436,7 @@ def _features(defs: list[dict], uses: dict[tuple[int, int], dict], scores: dict[
     out: dict[str, Feature] = {}
     for fd in defs:
         name = safe_name(fd.get("name"))
-        if not name or name in out:
+        if not name or name in out or name.lower() in BOOKKEEPING:
             continue
         use = uses.get((_int(fd.get("id"), -1), _int(fd.get("entityTypeId"), -1)))
         out[name] = Feature(name, _max_uses(use, scores, pb) if use else None, _recovery(use) if use else "")
@@ -569,7 +573,7 @@ def _inventory_lists(rows: list[dict], values: dict) -> tuple[list[Item], list[M
         name = _item_name(row, values)
         if not name:
             continue
-        if defn.get("magic"):
+        if defn.get("magic") and not defn.get("isConsumable"):
             charges, recovers = _charges(row)
             seen = magic.get(name)
             if seen is None:

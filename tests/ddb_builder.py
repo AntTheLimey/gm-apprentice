@@ -142,9 +142,9 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
     items, item_ids = [], {}
 
     def add_item(iname, qty=1, weight=0, magic=False, attuned=False, kind="gear", equipped=True,
-                 charges=None, reset=None):
+                 charges=None, reset=None, consumable=False):
         defn = {"id": 5000 + len(items), "name": iname, "weight": weight, "magic": magic,
-                "canAttune": magic, "stackable": qty > 1, "bundleSize": 1, "weightMultiplier": 1,
+                "canAttune": magic, "isConsumable": consumable, "stackable": qty > 1, "bundleSize": 1, "weightMultiplier": 1,
                 "filterType": {"armor": "Armor", "shield": "Armor", "weapon": "Weapon"}.get(
                     kind, "Wondrous item" if magic else "Other Gear"),
                 "armorTypeId": {"armor": 1, "shield": 4}.get(kind), "strengthRequirement": 0}

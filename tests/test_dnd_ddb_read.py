@@ -180,6 +180,15 @@ def test_a_feature_hidden_from_the_sheet_or_above_the_classs_level_is_left_out()
     assert c.species_traits == []
 
 
+@pytest.mark.parametrize("name", ["Proficiencies", "hit points", " Ability Score Improvement ", "Ability Score Increase",
+                                  "Ability Score Increases", "Equipment", "Languages", "Age", "Size", "Speed",
+                                  "Alignment", "Creature Type"])
+def test_the_sites_bookkeeping_features_are_not_listed(name):
+    c = got(class_features=((name, None, None), ("Real Feature", None, None)), racial_traits=((name, None, None), ("Real Trait", None, None)))
+    assert [f.name for f in c.class_features] == ["Real Feature"]
+    assert [f.name for f in c.species_traits] == ["Real Trait"]
+
+
 def test_a_feature_listed_twice_is_kept_once():
     c = got(class_features=(("Rage Test", None, None, 1, True), ("Rage Test", 3, 2), ("Rage Test", None, None)))
     assert [(f.name, f.uses) for f in c.class_features] == [("Rage Test", 3)]
@@ -306,6 +315,15 @@ def test_a_name_the_player_gave_an_item_is_the_name_read():
     data["characterValues"] = [{"typeId": 8, "value": "Gloomwright's Edge", "valueId": "9000",
                                 "valueTypeId": "1439493548"}]
     assert read(data).gear[0].name == "Gloomwright's Edge"
+
+
+def test_consumable_magic_items_are_gear_and_other_magic_stays_magic():
+    potion = ("Potion of Healing", 3, 0.5, True, False, "gear", True, None, None, True)
+    c = got(inventory=(potion, ("Ring of Gloomwright", 1, 0, True, False, "gear")))
+    assert [(i.name, i.qty, i.weight, i.kind) for i in c.gear] == [("Potion of Healing", 3, "1/2 lb", "other")]
+    assert [m.name for m in c.magic_items] == ["Ring of Gloomwright"]
+    again = got(inventory=(potion, potion))
+    assert [(i.name, i.qty) for i in again.gear] == [("Potion of Healing", 6)] and again.magic_items == []
 
 
 # --- coins and speed ----------------------------------------------------
