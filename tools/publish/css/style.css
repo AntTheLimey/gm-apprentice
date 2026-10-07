@@ -781,9 +781,11 @@ h3 {
   }
 }
 /* A wide table written straight into a tab (the PF2e Strikes table, five no-wrap headers) is wider than a phone and
-   made the whole page scroll sideways; on a phone it scrolls inside its own box. */
+   made the whole page scroll sideways. On a phone its headers and cells may wrap, so it shrinks to the panel and keeps
+   being a table; one that already fits is unchanged. */
 @media (max-width: 600px) {
-  .tab-panel > table { display: block; overflow-x: auto; max-width: 100%; }
+  .tab-panel > table th { white-space: normal; }
+  .tab-panel > table td { overflow-wrap: anywhere; }
 }
 .tab-panel {
   display: none;
@@ -4339,7 +4341,8 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
   .gl-party-table thead th.gl-pc { text-align: left; padding-left: 4px; padding-right: 4px; }
   .gl-party-table th.gl-pc, .gl-party-table td.gl-pc { flex: 0 0 38%; text-align: left; padding-left: 4px; padding-right: 4px; }
   .gl-party-table th.gl-pc { letter-spacing: 0; }
-  .gl-party-table th:last-child { display: none; }
+  .gl-party-table thead tr { position: relative; }
+  .gl-party-table th:last-child { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; overflow: hidden; clip-path: inset(50%); }
   .gl-party-table td[data-gl-party-field="status"] { flex: 0 0 100%; text-align: left; padding: 0 4px 10px; }
   .gl-party-table .gl-vital, .gl-party-table .gl-stat { min-width: 0; }
   .gl-party-table .gl-vital .gl-max, .gl-party-table .gl-stat .gl-of { display: block; }

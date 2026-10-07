@@ -26,7 +26,11 @@ test('the PC tab bar shows an edge hint on a phone where it can scroll', () => {
   assert.match(block[0], /var\(--text\)/, 'the hint follows the theme, so it shows on dark palettes too');
 });
 
-test('a table written straight into a tab scrolls inside its own box on a phone', () => {
+test('a table written straight into a tab wraps to the panel on a phone and stays a table', () => {
   const flat = css.replace(/\s+/g, ' ');
-  assert.match(flat, /@media\s*\(max-width:\s*600px\)\s*\{\s*\.tab-panel > table\s*\{[^}]*overflow-x:\s*auto/);
+  const m = flat.match(/@media\s*\(max-width:\s*600px\)\s*\{\s*\.tab-panel > table th\s*\{([^}]*)\}\s*\.tab-panel > table td\s*\{([^}]*)\}/);
+  assert.ok(m, 'phone rules for .tab-panel > table');
+  assert.match(m[1], /white-space:\s*normal/);
+  assert.match(m[2], /overflow-wrap:\s*anywhere/);
+  assert.doesNotMatch(flat, /\.tab-panel > table\s*\{[^}]*display:\s*block/, 'a block display would drop the table role');
 });
