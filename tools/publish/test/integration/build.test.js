@@ -1752,6 +1752,13 @@ describe('publish controls (#166, #167)', () => {
     assert.ok(!story.includes('Session 3'));
   });
 
+  it('publish: stub keeps nothing the story companion withholds (#320)', () => {
+    for (const out of [read('story', 'characters', 'mira-chandra.html'), read('search-index.json')]) {
+      assert.ok(!out.includes('Barrackpore'));
+      assert.ok(!out.includes('maps are forgeries'));
+    }
+  });
+
   it('publish: stub reduces the PC page itself', () => {
     const pc = read('characters', 'pcs', 'mira-chandra.html');
     assert.ok(!pc.includes('Prep preamble'));
