@@ -36,6 +36,16 @@ describe('skins: resolveLook', () => {
       assert.strictEqual(r.notes[0].key, 'sheet_skin');
     }
   });
+  it('warns and falls back on an unknown frame, naming the key and the value', () => {
+    const r = resolveLook({ sheet_frame: 'filigree' }, { skin: 'ledger', frame: null, notes: [] });
+    assert.strictEqual(r.skin, 'ledger');
+    assert.strictEqual(r.frame, 'gilt', "the skin's own frame");
+    assert.strictEqual(r.notes.length, 1);
+    assert.strictEqual(r.notes[0].key, 'sheet_frame');
+    assert.strictEqual(r.notes[0].value, 'filigree');
+    // a campaign frame is the fallback when there is one
+    assert.strictEqual(resolveLook({ sheet_frame: 'filigree' }, { skin: 'ledger', frame: 'ring', notes: [] }).frame, 'ring');
+  });
   it('treats an empty or null value as not set, silently', () => {
     for (const empty of [null, '', '   ']) {
       assert.deepStrictEqual(resolveLook({ sheet_skin: empty, sheet_frame: empty }, none), { skin: 'plain', frame: 'none', notes: [] });

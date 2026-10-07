@@ -76,10 +76,10 @@ function buildCocBody(opts) {
     const framed = framedPortrait({ frame: look.frame, imgUrl: portraitUrl || '', alt: displayTitle, initials: getInitials(displayTitle) });
     sheet = sheet.replace(slot, () => framed);
   } else if (portraitUrl) {
-    sheet = sheet.replace(/<img class="portrait" data-portrait[^>]*>/,
+    sheet = sheet.replace(slot,
       `<img class="portrait" src="${portraitUrl}" alt="${escapeHtml(displayTitle)}">`);
   } else {
-    sheet = sheet.replace(/<img class="portrait" data-portrait[^>]*>/, '');
+    sheet = sheet.replace(slot, '');
   }
 
   // Content-loss guard: every non-consumed prose section (including any authored

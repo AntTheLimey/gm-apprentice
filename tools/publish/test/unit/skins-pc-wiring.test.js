@@ -38,6 +38,9 @@ describe('pcTemplate: look wiring', () => {
     assert.match(h, /hero-cinematic-framed/);
     assert.match(h, /<span class="sk-initials">/);
     assert.doesNotMatch(h, /hero-cinematic-no-img/);
+    // the old initials circle (an inline-sized .pc-portrait holding the letters) is gone, not drawn beside the frame
+    assert.doesNotMatch(h, /<div class="pc-portrait" style=/);
+    assert.strictEqual((h.match(/pc-portrait/g) || []).length, 1, 'one portrait block, the framed one');
   });
   it('a dressed page carries data-skin and links skins.css; a PC value beats the site', () => {
     const h = render(mkPage({ sheet_skin: 'ledger' }), withLook({ sheet_skin: 'console' }));
