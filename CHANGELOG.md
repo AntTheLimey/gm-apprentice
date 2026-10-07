@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.37] — 2026-10-07
+
+### Fixed
+
+- A `publish: stub` page no longer publishes a hidden section that
+  shares its name with one of the page's `publish_include_sections`. A
+  `### Appearance` under `## GM Notes` was published when `Appearance`
+  was a named section, because the page was cut down to its named
+  sections before anything was withheld, and the `## GM Notes` heading
+  went with the cut. The same happened to a named heading inside a
+  `<!-- gm-only -->` block, a `<!-- spoiler -->` block or a comment that
+  opened outside the named sections. A stub page now keeps a line only
+  when the whole note would have published it. The page, its story
+  companion, the search index, `sheet show --player-safe` and the
+  `lines` command all take the fix (#320).
+- Pressing Escape with the keyboard focus inside an open menu closes the
+  menu and puts the focus back on the button that opened it, for the
+  top menus and the phone menu. The focus was left on a hidden link
+  (#321).
+- Publish tool 1.15.1.
+
+---
+
 ## [1.10.36] — 2026-10-06
 
 ### Added

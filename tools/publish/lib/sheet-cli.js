@@ -69,7 +69,8 @@ function playerSafeBody(page, publishConfig, warnings) {
     const include = Array.isArray(page.frontmatter.publish_include_sections)
       ? page.frontmatter.publish_include_sections
       : [];
-    markdown = keepOnlySections(markdown || '', include);
+    markdown = keepOnlySections(markdown || '', include,
+      { excludeSections: publishConfig.exclude_sections, frontmatter: page.frontmatter });
   }
   const result = playerSafeMarkdown(markdown, {
     excludeCallouts: publishConfig.exclude_callouts,

@@ -528,13 +528,16 @@ function build(options = {}) {
       const include = Array.isArray(page.frontmatter.publish_include_sections)
         ? page.frontmatter.publish_include_sections
         : [];
-      page.markdown = keepOnlySections(page.markdown || '', include);
+      // What the whole note withholds stays withheld: the reduction drops the heading
+      // or marker that hid it, so the strips below could not (#320).
+      const withhold = { excludeSections, frontmatter: page.frontmatter };
+      page.markdown = keepOnlySections(page.markdown || '', include, withhold);
       // A PC's story companion is a SEPARATE file paired in by the scanner and
       // rendered on its own page. Reducing only page.markdown left a stubbed PC
       // publishing its complete story — the same content the stub exists to
       // withhold, one URL over.
       if (page.storyMarkdown) {
-        page.storyMarkdown = keepOnlySections(page.storyMarkdown, include);
+        page.storyMarkdown = keepOnlySections(page.storyMarkdown, include, withhold);
       }
     }
     const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};

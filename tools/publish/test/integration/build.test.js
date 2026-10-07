@@ -1665,7 +1665,7 @@ describe('publish controls (#166, #167)', () => {
       siteTitle: 'Publish Controls Test',
       siteUrl: 'https://example.github.io/test-pubctl',
       excludeDirs: ['_meta'],
-      excludeSections: [],
+      excludeSections: ['GM Notes'],
       folderMap: {
         'Characters/NPCs': 'characters/npcs',
         'Characters/PCs': 'characters/pcs',
@@ -1712,6 +1712,15 @@ describe('publish controls (#166, #167)', () => {
     assert.ok(!html.includes('is the traitor'));
     assert.ok(!html.includes('The Climax'));
     assert.ok(!html.includes('beneath the ossuary'));
+  });
+
+  // The reduction drops `## GM Notes` and the spoiler opener; what they hid must not
+  // ride out on a heading that happens to share an included section's name (#320).
+  it('publish: stub keeps nothing the whole note withholds', () => {
+    for (const out of [read('chapters', 'chapter-4-overview.html'), read('search-index.json')]) {
+      assert.ok(!out.includes('already knows who the party are'));
+      assert.ok(!out.includes('monsoon breaks'));
+    }
   });
 
   it('publish_exclude_fields hides the fields on that file only', () => {

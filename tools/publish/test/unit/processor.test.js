@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, publishedFrontmatter, playerSafeMarkdown } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -700,6 +700,69 @@ describe('keepOnlySections (#167)', () => {
     const out = keepOnlySections(nested, ['Keep']);
     assert.ok(out.includes('a') && out.includes('b'));   // child rides along
     assert.ok(!out.includes('c'));
+  });
+});
+
+// The stub reduction runs before the strips, and it drops whatever sits outside a kept
+// section: a withheld parent heading, the opener of a hidden block. A kept line must be
+// one the whole note would have published.
+describe('keepOnlySections never keeps what the whole note withholds (#320)', () => {
+  const withhold = { excludeSections: ['GM Notes'] };
+  const published = (text, include, fm) => playerSafeMarkdown(
+    keepOnlySections(text, include, { excludeSections: ['GM Notes'], frontmatter: fm }),
+    { excludeSections: ['GM Notes'], frontmatter: fm }).text;
+
+  it('a heading under a withheld section stays withheld, whatever its text', () => {
+    const text = '## Appearance\nWhat the party saw.\n\n## GM Notes\n### Appearance\nSECRET\n';
+    assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), '## Appearance\nWhat the party saw.\n');
+  });
+
+  it('a withheld section inside a kept one goes, and the kept one resumes after it', () => {
+    const text = '# Hero\n## Appearance\nseen\n### GM Notes\nSECRET\n### Scars\nalso seen\n## Other\nno';
+    assert.strictEqual(keepOnlySections(text, ['Hero'], withhold),
+      '# Hero\n## Appearance\nseen\n### Scars\nalso seen\n## Other\nno');
+  });
+
+  it('a document page\'s Keeper section withholds a kept title under it', () => {
+    const text = '## The Text\nread aloud\n\n## Context\n### The Text\nSECRET\n';
+    assert.ok(!published(text, ['The Text'], { type: 'document' }).includes('SECRET'));
+    assert.ok(published(text, ['The Text'], { type: 'document' }).includes('read aloud'));
+  });
+
+  for (const marker of ['gm-only', 'spoiler']) {
+    it(`a kept title inside a ${marker} block opened outside any kept section stays hidden`, () => {
+      const text = `intro\n<!-- ${marker} -->\n## Appearance\nSECRET\n\n## Other\nx\n<!-- /${marker} -->\n## Appearance\npublic\n`;
+      const out = published(text, ['Appearance']);
+      assert.ok(!out.includes('SECRET'), out);
+      assert.ok(out.includes('public'), out);
+    });
+
+    it(`a ${marker} block opened in a dropped section hides the kept section it runs into`, () => {
+      const text = `## Prep\n<!-- ${marker} -->\nnotes\n## Appearance\nSECRET\n<!-- /${marker} -->\nafter\n`;
+      assert.ok(!published(text, ['Appearance']).includes('SECRET'));
+    });
+
+    it(`a ${marker} block wholly inside a kept section is still the strip's to remove`, () => {
+      const text = `## Appearance\nseen\n<!-- ${marker} -->\nSECRET\n<!-- /${marker} -->\nalso seen\n`;
+      assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), text);
+      assert.strictEqual(published(text, ['Appearance']), '## Appearance\nseen\n\nalso seen\n');
+    });
+  }
+
+  it('a kept title inside a comment opened outside any kept section stays hidden', () => {
+    const text = '<!--\n## Appearance\nSECRET\n\n## Other\n-->\n## Appearance\npublic\n';
+    const out = published(text, ['Appearance']);
+    assert.ok(!out.includes('SECRET'), out);
+    assert.ok(out.includes('public'), out);
+  });
+
+  it('a marker shown in a code block hides nothing', () => {
+    const text = '```\n<!-- gm-only -->\n```\n## Appearance\npublic\n';
+    assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), '## Appearance\npublic\n');
+  });
+
+  it('with no exclude list a section is kept by its name alone, as before', () => {
+    assert.strictEqual(keepOnlySections('x\n## GM Notes\nkept\n', ['GM Notes']), '## GM Notes\nkept\n');
   });
 });
 

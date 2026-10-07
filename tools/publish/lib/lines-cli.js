@@ -18,9 +18,11 @@
 //   {"op":"sections","text":…,"excludeSections":[…]}
 //       -> {"withheldBy":[…]}  per line of `text`: the excluded section that
 //                            withholds it, or null
-//   {"op":"stub","text":…,"include":[…]}
+//   {"op":"stub","text":…,"include":[…],"excludeSections":[…]}
 //       -> {"kept":[…]}      per line of `text`: whether a `publish: stub` page with
-//                            these `publish_include_sections` keeps it
+//                            these `publish_include_sections` keeps it. A line inside a
+//                            hidden block opened outside the kept sections is not kept;
+//                            nor, when `excludeSections` is given, one it withholds
 //
 //   {"op":"site","vault":…}
 //       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault file has a
@@ -97,13 +99,14 @@ function answer(request) {
       const include = publish === 'stub' ? list(request, 'include') : [];
       if (publish === 'none') return { text: '' };
       // The stub reduction runs first, as in the build (see sheet-cli playerSafeBody).
-      const body = publish === 'stub' ? keepOnlySections(text, include) : text;
+      const body = publish === 'stub' ? keepOnlySections(text, include, { excludeSections }) : text;
       return { text: playerSafeMarkdown(body, { excludeSections }).text };
     }
     case 'sections':
       return { withheldBy: sectionVerdicts(text, list(request, 'excludeSections')) };
     case 'stub':
-      return { kept: keptSectionFlags(text, list(request, 'include')) };
+      return { kept: keptSectionFlags(text, list(request, 'include'),
+        { excludeSections: request.excludeSections === undefined ? [] : list(request, 'excludeSections') }) };
     default:
       throw new Error(`unknown op: ${JSON.stringify(request.op)}`);
   }

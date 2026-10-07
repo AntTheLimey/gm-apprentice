@@ -31,7 +31,9 @@ All campaign content falls into three categories:
 - Relationship edges marked `gm_only: true` — removed from the page,
   its relationship graph, and the search index.
 - On a `publish: stub` file, everything except the sections named in
-  `publish_include_sections`.
+  `publish_include_sections`. A named section under a withheld heading,
+  or inside a fenced block that opens outside the named sections, stays
+  withheld.
 
 ### Frontmatter is not covered by the fence
 
