@@ -529,9 +529,9 @@ function build(options = {}) {
         ? page.frontmatter.publish_include_sections
         : [];
       // The cut is made on what the whole note publishes: cut first, and the heading or
-      // marker that hid a line goes with it, so the strips below could not (#320). Their
-      // warnings come from here; nothing later sees a marker on a stub page.
-      const withhold = { excludeSections, frontmatter: page.frontmatter,
+      // marker that hid a line goes with it, so the strips below could not (#320). An
+      // unclosed marker is reported from here: the cut text no longer holds it.
+      const withhold = { excludeSections, excludeCallouts, frontmatter: page.frontmatter,
         warn: (message) => console.warn(`  WARNING: ${page.outputPath}: ${message}`) };
       page.markdown = keepOnlySections(page.markdown || '', include, withhold);
       // A PC's story companion is a SEPARATE file paired in by the scanner and

@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - On a stub page, a hidden block opened in one named section and closed
   in a section that is not named no longer hides the named sections
   after it.
+- On a stub page of a site that hides callouts, a callout stays hidden
+  when a named section above it holds a code block with a `#` line in
+  it. The code block was left open by the cut and the callout was
+  published as code.
 - Pressing Escape with the keyboard focus inside an open menu closes the
   menu and puts the focus back on the button that opened it, for the
   top menus and the phone menu. The focus was left on a hidden link

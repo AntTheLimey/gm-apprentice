@@ -67,7 +67,7 @@ function playerSafeBody(page, publishConfig, warnings) {
       ? page.frontmatter.publish_include_sections
       : [];
     markdown = keepOnlySections(markdown || '', include,
-      { excludeSections: publishConfig.exclude_sections, frontmatter: page.frontmatter, warn: (w) => warnings.push(w) });
+      { excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts, frontmatter: page.frontmatter, warn: (w) => warnings.push(w) });
   }
   const result = playerSafeMarkdown(markdown, {
     excludeCallouts: publishConfig.exclude_callouts,

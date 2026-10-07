@@ -776,6 +776,23 @@ describe('keepOnlySections never keeps what the whole note withholds (#320)', ()
     assert.strictEqual(keepOnlySections(text, ['Appearance'], withhold), '');
   });
 
+  it('a callout the site hides stays hidden when the cut leaves a code block open above it', () => {
+    const text = '## Appearance\nTall.\n```\n# a comment line\n```\n\n## Rumours\nHeard in town.\n> [!gm] KILLER\n';
+    const cut = keepOnlySections(text, ['Appearance', 'Rumours'], { excludeCallouts: true });
+    assert.ok(!playerSafeMarkdown(cut, { excludeCallouts: true }).text.includes('KILLER'));
+    assert.ok(cut.includes('Heard in town.'));
+  });
+
+  it('a dataview block is removed before the markers are read, as on any page', () => {
+    for (const text of ['### Keep\n```dataview\n```dataview\nT1 <!-- gm-only --> T2\n', '# keep\n```dataview\n```js\nT1 <!-- spoiler --> T2']) {
+      const include = [text.startsWith('###') ? 'Keep' : 'keep'];
+      assert.strictEqual(playerSafeMarkdown(keepOnlySections(text, include), {}).text.includes('T2'), false);
+    }
+    const closed = '## Keep\nbefore\n```dataview\nLIST\n```\nafter\n## Other\nno';
+    assert.strictEqual(keepOnlySections(closed, ['Keep']), '## Keep\nbefore\n\nafter');
+    assert.deepStrictEqual(keptSectionFlags(closed, ['Keep']), [true, true, false, false, true, true, false, false]);
+  });
+
   it('an unclosed marker is reported, since no later pass can see it', () => {
     const heard = [];
     keepOnlySections('## Appearance\nseen\n<!-- gm-only -->\nSECRET', ['Appearance'], { warn: (w) => heard.push(w) });
