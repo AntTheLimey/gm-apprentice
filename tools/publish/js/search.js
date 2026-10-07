@@ -209,7 +209,13 @@
     if (!searchOverlay.classList.contains('open')) return;
     searchOverlay.classList.remove('open');
     setExpanded(false);
-    if (lastTrigger && lastTrigger.offsetParent !== null) lastTrigger.focus();
+    var back = lastTrigger;
+    // A link in a menu that Escape has just closed is hidden; its menu's button stands in.
+    if (back && back.offsetParent === null && back.closest) {
+      var group = back.closest('.nav-group');
+      back = group ? group.querySelector('.nav-group-toggle') : null;
+    }
+    if (back && back.offsetParent !== null) back.focus();
     lastTrigger = null;
   }
 

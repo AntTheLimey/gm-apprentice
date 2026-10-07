@@ -417,26 +417,47 @@ function walkKeepList(markdown, excludeSections, frontmatter, rules) {
 // its body is prep. Defaults to keeping nothing — a stub opts content IN, so a
 // section added later is suppressed until the GM names it, rather than
 // appearing the moment someone writes it.
-function keepOnlySections(markdown, includeSections = []) {
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
-  const flags = keptSectionFlags(markdown, includeSections);
-  return lines.filter((_, i) => flags[i]).join('\n');
+//
+// This runs BEFORE the build's strips, and cutting a note down drops the very things
+// that hide its text: the `## GM Notes` over a kept title, the `<!-- gm-only -->` that
+// opened above one (#320). So the cut is made on what the WHOLE note publishes:
+// playerSafeMarkdown's own strips run first (strippedLines; `withhold.excludeCallouts`
+// is its callout setting), then the exclude list (`withhold.excludeSections`, and
+// `withhold.frontmatter` for a document page's own sections), and only then are the
+// named sections kept. `withhold.warn` hears the strips' warnings (an unclosed
+// marker): a later pass over the cut text has no marker left to warn about, bar one
+// shown in a code block.
+function keepOnlySections(markdown, includeSections = [], withhold = {}) {
+  return stubView(markdown, includeSections, withhold).kept.join('\n');
 }
 
-// keepOnlySections by line: whether each line of `markdown` is kept.
-function keptSectionFlags(markdown, includeSections = []) {
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+// keepOnlySections by line: whether each line of `markdown` is kept, whole or in part.
+function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
+  return stubView(markdown, includeSections, withhold).flags;
+}
+
+function stubView(markdown, includeSections, withhold) {
+  const source = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  const flags = source.map(() => false);
   const wanted = (Array.isArray(includeSections) ? includeSections : [])
     .filter(s => typeof s === 'string')
     .map(s => s.toLowerCase());
-  if (wanted.length === 0) return lines.map(() => false);
+  if (wanted.length === 0) return { kept: [], flags };
+
+  // What the whole note publishes, each line with the line of the note it came from.
+  let { lines, from, warnings } = strippedLines(source.join('\n'), withhold.excludeCallouts);
+  if (typeof withhold.warn === 'function') warnings.forEach(w => withhold.warn(w));
+  const { withheldBy } = walkExcludeList(lines, withhold.excludeSections || [], withhold.frontmatter || null, { warn: withhold.warn });
+  from = from.filter((_, i) => withheldBy[i] === null);
+  lines = lines.filter((_, i) => withheldBy[i] === null);
+
   let headingAt;
   try {
     ({ headingAt } = findHeadings(lines.join('\n')));
   } catch (err) {
-    return lines.map(() => false);
+    return { kept: [], flags };
   }
-  const flags = [];
+  const kept = [];
   let keeping = false;
   let keepLevel = 0;
 
@@ -467,13 +488,56 @@ function keptSectionFlags(markdown, includeSections = []) {
         if (seen && wanted.includes(seen.title.toLowerCase())) keepLevel = Math.max(keepLevel, seen.level);
       }
     }
-    flags.push(keeping);
+    if (keeping) {
+      kept.push(lines[i]);
+      flags[from[i]] = true;
+    }
   }
-  return flags;
+  return { kept, flags };
 }
 
+const DATAVIEW_RE = /```dataview[\s\S]*?```/g;
+
 function stripDataview(markdown) {
-  return markdown.replace(/```dataview[\s\S]*?```/g, '');
+  return markdown.replace(DATAVIEW_RE, '');
+}
+
+// stripDataview as lines, and `from`: the line of `markdown` each of them starts on (a
+// removed block can join the ends of two lines into one).
+function dataviewLines(markdown) {
+  const lines = [];
+  const from = [];
+  let line = '';
+  let startedAt = -1;
+  let n = 0;
+  let last = 0;
+  const take = (chunk) => {
+    for (const ch of chunk) {
+      if (ch !== '\n') {
+        if (startedAt === -1) startedAt = n;
+        line += ch;
+        continue;
+      }
+      lines.push(line);
+      from.push(startedAt === -1 ? n : startedAt);
+      line = '';
+      startedAt = -1;
+      n++;
+    }
+  };
+  for (const m of markdown.matchAll(DATAVIEW_RE)) {
+    take(markdown.slice(last, m.index));
+    n += m[0].split('\n').length - 1;
+    last = m.index + m[0].length;
+  }
+  if (last === 0) {
+    const whole = markdown.split('\n');
+    return { lines: whole, from: whole.map((_, i) => i) };
+  }
+  take(markdown.slice(last));
+  lines.push(line);
+  from.push(startedAt === -1 ? n : startedAt);
+  return { lines, from };
 }
 
 // Strip content between a named HTML-comment marker pair (e.g. "gm-only" for
@@ -489,6 +553,12 @@ function stripDataview(markdown) {
 // one primitive whose entire job is hiding things — so an inner block now
 // closes only itself, and the outer block survives it.
 function stripMarkedBlocks(markdown, markerName) {
+  const { text, warnings } = markedBlocks(markdown, markerName);
+  return warnings.length > 0 ? { text, warnings } : text;
+}
+
+// The strip as lines, and `from`: the line of `markdown` each of them came from.
+function markedBlocks(markdown, markerName) {
   // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
   const markerRe = new RegExp(`<!--\\s*(/?)${markerName}\\s*-->`, 'g');
   // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
@@ -498,6 +568,8 @@ function stripMarkedBlocks(markdown, markerName) {
   const result = [];
   const warnings = [];
   const stack = [];
+  const from = [];
+  const keep = (text, i) => { result.push(text); from.push(i); };
   let depth = 0;
   let orphanClosers = 0;
   // The open fence's delimiter, or null outside a fence. Tracking the actual
@@ -537,7 +609,7 @@ function stripMarkedBlocks(markdown, markerName) {
     }
 
     if (fenceDelim !== null || isFenceLine) {
-      if (depth === 0) result.push(line);
+      if (depth === 0) keep(line, i);
       continue;
     }
 
@@ -546,7 +618,7 @@ function stripMarkedBlocks(markdown, markerName) {
     // per line. Text outside every block is kept; a line that held only markers
     // and blank leftovers collapses (one blank stands in for a whole block).
     if (!markerRe.test(line)) {
-      if (depth === 0) result.push(line);
+      if (depth === 0) keep(line, i);
       continue;
     }
     markerRe.lastIndex = 0;
@@ -577,8 +649,8 @@ function stripMarkedBlocks(markdown, markerName) {
     }
     if (depth === 0) kept += line.slice(last);
     markerRe.lastIndex = 0;
-    if (kept.trim() !== '') result.push(kept);
-    else if (opened) result.push('');
+    if (kept.trim() !== '') keep(kept, i);
+    else if (opened) keep('', i);
   }
 
   if (depth > 0) {
@@ -592,8 +664,7 @@ function stripMarkedBlocks(markdown, markerName) {
       + `without a matching <!-- ${markerName} --> — check the block boundaries`);
   }
 
-  const text = result.join('\n');
-  return warnings.length > 0 ? { text, warnings } : text;
+  return { text: result.join('\n'), warnings, lines: result, from };
 }
 
 function stripGmOnly(markdown) {
@@ -615,17 +686,24 @@ function stripSpoiler(markdown) {
 // then consumes the contiguous `>`-prefixed lines that form the blockquote.
 function stripCallouts(markdown, exclude) {
   if (!exclude) return markdown;
+  return calloutLines(markdown, exclude).lines.join('\n');
+}
+
+// The strip as lines, and `from`: the line of `markdown` each of them came from.
+function calloutLines(markdown, exclude) {
   const types = Array.isArray(exclude)
     ? new Set(exclude.map(t => String(t).toLowerCase()))
     : null; // null → strip all types
   const lines = markdown.split('\n');
   const out = [];
+  const from = [];
+  if (!exclude) return { lines, from: lines.map((_, i) => i) };
   let inCodeFence = false;
   for (let i = 0; i < lines.length; i++) {
     // A `> [!warning]` written as an example inside a fenced code block is documentation,
     // not a real callout — copy fenced lines verbatim (matches stripMarkedBlocks).
     if (/^```/.test(lines[i])) inCodeFence = !inCodeFence;
-    if (inCodeFence) { out.push(lines[i]); continue; }
+    if (inCodeFence) { out.push(lines[i]); from.push(i); continue; }
     const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
     if (m && (!types || types.has(m[1].toLowerCase()))) {
       i++;
@@ -637,8 +715,9 @@ function stripCallouts(markdown, exclude) {
       continue;
     }
     out.push(lines[i]);
+    from.push(i);
   }
-  return out.join('\n');
+  return { lines: out, from };
 }
 
 // Remove every `<!-- ... -->` comment, including multi-line ones, outside fenced code
@@ -650,15 +729,23 @@ function stripCallouts(markdown, exclude) {
 // A line that holds nothing but a comment is dropped rather than blanked: a blank line
 // would split the paragraph the comment was sitting inside.
 function stripHtmlComments(markdown) {
+  const { text, warnings } = htmlComments(markdown);
+  return warnings.length > 0 ? { text, warnings } : text;
+}
+
+// The strip as lines, and `from`: the line of `markdown` each of them came from.
+function htmlComments(markdown) {
   const lines = String(markdown || '').split('\n');
   const result = [];
   const warnings = [];
+  const from = [];
   // Track which marker opened the fence: a ``` line inside a ~~~ block is content, not a
   // close, and must not toggle the fence off and expose the rest of the block to stripping.
   let fenceMarker = null;
   let inComment = false;
 
-  for (const line of lines) {
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
     const fence = inComment ? null : /^\s*(```|~~~)/.exec(line);
     if (fence) {
       if (fenceMarker === null) fenceMarker = fence[1];
@@ -667,6 +754,7 @@ function stripHtmlComments(markdown) {
     // Inside a fence, or on the line that opened or closed one: pass through verbatim.
     if (fenceMarker !== null || fence) {
       result.push(line);
+      from.push(n);
       continue;
     }
 
@@ -689,14 +777,14 @@ function stripHtmlComments(markdown) {
 
     if (kept.trim() === '' && line.trim() !== '') continue;
     result.push(kept);
+    from.push(n);
   }
 
   if (inComment) {
     warnings.push('unclosed <!-- comment --> — content stripped to end of file');
   }
 
-  const text = result.join('\n');
-  return warnings.length > 0 ? { text, warnings } : text;
+  return { text: result.join('\n'), warnings, lines: result, from };
 }
 
 // Strip a single leading H1 from the markdown body. Templates inject their own H1
@@ -889,22 +977,37 @@ function portraitBasename(frontmatter) {
 // Returns { text, warnings } — warnings are the strip functions' own
 // (unclosed markers), for the caller to log wherever its warnings go.
 function playerSafeMarkdown(markdown, options = {}) {
-  const warnings = [];
-  let text = String(markdown == null ? '' : markdown).replace(/\r/g, '');
-  text = stripDataview(text);
-  for (const strip of [stripGmOnly, stripSpoiler, stripHtmlComments]) {
-    const result = strip(text);
-    if (typeof result === 'string') {
-      text = result;
-    } else {
-      text = result.text;
-      if (Array.isArray(result.warnings)) warnings.push(...result.warnings);
-    }
-  }
-  text = stripCallouts(text, options.excludeCallouts);
+  const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts);
+  const { warnings } = stripped;
+  let text = stripped.lines.join('\n');
   text = filterSections(text, options.excludeSections, options.frontmatter,
     { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m) });
   return { text, warnings };
+}
+
+// The strips of playerSafeMarkdown, in its order, before any section is filtered: the
+// lines left, `from` (the line of `text` each came from) and the strips' warnings.
+// playerSafeMarkdown and the stub cut both take this, so the cut cannot be made on a
+// different reading of what is hidden.
+function strippedLines(text, excludeCallouts) {
+  const warnings = [];
+  let lines = null;
+  let from = null;
+  const strips = [
+    dataviewLines,
+    (t) => markedBlocks(t, 'gm-only'),
+    (t) => markedBlocks(t, 'spoiler'),
+    htmlComments,
+    (t) => calloutLines(t, excludeCallouts),
+  ];
+  for (const strip of strips) {
+    const before = from;
+    const result = strip(lines === null ? text : lines.join('\n'));
+    from = before === null ? result.from : result.from.map(i => before[i]);
+    lines = result.lines;
+    if (result.warnings) warnings.push(...result.warnings);
+  }
+  return { lines, from, warnings };
 }
 
 const HEADINGS_UNSTABLE_WARNING = 'a link or embed label changes this note\'s headings; nothing after its title is published while character sheets are off. Fix the label.';

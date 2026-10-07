@@ -19,3 +19,19 @@ Havildar Singh is the traitor.
 ## The Climax
 
 The cult completes the rite beneath the ossuary.
+
+## GM Notes
+
+### Synopsis
+
+The Resident already knows who the party are.
+
+<!-- spoiler -->
+
+## Synopsis
+
+The monsoon breaks on the night of the rite.
+
+## Aftermath
+
+<!-- /spoiler -->

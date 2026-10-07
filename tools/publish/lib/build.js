@@ -528,13 +528,18 @@ function build(options = {}) {
       const include = Array.isArray(page.frontmatter.publish_include_sections)
         ? page.frontmatter.publish_include_sections
         : [];
-      page.markdown = keepOnlySections(page.markdown || '', include);
+      // The cut is made on what the whole note publishes: cut first, and the heading or
+      // marker that hid a line goes with it, so the strips below could not (#320). An
+      // unclosed marker is reported from here: the cut text no longer holds it.
+      const withhold = { excludeSections, excludeCallouts, frontmatter: page.frontmatter,
+        warn: (message) => console.warn(`  WARNING: ${page.outputPath}: ${message}`) };
+      page.markdown = keepOnlySections(page.markdown || '', include, withhold);
       // A PC's story companion is a SEPARATE file paired in by the scanner and
       // rendered on its own page. Reducing only page.markdown left a stubbed PC
       // publishing its complete story — the same content the stub exists to
       // withhold, one URL over.
       if (page.storyMarkdown) {
-        page.storyMarkdown = keepOnlySections(page.storyMarkdown, include);
+        page.storyMarkdown = keepOnlySections(page.storyMarkdown, include, withhold);
       }
     }
     const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};

@@ -60,6 +60,14 @@ describe('lines: stub', () => {
   it('no list keeps nothing', () => {
     assert.ok(answer({ op: 'stub', text: NOTE, include: [] }).kept.every((k) => k === false));
   });
+  it('does not keep an included title under a withheld section, or inside a hidden block (#320)', () => {
+    const text = '## Overview\npublic\n## GM Notes\n### Overview\nsecret\n<!-- spoiler -->\n## Overview\nlater\n<!-- /spoiler -->';
+    const lines = text.split('\n');
+    const named = answer({ op: 'stub', text, include: ['Overview'], excludeSections: ['GM Notes'] }).kept;
+    assert.deepStrictEqual(lines.filter((_, i) => named[i]), ['## Overview', 'public']);
+    assert.strictEqual(answer({ op: 'published', text, excludeSections: ['GM Notes'], publish: 'stub', include: ['Overview'] }).text, '## Overview\npublic');
+    assert.throws(() => answer({ op: 'stub', text, include: [], excludeSections: 'GM Notes' }), /excludeSections must be a list of strings/);
+  });
 });
 
 describe('lines: site', () => {
