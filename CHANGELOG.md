@@ -25,7 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Pressing Escape with the keyboard focus inside an open menu closes the
   menu and puts the focus back on the button that opened it, for the
   top menus and the phone menu. The focus was left on a hidden link
-  (#321).
+  (#321). The phone menu's close button does the same.
 - Publish tool 1.15.1.
 
 ---

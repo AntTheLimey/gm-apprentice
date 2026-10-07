@@ -24,7 +24,9 @@ function el(doc, classes, children = []) {
     ],
     querySelector: (sel) => children.flatMap((c) => c.find(sel.slice(1)))[0] || null,
     querySelectorAll: () => [],
-    addEventListener: () => {},
+    clicks: [],
+    addEventListener: (type, fn) => { if (type === 'click') node.clicks.push(fn); },
+    click: () => node.clicks.forEach((fn) => fn({})),
     focus: () => { doc.activeElement = node; },
   };
   return node;
@@ -41,7 +43,8 @@ function page() {
   const world = group(false);
   const mobileToggle = el(doc, ['nav-mobile-toggle']);
   const mobileLink = el(doc, ['mobile-link']);
-  const mobileNav = el(doc, ['mobile-nav-overlay', 'open'], [mobileLink]);
+  const mobileClose = el(doc, ['mobile-nav-close']);
+  const mobileNav = el(doc, ['mobile-nav-overlay', 'open'], [mobileClose, mobileLink]);
   const body = el(doc, ['body'], [story.node, world.node, mobileToggle, mobileNav]);
   doc.body = body;
   doc.getElementById = (id) => (id === 'mobile-nav' ? mobileNav : null);
@@ -53,7 +56,7 @@ function page() {
   doc.addEventListener = (type, fn) => { if (type === 'keydown') doc.listeners.push(fn); };
   vm.runInNewContext(SOURCE, { document: doc });
   const press = (key) => doc.listeners.forEach((fn) => fn({ key, preventDefault() {} }));
-  return { doc, story, world, mobileNav, mobileToggle, mobileLink, press };
+  return { doc, story, world, mobileNav, mobileToggle, mobileLink, mobileClose, press };
 }
 
 test('Escape closes an open menu and hands its focus back to the toggle (#321)', () => {
@@ -93,4 +96,12 @@ test('another key closes nothing and moves nothing', () => {
   p.press('a');
   assert.ok(p.story.node.classList.contains('open'));
   assert.strictEqual(p.doc.activeElement, p.story.link);
+});
+
+// The close button's own onclick hides the menu, the button with it.
+test('the phone menu\'s close button hands the focus back to the menu button', () => {
+  const p = page();
+  p.doc.activeElement = p.mobileClose;
+  p.mobileClose.click();
+  assert.strictEqual(p.doc.activeElement, p.mobileToggle);
 });

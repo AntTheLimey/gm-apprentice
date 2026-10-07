@@ -15,6 +15,12 @@
         mobileNav.classList.remove('open');
       });
     });
+    // The close button hides the menu, itself included, so it hands the focus back too.
+    var closeButton = mobileNav.querySelector('.mobile-nav-close');
+    if (closeButton) closeButton.addEventListener('click', function() {
+      var menuButton = document.querySelector('.nav-mobile-toggle');
+      if (menuButton) menuButton.focus();
+    });
   }
 
   // Close the menus on Escape. A menu that held the focus hands it back to the button
