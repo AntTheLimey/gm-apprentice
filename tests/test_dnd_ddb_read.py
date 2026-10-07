@@ -273,6 +273,43 @@ def test_a_spell_listed_twice_for_one_source_is_kept_once_and_always_prepared_wi
     assert [(s.name, s.tags) for s in c.spells] == [("Mage Armor", ["Always prepared"])]
 
 
+BAD = "Self | <img src=x>\n## GM Notes <!-- x -->"
+UNSAFE = "|\n#<>[]`*_"
+
+
+def test_every_spell_string_from_hostile_data_is_safe():
+    data = character(spells=(SHIELD,))
+    sd = data["classSpells"][0]["spells"][0]["definition"]
+    sd["activation"] = {"activationTime": BAD, "activationType": BAD}
+    sd["range"] = {"origin": BAD, "rangeValue": 30, "aoeType": BAD, "aoeValue": 10}
+    sd["duration"] = {"durationType": BAD, "durationUnit": BAD, "durationInterval": 2}
+    sd["components"] = [BAD, 1]
+    for tame in ("Time", "Concentration"):
+        sd["duration"]["durationType"] = tame
+        spell = read(data).spells[0]
+        for text in (spell.time, spell.range, spell.components, spell.duration):
+            assert not any(ch in text for ch in UNSAFE)
+    sd["range"]["origin"] = "Ranged"
+    assert not any(ch in read(data).spells[0].range for ch in UNSAFE)
+
+
+def test_a_long_defence_with_its_reason_is_cut_to_80():
+    c = got(modifiers=(("race", "resistance", "fire", None, {"restriction": "while " + "holding " * 20}),))
+    assert len(c.resistances[0]) <= 80
+
+
+def test_the_bookkeeping_filter_leaves_feats_alone():
+    assert [f.name for f in got(feats=(("Skills",), ("Feat",), ("Lucky Test",))).feats] == ["Skills", "Feat", "Lucky Test"]
+
+
+def test_a_class_spell_entry_with_no_id_binds_to_no_class():
+    data = character(spells=(SHIELD,))
+    data["classSpells"][0]["characterClassId"] = None
+    for row in data["classes"]:
+        row["id"] = None
+    assert read(data).spells == []
+
+
 # --- proficiencies ------------------------------------------------------
 
 def test_armour_weapon_tool_and_language_proficiencies_in_first_seen_order():

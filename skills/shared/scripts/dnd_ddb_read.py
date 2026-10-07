@@ -381,7 +381,7 @@ def _defences(everything: list[dict]) -> tuple[list[str], list[str], list[str], 
             lists["condition"].append(name)
             continue
         why = safe_name(m.get("restriction"))
-        lists[str(kind)].append(f"{name} ({why})" if name and why else name)
+        lists[str(kind)].append((f"{name} ({why})" if name and why else name)[:NAME_LIMIT].rstrip())
     return (_unique(lists["resistance"]), _unique(lists["immunity"]),
             _unique(lists["vulnerability"]), _unique(lists["condition"]))
 
@@ -436,11 +436,12 @@ def _recovery(use: dict) -> str:
     return RESET_NAMES.get(_int(kind)) or (kind if isinstance(kind, str) and kind in RESET_NAMES.values() else "")
 
 
-def _features(defs: list[dict], uses: dict[tuple[int, int], dict], scores: dict[str, int], pb: int) -> list[Feature]:
+def _features(defs: list[dict], uses: dict[tuple[int, int], dict], scores: dict[str, int], pb: int,
+              bookkeeping: bool = True) -> list[Feature]:
     out: dict[str, Feature] = {}
     for fd in defs:
         name = LEVEL_PREFIX.sub("", safe_name(fd.get("name")))
-        if not name or name.lower() in BOOKKEEPING or BOOKKEEPING_PATTERN.fullmatch(name):
+        if not name or (bookkeeping and (name.lower() in BOOKKEEPING or BOOKKEEPING_PATTERN.fullmatch(name))):
             continue
         use = uses.get((_int(fd.get("id"), -1), _int(fd.get("entityTypeId"), -1)))
         feature = Feature(name, _max_uses(use, scores, pb) if use else None, _recovery(use) if use else "")
@@ -481,15 +482,15 @@ def _cast_time(act: dict) -> str:
 
 
 def _spell_range(r: dict) -> str:
-    origin, dist = _text(r.get("origin")), _int(r.get("rangeValue"))
+    origin, dist = safe_name(r.get("origin")), _int(r.get("rangeValue"))
     text = f"{dist} ft" if origin == "Ranged" or (dist and origin not in ("Self", "Touch")) else origin
-    shape, size = _text(r.get("aoeType")), _int(r.get("aoeValue"))
+    shape, size = safe_name(r.get("aoeType")), _int(r.get("aoeValue"))
     return f"{text} ({size}-ft {shape.lower()})" if shape and size else text
 
 
 def _spell_duration(x: dict) -> str:
-    kind = _text(x.get("durationType"))
-    unit, n = _text(x.get("durationUnit")).lower(), _int(x.get("durationInterval"))
+    kind = safe_name(x.get("durationType"))
+    unit, n = safe_name(x.get("durationUnit")).lower(), _int(x.get("durationInterval"))
     return _count_unit(n, unit) if kind in ("Time", "Concentration") and unit else kind
 
 
@@ -523,7 +524,8 @@ def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict) -> lis
             found[(sp.name, source)] = sp
 
     for entry in _dicts(d.get("classSpells")):
-        cls = next((c for c in classes if c.get("id") == entry.get("characterClassId")), None)
+        wanted = entry.get("characterClassId")
+        cls = next((c for c in classes if wanted is not None and c.get("id") == wanted), None)
         if cls is None:
             continue
         known = _dict(cls.get("definition")).get("spellPrepareType") is None
@@ -702,7 +704,7 @@ def read(data: object) -> Character:
         resistances=resist, immunities=immune, vulnerabilities=vulnerable, condition_immunities=condition,
         class_features=_features(class_defs, class_uses, scores, pb),
         species_traits=_features(traits, _action_uses(d, "race"), scores, pb),
-        feats=_features(feat_defs, _action_uses(d, "feat"), scores, pb),
+        feats=_features(feat_defs, _action_uses(d, "feat"), scores, pb, bookkeeping=False),
         spells=_spells(d, classes, rows, values),
         armor=armor, weapons=weapons, tools=tools, languages=languages,
         gear=gear, magic_items=magic,
