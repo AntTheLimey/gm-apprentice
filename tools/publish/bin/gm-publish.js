@@ -40,7 +40,7 @@ Usage:
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
   gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
-  gm-apprentice-publish vault-setting        Read or set the default palette and font source (used by migrate.py)
+  gm-apprentice-publish vault-setting        Read or set the default palette, font source and sheet look
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
@@ -254,8 +254,9 @@ gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <
 
 With no --set, reports what the vault file says: whether theme.default_mode is
 set, the font source, and the fonts the site would load from Google. With --set,
-writes one of: theme.default_mode ("dark", "light", "system") or
-theme.fonts.source ("self-host"). Used by migrate.py.
+writes one of: theme.default_mode ("dark", "light", "system"),
+theme.fonts.source ("self-host"), sheet_skin (a skin id) or sheet_frame (a frame
+id, or "none"). Used by migrate.py, and to set a campaign's sheet look.
 
   --set <key>=<json>  The setting and its value as JSON; repeatable
   --vault <dir>       The vault to read and write (default: the config's vaultPath)

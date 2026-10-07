@@ -9,10 +9,15 @@
 const fs = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
+const { SKINS, FRAME_IDS } = require('./skins');
 
+// A value is taken only as the exact id, so the line written is always a clean one. (The
+// build is more forgiving of a hand-typed value: it trims and lower-cases before matching.)
 const SETTABLE = {
   'theme.default_mode': (v) => ['dark', 'light', 'system'].includes(v),
   'theme.fonts.source': (v) => v === 'self-host',
+  'sheet_skin': (v) => typeof v === 'string' && Object.prototype.hasOwnProperty.call(SKINS, v),
+  'sheet_frame': (v) => v === 'none' || FRAME_IDS.includes(v),
 };
 
 function siteConfigPath(options) {
@@ -72,7 +77,7 @@ function write(options) {
     written.push(key);
   }
   // Writes only the entry's own line (and any parent key it has to create); the rest of
-  // publish.theme, comments included, stays as the GM wrote it. Throws Error(reason) on a
+  // the publish block, comments included, stays as the GM wrote it. Throws Error(reason) on a
   // refusal, with the file untouched.
   setPublishLeaves(vaultPath, leaves);
   return { written };
