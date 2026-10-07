@@ -26,7 +26,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null });
+  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -197,4 +197,25 @@ test('reports the two sheet-look lines as written, and null when they are not th
   assert.deepEqual([run(s, []).data.sheetSkin, run(s, []).data.sheetFrame], ['ledger', null]);
   assert.equal(run(s, ['sheet_frame="thorns"']).rc, 0);
   assert.deepEqual([run(s, []).data.sheetSkin, run(s, []).data.sheetFrame], ['ledger', 'thorns']);
+});
+
+test('sets dndbeyond_sync to build or manual and reports it back', () => {
+  const s = scratch('  mode: player\n');
+  assert.equal(run(s, []).data.dndbeyondSync, null);
+  assert.deepEqual(run(s, ['dndbeyond_sync="build"']).data, { written: ['dndbeyond_sync'] });
+  assert.match(config(s), /^ {2}dndbeyond_sync: build$/m);
+  assert.equal(run(s, []).data.dndbeyondSync, 'build');
+  assert.equal(run(s, ['dndbeyond_sync="manual"']).rc, 0);
+  assert.equal(run(s, []).data.dndbeyondSync, 'manual');
+});
+
+test('refuses a dndbeyond_sync value that is not build or manual, and writes nothing', () => {
+  const s = scratch('  mode: player\n');
+  const before = config(s);
+  for (const json of ['"always"', '"Build"', '""', 'true', 'null']) {
+    const { rc, err } = run(s, [`dndbeyond_sync=${json}`]);
+    assert.equal(rc, 1, json);
+    assert.deepEqual(err, [`Error: ${json} is not a value dndbeyond_sync takes`], json);
+    assert.equal(config(s), before, json);
+  }
 });

@@ -378,7 +378,8 @@ usually found), `portrait` (optional)
 defaults to `[occupation, age, nationality]` when omitted), `sheet_source`
 (optional string: where the character sheet is kept when it is not in this
 file, e.g. `"D&D Beyond"` or `"paper, with the player"`; not shown on the site by default; see
-`shared/pc-body-structure.md`)
+`shared/pc-body-structure.md`), `dndbeyond` (optional string, D&D only: a
+D&D Beyond character link or id; `dnd_ddb.py` syncs the note from it)
 
 ### PC Body Structure
 

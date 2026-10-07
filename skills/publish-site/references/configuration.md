@@ -69,6 +69,7 @@ publish:
 | CoC sheet crest | `publish.sheet_crest` | Vault-relative image for the Order crest / wax seal in the CoC investigator-sheet masthead. Renders only when set and the image exists. Campaign-wide — there is no per-PC override |
 | Sheet skin | `publish.sheet_skin` | The look of every PC page (default: `plain`). See `sheet-skins.md` |
 | Sheet frame | `publish.sheet_frame` | The ornament round each PC's portrait. See `sheet-skins.md` |
+| D&D Beyond sync | `publish.dndbeyond_sync` | When D&D PC notes with a `dndbeyond` link are synced: `build` (at each site build) or `manual` (only when asked). Unset means manual. Vault file only |
 | Setting year | `setting_year` | Fallback in-game date on the landing page (used only when the campaign overview has no `current_game_date`) |
 
 > **Landing page state.** The landing hero (in-game date, session count) and the

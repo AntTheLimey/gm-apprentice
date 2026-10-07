@@ -362,6 +362,14 @@ Notes:
   section with nothing filled in is left out, so a non-caster has no
   Spells tab. Braces an author wrote are kept.
 
+### The `dndbeyond` field
+
+A D&D PC note may carry `dndbeyond` in its frontmatter: a D&D Beyond
+character link or a bare character id. `dnd_ddb.py` syncs the note from
+it. An absent or empty field means the note is not synced. The vault
+setting `publish.dndbeyond_sync` (`build` or `manual`) says when the
+sync runs.
+
 ### Cells the live sheet writes back
 
 With live stats on, a player changes these values on the page, the site
