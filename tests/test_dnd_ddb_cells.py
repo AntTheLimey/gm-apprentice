@@ -130,10 +130,10 @@ def test_speed_blank_is_filled_and_an_existing_speed_is_left():
     placeholder = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | {speed} |")
     assert one(placeholder, "Stat Sheet / Combat / Speed", c).status == "WRITE"
     forty = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | 40 ft |")
-    e = one(forty, "Stat Sheet / Combat / Speed", c)
-    assert (e.status, e.message) == ("KEPT", "40 ft; D&D Beyond gives 35 ft")
+    # A Speed that holds text is never reported: no KEPT row, no SAME row.
+    assert "Stat Sheet / Combat / Speed" not in edits(forty, c)
     assert "| Speed | 40 ft |" in written(forty, c)
-    assert one(forty, "Stat Sheet / Combat / Speed", got(speed=40)).status == "SAME"
+    assert "Stat Sheet / Combat / Speed" not in edits(forty, got(speed=40))
 
 
 def test_hit_dice_keeps_spent_and_replaces_max():
@@ -397,3 +397,53 @@ def test_a_newline_or_pipe_in_a_name_becomes_a_space():
 def test_edit_is_a_plain_dataclass_with_the_contract_fields():
     e = Edit("SAME", "x", "y")
     assert (e.line, e.col, e.new) == (-1, -1, "")
+
+
+# --- carried over from the review of the cells -------------------------------------
+
+def test_whole_line_rewrite_keeps_what_precedes_the_label():
+    text = "intro\n  **Species:** {species}\n> **Class/Subclass:** x\n"
+    out = write_edits(text, [Edit("WRITE", "a", "m", 1, -1, "**Species:** Dwarf"),
+                             Edit("WRITE", "b", "m", 2, -1, "**Class/Subclass:** Wizard 5")])
+    assert out == "intro\n  **Species:** Dwarf\n> **Class/Subclass:** Wizard 5\n"
+
+
+def test_indented_labelled_line_is_found_and_keeps_its_indent():
+    text = swap(TEMPLATE, "**Species:** {Species name}", "  **Species:** {Species name}")
+    assert "  **Species:** Dwarf\n" in written(text, got(species="Dwarf"))
+
+
+def test_whole_line_rewrite_keeps_an_odd_line_ending():
+    for eol in ("\x0b", "\x85", "\u2028", "\r", "\r\n", ""):
+        text = "**Species:** {species}" + eol
+        out = write_edits(text, [Edit("WRITE", "a", "m", 0, -1, "**Species:** Dwarf")])
+        assert out == "**Species:** Dwarf" + eol
+
+
+def test_a_last_line_with_no_newline_gains_none():
+    text = TEMPLATE.rstrip("\n")
+    assert not text.endswith("\n")
+    out = written(text, got(species="Dwarf"))
+    assert out != text and not out.endswith("\n")
+    last = "| Attribute | Value |\n|---|---|\n| Level | 1 |"
+    out = write_edits(last, [Edit("WRITE", "a", "m", 2, 1, "6")])
+    assert out == "| Attribute | Value |\n|---|---|\n| Level | 6 |"
+
+
+def test_an_escaped_pipe_in_another_cell_of_an_edited_row_survives():
+    text = "| Attribute | Value | Notes |\n|---|---|---|\n| Level | 1 | a \\| b |\n"
+    out = write_edits(text, [Edit("WRITE", "a", "m", 2, 1, "6")])
+    assert out == "| Attribute | Value | Notes |\n|---|---|---|\n| Level | 6 | a \\| b |\n"
+
+
+def test_a_skills_row_without_ability_or_modifier_or_with_a_bad_ability_is_skipped():
+    for old, new in (("| Arcana | INT | No | No | +0 |", "| Arcana | XYZ | No | No | +0 |"),
+                     ("| Arcana | INT | No | No | +0 |", "| Arcana |  | No | No | +0 |")):
+        text = swap(TEMPLATE, old, new)
+        assert not [k for k in edits(text) if k.startswith("Skills / Arcana")]
+    text = swap(TEMPLATE, "| Skill | Ability | Proficient | Expertise | Modifier |",
+                "| Skill | Ability | Proficient | Expertise | Total |")
+    assert not [k for k in edits(text) if k.startswith("Skills /")]
+    text = swap(TEMPLATE, "| Skill | Ability | Proficient | Expertise | Modifier |",
+                "| Skill | Proficient | Expertise | Modifier |")
+    assert not [k for k in edits(text) if k.startswith("Skills /")]
