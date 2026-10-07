@@ -24,8 +24,8 @@ main.content[data-skin]:not([data-skin=plain]) {
   background-color: var(--bg); background-image: var(--sk-ground-img, none); color: var(--sk-g-text, var(--text)); font-family: var(--font-body);
   border-radius: 12px; margin-top: 1rem;
 }
-/* tiles: D&D blocks and strip, GURPS blocks and status panel, the shared hero and tab bar */
-main.content[data-skin]:not([data-skin=plain]) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel) {
+/* tiles: D&D blocks and strip, GURPS blocks and status panel, the Pathfinder and FitD sheets, the shared hero and tab bar */
+main.content[data-skin]:not([data-skin=plain]) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet) {
   --bg: var(--sk-well); color: var(--text); background-color: var(--bg-card); background-image: var(--sk-card-img, none);
   border: var(--sk-edge, 1px solid var(--border)); border-radius: var(--sk-r, 8px); box-shadow: var(--sk-inner, none);
 }
@@ -34,6 +34,13 @@ main.content[data-skin]:not([data-skin=plain]) :is(.dnd5e-mark, .coc-sheet-root 
 main.content[data-skin]:not([data-skin=plain]) .dnd5e-mark:not(.is-spent) { background: var(--sk-pip-on, var(--accent)); }
 main.content[data-skin]:not([data-skin=plain]) .dnd5e-marks.is-fail .dnd5e-mark:not(.is-spent) { background: var(--danger); }
 main.content[data-skin]:not([data-skin=plain]) :is(h1, .dnd5e-blk > h3, .blk h2, .wide h2, .pc-tab, .dnd5e-drawer-title) { font-family: var(--font-heading); }
+/* Pathfinder and FitD: their inset tiles and marks, each scoped under its own sheet. Every one paints with --bg, --border or --accent in style.css, so the skin reaches them; these set the shape. */
+main.content[data-skin]:not([data-skin=plain]) :is(.pf2e-sheet, .fitd-sheet) :is(.stat-item, .dnd-proficiency, .fitd-tracker) { border-radius: var(--sk-r-ctl, 6px); }
+main.content[data-skin]:not([data-skin=plain]) .pf2e-sheet :is(.dnd-ability-card, .skill-rank) { border-radius: var(--sk-r-ctl, 6px); }
+main.content[data-skin]:not([data-skin=plain]) .pf2e-sheet .skill-mark, main.content[data-skin]:not([data-skin=plain]) .fitd-sheet .fitd-dot { border-radius: var(--sk-r-pip, 50%); transform: var(--sk-pip-turn, none); }
+main.content[data-skin]:not([data-skin=plain]) .fitd-sheet .fitd-box { border-radius: var(--sk-r-ctl, 2px); }
+main.content[data-skin]:not([data-skin=plain]) .pf2e-sheet .dnd-skill.is-proficient .skill-mark, main.content[data-skin]:not([data-skin=plain]) .fitd-sheet :is(.fitd-dot, .fitd-box).filled { background: var(--sk-pip-on, var(--accent)); }
+main.content[data-skin]:not([data-skin=plain]) :is(.pf2e-sheet :is(h3, h4, .dnd-header), .fitd-sheet h3, .fitd-attribute h4) { font-family: var(--font-heading); }
 main.content[data-skin]:not([data-skin=plain]) .dnd5e-header { color: var(--sk-g-text, var(--text)); }
 main.content[data-skin]:not([data-skin=plain]) :is(.breadcrumbs, .pull-quote, .tab-panel > .text-muted) { color: var(--sk-g-muted, var(--text-muted)); }
 main.content[data-skin]:not([data-skin=plain]) .breadcrumbs a { color: var(--sk-g-accent, var(--accent)); }

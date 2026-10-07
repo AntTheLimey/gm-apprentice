@@ -17,6 +17,21 @@ describe('skins: css', () => {
     assert.doesNotMatch(layer, /#[0-9a-fA-F]{3,8}\b|rgba?\(/);
     assert.doesNotMatch(layer, /data-skin="/);
   });
+  it('the layer names every Pathfinder and FitD sheet class it dresses', () => {
+    const layer = read('_layer.css');
+    for (const c of ['pf2e-sheet', 'fitd-sheet', 'dnd-ability-card', 'stat-item', 'dnd-proficiency', 'skill-rank', 'skill-mark', 'dnd-header',
+      'fitd-tracker', 'fitd-attribute', 'fitd-dot', 'fitd-box', 'filled', 'is-proficient']) {
+      assert.match(layer, new RegExp('[.]' + c + '\\b'), c);
+    }
+  });
+  it('the layer ends with one light block and scopes every Pathfinder and FitD rule under its sheet', () => {
+    const layer = read('_layer.css').replace(/\/\*[\s\S]*?\*\//g, '');
+    assert.strictEqual((layer.match(/@media \(prefers-color-scheme: light\)/g) || []).length, 1);
+    assert.match(layer, /@media \(prefers-color-scheme: light\) \{[\s\S]*\}\s*$/);
+    for (const line of layer.split('\n').filter((l) => /[.]fitd-|[.]skill-|[.]dnd-ability|[.]dnd-header|[.]pf2e-sheet/.test(l))) {
+      assert.match(line, /main\.content\[data-skin\]:not\(\[data-skin=plain\]\)/, line.slice(0, 80));
+    }
+  });
   for (const id of Object.keys(SKINS).filter((s) => s !== 'plain')) {
     it(`${id} sets every setting, dark first, and every colour again for light`, () => {
       const css = read(id + '.css');

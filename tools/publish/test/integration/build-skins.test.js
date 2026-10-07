@@ -7,6 +7,8 @@ const os = require('os');
 const { build } = require('../../lib/build');
 const { buildWithFonts } = require('../../lib/fonts');
 const { skinsInVault } = require('../../lib/skins');
+const { buildPc } = require('../helpers/pc-vault');
+const { druidBody, cutterBody } = require('../helpers/pc-template');
 const { resolveConfig, loadVaultConfig, scanConfigFor } = require('../../lib/config');
 
 const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -250,4 +252,20 @@ describe('build integration: sheet skins and frames', () => {
       assert.strictEqual(warnings.filter((w) => /page slug collision/.test(w)).length, 1);
     }
   });
+});
+
+describe('build integration: Pathfinder and FitD PCs take a skin', () => {
+  const roots = [];
+  after(() => { for (const r of roots) fs.rmSync(r, { recursive: true, force: true }); });
+  for (const [system, body, sheet] of [['pf2e', druidBody(), 'pf2e-sheet'], ['fitd', cutterBody(), 'fitd-sheet']]) {
+    it(`dresses a ${system} PC from the campaign setting`, () => {
+      const out = buildPc(system, body, ['sheet_skin: ledger']);
+      roots.push(out.root);
+      assert.ok(out.html.includes(sheet));
+      assert.match(out.html, /<main class="content" data-skin="ledger"/);
+      assert.match(out.html, /data-frame="gilt"/);
+      assert.match(out.html, /href="[^"]*skins\.css/);
+      assert.ok(fs.existsSync(path.join(out.out, 'css', 'skins.css')));
+    });
+  }
 });
