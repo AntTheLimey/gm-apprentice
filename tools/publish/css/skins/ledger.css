@@ -10,7 +10,7 @@ main.content[data-skin="ledger"] {
   --sk-card-img: linear-gradient(225deg, var(--sk-brass) 9px, transparent 9.6px), linear-gradient(315deg, var(--sk-brass) 9px, transparent 9.6px);
   --sk-r: 3px; --sk-r-ctl: 3px;
   --sk-edge: 0 solid transparent; --sk-inner: 0 2px 5px rgba(0,0,0,.35);
-  --sk-pip-on: radial-gradient(circle at 35% 30%, #f0d48f, #b08a3e 55%, #6d4f17);
+  --sk-pip-on: radial-gradient(circle at 35% 30%, #f0d48f, #b08a3e 55%, #88631d);
   --sk-c1: #3d6630; --sk-c2: #7a4f0e; --sk-c3: #8a3f1c; --sk-c4: #2f4a6b; --sk-c5: #5a3a66; --sk-c6: #2a5f66; --sk-c7: #5a4a3a; --sk-c8: #8f2a1c;
 }
 main.content[data-skin="ledger"] :is(.hero-cinematic h1, .masthead h1) { font-weight: 600; letter-spacing: .03em; }
@@ -27,5 +27,6 @@ main.content[data-skin="ledger"] .dnd5e-mark.is-spent { border-style: dashed; }
     --danger: #9c2a1c; --warning: #7a5200; --success: #3d6630;
     --sk-g-text: #f1e4c8; --sk-g-muted: #cbb893; --sk-g-accent: #dfbf78;
     --sk-brass: #b08a3e;
+    --sk-pip-on: radial-gradient(circle at 35% 30%, #9d7515, #8a6a22 55%, #6d4f17);
   }
 }

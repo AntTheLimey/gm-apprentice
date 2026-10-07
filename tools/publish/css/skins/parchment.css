@@ -7,7 +7,7 @@ main.content[data-skin="parchment"] {
   --sk-ground-img: var(--sk-grain), radial-gradient(ellipse at 20% 0%, rgba(255,190,110,.1), transparent 60%);
   --sk-r: 2px; --sk-r-ctl: 2px; --sk-r-pip: 2px; --sk-pip-turn: rotate(45deg) scale(.78);
   --sk-edge: 1px solid var(--border); --sk-inner: inset 0 0 0 3px var(--bg-card), inset 0 0 0 4px var(--border);
-  --sk-c1: #2f6b4f; --sk-c2: #8a5a00; --sk-c3: #a23b1a; --sk-c4: #2b4a8f; --sk-c5: #6b2f7a; --sk-c6: #1f6a80; --sk-c7: #5b4a36; --sk-c8: #8c1c13;
+  --sk-c1: #2f6b4f; --sk-c2: #8a5a00; --sk-c3: #a23b1a; --sk-c4: #2b4a8f; --sk-c5: #6b2f7a; --sk-c6: #1f6a80; --sk-c7: #5b4a36; --sk-c8: #951e14;
 }
 main.content[data-skin="parchment"] :is(.hero-cinematic h1, .masthead h1) { font-weight: 400; }
 main.content[data-skin="parchment"] :is(.hero-cinematic h1, .masthead h1)::first-letter { color: var(--accent); font-size: 1.4em; }
