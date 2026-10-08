@@ -301,8 +301,8 @@ def test_on_build_never_writes_unless_asked(tmp_path, capsys, fake):
 # --- fetch --------------------------------------------------------------------------------
 
 class Response:
-    def __init__(self, body):
-        self.body = body
+    def __init__(self, body, tick=None):
+        self.body, self.tick = body, tick
 
     def __enter__(self):
         return self
@@ -311,24 +311,27 @@ class Response:
         return False
 
     def read(self, size=-1):
-        return self.body if size < 0 else self.body[:size]
+        if self.tick:
+            self.tick()
+        out, self.body = (self.body, b"") if size < 0 else (self.body[:size], self.body[size:])
+        return out
 
 
 class Opener:
-    def __init__(self, result):
-        self.result, self.requests = result, []
+    def __init__(self, result, tick=None):
+        self.result, self.requests, self.tick = result, [], tick
 
     def open(self, request, timeout=None):
         self.requests.append((request, timeout))
         if isinstance(self.result, BaseException):
             raise self.result
-        return Response(self.result)
+        return Response(self.result, self.tick)
 
 
 @pytest.fixture
 def opens(monkeypatch):
-    def install(result):
-        stand_in = Opener(result)
+    def install(result, tick=None):
+        stand_in = Opener(result, tick)
         monkeypatch.setattr(dnd_ddb, "opener", lambda: stand_in)
         return stand_in
     return install
@@ -388,3 +391,136 @@ def test_a_redirect_to_another_host_is_refused():
 
 def test_the_real_opener_carries_the_redirect_guard():
     assert any(isinstance(h, dnd_ddb.OnlyServiceHost) for h in dnd_ddb.opener().handlers)
+
+
+def test_a_deeply_nested_body_is_unreadable_not_a_crash(opens):
+    opens(b"[" * 400_000)
+    with pytest.raises(Unreadable, match=r"^D&D Beyond could not be read \(the response is not JSON\)$"):
+        fetch("31198239")
+
+
+def test_a_slow_response_is_given_up_on_after_the_deadline(opens, monkeypatch):
+    now = [100.0]
+    monkeypatch.setattr(dnd_ddb, "CLOCK", lambda: now[0])
+    seen = opens(b'{"data": {}}' + b" " * 200_000, tick=lambda: now.__setitem__(0, now[0] + 20))
+    with pytest.raises(Unreadable, match=r"\(it took too long\)"):
+        fetch("31198239")
+    assert len(seen.requests) == 1
+
+
+def test_a_big_body_is_cut_off_at_the_cap_while_it_is_read(opens):
+    reads = []
+    seen = opens(b"x" * (20 * 1024 * 1024), tick=lambda: reads.append(1))
+    with pytest.raises(Unreadable, match="too large"):
+        fetch("31198239")
+    assert len(reads) <= 8 * 1024 * 1024 // dnd_ddb.CHUNK + 2 and seen.requests
+
+
+def test_a_redirect_to_another_port_is_refused():
+    handler = dnd_ddb.OnlyServiceHost()
+    request = urllib.request.Request("https://character-service.dndbeyond.com/x")
+    for target in ("https://character-service.dndbeyond.com:8443/x", "https://character-service.dndbeyond.com:bad/x"):
+        with pytest.raises(urllib.error.URLError, match="another host"):
+            handler.redirect_request(request, None, 302, "Found", {}, target)
+    ok = handler.redirect_request(request, None, 302, "Found", {}, "https://character-service.dndbeyond.com:443/y")
+    assert ok is not None
+
+
+# --- what --party does to the bytes, and to the run, when a note goes wrong ---------------
+
+def test_party_write_keeps_crlf_on_every_line(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    (root / "Characters" / "Alder.md").write_bytes(note(eol="\r\n").encode("utf-8"))
+    assert main(["--party", str(root), "--write"]) == 0
+    raw = (root / "Characters" / "Alder.md").read_bytes()
+    assert b"| Level | 5 |" in raw
+    assert raw.count(b"\r\n") == raw.count(b"\n") > 0
+
+
+def test_party_leaves_a_note_that_is_not_utf8_alone_and_goes_on(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    bad = note().replace("Medium", "Me\u00e9dium").encode("latin-1", "replace") + b"\xff\xfe tail\n"
+    (root / "Characters" / "Alder.md").write_bytes(bad)
+    (root / "Characters" / "Briar.md").write_text(note(), encoding="utf-8")
+    assert main(["--party", str(root), "--write"]) == 0
+    out = lines(capsys)
+    assert (root / "Characters" / "Alder.md").read_bytes() == bad
+    assert "ERROR\tAlder: note\tthe note is not valid UTF-8; nothing was written" in out
+    assert any(r.startswith("WRITE\tBriar: ") for r in out)
+    assert "| Level | 5 |" in (root / "Characters" / "Briar.md").read_text(encoding="utf-8")
+
+
+def test_one_note_failing_does_not_stop_or_unwrite_the_others(tmp_path, capsys, fake, monkeypatch):
+    root = vault(tmp_path)
+    for name in ("Alder", "Briar", "Cress"):
+        (root / "Characters" / f"{name}.md").write_text(note().replace("Medium", f"Medium {name}"), encoding="utf-8")
+    real = dnd_ddb.plan_cells
+
+    def planner(text, c):
+        if "Medium Briar" in text:
+            raise KeyError("boom")
+        return real(text, c)
+    monkeypatch.setattr(dnd_ddb, "plan_cells", planner)
+    before = (root / "Characters" / "Briar.md").read_bytes()
+    assert main(["--party", str(root), "--write"]) == 0
+    captured = capsys.readouterr()
+    out = captured.out.splitlines()
+    assert captured.err == ""
+    assert "ERROR\tBriar: sync\tcould not be synced (KeyError); nothing was written" in out
+    assert (root / "Characters" / "Briar.md").read_bytes() == before
+    for name in ("Alder", "Cress"):
+        assert "| Level | 5 |" in (root / "Characters" / f"{name}.md").read_text(encoding="utf-8")
+        assert any(r.startswith(f"WRITE\t{name}: ") for r in out)
+    assert out[-1].endswith("sheets: 3")
+
+
+def test_rows_are_printed_as_each_note_finishes(tmp_path, capsys, fake, monkeypatch):
+    root = vault(tmp_path)
+    for name in ("Alder", "Briar"):
+        (root / "Characters" / f"{name}.md").write_text(note(), encoding="utf-8")
+    seen = []
+    real = dnd_ddb.guarded_sync
+
+    def spy(text):
+        seen.append(capsys.readouterr().out)
+        return real(text)
+    monkeypatch.setattr(dnd_ddb, "guarded_sync", spy)
+    main(["--party", str(root)])
+    assert seen[0] == "" and "Alder: " in seen[1]
+
+
+def test_a_single_sheet_that_fails_unexpectedly_is_an_error_row_not_a_traceback(tmp_path, capsys, fake, monkeypatch):
+    def planner(text, c):
+        raise KeyError("boom")
+    monkeypatch.setattr(dnd_ddb, "plan_cells", planner)
+    path = sheet(tmp_path)
+    before = path.read_bytes()
+    assert main([str(path), "--write"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out.splitlines() == ["ERROR\tsync\tcould not be synced (KeyError); nothing was written"]
+    assert captured.err == "" and path.read_bytes() == before
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="a tab cannot be in a Windows file name")
+def test_a_control_character_in_a_file_name_cannot_shift_the_columns(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    (root / "Characters" / "Al\tder.md").write_text(note(), encoding="utf-8")
+    main(["--party", str(root)])
+    out = lines(capsys)
+    assert out[0].startswith("WRITE\tAl der: ")
+    assert all(len(r.split("\t")) == 3 for r in out[:-1])
+
+
+def test_on_build_with_an_unreadable_settings_file_says_so_once(tmp_path, capsys, fake):
+    root = vault(tmp_path, setting="build")
+    pcs(root, ("Alder",))
+    (root / "_meta" / "vault-config.md").write_bytes(b"---\npublish:\n  dndbeyond_sync: build\n\xff\xfe\n---\n")
+    assert main(["--party", str(root), "--on-build"]) == 0
+    assert lines(capsys) == ["dnd_ddb: _meta/vault-config.md could not be read; nothing was synced"]
+    assert fake.asked == []
+
+
+def test_on_build_with_no_settings_file_stays_silent(tmp_path, capsys, fake):
+    (tmp_path / "Characters").mkdir()
+    assert main(["--party", str(tmp_path), "--on-build"]) == 0
+    assert lines(capsys) == [] and fake.asked == []

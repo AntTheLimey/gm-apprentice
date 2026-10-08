@@ -40,6 +40,7 @@ import http.client
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -859,6 +860,9 @@ SERVICE = f"https://{HOST}/character/v5/character/"
 USER_AGENT = "gm-apprentice dnd_ddb (+https://github.com/AntTheLimey/gm-apprentice)"
 MAX_BODY = 8 * 1024 * 1024
 TIMEOUT = 15
+DEADLINE = 30          # seconds from the request to the last byte
+CHUNK = 64 * 1024
+CLOCK = time.monotonic
 ID_DIGITS = re.compile(r"[0-9]{1,12}")
 # The host is `dndbeyond.com` or `www.dndbeyond.com` and then the path starts: nothing can sit
 # between them. After the id only plain slug segments, a query or a fragment may follow.
@@ -897,7 +901,11 @@ class OnlyServiceHost(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, req: urllib.request.Request, fp: Any, code: int, msg: str,
                          headers: Any, newurl: str) -> urllib.request.Request | None:
         parts = urllib.parse.urlsplit(newurl)
-        if parts.scheme != "https" or parts.hostname != HOST:
+        try:
+            port = parts.port
+        except ValueError:
+            port = -1
+        if parts.scheme != "https" or parts.hostname != HOST or port not in (None, 443):
             raise urllib.error.URLError("it redirected to another host")
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -916,9 +924,21 @@ def fetch(char_id: str) -> object:
         raise cannot("that is not a character id")
     request = urllib.request.Request(SERVICE + char_id, headers={"User-Agent": USER_AGENT,
                                                                   "Accept": "application/json"})
+    started = CLOCK()
+    chunks: list[bytes] = []
+    size = 0
     try:
         with opener().open(request, timeout=TIMEOUT) as response:
-            body = response.read(MAX_BODY + 1)
+            while True:
+                if CLOCK() - started > DEADLINE:
+                    raise cannot("it took too long")
+                chunk = response.read(min(CHUNK, MAX_BODY + 1 - size))
+                if not chunk:
+                    break
+                chunks.append(chunk)
+                size += len(chunk)
+                if size > MAX_BODY:
+                    raise cannot("the response is too large")
     except urllib.error.HTTPError as e:
         if e.code == 403:
             raise Unreadable("this character is private on D&D Beyond; set it to public") from e
@@ -931,11 +951,9 @@ def fetch(char_id: str) -> object:
         raise cannot("it timed out") from e
     except (OSError, http.client.HTTPException) as e:
         raise cannot(e.__class__.__name__) from e
-    if len(body) > MAX_BODY:
-        raise cannot("the response is too large")
     try:
-        parsed = json.loads(body)
-    except ValueError as e:
+        parsed = json.loads(b"".join(chunks))
+    except (ValueError, RecursionError) as e:
         raise cannot("the response is not JSON") from e
     data = parsed.get("data") if isinstance(parsed, dict) else None
     if not isinstance(data, dict):
@@ -1017,6 +1035,22 @@ def count_line(rows: list[tuple[str, str, str]], sheets: int | None = None) -> s
     return f"# {line}" + (f"  sheets: {sheets}" if sheets is not None else "")
 
 
+PLAIN = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
+
+
+def emit(status: str, locus: str, message: str) -> None:
+    """One report row; a control character in a file name or a cell cannot shift the columns."""
+    print("\t".join(PLAIN.sub(" ", part) for part in (status, locus, message)))
+
+
+def guarded_sync(text: str) -> Report:
+    """sync_note, with any unexpected failure as one ERROR row and the text unchanged."""
+    try:
+        return sync_note(text)
+    except Exception as e:     # one note must not stop the run
+        return Report([("ERROR", "sync", f"could not be synced ({e.__class__.__name__}); nothing was written")], text)
+
+
 def one_sheet(path: Path, write_it: bool) -> int:
     try:
         with path.open("r", encoding="utf-8", newline="") as f:
@@ -1024,9 +1058,9 @@ def one_sheet(path: Path, write_it: bool) -> int:
     except (OSError, UnicodeDecodeError) as e:
         print(f"dnd_ddb: cannot read {path.as_posix()}: {e}", file=sys.stderr)
         return 2
-    report = sync_note(text)
-    for status, locus, message in report.rows:
-        print(f"{status}\t{locus}\t{message}")
+    report = guarded_sync(text)
+    for row in report.rows:
+        emit(*row)
     if any(r[0] == "ERROR" for r in report.rows):
         return 0
     print(count_line(report.rows))
@@ -1046,6 +1080,13 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
         print(f"dnd_ddb: {vault.as_posix()} is not a folder", file=sys.stderr)
         return 2
     if on_build:
+        config = vault / "_meta" / "vault-config.md"
+        if config.exists():
+            try:
+                config.read_text(encoding="utf-8-sig")
+            except (OSError, UnicodeDecodeError):
+                print("dnd_ddb: _meta/vault-config.md could not be read; nothing was synced")
+                return 0
         setting = (read_publish_scalar(vault, "dndbeyond_sync") or "manual").strip().strip("\"'").strip()
         if setting.lower() == "manual":
             return 0
@@ -1059,23 +1100,31 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
         return 0
     rows: list[tuple[str, str, str]] = []
     sheets, failed = 0, False
-    for rel, text in vault_files(vault):
-        fm = extract_frontmatter(text) or {}
+    # vault_files only finds the PC notes; each is re-read byte-exact (line endings kept, strict utf-8).
+    for rel, found_text in vault_files(vault):
+        fm = extract_frontmatter(found_text) or {}
         if entity_type(fm) != "pc" or note_link(fm) is None:
             continue
         sheets += 1
-        report = sync_note(text)
+        path = vault / rel
+        try:
+            with path.open("r", encoding="utf-8", newline="") as f:
+                text = f.read()
+            report = guarded_sync(text)
+        except (OSError, UnicodeDecodeError) as e:
+            why = "is not valid UTF-8" if isinstance(e, UnicodeDecodeError) else "could not be read"
+            text, report = "", Report([("ERROR", "note", f"the note {why}; nothing was written")], "")
         found = report.rows
         if write_it and report.text != text:
             try:
-                write_text_atomic(vault / rel, report.text)
+                write_text_atomic(path, report.text)
             except StepFailed as e:
                 found = [("ERROR", "write", str(e))]
                 failed = True
         for status, locus, message in found:
-            rows.append((status, f"{Path(rel).stem}: {locus}", message))
-    for row in rows:
-        print("\t".join(row))
+            row = (status, f"{Path(rel).stem}: {locus}", message)
+            rows.append(row)
+            emit(*row)
     print(count_line(rows, sheets))
     return 2 if failed else 0
 
