@@ -214,6 +214,30 @@ Transformation: reproduced as an optional collapsible
 reference appendix with citation, displayed only when the
 user expands the details element.
 
+## D&D Beyond
+
+D&D Beyond is a service of Wizards of the Coast LLC. This project is
+not affiliated with it, and nothing from D&D Beyond is redistributed
+here: no character data, no rules text and no site code.
+
+`skills/shared/scripts/dnd_ddb.py` reads one public character, at the
+user's request, and writes names, numbers and short key facts (a spell's
+level, casting time, range, component letters and duration; an item's
+quantity, weight and charges) into the user's own vault. It writes no
+rules text and no descriptions.
+
+`skills/shared/scripts/dnd_ddb_read.py` and
+`skills/shared/scripts/dnd_ddb_calc.py` were written from the author's
+own notes on the shape of the public character data, in the author's
+own words. The calculator recognises a handful of features by a digest
+(SHA-256) of their name, so that no name from outside the free rules is
+written in this repository.
+
+The sync tests (`tests/test_dnd_ddb_*.py`, built by
+`tests/ddb_builder.py`) use invented characters in the shape of that
+data, with SRD 5.2 names (CC-BY 4.0) and made-up names for anything
+meant to be outside the SRD.
+
 ## Referenced Frameworks and Concepts
 
 The following frameworks and concepts are referenced in this

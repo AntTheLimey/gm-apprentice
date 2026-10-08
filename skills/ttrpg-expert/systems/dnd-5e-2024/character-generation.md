@@ -135,6 +135,8 @@ Game assumes PCs are not evil. Check with GM before making an evil character.
 
 ### Write the Sheet and Fill the Numbers
 
+A character already built on D&D Beyond is not written by hand: copy the template, put the character's link in `dndbeyond`, and sync it (character-sheet.md, "D&D Beyond sync").
+
 Write the PC note in the template's layout, following "Writing the Sheet in the Vault" in character-sheet.md. The order matters, because the attack lines are built from numbers the tool fills:
 
 1. Write the level, the scores, the save and skill proficiencies, and one row per feature, trait, feat and spell. An item, feat or feature that adds to saves, checks, initiative or the spell numbers goes in `### Bonuses`, not into a hand sum.

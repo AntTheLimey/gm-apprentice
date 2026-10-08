@@ -117,6 +117,42 @@ odd may show a slot `LOOK` (the free rules can be read two ways).
 Not checked: armour class, attacks, skill counts, and whether a spell,
 feat or skill pick is allowed.
 
+### D&D Beyond sync
+
+A PC note with `dndbeyond: "<character link>"` in its frontmatter is
+brought up to date from that character's public D&D Beyond page: level,
+scores, proficiencies, features, feats, spells, slot totals, gear, magic
+items, coins, then AC, the hit point maximum and the attack lines, then
+the fill. Run it when the GM says a character changed there.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" "path/to/PC.md"
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>"
+```
+
+Both preview. Show the GM the rows; on their yes, run again with `--write`.
+
+| Row | Means | Do |
+|-----|-------|----|
+| `WRITE`, `FILL` | A cell changes (old -> new) | Show it |
+| `ADD` | A new row, its Summary blank | After the write, fill Summary as "Summaries" above says, never from D&D Beyond's text |
+| `REMOVE` | A row sync added earlier that D&D Beyond no longer has | If the GM wants it, add it back by hand after the write |
+| `KEPT` | The note's own value stays: a number with a reason in brackets (`+7 (cloak of elvenkind)`), or a list the note has no table for | Show it |
+| `CHECK` | Sync was unsure and wrote nothing there | Tell the GM every run, with the reason; settle it with them by hand |
+| `ERROR` | Nothing was written to that note | Pass it on. A private character must be set to public; a note in the earlier layout is converted first (`sheet-conversion.md`) |
+
+Sync removes only rows it added, so a row written by hand always stays,
+and a stale one is yours to delete. It never writes what the player
+tracks in play, `### Bonuses`, Companions, a description or any free
+text.
+
+Not in D&D Beyond's data, so entered by hand: a subclass's
+always-prepared spells, Artificer infusions, and a language or tool the
+player picked from a list there (one they typed in is read). The
+worked-out lines leave out conditional damage and bonuses. A use count
+can sit under a neighbouring feature's name. A note outside a vault
+never has a row removed.
+
 ## Identity Block
 
 | Field | Source |

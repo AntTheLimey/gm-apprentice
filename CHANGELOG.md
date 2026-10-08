@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.38] — 2026-10-07
+
+### Added
+
+- D&D Beyond sync. A D&D character note that carries the character's
+  D&D Beyond link is brought up to date from D&D Beyond with one
+  command: level-ups, new spells, features, feats, gear, magic items
+  and coins arrive in the note, and every modifier is then worked out
+  again. The link goes in the PC note's frontmatter as `dndbeyond`
+  (a link or a bare character id); the D&D PC template has the field.
+  `dnd_ddb.py "<note>"` previews one character and
+  `dnd_ddb.py --party "<vault>"` every character with a link; `--write`
+  applies. The campaign setting `publish.dndbeyond_sync` in
+  `_meta/vault-config.md` is `build` (the apprentice syncs before it
+  updates the site) or `manual` (only when asked, the default), and
+  `vault-setting` sets and reports it.
+  - Sync also works out armour class, the hit point maximum and the
+    attack lines. They are written only into a cell that is blank or a
+    bare number. Where it is unsure for a character it writes nothing
+    and prints a `CHECK` row saying why.
+  - It never touches what the vault owns: current and temporary hit
+    points, spent hit dice, death saves, exhaustion, conditions, Heroic
+    Inspiration, used slots, uses and charges, the Bonuses table,
+    Companions, notes, a summary that holds text, or any number with a
+    reason in brackets beside it (`+7 (cloak of elvenkind)`). It writes
+    names and numbers only: no descriptions, no rules text and no free
+    text.
+  - Sync remembers the rows it added, in
+    `_meta/dndbeyond/<character id>.json`, which is never published. A
+    row is removed only when sync added it on an earlier run and D&D
+    Beyond no longer has it. A row added by hand needs no marker and is
+    never removed, and the first sync of a note removes nothing.
+  - Limits: the character must be public; a subclass's always-prepared
+    spells, Artificer infusions, and languages and tools picked from
+    D&D Beyond's lists are not in what it reads and are entered by
+    hand; conditional damage and bonuses are left out of the worked-out
+    lines; a note in the earlier layout is converted first.
+  - Guidance is in
+    `skills/ttrpg-expert/systems/dnd-5e-2024/character-sheet.md`,
+    "D&D Beyond sync".
+- Shared test cases for the GURPS sums
+  (`tests/shared-cases/gurps-calc.json`). The Python calculator and the
+  publish tool's copy both run them, so the two cannot drift apart. No
+  GURPS behaviour changes.
+- Publish tool 1.15.2.
+
+---
+
 ## [1.10.37] — 2026-10-07
 
 ### Fixed

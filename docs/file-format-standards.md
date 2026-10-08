@@ -370,6 +370,31 @@ it. An absent or empty field means the note is not synced. The vault
 setting `publish.dndbeyond_sync` (`build` or `manual`) says when the
 sync runs.
 
+Sync owns the cells and rows D&D Beyond has a value for: level, XP,
+scores, save and skill proficiency, size, Speed when it is blank, the
+hit dice maximum, the spellcasting ability, the Background, Defences
+and Proficiencies lines, slot totals, and the feature, feat, spell,
+gear, magic item, coin and attack rows. It also
+works out `AC`, `HP (Max)` and the attack lines, and writes them only
+into a cell that is blank or a bare number. A number with a reason in
+brackets (`15 (homebrew plate)`) is kept. Where sync is unsure it
+writes nothing and reports a `CHECK` row. A new row's `Summary` is left
+blank, and a `Summary` or `Notes` cell that holds text is never
+changed.
+
+Sync remembers the rows it added in
+`_meta/dndbeyond/<character id>.json`, which is never published. A row
+is removed only when that file holds it and D&D Beyond no longer has
+it. A row added by hand needs no marker and always stays. With no
+memory file (a first sync, a deleted file, a note outside a vault)
+nothing is removed, and a sync with `--write` inside a vault builds the
+file again.
+
+Sync never writes vault-owned state: `HP (Current)`, `Temp HP`, hit
+dice spent, death saves, exhaustion, conditions, Heroic Inspiration,
+any `Used` or `Expended` cell, `### Bonuses`, Companions, Current
+Status, Notes, GM Notes or any free text.
+
 ### Cells the live sheet writes back
 
 With live stats on, a player changes these values on the page, the site

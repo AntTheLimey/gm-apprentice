@@ -75,6 +75,15 @@ offer `update-pin --site <dir>` first. The build itself stays
 read-only on the vault, so this lives in the skill, not in
 `build`/`deploy`.
 
+**On a D&D vault, before every build**, also run
+`python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>" --on-build --write`
+and pass on any `ERROR` or `CHECK` row. It does nothing unless the
+vault's `publish.dndbeyond_sync` is `build`. When the GM asks for the
+characters to be synced from D&D Beyond at every site update, run
+`vault-setting --set dndbeyond_sync='"build"'` from the site directory
+(`'"manual"'` turns it off). What the rows mean is in ttrpg-expert's
+`systems/dnd-5e-2024/character-sheet.md`, "D&D Beyond sync".
+
 Inside a scaffolded site, build with npm (it resolves the tool
 from the scaffold's `file:` pin — no registry, no network):
 
