@@ -108,7 +108,47 @@ def test_hp_is_never_below_one():
 def test_hp_is_unsure_without_the_fields_it_needs():
     assert hp() == Worked(None, "", "the data has no rolled hit point total")
     assert hp(hit_points={"type": 1}).unsure == "a class has no hit die in the data"
-    assert hp(hit_points={"base": "many"}).value is None
+    assert hp(hit_points={"base": "many"}) == Worked(None, "", "the data has no rolled hit point total")
+
+
+def test_hp_is_unsure_when_a_per_level_bonus_names_no_class_of_a_multiclass_character():
+    two = (("Fighter", 3, "", None), ("Sorcerer", 2, "", 6))
+    lost = (("class", "bonus", "hit-points-per-level", 1, {"componentId": 999999}),)
+    assert hp(classes=two, hit_points={"base": 22}, modifiers=lost) \
+        == Worked(None, "", "a per-level hit point bonus does not say which class it belongs to")
+
+
+@pytest.mark.parametrize("first", [(), (0, 1)])
+def test_fixed_hp_is_unsure_unless_exactly_one_class_came_first(first):
+    two = (("Fighter", 3, "", None), ("Wizard", 2, "", 4))
+    data = character(classes=two, hit_points={"type": 1}, hit_dice={"Fighter": 10, "Wizard": 6})
+    for i, row in enumerate(data["classes"]):
+        row["isStartingClass"] = i in first
+    assert read(data).hp_max == Worked(None, "", "the data does not say which class came first")
+
+
+def test_a_character_with_no_levels_is_unsure_three_times():
+    data = character(hit_points={"base": 22})
+    c = read(data)
+    data["classes"][0]["level"] = 0
+    for work in (calc.hp_max, calc.armour_class, calc.attacks):
+        assert work(data, c) == Worked(None, "", "the data is not a character this reader understands")
+
+
+def by_experience(**kw):
+    data = character(xp=900, **kw)
+    data["preferences"]["progressionType"] = 2
+    return read(data)
+
+
+def test_levelling_by_experience_leaves_hp_and_ac_alone_unless_the_proficiency_bonus_is_in_the_sum():
+    plain = (("feat", "bonus", "armor-class", 1),)
+    scaled = (("feat", "bonus", "armor-class", 0, {"bonusTypes": [1]}),)
+    assert by_experience(hit_points={"base": 22}, modifiers=plain).hp_max.value == 32
+    assert by_experience(modifiers=plain).ac.value == 13
+    assert by_experience(modifiers=scaled).ac \
+        == Worked(None, "", "the character levels by experience points, which this calculator does not turn into a level")
+    assert ac(modifiers=scaled).value == 15                           # by class levels: proficiency bonus +3
 
 
 def test_hp_is_unsure_about_a_hit_point_rule_it_does_not_know():
@@ -135,9 +175,9 @@ def test_ac_in_medium_armour_caps_dex_at_two():
     worn = dict(inventory=(held("Scale Mail", "armor"),), item_details={"Scale Mail": armour(14, MEDIUM)})
     assert ac(stats=(8, 18, 14, 16, 12, 10), **worn) == Worked(16, "Scale Mail 14 + Dex 2", "")
     assert ac(stats=(8, 12, 14, 16, 12, 10), **worn).value == 15
-    master = (("feat", "set", "ac-max-dex-armored-modifier", 3),)
-    assert ac(stats=(8, 18, 14, 16, 12, 10), modifiers=master, **worn).value == 17
-    assert ac(stats=(8, 14, 14, 16, 12, 10), modifiers=master, **worn).value == 16   # the raise needs DEX 16
+    raised = (("feat", "set", "ac-max-dex-armored-modifier", 3),)
+    assert ac(stats=(8, 18, 14, 16, 12, 10), modifiers=raised, **worn).value == 17
+    assert ac(stats=(8, 14, 14, 16, 12, 10), modifiers=raised, **worn).value == 16   # the raise needs DEX 16
 
 
 def test_ac_in_heavy_armour_ignores_dex():
@@ -180,6 +220,31 @@ def test_the_better_of_two_suits_is_the_one_that_counts():
     worn = (held("Leather", "armor"), held("Chain Mail", "armor"))
     details = {**LEATHER, "Chain Mail": armour(16, HEAVY)}
     assert ac(inventory=worn, item_details=details).parts == "Chain Mail 16"
+
+
+def test_worn_armour_with_no_armour_class_number_is_unsure():
+    for missing in (None, "eleven"):
+        worn = dict(inventory=(held("Leather", "armor"),), item_details={"Leather": armour(missing)})
+        assert ac(**worn) == Worked(None, "", "Leather has no armour class in the data")
+    shield = dict(inventory=(held("Shield", "shield"),), item_details={"Shield": armour(None, SHIELD)})
+    assert ac(**shield) == Worked(None, "", "Shield has no armour class in the data")
+
+
+@pytest.mark.parametrize("kind, details", [("armor", armour(11, 9)), ("armor", armour(11, None)),
+                                           ("gear", {"armorClass": 3}), ("gear", {"armorTypeId": 7}),
+                                           ("gear", {"baseTypeId": 701257905})])
+def test_worn_armour_of_a_kind_it_does_not_know_is_unsure(kind, details):
+    worn = dict(inventory=(held("Zzyx Mail", kind),), item_details={"Zzyx Mail": details})
+    assert ac(**worn) == Worked(None, "", "Zzyx Mail is armour of a kind this calculator does not know")
+    assert ac(inventory=(held("Zzyx Mail", kind, equipped=False),), item_details={"Zzyx Mail": details}).value == 12
+    assert ac(inventory=(held("Zzyx Cloak", "gear"),)).value == 12
+
+
+def test_a_conditional_armour_class_bonus_is_left_out():
+    sometimes = ("feat", "bonus", "armor-class", 2, {"restriction": "against zzyx attacks"})
+    assert ac(modifiers=(sometimes, ("feat", "bonus", "armor-class", 1))).value == 13
+    base = (("class", "set", "unarmored-armor-class", None, {"statId": 3, "restriction": "while zzyx"}),)
+    assert ac(modifiers=base).value == 12
 
 
 def test_a_ring_style_bonus_adds_to_armour_class():
@@ -364,6 +429,20 @@ def test_a_to_hit_bonus_for_ranged_weapons_leaves_melee_alone():
     assert line(worked, "Shortbow")[0] == "+7" and line(worked, "Mace")[0] == "+6"
 
 
+def test_a_conditional_to_hit_bonus_is_left_out():
+    sometimes = ("class", "bonus", "melee-weapon-attacks", 2, {"restriction": "against zzyx"})
+    always = ("class", "bonus", "melee-weapon-attacks", 1)
+    assert line(attacks(**{**MACE, "modifiers": (SIMPLE_WEAPONS, sometimes, always)}), "Mace") == ("+7", "1d6+3 bludgeoning")
+    assert line(attacks(modifiers=(sometimes, always)), "Unarmed Strike")[0] == "+7"
+
+
+def test_a_conditional_damage_bonus_is_left_out():
+    sometimes = ("class", "damage", "melee-weapon-attacks", 2, {"restriction": "while zzyx"})
+    always = ("class", "damage", "melee-weapon-attacks", 1)
+    assert line(attacks(**{**MACE, "modifiers": (SIMPLE_WEAPONS, sometimes, always)}), "Mace") == ("+6", "1d6+4 bludgeoning")
+    assert line(attacks(modifiers=(sometimes, always)), "Unarmed Strike")[1] == "5 bludgeoning"
+
+
 def test_another_items_magic_bonus_reaches_every_weapon():
     worn = dict(inventory=(held("Mace"), RING), item_details={"Mace": weapon("1d6", "Bludgeoning")})
     mods = (SIMPLE_WEAPONS, ("item", "bonus", "magic", 1, {"item": "Ring of Tests"}))
@@ -479,6 +558,18 @@ def test_attacks_are_unsure_about_a_weapon_adjustment_it_does_not_read():
     assert worked == Worked(None, "", "Mace carries an adjustment this calculator does not read")
 
 
+def test_attacks_are_unsure_about_a_weapon_that_does_not_say_melee_or_ranged():
+    worked = attacks(inventory=(held("Mace"),), item_details={"Mace": weapon("1d6", attackType=None)})
+    assert worked == Worked(None, "", "Mace does not say whether it is melee or ranged")
+
+
+def test_attacks_are_unsure_about_a_versatile_die_off_the_ladder():
+    odd = dict(inventory=(held("Zzyx Blade"),), item_details={"Zzyx Blade": weapon("1d7", properties=("Versatile",))})
+    assert attacks(**odd) == Worked(None, "", "Zzyx Blade has a versatile die this calculator does not know")
+    odd["item_details"] = {"Zzyx Blade": weapon("1d7")}
+    assert line(attacks(**odd), "Zzyx Blade")[1] == "1d7+3 slashing"
+
+
 def test_attacks_are_unsure_about_a_weapon_with_no_damage_dice():
     worked = attacks(inventory=(held("Net"),), item_details={"Net": weapon(None)}, modifiers=(MARTIAL_WEAPONS,))
     assert worked == Worked(None, "", "Net has no damage dice in the data")
@@ -531,8 +622,8 @@ def test_unarmed_strike_is_always_there_with_a_flat_damage():
 
 def test_unarmed_strike_takes_the_players_bonus_and_a_damage_die():
     assert line(attacks(character_values=((12, 4, "unarmed"),)), "Unarmed Strike") == ("+10", "4 bludgeoning")
-    brawler = (("feat", "set", "unarmed-damage-die", None, {"dice": dice("1d4")}),)
-    assert line(attacks(modifiers=brawler), "Unarmed Strike") == ("+6", "1d4+3 bludgeoning")
+    fists = (("feat", "set", "unarmed-damage-die", None, {"dice": dice("1d4")}),)
+    assert line(attacks(modifiers=fists), "Unarmed Strike") == ("+6", "1d4+3 bludgeoning")
     assert attacks(character_values=((30, 8, "unarmed"),)).unsure \
         == "Unarmed Strike carries an adjustment this calculator does not read"
 
@@ -603,6 +694,12 @@ def test_the_players_adjustments_on_a_features_action():
     assert names(attacks(character_values=((16, False, "55", ACTION),), **shown)) == ["Unarmed Strike"]
     assert attacks(character_values=((30, 8, "55", ACTION),), **shown).unsure \
         == "Fire Breath carries an adjustment this calculator does not read"
+
+
+def test_attacks_are_unsure_about_a_save_whose_ability_the_data_does_not_name():
+    gas = attack_action("Zzyx Cloud", saveStatId=3, dice=dice("2d6"), damageTypeId=10, displayAsAttack=True)
+    assert attacks(actions=(("race", gas),)) \
+        == Worked(None, "", "Zzyx Cloud does not name the ability its save DC comes from")
 
 
 def test_attacks_are_unsure_about_an_attack_whose_ability_the_data_does_not_name():
@@ -683,17 +780,34 @@ def test_an_items_cantrip_borrows_the_best_casting_class():
     wand = wizard(5, spells=(known("Fire Bolt", "Item: Wand of Tests"),), spell_details=FIRE_BOLT,
                   modifiers=(("item", "bonus", "spell-attacks", 1),))
     assert line(wand, "Fire Bolt") == ("+7", "2d10 fire")
-    assert line(attacks(spells=(known("Fire Bolt", "Item: Wand of Tests"),), spell_details=FIRE_BOLT), "Fire Bolt")[0] == "+3"
+
+
+def test_attacks_are_unsure_about_a_cantrip_with_no_casting_ability_to_go_by():
+    why = Worked(None, "", "Fire Bolt does not say which ability casts it")
+    assert attacks(spells=(known("Fire Bolt", "Item: Wand of Tests"),), spell_details=FIRE_BOLT) == why   # no caster
+    assert wizard(5, spells=(known("Fire Bolt", "Species"),), spell_details=FIRE_BOLT) == why
+    assert wizard(5, feats=(("Zzyx Initiate",),), spells=(known("Fire Bolt", "Feat: Zzyx Initiate"),),
+                  spell_details=FIRE_BOLT) == why
+    assert attacks(spells=(known("Fire Bolt", "Fighter"),), spell_details=FIRE_BOLT) == why   # a class with no ability
+    odd = {"Fire Bolt": {**FIRE_BOLT["Fire Bolt"], "row": {"spellCastingAbilityId": 9}}}
+    assert wizard(5, spells=(known("Fire Bolt"),), spell_details=odd) == why
+
+
+def test_attacks_are_unsure_about_a_class_cantrip_whose_class_the_data_does_not_name():
+    data = character(spells=(known("Fire Bolt"),), spell_details=FIRE_BOLT)
+    row = data["classSpells"][0]["spells"].pop()
+    data["spells"]["class"].append({**row, "componentId": 999999})
+    assert read(data).attacks == Worked(None, "", "Fire Bolt does not say which class casts it")
 
 
 def test_a_cantrips_damage_bonuses():
     blast = {"Eldritch Blast": cantrip("1d10", "force", attack=2)}
-    agony = (("class", "eldritch-blast", "bonus-damage", None, {"statId": 4}),)
-    assert line(wizard(5, spells=(known("Eldritch Blast"),), spell_details=blast, modifiers=agony), "Eldritch Blast") \
+    added = (("class", "eldritch-blast", "bonus-damage", None, {"statId": 4}),)
+    assert line(wizard(5, spells=(known("Eldritch Blast"),), spell_details=blast, modifiers=added), "Eldritch Blast") \
         == ("+6", "1d10+3 force")
-    assert line(wizard(5, spells=(known("Fire Bolt"),), spell_details=FIRE_BOLT, modifiers=agony), "Fire Bolt")[1] == "2d10 fire"
-    potent = (("class", "bonus", "wizard-cantrip-damage", 3),)
-    stronger = wizard(5, spells=(known("Fire Bolt"),), spell_details=FIRE_BOLT, modifiers=potent)
+    assert line(wizard(5, spells=(known("Fire Bolt"),), spell_details=FIRE_BOLT, modifiers=added), "Fire Bolt")[1] == "2d10 fire"
+    plus = (("class", "bonus", "wizard-cantrip-damage", 3),)
+    stronger = wizard(5, spells=(known("Fire Bolt"),), spell_details=FIRE_BOLT, modifiers=plus)
     assert line(stronger, "Fire Bolt")[1] == "2d10+3 fire"
 
 
@@ -711,7 +825,9 @@ def test_attacks_are_unsure_about_a_cantrip_with_two_different_damage_lines():
 
 
 def test_the_same_cantrip_from_two_sources_with_different_numbers_is_unsure():
-    twice = wizard(5, spells=(known("Fire Bolt"), known("Fire Bolt", "Species")), spell_details=FIRE_BOLT)
+    own = {"Fire Bolt": {**FIRE_BOLT["Fire Bolt"], "row": {"spellCastingAbilityId": 4}}}
+    twice = wizard(5, spells=(known("Fire Bolt"), known("Fire Bolt", "Species")), spell_details=own,
+                   inventory=(RING,), modifiers=(("item", "bonus", "spell-attacks", 1),))
     assert twice.unsure == "two attacks are both called Fire Bolt with different numbers"
 
 
@@ -766,3 +882,4 @@ def test_odd_values_inside_a_character_never_raise():
     data["preferences"] = None
     for work in (calc.hp_max, calc.armour_class, calc.attacks):
         assert isinstance(work(data, c), Worked)
+    assert calc.armour_class(data, c) == Worked(None, "", "Leather has no armour class in the data")

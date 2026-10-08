@@ -35,12 +35,12 @@ from typing import Callable, Iterator
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from dnd_ddb_read import (ABILITIES, ABILITY_WORDS, CLASS_FEATURE, ITEM_ROW_TYPE, Attack,  # noqa: E402
                           Character, Unreadable, Worked, _ability_mod, _char_values, _class_rows,
-                          _dict, _dicts, _equipped, _int, _inventory, _item_name, _live_item,
+                          _dict, _dicts, _equipped, _int, _inventory, _item_name, _list, _live_item,
                           _live_modifiers, _num, _of, _text, _worth, safe_name)
 
 __all__ = ["Attack", "Worked", "armour_class", "attacks", "hp_max"]
 
-WEAPON_BASE, WEAPON_CATEGORY, OPTION = 1782728300, 660121713, 258900837
+WEAPON_BASE, WEAPON_CATEGORY, ARMOUR_BASE = 1782728300, 660121713, 701257905
 UNARMED_ID, UNARMED_TYPE = "1", 1120657896        # the Unarmed Strike every character has
 LIGHT, MEDIUM, HEAVY, SHIELD = 1, 2, 3, 4         # armour type ids
 NO_ARMOUR = 10
@@ -201,6 +201,8 @@ def _sheet(data: object, c: Character) -> _Sheet:
     by_origin["item"] = [m for r in worn for m in _own(d, r) if _counts(m, r) and not _stays_on_item(m, r)]
     shared = [m for group in by_origin.values() for m in group]
     level = sum(_int(k.get("level")) for k in classes)
+    if level < 1:
+        raise Unreadable("no levels")
     pb = 2 + (level - 1) // 4 + sum(_int(m.get("value")) for m in _of(shared, "bonus", "proficiency-bonus"))
     return _Sheet(d, c, classes, worn, values, by_origin, shared, pb,
                   min(6, sum(1 for r in rows if r.get("isAttuned"))), _owners(d, classes), _names(d, classes, rows, values))
@@ -245,14 +247,37 @@ def _scaled(s: _Sheet, m: dict) -> int:
     return _int(m.get("value")) + max(0, _mod(s, m.get("statId")))
 
 
+XP_REASON = "the character levels by experience points, which this calculator does not turn into a level"
+
+
+def _by_xp(s: _Sheet) -> bool:
+    """Whether the level, and so the proficiency bonus and a cantrip's dice, follow the experience
+    points and may be out of step with the class levels. Level 1 with no experience is level 1 both ways."""
+    prefs = _dict(s.d.get("preferences"))
+    return _num(prefs.get("progressionType")) == 2 and not (_level(s) == 1 and _int(s.d.get("currentXp")) == 0)
+
+
+def _steady(m: dict) -> bool:
+    """A modifier with no condition written on it. One with a condition holds only some of the
+    time, and a number on the sheet must hold every time, so it is left out of every sum."""
+    return not _text(m.get("restriction")).strip()
+
+
+def _sure(s: _Sheet, kind: str, sub: str) -> list[dict]:
+    return [m for m in _of(s.shared, kind, sub) if _steady(m)]
+
+
 def _full(s: _Sheet, m: dict) -> int:
     """As `_scaled`, with what the modifier's bonus types add (proficiency bonus, attuned items)."""
+    if 1 in _list(m.get("bonusTypes")) and _by_xp(s):
+        raise _Unsure(XP_REASON)
     return _worth(m, s.pb, s.attuned) + max(0, _mod(s, m.get("statId")))
 
 
 def _total(s: _Sheet, kind: str, subs: set[str]) -> int:
     """Every shared modifier of this kind whose subType is one of `subs`, added up."""
-    return sum(_scaled(s, m) for m in s.shared if m.get("type") == kind and _text(m.get("subType")) in subs)
+    return sum(_scaled(s, m) for m in s.shared
+               if m.get("type") == kind and _text(m.get("subType")) in subs and _steady(m))
 
 
 def _adjustments(s: _Sheet, ident: object, kind: object) -> dict[int, object]:
@@ -304,6 +329,8 @@ def _with_type(damage: str, kind: str) -> str:
 
 def _fixed_base(s: _Sheet) -> int:
     """The hit dice at their fixed value: the first class's whole die, then half plus one a level."""
+    if sum(1 for k in s.classes if k.get("isStartingClass")) != 1:
+        raise _Unsure("the data does not say which class came first")
     total = 0
     for k in s.classes:
         die, lvl = _num(_dict(k.get("definition")).get("hitDice")), _int(k.get("level"))
@@ -365,7 +392,9 @@ def _about_ac(m: dict) -> bool:
 def _item_ac(s: _Sheet, row: dict) -> int:
     """An armour's or shield's own armour class: its base, which never waits for attunement,
     and its own bonus, which does."""
-    base = _int(_dict(row.get("definition")).get("armorClass"))
+    base = _num(_dict(row.get("definition")).get("armorClass"))
+    if base is None:
+        raise _Unsure(f"{_item_name(row, s.values)} has no armour class in the data")
     return base + sum(_int(m.get("value")) for m in _of(_own(s.d, row), "bonus", "armor-class") if _counts(m, row))
 
 
@@ -377,7 +406,7 @@ def _dex_in(s: _Sheet, row: dict) -> int:
         return 0
     cap = 2
     raised = [_int(m.get("value")) for sub in ("ac-max-dex-modifier", "ac-max-dex-armored-modifier")
-              for m in _of(s.shared, "set", sub)]
+              for m in _sure(s, "set", sub)]
     if raised and _int(s.c.scores.get("DEX"), 10) >= 16:   # the raise asks for the score, not the modifier
         cap = max(raised)
     return min(cap, dex)
@@ -399,21 +428,21 @@ def _unarmoured(s: _Sheet, group: list[dict]) -> Parts:
     if not _of(group, "ignore", "unarmored-dex-ac-bonus"):
         dex = _mod(s, 2)
         caps = [_int(m.get("value")) for sub in ("ac-max-dex-modifier", "ac-max-dex-unarmored-modifier")
-                for m in _of(s.shared, "set", sub)]
+                for m in _sure(s, "set", sub)]
         parts.append(("Dex", min(max(caps), dex) if caps else dex))
-    best = _best(_of(group, "set", "unarmored-armor-class"), lambda m: _full(s, m))
+    best = _best([m for m in _of(group, "set", "unarmored-armor-class") if _steady(m)], lambda m: _full(s, m))
     if best is not None:
         stat = _num(best.get("statId"))
         label = ABILITIES[stat - 1].title() if stat is not None and 1 <= stat <= 6 and not _int(best.get("value")) \
             else _source(s, best, "unarmoured bonus")
         parts.append((label, _full(s, best)))
-    parts += [(_source(s, m, "unarmoured bonus"), _full(s, m)) for m in _of(s.shared, "bonus", "unarmored-armor-class")]
+    parts += [(_source(s, m, "unarmoured bonus"), _full(s, m)) for m in _sure(s, "bonus", "unarmored-armor-class")]
     return parts
 
 
 def _armoured(s: _Sheet, suit: dict) -> Parts:
     parts: Parts = [(_item_name(suit, s.values), _item_ac(s, suit)), ("Dex", _dex_in(s, suit))]
-    return parts + [(_source(s, m, "armoured bonus"), _full(s, m)) for m in _of(s.shared, "bonus", "armored-armor-class")]
+    return parts + [(_source(s, m, "armoured bonus"), _full(s, m)) for m in _sure(s, "bonus", "armored-armor-class")]
 
 
 def _base_armour(s: _Sheet, suit: dict | None) -> Parts:
@@ -451,6 +480,11 @@ def _armour_class(s: _Sheet) -> Worked:
         if _named("armour class trait", _dict(trait.get("definition")).get("name")):
             raise _Unsure(f"{safe_name(_dict(trait.get('definition')).get('name'))} has an armour class rule of its own")
     armour = [r for r in s.worn if _armour_kind(r) is not None]
+    for r in s.worn:                              # armour by any other sign, of a kind not known here
+        defn = _dict(r.get("definition"))
+        if _armour_kind(r) is None and (defn.get("filterType") == "Armor" or _num(defn.get("baseTypeId")) == ARMOUR_BASE
+                                        or _num(defn.get("armorTypeId")) is not None or _int(defn.get("armorClass"))):
+            raise _Unsure(f"{_item_name(r, s.values)} is armour of a kind this calculator does not know")
     for m in s.shared + [m for r in armour for m in _own(s.d, r)]:
         kind, sub = _text(m.get("type")), _text(m.get("subType"))
         if _about_ac(m) and (kind, sub) not in AC_KNOWN:
@@ -461,9 +495,9 @@ def _armour_class(s: _Sheet) -> Worked:
     shield = _best([r for r in armour if _armour_kind(r) == SHIELD], lambda r: _item_ac(s, r))
 
     parts = _base_armour(s, suit)
-    parts += [(_source(s, m, "bonus"), _full(s, m)) for m in _of(s.shared, "bonus", "armor-class")]
+    parts += [(_source(s, m, "bonus"), _full(s, m)) for m in _sure(s, "bonus", "armor-class")]
     shield_ac = _item_ac(s, shield) if shield is not None else 0
-    paired = sum(_full(s, m) for m in _of(s.shared, "bonus", "dual-wield-armor-class")) if _two_weapons(s) else 0
+    paired = sum(_full(s, m) for m in _sure(s, "bonus", "dual-wield-armor-class")) if _two_weapons(s) else 0
     if paired > max(0, shield_ac):                # the two-weapon bonus takes the shield's place only when it beats it
         parts.append(("two weapons", paired))
     elif shield is not None:
@@ -554,21 +588,21 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
     abilities = ([1] if not ranged or "finesse" in props else []) + ([2] if ranged or "finesse" in props else [])
     abilities += _granted_abilities(s, pact_by) + _granted_abilities(s, other_by)
     proficiency = s.pb if pact or _proficient(s, facts, own) else 0
-    best: tuple[int, int, int] | None = None      # to hit, modifier, damage from the ability
+    ways = []                                     # per ability: to hit, modifier, damage from the ability
     for stat in abilities:
-        if not 1 <= stat <= 6:
-            continue
-        word, mod = f"{ABILITY_WORDS[stat - 1]}-attacks", _mod(s, stat)
-        this = (mod + proficiency + _total(s, "bonus", {word}), mod, mod + _total(s, "damage", {word}))
-        if best is None or this[:2] >= best[:2]:  # of equals, the later ability
-            best = this
-    if best is None:
-        raise _Unsure(f"{name} names no ability to attack with")
+        if 1 <= stat <= 6:
+            word, mod = f"{ABILITY_WORDS[stat - 1]}-attacks", _mod(s, stat)
+            ways.append((mod + proficiency + _total(s, "bonus", {word}), mod, mod + _total(s, "damage", {word})))
+    best = ways[0]                                # Strength or Dexterity is always there
+    for way in ways[1:]:
+        if way[:2] >= best[:2]:                   # of equals, the later ability
+            best = way
     magic = sum(_int(m.get("value")) for m in _of(own, "bonus", "magic") if _counts(m, row)) \
-        + sum(_int(m.get("value")) for m in _of(s.shared, "bonus", "magic"))
+        + sum(_int(m.get("value")) for m in _sure(s, "bonus", "magic"))
 
     def about(kind: str, two_hands: bool) -> int:
-        return sum(_scaled(s, m) for m in s.shared if m.get("type") == kind and _fits_weapon(m, facts, props, ranged, two_hands))
+        return sum(_scaled(s, m) for m in s.shared
+                   if m.get("type") == kind and _steady(m) and _fits_weapon(m, facts, props, ranged, two_hands))
 
     hit = best[0] + magic + about("bonus", False) + _int(mine.get(12))
     if _num(mine.get(13)) is not None:
@@ -580,14 +614,16 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
     fixed = die[2] + magic + from_ability + _int(mine.get(10))
     damage = _dice_text(die[0], die[1], fixed + about("damage", False))
     if "versatile" in props and not off_hand:
-        bigger = DICE_LADDER[min(len(DICE_LADDER) - 1, DICE_LADDER.index(die[1]) + 1)] if die[1] in DICE_LADDER else die[1]
+        if die[1] not in DICE_LADDER:
+            raise _Unsure(f"{name} has a versatile die this calculator does not know")
+        bigger = DICE_LADDER[min(len(DICE_LADDER) - 1, DICE_LADDER.index(die[1]) + 1)]
         damage += f" ({_dice_text(die[0], bigger, fixed + about('damage', True))})"
     swapped = next((_text(m.get("subType")) for m in own if m.get("type") == "replace-damage-type"), "")
     damage = _with_type(damage, safe_name(swapped or _text(facts.get("damageType")).lower()))
     for m in own:                                 # extra damage: only what always applies, from an item in use
         sub = _text(m.get("subType"))
         if m.get("type") == "damage" and sub in DAMAGE_WORDS and _counts(m, row) \
-                and not _text(m.get("restriction")).strip():
+                and _steady(m):
             extra = _die(m.get("dice"))
             amount = _dice_text(*extra) if extra else str(_int(m.get("value"))) if _num(m.get("value")) else ""
             if amount:
@@ -723,13 +759,26 @@ class _Casting:
     slug: str                                     # the class name as modifiers spell it, "" when there is no class
 
 
-def _class_casting(s: _Sheet, index: int) -> _Casting:
+def _class_slug(s: _Sheet, index: int) -> str:
+    """The class name as modifiers for one class spell it."""
+    return "-".join(safe_name(_dict(s.classes[index].get("definition")).get("name")).lower().split())
+
+
+def _casts_with(s: _Sheet, stat: object, name: str) -> int:
+    """The modifier of a casting ability, which the data must name."""
+    n = _num(stat)
+    if n is None or not 1 <= n <= 6:
+        raise _Unsure(f"{name} does not say which ability casts it")
+    return _mod(s, n)
+
+
+def _class_casting(s: _Sheet, index: int, name: str) -> _Casting:
     """A class's spell attack and save DC: its ability, the proficiency bonus, and the
     modifiers for every caster or for this class by name."""
     k = s.classes[index]
     cd, sub = _dict(k.get("definition")), _dict(k.get("subclassDefinition"))
-    mod = _mod(s, _int(sub.get("spellCastingAbilityId")) or _int(cd.get("spellCastingAbilityId")))
-    slug = "-".join(safe_name(cd.get("name")).lower().split())
+    mod = _casts_with(s, _int(sub.get("spellCastingAbilityId")) or _int(cd.get("spellCastingAbilityId")), name)
+    slug = _class_slug(s, index)
     return _Casting(mod, s.pb + mod + _total(s, "bonus", {"spell-attacks", f"{slug}-spell-attacks"}),
                     8 + s.pb + mod + _total(s, "bonus", {"spell-save-dc", f"{slug}-spell-save-dc"}), slug)
 
@@ -761,18 +810,20 @@ def _casting_for(s: _Sheet, origin: str, index: int | None, row: dict, name: str
         | ({"ranged-attacks", "ranged-spell-attacks"} if reach == 2 else set())
     if origin == "class":
         if own is not None:                       # its own ability: the bare sum, without the class's bonuses
-            slug = _class_casting(s, index).slug if index is not None else ""
-            return _Casting(_mod(s, own), s.pb + _mod(s, own), 8 + s.pb + _mod(s, own), slug)
+            mod = _casts_with(s, own, name)
+            return _Casting(mod, s.pb + mod, 8 + s.pb + mod, _class_slug(s, index) if index is not None else "")
         if index is None:
             raise _Unsure(f"{name} does not say which class casts it")
-        return _class_casting(s, index)
+        return _class_casting(s, index, name)
     extra = _total(s, "bonus", subs)
     if origin == "item" and own is None:          # an item borrows the best of the casting classes
-        casters = [_class_casting(s, i) for i, k in enumerate(s.c.classes[:len(s.classes)]) if k.casting_ability]
+        casters = [_class_casting(s, i, name) for i, k in enumerate(s.c.classes[:len(s.classes)]) if k.casting_ability]
+        if not casters:
+            raise _Unsure(f"{name} does not say which ability casts it")
         return _Casting(max([0] + [k.mod for k in casters]),
                         max([s.pb] + [s.pb + k.mod for k in casters]) + extra,
                         max([8 + s.pb] + [k.dc for k in casters]), "")
-    mod = _mod(s, own)
+    mod = _casts_with(s, own, name)
     dc = 8 + s.pb + mod + (_total(s, "bonus", {"spell-save-dc"}) if origin == "other" else 0)
     return _Casting(mod, s.pb + mod + extra, dc, "")
 
@@ -834,7 +885,7 @@ def _cantrip_line(s: _Sheet, origin: str, index: int | None, row: dict) -> Attac
     if cast.slug:
         fixed += _total(s, "damage", {f"{cast.slug}-spell-attacks"}) + _total(s, "bonus", {f"{cast.slug}-cantrip-damage"})
     if _text(defn.get("name")) == "Eldritch Blast":   # the one spell whose damage bonus the data keys by name
-        fixed += sum(_scaled(s, m) for m in _of(s.shared, "eldritch-blast", "bonus-damage"))
+        fixed += sum(_scaled(s, m) for m in _sure(s, "eldritch-blast", "bonus-damage"))
     if any(m.get("usePrimaryStat") for m in lines):
         fixed += cast.mod
     kinds = {_text(m.get("subType")) for m in lines}
@@ -861,10 +912,8 @@ def _one_each(lines: list[Attack]) -> list[Attack]:
 
 
 def _attacks(s: _Sheet) -> Worked:
-    prefs = _dict(s.d.get("preferences"))
-    if _num(prefs.get("progressionType")) == 2 and not (_level(s) == 1 and _int(s.d.get("currentXp")) == 0):
-        # Then the proficiency bonus and a cantrip's dice follow the experience points, not the class levels.
-        raise _Unsure("the character levels by experience points, which this calculator does not turn into a level")
+    if _by_xp(s):
+        raise _Unsure(XP_REASON)
     if any(_text(_dict(cf.get("definition")).get("name")).startswith("Martial Arts")
            for k in s.classes for cf in _dicts(k.get("classFeatures"))):
         raise _Unsure("a Martial Arts die is in play, which this calculator does not work out")
