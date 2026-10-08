@@ -55,6 +55,7 @@ LEVEL_PREFIX = re.compile(r"^\d+:\s*")
 # What stands for a bonus's source when the thing that gives it has no name.
 SOURCE_KINDS = {"race": "Species trait", "class": "Class feature", "feat": "Feat", "background": "Background",
                 "item": "Item"}
+OWN_SOURCE = "Player's adjustment"
 # A bonus's subType -> the `Applies To` the fill reads. Ability checks are the skills only: the
 # site adds them to no initiative, which has its own subType.
 APPLIES = {"saving-throws": "Saves", "ability-checks": "Skills", "initiative": "Initiative",
@@ -513,6 +514,22 @@ def _bonuses(mods: dict[str, list[dict]], scores: dict[str, int], pb: int, attun
     return [Bonus(applies, amount, source) for (applies, source), amount in found.items() if amount]
 
 
+def _own_bonuses(values: dict) -> list[Bonus]:
+    """The player's own typed-in adjustments the site adds to a finished number: a skill's misc
+    and magic bonus (24, 25) and a save's (39, 40). One with an override beside it (23, 38) is
+    left out: the site then shows the override and adds nothing."""
+    out = []
+    targets = [(str(sid), str(SKILL_TYPE), name, (24, 25), 23) for sid, name, _stat in SKILLS]
+    targets += [(str(i + 1), str(STAT_TYPE), f"{word.title()} Save", (39, 40), 38) for i, word in enumerate(ABILITY_WORDS)]
+    for ident, kind, applies, adds, override in targets:
+        if _num(values.get((override, ident, kind))) is not None:
+            continue
+        amount = sum(_int(values.get((t, ident, kind))) for t in adds)
+        if amount:
+            out.append(Bonus(applies, amount, OWN_SOURCE))
+    return out
+
+
 # --- features -------------------------------------------------------------------------------
 
 def _max_uses(use: dict, scores: dict[str, int], pb: int) -> int:
@@ -821,6 +838,6 @@ def read(data: object) -> Character:
     character.ac = dnd_ddb_calc.armour_class(d, character)
     character.attacks = dnd_ddb_calc.attacks(d, character)
     # An item's or a feature's name, and whether a modifier carries a condition, as the calculator has them.
-    character.bonuses = _bonuses(mods, scores, pb, attuned, dnd_ddb_calc._names(d, classes, rows, values),
-                                 dnd_ddb_calc._steady)
+    character.bonuses = _bonuses(mods, scores, pb, attuned, dnd_ddb_calc.source_names(d, classes, rows, values),
+                                 dnd_ddb_calc.steady) + _own_bonuses(values)
     return character

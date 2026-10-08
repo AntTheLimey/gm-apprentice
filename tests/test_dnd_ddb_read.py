@@ -678,3 +678,19 @@ def test_odd_bonus_data_is_read_without_a_crash():
            ("item", "bonus", "saving-throws", 2, {"statId": 99, "restriction": 7}),
            ("item", "bonus", "x", 2, {"subType": None}), ("item", "bonus", "saving-throws", 2, {"type": None}))
     assert [(b.applies, b.amount) for b in bonuses(inventory=RING, modifiers=odd)] == [("Saves", 2)]
+
+
+def test_the_players_own_adjustments_to_a_skill_or_a_save_are_bonuses():
+    stat = 1472902489
+    values = ((24, 2, "9", SKILL), (25, 1, "9", SKILL), (24, -1, "6", SKILL), (39, 1, "5", stat), (40, 2, "5", stat), (39, 3, "1", stat))
+    assert bonuses(character_values=values) == [
+        Bonus("Arcana", -1, "Player's adjustment"), Bonus("Nature", 3, "Player's adjustment"),
+        Bonus("Strength Save", 3, "Player's adjustment"), Bonus("Wisdom Save", 3, "Player's adjustment")]
+    assert safe_name("Player's adjustment") == "Player's adjustment"
+
+
+def test_an_adjustment_that_is_zero_not_a_number_or_beside_an_override_is_left_out():
+    stat = 1472902489
+    assert bonuses(character_values=((24, 0, "9", SKILL), (24, "two", "6", SKILL), (24, None, "7", SKILL))) == []
+    assert bonuses(character_values=((24, 2, "9", SKILL), (23, 7, "9", SKILL), (39, 2, "5", stat), (38, 4, "5", stat))) == []
+    assert bonuses(character_values=((24, 2, "99", SKILL), (24, 2, "9", stat), (39, 2, "9", stat))) == []

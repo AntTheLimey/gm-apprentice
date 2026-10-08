@@ -278,3 +278,61 @@ def test_plan_bonuses_plans_against_the_text_it_is_given():
     assert [(e.status, e.silent) for e in edits] == [("REMOVE", True), ("ADD", False)]
     text = write_rows(TEMPLATE, edits)
     assert [e.status for e in plan_bonuses(text, c)] == ["SAME"]
+
+
+# --- a hand-written bonus that shares a source with one sync writes -------------------------
+
+TWICE = "the note already has a bonus from {0}; if it is the same one, it is counted twice"
+STONED = [STONE], LUCK
+
+
+def checks(report):
+    return [r for r in report.rows if r[0] == "CHECK" and r[1].startswith(AT)]
+
+
+def test_a_gms_row_for_the_same_item_in_other_words_gets_one_check_and_is_not_touched():
+    mine = "| Ability Checks, Saves | +1 | stone of  good luck |"
+    text = swap(TEMPLATE, BLANK, HEAD + mine + "\n| Initiative | +1 | Stone of Good Luck (again) |\n")
+    first = sync_text(text, wizard(*STONED))
+    assert checks(first) == [("CHECK", f"{AT} / stone of  good luck", TWICE.format("stone of  good luck"))]
+    assert bonus_rows(first.text)[:2] == [mine, "| Initiative | +1 | Stone of Good Luck (again) |"]
+    assert len(bonus_rows(first.text)) == 5                           # sync's three rows went in beside them
+    second = sync_text(first.text, wizard(*STONED), first.seen)
+    assert second.rows == checks(first) and second.text == first.text  # said again, nothing written
+    gone = swap(first.text, mine + "\n", "")
+    after = sync_text(gone, wizard(*STONED), second.seen)
+    assert {r[0] for r in after.rows} == {"FILL"}                      # the numbers lose what was counted twice
+    assert ("FILL", "Stat Sheet / Ability Scores / STR / Save", "+1 -> +0 (incl. +1 Stone of Good Luck)") in after.rows
+
+
+def test_two_rows_of_the_gms_from_one_source_are_one_check():
+    text = swap(TEMPLATE, BLANK, HEAD + "| Ability Checks | +1 | Stone of Good Luck |\n| Stealth | +1 | Stone of Good Luck |\n")
+    assert len(checks(sync_text(text, wizard(*STONED)))) == 1
+
+
+def test_a_gms_row_from_another_source_gets_no_check():
+    assert checks(sync_text(with_gm_rows(), wizard(*STONED))) == []
+    assert checks(sync_text(with_gm_rows(), wizard())) == []
+
+
+def test_a_row_sync_matched_and_took_over_gets_no_check():
+    hand = swap(TEMPLATE, BLANK, HEAD + "| saves | 3 | ring  of protection |\n")
+    assert checks(sync_text(hand, ringed())) == []
+
+
+def test_a_row_sync_removes_gets_no_check_and_a_source_d_and_d_beyond_no_longer_gives_gets_none():
+    first = sync_text(TEMPLATE, wizard([RING, STONE], [SAVES_1, *LUCK]))
+    hand = swap(first.text, "| Saves | +1 | Ring of Protection |", "| Saves | +1 | Ring of Protection |\n| Wisdom Save | +1 | Ring of Protection |")
+    assert len(checks(sync_text(hand, wizard([RING, STONE], [SAVES_1, *LUCK]), first.seen))) == 1
+    dropped = sync_text(hand, wizard([STONE], LUCK), first.seen)
+    assert checks(dropped) == [] and "| Wisdom Save | +1 | Ring of Protection |" in dropped.text
+
+
+# --- the player's own adjustments ------------------------------------------------------------
+
+def test_a_players_own_skill_adjustment_is_a_row_and_moves_that_skill_and_its_passive():
+    data = wizard(character_values=((24, 2, "14", 1958004211),))      # skill id 14 is Perception
+    report = sync_text(TEMPLATE, data)
+    assert bonus_rows(report.text) == ["| Perception | +2 | Player's adjustment |"]
+    assert moved(data) == {"Perception": 2, "passive perception": 2}
+    assert sync_text(report.text, data, report.seen).rows == []

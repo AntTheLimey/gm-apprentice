@@ -66,13 +66,16 @@ def field_kwargs(field, value):
     if field == "bonus source":      # the Source cell of a `### Bonuses` row is the name of the feat that gives the bonus
         return {**known, "feats": (("Alert",), (value,)),
                 "modifiers": (("feat", "bonus", "saving-throws", 1, {"feat": value}),)}
+    if field == "bonus item":        # and the commoner source: the name of the item that gives it
+        return {**known, "inventory": INVENTORY + ((value, 1, 0, True, True, "gear"),),
+                "modifiers": (("item", "bonus", "saving-throws", 1, {"item": value}),)}
     raise AssertionError(field)
 
 
 # Cells worked out from the gear: a name that drops an item moves the weight carried.
 WORKED_FROM_GEAR = ("| Carried Weight |", "| Encumbrance |")
 FIELDS = ["name", "class", "subclass", "species", "background", "feature", "feat", "spell", "item",
-          "magic item", "language", "resistance", "bonus source"]
+          "magic item", "language", "resistance", "bonus source", "bonus item"]
 
 
 def synced(field, value, text=TEMPLATE):
@@ -136,7 +139,7 @@ def test_a_hostile_name_stays_in_its_own_cell(field, value, harmless_runs):
     renamed = {squash(ln.replace(HARMLESS, flat)) for ln in a}
     if not flat:        # nothing left of the name: the line falls back to its template text, a dash, the data's own default, or the source's kind
         template = set(map(squash, lines_of(TEMPLATE)))
-        renamed |= template | {squash(ln.replace(f" ({HARMLESS})", "").replace(HARMLESS, word)) for ln in a for word in ("", "Fire", "Common", "Feat")}
+        renamed |= template | {squash(ln.replace(f" ({HARMLESS})", "").replace(HARMLESS, word)) for ln in a for word in ("", "Fire", "Common", "Feat", "Item")}
         renamed |= {squash(ln) for ln in b if ln.endswith(" —")}
     for old, new, at in blocks(base.text, run.text):
         assert len(old) <= span and len(new) <= span, (old, new)

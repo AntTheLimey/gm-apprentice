@@ -78,7 +78,7 @@ HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
 GROUPED = re.compile(r"^\d{1,3}(?:,\d{3})+$")
 SPEED_UNIT = r"\s*(?:ft\.?|feet|foot)?"
 BARE_SPEED = re.compile(rf"^(\d+){SPEED_UNIT}$", re.I)
-REASONED_SPEED = re.compile(rf"^\d+{SPEED_UNIT}\s*\(.+\)$", re.I)
+REASONED_SPEED = re.compile(rf"^\d+{SPEED_UNIT}\s*\([^()]+\)$", re.I)   # one bracket group and nothing else
 LABEL_AT = re.compile(r"\*\*[^*:]+:\*\*")
 ABILITY_LABEL = re.compile(r"^spellcasting ability(?:\s*\((.+)\))?$")
 NO = frozenset(("no", "n", "false", "0", "-", "—", "–"))
@@ -796,10 +796,40 @@ def bonus_entries(c: Character) -> list[Entry]:
     return [Entry(safe(b.applies), {"Bonus": b.amount}, safe_name(b.source)) for b in c.bonuses]
 
 
+def shared_sources(lines: list[str], entries: list[Entry], removed: set[int]) -> list[RowEdit]:
+    """One CHECK per source that a row of the GM's own shares with a bonus sync writes: the fill
+    adds both, and only the GM can say whether they are one bonus. Nothing is written."""
+    table = find_table(lines, BONUS_SPEC.h2, BONUS_SPEC.h3)
+    key = column(table.header, BONUS_SPEC.key) if table else -1
+    also = column(table.header, BONUS_SPEC.second) if table else -1
+    if table is None or key < 0 or also < 0:
+        return []
+    mine = {entry_key(e) for e in entries}
+    sources = {norm(e.second) for e in entries}
+    taken: set[str] = set()                           # the first row of each key is sync's own
+    said: set[str] = set()
+    out: list[RowEdit] = []
+    for i, cells in table.rows:
+        if i in removed or also >= len(cells) or key >= len(cells) or blank(clean(cells[key])):
+            continue
+        hit = next((k for k in row_keys(cells, key, also) if k in mine), None)
+        if hit is not None and hit not in taken:
+            taken.add(hit)
+            continue
+        source = clean(cells[also])
+        if norm(source) in sources and norm(source) not in said:
+            said.add(norm(source))
+            out.append(RowEdit("CHECK", f"{BONUS_SPEC.locus} / {source}",
+                               f"the note already has a bonus from {source}; if it is the same one, it is counted twice"))
+    return out
+
+
 def plan_bonuses(text: str, c: Character, seen: Seen | None = None) -> list[RowEdit]:
     """The `### Bonuses` table as a list: Applies To and Source together are the key, Bonus is
     owned. A row with any other pair is the GM's. Planned before the fill, which reads the table."""
-    return plan_table(text.splitlines(), BONUS_SPEC, bonus_entries(c), remembered_for(seen, BONUS_SPEC.list_id))
+    lines, entries = text.splitlines(), bonus_entries(c)
+    edits = plan_table(lines, BONUS_SPEC, entries, remembered_for(seen, BONUS_SPEC.list_id))
+    return edits + shared_sources(lines, entries, {e.line for e in edits if e.status == "REMOVE"})
 
 
 def write_rows(text: str, edits: list[RowEdit]) -> str:

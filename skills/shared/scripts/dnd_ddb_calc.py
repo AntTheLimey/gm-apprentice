@@ -38,7 +38,7 @@ from dnd_ddb_read import (ABILITIES, ABILITY_WORDS, CLASS_FEATURE, ITEM_ROW_TYPE
                           _dict, _dicts, _equipped, _int, _inventory, _item_name, _list, _live_item,
                           _live_modifiers, _num, _of, _text, _worth, safe_name)
 
-__all__ = ["Attack", "Worked", "armour_class", "attacks", "hp_max"]
+__all__ = ["Attack", "Worked", "armour_class", "attacks", "hp_max", "source_names", "steady"]
 
 WEAPON_BASE, WEAPON_CATEGORY, ARMOUR_BASE = 1782728300, 660121713, 701257905
 UNARMED_ID, UNARMED_TYPE = "1", 1120657896        # the Unarmed Strike every character has
@@ -169,7 +169,7 @@ def _owners(d: dict, classes: list[dict]) -> dict[int, int]:
     return owner
 
 
-def _names(d: dict, classes: list[dict], rows: list[dict], values: dict) -> dict[tuple[int, int | None], str]:
+def source_names(d: dict, classes: list[dict], rows: list[dict], values: dict) -> dict[tuple[int, int | None], str]:
     out: dict[tuple[int, int | None], str] = {}
     defs = [_dict(cf.get("definition")) for c in classes for cf in _dicts(c.get("classFeatures"))]
     defs += [_dict(t.get("definition")) for t in _dicts(_dict(d.get("race")).get("racialTraits"))]
@@ -205,7 +205,7 @@ def _sheet(data: object, c: Character) -> _Sheet:
         raise Unreadable("no levels")
     pb = 2 + (level - 1) // 4 + sum(_int(m.get("value")) for m in _of(shared, "bonus", "proficiency-bonus"))
     return _Sheet(d, c, classes, worn, values, by_origin, shared, pb,
-                  min(6, sum(1 for r in rows if r.get("isAttuned"))), _owners(d, classes), _names(d, classes, rows, values))
+                  min(6, sum(1 for r in rows if r.get("isAttuned"))), _owners(d, classes), source_names(d, classes, rows, values))
 
 
 def _guarded(work: Callable[[_Sheet], Worked], data: object, c: Character) -> Worked:
@@ -257,14 +257,14 @@ def _by_xp(s: _Sheet) -> bool:
     return _num(prefs.get("progressionType")) == 2 and not (_level(s) == 1 and _int(s.d.get("currentXp")) == 0)
 
 
-def _steady(m: dict) -> bool:
+def steady(m: dict) -> bool:
     """A modifier with no condition written on it. One with a condition holds only some of the
     time, and a number on the sheet must hold every time, so it is left out of every sum."""
     return not _text(m.get("restriction")).strip()
 
 
 def _sure(s: _Sheet, kind: str, sub: str) -> list[dict]:
-    return [m for m in _of(s.shared, kind, sub) if _steady(m)]
+    return [m for m in _of(s.shared, kind, sub) if steady(m)]
 
 
 def _full(s: _Sheet, m: dict) -> int:
@@ -277,7 +277,7 @@ def _full(s: _Sheet, m: dict) -> int:
 def _total(s: _Sheet, kind: str, subs: set[str]) -> int:
     """Every shared modifier of this kind whose subType is one of `subs`, added up."""
     return sum(_scaled(s, m) for m in s.shared
-               if m.get("type") == kind and _text(m.get("subType")) in subs and _steady(m))
+               if m.get("type") == kind and _text(m.get("subType")) in subs and steady(m))
 
 
 def _adjustments(s: _Sheet, ident: object, kind: object) -> dict[int, object]:
@@ -430,7 +430,7 @@ def _unarmoured(s: _Sheet, group: list[dict]) -> Parts:
         caps = [_int(m.get("value")) for sub in ("ac-max-dex-modifier", "ac-max-dex-unarmored-modifier")
                 for m in _sure(s, "set", sub)]
         parts.append(("Dex", min(max(caps), dex) if caps else dex))
-    best = _best([m for m in _of(group, "set", "unarmored-armor-class") if _steady(m)], lambda m: _full(s, m))
+    best = _best([m for m in _of(group, "set", "unarmored-armor-class") if steady(m)], lambda m: _full(s, m))
     if best is not None:
         stat = _num(best.get("statId"))
         label = ABILITIES[stat - 1].title() if stat is not None and 1 <= stat <= 6 and not _int(best.get("value")) \
@@ -602,7 +602,7 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
 
     def about(kind: str, two_hands: bool) -> int:
         return sum(_scaled(s, m) for m in s.shared
-                   if m.get("type") == kind and _steady(m) and _fits_weapon(m, facts, props, ranged, two_hands))
+                   if m.get("type") == kind and steady(m) and _fits_weapon(m, facts, props, ranged, two_hands))
 
     hit = best[0] + magic + about("bonus", False) + _int(mine.get(12))
     if _num(mine.get(13)) is not None:
@@ -623,7 +623,7 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
     for m in own:                                 # extra damage: only what always applies, from an item in use
         sub = _text(m.get("subType"))
         if m.get("type") == "damage" and sub in DAMAGE_WORDS and _counts(m, row) \
-                and _steady(m):
+                and steady(m):
             extra = _die(m.get("dice"))
             amount = _dice_text(*extra) if extra else str(_int(m.get("value"))) if _num(m.get("value")) else ""
             if amount:

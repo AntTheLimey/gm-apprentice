@@ -161,7 +161,8 @@ def test_a_speed_with_a_reason_is_kept():
 
 
 def test_a_speed_that_is_not_one_speed_is_left_alone_and_unreported():
-    for odd in ("30 ft, fly 60 ft", "30 ft, fly 60 ft (hover)", "walk 30", "fast", "30 ft / 40 ft", "(x)"):
+    for odd in ("30 ft, fly 60 ft", "30 ft, fly 60 ft (hover)", "walk 30", "fast", "30 ft / 40 ft", "(x)",
+                "30 ft (a), fly 60 ft (b)", "30 ft (a) (b)", "30 ft (boots) more"):
         text = speed_cell(odd)
         assert SPEED not in edits(text, got(speed=20)), odd
         assert f"| Speed | {odd} |" in written(text, got(speed=20)), odd
