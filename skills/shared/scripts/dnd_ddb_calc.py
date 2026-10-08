@@ -26,6 +26,7 @@ player hid. One line that cannot be worked out makes the whole list unsure.
 Stdlib only.
 """
 
+import hashlib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -56,20 +57,29 @@ AC_KNOWN = frozenset((
     ("ignore", "unarmored-dex-ac-bonus"), ("ignore", "unarmored-while-armored")))
 BRANCHING = frozenset((("set", "unarmored-armor-class"), ("ignore", "unarmored-dex-ac-bonus"),
                        ("ignore", "unarmored-while-armored")))
-# The site keys a few rules on a feature's name alone. Only the names are here, as the data
-# spells them, so that a character who has one is left unsure: two species traits with an
-# armour class rule of their own, and the option that makes a pact weapon magical.
-AC_BY_NAME = frozenset(("integrated protection", "carapace"))
-PACT_BY_NAME = "Improved Pact Weapon"
-PACT_WEAPON, HEX_WEAPON = "enable-pact-weapon", "enable-hex-weapon"   # the features that let a weapon be marked
 # Kinds of modifier that change how a weapon attacks in ways this calculator does not follow.
-WEAPON_UNKNOWN = frozenset(("kensei", "natural-weapon"))
+WEAPON_UNKNOWN = frozenset(("natural-weapon",))
+PACT_WEAPON = "enable-pact-weapon"                # the feature that lets a weapon be marked as a pact weapon
+# D&D Beyond keys a few rules on a name alone, and those names are from outside the free
+# rules, so they are held here as digests and never written. A name is matched by putting
+# it through `_digest` (lower case, single spaces, SHA-256).
+#   armour class trait: a species trait with an armour class rule of its own (unsure)
+#   pact option: the class option that makes a pact weapon magical (unsure)
+#   marked weapon: the feature, beside the pact one, that lets a weapon be marked as its own
+#   weapon kind: a kind of modifier that changes how a weapon attacks (unsure)
+BY_NAME: dict[str, frozenset[str]] = {
+    "armour class trait": frozenset(("25c865a5c9f3f910296f5133d5940cd71758778d1810e25b71e6d88d3cb201e1",
+                                     "1e91b168f61983b2805fc4e2e194fdf49cdc9a3c36f3f5aa41c9723ecefd6cab")),
+    "pact option": frozenset(("9bf5d2d564ae0708ab4acc8a7a75ff0ee7d88b31670316f92d87ea9876d4653c",)),
+    "marked weapon": frozenset(("f4d64f38e6970dd92406719676b6772e75628fef819c38be92c1627ded206e5c",)),
+    "weapon kind": frozenset(("00b4b01c51972f6cd1c3d31a8619853a2adfd2f9c032c1a9a0a4d314c04df1c8",)),
+}
 
 # The player's own adjustments (characterValues type ids) each sum reads. Any other on the
 # thing being worked out is a reason to be unsure. 8 name, 9 notes, 19 cost, 20 silvered,
 # 21 adamantine and 22 weight change no number; 10 damage bonus, 12 to-hit bonus,
 # 13 to-hit override, 14 save DC bonus, 15 save DC override, 16 shown as an attack,
-# 18 off hand, 28 pact weapon, 29 hex weapon.
+# 18 off hand, 28 pact weapon, 29 the other marked weapon.
 NO_NUMBER = frozenset((8, 9, 19, 20, 21, 22))
 ARMOUR_READ = NO_NUMBER
 WEAPON_READ = NO_NUMBER | {10, 12, 13, 16, 18, 28, 29}
@@ -210,6 +220,15 @@ def _guarded(work: Callable[[_Sheet], Worked], data: object, c: Character) -> Wo
 
 
 # --- small sums -----------------------------------------------------------------------------
+
+def _digest(name: object) -> str:
+    return hashlib.sha256(" ".join(_text(name).lower().split()).encode("utf-8")).hexdigest()
+
+
+def _named(rule: str, name: object) -> bool:
+    """Whether this name is one D&D Beyond keys the rule on."""
+    return _digest(name) in BY_NAME[rule]
+
 
 def _level(s: _Sheet) -> int:
     return sum(_int(k.get("level")) for k in s.classes)
@@ -429,7 +448,7 @@ def _armour_class(s: _Sheet) -> Worked:
     if own.get(4) is not None:
         raise _Unsure("the base armour is set by hand")
     for trait in _dicts(_dict(s.d.get("race")).get("racialTraits")):
-        if _text(_dict(trait.get("definition")).get("name")).lower() in AC_BY_NAME:
+        if _named("armour class trait", _dict(trait.get("definition")).get("name")):
             raise _Unsure(f"{safe_name(_dict(trait.get('definition')).get('name'))} has an armour class rule of its own")
     armour = [r for r in s.worn if _armour_kind(r) is not None]
     for m in s.shared + [m for r in armour for m in _own(s.d, r)]:
@@ -494,9 +513,9 @@ def _proficient(s: _Sheet, facts: dict, own: list[dict]) -> bool:
     return base is not None and any(t == 33 and vid == str(base) and _int(v) >= 3 for (t, vid, _), v in s.values.items())
 
 
-def _granted_abilities(s: _Sheet, enable: str) -> list[int]:
-    """The abilities a pact or hex weapon may use: named by the same feature that enables it."""
-    origins = {(_num(m.get("componentId")), _num(m.get("componentTypeId"))) for m in _of(s.shared, "enable-feature", enable)}
+def _granted_abilities(s: _Sheet, enablers: list[dict]) -> list[int]:
+    """The abilities a marked weapon may use: named by the same feature that enables the mark."""
+    origins = {(_num(m.get("componentId")), _num(m.get("componentTypeId"))) for m in enablers}
     return [_int(m.get("statId")) or _int(m.get("entityId")) for m in s.shared
             if m.get("type") == "replace-weapon-ability"
             and (_num(m.get("componentId")), _num(m.get("componentTypeId"))) in origins]
@@ -516,23 +535,24 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
         raise _Unsure(f"{name} does not say whether it is melee or ranged")
     ranged = reach == 2
     own = _own(s.d, row)
-    # Properties, damage type and extra damage come from the item whether it is attuned or not.
+    # Properties and damage type come from the item whether it is attuned or not.
     props = {_text(p.get("name")).lower() for p in _dicts(facts.get("properties"))}
     props |= {_text(m.get("subType")) for m in own if m.get("type") == "weapon-property"}
     props -= {_text(m.get("subType")) for m in own if m.get("type") == "ignore-weapon-property"}
 
-    pact = bool(mine.get(28)) and bool(_of(s.shared, "enable-feature", PACT_WEAPON))
-    hexed = bool(mine.get(29)) and bool(_of(s.shared, "enable-feature", HEX_WEAPON))
-    if pact and any(_text(_dict(o.get("definition")).get("name")) == PACT_BY_NAME
+    pact_by = _of(s.shared, "enable-feature", PACT_WEAPON) if mine.get(28) else []
+    other_by = [m for m in s.shared if m.get("type") == "enable-feature"
+                and _named("marked weapon", m.get("subType"))] if mine.get(29) else []
+    pact = bool(pact_by)
+    if pact and any(_named("pact option", _dict(o.get("definition")).get("name"))
                     for o in _dicts(_dict(s.d.get("options")).get("class"))):
-        raise _Unsure(f"{name} is an improved pact weapon, which this calculator does not work out")
+        raise _Unsure(f"{name} is a pact weapon an option makes magical, which this calculator does not work out")
     if _dict(row.get("definition")).get("magic") and any(
             _text(m.get("subType")).startswith("magic-item-attack-with-") for m in s.shared):
         raise _Unsure(f"{name} may attack with another ability, which this calculator does not work out")
 
     abilities = ([1] if not ranged or "finesse" in props else []) + ([2] if ranged or "finesse" in props else [])
-    abilities += (_granted_abilities(s, PACT_WEAPON) if pact else [])
-    abilities += (_granted_abilities(s, HEX_WEAPON) if hexed else [])
+    abilities += _granted_abilities(s, pact_by) + _granted_abilities(s, other_by)
     proficiency = s.pb if pact or _proficient(s, facts, own) else 0
     best: tuple[int, int, int] | None = None      # to hit, modifier, damage from the ability
     for stat in abilities:
@@ -564,9 +584,10 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
         damage += f" ({_dice_text(die[0], bigger, fixed + about('damage', True))})"
     swapped = next((_text(m.get("subType")) for m in own if m.get("type") == "replace-damage-type"), "")
     damage = _with_type(damage, safe_name(swapped or _text(facts.get("damageType")).lower()))
-    for m in own:
+    for m in own:                                 # extra damage: only what always applies, from an item in use
         sub = _text(m.get("subType"))
-        if m.get("type") == "damage" and sub in DAMAGE_WORDS:
+        if m.get("type") == "damage" and sub in DAMAGE_WORDS and _counts(m, row) \
+                and not _text(m.get("restriction")).strip():
             extra = _die(m.get("dice"))
             amount = _dice_text(*extra) if extra else str(_int(m.get("value"))) if _num(m.get("value")) else ""
             if amount:
@@ -848,7 +869,7 @@ def _attacks(s: _Sheet) -> Worked:
            for k in s.classes for cf in _dicts(k.get("classFeatures"))):
         raise _Unsure("a Martial Arts die is in play, which this calculator does not work out")
     for m in s.shared:
-        if _text(m.get("type")) in WEAPON_UNKNOWN:
+        if _text(m.get("type")) in WEAPON_UNKNOWN or _named("weapon kind", m.get("type")):
             raise _Unsure(f"a weapon rule this calculator does not know ({safe_name(m.get('type'))})")
     unarmed = _unarmed(s)
     lines = _weapon_lines(s) + ([unarmed] if unarmed is not None else []) + _action_lines(s) + _cantrip_lines(s)

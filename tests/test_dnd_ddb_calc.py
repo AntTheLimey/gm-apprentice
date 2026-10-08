@@ -264,11 +264,22 @@ def test_a_speed_bonus_for_going_unarmoured_is_not_an_armour_class_rule():
     assert ac(modifiers=(("class", "bonus", "unarmored-movement", 10),)).value == 12
 
 
-@pytest.mark.parametrize("trait", sorted(calc.AC_BY_NAME))
-def test_ac_is_unsure_about_a_species_trait_the_site_counts_by_name(trait):
-    named = trait.title()
-    assert ac(racial_traits=((named, None, None),)) == Worked(None, "", f"{named} has an armour class rule of its own")
-    assert ac(racial_traits=(("Zzyx Hide", None, None),)).value == 12
+def by_name(monkeypatch, rule, name):
+    """Stand an invented name in for the ones the module holds as digests."""
+    monkeypatch.setitem(calc.BY_NAME, rule, frozenset((calc._digest(name),)))
+
+
+def test_names_are_matched_by_digest_whatever_their_case_and_spacing(monkeypatch):
+    by_name(monkeypatch, "pact option", "Zzyx  Edge")
+    assert calc._named("pact option", " zzyx edge ") and not calc._named("pact option", "Zzyx Edges")
+    assert all(len(d) == 64 and int(d, 16) >= 0 for held in calc.BY_NAME.values() for d in held)
+
+
+def test_ac_is_unsure_about_a_species_trait_the_site_counts_by_name(monkeypatch):
+    by_name(monkeypatch, "armour class trait", "Zzyx Hide")
+    assert ac(racial_traits=(("Zzyx Hide", None, None),)) \
+        == Worked(None, "", "Zzyx Hide has an armour class rule of its own")
+    assert ac(racial_traits=(("Zzyx Shell", None, None),)).value == 12
 
 
 def test_ac_is_unsure_about_an_adjustment_on_worn_armour_it_does_not_read():
@@ -359,13 +370,29 @@ def test_another_items_magic_bonus_reaches_every_weapon():
     assert line(attacks(modifiers=mods, **worn), "Mace") == ("+7", "1d6+4 bludgeoning")
 
 
-def test_a_weapons_extra_damage_is_added_after_its_own():
-    blade = dict(inventory=(held("Zzyx Blade", magic=True),),
-                 item_details={"Zzyx Blade": weapon("2d6", category=MARTIAL, properties=("Two-Handed",))})
-    mods = (MARTIAL_WEAPONS,
-            ("item", "damage", "cold", None, {"dice": dice("1d8"), "requiresAttunement": True}),
-            ("item", "damage", "fire", 2))
-    assert line(attacks(modifiers=mods, **blade), "Zzyx Blade") == ("+6", "2d6+3 slashing + 1d8 cold + 2 fire")
+def zzyx_blade(attuned, *extras):
+    return attacks(inventory=(held("Zzyx Blade", magic=True, attuned=attuned),), modifiers=(MARTIAL_WEAPONS,) + extras,
+                   item_details={"Zzyx Blade": weapon("2d6", category=MARTIAL, properties=("Two-Handed",))})
+
+
+COLD = ("item", "damage", "cold", None, {"dice": dice("1d8"), "requiresAttunement": True})
+
+
+def test_an_attuned_weapons_unconditional_extra_damage_is_added_after_its_own():
+    worked = zzyx_blade(True, COLD, ("item", "damage", "fire", 2))
+    assert line(worked, "Zzyx Blade") == ("+6", "2d6+3 slashing + 1d8 cold + 2 fire")
+
+
+def test_conditional_extra_damage_is_left_out_of_the_line():
+    sometimes = ("item", "damage", "radiant", None, {"dice": dice("1d8"), "restriction": "Against Zzyx Targets"})
+    assert line(zzyx_blade(True, sometimes, COLD), "Zzyx Blade")[1] == "2d6+3 slashing + 1d8 cold"
+    assert line(zzyx_blade(True, sometimes), "Zzyx Blade")[1] == "2d6+3 slashing"
+
+
+def test_extra_damage_that_needs_attunement_is_left_out_until_the_weapon_is_attuned():
+    assert line(zzyx_blade(False, COLD), "Zzyx Blade")[1] == "2d6+3 slashing"
+    free = ("item", "damage", "fire", 2)                             # asks for no attunement
+    assert line(zzyx_blade(False, COLD, free), "Zzyx Blade")[1] == "2d6+3 slashing + 2 fire"
 
 
 def test_a_weapon_can_change_its_damage_type_and_gain_a_property():
@@ -413,10 +440,11 @@ def test_an_off_hand_weapon_drops_its_ability_from_the_damage():
     assert line(attacks(modifiers=style, **off), "Longsword")[1] == "1d8+3 slashing"
 
 
-def test_a_weapon_marked_for_a_feature_may_use_the_ability_that_feature_names():
+def test_a_weapon_marked_for_a_feature_may_use_the_ability_that_feature_names(monkeypatch):
+    by_name(monkeypatch, "marked weapon", "enable-zzyx-weapon")
     blade = dict(inventory=(held("Greatsword"),), stats=(10, 14, 14, 10, 12, 18),
                  item_details={"Greatsword": weapon("2d6", category=MARTIAL)})
-    feature = (MARTIAL_WEAPONS, ("class", "enable-feature", calc.HEX_WEAPON, None, {"componentId": 77}),
+    feature = (MARTIAL_WEAPONS, ("class", "enable-feature", "enable-zzyx-weapon", None, {"componentId": 77}),
                ("class", "replace-weapon-ability", "charisma-score", None, {"componentId": 77, "statId": 6}))
     assert line(attacks(modifiers=feature, **blade), "Greatsword") == ("+3", "2d6 slashing")   # not marked: Strength
     marked = attacks(modifiers=feature, character_values=((29, True, "item:Greatsword"),), **blade)
@@ -456,10 +484,12 @@ def test_attacks_are_unsure_about_a_weapon_with_no_damage_dice():
     assert worked == Worked(None, "", "Net has no damage dice in the data")
 
 
-@pytest.mark.parametrize("kind", sorted(calc.WEAPON_UNKNOWN))
-def test_attacks_are_unsure_about_a_kind_of_weapon_modifier_it_does_not_know(kind):
+@pytest.mark.parametrize("kind", ["natural-weapon", "zzyx-style"])
+def test_attacks_are_unsure_about_a_kind_of_weapon_modifier_it_does_not_know(monkeypatch, kind):
+    by_name(monkeypatch, "weapon kind", "zzyx-style")
     assert attacks(modifiers=(("class", kind, "longsword", None),)) \
         == Worked(None, "", f"a weapon rule this calculator does not know ({kind})")
+    assert attacks(modifiers=(("class", "zzyx-stance", "longsword", None),)).unsure == ""
 
 
 def test_attacks_are_unsure_with_a_martial_arts_die_in_play():
@@ -467,11 +497,15 @@ def test_attacks_are_unsure_with_a_martial_arts_die_in_play():
         == Worked(None, "", "a Martial Arts die is in play, which this calculator does not work out")
 
 
-def test_attacks_are_unsure_for_a_pact_weapon_made_magical_by_name_or_a_magic_weapon_ability_swap():
+def test_attacks_are_unsure_for_a_pact_weapon_made_magical_by_name_or_a_magic_weapon_ability_swap(monkeypatch):
+    by_name(monkeypatch, "pact option", "Zzyx Edge")
     pact = {**MACE, "modifiers": (SIMPLE_WEAPONS, ("class", "enable-feature", calc.PACT_WEAPON, None))}
     data = character(classes=FIGHTER, stats=STRONG, character_values=((28, True, "item:Mace"),), **pact)
-    data["options"] = {"class": [{"componentId": 1, "definition": {"id": 9, "name": calc.PACT_BY_NAME}}]}
-    assert read(data).attacks.unsure == "Mace is an improved pact weapon, which this calculator does not work out"
+    data["options"] = {"class": [{"componentId": 1, "definition": {"id": 9, "name": "Zzyx Edge"}}]}
+    assert read(data).attacks.unsure \
+        == "Mace is a pact weapon an option makes magical, which this calculator does not work out"
+    data["options"]["class"][0]["definition"]["name"] = "Zzyx Hilt"
+    assert read(data).attacks.unsure == ""
     swap = dict(inventory=(held("Mace, +1", magic=True),), item_details={"Mace, +1": weapon("1d6")},
                 modifiers=(("class", "bonus", "magic-item-attack-with-intelligence", None),))
     assert attacks(**swap).unsure == "Mace, +1 may attack with another ability, which this calculator does not work out"
