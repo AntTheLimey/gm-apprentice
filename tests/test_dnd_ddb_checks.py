@@ -84,6 +84,13 @@ def test_warlock_with_a_pact_row_gets_the_row_relabelled_and_set():
     assert checks(WITH_PACT, c, [], []) == []
 
 
+def test_a_second_plan_on_a_warlock_note_with_a_pact_row_writes_nothing():
+    c = got(classes=WARLOCK)
+    out = synced(c, WITH_PACT)
+    assert [e for e in plan_slots(out, c) if e.status == "WRITE"] == []
+    assert synced(c, out) == out
+
+
 def test_warlock_pact_row_is_corrected_when_the_level_changes():
     text = synced(got(classes=WARLOCK), WITH_PACT)
     c = got(classes=(("Warlock", 9, "", 6),))
@@ -147,6 +154,13 @@ def test_one_class_outside_the_free_rules_with_its_own_table_gets_that_table():
     assert slot_looks(synced(c)) == []          # dnd_rules does not read an unknown class
     out = synced(c)
     assert [totals(out)[k] for k in ("1st", "2nd", "3rd")] == ["4", "3", "2"]
+    assert checks(TEMPLATE, c, [], []) == []
+
+
+def test_a_character_with_no_classes_gets_no_slot_check():
+    c = got()
+    c.classes = []      # the reader refuses a character with none, but the planner is handed any Character
+    assert plan_slots(TEMPLATE, c) == []
     assert checks(TEMPLATE, c, [], []) == []
 
 

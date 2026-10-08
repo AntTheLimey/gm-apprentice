@@ -447,3 +447,9 @@ def test_a_skills_row_without_ability_or_modifier_or_with_a_bad_ability_is_skipp
     text = swap(TEMPLATE, "| Skill | Ability | Proficient | Expertise | Modifier |",
                 "| Skill | Proficient | Expertise | Modifier |")
     assert not [k for k in edits(text) if k.startswith("Skills /")]
+
+
+def test_write_edits_with_an_empty_value_writes_one_space_between_the_pipes():
+    text = "| Attribute | Value |\n|---|---|\n| Size | Medium |\n"
+    out = write_edits(text, [Edit("WRITE", "x", "m", 2, 1, "")])
+    assert out == "| Attribute | Value |\n|---|---|\n| Size | |\n"

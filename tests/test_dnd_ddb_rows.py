@@ -395,14 +395,6 @@ TORCH = (("Torch", 2, 1, False, False, "gear"),)
 SHIELD = ("Shield", 1, 6, False, False, "gear")
 
 
-def changed(before, after_):
-    """The line numbers (against `before`) of lines that are not the same after."""
-    old, new = before.splitlines(), after_.splitlines()
-    if len(old) == len(new):
-        return [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
-    return None
-
-
 def test_a_stored_gear_table_beside_the_real_one_is_never_touched():
     stored = "### Gear (stored)\n\n" + GEAR + "| Junk | 1 | 1 lb | |\n| Torch | 9 | | |\n\n"
     text = "## Equipment\n\n" + stored + "### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n"
@@ -429,17 +421,13 @@ def test_an_indented_table_is_read_and_only_its_rows_change():
     head = "## Equipment\n\n### Gear\n\n  | Item | Qty | Weight | Notes |\n  |---|---|---|---|\n"
     text = head + "  | Torch | 1 | 1 lb | keep |\n  | Old Rope | 1 | | |\n\nafter\n"
     out = after(text, got(inventory=TORCH + (SHIELD,)))
-    assert out.startswith(head + "  | Torch | 2 | 1 lb | keep |\n")
-    assert out.endswith("| Shield | 1 | 6 lb | |\n\nafter\n")
-    assert "Old Rope" not in out
+    assert out == head + "  | Torch | 2 | 1 lb | keep |\n  | Shield | 1 | 6 lb | |\n\nafter\n"
 
 
 def test_a_crlf_file_keeps_every_line_ending_through_a_write_a_remove_and_an_add():
-    text = note("", gear="| Torch | 1 | 1 lb | |\r\n| Old Rope | 1 | | |\n".replace("\r\n", "\n"), eol="\r\n")
+    text = note("", gear="| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n", eol="\r\n")
     out = after(text, got(inventory=TORCH + (SHIELD,), **NOTHING))
-    assert "\n" not in out.replace("\r\n", "")
-    assert "| Torch | 2 | 1 lb | |\r\n| Shield | 1 | 6 lb | |\r\n" in out
-    assert "Old Rope" not in out
+    assert out == note("", gear="| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n", eol="\r\n")
 
 
 def test_a_write_a_remove_and_an_add_in_one_table_in_one_pass():

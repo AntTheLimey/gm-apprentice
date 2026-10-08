@@ -11,15 +11,23 @@ save proficiency, Size, Speed, Hit Dice, skill proficiency, the spellcasting
 ability) and the `**Label:** value` lines (species, class, background,
 alignment, defences, proficiencies), and the lists (features, feats, spells,
 gear, magic items, coins) as table rows that are matched, added, removed or
-kept, and the spell slot totals (and a Warlock's Pact row). Never written here: Weapon Mastery and anything a player tracks in play.
+kept, and the spell slot totals (and a Warlock's Pact row). It also writes the
+three things dnd_ddb_calc works out: HP (Max) and AC (blank or bare cells), the
+`**Armour Class:**` line (blank or placeholder only) and the attacks table
+(`### Weapons & Damage Cantrips`, a list like the others, Notes never written).
+When the calculator is unsure nothing is written and a CHECK row says why.
+Never written here: Weapon Mastery, HP (Current) and anything a player tracks
+in play.
 
-Edit statuses: WRITE (the note changes), KEPT (the note is the GM's), SAME.
-Row statuses: ADD, REMOVE, WRITE, KEPT, SAME.
+Edit statuses: WRITE (the note changes), KEPT (the note is the GM's), SAME,
+CHECK (something to look at; writes nothing). Row statuses: ADD, REMOVE, WRITE,
+KEPT, SAME, CHECK.
 
-Cells and rows are meant to run in that order, each planned on the text the
-step before produced: `t = write_edits(t, plan_cells(t, c))`, then
-`t = write_rows(t, plan_rows(t, c))`. Both plan against the text they are
-given, so the line numbers of one are not valid for the other.
+The planners run in this order, each on the text the step before produced:
+`t = write_edits(t, plan_cells(t, c))`, `t = write_edits(t, plan_slots(t, c))`,
+`t = write_edits(t, plan_worked(t, c))`, `t = write_rows(t, plan_rows(t, c))`,
+`t = write_rows(t, plan_attacks(t, c))`. Each plans against the text it is
+given, so the line numbers of one are not valid for the next.
 """
 
 import re
@@ -33,7 +41,7 @@ import dnd_rules as dr  # noqa: E402
 import dnd_tables as dt  # noqa: E402
 from dnd_ddb_read import ABILITIES, Character, safe_name  # noqa: E402
 from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES,  # noqa: E402
-                      Cell, Note, clean, column, split_cells, to_int)
+                      Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
 from vaultlib import fence_step  # noqa: E402
 
@@ -53,7 +61,7 @@ PROFICIENCIES = (("Armor Training", "armor"), ("Weapons", "weapons"), ("Tools", 
 
 @dataclass
 class Edit:
-    status: str        # WRITE, KEPT or SAME
+    status: str        # WRITE, KEPT, SAME or CHECK (a CHECK has line -1 and writes nothing)
     locus: str
     message: str
     line: int = -1     # index into text.splitlines(keepends=True)
@@ -333,7 +341,7 @@ def write_edits(text: str, edits: list[Edit]) -> str:
             continue
         parts = re.split(r"(?<!\\)\|", body)
         # parts[0] is what precedes the first pipe; cell n is parts[n + 1].
-        parts[e.col + 1] = f" {e.new} "
+        parts[e.col + 1] = f" {e.new} " if e.new else " "
         lines[e.line] = "|".join(parts) + eol
     return "".join(lines)
 
@@ -342,7 +350,7 @@ def write_edits(text: str, edits: list[Edit]) -> str:
 
 @dataclass
 class RowEdit:
-    status: str        # ADD, REMOVE, WRITE, KEPT or SAME
+    status: str        # ADD, REMOVE, WRITE, KEPT, SAME or CHECK (a CHECK has line -1 and writes nothing)
     locus: str         # "Spells / Foresight", "Equipment / Gear / Rope, Hempen"
     message: str
     line: int = -1     # the row's line for REMOVE and WRITE; the line to insert after for ADD
@@ -616,8 +624,9 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry]) -> list[RowEd
         cells[key] = new_entry.name
         for col, at in cols:
             cells[at] = value_text(col.kind, new_entry.wants.get(col.title))
+        indent = lines[table.last][:len(lines[table.last]) - len(lines[table.last].lstrip())]
         adds.append(RowEdit("ADD", f"{spec.locus} / {new_entry.name}", "not in the note; added", table.last,
-                            plain_row(cells)))
+                            indent + plain_row(cells)))
     if adds and not held:
         out.extend(RowEdit("REMOVE", "", "", i, silent=True) for i in blanks)
     return out + adds
@@ -766,7 +775,7 @@ def checks(text: str, c: Character, cells: list[Edit], rows: list[RowEdit]) -> l
     note has had, for the checks that read them."""
     levels = slot_levels(c)
     if levels is None:
-        if own_table(c):
+        if own_table(c) or not c.classes:
             return []
         return [Edit("CHECK", SLOT_LOCUS, "the class is outside the free rules; check the slot totals")]
     table = slot_rows(text)
@@ -774,3 +783,51 @@ def checks(text: str, c: Character, cells: list[Edit], rows: list[RowEdit]) -> l
         return [Edit("CHECK", SLOT_LOCUS, "the note has no Pact row for the Warlock's pact slots; they are "
                      "counted in the numbered rows; add a Pact row to show them apart")]
     return []
+
+
+# --- hit point maximum, armour class, attacks --------------------------------------------
+
+COMBAT_LOCUS = "Stat Sheet / Combat"
+ATTACK_LOCUS = "Equipment / Weapons & Damage Cantrips"
+ATTACK_SPEC = Spec(ATTACK_LOCUS, "equipment", "weapons & damage cantrips", ("attack line", "attack lines"),
+                   r"^name$", (Col("Atk Bonus / DC", r"^(atk|attack|hit)", "text"),
+                               Col("Damage & Type", r"^damage", "text")))
+
+
+def plan_worked_cell(note: Note, label: str, locus: str, worked: Any) -> list[Edit]:
+    cell = note.attr("stat sheet", "combat", label)
+    if cell is None:
+        return []
+    if worked.value is None:
+        return [Edit("CHECK", locus, f"not worked out: {worked.unsure}; check it")]
+    edit = judge_number(locus, cell, int(worked.value))
+    if edit.status == "KEPT":
+        have, reasoned = number(cell.text)
+        if reasoned and have != worked.value:
+            said = REASON.search(cell.text.strip())
+            reason = said.group(0).strip()[1:-1] if said else ""
+            return [edit, Edit("CHECK", locus, f"the sheet says {have} ({reason}); D&D Beyond's numbers give {worked.value}")]
+    return [edit]
+
+
+def plan_worked(text: str, c: Character) -> list[Edit]:
+    """HP (Max), AC and the `**Armour Class:**` line, from what the calculator worked out.
+    HP (Current) is never touched."""
+    note = Note(text)
+    out = plan_worked_cell(note, "hp (max)", f"{COMBAT_LOCUS} / HP (Max)", c.hp_max)
+    out += plan_worked_cell(note, "ac", f"{COMBAT_LOCUS} / AC", c.ac)
+    hit = note.bold_at("armour class")
+    if hit and c.ac.parts and blank(hit[1].strip()):
+        out.append(as_line("Armour Class", write("Stat Sheet / Defences / Armour Class", "", None, safe(c.ac.parts), hit[0])))
+    return out
+
+
+def plan_attacks(text: str, c: Character) -> list[RowEdit]:
+    """The attacks table as a list: Name is the key, Atk Bonus / DC and Damage & Type are owned,
+    Notes is never written."""
+    worked = c.attacks
+    if worked.value is None:
+        return [RowEdit("CHECK", ATTACK_LOCUS, f"not worked out: {worked.unsure}; check the attack lines")]
+    entries = [Entry(safe_name(a.name), {"Atk Bonus / DC": a.hit or None, "Damage & Type": a.damage or None})
+               for a in worked.value]   # type: ignore[attr-defined]
+    return plan_table(text.splitlines(), ATTACK_SPEC, entries)
