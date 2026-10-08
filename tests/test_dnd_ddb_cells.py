@@ -12,7 +12,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import dnd_builder  # noqa: E402
 import dnd_rules  # noqa: E402
 from ddb_builder import character  # noqa: E402
-from dnd_ddb import Edit, plan_cells, write_edits  # noqa: E402
+from dnd_ddb import Edit, plan_cells, split_entries, write_edits  # noqa: E402
 from dnd_ddb_read import read  # noqa: E402
 
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
@@ -121,19 +121,62 @@ def test_size_written():
     assert one(TEMPLATE, "Stat Sheet / Combat / Size").status == "SAME"
 
 
-def test_speed_blank_is_filled_and_an_existing_speed_is_left():
-    blank = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed |  |")
+SPEED = "Stat Sheet / Combat / Speed"
+
+
+def speed_cell(text):
+    return swap(TEMPLATE, "| Speed | 30 ft |", f"| Speed | {text} |")
+
+
+def test_a_blank_speed_and_a_placeholder_are_written():
     c = got(speed=35)
-    e = one(blank, "Stat Sheet / Combat / Speed", c)
+    e = one(speed_cell(""), SPEED, c)
     assert (e.status, e.message) == ("WRITE", "(blank) -> 35 ft")
-    assert "| Speed | 35 ft |" in write_edits(blank, [e])
-    placeholder = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | {speed} |")
-    assert one(placeholder, "Stat Sheet / Combat / Speed", c).status == "WRITE"
-    forty = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | 40 ft |")
-    # A Speed that holds text is never reported: no KEPT row, no SAME row.
-    assert "Stat Sheet / Combat / Speed" not in edits(forty, c)
-    assert "| Speed | 40 ft |" in written(forty, c)
-    assert "Stat Sheet / Combat / Speed" not in edits(forty, got(speed=40))
+    assert "| Speed | 35 ft |" in write_edits(speed_cell(""), [e])
+    assert one(speed_cell("{speed}"), SPEED, c).status == "WRITE"
+
+
+def test_a_bare_speed_is_written_when_it_differs_and_same_when_equal():
+    slow = got(speed=20)
+    for bare in ("30 ft", "30", "30 feet", "30 ft.", "30ft"):
+        e = one(speed_cell(bare), SPEED, slow)
+        assert (e.status, e.message) == ("WRITE", f"{bare} -> 20 ft"), bare
+        assert "| Speed | 20 ft |" in written(speed_cell(bare), slow)
+        same = one(speed_cell(bare), SPEED, got(speed=30))
+        assert (same.status, same.message) == ("SAME", bare), bare
+        assert f"| Speed | {bare} |" in written(speed_cell(bare), got(speed=30))  # not respelled
+
+
+def test_the_templates_own_speed_is_written_over():
+    e = one(TEMPLATE, SPEED, got(speed=20))
+    assert (e.status, e.message) == ("WRITE", "30 ft -> 20 ft")
+
+
+def test_a_speed_with_a_reason_is_kept():
+    text = speed_cell("40 ft (boots of striding)")
+    e = one(text, SPEED, got(speed=30))
+    assert (e.status, e.message) == ("KEPT", "40 ft (boots of striding); D&D Beyond gives 30 ft")
+    assert "| Speed | 40 ft (boots of striding) |" in written(text, got(speed=30))
+    assert one(speed_cell("40 (boots)"), SPEED, got(speed=30)).status == "KEPT"
+
+
+def test_a_speed_that_is_not_one_speed_is_left_alone_and_unreported():
+    for odd in ("30 ft, fly 60 ft", "30 ft, fly 60 ft (hover)", "walk 30", "fast", "30 ft / 40 ft", "(x)"):
+        text = speed_cell(odd)
+        assert SPEED not in edits(text, got(speed=20)), odd
+        assert f"| Speed | {odd} |" in written(text, got(speed=20)), odd
+
+
+def test_an_extra_speed_row_is_never_touched():
+    text = swap(TEMPLATE, "| Speed | 30 ft |", "| Speed | 30 ft |\n| Fly Speed | 60 ft |\n| Swim Speed | |")
+    after = written(text, got(speed=20))
+    assert "| Speed | 20 ft |\n| Fly Speed | 60 ft |\n| Swim Speed | |" in after
+    assert not [locus for locus in edits(text, got(speed=20)) if "Fly" in locus or "Swim" in locus]
+
+
+def test_a_character_whose_data_gives_no_walking_speed_leaves_the_cell_alone():
+    assert SPEED not in edits(TEMPLATE, got(speed=0))
+    assert SPEED not in edits(speed_cell(""), got(speed=0))
 
 
 def test_hit_dice_keeps_spent_and_replaces_max():
@@ -369,6 +412,86 @@ def test_proficiency_lines():
     assert es["Proficiencies / Languages"].new == "**Languages:** Common"
     assert "Proficiencies / Weapon Mastery" not in es
     assert "**Weapon Mastery:** {list}" in written(TEMPLATE, c)
+
+
+# --- a name with a comma on a labelled line ---------------------------------------------
+
+WEAPON = 1782728300
+
+
+def proficient_with(*names, kind=WEAPON):
+    return got(modifiers=tuple(("class", "proficiency", f"made-up-{n}", None, {"friendlySubtypeName": name, "entityTypeId": kind})
+                               for n, name in enumerate(names)))
+
+
+def weapons_line(text, c, seen=None):
+    return one(text, "Proficiencies / Weapons", c, seen)
+
+
+def test_a_name_of_two_parts_is_written_the_other_way_round_with_no_comma():
+    c = proficient_with("Crossbow, Light", "Crossbow, Hand", "Dagger")
+    assert weapons_line(TEMPLATE, c).new == "**Weapons:** Light Crossbow, Hand Crossbow, Dagger"
+
+
+def test_a_name_with_more_commas_has_each_replaced_by_a_space():
+    c = proficient_with("Blade, Curved, Long", "Sling,", ",Net")
+    assert weapons_line(TEMPLATE, c).new == "**Weapons:** Blade Curved Long, Sling, Net"
+
+
+def test_a_comma_inside_brackets_goes_too_and_the_name_is_not_turned_round():
+    c = got(modifiers=(("race", "resistance", "fire", None, {"restriction": "in sunlight, by day"}),))
+    assert one(TEMPLATE, "Stat Sheet / Defences / Resistances", c).new == "**Resistances:** Fire (in sunlight by day)"
+
+
+def test_a_line_already_holding_the_written_form_is_same():
+    c = proficient_with("Crossbow, Light", "Dagger")
+    text = written(TEMPLATE, c)
+    assert "**Weapons:** Light Crossbow, Dagger\n" in text
+    assert weapons_line(text, c).status == "SAME"
+    assert written(written(text, c), c) == text
+
+
+def test_a_hand_written_light_crossbow_is_d_and_d_beyonds_crossbow_light():
+    text = swap(TEMPLATE, "**Weapons:** {list}", "**Weapons:** Dagger, light crossbow")
+    e = weapons_line(text, proficient_with("Crossbow, Light", "Dagger"))
+    assert e.new == "**Weapons:** Light Crossbow, Dagger"
+    same = swap(TEMPLATE, "**Weapons:** {list}", "**Weapons:** Light Crossbow, Dagger")
+    assert weapons_line(same, proficient_with("Crossbow, Light", "Dagger")).status == "SAME"
+
+
+def test_the_memory_drops_the_written_form_when_d_and_d_beyond_no_longer_gives_it():
+    text = swap(TEMPLATE, "**Weapons:** {list}", "**Weapons:** Light Crossbow, Dagger, Whip")
+    e = weapons_line(text, proficient_with("Dagger"), {"weapons": ["light crossbow", "dagger"]})
+    assert e.new == "**Weapons:** Dagger, Whip"
+
+
+def test_two_names_that_come_to_one_written_form_are_one_entry():
+    c = proficient_with("Crossbow, Light", "Light Crossbow")
+    assert weapons_line(TEMPLATE, c).new == "**Weapons:** Light Crossbow"
+
+
+def test_a_bracket_that_never_closes_protects_no_comma_so_the_entries_after_it_are_still_entries():
+    """A defence's condition cut at 80 characters loses its closing bracket."""
+    long = "while standing in the long shadow of a very tall tower at dusk or at dawn or at noon"
+    c = got(modifiers=(("race", "resistance", "fire", None, {"restriction": long}), ("race", "resistance", "cold", None)))
+    text = written(TEMPLATE, c)
+    line = next(ln for ln in text.splitlines() if ln.startswith("**Resistances:**"))
+    assert line.endswith(", Cold") and line.count("(") == 1 and ")" not in line
+    assert one(text, "Stat Sheet / Defences / Resistances", c).status == "SAME"
+    assert split_entries("Fire (a, b), Cold (c, Acid, Bolt (d, e)") == ["Fire (a, b)", "Cold (c", "Acid", "Bolt (d, e)"]
+    assert split_entries("a ) b, c") == ["a ) b", "c"]
+
+
+def test_the_other_labelled_lines_follow_the_same_rule():
+    c = got(modifiers=(("class", "proficiency", "x", None, {"friendlySubtypeName": "Armor, Light", "entityTypeId": 174869515}),
+                       ("class", "proficiency", "y", None, {"friendlySubtypeName": "Tools, Thieves'", "entityTypeId": 2103445194}),
+                       ("race", "language", "z", None, {"friendlySubtypeName": "Speech, Deep"}),
+                       ("race", "immunity", "w", None, {"friendlySubtypeName": "Damage, Poison"})))
+    es = edits(TEMPLATE, c)
+    assert es["Proficiencies / Armor Training"].new == "**Armor Training:** Light Armor"
+    assert es["Proficiencies / Tools"].new == "**Tools:** Thieves' Tools"
+    assert es["Proficiencies / Languages"].new == "**Languages:** Deep Speech"
+    assert es["Stat Sheet / Defences / Immunities"].new == "**Immunities:** Poison Damage"
 
 
 # --- the note's shape -----------------------------------------------------------

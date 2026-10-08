@@ -16,7 +16,12 @@ save proficiency, Size, Speed, Hit Dice, skill proficiency, the spellcasting
 ability) and the `**Label:** value` lines (species, class, background,
 alignment, defences, proficiencies), and the lists (features, feats, spells,
 gear, magic items, coins) as table rows that are matched, added, removed or
-kept, and the spell slot totals (and a Warlock's Pact row). It also writes the
+kept, and the spell slot totals (and a Warlock's Pact row). Speed is written
+like Level when the cell is blank or one bare speed. The bonuses D&D Beyond's
+data gives (an item's, a feature's) are rows of `### Bonuses`, matched by
+Applies To and Source together, so the fill counts them; any other row of that
+table is the GM's. A name on a labelled line never holds a comma (`Crossbow,
+Light` is written `Light Crossbow`): the line is split on them. It also writes the
 three things dnd_ddb_calc works out: HP (Max) and AC (blank or bare cells), the
 `**Armour Class:**` line (blank or placeholder only) and the attacks table
 (`### Weapons & Damage Cantrips`, a list like the others, Notes never written).
@@ -36,9 +41,10 @@ With no memory (a first sync, a lost file, a note outside a vault) nothing is re
 
 The planners run in this order, each on the text the step before produced:
 `t = write_edits(t, plan_cells(t, c))`, `t = write_edits(t, plan_slots(t, c))`,
-`t = write_edits(t, plan_worked(t, c))`, `t = write_rows(t, plan_rows(t, c))`,
-`t = write_rows(t, plan_attacks(t, c))`. Each plans against the text it is
-given, so the line numbers of one are not valid for the next.
+`t = write_rows(t, plan_bonuses(t, c))`, `t = write_edits(t, plan_worked(t, c))`,
+`t = write_rows(t, plan_rows(t, c))`, `t = write_rows(t, plan_attacks(t, c))`.
+Each plans against the text it is given, so the line numbers of one are not
+valid for the next. The fill (dnd_sheet.py) runs last, on the bonuses just written.
 """
 
 import argparse
@@ -70,6 +76,9 @@ from vaultlib import (entity_type, extract_frontmatter, fence_step, read_publish
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
 GROUPED = re.compile(r"^\d{1,3}(?:,\d{3})+$")
+SPEED_UNIT = r"\s*(?:ft\.?|feet|foot)?"
+BARE_SPEED = re.compile(rf"^(\d+){SPEED_UNIT}$", re.I)
+REASONED_SPEED = re.compile(rf"^\d+{SPEED_UNIT}\s*\(.+\)$", re.I)
 LABEL_AT = re.compile(r"\*\*[^*:]+:\*\*")
 ABILITY_LABEL = re.compile(r"^spellcasting ability(?:\s*\((.+)\))?$")
 NO = frozenset(("no", "n", "false", "0", "-", "—", "–"))
@@ -203,6 +212,20 @@ def plan_hit_dice(note: Note, c: Character) -> list[Edit]:
     return [write(locus, text, Cell(i, 1, cells[1]), new)]
 
 
+def judge_speed(locus: str, cell: Cell, want: int) -> list[Edit]:
+    """The walking speed: blank or one bare speed (`30 ft`, `30`, `30 feet`) is sync's, one with a
+    reason in brackets is kept, and anything else (`30 ft, fly 60 ft`) is the GM's and unreported."""
+    new, text = f"{want} ft", cell.text.strip()
+    if blank(text):
+        return [write(locus, "", cell, new)]
+    bare = BARE_SPEED.match(text)
+    if bare:
+        return [Edit("SAME", locus, text) if int(bare.group(1)) == want else write(locus, text, cell, new)]
+    if REASONED_SPEED.match(text):
+        return [Edit("KEPT", locus, f"{text}; D&D Beyond gives {new}")]
+    return []
+
+
 def plan_combat(note: Note, c: Character) -> list[Edit]:
     out: list[Edit] = []
     size = note.attr("stat sheet", "combat", "size")
@@ -210,12 +233,8 @@ def plan_combat(note: Note, c: Character) -> list[Edit]:
         out.append(judge_text("Stat Sheet / Combat / Size", size, safe(c.size),
                               size.text.strip().lower() == safe(c.size).lower()))
     speed = note.attr("stat sheet", "combat", "speed")
-    if speed:
-        locus, new = "Stat Sheet / Combat / Speed", f"{c.speed} ft"
-        text = speed.text.strip()
-        # A Speed that holds text is the GM's and is not reported at all.
-        if blank(text):
-            out.append(write(locus, "", speed, new))
+    if speed and c.speed > 0:           # data with no walking speed says nothing about the cell
+        out.extend(judge_speed("Stat Sheet / Combat / Speed", speed, c.speed))
     out.extend(plan_hit_dice(note, c))
     return out
 
@@ -286,10 +305,16 @@ def judge_classes(locus: str, line: int, old: str, c: Character) -> Edit:
 
 
 def split_entries(text: str) -> list[str]:
-    """Split on commas outside brackets."""
-    out, depth, start = [], 0, 0
+    """Split on commas outside brackets. A bracket that never closes protects nothing."""
+    unclosed: list[int] = []
     for n, ch in enumerate(text):
         if ch in "([":
+            unclosed.append(n)
+        elif ch in ")]" and unclosed:
+            unclosed.pop()
+    out, depth, start = [], 0, 0
+    for n, ch in enumerate(text):
+        if ch in "([" and n not in unclosed:
             depth += 1
         elif ch in ")]":
             depth = max(0, depth - 1)
@@ -300,11 +325,32 @@ def split_entries(text: str) -> list[str]:
     return [e for e in out if e]
 
 
+def line_name(name: str) -> str:
+    """A name as an entry of a labelled line, where a comma parts two entries: `Crossbow, Light`
+    is written `Light Crossbow`; with more than one comma, or one inside brackets, each comma
+    becomes a space. Table rows keep the name as D&D Beyond gives it."""
+    text = safe(name)
+    if "," not in text:
+        return text
+    parts = split_entries(text)
+    if text.count(",") == 1 and len(parts) == 2:
+        return f"{parts[1]} {parts[0]}"
+    return " ".join(text.replace(",", " ").split())
+
+
+def line_names(names: list[str]) -> list[str]:
+    """The names as a labelled line holds them, each once."""
+    out: dict[str, str] = {}
+    for name in map(line_name, names):
+        out.setdefault(norm(name), name)
+    return [name for key, name in out.items() if key]
+
+
 def judge_list(locus: str, line: int, old: str, names: list[str], remembered: Collection[str] = ()) -> Edit:
     """Entry by entry: D&D Beyond's names, then the entries that are the GM's. An entry is D&D
     Beyond's when its whole name is one of the names, and sync's own (so dropped) when the memory
     holds it; any other entry stays."""
-    names = [safe(n) for n in names]
+    names = line_names(names)
     gives = {norm(n) for n in names}
     entries = [] if blank(old) or old.strip() in DASHES else split_entries(old)
     kept = [e for e in entries if norm(e) not in gives and norm(e) not in remembered]
@@ -392,7 +438,7 @@ class RowEdit:
 class Col:
     title: str
     pattern: str       # the page's pattern for this column (tools/publish/lib/templates/dnd/parse.js COLS)
-    kind: str          # num, text, recovers, flag, level, weight or tags
+    kind: str          # num, signed, text, recovers, flag, level, weight or tags
 
 
 @dataclass
@@ -404,12 +450,14 @@ class Spec:
     key: str                    # the key column's pattern
     cols: tuple[Col, ...]
     list_id: str = ""           # the list's id in the memory of what sync added
+    second: str = ""            # a second key column's pattern: a row is then matched by both (Bonuses)
 
 
 @dataclass
 class Entry:
     name: str
     wants: dict[str, Any]       # column title -> what D&D Beyond says; None when it has no opinion
+    second: str = ""            # the second key cell, for a list matched by two columns
 
 
 @dataclass
@@ -515,6 +563,8 @@ def value_text(kind: str, want: Any) -> str:
     """What a column holds for a new row."""
     if want is None:
         return ""
+    if kind == "signed":
+        return f"{want:+d}"
     if kind == "level":
         return level_text(want)
     if kind == "tags":
@@ -538,10 +588,24 @@ def judge_tags(locus: str, cell: Cell, want: list[str]) -> Edit:
     return edit
 
 
+def judge_signed(locus: str, cell: Cell, want: int) -> Edit:
+    """As judge_number, for a number written with its sign (`+2`)."""
+    new, text = f"{want:+d}", cell.text.strip()
+    if blank(text):
+        return write(locus, "", cell, new)
+    if BARE.match(text):
+        return Edit("SAME", locus, text) if to_int(text) == want else write(locus, text, cell, new)
+    if REASONED.match(text):
+        return Edit("KEPT", locus, f"{text}; D&D Beyond gives {new}")
+    return Edit("KEPT", locus, f"{text}; not read as a number; D&D Beyond gives {new}")
+
+
 def judge_column(kind: str, locus: str, cell: Cell, want: Any) -> Edit:
     text = cell.text.strip()
     if kind == "num":
         return judge_number(locus, cell, want)
+    if kind == "signed":
+        return judge_signed(locus, cell, want)
     if kind == "flag":
         return judge_flag(locus, cell, want)
     if kind == "tags":
@@ -574,9 +638,27 @@ def entries_for(name: str, c: Character) -> list[Entry]:
                                  "Recovers": m.recovers or None}) for m in c.magic_items]
 
 
-def match_row(cells: list[str], key: int, by_key: dict[str, Entry], matched: set[str]) -> tuple[Entry | None, bool]:
+def entry_key(entry: Entry) -> str:
+    """The key an entry is matched and remembered by: its name, and its second key cell when it has one."""
+    return norm(entry.name) + (f" | {norm(entry.second)}" if entry.second else "")
+
+
+def entry_label(name: str, second: str) -> str:
+    return f"{name} ({second})" if second else name
+
+
+def row_keys(cells: list[str], key: int, also: int) -> list[str]:
+    """The keys a row may be matched by. With a second key column each is `first | second`."""
+    names = candidates(cells[key])
+    if also < 0:
+        return names
+    second = norm(clean(cells[also])) if also < len(cells) else ""
+    return [f"{k} | {second}" for k in names]
+
+
+def match_row(keys: list[str], by_key: dict[str, Entry], matched: set[str]) -> tuple[Entry | None, bool]:
     """(the entry the row is, whether the row is a duplicate of an entry already matched)."""
-    for k in candidates(cells[key]):
+    for k in keys:
         if k in by_key:
             return (None, True) if k in matched else (by_key[k], False)
     return None, False
@@ -587,7 +669,8 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
     removed only when its key is in it."""
     table = find_table(lines, spec.h2, spec.h3)
     key = column(table.header, spec.key) if table else -1
-    if table is None or key < 0:
+    also = column(table.header, spec.second) if table and spec.second else -1
+    if table is None or key < 0 or (spec.second and also < 0):
         if not entries:
             return []
         noun = spec.nouns[0] if len(entries) == 1 else spec.nouns[1]
@@ -598,7 +681,7 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
     cols = [(col, at) for col, at in cols if at >= 0]
     by_key: dict[str, Entry] = {}
     for each in entries:
-        by_key.setdefault(norm(each.name), each)
+        by_key.setdefault(entry_key(each), each)
     matched: set[str] = set()
     claimed: set[str] = set()                         # keys of the first unmatched row of each name
     out: list[RowEdit] = []
@@ -611,18 +694,18 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
         if key >= len(cells) or blank(clean(cells[key])):
             continue                                  # not a row, and not blank either: left alone
         held = True
-        entry, duplicate = match_row(cells, key, by_key, matched)
-        name = clean(cells[key])
+        names = row_keys(cells, key, also)
+        entry, duplicate = match_row(names, by_key, matched)
         if entry is None:
             # Only the first row with a key is sync's; a later row with it is the GM's.
-            names = candidates(cells[key])
             if not duplicate and not claimed.intersection(names):
                 claimed.update(names)
                 if any(k in remembered for k in names):
+                    name = entry_label(clean(cells[key]), clean(cells[also]) if 0 <= also < len(cells) else "")
                     out.append(RowEdit("REMOVE", f"{spec.locus} / {name}", GONE, i))
             continue                                  # any other row is the GM's: left alone, unreported
-        matched.add(norm(entry.name))
-        locus = f"{spec.locus} / {entry.name}"
+        matched.add(entry_key(entry))
+        locus = f"{spec.locus} / {entry_label(entry.name, entry.second)}"
         changes: dict[int, str] = {}
         row: list[RowEdit] = []
         for col, at in cols:
@@ -651,11 +734,13 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
             continue
         cells = [""] * len(table.header)
         cells[key] = new_entry.name
+        if also >= 0:
+            cells[also] = new_entry.second
         for col, at in cols:
             cells[at] = value_text(col.kind, new_entry.wants.get(col.title))
         indent = lines[table.last][:len(lines[table.last]) - len(lines[table.last].lstrip())]
-        adds.append(RowEdit("ADD", f"{spec.locus} / {new_entry.name}", "not in the note; added", table.last,
-                            indent + plain_row(cells)))
+        adds.append(RowEdit("ADD", f"{spec.locus} / {entry_label(new_entry.name, new_entry.second)}",
+                            "not in the note; added", table.last, indent + plain_row(cells)))
     if adds and not held:
         out.extend(RowEdit("REMOVE", "", "", i, silent=True) for i in blanks)
     return out + adds
@@ -701,6 +786,20 @@ def plan_rows(text: str, c: Character, seen: Seen | None = None) -> list[RowEdit
     for name, spec in SPECS.items():
         out.extend(plan_table(lines, spec, entries_for(name, c), remembered_for(seen, spec.list_id)))
     return out + plan_coins(lines, c)
+
+
+BONUS_SPEC = Spec("Stat Sheet / Bonuses", "stat sheet", "bonuses", ("bonus", "bonuses"), r"^appl",
+                  (Col("Bonus", r"^bonus$", "signed"),), "bonuses", second=r"^source$")
+
+
+def bonus_entries(c: Character) -> list[Entry]:
+    return [Entry(safe(b.applies), {"Bonus": b.amount}, safe_name(b.source)) for b in c.bonuses]
+
+
+def plan_bonuses(text: str, c: Character, seen: Seen | None = None) -> list[RowEdit]:
+    """The `### Bonuses` table as a list: Applies To and Source together are the key, Bonus is
+    owned. A row with any other pair is the GM's. Planned before the fill, which reads the table."""
+    return plan_table(text.splitlines(), BONUS_SPEC, bonus_entries(c), remembered_for(seen, BONUS_SPEC.list_id))
 
 
 def write_rows(text: str, edits: list[RowEdit]) -> str:
@@ -1004,13 +1103,14 @@ def given_now(c: Character, before: Seen | None) -> Seen:
     out: Seen = {}
     for name, spec in SPECS.items():
         out[spec.list_id] = sorted({k for e in entries_for(name, c) if (k := norm(e.name))})
+    out[BONUS_SPEC.list_id] = sorted({entry_key(e) for e in bonus_entries(c)})
     if c.attacks.value is not None:
         out["attacks"] = sorted({k for e in attack_entries(c.attacks) if (k := norm(e.name))})
     elif before is not None and "attacks" in before:
         out["attacks"] = list(before["attacks"])
     for group in (DEFENCES, PROFICIENCIES):
         for label, field in group:
-            out[label.lower()] = sorted({k for n in getattr(c, field) if (k := norm(safe(n)))})
+            out[label.lower()] = sorted(norm(n) for n in line_names(getattr(c, field)))
     return out
 
 
@@ -1031,6 +1131,9 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     slots = plan_slots(t, c)
     rows += shown(slots)
     t = write_edits(t, slots)
+    bonuses = plan_bonuses(t, c, seen)
+    rows += shown(bonuses)
+    t = write_rows(t, bonuses)
     worked = plan_worked(t, c)
     rows += shown(worked)
     t = write_edits(t, worked)
@@ -1040,7 +1143,7 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     attacks = plan_attacks(t, c, seen)
     rows += shown(attacks)
     t = write_rows(t, attacks)
-    rows += shown(checks(t, c, cells + slots + worked, lists + attacks))
+    rows += shown(checks(t, c, cells + slots + worked, bonuses + lists + attacks))
     fill = dnd_sheet.plan(t)
     errors = [r for r in fill if r.status == "ERROR"]
     if errors:

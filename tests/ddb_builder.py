@@ -121,7 +121,7 @@ def _modifier(ident, kind, sub, value, component_id, component_type, extra):
            "requiresAttunement": False, "availableToMulticlass": True, "bonusTypes": [],
            "friendlySubtypeName": sub.replace("-", " ").title(),
            "componentId": component_id, "componentTypeId": component_type}
-    mod.update({k: v for k, v in extra.items() if k not in ("item", "class")})
+    mod.update({k: v for k, v in extra.items() if k not in ("item", "class", "feature", "feat", "trait")})
     return mod
 
 
@@ -136,7 +136,10 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
     modifiers: (group, type, subType, value[, extras]) with group one of race, class,
     background, item, feat; extras is a dict that overrides a modifier field, plus
     "item": the inventory item an item modifier belongs to (the first by default) and
-    "class": the class a class modifier belongs to (the first by default).
+    "class": the class a class modifier belongs to (the first by default), "feature": the
+    class feature (of `class_features`) a class modifier belongs to, "feat": the feat a feat
+    modifier belongs to, and "trait": the species trait a race modifier belongs to (without
+    these a feat's or species' modifier belongs to nothing with a name).
     spells: (name, level, prepared, always_prepared, concentration, ritual, component ids,
     source) with source a class name, "Species", "Feat: <name>" or "Item: <name>".
     inventory: (name, quantity, weight, magic, attuned, kind[, equipped[, charges[, reset]]])
@@ -154,7 +157,7 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
     target "item:<name>" for an inventory row, "unarmed" for the Unarmed Strike, None for a
     character-wide value, or an id."""
     char_id = 4242
-    class_rows, class_actions, feature_ids, ident = [], [], {}, 1000
+    class_rows, class_actions, feature_ids, named_features, ident = [], [], {}, {}, 1000
     for i, (cname, level, subclass, ability) in enumerate(classes):
         feats_here = []
         if ability is not None:
@@ -167,6 +170,7 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
             for spec in class_features:
                 fname, uses, reset, required, hidden, scaling = _entry(spec, 1)
                 ident += 1
+                named_features.setdefault(fname, ident)
                 feats_here.append({"definition": _feature_def(ident, fname, required, hidden, i), "levelScale": None})
                 if uses is not None:
                     class_actions.append(_action(fname, ident, CLASS_FEATURE, uses, reset, scaling))
@@ -188,10 +192,11 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
     actions = {"race": [], "class": class_actions, "background": None, "item": None, "feat": []}
     for group, action in given_actions:
         actions[group].append(action)
-    trait_rows = []
+    trait_rows, trait_ids = [], {}
     for spec in racial_traits:
         tname, uses, reset, required, hidden, scaling = _entry(spec, None)
         ident += 1
+        trait_ids.setdefault(tname, ident)
         trait_rows.append({"definition": {"id": ident, "name": tname, "hideInSheet": hidden, "requiredLevel": required,
                                           "entityTypeId": RACIAL_TRAIT, "featureType": 1}})
         if uses is not None:
@@ -256,8 +261,14 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
             if not items:
                 add_item("Charm of Tests", magic=True, attuned=True)
             owner, owner_type = item_ids[extra.get("item", items[0]["definition"]["name"])], ITEM
+        elif group == "class" and "feature" in extra:
+            owner, owner_type = named_features[extra["feature"]], CLASS_FEATURE
         elif group == "class":
             owner, owner_type = feature_ids[extra.get("class", classes[0][0])], CLASS_FEATURE
+        elif group == "feat" and "feat" in extra:
+            owner, owner_type = feat_ids[extra["feat"]], FEAT
+        elif group == "race" and "trait" in extra:
+            owner, owner_type = trait_ids[extra["trait"]], RACIAL_TRAIT
         else:
             owner, owner_type = 0, None
         mods[group].append(_modifier(n + 1, kind, sub, value, owner, owner_type, extra))

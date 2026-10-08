@@ -63,13 +63,16 @@ def field_kwargs(field, value):
         return {**known, "modifiers": (("background", "language", "common", None, {"friendlySubtypeName": value}),)}
     if field == "resistance":
         return {**known, "modifiers": (("race", "resistance", "fire", None, {"friendlySubtypeName": value}),)}
+    if field == "bonus source":      # the Source cell of a `### Bonuses` row is the name of the feat that gives the bonus
+        return {**known, "feats": (("Alert",), (value,)),
+                "modifiers": (("feat", "bonus", "saving-throws", 1, {"feat": value}),)}
     raise AssertionError(field)
 
 
 # Cells worked out from the gear: a name that drops an item moves the weight carried.
 WORKED_FROM_GEAR = ("| Carried Weight |", "| Encumbrance |")
 FIELDS = ["name", "class", "subclass", "species", "background", "feature", "feat", "spell", "item",
-          "magic item", "language", "resistance"]
+          "magic item", "language", "resistance", "bonus source"]
 
 
 def synced(field, value, text=TEMPLATE):
@@ -131,9 +134,9 @@ def test_a_hostile_name_stays_in_its_own_cell(field, value, harmless_runs):
     span = 4 if field == "class" else 2           # a class also feeds the Source cell of each spell row
     flat = flatten(value)
     renamed = {squash(ln.replace(HARMLESS, flat)) for ln in a}
-    if not flat:        # nothing left of the name: the line falls back to its template text, a dash, or the data's own default
+    if not flat:        # nothing left of the name: the line falls back to its template text, a dash, the data's own default, or the source's kind
         template = set(map(squash, lines_of(TEMPLATE)))
-        renamed |= template | {squash(ln.replace(f" ({HARMLESS})", "").replace(HARMLESS, word)) for ln in a for word in ("", "Fire", "Common")}
+        renamed |= template | {squash(ln.replace(f" ({HARMLESS})", "").replace(HARMLESS, word)) for ln in a for word in ("", "Fire", "Common", "Feat")}
         renamed |= {squash(ln) for ln in b if ln.endswith(" —")}
     for old, new, at in blocks(base.text, run.text):
         assert len(old) <= span and len(new) <= span, (old, new)

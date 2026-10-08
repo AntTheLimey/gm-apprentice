@@ -13,7 +13,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from ddb_builder import character  # noqa: E402
-from dnd_ddb_read import Character, Unreadable, Worked, read, safe_name  # noqa: E402
+from dnd_ddb_read import Bonus, Character, Unreadable, Worked, read, safe_name  # noqa: E402
 
 
 def got(**kw):
@@ -542,3 +542,139 @@ def test_a_character_made_without_the_worked_numbers_has_them_unsure():
     for name in worked:
         assert getattr(bare, name) == Worked(None, "", "it has not been worked out")
     assert bare.hp_max is not bare.ac
+
+
+# --- bonuses from items and features --------------------------------------------------
+# The default character is a Wizard 5 (proficiency bonus +3): STR 8, DEX 14, CON 14, INT 16, WIS 12, CHA 10.
+
+RING = (("Ring of Protection", 1, 0, True, True, "gear"),)
+STONE = (("Stone of Good Luck", 1, 0, True, True, "gear"),)
+NEEDS = {"requiresAttunement": True}
+SKILL = 1958004211
+
+
+def bonuses(**kw):
+    return got(**kw).bonuses
+
+
+def test_a_character_with_no_bonus_has_an_empty_list():
+    assert bonuses() == [] and bonuses(inventory=RING) == []
+
+
+def test_an_items_bonus_to_every_save_and_to_one_save():
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "saving-throws", 1, NEEDS),)) == \
+        [Bonus("Saves", 1, "Ring of Protection")]
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "wisdom-saving-throws", 2),
+                                              ("item", "bonus", "strength-saving-throws", -1))) == \
+        [Bonus("Wisdom Save", 2, "Ring of Protection"), Bonus("Strength Save", -1, "Ring of Protection")]
+
+
+def test_a_save_bonus_given_as_an_abilitys_modifier_is_the_number_and_never_under_one():
+    aura = dict(class_features=(("Aura of Protection", None, None),),
+                modifiers=(("class", "bonus", "saving-throws", None, {"statId": 6, "feature": "Aura of Protection"}),))
+    assert bonuses(stats=(8, 14, 14, 16, 12, 18), **aura) == [Bonus("Saves", 4, "Aura of Protection")]
+    assert bonuses(stats=(8, 14, 14, 16, 12, 8), **aura) == [Bonus("Saves", 1, "Aura of Protection")]
+
+
+def test_a_save_bonus_counts_the_proficiency_bonus_and_the_attuned_items_when_the_data_says_so():
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "saving-throws", 1, {"bonusTypes": [1]}),)) == \
+        [Bonus("Saves", 4, "Ring of Protection")]
+    assert bonuses(inventory=RING + STONE, modifiers=(("item", "bonus", "saving-throws", 0, {"bonusTypes": [2]}),)) == \
+        [Bonus("Saves", 2, "Ring of Protection")]
+
+
+def test_a_bonus_to_ability_checks_is_for_the_skills_and_one_to_initiative_for_initiative():
+    both = (("item", "bonus", "ability-checks", 1, NEEDS), ("item", "bonus", "initiative", 1, NEEDS))
+    assert bonuses(inventory=STONE, modifiers=both) == \
+        [Bonus("Skills", 1, "Stone of Good Luck"), Bonus("Initiative", 1, "Stone of Good Luck")]
+    assert bonuses(inventory=STONE, modifiers=both[:1]) == [Bonus("Skills", 1, "Stone of Good Luck")]
+
+
+def test_half_proficiency_on_ability_checks_is_half_on_the_skills_and_never_a_bonus():
+    jack = dict(class_features=(("Jack of All Trades", None, None),),
+                modifiers=(("class", "half-proficiency", "ability-checks", None, {"feature": "Jack of All Trades"}),
+                           ("class", "half-proficiency", "initiative", None, {"feature": "Jack of All Trades"})))
+    c = got(**jack)
+    assert c.bonuses == [Bonus("Initiative", 1, "Jack of All Trades")]
+    assert set(c.skills.values()) == {"half"} and len(c.skills) == 18
+
+
+def test_initiative_takes_one_share_of_the_proficiency_bonus_the_largest():
+    down = ("class", "half-proficiency", "initiative", None)
+    up = ("feat", "half-proficiency-round-up", "initiative", None)
+    full = ("feat", "bonus", "initiative", None, {"bonusTypes": [1], "feat": "Alert"})
+    alert = dict(feats=(("Alert",),))
+    assert bonuses(modifiers=(down,)) == [Bonus("Initiative", 1, "Wizard Proficiencies")]
+    assert bonuses(modifiers=(down, up)) == [Bonus("Initiative", 2, "Feat")]
+    assert bonuses(modifiers=(down, up, full), **alert) == [Bonus("Initiative", 3, "Alert")]
+    assert bonuses(modifiers=(full, down), **alert) == [Bonus("Initiative", 3, "Alert")]
+    plus = ("feat", "bonus", "initiative", 2, {"feat": "Alert"})
+    assert bonuses(modifiers=(plus, full), **alert) == [Bonus("Initiative", 5, "Alert")]
+
+
+def test_a_bonus_to_one_skill_by_its_slug_or_by_its_id():
+    gloves = (("Gloves of Tests", 1, 0, True, False, "gear"),)
+    assert bonuses(inventory=gloves, modifiers=(("item", "bonus", "sleight-of-hand", 5),)) == \
+        [Bonus("Sleight of Hand", 5, "Gloves of Tests")]
+    by_id = ("class", "bonus", "made-up", None, {"entityId": 6, "entityTypeId": SKILL, "statId": 5})
+    assert bonuses(modifiers=(by_id,)) == [Bonus("Arcana", 1, "Wizard Proficiencies")]
+    assert bonuses(stats=(8, 14, 14, 16, 8, 10), modifiers=(by_id,)) == []      # a modifier under 0 adds nothing
+
+
+def test_bonuses_to_the_passive_scores_and_to_spells():
+    mods = tuple(("item", "bonus", sub, n + 1) for n, sub in enumerate((
+        "passive-perception", "passive-investigation", "passive-insight", "spell-attacks", "spell-save-dc")))
+    assert [(b.applies, b.amount) for b in bonuses(inventory=RING, modifiers=mods)] == [
+        ("Passive Perception", 1), ("Passive Investigation", 2), ("Passive Insight", 3),
+        ("Spell Attack", 4), ("Spell Save DC", 5)]
+
+
+def test_a_bonus_with_a_condition_written_on_it_is_left_out():
+    cond = {"restriction": "against spells"}
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "saving-throws", 1, cond),
+                                              ("item", "bonus", "ability-checks", 1, cond),
+                                              ("class", "half-proficiency", "initiative", None, cond))) == []
+
+
+def test_an_items_bonus_counts_only_while_it_is_worn_and_attuned_when_it_needs_it():
+    mod = (("item", "bonus", "saving-throws", 1, NEEDS),)
+    assert bonuses(inventory=(("Ring of Protection", 1, 0, True, False, "gear"),), modifiers=mod) == []
+    assert bonuses(inventory=(("Ring of Protection", 1, 0, True, True, "gear", False),), modifiers=mod) == []
+    assert bonuses(inventory=(("Ring of Protection", 1, 0, True, False, "gear"),),
+                   modifiers=(("item", "bonus", "saving-throws", 1),)) == [Bonus("Saves", 1, "Ring of Protection")]
+
+
+def test_a_zero_bonus_is_left_out_and_two_of_one_kind_from_one_source_are_one_sum():
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "saving-throws", 0),)) == []
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "saving-throws", 1), ("item", "bonus", "saving-throws", 2))) == \
+        [Bonus("Saves", 3, "Ring of Protection")]
+    assert bonuses(inventory=RING, modifiers=(("item", "bonus", "saving-throws", 1), ("item", "bonus", "saving-throws", -1))) == []
+    two = bonuses(inventory=RING + (("Cloak of Protection", 1, 0, True, True, "gear"),),
+                  modifiers=(("item", "bonus", "saving-throws", 1), ("item", "bonus", "saving-throws", 1, {"item": "Cloak of Protection"})))
+    assert two == [Bonus("Saves", 1, "Ring of Protection"), Bonus("Saves", 1, "Cloak of Protection")]
+
+
+def test_the_source_is_the_name_of_what_gives_it_and_else_its_kind():
+    named = dict(feats=(("Alert",),), racial_traits=(("Zzyx Luck", None, None),), class_features=(("6: Aura of Protection", None, None),))
+    mods = (("race", "bonus", "saving-throws", 1, {"trait": "Zzyx Luck"}),
+            ("class", "bonus", "saving-throws", 1, {"feature": "6: Aura of Protection"}),
+            ("feat", "bonus", "saving-throws", 1, {"feat": "Alert"}))
+    assert [b.source for b in bonuses(modifiers=mods, **named)] == ["Zzyx Luck", "Aura of Protection", "Alert"]
+    nameless = (("race", "bonus", "saving-throws", 1), ("class", "bonus", "saving-throws", 1, {"componentId": 31337}),
+                ("feat", "bonus", "saving-throws", 1), ("background", "bonus", "saving-throws", 1),
+                ("item", "bonus", "saving-throws", 1))
+    assert [b.source for b in bonuses(modifiers=nameless, inventory=(("|", 1, 0, True, True, "gear"),))] == \
+        ["Species trait", "Class feature", "Feat", "Background", "Item"]
+
+
+def test_a_bonus_this_reader_does_not_map_is_not_a_row():
+    other = tuple(("item", "bonus", sub, 2) for sub in ("armor-class", "hit-points", "speed", "melee-attacks", "strength-score",
+                                                         "proficiency-bonus", "strength-ability-checks", "wizard-spell-attacks"))
+    assert bonuses(inventory=RING, modifiers=other) == []
+
+
+def test_odd_bonus_data_is_read_without_a_crash():
+    odd = (("item", "bonus", "saving-throws", "three", {"statId": "six", "bonusTypes": "all", "componentId": [1]}),
+           ("item", "bonus", "saving-throws", 2, {"statId": 99, "restriction": 7}),
+           ("item", "bonus", "x", 2, {"subType": None}), ("item", "bonus", "saving-throws", 2, {"type": None}))
+    assert [(b.applies, b.amount) for b in bonuses(inventory=RING, modifiers=odd)] == [("Saves", 2)]

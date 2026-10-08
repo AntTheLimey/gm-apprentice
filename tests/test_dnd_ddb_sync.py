@@ -240,11 +240,27 @@ def test_what_the_table_tracks_in_play_is_never_touched():
         assert lines_starting(after, start) == lines_starting(before, start), start
     assert column(after, "Used")["Arcane Recovery"] == "1"
     assert column(after, "Expended") == column(before, "Expended")
-    for heading in ("### Bonuses", "## Companions", "## Current Status", "## Notes", "## GM Notes"):
+    for heading in ("## Companions", "## Current Status", "## Notes", "## GM Notes"):
         assert section(after, heading) == section(before, heading), heading
     assert column(after, "Summary")["Arcane Recovery"] == "my own summary"
     assert column(after, "Notes")["Torch"] == "for the cellar"
     assert column(after, "Notes")["Owl"] == "scouts ahead"
+
+
+def test_a_gms_own_bonuses_rows_are_byte_identical_beside_the_rows_sync_writes():
+    """Sync writes the bonuses D&D Beyond gives; every other row of the table is the GM's."""
+    before = played(TEMPLATE)
+    cloak = wizard(inventory=GEAR + (("Cloak of Protection", 1, 3, True, True, "gear"),),
+                   modifiers=SAVES + (("item", "bonus", "saving-throws", 1, {"item": "Cloak of Protection"}),))
+    mine = section(before, "### Bonuses")
+    assert mine[-2:] == ["| Saves | +1 | Ring of Protection |", ""]
+    first = sync_text(before, cloak)
+    assert section(first.text, "### Bonuses") == mine[:-1] + ["| Saves | +1 | Cloak of Protection |", ""]
+    again = sync_text(first.text, cloak, first.seen)
+    assert again.rows == [] and again.text == first.text
+    dropped = sync_text(first.text, wizard(), first.seen)
+    assert section(dropped.text, "### Bonuses") == mine
+    assert not [r for r in first.rows + dropped.rows if "Ring of Protection" in r[1]]
 
 
 def test_the_spell_slot_expended_cells_keep_their_values_when_the_totals_change():
@@ -255,7 +271,7 @@ def test_the_spell_slot_expended_cells_keep_their_values_when_the_totals_change(
 
 # --- what sync remembers it added -------------------------------------------------------------
 
-LIST_IDS = {"class features", "species traits", "feats", "spells", "gear", "magic items", "attacks",
+LIST_IDS = {"class features", "species traits", "feats", "spells", "gear", "magic items", "attacks", "bonuses",
             "resistances", "immunities", "vulnerabilities", "condition immunities", "armor training",
             "weapons", "tools", "languages"}
 GONE = ("REMOVE", "Equipment / Gear / Torch", "D&D Beyond no longer has it")
@@ -366,3 +382,28 @@ def test_unsure_attacks_carry_the_earlier_attack_memory_forward(monkeypatch):
     assert any(r[0] == "CHECK" and "Weapons" in r[1] for r in unsure.rows)
     assert unsure.seen["attacks"] == first.seen["attacks"] == ["unarmed strike"]
     assert "attacks" not in sync_text(first.text, wizard()).seen
+
+
+# --- a name with a comma on a labelled line --------------------------------------------------
+
+CROSSBOWS = tuple(("class", "proficiency", f"made-up-{n}", None, {"friendlySubtypeName": name, "entityTypeId": 1782728300})
+                  for n, name in enumerate(("Simple Weapons", "Crossbow, Hand", "Crossbow, Light")))
+
+
+def test_a_weapon_named_with_a_comma_is_added_once_and_a_second_and_third_sync_add_nothing():
+    data = wizard(modifiers=SAVES + CROSSBOWS)
+    first = sync_text(TEMPLATE, data)
+    line = "**Weapons:** Simple Weapons, Hand Crossbow, Light Crossbow"
+    assert line_of(first.text, "Weapons") == line
+    assert first.seen["weapons"] == ["hand crossbow", "light crossbow", "simple weapons"]
+    second = sync_text(first.text, data, first.seen)
+    third = sync_text(second.text, data, second.seen)
+    assert second.rows == [] and third.rows == [] and third.text == first.text
+    assert sync_text(first.text, data).rows == []                      # and with the memory lost
+    dropped = sync_text(first.text, wizard(modifiers=SAVES + CROSSBOWS[:2]), first.seen)
+    assert line_of(dropped.text, "Weapons") == "**Weapons:** Simple Weapons, Hand Crossbow"
+
+
+def test_a_table_row_keeps_the_comma_d_and_d_beyond_gives_its_name():
+    report = sync_text(TEMPLATE, wizard())
+    assert "| Rope, Hempen | 1 | 10 lb | |" in report.text and "rope, hempen" in report.seen["gear"]

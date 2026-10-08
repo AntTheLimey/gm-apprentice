@@ -116,3 +116,31 @@ def test_the_hand_added_row_is_on_the_page_by_its_plain_name_after_two_syncs(sit
     assert HAND_ROW in text
     assert '<span class="dnd5e-entry-name">Moon-touched Blade</span>' in html
     assert "gift of the abbot" not in html
+
+
+@pytest.fixture(scope="module")
+def ringbearer(tmp_path_factory):
+    """A slow character with a save bonus from an item: the two things sync writes that the first note lacks."""
+    if NODE is None:
+        pytest.skip("node is not installed")
+    data = wizard_five(speed=20, inventory=INVENTORY + (("Cloak of Protection", 1, 3, True, True, "gear"),),
+                       modifiers=(("item", "bonus", "saving-throws", 1, {"item": "Cloak of Protection"}),))
+    text = sync_text(TEMPLATE, data).text
+    assert "| Speed | 20 ft |" in text and "| Saves | +1 | Cloak of Protection |" in text
+    output, pages = build_site(tmp_path_factory.mktemp("ringbearer"), {"Tavin_Reedmere.md": text})
+    return output, pages["tavin-reedmere"]
+
+
+@needs_node
+def test_the_page_reads_the_speed_sync_wrote(ringbearer):
+    _, html = ringbearer
+    assert '<span class="dnd5e-lbl">Speed</span><span class="dnd5e-num">20 ft</span>' in html
+
+
+@needs_node
+def test_the_page_shows_the_bonus_row_sync_wrote_and_warns_of_nothing(ringbearer):
+    output, html = ringbearer
+    block = re.search(r'<section class="dnd5e-blk dnd5e-blk-bonuses">.*?</section>', html, re.S).group(0)
+    assert block.count('class="dnd5e-entry"') == 1
+    assert '<span class="dnd5e-entry-name">Cloak of Protection</span>' in block and "Saves" in block and "+1" in block
+    assert warnings(output) == []

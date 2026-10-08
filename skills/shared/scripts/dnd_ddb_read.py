@@ -12,9 +12,14 @@ guessed. Stdlib only.
 Three numbers the data does not carry as totals (hit point maximum, armour
 class, the attack lines) are worked out by dnd_ddb_calc.py and ride on the
 `Character` as `Worked` values, each either a value or a reason it is unsure.
+
+What an item or a feature adds to saves, skills, initiative, the passive scores
+and the spell numbers rides on it as `bonuses`, one per thing it applies to and
+source, in the words dnd_sheet.py reads from the note's `### Bonuses` table.
 """
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from fractions import Fraction
 
@@ -47,6 +52,14 @@ BOOKKEEPING = frozenset((
     "skills", "tool proficiency", "bonus proficiency", "extra language", "feat", "spellcasting", "pact magic"))
 BOOKKEEPING_PATTERN = re.compile(r"core .+ traits|.+ subclass", re.I)
 LEVEL_PREFIX = re.compile(r"^\d+:\s*")
+# What stands for a bonus's source when the thing that gives it has no name.
+SOURCE_KINDS = {"race": "Species trait", "class": "Class feature", "feat": "Feat", "background": "Background",
+                "item": "Item"}
+# A bonus's subType -> the `Applies To` the fill reads. Ability checks are the skills only: the
+# site adds them to no initiative, which has its own subType.
+APPLIES = {"saving-throws": "Saves", "ability-checks": "Skills", "initiative": "Initiative",
+           "passive-perception": "Passive Perception", "passive-investigation": "Passive Investigation",
+           "passive-insight": "Passive Insight", "spell-attacks": "Spell Attack", "spell-save-dc": "Spell Save DC"}
 KEPT_IN_NAMES = frozenset("'-,./+():&")
 
 
@@ -106,6 +119,13 @@ class Attack:
 
 
 @dataclass
+class Bonus:
+    applies: str                        # "Saves", "Wisdom Save", "Skills", "Initiative", a skill's name, "Passive Perception", ...
+    amount: int                         # the finished number, never 0
+    source: str                         # the item's or feature's name, else its kind ("Item", "Feat", ...)
+
+
+@dataclass
 class Worked:
     """A number dnd_ddb_calc worked out, or the reason it would not."""
     value: object | None                # int for hit points and armour class, list[Attack] for attacks; None when unsure
@@ -149,6 +169,7 @@ class Character:
     hp_max: Worked = field(default_factory=_not_worked)
     ac: Worked = field(default_factory=_not_worked)
     attacks: Worked = field(default_factory=_not_worked)
+    bonuses: list[Bonus] = field(default_factory=list)
 
 
 # --- small accessors: nothing below indexes into something that may not be a dict ----------
@@ -433,6 +454,63 @@ def _proficiencies(d: dict, everything: list[dict]) -> tuple[list[str], list[str
         if into is not None:
             into.append(safe_name(c.get("name")))
     return _unique(armor), _unique(weapons), _unique(tools), _unique(languages)
+
+
+# --- bonuses --------------------------------------------------------------------------------
+
+def _applies(m: dict) -> str:
+    """The `Applies To` a bonus modifier feeds; "" for one that is not a bonus to a sheet sum."""
+    sub = _text(m.get("subType"))
+    if sub in APPLIES:
+        return APPLIES[sub]
+    for word in ABILITY_WORDS:
+        if sub == f"{word}-saving-throws":
+            return f"{word.title()} Save"
+    for sid, name, _stat in SKILLS:
+        if sub == name.lower().replace(" ", "-") or (m.get("entityId") == sid and m.get("entityTypeId") == SKILL_TYPE):
+            return name
+    return ""
+
+
+def _bonus_source(m: dict, origin: str, names: dict[tuple[int, int | None], str]) -> str:
+    ident, kind = _num(m.get("componentId")), _num(m.get("componentTypeId"))
+    name = ""
+    if ident is not None:
+        name = names.get((ident, kind)) or (names.get((ident, None), "") if origin == "item" else "")
+    return LEVEL_PREFIX.sub("", name) or SOURCE_KINDS[origin]
+
+
+def _bonuses(mods: dict[str, list[dict]], scores: dict[str, int], pb: int, attuned: int,
+             names: dict[tuple[int, int | None], str], steady: Callable[[dict], bool]) -> list[Bonus]:
+    """What the live modifiers add to saves, skills, initiative, the passive scores and the spell
+    numbers, as the site counts each: a modifier with a condition written on it is left out
+    (`steady`), one that names an ability adds that ability's modifier (never under 1 on a save,
+    never under 0 elsewhere), and only a save counts the bonus types. Initiative takes one share
+    of the proficiency bonus: all of it, else half rounded up, else half. Half proficiency on
+    ability checks is not here: it is `half` on each skill (`_skill_levels`)."""
+    found: dict[tuple[str, str], int] = {}
+    share: tuple[int, int, str] | None = None         # rank, amount, source of initiative's share
+    for origin, group in mods.items():
+        for m in group:
+            if not steady(m):
+                continue
+            kind, source = m.get("type"), _bonus_source(m, origin, names)
+            if m.get("subType") == "initiative":
+                rank, amount = {"half-proficiency": (1, pb // 2), "half-proficiency-round-up": (2, (pb + 1) // 2)}.get(
+                    _text(kind), (3, pb) if kind == "bonus" and 1 in _list(m.get("bonusTypes")) else (0, 0))
+                if rank and (share is None or rank > share[0]):
+                    share = (rank, amount, source)
+            applies = _applies(m) if kind == "bonus" else ""
+            if not applies:
+                continue
+            save = applies.endswith(("Saves", " Save"))
+            stat = _num(m.get("statId"))
+            scaled = max(1 if save else 0, _ability_mod(scores[ABILITIES[stat - 1]])) if stat is not None and 1 <= stat <= 6 else 0
+            amount = (_worth(m, pb, attuned) if save else _int(m.get("value"))) + scaled
+            found[(applies, source)] = found.get((applies, source), 0) + amount
+    if share:
+        found[("Initiative", share[2])] = found.get(("Initiative", share[2]), 0) + share[1]
+    return [Bonus(applies, amount, source) for (applies, source), amount in found.items() if amount]
 
 
 # --- features -------------------------------------------------------------------------------
@@ -742,4 +820,7 @@ def read(data: object) -> Character:
     character.hp_max = dnd_ddb_calc.hp_max(d, character)
     character.ac = dnd_ddb_calc.armour_class(d, character)
     character.attacks = dnd_ddb_calc.attacks(d, character)
+    # An item's or a feature's name, and whether a modifier carries a condition, as the calculator has them.
+    character.bonuses = _bonuses(mods, scores, pb, attuned, dnd_ddb_calc._names(d, classes, rows, values),
+                                 dnd_ddb_calc._steady)
     return character
