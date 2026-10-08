@@ -13,6 +13,9 @@ WEAPON_CATEGORIES = ("simple-weapons", "martial-weapons")
 SIZE_IDS = {"Tiny": 2, "Small": 3, "Medium": 4, "Large": 5, "Huge": 6, "Gargantuan": 7}
 KNOWN_CASTERS = ("Bard", "Sorcerer", "Warlock")   # no spellPrepareType: every listed spell is known
 CLASS_FEATURE, RACIAL_TRAIT, FEAT, ITEM = 12168134, 1960452172, 1088085227, 112130694
+ITEM_ROW, WEAPON_BASE, WEAPON_CATEGORY, ACTION, UNARMED = 1439493548, 1782728300, 660121713, 222216831, 1120657896
+SIMPLE, MARTIAL = 1, 2                          # weapon category ids
+LIGHT, MEDIUM, HEAVY, SHIELD = 1, 2, 3, 4       # armour type ids
 # The SRD full-caster table: slots of each spell level, by class level 0..20.
 FULL_CASTER_SLOTS = [[0] * 9, [2] + [0] * 8, [3] + [0] * 8, [4, 2] + [0] * 7, [4, 3] + [0] * 7,
                      [4, 3, 2] + [0] * 6, [4, 3, 3] + [0] * 6, [4, 3, 3, 1] + [0] * 5,
@@ -22,6 +25,50 @@ FULL_CASTER_SLOTS = [[0] * 9, [2] + [0] * 8, [3] + [0] * 8, [4, 2] + [0] * 7, [4
                      [4, 3, 3, 3, 2, 1, 1, 1, 0], [4, 3, 3, 3, 2, 1, 1, 1, 0],
                      [4, 3, 3, 3, 2, 1, 1, 1, 1], [4, 3, 3, 3, 3, 1, 1, 1, 1],
                      [4, 3, 3, 3, 3, 2, 1, 1, 1], [4, 3, 3, 3, 3, 2, 2, 1, 1]]
+
+
+def dice(text, fixed=None):
+    """'2d6' as the data writes a set of dice."""
+    count, value = text.split("d")
+    return {"diceCount": int(count), "diceValue": int(value), "diceMultiplier": None,
+            "fixedValue": fixed, "diceString": text}
+
+
+def weapon(damage="1d8", damage_type="Slashing", category=SIMPLE, base_item=1, ranged=False, properties=(), **more):
+    """Definition fields of a weapon, for `item_details`. `damage` None is a weapon with no dice."""
+    return {"baseTypeId": WEAPON_BASE, "baseItemId": base_item, "categoryId": category,
+            "attackType": 2 if ranged else 1, "damage": dice(damage) if damage else None,
+            "fixedDamage": None, "damageType": damage_type, "isMonkWeapon": False, "weaponBehaviors": [],
+            "properties": [{"id": n + 1, "name": p, "notes": None} for n, p in enumerate(properties)], **more}
+
+
+def armour(armor_class, kind=LIGHT, **more):
+    """Definition fields of a suit of armour or a shield, for `item_details`."""
+    return {"armorClass": armor_class, "armorTypeId": kind, **more}
+
+
+def cantrip(damage=None, damage_type="fire", attack=None, save=None, tiers=(), primary_stat=False, **more):
+    """Definition fields of a cantrip, for `spell_details`. attack: 1 melee, 2 ranged, None for
+    no attack roll. save: the stat id the target saves with. tiers: (level, dice) the damage
+    becomes at that character level."""
+    mods = []
+    if damage:
+        higher = [{"level": lvl, "typeId": 15, "dice": dice(d), "value": None} for lvl, d in tiers]
+        mods.append({"type": "damage", "subType": damage_type, "die": dice(damage), "usePrimaryStat": primary_stat,
+                     "atHigherLevels": {"higherLevelDefinitions": higher, "additionalAttacks": [], "points": []}})
+    return {"level": 0, "requiresAttackRoll": attack is not None, "attackType": attack,
+            "requiresSavingThrow": save is not None, "saveDcAbilityId": save, "scaleType": "characterlevel",
+            "asPartOfWeaponAttack": False, "modifiers": mods, **more}
+
+
+def attack_action(name, ident=700, **more):
+    """An entry of `actions`: a feature's action as the data lists it. Nothing is set that
+    makes it an attack; pass attackTypeRange, saveStatId, dice and the rest."""
+    return {"id": str(ident), "entityTypeId": str(ACTION), "name": name, "actionType": 3, "attackSubtype": None,
+            "attackTypeRange": None, "abilityModifierStatId": None, "isProficient": False, "fixedToHit": None,
+            "saveStatId": None, "fixedSaveDc": None, "dice": None, "value": None, "damageTypeId": None,
+            "isMartialArts": False, "displayAsAttack": None, "limitedUse": None,
+            "componentId": 0, "componentTypeId": None, **more}
 
 
 def _stats(values):
@@ -82,7 +129,9 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
               background="Sage", alignment_id=2, stats=(8, 14, 14, 16, 12, 10),
               bonus_stats=(0,) * 6, override_stats=(None,) * 6, modifiers=(),
               spells=(), inventory=(), feats=(), class_features=(), racial_traits=(),
-              currencies=None, xp=6500, size="Medium", speed=30):
+              currencies=None, xp=6500, size="Medium", speed=30,
+              hit_points=None, hit_dice=None, item_details=None, spell_details=None,
+              actions=(), custom_actions=(), character_values=()):
     """classes: (name, level, subclass or "", spellcasting ability stat id or None).
     modifiers: (group, type, subType, value[, extras]) with group one of race, class,
     background, item, feat; extras is a dict that overrides a modifier field, plus
@@ -94,7 +143,16 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
     with kind armor, shield, weapon or gear.
     feats: (name,). class_features and racial_traits: (name, max uses or None, reset type
     1 short, 2 long, or None[, required level[, hidden in sheet[, limitedUse overrides]]]);
-    class_features belong to the first class."""
+    class_features belong to the first class.
+    hit_points: any of base (the rolled total), bonus, override and type (1 fixed from the hit
+    dice, 2 rolled); without it the data carries no hit point fields. hit_dice: class name ->
+    die size. item_details: item name -> definition fields laid over the item's (see `weapon`
+    and `armour`), with "row" a dict laid over the inventory row. spell_details: the same for
+    a spell's definition and its row (see `cantrip`). actions: (group, action) with group
+    race, class or feat (see `attack_action`). custom_actions: the player's own actions, as
+    the data lists them. character_values: (type id, value, target[, target type id]) with
+    target "item:<name>" for an inventory row, "unarmed" for the Unarmed Strike, None for a
+    character-wide value, or an id."""
     char_id = 4242
     class_rows, class_actions, feature_ids, ident = [], [], {}, 1000
     for i, (cname, level, subclass, ability) in enumerate(classes):
@@ -123,8 +181,13 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
                            "knowsAllSpells": cname not in KNOWN_CASTERS and ability is not None,
                            "spellPrepareType": None if cname in KNOWN_CASTERS or ability is None else 1,
                            "spellRules": rules}})
+        if hit_dice and cname in hit_dice:
+            class_rows[-1]["definition"]["hitDice"] = hit_dice[cname]
 
+    given_actions = actions
     actions = {"race": [], "class": class_actions, "background": None, "item": None, "feat": []}
+    for group, action in given_actions:
+        actions[group].append(action)
     trait_rows = []
     for spec in racial_traits:
         tname, uses, reset, required, hidden, scaling = _entry(spec, None)
@@ -156,6 +219,11 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
 
     for spec in inventory:
         add_item(*spec)
+    for iname, details in (item_details or {}).items():
+        for row in items:
+            if row["definition"]["name"] == iname:
+                row["definition"].update({k: v for k, v in details.items() if k != "row"})
+                row.update(details.get("row", {}))
 
     spell_rows = {"race": [], "class": [], "item": [], "feat": [], "background": None}
     class_spells = {c["definition"]["name"]: [] for c in class_rows}
@@ -166,6 +234,9 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
                 "range": {"origin": "Ranged", "rangeValue": 30, "aoeType": None, "aoeValue": None}}
         row = {"definition": defn, "prepared": prepared, "alwaysPrepared": always, "countsAsKnownSpell": True,
                "componentId": 0, "componentTypeId": 0}
+        details = (spell_details or {}).get(sname, {})
+        defn.update({k: v for k, v in details.items() if k != "row"})
+        row.update(details.get("row", {}))
         if source.startswith("Item: "):
             if source[6:] not in item_ids:
                 add_item(source[6:], magic=True, attuned=True)
@@ -191,10 +262,28 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
             owner, owner_type = 0, None
         mods[group].append(_modifier(n + 1, kind, sub, value, owner, owner_type, extra))
 
-    return {
+    values = []
+    for spec in character_values:
+        type_id, value, target = spec[:3]
+        if target == "unarmed":
+            target, target_type = "1", str(UNARMED)
+        elif isinstance(target, str) and target.startswith("item:"):
+            target = str(next(r["id"] for r in items if r["definition"]["name"] == target[5:]))
+            target_type = str(ITEM_ROW)
+        else:
+            target_type = str(spec[3]) if len(spec) > 3 else None
+        values.append({"typeId": type_id, "value": value, "notes": None, "valueId": target,
+                       "valueTypeId": target_type, "contextId": None, "contextTypeId": None})
+    hp_fields = {}
+    if hit_points is not None:
+        hp_fields = {"baseHitPoints": hit_points.get("base", 0), "bonusHitPoints": hit_points.get("bonus"),
+                     "overrideHitPoints": hit_points.get("override"),
+                     "removedHitPoints": 0, "temporaryHitPoints": 0}
+
+    built = {
         "id": char_id, "name": name, "currentXp": xp, "alignmentId": alignment_id,
         "stats": _stats(stats), "bonusStats": _stats(bonus_stats), "overrideStats": _stats(override_stats),
-        "preferences": {"progressionType": 1}, "characterValues": [], "customProficiencies": [],
+        "preferences": {"progressionType": 1}, "characterValues": values, "customProficiencies": [],
         "customSpeeds": [], "conditions": [],
         "background": {"hasCustomBackground": False, "definition": {"name": background}},
         "race": {"fullName": species, "sizeId": SIZE_IDS[size], "size": None, "racialTraits": trait_rows,
@@ -203,4 +292,8 @@ def character(name="Tavin Reedmere", classes=(("Wizard", 5, "Evoker", 4),), spec
         "currencies": currencies if currencies is not None else {"cp": 0, "sp": 0, "gp": 15, "ep": 0, "pp": 0},
         "modifiers": mods, "actions": actions, "spells": spell_rows,
         "classSpells": [{"characterClassId": 1000 + i, "spells": class_spells[c[0]]} for i, c in enumerate(classes)],
+        "customActions": list(custom_actions), **hp_fields,
     }
+    if hit_points is not None:
+        built["preferences"]["hitPointType"] = hit_points.get("type", 2)
+    return built

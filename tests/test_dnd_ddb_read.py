@@ -2,6 +2,7 @@
 """Tests for dnd_ddb_read.py: a D&D Beyond character read into plain inputs."""
 
 import copy
+import dataclasses
 import sys
 from pathlib import Path
 
@@ -12,7 +13,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from ddb_builder import character  # noqa: E402
-from dnd_ddb_read import Unreadable, read, safe_name  # noqa: E402
+from dnd_ddb_read import Character, Unreadable, Worked, read, safe_name  # noqa: E402
 
 
 def got(**kw):
@@ -524,3 +525,20 @@ def test_a_mangled_entry_is_skipped_and_the_rest_still_reads():
     c = read(data)
     assert [i.name for i in c.gear] == ["Torch"] and [s.name for s in c.spells] == ["Shield"]
     assert c.skills == {"arcana": "proficient"}
+
+
+# --- the worked numbers -------------------------------------------------
+
+def test_read_fills_the_three_worked_numbers():
+    c = read(character(hit_points={"base": 22}))
+    assert c.hp_max == Worked(32, "", "") and c.ac == Worked(12, "Unarmoured 10 + Dex 2", "")
+    assert [a.name for a in c.attacks.value] == ["Unarmed Strike"]
+
+
+def test_a_character_made_without_the_worked_numbers_has_them_unsure():
+    c = got()
+    worked = ("hp_max", "ac", "attacks")
+    bare = Character(**{f.name: getattr(c, f.name) for f in dataclasses.fields(c) if f.name not in worked})
+    for name in worked:
+        assert getattr(bare, name) == Worked(None, "", "it has not been worked out")
+    assert bare.hp_max is not bare.ac

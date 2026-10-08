@@ -8,10 +8,14 @@ the rest of the sync works from a `Character`. The sums follow the way the
 site itself counts (which modifiers are live, the 20-point cap, level-scaled
 uses); anything not in the data raises `Unreadable` or is skipped, never
 guessed. Stdlib only.
+
+Three numbers the data does not carry as totals (hit point maximum, armour
+class, the attack lines) are worked out by dnd_ddb_calc.py and ride on the
+`Character` as `Worked` values, each either a value or a reason it is unsure.
 """
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from fractions import Fraction
 
 ABILITIES = ("STR", "DEX", "CON", "INT", "WIS", "CHA")   # stat ids 1..6 in this order
@@ -95,6 +99,25 @@ class MagicItem:
 
 
 @dataclass
+class Attack:
+    name: str
+    hit: str                            # "+7", or "DC 15" for a saving throw
+    damage: str                         # "1d8+4 slashing"; versatile "1d8+4 (1d10+4) slashing"; "" for none
+
+
+@dataclass
+class Worked:
+    """A number dnd_ddb_calc worked out, or the reason it would not."""
+    value: object | None                # int for hit points and armour class, list[Attack] for attacks; None when unsure
+    parts: str                          # armour class only: "Studded Leather 12 + Dex 3 + shield 2"; else ""
+    unsure: str                         # why, in one plain clause, when value is None; else ""
+
+
+def _not_worked() -> Worked:
+    return Worked(None, "", "it has not been worked out")
+
+
+@dataclass
 class Character:
     name: str
     classes: list[ClassLevel]
@@ -123,6 +146,9 @@ class Character:
     magic_items: list[MagicItem]
     coins: dict[str, int]               # cp sp ep gp pp
     speed: int                          # walking speed in feet
+    hp_max: Worked = field(default_factory=_not_worked)
+    ac: Worked = field(default_factory=_not_worked)
+    attacks: Worked = field(default_factory=_not_worked)
 
 
 # --- small accessors: nothing below indexes into something that may not be a dict ----------
@@ -689,7 +715,7 @@ def read(data: object) -> Character:
     gear, magic = _inventory_lists(rows, values)
     align = _num(d.get("alignmentId"))
 
-    return Character(
+    character = Character(
         name=safe_name(d.get("name")),
         classes=[_class_level(c) for c in classes],
         level=level,
@@ -711,3 +737,9 @@ def read(data: object) -> Character:
         coins=_coins(d),
         speed=_walking_speed(d, everything, scores, rows),
     )
+    # The calculator reads this module, so it is brought in here and not at the top.
+    import dnd_ddb_calc
+    character.hp_max = dnd_ddb_calc.hp_max(d, character)
+    character.ac = dnd_ddb_calc.armour_class(d, character)
+    character.attacks = dnd_ddb_calc.attacks(d, character)
+    return character
