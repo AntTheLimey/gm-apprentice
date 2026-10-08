@@ -15,6 +15,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 
 from ddb_builder import character, weapon  # noqa: E402
 from dnd_ddb import sync_text  # noqa: E402
+from dnd_note import split_cells  # noqa: E402
 from test_dnd_ddb_page import INVENTORY, SPELLS, TEMPLATE, build_site, needs_node, warnings  # noqa: E402
 
 HARMLESS = "Zed"
@@ -27,6 +28,7 @@ STRINGS = [
     "{{", "{{x}}", "{list}", "> quote", "- item", "1. item", "---", "***", "\\", "\\|", "&amp;", "&", "'", '"',
     "A" * 5000, "", "   ", "\t", "‮evil", "a‮b", "a​b", "a\x00b", "\x00", "﻿",
     "(x)", "Thing (gift)", "HP (Current)", "AC", "HP (Max)", "Level", WIDE, "界" * 80, "Zed" + "́" * 200,
+    "x\n| fake | row |", "x\r\n## Heading",
     "x: y", "Name (", ") (", "[[", "]]", "[", "]",
 ]
 assert len(STRINGS) >= 40
@@ -78,6 +80,26 @@ def lines_of(text):
     return text.split("\n")          # not splitlines: U+2028 and friends are not line ends here
 
 
+def flatten(value):
+    """What a name must come to before it is written: letters, digits, spaces and ' - , . / + ( ) : &,
+    at most 80 characters. Written out here so a weakened safe_name cannot weaken the expectation."""
+    s = value.replace("\u2019", "'").replace("\u2018", "'")
+    s = "".join(ch if ch.isalnum() or ch in "'-,./+():&" else " " for ch in s)
+    return " ".join(s.split())[:80].rstrip()
+
+
+def squash(line):
+    return " ".join(line.split())
+
+
+def header_cells(lines, at):
+    """The cell count of the header of the table the row at `at` is in."""
+    top = at
+    while top > 0 and lines[top - 1].startswith("|"):
+        top -= 1
+    return len(split_cells(lines[top]))
+
+
 def special(lines):
     return sorted(ln for ln in lines if ln.startswith(("#", "<!--", "%%")))
 
@@ -85,7 +107,7 @@ def special(lines):
 def blocks(harmless, hostile):
     """(lines of the harmless run, lines of the hostile run) for every stretch where they differ."""
     a, b = lines_of(harmless), lines_of(hostile)
-    return [(a[i1:i2], b[j1:j2]) for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
+    return [(a[i1:i2], b[j1:j2], j1) for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, a, b, autojunk=False).get_opcodes()
             if tag != "equal"]
 
 
@@ -107,15 +129,26 @@ def test_a_hostile_name_stays_in_its_own_cell(field, value, harmless_runs):
     assert abs(len(a) - len(b)) <= 1, (len(a), len(b))
     # Every line outside the cell or row the field feeds is byte-identical to the harmless run.
     span = 4 if field == "class" else 2           # a class also feeds the Source cell of each spell row
-    for old, new in blocks(base.text, run.text):
+    flat = flatten(value)
+    renamed = {squash(ln.replace(HARMLESS, flat)) for ln in a}
+    if not flat:        # nothing left of the name: the line falls back to its template text, a dash, or the data's own default
+        template = set(map(squash, lines_of(TEMPLATE)))
+        renamed |= template | {squash(ln.replace(f" ({HARMLESS})", "").replace(HARMLESS, word)) for ln in a for word in ("", "Fire", "Common")}
+        renamed |= {squash(ln) for ln in b if ln.endswith(" —")}
+    for old, new, at in blocks(base.text, run.text):
         assert len(old) <= span and len(new) <= span, (old, new)
         for ln in old + new:
             assert ln.startswith(("|", "**")), ln                    # a table row or a labelled line
         assert all(HARMLESS in ln or ln.startswith(WORKED_FROM_GEAR) for ln in old), old   # only lines the name fed
+        for n, ln in enumerate(new):
+            # A new line is the harmless run's line with the name flattened in (the paired rewrite, or the one
+            # added row of the affected table), or a figure worked out from the gear. Nothing else rides in.
+            assert squash(ln) in renamed or ln.startswith(WORKED_FROM_GEAR), ln
+            if ln.startswith("|"):                                   # same number of cells as the table's header
+                assert len(split_cells(ln)) == header_cells(b, at + n), ln
     assert special(b) == special(a)
     assert not any(ln.startswith("#") and ln not in a for ln in b)
     assert "\r" not in run.text and "\x00" not in run.text and " " not in run.text
-    assert not re.search(r"[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]\s*[|]", run.text)
     assert "<!--" not in run.text and "%%" not in run.text
 
 
