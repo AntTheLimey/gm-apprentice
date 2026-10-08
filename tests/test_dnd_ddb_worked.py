@@ -257,3 +257,13 @@ def test_the_armour_class_line_needs_an_armour_class_as_well_as_parts():
     c = fake(hp=1, ac=None, parts="Chain Mail 16")
     assert [e for e in plan_worked(TEMPLATE, c) if e.locus == LINE_LOCUS] == []
     assert [(e.status, e.locus) for e in plan_worked(TEMPLATE, c)] == [("WRITE", HP_LOCUS), ("CHECK", AC_LOCUS)]
+
+
+def test_a_second_attack_row_of_the_same_name_is_the_gms_and_the_first_alone_goes():
+    text = HEAD + "| Dagger | +2 | 1d4 | |\n| Dagger | +9 | 1d4 | mine |\n"
+    seen = {"attacks": ["dagger", "longsword"]}
+    kept = write_rows(text, plan_attacks(text, fake(attacks=[Attack("Dagger", "+2", "1d4")]), seen))
+    assert kept == text
+    edits = plan_attacks(text, fake(attacks=[]), seen)
+    assert rows(edits) == [("REMOVE", f"{ATTACKS} / Dagger", "D&D Beyond no longer has it")]
+    assert write_rows(text, edits) == HEAD + "| Dagger | +9 | 1d4 | mine |\n"

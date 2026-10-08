@@ -600,6 +600,7 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
     for each in entries:
         by_key.setdefault(norm(each.name), each)
     matched: set[str] = set()
+    claimed: set[str] = set()                         # keys of the first unmatched row of each name
     out: list[RowEdit] = []
     blanks: list[int] = []
     held = False                                      # the table has a row with a name
@@ -613,9 +614,12 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
         entry, duplicate = match_row(cells, key, by_key, matched)
         name = clean(cells[key])
         if entry is None:
-            if any(k in remembered for k in candidates(cells[key])):
-                said = "a second row for an entry already in the note; removed" if duplicate else GONE
-                out.append(RowEdit("REMOVE", f"{spec.locus} / {name}", said, i))
+            # Only the first row with a key is sync's; a later row with it is the GM's.
+            names = candidates(cells[key])
+            if not duplicate and not claimed.intersection(names):
+                claimed.update(names)
+                if any(k in remembered for k in names):
+                    out.append(RowEdit("REMOVE", f"{spec.locus} / {name}", GONE, i))
             continue                                  # any other row is the GM's: left alone, unreported
         matched.add(norm(entry.name))
         locus = f"{spec.locus} / {entry.name}"
@@ -1062,7 +1066,7 @@ def state_path(vault: Path, char_id: str) -> Path:
 def load_seen(path: Path) -> Seen | None:
     """What was saved, or None when the file is missing or cannot be trusted. Never raises."""
     try:
-        if path.stat().st_size > STATE_MAX:
+        if not path.is_file() or path.stat().st_size > STATE_MAX:
             return None
         with path.open("r", encoding="utf-8", newline="") as f:
             stored = json.loads(f.read(STATE_MAX + 1))

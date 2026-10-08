@@ -166,14 +166,12 @@ def test_the_first_cell_is_never_rewritten_and_links_and_bold_match():
     assert "| [[Rope, Hempen\\|rope]] | 1 | 10 lb | |\n| **Shield** | 1 | 6 lb | |\n" in out
 
 
-def test_duplicate_rows_first_matched_second_is_an_extra_row():
+def test_duplicate_rows_first_matched_second_is_the_gms_and_left_alone():
     text = note("", gear="| Rope, Hempen | 1 | 10 lb | |\n| Rope, Hempen | 1 | 10 lb | |\n")
     c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
-    seen = {"gear": ["rope, hempen"]}
-    assert report(text, c, seen=seen) == [
-        ("SAME", "Equipment / Gear / Rope, Hempen", "matches"),
-        ("REMOVE", "Equipment / Gear / Rope, Hempen", "a second row for an entry already in the note; removed")]
-    assert after(text, c, seen=seen).count("Rope, Hempen") == 1
+    for seen in (None, {"gear": ["rope, hempen"]}):
+        assert report(text, c, seen=seen) == [("SAME", "Equipment / Gear / Rope, Hempen", "matches")]
+        assert after(text, c, seen=seen) == text
 
 
 def test_a_name_whose_safe_form_collides_with_a_row_is_that_row():
@@ -530,11 +528,10 @@ def test_an_always_prepared_spell_row_is_the_gms_when_never_remembered_and_goes_
         ("REMOVE", "Spells / Bless", GONE)]
 
 
-def test_a_second_row_for_an_entry_already_matched_goes_only_when_remembered():
+def test_a_second_row_for_an_entry_already_matched_stays_even_when_remembered():
     text = note("", gear="| Rope, Hempen | 1 | 10 lb | |\n| Rope, Hempen | 1 | 10 lb | |\n")
     c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
-    assert report(text, c) == [("SAME", "Equipment / Gear / Rope, Hempen", "matches")]
-    assert report(text, c, seen={"gear": ["rope, hempen"]})[1][0] == "REMOVE"
+    assert report(text, c, seen={"gear": ["rope, hempen"]}) == [("SAME", "Equipment / Gear / Rope, Hempen", "matches")]
 
 
 def test_a_linked_row_is_remembered_by_its_shown_name_or_its_target():
@@ -543,3 +540,28 @@ def test_a_linked_row_is_remembered_by_its_shown_name_or_its_target():
     assert report(text, c, seen={"gear": ["rope, hempen"]})[0][0] == "REMOVE"
     assert report(text, c, seen={"gear": ["rope"]})[0][0] == "REMOVE"
     assert report(text, c) == []
+
+
+def javelins(second="| Javelin | 7 | 2 lb | stack two |\n"):
+    return note("", gear="| Javelin | 3 | 2 lb | |\n" + second)
+
+
+def test_two_javelin_rows_survive_three_syncs_and_the_second_is_never_touched():
+    c = got(inventory=(("Javelin", 3, 2, False, False, "gear"),))
+    text, seen = javelins(), {"gear": ["javelin"]}
+    for _ in range(3):
+        assert report(text, c, seen=seen) == [("SAME", "Equipment / Gear / Javelin", "matches")]
+        text = after(text, c, seen=seen)
+    assert text == javelins()
+
+
+def test_when_d_and_d_beyond_drops_a_remembered_entry_only_its_first_row_goes():
+    c = got(inventory=())
+    seen = {"gear": ["javelin"]}
+    assert report(javelins(), c, seen=seen) == [("REMOVE", "Equipment / Gear / Javelin", GONE)]
+    assert after(javelins(), c, seen=seen) == note("", gear="| Javelin | 7 | 2 lb | stack two |\n")
+
+
+def test_a_hand_row_beside_a_synced_one_stays_when_d_and_d_beyond_drops_the_entry():
+    text = note("", gear="| Shield | 1 | 6 lb | |\n| shield | 1 | | mine |\n")
+    assert after(text, got(inventory=()), {"gear": ["shield"]}) == note("", gear="| shield | 1 | | mine |\n")
