@@ -10,7 +10,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 from ddb_builder import character  # noqa: E402
-from dnd_ddb import RowEdit, plan_cells, plan_rows, write_edits, write_rows  # noqa: E402
+from dnd_ddb import RowEdit, plan_cells, plan_rows, set_cell, write_edits, write_rows  # noqa: E402
 from dnd_ddb_read import read  # noqa: E402
 
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
@@ -387,3 +387,84 @@ def test_fenced_example_tables_are_not_read():
     text = "## Equipment\n\n" + fenced + "### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n"
     out = after(text, got(inventory=(("Torch", 1, 1, False, False, "gear"),)))
     assert out == text
+
+
+# --- where the lines go: the one path that deletes a user's lines -----------------------------
+
+TORCH = (("Torch", 2, 1, False, False, "gear"),)
+SHIELD = ("Shield", 1, 6, False, False, "gear")
+
+
+def changed(before, after_):
+    """The line numbers (against `before`) of lines that are not the same after."""
+    old, new = before.splitlines(), after_.splitlines()
+    if len(old) == len(new):
+        return [i for i, (a, b) in enumerate(zip(old, new)) if a != b]
+    return None
+
+
+def test_a_stored_gear_table_beside_the_real_one_is_never_touched():
+    stored = "### Gear (stored)\n\n" + GEAR + "| Junk | 1 | 1 lb | |\n| Torch | 9 | | |\n\n"
+    text = "## Equipment\n\n" + stored + "### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n"
+    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    assert out.startswith("## Equipment\n\n" + stored)
+    assert out.endswith("### Gear\n\n" + GEAR + "| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n")
+
+
+def test_a_second_table_under_the_same_gear_heading_is_never_touched():
+    second = "\nNotes on the party's stash:\n\n" + GEAR + "| Junk | 1 | 1 lb | |\n| Torch | 9 | | |\n"
+    text = "## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n" + second
+    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    assert out == ("## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n" + second)
+
+
+def test_a_table_right_above_the_next_heading_with_no_blank_line_keeps_the_heading_where_it_is():
+    text = "## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n## Companions\n\n| X |\n"
+    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    assert out == ("## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n"
+                   "## Companions\n\n| X |\n")
+
+
+def test_an_indented_table_is_read_and_only_its_rows_change():
+    head = "## Equipment\n\n### Gear\n\n  | Item | Qty | Weight | Notes |\n  |---|---|---|---|\n"
+    text = head + "  | Torch | 1 | 1 lb | keep |\n  | Old Rope | 1 | | |\n\nafter\n"
+    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    assert out.startswith(head + "  | Torch | 2 | 1 lb | keep |\n")
+    assert out.endswith("| Shield | 1 | 6 lb | |\n\nafter\n")
+    assert "Old Rope" not in out
+
+
+def test_a_crlf_file_keeps_every_line_ending_through_a_write_a_remove_and_an_add():
+    text = note("", gear="| Torch | 1 | 1 lb | |\r\n| Old Rope | 1 | | |\n".replace("\r\n", "\n"), eol="\r\n")
+    out = after(text, got(inventory=TORCH + (SHIELD,), **NOTHING))
+    assert "\n" not in out.replace("\r\n", "")
+    assert "| Torch | 2 | 1 lb | |\r\n| Shield | 1 | 6 lb | |\r\n" in out
+    assert "Old Rope" not in out
+
+
+def test_a_write_a_remove_and_an_add_in_one_table_in_one_pass():
+    text = note("", gear="| Anvil | 1 | | |\n| Torch | 1 | 1 lb | keep |\n| Old Rope | 1 | | |\n| Lamp | 1 | | |\n")
+    c = got(inventory=TORCH + (SHIELD, ("Lamp", 1, 1, False, False, "gear")), **NOTHING)
+    out = after(text, c)
+    assert out == note("", gear="| Torch | 2 | 1 lb | keep |\n| Lamp | 1 | 1 lb | |\n| Shield | 1 | 6 lb | |\n")
+    assert [r for r in report(text, c) if r[0] in ("WRITE", "REMOVE", "ADD")] == [
+        ("REMOVE", "Equipment / Gear / Anvil", "not on D&D Beyond; removed"),
+        ("WRITE", "Equipment / Gear / Torch / Qty", "1 -> 2"),
+        ("REMOVE", "Equipment / Gear / Old Rope", "not on D&D Beyond; removed"),
+        ("WRITE", "Equipment / Gear / Lamp / Weight", "(blank) -> 1 lb"),
+        ("ADD", "Equipment / Gear / Shield", "not in the note; added")]
+
+
+# --- the template's blank row, and an emptied cell ---------------------------------------------
+
+def test_the_blank_row_goes_only_when_the_table_had_no_real_row():
+    c = got(inventory=TORCH)
+    assert after(note("", gear="| | | | |\n"), c) == note("", gear="| Torch | 2 | 1 lb | |\n")
+    c = got(inventory=(("Rope", 1, 1, False, False, "gear"), SHIELD))
+    kept = after(note("", gear="| Rope | 1 | 1 lb | |\n| | | | |\n"), c)
+    assert kept == note("", gear="| Rope | 1 | 1 lb | |\n| | | | |\n| Shield | 1 | 6 lb | |\n")
+
+
+def test_set_cell_with_an_empty_value_writes_one_space_between_the_pipes():
+    assert set_cell("| a | b | c |", 1, "") == "| a | | c |"
+    assert set_cell("| a | b | c |", 1, "x") == "| a | x | c |"

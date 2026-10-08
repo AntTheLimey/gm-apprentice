@@ -11,7 +11,7 @@ save proficiency, Size, Speed, Hit Dice, skill proficiency, the spellcasting
 ability) and the `**Label:** value` lines (species, class, background,
 alignment, defences, proficiencies), and the lists (features, feats, spells,
 gear, magic items, coins) as table rows that are matched, added, removed or
-kept. Never written here: Weapon Mastery and anything a player tracks in play.
+kept, and the spell slot totals (and a Warlock's Pact row). Never written here: Weapon Mastery and anything a player tracks in play.
 
 Edit statuses: WRITE (the note changes), KEPT (the note is the GM's), SAME.
 Row statuses: ADD, REMOVE, WRITE, KEPT, SAME.
@@ -25,11 +25,12 @@ given, so the line numbers of one are not valid for the other.
 import re
 import sys
 from dataclasses import dataclass
-from typing import Any
 from pathlib import Path
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_rules as dr  # noqa: E402
+import dnd_tables as dt  # noqa: E402
 from dnd_ddb_read import ABILITIES, Character, safe_name  # noqa: E402
 from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES,  # noqa: E402
                       Cell, Note, clean, column, split_cells, to_int)
@@ -460,7 +461,7 @@ def candidates(raw: str) -> tuple[list[str], list[str]]:
 def set_cell(row: str, col: int, new: str) -> str:
     """The row line with cell `col` replaced; every other byte stays."""
     parts = re.split(r"(?<!\\)\|", row)
-    parts[col + 1] = f" {new} "
+    parts[col + 1] = f" {new} " if new else " "
     return "|".join(parts)
 
 
@@ -563,12 +564,14 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry]) -> list[RowEd
     matched: set[str] = set()
     out: list[RowEdit] = []
     blanks: list[int] = []
+    held = False                                      # the table has a row with a name
     for i, cells in table.rows:
         if all(blank(c.strip()) for c in cells):
             blanks.append(i)
             continue
         if key >= len(cells) or blank(clean(cells[key])):
             continue                                  # not a row, and not blank either: left alone
+        held = True
         entry, duplicate = match_row(cells, key, by_key, matched)
         name = clean(cells[key])
         if entry is None:
@@ -615,7 +618,7 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry]) -> list[RowEd
             cells[at] = value_text(col.kind, new_entry.wants.get(col.title))
         adds.append(RowEdit("ADD", f"{spec.locus} / {new_entry.name}", "not in the note; added", table.last,
                             plain_row(cells)))
-    if adds:
+    if adds and not held:
         out.extend(RowEdit("REMOVE", "", "", i, silent=True) for i in blanks)
     return out + adds
 
@@ -686,3 +689,88 @@ def write_rows(text: str, edits: list[RowEdit]) -> str:
         else:
             lines[at] = edit.new + split_eol(lines[at])[1]
     return "".join(lines)
+
+
+# --- spell slots -------------------------------------------------------------------------
+
+SLOT_LOCUS = "Spellcasting / Spell Slots"
+SLOT_ROW = re.compile(r"^(?:level\s+)?([1-9])", re.I)
+SLOT_TOTAL = r"(total|max)$"
+SlotRow = tuple[int, list[str], list[str]]      # line, header, cells
+
+
+def slot_levels(c: Character) -> dict[str, int] | None:
+    """{class name lower: level} when every class is in the free rules, else None."""
+    if not c.classes or not all(dt.known(k.name) for k in c.classes):
+        return None
+    levels: dict[str, int] = {}
+    for k in c.classes:
+        name = k.name.strip().lower()
+        levels[name] = levels.get(name, 0) + k.level
+    return levels
+
+
+def slot_rows(text: str) -> list[SlotRow]:
+    return [(i, h, cells) for i, h, cells in Note(text).table("spellcasting", "spell slots")
+            if 0 <= column(h, SLOT_TOTAL) < len(cells)]
+
+
+def pact_row(rows: list[SlotRow]) -> SlotRow | None:
+    return next((r for r in rows if dr.PACT_ROW.match(clean(r[2][0]))), None)
+
+
+def own_table(c: Character) -> bool:
+    """One class outside the free rules whose data gives its own slot totals."""
+    return len(c.classes) == 1 and bool(c.classes[0].own_slots)
+
+
+def plan_slots(text: str, c: Character) -> list[Edit]:
+    """The Total column of `### Spell Slots`, and the label and total of a `Pact` row.
+    Expended is never touched and no row is added. Nothing is written when a class is outside
+    the free rules and the data does not give its table (see `checks`)."""
+    rows = slot_rows(text)
+    levels = slot_levels(c)
+    pact_at = pact_row(rows)
+    if levels is not None:
+        pact = dt.pact_slots(levels)
+        # A note with no Pact row has the pact slots counted into their spell level.
+        want = dt.numbered_slots(levels) if pact_at or not pact else dt.slots_for(levels)
+    elif own_table(c):
+        want, pact, pact_at = list(c.classes[0].own_slots or []), None, None
+    else:
+        return []
+    out: list[Edit] = []
+    for i, header, cells in rows:
+        m = SLOT_ROW.match(clean(cells[0]))
+        if not m or (pact_at and i == pact_at[0]):
+            continue
+        at, col = int(m.group(1)), column(header, SLOT_TOTAL)
+        total = cells[col].strip()
+        # A level the character has no slots at stays as it is unless the cell holds a number.
+        if want[at - 1] == 0 and not (BARE.match(total) or REASONED.match(total)):
+            continue
+        out.append(judge_number(f"{SLOT_LOCUS} / {dr.ORDINALS[at - 1]}", Cell(i, col, cells[col]), want[at - 1]))
+    if pact_at and pact:
+        i, header, cells = pact_at
+        count, slot_level = pact
+        label, col = f"Pact ({dr.ORDINALS[slot_level - 1]})", column(header, SLOT_TOTAL)
+        old = cells[0].strip()
+        out.append(Edit("SAME", f"{SLOT_LOCUS} / Pact / Level", old) if old == label
+                   else write(f"{SLOT_LOCUS} / Pact / Level", old, Cell(i, 0, cells[0]), label))
+        out.append(judge_number(f"{SLOT_LOCUS} / Pact", Cell(i, col, cells[col]), count))
+    return out
+
+
+def checks(text: str, c: Character, cells: list[Edit], rows: list[RowEdit]) -> list[Edit]:
+    """CHECK rows for what sync cannot settle itself. `cells` and `rows` are the edits the
+    note has had, for the checks that read them."""
+    levels = slot_levels(c)
+    if levels is None:
+        if own_table(c):
+            return []
+        return [Edit("CHECK", SLOT_LOCUS, "the class is outside the free rules; check the slot totals")]
+    table = slot_rows(text)
+    if dt.pact_slots(levels) and table and pact_row(table) is None:
+        return [Edit("CHECK", SLOT_LOCUS, "the note has no Pact row for the Warlock's pact slots; they are "
+                     "counted in the numbered rows; add a Pact row to show them apart")]
+    return []
