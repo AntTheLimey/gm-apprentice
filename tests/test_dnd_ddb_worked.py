@@ -148,7 +148,7 @@ def test_the_template_blank_row_gives_way_to_the_first_attack():
 
 def test_a_changed_cell_is_written_notes_is_never_and_a_missing_attack_goes():
     text = HEAD + "| Longsword | +4 | 1d8+1 slashing | my favourite |\n| Dagger | +2 | 1d4 piercing | |\n"
-    edits = plan_attacks(text, fake(attacks=[SWORD]))
+    edits = plan_attacks(text, fake(attacks=[SWORD]), {"attacks": ["dagger"]})
     assert [e.status for e in edits] == ["WRITE", "WRITE", "REMOVE"]
     assert edits[2].locus == f"{ATTACKS} / Dagger"
     assert write_rows(text, edits) == HEAD + "| Longsword | +6 | 1d8+3 slashing | my favourite |\n"
@@ -162,12 +162,15 @@ def test_an_attack_with_no_damage_leaves_that_cell_alone():
     assert out == HEAD + "| Net | +5 | | |\n"
 
 
-def test_a_hand_kept_row_stays_unless_its_name_matches():
-    text = HEAD + "| Whip (house rule) | +4 | 1d4 | |\n| Longsword (silvered) | +1 | 1d8 | |\n"
-    edits = plan_attacks(text, fake(attacks=[SWORD]))
-    assert [(e.status, e.locus) for e in edits if e.status != "WRITE"] == [("KEPT", f"{ATTACKS} / Whip (house rule)")]
-    out = write_rows(text, edits)
-    assert "| Whip (house rule) | +4 | 1d4 | |" in out and "| Longsword (silvered) | +6 | 1d8+3 slashing | |" in out
+def test_a_hand_added_row_stays_unreported_unless_its_whole_name_matches():
+    text = HEAD + "| Whip | +4 | 1d4 | |\n| Longsword (silvered) | +1 | 1d8 | |\n| Longsword | +1 | 1d8 | |\n"
+    for seen in (None, {"attacks": ["longsword"]}):
+        edits = plan_attacks(text, fake(attacks=[SWORD]), seen)
+        assert [(e.status, e.locus) for e in edits] == [("WRITE", f"{ATTACKS} / Longsword / Atk Bonus / DC"),
+                                                        ("WRITE", f"{ATTACKS} / Longsword / Damage & Type")]
+        out = write_rows(text, edits)
+        assert "| Whip | +4 | 1d4 | |" in out and "| Longsword (silvered) | +1 | 1d8 | |" in out
+        assert "| Longsword | +6 | 1d8+3 slashing | |" in out
 
 
 def test_unsure_attacks_change_nothing_and_say_why():
@@ -214,7 +217,7 @@ def test_rules_check_agrees_with_what_sync_writes():
 def test_the_attacks_table_is_found_under_each_heading_the_page_accepts():
     for heading in ("Weapons & Damage Cantrips", "Weapons and Damage Cantrips", "Attacks", "attacks"):
         text = HEAD.replace("Weapons & Damage Cantrips", heading) + "| Dagger | +2 | 1d4 piercing | |\n"
-        edits = plan_attacks(text, fake(attacks=[SWORD]))
+        edits = plan_attacks(text, fake(attacks=[SWORD]), {"attacks": ["dagger"]})
         assert [e.status for e in edits] == ["REMOVE", "ADD"], heading
         assert edits[1].locus == f"{ATTACKS} / Longsword", heading
         assert write_rows(text, edits).splitlines()[-1] == "| Longsword | +6 | 1d8+3 slashing | |", heading
@@ -222,16 +225,16 @@ def test_the_attacks_table_is_found_under_each_heading_the_page_accepts():
 
 def test_a_note_with_two_of_the_headings_reads_the_first_in_the_page_order():
     text = HEAD + "| Dagger | +2 | 1d4 piercing | |\n\n### Attacks\n\n| Name | Atk Bonus / DC | Damage & Type | Notes |\n|---|---|---|---|\n| Mace | +1 | 1d6 | |\n"
-    out = write_rows(text, plan_attacks(text, fake(attacks=[SWORD])))
+    out = write_rows(text, plan_attacks(text, fake(attacks=[SWORD]), {"attacks": ["dagger", "mace"]}))
     assert "| Mace | +1 | 1d6 | |" in out and "| Dagger |" not in out
 
 
-def test_an_empty_attacks_list_removes_a_hand_written_row_and_keeps_a_reasoned_one():
-    text = HEAD + "| Dagger | +2 | 1d4 piercing | |\n| Whip (house rule) | +4 | 1d4 | |\n"
-    edits = plan_attacks(text, fake(attacks=[]))
-    assert rows(edits) == [("REMOVE", f"{ATTACKS} / Dagger", "not on D&D Beyond; removed"),
-                           ("KEPT", f"{ATTACKS} / Whip (house rule)", "hand-added; kept")]
-    assert write_rows(text, edits) == HEAD + "| Whip (house rule) | +4 | 1d4 | |\n"
+def test_an_empty_attacks_list_removes_a_remembered_row_and_keeps_the_gms_own():
+    text = HEAD + "| Dagger | +2 | 1d4 piercing | |\n| Whip | +4 | 1d4 | |\n"
+    edits = plan_attacks(text, fake(attacks=[]), {"attacks": ["dagger"]})
+    assert rows(edits) == [("REMOVE", f"{ATTACKS} / Dagger", "D&D Beyond no longer has it")]
+    assert write_rows(text, edits) == HEAD + "| Whip | +4 | 1d4 | |\n"
+    assert plan_attacks(text, fake(attacks=[])) == []
     assert plan_attacks(HEAD, fake(attacks=[])) == []
 
 

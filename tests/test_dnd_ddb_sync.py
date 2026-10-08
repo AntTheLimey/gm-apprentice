@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for dnd_ddb.sync_text: one note brought up to date from D&D Beyond's data. No network."""
 
+import dataclasses
 import re
 import socket
 import sys
@@ -13,11 +14,12 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 sys.path.insert(0, str(ROOT / "tests"))
 
 import dnd_builder  # noqa: E402
+import dnd_ddb  # noqa: E402
 import dnd_rules  # noqa: E402
 import dnd_sheet  # noqa: E402
 from ddb_builder import character  # noqa: E402
 from dnd_ddb import sync_text  # noqa: E402
-from dnd_ddb_read import read  # noqa: E402
+from dnd_ddb_read import Worked, read  # noqa: E402
 
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
 SAVES = (("class", "proficiency", "intelligence-saving-throws", None),
@@ -126,23 +128,23 @@ def test_a_unsure_calculator_gives_check_rows_and_no_writes_for_those_cells():
 
 
 def edit(text, rope="Rope, Hempen"):
-    """The hand-edit sequence from the review focus."""
-    text = swap(text, f"| {rope} |", f"| {rope} (gift of the abbot) |")
+    """The hand-edit sequence from the review focus: a row of the GM's own, a synced row deleted, a score with a reason."""
+    text = swap(text, f"| {rope} |", f"| Moon-touched Blade | 1 | | |\n| {rope} |")
     text = swap(text, "| Torch | 3 | 1 lb | |\n", "")
     return swap(text, "| INT | 16 |", "| INT | 18 (tome) |")
 
 
 def test_hand_edits_are_kept_a_deleted_row_returns_and_the_next_sync_is_silent():
     c = wizard()
-    first = sync_text(TEMPLATE, c).text
-    hand = edit(first)
-    second = sync_text(hand, c)
+    first = sync_text(TEMPLATE, c)
+    hand = edit(first.text)
+    second = sync_text(hand, c, first.seen)
     assert ("ADD", "Equipment / Gear / Torch", "not in the note; added") in second.rows
-    assert "| Rope, Hempen (gift of the abbot) | 1 | 10 lb | |" in second.text
+    assert "| Moon-touched Blade | 1 | | |" in second.text
     assert "| INT | 18 (tome) |" in second.text
-    assert not [r for r in second.rows if r[0] in ("REMOVE", "WRITE") and "Rope" in r[1] + r[2]]
+    assert not [r for r in second.rows if "Moon-touched" in r[1] + r[2] or r[0] == "REMOVE"]
     assert any(r[0] == "KEPT" and "INT / Score" in r[1] for r in second.rows)
-    third = sync_text(second.text, c)
+    third = sync_text(second.text, c, second.seen)
     assert [r for r in third.rows if r[0] in NOT_WRITTEN] == []
     assert third.text == second.text
 
@@ -249,3 +251,118 @@ def test_the_spell_slot_expended_cells_keep_their_values_when_the_totals_change(
     before = played(TEMPLATE)
     after = sync_text(before, wizard()).text
     assert [ln for ln in after.splitlines() if ln.startswith(("| 1st", "| 2nd"))] == ["| 1st | 4 | 2 |", "| 2nd | 3 | 1 |"]
+
+
+# --- what sync remembers it added -------------------------------------------------------------
+
+LIST_IDS = {"class features", "species traits", "feats", "spells", "gear", "magic items", "attacks",
+            "resistances", "immunities", "vulnerabilities", "condition immunities", "armor training",
+            "weapons", "tools", "languages"}
+GONE = ("REMOVE", "Equipment / Gear / Torch", "D&D Beyond no longer has it")
+
+
+def without_torch():
+    return wizard(inventory=GEAR[:1])
+
+
+def test_the_report_holds_the_keys_of_what_d_and_d_beyond_gave_for_every_list():
+    report = sync_text(TEMPLATE, wizard())
+    assert set(report.seen) == LIST_IDS
+    assert report.seen["gear"] == ["rope, hempen", "torch"]
+    assert report.seen["spells"] == ["fire bolt"]
+    assert report.seen["class features"] == ["arcane recovery"]
+    assert report.seen["attacks"] == ["unarmed strike"]
+    assert report.seen["species traits"] == [] and report.seen["magic items"] == []
+
+
+def test_an_error_has_no_memory_to_save():
+    assert sync_text(TEMPLATE, {"name": "nobody"}).seen is None
+    assert sync_text("# not a sheet\n", wizard()).seen is None
+
+
+def test_the_second_sync_with_the_returned_memory_has_nothing_to_do():
+    first = sync_text(TEMPLATE, wizard())
+    second = sync_text(first.text, wizard(), first.seen)
+    assert second.rows == [] and second.text == first.text and second.seen == first.seen
+
+
+def test_a_row_sync_added_goes_when_d_and_d_beyond_drops_it_and_not_before():
+    first = sync_text(TEMPLATE, wizard())
+    dropped = sync_text(first.text, without_torch(), first.seen)
+    assert GONE in dropped.rows and "| Torch |" not in dropped.text
+    assert dropped.seen["gear"] == ["rope, hempen"]
+    assert not [r for r in sync_text(first.text, without_torch()).rows if r[0] == "REMOVE"]    # no memory: kept
+
+
+def test_a_row_with_a_bracketed_name_that_sync_added_is_removed_when_dropped():
+    with_item = wizard(inventory=GEAR + (("Potion of Healing (Greater)", 1, 1, False, False, "gear"),))
+    first = sync_text(TEMPLATE, with_item)
+    assert "| Potion of Healing (Greater) | 1 |" in first.text
+    dropped = sync_text(first.text, wizard(), first.seen)
+    assert "Potion of Healing" not in dropped.text
+    assert ("REMOVE", "Equipment / Gear / Potion of Healing (Greater)", "D&D Beyond no longer has it") in dropped.rows
+
+
+def test_a_hand_added_row_survives_every_sync_and_is_never_mentioned():
+    first = sync_text(TEMPLATE, wizard())
+    hand = swap(first.text, "| Torch | 3 | 1 lb | |\n", "| Torch | 3 | 1 lb | |\n| Moon-touched Blade | 1 | | |\n")
+    seen = first.seen
+    for _ in range(3):
+        again = sync_text(hand, without_torch(), seen)
+        assert "| Moon-touched Blade | 1 | | |" in again.text
+        assert not [r for r in again.rows if "Moon-touched" in r[1]]
+        seen = again.seen
+    assert "moon-touched blade" not in seen["gear"]
+
+
+def test_a_hand_added_row_d_and_d_beyond_later_gains_is_updated_and_then_remembered():
+    first = sync_text(TEMPLATE, wizard())
+    hand = swap(first.text, "| Torch | 3 | 1 lb | |\n", "| Torch | 3 | 1 lb | |\n| Moon Lamp | 5 | | |\n")
+    gains = wizard(inventory=GEAR + (("Moon Lamp", 1, 2, False, False, "gear"),))
+    gained = sync_text(hand, gains, first.seen)
+    assert "| Moon Lamp | 1 | 2 lb | |" in gained.text and "moon lamp" in gained.seen["gear"]
+    lost = sync_text(gained.text, wizard(), gained.seen)
+    assert ("REMOVE", "Equipment / Gear / Moon Lamp", "D&D Beyond no longer has it") in lost.rows
+
+
+def test_a_row_the_gm_deleted_comes_back_even_with_a_memory():
+    first = sync_text(TEMPLATE, wizard())
+    hand = swap(first.text, "| Torch | 3 | 1 lb | |\n", "")
+    assert ("ADD", "Equipment / Gear / Torch", "not in the note; added") in sync_text(hand, wizard(), first.seen).rows
+
+
+def test_a_lost_memory_removes_nothing_says_nothing_and_comes_back_complete():
+    first = sync_text(TEMPLATE, wizard())
+    lost = sync_text(first.text, without_torch(), None)
+    assert not [r for r in lost.rows if r[0] == "REMOVE"] and "| Torch | 3 |" in lost.text
+    assert lost.seen["gear"] == ["rope, hempen"]
+    assert "REMOVE" not in statuses(sync_text(first.text, without_torch(), {}))
+
+
+def line_of(text, label):
+    return next(ln for ln in text.splitlines() if ln.startswith(f"**{label}:**"))
+
+
+def test_a_labelled_line_drops_a_remembered_entry_and_keeps_the_gms_own():
+    fire = wizard(modifiers=(("race", "resistance", "fire", None), ("race", "resistance", "cold", None)))
+    first = sync_text(TEMPLATE, fire)
+    assert line_of(first.text, "Resistances") == "**Resistances:** Fire, Cold" and first.seen["resistances"] == ["cold", "fire"]
+    hand = swap(first.text, "**Resistances:** Fire, Cold", "**Resistances:** Fire, Cold, Psychic (cloak), Thunder")
+    only_fire = wizard(modifiers=(("race", "resistance", "fire", None),))
+    kept = sync_text(hand, only_fire)                     # no memory: nothing dropped
+    assert line_of(kept.text, "Resistances") == "**Resistances:** Fire, Cold, Psychic (cloak), Thunder"
+    dropped = sync_text(hand, only_fire, first.seen)
+    assert line_of(dropped.text, "Resistances") == "**Resistances:** Fire, Psychic (cloak), Thunder"
+    assert dropped.seen["resistances"] == ["fire"]
+    assert sync_text(dropped.text, only_fire, dropped.seen).rows == []
+
+
+def test_unsure_attacks_carry_the_earlier_attack_memory_forward(monkeypatch):
+    first = sync_text(TEMPLATE, wizard())
+    real = dnd_ddb.read
+    monkeypatch.setattr(dnd_ddb, "read", lambda data: dataclasses.replace(
+        real(data), attacks=Worked(None, "", "a weapon has no damage in the data")))
+    unsure = sync_text(first.text, wizard(), first.seen)
+    assert any(r[0] == "CHECK" and "Weapons" in r[1] for r in unsure.rows)
+    assert unsure.seen["attacks"] == first.seen["attacks"] == ["unarmed strike"]
+    assert "attacks" not in sync_text(first.text, wizard()).seen

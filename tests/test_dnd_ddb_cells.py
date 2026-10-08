@@ -22,12 +22,12 @@ def got(**kw):
     return read(character(**kw))
 
 
-def edits(text, c=None):
-    return {e.locus: e for e in plan_cells(text, c or got())}
+def edits(text, c=None, seen=None):
+    return {e.locus: e for e in plan_cells(text, c or got(), seen)}
 
 
-def one(text, locus, c=None):
-    return edits(text, c)[locus]
+def one(text, locus, c=None, seen=None):
+    return edits(text, c, seen)[locus]
 
 
 def written(text, c=None):
@@ -308,13 +308,22 @@ def test_defence_lines():
     assert "**Advantages:** {list}" in written(TEMPLATE, c)
 
 
-def test_a_reasoned_entry_stays_in_the_line_after_the_new_names():
+def test_an_entry_the_gm_added_stays_in_the_line_after_the_new_names():
     text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire, Cold (ring of warmth)")
     c = got(modifiers=(("race", "resistance", "poison", None),))
     e = one(text, "Stat Sheet / Defences / Resistances", c)
     assert e.status == "WRITE"
-    assert e.message == "Fire, Cold (ring of warmth) -> Poison, Cold (ring of warmth)"
-    assert "**Resistances:** Poison, Cold (ring of warmth)\n" in write_edits(text, [e])
+    assert e.message == "Fire, Cold (ring of warmth) -> Poison, Fire, Cold (ring of warmth)"
+    assert "**Resistances:** Poison, Fire, Cold (ring of warmth)\n" in write_edits(text, [e])
+
+
+def test_a_remembered_entry_is_dropped_from_the_line_and_the_gms_own_stays():
+    text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire, Cold (ring of warmth), Radiant")
+    c = got(modifiers=(("race", "resistance", "poison", None),))
+    e = one(text, "Stat Sheet / Defences / Resistances", c, {"resistances": ["fire"]})
+    assert e.new == "**Resistances:** Poison, Cold (ring of warmth), Radiant"
+    assert one(text, "Stat Sheet / Defences / Resistances", c, {"immunities": ["fire"]}).new == \
+        "**Resistances:** Poison, Fire, Cold (ring of warmth), Radiant"
 
 
 def test_a_list_line_is_same_when_the_result_equals_the_old():
@@ -326,20 +335,25 @@ def test_a_list_line_is_same_when_the_result_equals_the_old():
 def test_commas_inside_brackets_do_not_split_an_entry():
     text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Cold (ring, worn), Fire")
     c = got(modifiers=(("race", "resistance", "poison", None),))
-    e = one(text, "Stat Sheet / Defences / Resistances", c)
+    e = one(text, "Stat Sheet / Defences / Resistances", c, {"resistances": ["fire"]})
     assert e.new == "**Resistances:** Poison, Cold (ring, worn)"
 
 
-def test_a_kept_entry_is_not_repeated_by_the_same_name_from_d_and_d_beyond():
+def test_an_entry_is_d_and_d_beyonds_only_by_its_whole_name():
     text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire (ring)")
     c = got(modifiers=(("race", "resistance", "fire", None),))
-    assert one(text, "Stat Sheet / Defences / Resistances", c).status == "SAME"
+    e = one(text, "Stat Sheet / Defences / Resistances", c)
+    assert e.new == "**Resistances:** Fire, Fire (ring)"
+    assert one(swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** fire"),
+               "Stat Sheet / Defences / Resistances", c).new == "**Resistances:** Fire"
 
 
-def test_all_gone_gives_a_dash():
+def test_all_gone_gives_a_dash_and_a_dash_is_not_an_entry():
     text = swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** Fire")
-    e = one(text, "Stat Sheet / Defences / Resistances")
+    e = one(text, "Stat Sheet / Defences / Resistances", seen={"resistances": ["fire"]})
     assert e.new == "**Resistances:** —"
+    assert one(swap(TEMPLATE, "**Resistances:** {list}", "**Resistances:** —"),
+               "Stat Sheet / Defences / Resistances").status == "SAME"
 
 
 def test_proficiency_lines():

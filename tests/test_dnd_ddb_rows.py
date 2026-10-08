@@ -42,16 +42,17 @@ def note(features="", spells=None, gear=None, magic=None, coins=None, eol="\n"):
     return out.replace("\n", eol)
 
 
-def report(text, c=None, coins=False):
+def report(text, c=None, coins=False, seen=None):
     """The report rows; the default character's coins are left out unless a test is about them."""
-    return [(e.status, e.locus, e.message) for e in plan_rows(text, c or got())
+    return [(e.status, e.locus, e.message) for e in plan_rows(text, c or got(), seen=seen)
             if not e.silent and (coins or not e.locus.startswith("Equipment / Coins"))]
 
 
-def after(text, c=None):
-    return write_rows(text, plan_rows(text, c or got()))
+def after(text, c=None, seen=None):
+    return write_rows(text, plan_rows(text, c or got(), seen=seen))
 
 
+GONE = "D&D Beyond no longer has it"
 FEATS = dict(class_features=(("Second Wind", 3, 1), ("Arcane Recovery", 1, 2)))
 NOTHING = dict(class_features=())
 
@@ -80,8 +81,8 @@ def test_feature_uses_and_recovers_with_a_reason_are_kept():
 def test_feature_with_no_uses_on_d_and_d_beyond_leaves_the_cells_alone():
     text = note("| Darkvision | | 2 | | Dawn | |\n")
     c = got(class_features=(), racial_traits=(("Darkvision", None, None),))
-    assert [r for r in report(text, c) if r[1].startswith("Class")] == [
-        ("REMOVE", "Class Features / Darkvision", "not on D&D Beyond; removed")]
+    assert [r for r in report(text, c, seen={"class features": ["darkvision"]}) if r[1].startswith("Class")] == [
+        ("REMOVE", "Class Features / Darkvision", GONE)]
 
 
 def test_species_traits_and_feats_use_their_own_tables():
@@ -129,29 +130,31 @@ def test_a_placeholder_row_is_blank_too_but_a_row_with_other_content_is_not_remo
 
 # --- matching ------------------------------------------------------------------------------
 
-def test_extra_row_is_removed_and_a_reasoned_one_kept():
+def test_extra_row_is_removed_when_remembered_and_a_hand_added_one_stays():
     text = note("| Second Wind | | 3 | | Short Rest | |\n| Old Trick | | | | | |\n"
-                "| Moon-touched Blade (gift of the abbot) | | | | | |\n")
+                "| Moon-touched Blade | | | | | |\n")
     c = got(class_features=(("Second Wind", 3, 1),))
-    assert report(text, c) == [
+    assert report(text, c, seen={"class features": ["old trick", "second wind"]}) == [
         ("SAME", "Class Features / Second Wind", "matches"),
-        ("REMOVE", "Class Features / Old Trick", "not on D&D Beyond; removed"),
-        ("KEPT", "Class Features / Moon-touched Blade (gift of the abbot)", "hand-added; kept")]
-    assert after(text, c) == text.replace("| Old Trick | | | | | |\n", "")
+        ("REMOVE", "Class Features / Old Trick", GONE)]
+    assert after(text, c, seen={"class features": ["old trick"]}) == text.replace("| Old Trick | | | | | |\n", "")
 
 
-def test_whole_name_with_brackets_matches_before_the_bracket_is_read_as_a_reason():
+def test_the_whole_name_is_what_matches_a_potion_with_brackets_is_not_its_plain_name():
     text = note("", gear="| Potion of Healing (Greater) | 1 | 1 lb | |\n| Potion of Healing | 1 | 1 lb | |\n")
     c = got(inventory=(("Potion of Healing (Greater)", 1, 1, False, False, "gear"),))
-    assert report(text, c) == [
+    assert report(text, c) == [("SAME", "Equipment / Gear / Potion of Healing (Greater)", "matches")]
+    assert report(text, c, seen={"gear": ["potion of healing"]}) == [
         ("SAME", "Equipment / Gear / Potion of Healing (Greater)", "matches"),
-        ("REMOVE", "Equipment / Gear / Potion of Healing", "not on D&D Beyond; removed")]
+        ("REMOVE", "Equipment / Gear / Potion of Healing", GONE)]
 
 
-def test_a_trailing_reason_is_stripped_when_the_whole_name_is_not_on_d_and_d_beyond():
+def test_a_row_with_a_trailing_bracket_is_not_the_entry_without_it():
     text = note("", gear="| Rope, Hempen (spare) | 1 | 10 lb | |\n")
     c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
-    assert report(text, c) == [("SAME", "Equipment / Gear / Rope, Hempen", "matches")]
+    assert report(text, c) == [("ADD", "Equipment / Gear / Rope, Hempen", "not in the note; added")]
+    out = after(text, c)
+    assert "| Rope, Hempen (spare) | 1 | 10 lb | |\n| Rope, Hempen | 1 | 10 lb | |\n" in out
 
 
 def test_the_first_cell_is_never_rewritten_and_links_and_bold_match():
@@ -166,9 +169,11 @@ def test_the_first_cell_is_never_rewritten_and_links_and_bold_match():
 def test_duplicate_rows_first_matched_second_is_an_extra_row():
     text = note("", gear="| Rope, Hempen | 1 | 10 lb | |\n| Rope, Hempen | 1 | 10 lb | |\n")
     c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
-    assert report(text, c) == [("SAME", "Equipment / Gear / Rope, Hempen", "matches"),
-                               ("REMOVE", "Equipment / Gear / Rope, Hempen", "not on D&D Beyond; removed")]
-    assert after(text, c).count("Rope, Hempen") == 1
+    seen = {"gear": ["rope, hempen"]}
+    assert report(text, c, seen=seen) == [
+        ("SAME", "Equipment / Gear / Rope, Hempen", "matches"),
+        ("REMOVE", "Equipment / Gear / Rope, Hempen", "a second row for an entry already in the note; removed")]
+    assert after(text, c, seen=seen).count("Rope, Hempen") == 1
 
 
 def test_a_name_whose_safe_form_collides_with_a_row_is_that_row():
@@ -193,10 +198,11 @@ def test_gear_table_with_no_weight_column_still_matches_adds_and_removes():
     text = ("## Equipment\n\n### Gear\n\n| Item | Qty | Notes |\n|---|---|---|\n"
             "| Rope, Hempen | 3 | long |\n| Old Sack | 1 | |\n")
     c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"), ("Shield", 1, 6, False, False, "gear")))
-    assert report(text, c) == [("WRITE", "Equipment / Gear / Rope, Hempen / Qty", "3 -> 1"),
-                               ("REMOVE", "Equipment / Gear / Old Sack", "not on D&D Beyond; removed"),
-                               ("ADD", "Equipment / Gear / Shield", "not in the note; added")]
-    assert after(text, c) == ("## Equipment\n\n### Gear\n\n| Item | Qty | Notes |\n|---|---|---|\n"
+    seen = {"gear": ["old sack"]}
+    assert report(text, c, seen=seen) == [("WRITE", "Equipment / Gear / Rope, Hempen / Qty", "3 -> 1"),
+                                          ("REMOVE", "Equipment / Gear / Old Sack", GONE),
+                                          ("ADD", "Equipment / Gear / Shield", "not in the note; added")]
+    assert after(text, c, seen=seen) == ("## Equipment\n\n### Gear\n\n| Item | Qty | Notes |\n|---|---|---|\n"
                               "| Rope, Hempen | 1 | long |\n| Shield | 1 | |\n")
 
 
@@ -261,12 +267,13 @@ def test_spell_tags_sync_owns_only_c_r_and_always_prepared():
     assert report(text, plain)[0][0] == "KEPT"
 
 
-def test_always_prepared_row_d_and_d_beyond_does_not_list_is_kept():
+def test_a_hand_entered_always_prepared_row_stays_and_a_remembered_one_goes():
     text = note("", spells="| Bless | 1st | | | | | | Always prepared | | |\n| Dud | 1st | | | | | | C | | |\n")
-    rows = report(text, got(spells=SPELL_ARGS[:1]))
-    assert ("KEPT", "Spells / Bless", "always prepared; D&D Beyond does not list these; kept") in rows
-    assert ("REMOVE", "Spells / Dud", "not on D&D Beyond; removed") in rows
-    assert "Bless" in after(text, got(spells=SPELL_ARGS[:1])) and "Dud" not in after(text, got(spells=SPELL_ARGS[:1]))
+    c, seen = got(spells=SPELL_ARGS[:1]), {"spells": ["dud"]}
+    rows = report(text, c, seen=seen)
+    assert not [r for r in rows if "Bless" in r[1]]
+    assert ("REMOVE", "Spells / Dud", GONE) in rows
+    assert "Bless" in after(text, c, seen=seen) and "Dud" not in after(text, c, seen=seen)
 
 
 def test_spells_table_with_the_source_column_missing_is_still_read():
@@ -393,12 +400,13 @@ def test_fenced_example_tables_are_not_read():
 
 TORCH = (("Torch", 2, 1, False, False, "gear"),)
 SHIELD = ("Shield", 1, 6, False, False, "gear")
+OLD_ROPE = {"gear": ["old rope", "torch"]}
 
 
 def test_a_stored_gear_table_beside_the_real_one_is_never_touched():
     stored = "### Gear (stored)\n\n" + GEAR + "| Junk | 1 | 1 lb | |\n| Torch | 9 | | |\n\n"
     text = "## Equipment\n\n" + stored + "### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n"
-    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    out = after(text, got(inventory=TORCH + (SHIELD,)), OLD_ROPE)
     assert out.startswith("## Equipment\n\n" + stored)
     assert out.endswith("### Gear\n\n" + GEAR + "| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n")
 
@@ -406,13 +414,13 @@ def test_a_stored_gear_table_beside_the_real_one_is_never_touched():
 def test_a_second_table_under_the_same_gear_heading_is_never_touched():
     second = "\nNotes on the party's stash:\n\n" + GEAR + "| Junk | 1 | 1 lb | |\n| Torch | 9 | | |\n"
     text = "## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n" + second
-    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    out = after(text, got(inventory=TORCH + (SHIELD,)), OLD_ROPE)
     assert out == ("## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n" + second)
 
 
 def test_a_table_right_above_the_next_heading_with_no_blank_line_keeps_the_heading_where_it_is():
     text = "## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n## Companions\n\n| X |\n"
-    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    out = after(text, got(inventory=TORCH + (SHIELD,)), OLD_ROPE)
     assert out == ("## Equipment\n\n### Gear\n\n" + GEAR + "| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n"
                    "## Companions\n\n| X |\n")
 
@@ -420,25 +428,26 @@ def test_a_table_right_above_the_next_heading_with_no_blank_line_keeps_the_headi
 def test_an_indented_table_is_read_and_only_its_rows_change():
     head = "## Equipment\n\n### Gear\n\n  | Item | Qty | Weight | Notes |\n  |---|---|---|---|\n"
     text = head + "  | Torch | 1 | 1 lb | keep |\n  | Old Rope | 1 | | |\n\nafter\n"
-    out = after(text, got(inventory=TORCH + (SHIELD,)))
+    out = after(text, got(inventory=TORCH + (SHIELD,)), OLD_ROPE)
     assert out == head + "  | Torch | 2 | 1 lb | keep |\n  | Shield | 1 | 6 lb | |\n\nafter\n"
 
 
 def test_a_crlf_file_keeps_every_line_ending_through_a_write_a_remove_and_an_add():
     text = note("", gear="| Torch | 1 | 1 lb | |\n| Old Rope | 1 | | |\n", eol="\r\n")
-    out = after(text, got(inventory=TORCH + (SHIELD,), **NOTHING))
+    out = after(text, got(inventory=TORCH + (SHIELD,), **NOTHING), OLD_ROPE)
     assert out == note("", gear="| Torch | 2 | 1 lb | |\n| Shield | 1 | 6 lb | |\n", eol="\r\n")
 
 
 def test_a_write_a_remove_and_an_add_in_one_table_in_one_pass():
     text = note("", gear="| Anvil | 1 | | |\n| Torch | 1 | 1 lb | keep |\n| Old Rope | 1 | | |\n| Lamp | 1 | | |\n")
     c = got(inventory=TORCH + (SHIELD, ("Lamp", 1, 1, False, False, "gear")), **NOTHING)
-    out = after(text, c)
+    seen = {"gear": ["anvil", "old rope", "lamp"]}
+    out = after(text, c, seen)
     assert out == note("", gear="| Torch | 2 | 1 lb | keep |\n| Lamp | 1 | 1 lb | |\n| Shield | 1 | 6 lb | |\n")
-    assert [r for r in report(text, c) if r[0] in ("WRITE", "REMOVE", "ADD")] == [
-        ("REMOVE", "Equipment / Gear / Anvil", "not on D&D Beyond; removed"),
+    assert [r for r in report(text, c, seen=seen) if r[0] in ("WRITE", "REMOVE", "ADD")] == [
+        ("REMOVE", "Equipment / Gear / Anvil", GONE),
         ("WRITE", "Equipment / Gear / Torch / Qty", "1 -> 2"),
-        ("REMOVE", "Equipment / Gear / Old Rope", "not on D&D Beyond; removed"),
+        ("REMOVE", "Equipment / Gear / Old Rope", GONE),
         ("WRITE", "Equipment / Gear / Lamp / Weight", "(blank) -> 1 lb"),
         ("ADD", "Equipment / Gear / Shield", "not in the note; added")]
 
@@ -456,3 +465,81 @@ def test_the_blank_row_goes_only_when_the_table_had_no_real_row():
 def test_set_cell_with_an_empty_value_writes_one_space_between_the_pipes():
     assert set_cell("| a | b | c |", 1, "") == "| a | | c |"
     assert set_cell("| a | b | c |", 1, "x") == "| a | x | c |"
+
+
+# --- sync removes only what it remembers adding ----------------------------------------------
+
+def test_a_first_sync_removes_nothing_and_says_nothing_about_rows_it_does_not_know():
+    text = note("| Second Wind | | 3 | | Short Rest | |\n| Old Trick | | | | | |\n| Thing (gift) | | | | | |\n")
+    c = got(class_features=(("Second Wind", 3, 1),))
+    assert report(text, c) == [("SAME", "Class Features / Second Wind", "matches")]
+    assert after(text, c) == text
+
+
+def test_a_remembered_row_is_removed_when_d_and_d_beyond_drops_it():
+    text = note("| Second Wind | | 3 | | Short Rest | |\n| Old Trick | | | | | |\n")
+    c = got(class_features=(("Second Wind", 3, 1),))
+    seen = {"class features": ["old trick", "second wind"]}
+    assert report(text, c, seen=seen) == [("SAME", "Class Features / Second Wind", "matches"),
+                                          ("REMOVE", "Class Features / Old Trick", GONE)]
+    assert after(text, c, seen=seen) == text.replace("| Old Trick | | | | | |\n", "")
+
+
+def test_a_remembered_row_named_with_brackets_is_removed_too():
+    text = note("", gear="| Potion of Healing (Greater) | 1 | 1 lb | |\n| Thing (gift) | 1 | | |\n")
+    seen = {"gear": ["potion of healing (greater)", "thing (gift)"]}
+    c = got(inventory=())
+    assert report(text, c, seen=seen) == [("REMOVE", "Equipment / Gear / Potion of Healing (Greater)", GONE),
+                                          ("REMOVE", "Equipment / Gear / Thing (gift)", GONE)]
+
+
+def test_a_hand_added_row_stays_byte_for_byte_and_is_never_reported():
+    text = note("| Moon-touched Blade | | | | | |\n| Second Wind | | 3 | | Short Rest | |\n")
+    c = got(class_features=(("Second Wind", 3, 1),))
+    for seen in (None, {}, {"class features": ["second wind"]}, {"gear": ["moon-touched blade"]}):
+        assert report(text, c, seen=seen) == [("SAME", "Class Features / Second Wind", "matches")]
+        assert after(text, c, seen=seen) == text
+
+
+def test_a_row_is_remembered_by_the_list_it_was_in_not_by_its_name_alone():
+    text = note("| Torch | | | | | |\n")
+    c = got(class_features=())
+    assert report(text, c, seen={"gear": ["torch"]}) == []
+    assert report(text, c, seen={"class features": ["torch"]}) == [("REMOVE", "Class Features / Torch", GONE)]
+
+
+def test_a_hand_added_row_d_and_d_beyond_later_gains_is_matched_and_updated():
+    text = note("", gear="| Moon Lamp | 5 | | |\n")
+    c = got(inventory=(("Moon Lamp", 1, 2, False, False, "gear"),))
+    assert [r[0] for r in report(text, c)] == ["WRITE", "WRITE"]
+    assert "| Moon Lamp | 1 | 2 lb | |\n" in after(text, c)
+
+
+def test_a_row_the_gm_deleted_by_hand_comes_back_while_d_and_d_beyond_has_it():
+    c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
+    seen = {"gear": ["rope, hempen"]}
+    assert report(note("", gear=""), c, seen=seen) == [("ADD", "Equipment / Gear / Rope, Hempen", "not in the note; added")]
+
+
+def test_an_always_prepared_spell_row_is_the_gms_when_never_remembered_and_goes_when_remembered():
+    text = note("", spells="| Bless | 1st | | | | | | Always prepared | | |\n")
+    c = got(spells=SPELL_ARGS[:1])
+    assert ("KEPT", "Spells / Bless", "always prepared; D&D Beyond does not list these; kept") not in report(text, c)
+    assert not [r for r in report(text, c) if "Bless" in r[1]]
+    assert [r for r in report(text, c, seen={"spells": ["bless"]}) if "Bless" in r[1]] == [
+        ("REMOVE", "Spells / Bless", GONE)]
+
+
+def test_a_second_row_for_an_entry_already_matched_goes_only_when_remembered():
+    text = note("", gear="| Rope, Hempen | 1 | 10 lb | |\n| Rope, Hempen | 1 | 10 lb | |\n")
+    c = got(inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
+    assert report(text, c) == [("SAME", "Equipment / Gear / Rope, Hempen", "matches")]
+    assert report(text, c, seen={"gear": ["rope, hempen"]})[1][0] == "REMOVE"
+
+
+def test_a_linked_row_is_remembered_by_its_shown_name_or_its_target():
+    text = note("", gear="| [[Rope, Hempen\\|rope]] | 1 | 10 lb | |\n")
+    c = got(inventory=())
+    assert report(text, c, seen={"gear": ["rope, hempen"]})[0][0] == "REMOVE"
+    assert report(text, c, seen={"gear": ["rope"]})[0][0] == "REMOVE"
+    assert report(text, c) == []

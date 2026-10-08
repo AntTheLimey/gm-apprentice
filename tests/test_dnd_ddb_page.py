@@ -23,7 +23,7 @@ BUILD_LIB = ROOT / "tools" / "publish" / "lib" / "build"
 NODE = shutil.which("node")
 needs_node = pytest.mark.skipif(NODE is None, reason="node is not installed")
 BUILD_JS = "require(process.argv[1]).build({configPath: process.argv[2]})"
-HAND_ROW = "| Moon-touched Blade (gift of the abbot) | 1 | | |"
+HAND_ROW = "| Moon-touched Blade | 1 | | |"
 SPELLS = (("Fire Bolt", 0, True, False, False, False, (1, 2), "Wizard"),
           ("Shield", 1, True, False, False, False, (1, 2), "Wizard"),
           ("Fireball", 3, True, False, False, False, (1, 2), "Wizard"))
@@ -67,13 +67,15 @@ def warnings(output):
 def site(tmp_path_factory):
     if NODE is None:
         pytest.skip("node is not installed")
-    synced = sync_text(TEMPLATE, wizard_five()).text
+    first = sync_text(TEMPLATE, wizard_five())
+    synced = first.text
     assert "| Torch | 3 | 1 lb | |" in synced
     note = synced.replace("| Torch | 3 | 1 lb | |", "| Torch | 3 | 1 lb | |\n" + HAND_ROW, 1)
-    again = sync_text(note, wizard_five())
-    assert HAND_ROW in again.text and ("KEPT", "Equipment / Gear / Moon-touched Blade (gift of the abbot)", "hand-added; kept") in again.rows
-    output, pages = build_site(tmp_path_factory.mktemp("page"), {"Tavin_Reedmere.md": note})
-    return output, pages["tavin-reedmere"], note
+    once = sync_text(note, wizard_five(), first.seen)
+    twice = sync_text(once.text, wizard_five(), once.seen)
+    assert HAND_ROW in twice.text and not [r for r in twice.rows + once.rows if "Moon-touched" in r[1]]
+    output, pages = build_site(tmp_path_factory.mktemp("page"), {"Tavin_Reedmere.md": twice.text})
+    return output, pages["tavin-reedmere"], twice.text
 
 
 @needs_node
@@ -109,15 +111,8 @@ def test_the_build_names_no_warning_for_the_synced_pc(site):
 
 
 @needs_node
-def test_the_hand_added_row_is_on_the_page_by_its_name(site):
-    _, html, _ = site
-    assert '<span class="dnd5e-entry-name">Moon-touched Blade' in html
-
-
-@needs_node
-@pytest.mark.xfail(strict=True, reason="the page shows a bracketed reason as part of the name: "
-                   "'Moon-touched Blade (gift of the abbot)'; the hand-kept marker needs another home")
-def test_the_hand_added_row_is_shown_without_its_bracketed_reason(site):
-    _, html, _ = site
+def test_the_hand_added_row_is_on_the_page_by_its_plain_name_after_two_syncs(site):
+    _, html, text = site
+    assert HAND_ROW in text
     assert '<span class="dnd5e-entry-name">Moon-touched Blade</span>' in html
     assert "gift of the abbot" not in html

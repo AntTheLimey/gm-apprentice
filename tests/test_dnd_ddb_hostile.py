@@ -179,25 +179,22 @@ def test_a_name_that_is_only_brackets_is_a_row_and_a_second_sync_is_quiet():
     assert second.rows == [] and second.text == first.text
 
 
-def test_a_data_name_with_a_bracket_reason_does_not_make_its_own_row_hand_kept():
-    """Sync writes `Thing (gift)` from D&D Beyond's data. Dropped from the data later, the row is
-    sync's own and goes. (Today it is kept as hand-added: see the xfail.)"""
+def test_a_data_name_with_a_bracket_reason_is_synced_and_removed_like_any_other():
+    """Sync writes `Thing (gift)` from D&D Beyond's data; dropped from the data later, the row is
+    sync's own and goes."""
     with_item = character(**field_kwargs("item", "Thing (gift)"))
     first = sync_text(TEMPLATE, with_item)
     assert "| Thing (gift) | 1 |" in first.text
-    assert sync_text(first.text, with_item).rows == []                # the row is stable across syncs
-    dropped = sync_text(first.text, character(**field_kwargs("item", HARMLESS)))
-    assert "Thing (gift)" in dropped.text                             # pins today's result, whatever the xfail says
-    assert [r for r in dropped.rows if "Thing (gift)" in r[1]] == [("KEPT", "Equipment / Gear / Thing (gift)", "hand-added; kept")]
-
-
-@pytest.mark.xfail(strict=True, reason="a row sync wrote from D&D Beyond data with a bracketed name is kept as "
-                   "hand-added forever once the item is dropped")
-def test_an_item_named_with_a_bracket_reason_is_removed_when_dropped_from_the_data():
-    first = sync_text(TEMPLATE, character(**field_kwargs("item", "Thing (gift)")))
-    dropped = sync_text(first.text, character(**field_kwargs("item", HARMLESS)))
+    assert sync_text(first.text, with_item, first.seen).rows == []     # the row is stable across syncs
+    dropped = sync_text(first.text, character(**field_kwargs("item", HARMLESS)), first.seen)
     assert "Thing (gift)" not in dropped.text
-    assert ("REMOVE", "Equipment / Gear / Thing (gift)", "not on D&D Beyond; removed") in dropped.rows
+    assert ("REMOVE", "Equipment / Gear / Thing (gift)", "D&D Beyond no longer has it") in dropped.rows
+
+
+def test_a_bracketed_row_is_kept_when_the_memory_is_lost():
+    first = sync_text(TEMPLATE, character(**field_kwargs("item", "Thing (gift)")))
+    kept = sync_text(first.text, character(**field_kwargs("item", HARMLESS)))
+    assert "Thing (gift)" in kept.text and not [r for r in kept.rows if "Thing (gift)" in r[1]]
 
 
 WORST = ["x | y\n## GM Notes\n<!-- gm-only -->LEAKWORD<!-- /gm-only --> %% [[Secret]] </td>{{ `**`",

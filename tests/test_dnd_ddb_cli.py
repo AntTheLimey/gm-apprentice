@@ -456,10 +456,10 @@ def test_one_note_failing_does_not_stop_or_unwrite_the_others(tmp_path, capsys, 
         (root / "Characters" / f"{name}.md").write_text(note().replace("Medium", f"Medium {name}"), encoding="utf-8")
     real = dnd_ddb.plan_cells
 
-    def planner(text, c):
+    def planner(text, c, seen=None):
         if "Medium Briar" in text:
             raise KeyError("boom")
-        return real(text, c)
+        return real(text, c, seen)
     monkeypatch.setattr(dnd_ddb, "plan_cells", planner)
     before = (root / "Characters" / "Briar.md").read_bytes()
     assert main(["--party", str(root), "--write"]) == 0
@@ -481,19 +481,19 @@ def test_rows_are_printed_as_each_note_finishes(tmp_path, capsys, fake, monkeypa
     seen = []
     real = dnd_ddb.guarded_sync
 
-    def spy(text):
+    def spy(text, vault=None):
         seen.append(capsys.readouterr().out)
-        return real(text)
+        return real(text, vault)
     monkeypatch.setattr(dnd_ddb, "guarded_sync", spy)
     main(["--party", str(root)])
     assert seen[0] == "" and "Alder: " in seen[1]
 
 
 def test_a_single_sheet_that_fails_unexpectedly_is_an_error_row_not_a_traceback(tmp_path, capsys, fake, monkeypatch):
-    def planner(text, c):
+    def planner(text, c, seen=None):
         raise KeyError("boom")
     monkeypatch.setattr(dnd_ddb, "plan_cells", planner)
-    path = sheet(tmp_path)
+    path = sheet(vault(tmp_path) / "Characters")
     before = path.read_bytes()
     assert main([str(path), "--write"]) == 0
     captured = capsys.readouterr()
@@ -524,3 +524,212 @@ def test_on_build_with_no_settings_file_stays_silent(tmp_path, capsys, fake):
     (tmp_path / "Characters").mkdir()
     assert main(["--party", str(tmp_path), "--on-build"]) == 0
     assert lines(capsys) == [] and fake.asked == []
+
+
+# --- the memory of what sync added ----------------------------------------------------------
+
+GOOD = {"version": 1, "character": "31198239", "lists": {"gear": ["rope, hempen", "shield"], "spells": ["fire bolt"]}}
+NOT_IN_A_VAULT = "dnd_ddb: this note is not inside a vault, so nothing is remembered and no row is ever removed"
+
+
+def memory_file(root, char_id="31198239"):
+    return root / "_meta" / "dndbeyond" / f"{char_id}.json"
+
+
+def put(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(value if isinstance(value, str) else json.dumps(value), encoding="utf-8")
+    return path
+
+
+def test_state_path_is_inside_the_vaults_meta_folder():
+    assert dnd_ddb.state_path(Path("v"), "31198239") == Path("v") / "_meta" / "dndbeyond" / "31198239.json"
+
+
+@pytest.mark.parametrize("bad", ["", "../x", "12ab", "1" * 13, "1/2", "٣", "1\n", " 1", "x"])
+def test_state_path_refuses_an_id_that_is_not_digits(bad):
+    with pytest.raises(ValueError):
+        dnd_ddb.state_path(Path("v"), bad)
+
+
+def test_save_seen_writes_sorted_indented_lf_json_and_creates_the_folder(tmp_path):
+    path = memory_file(tmp_path)
+    dnd_ddb.save_seen(path, "31198239", {"spells": ["fire bolt"], "gear": ["shield", "rope, hempen"]})
+    raw = path.read_bytes()
+    assert raw.endswith(b"}\n") and b"\r" not in raw
+    assert raw.decode("utf-8") == json.dumps(GOOD, indent=1, sort_keys=True) + "\n"
+    assert dnd_ddb.load_seen(path) == {"gear": ["rope, hempen", "shield"], "spells": ["fire bolt"]}
+    assert [p.name for p in path.parent.iterdir()] == ["31198239.json"]
+
+
+def test_save_seen_keeps_non_ascii_names_as_utf8(tmp_path):
+    path = memory_file(tmp_path)
+    dnd_ddb.save_seen(path, "31198239", {"gear": ["bâton"]})
+    assert "bâton" in path.read_text(encoding="utf-8")
+    assert dnd_ddb.load_seen(path) == {"gear": ["bâton"]}
+
+
+def test_load_seen_reads_a_good_file_and_trusts_nothing_else(tmp_path):
+    path = memory_file(tmp_path)
+    assert dnd_ddb.load_seen(path) is None                                     # missing
+    put(path, GOOD)
+    assert dnd_ddb.load_seen(path) == GOOD["lists"]
+    path.write_text("{not json", encoding="utf-8")
+    assert dnd_ddb.load_seen(path) is None
+    path.write_bytes(b"\xff\xfe\x00")
+    assert dnd_ddb.load_seen(path) is None
+    path.write_text(json.dumps({**GOOD, "pad": "x" * 1_100_000}), encoding="utf-8")
+    assert dnd_ddb.load_seen(path) is None                                     # over 1 MB
+    for bad in ([], "x", 3, None, {**GOOD, "version": 2}, {**GOOD, "version": True}, {**GOOD, "version": "1"},
+                {**GOOD, "character": "5"}, {**GOOD, "character": 31198239}, {**GOOD, "lists": []},
+                {**GOOD, "lists": "x"}, {k: v for k, v in GOOD.items() if k != "lists"},
+                {k: v for k, v in GOOD.items() if k != "character"}):
+        put(path, bad)
+        assert dnd_ddb.load_seen(path) is None, bad
+
+
+def test_load_seen_drops_a_list_that_is_not_a_list_of_strings_and_keeps_the_rest(tmp_path):
+    path = put(memory_file(tmp_path), {**GOOD, "lists": {"gear": ["a"], "spells": "fire bolt", "feats": [1, "x"],
+                                                           "tools": {"a": 1}, "languages": ["common"]}})
+    assert dnd_ddb.load_seen(path) == {"gear": ["a"], "languages": ["common"]}
+
+
+def test_load_seen_on_a_folder_or_a_deep_nest_is_none_not_a_crash(tmp_path):
+    folder = memory_file(tmp_path)
+    folder.mkdir(parents=True)
+    assert dnd_ddb.load_seen(folder) is None
+    assert dnd_ddb.load_seen(put(memory_file(tmp_path, "7"), "[" * 100000)) is None
+
+
+def test_a_single_sheet_inside_a_vault_is_found_by_walking_up(tmp_path):
+    root = vault(tmp_path)
+    deep = root / "Characters" / "PCs" / "Old"
+    deep.mkdir(parents=True)
+    path = sheet(deep)
+    assert dnd_ddb.find_vault(path) == root.resolve()
+    assert dnd_ddb.find_vault(sheet(tmp_path / "Characters", name="Up.md")) == root.resolve()
+
+
+def test_a_single_sheet_outside_a_vault_has_none(tmp_path):
+    assert dnd_ddb.find_vault(sheet(tmp_path)) is None
+
+
+def test_a_single_sheet_in_a_vault_saves_what_d_and_d_beyond_gave_only_with_write(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    path = sheet(root / "Characters")
+    assert main([str(path)]) == 0
+    assert not (root / "_meta" / "dndbeyond").exists()                         # a preview creates nothing
+    assert main([str(path), "--write"]) == 0
+    saved = json.loads(memory_file(root).read_text(encoding="utf-8"))
+    assert saved["version"] == 1 and saved["character"] == "31198239" and "gear" in saved["lists"]
+    assert capsys.readouterr().err == ""
+
+
+def test_a_single_sheet_outside_a_vault_says_so_once_on_stderr_and_saves_nothing(tmp_path, capsys, fake):
+    path = sheet(tmp_path)
+    assert main([str(path), "--write"]) == 0
+    captured = capsys.readouterr()
+    assert captured.err.splitlines() == [NOT_IN_A_VAULT]
+    assert "| Level | 5 |" in path.read_text(encoding="utf-8")
+    assert not (tmp_path / "_meta").exists()
+
+
+def test_a_row_sync_added_is_removed_on_the_next_run_after_d_and_d_beyond_drops_it(tmp_path, capsys, monkeypatch):
+    root = vault(tmp_path)
+    path = sheet(root / "Characters")
+    with_rope = character(hit_points={"base": 25}, inventory=(("Rope, Hempen", 1, 10, False, False, "gear"),))
+    monkeypatch.setattr(dnd_ddb, "FETCH", Fetches(with_rope))
+    main([str(path), "--write"])
+    assert "| Rope, Hempen | 1 |" in path.read_text(encoding="utf-8")
+    monkeypatch.setattr(dnd_ddb, "FETCH", Fetches(DATA))
+    capsys.readouterr()
+    main([str(path), "--write"])
+    assert "REMOVE\tEquipment / Gear / Rope, Hempen\tD&D Beyond no longer has it" in lines(capsys)
+    assert "Rope, Hempen" not in path.read_text(encoding="utf-8")
+    assert json.loads(memory_file(root).read_text(encoding="utf-8"))["lists"]["gear"] == []
+
+
+def test_party_write_creates_the_memory_and_a_preview_creates_nothing(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    pcs(root, ("Alder",))
+    assert main(["--party", str(root)]) == 0
+    assert not (root / "_meta" / "dndbeyond").exists()
+    assert main(["--party", str(root), "--write"]) == 0
+    files = sorted(p.name for p in (root / "_meta" / "dndbeyond").iterdir())
+    assert files == ["31198230.json"]
+    assert capsys.readouterr().err == ""
+
+
+def test_party_does_not_save_the_memory_of_a_note_that_errored_or_was_not_written(tmp_path, capsys, monkeypatch):
+    root = vault(tmp_path)
+    (root / "Characters" / "Briar.md").write_text(note(link="https://www.dndbeyond.com/characters/2"), encoding="utf-8")
+    (root / "Characters" / "Cress.md").write_text(note(link="https://www.dndbeyond.com/characters/3"), encoding="utf-8")
+
+    def by_id(char_id):
+        if char_id == "2":
+            raise Unreadable("D&D Beyond has no character with that id")
+        return DATA
+    monkeypatch.setattr(dnd_ddb, "FETCH", by_id)
+    assert main(["--party", str(root), "--write"]) == 0
+    assert sorted(p.name for p in (root / "_meta" / "dndbeyond").iterdir()) == ["3.json"]
+    monkeypatch.setattr(dnd_ddb, "FETCH", Fetches())
+    (root / "Characters" / "Cress.md").write_text(note(link="https://www.dndbeyond.com/characters/3"), encoding="utf-8")
+    (root / "_meta" / "dndbeyond" / "3.json").unlink()
+
+    def broken(path, text):
+        raise dnd_ddb.StepFailed("Cress.md cannot be written (PermissionError)")
+    monkeypatch.setattr(dnd_ddb, "write_text_atomic", broken)
+    assert main(["--party", str(root), "--write"]) == 2
+    assert not (root / "_meta" / "dndbeyond" / "3.json").exists()
+
+
+def test_a_memory_that_cannot_be_saved_is_one_stderr_line_and_the_note_is_still_written(tmp_path, capsys, fake, monkeypatch):
+    def refuse(path, char_id, seen):
+        raise OSError("disk full")
+    monkeypatch.setattr(dnd_ddb, "save_seen", refuse)
+    root = vault(tmp_path)
+    path = sheet(root / "Characters")
+    assert main([str(path), "--write"]) == 0
+    captured = capsys.readouterr()
+    assert captured.err.splitlines() == ["dnd_ddb: could not save what was synced for Tavin: disk full"]
+    assert "| Level | 5 |" in path.read_text(encoding="utf-8")
+    (tmp_path / "party").mkdir()
+    other = vault(tmp_path / "party")
+    pcs(other, ("Alder",))
+    capsys.readouterr()
+    assert main(["--party", str(other), "--write"]) == 0
+    assert capsys.readouterr().err.splitlines() == ["dnd_ddb: could not save what was synced for Alder: disk full"]
+
+
+@pytest.mark.skipif(sys.platform == "win32", reason="folder modes are not enforced the same way on Windows")
+def test_an_unwritable_memory_folder_leaves_the_note_written_and_exit_0(tmp_path, capsys, fake):
+    import os
+    root = vault(tmp_path)
+    (root / "_meta" / "dndbeyond").mkdir()
+    os.chmod(root / "_meta" / "dndbeyond", 0o500)
+    try:
+        if os.access(root / "_meta" / "dndbeyond", os.W_OK):
+            pytest.skip("this account can write anywhere")
+        path = sheet(root / "Characters")
+        assert main([str(path), "--write"]) == 0
+        assert "could not save what was synced for Tavin" in capsys.readouterr().err
+        assert "| Level | 5 |" in path.read_text(encoding="utf-8")
+    finally:
+        os.chmod(root / "_meta" / "dndbeyond", 0o700)
+
+
+def test_a_damaged_memory_file_removes_nothing_and_is_replaced_whole(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    put(memory_file(root), "{broken")
+    path = sheet(root / "Characters")
+    assert main([str(path), "--write"]) == 0
+    assert not [r for r in lines(capsys) if r.startswith("REMOVE")]
+    assert dnd_ddb.load_seen(memory_file(root)) is not None
+
+
+def test_the_memory_is_never_written_outside_the_vaults_meta_folder(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    pcs(root, ("Alder", "Briar"))
+    main(["--party", str(root), "--write"])
+    found = {p.relative_to(root).as_posix() for p in root.rglob("*.json")}
+    assert found and all(f.startswith("_meta/dndbeyond/") for f in found)
