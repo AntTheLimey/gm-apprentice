@@ -11,7 +11,7 @@ sys.path.insert(0, str(ROOT / "tests"))
 import dnd_rules  # noqa: E402
 from ddb_builder import HEAVY, MARTIAL, SHIELD, armour, character, weapon  # noqa: E402
 from dnd_ddb import plan_attacks, plan_cells, plan_rows, plan_slots, plan_worked, write_edits, write_rows  # noqa: E402
-from dnd_ddb_read import Attack, Worked, read  # noqa: E402
+from dnd_ddb_read import Attack, Character, Worked, read  # noqa: E402
 
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
 FIGHTER = (("Fighter", 5, "", None),)
@@ -207,3 +207,50 @@ def test_rules_check_agrees_with_what_sync_writes():
         assert cell(out, "hp (max)") == str(c.hp_max.value), name
         assert hp_findings(out) == [], (name, hp_findings(out))
         assert cell(out, "ac") == str(c.ac.value), name
+
+
+# --- the three headings, an empty list, the defaults, the armour line without an armour class ---
+
+def test_the_attacks_table_is_found_under_each_heading_the_page_accepts():
+    for heading in ("Weapons & Damage Cantrips", "Weapons and Damage Cantrips", "Attacks", "attacks"):
+        text = HEAD.replace("Weapons & Damage Cantrips", heading) + "| Dagger | +2 | 1d4 piercing | |\n"
+        edits = plan_attacks(text, fake(attacks=[SWORD]))
+        assert [e.status for e in edits] == ["REMOVE", "ADD"], heading
+        assert edits[1].locus == f"{ATTACKS} / Longsword", heading
+        assert write_rows(text, edits).splitlines()[-1] == "| Longsword | +6 | 1d8+3 slashing | |", heading
+
+
+def test_a_note_with_two_of_the_headings_reads_the_first_in_the_page_order():
+    text = HEAD + "| Dagger | +2 | 1d4 piercing | |\n\n### Attacks\n\n| Name | Atk Bonus / DC | Damage & Type | Notes |\n|---|---|---|---|\n| Mace | +1 | 1d6 | |\n"
+    out = write_rows(text, plan_attacks(text, fake(attacks=[SWORD])))
+    assert "| Mace | +1 | 1d6 | |" in out and "| Dagger |" not in out
+
+
+def test_an_empty_attacks_list_removes_a_hand_written_row_and_keeps_a_reasoned_one():
+    text = HEAD + "| Dagger | +2 | 1d4 piercing | |\n| Whip (house rule) | +4 | 1d4 | |\n"
+    edits = plan_attacks(text, fake(attacks=[]))
+    assert rows(edits) == [("REMOVE", f"{ATTACKS} / Dagger", "not on D&D Beyond; removed"),
+                           ("KEPT", f"{ATTACKS} / Whip (house rule)", "hand-added; kept")]
+    assert write_rows(text, edits) == HEAD + "| Whip (house rule) | +4 | 1d4 | |\n"
+    assert plan_attacks(HEAD, fake(attacks=[])) == []
+
+
+def test_a_character_never_worked_out_writes_and_removes_nothing_and_says_so_three_times():
+    c = got()
+    for name in ("hp_max", "ac", "attacks"):
+        setattr(c, name, Character.__dataclass_fields__[name].default_factory())
+    assert c.ac == Worked(None, "", "it has not been worked out")
+    text = TEMPLATE + "\n"
+    wrote = plan_worked(text, c) + plan_attacks(text, c)
+    assert [e.status for e in wrote] == ["CHECK", "CHECK", "CHECK"]
+    assert {e.locus for e in wrote} == {HP_LOCUS, AC_LOCUS, ATTACKS}
+    assert write_edits(text, plan_worked(text, c)) == text
+    assert write_rows(text, plan_attacks(text, c)) == text
+    hand = swap(text, "| | | | |\n\n### Gear", "| Dagger | +2 | 1d4 | |\n\n### Gear")
+    assert write_rows(hand, plan_attacks(hand, c)) == hand
+
+
+def test_the_armour_class_line_needs_an_armour_class_as_well_as_parts():
+    c = fake(hp=1, ac=None, parts="Chain Mail 16")
+    assert [e for e in plan_worked(TEMPLATE, c) if e.locus == LINE_LOCUS] == []
+    assert [(e.status, e.locus) for e in plan_worked(TEMPLATE, c)] == [("WRITE", HP_LOCUS), ("CHECK", AC_LOCUS)]

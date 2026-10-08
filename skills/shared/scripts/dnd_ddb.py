@@ -6,6 +6,11 @@ labelled line, then writes the ones marked WRITE. A cell that is blank, a
 `{placeholder}` or bare text is sync's to maintain. A cell with a bracketed
 reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
 
+Usage:
+  dnd_ddb.py SHEET.md [--write]               preview (or write) one note
+  dnd_ddb.py --party VAULT [--write] [--on-build]   every PC note with a D&D Beyond link
+The only request ever made is to character-service.dndbeyond.com, with a path of digits.
+
 This part plans and writes the single cells (Level, XP, ability scores and
 save proficiency, Size, Speed, Hit Dice, skill proficiency, the spellcasting
 ability) and the `**Label:** value` lines (species, class, background,
@@ -30,20 +35,29 @@ The planners run in this order, each on the text the step before produced:
 given, so the line numbers of one are not valid for the next.
 """
 
+import argparse
+import http.client
+import json
 import re
 import sys
-from dataclasses import dataclass
+import urllib.error
+import urllib.parse
+import urllib.request
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import dnd_rules as dr  # noqa: E402
+import dnd_sheet  # noqa: E402
 import dnd_tables as dt  # noqa: E402
-from dnd_ddb_read import ABILITIES, Character, safe_name  # noqa: E402
+from dnd_ddb_read import ABILITIES, Character, Unreadable, read, safe_name  # noqa: E402
 from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES,  # noqa: E402
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
-from vaultlib import fence_step  # noqa: E402
+from migrate_core import StepFailed, write_text_atomic  # noqa: E402
+from vaultlib import (entity_type, extract_frontmatter, fence_step, read_publish_scalar,  # noqa: E402
+                      vault_files)
 
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
@@ -792,6 +806,8 @@ ATTACK_LOCUS = "Equipment / Weapons & Damage Cantrips"
 ATTACK_SPEC = Spec(ATTACK_LOCUS, "equipment", "weapons & damage cantrips", ("attack line", "attack lines"),
                    r"^name$", (Col("Atk Bonus / DC", r"^(atk|attack|hit)", "text"),
                                Col("Damage & Type", r"^damage", "text")))
+# The headings the published page takes for the attacks table (parse.js readEquipment).
+ATTACK_HEADINGS = ("weapons & damage cantrips", "weapons and damage cantrips", "attacks")
 
 
 def plan_worked_cell(note: Note, label: str, locus: str, worked: Any) -> list[Edit]:
@@ -817,7 +833,7 @@ def plan_worked(text: str, c: Character) -> list[Edit]:
     out = plan_worked_cell(note, "hp (max)", f"{COMBAT_LOCUS} / HP (Max)", c.hp_max)
     out += plan_worked_cell(note, "ac", f"{COMBAT_LOCUS} / AC", c.ac)
     hit = note.bold_at("armour class")
-    if hit and c.ac.parts and blank(hit[1].strip()):
+    if hit and c.ac.value is not None and c.ac.parts and blank(hit[1].strip()):
         out.append(as_line("Armour Class", write("Stat Sheet / Defences / Armour Class", "", None, safe(c.ac.parts), hit[0])))
     return out
 
@@ -830,4 +846,256 @@ def plan_attacks(text: str, c: Character) -> list[RowEdit]:
         return [RowEdit("CHECK", ATTACK_LOCUS, f"not worked out: {worked.unsure}; check the attack lines")]
     entries = [Entry(safe_name(a.name), {"Atk Bonus / DC": a.hit or None, "Damage & Type": a.damage or None})
                for a in worked.value]   # type: ignore[attr-defined]
-    return plan_table(text.splitlines(), ATTACK_SPEC, entries)
+    lines = text.splitlines()
+    heading = next((h for h in ATTACK_HEADINGS if find_table(lines, "equipment", h)), ATTACK_HEADINGS[0])
+    return plan_table(lines, replace(ATTACK_SPEC, h3=heading), entries)
+
+
+# --- one sync, the fetch and the command line --------------------------------------------
+
+SYSTEM = dnd_sheet.SYSTEM
+HOST = "character-service.dndbeyond.com"
+SERVICE = f"https://{HOST}/character/v5/character/"
+USER_AGENT = "gm-apprentice dnd_ddb (+https://github.com/AntTheLimey/gm-apprentice)"
+MAX_BODY = 8 * 1024 * 1024
+TIMEOUT = 15
+ID_DIGITS = re.compile(r"[0-9]{1,12}")
+# The host is `dndbeyond.com` or `www.dndbeyond.com` and then the path starts: nothing can sit
+# between them. After the id only plain slug segments, a query or a fragment may follow.
+CHARACTER_LINK = re.compile(
+    r"(?:https?://)?(?:www\.)?dndbeyond\.com/characters/([0-9]{1,12})(?:/[A-Za-z0-9_-]*)*(?:[?#]\S*)?", re.I)
+PRINTED = ("WRITE", "ADD", "REMOVE", "KEPT", "CHECK")
+COUNTED = ("WRITE", "ADD", "REMOVE", "KEPT", "CHECK", "FILL")
+
+
+@dataclass
+class Report:
+    rows: list[tuple[str, str, str]]     # (status, locus, message) in print order
+    text: str                            # the note after sync; equal to the input when nothing changed or on ERROR
+
+
+def character_id(link: object) -> str | None:
+    """The digits of a D&D Beyond character link or a bare id; None for anything else.
+    The link is untrusted text: only the digits are ever used."""
+    if isinstance(link, bool):
+        return None
+    if isinstance(link, int):
+        text = str(link)
+        return text if ID_DIGITS.fullmatch(text) else None
+    if not isinstance(link, str):
+        return None
+    text = link.strip()
+    if ID_DIGITS.fullmatch(text):
+        return text
+    m = CHARACTER_LINK.fullmatch(text)
+    return m.group(1) if m else None
+
+
+class OnlyServiceHost(urllib.request.HTTPRedirectHandler):
+    """A redirect is followed only when it stays on D&D Beyond's character service over https."""
+
+    def redirect_request(self, req: urllib.request.Request, fp: Any, code: int, msg: str,
+                         headers: Any, newurl: str) -> urllib.request.Request | None:
+        parts = urllib.parse.urlsplit(newurl)
+        if parts.scheme != "https" or parts.hostname != HOST:
+            raise urllib.error.URLError("it redirected to another host")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+def opener() -> urllib.request.OpenerDirector:
+    return urllib.request.build_opener(OnlyServiceHost)
+
+
+def cannot(reason: str) -> Unreadable:
+    return Unreadable(f"D&D Beyond could not be read ({reason})")
+
+
+def fetch(char_id: str) -> object:
+    """The "data" object of one character from D&D Beyond. Raises Unreadable. No retry."""
+    if not ID_DIGITS.fullmatch(char_id):
+        raise cannot("that is not a character id")
+    request = urllib.request.Request(SERVICE + char_id, headers={"User-Agent": USER_AGENT,
+                                                                  "Accept": "application/json"})
+    try:
+        with opener().open(request, timeout=TIMEOUT) as response:
+            body = response.read(MAX_BODY + 1)
+    except urllib.error.HTTPError as e:
+        if e.code == 403:
+            raise Unreadable("this character is private on D&D Beyond; set it to public") from e
+        if e.code == 404:
+            raise Unreadable("D&D Beyond has no character with that id") from e
+        raise cannot(f"HTTP {e.code}") from e
+    except urllib.error.URLError as e:
+        raise cannot(str(e.reason)) from e
+    except TimeoutError as e:
+        raise cannot("it timed out") from e
+    except (OSError, http.client.HTTPException) as e:
+        raise cannot(e.__class__.__name__) from e
+    if len(body) > MAX_BODY:
+        raise cannot("the response is too large")
+    try:
+        parsed = json.loads(body)
+    except ValueError as e:
+        raise cannot("the response is not JSON") from e
+    data = parsed.get("data") if isinstance(parsed, dict) else None
+    if not isinstance(data, dict):
+        raise cannot("the response holds no character")
+    return data
+
+
+FETCH = fetch
+
+
+def current_layout(text: str) -> bool:
+    note = Note(text)
+    abilities = note.table("stat sheet", "ability scores")
+    return bool(note.table("stat sheet", "core")) and bool(abilities) and column(abilities[0][1], r"save$") >= 0
+
+
+def shown(edits: list[Edit] | list[RowEdit]) -> list[tuple[str, str, str]]:
+    return [(e.status, e.locus, e.message) for e in edits
+            if e.status in PRINTED and not getattr(e, "silent", False)]
+
+
+def sync_text(text: str, data: object) -> Report:
+    """The note brought up to date from D&D Beyond's data, and what was done. Pure."""
+    try:
+        c = read(data)
+    except Unreadable as e:
+        return Report([("ERROR", "D&D Beyond", str(e))], text)
+    if not current_layout(text):
+        return Report([("ERROR", "Stat Sheet", "this note is in the earlier layout; convert it first "
+                        "(sheet-conversion.md)")], text)
+    rows: list[tuple[str, str, str]] = []
+    cells = plan_cells(text, c)
+    rows += shown(cells)
+    t = write_edits(text, cells)
+    slots = plan_slots(t, c)
+    rows += shown(slots)
+    t = write_edits(t, slots)
+    worked = plan_worked(t, c)
+    rows += shown(worked)
+    t = write_edits(t, worked)
+    lists = plan_rows(t, c)
+    rows += shown(lists)
+    t = write_rows(t, lists)
+    attacks = plan_attacks(t, c)
+    rows += shown(attacks)
+    t = write_rows(t, attacks)
+    rows += shown(checks(t, c, cells + slots + worked, lists + attacks))
+    fill = dnd_sheet.plan(t)
+    errors = [r for r in fill if r.status == "ERROR"]
+    if errors:
+        return Report([("ERROR", errors[0].locus, errors[0].message)], text)
+    rows += [("FILL", r.locus, r.message) for r in fill if r.status == "FILL"]
+    return Report(rows, dnd_sheet.apply(t, fill))
+
+
+def note_link(fm: dict[str, Any]) -> object:
+    """The `dndbeyond` value, None when the note has none (a bare key reads as an empty list)."""
+    link = fm.get("dndbeyond")
+    return None if link in (None, []) or not str(link).strip() else link
+
+
+def sync_note(text: str) -> Report:
+    """One note: its link, the request, then sync_text."""
+    link = note_link(extract_frontmatter(text) or {})
+    if link is None:
+        return Report([("ERROR", "dndbeyond", "this note has no D&D Beyond link")], text)
+    char_id = character_id(link)
+    if char_id is None:
+        return Report([("ERROR", "dndbeyond", "this is not a D&D Beyond character link")], text)
+    try:
+        data = FETCH(char_id)
+    except Unreadable as e:
+        return Report([("ERROR", "D&D Beyond", str(e))], text)
+    return sync_text(text, data)
+
+
+def count_line(rows: list[tuple[str, str, str]], sheets: int | None = None) -> str:
+    line = "  ".join(f"{s.lower()}: {sum(1 for r in rows if r[0] == s)}" for s in COUNTED)
+    return f"# {line}" + (f"  sheets: {sheets}" if sheets is not None else "")
+
+
+def one_sheet(path: Path, write_it: bool) -> int:
+    try:
+        with path.open("r", encoding="utf-8", newline="") as f:
+            text = f.read()
+    except (OSError, UnicodeDecodeError) as e:
+        print(f"dnd_ddb: cannot read {path.as_posix()}: {e}", file=sys.stderr)
+        return 2
+    report = sync_note(text)
+    for status, locus, message in report.rows:
+        print(f"{status}\t{locus}\t{message}")
+    if any(r[0] == "ERROR" for r in report.rows):
+        return 0
+    print(count_line(report.rows))
+    if write_it and report.text != text:
+        try:
+            write_text_atomic(path, report.text)
+        except StepFailed as e:
+            print(f"dnd_ddb: {e}", file=sys.stderr)
+            return 2
+    return 0
+
+
+def party(vault: Path, write_it: bool, on_build: bool) -> int:
+    from migrate_vault import vault_system
+
+    if not vault.is_dir():
+        print(f"dnd_ddb: {vault.as_posix()} is not a folder", file=sys.stderr)
+        return 2
+    if on_build:
+        setting = (read_publish_scalar(vault, "dndbeyond_sync") or "manual").strip().strip("\"'").strip()
+        if setting.lower() == "manual":
+            return 0
+        if setting.lower() != "build":
+            print(f'dnd_ddb: publish.dndbeyond_sync is "{setting}", not build or manual; nothing was synced')
+            return 0
+    system = vault_system(vault)
+    if system != SYSTEM:
+        said = f"is {system}, not {SYSTEM}" if system else f"is not recorded, not {SYSTEM}"
+        print(f"dnd_ddb: this vault's system {said}; nothing was read")
+        return 0
+    rows: list[tuple[str, str, str]] = []
+    sheets, failed = 0, False
+    for rel, text in vault_files(vault):
+        fm = extract_frontmatter(text) or {}
+        if entity_type(fm) != "pc" or note_link(fm) is None:
+            continue
+        sheets += 1
+        report = sync_note(text)
+        found = report.rows
+        if write_it and report.text != text:
+            try:
+                write_text_atomic(vault / rel, report.text)
+            except StepFailed as e:
+                found = [("ERROR", "write", str(e))]
+                failed = True
+        for status, locus, message in found:
+            rows.append((status, f"{Path(rel).stem}: {locus}", message))
+    for row in rows:
+        print("\t".join(row))
+    print(count_line(rows, sheets))
+    return 2 if failed else 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0] if __doc__ else None)
+    ap.add_argument("sheet", nargs="?")
+    ap.add_argument("--write", action="store_true")
+    ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
+    ap.add_argument("--on-build", action="store_true",
+                    help="with --party: run only when publish.dndbeyond_sync is build")
+    args = ap.parse_args(argv)
+    if bool(args.sheet) == bool(args.party):
+        ap.error("give one sheet, or --party VAULT")
+    if args.on_build and not args.party:
+        ap.error("--on-build goes with --party VAULT")
+    if args.party:
+        return party(Path(args.party), args.write, args.on_build)
+    return one_sheet(Path(args.sheet), args.write)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
