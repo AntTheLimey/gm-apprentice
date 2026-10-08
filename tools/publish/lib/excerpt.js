@@ -91,6 +91,11 @@ function excerptFromMarkdown(source, opts = {}) {
     const t = line.trim();
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) continue;    // horizontal rules
     if (t.startsWith('|')) continue;                   // table rows
+    // For a PC's epithet a blockquote line is never the quote: the templates write their
+    // instructions to the GM ("Omit this section if...") as blockquotes, and a quoted
+    // speech or letter is no description of the character. The line is skipped, not the
+    // rest of the note, so prose written after it still supplies the first sentence.
+    if (opts.skipSheetLines && /^\s*>/.test(line)) continue;
     let cleaned = line.replace(/^\s*>\s?/, '');        // blockquote marker
     // A callout marker line is metadata, never prose — drop the whole line, title included.
     // The type pattern must match markdown.js CALLOUT_RE, which allows hyphens.

@@ -1,6 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { pcTemplate } = require('../../lib/templates/pc');
+const fs = require('node:fs');
+const path = require('node:path');
+const templatesDir = path.join(__dirname, '../../../../skills/shared/templates');
 
 const page = { frontmatter: { type: 'pc', player_name: 'X' }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
 const noop = () => '';
@@ -133,6 +136,22 @@ describe('pcTemplate pull quote', () => {
     for (const template of ['pc-fitd.md', 'pc-coc-7e.md', 'pc-coc-7e-regency.md', 'pc-generic.md']) {
       assert.ok(!quoted({}, sheet, templateBody(template)).includes('pull-quote'), template);
     }
+  });
+  it('never quotes a template instruction or placeholder, whatever the system', () => {
+    const templates = fs.readdirSync(templatesDir).filter(f => /^pc-.*\.md$/.test(f));
+    assert.ok(templates.length >= 7, 'expected every system\'s PC template');
+    for (const template of templates) {
+      const body = templateBody(template);
+      const instructions = body.split('\n').filter(l => /^\s*>/.test(l)).map(l => l.replace(/^\s*>\s?/, '').trim());
+      const html = quoted({}, sheet, body);
+      const shown = quote(html) || '';
+      for (const line of instructions) assert.ok(!shown.includes(line), `${template} quotes "${line}"`);
+      assert.ok(!/[{}]/.test(shown), `${template} quotes a placeholder: ${shown}`);
+    }
+  });
+  it('quotes the prose that follows a template\'s instruction lines', () => {
+    const body = templateBody('pc-dnd-5e-2024.md');
+    assert.strictEqual(quote(quoted({}, sheet, body + prose)), 'A sailor out of Brest.');
   });
   it('keeps a bold phrase that opens a sentence', () => {
     assert.strictEqual(quote(quoted({}, sheet, '## Background\n\n**Jacob** was the coachman. He said little.\n')), 'Jacob was the coachman.');
