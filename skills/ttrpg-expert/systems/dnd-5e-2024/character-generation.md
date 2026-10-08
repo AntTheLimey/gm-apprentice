@@ -147,7 +147,7 @@ Write the PC note in the template's layout, following "Writing the Sheet in the 
    ```
 
    Show the GM the `FILL` rows it prints, then run it again with `--write` on their yes.
-3. Read the modifiers and the proficiency bonus it filled, and write what it leaves to you (too many features move these for a sum to be trusted):
+3. Read the modifiers and the proficiency bonus it filled, and write what it leaves to you (too many features move these for a sum to be trusted; on a note with a `dndbeyond` link, sync writes them):
 
    | Number | How it is made |
    |--------|----------------|

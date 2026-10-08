@@ -13,9 +13,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - D&D Beyond sync. A D&D character note that carries the character's
   D&D Beyond link is brought up to date from D&D Beyond with one
-  command: level-ups, new spells, features, feats, gear, magic items
-  and coins arrive in the note, and every modifier is then worked out
-  again. The link goes in the PC note's frontmatter as `dndbeyond`
+  command: level-ups, new spells, features, feats, gear, magic items,
+  coins and speed arrive in the note, with the bonuses its items and
+  features give, and every modifier is then worked out again. On
+  eleven real characters a synced sheet's saves, skills, passive
+  scores, initiative, speed, armour class and hit point maximum all
+  equal D&D Beyond's own. The link goes in the PC note's frontmatter as `dndbeyond`
   (a link or a bare character id); the D&D PC template has the field.
   `dnd_ddb.py "<note>"` previews one character and
   `dnd_ddb.py --party "<vault>"` every character with a link; `--write`
@@ -27,10 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     attack lines. They are written only into a cell that is blank or a
     bare number. Where it is unsure for a character it writes nothing
     and prints a `CHECK` row saying why.
+  - Bonuses that D&D Beyond gives from items and features (to saves,
+    skills, initiative, passive scores, spell attack and spell save DC)
+    are written as rows of the Bonuses table, so the fill counts them.
+    A Bonuses row written by hand is never changed or removed. When one
+    names the same source as a synced row, sync prints a `CHECK`,
+    because the bonus may be counted twice.
   - It never touches what the vault owns: current and temporary hit
     points, spent hit dice, death saves, exhaustion, conditions, Heroic
-    Inspiration, used slots, uses and charges, the Bonuses table,
-    Companions, notes, a summary that holds text, or any number with a
+    Inspiration, used slots, uses and charges, a Bonuses row written by
+    hand, Companions, notes, a summary that holds text, or any number with a
     reason in brackets beside it (`+7 (cloak of elvenkind)`). It writes
     names and numbers only: no descriptions, no rules text and no free
     text.
@@ -38,7 +47,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `_meta/dndbeyond/<character id>.json`, which is never published. A
     row is removed only when sync added it on an earlier run and D&D
     Beyond no longer has it. A row added by hand needs no marker and is
-    never removed, and the first sync of a note removes nothing.
+    never removed, nor is a second row with the same name as a synced
+    one, and the first sync of a note removes nothing.
   - Limits: the character must be public; a subclass's always-prepared
     spells, Artificer infusions, and languages and tools picked from
     D&D Beyond's lists are not in what it reads and are entered by
@@ -52,6 +62,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   publish tool's copy both run them, so the two cannot drift apart. No
   GURPS behaviour changes.
 - Publish tool 1.15.2.
+
+### Fixed
+
+- A PC page's pull-quote, shown when the note has no `key_traits`, is
+  no longer a line of template instruction such as "Omit this section
+  if the character has no spellcasting."
 
 ---
 

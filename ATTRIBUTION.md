@@ -224,7 +224,10 @@ here: no character data, no rules text and no site code.
 user's request, and writes names, numbers and short key facts (a spell's
 level, casting time, range, component letters and duration; an item's
 quantity, weight and charges) into the user's own vault. It writes no
-rules text and no descriptions.
+rules text and no descriptions. It reads the public character address
+that D&D Beyond's own character page reads, with no login. That address
+is unofficial, carries no licence and may change. A character is read
+only when the user asks, and only if its owner has made it public.
 
 `skills/shared/scripts/dnd_ddb_read.py` and
 `skills/shared/scripts/dnd_ddb_calc.py` were written from the author's
