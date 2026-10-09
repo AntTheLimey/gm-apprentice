@@ -137,7 +137,9 @@ describe('pcTemplate pull quote', () => {
       assert.ok(!quoted({}, sheet, templateBody(template)).includes('pull-quote'), template);
     }
   });
-  it('never quotes a template instruction or placeholder, whatever the system', () => {
+  // Covers the `>` instruction lines and the placeholders of every PC template. The plain-paragraph
+  // instructions of the GURPS and PF2e templates are not covered: they still read as prose.
+  it('never quotes a blockquoted instruction or a placeholder from any PC template', () => {
     const templates = fs.readdirSync(templatesDir).filter(f => /^pc-.*\.md$/.test(f));
     assert.ok(templates.length >= 7, 'expected every system\'s PC template');
     for (const template of templates) {

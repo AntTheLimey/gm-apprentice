@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - 'tools/publish/**'
+      - 'tests/shared-cases/**'
+      - 'skills/shared/scripts/gurps_calc.py'
       - '.github/workflows/publish-tool-ci.yml'
   pull_request:
     paths:
       - 'tools/publish/**'
+      - 'tests/shared-cases/**'
+      - 'skills/shared/scripts/gurps_calc.py'
       - '.github/workflows/publish-tool-ci.yml'
 
 jobs:

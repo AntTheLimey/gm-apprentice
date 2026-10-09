@@ -1,5 +1,5 @@
 {
- "_about": "Inputs and results for every GURPS formula that exists in both gurps_calc.py and the publish tool. Both test suites run this file; a formula shared by name with no case fails both.",
+ "_about": "Inputs and results for every GURPS formula that exists in both gurps_calc.py and the publish tool. Both test suites run the same cases from this file; neither finds a formula that is shared but missing from it, so add the cases when a formula is shared.",
  "constants": {
   "ENC_LEVELS": [
    [

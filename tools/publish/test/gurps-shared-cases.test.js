@@ -10,7 +10,7 @@ const camel = (name) => name.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 // The JavaScript copy returns the same encumbrance rows as objects; turn them into [name, level, max] triples.
 const plain = (r) => (Array.isArray(r) ? r.map((x) => (x && typeof x === 'object' && !Array.isArray(x) && 'name' in x && 'level' in x && 'max' in x ? [x.name, x.level, x.max] : x)) : r);
 
-test('every formula shared with gurps_calc.py has cases, and every case names one', () => {
+test('every formula in the case file is exported here and has five or more cases', () => {
   for (const name of Object.keys(DATA.cases)) {
     assert.strictEqual(typeof gc[camel(name)], 'function', `${camel(name)} is not exported`);
     assert.ok(DATA.cases[name].length >= 5, `${name} has fewer than five cases`);

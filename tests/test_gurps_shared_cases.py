@@ -14,7 +14,7 @@ SHARED = ("halve_up", "is_reeling", "is_tired", "basic_lift", "enc_max_weights",
           "enc_move", "enc_dodge", "parry", "block")
 
 
-def test_every_shared_formula_has_cases():
+def test_the_case_file_holds_five_or_more_cases_for_exactly_the_listed_formulas():
     assert sorted(DATA["cases"]) == sorted(SHARED)
     assert all(len(v) >= 5 for v in DATA["cases"].values())
 
