@@ -1057,8 +1057,9 @@ AC_PART = re.compile(r"(-?\d+)$")
 def line_total(text: str) -> int | None:
     """What an `**Armour Class:**` line adds up to (`Leather 11 + Dex 2` is 13); None when a part
     of it does not end in a number."""
-    parts = [AC_PART.search(p.strip()) for p in text.split(" + ")]
-    return sum(int(m.group(1)) for m in parts) if parts and all(parts) else None
+    found = [AC_PART.search(p.strip()) for p in text.split(" + ")]
+    numbers = [m.group(1) for m in found if m]
+    return sum(int(n) for n in numbers) if len(numbers) == len(found) else None
 
 
 def plan_ac_line(note: Note, c: Character, gave: Gave | None) -> list[Edit]:
@@ -1393,7 +1394,9 @@ def has_list_rows(text: str) -> bool:
     lines = text.splitlines()
     for spec in (*SPECS.values(), BONUS_SPEC):
         table = find_table(lines, spec.h2, spec.h3)
-        key = column(table.header, spec.key) if table else -1
+        if table is None:
+            continue
+        key = column(table.header, spec.key)
         if key >= 0 and any(key < len(cells) and not blank(clean(cells[key])) for _i, cells in table.rows):
             return True
     return False
