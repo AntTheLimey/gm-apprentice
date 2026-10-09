@@ -45,8 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     Inspiration, used slots, uses and charges, a Bonuses row written by
     hand, Companions, notes, a summary that holds text, or any number with a
     reason in brackets beside it (`+7 (cloak of elvenkind)`). It writes
-    names and numbers only: no descriptions, no rules text and no free
-    text.
+    names, numbers, fixed words and a defence's short condition: no
+    descriptions and no free text.
   - Sync remembers the names D&D Beyond gave at the last sync, in
     `_meta/dndbeyond/<character id>.json`, which is never published. A
     row is removed only when that file holds its name and D&D Beyond no
