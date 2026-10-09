@@ -336,3 +336,17 @@ def test_a_players_own_skill_adjustment_is_a_row_and_moves_that_skill_and_its_pa
     assert bonus_rows(report.text) == ["| Perception | +2 | Player's adjustment |"]
     assert moved(data) == {"Perception": 2, "passive perception": 2}
     assert sync_text(report.text, data, report.seen).rows == []
+
+
+def test_a_bonus_cell_written_as_pb_or_an_ability_is_read_as_its_number():
+    first = sync_text(TEMPLATE, ringed(3))
+    pb = swap(first.text, "| Saves | +3 | Ring of Protection |", "| Saves | PB | Ring of Protection |")
+    same = sync_text(pb, ringed(3), first.seen)
+    assert [r for r in same.rows if r[0] in NOT_WRITTEN] == [] and "| Saves | PB |" in same.text
+    differs = sync_text(pb, ringed(5), first.seen)
+    kept = [r for r in differs.rows if r[0] == "KEPT"]
+    assert kept == [("KEPT", "Stat Sheet / Bonuses / Saves (Ring of Protection) / Bonus", "PB; reads as +3; D&D Beyond gives +5")]
+    word = swap(first.text, "| Saves | +3 | Ring of Protection |", "| Saves | Half PB | Ring of Protection |")
+    assert not [r for r in sync_text(word, ringed(2), first.seen).rows if "not read as a number" in r[2]]
+    nonsense = swap(first.text, "| Saves | +3 | Ring of Protection |", "| Saves | lots | Ring of Protection |")
+    assert any("not read as a number" in r[2] for r in sync_text(nonsense, ringed(3), first.seen).rows)

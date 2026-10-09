@@ -614,3 +614,12 @@ def test_write_edits_with_an_empty_value_writes_one_space_between_the_pipes():
     text = "| Attribute | Value |\n|---|---|\n| Size | Medium |\n"
     out = write_edits(text, [Edit("WRITE", "x", "m", 2, 1, "")])
     assert out == "| Attribute | Value |\n|---|---|\n| Size | |\n"
+
+
+def test_a_reason_beside_the_level_is_one_error_row_that_says_so():
+    from dnd_ddb import sync_text
+    text = swap(TEMPLATE, "| Level | 1 |", "| Level | 5 (milestone) |")
+    report = sync_text(text, character())
+    assert report.rows == [("ERROR", "Stat Sheet / Core / Level",
+                            "the Level cell cannot carry a reason in brackets; remove it and sync again; nothing was changed")]
+    assert report.text == text and report.seen is None

@@ -56,7 +56,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from collections.abc import Collection
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
@@ -143,6 +143,7 @@ class Gave:
     from the last sync's memory, `now` is filled as cells are judged."""
     last: dict[str, str]
     now: dict[str, str]
+    reads: Callable[[str], int | None] | None = None     # a Bonus cell as the fill reads it (`PB`, `Strength`, `+2`)
 
 
 CELLS = "cells"      # the memory's list id for them: entries are `locus<TAB>value`
@@ -195,7 +196,10 @@ def cell_at(i: int, col: int, cells: list[str]) -> Cell | None:
 def plan_core(note: Note, c: Character) -> list[Edit]:
     out: list[Edit] = []
     level, xp = note.attr("stat sheet", "core", "level"), note.attr("stat sheet", "core", "xp")
-    if level:
+    if level and REASON.search(level.text.strip()):
+        out.append(Edit("ERROR", "Stat Sheet / Core / Level",
+                        "the Level cell cannot carry a reason in brackets; remove it and sync again; nothing was changed"))
+    elif level:
         out.append(judge_number("Stat Sheet / Core / Level", level, c.level))
     if xp:
         out.append(judge_number("Stat Sheet / Core / XP", xp, c.xp))
@@ -637,8 +641,9 @@ def judge_tags(locus: str, cell: Cell, want: list[str]) -> Edit:
     return edit
 
 
-def judge_signed(locus: str, cell: Cell, want: int) -> Edit:
-    """As judge_number, for a number written with its sign (`+2`)."""
+def judge_signed(locus: str, cell: Cell, want: int, gave: Gave | None = None) -> Edit:
+    """As judge_number, for a number written with its sign (`+2`). A word the fill reads as a
+    number (`PB`, `Half PB`, an ability) is that number."""
     new, text = f"{want:+d}", cell.text.strip()
     if blank(text):
         return write(locus, "", cell, new)
@@ -646,7 +651,12 @@ def judge_signed(locus: str, cell: Cell, want: int) -> Edit:
         return Edit("SAME", locus, text) if to_int(text) == want else write(locus, text, cell, new)
     if REASONED.match(text):
         return Edit("KEPT", locus, f"{text}; D&D Beyond gives {new}")
-    return Edit("KEPT", locus, f"{text}; not read as a number; D&D Beyond gives {new}")
+    read_as = gave.reads(text) if gave is not None and gave.reads is not None else None
+    if read_as is None:
+        return Edit("KEPT", locus, f"{text}; not read as a number; D&D Beyond gives {new}")
+    if read_as == want:
+        return Edit("SAME", locus, text)
+    return Edit("KEPT", locus, f"{text}; reads as {read_as:+d}; D&D Beyond gives {new}")
 
 
 def judge_column(kind: str, locus: str, cell: Cell, want: Any, gave: Gave | None = None) -> Edit:
@@ -654,7 +664,7 @@ def judge_column(kind: str, locus: str, cell: Cell, want: Any, gave: Gave | None
     if kind == "num":
         return judge_number(locus, cell, want)
     if kind == "signed":
-        return judge_signed(locus, cell, want)
+        return judge_signed(locus, cell, want, gave)
     if kind == "flag":
         return judge_flag(locus, cell, want)
     if kind == "tags":
@@ -884,11 +894,11 @@ def shared_sources(lines: list[str], entries: list[Entry], removed: set[int]) ->
     return out
 
 
-def plan_bonuses(text: str, c: Character, seen: Seen | None = None) -> list[RowEdit]:
+def plan_bonuses(text: str, c: Character, seen: Seen | None = None, gave: Gave | None = None) -> list[RowEdit]:
     """The `### Bonuses` table as a list: Applies To and Source together are the key, Bonus is
     owned. A row with any other pair is the GM's. Planned before the fill, which reads the table."""
     lines, entries = text.splitlines(), bonus_entries(c)
-    edits = plan_table(lines, BONUS_SPEC, entries, remembered_for(seen, BONUS_SPEC.list_id))
+    edits = plan_table(lines, BONUS_SPEC, entries, remembered_for(seen, BONUS_SPEC.list_id), gave)
     return edits + shared_sources(lines, entries, {e.line for e in edits if e.status == "REMOVE"})
 
 
@@ -1239,6 +1249,19 @@ def given_now(c: Character, before: Seen | None, gave: Gave | None = None) -> Se
     return out
 
 
+def bonus_reader(c: Character) -> Callable[[str], int | None]:
+    """A Bonus cell's number as the fill reads it, from this character's modifiers and proficiency bonus."""
+    mods = {k: (v - 10) // 2 for k, v in c.scores.items()}
+    pb = 2 + (c.level - 1) // 4
+
+    def read_cell(text: str) -> int | None:
+        try:
+            return dnd_sheet.bonus_amount(text, mods, pb)
+        except KeyError:
+            return None
+    return read_cell
+
+
 def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     """The note brought up to date from D&D Beyond's data, and what was done. Pure. `seen` is what
     the last sync remembered adding: a row or entry leaves only if it is in it."""
@@ -1251,13 +1274,17 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
                         "(sheet-conversion.md)")], text)
     rows: list[tuple[str, str, str]] = []
     gave = cell_memory(seen)
+    gave.reads = bonus_reader(c)
     cells = plan_cells(text, c, seen, gave)
+    refused = next((e for e in cells if e.status == "ERROR"), None)
+    if refused:
+        return Report([("ERROR", refused.locus, refused.message)], text)
     rows += shown(cells)
     t = write_edits(text, cells)
     slots = plan_slots(t, c)
     rows += shown(slots)
     t = write_edits(t, slots)
-    bonuses = plan_bonuses(t, c, seen)
+    bonuses = plan_bonuses(t, c, seen, gave)
     rows += shown(bonuses)
     t = write_rows(t, bonuses)
     worked = plan_worked(t, c, gave)
