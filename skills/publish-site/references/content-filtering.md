@@ -314,7 +314,18 @@ custom input as an alternative.
 ## Publish Modes
 
 - `player` (default): Only player-known content is published
-- `full`: Everything is published (GM's private reference copy)
+- `full`: The GM's own copy. Notes held back as prep (`status: planned`
+  or `prepped`, `stage: outline`, `draft` or `ready`, `source: prep`, a
+  cut or skipped scene) publish, the publish manifest is not applied,
+  and every image in the attachments folder is copied, used or not. `exclude_sections`,
+  `exclude_fields`, `exclude_callouts`, `exclude_dirs`,
+  `exclude_drafts` and a note's own `publish: false` still apply. The
+  default exclude lists keep GM Notes and `secrets` off a `full` site;
+  a list the GM has replaced must still name them
+
+The build reads `Player` as `player` and ` FULL ` as `full` (case and
+surrounding spaces are ignored); any other value is `player`, with a
+warning naming `publish.mode`.
 
 ## Setup Questioning Flow
 

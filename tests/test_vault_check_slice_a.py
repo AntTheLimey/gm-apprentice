@@ -858,6 +858,17 @@ class SessionsManifestTests(unittest.TestCase):
             "## Publishing (0 files)\n",
             config="---\npublish:\n  mode: full\n---\n")), [])
 
+    def test_a_mode_that_is_neither_player_nor_full_is_player_as_the_build_reads_it(self):
+        """The build takes `players` or `gm` as player mode and applies the
+        publish list, so the row must not go quiet for them."""
+        for mode in ("players", "gm", "Player", " PLAYER "):
+            rows = self.missing(self.vault(
+                self.NEEDS, config=f'---\npublish:\n  mode: "{mode}"\n---\n'))
+            self.assertEqual(len(rows), 1, (mode, rows))
+        for mode in ("Full", " FULL "):
+            self.assertEqual(self.missing(self.vault(
+                self.NEEDS, config=f'---\npublish:\n  mode: "{mode}"\n---\n')), [], mode)
+
     def test_mode_defaults_to_player(self):
         self.assertEqual(len(self.missing(self.vault(
             "## Publishing (0 files)\n", config=None))), 1)

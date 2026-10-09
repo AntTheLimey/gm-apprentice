@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.40] — 2026-10-09
+
+### Added
+
+- **A settings page for GMs, `docs/site-settings.md`.** It lists every
+  setting for a campaign's site: where it lives (`_meta/vault-config.md`
+  in the vault, with six deployment settings left in the site's
+  `vault.config.json`), how to change one, what each does, the values it
+  takes and what you get when it is left out. The README, the quickstart
+  and the publish guide link to it. A test holds the page against the
+  publish tool's code: it fails when the tool reads a setting the page
+  does not list, or the page lists one the tool does not read. It checks
+  names, not the values and defaults the page gives.
+
+### Fixed
+
+- **A mistyped `publish.mode` no longer publishes more than player
+  mode.** Any value that was not exactly `player` (`Player`, `players`)
+  was treated as not-player: the publish list was ignored and unplayed
+  sessions and scenes were published, with nothing said. Case and spaces
+  round the word are now forgiven, and any other value is `player`, with
+  a build warning that names the setting. `Full` in capitals used to be
+  a half-way mode (the list ignored, prep notes still held back) and is
+  now `full`. The session check in `vault_check.py` reads the mode the
+  same way. Publish tool 1.15.4.
+- **The apprentice's settings reference matches the tool.** `full` mode
+  was described as publishing everything; it still leaves out the
+  excluded sections, fields, callouts and folders. The reference now
+  also lists `publish.landing.max_events`,
+  `publish.landing.explore_descriptions` and the `documents` section
+  title, and no longer names a `total_sessions` fallback that nothing
+  sets.
+
 ## [1.10.39] — 2026-10-09
 
 ### Fixed

@@ -1021,7 +1021,9 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     sections = read_manifest_sections(vault)
     if sections is None:
         return []
-    if (read_publish_scalar(vault, "mode") or "player").casefold() != "player":
+    # As the build reads it (config.js `publishModeFrom`): only `full`, in any
+    # case, is full; anything else is player mode and the list applies.
+    if str(read_publish_scalar(vault, "mode") or "").strip().casefold() == "full":
         return []
 
     def unlisted(rel: str) -> str | None:
