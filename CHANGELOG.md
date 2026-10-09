@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.39] — 2026-10-09
+
+### Fixed
+
+- **A character page's Journey tab shows its Timeline (#323).** The
+  Timeline was never drawn on any PC page, whatever the vault held. It
+  now lists the events that name that character in their
+  `participants`, oldest first, the fifteen latest, each linked to its
+  event page, with a link to the full timeline underneath. A character
+  no event names has no Timeline section. A character is matched by any
+  name the site knows it by (its title, an alias, a path). Sessions are
+  not listed, because a session note does not name who took part. An
+  event with no `in_game_date` is on no timeline, as before. The landing
+  page still shows the campaign's latest events. Publish tool 1.15.3.
+- **The Story and Journey tabs of a Call of Cthulhu sheet are readable
+  on a dark-themed site.** The sheet is light paper on every theme, but
+  the story link, the route, the Connections heading and graph labels
+  were drawn in the site's colours, so a dark theme put pale text on the
+  paper (as low as 1.4:1). Inside those two tabs the site's colour names
+  now stand for the sheet's own inks (7:1 and better). A skinned sheet
+  is unchanged. Every site's `css/style.css` changes by this one rule.
+
 ## [1.10.38] — 2026-10-07
 
 ### Added
