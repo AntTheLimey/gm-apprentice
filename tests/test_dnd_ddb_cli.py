@@ -21,7 +21,7 @@ from dnd_ddb import character_id, fetch, main  # noqa: E402
 from dnd_ddb_read import Unreadable  # noqa: E402
 
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
-LINK = "https://www.dndbeyond.com/characters/31198239"
+LINK = "https://www.dndbeyond.com/characters/424242"
 DATA = character(hit_points={"base": 25})
 COUNT = "# write: {w}  add: {a}  remove: {r}  kept: {k}  check: {c}  fill: {f}"
 
@@ -86,7 +86,7 @@ def test_a_preview_prints_the_rows_and_the_count_and_writes_nothing(tmp_path, ca
     assert out[0] == "WRITE\tStat Sheet / Core / Level\t1 -> 5"
     assert out[-1].startswith("# write: ")
     assert path.read_bytes() == before
-    assert fake.asked == ["31198239"]
+    assert fake.asked == ["424242"]
 
 
 def test_write_changes_the_note_and_a_second_run_has_nothing_to_do(tmp_path, capsys, fake):
@@ -138,6 +138,13 @@ def test_a_note_with_a_bare_link_key_has_no_link(tmp_path, capsys, fake):
     "https://www.dndbeyond.com\\@evil.example/characters/1",
     "https://www.dndbeyond.com/characters/",
     "https://www.dndbeyond.com/characters/12ab",
+    "https://ddb.ac.evil.example/characters/1",
+    "https://evil.example/ddb.ac/characters/1",
+    "https://ddb.ac/characters/",
+    "https://ddb.ac/characters/1/../../x",
+    "https://www.dndbeyond.com/profile/a b/characters/1",
+    "https://www.dndbeyond.com/profile/a@evil.example/characters/1",
+    "https://www.dndbeyond.com/profile/characters/1",
     "https://www.dndbeyond.com/characters/\u0663\u0664",
     "\u0663\u0664",
 ])
@@ -150,24 +157,29 @@ def test_a_link_that_is_not_a_character_link_is_refused_without_a_request(tmp_pa
 
 
 @pytest.mark.parametrize("link, want", [
-    ("https://www.dndbeyond.com/characters/31198239", "31198239"),
-    ("https://www.dndbeyond.com/characters/31198239/", "31198239"),
-    ("https://www.dndbeyond.com/characters/31198239/a-slug-here", "31198239"),
-    ("https://www.dndbeyond.com/characters/31198239/builder", "31198239"),
-    ("http://dndbeyond.com/characters/31198239", "31198239"),
-    ("HTTPS://WWW.DNDBEYOND.COM/characters/31198239", "31198239"),
-    ("dndbeyond.com/characters/31198239", "31198239"),
-    ("www.dndbeyond.com/characters/31198239", "31198239"),
-    ("  31198239  ", "31198239"),
-    ("31198239", "31198239"),
-    (31198239, "31198239"),
+    ("https://www.dndbeyond.com/characters/424242", "424242"),
+    ("https://www.dndbeyond.com/characters/424242/", "424242"),
+    ("https://www.dndbeyond.com/characters/424242/a-slug-here", "424242"),
+    ("https://www.dndbeyond.com/characters/424242/builder", "424242"),
+    ("https://ddb.ac/characters/424242", "424242"),
+    ("https://ddb.ac/characters/424242/AbCdEf", "424242"),
+    ("ddb.ac/characters/424242", "424242"),
+    ("https://www.dndbeyond.com/profile/SomeUser/characters/424242", "424242"),
+    ("dndbeyond.com/profile/Some_User-1/characters/424242/", "424242"),
+    ("http://dndbeyond.com/characters/424242", "424242"),
+    ("HTTPS://WWW.DNDBEYOND.COM/characters/424242", "424242"),
+    ("dndbeyond.com/characters/424242", "424242"),
+    ("www.dndbeyond.com/characters/424242", "424242"),
+    ("  424242  ", "424242"),
+    ("424242", "424242"),
+    (424242, "424242"),
     ("123456789012", "123456789012"),
 ])
 def test_character_id_accepts_the_forms_a_gm_pastes(link, want):
     assert character_id(link) == want
 
 
-@pytest.mark.parametrize("link", [None, "", "   ", True, 0.5, -5, [], ["31198239"], {}, "abc", "1234567890123", 10 ** 12,
+@pytest.mark.parametrize("link", [None, "", "   ", True, 0.5, -5, [], ["424242"], {}, "abc", "1234567890123", 10 ** 12,
                                   "https://www.dndbeyond.com/characters/1234567890123"])
 def test_character_id_refuses_the_rest(link):
     assert character_id(link) is None
@@ -342,15 +354,15 @@ def http_error(code):
 
 
 def test_fetch_asks_the_character_service_once_and_returns_the_data(opens):
-    seen = opens(json.dumps({"success": True, "data": {"id": 31198239}}).encode())
-    assert fetch("31198239") == {"id": 31198239}
+    seen = opens(json.dumps({"success": True, "data": {"id": 424242}}).encode())
+    assert fetch("424242") == {"id": 424242}
     (request, timeout), = seen.requests
-    assert request.full_url == "https://character-service.dndbeyond.com/character/v5/character/31198239"
+    assert request.full_url == "https://character-service.dndbeyond.com/character/v5/character/424242"
     assert request.get_header("User-agent").startswith("gm-apprentice dnd_ddb")
     assert request.get_header("Accept") == "application/json" and timeout == 15
 
 
-@pytest.mark.parametrize("bad", ["", "abc", "1/../2", "31198239/x", "1" * 13, "٣"])
+@pytest.mark.parametrize("bad", ["", "abc", "1/../2", "424242/x", "1" * 13, "٣"])
 def test_fetch_refuses_an_id_that_is_not_digits_without_a_request(opens, bad):
     seen = opens(b"{}")
     with pytest.raises(Unreadable, match="could not be read"):
@@ -374,7 +386,7 @@ def test_fetch_refuses_an_id_that_is_not_digits_without_a_request(opens, bad):
 def test_fetch_says_what_went_wrong_in_one_sentence(opens, result, message):
     opens(result)
     with pytest.raises(Unreadable) as stopped:
-        fetch("31198239")
+        fetch("424242")
     assert str(stopped.value) == message
 
 
@@ -396,7 +408,7 @@ def test_the_real_opener_carries_the_redirect_guard():
 def test_a_deeply_nested_body_is_unreadable_not_a_crash(opens):
     opens(b"[" * 400_000)
     with pytest.raises(Unreadable, match=r"^D&D Beyond could not be read \(the response is not JSON\)$"):
-        fetch("31198239")
+        fetch("424242")
 
 
 def test_a_slow_response_is_given_up_on_after_the_deadline(opens, monkeypatch):
@@ -404,7 +416,7 @@ def test_a_slow_response_is_given_up_on_after_the_deadline(opens, monkeypatch):
     monkeypatch.setattr(dnd_ddb, "CLOCK", lambda: now[0])
     seen = opens(b'{"data": {}}' + b" " * 200_000, tick=lambda: now.__setitem__(0, now[0] + 20))
     with pytest.raises(Unreadable, match=r"\(it took too long\)"):
-        fetch("31198239")
+        fetch("424242")
     assert len(seen.requests) == 1
 
 
@@ -412,7 +424,7 @@ def test_a_big_body_is_cut_off_at_the_cap_while_it_is_read(opens):
     reads = []
     seen = opens(b"x" * (20 * 1024 * 1024), tick=lambda: reads.append(1))
     with pytest.raises(Unreadable, match="too large"):
-        fetch("31198239")
+        fetch("424242")
     assert len(reads) <= 8 * 1024 * 1024 // dnd_ddb.CHUNK + 2 and seen.requests
 
 
@@ -528,11 +540,11 @@ def test_on_build_with_no_settings_file_stays_silent(tmp_path, capsys, fake):
 
 # --- the memory of what sync added ----------------------------------------------------------
 
-GOOD = {"version": 1, "character": "31198239", "lists": {"gear": ["rope, hempen", "shield"], "spells": ["fire bolt"]}}
+GOOD = {"version": 1, "character": "424242", "lists": {"gear": ["rope, hempen", "shield"], "spells": ["fire bolt"]}}
 NOT_IN_A_VAULT = "dnd_ddb: this note is not inside a vault, so nothing is remembered and no row is ever removed"
 
 
-def memory_file(root, char_id="31198239"):
+def memory_file(root, char_id="424242"):
     return root / "_meta" / "dndbeyond" / f"{char_id}.json"
 
 
@@ -543,7 +555,7 @@ def put(path, value):
 
 
 def test_state_path_is_inside_the_vaults_meta_folder():
-    assert dnd_ddb.state_path(Path("v"), "31198239") == Path("v") / "_meta" / "dndbeyond" / "31198239.json"
+    assert dnd_ddb.state_path(Path("v"), "424242") == Path("v") / "_meta" / "dndbeyond" / "424242.json"
 
 
 @pytest.mark.parametrize("bad", ["", "../x", "12ab", "1" * 13, "1/2", "٣", "1\n", " 1", "x"])
@@ -554,17 +566,17 @@ def test_state_path_refuses_an_id_that_is_not_digits(bad):
 
 def test_save_seen_writes_sorted_indented_lf_json_and_creates_the_folder(tmp_path):
     path = memory_file(tmp_path)
-    dnd_ddb.save_seen(path, "31198239", {"spells": ["fire bolt"], "gear": ["shield", "rope, hempen"]})
+    dnd_ddb.save_seen(path, "424242", {"spells": ["fire bolt"], "gear": ["shield", "rope, hempen"]})
     raw = path.read_bytes()
     assert raw.endswith(b"}\n") and b"\r" not in raw
     assert raw.decode("utf-8") == json.dumps(GOOD, indent=1, sort_keys=True) + "\n"
     assert dnd_ddb.load_seen(path) == {"gear": ["rope, hempen", "shield"], "spells": ["fire bolt"]}
-    assert [p.name for p in path.parent.iterdir()] == ["31198239.json"]
+    assert [p.name for p in path.parent.iterdir()] == ["424242.json"]
 
 
 def test_save_seen_keeps_non_ascii_names_as_utf8(tmp_path):
     path = memory_file(tmp_path)
-    dnd_ddb.save_seen(path, "31198239", {"gear": ["bâton"]})
+    dnd_ddb.save_seen(path, "424242", {"gear": ["bâton"]})
     assert "bâton" in path.read_text(encoding="utf-8")
     assert dnd_ddb.load_seen(path) == {"gear": ["bâton"]}
 
@@ -581,7 +593,7 @@ def test_load_seen_reads_a_good_file_and_trusts_nothing_else(tmp_path):
     path.write_text(json.dumps({**GOOD, "pad": "x" * 1_100_000}), encoding="utf-8")
     assert dnd_ddb.load_seen(path) is None                                     # over 1 MB
     for bad in ([], "x", 3, None, {**GOOD, "version": 2}, {**GOOD, "version": True}, {**GOOD, "version": "1"},
-                {**GOOD, "character": "5"}, {**GOOD, "character": 31198239}, {**GOOD, "lists": []},
+                {**GOOD, "character": "5"}, {**GOOD, "character": 424242}, {**GOOD, "lists": []},
                 {**GOOD, "lists": "x"}, {k: v for k, v in GOOD.items() if k != "lists"},
                 {k: v for k, v in GOOD.items() if k != "character"}):
         put(path, bad)
@@ -621,7 +633,7 @@ def test_a_single_sheet_in_a_vault_saves_what_d_and_d_beyond_gave_only_with_writ
     assert not (root / "_meta" / "dndbeyond").exists()                         # a preview creates nothing
     assert main([str(path), "--write"]) == 0
     saved = json.loads(memory_file(root).read_text(encoding="utf-8"))
-    assert saved["version"] == 1 and saved["character"] == "31198239" and "gear" in saved["lists"]
+    assert saved["version"] == 1 and saved["character"] == "424242" and "gear" in saved["lists"]
     assert capsys.readouterr().err == ""
 
 
@@ -656,7 +668,7 @@ def test_party_write_creates_the_memory_and_a_preview_creates_nothing(tmp_path, 
     assert not (root / "_meta" / "dndbeyond").exists()
     assert main(["--party", str(root), "--write"]) == 0
     files = sorted(p.name for p in (root / "_meta" / "dndbeyond").iterdir())
-    assert files == ["31198230.json"]
+    assert files == ["424240.json"]
     assert capsys.readouterr().err == ""
 
 

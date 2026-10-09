@@ -1065,8 +1065,10 @@ CLOCK = time.monotonic
 ID_DIGITS = re.compile(r"[0-9]{1,12}")
 # The host is `dndbeyond.com` or `www.dndbeyond.com` and then the path starts: nothing can sit
 # between them. After the id only plain slug segments, a query or a fragment may follow.
+# `ddb.ac` is the address the Share button gives; the profile form is the older link.
 CHARACTER_LINK = re.compile(
-    r"(?:https?://)?(?:www\.)?dndbeyond\.com/characters/([0-9]{1,12})(?:/[A-Za-z0-9_-]*)*(?:[?#]\S*)?", re.I)
+    r"(?:https?://)?(?:(?:www\.)?dndbeyond\.com(?:/profile/[A-Za-z0-9_.-]+)?|ddb\.ac)"
+    r"/characters/([0-9]{1,12})(?:/[A-Za-z0-9_-]*)*(?:[?#]\S*)?", re.I)
 PRINTED = ("WRITE", "ADD", "REMOVE", "KEPT", "CHECK")
 COUNTED = ("WRITE", "ADD", "REMOVE", "KEPT", "CHECK", "FILL")
 
