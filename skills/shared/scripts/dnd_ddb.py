@@ -811,6 +811,8 @@ def plan_named(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
             cells[also] = new_entry.second
         for col, at in cols:
             cells[at] = value_text(col.kind, new_entry.wants.get(col.title))
+            if gave is not None and REASON.search(cells[at]) and col.kind == "text":
+                gave.now[f"{spec.locus} / {entry_label(new_entry.name, new_entry.second)} / {col.title}"] = cells[at]
         indent = lines[table.last][:len(lines[table.last]) - len(lines[table.last].lstrip())]
         adds.append(RowEdit("ADD", f"{spec.locus} / {entry_label(new_entry.name, new_entry.second)}",
                             "not in the note; added", table.last, indent + plain_row(cells)))
@@ -1059,7 +1061,9 @@ def line_total(text: str) -> int | None:
     of it does not end in a number."""
     found = [AC_PART.search(p.strip()) for p in text.split(" + ")]
     numbers = [m.group(1) for m in found if m]
-    return sum(int(n) for n in numbers) if len(numbers) == len(found) else None
+    if len(found) < 2 or len(numbers) != len(found):      # words, commas or one number: the GM's own shape
+        return None
+    return sum(int(n) for n in numbers)
 
 
 def plan_ac_line(note: Note, c: Character, gave: Gave | None) -> list[Edit]:
@@ -1070,7 +1074,8 @@ def plan_ac_line(note: Note, c: Character, gave: Gave | None) -> list[Edit]:
         return []
     i, old = hit
     new = safe(c.ac.parts)
-    mine = gave is not None and norm(old) == norm(gave.last.get(AC_LINE, ""))
+    # Sync's own: the line it wrote last time, or one that is exactly what it would write now.
+    mine = norm(old) == norm(new) or (gave is not None and norm(old) == norm(gave.last.get(AC_LINE, "")))
     if blank(old.strip()) or mine:
         if gave is not None:
             gave.now[AC_LINE] = new
@@ -1253,7 +1258,13 @@ def given_now(c: Character, before: Seen | None, gave: Gave | None = None) -> Se
         for label, field in group:
             out[label.lower()] = sorted(norm(n) for n in line_names(getattr(c, field)))
     if gave is not None:
-        out[CELLS] = sorted(f"{locus}\t{value}" for locus, value in gave.now.items())
+        kept = dict(gave.now)
+        for locus, value in gave.last.items():      # a cell not judged this run keeps its entry
+            unjudged = (c.attacks.value is None and locus.startswith(ATTACK_LOCUS)) or \
+                       (locus == AC_LINE and (c.ac.value is None or not c.ac.parts))
+            if unjudged:
+                kept.setdefault(locus, value)
+        out[CELLS] = sorted(f"{locus}\t{value}" for locus, value in kept.items())
     return out
 
 
