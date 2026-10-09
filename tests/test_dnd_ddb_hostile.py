@@ -21,13 +21,13 @@ from test_dnd_ddb_page import INVENTORY, SPELLS, TEMPLATE, build_site, needs_nod
 HARMLESS = "Zed"
 WIDE = "Ｗ" * 80                       # 80 full-width letters
 STRINGS = [
-    "a|b", "|", "||", "| x |", "a\nb", "a\r\nb", "a\rb", "a b", "a b", "a\vb", "a\fb", "a\x85b",
+    "a|b", "|", "||", "| x |", "a\nb", "a\r\nb", "a\rb", "a\u2028b", "a\u2029b", "a\vb", "a\fb", "a\x85b",
     "## GM Notes", "\n## GM Notes\n", "# Heading", "<!-- gm-only -->", "<!-- /gm-only -->",
     "<!-- gm-only -->LEAK<!-- /gm-only -->", "%%", "%% hidden %%", "[[Secret]]", "![[Secret.png]]",
     "[x](http://e)", "`", "```", "**", "__bold__", "</td>", "</td></tr></table>", "<script>alert(1)</script>",
     "{{", "{{x}}", "{list}", "> quote", "- item", "1. item", "---", "***", "\\", "\\|", "&amp;", "&", "'", '"',
-    "A" * 5000, "", "   ", "\t", "‮evil", "a‮b", "a​b", "a\x00b", "\x00", "﻿",
-    "(x)", "Thing (gift)", "HP (Current)", "AC", "HP (Max)", "Level", WIDE, "界" * 80, "Zed" + "́" * 200,
+    "A" * 5000, "", "   ", "\t", "\u202eevil", "a\u202eb", "a\u200bb", "a\x00b", "\x00", "\ufeff",
+    "(x)", "Thing (gift)", "HP (Current)", "AC", "HP (Max)", "Level", WIDE, "界" * 80, "Zed" + "\u0301" * 200,
     "x\n| fake | row |", "x\r\n## Heading",
     "x: y", "Name (", ") (", "[[", "]]", "[", "]",
 ]
@@ -154,7 +154,7 @@ def test_a_hostile_name_stays_in_its_own_cell(field, value, harmless_runs):
                 assert len(split_cells(ln)) == header_cells(b, at + n), ln
     assert special(b) == special(a)
     assert not any(ln.startswith("#") and ln not in a for ln in b)
-    assert "\r" not in run.text and "\x00" not in run.text and " " not in run.text
+    assert "\r" not in run.text and "\x00" not in run.text and "\u2028" not in run.text
     assert "<!--" not in run.text and "%%" not in run.text
 
 
@@ -204,7 +204,7 @@ def test_a_bracketed_row_is_kept_when_the_memory_is_lost():
 
 
 WORST = ["x | y\n## GM Notes\n<!-- gm-only -->LEAKWORD<!-- /gm-only --> %% [[Secret]] </td>{{ `**`",
-         "a ## GM Notes <!-- gm-only -->LEAKWORD"]
+         "a\u2028## GM Notes\u2028<!-- gm-only -->LEAKWORD"]
 
 
 @needs_node

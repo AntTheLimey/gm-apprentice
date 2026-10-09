@@ -558,7 +558,7 @@ def test_nothing_changed_means_nothing_to_write():
 
 
 def test_a_newline_or_pipe_in_a_name_becomes_a_space():
-    c = dataclasses.replace(got(), species="Dwarf\nmountain | hill", size="Me|dium x")
+    c = dataclasses.replace(got(), species="Dwarf\nmountain | hill", size="Me|dium\u2028x")
     out = written(TEMPLATE, c)
     assert "**Species:** Dwarf mountain   hill\n" in out
     assert "| Size | Me dium x |" in out
