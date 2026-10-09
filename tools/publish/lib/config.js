@@ -103,6 +103,17 @@ function searchFrom(raw, label, warn = console.warn) {
 }
 
 // A mistyped default_mode falls back to 'system' — say so rather than silently.
+// `mode` is `player` or `full`. Every reader compares it with one of those two words, so
+// a value that is neither (`Player`, `players`) used to count as not-player and publish
+// more, with nothing said. Case and spaces are forgiven; anything else is `player`.
+function publishModeFrom(raw, warn = console.warn) {
+  if (raw === undefined || raw === null || raw === '') return PUBLISH_DEFAULTS.mode;
+  const mode = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
+  if (mode === 'player' || mode === 'full') return mode;
+  warn(`config: publish.mode ${JSON.stringify(raw)} is not player or full; using player`);
+  return 'player';
+}
+
 function defaultModeFrom(raw, warn = console.warn) {
   const mode = normalizeDefaultMode(raw);
   if (raw != null && String(raw).trim().toLowerCase() !== mode) {
@@ -398,7 +409,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const asMap = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
 
   const merged = {
-    mode: publish.mode || PUBLISH_DEFAULTS.mode,
+    mode: publishModeFrom(publish.mode, warn),
     site_title: picked.site_title ?? null,
     footer: picked.footer ?? null,
     search: searchFrom(picked.search, publish.search !== undefined ? 'publish.search' : 'vault.config.json searchEnabled', warn),
