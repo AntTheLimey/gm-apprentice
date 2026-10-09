@@ -137,4 +137,5 @@ For detailed guidance on each skill:
 - [session-wrapup](session-wrapup.md)
 - [vault-ingest](vault-ingest.md)
 - [publish-site](publish-tool.md)
+- [Site settings](site-settings.md)
 - [Campaign Lifecycle](campaign-lifecycle.md) — the whole arc, end to end

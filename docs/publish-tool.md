@@ -57,6 +57,9 @@ mapped in `publish.folder_map` in the vault's `_meta/vault-config.md`.
 campaign-organizer can help you fix frontmatter; the publish-site skill
 can help you update the folder map.
 
+Every setting for a site, with what it does and its default, is listed
+in [Site settings](site-settings.md).
+
 ## Getting started
 
 For a guided setup, use the `publish-site` skill. It will walk you
