@@ -189,6 +189,7 @@ investigation. No keyword or tag → base files only.
 | Conditions / rules | `conditions-rules.md` | condition |
 | Combat / actions | `rules-reference.md` | |
 | Converting an old-layout PC note | `sheet-conversion.md` | |
+| Syncing a PC from D&D Beyond | `character-sheet.md`, "D&D Beyond sync" | |
 
 ### PF2e Remaster (`systems/pf2e/`)
 

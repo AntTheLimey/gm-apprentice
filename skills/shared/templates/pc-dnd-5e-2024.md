@@ -15,6 +15,7 @@ status: alive
 key_traits: []
 portrait: ""
 sheet_source: ""
+dndbeyond: ""
 display_meta: [occupation, age, nationality]
 relationships:
   - target: "[[]]"

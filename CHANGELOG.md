@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.38] — 2026-10-07
+
+### Added
+
+- D&D Beyond sync. A D&D character note that carries the character's
+  D&D Beyond link is brought up to date from D&D Beyond with one
+  command: level-ups, new spells, features, feats, gear, magic items,
+  coins and speed arrive in the note, with the bonuses its items and
+  features give, and every modifier is then worked out again. On
+  eleven real characters a synced sheet's saves, initiative, armour
+  class and hit point maximum equal D&D Beyond's own; speed on the ten
+  that show one; skills and passive scores on the four we hold them
+  for. The attack lines matched on 46 of 47 lines (the miss is two
+  identical weapons shown once, which is by design). The link goes in
+  the PC note's frontmatter as `dndbeyond`
+  (a link or a bare character id, or the link the Share button gives);
+  the D&D PC template has the field.
+  `dnd_ddb.py "<note>"` previews one character and
+  `dnd_ddb.py --party "<vault>"` every character with a link; `--write`
+  applies. The campaign setting `publish.dndbeyond_sync` in
+  `_meta/vault-config.md` is `build` (the apprentice syncs before it
+  updates the site) or `manual` (only when asked, the default), and
+  `vault-setting` sets and reports it.
+  - Sync also works out armour class, the hit point maximum and the
+    attack lines. They are written only into a cell that is blank or a
+    bare number. Where it is unsure for a character it writes nothing
+    and prints a `CHECK` row saying why.
+  - Bonuses that D&D Beyond gives from items and features (to saves,
+    skills, initiative, passive scores, spell attack and spell save DC)
+    are written as rows of the Bonuses table, so the fill counts them.
+    A Bonuses row written by hand is never changed or removed. When one
+    names the same source as a synced row, sync prints a `CHECK`,
+    because the bonus may be counted twice.
+  - It never touches what the vault owns: current and temporary hit
+    points, spent hit dice, death saves, exhaustion, conditions, Heroic
+    Inspiration, used slots, uses and charges, a Bonuses row written by
+    hand, Companions, notes, a summary that holds text, or any number with a
+    reason in brackets beside it (`+7 (cloak of elvenkind)`). It writes
+    names, numbers, fixed words and a defence's short condition: no
+    descriptions and no free text.
+  - Sync remembers the names D&D Beyond gave at the last sync, in
+    `_meta/dndbeyond/<character id>.json`, which is never published. A
+    row is removed only when that file holds its name and D&D Beyond no
+    longer has it. A row added by hand needs no marker and is
+    never removed, nor is a second row with the same name as a synced
+    one, and the first sync of a note removes nothing.
+  - Limits: the character must be public; a subclass's always-prepared
+    spells, item infusions from a class outside the free rules, and
+    languages and tools picked from
+    D&D Beyond's lists are not in what it reads and are entered by
+    hand; conditional damage and bonuses are left out of the worked-out
+    lines; a note in the earlier layout is converted first.
+  - A value D&D Beyond gives that ends in a bracket group (a spell's
+    area, a feat's source, a species) is followed when it changes and is
+    quiet on a second sync; only a reason the GM wrote is kept. A
+    labelled line is read only under its own heading, and a line the
+    note lacks is a `CHECK`. The `**Armour Class:**` line follows the
+    armour class while it is the line sync wrote. A nameless entry, a
+    spell level outside 0 to 9 and a reason beside the Level are each one
+    clear row. A condition written on a bonus keeps it out of an item's
+    armour class, the hit point maximum, a weapon's magic bonus and the
+    unarmed die. Half proficiency rounded up is a Bonuses row at an odd
+    proficiency bonus. `ddb.ac` and profile links are accepted, and
+    `--party` leaves `_QA` and `_archive` alone.
+  - Guidance is in
+    `skills/ttrpg-expert/systems/dnd-5e-2024/character-sheet.md`,
+    "D&D Beyond sync".
+- Shared test cases for the GURPS sums
+  (`tests/shared-cases/gurps-calc.json`). The Python calculator and the
+  publish tool's copy both run the same cases, and the publish tool's
+  tests also run when the case file or the calculator changes. No
+  GURPS behaviour changes.
+- Publish tool 1.15.2.
+
+### Fixed
+
+- A PC page's pull-quote, shown when the note has no `key_traits`, is
+  no longer a line of template instruction such as "Omit this section
+  if the character has no spellcasting."
+
+---
+
 ## [1.10.37] — 2026-10-07
 
 ### Fixed

@@ -13,3 +13,5 @@ give the `CANTCHECK` count in one line. What each row means, and how a
 `LOOK` the GM accepts is settled, is in ttrpg-expert's
 `systems/dnd-5e-2024/character-sheet.md`, "Rules checks". A PC with no
 sheet is `pc-body`'s finding, not this check's.
+
+D&D Beyond sync (`dnd_ddb.py`) is not part of QA: it changes notes.

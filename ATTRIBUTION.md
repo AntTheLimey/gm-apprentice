@@ -22,6 +22,20 @@ fiction, and which are our own descriptions of mechanics.
 
 ## Open Game Content
 
+### Dungeons & Dragons System Reference Document 5.1
+
+This work includes material from the System Reference Document
+5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at
+https://dnd.wizards.com/resources/systems-reference-document. The
+SRD 5.1 is licensed under the Creative Commons Attribution 4.0
+International License, available at
+https://creativecommons.org/licenses/by/4.0/legalcode.
+
+Content derived from the SRD 5.1 is limited to a few item, weapon and
+feature names (such as `Rope, Hempen` and `Crossbow, Light`) used in the
+D&D Beyond sync tests and comments, where D&D Beyond still spells them
+that way.
+
 ### Dungeons & Dragons System Reference Document 5.2
 
 This work includes material from the System Reference Document
@@ -204,6 +218,15 @@ is discussed.
   `powers-rules.md`, `chargen-kit-powers.md`: sourced from the GURPS
   Powers line; page numbers are not recorded in the files.
 
+**`tests/shared-cases/gurps-calc.json`**
+Source: `skills/shared/scripts/gurps_calc.py` in this repository, which
+follows *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: the encumbrance level names and multipliers and the nine
+skills that encumbrance penalises are copied from `gurps_calc.py`; the
+case inputs and results are our own arithmetic. Names and numbers only.
+
 **`tools/publish/lib/templates/gurps/blocks/reference.js`**
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
 Tables reproduced: Humanoid Hit Location (p. B552) and
@@ -213,6 +236,16 @@ License: SJG Online Policy
 Transformation: reproduced as an optional collapsible
 reference appendix with citation, displayed only when the
 user expands the details element.
+
+## D&D Beyond
+
+D&D Beyond is a service of Wizards of the Coast LLC. This project is
+not affiliated with it and redistributes nothing from it.
+
+`skills/shared/scripts/dnd_ddb.py` reads a public character at the
+user's request and writes names, numbers and short key facts into the
+user's own vault. The sync tests use invented characters, with SRD 5.1
+and 5.2 names (both CC-BY 4.0).
 
 ## Referenced Frameworks and Concepts
 

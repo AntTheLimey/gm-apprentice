@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.37"
+current_version: "1.10.38"
 ---
 
 # Vault Migration Record
@@ -44,3 +44,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.35 | D&D rules checks: no vault change. The fill tool reports slips and never writes for them | — |
 | 1.10.36 | Sheet skins and frames: no vault change. A vault that sets no skin builds as before. The site's publish tool is repinned to 1.15.0 by the every-pass repin | — |
 | 1.10.37 | None (publish tool only, 1.15.1) | |
+| 1.10.38 | D&D Beyond sync: no vault change. A PC note syncs only when it carries a dndbeyond link; a synced character gets a memory file under _meta/dndbeyond/ | — |

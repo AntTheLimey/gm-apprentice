@@ -259,7 +259,8 @@ Notes:
   and Spell Save DC, and the four `### Carrying` values when the note
   has that table. It maintains a cell that is blank or a bare number
   and keeps one that carries a reason, `+7 (GM boon)`. AC,
-  HP, Speed, attack lines and slot totals are written by hand.
+  HP, Speed, attack lines and slot totals are written by hand, or by
+  the sync on a note with a `dndbeyond` field (below).
 - **Rules checks.** The same tool then reports slips, and never writes
   for them. `WRONG`: class levels that do not add up to Level, hit dice
   that do not match the class levels, more than three attuned items (a
@@ -361,6 +362,51 @@ Notes:
   its "Omit this section" and "Delete this section" notes are not content, and a Spellcasting
   section with nothing filled in is left out, so a non-caster has no
   Spells tab. Braces an author wrote are kept.
+
+### The `dndbeyond` field
+
+A D&D PC note may carry `dndbeyond` in its frontmatter: a D&D Beyond
+character link or a bare character id. `dnd_ddb.py` syncs the note from
+it. An absent or empty field means the note is not synced. The vault
+setting `publish.dndbeyond_sync` (`build` or `manual`) says when the
+sync runs.
+
+Sync owns the cells and rows D&D Beyond has a value for. The cells are
+level, XP, scores, save and skill proficiency, size, Speed, the hit dice
+maximum, the spellcasting ability and slot totals. The lines are those
+of Background, Defences and Proficiencies. The rows are features,
+feats, spells, gear, magic items, coins, attacks and the `### Bonuses`
+rows that the character's items and features give.
+
+- **A number with a reason in brackets is kept**: `15 (homebrew plate)`,
+  `40 ft (boots of striding)`. A blank cell or a bare value is sync's.
+- **Worked out by sync:** `AC`, `HP (Max)` and the attack lines, written
+  only into a cell that is blank or a bare number. Where sync is unsure
+  it writes nothing and reports a `CHECK` row.
+- **Bonuses rows** are matched by `Applies To` and `Source` together,
+  and `Bonus` is a bare signed number. A row with any other pair is the
+  GM's. When a GM's row shares a `Source` with a synced one, sync
+  reports a `CHECK`, because the fill would count both.
+- **Names on the Defences and Proficiencies lines hold no comma.** D&D
+  Beyond's `Crossbow, Light` is written `Light Crossbow`. Table rows
+  keep D&D Beyond's spelling.
+- A new row's `Summary` is left blank, and a `Summary` or `Notes` cell
+  that holds text is never changed.
+
+Sync remembers the names D&D Beyond gave at the last sync in
+`_meta/dndbeyond/<character id>.json`, which is never published. It
+also holds the bracketed values and the Armour Class line sync wrote, so
+a later change to them is followed and not taken for the GM's reason. A
+row is removed only when that file holds its name and D&D Beyond no
+longer has it. A row added by hand needs no marker and stays, and so does a
+second row with the same name as a synced one. With no memory file (a
+first sync, a deleted file, a note outside a vault) nothing is removed,
+and a sync with `--write` inside a vault builds the file again.
+
+Sync never writes vault-owned state: `HP (Current)`, `Temp HP`, hit
+dice spent, death saves, exhaustion, conditions, Heroic Inspiration,
+any `Used` or `Expended` cell, a GM's own Bonuses row, Companions,
+Current Status, Notes, GM Notes or any free text.
 
 ### Cells the live sheet writes back
 

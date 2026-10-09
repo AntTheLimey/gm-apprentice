@@ -201,6 +201,24 @@ describe('excerptFromMarkdown skipSheetLines', () => {
   });
 });
 
+describe('excerptFromMarkdown skipSheetLines and instructions', () => {
+  const opts = { skipSheetLines: true };
+  const instructions = '> Omit this section if the character has no spellcasting.\n\n> Delete this section if the character has no companion.\n\n{Optional one-line present-tense lede for the published page.}\n\n{Player-facing notes. Protected \u2014 skills never modify.}\n';
+  it('never returns a blockquote instruction or a placeholder paragraph', () => {
+    assert.strictEqual(excerptFromMarkdown(instructions, opts), '');
+  });
+  it('returns the first sentence of the prose that follows the instructions', () => {
+    assert.strictEqual(excerptFromMarkdown(instructions + '\nA sailor out of Brest. He owes the Guild.\n', opts), 'A sailor out of Brest.');
+  });
+  it('skips a blockquote in the middle and reads on to the prose after it', () => {
+    assert.strictEqual(excerptFromMarkdown('> "Never again," she said.\n> Not here.\n\nShe keeps a lighthouse. Alone.\n', opts),
+      'She keeps a lighthouse.');
+  });
+  it('still reads a blockquote for every other caller', () => {
+    assert.strictEqual(excerptFromMarkdown('> Omit this section. Really.\n'), 'Omit this section.');
+  });
+});
+
 describe('excerptFromMarkdown edge stops', () => {
   it('does not return a bare stop for text that opens with one', () => {
     assert.strictEqual(excerptFromMarkdown('. foo'), '. foo');

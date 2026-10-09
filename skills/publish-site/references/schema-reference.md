@@ -30,6 +30,7 @@ These entity types have purpose-built page layouts.
 | `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
 | `sheet_skin`, `sheet_frame` | Optional | This character's own look, over the campaign's. See `sheet-skins.md` |
+| `dndbeyond` | Optional | D&D only. A D&D Beyond character link or id; `dnd_ddb.py` syncs the note from it. Not shown on the site |
 
 **Layout — single panel vs. tabbed:** When no story companion file
 exists, the PC template renders body content as collapsible accordion
@@ -371,6 +372,7 @@ and affect the whole site rather than individual entity pages. See
 | `inbox` | `publish.inbox` | switch | off | The change-request widget on each PC page. Needs a KV store wired in the site's `wrangler.toml` |
 | `pc_prose_sections` | `publish.pc_prose_sections` | list of heading titles | empty | Extra `##` sections a PC page keeps when `character_sheets` is off, on top of the built-in list |
 | `sheet_skin`, `sheet_frame` | `publish.sheet_skin`, `publish.sheet_frame` | id | `plain`; the skin's own frame | The look of every PC page. See `sheet-skins.md` |
+| `dndbeyond_sync` | `publish.dndbeyond_sync` | `build` or `manual` | `manual` | When `dnd_ddb.py` syncs D&D PC notes that carry a `dndbeyond` link |
 
 A switch takes `true`/`false` or the words `yes`, `no`, `on`, `off`
 (any case). Any other value, or a key left empty, counts as off and
