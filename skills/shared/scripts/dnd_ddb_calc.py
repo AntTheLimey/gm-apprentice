@@ -26,14 +26,13 @@ player hid. One line that cannot be worked out makes the whole list unsure.
 Stdlib only.
 """
 
-import hashlib
 import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable, Iterator
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from dnd_ddb_read import (ABILITIES, ABILITY_WORDS, CLASS_FEATURE, ITEM_ROW_TYPE, Attack,  # noqa: E402
+from dnd_ddb_read import (ABILITIES, ABILITY_WORDS, ITEM_ROW_TYPE, Attack,  # noqa: E402
                           Character, Unreadable, Worked, _ability_mod, _char_values, _class_rows,
                           _dict, _dicts, _equipped, _int, _inventory, _item_name, _list, _live_item,
                           _live_modifiers, _num, _of, _text, _worth, safe_name)
@@ -60,19 +59,17 @@ BRANCHING = frozenset((("set", "unarmored-armor-class"), ("ignore", "unarmored-d
 # Kinds of modifier that change how a weapon attacks in ways this calculator does not follow.
 WEAPON_UNKNOWN = frozenset(("natural-weapon",))
 PACT_WEAPON = "enable-pact-weapon"                # the feature that lets a weapon be marked as a pact weapon
-# D&D Beyond keys a few rules on a name alone, and those names are from outside the free
-# rules, so they are held here as digests and never written. A name is matched by putting
-# it through `_digest` (lower case, single spaces, SHA-256).
+# Names D&D Beyond keys a rule on; used only to recognise a case, never shown, never written to a note.
+# A name is matched lower case with single spaces.
 #   armour class trait: a species trait with an armour class rule of its own (unsure)
 #   pact option: the class option that makes a pact weapon magical (unsure)
 #   marked weapon: the feature, beside the pact one, that lets a weapon be marked as its own
 #   weapon kind: a kind of modifier that changes how a weapon attacks (unsure)
 BY_NAME: dict[str, frozenset[str]] = {
-    "armour class trait": frozenset(("25c865a5c9f3f910296f5133d5940cd71758778d1810e25b71e6d88d3cb201e1",
-                                     "1e91b168f61983b2805fc4e2e194fdf49cdc9a3c36f3f5aa41c9723ecefd6cab")),
-    "pact option": frozenset(("9bf5d2d564ae0708ab4acc8a7a75ff0ee7d88b31670316f92d87ea9876d4653c",)),
-    "marked weapon": frozenset(("f4d64f38e6970dd92406719676b6772e75628fef819c38be92c1627ded206e5c",)),
-    "weapon kind": frozenset(("00b4b01c51972f6cd1c3d31a8619853a2adfd2f9c032c1a9a0a4d314c04df1c8",)),
+    "armour class trait": frozenset(("carapace", "integrated protection")),
+    "pact option": frozenset(("improved pact weapon",)),
+    "marked weapon": frozenset(("enable-hex-weapon",)),
+    "weapon kind": frozenset(("kensei",)),
 }
 
 # The player's own adjustments (characterValues type ids) each sum reads. Any other on the
@@ -223,13 +220,9 @@ def _guarded(work: Callable[[_Sheet], Worked], data: object, c: Character) -> Wo
 
 # --- small sums -----------------------------------------------------------------------------
 
-def _digest(name: object) -> str:
-    return hashlib.sha256(" ".join(_text(name).lower().split()).encode("utf-8")).hexdigest()
-
-
 def _named(rule: str, name: object) -> bool:
     """Whether this name is one D&D Beyond keys the rule on."""
-    return _digest(name) in BY_NAME[rule]
+    return " ".join(_text(name).lower().split()) in BY_NAME[rule]
 
 
 def _level(s: _Sheet) -> int:

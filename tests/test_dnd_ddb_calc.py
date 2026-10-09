@@ -330,14 +330,14 @@ def test_a_speed_bonus_for_going_unarmoured_is_not_an_armour_class_rule():
 
 
 def by_name(monkeypatch, rule, name):
-    """Stand an invented name in for the ones the module holds as digests."""
-    monkeypatch.setitem(calc.BY_NAME, rule, frozenset((calc._digest(name),)))
+    """Stand an invented name in for the ones the module keys a rule on."""
+    monkeypatch.setitem(calc.BY_NAME, rule, frozenset((" ".join(name.lower().split()),)))
 
 
-def test_names_are_matched_by_digest_whatever_their_case_and_spacing(monkeypatch):
+def test_names_are_matched_whatever_their_case_and_spacing(monkeypatch):
     by_name(monkeypatch, "pact option", "Zzyx  Edge")
     assert calc._named("pact option", " zzyx edge ") and not calc._named("pact option", "Zzyx Edges")
-    assert all(len(d) == 64 and int(d, 16) >= 0 for held in calc.BY_NAME.values() for d in held)
+    assert all(n == " ".join(n.lower().split()) for held in calc.BY_NAME.values() for n in held)
 
 
 def test_ac_is_unsure_about_a_species_trait_the_site_counts_by_name(monkeypatch):
@@ -908,3 +908,31 @@ def test_a_conditional_magic_bonus_on_a_weapon_and_a_conditional_unarmed_die_are
     assert line(attacks(modifiers=mods, **sword), "Mace, +1") == ("+6", "1d6+3 bludgeoning")
     fists = (("feat", "set", "unarmed-damage-die", None, {"dice": dice("1d4"), "restriction": "while zzyx"}),)
     assert line(attacks(modifiers=fists), "Unarmed Strike") == ("+6", "4 bludgeoning")
+
+
+# --- the names a rule is keyed on, each reaching its branch ------------------------------------
+
+@pytest.mark.parametrize("trait", ["Carapace", "Integrated Protection"])
+def test_a_species_trait_with_an_armour_class_rule_of_its_own_makes_armour_class_unsure(trait):
+    assert ac(racial_traits=((trait, None, None),)) == Worked(None, "", f"{trait} has an armour class rule of its own")
+
+
+def test_an_option_that_makes_a_pact_weapon_magical_makes_attacks_unsure():
+    pact = {**MACE, "modifiers": (SIMPLE_WEAPONS, ("class", "enable-feature", calc.PACT_WEAPON, None))}
+    data = character(classes=FIGHTER, stats=STRONG, character_values=((28, True, "item:Mace"),), **pact)
+    data["options"] = {"class": [{"componentId": 1, "definition": {"id": 9, "name": "improved pact weapon"}}]}
+    assert read(data).attacks.unsure == "Mace is a pact weapon an option makes magical, which this calculator does not work out"
+
+
+def test_a_weapon_marked_for_the_hex_feature_is_found_by_its_slug():
+    blade = dict(inventory=(held("Greatsword"),), stats=(10, 14, 14, 10, 12, 18),
+                 item_details={"Greatsword": weapon("2d6", category=MARTIAL)})
+    feature = (MARTIAL_WEAPONS, ("class", "enable-feature", "enable-hex-weapon", None, {"componentId": 77}),
+               ("class", "replace-weapon-ability", "charisma-score", None, {"componentId": 77, "statId": 6}))
+    marked = attacks(modifiers=feature, character_values=((29, True, "item:Greatsword"),), **blade)
+    assert line(marked, "Greatsword") == ("+7", "2d6+4 slashing")
+
+
+def test_a_modifier_of_the_kind_named_kensei_makes_attacks_unsure():
+    assert attacks(modifiers=(("class", "kensei", "longsword", None),)) \
+        == Worked(None, "", "a weapon rule this calculator does not know (kensei)")
