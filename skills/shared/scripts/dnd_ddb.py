@@ -535,6 +535,7 @@ def find_table(lines: list[str], h2: str, h3: str) -> Table | None:
     """The first table under the heading, with its blank rows (Note.table drops those)."""
     cur2 = cur3 = ""
     table: Table | None = None
+    header_at = -1
     in_fm = bool(lines) and lines[0].strip() == "---"
     fence: str | None = None
     for i, raw in enumerate(lines):
@@ -559,10 +560,12 @@ def find_table(lines: list[str], h2: str, h3: str) -> Table | None:
             continue
         cells = split_cells(s)
         if table is None:
-            table = Table(cells, [], i)
+            table, header_at = Table(cells, [], i), i
         else:
+            # The divider is the line directly under the header; a row named `---` further down is a row.
+            divider = table.last == header_at and any(cells) and all(SEPARATOR.match(c) for c in cells if c)
             table.last = i
-            if not all(SEPARATOR.match(c) for c in cells if c) or not any(cells):
+            if not divider:
                 table.rows.append((i, cells))
     return table
 
@@ -702,6 +705,14 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
                gave: Gave | None = None) -> list[RowEdit]:
     """`remembered` holds the keys D&D Beyond gave on the last sync: a row that matches nothing is
     removed only when its key is in it."""
+    skipped = [RowEdit("CHECK", spec.locus, "an entry with no usable name was skipped")
+               for e in entries if not norm(e.name)]
+    entries = [e for e in entries if norm(e.name)]
+    return skipped + plan_named(lines, spec, entries, remembered, gave)
+
+
+def plan_named(lines: list[str], spec: Spec, entries: list[Entry], remembered: Collection[str],
+               gave: Gave | None) -> list[RowEdit]:
     table = find_table(lines, spec.h2, spec.h3)
     key = column(table.header, spec.key) if table else -1
     also = column(table.header, spec.second) if table and spec.second else -1
@@ -820,6 +831,8 @@ def plan_rows(text: str, c: Character, seen: Seen | None = None, gave: Gave | No
     out: list[RowEdit] = []
     for name, spec in SPECS.items():
         out.extend(plan_table(lines, spec, entries_for(name, c), remembered_for(seen, spec.list_id), gave))
+        out.extend(RowEdit("CHECK", spec.locus, "an entry with no usable name was skipped")
+                   for _ in range(c.nameless.get(name, 0)))
     return out + plan_coins(lines, c)
 
 

@@ -171,6 +171,7 @@ class Character:
     ac: Worked = field(default_factory=_not_worked)
     attacks: Worked = field(default_factory=_not_worked)
     bonuses: list[Bonus] = field(default_factory=list)
+    nameless: dict[str, int] = field(default_factory=dict)    # list name -> entries skipped for having no usable name
 
 
 # --- small accessors: nothing below indexes into something that may not be a dict ----------
@@ -628,7 +629,7 @@ def _spell(row: dict, source: str) -> Spell | None:
                  _spell_duration(_dict(sd.get("duration"))), tags, source)
 
 
-def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict) -> list[Spell]:
+def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict, lost: list[int] | None = None) -> list[Spell]:
     char_id = d.get("id")
     first = safe_name(_dict(classes[0].get("definition")).get("name"))
     by_feature: dict[int, str] = {}
@@ -641,6 +642,8 @@ def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict) -> lis
 
     def keep(row: dict, source: str) -> None:
         sp = _spell(row, source)
+        if sp is None and lost is not None:
+            lost.append(1)
         if sp and ((sp.name, source) not in found or "Always prepared" in sp.tags):
             found[(sp.name, source)] = sp
 
@@ -810,6 +813,7 @@ def read(data: object) -> Character:
     gear, magic = _inventory_lists(rows, values)
     align = _num(d.get("alignmentId"))
 
+    lost: list[int] = []
     character = Character(
         name=safe_name(d.get("name")),
         classes=[_class_level(c) for c in classes],
@@ -826,12 +830,16 @@ def read(data: object) -> Character:
         class_features=_features(class_defs, class_uses, scores, pb),
         species_traits=_features(traits, _action_uses(d, "race"), scores, pb),
         feats=_features(feat_defs, _action_uses(d, "feat"), scores, pb, bookkeeping=False),
-        spells=_spells(d, classes, rows, values),
+        spells=_spells(d, classes, rows, values, lost),
         armor=armor, weapons=weapons, tools=tools, languages=languages,
         gear=gear, magic_items=magic,
         coins=_coins(d),
         speed=_walking_speed(d, everything, scores, rows),
     )
+    unnamed = [sum(1 for fd in defs if not LEVEL_PREFIX.sub("", safe_name(fd.get("name")))) for defs in (class_defs, traits, feat_defs)]
+    character.nameless = {k: n for k, n in (
+        ("class_features", unnamed[0]), ("species_traits", unnamed[1]), ("feats", unnamed[2]), ("spells", len(lost)),
+        ("gear", sum(1 for r in rows if not _item_name(r, values)))) if n}
     # The calculator reads this module, so it is brought in here and not at the top.
     import dnd_ddb_calc
     character.hp_max = dnd_ddb_calc.hp_max(d, character)
