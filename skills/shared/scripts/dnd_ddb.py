@@ -419,6 +419,9 @@ def plan_lines(note: Note, c: Character, seen: Seen | None = None, gave: Gave | 
                          ("Background", c.background), ("Alignment", c.alignment)):
         if value is not None and not safe(value).strip():
             continue
+        if value is None and any(not k.name.strip() for k in c.classes):
+            out.append(Edit("CHECK", f"Background / {label}", "a class has no usable name; nothing was written for the line"))
+            continue
         hit = note.bold_at(label.lower(), "background")
         if not hit:
             out.append(missing_line(label, "Background"))

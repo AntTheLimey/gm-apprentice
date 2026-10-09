@@ -102,3 +102,11 @@ def test_nothing_but_a_row_leaves_sync_text(monkeypatch):
     report = sync_text(TEMPLATE, character())
     assert report.rows == [("ERROR", "sync", "could not be synced (ZeroDivisionError); nothing was written")]
     assert report.text == TEMPLATE
+
+
+def test_a_class_with_no_usable_name_is_a_check_and_the_line_is_not_written():
+    data = character(classes=((SYMBOLS, 5, "", None),), hit_points={"base": 20})
+    first = sync_text(TEMPLATE, data)
+    assert ("CHECK", "Background / Class/Subclass", "a class has no usable name; nothing was written for the line") in first.rows
+    second = sync_text(first.text, data, first.seen)
+    assert [r for r in second.rows if r[0] != "CHECK"] == []
