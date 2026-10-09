@@ -362,6 +362,8 @@ def _hp_max(s: _Sheet) -> Worked:
     total = base + _mod(s, 3) * level + _int(d.get("bonusHitPoints"))
     for origin, group in s.by_origin.items():
         for m in _of(group, "bonus", "hit-points-per-level"):
+            if not steady(m):
+                continue
             levels = level
             if origin == "class" and len(s.classes) > 1:   # a class feature's bonus counts its own class's levels
                 mine = s.owner.get(_int(m.get("componentId"), -1))
@@ -369,7 +371,7 @@ def _hp_max(s: _Sheet) -> Worked:
                     raise _Unsure("a per-level hit point bonus does not say which class it belongs to")
                 levels = _int(s.classes[mine].get("level"))
             total += levels * _int(m.get("value"))
-    for m in _of(s.shared, "bonus", "hit-points"):          # once, not per level; a healing item's dice add nothing
+    for m in _sure(s, "bonus", "hit-points"):          # once, not per level; a healing item's dice add nothing
         stat = _num(m.get("statId"))
         total += _mod(s, stat) if stat is not None else _int(m.get("value"))
     return Worked(max(1, total), "", "")
@@ -395,7 +397,7 @@ def _item_ac(s: _Sheet, row: dict) -> int:
     base = _num(_dict(row.get("definition")).get("armorClass"))
     if base is None:
         raise _Unsure(f"{_item_name(row, s.values)} has no armour class in the data")
-    return base + sum(_int(m.get("value")) for m in _of(_own(s.d, row), "bonus", "armor-class") if _counts(m, row))
+    return base + sum(_int(m.get("value")) for m in _of(_own(s.d, row), "bonus", "armor-class") if _counts(m, row) and steady(m))
 
 
 def _dex_in(s: _Sheet, row: dict) -> int:
@@ -597,7 +599,7 @@ def _weapon_line(s: _Sheet, row: dict, facts: dict) -> Attack | None:
     for way in ways[1:]:
         if way[:2] >= best[:2]:                   # of equals, the later ability
             best = way
-    magic = sum(_int(m.get("value")) for m in _of(own, "bonus", "magic") if _counts(m, row)) \
+    magic = sum(_int(m.get("value")) for m in _of(own, "bonus", "magic") if _counts(m, row) and steady(m)) \
         + sum(_int(m.get("value")) for m in _sure(s, "bonus", "magic"))
 
     def about(kind: str, two_hands: bool) -> int:
@@ -658,7 +660,7 @@ def _unarmed(s: _Sheet) -> Attack | None:
     if _num(mine.get(13)) is not None:
         hit = _int(mine.get(13))
     fixed = strength + _total(s, "damage", {"strength-attacks"}) + _total(s, "damage", subs) + _int(mine.get(10))
-    dice = [d for d in (_die(m.get("dice")) for m in _of(s.shared, "set", "unarmed-damage-die")) if d]
+    dice = [d for d in (_die(m.get("dice")) for m in _sure(s, "set", "unarmed-damage-die")) if d]
     if dice:
         count, size, more = max(dice, key=lambda d: d[0] * (d[1] + 1) + 2 * d[2])   # the highest on average
         return Attack(name, _signed(hit), f"{_dice_text(count, size, more + fixed)} bludgeoning")

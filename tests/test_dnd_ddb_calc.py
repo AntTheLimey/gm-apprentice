@@ -883,3 +883,28 @@ def test_odd_values_inside_a_character_never_raise():
     for work in (calc.hp_max, calc.armour_class, calc.attacks):
         assert isinstance(work(data, c), Worked)
     assert calc.armour_class(data, c) == Worked(None, "", "Leather has no armour class in the data")
+
+
+# --- a condition written on a bonus keeps it out of every sum ---------------------------
+
+def test_a_conditional_bonus_on_the_armour_itself_is_left_out():
+    worn = (held("Leather, +1", "armor", magic=True), held("Shield, +2", "shield", magic=True))
+    details = {"Leather, +1": armour(11), "Shield, +2": armour(2, SHIELD)}
+    plain = (("item", "bonus", "armor-class", 1, {"item": "Leather, +1"}),)
+    sometimes = (("item", "bonus", "armor-class", 2, {"item": "Shield, +2", "restriction": "against zzyx attacks"}),)
+    assert ac(inventory=worn, item_details=details, modifiers=plain).value == 16
+    assert ac(inventory=worn, item_details=details, modifiers=plain + sometimes).value == 16
+
+
+def test_a_conditional_hit_point_bonus_is_left_out():
+    base = hp(hit_points={"base": 22}).value
+    assert hp(hit_points={"base": 22}, modifiers=(("feat", "bonus", "hit-points", 7, {"restriction": "while zzyx"}),)).value == base
+    assert hp(hit_points={"base": 22}, modifiers=(("feat", "bonus", "hit-points-per-level", 2, {"restriction": "while zzyx"}),)).value == base
+
+
+def test_a_conditional_magic_bonus_on_a_weapon_and_a_conditional_unarmed_die_are_left_out():
+    sword = dict(inventory=(held("Mace, +1", magic=True),), item_details={"Mace, +1": weapon("1d6", "Bludgeoning")})
+    mods = (SIMPLE_WEAPONS, ("item", "bonus", "magic", 1, {"restriction": "against zzyx"}))
+    assert line(attacks(modifiers=mods, **sword), "Mace, +1") == ("+6", "1d6+3 bludgeoning")
+    fists = (("feat", "set", "unarmed-damage-die", None, {"dice": dice("1d4"), "restriction": "while zzyx"}),)
+    assert line(attacks(modifiers=fists), "Unarmed Strike") == ("+6", "4 bludgeoning")
