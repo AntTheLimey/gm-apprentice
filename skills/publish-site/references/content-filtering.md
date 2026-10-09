@@ -314,7 +314,14 @@ custom input as an alternative.
 ## Publish Modes
 
 - `player` (default): Only player-known content is published
-- `full`: Everything is published (GM's private reference copy)
+- `full`: The GM's own copy. Unplayed sessions and scenes publish and
+  the publish manifest is not applied. `exclude_sections`,
+  `exclude_fields`, `exclude_callouts`, `exclude_dirs`,
+  `exclude_drafts` and a note's own `publish: false` still apply, so
+  GM Notes and `secrets` are not on a `full` site
+
+The build takes `Player` or ` FULL ` as written; any other value is
+`player`, with a warning naming `publish.mode`.
 
 ## Setup Questioning Flow
 

@@ -32,7 +32,7 @@ publish:
 |---------|----------|-------------|
 | Site | `publish.site` | Switch: whether the vault has a site at all. See § Switches |
 | Site folder | `publish.site_dir` | Where the site is, when `publish.site` is on. `init` writes it |
-| Publish mode | `publish.mode` | `player` or `full` |
+| Publish mode | `publish.mode` | `player` or `full` (default: `player`). Any other value is `player`, with a build warning. See `content-filtering.md` § Publish Modes |
 | Site title | `publish.site_title` | Name shown in the nav bar and browser tab |
 | Landing tagline | `publish.theme.tagline` | One-sentence hook under the title on the landing page (default: none) |
 | Footer | `publish.footer` | Text for the footer of every page (default: none) |
@@ -50,10 +50,12 @@ publish:
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`). Spelling is normalized (trailing `/`, leading `./`, backslashes, an absolute path inside the vault) and matched case-insensitively, so `"NPCs/Hidden/"` and `"npcs/hidden"` exclude the same folder |
 | Landing NPC count | `publish.landing.max_npcs` | Cards in "NPCs in Play" (default: `6`) |
 | Landing location count | `publish.landing.max_locations` | Cards in "Latest Locations" (default: `4`) |
+| Landing event count | `publish.landing.max_events` | Cards in "Latest Events" (default: `4`) |
 | Landing recency window | `publish.landing.recency_window` | How many recent sessions feed the scoring (default: `3`) |
 | Featured NPCs | `publish.landing.featured_npcs` | Pin NPCs to the front of their section, in order (see § Pinning landing entries) |
 | Featured locations | `publish.landing.featured_locations` | Same, for locations |
-| Quick links | `publish.landing.quick_links` | A short row of pinned links near the top of the landing page |
+| Quick links | `publish.landing.quick_links` | A short row of pinned links on the landing page, after the hero, the latest session and the team |
+| Explore card lines | `publish.landing.explore_descriptions` | A map overriding the line under each Explore card: `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events` (default: the genre's lines) |
 | Campaign image | `publish.theme.campaign_image` | Vault-relative path to hero image |
 | Theme palette | `publish.theme.palette` | Colour scheme (primary, accent, background, text) |
 | Theme fonts | `publish.theme.fonts` | Heading and body font families. `fonts.source: self-host` (new vaults) downloads the Google-hosted families once into the vault's `_meta/font-cache/` and serves them from the site, so visitors never contact Google (needs network on the first build only; a failed download warns and uses the fallback stack). `google` (the default for vaults that never set it) pulls custom families from Google Fonts at page load and the build warns about it; `local` self-hosts your own files instead — `fonts.files` lists `{family, path, weight?, style?}` entries copied into the site's `fonts/` (`path` must be `.woff2`/`.woff`/`.ttf`/`.otf`) and referenced with `@font-face` |
@@ -61,7 +63,7 @@ publish:
 | Default light/dark mode | `publish.theme.default_mode` | Which palette a reader starts in: `system` (follow their OS, the default), `dark` or `light`. Readers switch with the ☀/☾ button in the nav, and their choice is remembered per site. The button appears only with a genre preset and no custom `theme.palette`, the themes that ship both palettes |
 | 404 message | `publish.four_oh_four.message` | Custom in-world 404 text |
 | Per-file field overrides | `publish.overrides.fields` | Re-admit an excluded frontmatter field for one named file (see § Per-file field overrides) |
-| Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures index pages |
+| Section index titles | `publish.section_titles` | Override h1 titles on the Locations/Factions/Items/Creatures/Documents index pages |
 | Exclude drafts | `publish.exclude_drafts` | When `true`, DRAFT entities are excluded entirely (default: `false`) |
 | Image optimization | `publish.images` | Opt-in WebP re-encoding of copied images (default: off) |
 | Section banners | `publish.banners` | Hero image or clickable map at the top of a section index |
@@ -78,8 +80,8 @@ publish:
 > the `session-wrapup` skill keeps current. The overview is located by its
 > `type: campaign_overview` frontmatter (not by filename, so a renamed overview
 > still resolves) and is read from the full vault corpus, so it applies even
-> though the overview is normally excluded from publishing. `setting_year` and
-> `total_sessions` remain as fallbacks when those fields are absent.
+> though the overview is normally excluded from publishing. `setting_year` remains
+> as the fallback for the date when that field is absent.
 
 ### Section index titles
 
@@ -98,7 +100,7 @@ publish:
     factions: "Powers & Syndicates"
 ```
 
-Valid keys: `locations`, `factions`, `items`, `creatures`.
+Valid keys: `locations`, `factions`, `items`, `creatures`, `documents`.
 
 ### Theme genre presets
 
