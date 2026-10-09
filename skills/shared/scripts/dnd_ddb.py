@@ -70,8 +70,8 @@ from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
-from vaultlib import (entity_type, extract_frontmatter, fence_step, read_publish_scalar,  # noqa: E402
-                      vault_files)
+from vaultlib import (entity_type, extract_frontmatter, fence_step, is_unchecked_source,  # noqa: E402
+                      read_publish_scalar, vault_files)
 
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
@@ -83,6 +83,7 @@ LABEL_AT = re.compile(r"\*\*[^*:]+:\*\*")
 ABILITY_LABEL = re.compile(r"^spellcasting ability(?:\s*\((.+)\))?$")
 NO = frozenset(("no", "n", "false", "0", "-", "—", "–"))
 DASHES = frozenset(("-", "—", "–"))
+NOTHING = DASHES | {"none", "n/a"}       # what a list line says when it has nothing
 # Characters that end a line when the note is split, and the one that ends a cell.
 BREAKS = re.compile(r"[\r\n\x0b\x0c\x1c-\x1e\x85  |]")
 DEFENCES = (("Resistances", "resistances"), ("Immunities", "immunities"),
@@ -309,7 +310,7 @@ def plan_spellcasting(note: Note, c: Character) -> list[Edit]:
             want = named[0].casting_ability
         elif len(casters) > 1:
             gives = ", ".join(f"{k.casting_ability} ({k.name})" for k in casters)
-            out.append(Edit("KEPT", locus, f"{text or '(blank)'}; several casting classes; D&D Beyond gives {gives}"))
+            out.append(Edit("CHECK", locus, f"{text or '(blank)'}; several casting classes, so it is not written; D&D Beyond gives {gives}"))
             continue
         else:
             want = casters[0].casting_ability
@@ -390,7 +391,7 @@ def judge_list(locus: str, line: int, old: str, names: list[str], remembered: Co
     holds it; any other entry stays."""
     names = line_names(names)
     gives = {norm(n) for n in names}
-    entries = [] if blank(old) or old.strip() in DASHES else split_entries(old)
+    entries = [] if blank(old) or old.strip().lower() in NOTHING else [e for e in split_entries(old) if e.lower() not in NOTHING]
     kept = [e for e in entries if norm(e) not in gives and norm(e) not in remembered]
     new = ", ".join(names + kept) or "—"
     if old == new:
@@ -1383,6 +1384,17 @@ def note_link(fm: dict[str, Any]) -> object:
     return None if link in (None, []) or not str(link).strip() else link
 
 
+def has_list_rows(text: str) -> bool:
+    """Does the note already hold a named row in any of the lists sync keeps?"""
+    lines = text.splitlines()
+    for spec in (*SPECS.values(), BONUS_SPEC):
+        table = find_table(lines, spec.h2, spec.h3)
+        key = column(table.header, spec.key) if table else -1
+        if key >= 0 and any(key < len(cells) and not blank(clean(cells[key])) for _i, cells in table.rows):
+            return True
+    return False
+
+
 def sync_note(text: str, vault: Path | None = None) -> Report:
     """One note: its link, what was remembered, the request, then sync_text."""
     link = note_link(extract_frontmatter(text) or {})
@@ -1392,6 +1404,9 @@ def sync_note(text: str, vault: Path | None = None) -> Report:
     if char_id is None:
         return Report([("ERROR", "dndbeyond", "this is not a D&D Beyond character link")], text)
     seen = load_seen(state_path(vault, char_id)) if vault is not None else None
+    if vault is not None and seen is None and has_list_rows(text):
+        print("dnd_ddb: nothing is remembered of an earlier sync of this note, so no row is removed this time",
+              file=sys.stderr)
     try:
         data = FETCH(char_id)
     except Unreadable as e:
@@ -1468,6 +1483,8 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
             print(f'dnd_ddb: publish.dndbeyond_sync is "{setting}", not build or manual; nothing was synced')
             return 0
     system = vault_system(vault)
+    if system != SYSTEM and on_build:
+        return 0                      # a site build in another system has nothing to say about this
     if system != SYSTEM:
         said = f"is {system}, not {SYSTEM}" if system else f"is not recorded, not {SYSTEM}"
         print(f"dnd_ddb: this vault's system {said}; nothing was read")
@@ -1476,6 +1493,8 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
     sheets, failed = 0, False
     # vault_files only finds the PC notes; each is re-read byte-exact (line endings kept, strict utf-8).
     for rel, found_text in vault_files(vault):
+        if is_unchecked_source(rel):
+            continue                  # _QA and _archive hold records of the past, not live sheets
         fm = extract_frontmatter(found_text) or {}
         if entity_type(fm) != "pc" or note_link(fm) is None:
             continue

@@ -267,9 +267,20 @@ def test_two_casting_classes_labelled_rows_each_get_their_own():
     assert "| Spellcasting Ability (Cleric) | WIS |" in out
 
 
-def test_two_casting_classes_unlabelled_row_is_kept():
+def test_two_casting_classes_unlabelled_row_is_a_check_for_the_gm():
     e = one(TEMPLATE, "Spellcasting / Spellcasting Ability", got(classes=MULTI))
-    assert e.status == "KEPT"
+    assert e.status == "CHECK" and "several casting classes" in e.message
+
+
+def test_none_and_na_on_a_list_line_are_the_dash():
+    text = swap(TEMPLATE, "**Immunities:** {list}", "**Immunities:** Poison, None, N/A")
+    c = got(modifiers=(("class", "immunity", "poison", None),))
+    e = one(text, "Stat Sheet / Defences / Immunities", c)
+    assert (e.status, e.new) == ("WRITE", "**Immunities:** Poison")
+    for word in ("None", "none", "N/A", "n/a"):
+        bare = swap(TEMPLATE, "**Immunities:** {list}", f"**Immunities:** {word}")
+        assert one(bare, "Stat Sheet / Defences / Immunities", c).new == "**Immunities:** Poison"
+    assert one(swap(TEMPLATE, "**Immunities:** {list}", "**Immunities:** None"), "Stat Sheet / Defences / Immunities").status == "WRITE"
 
 
 def test_a_non_caster_has_no_spellcasting_edit():

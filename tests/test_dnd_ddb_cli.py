@@ -745,3 +745,43 @@ def test_the_memory_is_never_written_outside_the_vaults_meta_folder(tmp_path, ca
     main(["--party", str(root), "--write"])
     found = {p.relative_to(root).as_posix() for p in root.rglob("*.json")}
     assert found and all(f.startswith("_meta/dndbeyond/") for f in found)
+
+
+def test_party_leaves_qa_and_archive_notes_alone(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    pcs(root, ("Alder",))
+    for folder in ("_QA", "_archive"):
+        (root / folder).mkdir()
+        (root / folder / "Copy.md").write_text(note(link=f"{LINK[:-1]}7"), encoding="utf-8")
+    before = (root / "_archive" / "Copy.md").read_bytes()
+    assert main(["--party", str(root), "--write"]) == 0
+    assert fake.asked == ["424240"]
+    assert (root / "_archive" / "Copy.md").read_bytes() == before
+    assert lines(capsys)[-1].endswith("sheets: 1")
+
+
+def test_on_build_in_a_vault_of_another_system_prints_nothing(tmp_path, capsys, fake):
+    root = vault(tmp_path, system="gurps-4e", setting="build")
+    pcs(root)
+    assert main(["--party", str(root), "--on-build"]) == 0
+    assert capsys.readouterr().out == "" and fake.asked == []
+
+
+def test_a_note_with_rows_and_no_memory_says_so_once_on_stderr(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    pcs(root, ("Alder",))
+    fake.data = character(hit_points={"base": 25}, inventory=(("Torch", 3, 1, False, False, "gear"),))
+    assert main(["--party", str(root), "--write"]) == 0
+    capsys.readouterr()
+    assert main(["--party", str(root), "--write"]) == 0
+    assert "nothing is remembered" not in capsys.readouterr().err        # the memory now exists
+    (root / "_meta" / "dndbeyond" / "424240.json").unlink()
+    assert main(["--party", str(root)]) == 0
+    assert capsys.readouterr().err.count("nothing is remembered of an earlier sync") == 1
+
+
+def test_a_template_note_with_no_rows_needs_no_such_line(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    pcs(root, ("Alder",))
+    assert main(["--party", str(root)]) == 0
+    assert "nothing is remembered" not in capsys.readouterr().err
