@@ -101,7 +101,7 @@ def test_hp_current_is_byte_identical_whatever_happens_to_hp_max():
 # --- the Armour Class line ---------------------------------------------------------------
 
 def test_the_armour_class_line_takes_the_parts_only_when_blank_or_a_placeholder():
-    c = fake(hp=1, ac=15, parts="Chain Mail 16 + shield 2")
+    c = fake(hp=1, ac=18, parts="Chain Mail 16 + shield 2")
     edits = [e for e in plan_worked(TEMPLATE, c) if e.locus == LINE_LOCUS]
     assert rows(edits) == [("WRITE", LINE_LOCUS, "(blank) -> Chain Mail 16 + shield 2")]
     assert edits[0].new == "**Armour Class:** Chain Mail 16 + shield 2"
@@ -112,7 +112,7 @@ def test_the_armour_class_line_takes_the_parts_only_when_blank_or_a_placeholder(
     assert [e for e in plan_worked(hand, c) if e.locus == LINE_LOCUS] == []
     empty = swap(TEMPLATE, "**Armour Class:** {what it is made of}", "**Armour Class:**")
     assert [e.status for e in plan_worked(empty, c) if e.locus == LINE_LOCUS] == ["WRITE"]
-    none = fake(hp=1, ac=15, parts="")
+    none = fake(hp=1, ac=18, parts="")
     assert [e for e in plan_worked(TEMPLATE, none) if e.locus == LINE_LOCUS] == []
 
 
@@ -125,7 +125,7 @@ def test_nothing_with_a_pipe_or_a_break_is_written():
 
 
 def test_a_second_pass_writes_nothing_more():
-    c = fake(hp=38, ac=15, parts="Chain Mail 16", attacks=[Attack("Longsword", "+6", "1d8+3 slashing")])
+    c = fake(hp=38, ac=16, parts="Chain Mail 16", attacks=[Attack("Longsword", "+6", "1d8+3 slashing")])
     once = sync(TEMPLATE, c)
     assert [e.status for e in plan_worked(once, c)] == ["SAME", "SAME"]
     assert [e for e in plan_attacks(once, c) if e.status in ("ADD", "REMOVE", "WRITE")] == []

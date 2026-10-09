@@ -1034,16 +1034,47 @@ def plan_worked_cell(note: Note, label: str, locus: str, worked: Any) -> list[Ed
     return [edit]
 
 
-def plan_worked(text: str, c: Character) -> list[Edit]:
+AC_LINE = "Stat Sheet / Defences / Armour Class"
+AC_PART = re.compile(r"(-?\d+)$")
+
+
+def line_total(text: str) -> int | None:
+    """What an `**Armour Class:**` line adds up to (`Leather 11 + Dex 2` is 13); None when a part
+    of it does not end in a number."""
+    parts = [AC_PART.search(p.strip()) for p in text.split(" + ")]
+    return sum(int(m.group(1)) for m in parts) if parts and all(parts) else None
+
+
+def plan_ac_line(note: Note, c: Character, gave: Gave | None) -> list[Edit]:
+    """The `**Armour Class:**` line is sync's while it is blank or still the line sync wrote last
+    time; one the GM has changed is theirs, and only an armour class it no longer adds up to is said."""
+    hit = note.bold_at("armour class", "stat sheet")
+    if not hit or c.ac.value is None or not c.ac.parts:
+        return []
+    i, old = hit
+    new = safe(c.ac.parts)
+    mine = gave is not None and norm(old) == norm(gave.last.get(AC_LINE, ""))
+    if blank(old.strip()) or mine:
+        if gave is not None:
+            gave.now[AC_LINE] = new
+        if norm(old) == norm(new):
+            return []
+        return [as_line("Armour Class", write(AC_LINE, "" if blank(old.strip()) else old, None, new, i))]
+    total, cell = line_total(old), note.attr("stat sheet", "combat", "ac")
+    have, reasoned = number(cell.text) if cell else (None, False)
+    shown = have if reasoned and have is not None else c.ac.value     # a bare cell is about to be sync's
+    if total is not None and total != shown:
+        return [Edit("CHECK", AC_LINE, f"the line adds up to {total} and the AC cell says {shown}; the line is yours, so it was not rewritten")]
+    return []
+
+
+def plan_worked(text: str, c: Character, gave: Gave | None = None) -> list[Edit]:
     """HP (Max), AC and the `**Armour Class:**` line, from what the calculator worked out.
     HP (Current) is never touched."""
     note = Note(text)
     out = plan_worked_cell(note, "hp (max)", f"{COMBAT_LOCUS} / HP (Max)", c.hp_max)
     out += plan_worked_cell(note, "ac", f"{COMBAT_LOCUS} / AC", c.ac)
-    hit = note.bold_at("armour class", "stat sheet")
-    if hit and c.ac.value is not None and c.ac.parts and blank(hit[1].strip()):
-        out.append(as_line("Armour Class", write("Stat Sheet / Defences / Armour Class", "", None, safe(c.ac.parts), hit[0])))
-    return out
+    return out + plan_ac_line(note, c, gave)
 
 
 def attack_entries(worked: Any) -> list[Entry]:
@@ -1229,7 +1260,7 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     bonuses = plan_bonuses(t, c, seen)
     rows += shown(bonuses)
     t = write_rows(t, bonuses)
-    worked = plan_worked(t, c)
+    worked = plan_worked(t, c, gave)
     rows += shown(worked)
     t = write_edits(t, worked)
     lists = plan_rows(t, c, seen, gave)
