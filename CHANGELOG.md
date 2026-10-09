@@ -28,7 +28,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was treated as not-player: the publish list was ignored and unplayed
   sessions and scenes were published, with nothing said. Case and spaces
   round the word are now forgiven, and any other value is `player`, with
-  a build warning that names the setting. Publish tool 1.15.4.
+  a build warning that names the setting. `Full` in capitals used to be
+  a half-way mode (the list ignored, prep notes still held back) and is
+  now `full`. The session check in `vault_check.py` reads the mode the
+  same way. Publish tool 1.15.4.
 - **The apprentice's settings reference matches the tool.** `full` mode
   was described as publishing everything; it still leaves out the
   excluded sections, fields, callouts and folders. The reference now

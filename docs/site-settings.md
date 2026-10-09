@@ -110,7 +110,7 @@ These decide which notes, and which parts of a note, reach the site.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.mode` | `player` leaves out notes for sessions and scenes that have not been played and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own | `player` or `full` | `player` |
+| `publish.mode` | `player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own | `player` or `full` | `player` |
 | `publish.folder_map` | Which vault folders are published, and the web address each gets | A vault folder and its address, one pair to a line | Nothing is mapped; setting up a site writes the standard map |
 | `publish.attachments_dir` | The vault folder that holds pictures | A folder name | `_attachments` |
 | `publish.exclude_dirs` | Vault folders never published | A list of folders | `_meta`, `_Templates` |
@@ -128,7 +128,10 @@ still want. The same holds for `publish.exclude_fields` and
 
 **`full` mode still hides your notes to yourself.** The excluded
 sections, fields, callouts and folders are left out in both modes, and
-so is any note marked `publish: false`.
+so is any note marked `publish: false`. Pictures are different: `full`
+copies every picture in the attachments folder to the site, used on a
+page or not, where `player` copies only the pictures a published page
+shows.
 
 ```yaml
 publish:
@@ -234,11 +237,11 @@ The apprentice does the setting up and writes the switch for you.
 | `publish.landing.max_npcs` | How many people appear under "NPCs in Play" | A number above 0 | `6` |
 | `publish.landing.max_locations` | How many places appear under "Latest Locations" | A number above 0 | `4` |
 | `publish.landing.max_events` | How many events appear under "Latest Events" | A number above 0 | `4` |
-| `publish.landing.recency_window` | How many recent sessions decide who and what is "in play" | A number | `3` |
+| `publish.landing.recency_window` | How many recent sessions decide who and what is "in play" | A number above 0 | `3` |
 | `publish.landing.featured_npcs` | People pinned to the front of their row, in your order | A list of note names | Nobody pinned |
 | `publish.landing.featured_locations` | The same, for places | A list of note names | Nothing pinned |
 | `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
-| `publish.landing.explore_descriptions` | Your own line under each card in the "Explore" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
+| `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
 
 Name a note the way a link does, by its file name: `Hugh_Cavendish`, not
 "Hugh Cavendish". A name that matches no published page gives a build
