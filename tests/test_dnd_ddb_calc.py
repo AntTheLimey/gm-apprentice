@@ -343,7 +343,7 @@ def test_names_are_matched_whatever_their_case_and_spacing(monkeypatch):
 def test_ac_is_unsure_about_a_species_trait_the_site_counts_by_name(monkeypatch):
     by_name(monkeypatch, "armour class trait", "Zzyx Hide")
     assert ac(racial_traits=(("Zzyx Hide", None, None),)) \
-        == Worked(None, "", "Zzyx Hide has an armour class rule of its own")
+        == Worked(None, "", "a species trait has an armour class rule of its own")
     assert ac(racial_traits=(("Zzyx Shell", None, None),)).value == 12
 
 
@@ -579,7 +579,7 @@ def test_attacks_are_unsure_about_a_weapon_with_no_damage_dice():
 def test_attacks_are_unsure_about_a_kind_of_weapon_modifier_it_does_not_know(monkeypatch, kind):
     by_name(monkeypatch, "weapon kind", "zzyx-style")
     assert attacks(modifiers=(("class", kind, "longsword", None),)) \
-        == Worked(None, "", f"a weapon rule this calculator does not know ({kind})")
+        == Worked(None, "", "a weapon rule this calculator does not know")
     assert attacks(modifiers=(("class", "zzyx-stance", "longsword", None),)).unsure == ""
 
 
@@ -914,7 +914,7 @@ def test_a_conditional_magic_bonus_on_a_weapon_and_a_conditional_unarmed_die_are
 
 @pytest.mark.parametrize("trait", ["Carapace", "Integrated Protection"])
 def test_a_species_trait_with_an_armour_class_rule_of_its_own_makes_armour_class_unsure(trait):
-    assert ac(racial_traits=((trait, None, None),)) == Worked(None, "", f"{trait} has an armour class rule of its own")
+    assert ac(racial_traits=((trait, None, None),)) == Worked(None, "", "a species trait has an armour class rule of its own")
 
 
 def test_an_option_that_makes_a_pact_weapon_magical_makes_attacks_unsure():
@@ -935,4 +935,4 @@ def test_a_weapon_marked_for_the_hex_feature_is_found_by_its_slug():
 
 def test_a_modifier_of_the_kind_named_kensei_makes_attacks_unsure():
     assert attacks(modifiers=(("class", "kensei", "longsword", None),)) \
-        == Worked(None, "", "a weapon rule this calculator does not know (kensei)")
+        == Worked(None, "", "a weapon rule this calculator does not know")

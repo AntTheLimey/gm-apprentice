@@ -59,7 +59,7 @@ BRANCHING = frozenset((("set", "unarmored-armor-class"), ("ignore", "unarmored-d
 # Kinds of modifier that change how a weapon attacks in ways this calculator does not follow.
 WEAPON_UNKNOWN = frozenset(("natural-weapon",))
 PACT_WEAPON = "enable-pact-weapon"                # the feature that lets a weapon be marked as a pact weapon
-# Names D&D Beyond keys a rule on; used only to recognise a case, never shown, never written to a note.
+# Names D&D Beyond keys a rule on; used only to recognise a case, never shown in a report row, never written to a note.
 # A name is matched lower case with single spaces.
 #   armour class trait: a species trait with an armour class rule of its own (unsure)
 #   pact option: the class option that makes a pact weapon magical (unsure)
@@ -473,7 +473,7 @@ def _armour_class(s: _Sheet) -> Worked:
         raise _Unsure("the base armour is set by hand")
     for trait in _dicts(_dict(s.d.get("race")).get("racialTraits")):
         if _named("armour class trait", _dict(trait.get("definition")).get("name")):
-            raise _Unsure(f"{safe_name(_dict(trait.get('definition')).get('name'))} has an armour class rule of its own")
+            raise _Unsure("a species trait has an armour class rule of its own")
     armour = [r for r in s.worn if _armour_kind(r) is not None]
     for r in s.worn:                              # armour by any other sign, of a kind not known here
         defn = _dict(r.get("definition"))
@@ -914,7 +914,7 @@ def _attacks(s: _Sheet) -> Worked:
         raise _Unsure("a Martial Arts die is in play, which this calculator does not work out")
     for m in s.shared:
         if _text(m.get("type")) in WEAPON_UNKNOWN or _named("weapon kind", m.get("type")):
-            raise _Unsure(f"a weapon rule this calculator does not know ({safe_name(m.get('type'))})")
+            raise _Unsure("a weapon rule this calculator does not know")
     unarmed = _unarmed(s)
     lines = _weapon_lines(s) + ([unarmed] if unarmed is not None else []) + _action_lines(s) + _cantrip_lines(s)
     return Worked(_one_each(lines), "", "")

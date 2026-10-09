@@ -651,7 +651,7 @@ def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict, lost: 
 
     def keep(row: dict, source: str) -> None:
         sp = _spell(row, source)
-        if sp is None and lost is not None:
+        if sp is None and lost is not None and isinstance(row.get("definition"), dict):   # an unpicked choice has none
             lost.append("name" if not safe_name(_dict(row.get("definition")).get("name")) else "level")
         if sp and ((sp.name, source) not in found or "Always prepared" in sp.tags):
             found[(sp.name, source)] = sp
