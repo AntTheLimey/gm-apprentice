@@ -3112,6 +3112,12 @@ tr:nth-child(even) {
    panel; inside the folio the mockup toggles [hidden] instead, so re-establish that here. */
 .coc-sheet-root .folio .tab-panel{ display:block;}
 .coc-sheet-root .folio .tab-panel[hidden]{ display:none;}
+/* the Story and Journey panels hold the site's own parts (story link, route, timeline,
+   connections), drawn in the site's colours: a dark theme's pale text on many sites. On
+   the folio's paper the site's colour names stand for the sheet's inks instead. */
+.coc-sheet-root :is(#p-story, #p-journey){
+  --text:var(--ink); --text-muted:var(--ink-soft); --accent:var(--oxblood);
+  --border:var(--rule-soft); --bg:var(--box); --bg-card:var(--box);}
 .coc-sheet-root .rechead{ font-family:var(--didone); text-align:center; color:var(--oxblood); font-size:.72rem; letter-spacing:.28em; text-transform:uppercase; margin:1.6rem 0 .4rem; display:flex; align-items:center; gap:1rem; justify-content:center;}
 .coc-sheet-root .rechead::before,.coc-sheet-root .rechead::after{ content:""; height:1px; background:var(--rule-soft); flex:1;}
 .coc-sheet-root details.acc{ border:1px solid var(--rule-soft); border-radius:3px; margin-top:.6rem; background:rgba(255,250,235,.4);}
