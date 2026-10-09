@@ -22,6 +22,20 @@ fiction, and which are our own descriptions of mechanics.
 
 ## Open Game Content
 
+### Dungeons & Dragons System Reference Document 5.1
+
+This work includes material from the System Reference Document
+5.1 ("SRD 5.1") by Wizards of the Coast LLC, available at
+https://dnd.wizards.com/resources/systems-reference-document. The
+SRD 5.1 is licensed under the Creative Commons Attribution 4.0
+International License, available at
+https://creativecommons.org/licenses/by/4.0/legalcode.
+
+Content derived from the SRD 5.1 is limited to a few item, weapon and
+feature names (such as `Rope, Hempen` and `Crossbow, Light`) used in the
+D&D Beyond sync tests and comments, where D&D Beyond still spells them
+that way.
+
 ### Dungeons & Dragons System Reference Document 5.2
 
 This work includes material from the System Reference Document
@@ -204,6 +218,15 @@ is discussed.
   `powers-rules.md`, `chargen-kit-powers.md`: sourced from the GURPS
   Powers line; page numbers are not recorded in the files.
 
+**`tests/shared-cases/gurps-calc.json`**
+Source: `skills/shared/scripts/gurps_calc.py` in this repository, which
+follows *GURPS Basic Set 4th Edition* (Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: the encumbrance level names and multipliers and the nine
+skills that encumbrance penalises are copied from `gurps_calc.py`; the
+case inputs and results are our own arithmetic. Names and numbers only.
+
 **`tools/publish/lib/templates/gurps/blocks/reference.js`**
 Source: *GURPS Basic Set 4th Edition* (Steve Jackson Games).
 Tables reproduced: Humanoid Hit Location (p. B552) and
@@ -223,23 +246,32 @@ here: no character data, no rules text and no site code.
 `skills/shared/scripts/dnd_ddb.py` reads one public character, at the
 user's request, and writes names, numbers and short key facts (a spell's
 level, casting time, range, component letters and duration; an item's
-quantity, weight and charges) into the user's own vault. It writes no
-rules text and no descriptions. It reads the public character address
-that D&D Beyond's own character page reads, with no login. That address
-is unofficial, carries no licence and may change. A character is read
-only when the user asks, and only if its owner has made it public.
+quantity, weight and charges; a defence's short condition, up to 80
+characters) into the user's own vault. It writes no descriptions and no
+rules text beyond that short condition. It reads the public character
+address that D&D Beyond's own character page reads, with no login. That
+address is unofficial, is not a published API, carries no licence and may
+change.
+
+The tool makes one request per character, only when the user asks, for
+characters their owners have made public, and names itself in its
+User-Agent. Use of D&D Beyond is subject to its terms, which are the
+user's to follow.
 
 `skills/shared/scripts/dnd_ddb_read.py` and
-`skills/shared/scripts/dnd_ddb_calc.py` were written from the author's
-own notes on the shape of the public character data, in the author's
-own words. The calculator recognises a handful of features by a digest
-(SHA-256) of their name, so that no name from outside the free rules is
-written in this repository.
+`skills/shared/scripts/dnd_ddb_calc.py` were written by the author, in
+the author's own words, from private notes describing how D&D Beyond's
+character sheet arrives at its numbers. Those notes were made by
+studying the public character data and the sheet's publicly served code.
+No code from D&D Beyond was copied or translated; the sums were checked
+against the finished numbers of real public characters. Five names from
+outside the free rules are written in the calculator, only to recognise a
+case D&D Beyond treats specially; none is ever written to a note.
 
 The sync tests (`tests/test_dnd_ddb_*.py`, built by
 `tests/ddb_builder.py`) use invented characters in the shape of that
-data, with SRD 5.2 names (CC-BY 4.0) and made-up names for anything
-meant to be outside the SRD.
+data, with SRD 5.1 and 5.2 names (both CC-BY 4.0) and made-up names for
+anything meant to be outside the SRD.
 
 ## Referenced Frameworks and Concepts
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """An invented character in D&D Beyond's shape, for tests of dnd_ddb_read.
 
-SRD 5.2 names and made-up ones only; nothing here is copied from a real
+SRD 5.1 and 5.2 names (both CC-BY 4.0) and made-up ones only; nothing here is copied from a real
 character. Not a test file.
 """
 
