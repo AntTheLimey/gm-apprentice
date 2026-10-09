@@ -240,41 +240,12 @@ user expands the details element.
 ## D&D Beyond
 
 D&D Beyond is a service of Wizards of the Coast LLC. This project is
-not affiliated with it, and nothing from D&D Beyond is redistributed
-here: no character data, no rules text and no site code.
+not affiliated with it and redistributes nothing from it.
 
-`skills/shared/scripts/dnd_ddb.py` reads one public character, at the
-user's request, and writes names, numbers and short key facts (a spell's
-level, casting time, range, component letters and duration; an item's
-quantity, weight and charges; a defence's short condition, up to 80
-characters) into the user's own vault. It writes no descriptions and no
-rules text beyond that short condition. It reads the public character
-address that D&D Beyond's own character page reads, with no login. That
-address is unofficial, is not a published API, carries no licence and may
-change.
-
-The tool makes one request per character, only when the user asks, for
-characters their owners have made public, and names itself in its
-User-Agent. Use of D&D Beyond is subject to its terms, which are the
-user's to follow.
-
-`skills/shared/scripts/dnd_ddb_read.py` and
-`skills/shared/scripts/dnd_ddb_calc.py` were written by the author, in
-the author's own words, from private notes describing how D&D Beyond's
-character sheet arrives at its numbers. Those notes were made by
-studying the public character data and the sheet's publicly served code.
-No code from D&D Beyond was copied or translated; the sums were checked
-against the finished numbers of real public characters. Five names from
-outside the free rules are written in the calculator, only to recognise a
-case D&D Beyond treats specially. The calculator never writes them to a
-note or prints them in a report. A character who has a trait or option of
-one of those names still has it listed in the note under its own name,
-which comes from that character's data like any other feature name.
-
-The sync tests (`tests/test_dnd_ddb_*.py`, built by
-`tests/ddb_builder.py`) use invented characters in the shape of that
-data, with SRD 5.1 and 5.2 names (both CC-BY 4.0) and made-up names for
-anything meant to be outside the SRD.
+`skills/shared/scripts/dnd_ddb.py` reads a public character at the
+user's request and writes names, numbers and short key facts into the
+user's own vault. The sync tests use invented characters, with SRD 5.1
+and 5.2 names (both CC-BY 4.0).
 
 ## Referenced Frameworks and Concepts
 
