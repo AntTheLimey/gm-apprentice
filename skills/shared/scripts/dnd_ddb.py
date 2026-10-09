@@ -1,33 +1,32 @@
 #!/usr/bin/env python3
-"""Bring a D&D 5e (2024) PC note up to date from a D&D Beyond `Character`.
+"""Bring a D&D 5e (2024) PC note up to date from its D&D Beyond character.
 
-Reads the note the way dnd_sheet.py does and plans one `Edit` per cell or
-labelled line, then writes the ones marked WRITE. A cell that is blank, a
-`{placeholder}` or bare text is sync's to maintain. A cell with a bracketed
-reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
+Asks D&D Beyond for one public character (a link in the note's `dndbeyond` field), reads
+the note the way dnd_sheet.py does, plans what to change and writes it whole or not at
+all. A cell that is blank, a `{placeholder}` or bare text is sync's to maintain. A cell
+with a bracketed reason (`18 (tome)`) is the GM's and is kept. Stdlib only.
 
 Usage:
   dnd_ddb.py SHEET.md [--write]               preview (or write) one note
   dnd_ddb.py --party VAULT [--write] [--on-build]   every PC note with a D&D Beyond link
-The only request ever made is to character-service.dndbeyond.com, with a path of digits.
+The only request ever made is to character-service.dndbeyond.com, with a path of digits
+(it may go through the user's own proxy).
 
-This part plans and writes the single cells (Level, XP, ability scores and
-save proficiency, Size, Speed, Hit Dice, skill proficiency, the spellcasting
-ability) and the `**Label:** value` lines (species, class, background,
-alignment, defences, proficiencies), and the lists (features, feats, spells,
-gear, magic items, coins) as table rows that are matched, added, removed or
-kept, and the spell slot totals (and a Warlock's Pact row). Speed is written
-like Level when the cell is blank or one bare speed. The bonuses D&D Beyond's
-data gives (an item's, a feature's) are rows of `### Bonuses`, matched by
-Applies To and Source together, so the fill counts them; any other row of that
-table is the GM's. A name on a labelled line never holds a comma (`Crossbow,
-Light` is written `Light Crossbow`): the line is split on them. It also writes the
-three things dnd_ddb_calc works out: HP (Max) and AC (blank or bare cells), the
-`**Armour Class:**` line (blank or placeholder only) and the attacks table
-(`### Weapons & Damage Cantrips`, a list like the others, Notes never written).
-When the calculator is unsure nothing is written and a CHECK row says why.
-Never written here: Weapon Mastery, HP (Current) and anything a player tracks
-in play.
+What it plans: the single cells (Level, XP, ability scores and save proficiency, Size,
+Speed, Hit Dice, skill proficiency, the spellcasting ability); the `**Label:** value`
+lines (species, class, background, alignment, defences with their short conditions,
+proficiencies), each under its own heading only; the lists (features, feats, spells, gear,
+magic items, coins) as table rows that are matched, added, removed or kept; the spell
+slot totals (and a Warlock's Pact row); and the bonuses D&D Beyond's data gives (an
+item's, a feature's, half proficiency rounded up) as rows of `### Bonuses`, matched by
+Applies To and Source together so the fill counts them; any other row of that table is
+the GM's. A name on a labelled line never holds a comma (`Crossbow, Light` is written
+`Light Crossbow`): the line is split on them. It also writes the three things
+dnd_ddb_calc works out: HP (Max) and AC (blank or bare cells), the `**Armour Class:**`
+line (while blank, or still the line sync wrote) and the attacks table (`### Weapons &
+Damage Cantrips`, a list like the others, Notes never written). When the calculator is
+unsure nothing is written and a CHECK row says why. Never written here: Weapon Mastery,
+HP (Current) and anything a player tracks in play.
 
 Edit statuses: WRITE (the note changes), KEPT (the note is the GM's), SAME,
 CHECK (something to look at; writes nothing). Row statuses: ADD, REMOVE, WRITE,
@@ -38,6 +37,8 @@ Beyond gave for each list are saved to `<vault>/_meta/dndbeyond/<id>.json`. A ro
 (or an entry of a labelled list) that matches nothing on D&D Beyond is removed
 only when that memory holds it; any other row is the GM's and stays, unreported.
 With no memory (a first sync, a lost file, a note outside a vault) nothing is removed.
+The memory also holds the bracketed values and the Armour Class line sync wrote, so that a
+later change to them is followed and not mistaken for the GM's reason.
 
 The planners run in this order, each on the text the step before produced:
 `t = write_edits(t, plan_cells(t, c))`, `t = write_edits(t, plan_slots(t, c))`,
@@ -85,7 +86,7 @@ NO = frozenset(("no", "n", "false", "0", "-", "—", "–"))
 DASHES = frozenset(("-", "—", "–"))
 NOTHING = DASHES | {"none", "n/a"}       # what a list line says when it has nothing
 # Characters that end a line when the note is split, and the one that ends a cell.
-BREAKS = re.compile(r"[\r\n\x0b\x0c\x1c-\x1e\x85  |]")
+BREAKS = re.compile(r"[\r\n\x0b\x0c\x1c-\x1e\x85\u2028\u2029|]")
 DEFENCES = (("Resistances", "resistances"), ("Immunities", "immunities"),
             ("Vulnerabilities", "vulnerabilities"), ("Condition Immunities", "condition_immunities"))
 PROFICIENCIES = (("Armor Training", "armor"), ("Weapons", "weapons"), ("Tools", "tools"),
@@ -1005,9 +1006,8 @@ def plan_slots(text: str, c: Character) -> list[Edit]:
     return out
 
 
-def checks(text: str, c: Character, cells: list[Edit], rows: list[RowEdit]) -> list[Edit]:
-    """CHECK rows for what sync cannot settle itself. `cells` and `rows` are the edits the
-    note has had, for the checks that read them."""
+def checks(text: str, c: Character) -> list[Edit]:
+    """CHECK rows for what sync cannot settle itself."""
     levels = slot_levels(c)
     if levels is None:
         if own_table(c) or not c.classes:
@@ -1177,7 +1177,8 @@ def cannot(reason: str) -> Unreadable:
 
 
 def fetch(char_id: str) -> object:
-    """The "data" object of one character from D&D Beyond. Raises Unreadable. No retry."""
+    """The "data" object of one character from D&D Beyond. Raises Unreadable. No retry. The HTTP
+    request goes to D&D Beyond's character service; the connection may go through the user's proxy."""
     if not ID_DIGITS.fullmatch(char_id):
         raise cannot("that is not a character id")
     request = urllib.request.Request(SERVICE + char_id, headers={"User-Agent": USER_AGENT,
@@ -1190,7 +1191,7 @@ def fetch(char_id: str) -> object:
             while True:
                 if CLOCK() - started > DEADLINE:
                     raise cannot("it took too long")
-                chunk = response.read(min(CHUNK, MAX_BODY + 1 - size))
+                chunk = response.read1(min(CHUNK, MAX_BODY + 1 - size))
                 if not chunk:
                     break
                 chunks.append(chunk)
@@ -1307,7 +1308,7 @@ def sync_parts(text: str, data: object, seen: Seen | None) -> Report:
     attacks = plan_attacks(t, c, seen, gave)
     rows += shown(attacks)
     t = write_rows(t, attacks)
-    rows += shown(checks(t, c, cells + slots + worked, bonuses + lists + attacks))
+    rows += shown(checks(t, c))
     fill = dnd_sheet.plan(t)
     errors = [r for r in fill if r.status == "ERROR"]
     if errors:
@@ -1325,7 +1326,7 @@ NOT_IN_A_VAULT = "dnd_ddb: this note is not inside a vault, so nothing is rememb
 
 def state_path(vault: Path, char_id: str) -> Path:
     """Where the memory for one character lives. Only digits ever reach the path."""
-    if not re.fullmatch(r"[0-9]{1,12}", char_id):
+    if not ID_DIGITS.fullmatch(char_id):
         raise ValueError("a character id is digits only")
     return vault / "_meta" / "dndbeyond" / f"{char_id}.json"
 
@@ -1480,14 +1481,14 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
         if setting.lower() == "manual":
             return 0
         if setting.lower() != "build":
-            print(f'dnd_ddb: publish.dndbeyond_sync is "{setting}", not build or manual; nothing was synced')
+            print(PLAIN.sub(" ", f'dnd_ddb: publish.dndbeyond_sync is "{setting}", not build or manual; nothing was synced'))
             return 0
     system = vault_system(vault)
     if system != SYSTEM and on_build:
         return 0                      # a site build in another system has nothing to say about this
     if system != SYSTEM:
         said = f"is {system}, not {SYSTEM}" if system else f"is not recorded, not {SYSTEM}"
-        print(f"dnd_ddb: this vault's system {said}; nothing was read")
+        print(PLAIN.sub(" ", f"dnd_ddb: this vault's system {said}; nothing was read"))
         return 0
     rows: list[tuple[str, str, str]] = []
     sheets, failed = 0, False

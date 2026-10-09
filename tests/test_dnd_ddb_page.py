@@ -3,6 +3,7 @@
 Node into a pytest tmp_path; skipped when Node is not installed. No network, no deploy."""
 
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -21,9 +22,11 @@ from dnd_ddb import sync_text  # noqa: E402
 TEMPLATE = (ROOT / "skills" / "shared" / "templates" / "pc-dnd-5e-2024.md").read_text(encoding="utf-8")
 BUILD_LIB = ROOT / "tools" / "publish" / "lib" / "build"
 NODE = shutil.which("node")
-needs_node = pytest.mark.skipif(NODE is None, reason="node is not installed")
+# VAULT_CHECK_REQUIRE_NODE turns a missing Node into a failure, as the migrate tests do.
+needs_node = pytest.mark.skipif(NODE is None and not os.environ.get("VAULT_CHECK_REQUIRE_NODE"),
+                                reason="node is not installed")
 BUILD_JS = "require(process.argv[1]).build({configPath: process.argv[2]})"
-HAND_ROW = "| Moon-touched Blade | 1 | | |"
+HAND_ROW = "| Abbot Blade | 1 | | |"
 SPELLS = (("Fire Bolt", 0, True, False, False, False, (1, 2), "Wizard"),
           ("Shield", 1, True, False, False, False, (1, 2), "Wizard"),
           ("Fireball", 3, True, False, False, False, (1, 2), "Wizard"))
@@ -73,7 +76,7 @@ def site(tmp_path_factory):
     note = synced.replace("| Torch | 3 | 1 lb | |", "| Torch | 3 | 1 lb | |\n" + HAND_ROW, 1)
     once = sync_text(note, wizard_five(), first.seen)
     twice = sync_text(once.text, wizard_five(), once.seen)
-    assert HAND_ROW in twice.text and not [r for r in twice.rows + once.rows if "Moon-touched" in r[1]]
+    assert HAND_ROW in twice.text and not [r for r in twice.rows + once.rows if "Abbot" in r[1]]
     output, pages = build_site(tmp_path_factory.mktemp("page"), {"Tavin_Reedmere.md": twice.text})
     return output, pages["tavin-reedmere"], twice.text
 
@@ -114,7 +117,7 @@ def test_the_build_names_no_warning_for_the_synced_pc(site):
 def test_the_hand_added_row_is_on_the_page_by_its_plain_name_after_two_syncs(site):
     _, html, text = site
     assert HAND_ROW in text
-    assert '<span class="dnd5e-entry-name">Moon-touched Blade</span>' in html
+    assert '<span class="dnd5e-entry-name">Abbot Blade</span>' in html
     assert "gift of the abbot" not in html
 
 

@@ -3,7 +3,7 @@
 
 `read()` takes the object under the `data` key of the public character JSON
 and returns a `Character`: finished ability scores, proficiencies, features,
-spells, gear and coins. This is the only file that knows D&D Beyond's shape;
+spells, gear and coins. This file and dnd_ddb_calc.py know D&D Beyond's shape;
 the rest of the sync works from a `Character`. The sums follow the way the
 site itself counts (which modifiers are live, the 20-point cap, level-scaled
 uses); anything not in the data raises `Unreadable` or is skipped, never

@@ -132,7 +132,7 @@ def test_a_placeholder_row_is_blank_too_but_a_row_with_other_content_is_not_remo
 
 def test_extra_row_is_removed_when_remembered_and_a_hand_added_one_stays():
     text = note("| Second Wind | | 3 | | Short Rest | |\n| Old Trick | | | | | |\n"
-                "| Moon-touched Blade | | | | | |\n")
+                "| Abbot Blade | | | | | |\n")
     c = got(class_features=(("Second Wind", 3, 1),))
     assert report(text, c, seen={"class features": ["old trick", "second wind"]}) == [
         ("SAME", "Class Features / Second Wind", "matches"),
@@ -492,9 +492,9 @@ def test_a_remembered_row_named_with_brackets_is_removed_too():
 
 
 def test_a_hand_added_row_stays_byte_for_byte_and_is_never_reported():
-    text = note("| Moon-touched Blade | | | | | |\n| Second Wind | | 3 | | Short Rest | |\n")
+    text = note("| Abbot Blade | | | | | |\n| Second Wind | | 3 | | Short Rest | |\n")
     c = got(class_features=(("Second Wind", 3, 1),))
-    for seen in (None, {}, {"class features": ["second wind"]}, {"gear": ["moon-touched blade"]}):
+    for seen in (None, {}, {"class features": ["second wind"]}, {"gear": ["abbot blade"]}):
         assert report(text, c, seen=seen) == [("SAME", "Class Features / Second Wind", "matches")]
         assert after(text, c, seen=seen) == text
 

@@ -409,8 +409,8 @@ def test_speed_adds_bonuses_and_takes_the_armour_strength_penalty():
 # --- safe_name ----------------------------------------------------------
 
 def test_safe_name():
-    assert safe_name("Bigby's Hand") == "Bigby's Hand"
-    assert safe_name("Bigby’s Hand") == "Bigby's Hand"
+    assert safe_name("Tavin's Hand") == "Tavin's Hand"
+    assert safe_name("Tavin’s Hand") == "Tavin's Hand"
     bad = safe_name("A | B\n## GM Notes <!-- x --> [[Y]] `z` *w* _v_")
     assert not any(ch in bad for ch in "|\n#<>[]`*_") and "GM Notes" in bad
     assert len(safe_name("x" * 200)) == 80

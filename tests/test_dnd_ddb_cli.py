@@ -322,7 +322,7 @@ class Response:
     def __exit__(self, *exc):
         return False
 
-    def read(self, size=-1):
+    def read1(self, size=-1):          # fetch must use read1 so a slow server cannot hold one read past the deadline
         if self.tick:
             self.tick()
         out, self.body = (self.body, b"") if size < 0 else (self.body[:size], self.body[size:])
@@ -785,3 +785,12 @@ def test_a_template_note_with_no_rows_needs_no_such_line(tmp_path, capsys, fake)
     pcs(root, ("Alder",))
     assert main(["--party", str(root)]) == 0
     assert "nothing is remembered" not in capsys.readouterr().err
+
+
+def test_a_control_character_in_the_vault_setting_is_not_echoed(tmp_path, capsys, fake):
+    root = vault(tmp_path)
+    (root / "_meta" / "vault-config.md").write_bytes(
+        b"---\npublish:\n  system: dnd-5e-2024\n  dndbeyond_sync: always\x07\x1b[2J\n---\n")
+    assert main(["--party", str(root), "--on-build"]) == 0
+    out = capsys.readouterr().out
+    assert "nothing was synced" in out and "\x07" not in out and "\x1b" not in out

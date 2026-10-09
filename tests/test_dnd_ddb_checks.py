@@ -81,7 +81,7 @@ def test_warlock_with_a_pact_row_gets_the_row_relabelled_and_set():
     out = synced(c, WITH_PACT)
     assert totals(out)["Pact (3rd)"] == "2" and totals(out)["1st"] == ""
     assert slot_looks(out) == []
-    assert checks(WITH_PACT, c, [], []) == []
+    assert checks(WITH_PACT, c) == []
 
 
 def test_a_second_plan_on_a_warlock_note_with_a_pact_row_writes_nothing():
@@ -104,7 +104,7 @@ def test_warlock_without_a_pact_row_counts_the_pact_slots_and_says_so():
     out = synced(c)
     assert totals(out)["3rd"] == "2"
     assert slot_looks(out) == []
-    found = checks(TEMPLATE, c, [], [])
+    found = checks(TEMPLATE, c)
     assert [(e.status, e.locus) for e in found] == [("CHECK", CLASS_LOCUS)]
     assert "no Pact row" in found[0].message
     assert "Pact" not in TEMPLATE.split("### Spell Slots")[1].split("### Spells")[0]
@@ -116,7 +116,7 @@ def test_full_and_half_caster_multiclass():
     out = synced(c)
     assert [totals(out)[k] for k in ("1st", "2nd", "3rd", "4th")] == ["4", "3", "3", ""]
     assert slot_looks(out) == []
-    assert checks(out, c, [], []) == []
+    assert checks(out, c) == []
 
 
 def test_warlock_and_sorcerer_multiclass():
@@ -129,7 +129,7 @@ def test_warlock_and_sorcerer_multiclass():
 def test_non_caster_writes_and_reports_nothing():
     c = got(classes=(("Fighter", 5, "", None),))
     assert plan_slots(TEMPLATE, c) == []
-    assert checks(TEMPLATE, c, [], []) == []
+    assert checks(TEMPLATE, c) == []
     out = synced(c)
     assert totals(out) == totals(TEMPLATE) and slot_looks(out) == []
 
@@ -154,20 +154,20 @@ def test_one_class_outside_the_free_rules_with_its_own_table_gets_that_table():
     assert slot_looks(synced(c)) == []          # dnd_rules does not read an unknown class
     out = synced(c)
     assert [totals(out)[k] for k in ("1st", "2nd", "3rd")] == ["4", "3", "2"]
-    assert checks(TEMPLATE, c, [], []) == []
+    assert checks(TEMPLATE, c) == []
 
 
 def test_a_character_with_no_classes_gets_no_slot_check():
     c = got()
     c.classes = []      # the reader refuses a character with none, but the planner is handed any Character
     assert plan_slots(TEMPLATE, c) == []
-    assert checks(TEMPLATE, c, [], []) == []
+    assert checks(TEMPLATE, c) == []
 
 
 def test_unknown_class_in_a_multiclass_writes_nothing_and_checks_once():
     c = got(classes=(("Wizard", 3, "", 4), ("Gloomwright", 2, "", 4)))
     assert plan_slots(TEMPLATE, c) == []
-    found = checks(TEMPLATE, c, [], [])
+    found = checks(TEMPLATE, c)
     assert [(e.status, e.locus, e.message) for e in found] == [
         ("CHECK", CLASS_LOCUS, "the class is outside the free rules; check the slot totals")]
 
@@ -175,13 +175,13 @@ def test_unknown_class_in_a_multiclass_writes_nothing_and_checks_once():
 def test_unknown_class_with_no_table_in_its_data_checks_once():
     c = got(classes=(("Gloomwright", 5, "", None),))
     assert plan_slots(TEMPLATE, c) == []
-    assert [e.status for e in checks(TEMPLATE, c, [], [])] == ["CHECK"]
+    assert [e.status for e in checks(TEMPLATE, c)] == ["CHECK"]
 
 
 def test_a_note_without_a_slots_table_gets_nothing_and_no_pact_check():
     text = "## Spellcasting\n\n| Attribute | Value |\n|---|---|\n| Spell Save DC | |\n"
     assert plan_slots(text, got(classes=WARLOCK)) == []
-    assert checks(text, got(classes=WARLOCK), [], []) == []
+    assert checks(text, got(classes=WARLOCK)) == []
 
 
 def test_crlf_note_keeps_its_line_endings():

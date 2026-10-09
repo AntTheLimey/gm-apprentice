@@ -129,7 +129,7 @@ def test_a_unsure_calculator_gives_check_rows_and_no_writes_for_those_cells():
 
 def edit(text, rope="Rope, Hempen"):
     """The hand-edit sequence from the review focus: a row of the GM's own, a synced row deleted, a score with a reason."""
-    text = swap(text, f"| {rope} |", f"| Moon-touched Blade | 1 | | |\n| {rope} |")
+    text = swap(text, f"| {rope} |", f"| Abbot Blade | 1 | | |\n| {rope} |")
     text = swap(text, "| Torch | 3 | 1 lb | |\n", "")
     return swap(text, "| INT | 16 |", "| INT | 18 (tome) |")
 
@@ -140,9 +140,9 @@ def test_hand_edits_are_kept_a_deleted_row_returns_and_the_next_sync_is_silent()
     hand = edit(first.text)
     second = sync_text(hand, c, first.seen)
     assert ("ADD", "Equipment / Gear / Torch", "not in the note; added") in second.rows
-    assert "| Moon-touched Blade | 1 | | |" in second.text
+    assert "| Abbot Blade | 1 | | |" in second.text
     assert "| INT | 18 (tome) |" in second.text
-    assert not [r for r in second.rows if "Moon-touched" in r[1] + r[2] or r[0] == "REMOVE"]
+    assert not [r for r in second.rows if "Abbot" in r[1] + r[2] or r[0] == "REMOVE"]
     assert any(r[0] == "KEPT" and "INT / Score" in r[1] for r in second.rows)
     third = sync_text(second.text, c, second.seen)
     assert [r for r in third.rows if r[0] in NOT_WRITTEN] == []
@@ -322,14 +322,14 @@ def test_a_row_with_a_bracketed_name_that_sync_added_is_removed_when_dropped():
 
 def test_a_hand_added_row_survives_every_sync_and_is_never_mentioned():
     first = sync_text(TEMPLATE, wizard())
-    hand = swap(first.text, "| Torch | 3 | 1 lb | |\n", "| Torch | 3 | 1 lb | |\n| Moon-touched Blade | 1 | | |\n")
+    hand = swap(first.text, "| Torch | 3 | 1 lb | |\n", "| Torch | 3 | 1 lb | |\n| Abbot Blade | 1 | | |\n")
     seen = first.seen
     for _ in range(3):
         again = sync_text(hand, without_torch(), seen)
-        assert "| Moon-touched Blade | 1 | | |" in again.text
-        assert not [r for r in again.rows if "Moon-touched" in r[1]]
+        assert "| Abbot Blade | 1 | | |" in again.text
+        assert not [r for r in again.rows if "Abbot" in r[1]]
         seen = again.seen
-    assert "moon-touched blade" not in seen["gear"]
+    assert "abbot blade" not in seen["gear"]
 
 
 def test_a_hand_added_row_d_and_d_beyond_later_gains_is_updated_and_then_remembered():
