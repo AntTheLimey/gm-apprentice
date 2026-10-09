@@ -18,6 +18,7 @@ and the spell numbers rides on it as `bonuses`, one per thing it applies to and
 source, in the words dnd_sheet.py reads from the note's `### Bonuses` table.
 """
 
+import math
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -619,7 +620,7 @@ def _spell_duration(x: dict) -> str:
 def _spell(row: dict, source: str) -> Spell | None:
     sd = row.get("definition")
     name = safe_name(_dict(sd).get("name"))
-    if not isinstance(sd, dict) or not name:
+    if not isinstance(sd, dict) or not name or not 0 <= _int(sd.get("level")) <= 9:
         return None
     tags = [t for t, on in (("C", sd.get("concentration")), ("R", sd.get("ritual")),
                             ("Always prepared", row.get("alwaysPrepared"))) if on]
@@ -629,7 +630,7 @@ def _spell(row: dict, source: str) -> Spell | None:
                  _spell_duration(_dict(sd.get("duration"))), tags, source)
 
 
-def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict, lost: list[int] | None = None) -> list[Spell]:
+def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict, lost: list[str] | None = None) -> list[Spell]:
     char_id = d.get("id")
     first = safe_name(_dict(classes[0].get("definition")).get("name"))
     by_feature: dict[int, str] = {}
@@ -643,7 +644,7 @@ def _spells(d: dict, classes: list[dict], rows: list[dict], values: dict, lost: 
     def keep(row: dict, source: str) -> None:
         sp = _spell(row, source)
         if sp is None and lost is not None:
-            lost.append(1)
+            lost.append("name" if not safe_name(_dict(row.get("definition")).get("name")) else "level")
         if sp and ((sp.name, source) not in found or "Always prepared" in sp.tags):
             found[(sp.name, source)] = sp
 
@@ -682,6 +683,8 @@ def _weight_text(each: Fraction) -> str:
 def _each_weight(defn: dict) -> Fraction:
     w = defn.get("weight")
     if isinstance(w, bool) or not isinstance(w, (int, float)) or w <= 0:
+        return Fraction(0)
+    if isinstance(w, float) and not math.isfinite(w):
         return Fraction(0)
     each = Fraction(w).limit_denominator(100)
     return each / max(1, _int(defn.get("bundleSize"), 1)) if defn.get("stackable") else each
@@ -813,7 +816,7 @@ def read(data: object) -> Character:
     gear, magic = _inventory_lists(rows, values)
     align = _num(d.get("alignmentId"))
 
-    lost: list[int] = []
+    lost: list[str] = []
     character = Character(
         name=safe_name(d.get("name")),
         classes=[_class_level(c) for c in classes],
@@ -838,7 +841,8 @@ def read(data: object) -> Character:
     )
     unnamed = [sum(1 for fd in defs if not LEVEL_PREFIX.sub("", safe_name(fd.get("name")))) for defs in (class_defs, traits, feat_defs)]
     character.nameless = {k: n for k, n in (
-        ("class_features", unnamed[0]), ("species_traits", unnamed[1]), ("feats", unnamed[2]), ("spells", len(lost)),
+        ("class_features", unnamed[0]), ("species_traits", unnamed[1]), ("feats", unnamed[2]), ("spells", lost.count("name")),
+        ("spell_levels", lost.count("level")),
         ("gear", sum(1 for r in rows if not _item_name(r, values)))) if n}
     # The calculator reads this module, so it is brought in here and not at the top.
     import dnd_ddb_calc

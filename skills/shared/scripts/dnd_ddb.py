@@ -855,6 +855,8 @@ def plan_rows(text: str, c: Character, seen: Seen | None = None, gave: Gave | No
         out.extend(plan_table(lines, spec, entries_for(name, c), remembered_for(seen, spec.list_id), gave))
         out.extend(RowEdit("CHECK", spec.locus, "an entry with no usable name was skipped")
                    for _ in range(c.nameless.get(name, 0)))
+    out.extend(RowEdit("CHECK", SPECS["spells"].locus, "a spell with a level outside 0 to 9 was skipped")
+               for _ in range(c.nameless.get("spell_levels", 0)))
     return out + plan_coins(lines, c)
 
 
@@ -1264,7 +1266,15 @@ def bonus_reader(c: Character) -> Callable[[str], int | None]:
 
 def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     """The note brought up to date from D&D Beyond's data, and what was done. Pure. `seen` is what
-    the last sync remembered adding: a row or entry leaves only if it is in it."""
+    the last sync remembered adding: a row or entry leaves only if it is in it. Nothing is raised:
+    a failure nobody foresaw is one ERROR row and the text unchanged."""
+    try:
+        return sync_parts(text, data, seen)
+    except Exception as e:     # the data is untrusted; whatever it holds, the note is not touched
+        return Report([("ERROR", "sync", f"could not be synced ({e.__class__.__name__}); nothing was written")], text)
+
+
+def sync_parts(text: str, data: object, seen: Seen | None) -> Report:
     try:
         c = read(data)
     except Unreadable as e:

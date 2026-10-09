@@ -74,3 +74,31 @@ def test_a_class_name_in_brackets_follows_a_change_through_the_memory():
     first = sync_text(TEMPLATE, character(classes=(("Gloomwright (archived)", 5, "", None),), hit_points={"base": 20}))
     third = sync_text(first.text, character(classes=(("Gloomwright (archived)", 6, "", None),), hit_points={"base": 20}), first.seen)
     assert any(r[0] == "WRITE" and r[1] == "Background / Class/Subclass" for r in third.rows)
+
+
+def test_a_spell_level_outside_zero_to_nine_is_skipped_with_a_row():
+    for level in (10, -1, 400):
+        data = character(spells=(("Zzyx Bolt", level, True, False, False, False, (1,), "Wizard"),
+                                 ("Fire Bolt", 0, True, False, False, False, (1,), "Wizard")))
+        first = sync_text(TEMPLATE, data)
+        assert not [r for r in first.rows if r[0] == "ERROR"]
+        assert [r for r in first.rows if r[0] == "CHECK" and r[1] == "Spells" and "level outside 0 to 9" in r[2]]
+        assert "Zzyx Bolt" not in first.text and "Fire Bolt" in first.text
+        assert [r for r in sync_text(first.text, data, first.seen).rows if r[0] != "CHECK"] == []
+
+
+@pytest.mark.parametrize("weight", [float("inf"), float("-inf"), float("nan"), 1e999])
+def test_a_weight_that_is_not_finite_reads_as_no_weight(weight):
+    data = character(inventory=(("Zzyx Sack", 1, weight, False, False, "gear"),))
+    report = sync_text(TEMPLATE, data)
+    assert not [r for r in report.rows if r[0] == "ERROR"]
+    assert "| Zzyx Sack | 1 | — |" in report.text
+
+
+def test_nothing_but_a_row_leaves_sync_text(monkeypatch):
+    def boom(*args, **kwargs):
+        raise ZeroDivisionError("boom")
+    monkeypatch.setattr(dnd_ddb, "plan_cells", boom)
+    report = sync_text(TEMPLATE, character())
+    assert report.rows == [("ERROR", "sync", "could not be synced (ZeroDivisionError); nothing was written")]
+    assert report.text == TEMPLATE
