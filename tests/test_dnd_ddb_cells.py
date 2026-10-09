@@ -332,9 +332,32 @@ def test_class_line_that_differs_is_written_and_one_with_a_reason_kept():
     assert one(text, "Background / Class/Subclass").status == "KEPT"
 
 
-def test_line_the_note_lacks_is_skipped():
+def test_line_the_note_lacks_is_a_check_and_writes_nothing():
     text = swap(TEMPLATE, "**Alignment:** {Alignment}\n\n", "")
-    assert "Background / Alignment" not in edits(text)
+    e = one(text, "Background / Alignment")
+    assert e.status == "CHECK" and "no **Alignment:** line under Background" in e.message and e.line == -1
+
+
+def test_a_line_of_the_same_name_under_gm_notes_is_never_written():
+    text = swap(TEMPLATE, "**Immunities:** {list}\n\n", "")
+    text = swap(text, "**Languages:** {list}\n\n", "")
+    text = swap(text, "**Species:** {Species name}\n\n", "")
+    text = text.rstrip("\n") + ("\n**Immunities:** the players think none\n**Languages:** speaks Infernal in his sleep"
+                               "\n**Species:** a changeling, really\n")
+    c = got(modifiers=(("class", "immunity", "poison", None),), species="Human")
+    found = edits(text, c)
+    assert found["Stat Sheet / Defences / Immunities"].status == "CHECK"
+    assert found["Background / Species"].status == "CHECK"
+    assert not [e for e in found.values() if e.status == "WRITE" and e.locus in ("Stat Sheet / Defences / Immunities", "Background / Species")]
+    after = write_edits(text, list(found.values()))
+    assert after.endswith("**Species:** a changeling, really\n") and "speaks Infernal in his sleep\n" in after
+    assert "the players think none\n" in after
+
+
+def test_a_line_under_the_wrong_heading_is_not_the_line():
+    text = swap(TEMPLATE, "**Alignment:** {Alignment}\n\n", "")
+    text = swap(text, "## Current Status\n", "## Current Status\n\n**Alignment:** Chaotic Good\n")
+    assert one(text, "Background / Alignment", got(alignment_id=2)).status == "CHECK"
 
 
 def test_an_unset_alignment_writes_nothing():

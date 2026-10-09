@@ -401,12 +401,21 @@ def as_line(label: str, edit: Edit) -> Edit:
     return edit
 
 
+def missing_line(label: str, heading: str, locus: str = "") -> Edit:
+    """A CHECK for a labelled line the note does not have under its own heading: sync looks nowhere
+    else (a line of the same name under Notes is the GM's), so nothing is written for it."""
+    return Edit("CHECK", locus or f"{heading} / {label}", f"the note has no **{label}:** line under {heading}; nothing was written for it")
+
+
 def plan_lines(note: Note, c: Character, seen: Seen | None = None, gave: Gave | None = None) -> list[Edit]:
     out: list[Edit] = []
     for label, value in (("Species", c.species), ("Class/Subclass", None),
                          ("Background", c.background), ("Alignment", c.alignment)):
-        hit = note.bold_at(label.lower())
-        if not hit or (value is not None and not safe(value).strip()):
+        if value is not None and not safe(value).strip():
+            continue
+        hit = note.bold_at(label.lower(), "background")
+        if not hit:
+            out.append(missing_line(label, "Background"))
             continue
         i, old = hit
         locus = f"Background / {label}"
@@ -416,12 +425,15 @@ def plan_lines(note: Note, c: Character, seen: Seen | None = None, gave: Gave | 
             new = safe(value)
             edit = judge_text(locus, Cell(i, -1, old), new, old.lower() == new.lower(), gave)
         out.append(as_line(label, edit))
-    for prefix, group in (("Stat Sheet / Defences", DEFENCES), ("Proficiencies", PROFICIENCIES)):
+    for prefix, under, group in (("Stat Sheet / Defences", "stat sheet", DEFENCES),
+                                 ("Proficiencies", "proficiencies", PROFICIENCIES)):
         for label, field in group:
-            hit = note.bold_at(label.lower())
+            hit = note.bold_at(label.lower(), under)
             if hit:
                 remembered = set((seen or {}).get(label.lower(), ()))
                 out.append(as_line(label, judge_list(f"{prefix} / {label}", hit[0], hit[1], getattr(c, field), remembered)))
+            elif line_names(getattr(c, field)):
+                out.append(missing_line(label, prefix.split(" / ")[0], f"{prefix} / {label}"))
     return out
 
 
@@ -1028,7 +1040,7 @@ def plan_worked(text: str, c: Character) -> list[Edit]:
     note = Note(text)
     out = plan_worked_cell(note, "hp (max)", f"{COMBAT_LOCUS} / HP (Max)", c.hp_max)
     out += plan_worked_cell(note, "ac", f"{COMBAT_LOCUS} / AC", c.ac)
-    hit = note.bold_at("armour class")
+    hit = note.bold_at("armour class", "stat sheet")
     if hit and c.ac.value is not None and c.ac.parts and blank(hit[1].strip()):
         out.append(as_line("Armour Class", write("Stat Sheet / Defences / Armour Class", "", None, safe(c.ac.parts), hit[0])))
     return out
