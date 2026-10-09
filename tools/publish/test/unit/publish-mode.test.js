@@ -28,7 +28,7 @@ describe('publish.mode', () => {
   // Anything else used to pass through as written, and the build then treated it as
   // not-player: the publish list was ignored and more was published, silently.
   it('is player for any other value, and says so', () => {
-    for (const line of ['  mode: players\n', '  mode: gm\n', '  mode: true\n', '  mode: [player]\n']) {
+    for (const line of ['  mode: players\n', '  mode: gm\n', '  mode: true\n', '  mode: [player]\n', '  mode:\n', '  mode: ""\n', '  mode: "  "\n']) {
       const { mode, said } = modeOf(line);
       assert.strictEqual(mode, 'player', line);
       assert.strictEqual(said.length, 1, line);

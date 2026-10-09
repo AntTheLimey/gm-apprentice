@@ -105,9 +105,10 @@ function searchFrom(raw, label, warn = console.warn) {
 // A mistyped default_mode falls back to 'system' — say so rather than silently.
 // `mode` is `player` or `full`. Every reader compares it with one of those two words, so
 // a value that is neither (`Player`, `players`) used to count as not-player and publish
-// more, with nothing said. Case and spaces are forgiven; anything else is `player`.
+// more, with nothing said. Case and spaces are forgiven; anything else, a line left empty
+// included, is `player` and is said. Only a setting left out is silent.
 function publishModeFrom(raw, warn = console.warn) {
-  if (raw === undefined || raw === null || raw === '') return PUBLISH_DEFAULTS.mode;
+  if (raw === undefined) return PUBLISH_DEFAULTS.mode;
   const mode = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
   if (mode === 'player' || mode === 'full') return mode;
   warn(`config: publish.mode ${JSON.stringify(raw)} is not player or full; using player`);
