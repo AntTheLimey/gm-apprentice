@@ -266,7 +266,10 @@ studying the public character data and the sheet's publicly served code.
 No code from D&D Beyond was copied or translated; the sums were checked
 against the finished numbers of real public characters. Five names from
 outside the free rules are written in the calculator, only to recognise a
-case D&D Beyond treats specially; none is ever written to a note.
+case D&D Beyond treats specially. The calculator never writes them to a
+note or prints them in a report. A character who has a trait or option of
+one of those names still has it listed in the note under its own name,
+which comes from that character's data like any other feature name.
 
 The sync tests (`tests/test_dnd_ddb_*.py`, built by
 `tests/ddb_builder.py`) use invented characters in the shape of that
