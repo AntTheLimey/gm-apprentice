@@ -4,7 +4,7 @@
 `_meta/vault-config.md` on first setup; a test holds the tree and
 the script in step. `_midwife/` and `_inbox/` are made on demand.
 `_meta/dndbeyond/` is made by the D&D Beyond sync: one file per synced
-character, holding the rows sync added. It is never published.
+character, holding the names D&D Beyond gave at the last sync. It is never published.
 Folders may be added or renamed afterwards.
 
 ```text

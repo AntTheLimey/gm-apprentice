@@ -16,10 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   command: level-ups, new spells, features, feats, gear, magic items,
   coins and speed arrive in the note, with the bonuses its items and
   features give, and every modifier is then worked out again. On
-  eleven real characters a synced sheet's saves, skills, passive
-  scores, initiative, speed, armour class and hit point maximum all
-  equal D&D Beyond's own. The link goes in the PC note's frontmatter as `dndbeyond`
-  (a link or a bare character id); the D&D PC template has the field.
+  eleven real characters a synced sheet's saves, initiative, armour
+  class and hit point maximum equal D&D Beyond's own; speed on the ten
+  that show one; skills and passive scores on the four we hold them
+  for. The attack lines matched on 46 of 47 lines (the miss is two
+  identical weapons shown once, which is by design). The link goes in
+  the PC note's frontmatter as `dndbeyond`
+  (a link or a bare character id, or the link the Share button gives);
+  the D&D PC template has the field.
   `dnd_ddb.py "<note>"` previews one character and
   `dnd_ddb.py --party "<vault>"` every character with a link; `--write`
   applies. The campaign setting `publish.dndbeyond_sync` in
@@ -43,23 +47,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     reason in brackets beside it (`+7 (cloak of elvenkind)`). It writes
     names and numbers only: no descriptions, no rules text and no free
     text.
-  - Sync remembers the rows it added, in
+  - Sync remembers the names D&D Beyond gave at the last sync, in
     `_meta/dndbeyond/<character id>.json`, which is never published. A
-    row is removed only when sync added it on an earlier run and D&D
-    Beyond no longer has it. A row added by hand needs no marker and is
+    row is removed only when that file holds its name and D&D Beyond no
+    longer has it. A row added by hand needs no marker and is
     never removed, nor is a second row with the same name as a synced
     one, and the first sync of a note removes nothing.
   - Limits: the character must be public; a subclass's always-prepared
-    spells, Artificer infusions, and languages and tools picked from
+    spells, item infusions from a class outside the free rules, and
+    languages and tools picked from
     D&D Beyond's lists are not in what it reads and are entered by
     hand; conditional damage and bonuses are left out of the worked-out
     lines; a note in the earlier layout is converted first.
+  - A value D&D Beyond gives that ends in a bracket group (a spell's
+    area, a feat's source, a species) is followed when it changes and is
+    quiet on a second sync; only a reason the GM wrote is kept. A
+    labelled line is read only under its own heading, and a line the
+    note lacks is a `CHECK`. The `**Armour Class:**` line follows the
+    armour class while it is the line sync wrote. A nameless entry, a
+    spell level outside 0 to 9 and a reason beside the Level are each one
+    clear row. A condition written on a bonus keeps it out of an item's
+    armour class, the hit point maximum, a weapon's magic bonus and the
+    unarmed die. Half proficiency rounded up is a Bonuses row at an odd
+    proficiency bonus. `ddb.ac` and profile links are accepted, and
+    `--party` leaves `_QA` and `_archive` alone.
   - Guidance is in
     `skills/ttrpg-expert/systems/dnd-5e-2024/character-sheet.md`,
     "D&D Beyond sync".
 - Shared test cases for the GURPS sums
   (`tests/shared-cases/gurps-calc.json`). The Python calculator and the
-  publish tool's copy both run them, so the two cannot drift apart. No
+  publish tool's copy both run the same cases, and the publish tool's
+  tests also run when the case file or the calculator changes. No
   GURPS behaviour changes.
 - Publish tool 1.15.2.
 

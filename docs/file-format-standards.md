@@ -393,10 +393,12 @@ rows that the character's items and features give.
 - A new row's `Summary` is left blank, and a `Summary` or `Notes` cell
   that holds text is never changed.
 
-Sync remembers the rows it added in
-`_meta/dndbeyond/<character id>.json`, which is never published. A row
-is removed only when that file holds its name and D&D Beyond no longer
-has it. A row added by hand needs no marker and stays, and so does a
+Sync remembers the names D&D Beyond gave at the last sync in
+`_meta/dndbeyond/<character id>.json`, which is never published. It
+also holds the bracketed values and the Armour Class line sync wrote, so
+a later change to them is followed and not taken for the GM's reason. A
+row is removed only when that file holds its name and D&D Beyond no
+longer has it. A row added by hand needs no marker and stays, and so does a
 second row with the same name as a synced one. With no memory file (a
 first sync, a deleted file, a note outside a vault) nothing is removed,
 and a sync with `--write` inside a vault builds the file again.

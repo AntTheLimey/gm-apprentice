@@ -77,7 +77,7 @@ read-only on the vault, so this lives in the skill, not in
 
 **On a D&D vault, before every build**, also run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>" --on-build --write`
-and pass on any `ERROR` or `CHECK` row. It does nothing unless
+and pass on any `ERROR`, `CHECK` or `REMOVE` row. It does nothing unless
 `publish.dndbeyond_sync` is `build` (`references/configuration.md`).
 
 Inside a scaffolded site, build with npm (it resolves the tool
