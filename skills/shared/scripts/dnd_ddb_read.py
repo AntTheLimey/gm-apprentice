@@ -381,7 +381,12 @@ def _scores(d: dict, mods: dict[str, list[dict]], pb: int, attuned: int) -> dict
     return out
 
 
-def _skill_levels(values: dict, everything: list[dict], scores: dict[str, int]) -> dict[str, str]:
+ROUND_UP_SOURCE = "Half proficiency, rounded up"
+
+
+def _skill_levels(values: dict, everything: list[dict], rounded_up: list[str] | None = None) -> dict[str, str]:
+    """Each skill's level. `rounded_up` collects the skills left at half proficiency by a modifier
+    that rounds it up (the fill rounds down, so an odd proficiency bonus needs a row)."""
     out = {}
     for sid, name, stat in SKILLS:
         slug = name.lower().replace(" ", "-")
@@ -392,8 +397,9 @@ def _skill_levels(values: dict, everything: list[dict], scores: dict[str, int]) 
             return m.get("subType") == slug or (m.get("entityId") == sid and m.get("entityTypeId") == SKILL_TYPE)
 
         level = ""
-        if any(m.get("type") in ("half-proficiency", "half-proficiency-round-up")
-               and (about(m) or m.get("subType") in ("ability-checks", f"{word}-ability-checks")) for m in everything):
+        halves = [m for m in everything if m.get("type") in ("half-proficiency", "half-proficiency-round-up")
+                  and (about(m) or m.get("subType") in ("ability-checks", f"{word}-ability-checks"))]
+        if halves:
             level = "half"
         if any(m.get("type") == "proficiency" and about(m) for m in everything):
             level = "proficient"
@@ -404,6 +410,8 @@ def _skill_levels(values: dict, everything: list[dict], scores: dict[str, int]) 
             level = {2: "half", 3: "proficient", 4: "expertise"}.get(chosen, "")
         if level:
             out[name.lower()] = level
+        if level == "half" and rounded_up is not None and any(m.get("type") == "half-proficiency-round-up" for m in halves):
+            rounded_up.append(name)
     return out
 
 
@@ -817,6 +825,7 @@ def read(data: object) -> Character:
     align = _num(d.get("alignmentId"))
 
     lost: list[str] = []
+    rounded_up: list[str] = []
     character = Character(
         name=safe_name(d.get("name")),
         classes=[_class_level(c) for c in classes],
@@ -828,7 +837,7 @@ def read(data: object) -> Character:
         size=_size(d, everything),
         scores=scores,
         save_proficiencies=_saves(values, everything),
-        skills=_skill_levels(values, everything, scores),
+        skills=_skill_levels(values, everything, rounded_up),
         resistances=resist, immunities=immune, vulnerabilities=vulnerable, condition_immunities=condition,
         class_features=_features(class_defs, class_uses, scores, pb),
         species_traits=_features(traits, _action_uses(d, "race"), scores, pb),
@@ -852,4 +861,6 @@ def read(data: object) -> Character:
     # An item's or a feature's name, and whether a modifier carries a condition, as the calculator has them.
     character.bonuses = _bonuses(mods, scores, pb, attuned, dnd_ddb_calc.source_names(d, classes, rows, values),
                                  dnd_ddb_calc.steady) + _own_bonuses(values)
+    if pb % 2 and rounded_up:
+        character.bonuses.append(Bonus(", ".join(rounded_up), 1, ROUND_UP_SOURCE))
     return character

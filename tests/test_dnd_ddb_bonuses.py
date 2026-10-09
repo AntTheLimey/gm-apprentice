@@ -350,3 +350,33 @@ def test_a_bonus_cell_written_as_pb_or_an_ability_is_read_as_its_number():
     assert not [r for r in sync_text(word, ringed(2), first.seen).rows if "not read as a number" in r[2]]
     nonsense = swap(first.text, "| Saves | +3 | Ring of Protection |", "| Saves | lots | Ring of Protection |")
     assert any("not read as a number" in r[2] for r in sync_text(nonsense, ringed(3), first.seen).rows)
+
+
+# --- half proficiency rounded up ------------------------------------------------------------
+
+ROUNDED = dict(modifiers=(("class", "half-proficiency-round-up", "ability-checks", None),))
+
+
+def rounded(level=5, xp=6500):
+    return wizard(classes=(("Wizard", level, "Evoker", 4),), xp=xp, **ROUNDED)
+
+
+def test_half_proficiency_rounded_up_moves_every_skill_by_the_whole_half_at_an_odd_bonus():
+    report = sync_text(TEMPLATE, rounded())                       # level 5: proficiency bonus +3
+    assert bonus_rows(report.text) == [f"| {', '.join(SKILLS)} | +1 | Half proficiency, rounded up |"]
+    assert moved(rounded()) == {k: 2 for k in SKILLS + PASSIVES}
+
+
+def test_half_proficiency_rounded_up_needs_no_row_at_an_even_bonus():
+    even = rounded(4, 2700)                                       # level 4: proficiency bonus +2
+    assert BLANK in sync_text(TEMPLATE, even).text
+
+
+def test_the_round_up_row_comes_and_goes_with_the_proficiency_bonus_and_is_quiet_between():
+    five = sync_text(TEMPLATE, rounded())
+    assert [r for r in sync_text(five.text, rounded(), five.seen).rows if r[0] in NOT_WRITTEN] == []
+    four = sync_text(five.text, rounded(4, 2700), five.seen)
+    assert bonus_rows(four.text) == [] and any(r[0] == "REMOVE" for r in four.rows)
+    back = sync_text(four.text, rounded(), four.seen)
+    assert bonus_rows(back.text) == bonus_rows(five.text) and any(r[0] == "ADD" for r in back.rows)
+    assert [r for r in sync_text(back.text, rounded(), back.seen).rows if r[0] in NOT_WRITTEN] == []
