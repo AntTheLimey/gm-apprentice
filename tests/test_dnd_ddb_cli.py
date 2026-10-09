@@ -456,7 +456,7 @@ def test_one_note_failing_does_not_stop_or_unwrite_the_others(tmp_path, capsys, 
         (root / "Characters" / f"{name}.md").write_text(note().replace("Medium", f"Medium {name}"), encoding="utf-8")
     real = dnd_ddb.plan_cells
 
-    def planner(text, c, seen=None):
+    def planner(text, c, seen=None, gave=None):
         if "Medium Briar" in text:
             raise KeyError("boom")
         return real(text, c, seen)
@@ -490,7 +490,7 @@ def test_rows_are_printed_as_each_note_finishes(tmp_path, capsys, fake, monkeypa
 
 
 def test_a_single_sheet_that_fails_unexpectedly_is_an_error_row_not_a_traceback(tmp_path, capsys, fake, monkeypatch):
-    def planner(text, c, seen=None):
+    def planner(text, c, seen=None, gave=None):
         raise KeyError("boom")
     monkeypatch.setattr(dnd_ddb, "plan_cells", planner)
     path = sheet(vault(tmp_path) / "Characters")

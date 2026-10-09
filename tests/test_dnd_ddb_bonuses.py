@@ -27,7 +27,7 @@ SAVES_1 = ("item", "bonus", "saving-throws", 1, {"requiresAttunement": True})
 LUCK = (("item", "bonus", "ability-checks", 1, {"item": "Stone of Good Luck"}),
         ("item", "bonus", "initiative", 1, {"item": "Stone of Good Luck"}),
         ("item", "bonus", "saving-throws", 1, {"item": "Stone of Good Luck"}))
-NOT_WRITTEN = ("WRITE", "ADD", "REMOVE", "FILL")
+NOT_WRITTEN = ("WRITE", "ADD", "REMOVE", "FILL", "KEPT")
 
 
 def wizard(inventory=(), modifiers=(), **more):

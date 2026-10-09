@@ -136,14 +136,42 @@ def judge_number(locus: str, cell: Cell, want: int) -> Edit:
     return Edit("KEPT", locus, f"{text}; not read as a number; D&D Beyond gives {new}")
 
 
-def judge_text(locus: str, cell: Cell, new: str, same: bool) -> Edit:
-    """A text cell: `same` says whether the cell already means `new`."""
+@dataclass
+class Gave:
+    """What D&D Beyond gave for the text cells whose value ends in a bracket group (`Self (15-ft
+    cone)`): such a cell cannot tell sync's own value from the GM's reason by its shape. `last` is
+    from the last sync's memory, `now` is filled as cells are judged."""
+    last: dict[str, str]
+    now: dict[str, str]
+
+
+CELLS = "cells"      # the memory's list id for them: entries are `locus<TAB>value`
+
+
+def cell_memory(seen: Seen | None) -> Gave:
+    last: dict[str, str] = {}
+    for entry in (seen or {}).get(CELLS, ()):
+        locus, tab, value = entry.partition("\t")
+        if tab:
+            last[locus] = value
+    return Gave(last, {})
+
+
+def judge_text(locus: str, cell: Cell, new: str, same: bool, gave: Gave | None = None) -> Edit:
+    """A text cell: `same` says whether the cell already means `new`. A trailing bracket group is
+    the GM's reason unless it is what D&D Beyond gave at the last sync."""
     text = cell.text.strip()
+    if gave is not None and REASON.search(new):
+        gave.now[locus] = new
     if blank(text):
         return write(locus, "", cell, new)
+    if same:
+        return Edit("SAME", locus, text)
     if REASON.search(text):
+        if gave is not None and norm(text) == norm(gave.last.get(locus, "")):
+            return write(locus, text, cell, new)
         return Edit("KEPT", locus, f"{text}; D&D Beyond gives {new}")
-    return Edit("SAME", locus, text) if same else write(locus, text, cell, new)
+    return write(locus, text, cell, new)
 
 
 def flag(text: str) -> str | None:
@@ -289,9 +317,13 @@ def class_line(c: Character) -> str:
     return " / ".join(f"{k.name} {k.level}" + (f" ({k.subclass})" if k.subclass else "") for k in c.classes)
 
 
-def judge_classes(locus: str, line: int, old: str, c: Character) -> Edit:
+def judge_classes(locus: str, line: int, old: str, c: Character, gave: Gave | None = None) -> Edit:
     """The Class/Subclass line: the same classes in any shape the reader takes are the same."""
     new = safe(class_line(c))
+    if gave is not None and REASON.search(new):
+        gave.now[locus] = new
+    if old == new:
+        return Edit("SAME", locus, old)
     if blank(old):
         return write(locus, "", None, new, line)
     read = dr.read_classes(old, c.level)
@@ -300,6 +332,8 @@ def judge_classes(locus: str, line: int, old: str, c: Character) -> Edit:
         if [(k.name.lower(), k.level, k.subclass.lower()) for k in read] == mine:
             return Edit("SAME", locus, old)
     elif REASON.search(old):
+        if gave is not None and norm(old) == norm(gave.last.get(locus, "")):
+            return write(locus, old, None, new, line)
         return Edit("KEPT", locus, f"{old}; D&D Beyond gives {new}")
     return write(locus, old, None, new, line)
 
@@ -367,7 +401,7 @@ def as_line(label: str, edit: Edit) -> Edit:
     return edit
 
 
-def plan_lines(note: Note, c: Character, seen: Seen | None = None) -> list[Edit]:
+def plan_lines(note: Note, c: Character, seen: Seen | None = None, gave: Gave | None = None) -> list[Edit]:
     out: list[Edit] = []
     for label, value in (("Species", c.species), ("Class/Subclass", None),
                          ("Background", c.background), ("Alignment", c.alignment)):
@@ -377,10 +411,10 @@ def plan_lines(note: Note, c: Character, seen: Seen | None = None) -> list[Edit]
         i, old = hit
         locus = f"Background / {label}"
         if value is None:
-            edit = judge_classes(locus, i, old, c)
+            edit = judge_classes(locus, i, old, c, gave)
         else:
             new = safe(value)
-            edit = judge_text(locus, Cell(i, -1, old), new, old.lower() == new.lower())
+            edit = judge_text(locus, Cell(i, -1, old), new, old.lower() == new.lower(), gave)
         out.append(as_line(label, edit))
     for prefix, group in (("Stat Sheet / Defences", DEFENCES), ("Proficiencies", PROFICIENCIES)):
         for label, field in group:
@@ -391,11 +425,11 @@ def plan_lines(note: Note, c: Character, seen: Seen | None = None) -> list[Edit]
     return out
 
 
-def plan_cells(text: str, c: Character, seen: Seen | None = None) -> list[Edit]:
+def plan_cells(text: str, c: Character, seen: Seen | None = None, gave: Gave | None = None) -> list[Edit]:
     """One Edit per single cell and labelled line the note has. Nothing is added."""
     note = Note(text)
     return (plan_core(note, c) + plan_abilities(note, c) + plan_combat(note, c) + plan_skills(note, c)
-            + plan_spellcasting(note, c) + plan_lines(note, c, seen))
+            + plan_spellcasting(note, c) + plan_lines(note, c, seen, gave))
 
 
 def split_eol(raw: str) -> tuple[str, str]:
@@ -600,7 +634,7 @@ def judge_signed(locus: str, cell: Cell, want: int) -> Edit:
     return Edit("KEPT", locus, f"{text}; not read as a number; D&D Beyond gives {new}")
 
 
-def judge_column(kind: str, locus: str, cell: Cell, want: Any) -> Edit:
+def judge_column(kind: str, locus: str, cell: Cell, want: Any, gave: Gave | None = None) -> Edit:
     text = cell.text.strip()
     if kind == "num":
         return judge_number(locus, cell, want)
@@ -618,7 +652,7 @@ def judge_column(kind: str, locus: str, cell: Cell, want: Any) -> Edit:
         return judge_text(locus, cell, new, mine is not None and mine == to_weight(new))
     if kind == "recovers":
         return judge_text(locus, cell, new, norm(text) in (norm(new), norm(new).split(" ")[0]))
-    return judge_text(locus, cell, new, norm(text) == norm(new))
+    return judge_text(locus, cell, new, norm(text) == norm(new), gave)
 
 
 def feature_entries(features: list[Any]) -> list[Entry]:
@@ -664,7 +698,8 @@ def match_row(keys: list[str], by_key: dict[str, Entry], matched: set[str]) -> t
     return None, False
 
 
-def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: Collection[str] = ()) -> list[RowEdit]:
+def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: Collection[str] = (),
+               gave: Gave | None = None) -> list[RowEdit]:
     """`remembered` holds the keys D&D Beyond gave on the last sync: a row that matches nothing is
     removed only when its key is in it."""
     table = find_table(lines, spec.h2, spec.h3)
@@ -712,7 +747,7 @@ def plan_table(lines: list[str], spec: Spec, entries: list[Entry], remembered: C
             want = entry.wants.get(col.title)
             if want is None or at >= len(cells):
                 continue
-            edit = judge_column(col.kind, f"{locus} / {col.title}", Cell(i, at, cells[at]), want)
+            edit = judge_column(col.kind, f"{locus} / {col.title}", Cell(i, at, cells[at]), want, gave)
             if edit.status == "WRITE":
                 changes[at] = edit.new
                 row.append(RowEdit("WRITE", edit.locus, edit.message, i))
@@ -779,12 +814,12 @@ def remembered_for(seen: Seen | None, list_id: str) -> set[str]:
     return set((seen or {}).get(list_id, ()))
 
 
-def plan_rows(text: str, c: Character, seen: Seen | None = None) -> list[RowEdit]:
+def plan_rows(text: str, c: Character, seen: Seen | None = None, gave: Gave | None = None) -> list[RowEdit]:
     """One RowEdit per row that is matched, added, removed or kept, on the text it is given."""
     lines = text.splitlines()
     out: list[RowEdit] = []
     for name, spec in SPECS.items():
-        out.extend(plan_table(lines, spec, entries_for(name, c), remembered_for(seen, spec.list_id)))
+        out.extend(plan_table(lines, spec, entries_for(name, c), remembered_for(seen, spec.list_id), gave))
     return out + plan_coins(lines, c)
 
 
@@ -991,7 +1026,7 @@ def attack_entries(worked: Any) -> list[Entry]:
             for a in worked.value]
 
 
-def plan_attacks(text: str, c: Character, seen: Seen | None = None) -> list[RowEdit]:
+def plan_attacks(text: str, c: Character, seen: Seen | None = None, gave: Gave | None = None) -> list[RowEdit]:
     """The attacks table as a list: Name is the key, Atk Bonus / DC and Damage & Type are owned,
     Notes is never written."""
     worked = c.attacks
@@ -1000,7 +1035,7 @@ def plan_attacks(text: str, c: Character, seen: Seen | None = None) -> list[RowE
     entries = attack_entries(worked)
     lines = text.splitlines()
     heading = next((h for h in ATTACK_HEADINGS if find_table(lines, "equipment", h)), ATTACK_HEADINGS[0])
-    return plan_table(lines, replace(ATTACK_SPEC, h3=heading), entries, remembered_for(seen, ATTACK_SPEC.list_id))
+    return plan_table(lines, replace(ATTACK_SPEC, h3=heading), entries, remembered_for(seen, ATTACK_SPEC.list_id), gave)
 
 
 # --- one sync, the fetch and the command line --------------------------------------------
@@ -1127,7 +1162,7 @@ def shown(edits: list[Edit] | list[RowEdit]) -> list[tuple[str, str, str]]:
             if e.status in PRINTED and not getattr(e, "silent", False)]
 
 
-def given_now(c: Character, before: Seen | None) -> Seen:
+def given_now(c: Character, before: Seen | None, gave: Gave | None = None) -> Seen:
     """The keys of what D&D Beyond gave this run for each list. The attacks are carried forward
     from `before` when the calculator was unsure of them."""
     out: Seen = {}
@@ -1141,6 +1176,8 @@ def given_now(c: Character, before: Seen | None) -> Seen:
     for group in (DEFENCES, PROFICIENCIES):
         for label, field in group:
             out[label.lower()] = sorted(norm(n) for n in line_names(getattr(c, field)))
+    if gave is not None:
+        out[CELLS] = sorted(f"{locus}\t{value}" for locus, value in gave.now.items())
     return out
 
 
@@ -1155,7 +1192,8 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
         return Report([("ERROR", "Stat Sheet", "this note is in the earlier layout; convert it first "
                         "(sheet-conversion.md)")], text)
     rows: list[tuple[str, str, str]] = []
-    cells = plan_cells(text, c, seen)
+    gave = cell_memory(seen)
+    cells = plan_cells(text, c, seen, gave)
     rows += shown(cells)
     t = write_edits(text, cells)
     slots = plan_slots(t, c)
@@ -1167,10 +1205,10 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     worked = plan_worked(t, c)
     rows += shown(worked)
     t = write_edits(t, worked)
-    lists = plan_rows(t, c, seen)
+    lists = plan_rows(t, c, seen, gave)
     rows += shown(lists)
     t = write_rows(t, lists)
-    attacks = plan_attacks(t, c, seen)
+    attacks = plan_attacks(t, c, seen, gave)
     rows += shown(attacks)
     t = write_rows(t, attacks)
     rows += shown(checks(t, c, cells + slots + worked, bonuses + lists + attacks))
@@ -1179,7 +1217,7 @@ def sync_text(text: str, data: object, seen: Seen | None = None) -> Report:
     if errors:
         return Report([("ERROR", errors[0].locus, errors[0].message)], text)
     rows += [("FILL", r.locus, r.message) for r in fill if r.status == "FILL"]
-    return Report(rows, dnd_sheet.apply(t, fill), given_now(c, seen))
+    return Report(rows, dnd_sheet.apply(t, fill), given_now(c, seen, gave))
 
 
 # --- the memory of what sync added -------------------------------------------------------

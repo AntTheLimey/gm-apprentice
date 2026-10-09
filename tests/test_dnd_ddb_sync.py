@@ -146,6 +146,7 @@ def test_hand_edits_are_kept_a_deleted_row_returns_and_the_next_sync_is_silent()
     assert any(r[0] == "KEPT" and "INT / Score" in r[1] for r in second.rows)
     third = sync_text(second.text, c, second.seen)
     assert [r for r in third.rows if r[0] in NOT_WRITTEN] == []
+    assert [r for r in third.rows if r[0] == "KEPT" and "INT / Score" not in r[1]] == []   # the GM's reason repeats; nothing else
     assert third.text == second.text
 
 
@@ -273,7 +274,7 @@ def test_the_spell_slot_expended_cells_keep_their_values_when_the_totals_change(
 
 LIST_IDS = {"class features", "species traits", "feats", "spells", "gear", "magic items", "attacks", "bonuses",
             "resistances", "immunities", "vulnerabilities", "condition immunities", "armor training",
-            "weapons", "tools", "languages"}
+            "weapons", "tools", "languages", "cells"}
 GONE = ("REMOVE", "Equipment / Gear / Torch", "D&D Beyond no longer has it")
 
 

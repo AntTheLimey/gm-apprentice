@@ -61,6 +61,12 @@ def cantrip(damage=None, damage_type="fire", attack=None, save=None, tiers=(), p
             "asPartOfWeaponAttack": False, "modifiers": mods, **more}
 
 
+def area(shape="Cone", size=15, origin="Self", distance=0):
+    """Definition fields of a spell with an area, for `spell_details`: its range then ends in
+    a bracket group (`Self (15-ft cone)`)."""
+    return {"range": {"origin": origin, "rangeValue": distance, "aoeType": shape, "aoeValue": size}}
+
+
 def attack_action(name, ident=700, **more):
     """An entry of `actions`: a feature's action as the data lists it. Nothing is set that
     makes it an attack; pass attackTypeRange, saveStatId, dice and the rest."""
