@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.40] — 2026-10-09
+
+### Added
+
+- **A settings page for GMs, `docs/site-settings.md`.** It lists every
+  setting for a campaign's site: where it lives (`_meta/vault-config.md`
+  in the vault, with six deployment settings left in the site's
+  `vault.config.json`), how to change one, what each does, the values it
+  takes and what you get when it is left out. The README, the quickstart
+  and the publish guide link to it. A test holds the page against the
+  publish tool's code: it fails when the tool reads a setting the page
+  does not list, or the page lists one the tool does not read.
+
 ## [1.10.39] — 2026-10-09
 
 ### Fixed
