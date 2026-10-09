@@ -109,3 +109,29 @@ test("the CoC sheet's Story and Journey panels read the site's colour names as t
     assert.ok(rule[1].replace(/\s/g, '').includes(`${name}:var(${ink});`), `${name} stands for ${ink}`);
   }
 });
+
+test('a CoC investigator page carries the Timeline in its own Journey panel', () => {
+  const { read, root } = buildVault({ ...VAULT, '_meta/vault-config.md': CONFIG.replace('publish:\n', 'publish:\n  system: "coc-7e"\n') });
+  const html = read('characters', 'pcs', 'mara-voss.html');
+  const start = html.indexOf('id="p-journey"');
+  assert.notStrictEqual(start, -1, 'the page is a CoC folio');
+  const panel = html.slice(start);
+  assert.match(panel, /<h2>Timeline<\/h2>/);
+  assert.match(panel, /href="\.\.\/\.\.\/events\/dock-fire\.html"/);
+  assert.doesNotMatch(panel, /Vault Heist/);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a date written without quotes keeps its month and day', () => {
+  const { read, root } = buildVault({
+    ...VAULT,
+    'Events/Dock Fire.md': event('1921-03-01', ['[[Mara_Voss]]']).replace('"1921-03-01"', '1921-03-01'),
+    'Events/Late One.md': event('1921-09-20', ['[[Mara_Voss]]']).replace('"1921-09-20"', '1921-09-20'),
+    'Events/Midsummer.md': event('1921-07-04', ['[[Mara_Voss]]']),
+  });
+  const mara = journey(read('characters', 'pcs', 'mara-voss.html'));
+  assert.match(mara, /MAR 1</);
+  assert.match(mara, /SEP 20</);
+  assert.ok(mara.indexOf('Dock Fire') < mara.indexOf('Midsummer') && mara.indexOf('Midsummer') < mara.indexOf('Late One'));
+  fs.rmSync(root, { recursive: true, force: true });
+});

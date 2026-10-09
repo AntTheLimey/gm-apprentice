@@ -27,7 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   were drawn in the site's colours, so a dark theme put pale text on the
   paper (as low as 1.4:1). Inside those two tabs the site's colour names
   now stand for the sheet's own inks (7:1 and better). A skinned sheet
-  is unchanged. Every site's `css/style.css` changes by this one rule.
+  keeps its skin's colours. Every site's `css/style.css` changes by this one rule.
+- **An in-game date written without quotes keeps its month and day.**
+  `in_game_date: 1921-03-01` was shown and sorted as 1 June 1921 on the
+  timeline; only a quoted date was read correctly.
 
 ## [1.10.38] — 2026-10-07
 

@@ -6,6 +6,8 @@ const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
   july:6, august:7, september:8, october:9, november:10, december:11 };
 
 function parseDate(value) {
+  // An unquoted `1921-03-01` reaches here as a Date; its string form has no ISO date in it.
+  if (value instanceof Date) return value;
   const s = String(value);
   const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
   if (iso) return new Date(Date.UTC(+iso[1], +iso[2] - 1, +iso[3]));
