@@ -713,7 +713,7 @@ function build(options = {}) {
   // A root timeline.html is generated only when dated events exist; failing that, an
   // authored Timeline page (which a folderMap may place anywhere, e.g.
   // campaign/timeline.html) is the real target. With neither, Events keeps its own index.
-  const { buildTimelineData, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
+  const { buildTimelineData, eventsNaming, renderTimelineHTML, renderTimelineStrip } = require('./timeline');
   const timelineData = buildTimelineData(pages);
   const generatesTimeline = timelineData.events.length > 0;
   // An authored Timeline takes Events over only when players would find something on it:
@@ -954,6 +954,8 @@ function build(options = {}) {
             systemStatusBarHtml: systemOut.statusBarHtml || null,
             identity,
             sheetsOff,
+            // The PC's own events (#323), not the campaign's: the landing page has those.
+            timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: 15, from: page.outputPath }),
             onLook: (look, p) => {
               for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
               if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }

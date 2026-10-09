@@ -449,8 +449,10 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // --- Journey Tab ---
   const routeMap = buildRouteMap(page, pages);
   const graphSvg = (publishConfig._entityGraphs || {})[page.title] || '';
-  const timelineStrip = publishConfig._timelineStrip || '';
-  const timelineSection = timelineStrip ? `<h2>Timeline</h2>\n<div class="timeline-strip">${timelineStrip}</div>` : '';
+  const timelineStrip = opts.timelineStrip || '';
+  const timelineSection = timelineStrip
+    ? `<h2>Timeline</h2>\n<div class="timeline-strip">${timelineStrip}</div>\n<a class="recap-link" href="${encodeHref(relativeHref(page.outputPath, 'timeline.html'))}">Full timeline &rarr;</a>`
+    : '';
   const graphSection = graphSvg ? `<h2>Connections</h2>\n<div class="relationship-graph">${graphSvg}</div>` : '';
   const journeyContent = [routeMap, timelineSection, graphSection].filter(Boolean).join('\n') || '<p class="text-muted">Journey data builds as the campaign progresses.</p>';
 

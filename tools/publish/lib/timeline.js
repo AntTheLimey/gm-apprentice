@@ -1,4 +1,6 @@
-const { escapeHtml, encodeHref } = require('./processor');
+const { escapeHtml, encodeHref, relativeHref } = require('./processor');
+const { firstWikilinkTarget, parseWikilink } = require('./wikilink');
+const { canonicalNfc } = require('./unicode');
 
 const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
   july:6, august:7, september:8, october:9, november:10, december:11 };
@@ -51,6 +53,7 @@ function buildTimelineData(pages) {
       location: p.frontmatter.location
         ? String(p.frontmatter.location).replace(/\[\[|\]\]/g, '').trim()
         : '',
+      participants: Array.isArray(p.frontmatter.participants) ? p.frontmatter.participants : [],
     }));
 
   const sessions = pages
@@ -125,8 +128,21 @@ function renderTimelineHTML(data) {
   return `<div class="tl-timeline">\n${nodes}\n</div>`;
 }
 
+// The events whose `participants` link to the page at `outputPath`, by any name the
+// link map knows it by. A session names no participants, so none is kept.
+function eventsNaming(data, outputPath, linkMap) {
+  const names = (evt) => (evt.participants || []).some(raw => {
+    const target = firstWikilinkTarget(raw);
+    return target !== null && linkMap[canonicalNfc(parseWikilink(target).name.trim())] === outputPath;
+  });
+  return { events: data.events.filter(names), chapters: data.chapters };
+}
+
+// `options.from` is the output path of the page the strip sits on; without it the links
+// are written from the site root, as the landing page needs.
 function renderTimelineStrip(data, options) {
   const maxEvents = (options && options.maxEvents) || 10;
+  const href = (out) => (options && options.from) ? relativeHref(options.from, out) : out;
   const recent = data.events.slice(-maxEvents);
   if (recent.length === 0) return '';
 
@@ -143,7 +159,7 @@ function renderTimelineStrip(data, options) {
     <div class="tl-dot"></div>
   </div>
   <div class="tl-detail-col">
-    <h3><a href="${escapeHtml(encodeHref(evt.outputPath))}">${escapeHtml(evt.title)}</a></h3>
+    <h3><a href="${escapeHtml(encodeHref(href(evt.outputPath)))}">${escapeHtml(evt.title)}</a></h3>
   </div>
 </div>`;
   }).join('\n');
@@ -151,4 +167,4 @@ function renderTimelineStrip(data, options) {
   return `<div class="tl-timeline tl-compact">\n${nodes}\n</div>`;
 }
 
-module.exports = { buildTimelineData, renderTimelineHTML, renderTimelineStrip };
+module.exports = { buildTimelineData, eventsNaming, renderTimelineHTML, renderTimelineStrip };
