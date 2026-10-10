@@ -107,3 +107,49 @@ test('B3: the "Mentioned in" list names a snake_case page type as words', () => 
     assert.match(html, /sidebar-badge">Session wrap</);
   } finally { v.cleanup(); }
 });
+
+test('A3: a bare header value holding # ^ or | prints whole, on every template that takes a reference', () => {
+  const values = { a: 'Pier #4', b: 'A | B', c: 'x^2', d: 'Near [[Hallam]] and Pier #4' };
+  const want = { a: 'Pier #4', b: 'A | B', c: 'x^2', d: 'Near Hallam and Pier #4' };
+  const files = { 'Characters/Hallam.md': '---\ntype: npc\n---\nBody.\n' };
+  for (const [k, raw] of Object.entries(values)) {
+    const v = JSON.stringify(raw);
+    files[`Events/E ${k}.md`] = `---\ntype: event\nlocation: ${v}\n---\nBody.\n`;
+    files[`Items/I ${k}.md`] = `---\ntype: item\ncurrent_holder: ${v}\norigin: ${v}\n---\nBody.\n`;
+    files[`Factions/F ${k}.md`] = `---\ntype: faction\nleadership: ${v}\nterritory: ${v}\n---\nBody.\n`;
+  }
+  const v = buildVault(files, { extraConfig: '' });
+  try {
+    for (const k of Object.keys(values)) {
+      const w = want[k];
+      assert.ok(header(v.read('events', `e-${k}.html`)).includes(`Location ${w}`), `event ${k}`);
+      const item = header(v.read('items', `i-${k}.html`));
+      assert.ok(item.includes(`Current Holder: ${w}`) && item.includes(`Origin: ${w}`), `item ${k}: ${item}`);
+      const fac = header(v.read('factions', `f-${k}.html`));
+      assert.ok(fac.includes(`Leadership: ${w}`) && fac.includes(`Territory: ${w}`), `faction ${k}: ${fac}`);
+      // The card says what the page says.
+      const cards = JSON.parse(v.read('previews.json'));
+      const facts = (rel) => Object.fromEntries(cards[rel].f || []);
+      assert.strictEqual(facts(`events/e-${k}.html`).Where, w);
+      assert.strictEqual(facts(`items/i-${k}.html`)['Held by'], w);
+      assert.strictEqual(facts(`factions/f-${k}.html`)['Led by'], w);
+    }
+  } finally { v.cleanup(); }
+});
+
+test('B-I2: an event header value is one inline run inside its flex item, whatever it holds', () => {
+  const v = buildVault({
+    'Locations/Alpha.md': '---\ntype: location\n---\nBody.\n',
+    'Locations/Beta.md': '---\ntype: location\n---\nBody.\n',
+    'Events/Fire.md': '---\ntype: event\nlocation: "Near [[Alpha]] and [[Beta]], Calcutta"\n---\nBody.\n',
+  }, SETTINGS);
+  try {
+    const html = v.read('events', 'fire.html');
+    const m = /<span><span class="label">Location<\/span> <span class="meta-value">([\s\S]*?)<\/span><\/span>/.exec(html);
+    assert.ok(m, 'the Location item is a label and one value element');
+    assert.match(m[1], /^Near <a [^>]*>Alpha<\/a> and <a [^>]*>Beta<\/a>, Calcutta$/);
+    // The one element is not itself laid out as a flex row.
+    const css = require('fs').readFileSync(require('path').join(__dirname, '..', 'css', 'style.css'), 'utf8');
+    assert.match(css, /\.char-header \.meta \.meta-value\s*\{[^}]*display:\s*inline;/);
+  } finally { v.cleanup(); }
+});

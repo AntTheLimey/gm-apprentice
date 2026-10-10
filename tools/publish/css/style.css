@@ -604,6 +604,9 @@ h3 {
   align-items: center;
   gap: 0.35rem;
 }
+.char-header .meta .meta-value {
+  display: inline;
+}
 .char-header .meta .label {
   color: var(--accent);
   font-size: 0.75rem;

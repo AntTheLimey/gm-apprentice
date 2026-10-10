@@ -44,7 +44,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
     metaItems.push(`<span><span class="label">Date</span> ${escapeHtml(headerValueText('date', dateVal))}</span>`);
   }
   if (fm.location) {
-    metaItems.push(`<span><span class="label">Location</span> ${refMetaValue(fm.location, linkMap, page.outputPath)}</span>`);
+    metaItems.push(`<span><span class="label">Location</span> <span class="meta-value">${refMetaValue(fm.location, linkMap, page.outputPath)}</span></span>`);
   }
 
   const metaHtml = metaItems.length > 0

@@ -949,17 +949,23 @@ function wholeReference(text) {
   return Boolean(m) && m.index === 0 && m[0].length === text.length;
 }
 
+// The target and label of a whole-reference value. Only a bracketed `[[…]]` goes through the
+// wikilink parser (which reads `#`, `^` and `|`); a bare value is a name as written.
+function referenceParts(text) {
+  return text.includes('[[') ? parseWikiRef(text) : { target: text, label: humanizeName(text) };
+}
+
 function plainRefValue(raw) {
   const text = valueText(raw).trim();
   if (!text) return '';
-  return wholeReference(text) ? parseWikiRef(text).label : plainMetaValue(text);
+  return wholeReference(text) ? referenceParts(text).label : plainMetaValue(text);
 }
 
 function refMetaValue(raw, linkMap = {}, currentOutputPath = '') {
   const text = valueText(raw).trim();
   if (!text) return '';
   if (!wholeReference(text)) return renderMetaValue(text, linkMap, currentOutputPath);
-  const { target, label } = parseWikiRef(text);
+  const { target, label } = referenceParts(text);
   const targetPath = (linkMap || {})[target];
   return targetPath
     ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}">${escapeHtml(label)}</a>`
