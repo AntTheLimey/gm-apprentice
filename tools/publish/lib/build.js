@@ -822,7 +822,7 @@ function build(options = {}) {
   if (publishConfig.link_previews !== 'off') {
     const { buildPreviews } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
-    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(buildPreviews(pages, { imageMap, excludeSections, pcEpithet: !usesCocFolio(publishConfig, sheetsOff) })));
+    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, pcEpithet: !usesCocFolio(publishConfig, sheetsOff) })));
     console.log('  wrote previews.json');
   }
 

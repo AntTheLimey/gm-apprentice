@@ -31,27 +31,16 @@ const collapse = (s) => plainQuotes(String(s)).replace(/\s+/g, ' ').trim();
 
 // The rule. The title `t`, the excerpt `x` and every fact value, each with a trailing "…"
 // removed (the card cuts long text; the page does not), must occur in the page text exactly.
-// One allowance, for an excerpt only: the excerpt skips headings and tables, so on a page
-// with a sheet its two sentences can sit in separate blocks. It passes when each sentence
-// occurs exactly (reported in `loose`, label 'excerpt').
-// Returns { problems: [string], loose: [{label, value}] }; loose lists the excerpts that
-// passed only by that allowance.
+// Returns { problems: [string] }.
 function cardProblems(card, text) {
   const problems = [];
-  const loose = [];
-  const has = (s) => text.includes(collapse(s));
-  if (!has(card.t.replace(/…$/, ''))) problems.push(`title ${JSON.stringify(card.t)}`);
-  if (card.x != null) {
-    const x = card.x.replace(/…$/, '');
-    if (!has(x)) {
-      if (collapse(x).split(/(?<=[.!?])\s+/).every(has)) loose.push({ label: 'excerpt', value: card.x });
-      else problems.push(`excerpt ${JSON.stringify(card.x)}`);
-    }
-  }
+  const has = (s) => text.includes(collapse(s.replace(/…$/, '')));
+  if (!has(card.t)) problems.push(`title ${JSON.stringify(card.t)}`);
+  if (card.x != null && !has(card.x)) problems.push(`excerpt ${JSON.stringify(card.x)}`);
   for (const [label, value] of card.f || []) {
-    if (!has(value.replace(/…$/, ''))) problems.push(`fact ${label}=${JSON.stringify(value)}`);
+    if (!has(value)) problems.push(`fact ${label}=${JSON.stringify(value)}`);
   }
-  return { problems, loose };
+  return { problems };
 }
 
 module.exports = { pageText, cardProblems };

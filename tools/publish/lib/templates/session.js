@@ -1,9 +1,16 @@
-const { escapeHtml, relativeHref, encodeHref } = require('../processor');
+const { escapeHtml, relativeHref, encodeHref, valueText } = require('../processor');
 const { extractRecap } = require('./landing-data');
 
 // How a session page prints its in-game date: a range written as a list reads "from – to".
 function inGameDateText(value) {
-  return Array.isArray(value) ? value.join(' – ') : String(value);
+  return Array.isArray(value) ? value.map(valueText).join(' – ') : valueText(value);
+}
+
+// The in-game date a session page prints, or '' when it prints none: only a hub whose body
+// is withheld because a Wrap-Up is published (`wrapUp`) has a body to print it in, and only
+// when the note has one. The page (sessionBodyHtml) and the link preview card both call it.
+function shownInGameDate(fm, wrapUp) {
+  return wrapUp && fm && fm.in_game_date ? inGameDateText(fm.in_game_date) : '';
 }
 
 // The article body of a session page whose hub body is withheld (#276: the session has a
@@ -28,8 +35,8 @@ function sessionBodyHtml(page, context) {
   if (fm.chapter && ctx.chapter) {
     facts.push(`<span class="session-chapter">Chapter: <a href="${href(ctx.chapter)}">${escapeHtml(ctx.chapter.displayTitle || ctx.chapter.title)}</a></span>`);
   }
-  if (fm.in_game_date) {
-    const when = inGameDateText(fm.in_game_date);
+  const when = shownInGameDate(fm, ctx.wrapUp);
+  if (when) {
     facts.push(`<span class="session-in-game-date">In-game: ${escapeHtml(when)}</span>`);
   }
   const factsHtml = facts.length ? `<p class="session-facts">${facts.join(' · ')}</p>\n` : '';
@@ -42,4 +49,4 @@ function sessionBodyHtml(page, context) {
   return factsHtml + recapHtml;
 }
 
-module.exports = { sessionBodyHtml, inGameDateText };
+module.exports = { sessionBodyHtml, inGameDateText, shownInGameDate };

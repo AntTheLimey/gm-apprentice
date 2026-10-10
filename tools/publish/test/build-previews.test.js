@@ -7,6 +7,8 @@ const path = require('path');
 const { build } = require('../lib/build');
 const { pageText, cardProblems } = require('./helpers/card-subset');
 const { fixtureNames, prepareFixture } = require('./helpers/fixture-build');
+const { insideNoPreview } = require('./helpers/no-preview');
+const { buildVault: buildSmallVault } = require('./helpers/build-vault');
 
 function configFor(root, vault, outputDir) {
   const configPath = path.join(root, 'config.json');
@@ -110,7 +112,6 @@ const UNBUILDABLE = {};
 
 // The card is a subset of the page: every string on a card occurs in that page's own text.
 test('every card string occurs in its own built page, on every fixture vault that builds', () => {
-  const looseSeen = [];
   const failures = [];
   let checked = 0;
   for (const name of fixtureNames()) {
@@ -123,9 +124,8 @@ test('every card string occurs in its own built page, on every fixture vault tha
       const cards = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'previews.json'), 'utf8'));
       for (const [rel, card] of Object.entries(cards)) {
         const html = fs.readFileSync(path.join(root, 'docs', ...rel.split('/')), 'utf8');
-        const { problems, loose } = cardProblems(card, pageText(html));
+        const { problems } = cardProblems(card, pageText(html));
         for (const pr of problems) failures.push(`${name}/${rel}: ${pr}`);
-        for (const l of loose) looseSeen.push({ page: `${name}/${rel}`, label: l.label, value: l.value });
         checked++;
       }
     } finally {
@@ -135,26 +135,6 @@ test('every card string occurs in its own built page, on every fixture vault tha
   assert.deepStrictEqual(failures, []);
   assert.ok(checked > 60, `checked ${checked} cards`);
 
-  // The known looser passes. A new one is a card drifting from its page: it fails here,
-  // naming the page and the card string. Nothing but an excerpt may pass loosely.
-  const excerpts = looseSeen.filter((l) => l.label === 'excerpt');
-  assert.deepStrictEqual(looseSeen.filter((l) => l.label !== 'excerpt'), [], 'a card fact passed loosely');
-  // Excerpts whose two sentences both occur on the page but not next to each other (the page
-  // shows the first as a pull-quote or lede, the second further down). Pinned by page name.
-  const KNOWN_EXCERPT_PAGES = [
-    'clean-schema/campaign/campaign-overview.html',
-    'clean-schema/events/battle.html',
-    'html-comment-leak/chapters/chapter 1 - test/session-1.html',
-    'minimal/locations/test-location.html',
-    'redesign-full/sessions/session-1.html',
-    'with-creature/creatures/test-creature.html',
-    'with-dashboard/sessions/session-1.html',
-    'with-dashboard/sessions/session-2.html',
-    'with-gm-only-markers/locations/catacombs.html',
-    'with-item/items & artifacts/test-sword.html',
-  ];
-  assert.deepStrictEqual(excerpts.map((l) => l.page).sort(), KNOWN_EXCERPT_PAGES,
-    `excerpts needing the non-adjacent rule changed:\n${excerpts.map((l) => `${l.page}: ${JSON.stringify(l.value)}`).join('\n')}`);
 });
 
 // Listing containers (each row already a summary) opt out of cards; running prose does not.
@@ -170,10 +150,77 @@ test('listing containers carry data-no-preview, and only when previews are on', 
       const landing = read('index.html');
       for (const cls of LANDING) { const m = marked(landing, cls); assert.ok(m, `${cls} on the landing page`); assert.strictEqual(Boolean(m[1]), on, `${cls} on=${on}`); }
       for (const [dir, cls] of INDEX) { const m = marked(read(dir, 'index.html'), cls); assert.ok(m, `${cls} in ${dir}`); assert.strictEqual(Boolean(m[1]), on, `${dir} ${cls} on=${on}`); }
-      assert.ok(!/class="recap[^"]*"[^>]*data-no-preview/.test(landing), 'recap prose is not opted out');
       if (!on) for (const f of ['index.html', 'characters/index.html', 'locations/index.html']) assert.ok(!read(f).includes('data-no-preview'), f);
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   };
   check({}, true);
   check({ link_previews: 'off' }, false);
+});
+
+// Running prose and the landing page's recap keep their cards; the listings below opt out.
+test('the landing recap, its text and its links are not opted out; the story and character listings are', () => {
+  const build = (name) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'previews-optout-'));
+    quietBuild(prepareFixture(name, root));
+    return { root, read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8') };
+  };
+  let dash;
+  let story;
+  try {
+    dash = build('with-dashboard');
+    const landing = dash.read('index.html');
+    const at = (needle) => { const i = landing.indexOf(needle); assert.ok(i !== -1, needle); return i; };
+    assert.ok(landing.includes('class="recap-link"'));
+    for (const needle of ['<div class="recap">', 'The team infiltrated the cave complex', '<a class="recap-link"']) {
+      assert.strictEqual(insideNoPreview(landing, at(needle)), false, `${needle} is not opted out`);
+    }
+    assert.strictEqual(insideNoPreview(landing, at('<div class="pc-roster"')), true, 'the roster is opted out (the control)');
+
+    const npcIndex = dash.read('characters', 'npcs', 'index.html');
+    const wrap = npcIndex.indexOf('<div class="npc-table-wrap"');
+    assert.ok(wrap !== -1);
+    assert.strictEqual(insideNoPreview(npcIndex, npcIndex.indexOf('<a ', wrap)), true, 'npc-table-wrap links are opted out');
+
+    story = build('story');
+    const chapters = story.read('chapters', 'index.html');
+    const prog = chapters.indexOf('<div class="story-progression"');
+    assert.ok(prog !== -1);
+    assert.strictEqual(insideNoPreview(chapters, chapters.indexOf('<a ', prog)), true, 'story-progression links are opted out');
+    const landingPage = story.read('story.html');
+    const branch = landingPage.indexOf('<section class="story-branch"');
+    assert.ok(branch !== -1);
+    assert.strictEqual(insideNoPreview(landingPage, landingPage.indexOf('<a ', branch)), true, 'story-branch links are opted out');
+  } finally {
+    for (const v of [dash, story]) if (v) fs.rmSync(v.root, { recursive: true, force: true });
+  }
+});
+
+// The subset rule on notes shaped like the defects the proof found: a session with and
+// without a Wrap-Up, an item for each holder shape, unquoted dates, a bare underscore name,
+// a reference nested in running text.
+test('a card is a subset of its page for the shapes that once differed', () => {
+  const holders = ['[[Name]]', '[[Name|alias]]', 'Name (note)', 'Name / Other', '[[A]] (held for [[B]])',
+    '[[Nathaniel]] (and / or [[Cleo]])', 'n/a — federal fleet vessel', 'Anna_Lindqvist'];
+  const files = {
+    'Sessions/Session 1.md': '---\ntype: session\nsession_number: 1\nin_game_date: "March 4th 1925"\nplay_date: 2026-07-02\n---\nPrep notes for the night.\n',
+    'Sessions/Session 2.md': '---\ntype: session\nsession_number: 2\nin_game_date: "March 5th 1925"\nplay_date: 2026-07-09\n---\nPrep notes.\n',
+    'Wrapups/Session 2 Wrap-Up.md': '---\ntype: session_wrap\nsession: "[[Session 2]]"\n---\n# Recap\n\nThey went in. They came out.\n',
+    'Events/Fire.md': '---\ntype: event\nin_game_date: 1925-03-04\nlocation: Ex_under_score\noutcome: "Won by [[Left_Side|the left]] after a long fight that went on and on and on and on and on and on and on and on and on and on and on and on"\n---\nBody text.\n',
+    'Locations/Quarter.md': '---\ntype: location\nlocation_type: government_quarter\nparent_location: "[[Big_Town]]"\n---\nThe quarter is old. Its walls are high.\n',
+    'Notes/Dated.md': '---\ntype: note\ndate: 2026-07-02\n---\nBody.\n',
+  };
+  holders.forEach((h, i) => { files[`Items/Item ${i}.md`] = `---\ntype: item\nitem_type: plot_thread\ncurrent_holder: ${JSON.stringify(h)}\n---\n- A list marker here. Then more.\n`; });
+  const v = buildSmallVault(files, { extraConfig: '  exclude_sections: []\n' });
+  try {
+    const cards = JSON.parse(v.read('previews.json'));
+    assert.ok(Object.keys(cards).length >= 14, Object.keys(cards).join());
+    const failures = [];
+    for (const [rel, card] of Object.entries(cards)) failures.push(...cardProblems(card, pageText(v.read(...rel.split('/')))).problems.map((p) => `${rel}: ${p}`));
+    assert.deepStrictEqual(failures, []);
+    // The hub without a Wrap-Up prints no in-game date, and neither does its card.
+    assert.ok(!(cards['sessions/session-1.html'].f || []).some(([l]) => l === 'In-game date'));
+    assert.ok((cards['sessions/session-2.html'].f || []).some(([l]) => l === 'In-game date'));
+    assert.ok(pageText(v.read('sessions', 'session-2.html')).includes('In-game: March 5th 1925'));
+    assert.ok(!pageText(v.read('sessions', 'session-1.html')).includes('March 4th 1925'));
+  } finally { v.cleanup(); }
 });

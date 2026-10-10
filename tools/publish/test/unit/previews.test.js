@@ -103,8 +103,96 @@ describe('cardFor', () => {
 
 describe('values as the page prints them', () => {
   it('joins a session in-game date range the way the session page does', () => {
-    const f = cardFor(page('session', { in_game_date: ['1 May', '3 May'] }, ''), ctx).f;
+    const hub = page('session', { in_game_date: ['1 May', '3 May'] }, '');
+    const f = cardFor(hub, { ...ctx, hubWrapUps: new Map([[hub, {}]]) }).f;
     assert.deepStrictEqual(f, [['In-game date', '1 May – 3 May']]);
+  });
+  it('shows a session in-game date only where the session page prints it (a hub with a Wrap-Up)', () => {
+    const fm = { session_number: 4, in_game_date: 'March 4th 1925', play_date: '2026-01-10' };
+    const bare = page('session', fm, '');
+    assert.deepStrictEqual(cardFor(bare, { ...ctx, hubWrapUps: new Map() }).f, [['Session', '4'], ['Played', '2026-01-10']]);
+    assert.deepStrictEqual(cardFor(bare, ctx).f, [['Session', '4'], ['Played', '2026-01-10']]);
+    const wrapped = page('session', fm, '');
+    assert.deepStrictEqual(cardFor(wrapped, { ...ctx, hubWrapUps: new Map([[wrapped, {}]]) }).f,
+      [['Session', '4'], ['In-game date', 'March 4th 1925'], ['Played', '2026-01-10']]);
+  });
+  it('uses the same function as the session page for that date', () => {
+    const { shownInGameDate } = require('../../lib/templates/session');
+    assert.strictEqual(shownInGameDate({ in_game_date: 'x' }, null), '');
+    assert.strictEqual(shownInGameDate({}, {}), '');
+    assert.strictEqual(shownInGameDate({ in_game_date: ['a', 'b'] }, {}), 'a – b');
+  });
+  it('prints an item holder through the page rule, in every real shape', () => {
+    const holders = [['[[Name]]', 'Name'], ['[[Name|alias]]', 'alias'], ['Name (note)', 'Name (note)'], ['Name / Other', 'Name / Other'],
+      ['[[A]] (held for [[B]])', 'A (held for B)'], ['[[Nathaniel]] (and / or [[Cleo]])', 'Nathaniel (and / or Cleo)']];
+    for (const [raw, want] of holders) {
+      assert.deepStrictEqual(cardFor(page('item', { current_holder: raw }, ''), ctx).f, [['Held by', want]], raw);
+    }
+  });
+  it('prints a bare name with underscores the way the page does (as words, in a reference)', () => {
+    assert.deepStrictEqual(cardFor(page('event', { location: 'Ex_under_score' }, ''), ctx).f, [['Where', 'Ex under score']]);
+    assert.deepStrictEqual(cardFor(page('item', { current_holder: '[[Ex_under_score]]' }, ''), ctx).f, [['Held by', 'Ex under score']]);
+  });
+  it('prints a snake_case type value as words, as the page badge does', () => {
+    assert.deepStrictEqual(cardFor(page('location', { location_type: 'government_quarter' }, ''), ctx).f, [['Sort of place', 'Government quarter']]);
+  });
+});
+
+describe('a card holds only bounded, clean text', () => {
+  it('caps a title at 120 characters and a PC epithet at 200, with an ellipsis', () => {
+    const card = cardFor(page('wiki', {}, 'A.', { displayTitle: 'T'.repeat(10000) }), ctx);
+    assert.strictEqual(card.t.length, 121);
+    assert.ok(card.t.endsWith('…'));
+    const pc = cardFor(page('pc', { key_traits: ['k'.repeat(10000), 'j'.repeat(10000)] }, ''), ctx);
+    assert.strictEqual(pc.x.length, 201);
+    assert.ok(pc.x.endsWith('…'));
+    assert.strictEqual(cardFor(page('wiki', {}, 'A.', { displayTitle: 'Short' }), ctx).t, 'Short');
+  });
+  it('does not split a character at the cap', () => {
+    const card = cardFor(page('wiki', {}, 'A.', { displayTitle: '😀'.repeat(200) }), ctx);
+    assert.ok(!/[\uD800-\uDBFF]…$/.test(card.t));
+    assert.doesNotThrow(() => JSON.parse(JSON.stringify(card)));
+  });
+  it('looks a picture up as an own entry, never a name on Object.prototype', () => {
+    for (const name of ['__proto__', 'constructor', 'toString', 'hasOwnProperty']) {
+      assert.strictEqual(cardFor(page('npc', { portrait: name }, ''), ctx).i, undefined, name);
+    }
+  });
+  it('treats a type named after an Object member as an unknown kind', () => {
+    for (const name of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf']) {
+      const card = cardFor(page(name, { occupation: 'x' }, 'Some prose.'), ctx);
+      assert.strictEqual(card.f, undefined, name);
+      assert.strictEqual(typeof card.k, 'string', name);
+    }
+  });
+});
+
+describe('a card opens with clean prose', () => {
+  const x = (body) => cardFor(page('wiki', {}, body), ctx).x;
+  it('reads a markdown link as its text', () => {
+    assert.strictEqual(x('[Open the Gazetteer — the handouts](/gazetteer/), set in 1890. Next.'), 'Open the Gazetteer — the handouts, set in 1890. Next.');
+    assert.strictEqual(x('See [the map][m] and [^1] there.\n'), 'See the map and there.');
+  });
+  it('drops emphasis markers and list markers', () => {
+    assert.strictEqual(x('**Warden** of the _north_ gate. ~~Gone~~ now.'), 'Warden of the north gate. Gone now.');
+    assert.strictEqual(x('- In the dead of night. Then.\n- Second item.'), 'In the dead of night. Then.');
+    assert.strictEqual(x('1. First thing here. Second.\n2. Other'), 'First thing here. Second.');
+    assert.strictEqual(x('- [ ] A task. Done.'), 'A task. Done.');
+  });
+  it('never shows a table row, and never joins prose across a heading or a table', () => {
+    assert.strictEqual(x('| a | b |\n|---|---|\n| c | d |\n\nAfter the table. More.'), 'After the table. More.');
+    assert.strictEqual(x('Name | Value\n--- | ---\nx | y\n\nProse here.'), 'Prose here.');
+    assert.strictEqual(x('Before the heading\n\n## Heading\n\nAfter the heading.'), 'Before the heading');
+    assert.strictEqual(x('Intro text.\n\n| a | b |\n|---|---|\n\nLater text.'), 'Intro text.');
+  });
+  it('shows no raw html and decodes entities', () => {
+    assert.strictEqual(x('<div class="x">Fish &amp; chips</div> <b>here</b> now. Next.'), 'Fish & chips here now. Next.');
+  });
+  it('prints three dots and double hyphens as the page typography does', () => {
+    assert.strictEqual(x('Wait... then go -- now. Next.'), 'Wait… then go – now. Next.');
+  });
+  it('leaves the default excerpt alone', () => {
+    assert.strictEqual(excerptFromMarkdown('- item [a](b) one.\n\n## H\n\nafter.'), '- item [a](b) one.');
   });
   it('prints a list in another header the way String() does', () => {
     assert.deepStrictEqual(cardFor(page('event', { in_game_date: ['1 May', '3 May'] }, ''), ctx).f, [['Date', '1 May,3 May']]);
