@@ -4,6 +4,8 @@
     links.py VAULT
     links.py VAULT retarget NAME NOTE [--keep-text] [--write]
     links.py VAULT unlink NAME [NAME ...] [--write]
+    links.py VAULT unlink NAME [NAME ...] --in NOTE [--in NOTE ...]
+                          [--as WORDS] [--write]
 
 With no command it prints a report and writes nothing: a header line, then
 one tab-separated row per broken name.
@@ -33,6 +35,14 @@ spellings too, but not a name that differs by a number.
 
 `unlink` turns every link to NAME into its words. A link in frontmatter
 and an embed are left alone and listed as KEPT.
+
+With `--in`, `unlink` works only in the notes named (vault paths, or a
+filename only one note has), and NAME may be a note that exists: the way
+to stop a published page naming a note that has no page, while every
+other note keeps its link. `--as WORDS` gives the words for a link that
+has no display text of its own, where the note's name would read as a file
+name (`[[Scene_06_Dinner]]` becomes WORDS); a link with display text keeps
+it.
 
 Both fixes print what they would change and write nothing without
 --write. With --write every note is written or none is. Links in a code
@@ -267,15 +277,22 @@ def _retarget(new: str, keep_text: bool) -> Fix:
     return fix
 
 
-def _unlink(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
+def _unlink_as(bare: str | None) -> Fix:
+    """Turn a link into its words: its display text, else `bare` when
+    given, else the name as written."""
+    def fix(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
             line: str) -> tuple[str | None, str]:
-    if in_fm:
-        return None, "frontmatter"
-    if embed:
-        return None, "embed"
-    dest, _sub, shown = parsed
-    words = shown.lstrip("\\")[1:].strip() if shown else ""
-    return words or link_name(dest), ""
+        if in_fm:
+            return None, "frontmatter"
+        if embed:
+            return None, "embed"
+        dest, _sub, shown = parsed
+        words = shown.lstrip("\\")[1:].strip() if shown else ""
+        return words or bare or link_name(dest), ""
+    return fix
+
+
+_unlink = _unlink_as(None)
 
 
 def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
@@ -304,9 +321,12 @@ def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
     return "".join(out)
 
 
-def _plan(vault: Path, targets: set[str], fix: Fix) -> Plan:
+def _plan(vault: Path, targets: set[str], fix: Fix,
+          only: set[str] | None = None) -> Plan:
     p = Plan(vault)
     for rel in _walk(vault, ".md"):
+        if only is not None and _nfc(rel) not in only:
+            continue
         text = _read(vault, rel)
         if text is None:
             for body in LINK_RE.findall(_raw(vault, rel)):
@@ -351,8 +371,22 @@ def plan_retarget(vault: Path, name: str, note: str,
     return _plan(vault, targets, _retarget(new, keep_text))
 
 
-def plan_unlink(vault: Path, names: list[str]) -> Plan:
-    return _plan(vault, _broken_names(vault, names), _unlink)
+def plan_unlink(vault: Path, names: list[str],
+                within: list[str] | None = None,
+                bare: str | None = None) -> Plan:
+    """`within` keeps the fix to those notes, and then a name need not be
+    broken: a link to a note that exists is turned into words there."""
+    if not within:
+        return _plan(vault, _broken_names(vault, names), _unlink)
+    notes = {_nfc(n) for n in _walk(vault, ".md")}
+    only = set()
+    for note in within:
+        rel = _nfc(resolve_old(vault, note))
+        if rel not in notes:
+            raise LinksError(f"there is no note {note}")
+        only.add(rel)
+    return _plan(vault, {link_target(n) for n in names},
+                 _unlink_as(bare), only)
 
 
 def apply(p: Plan) -> None:
@@ -414,6 +448,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("names", nargs="*")
     ap.add_argument("--keep-text", action="store_true")
     ap.add_argument("--write", action="store_true")
+    ap.add_argument("--in", dest="within", action="append", metavar="NOTE")
+    ap.add_argument("--as", dest="bare", metavar="WORDS")
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"links.py: not a directory: {args.vault.as_posix()}",
@@ -428,6 +464,12 @@ def main(argv: list[str] | None = None) -> int:
         usage = "unlink takes one or more NAMEs"
     elif args.command == "unlink" and args.keep_text:
         usage = "--keep-text goes with retarget"
+    if args.within and args.command != "unlink":
+        usage = "--in goes with unlink"
+    elif args.bare is not None and not args.within:
+        usage = "--as goes with unlink --in"
+    elif args.bare is not None and not args.bare.strip():
+        usage = "--as takes the words to print"
     if usage:
         print(f"links.py: {usage}", file=sys.stderr)
         return 2
@@ -439,7 +481,8 @@ def main(argv: list[str] | None = None) -> int:
             p = plan_retarget(args.vault, args.names[0], args.names[1],
                               args.keep_text)
         else:
-            p = plan_unlink(args.vault, args.names)
+            p = plan_unlink(args.vault, args.names, args.within,
+                            args.bare)
         if args.write:
             apply(p)
         print("\n".join(rows(p, done=args.write)))

@@ -322,6 +322,56 @@ class UnlinkTests(unittest.TestCase):
             with self.subTest(line=line):
                 self.assertEqual(self.after(line)[0], want)
 
+    def test_within_named_notes_a_link_to_an_existing_note_is_unlinked(self):
+        # A published page names a note that has no page: the name becomes
+        # words on that page, and every other note keeps its link.
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "Seen at [[Dinner_Scene|the dinner]] and "
+                              "[[Plans/Dinner_Scene]].\n",
+            "People/Guest.md": "Also at [[Dinner_Scene|the dinner]].\n",
+            "Plans/Plan.md": "Run [[Dinner_Scene]] first.\n"})
+        with self.assertRaises(links.LinksError):
+            links.plan_unlink(vault, ["Dinner_Scene"])
+        p = links.plan_unlink(vault, ["Dinner_Scene"],
+                              ["People/Host.md", "Guest"])
+        self.assertEqual(p.texts, {
+            "People/Host.md": "Seen at the dinner and Dinner_Scene.\n",
+            "People/Guest.md": "Also at the dinner.\n"})
+        links.apply(p)
+        self.assertEqual(read(vault, "Plans/Plan.md"),
+                         "Run [[Dinner_Scene]] first.\n")
+
+    def test_as_gives_the_words_for_a_link_with_none_of_its_own(self):
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "- [[Dinner_Scene]]\n- at [[Dinner_Scene|the "
+                              "dinner]]\n- ![[Dinner_Scene]]\n"})
+        p = links.plan_unlink(vault, ["Dinner_Scene"], ["People/Host.md"],
+                              "the welcome dinner")
+        self.assertEqual(p.texts["People/Host.md"],
+                         "- the welcome dinner\n- at the dinner\n"
+                         "- ![[Dinner_Scene]]\n")
+        got = cli(vault, "unlink", "Dinner_Scene", "--as", "x")
+        self.assertEqual(got.returncode, 2)
+        self.assertIn("--as goes with unlink --in", got.stderr)
+
+    def test_within_refuses_a_note_that_is_not_there(self):
+        vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
+        with self.assertRaises(links.LinksError) as cm:
+            links.plan_unlink(vault, ["B"], ["Nope.md"])
+        self.assertIn("there is no note Nope.md", str(cm.exception))
+
+    def test_in_goes_with_unlink_only(self):
+        vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
+        got = cli(vault, "retarget", "B", "B.md", "--in", "A.md")
+        self.assertEqual(got.returncode, 2)
+        self.assertIn("--in goes with unlink", got.stderr)
+        done = cli(vault, "unlink", "B", "--in", "A.md", "--write")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.splitlines()[0],
+                         "CHANGED\tA.md:1\t[[B]] -> B")
+
     def test_an_embed_is_kept(self):
         got, p = self.after("![[Judo]] and [[Judo]]")
         self.assertEqual(got, "![[Judo]] and Judo")
