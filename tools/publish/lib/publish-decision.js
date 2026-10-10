@@ -34,9 +34,8 @@ const { publishMode } = require('./processor');
 const { storyOwnerPath, isStoryCompanion } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
 
-const AUTO_EXCLUDE_STATUS = new Set(['planned', 'prepped']);
-const AUTO_EXCLUDE_STAGE = new Set(['outline', 'draft', 'ready']);
-const AUTO_EXCLUDE_SOURCE = new Set(['prep']);
+// The values that keep a note off a player site are listed once, in excluding-values.js.
+const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, ruleValue } = require('./excluding-values');
 
 // Directories that never publish, whatever the config says. `_templates` is the
 // lowercase spelling some vaults use; `personal` holds the GM's own licensed
@@ -50,7 +49,7 @@ const ALWAYS_EXCLUDE_DIRS = ['_meta', '_Templates', '_templates', 'personal'];
 // behind the same mode/manifest checks as the other prep-state heuristics so the
 // GM's own full-mode copy still shows everything and an explicit manifest entry
 // still wins.
-const SCENE_SKIP_STATUS = new Set(['cut', 'skipped']);
+// (SCENE_SKIP_STATUS, with the other excluding values.)
 
 function lower(value) {
   return String(value == null ? '' : value).toLowerCase();
@@ -61,15 +60,16 @@ function lower(value) {
 // needs to count the pages a manifest entry later re-included.
 function autoExcludeCode(frontmatter) {
   const fm = frontmatter || {};
-  if (AUTO_EXCLUDE_STATUS.has(lower(fm.status))) return 'AUTO_EXCLUDED_STATUS';
-  if (AUTO_EXCLUDE_STAGE.has(lower(fm.stage))) return 'AUTO_EXCLUDED_STAGE';
-  if (AUTO_EXCLUDE_SOURCE.has(lower(fm.source))) return 'AUTO_EXCLUDED_SOURCE';
+  // ruleValue: a list typed where one value belongs is read as the item that excludes.
+  if (AUTO_EXCLUDE_STATUS.has(lower(ruleValue('status', fm.status)))) return 'AUTO_EXCLUDED_STATUS';
+  if (AUTO_EXCLUDE_STAGE.has(lower(ruleValue('stage', fm.stage)))) return 'AUTO_EXCLUDED_STAGE';
+  if (AUTO_EXCLUDE_SOURCE.has(lower(ruleValue('source', fm.source)))) return 'AUTO_EXCLUDED_SOURCE';
   return null;
 }
 
 function autoExcludeReason(code, frontmatter) {
   const field = { AUTO_EXCLUDED_STATUS: 'status', AUTO_EXCLUDED_STAGE: 'stage', AUTO_EXCLUDED_SOURCE: 'source' }[code];
-  return `${field}: ${lower(frontmatter[field])}`;
+  return `${field}: ${lower(ruleValue(field, frontmatter[field]))}`;
 }
 
 // The first path segment (excluding the filename) that names an always-excluded
@@ -167,7 +167,7 @@ function decidePage(page, options) {
   const index = manifest ? indexOf(manifest) : null;
   const listedForPublish = !!(index && index.publishing.has(rel));
 
-  if (publishConfig.exclude_drafts && getCanonStatus(frontmatter) === 'DRAFT') {
+  if (publishConfig.exclude_drafts && getCanonStatus(frontmatter) === DRAFT) {
     return verdict('exclude', 'DRAFT_EXCLUDED', 'canon_status: DRAFT and exclude_drafts is on');
   }
 
@@ -176,7 +176,7 @@ function decidePage(page, options) {
   if (mode !== 'full' && !listedForPublish) {
     const auto = autoExcludeCode(frontmatter);
     if (auto) return verdict('exclude', auto, autoExcludeReason(auto, frontmatter));
-    if (lower(frontmatter.type) === 'scene' && SCENE_SKIP_STATUS.has(lower(frontmatter.status))) {
+    if (lower(frontmatter.type) === 'scene' && SCENE_SKIP_STATUS.has(lower(ruleValue('status', frontmatter.status)))) {
       return verdict('exclude', 'SCENE_CUT_SKIPPED', `scene status: ${lower(frontmatter.status)} — it did not happen`);
     }
   }

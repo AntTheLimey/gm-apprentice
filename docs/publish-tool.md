@@ -28,9 +28,10 @@ Section headings marked as GM-only (such as `GM Notes`) are stripped
 before the site builds, so private information stays private. A heading
 is matched by its words, so `## **GM Notes**` and `## GM Notes:` are
 hidden too. Text between `<!-- gm-only -->` markers, in an HTML comment
-or in an Obsidian `%% comment %%` is stripped as well. A stray `%%` in
-prose, such as `100%% done`, starts a comment as it does in Obsidian, and
-the build warns.
+or in an Obsidian `%% comment %%` is stripped as well, in a note's text
+and in its frontmatter fields. A marker works in capitals too. A stray
+`%%` in prose, such as `100%% done`, starts a comment as it does in
+Obsidian, and the build warns.
 
 Wiki-links between vault files become live hyperlinks in the site.
 Portrait images from your vault's attachments folder are copied across

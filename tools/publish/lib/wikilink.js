@@ -66,6 +66,48 @@ function refTarget(value) {
   return canonicalNfc(parseWikilink(String(value == null ? '' : value).replace(/\[\[|\]\]/g, '')).raw.trim());
 }
 
+// A frontmatter value that names a note (`location`, `first_appearance`, a relationship's
+// `target`), read for a page that prints it outside the note's own page: an index card, the
+// landing page, the timeline, the connections graph. The ONE reader for those, so each
+// prints what the note's own page prints for the link (processor.js referenceOf):
+//
+//   words     what to print. A link with a label prints its label; one without prints its
+//             target as written; text around links stays. `humanize` reads `_` as a space
+//             in everything but a label.
+//   key       the name to look a page up by: the target of a value that is one labelled
+//             link, else `words` un-humanized (the value with its brackets off).
+//   labelled  the value is one link with a label.
+//
+// `[[Vesper_Hale|the stranger]]` is looked up as Vesper_Hale and printed as "the stranger".
+// A GM writes the label to keep the name off the site, so the target of a labelled link
+// is never printed, beside the label or in place of it.
+function linkText(value, { humanize = false } = {}) {
+  const text = String(value == null ? '' : value);
+  const spaced = (s) => (humanize ? s.replace(/_/g, ' ') : s);
+  const whole = wikilinkRe('').exec(text.trim());
+  const only = whole && whole.index === 0 && whole[0].length === text.trim().length ? parseWikilink(whole[1]) : null;
+  const labelled = !!only && only.display.trim() !== '';
+  // The value with its brackets off, as these readers always took it: the key of a value
+  // with no label, and the words of one.
+  const bare = text.replace(/\[\[|\]\]/g, '');
+  const words = text.replace(wikilinkRe('g'), (link, body) => {
+    const w = parseWikilink(body);
+    const label = w.display.trim();
+    return label ? `\u0000${label}\u0000` : body;
+  }).replace(/\[\[|\]\]/g, '').split('\u0000').map((part, n) => (n % 2 ? part : spaced(part))).join('');
+  return { words, key: labelled ? only.name.trim() : bare, labelled };
+}
+
+// `text` with every labelled link in it turned into its label. For text that goes to the
+// site as it stands (a title, a field printed whole, a search entry): a link the GM gave a
+// label must never print its target, whatever prints the value. A link with no label is
+// left as written.
+function labelsForLinks(text) {
+  const s = String(text == null ? '' : text);
+  if (!s.includes('[[') || !s.includes('|')) return s;
+  return s.replace(wikilinkRe('g'), (whole, body) => parseWikilink(body).display.trim() || whole);
+}
+
 // Split a markdown table row on its cell pipes, not on the pipe inside a `[[link|alias]]` or
 // after a backslash (`\|`). Like `line.split('|')`: the pieces join back to the line with `|`,
 // the first is what sits before the first pipe.
@@ -84,4 +126,4 @@ function splitTableRow(line) {
   return out;
 }
 
-module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget };
+module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget, linkText, labelsForLinks };

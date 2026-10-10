@@ -42,17 +42,17 @@ class ReportTests(unittest.TestCase):
         return rows[0]
 
     def test_same_ignores_punctuation(self):
-        row = self.one({"Locations/Acheron's Rest.md": "x\n",
-                        "A.md": "[[Acherons Rest]]\n"})
+        row = self.one({"Locations/Dunmoor's Rest.md": "x\n",
+                        "A.md": "[[Dunmoors Rest]]\n"})
         self.assertEqual(row.kind, "NEAR")
         self.assertEqual(row.candidates,
-                         [("Locations/Acheron's Rest.md", "same")])
+                         [("Locations/Dunmoor's Rest.md", "same")])
 
     def test_same_ignores_emoji_and_accents(self):
-        row = self.one({"NPCs/Doctor_Emile_Carreau.md": "x\n",
-                        "A.md": "[[🩸 Doctor Émile Carreau]]\n"})
+        row = self.one({"NPCs/Doctor_Jorund_Vale.md": "x\n",
+                        "A.md": "[[🩸 Doctor Jórund Vale]]\n"})
         self.assertEqual(row.candidates,
-                         [("NPCs/Doctor_Emile_Carreau.md", "same")])
+                         [("NPCs/Doctor_Jorund_Vale.md", "same")])
 
     def test_close_is_a_likely_typo(self):
         row = self.one({"Locations/Barabazar.md": "x\n",
@@ -60,9 +60,9 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(row.candidates, [("Locations/Barabazar.md", "close")])
 
     def test_part_is_extra_words_before_or_after(self):
-        row = self.one({"NPCs/Thomas Wyndham.md": "x\n",
-                        "A.md": "[[Captain Thomas Wyndham]]\n"})
-        self.assertEqual(row.candidates, [("NPCs/Thomas Wyndham.md", "part")])
+        row = self.one({"NPCs/Corvin Hollis.md": "x\n",
+                        "A.md": "[[Captain Corvin Hollis]]\n"})
+        self.assertEqual(row.candidates, [("NPCs/Corvin Hollis.md", "part")])
 
     def test_a_copy_suffix_is_a_part_not_a_typo(self):
         row = self.one({"Vienna Summary.md": "x\n",
@@ -115,10 +115,10 @@ class ReportTests(unittest.TestCase):
 
     def test_best_candidate_first_and_at_most_three(self):
         row = self.one({
-            "NPCs/Savarin.md": "x\n", "NPCs/Mathilde Savarin.md": "x\n",
-            "NPCs/Madame Savarin.md": "x\n", "Docs/Letter to Savarin.md": "x\n",
-            "A.md": "[[savarin!]]\n"})
-        self.assertEqual(row.candidates[0], ("NPCs/Savarin.md", "same"))
+            "NPCs/Karsh.md": "x\n", "NPCs/Meribel Karsh.md": "x\n",
+            "NPCs/Madame Karsh.md": "x\n", "Docs/Letter to Karsh.md": "x\n",
+            "A.md": "[[karsh!]]\n"})
+        self.assertEqual(row.candidates[0], ("NPCs/Karsh.md", "same"))
         self.assertEqual(len(row.candidates), 3)
         self.assertEqual({tag for _, tag in row.candidates[1:]}, {"part"})
 
@@ -321,6 +321,129 @@ class UnlinkTests(unittest.TestCase):
         for line, want in cases.items():
             with self.subTest(line=line):
                 self.assertEqual(self.after(line)[0], want)
+
+    def test_within_named_notes_a_link_to_an_existing_note_is_unlinked(self):
+        # A published page names a note that has no page: the name becomes
+        # words on that page, and every other note keeps its link.
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "Seen at [[Dinner_Scene|the dinner]] and "
+                              "[[Plans/Dinner_Scene]].\n",
+            "People/Guest.md": "Also at [[Dinner_Scene|the dinner]].\n",
+            "Plans/Plan.md": "Run [[Dinner_Scene]] first.\n"})
+        with self.assertRaises(links.LinksError):
+            links.plan_unlink(vault, ["Dinner_Scene"])
+        p = links.plan_unlink(vault, ["Dinner_Scene"],
+                              ["People/Host.md", "Guest"])
+        self.assertEqual(p.texts, {
+            "People/Host.md": "Seen at the dinner and Dinner_Scene.\n",
+            "People/Guest.md": "Also at the dinner.\n"})
+        links.apply(p)
+        self.assertEqual(read(vault, "Plans/Plan.md"),
+                         "Run [[Dinner_Scene]] first.\n")
+
+    def test_as_gives_the_words_for_a_link_with_none_of_its_own(self):
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "- [[Dinner_Scene]]\n- at [[Dinner_Scene|the "
+                              "dinner]]\n- ![[Dinner_Scene]]\n"})
+        p = links.plan_unlink(vault, ["Dinner_Scene"], ["People/Host.md"],
+                              "the welcome dinner")
+        self.assertEqual(p.texts["People/Host.md"],
+                         "- the welcome dinner\n- at the dinner\n"
+                         "- ![[Dinner_Scene]]\n")
+        got = cli(vault, "unlink", "Dinner_Scene", "--as", "x")
+        self.assertEqual(got.returncode, 2)
+        self.assertIn("--as goes with unlink --in", got.stderr)
+
+    def test_as_words_with_a_pipe_stay_in_one_table_cell(self):
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "| when | what |\n|---|---|\n"
+                              "| noon | [[Dinner_Scene]] |\n\n"
+                              "Then [[Dinner_Scene]].\n"})
+        p = links.plan_unlink(vault, ["Dinner_Scene"], ["People/Host.md"],
+                              "dinner | welcome")
+        self.assertEqual(p.texts["People/Host.md"],
+                         "| when | what |\n|---|---|\n"
+                         "| noon | dinner \\| welcome |\n\n"
+                         "Then dinner | welcome.\n")
+
+    def test_as_words_with_a_pipe_stay_in_one_cell_of_a_row_with_no_leading_pipe(self):
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "when | what | then\n---|---|---\n"
+                              "noon | [[Dinner_Scene]] | next\n"})
+        p = links.plan_unlink(vault, ["Dinner_Scene"], ["People/Host.md"],
+                              "dinner | welcome")
+        self.assertEqual(p.texts["People/Host.md"],
+                         "when | what | then\n---|---|---\n"
+                         "noon | dinner \\| welcome | next\n")
+
+    def test_a_name_given_with_its_path_leaves_a_link_to_another_note_of_that_name(self):
+        vault = make_vault(self, {
+            "Plans/Scene.md": "x\n", "Other/Scene.md": "y\n",
+            "People/Host.md": "At [[Plans/Scene]], not [[Other/Scene]], "
+                              "nor [[Scene]], and [[Plans/Scene|the plan]].\n"})
+        p = links.plan_unlink(vault, ["Plans/Scene"], ["People/Host.md"])
+        # The bare link could be either note: it is left, and listed.
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At Scene, not [[Other/Scene]], nor [[Scene]], "
+                         "and the plan.\n")
+        self.assertEqual([(k[2], k[3]) for k in p.kept],
+                         [("[[Scene]]", links.KEPT["ambiguous"])])
+
+    def test_a_bare_link_is_turned_when_it_can_only_be_the_note_named_by_path(self):
+        vault = make_vault(self, {
+            "Plans/Scene.md": "x\n",
+            "People/Host.md": "At [[Scene]] and [[Plans/Scene]] and "
+                              "[[Elsewhere/Scene]].\n"})
+        p = links.plan_unlink(vault, ["Plans/Scene"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At Scene and Scene and [[Elsewhere/Scene]].\n")
+        # A bare name is the same one note here.
+        q = links.plan_unlink(vault, ["Scene"], ["People/Host.md"])
+        self.assertEqual(q.texts["People/Host.md"],
+                         "At Scene and Scene and [[Elsewhere/Scene]].\n")
+
+    def test_a_path_that_names_no_note_leaves_a_bare_link_to_the_note_that_is_there(self):
+        vault = make_vault(self, {
+            "Other/Scene.md": "y\n",
+            "People/Host.md": "At [[Scene]] and [[Plans/Scene]].\n"})
+        p = links.plan_unlink(vault, ["Plans/Scene"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At [[Scene]] and Scene.\n")
+
+    def test_a_bare_name_with_no_note_takes_its_links_whatever_folder_they_give(self):
+        vault = make_vault(self, {
+            "People/Host.md": "At [[Gone]] and [[Old/Gone]] and [[Old/Other]].\n"})
+        p = links.plan_unlink(vault, ["Gone"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At Gone and Gone and [[Old/Other]].\n")
+
+    def test_a_bare_name_that_two_notes_share_is_refused(self):
+        vault = make_vault(self, {
+            "Plans/Scene.md": "x\n", "Other/Scene.md": "y\n",
+            "People/Host.md": "At [[Plans/Scene]].\n"})
+        with self.assertRaises(links.LinksError) as caught:
+            links.plan_unlink(vault, ["Scene"], ["People/Host.md"])
+        self.assertIn("give the path", str(caught.exception))
+
+    def test_within_refuses_a_note_that_is_not_there(self):
+        vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
+        with self.assertRaises(links.LinksError) as cm:
+            links.plan_unlink(vault, ["B"], ["Nope.md"])
+        self.assertIn("there is no note Nope.md", str(cm.exception))
+
+    def test_in_goes_with_unlink_only(self):
+        vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
+        got = cli(vault, "retarget", "B", "B.md", "--in", "A.md")
+        self.assertEqual(got.returncode, 2)
+        self.assertIn("--in goes with unlink", got.stderr)
+        done = cli(vault, "unlink", "B", "--in", "A.md", "--write")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.splitlines()[0],
+                         "CHANGED\tA.md:1\t[[B]] -> B")
 
     def test_an_embed_is_kept(self):
         got, p = self.after("![[Judo]] and [[Judo]]")

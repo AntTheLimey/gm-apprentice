@@ -69,6 +69,22 @@ describe('%% comments (Obsidian), #305', () => {
       assert.ok(got.includes('after'), got);
     }
   });
+  it('cuts a %% comment in an indented code block: only a fence shows one', () => {
+    const got = safe('intro\n\n    code %%x%% here\n    more\n\nafter %%gone%%').text;
+    assert.ok(got.includes('    code  here'), got);
+    assert.ok(!got.includes('%%'), got);
+    assert.ok(!got.includes('gone'), got);
+    assert.strictEqual(safe('para\n    lazy %%gone%% line').text, 'para\n    lazy  line');
+  });
+  it('a comment-only line between a paragraph and a --- line does not turn the paragraph into a heading', () => {
+    assert.strictEqual(safe('text\n%%c%%\n---\nafter').text, 'text\n\n---\nafter');
+    assert.strictEqual(safe('text\n<!-- c -->\n---\nafter').text, 'text\n\n---\nafter');
+    assert.strictEqual(safe('text\n%%\nc\n%%\n===').text, 'text\n\n===');
+    // Nothing to keep apart: no paragraph above, or the underline is not one.
+    assert.strictEqual(safe('%%c%%\n---').text, '---');
+    assert.strictEqual(safe('text\n\n%%c%%\n---').text, 'text\n\n---');
+    assert.strictEqual(safe('text\n%%c%%\nmore').text, 'text\nmore');
+  });
   it('a comment still closes on a line the markdown parser would call code', () => {
     assert.strictEqual(safe('a\n%%\n```\n%%\nb').text, 'a\nb');
   });
@@ -83,5 +99,57 @@ describe('%% comments (Obsidian), #305', () => {
     const { html } = processContent({ markdown: '# T\nLead %%HIDDENWORD%% tail\n\n%%\nHIDDENBLOCK\n%%\n', frontmatter: {}, outputPath: 'a/b.html' }, {}, ['GM Notes']);
     assert.ok(!/HIDDEN/.test(html), html);
     assert.match(html, /Lead\s+tail/);
+  });
+});
+
+describe('%% comments in a frontmatter value', () => {
+  const { cutValueComments } = require('../../lib/frontmatter');
+  it('cuts a span, an unclosed one to the end, and a value that was only comment', () => {
+    assert.deepStrictEqual(
+      cutValueComments({ a: 'x %%y%% z', b: 'keep %%open', c: '%%all%%', d: ['p %%q%%', '%%r%%', 'ok'], n: 3, e: { f: 'g %%h%%' } }),
+      { a: 'x z', b: 'keep', d: ['p', 'ok'], n: 3, e: { f: 'g' } });
+  });
+});
+
+describe('HTML comments and hidden blocks in a frontmatter value', () => {
+  const { cutValueComments } = require('../../lib/frontmatter');
+  const cut = (text) => cutValueComments(text);
+  it('cuts an HTML comment, and an unclosed one to the end', () => {
+    assert.strictEqual(cut('Clerk <!-- a spy --> of works'), 'Clerk of works');
+    assert.strictEqual(cut('Clerk <!-- a spy'), 'Clerk');
+    assert.strictEqual(cut('<!---->Clerk<!-- x -->'), 'Clerk');
+    assert.strictEqual(cut('line one <!-- a\nspy --> line two'), 'line one line two');
+  });
+  it('cuts a gm-only or spoiler block with what it holds, in any capitals', () => {
+    assert.strictEqual(cut('Clerk <!-- gm-only -->a spy<!-- /gm-only --> of works'), 'Clerk of works');
+    assert.strictEqual(cut('Clerk <!-- SPOILER -->a spy<!-- / Spoiler --> of works'), 'Clerk of works');
+    assert.strictEqual(cut('Clerk <!--GM-ONLY-->a spy<!--/gm-only-->'), 'Clerk');
+  });
+  it('a block never closed hides the rest of the value', () => {
+    assert.strictEqual(cut('Clerk <!-- gm-only --> a spy'), 'Clerk');
+    // A closer of the other name does not close it.
+    assert.strictEqual(cut('Clerk <!-- gm-only --> a spy <!-- /spoiler --> of works'), 'Clerk');
+  });
+  it('a block inside a block of the same name closes only itself', () => {
+    assert.strictEqual(cut('A <!-- gm-only -->b <!-- gm-only -->c<!-- /gm-only --> d<!-- /gm-only --> E'), 'A E');
+  });
+  it('a closer with nothing open is a comment like any other', () => {
+    assert.strictEqual(cut('Clerk <!-- /gm-only --> of works'), 'Clerk of works');
+  });
+  it('leaves one in backticks alone, as it does a %%', () => {
+    assert.strictEqual(cut('type `<!-- x -->` to hide'), 'type `<!-- x -->` to hide');
+    assert.strictEqual(cut('type `<!-- gm-only -->` then <!-- real --> text'), 'type `<!-- gm-only -->` then text');
+  });
+  it('reads the three kinds in one pass, left to right', () => {
+    assert.strictEqual(cut('a %% x <!-- y %% b <!-- z --> c'), 'a b c');
+    assert.strictEqual(cut('a <!-- x %% y --> b %% z %% c'), 'a b c');
+  });
+  it('reads every string at any depth, and drops a value that was only hidden text', () => {
+    assert.deepStrictEqual(
+      cutValueComments({ a: 'x <!-- y --> z', c: '<!-- all -->', d: ['p <!-- q -->', '<!-- gm-only -->r<!-- /gm-only -->', 'ok'], n: 3, e: { f: 'g <!-- h' } }),
+      { a: 'x z', d: ['p', 'ok'], n: 3, e: { f: 'g' } });
+  });
+  it('a value with none of them is returned as it was', () => {
+    assert.strictEqual(cut('a  < b   and  -> c'), 'a  < b   and  -> c');
   });
 });

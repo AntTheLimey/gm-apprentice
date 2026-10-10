@@ -30,4 +30,19 @@ function typeLabelText(value) {
   return SNAKE_CASE.test(text) ? snakeWords(text) : text;
 }
 
-module.exports = { KIND_LABELS, kindLabel, typeLabelText };
+// Whether a note is something in the world (`entity`: a person, a place, a thing a player
+// can meet) or part of running the game (`working`: a plan, a session, a scene, a chapter,
+// the campaign overview). A type the tool does not know reads as `working`, so a custom
+// type is never offered a page by mistake. null when there is no type to read.
+const ENTITY_TYPES = new Set([
+  'npc', 'pc', 'creature', 'location', 'faction', 'organization', 'item', 'event', 'clue',
+  'document', 'handout', 'npc_group', 'heritage', 'world_domain',
+]);
+
+function kindOfType(type) {
+  const t = String(type == null ? '' : type).trim().toLowerCase().replace(/-/g, '_');
+  if (!t) return null;
+  return ENTITY_TYPES.has(t) ? 'entity' : 'working';
+}
+
+module.exports = { KIND_LABELS, kindLabel, typeLabelText, kindOfType, ENTITY_TYPES };

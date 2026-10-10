@@ -76,6 +76,63 @@ describe('site-doctor similarity', () => {
 });
 
 describe('doctor --site', () => {
+  it('audits the vault named by --vault, through the site\'s rules, instead of the one the config names', async () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-other-'));
+    write(other, 'Characters/NPCs/Fine.md', '---\ntype: npc\n---\n\nNothing wrong.\n');
+    const { configPath } = siteFor(other);
+    const cap = capture();
+    await runSiteDoctor({ configPath, vaultPath: messyVault(), json: true }, cap.deps);
+    const codes = JSON.parse(cap.text()).findings.map((f) => f.code);
+    assert.ok(codes.includes('FILE_UNTYPED'), cap.text());
+    const { runDoctor } = require('../lib/doctor-cli');
+    const viaCli = capture();
+    await runDoctor(['--site', '--config', configPath, '--vault', messyVault(), '--json'], viaCli.deps);
+    assert.ok(JSON.parse(viaCli.text()).findings.some((f) => f.code === 'FILE_UNTYPED'));
+    const plain = capture();
+    await runSiteDoctor({ configPath, json: true }, plain.deps);
+    assert.ok(!JSON.parse(plain.text()).findings.some((f) => f.code === 'FILE_UNTYPED'));
+  });
+
+  it('reads the note faults from the --vault vault too, and writes no site', async () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-other-'));
+    write(other, 'Characters/NPCs/Fine.md', '---\ntype: npc\n---\n\nNothing wrong.\n');
+    const audited = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-audited-'));
+    write(audited, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
+    const { configPath } = siteFor(other);
+    const cap = capture();
+    await runSiteDoctor({ configPath, vaultPath: audited, json: true }, cap.deps);
+    const strays = JSON.parse(cap.text()).findings.filter((f) => f.code === 'COMMENT_STRAY');
+    assert.deepStrictEqual(strays.map((f) => f.path), ['Characters/NPCs/Odd.md']);
+    assert.ok(!fs.existsSync(path.join(path.dirname(configPath), 'docs')), 'the audit wrote a site');
+  });
+
+  it('lists a frontmatter value of the wrong type, which the build read as best it could', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-mistyped-'));
+    write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\nstatus: [alive, well]\naliases: {a: 1}\n---\n\nFine.\n');
+    const { configPath } = siteFor(vault);
+    const cap = capture();
+    const rc = await runSiteDoctor({ configPath, json: true }, cap.deps);
+    const found = JSON.parse(cap.text()).findings.filter((f) => f.code === 'FRONTMATTER_MISTYPED');
+    assert.deepStrictEqual(found.map((f) => [f.severity, f.path]), [['warning', 'Characters/NPCs/Odd.md'], ['warning', 'Characters/NPCs/Odd.md']]);
+    assert.match(found.map((f) => f.detail).join('\n'), /^status: is a list where one value is expected/m);
+    assert.match(found.map((f) => f.detail).join('\n'), /^aliases: /m);
+    assert.strictEqual(rc, 0);
+  });
+
+  it('says so, as an error, when the site cannot be built in memory: never a clean list', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-broken-'));
+    write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
+    const { configPath } = siteFor(vault);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    config.outputDir = 7;   // not a path: the build cannot start
+    const cap = capture();
+    const rc = await runSiteDoctor({ configPath, json: true }, Object.assign({}, cap.deps, { config }));
+    const found = JSON.parse(cap.text()).findings.filter((f) => f.code === 'NOTE_FAULTS_UNCHECKED');
+    assert.strictEqual(found.length, 1, cap.text());
+    assert.strictEqual(found[0].severity, 'error');
+    assert.strictEqual(rc, 1);
+  });
+
   it('finds every class of problem in a messy vault', async () => {
     const vault = messyVault();
     const { configPath } = siteFor(vault);

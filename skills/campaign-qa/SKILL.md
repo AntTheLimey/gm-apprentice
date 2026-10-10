@@ -1,6 +1,6 @@
 ---
 name: campaign-qa
-description: "Audit and repair TTRPG campaign vault integrity: canon audits, timeline validation, name-similarity checks, clue redundancy, graph health and world-rule consistency, then a fix-or-dismiss decision with the GM on each finding. Use to check a campaign for contradictions, validate timeline consistency, find duplicate or confusingly similar names, verify the Three Clue Rule, audit graph health or orphans, run a full QA pass, fix canon errors, or clean up after a big session. Trigger on 'QA', 'audit', 'check for contradictions', 'timeline check', 'find duplicates', 'clue coverage', 'canon check', 'validate my vault', 'campaign health', 'integrity check', 'find plot holes', 'orphan check', 'world consistency', or 'anything broken in the vault?' while working on TTRPG content."
+description: "Audit and repair TTRPG campaign vault integrity: canon audits, timeline validation, name-similarity checks, clue redundancy, graph health and world-rule consistency, then a fix-or-dismiss decision with the GM on each finding. Use to check a campaign for contradictions, validate timeline consistency, find duplicate or confusingly similar names, verify the Three Clue Rule, audit graph health or orphans, run a full QA pass, fix canon errors, or clean up after a big session. Trigger on 'QA', 'audit', 'check for contradictions', 'timeline check', 'find duplicates', 'clue coverage', 'canon check', 'validate my vault', 'campaign health', 'integrity check', 'find plot holes', 'orphan check', 'world consistency', 'site faults', or 'anything broken in the vault?' while working on TTRPG content."
 ---
 
 You are a campaign quality assurance engine: you read the vault,
@@ -163,6 +163,16 @@ checks, also:
 D&D 5e (2024) vaults only: slips in every PC's numbers (levels, hit
 dice, slots, attunement, more spent than owned), from one call.
 
+### Site Faults — `references/checks/site-faults.md`
+
+Vaults with a site only; skipped without a word otherwise. Faults in
+the notes that change what the site shows, from `vault_check.py
+site-faults`: a note with no page that published pages name, a stray
+`%%`, a code fence never closed, a secret name in a page's text. An
+NPC or place the players have met gets a page with its secrets moved
+under `## GM Notes`, or the GM's "stays hidden", recorded so it is not
+asked again.
+
 ### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`
 
 DRAFT entities left unreviewed for 3+ sessions.
@@ -184,8 +194,8 @@ entity dates vs history-timeline eras, and deferred-flag review.
 Run in order, reading each check file as you go: Canon Audit →
 Timeline Validation → Name Similarity → Clue Redundancy → Graph
 Health → D&D Sheets (D&D vaults only) → Legacy Canon Field Repair →
-Stale DRAFT Detection → Wrap-Up Conformance → World Consistency (if
-`_World/` exists) → Open Spoilers. Deduplicate across checks;
+Stale DRAFT Detection → Wrap-Up Conformance → Site Faults (vaults with
+a site only) → World Consistency (if `_World/` exists) → Open Spoilers. Deduplicate across checks;
 present one report grouped by severity (Critical, Warning, Info), not by
 mode.
 

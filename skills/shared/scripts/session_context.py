@@ -68,9 +68,9 @@ from pathlib import Path
 
 from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
-from vaultlib import (PC_INACTIVE_STATUS, SKIP_DIRS,  # noqa: F401
-                      WRAP_UP_TYPES, body_of, entity_type, h3_blocks,
-                      nested_mapping, raw_frontmatter, section,
+from vaultlib import (GM_MARKER_RE, PC_INACTIVE_STATUS,  # noqa: F401
+                      SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
+                      h3_blocks, nested_mapping, raw_frontmatter, section,
                       session_ref_number, word_count)
 from vaultlib import vault_files as _vault_files
 
@@ -216,7 +216,6 @@ BRIEF_DROP_H3: tuple[str, ...] = (
 _H2_HEADING_RE = re.compile(r"^## (.+)$")
 _H3_HEADING_RE = re.compile(r"^### (.+)$")
 _ANY_HEADING_RE = re.compile(r"^(#{1,6})\s")
-_GM_MARKER_RE = re.compile(r"^<!--\s*/?gm-only\s*-->\s*$")
 
 
 def brief_wrapup(body: str) -> str:
@@ -283,7 +282,7 @@ def brief_wrapup(body: str) -> str:
             hm = _ANY_HEADING_RE.match(lines[j])
             if hm and len(hm.group(1)) <= level:
                 break
-            if _GM_MARKER_RE.match(lines[j].strip()):
+            if GM_MARKER_RE.fullmatch(lines[j].strip()):
                 break
             collected.append(lines[j])
             j += 1

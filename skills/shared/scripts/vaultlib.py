@@ -855,6 +855,38 @@ def atx_title(raw: str) -> str:
     renders as "GM Notes"), as processor.js `walkSections` reads it."""
     return _ATX_CLOSE_RE.sub("", raw.strip()).strip()
 _MARKERS = (("gm", "gm-only"), ("spoiler", "spoiler"))
+# Everything either side calls a space (Python's `\s` and JavaScript's
+# differ by these).
+_MARKER_SPACE = r"[\s\x1c-\x1f\x85\ufeff]"
+
+
+def marker_re(*words: str) -> re.Pattern[str]:
+    """The publish tool's one reading of a gm-only or spoiler marker
+    (tools/publish/lib/markers.js `markerRe`): an HTML comment holding
+    the name and nothing else, `/` before the name for a closer. Capitals
+    and spacing inside the comment do not matter. Group 1 is `/` for a
+    closer, group 2 the name as typed. No words: both markers.
+    tools/publish/test/fixtures/marker-vectors.json pins both sides."""
+    # Capitals are spelled out letter by letter: `re.I` on text also
+    # reads "ſ" as "s" and "ı" as "i", which the tool does not.
+    def any_case(word: str) -> str:
+        return "".join(f"[{c.lower()}{c.upper()}]" if c.isalpha()
+                       else re.escape(c) for c in word)
+    names = "|".join(any_case(w) for w in words or
+                     tuple(word for _, word in _MARKERS))
+    return re.compile(rf"<!--{_MARKER_SPACE}*(/?){_MARKER_SPACE}*({names})"
+                      rf"{_MARKER_SPACE}*-->")
+
+
+GM_MARKER_RE = marker_re("gm-only")
+_ANY_MARKER_RE = marker_re()
+
+
+def markers_in(line: str) -> list[tuple[int, str, bool]]:
+    """Every gm-only and spoiler marker in `line`, in order, as
+    (position, "gm-only" or "spoiler", is a closer)."""
+    return [(m.start(), m.group(2).lower(), m.group(1) == "/")
+            for m in _ANY_MARKER_RE.finditer(line)]
 
 
 # --------------------------------------------------------------------------
@@ -1161,6 +1193,23 @@ def withheld_by(lines: list[str], exclude_sections: Iterable[str]
     return [v if isinstance(v, str) else None for v in verdicts]
 
 
+def cut_lines(lines: list[str]) -> list[str | None]:
+    """For each line, what the publish tool's strip chain leaves of it
+    (gm-only and spoiler blocks, HTML and `%%` comments), or None when
+    the chain removes the line. `PublishToolUnavailable` when it cannot
+    be asked, or answers without the `cut` op (a tool older than the one
+    that added it)."""
+    if not lines:
+        return []
+    answer = PUBLISH_LINES.ask({"op": "cut", "text": "\n".join(lines)})
+    cut = answer.get("cut")
+    if (not isinstance(cut, list) or len(cut) != len(lines)
+            or not all(c is None or isinstance(c, str) for c in cut)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    return cut
+
+
 def stub_kept(lines: list[str], include: Iterable[Any]) -> list[bool]:
     """For each line, whether a `publish: stub` page with these
     `publish_include_sections` keeps it. The publish tool's own answer."""
@@ -1243,10 +1292,7 @@ def scan_body(text: str,
     closers and blocks left open at EOF.
     """
     excludes = [str(s) for s in exclude_sections]
-    marker_res = {
-        name: re.compile(rf"<!--\s*(/?){re.escape(word)}\s*-->")
-        for name, word in _MARKERS
-    }
+    names = {word: name for name, word in _MARKERS}
     stacks: dict[str, list[tuple[bool, int]]] = {n: [] for n, _ in _MARKERS}
     depths = {name: 0 for name, _ in _MARKERS}
     open_lines: dict[str, list[int]] = {name: [] for name, _ in _MARKERS}
@@ -1283,11 +1329,8 @@ def scan_body(text: str,
             # HTML wrapper, several per line), exactly as stripMarkedBlocks
             # does. `marker` is only set for a line that STARTS with one — the
             # own-line shape the wrap-up structure fixes reason about.
-            found = []
-            for name, _word in _MARKERS:
-                for mm in marker_res[name].finditer(line):
-                    found.append((mm.start(), name, mm.group(1) == "/"))
-            found.sort()
+            found = [(pos, names[word], is_close)
+                     for pos, word, is_close in markers_in(line)]
             for idx, (pos, name, is_close) in enumerate(found):
                 inline = line[:pos].strip() != ""
                 if idx == 0 and not inline:
@@ -1415,7 +1458,8 @@ def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:
     """One line with its HTML comment spans removed, as `stripHtmlComments`
     leaves it: (kept text, whether a comment is still open at line end).
     For a check that needs line numbers and reads comments as the
-    publisher does."""
+    publisher does. HTML comments only: `%%` comments are the publish tool's
+    to read (`cut_lines`); this is for a vault with no site to ask."""
     kept, i = "", 0
     while i < len(line):
         if in_comment:

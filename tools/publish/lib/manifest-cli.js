@@ -196,6 +196,7 @@ function surveyVault(options, deps) {
 async function runDiff(options, deps, survey) {
   const out = deps.out || console.log;
   const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
+  const exists = deps.exists || ((p) => fs.existsSync(p));
   const { vaultPath, publishConfig, manifest, files, verdicts } = survey;
 
   const listed = manifest
@@ -211,10 +212,15 @@ async function runDiff(options, deps, survey) {
     added.push({ path: rel, bucket: v.bucket, code: v.code, reason: v.reason });
   }
 
+  // An entry whose file is gone is "removed". One whose file is in a folder the site leaves
+  // out is not: the walk does not list it, and it is there (a recorded "stays hidden", say).
   const onDisk = new Set(files);
   const removed = [];
+  const outside = [];
   for (const [rel, entry] of listed) {
-    if (!onDisk.has(rel)) removed.push({ path: rel, section: TITLE_OF[entry.section] });
+    if (onDisk.has(rel)) continue;
+    const row = { path: rel, section: TITLE_OF[entry.section] };
+    if (exists(path.join(vaultPath, rel))) outside.push(row); else removed.push(row);
   }
 
   const counts = {
@@ -232,6 +238,7 @@ async function runDiff(options, deps, survey) {
       manifestExists: !!manifest,
       new: added,
       removed,
+      outside,
       counts,
     }, null, 2));
     return 0;
@@ -245,6 +252,11 @@ async function runDiff(options, deps, survey) {
   out('');
   out(`Removed (${removed.length}):`);
   for (const row of removed) out(`  ${row.path}\t${row.section}`);
+  if (outside.length > 0) {
+    out('');
+    out(`Listed, in a folder the site leaves out (${outside.length}; the file is there, the entry is kept):`);
+    for (const row of outside) out(`  ${row.path}\t${row.section}`);
+  }
   out('');
   out(`Unchanged: Publishing ${unchanged.publishing}, Excluded ${unchanged.excluded}, Needs Decision ${unchanged.needsDecision}`);
   return 0;
@@ -272,10 +284,22 @@ async function runApply(options, deps, survey) {
 
   // Validate before touching anything: a typo that half-applies leaves the GM with
   // a manifest they have to reconstruct to find out what happened.
+  // A note in a folder the site leaves out is not in the walked list, and it can still be
+  // named on a published page: the GM's "it stays hidden" is recorded for it like any other
+  // (doctor --site NAMED_NO_PAGE). It cannot be listed under Publishing, where it would
+  // read as published and is not.
   const onDisk = new Set(files);
-  const missing = moves.filter((m) => !onDisk.has(m.rel));
+  const inVault = (rel) => {
+    const full = path.resolve(vaultPath, rel);
+    return full.startsWith(path.resolve(vaultPath) + path.sep) && /\.md$/i.test(rel) && exists(full);
+  };
+  const missing = moves.filter((m) => !onDisk.has(m.rel) && !(m.section !== 'publishing' && inVault(m.rel)));
   if (missing.length > 0) {
-    for (const m of missing) out(`no such file in the vault: ${m.rel}`);
+    for (const m of missing) {
+      out(inVault(m.rel)
+        ? `cannot list under Publishing: ${m.rel} is in a folder the site leaves out (publish.exclude_dirs), so no page would be built. Put the folder on the site first, or record a decision with --exclude or --decide.`
+        : `no such file in the vault: ${m.rel}`);
+    }
     out('Nothing was written. Run `gm-publish manifest diff` for the paths the vault actually has.');
     return 1;
   }

@@ -14,6 +14,13 @@ describe('CLI: gm-publish doctor', () => {
     assert.ok(stdout.includes('doctor'), 'help mentions doctor');
   });
 
+  it('doctor --help says what each note fault is, the comment left open in a frontmatter value among them', async () => {
+    const { stdout } = await execFileAsync(process.execPath, [CLI, 'doctor', '--help']);
+    assert.match(stdout, /^ {2}COMMENT_STRAY {3}a %% that is not a comment, or a comment never closed in a\n {18}frontmatter value$/m);
+    for (const code of ['NAMED_NO_PAGE', 'FENCE_UNCLOSED', 'ALIAS_IN_PROSE', 'NOTE_FAULTS_UNCHECKED']) assert.ok(stdout.includes(code), code);
+    assert.match(stdout, /frontmatter values of the\nwrong type/);
+  });
+
   it('doctor --json emits parseable JSON with the expected keys', async () => {
     // Real subprocess exercises the bin -> runDoctor -> JSON dispatch wiring. We
     // point the child's PATH at a directory that does not exist so its internal

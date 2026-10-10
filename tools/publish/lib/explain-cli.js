@@ -20,7 +20,9 @@ const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
-const { nearestNames } = require('./site-doctor');
+const { markersIn } = require('./markers');
+const yaml = require('js-yaml');
+const { nearestNames, readerView } = require('./site-doctor');
 
 // The switches as the build resolves them, without the config notes.
 function switchesOf(publishConfig) {
@@ -139,7 +141,7 @@ async function runExplain(options, deps) {
   const stripped = frontmatterError ? null
     : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
   const sheetWithheld = frontmatterError || !page ? null : sheetWithheldOf(publishConfig, markdown, frontmatter);
-  const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
+  const gmOnlyBlocks = frontmatterError ? null : markersIn(markdown).filter((m) => m.name === 'gm-only' && !m.close).length;
 
   const publishes = publishesPage(verdict);
   // Whether this is a session index whose body the site withholds (#276).
@@ -155,6 +157,43 @@ async function runExplain(options, deps) {
   const auto = frontmatter ? autoExcludeCode(frontmatter) : null;
   const canonStatus = frontmatter ? getCanonStatus(frontmatter) : null;
   const section = manifestSectionOf(manifest, target);
+
+  // --shown: what the site holds of this note, or would if it published. The build is run
+  // in memory with the note built as if it published, and what comes back is read off the
+  // page it made: the text of the page (and of a PC's story page), its link-preview card,
+  // and what the search index holds. So it is the page, not a second reading of the note.
+  // A note the build can make no page of (no type, a folder not on the site) has no
+  // template to print it: for that one the frontmatter as published and the body after
+  // every cut are shown instead, and `from` says so. A `publish: false` note shows nothing.
+  let shown = null;
+  if (opts.shown && !frontmatterError) {
+    let source = page;
+    if (!source) {
+      try {
+        const parsed = parseNote(readFile(path.join(vaultPath, target)));
+        source = { markdown: parsed.content, frontmatter: parsed.data || {} };
+      } catch (e) { source = null; }
+    }
+    if (source && publishMode(source.frontmatter) === 'none') {
+      shown = { from: 'none' };
+    } else if (source) {
+      // A build that fails is not a build that makes no page: the first is an error, said
+      // as one, and never answered with the note's own text as if nothing more were on the site.
+      let built = null;
+      let failed = null;
+      try {
+        built = require('./build').build({ configPath: survey.configPath, vaultPath, rawConfig: d.config, inMemory: true, shownFor: target }).shown;
+      } catch (e) { failed = String((e && e.message) || e).split('\n')[0]; }
+      if (failed !== null) {
+        shown = { from: 'error', error: failed };
+      } else if (built && (built.page !== null || built.story !== null)) {
+        shown = Object.assign({ from: 'page' }, built);
+      } else {
+        const view = readerView(source, publishConfig, { bodyWithheld: hubBodyUnpublished, rel: target });
+        shown = { from: 'note', frontmatter: view.frontmatter, markdown: view.safe.text.replace(/\n{3,}/g, '\n\n').trim() };
+      }
+    }
+  }
 
   if (opts.json) {
     out(JSON.stringify({
@@ -179,8 +218,9 @@ async function runExplain(options, deps) {
       gmOnlyBlocks,
       bodyPublishes: publishes && !hubBodyUnpublished,
       bodyWithheld: hubBodyUnpublished,
+      ...(opts.shown ? { shown } : {}),
     }, null, 2));
-    return 0;
+    return shown && shown.from === 'error' ? 1 : 0;
   }
 
   out(target);
@@ -214,6 +254,64 @@ async function runExplain(options, deps) {
     out(publishes
       ? '  body: not published — a session index is metadata only, and this session has a published Wrap-Up; its page is built from frontmatter and the Wrap-Up'
       : '  body: not published — the page itself does not publish; if it did, the body would still be withheld, since this session has a published Wrap-Up');
+  }
+  if (opts.shown) {
+    out('');
+    const block = (text) => { for (const line of (text || '(nothing)').split('\n')) out(`    ${line}`); };
+    if (!shown) {
+      out('  what the site holds of this note: unknown — the note could not be read');
+      return 0;
+    }
+    if (shown.from === 'error') {
+      out(`  what the site holds of this note: could not be read — the site could not be built in memory: ${shown.error}`);
+      return 1;
+    }
+    if (shown.from === 'none') {
+      out('  what the site holds of this note: nothing — it is marked publish: false, so no page is built from it');
+      return 0;
+    }
+    const iff = publishes || mergedInto ? '' : ', if it published';
+    if (shown.from === 'note') {
+      out(`  the site can build no page of this note as it stands (${verdict.code}), so this is the note after every cut a page gets${iff}:`);
+      out('');
+      out('  frontmatter as published (a page prints some of these fields, the search and the cards read others):');
+      block(Object.keys(shown.frontmatter).length
+        ? yaml.safeDump(shown.frontmatter, { lineWidth: -1, skipInvalid: true }).trimEnd() : '(none)');
+      out('');
+      out('  body as published:');
+      block(shown.markdown);
+      return 0;
+    }
+    out(`  what the site holds of this note${iff}, read off the page as the build makes it:`);
+    if (shown.page !== null) {
+      out('');
+      out('  its page:');
+      block(shown.page);
+    }
+    if (shown.story !== null) {
+      out('');
+      out('  its story page:');
+      block(shown.story);
+    }
+    if (shown.images && shown.images.length > 0) {
+      out('');
+      out('  image files that publish with it:');
+      block(shown.images.join('\n'));
+    }
+    if (shown.card) {
+      out('');
+      out('  its link-preview card:');
+      block([shown.card.t, shown.card.k, ...(shown.card.f || []).map(([label, value]) => `${label}: ${value}`), shown.card.x].filter(Boolean).join('\n'));
+    }
+    if (shown.search) {
+      out('');
+      out('  what the search finds it by (not all of it is printed on the page):');
+      block([`title: ${shown.search.title}`, shown.search.subtitle ? `subtitle: ${shown.search.subtitle}` : '',
+        shown.search.aliases.length ? `aliases: ${shown.search.aliases.join(', ')}` : '',
+        'every word of the body as published:', shown.search.body.replace(/\n{3,}/g, '\n\n').trim() || '(nothing)'].filter(Boolean).join('\n'));
+    }
+    out('');
+    out('  Nothing else of this note\'s body and fields is on the site. Other pages that link the note still print its name.');
   }
   return 0;
 }

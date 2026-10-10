@@ -37,6 +37,18 @@ describe('lines: published', () => {
   });
 });
 
+describe('lines: cut', () => {
+  it('gives each line as the strip chain leaves it, null when the chain removes it', () => {
+    const text = 'a %%x%% b\n%%\nhidden\n%%\n<!-- c -->\nkept\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\nend';
+    const { cut } = answer({ op: 'cut', text });
+    assert.deepStrictEqual(cut, ['a  b', null, null, null, null, 'kept', '', null, null, 'end']);
+  });
+  it('is the build\'s own strip chain: fenced code is kept, a comment in indented code is cut', () => {
+    const { cut } = answer({ op: 'cut', text: '```\n%%x\n```\n    %%y%%' });
+    assert.deepStrictEqual(cut, ['```', '%%x', '```', null]);
+  });
+});
+
 describe('lines: sections', () => {
   it('names the section withholding each line', () => {
     const { withheldBy } = answer({ op: 'sections', text: NOTE, excludeSections: ['gm notes'] });

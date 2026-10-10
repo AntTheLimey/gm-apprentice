@@ -123,25 +123,25 @@ describe('rootPath', () => {
 
 describe('parseParticipant', () => {
   it('parses [[Entity]] (annotation)', () => {
-    const result = parseParticipant('[[Anna_Lindqvist]] (rescued)');
-    assert.strictEqual(result.target, 'Anna_Lindqvist'); // raw target preserved for lookup
-    assert.strictEqual(result.display, 'Anna Lindqvist'); // display humanized (no underscores)
+    const result = parseParticipant('[[Ilse_Karsh]] (rescued)');
+    assert.strictEqual(result.target, 'Ilse_Karsh'); // raw target preserved for lookup
+    assert.strictEqual(result.display, 'Ilse Karsh'); // display humanized (no underscores)
     assert.strictEqual(result.annotation, 'rescued');
     assert.strictEqual(result.isLink, true);
   });
 
   it('parses [[Entity|Display Name]] (annotation)', () => {
-    const result = parseParticipant('[[Anna_Lindqvist|Anna Lindqvist]] (rescued from control)');
-    assert.strictEqual(result.target, 'Anna_Lindqvist');
-    assert.strictEqual(result.display, 'Anna Lindqvist');
+    const result = parseParticipant('[[Ilse_Karsh|Ilse Karsh]] (rescued from control)');
+    assert.strictEqual(result.target, 'Ilse_Karsh');
+    assert.strictEqual(result.display, 'Ilse Karsh');
     assert.strictEqual(result.annotation, 'rescued from control');
     assert.strictEqual(result.isLink, true);
   });
 
   it('parses [[Entity]] without annotation', () => {
-    const result = parseParticipant('[[Emma_Wentworth]]');
-    assert.strictEqual(result.target, 'Emma_Wentworth');
-    assert.strictEqual(result.display, 'Emma Wentworth');
+    const result = parseParticipant('[[Ada_Moor]]');
+    assert.strictEqual(result.target, 'Ada_Moor');
+    assert.strictEqual(result.display, 'Ada Moor');
     assert.strictEqual(result.annotation, '');
     assert.strictEqual(result.isLink, true);
   });
@@ -163,8 +163,8 @@ describe('parseParticipant', () => {
   });
 
   it('handles annotation with special characters', () => {
-    const result = parseParticipant('[[Klaus_Bauer]] (attacker — escaped)');
-    assert.strictEqual(result.target, 'Klaus_Bauer');
+    const result = parseParticipant('[[Bo_Pike]] (attacker — escaped)');
+    assert.strictEqual(result.target, 'Bo_Pike');
     assert.strictEqual(result.annotation, 'attacker — escaped');
     assert.strictEqual(result.isLink, true);
   });
@@ -178,7 +178,7 @@ describe('parseParticipant', () => {
   });
 
   it('keeps an explicit alias verbatim (does not over-humanize)', () => {
-    const result = parseParticipant('[[Anna_Lindqvist|Madame A_B]]');
+    const result = parseParticipant('[[Ilse_Karsh|Madame A_B]]');
     assert.strictEqual(result.display, 'Madame A_B', 'explicit alias preserved as written');
   });
 });
@@ -224,27 +224,27 @@ describe('item template holder/origin humanization (B-batch2)', () => {
   it('humanizes the current_holder link text but keeps the link resolved', () => {
     const page = {
       title: 'Cursed_Locket', displayTitle: 'Cursed Locket', outputPath: 'items/cursed-locket.html',
-      frontmatter: { type: 'item', current_holder: '[[Lord_Percival_Harcourt]]' },
+      frontmatter: { type: 'item', current_holder: '[[Lord_Edric_Fenwick]]' },
     };
     const processed = { html: '<p>x</p>', relationships: '' };
-    const linkMap = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const linkMap = { 'Lord_Edric_Fenwick': 'characters/npcs/lord-edric-fenwick.html' };
     const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
-    assert.ok(html.includes('>Lord Percival Harcourt</a>'), 'holder display humanized');
-    assert.ok(!html.includes('>Lord_Percival_Harcourt<'), 'no raw slug in holder text');
-    assert.ok(html.includes('lord-percival-harcourt.html'), 'link still resolves');
+    assert.ok(html.includes('>Lord Edric Fenwick</a>'), 'holder display humanized');
+    assert.ok(!html.includes('>Lord_Edric_Fenwick<'), 'no raw slug in holder text');
+    assert.ok(html.includes('lord-edric-fenwick.html'), 'link still resolves');
   });
 
   it('parses an aliased holder ref (target for lookup, alias for display)', () => {
     const page = {
       title: 'Locket', displayTitle: 'Locket', outputPath: 'items/locket.html',
-      frontmatter: { type: 'item', current_holder: '[[Lord_Percival_Harcourt|Lord Percival]]' },
+      frontmatter: { type: 'item', current_holder: '[[Lord_Edric_Fenwick|Lord Edric]]' },
     };
     const processed = { html: '<p>x</p>', relationships: '' };
-    const linkMap = { 'Lord_Percival_Harcourt': 'characters/npcs/lord-percival-harcourt.html' };
+    const linkMap = { 'Lord_Edric_Fenwick': 'characters/npcs/lord-edric-fenwick.html' };
     const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
-    assert.ok(html.includes('>Lord Percival</a>'), 'explicit alias used as label');
-    assert.ok(html.includes('lord-percival-harcourt.html'), 'aliased ref still resolves the link');
-    assert.ok(!html.includes('Harcourt|Lord'), 'pipe/target+alias not rendered as text');
+    assert.ok(html.includes('>Lord Edric</a>'), 'explicit alias used as label');
+    assert.ok(html.includes('lord-edric-fenwick.html'), 'aliased ref still resolves the link');
+    assert.ok(!html.includes('Fenwick|Lord'), 'pipe/target+alias not rendered as text');
   });
 });
 
@@ -361,13 +361,13 @@ describe('displayTitle usage', () => {
     // hero-banner background — only a thin band around 25% height survived.
     // The cinematic layout shows the full portrait beside the name instead.
     const page = {
-      title: 'Thomas_Wyndham',
-      displayTitle: 'Thomas Wyndham',
-      outputPath: 'characters/npcs/thomas-wyndham.html',
-      frontmatter: { type: 'npc', portrait: '_attachments/characters/thomas-wyndham.png' },
+      title: 'Corvin_Hollis',
+      displayTitle: 'Corvin Hollis',
+      outputPath: 'characters/npcs/corvin-hollis.html',
+      frontmatter: { type: 'npc', portrait: '_attachments/characters/corvin-hollis.png' },
     };
     const processed = { html: '<p>Content</p>', relationships: '' };
-    const imageMap = { 'thomas-wyndham.png': true };
+    const imageMap = { 'corvin-hollis.png': true };
     const html = npcTemplate(page, processed, mockNavFor, mockConfig, imageMap);
     assert.ok(html.includes('class="hero-cinematic"'), 'Should use hero-cinematic, not hero-banner, when a portrait exists');
     assert.ok(html.includes('class="hero-cinematic-img"'), 'Portrait image should use the cinematic (not banner) class');
@@ -642,20 +642,20 @@ describe('location sub-location card excerpts (shared helper)', () => {
   const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
 
   const parent = {
-    title: 'Sector_7G', displayTitle: 'Sector 7-G',
-    outputPath: 'locations/sector-7g.html',
+    title: 'Sector_9K', displayTitle: 'Sector 9-K',
+    outputPath: 'locations/sector-9k.html',
     frontmatter: { type: 'location' }, markdown: '',
   };
   const sparseChild = {
-    title: 'Nova_Nexus', displayTitle: 'Nova Nexus',
-    outputPath: 'locations/nova-nexus.html',
-    frontmatter: { type: 'location', parent_location: '[[Sector_7G]]' },
+    title: 'Tarn_Reach', displayTitle: 'Tarn Reach',
+    outputPath: 'locations/tarn-reach.html',
+    frontmatter: { type: 'location', parent_location: '[[Sector_9K]]' },
     markdown: '## Overview\n\n## GM Notes\n\nThe owner launders syndicate money through the bar.\n',
   };
   const proseChild = {
-    title: 'Docking_Ring', displayTitle: 'Docking Ring',
-    outputPath: 'locations/docking-ring.html',
-    frontmatter: { type: 'location', parent_location: '[[Sector_7G]]' },
+    title: 'Mooring_Ring', displayTitle: 'Mooring Ring',
+    outputPath: 'locations/mooring-ring.html',
+    frontmatter: { type: 'location', parent_location: '[[Sector_9K]]' },
     markdown: '## Overview\n\nCargo moves at all hours here. Nobody asks questions.\n',
   };
   const ctx = { pages: [parent, sparseChild, proseChild], linkMap: {},

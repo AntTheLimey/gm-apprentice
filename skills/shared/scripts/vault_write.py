@@ -40,7 +40,7 @@ from pathlib import Path
 import vault_check as vc
 import vaultlib as vl
 from migrate_core import StepFailed, write_text_atomic
-from vaultlib import LineState, scan_body
+from vaultlib import GM_MARKER_RE, LineState, scan_body
 
 OPEN_GM, CLOSE_GM = "open-gm", "close-gm"
 # Spoiler blocks hide text like gm-only blocks, so a section ends at them
@@ -205,7 +205,6 @@ def apply(batch: Batch) -> list[str]:
     return changed
 
 
-GM_MARKER_RE = re.compile(r"<!--\s*/?\s*gm-only\s*-->")
 
 
 def check_fences(batch: Batch, given: str = "") -> None:
@@ -1095,7 +1094,8 @@ def type_template(note_type: str) -> tuple[TemplateMap | None, bool]:
             or ".." in note_type or not path.is_file()):
         return None, True
     text = path.read_text(encoding="utf-8")
-    return read_template_map(text), "<!-- gm-only -->" in text
+    return read_template_map(text), any(
+        not m.group(1) for m in GM_MARKER_RE.finditer(text))
 
 
 def _gm_notes_head(doc: Doc) -> Head | None:

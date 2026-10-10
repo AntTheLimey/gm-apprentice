@@ -1,4 +1,4 @@
-const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue } = require('../processor');
+const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('../processor');
 const { typeLabelText } = require('../kind-label');
 
 const DIR_LABELS = {
@@ -176,12 +176,13 @@ const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date', docume
 // a snake_case type label as words. The one definition for every badge the page headers
 // print and for the matching facts on the link preview cards.
 function headerValueText(field, raw) {
-  const text = plainMetaValue(raw).trim();
+  // A field that names a note reads as a reference: a bare name's underscores are spaces.
+  const text = (NOTE_NAME_FIELDS.has(field) ? plainRefValue(raw) : plainMetaValue(raw)).trim();
   return /(?:^|_)type$/.test(String(field)) ? typeLabelText(text) : text;
 }
 
 function metadataBadgesFor(frontmatter) {
-  const fields = TYPE_BADGE_FIELDS[frontmatter.type];
+  const fields = Object.prototype.hasOwnProperty.call(TYPE_BADGE_FIELDS, frontmatter.type) ? TYPE_BADGE_FIELDS[frontmatter.type] : null;
   if (!fields) return '';
 
   const badges = [];

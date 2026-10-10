@@ -29,7 +29,8 @@ All campaign content falls into three categories:
   inline code is literal text and stays. An unclosed `%%` hides the
   rest of the note and prints a build warning. That includes a stray
   `%%` in prose, such as `100%% done`: it starts a comment, as it does
-  in Obsidian.
+  in Obsidian. The build counts those strays in a closing warning, and
+  campaign-qa's Site Faults check finds and fixes each one.
 - Frontmatter fields in `exclude_fields` (default:
   `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`)
 - Files whose frontmatter says `publish: false` — in **every** mode,

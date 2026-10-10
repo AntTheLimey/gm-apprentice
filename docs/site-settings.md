@@ -97,7 +97,7 @@ two words. Do not write `yes` or `no` for them.
 | `publish.site_title` | The name in the menu bar and the browser tab | Text | No title; setting up a site writes one |
 | `publish.footer` | A line at the foot of every page | Text | No footer |
 | `publish.search` | The search box | `true` or `false` | `true` |
-| `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone | `on`, `desktop` (hover only; on a phone a tap goes straight to the page) or `off`; `yes` and `no` read as `on` and `off` | `on` |
+| `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone | `on`, `desktop` (hover only; on a phone a tap goes straight to the page) or `off`; `yes` and `true` read as `on`, `no` and `false` as `off` | `on` |
 | `publish.system` | The game system, which decides how a character sheet is drawn | `coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark) | A plain character page with no system's sheet |
 | `publish.four_oh_four.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
 | `setting_year` | An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. It sits at the left edge, beside `publish:`, as in the example above | A year | Nothing shown |
@@ -249,16 +249,16 @@ The apprentice does the setting up and writes the switch for you.
 | `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
 | `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
 
-Name a note the way a link does, by its file name: `Hugh_Cavendish`, not
-"Hugh Cavendish". A name that matches no published page gives a build
+Name a note the way a link does, by its file name: `Osric_Marlow`, not
+"Osric Marlow". A name that matches no published page gives a build
 warning.
 
 ```yaml
 publish:
   landing:
     max_npcs: 6
-    featured_npcs: ["Hugh_Cavendish", "Margaret_Cavendish"]
-    quick_links: ["Calcutta_City_Map"]
+    featured_npcs: ["Osric_Marlow", "Edda_Marlow"]
+    quick_links: ["Harbour_City_Map"]
 ```
 
 ## Lists and pictures
@@ -279,7 +279,7 @@ publish:
     locations:
       image: _attachments/sector-map.webp
       link: _attachments/sector-map-large.webp
-      alt: "Star chart of Sector 7-G"
+      alt: "Star chart of Sector 9-K"
     factions: _attachments/factions-hero.svg
 ```
 

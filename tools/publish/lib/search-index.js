@@ -1,7 +1,7 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const lunr = require('lunr');
-const { wikilinkRe, parseWikilink } = require('./wikilink');
+const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
 const { stripTags } = require('./strip-tags');
 const { getsNoPage } = require('./previews');
 
@@ -17,7 +17,10 @@ function stripMarkdown(md) {
 }
 
 function getSubtitle(fm) {
-  return fm.occupation || fm.location_type || fm.faction_type || fm.factionType || fm.event_type || fm.type || '';
+  const value = fm.occupation || fm.location_type || fm.faction_type || fm.factionType || fm.event_type || fm.type || '';
+  // A search result prints this as it stands: a labelled link in it prints its label.
+  if (Array.isArray(value)) return value.map((v) => (typeof v === 'string' ? labelsForLinks(v) : v));
+  return typeof value === 'string' ? labelsForLinks(value) : value;
 }
 
 // Search results must reflect only what readers can see, so prefer each page's published
@@ -86,4 +89,4 @@ function buildSearchIndex(allPages) {
   };
 }
 
-module.exports = { buildSearchIndex };
+module.exports = { subtitleOf: getSubtitle, buildSearchIndex };

@@ -20,6 +20,7 @@ Usage:
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
   vault_check.py VAULT pc-body [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT wrapup [--file REL] [--fix]
+  vault_check.py VAULT site-faults [--file REL ...]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
   vault_check.py VAULT all
@@ -70,7 +71,8 @@ Keeper keyword, or names a GM Notes subsection of the wrap-up template
 (`World State`, …: the pre-fix 1.8.3 migration left some top-level); INFO is a Keeper-facing bold label or callout —
 prose the GM has to judge, not auto-movable. A heading written with
 emphasis, a colon or a link (`### **GM Notes**`) is the excluded
-section: the site hides it, so it is not a finding. `--fix` re-nests
+section: the site hides it, so it is not a finding (unless the site's
+publish tool is older than 1.16.0, which does not: then it is an ERROR). `--fix` re-nests
 only the `##` sections the site withholds by its own rule (a
 handout's Keeper sections) under `## GM Notes`, demoting each and its
 sub-headings a level; keyword WARNINGs and INFO rows never move. `--renest-excludes` is the 1.8.3 migration:
@@ -116,6 +118,18 @@ a dry run, `FIXED` when `--fix` applies them; `wrapup` also prints
 `UNCHANGED` for a conformant file. Both join `all` as a dry run:
 `all` never writes.
 
+`site-faults` lists the faults in the notes that change what the site
+shows: a note with no page that a published page names, a stray `%%`, a
+code fence never closed above a hidden marker, a `gm_aliases` name in a
+page's text. The list is the site's publish tool's (`doctor --site
+--json`); nothing about it is worked out here. A note the GM has settled
+("stays hidden:" beside its Excluded entry) is counted in a closing INFO
+row and not listed. A row names the first three pages that name a note;
+`--file` keeps one note's rows and lists every page. It prints one INFO
+row for a vault with no site, and one for a site whose tool is from before
+these findings. It sits outside `all`: the list is long and has its own
+procedure (campaign-qa's Site Faults).
+
 Two commands are gates rather than reports and sit outside `all`:
 `version` emits one row whose first column is a verdict
 (OK/MISMATCH/AHEAD/SETUP/ERROR) and sets the exit code — 0 for
@@ -137,6 +151,7 @@ from collections import Counter
 import sys
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from html.entities import html5 as _HTML5
 import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -186,6 +201,7 @@ from vaultlib import (  # noqa: F401
     site_unasked,
     vault_site,
     strip_comment_spans,
+    cut_lines,
     read_publish_list,
     read_publish_scalar,
     resolve_exclude_sections,
@@ -1111,22 +1127,32 @@ def _hub_body_rows(rel: str, text: str) -> list[str]:
     withholds the hub body, so nothing leaks. It is still bookkeeping in
     the wrong document — the skills that need it read the Plan and the
     Wrap-Up, not the hub — so the row names where each kind belongs.
-    Comments are read as the publisher reads them (`strip_comment_spans`),
-    so the template's own comment line is not prose. The caller gates on
+    Comments are read as the publisher reads them (`cut_lines`, the tool's own
+    strip chain; `strip_comment_spans` when it cannot be asked), so the
+    template's own comment line is not prose. The caller gates on
     the Wrap-Up: without one the body is the session's only published
     record, and prose there is expected.
     """
     states, _problems = scan_body(text, ())
     loose: list[LineState] = []
+    # The tool's strip chain knows `%%` comments; HTML comments alone are read
+    # here when it cannot be asked (a site pinned to a tool without `cut`).
+    try:
+        cut = cut_lines([s.line for s in states])
+    except PublishToolUnavailable:
+        cut = None
     in_comment = False
-    for s in states:
+    for i, s in enumerate(states):
         if s.gm_depth or s.spoiler_depth or s.marker is not None:
             continue
         if s.in_code:
             if s.line.strip():
                 loose.append(s)
             continue
-        kept, in_comment = strip_comment_spans(s.line, in_comment)
+        if cut is not None:
+            kept = cut[i] or ""
+        else:
+            kept, in_comment = strip_comment_spans(s.line, in_comment)
         if kept.strip() and not (s.heading is not None and s.heading[0] == 1):
             loose.append(s)
     if not loose:
@@ -1679,6 +1705,152 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
                  f"(publish.site is not on), so nothing publishes{todo}"]
 
 
+# The four faults in a NOTE that change what the site shows, as the publish
+# tool's `doctor --site --json` names them.
+NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "FENCE_UNCLOSED", "COMMENT_STRAY",
+                    "NAMED_NO_PAGE")
+# How many of the pages naming a note a row lists; `--file` lists them all.
+SITE_FAULT_PAGES = 3
+
+
+def _one_line(value: object) -> str:
+    return " ".join(str(value if value is not None else "").split())
+
+
+def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
+    """One finding of the tool's, as a row. Its words are the tool's own;
+    nothing is worked out here."""
+    code, level = f["code"], str(f.get("severity", "warning")).upper()
+    path = _one_line(f.get("path")) or "(vault)"
+    if code == "NAMED_NO_PAGE":
+        kind = f.get("kind")
+        what = (f"{kind} ({f.get('type')})" if kind else "no type")
+        pages = [_one_line(p) for p in f.get("pages") or []]
+        shown = pages if whole else pages[:SITE_FAULT_PAGES]
+        more = len(pages) - len(shown)
+        printed = ", ".join(f'"{_one_line(w)}"' for w in f.get("printed") or [])
+        reason = _one_line(f.get("reason"))
+        count = f.get("pageCount", len(pages))
+        msg = (f"NAMED_NO_PAGE: {what}, named on {count} "
+               f"published page{'' if count == 1 else 's'} as {printed}; "
+               f"no page because {f.get('why')}; "
+               + (f"reason written: {reason}; " if reason else "no reason written; ")
+               + "named on: " + "; ".join(shown)
+               + (f"; +{more} more (--file lists them all)" if more > 0 else ""))
+        # A page counted because an index or listing page prints the name
+        # from it: the fix is in that note's field, not its text.
+        via = [_one_line(p) for p in f.get("viaListing") or []]
+        if via:
+            outs = [_one_line(p) for p in f.get("listings") or []]
+            msg += ("; printed only by an index or listing page ("
+                    + ", ".join(outs[:SITE_FAULT_PAGES]) + ") from: "
+                    + "; ".join(via if whole else via[:SITE_FAULT_PAGES]))
+    elif code == "COMMENT_STRAY":
+        msg = (f"COMMENT_STRAY: {_one_line(f.get('detail'))} | "
+               f"{_one_line(f.get('text'))}")
+    elif code == "FENCE_UNCLOSED":
+        msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
+    else:
+        msg = (f"ALIAS_IN_PROSE: \"{_one_line(f.get('alias'))}\" (a secret "
+               f"name of {_one_line(f.get('owner'))}), printed "
+               f"{f.get('count')} time{'' if f.get('count') == 1 else 's'} | "
+               f"{_one_line(f.get('context'))}")
+        outs = [_one_line(p) for p in f.get("listings") or []]
+        if outs:
+            msg += " | printed on the index or listing page: " + ", ".join(outs)
+    return f"{level}\t{path}\t{msg}"
+
+
+def check_site_faults(vault: Path, files: list[str] | None = None
+                      ) -> list[str]:
+    """The faults in the vault's notes that change what its site shows, as
+    the site's own publish tool lists them (`doctor --site --json`): a note
+    with no page named on a published page, a stray `%%`, an unclosed code
+    fence over a hidden marker, a secret name printed in a page's text.
+
+    Every rule is the tool's. This asks, and prints its findings as rows;
+    a finding the GM settled ("stays hidden:" in the manifest) is counted,
+    not listed. A vault with no site has nothing to ask about. A tool from
+    before these findings answers without them, and the row says so rather
+    than report a clean site. `files` keeps the findings on those notes,
+    with every page that names each."""
+    tool, why, fix, has_site = _lines_tool(vault)
+    if not has_site:
+        if why == SITE_IS_OFF:
+            return [f"INFO\t(vault)\tsite-faults has no site to check: "
+                    f"{SITE_IS_OFF} in {VAULT_CONFIG}"]
+        # The switch reads off, but the publish tool could not be asked (a
+        # vault file it will not parse): say that, and what to fix.
+        todo = f"; {fix}" if fix else ""
+        return [f"INFO\t(vault)\tsite-faults has no site to check "
+                f"({why}){todo}"]
+    if tool is None:
+        return [f"ERROR\t(vault)\tsite-faults could not ask the publish tool "
+                f"({why}) — nothing checked; {fix}"]
+    _publishes, _on, site = vault_site(vault)
+    node = shutil.which("node")
+    if not node or site is None:
+        return [f"ERROR\t(vault)\tsite-faults could not ask the publish tool "
+                f"(node is not on PATH) — nothing checked; {fix}"]
+    try:
+        # Read to the end of the pipe: the answer runs to hundreds of KB on
+        # a large vault, and the tool exits only once it is flushed (#279).
+        proc = subprocess.run(
+            [node, str(tool), "doctor", "--site", "--json", "--config",
+             str(site / "vault.config.json"), "--vault", str(vault.resolve())],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired:
+        return [f"ERROR\t(vault)\tsite-faults: the publish tool did not "
+                f"answer within {PUBLISH_TOOL_TIMEOUT}s — nothing checked"]
+    except OSError as e:
+        return [f"ERROR\t(vault)\tsite-faults: node could not run "
+                f"({e.__class__.__name__}) — nothing checked"]
+    try:
+        answer = json.loads(proc.stdout)
+        findings = answer["findings"]
+        # `counts.settled` came in with the note faults: a tool without it
+        # has no such findings to give, which is not a clean site.
+        settled = answer["counts"]["settled"]
+        if not isinstance(findings, list) or not isinstance(settled, int):
+            raise TypeError
+        findings = [f for f in findings if isinstance(f, dict)]
+    except (ValueError, KeyError, TypeError):
+        return ["INFO\t(vault)\tsite-faults not run: the publish tool this "
+                "site builds with is from before this check and does not "
+                "list these faults — nothing checked; the vault migration "
+                "brings the site's tool up to date"]
+    rows = [f"ERROR\t{_one_line(f.get('path')) or '(vault)'}\t"
+            f"{f.get('code')}: {_one_line(f.get('detail'))} — "
+            f"{_one_line(f.get('fix'))}"
+            for f in findings if f.get("severity") == "error"]
+    if rows:
+        return rows + ["ERROR\t(vault)\tsite-faults: the site audit stopped "
+                       "at the error above — nothing else checked"]
+    only = ({unicodedata.normalize("NFC", rel) for rel in files}
+            if files else None)
+    for f in findings:
+        if f.get("code") not in NOTE_FAULT_CODES or f.get("settled"):
+            continue
+        if only is not None and unicodedata.normalize(
+                "NFC", str(f.get("path"))) not in only:
+            continue
+        rows.append(_site_fault_row(f, whole=only is not None))
+    if rows:
+        # The tool that answered, the site file it read and the vault it
+        # audited, so a fix is checked and recorded with the same three
+        # (`explain --shown`, `manifest apply`): the site file may name
+        # another vault than the one asked about.
+        rows.insert(0, f"INFO\t(site)\tthe site's tool: node \"{tool}\" "
+                       f"<command> --config \"{site / 'vault.config.json'}\""
+                       f" --vault \"{vault.resolve()}\"")
+    if settled and only is None:
+        rows.append(f"INFO\t(vault)\t{settled} "
+                    f"{'note is' if settled == 1 else 'notes are'} settled "
+                    f"as \"stays hidden\" and not raised")
+    return rows
+
+
 def _tool_gone_row(check: str, e: Exception) -> str:
     """The row for a publish tool that stopped answering after a check
     began: what came before it stands, nothing after it was done."""
@@ -1805,22 +1977,41 @@ def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
 
 
 _HK_WIKILINK = re.compile(r"\[\[((?:[^\]|\\]|\\(?!\|))+(?:\\?\|[^\]]*)?)\]\]")
+# JavaScript's `\w` is the ASCII letters, digits and `_`; Python's takes in
+# every letter, so the class is written out.
+_HK_W = "A-Za-z0-9_"
 _HK_PAIRS = [
     re.compile(r"(\*\*|__|~~|==)(.+?)\1"),
-    re.compile(r"(?<![\w*])(\*)(?=\S)(.+?)(?<=\S)\1(?![\w*])"),
-    re.compile(r"(?<![\w_])(_)(?=\S)(.+?)(?<=\S)\1(?![\w_])"),
+    re.compile(rf"(?<![{_HK_W}*])(\*)(?=\S)(.+?)(?<=\S)\1(?![{_HK_W}*])"),
+    re.compile(rf"(?<![{_HK_W}])(_)(?=\S)(.+?)(?<=\S)\1(?![{_HK_W}])"),
     re.compile(r"(`+)([^`]+?)\1"),
 ]
 _HK_EDGE = re.compile(r"^[*_~=`\s]+|[*_~=`\s]+$")
 
 
-_HK_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'",
-             "nbsp": "\u00a0"}
+def _hk_class(ranges: str) -> re.Pattern[str]:
+    """A character class from hex code-point ranges ("9-d 20 85")."""
+    return re.compile("[" + "".join(
+        "-".join(re.escape(chr(int(cp, 16))) for cp in r.split("-"))
+        for r in ranges.split()) + "]")
+
+
+# heading-key.js SPACE_RANGES and INVISIBLE_RANGES: every Unicode space,
+# and every character that prints nothing. The shared vectors hold both
+# lists, and both sides are tested against them.
+_HK_SPACE_RANGES = "9-d 20 85 a0 1680 2000-200a 2028-2029 202f 205f 2800 3000"
+_HK_INVISIBLE_RANGES = (
+    "0-8 e-1f 7f-84 86-9f ad 34f 61c 115f-1160 17b4-17b5 180b-180f 200b-200f 202a-202e "
+    "2060-206f 3164 fe00-fe0f feff ffa0 fff0-fffb 1bca0-1bca3 1d173-1d17a e0000-e0fff")
+_HK_SPACE = _hk_class(_HK_SPACE_RANGES)
+_HK_INVISIBLE = _hk_class(_HK_INVISIBLE_RANGES)
 
 
 def _hk_decode_entities(text: str) -> str:
-    """The entities heading-key.js reads (templates/gurps/tables.js
-    `decodeEntities`): numeric ones and the six named ones."""
+    """The character references heading-key.js `decodeReferences` reads:
+    numeric ones, and every named one the Markdown renderer decodes (the
+    HTML5 list, which `html.entities.html5` is too). A name not known as
+    typed is tried in small letters."""
     def one(m: re.Match) -> str:
         body = m.group(1)
         if body[0] == "#":
@@ -1832,7 +2023,8 @@ def _hk_decode_entities(text: str) -> str:
             if 0 < cp <= 0x10FFFF and not 0xD800 <= cp <= 0xDFFF:
                 return chr(cp)
             return m.group(0)
-        return _HK_NAMED.get(body.lower(), m.group(0))
+        return (_HTML5.get(body + ";") or _HTML5.get(body.lower() + ";")
+                or m.group(0))
     return re.sub(r"&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);", one, text,
                   flags=re.I)
 
@@ -1841,13 +2033,14 @@ def _bare_section_title(title: str) -> str:
     """heading-key.js `headingKey` (the label reading): lower-cased, with
     emphasis, link brackets, a `{#id}` block, a `^block-id`, closing `#`s,
     a trailing colon and spacing removed, so `**Skills**`, `Skills:` and
-    `skills` are one section. The tool's titles and the file's headings
+    `skills` are one section. Character references are decoded, every
+    Unicode space is a space and every invisible character is dropped. The tool's titles and the file's headings
     both go through this, so a spelling cannot make them differ.
     tools/publish/test/fixtures/heading-key-vectors.json pins both."""
     text = _hk_decode_entities(title)
     text = unicodedata.normalize("NFC", text)
-    text = re.sub(r"[\u200b-\u200d\u2060\ufeff\u00ad]", "", text)
-    text = re.sub(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000]", " ", text)
+    text = _HK_SPACE.sub(" ", text)
+    text = _HK_INVISIBLE.sub("", text)
 
     def label(m: re.Match) -> str:
         body = m.group(1)
@@ -1867,7 +2060,7 @@ def _bare_section_title(title: str) -> str:
     for _ in range(12):
         before = s
         s = re.sub(r"\s*\{[#.][^}]*\}\s*$", "", s)
-        s = re.sub(r"\s+\^[\w-]+\s*$", "", s)
+        s = re.sub(rf"\s+\^[{_HK_W}-]+\s*$", "", s)
         s = re.sub(r"(^|\s+)#+\s*$", "", s)
         s = re.sub(r"[:\uff1a]\s*$", "", s).strip()
         for pair in _HK_PAIRS:
@@ -2151,6 +2344,24 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
     level, raw = state.heading
     m = EMPHASIS_RE.match(raw)
     title = m.group(2).strip() if m else raw
+    if _bare_section_title(raw) in {_bare_section_title(e) for e in excludes}:
+        # A heading the site hides never reaches here: `scan_body` has
+        # already marked it excluded, as the site's tool answered. This one
+        # is on the exclude list under another spelling and the tool did
+        # NOT hide it: a site pinned to a publish tool older than 1.16.0
+        # (which read only an exact title), and so it publishes. The
+        # remedy names the marker actually used, so the `*`/`_` spellings
+        # do not send the GM hunting for asterisks that are not there.
+        how = ("bold-wrapped" if m else "decorated")
+        if m:
+            fix = f"remove the {m.group(1)} or move it under ## GM Notes"
+        else:
+            fix = "write it plainly or move it under ## GM Notes"
+        if level == 1:
+            fix = ("rename the page title or move the page out of the "
+                   "published folders")
+        return [f"ERROR\t{rel}:{state.lineno}\t{how} heading "
+                f"'{title}' defeats the exclude list and publishes — {fix}"]
     # Before the keyword check: "Keeper Checklist" is a wrap-template heading
     # and must get the re-nest advice, not the generic keyword row.
     if title.casefold() in {t.casefold() for t in WRAP_TEMPLATE_SUBSECTIONS}:
@@ -4701,6 +4912,7 @@ def main() -> int:
                                         "timeline", "read-aloud",
                                         "relationships", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
+                                        "site-faults",
                                         "version", "active-pcs", "all"])
     ap.add_argument("--folder",
                     help="restrict the frontmatter, tables, relationships, "
@@ -4709,8 +4921,9 @@ def main() -> int:
                     help="restrict the check to one vault-relative file "
                          "(e.g. \"Chapters/C3/Sessions/Session 07/"
                          "Chapter_03_Session_07_Wrap_Up.md\") — repeatable "
-                         "for tables, relationships and pc-body; wrapup "
-                         "takes only the first if given more than one")
+                         "for tables, relationships, pc-body and "
+                         "site-faults; wrapup takes only the first if given "
+                         "more than one")
     ap.add_argument("--newer-than",
                     help="restrict tables/relationships/pc-body to files "
                          "with an mtime at or after this vault-relative "
@@ -4774,6 +4987,11 @@ def main() -> int:
         return code
     if args.command == "active-pcs":
         emit("active-pcs", list_active_pcs(args.vault))
+        return 0
+    # The site's own audit, asked whole: a long list with its own fixes
+    # (campaign-qa's Site Faults), so it stays out of `all` too.
+    if args.command == "site-faults":
+        emit("site-faults", check_site_faults(args.vault, args.file))
         return 0
 
     explain = ExplainAll(args.vault)

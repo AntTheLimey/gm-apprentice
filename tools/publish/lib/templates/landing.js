@@ -1,5 +1,5 @@
 const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
-const { refTarget } = require('../wikilink');
+const { refTarget, linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
   getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs,
@@ -202,7 +202,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     const eventCards = recentEvents.map(page => {
       const fm = page.frontmatter;
       const date = formatDate(fm.date) || '';
-      const location = fm.location ? String(fm.location).replace(/\[\[|\]\]/g, '').replace(/_/g, ' ') : '';
+      const location = fm.location ? linkText(fm.location, { humanize: true }).words : '';
       const outcome = fm.outcome || '';
       return `<a class="entity-card" href="${escapeHtml(encodeHref(page.outputPath))}">
   <h4>${escapeHtml(page.displayTitle)}</h4>

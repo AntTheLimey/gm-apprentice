@@ -9,7 +9,7 @@ a log of GM decisions.
 ```markdown
 ---
 type: qa_report
-mode: canon_audit | timeline | name_similarity | clue_redundancy | graph_health | full_audit
+mode: canon_audit | timeline | name_similarity | clue_redundancy | graph_health | site_faults | full_audit
 scope: full_vault | chapter_N | custom
 date: YYYY-MM-DD
 in_game_date: "[current in-game date if known]"

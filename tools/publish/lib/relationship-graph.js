@@ -1,6 +1,7 @@
 const { escapeHtml, encodeHref } = require('./processor');
 const { backlinksOf } = require('./backlinks');
 const { canonicalNfc, nfcLookupTable, truncateGraphemes } = require('./unicode');
+const { linkText } = require('./wikilink');
 
 const SHAPE_MAP = {
   pc: 'circle',
@@ -38,16 +39,30 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
 
   const nodes = new Map();
   const edges = [];
+  // A target written with a label (`[[Vesper_Hale|the stranger]]`) is the note it names. One
+  // that has a page is that page's node, under the page's own title: a page is one node,
+  // however each relationship labels it. One with no page is a node called by its label:
+  // the GM chose those words, and the note's own name is not printed (wikilink.js linkText).
+  const labels = new Map();
+  const targetOf = (value) => {
+    const ref = linkText(value);
+    const target = canonicalNfc(ref.key.trim());
+    // A page is one node whichever of its names the link uses: its title, or an alias.
+    const page = pageMap[target];
+    if (page) return canonicalNfc(page.title);
+    if (ref.labelled && !labels.has(target)) labels.set(target, ref.words.trim());
+    return target;
+  };
 
   function addNode(title, hop) {
     if (nodes.has(title)) return;
     const page = pageMap[title];
     nodes.set(title, {
       id: title,
-      displayTitle: page ? page.displayTitle : title.replace(/_/g, ' '),
+      displayTitle: page ? page.displayTitle : (labels.get(title) || title.replace(/_/g, ' ')),
       outputPath: page ? page.outputPath : null,
       type: page ? page.frontmatter.type : 'unknown',
-      shape: SHAPE_MAP[(page ? page.frontmatter.type : '')] || 'circle',
+      shape: (page && Object.prototype.hasOwnProperty.call(SHAPE_MAP, page.frontmatter.type) && SHAPE_MAP[page.frontmatter.type]) || 'circle',
       hop,
     });
   }
@@ -59,15 +74,13 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
     const raw = page.frontmatter.relationships;
     if (Array.isArray(raw)) {
       for (const r of raw) {
-        const target = canonicalNfc(String(r.target).replace(/\[\[|\]\]/g, '').trim());
-        rels.push({ target, type: r.type });
+        rels.push({ target: targetOf(r.target), type: r.type });
       }
     } else if (raw && typeof raw === 'object') {
       for (const [type, targets] of Object.entries(raw)) {
         const list = Array.isArray(targets) ? targets : [targets];
         for (const t of list) {
-          const target = canonicalNfc(String(t).replace(/\[\[|\]\]/g, '').trim());
-          rels.push({ target, type });
+          rels.push({ target: targetOf(t), type });
         }
       }
     }

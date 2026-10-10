@@ -1,4 +1,4 @@
-const { refTarget, parseWikilink } = require('../wikilink');
+const { refTarget, parseWikilink, linkText } = require('../wikilink');
 const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -84,7 +84,7 @@ function buildLocationTree(pages) {
   for (const n of nodes) {
     const parentRef = n.page.frontmatter.parent_location;
     if (parentRef) {
-      const parentTitle = String(parentRef).replace(/\[\[|\]\]/g, '').trim();
+      const parentTitle = linkText(parentRef).key.trim();
       const parentNode = lookup[parentTitle];
       if (parentNode && parentNode !== n) {
         parentNode.children.push(n);
@@ -298,7 +298,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = nul
   // Group ROOT cards: by the (unpublished) parent name if one was
   // declared, else by location_type, else "Other" — same region
   // semantics as before, but only true roots get cards now.
-  const byRegion = {};
+  const byRegion = Object.create(null);
   for (const node of roots) {
     const p = node.page;
     const parentRef = p.frontmatter.parent_location;
@@ -306,7 +306,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = nul
     // NFC (#139): this is a grouping key built from an author-typed ref, so two spellings of
     // one parent name would otherwise render as two separate regions with the same heading.
     const region = parentRef
-      ? canonicalNfc(String(parentRef).replace(/\[\[|\]\]/g, '').trim())
+      ? canonicalNfc(linkText(parentRef).words.trim())
       : (locType || 'Other');
     if (!byRegion[region]) byRegion[region] = [];
     byRegion[region].push(node);
@@ -323,7 +323,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = nul
     const fm = p.frontmatter;
     const locType = fm.location_type || '';
     const firstSeen = fm.first_appearance || fm.createdSession || '';
-    const firstSeenClean = String(firstSeen).replace(/\[\[|\]\]/g, '').trim();
+    const firstSeenClean = linkText(firstSeen).words.trim();
 
     const childrenHtml = node.children.length > 0
       ? `<div class="loc-children">${renderLocationTreeHTML(node.children, 0, indexDir)}</div>`
@@ -387,8 +387,8 @@ function renderChapterList(pages, indexDir) {
 
   // How strongly a ref names this chapter. 2 = the two titles are the same once a
   // "Chapter 3 — " prefix is discounted on either side. 1 = the chapter's own title
-  // appears inside a longer ref ("Chapter 1 — London: The Orphean Society" naming
-  // "London") — the direction both sibling matchers implement. 0 = no claim.
+  // appears inside a longer ref ("Chapter 1 — Harbour: The Lantern Guild" naming
+  // "Harbour") — the direction both sibling matchers implement. 0 = no claim.
   //
   // The reverse of that substring test, ref-inside-title, is deliberately absent: it
   // is what let `[[Vienna]]` claim both "Vienna" and "The Vienna Files", and it is
@@ -532,8 +532,8 @@ function renderBestiary(pages, indexDir) {
     const threat = threatLevel(fm);
     const status = creatureStatus(fm);
     const creatureType = fm.creature_type || fm.subtype || '';
-    const location = fm.location ? String(fm.location).replace(/\[\[|\]\]/g, '').trim() : '';
-    const firstSeen = fm.first_appearance ? String(fm.first_appearance).replace(/\[\[|\]\]/g, '').trim() : '';
+    const location = fm.location ? linkText(fm.location).words.trim() : '';
+    const firstSeen = fm.first_appearance ? linkText(fm.first_appearance).words.trim() : '';
 
     const abilities = (fm.abilities || []).map(a =>
       `<span class="bestiary-ability">${escapeHtml(a)}</span>`
@@ -580,7 +580,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
     government: 'Government Agencies',
   };
 
-  const byType = {};
+  const byType = Object.create(null);
   for (const p of factions) {
     const ft = String(p.frontmatter.faction_type || p.frontmatter.factionType || 'other').toLowerCase();
     if (!byType[ft]) byType[ft] = [];
@@ -601,7 +601,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
   function renderCard(p) {
     const fm = p.frontmatter;
     const ft = String(fm.faction_type || fm.factionType || 'other').toLowerCase();
-    const leadership = fm.leadership ? String(fm.leadership).replace(/\[\[|\]\]/g, '').trim() : '';
+    const leadership = fm.leadership ? linkText(fm.leadership).words.trim() : '';
     const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, 3) : [];
     const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, 4) : [];
     const canon = getCanonStatus(fm) || '';
@@ -616,7 +616,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
 
     const connsHtml = relationships.length > 0
       ? `<div class="intel-connections">${relationships.map(r => {
-          const target = String(r.target || '').replace(/\[\[|\]\]/g, '').trim();
+          const target = linkText(r.target || '').words.trim();
           const relType = String(r.type || '').replace(/_/g, ' ');
           return `<span class="intel-conn"><span class="intel-conn-type">${escapeHtml(relType)}</span>${escapeHtml(target)}</span>`;
         }).join('\n')}</div>`
@@ -642,7 +642,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
   }
 
   const sections = orderedTypes.map(ft => {
-    const label = TYPE_LABELS[ft] || (ft.charAt(0).toUpperCase() + ft.slice(1));
+    const label = (Object.prototype.hasOwnProperty.call(TYPE_LABELS, ft) && TYPE_LABELS[ft]) || (ft.charAt(0).toUpperCase() + ft.slice(1));
     const cards = byType[ft].map(renderCard).join('\n');
     return `<section class="intel-section">
   <h2 class="intel-section-title">${escapeHtml(label)}</h2>
@@ -824,7 +824,7 @@ function renderArmory(pages, indexDir) {
     'alien material': 'Alien Materials',
   };
 
-  const byType = {};
+  const byType = Object.create(null);
   for (const p of items) {
     const raw = (p.frontmatter.item_type || p.frontmatter.itemType || '').toLowerCase();
     const key = raw || 'other';
@@ -840,8 +840,8 @@ function renderArmory(pages, indexDir) {
   function renderItem(p) {
     const fm = p.frontmatter;
     const itemType = (fm.item_type || fm.itemType || '').replace(/^\w/, c => c.toUpperCase());
-    const holder = fm.current_holder ? String(fm.current_holder).replace(/\[\[|\]\]/g, '').trim() : '';
-    const origin = fm.origin ? String(fm.origin).replace(/\[\[|\]\]/g, '').trim() : '';
+    const holder = fm.current_holder ? linkText(fm.current_holder).words.trim() : '';
+    const origin = fm.origin ? linkText(fm.origin).words.trim() : '';
     const tl = fm.tl ? String(fm.tl) : '';
     const canonStatus = (getCanonStatus(fm) || '').toUpperCase();
     const isDraft = canonStatus === 'DRAFT' || canonStatus === 'STUB';
@@ -859,7 +859,7 @@ function renderArmory(pages, indexDir) {
   }
 
   const sections = orderedTypes.map(type => {
-    const label = TYPE_LABELS[type] || (type.charAt(0).toUpperCase() + type.slice(1));
+    const label = (Object.prototype.hasOwnProperty.call(TYPE_LABELS, type) && TYPE_LABELS[type]) || (type.charAt(0).toUpperCase() + type.slice(1));
     const itemsHtml = byType[type].map(renderItem).join('\n');
     return `<section class="armory-section">
   <h2 class="armory-section-title">${escapeHtml(label)}</h2>
@@ -871,7 +871,7 @@ function renderArmory(pages, indexDir) {
 }
 
 function cleanRef(str) {
-  return String(str || '').replace(/\[\[|\]\]/g, '').replace(/_/g, ' ').trim();
+  return linkText(str || '', { humanize: true }).words.trim();
 }
 
 function sessionSortKey(str) {

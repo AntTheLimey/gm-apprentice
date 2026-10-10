@@ -277,3 +277,46 @@ describe('fix round 2: old semantics kept', () => {
     assert.strictEqual(extractRecap(page), 'They met |x at dawn.');
   });
 });
+
+describe('linkText: a frontmatter value that names a note, read for a page that prints it', () => {
+  const { linkText, labelsForLinks } = require('../../lib/wikilink');
+  it('a value with no label is the value with its brackets off, as these readers always took it', () => {
+    for (const value of ['Old_Tam', '[[Old_Tam]]', ' [[Old_Tam#Past]] ', '[[A]] (and [[B]])', '[[Folder/Old_Tam]]', '[[Old_Tam|]]']) {
+      const bare = value.replace(/\[\[|\]\]/g, '');
+      assert.deepStrictEqual(linkText(value), { words: bare, key: bare, labelled: false }, value);
+    }
+  });
+  it('a labelled link is looked up by its target and printed as its label, never as the target', () => {
+    assert.deepStrictEqual(linkText('[[Vesper_Hale|the stranger]]'), { words: 'the stranger', key: 'Vesper_Hale', labelled: true });
+    assert.deepStrictEqual(linkText(' [[Vesper_Hale#Past\\|the stranger]] '), { words: ' the stranger ', key: 'Vesper_Hale', labelled: true });
+    assert.deepStrictEqual(linkText('[[Vesper_Hale.md|the stranger]]').key, 'Vesper_Hale');
+  });
+  it('in running text each labelled link prints its label and the rest stays', () => {
+    const got = linkText('[[Old_Tam]] (held for [[Vesper_Hale|the stranger]])');
+    assert.strictEqual(got.words, 'Old_Tam (held for the stranger)');
+    assert.strictEqual(got.labelled, false);
+    assert.ok(!got.words.includes('Vesper'));
+  });
+  it('humanize reads _ as a space in everything but a label', () => {
+    assert.strictEqual(linkText('[[Old_Tam]] and [[Vesper_Hale|snake_case]]', { humanize: true }).words, 'Old Tam and snake_case');
+    assert.strictEqual(linkText('Old_Tam', { humanize: true }).key, 'Old_Tam');
+  });
+  it('labelsForLinks turns only labelled links into their labels', () => {
+    assert.strictEqual(labelsForLinks('Heir of [[Old_Tam|the old man]] and [[Bo_Pike]]'), 'Heir of the old man and [[Bo_Pike]]');
+    assert.strictEqual(labelsForLinks('a | b and [[Bo_Pike]]'), 'a | b and [[Bo_Pike]]');
+    assert.strictEqual(labelsForLinks(null), '');
+    assert.strictEqual(labelsForLinks('[[Old_Tam\\|the old man]]'), 'the old man');
+  });
+});
+
+describe('a labelled superseded_by names the note that took over', () => {
+  const { buildLinkMap } = require('../../lib/scanner');
+  it('links to the old name go to the new page', () => {
+    const page = (title, frontmatter) => ({ title, displayTitle: title, outputPath: `${title.toLowerCase()}.html`, vaultPath: title, frontmatter });
+    const map = buildLinkMap([
+      page('Old', { type: 'npc', canon_status: 'SUPERSEDED', superseded_by: '[[New|the new one]]' }),
+      page('New', { type: 'npc' }),
+    ]);
+    assert.strictEqual(map.Old, 'new.html');
+  });
+});

@@ -1,5 +1,6 @@
 const { escapeHtml, relativePath, encodeHref } = require('../processor');
 const { kindLabel } = require('../kind-label');
+const { linkText } = require('../wikilink');
 
 function normalizeRelationships(raw, linkMap) {
   if (!raw) return [];
@@ -16,10 +17,14 @@ function normalizeRelationships(raw, linkMap) {
     return [];
   }
   return list.map(r => {
-    const target = String(r.target).replace(/\[\[|\]\]/g, '');
+    // A target written with a label is looked up by its name and called by its label, with
+    // or without a page (wikilink.js linkText).
+    const ref = linkText(r.target);
+    const target = ref.key;
     return {
       type: r.type,
       target,
+      label: ref.labelled ? ref.words.trim() : '',
       targetPath: linkMap ? linkMap[target] : null,
     };
   });
@@ -40,9 +45,10 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
   if (relationships && relationships.length > 0) {
     const items = relationships.map(r => {
       const href = r.targetPath ? encodeHref(relativePath(currentDir, r.targetPath)) : null;
-      const name = escapeHtml(r.target.replace(/_/g, ' '));
+      const name = escapeHtml(r.label || String(r.target || '').replace(/_/g, ' '));
       const link = href ? `<a href="${href}">${name}</a>` : name;
-      const type = escapeHtml(r.type.replace(/_/g, ' '));
+      // A relationship may have no type (left out, or a value that was only a comment).
+      const type = escapeHtml(String(r.type || '').replace(/_/g, ' '));
       return `<li>${link} <span class="sidebar-badge">${type}</span></li>`;
     });
     sections.push(`<h3>Relationships</h3>\n<ul>${items.join('\n')}</ul>`);

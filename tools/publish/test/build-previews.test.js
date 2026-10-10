@@ -205,7 +205,7 @@ test('the landing recap, its text and its links are not opted out; the story and
 // a reference nested in running text.
 test('a card is a subset of its page for the shapes that once differed', () => {
   const holders = ['[[Name]]', '[[Name|alias]]', 'Name (note)', 'Name / Other', '[[A]] (held for [[B]])',
-    '[[Nathaniel]] (and / or [[Cleo]])', 'n/a — federal fleet vessel', 'Anna_Lindqvist'];
+    '[[Corvin]] (and / or [[Meribel]])', 'n/a — federal fleet vessel', 'Ilse_Karsh'];
   const files = {
     'Sessions/Session 1.md': '---\ntype: session\nsession_number: 1\nin_game_date: "March 4th 1925"\nplay_date: 2026-07-02\n---\nPrep notes for the night.\n',
     'Sessions/Session 2.md': '---\ntype: session\nsession_number: 2\nin_game_date: "March 5th 1925"\nplay_date: 2026-07-09\n---\nPrep notes.\n',
@@ -265,5 +265,70 @@ test('a CoC folio PC card is a subset of its page when display_meta names a badg
     assert.ok(card, Object.keys(cards).join());
     assert.ok(!JSON.stringify(card).includes('Wyvern'), JSON.stringify(card));
     assert.deepStrictEqual(cardProblems(card, pageText(v.read('characters', 'ada-quill.html'))).problems, []);
+  } finally { v.cleanup(); }
+});
+
+// A note's `type` is a word the GM wrote: one that is also a property of every object
+// (`constructor`, `__proto__`...) must build as an unknown type, not break a lookup table.
+for (const hostile of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', 'isPrototypeOf', '__defineGetter__']) {
+  test(`a note of type ${hostile} builds as an unknown type, in listings, graphs and cards`, () => {
+    const v = buildSmallVault({
+      'Characters/Hostile.md': `---\ntype: ${hostile}\nrelationships:\n  - target: "[[Mara]]"\n    type: ally\n---\nA strange one. Known to [[Mara]].\n`,
+      'Characters/Mara.md': `---\ntype: npc\nrelationships:\n  - target: "[[Hostile]]"\n    type: knows\n---\nShe knows [[Hostile]].\n`,
+    });
+    try {
+      const cards = JSON.parse(v.read('previews.json'));
+      assert.strictEqual(cards['characters/hostile.html'].t, 'Hostile');
+      assert.strictEqual(cards['characters/hostile.html'].f, undefined, 'no facts for an unknown type');
+      assert.ok(v.read('characters', 'hostile.html').includes('A strange one.'));
+      assert.ok(v.read('characters', 'index.html').includes('Hostile'));
+    } finally { v.cleanup(); }
+  });
+}
+
+test('a note of a hostile type draws as a plain circle in the relationship graph', () => {
+  const { buildRelationshipGraph } = require('../lib/relationship-graph');
+  for (const hostile of ['constructor', 'toString', '__proto__']) {
+    const page = (title, type) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type, relationships: [{ target: 'B', type: 'ally' }] } });
+    const graph = buildRelationshipGraph('A', [page('A', hostile), page('B', 'npc')], []);
+    assert.strictEqual(graph.nodes.find((n) => n.id === 'A').shape, 'circle', hostile);
+  }
+});
+
+test('a faction, item or location of a hostile sub-type groups and labels as any other', () => {
+  for (const hostile of ['constructor', 'toString', '__proto__']) {
+    const v = buildSmallVault({
+      'Factions/Odd.md': `---\ntype: faction\nfaction_type: ${hostile}\n---\nA faction.\n`,
+      'Items/Odd.md': `---\ntype: item\nitem_type: ${hostile}\n---\nAn item.\n`,
+      'Locations/Odd.md': `---\ntype: location\nlocation_type: ${hostile}\n---\nA place.\n`,
+    });
+    try {
+      for (const dir of ['factions', 'items', 'locations']) {
+        const index = v.read(dir, 'index.html');
+        assert.ok(index.includes('Odd'), `${dir} ${hostile}`);
+        // The group is titled by the sub-type as written, not by what Object.prototype holds under that name.
+        assert.ok(!/native code|\[object Object\]/.test(index), `${dir} ${hostile}: the section title is a prototype member`);
+      }
+    } finally { v.cleanup(); }
+  }
+});
+
+test('a YAML number as a title builds as the string everywhere a title is used', () => {
+  const v = buildSmallVault({
+    'Notes/N.md': '---\ntype: npc\ntitle: 1984\n---\nBody about the year.\n',
+    'Notes/Other.md': '---\ntype: location\n---\nSee [[N]].\n',
+  });
+  try {
+    const cards = JSON.parse(v.read('previews.json'));
+    assert.strictEqual(cards['notes/n.html'].t, '1984');
+    const html = v.read('notes', 'n.html');
+    assert.match(html, /<title>1984 /);
+    assert.match(html, /<h1>1984</);
+    const search = JSON.parse(v.read('search-index.json'));
+    const doc = Object.values(search.documents).find((d) => d.href === 'notes/n.html');
+    assert.strictEqual(doc.title, '1984');
+    // The Mentioned-in list on the page it links to names the page by its title.
+    assert.match(v.read('notes', 'n.html'), /<a href="other\.html">Other<\/a>/);
+    assert.match(v.read('notes', 'other.html'), /<a href="n\.html">N<\/a>/);
   } finally { v.cleanup(); }
 });

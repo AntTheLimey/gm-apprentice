@@ -7,6 +7,119 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.42] — 2026-10-10
+
+### Added
+
+- **The build names faults in your notes.** After its other warnings the
+  build prints at most one line for each kind of fault, with a count and
+  the worst three: a note that published pages link to but that has no
+  page of its own, so its name prints as plain words; a stray `%%` that
+  hides text; a code block that never properly closes, so hidden text
+  below it is published; and a secret name from `gm_aliases` printed in
+  the open. The names are read off each page as it is built, so a page
+  is counted only when it prints the name, in its text, its header, a
+  PC's story page, its connections graph or anywhere else the page
+  shows it. An index page, the timeline, the story and the landing page
+  are read too: a name one of them prints is counted against the note
+  it is taken from, and the finding names the page. A fault that lies
+  wholly under a hidden heading is not counted. A site with none of
+  these prints nothing new.
+- **campaign-qa fixes them or asks: the Site Faults check.** It takes the
+  same list from the site's own tool. For a typing fault it shows the
+  line and fixes it on your yes. For a note that is named but has no
+  page, it proposes which parts stay in the open and which move under
+  `## GM Notes`, shows you the split, and on your yes publishes the page
+  and updates the publish manifest. A plan, scene or play note that is
+  named gets its link turned into plain words instead of a page.
+- **A no is remembered.** Say a note stays hidden and the reason is
+  written beside it in the publish manifest, beginning `stays hidden:`.
+  It is not counted or asked about again.
+- **`doctor --site` lists the same faults** (`NAMED_NO_PAGE`,
+  `COMMENT_STRAY`, `FENCE_UNCLOSED`, `ALIAS_IN_PROSE`), and takes
+  `--vault`. It builds the site in memory to find them, writing
+  nothing, so its list is the build's. When a page cannot be built it
+  says the list is incomplete, as an error (`NOTE_FAULTS_UNCHECKED`). A
+  link to a note that exists but has no page is listed once, under
+  `NAMED_NO_PAGE`, and no longer under `LINK_UNRESOLVED`. It also lists
+  frontmatter values of the wrong type (`FRONTMATTER_MISTYPED`).
+- **`explain "<note>" --shown`** prints what the site holds of a note,
+  or would if it published, read off the page as the build makes it:
+  the text of the page, a PC's story page, the image files that publish
+  with it, its link-preview card, and what the search finds it by.
+  When the site cannot be built it says so and exits with an error.
+- **`explain` and `manifest diff` / `apply` take `--vault`**, so a fix
+  is checked and recorded in the vault that was audited.
+- **`links.py unlink --in NOTE [--as WORDS]`** turns links to a note that
+  exists into plain words on the named pages. A NAME given with its
+  path means that note only; a link to another note of the same name is
+  left.
+- **`vault_check.py <vault> site-faults`** asks the site's tool for the
+  list, and names the tool, the site file and the vault to use for each
+  fix.
+
+### Fixed
+
+- A link written with a label in frontmatter
+  (`location: "[[Vesper_Hale|the stranger]]"`, a relationship's
+  `target`, a title) prints its label everywhere, and never the note's
+  own name. Index cards, the landing page, the timeline, the
+  Connections graph, the sidebar, an NPC's connection cards and the
+  search entry used to print `Vesper Hale|the stranger`. Where the note
+  has a page, a relationship now links to it under the label.
+- A list typed where one value belongs that holds a value which keeps
+  a note off a player site (`status: [planned, alive]`,
+  `canon_status: [AUTHORITATIVE, DRAFT]`, `stage`, `source`, a scene's
+  `cut`) keeps the note off, as that value alone would. It was read as
+  one joined text that no rule knew, and the note published. The build
+  says which value it took.
+- On the Connections graph a page is one node whichever of its names a
+  relationship uses, its title or an alias.
+- A `%%comment%%` in a frontmatter value is cut wherever the value
+  prints. A `%%` in backticks there is left as written.
+- A hidden heading written with `&ensp;`, `&emsp;`, `&shy;` or a
+  zero-width space in place of the space is still hidden.
+- Removing a comment or a hidden block no longer turns the paragraph
+  above it into a heading when a `---` line follows.
+- The vault check reads `%%` comments in a session hub the way the site
+  does, and its error for a dressed-up hidden heading that a site's tool
+  did not hide is back.
+- `manifest apply --exclude` accepts a note in a folder the site leaves
+  out, `manifest diff` no longer lists such an entry as removed, and
+  `--publish` on one says why it cannot be listed.
+- A relationship with no `type` builds; it failed the page.
+- A bare note name in a header badge or a PC's `display_meta`
+  (`found_by: Ilse_Karsh`) prints as words, on the page and on its
+  card.
+- A card's opening lines keep their space where one block follows
+  another, and no longer open with a note's Source or Reconstruction
+  Note callout.
+- The warning for an unknown `link_previews` value names every value it
+  takes.
+- A note whose `type` is `constructor`, `toString` and the like builds as
+  an unknown type; it failed the build.
+- A frontmatter `title: 1984` builds; it failed the build.
+- A `<!-- GM-ONLY -->` or `<!-- Spoiler -->` marker in capitals, or with
+  a space after the `/` of its closer, is a marker. It was read as a
+  plain comment and the block was published. The vault scripts read a
+  marker the same way.
+- An HTML comment, or a gm-only or spoiler block, in a frontmatter
+  value is cut wherever the value prints, as a `%%` comment is. One
+  never closed hides the rest of the value, and the build and the Site
+  Faults check name the field. One in backticks is left as written.
+- A hidden heading is still hidden when its words are joined by any
+  character reference (`&hairsp;`, `&numsp;`, `&puncsp;`,
+  `&ZeroWidthSpace;`, `&NoBreak;`, `&Tab;` and the rest), any Unicode
+  space, or an invisible character, in a word and between words alike.
+- A list or a set of named values where the site reads one value
+  (`status`, `canon_status`, `item_type`, `location_type`, `type`), or
+  anything but a list in `aliases`, `abilities`, `weaknesses` or
+  `notable_traits`, no longer stops the build. The build names the note
+  and the field. An `aliases:` written as one bare name was never read;
+  the build now says so. A list inside a list (`status: [[planned]]`
+  typed without quotes) is read as its items, as before, and a value
+  that refers to itself is cut at the reference.
+
 ## [1.10.41] — 2026-10-10
 
 ### Added
@@ -57,7 +170,7 @@ These changes reach every site, whatever the setting.
   no longer print `[[ ]]` brackets or `Target|alias`; a faction's leader
   and territory, an event's place and outcome and a PC's badges follow
   the same rule. A name of a published page in a header is now a link. A bare underscore-joined name (for
-  example `Anna_Lindqvist`) prints as the name in an item's holder or
+  example `Ilse_Karsh`) prints as the name in an item's holder or
   origin, a faction's leader or territory and an event's place; in the
   other badges it still prints as written.
 - **A type shown in a header reads as words.** `plot_thread` now reads
@@ -647,7 +760,7 @@ Publish tool 1.12.4.
   two pages with one title (an NPC and a PC) no longer list each other's
   mentions.
 - Renaming a note whose name another note shares (an NPC and a PC both
-  called `Charlotte_Thorne`) keeps every bare `[[Charlotte_Thorne]]` link, in each
+  called `Meribel_Hollis`) keeps every bare `[[Meribel_Hollis]]` link, in each
   spelling, going where the site sends it, instead of leaving them to resolve to the
   other note. Without a site, the same-folder rule applies as before.
 - Renaming a PC also renames its story file, so the story stays on its
@@ -1101,7 +1214,7 @@ asks for it, run `update-pin --site <site-dir>` and run it again.
   it now skips the sheet's own lines: bold label lines, tick-boxes and
   unfilled `{placeholders}`. A PC whose body has no prose still gets
   no quote. Publish tool 1.11.44.
-- **A pull quote stopped at a title.** "Mr. James Bennet was a poet."
+- **A pull quote stopped at a title.** "Mr. Jorund Vale was a poet."
   was quoted as "Mr.". The first sentence no longer ends at Mr., Mrs.,
   Dr., St., Col. and the like. This applies to NPC and location quotes
   and listing-card excerpts too.
@@ -3294,7 +3407,7 @@ CLI never overwrites a live element directly.
   every query, campaign-qa, and the mobRPG sync read) are independent; neither
   implies the other. Writing only the scalar leaves a note correctly nested on
   the published site while being an orphan in the graph — the state all three
-  Entertainment District venues were in. Documented in
+  Lantern Quarter venues were in. Documented in
   `shared/relationship-normalization.md`, with a campaign-qa graph-health check
   for each direction of the mismatch plus one for childless interposed
   containers.
@@ -3306,14 +3419,14 @@ CLI never overwrites a live element directly.
   derives an affiliation's event type from what the edge points AT — its GUI
   offers Reign/Employ only on a Political element and Leadership/Membership only
   on an Organization. `suggest` used a flat predicate→eventType table that knew
-  nothing about the endpoints, so `serves` fired `Employ` at Corvid Financial and
-  Kinetic Logistics, both Organizations: a pairing the GUI cannot produce. Events
+  nothing about the endpoints, so `serves` fired `Employ` at Halcyon Freight and
+  Brightwater Haulage, both Organizations: a pairing the GUI cannot produce. Events
   are now resolved through that grid from the endpoints' real kinds (canon
   `element_kind` for a linked note, the proposed kind for a net-new one) and named
   the way mobRPG names them — person first, mobRPG's own title word and
-  preposition (`"Marek Solano, Member of Corvid Financial"`, not
-  `"Marek Solano, serves Corvid Financial"`), including for edges authored
-  group-first like `Corvid Financial employs Marek Solano`. A per-world
+  preposition (`"Tomas Reed, Member of Halcyon Freight"`, not
+  `"Tomas Reed, serves Halcyon Freight"`), including for edges authored
+  group-first like `Halcyon Freight employs Tomas Reed`. A per-world
   `relationshipTypes` entry overrides the grid only when it *differs* from the
   ontology default, since `map init`/`map sync` write an entry for every predicate
   they discover. The rel/ externalRef is unchanged, so nothing re-files as net-new.
@@ -3348,7 +3461,7 @@ CLI never overwrites a live element directly.
 - **`pull-canon` no longer scaffolds junk vault notes** — `_scaffoldable`
   rejected reified-relationship refs (`rel/`) but let description-suggestion refs
   (`desc/`, minted by the retired `suggest-desc`) through, so an accepted
-  `space_game:desc/Items & Artifacts/Type II3-A` card scaffolded a stub at a
+  `my_campaign:desc/Items/Mark IV Rig` card scaffolded a stub at a
   spurious top-level `desc/` folder for an element that was already linked. Both
   reserved roots are now rejected, and scaffolding additionally requires the ref's
   first path segment to be a directory the vault already has — so the next verb to
@@ -3515,8 +3628,8 @@ against wiki-link targets, so entities whose display title differs from their
 filename can never be featured. That does not reproduce: `scanner.js` sets
 `page.title` to the **filename base** (the H1 goes to `displayTitle`, which
 recency never reads), and the mention pattern already stops its capture at the
-`|`. An NPC filed as `Margaret_Cavendish.md` with H1 `Margaret "Meg" Cavendish`,
-referenced only as `[[Margaret_Cavendish|Meg]]`, scores and is returned. The
+`|`. An NPC filed as `Edda_Marlow.md` with H1 `Edda "Eddie" Marlow`,
+referenced only as `[[Edda_Marlow|Eddie]]`, scores and is returned. The
 scoring path was left alone; the two fixes above are what actually produced the
 reported symptom.
 
@@ -5152,7 +5265,7 @@ Publish tool 1.9.0. Fixes the eight open publish-site issues.
   chapter links lost `chapters/`). Added a `relativeHref(fromFile, toFile)`
   helper and routed all file-to-file links through it.
 - **Wikilinks no longer render as raw underscore slugs (B1).** Body links
-  showed `Lord_Percival_Harcourt`; display text is now humanized (underscores
+  showed `Lord_Edric_Fenwick`; display text is now humanized (underscores
   to spaces) for resolved and unresolved links, leaving explicit aliases
   untouched.
 - **The 404 page is themed (B4).** It loaded `style.css` + `theme.css` but

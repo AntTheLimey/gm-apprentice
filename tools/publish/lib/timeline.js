@@ -1,5 +1,5 @@
 const { escapeHtml, encodeHref, relativeHref } = require('./processor');
-const { firstWikilinkTarget, parseWikilink } = require('./wikilink');
+const { firstWikilinkTarget, parseWikilink, linkText } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 
 const MONTHS = { january:0, february:1, march:2, april:3, may:4, june:5,
@@ -53,7 +53,7 @@ function buildTimelineData(pages) {
       outputPath: p.outputPath,
       outcome: p.frontmatter.outcome || '',
       location: p.frontmatter.location
-        ? String(p.frontmatter.location).replace(/\[\[|\]\]/g, '').trim()
+        ? linkText(p.frontmatter.location).words.trim()
         : '',
       participants: Array.isArray(p.frontmatter.participants) ? p.frontmatter.participants : [],
     }));
@@ -72,7 +72,7 @@ function buildTimelineData(pages) {
         number: p.frontmatter.session_number,
         outcome: '',
         location: p.frontmatter.location
-          ? String(p.frontmatter.location).replace(/\[\[|\]\]/g, '').trim()
+          ? linkText(p.frontmatter.location).words.trim()
           : '',
       }));
     });

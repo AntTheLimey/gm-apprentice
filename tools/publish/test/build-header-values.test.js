@@ -32,16 +32,16 @@ test('B1: an unquoted date in a header prints as written (YYYY-MM-DD), on every 
 
 test('B2: a wikilink in a header prints as its label on every template that prints it', () => {
   const v = site({
-    'Clues/C.md': '---\ntype: clue\nfound_by: "[[Anna_Lindqvist]] (Brenner); [[Target_Name|alias]]"\n---\nBody.\n',
-    'Documents/D.md': '---\ntype: document\nauthor: "[[Ramkanta_Sett]] as registrar"\n---\nBody.\n',
+    'Clues/C.md': '---\ntype: clue\nfound_by: "[[Ilse_Karsh]] (Hollis); [[Target_Name|alias]]"\n---\nBody.\n',
+    'Documents/D.md': '---\ntype: document\nauthor: "[[Hesper_Dunmoor]] as registrar"\n---\nBody.\n',
     'Items/I.md': '---\ntype: item\norigin: "[[Safe_House|Thaliastrasse 12]]"\ncurrent_holder: "[[A_B]] (held for [[C_D]])"\n---\nBody.\n',
     'Events/E.md': '---\ntype: event\noutcome: "Won by [[Left_Side|the left]]"\nlocation: "[[Old_Town|the old town]] (north)"\n---\nBody.\n',
     'Factions/F.md': '---\ntype: faction\nleadership: "[[The_Boss|Boss]]"\nterritory: "[[Big_Area]]"\n---\nBody.\n',
   });
   try {
     const want = [
-      [['clues', 'c.html'], 'Anna Lindqvist (Brenner); alias'],
-      [['documents', 'd.html'], 'Ramkanta Sett as registrar'],
+      [['clues', 'c.html'], 'Ilse Karsh (Hollis); alias'],
+      [['documents', 'd.html'], 'Hesper Dunmoor as registrar'],
       [['items', 'i.html'], 'Thaliastrasse 12'],
       [['items', 'i.html'], 'A B (held for C D)'],
       [['events', 'e.html'], 'Won by the left'],
@@ -173,5 +173,43 @@ test('B-M1: a location prints its parent whole in the sidebar, and its card says
       assert.ok(pageText(html).includes(`Parent ${want}`), `${file}: ${pageText(html).slice(0, 300)}`);
       assert.deepStrictEqual(cardProblems(cards[`locations/${file}.html`], pageText(html)).problems, []);
     }
+  } finally { v.cleanup(); }
+});
+
+test('C1: a bare note name in a badge prints as words, not with its underscores', () => {
+  const v = site({
+    'Clues/C.md': '---\ntype: clue\nfound_by: Ilse_Karsh\n---\nBody.\n',
+    'Documents/D.md': '---\ntype: document\nauthor: Hesper_Dunmoor\n---\nBody.\n',
+    'Items/I.md': '---\ntype: item\norigin: Safe_House\n---\nBody.\n',
+  });
+  try {
+    for (const [p, text] of [[['clues', 'c.html'], 'Ilse Karsh'], [['documents', 'd.html'], 'Hesper Dunmoor'],
+      [['items', 'i.html'], 'Safe House']]) {
+      const h = header(v.read(...p));
+      assert.ok(h.includes(text), `${p.join('/')} should show ${text}: ${h}`);
+      assert.ok(!h.includes('_'), `${p.join('/')} keeps an underscore: ${h}`);
+    }
+  } finally { v.cleanup(); }
+});
+
+// The badge fields of TYPE_BADGE_FIELDS that name a note are found_by, author, location, origin
+// (C1); every other one is a type label, a date, a number or a status, so is not read as a name.
+// A PC's display_meta names whatever field the GM likes: one that names a note reads as a name.
+test('C1b: a bare note name in a PC display_meta badge prints as words; free text keeps its underscores', () => {
+  const { cardProblems } = require('./helpers/card-subset');
+  const v = buildVault({
+    'Characters/Ada Quill.md': '---\ntype: pc\nplayer_name: Pat\ndisplay_meta: [location, origin, leadership, occupation, status]\nlocation: Old_Town\norigin: "[[Safe_House]]"\nleadership: The_Boss\noccupation: field_agent\nstatus: on_leave\n---\n## Background\n\nBody.\n',
+    'Locations/Safe House.md': '---\ntype: location\n---\nBody.\n',
+  }, {});
+  try {
+    const html = v.read('characters', 'ada-quill.html');
+    const text = pageText(html);
+    for (const want of ['Location Old Town', 'Origin Safe House', 'Leadership The Boss', 'Occupation field_agent', 'Status on_leave']) {
+      assert.ok(text.includes(want), `${want}: ${text.slice(0, 400)}`);
+    }
+    const cards = JSON.parse(v.read('previews.json'));
+    const card = cards['characters/ada-quill.html'];
+    assert.ok(card.f.some(([, value]) => value === 'Old Town'), JSON.stringify(card));
+    assert.deepStrictEqual(cardProblems(card, text).problems, []);
   } finally { v.cleanup(); }
 });

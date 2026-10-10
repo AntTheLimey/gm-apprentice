@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.41"
+current_version: "1.10.42"
 ---
 
 # Vault Migration Record
@@ -48,3 +48,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.39 | None (publish tool only, 1.15.3) | |
 | 1.10.40 | None (publish tool only, 1.15.4) | |
 | 1.10.41 | Link previews: no vault change. A site that sets nothing gains the cards at its next build. The site's publish tool is repinned to 1.16.0 by the every-pass repin | — |
+| 1.10.42 | Site faults: no vault change. The build names faults in notes and campaign-qa fixes them or asks. The site's publish tool is repinned to 1.17.0 by the every-pass repin | — |

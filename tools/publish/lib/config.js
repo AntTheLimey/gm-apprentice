@@ -125,7 +125,7 @@ function linkPreviewsFrom(raw, warn = console.warn) {
   if (value === 'on' || value === 'desktop' || value === 'off') return value;
   if (value === 'yes') return 'on';
   if (value === 'no') return 'off';
-  warn(`config: publish.link_previews ${JSON.stringify(raw)} is not on, desktop or off; using on`);
+  warn(`config: publish.link_previews ${JSON.stringify(raw)} is not on, desktop, off, yes, no, true or false; using on`);
   return 'on';
 }
 

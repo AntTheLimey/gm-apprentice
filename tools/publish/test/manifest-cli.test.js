@@ -334,6 +334,72 @@ describe('manifest apply', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('records a decision on a note in a folder the site leaves out, and will not list it under Publishing', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_Templates'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_Templates', 'Lore.md'), '---\ntype: world_domain\n---\n\nLore.\n');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const rc = await runManifest({ verb: 'apply', configPath, exclude: ['_Templates/Lore.md=stays hidden: reference only'] }, c.deps);
+    assert.strictEqual(rc, 0, c.text());
+    assert.match(c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
+      /- \[x\] _Templates\/Lore\.md — stays hidden: reference only\n/);
+
+    const refused = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, publish: ['_Templates/Lore.md'] }, refused.deps), 1);
+    // The file is there: the refusal says what stops it, not that it is missing.
+    assert.match(refused.text(), /cannot list under Publishing: _Templates\/Lore\.md is in a folder the site leaves out/);
+    assert.ok(!/no such file/.test(refused.text()), refused.text());
+    assert.deepStrictEqual(refused.writes, {});
+    const outside = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, exclude: ['../elsewhere.md=x'] }, outside.deps), 1);
+    assert.deepStrictEqual(outside.writes, {});
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('diff lists a recorded decision for a note in a left-out folder apart from "Removed", and --prune keeps it', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_Templates'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_Templates', 'Lore.md'), '---\ntype: world_domain\n---\n\nLore.\n');
+    const { configPath } = siteFor(vault);
+    await runManifest({ verb: 'apply', configPath, exclude: ['_Templates/Lore.md=stays hidden: reference only', 'Sessions/Played Session.md=x'] }, capture().deps);
+    fs.rmSync(path.join(vault, 'Sessions', 'Played Session.md'));
+
+    const human = capture();
+    await runManifest({ verb: 'diff', configPath }, human.deps);
+    // Only the entry whose file is gone is "Removed".
+    assert.match(human.text(), /^Removed \(1\):\n {2}Sessions\/Played Session\.md\tExcluded$/m);
+    assert.match(human.text(), /^Listed, in a folder the site leaves out \(1; the file is there, the entry is kept\):\n {2}_Templates\/Lore\.md\tExcluded$/m);
+    const json = capture();
+    await runManifest({ verb: 'diff', configPath, json: true }, json.deps);
+    const answer = JSON.parse(json.out.join(''));
+    assert.deepStrictEqual(answer.removed, [{ path: 'Sessions/Played Session.md', section: 'Excluded' }]);
+    assert.deepStrictEqual(answer.outside, [{ path: '_Templates/Lore.md', section: 'Excluded' }]);
+
+    const pruned = capture();
+    await runManifest({ verb: 'apply', configPath, prune: true }, pruned.deps);
+    const text = pruned.writes[path.join(vault, '_meta', 'publish-manifest.md')];
+    assert.match(text, /_Templates\/Lore\.md — stays hidden: reference only/);
+    assert.ok(!text.includes('Played Session.md'));
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--vault reads and writes that vault\'s manifest, not the one the site file names', async () => {
+    const named = copyVault('auto-exclude');
+    const audited = copyVault('auto-exclude');
+    const { configPath } = siteFor(named);
+    const c = capture();
+    const rc = await runManifest({ verb: 'apply', configPath, vaultPath: audited, exclude: ['Sessions/Played Session.md=stays hidden: not yet'] }, c.deps);
+    assert.strictEqual(rc, 0, c.text());
+    assert.deepStrictEqual(Object.keys(c.writes), [path.join(audited, '_meta', 'publish-manifest.md')]);
+    assert.ok(!fs.existsSync(path.join(named, '_meta', 'publish-manifest.md')));
+    const d = capture();
+    await runManifest({ verb: 'diff', configPath, vaultPath: audited, json: true }, d.deps);
+    assert.strictEqual(JSON.parse(d.out.join('')).manifestExists, true);
+    fs.rmSync(named, { recursive: true, force: true });
+    fs.rmSync(audited, { recursive: true, force: true });
+  });
+
   it('rejects a path that matches no vault file and writes nothing', async () => {
     const vault = copyVault('auto-exclude');
     const { configPath } = siteFor(vault);

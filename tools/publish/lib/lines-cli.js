@@ -24,6 +24,11 @@
 //                            gm-only block, a spoiler block or a comment is not kept;
 //                            nor, when `excludeSections` is given, one it withholds
 //
+//   {"op":"cut","text":…}
+//       -> {"cut":[…]}       per line of `text`: the line as the strip chain leaves it
+//                            (the build's own: gm-only, spoiler, HTML and %% comments),
+//                            or null when the chain removes it
+//
 //   {"op":"site","vault":…}
 //       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault file has a
 //                            `publish:` block, whether the vault has a site (`publish.site`;
@@ -40,7 +45,7 @@ const os = require('os');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { resolveSwitches } = require('./switches');
-const { playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
+const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
 // would answer "nothing is withheld".
@@ -107,6 +112,12 @@ function answer(request) {
     case 'stub':
       return { kept: keptSectionFlags(text, list(request, 'include'),
         { excludeSections: request.excludeSections === undefined ? [] : list(request, 'excludeSections') }) };
+    case 'cut': {
+      const { lines, from } = strippedLines(text.replace(/\r/g, ''), false);
+      const cut = text.split('\n').map(() => null);
+      lines.forEach((line, i) => { cut[from[i]] = line; });
+      return { cut };
+    }
     default:
       throw new Error(`unknown op: ${JSON.stringify(request.op)}`);
   }

@@ -11,13 +11,14 @@ const FIXES = {
 };
 
 function parseArgs(argv) {
-  const o = { json: false, host: 'cloudflare-pages', setCreds: false, site: false, configPath: './vault.config.json' };
+  const o = { json: false, host: 'cloudflare-pages', setCreds: false, site: false, configPath: './vault.config.json', vaultPath: null };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--json') o.json = true;
     else if (argv[i] === '--set-cloudflare-creds') o.setCreds = true;
     else if (argv[i] === '--site') o.site = true;
     else if (argv[i] === '--host' && argv[i + 1]) { o.host = argv[i + 1]; i++; }
     else if (argv[i] === '--config' && argv[i + 1]) { o.configPath = argv[i + 1]; i++; }
+    else if (argv[i] === '--vault' && argv[i + 1]) { o.vaultPath = argv[i + 1]; i++; }
   }
   return o;
 }
@@ -53,7 +54,7 @@ async function runDoctor(argv, deps = {}) {
   // question with different fixes.
   if (opts.site) {
     const { runSiteDoctor } = require('./site-doctor');
-    return runSiteDoctor({ configPath: opts.configPath, json: opts.json }, deps);
+    return runSiteDoctor({ configPath: opts.configPath, vaultPath: opts.vaultPath, json: opts.json }, deps);
   }
 
   if (opts.setCreds) {

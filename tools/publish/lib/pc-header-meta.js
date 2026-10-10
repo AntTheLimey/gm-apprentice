@@ -2,8 +2,9 @@
 // The badges a PC page's header shows after the player: the note's `display_meta` list,
 // else the defaults. The one definition: the page header (templates/pc.js) and the link
 // preview card (previews.js) both read it, so they cannot disagree.
-const { publishedSource, plainMetaValue } = require('./processor');
+const { publishedSource, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('./processor');
 const { excerptFromMarkdown } = require('./excerpt');
+const { labelsForLinks } = require('./wikilink');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -18,11 +19,12 @@ function headerMetaFields(fm) {
 }
 
 // [label, text] for each header badge that has a value, in order. The text is what the
-// reader sees: a wikilink as its label, a Date as the date written.
+// reader sees: a wikilink as its label, a Date as the date written, a bare note name as
+// words (a field that names a note, see NOTE_NAME_FIELDS).
 function headerMeta(fm) {
   return headerMetaFields(fm)
     .filter(field => fm[field] != null && fm[field] !== '')
-    .map(field => [formatLabel(field), plainMetaValue(fm[field]).trim()]);
+    .map(field => [formatLabel(field), (NOTE_NAME_FIELDS.has(field) ? plainRefValue(fm[field]) : plainMetaValue(fm[field])).trim()]);
 }
 
 // The epithet a PC page opens with: key_traits when the PC has any, otherwise the first
@@ -33,7 +35,8 @@ function pcEpithetText(page) {
   const traits = Array.isArray(fm.key_traits)
     ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
     : String(fm.key_traits || '');
-  return traits.trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
+  // Printed as it stands, on the page and on the card: a labelled link in it prints its label.
+  return labelsForLinks(traits).trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
 }
 
 module.exports = { headerMetaFields, headerMeta, pcEpithetText };

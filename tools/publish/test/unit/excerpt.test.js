@@ -128,12 +128,12 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
   });
 
   it('drops rendered image tags', () => {
-    const html = '<p><img src="../images/Thides System.png" alt="Thides System"> A dead-end star. More.</p>';
+    const html = '<p><img src="../images/Tarn System.png" alt="Tarn System"> A dead-end star. More.</p>';
     assert.strictEqual(excerptFromMarkdown(html), 'A dead-end star.');
   });
 
   it('drops raw image markdown', () => {
-    const md = '## Overview\n\n![Thides System](../images/Thides System.png)\n\nA charted dead-end. More.';
+    const md = '## Overview\n\n![Tarn System](../images/Tarn System.png)\n\nA charted dead-end. More.';
     assert.strictEqual(excerptFromMarkdown(md), 'A charted dead-end.');
   });
 
@@ -159,8 +159,8 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
   });
 
   it('de-links a wikilink anchor without leaving a stray space', () => {
-    const html = '<p><a href="x.html">Shackleton Magellan</a>’s enemy walks in. More.</p>';
-    assert.strictEqual(excerptFromMarkdown(html), 'Shackleton Magellan’s enemy walks in.');
+    const html = '<p><a href="x.html">Odrin Kell</a>’s enemy walks in. More.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'Odrin Kell’s enemy walks in.');
   });
 
   it('does not fuse adjacent paragraphs into one word', () => {
@@ -176,7 +176,7 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
 
 describe('excerptFromMarkdown sentence end', () => {
   it('does not stop at a title', () => {
-    assert.strictEqual(excerptFromMarkdown('Mr. James Bennet is a clerk. He is quiet.'), 'Mr. James Bennet is a clerk.');
+    assert.strictEqual(excerptFromMarkdown('Mr. Jorund Vale is a clerk. He is quiet.'), 'Mr. Jorund Vale is a clerk.');
     assert.strictEqual(excerptFromMarkdown('She met Col. Moreau and Dr. Ward at St. Malo. Then left.'), 'She met Col. Moreau and Dr. Ward at St. Malo.');
   });
   it('still stops at the first full stop otherwise', () => {
@@ -248,5 +248,39 @@ describe('excerptFromMarkdown prose mode and tables in a blockquote', () => {
   it('skips a quoted table that opens the note and reads on to the prose', () => {
     const md = '> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nThe gate is old. It creaks.\n';
     assert.strictEqual(excerptFromMarkdown(md, opts), 'The gate is old. It creaks.');
+  });
+});
+
+describe('excerptFromMarkdown blocks in HTML', () => {
+  const opts = { prose: true, sentences: 2, limit: 200 };
+  it('keeps a space where a block element opens after text, as it does where one closes', () => {
+    assert.strictEqual(excerptFromMarkdown('The gate is old.<p>It creaks.</p>', opts), 'The gate is old. It creaks.');
+    assert.strictEqual(excerptFromMarkdown('The gate is old.<div>It creaks.</div>', opts), 'The gate is old. It creaks.');
+    assert.strictEqual(excerptFromMarkdown('Old gate<ul><li>creaks</li></ul>', opts), 'Old gate creaks');
+  });
+  it('still closes up inline tags', () => {
+    assert.strictEqual(excerptFromMarkdown("<a>Magellan</a>'s ship<em>s</em> sail.", opts), "Magellan's ships sail.");
+  });
+});
+
+describe('excerptFromMarkdown provenance callouts', () => {
+  const opts = { prose: true, sentences: 2, limit: 200 };
+  const prose = 'The party reached the gate. It was shut.';
+  it('skips the Source callout a wrap-up opens with, however long, and reads on to the prose', () => {
+    const md = `# Chapter 1 · Session 8 — Wrap-Up\n\n> [!info] Source\n> Ingested verbatim from the old notes.\n> Nothing was changed.\n\n## Narrative Recap\n\n${prose}\n`;
+    assert.strictEqual(excerptFromMarkdown(md, opts), prose);
+  });
+  it('skips the Reconstruction Note callout of the ingest templates', () => {
+    const md = `> [!info] Reconstruction Note\n> Rebuilt from two transcripts; session 3 is missing.\n\n${prose}\n`;
+    assert.strictEqual(excerptFromMarkdown(md, opts), prose);
+  });
+  it('keeps prose that merely says so, and callouts of other titles', () => {
+    assert.strictEqual(excerptFromMarkdown('Ingested verbatim from the old notes. Then more.', opts), 'Ingested verbatim from the old notes. Then more.');
+    const quote = '> [!info] Rumour\n> The well is cursed. Nobody drinks from it.\n';
+    assert.strictEqual(excerptFromMarkdown(quote, opts), 'The well is cursed. Nobody drinks from it.');
+  });
+  it('is a card matter only: the plain excerpt is unchanged', () => {
+    const md = '> [!info] Source\n> Ingested verbatim.\n\nBody text here.\n';
+    assert.notStrictEqual(excerptFromMarkdown(md, {}), 'Body text here.');
   });
 });
