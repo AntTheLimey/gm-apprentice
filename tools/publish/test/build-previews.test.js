@@ -307,3 +307,23 @@ test('a faction, item or location of a hostile sub-type groups and labels as any
     } finally { v.cleanup(); }
   }
 });
+
+test('a YAML number as a title builds as the string everywhere a title is used', () => {
+  const v = buildSmallVault({
+    'Notes/N.md': '---\ntype: npc\ntitle: 1984\n---\nBody about the year.\n',
+    'Notes/Other.md': '---\ntype: location\n---\nSee [[N]].\n',
+  });
+  try {
+    const cards = JSON.parse(v.read('previews.json'));
+    assert.strictEqual(cards['notes/n.html'].t, '1984');
+    const html = v.read('notes', 'n.html');
+    assert.match(html, /<title>1984 /);
+    assert.match(html, /<h1>1984</);
+    const search = JSON.parse(v.read('search-index.json'));
+    const doc = Object.values(search.documents).find((d) => d.href === 'notes/n.html');
+    assert.strictEqual(doc.title, '1984');
+    // The Mentioned-in list on the page it links to names the page by its title.
+    assert.match(v.read('notes', 'n.html'), /<a href="other\.html">Other<\/a>/);
+    assert.match(v.read('notes', 'other.html'), /<a href="n\.html">N<\/a>/);
+  } finally { v.cleanup(); }
+});

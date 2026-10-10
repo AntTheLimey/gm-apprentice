@@ -134,7 +134,8 @@ function scanVaultReport(config, { quiet = false } = {}) {
         }
 
         const baseName = path.basename(entry.name, '.md');
-        const displayTitle = frontmatter.title || baseName.replace(/_/g, ' ');
+        // A YAML number (`title: 1984`) is the title as a string.
+        const displayTitle = (frontmatter.title ? String(frontmatter.title) : '') || baseName.replace(/_/g, ' ');
         const slug = slugify(baseName);
         const outputPath = outputDir
           ? outputDir + '/' + slug + '.html'
