@@ -242,6 +242,43 @@ describe('NAMED_NO_PAGE', () => {
   });
 });
 
+describe('NAMED_NO_PAGE with the rest of the audit', () => {
+  it('reads a grouped Excluded reason ("- Reason: stays hidden: ...") as settling the notes under it', async () => {
+    const files = {
+      'Characters/Mara_Quill.md': npc('M', 'Met [[Vesper_Hale]].'),
+      'Characters/Vesper_Hale.md': npc('V', 'x'),
+    };
+    const { vault, configPath } = site(files, { publish: ['Characters/Mara_Quill.md'] });
+    fs.appendFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
+      '\n## Excluded (1 files)\n\n- Reason: stays hidden: the ferry is the twist\n  - Characters/Vesper_Hale.md\n');
+    const { json } = await doctor(configPath, { json: true });
+    const [f] = json.findings.filter((x) => x.code === 'NAMED_NO_PAGE');
+    assert.strictEqual(f.settled, true);
+    assert.strictEqual(f.reason, 'stays hidden: the ferry is the twist');
+  });
+
+  it('leaves a name that LINK_UNRESOLVED would repeat to NAMED_NO_PAGE, and still reports a typo', async () => {
+    const files = {
+      'Characters/Mara_Quill.md': npc('M', 'Met [[Vesper_Hale]] and [[Vesper_Hael]].'),
+      'Characters/Vesper_Hale.md': npc('V', 'x'),
+    };
+    const { configPath } = site(files, { excluded: ['Characters/Vesper_Hale.md'] });
+    const { json } = await doctor(configPath, { json: true });
+    assert.deepStrictEqual(json.findings.filter((f) => f.code === 'LINK_UNRESOLVED').map((f) => f.detail.split(' ')[0]), ['[[Vesper_Hael]]']);
+    assert.strictEqual(json.findings.filter((f) => f.code === 'NAMED_NO_PAGE').length, 1);
+  });
+
+  it('names a world-flags note, which the build never gives a page, as a working note', async () => {
+    const files = {
+      'Characters/Mara_Quill.md': npc('M', 'See [[Flags_Tracker]].'),
+      'Characters/Flags_Tracker.md': '---\ntype: world_flags\n---\n\nx\n',
+    };
+    const [f] = await faults(files, {}, 'NAMED_NO_PAGE');
+    assert.strictEqual(f.why, 'TYPE_NEVER_PUBLISHES');
+    assert.strictEqual(f.kind, 'working');
+  });
+});
+
 describe('COMMENT_STRAY', () => {
   it('is silent for a clean comment, inline or block, and for one in code or a gm-only block', async () => {
     const body = ['A %% private note %% line.', '', '%%', 'block', '%%', '', '```', '50%% in code', '```', '', '<!-- gm-only -->', '50%% x', '<!-- /gm-only -->', '', 'Done.'].join('\n');
@@ -505,6 +542,7 @@ describe('the build stays quiet, then says one line per code', () => {
       'Sessions/Session_1.md': '---\ntype: session\nstatus: played\n---\n\n[[Vesper_Hale]] 9%% x\n',
       'Sessions/Session_1_Wrap.md': '---\ntype: session_wrap\nsession: "[[Session_1]]"\n---\n\n## Narrative Recap\n\nThey met [[Vesper_Hale]] again.\n',
       'Quiet/Hidden_Hall.md': '---\ntype: location\n---\n\nx\n',
+      'Characters/Stubby.md': '---\ntype: npc\npublish: stub\npublish_include_sections: ["Public"]\n---\n\n## Public\n\nHello.\n\n## Hidden\n\nx 40%% y [[Vesper_Hale]]\n',
     };
     const { configPath } = site(files, { excluded: ['Characters/Vesper_Hale.md — a reason'] });
     const { json } = await doctor(configPath, { json: true });
