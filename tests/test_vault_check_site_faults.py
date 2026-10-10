@@ -118,6 +118,34 @@ class SiteFaultRowsTests(unittest.TestCase):
             f'<command> --config "{site / "vault.config.json"}" '
             f'--vault "{vault.resolve()}"'), rows[0])
 
+    def test_a_row_says_which_pages_only_an_index_page_prints_from(self):
+        row = vc._site_fault_row({
+            "code": "NAMED_NO_PAGE", "severity": "warning",
+            "path": "Clues/Old_Tam.md", "kind": "entity", "type": "clue",
+            "pages": [MARA, "Characters/Bo_Pike.md"], "pageCount": 2,
+            "printed": ["Old Tam"], "why": "MANIFEST_EXCLUDED",
+            "reason": None, "viaListing": ["Characters/Bo_Pike.md"],
+            "listings": ["characters/npcs/index.html"]}, whole=False)
+        self.assertTrue(row.endswith(
+            f"named on: {MARA}; Characters/Bo_Pike.md; printed only by an "
+            f"index or listing page (characters/npcs/index.html) from: "
+            f"Characters/Bo_Pike.md"), row)
+        plain = vc._site_fault_row({
+            "code": "NAMED_NO_PAGE", "severity": "warning",
+            "path": "Clues/Old_Tam.md", "kind": "entity", "type": "clue",
+            "pages": [MARA], "pageCount": 1, "printed": ["Old Tam"],
+            "why": "MANIFEST_EXCLUDED", "reason": None, "viaListing": [],
+            "listings": ["characters/npcs/index.html"]}, whole=False)
+        self.assertTrue(plain.endswith(f"named on: {MARA}"), plain)
+        alias = vc._site_fault_row({
+            "code": "ALIAS_IN_PROSE", "severity": "warning", "path": MARA,
+            "alias": "Old Smuggler", "owner": VESPER, "count": 1,
+            "context": "Kin of the old smuggler",
+            "listings": ["characters/npcs/index.html"]}, whole=False)
+        self.assertTrue(alias.endswith(
+            "| Kin of the old smuggler | printed on the index or listing "
+            "page: characters/npcs/index.html"), alias)
+
     def test_the_other_three_faults_each_get_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Paid 100%% now, 50%% later.\n\n"

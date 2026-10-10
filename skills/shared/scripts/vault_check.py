@@ -1737,6 +1737,14 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                + (f"reason written: {reason}; " if reason else "no reason written; ")
                + "named on: " + "; ".join(shown)
                + (f"; +{more} more (--file lists them all)" if more > 0 else ""))
+        # A page counted because an index or listing page prints the name
+        # from it: the fix is in that note's field, not its text.
+        via = [_one_line(p) for p in f.get("viaListing") or []]
+        if via:
+            outs = [_one_line(p) for p in f.get("listings") or []]
+            msg += ("; printed only by an index or listing page ("
+                    + ", ".join(outs[:SITE_FAULT_PAGES]) + ") from: "
+                    + "; ".join(via if whole else via[:SITE_FAULT_PAGES]))
     elif code == "COMMENT_STRAY":
         msg = (f"COMMENT_STRAY: {_one_line(f.get('detail'))} | "
                f"{_one_line(f.get('text'))}")
@@ -1747,6 +1755,9 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                f"name of {_one_line(f.get('owner'))}), printed "
                f"{f.get('count')} time{'' if f.get('count') == 1 else 's'} | "
                f"{_one_line(f.get('context'))}")
+        outs = [_one_line(p) for p in f.get("listings") or []]
+        if outs:
+            msg += " | printed on the index or listing page: " + ", ".join(outs)
     return f"{level}\t{path}\t{msg}"
 
 
