@@ -250,3 +250,15 @@ describe('excerptFromMarkdown prose mode and tables in a blockquote', () => {
     assert.strictEqual(excerptFromMarkdown(md, opts), 'The gate is old. It creaks.');
   });
 });
+
+describe('excerptFromMarkdown blocks in HTML', () => {
+  const opts = { prose: true, sentences: 2, limit: 200 };
+  it('keeps a space where a block element opens after text, as it does where one closes', () => {
+    assert.strictEqual(excerptFromMarkdown('The gate is old.<p>It creaks.</p>', opts), 'The gate is old. It creaks.');
+    assert.strictEqual(excerptFromMarkdown('The gate is old.<div>It creaks.</div>', opts), 'The gate is old. It creaks.');
+    assert.strictEqual(excerptFromMarkdown('Old gate<ul><li>creaks</li></ul>', opts), 'Old gate creaks');
+  });
+  it('still closes up inline tags', () => {
+    assert.strictEqual(excerptFromMarkdown("<a>Magellan</a>'s ship<em>s</em> sail.", opts), "Magellan's ships sail.");
+  });
+});

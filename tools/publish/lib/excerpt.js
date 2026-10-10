@@ -22,7 +22,7 @@ const HTML_BLOCKS_TO_DROP = [
 // Tags that end a block of prose. Turning them into newlines (rather than letting the
 // generic tag strip below eat them) keeps "…load.</p><p>More…" from fusing into one word,
 // while inline tags close up cleanly so `<a>Magellan</a>'s` stays "Magellan's".
-const BLOCK_BOUNDARY_RE = /<\/(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|section|article)\s*>|<br\s*\/?>/gi;
+const BLOCK_BOUNDARY_RE = /<\/?(p|div|li|ul|ol|blockquote|h[1-6]|tr|td|th|section|article)\b[^>]*>|<br\s*\/?>/gi;
 
 // Lines of a PC's body that are sheet, not prose (opts.skipSheetLines): a label line
 // ("**Playbook:** Cutter", "**Stress**: 3", "**ST** 12", a bare "**Insight**"), a
