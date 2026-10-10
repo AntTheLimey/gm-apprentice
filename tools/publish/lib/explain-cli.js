@@ -20,7 +20,8 @@ const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
-const { nearestNames } = require('./site-doctor');
+const yaml = require('js-yaml');
+const { nearestNames, readerView } = require('./site-doctor');
 
 // The switches as the build resolves them, without the config notes.
 function switchesOf(publishConfig) {
@@ -156,6 +157,28 @@ async function runExplain(options, deps) {
   const canonStatus = frontmatter ? getCanonStatus(frontmatter) : null;
   const section = manifestSectionOf(manifest, target);
 
+  // --shown: what a reader gets of this page, or would if it published: the frontmatter
+  // as published and the body after every cut the build makes (readerView, the audit's
+  // own). For a note the scanner made no page of, the file is read here. A `publish:
+  // false` note shows nothing. Not replicated: a PC note whose headings a link label
+  // shifts, which the build withholds whole while character sheets are off.
+  let shown = null;
+  if (opts.shown && !frontmatterError) {
+    let source = page;
+    if (!source) {
+      try {
+        const parsed = parseNote(readFile(path.join(vaultPath, target)));
+        source = { markdown: parsed.content, frontmatter: parsed.data || {} };
+      } catch (e) { source = null; }
+    }
+    if (source && publishMode(source.frontmatter) !== 'none') {
+      const view = readerView(source, publishConfig, { bodyWithheld: hubBodyUnpublished, rel: target });
+      shown = { frontmatter: view.frontmatter, markdown: view.safe.text.replace(/\n{3,}/g, '\n\n').trim() };
+    } else if (source) {
+      shown = { frontmatter: {}, markdown: '' };
+    }
+  }
+
   if (opts.json) {
     out(JSON.stringify({
       path: target,
@@ -179,6 +202,7 @@ async function runExplain(options, deps) {
       gmOnlyBlocks,
       bodyPublishes: publishes && !hubBodyUnpublished,
       bodyWithheld: hubBodyUnpublished,
+      ...(opts.shown ? { shown } : {}),
     }, null, 2));
     return 0;
   }
@@ -214,6 +238,22 @@ async function runExplain(options, deps) {
     out(publishes
       ? '  body: not published — a session index is metadata only, and this session has a published Wrap-Up; its page is built from frontmatter and the Wrap-Up'
       : '  body: not published — the page itself does not publish; if it did, the body would still be withheld, since this session has a published Wrap-Up');
+  }
+  if (opts.shown) {
+    out('');
+    if (!shown) {
+      out('  what a reader gets: unknown — the note could not be read');
+      return 0;
+    }
+    out(`  what a reader gets of this page${publishes ? '' : ', if it published'} (nothing else of the note is on the site):`);
+    out('');
+    out('  frontmatter as published:');
+    const fields = Object.keys(shown.frontmatter).length
+      ? yaml.safeDump(shown.frontmatter, { lineWidth: -1, skipInvalid: true }).trimEnd() : '(none)';
+    for (const line of fields.split('\n')) out(`    ${line}`);
+    out('');
+    out('  body as published:');
+    for (const line of (shown.markdown || '(none)').split('\n')) out(`    ${line}`);
   }
   return 0;
 }

@@ -222,7 +222,7 @@ vault_check uses it instead of keeping a copy of the build's filters.
 A request that cannot be answered gets {"error":"…"}.
 `,
   explain: `
-gm-apprentice-publish explain <vault-relative path> [--config <path>] [--json]
+gm-apprentice-publish explain <vault-relative path> [--shown] [--config <path>] [--json]
 gm-apprentice-publish explain --all --json [--config <path>] [--vault <dir>]
 
 Prints the chain the build walks for one file — directory, type, publish mode,
@@ -234,6 +234,13 @@ rather than the whole vault.
 
   gm-apprentice-publish explain "Sessions/Session 7.md"
 
+With --shown, follows with what a reader gets of the page, or would get if
+it published: its frontmatter as published (excluded fields, gm_only
+relationships and gm_aliases gone) and its body after every cut the build
+makes. Text that is not there is not on the site. Use it to check a note
+before listing it under Publishing. With --json it is "shown":
+{ frontmatter, markdown }.
+
 With --all, prints one JSON object for every file the vault walk sees:
 { vaultPath, switches, excludeSections, pages: [{ path, type, publishes,
 code, bodyWithheld, bodyPublishes }] }. switches is { characterSheets,
@@ -243,6 +250,7 @@ the built-in default). bodyWithheld marks a session index whose body the site
 withholds because its Wrap-Up publishes.
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
+  --shown            Also print the frontmatter and body a reader gets
   --json             Emit the whole chain as an object
   --all              Every file at once (needs --json)
   --vault <dir>      With --all: read this vault through the site's rules
@@ -326,7 +334,7 @@ building with the old renderer until this runs. Pair it with "deploy".
 `,
   doctor: `
 gm-apprentice-publish doctor [--host <host>] [--json] [--set-cloudflare-creds]
-gm-apprentice-publish doctor --site [--config <path>] [--json]
+gm-apprentice-publish doctor --site [--config <path>] [--vault <dir>] [--json]
 
 Preflight for publishing: checks Node, git, and the host CLI (wrangler for
 Cloudflare Pages, gh for GitHub Pages) with its authentication, and prints a
@@ -349,6 +357,8 @@ report lists 20 rows per note-fault code; --json has them all.
   --host <host>              cloudflare-pages (default) or github-pages
   --site                     Audit the vault named by --config
   --config <path>            Path to vault.config.json, with --site
+  --vault <dir>              With --site: audit this vault through the site's
+                             rules instead of the vault the config names
   --json                     Machine-readable report instead of the checklist
   --set-cloudflare-creds     Read a Cloudflare API token from stdin, verify it,
                              and save it (plus the account id) to your shell env
@@ -735,14 +745,14 @@ if (command === 'explain') {
     printSubcommandHelp('explain');
     process.exit(1);
   }
-  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json' });
+  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json', '--shown': 'shown' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('explain');
     process.exit(1);
   }
   const { runExplain } = require('../lib/explain-cli.js');
-  runExplain({ configPath: parsed.configPath, target, json: !!parsed.flags.json })
+  runExplain({ configPath: parsed.configPath, target, json: !!parsed.flags.json, shown: !!parsed.flags.shown })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;

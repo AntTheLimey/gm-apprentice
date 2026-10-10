@@ -127,6 +127,28 @@ function emit(out, findings, vaultLabel, asJson) {
   return errors === 0 ? 0 : 1;
 }
 
+// What a reader gets of one page: the build's own cuts in the build's order (a session index
+// whose Wrap-Up is published has no body, a stub keeps only the sections it names), then the
+// page's strip chain, and its frontmatter as published. `explain --shown` prints it.
+function readerView(page, publishConfig, { bodyWithheld = false, rel = '', pcKeepSections = pcKeepList(publishConfig) } = {}) {
+  let source = bodyWithheld ? '' : (page.markdown || '');
+  if (publishMode(page.frontmatter) === 'stub') {
+    const include = Array.isArray(page.frontmatter.publish_include_sections) ? page.frontmatter.publish_include_sections : [];
+    source = keepOnlySections(source, include, {
+      excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts,
+      frontmatter: page.frontmatter, warn: () => {},
+    });
+  }
+  const safe = playerSafeMarkdown(source, {
+    excludeCallouts: publishConfig.exclude_callouts,
+    excludeSections: publishConfig.exclude_sections,
+    pcKeepSections,
+    frontmatter: page.frontmatter,
+  });
+  const fieldOverrides = (publishConfig.overrides && publishConfig.overrides.fields) || {};
+  return { source, safe, frontmatter: publishedFrontmatter(page.frontmatter, publishConfig.exclude_fields, fieldOverrides[rel] || {}) };
+}
+
 async function runSiteDoctor(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -149,7 +171,7 @@ async function runSiteDoctor(options, deps) {
       `edit vault.config.json so it is valid JSON with a "vaultPath" pointing at your vault`,
     )], configPath, asJson);
   }
-  if (!config.vaultPath) {
+  if (!config.vaultPath && !opts.vaultPath) {
     return emit(out, [finding(
       'CONFIG_INVALID', 'error', configPath,
       'has no "vaultPath"',
@@ -157,7 +179,9 @@ async function runSiteDoctor(options, deps) {
     )], configPath, asJson);
   }
 
-  const vaultPath = path.resolve(siteRoot, config.vaultPath);
+  // --vault: audit this vault through the site's rules, as `explain --all --vault` does, so
+  // a caller that starts from a vault is never answered about another one.
+  const vaultPath = opts.vaultPath ? path.resolve(opts.vaultPath) : path.resolve(siteRoot, config.vaultPath);
   if (!exists(vaultPath)) {
     return emit(out, [finding(
       'VAULT_MISSING', 'error', vaultPath,
@@ -193,36 +217,16 @@ async function runSiteDoctor(options, deps) {
   const allNotes = scanAllNotes(vaultPath);
   const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes });
 
-  // What a reader gets of a page: the build's own cuts in the build's order (a session index
-  // whose Wrap-Up is published has no body, a stub keeps only the sections it names), then
-  // the page's strip chain. Run once per page; the dead-link check and the note-fault
-  // detectors both read it.
-  const excludeFields = publishConfig.exclude_fields;
-  const fieldOverrides = (publishConfig.overrides && publishConfig.overrides.fields) || {};
+  // What a reader gets of a page (readerView), run once per page; the dead-link check and
+  // the note-fault detectors both read it.
   const pcKeepSections = pcKeepList(publishConfig);
   const views = new Map();
   const viewOf = (page) => {
     if (views.has(page)) return views.get(page);
-    let source = hubPairs.has(page) ? '' : (page.markdown || '');
-    if (publishMode(page.frontmatter) === 'stub') {
-      const include = Array.isArray(page.frontmatter.publish_include_sections) ? page.frontmatter.publish_include_sections : [];
-      source = keepOnlySections(source, include, {
-        excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts,
-        frontmatter: page.frontmatter, warn: () => {},
-      });
-    }
-    const safe = playerSafeMarkdown(source, {
-      excludeCallouts: publishConfig.exclude_callouts,
-      excludeSections: publishConfig.exclude_sections,
-      pcKeepSections,
-      frontmatter: page.frontmatter,
-    });
+    const { source, safe, frontmatter } = readerView(page, publishConfig, { bodyWithheld: hubPairs.has(page), rel: relOf(page), pcKeepSections });
     const unstable = pcKeepSections && pcHeadingsUnstable(page, linkMap, publishConfig.exclude_sections, attachments,
       { excludeCallouts: publishConfig.exclude_callouts, pcKeepSections });
-    const view = {
-      source, text: unstable ? '' : safe.text, strays: safe.strays, openFence: safe.openFence,
-      frontmatter: publishedFrontmatter(page.frontmatter, excludeFields, fieldOverrides[relOf(page)] || {}),
-    };
+    const view = { source, text: unstable ? '' : safe.text, strays: safe.strays, openFence: safe.openFence, frontmatter };
     views.set(page, view);
     return view;
   };
@@ -421,4 +425,4 @@ async function runSiteDoctor(options, deps) {
   return emit(out, findings, vaultPath, asJson);
 }
 
-module.exports = { runSiteDoctor, nearestNames, diceCoefficient, suggestedSlug };
+module.exports = { runSiteDoctor, readerView, nearestNames, diceCoefficient, suggestedSlug };

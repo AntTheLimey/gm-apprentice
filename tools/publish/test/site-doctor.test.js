@@ -76,6 +76,23 @@ describe('site-doctor similarity', () => {
 });
 
 describe('doctor --site', () => {
+  it('audits the vault named by --vault, through the site\'s rules, instead of the one the config names', async () => {
+    const other = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-other-'));
+    write(other, 'Characters/NPCs/Fine.md', '---\ntype: npc\n---\n\nNothing wrong.\n');
+    const { configPath } = siteFor(other);
+    const cap = capture();
+    await runSiteDoctor({ configPath, vaultPath: messyVault(), json: true }, cap.deps);
+    const codes = JSON.parse(cap.text()).findings.map((f) => f.code);
+    assert.ok(codes.includes('FILE_UNTYPED'), cap.text());
+    const { runDoctor } = require('../lib/doctor-cli');
+    const viaCli = capture();
+    await runDoctor(['--site', '--config', configPath, '--vault', messyVault(), '--json'], viaCli.deps);
+    assert.ok(JSON.parse(viaCli.text()).findings.some((f) => f.code === 'FILE_UNTYPED'));
+    const plain = capture();
+    await runSiteDoctor({ configPath, json: true }, plain.deps);
+    assert.ok(!JSON.parse(plain.text()).findings.some((f) => f.code === 'FILE_UNTYPED'));
+  });
+
   it('finds every class of problem in a messy vault', async () => {
     const vault = messyVault();
     const { configPath } = siteFor(vault);

@@ -65,6 +65,71 @@ function capture() {
 }
 
 describe('explain', () => {
+  // --shown: the frontmatter and body a reader gets, from the audit's own reader view.
+  const hiddenNote = [
+    '---', 'type: session', 'status: played', 'occupation: Ferryman', 'secrets: he is the informant',
+    'gm_aliases: [Old Smuggler]', 'aliases: [Vesper, Old Smuggler]', 'publish_exclude_fields: [occupation]',
+    'relationships:', '  - target: "[[Mara]]"', '    type: knows',
+    '  - target: "[[The Cult]]"', '    type: serves', '    gm_only: true', '---', '',
+    '## Overview', '', 'A ferryman on the quay.', '',
+    '%% a private aside %%', '',
+    '## GM Notes', '', 'He runs the ferry for the cult.', '',
+    '## Statistics', '', 'STR 50', '',
+  ].join('\n');
+
+  it('--shown prints what a reader gets: published frontmatter and the body after every cut', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Vesper.md', hiddenNote);
+    const c = capture();
+    const rc = await runExplain({ configPath: siteFor(vault), target: 'Sessions/Vesper.md', shown: true }, c.deps);
+    assert.strictEqual(rc, 0);
+    const text = c.text();
+    assert.match(text, /^ {2}VERDICT: publishes at /m);
+    assert.match(text, /^ {2}what a reader gets of this page \(nothing else of the note is on the site\):$/m);
+    const view = text.slice(text.indexOf('what a reader gets'));
+    assert.match(view, /^ {4}A ferryman on the quay\.$/m);
+    // An H2 after GM Notes ends the hidden section: the view shows it, so a split that
+    // left one behind is seen before the note publishes.
+    assert.match(view, /^ {4}## Statistics$/m);
+    for (const gone of ['cult', 'Ferryman', 'informant', 'Old Smuggler', 'private aside', 'publish_exclude_fields']) {
+      assert.ok(!view.includes(gone), `${gone} is in the view:\n${view}`);
+    }
+    assert.match(view, /target: '\[\[Mara\]\]'/);
+    assert.match(view, /^ {6}- Vesper$/m);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--shown --json adds shown: { frontmatter, markdown }, and plain --json has no such key', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Vesper.md', hiddenNote);
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Vesper.md', shown: true, json: true }, c.deps);
+    const { shown } = JSON.parse(c.out.join(''));
+    assert.deepStrictEqual(shown.frontmatter.relationships, [{ target: '[[Mara]]', type: 'knows' }]);
+    assert.ok(!('occupation' in shown.frontmatter) && !('secrets' in shown.frontmatter));
+    assert.ok(shown.markdown.startsWith('## Overview') && !shown.markdown.includes('cult'));
+    const plain = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Vesper.md', json: true }, plain.deps);
+    assert.ok(!('shown' in JSON.parse(plain.out.join(''))));
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--shown answers for a note that does not publish, and shows nothing of a publish: false note', async () => {
+    const vault = makeVault();
+    write(vault, 'Elsewhere/Loose.md', '---\nname: Loose\n---\n\nOpen words.\n\n## GM Notes\n\nHidden words.\n');
+    write(vault, 'Sessions/Off.md', '---\ntype: session\nstatus: played\npublish: false\n---\n\nNever shown.\n');
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Elsewhere/Loose.md', shown: true }, c.deps);
+    assert.match(c.text(), /what a reader gets of this page, if it published/);
+    assert.match(c.text(), /^ {4}Open words\.$/m);
+    assert.ok(!c.text().includes('Hidden words'));
+    const off = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Off.md', shown: true }, off.deps);
+    assert.ok(!off.text().includes('Never shown'));
+    assert.match(off.text(), /body as published:\n {4}\(none\)/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('walks the chain and names the output path for a published page', async () => {
     const vault = makeVault();
     const c = capture();
