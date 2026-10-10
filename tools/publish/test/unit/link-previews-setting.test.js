@@ -25,8 +25,13 @@ describe('publish.link_previews', () => {
       assert.deepStrictEqual(valueOf(`  link_previews: ${line}\n`), { value: want, said: [] }, line);
     }
   });
+  it('reads yes and no (any case, trimmed) as on and off, saying nothing', () => {
+    for (const [line, want] of [['yes', 'on'], ['no', 'off'], ['"No"', 'off'], ['" YES "', 'on'], ['"no"', 'off']]) {
+      assert.deepStrictEqual(valueOf(`  link_previews: ${line}\n`), { value: want, said: [] }, line);
+    }
+  });
   it('is on for anything else, and says so once, naming the three values', () => {
-    for (const line of ['mobile', '3', '[on]', '', '""']) {
+    for (const line of ['maybe', 'none', 'mobile', '3', '[on]', '', '""']) {
       const { value, said } = valueOf(`  link_previews: ${line}\n`);
       assert.strictEqual(value, 'on', line);
       assert.strictEqual(said.length, 1, line);

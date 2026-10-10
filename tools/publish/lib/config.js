@@ -116,13 +116,15 @@ function publishModeFrom(raw, warn = console.warn) {
 }
 
 // `link_previews` is `on`, `desktop` or `off`. YAML reads a bare `on` or `off` as true or
-// false, so those count too. Left out is on; anything else is on, and said.
+// false, so those count too, and `yes` and `no` mean on and off. Left out is on; anything else is on, and said.
 function linkPreviewsFrom(raw, warn = console.warn) {
   if (raw === undefined) return 'on';
   if (raw === true) return 'on';
   if (raw === false) return 'off';
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
   if (value === 'on' || value === 'desktop' || value === 'off') return value;
+  if (value === 'yes') return 'on';
+  if (value === 'no') return 'off';
   warn(`config: publish.link_previews ${JSON.stringify(raw)} is not on, desktop or off; using on`);
   return 'on';
 }

@@ -365,7 +365,7 @@ and affect the whole site rather than individual entity pages. See
 | `site_title` | `publish.site_title` | text | none (`init` writes one) | Name shown in the nav bar and browser tab |
 | `footer` | `publish.footer` | text | none | Footer text on every page |
 | `search` | `publish.search` | true/false | `true` | `false` leaves out the search index |
-| `link_previews` | `publish.link_previews` | `on`/`desktop`/`off` | `on` | The card opened by resting on, focusing or tapping a link to another page. `desktop` leaves touch taps as they were; `off` leaves the pages as they were. An unknown value is `on`, with a build warning |
+| `link_previews` | `publish.link_previews` | `on`/`desktop`/`off` (`yes`/`no` read as `on`/`off`) | `on` | The card opened by resting on, focusing or tapping a link to another page. `desktop` leaves touch taps as they were; `off` leaves the pages as they were. An unknown value is `on`, with a build warning |
 | `folder_map` | `publish.folder_map` | map of vault folder → output path | empty (`init` writes the standard map) | Which vault folders publish, and where. A folder holding typed pages with no entry is skipped with a build warning |
 | `attachments_dir` | `publish.attachments_dir` | text | `_attachments` | Vault folder holding images |
 | `character_sheets` | `publish.character_sheets` | switch | on | Off: PC pages publish prose sections and no stats, and live stats are forced off |

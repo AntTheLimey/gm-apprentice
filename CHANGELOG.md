@@ -28,8 +28,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   every card against its built page.
 - **A setting to turn the cards off, `publish.link_previews`.** `on` is
   the default. `desktop` keeps the cards for a mouse and keyboard only,
-  so a tap on a phone goes straight to the page. `off` removes them. An
-  unknown value counts as `on`, with a build warning. **Every site gains
+  so a tap on a phone goes straight to the page. `off` removes them.
+  `yes` and `no` read as `on` and `off`; any other unknown value counts
+  as `on`, with a build warning. **Every site gains
   the cards at its next build.** To turn them off, ask the apprentice;
   it sets the value for you. The setting is in `docs/site-settings.md`.
 - **Two new files on the site.** `previews.json` holds the cards and
