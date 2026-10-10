@@ -10,6 +10,7 @@ const { headerMeta, pcEpithetText } = require('./pc-header-meta');
 const { shownInGameDate } = require('./templates/session');
 const { kindLabel } = require('./kind-label');
 const { canonicalNfc } = require('./unicode');
+const { NO_PAGE_TYPES } = require('./excluding-values');
 
 const VALUE_LIMIT = 120;
 const TITLE_LIMIT = 120;
@@ -105,7 +106,7 @@ function cardFor(page, ctx) {
 // A note the build writes no page for (a world-flags file is internal tracking). The one
 // definition: the render loop and the card list both ask it, so a note with no page has no card.
 function getsNoPage(page) {
-  return (page.frontmatter || {}).type === 'world_flags';
+  return NO_PAGE_TYPES.has((page.frontmatter || {}).type);
 }
 
 function buildPreviews(pages, ctx) {

@@ -31,6 +31,8 @@ const LIST_FIELDS = {
 // out: each reader looks inside an item without asking whether there is one.
 const RECORD_LIST_FIELDS = ['relationships', 'equipment'];
 
+const { excludingValue } = require('./excluding-values');
+
 const isPlain = (v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' || typeof v === 'bigint';
 const isDate = (v) => v instanceof Date;
 // An unquoted `2026-07-02` is a Date at UTC midnight: its UTC day is the day as written.
@@ -58,7 +60,17 @@ function shapeFrontmatter(frontmatter) {
     if (field === 'type' && typeof value === 'boolean') { set(field, undefined); continue; }
     if (isPlain(value) || isDate(value)) { set(field, plainText(value)); continue; }
     if (Array.isArray(value) && value.length > 0 && value.every((v) => isPlain(v) || isDate(v))) {
-      const text = value.map(plainText).join(', ');
+      const items = value.map(plainText);
+      // A list that holds a value that keeps a note off a player site (`planned`, `DRAFT`)
+      // is read as that value alone: joined with the others it would be a text no rule
+      // knows, and the note would publish. The one list of those values is excluding-values.js.
+      const taken = excludingValue(field, items);
+      if (taken !== undefined && items.length > 1) {
+        set(field, taken);
+        wrong.push({ field, problem: `is a list where one value is expected; it holds "${taken}", which keeps a note off a player site, so it is read as "${taken}"` });
+        continue;
+      }
+      const text = items.join(', ');
       set(field, text);
       wrong.push({ field, problem: `is a list where one value is expected; it is read as "${text}"` });
       continue;
