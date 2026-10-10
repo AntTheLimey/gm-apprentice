@@ -234,6 +234,24 @@ describe('COMMENT_STRAY: only where it changes what the site shows', () => {
   });
 });
 
+describe('a PC note withheld whole (a link label changes its headings, sheets off)', () => {
+  it('reports no stray and names no note: nothing of its body is on the site', async () => {
+    const sheetsOff = '  character_sheets: false\n  pc_sections:\n    - Background\n';
+    const { configPath } = site({
+      'Hidden/Old_Tam.md': hidden(),
+      'PCs/Jean.md': '---\ntype: pc\nplayer_name: Pat\n---\n\n# Jean\n## Background\nRaised by [[Old_Tam]], at 100%% and 50%% pay.\n[[Nowhere|## Skills]]\nSTAT14\n',
+    }, sheetsOff);
+    assert.deepStrictEqual(await fromDoctor(configPath), []);
+    assert.deepStrictEqual(fromBuild(configPath), []);
+    // The same note, steady, is read: the silence above is the withholding, not a blind spot.
+    const steady = site({
+      'Hidden/Old_Tam.md': hidden(),
+      'PCs/Jean.md': '---\ntype: pc\nplayer_name: Pat\n---\n\n# Jean\n## Background\nRaised by [[Old_Tam]], at 100%% and 50%% pay.\n',
+    }, sheetsOff);
+    assert.deepStrictEqual((await fromDoctor(steady.configPath)).map((f) => f.code), ['COMMENT_STRAY', 'NAMED_NO_PAGE']);
+  });
+});
+
 describe('a relationship whose type is only a comment', () => {
   it('builds: the page is written, with no type on the row', () => {
     const { configPath, root } = site({
@@ -243,6 +261,14 @@ describe('a relationship whose type is only a comment', () => {
     fromBuild(configPath);
     const html = fs.readFileSync(path.join(root, 'docs', 'people', 'case.html'), 'utf8');
     assert.ok(!/ally/.test(html), 'the comment is printed');
+  });
+  it('a type written as a list builds too, on the page of either end', () => {
+    const { configPath, root } = site({
+      'People/Case.md': npcNote('Text.', 'relationships:\n  - target: "[[Bo]]"\n    type: [ally, rival]\n'),
+      'People/Bo.md': npcNote('Bo.'),
+    });
+    fromBuild(configPath);
+    for (const page of ['case.html', 'bo.html']) assert.ok(fs.existsSync(path.join(root, 'docs', 'people', page)), page);
   });
 });
 
