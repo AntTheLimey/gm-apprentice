@@ -244,6 +244,9 @@ test('link_previews "on" and "off" are written quoted and read back as those wor
     assert.deepEqual(run(s, [`link_previews=${JSON.stringify(word)}`]).data, { written: ['link_previews'] });
     const line = config(s).split('\n').find((l) => /^ {2}link_previews:/.test(l));
     assert.ok(line, 'the line is written');
+    // js-yaml reads a bare word back as a string, but a YAML 1.1 reader (the vault scripts) reads
+    // it as true / false: the quotes on the line are what keep it the word.
+    assert.match(line, new RegExp(`: ["']${word}["']$`), line);
     // Bare YAML `on` / `off` would read back as true / false: the file must say it is a string.
     const read = yaml.load(config(s).split('---')[1]).publish.link_previews;
     assert.strictEqual(read, word, `${line} reads back as ${JSON.stringify(read)}`);
