@@ -71,7 +71,8 @@
     var state = {
       cards: null, loading: null, failed: false,
       card: null, owner: null, touch: false, prior: null,
-      hover: null, openT: 0, closeT: 0, lastPointer: 'mouse'
+      hover: null, openT: 0, closeT: 0, lastPointer: 'mouse',
+      under: null, escaped: false, escapedOn: null
     };
 
     function load() {
@@ -94,6 +95,23 @@
       }
       return state.loading;
     }
+
+    // A phone, or any device whose main pointer cannot hover, has no hover to warn that a
+    // tap is coming: fetch the cards shortly after the page loads, so the first tap on a
+    // link finds them. A mouse or keyboard device fetches on first use. A tap that comes
+    // before the file has arrived follows the link, as it always did.
+    function cannotHover() {
+      try {
+        return !!(win.matchMedia && win.matchMedia('(hover: none), (pointer: coarse)').matches);
+      } catch (e) { return false; }
+    }
+
+    function prefetchWhenIdle() {
+      if (typeof win.requestIdleCallback === 'function') win.requestIdleCallback(load, { timeout: 2000 });
+      else setTimeout(load, 300);
+    }
+
+    if (mode === 'on' && cannotHover()) prefetchWhenIdle();
 
     function linkOf(target) {
       var a = target && target.closest ? target.closest('a[href]') : null;
@@ -235,6 +253,14 @@
       if (e.pointerType === 'touch') return;
       state.lastPointer = 'mouse';
       var link = linkOf(e.target);
+      state.under = link;
+      // After Escape the browser re-reports the pointer resting on the link it was on; that
+      // is not the pointer arriving. Nothing reopens until it comes to another link, or
+      // leaves this one and returns.
+      if (state.escaped) {
+        if (link && link === state.escapedOn) { state.hover = link; return; }
+        state.escaped = false;
+      }
       if (!link || state.hover === link) return;
       state.hover = link;
       clearTimeout(state.closeT);
@@ -253,6 +279,13 @@
     main.addEventListener('pointerout', function (e) {
       if (e.pointerType === 'touch') return;
       var link = linkOf(e.target);
+      if (link && link === state.under) {
+        var into = e.relatedTarget;
+        if (!(into && (link.contains(into) || (state.card && state.card.contains(into))))) {
+          state.under = null;
+          if (state.escapedOn === link) state.escaped = false;
+        }
+      }
       if (!link || link !== state.hover) return;
       var to = e.relatedTarget;
       if (to && (link.contains(to) || (state.card && state.card.contains(to)))) return;
@@ -294,7 +327,10 @@
     });
 
     doc.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && state.card) close();
+      if (e.key !== 'Escape' || !state.card) return;
+      state.escaped = true;
+      state.escapedOn = state.under;
+      close();
     });
 
     doc.addEventListener('pointerdown', function (e) {

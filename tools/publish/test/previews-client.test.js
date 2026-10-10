@@ -82,7 +82,7 @@ const CARDS = {
   'locations/inn.html': { t: '<b>Inn</b>', k: '<img src=x onerror=alert(1)>', f: [['<i>a</i>', '<img src=x onerror=alert(1)>']], x: '<script>x</script>', d: 1 },
 };
 
-function setup({ mode = 'on', fetchImpl, brandHref = '../../index.html', pageUrl = ROOT + 'characters/pcs/mara.html', cards = CARDS, hrefs = {} } = {}) {
+function setup({ mode = 'on', fetchImpl, brandHref = '../../index.html', pageUrl = ROOT + 'characters/pcs/mara.html', cards = CARDS, hrefs = {}, media, idle } = {}) {
   const timers = [];
   let tid = 0;
   const html = new Node('html');
@@ -111,6 +111,12 @@ function setup({ mode = 'on', fetchImpl, brandHref = '../../index.html', pageUrl
     pageXOffset: 0, pageYOffset: 0, listeners: {},
     addEventListener: (t, fn) => { (win.listeners[t] = win.listeners[t] || []).push(fn); },
   };
+  // media: undefined = the environment has no matchMedia; true / false = it matches the
+  // coarse / cannot-hover query or not. idle: the environment has requestIdleCallback.
+  const mediaQueries = [];
+  const idleCalls = [];
+  if (media !== undefined) win.matchMedia = (q) => { mediaQueries.push(q); return { matches: media }; };
+  if (idle) win.requestIdleCallback = (fn, opts) => { idleCalls.push({ fn, opts }); };
   let fetched = 0;
   const fetchUrls = [];
   const fetchFn = fetchImpl || (() => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(cards)) }));
@@ -135,7 +141,7 @@ function setup({ mode = 'on', fetchImpl, brandHref = '../../index.html', pageUrl
     await flush();
   };
   const card = () => body.find((n) => n.classes.includes('link-preview'))[0] || null;
-  return { doc, win, main, body, links, other, timers, fire, runTimers, flush, card, fetched: () => fetched, fetchUrls, ctx };
+  return { doc, win, main, body, links, other, timers, fire, runTimers, flush, card, fetched: () => fetched, fetchUrls, ctx, mediaQueries, idleCalls };
 }
 
 const textsOf = (n) => n.find(() => true).map((x) => x.textContent).filter(Boolean);
@@ -457,4 +463,107 @@ test('wrongly shaped files and cards leave links as they are, throwing nothing',
     await p.flush();
     assert.ok(!p.fire(p.links.hallam, 'click', { detail: 1 }).prevented, JSON.stringify(cards));
   }
+});
+
+// ---- a phone fetches the cards after the page loads ----
+test('a coarse pointer with previews on fetches the cards when the browser is idle', async () => {
+  const p = setup({ media: true, idle: true });
+  assert.strictEqual(p.fetched(), 0, 'not before the browser is idle');
+  assert.strictEqual(p.idleCalls.length, 1);
+  assert.deepStrictEqual(p.mediaQueries, ['(hover: none), (pointer: coarse)']);
+  p.idleCalls[0].fn();
+  await p.flush();
+  assert.strictEqual(p.fetched(), 1);
+  assert.deepStrictEqual(p.fetchUrls, ['../../previews.json']);
+  // the first tap now finds the file
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  const ev = p.fire(p.links.hallam, 'click');
+  assert.ok(ev.prevented, 'the first tap opens the card');
+  assert.ok(p.card());
+});
+
+test('without requestIdleCallback the prefetch is a short timer', async () => {
+  const p = setup({ media: true });
+  assert.strictEqual(p.fetched(), 0);
+  assert.strictEqual(p.timers.length, 1);
+  assert.ok(p.timers[0].ms <= 500);
+  await p.runTimers(500);
+  assert.strictEqual(p.fetched(), 1);
+});
+
+test('a fine pointer does not prefetch; it fetches on first use', async () => {
+  const p = setup({ media: false, idle: true });
+  assert.strictEqual(p.idleCalls.length, 0);
+  assert.strictEqual(p.timers.length, 0);
+  assert.strictEqual(p.fetched(), 0);
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  assert.strictEqual(p.fetched(), 1);
+});
+
+test('desktop mode never prefetches, even on a coarse pointer', async () => {
+  const p = setup({ mode: 'desktop', media: true, idle: true });
+  assert.strictEqual(p.idleCalls.length, 0);
+  assert.strictEqual(p.timers.length, 0);
+  assert.strictEqual(p.fetched(), 0);
+});
+
+test('an environment with no matchMedia does not throw and does not prefetch', async () => {
+  const p = setup({ idle: true });
+  assert.strictEqual(p.idleCalls.length, 0);
+  assert.strictEqual(p.fetched(), 0);
+  const q = setup({ idle: true, media: undefined });
+  q.win.matchMedia = () => { throw new Error('boom'); };
+  assert.strictEqual(q.fetched(), 0);
+});
+
+test('a tap before the prefetched file has arrived still follows the link', async () => {
+  let release;
+  const gate = new Promise((r) => { release = r; });
+  const p = setup({ media: true, idle: true, fetchImpl: () => gate.then(() => ({ ok: true, text: () => Promise.resolve(JSON.stringify(CARDS)) })) });
+  p.idleCalls[0].fn();
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  assert.ok(!p.fire(p.links.hallam, 'click').prevented);
+  release();
+  await p.flush();
+});
+
+// ---- Escape stays closed while the mouse rests on another link ----
+test('Escape with the mouse resting on link A and focus on link B: nothing reopens until the pointer moves on', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  assert.ok(p.card(), 'card A');
+  // keyboard focus moves to B; its card replaces A
+  p.doc.activeElement = p.links.inn;
+  p.fire(p.links.inn, 'focusin');
+  await p.flush();
+  assert.strictEqual(p.card().find((n) => n.classes.includes('lp-name'))[0].textContent, '<b>Inn</b>');
+  // the card sits under the resting pointer for a moment: the browser reports it over the card
+  p.fire(p.card(), 'pointerover', { pointerType: 'mouse' });
+  p.fire(p.doc, 'keydown', { key: 'Escape' });
+  assert.strictEqual(p.card(), null);
+  // the browser re-reports the pointer resting on A
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(1000);
+  assert.strictEqual(p.card(), null, 'A does not reopen');
+  // the pointer goes to another link: that one opens
+  p.fire(p.links.hallam, 'pointerout', { pointerType: 'mouse', relatedTarget: p.links.inn });
+  p.fire(p.links.inn, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(1000);
+  assert.ok(p.card(), 'a different link opens');
+});
+
+test('after Escape, leaving the link and coming back reopens its card', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  p.fire(p.doc, 'keydown', { key: 'Escape' });
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(1000);
+  assert.strictEqual(p.card(), null);
+  p.fire(p.links.hallam, 'pointerout', { pointerType: 'mouse', relatedTarget: p.other });
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(1000);
+  assert.ok(p.card(), 'back on the link, it opens');
 });

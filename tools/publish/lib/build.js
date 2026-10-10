@@ -207,6 +207,9 @@ function build(options = {}) {
     const destDir = path.join(outputDir, 'js');
     for (const file of fs.readdirSync(jsDir)) {
       if (!file.endsWith('.js')) continue;
+      // The link-preview script is for a site that has the cards file; with previews off no
+      // page loads it, so it is not copied.
+      if (file === 'previews.js' && publishConfig.link_previews === 'off') continue;
       const src = path.join(jsDir, file);
       const dest = path.join(destDir, file);
       ensureDir(dest);

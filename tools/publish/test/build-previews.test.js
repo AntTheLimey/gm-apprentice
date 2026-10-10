@@ -75,9 +75,11 @@ test('desktop marks the pages desktop', () => {
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('off writes no file, no script tag and no attribute', () => {
+test('off writes no file, no script tag and no attribute, and does not copy the script', () => {
   const { read, root } = buildVault(FILES('  link_previews: off\n'));
   assert.ok(!fs.existsSync(path.join(root, 'docs', 'previews.json')));
+  assert.ok(!fs.existsSync(path.join(root, 'docs', 'js', 'previews.js')), 'js/previews.js is not copied');
+  assert.ok(fs.existsSync(path.join(root, 'docs', 'js', 'nav.js')), 'the other scripts still are');
   for (const page of [['locations', 'north-gate.html'], ['404.html']]) {
     assert.ok(!read(...page).includes('previews'), `${page.join('/')} does not mention previews`);
   }
@@ -101,6 +103,7 @@ test('a build with previews off after one with them on keeps nothing from the fi
   write('  link_previews: off\n');
   quietBuild(configPath);
   assert.ok(!fs.existsSync(path.join(out, 'previews.json')), 'the stale file is cleared');
+  assert.ok(!fs.existsSync(path.join(out, 'js', 'previews.js')), 'the stale script is cleared');
   assert.ok(!fs.readFileSync(path.join(out, 'locations', 'north-gate.html'), 'utf8').includes('previews'));
   assert.ok(!fs.readFileSync(path.join(out, '404.html'), 'utf8').includes('previews'));
   fs.rmSync(root, { recursive: true, force: true });
