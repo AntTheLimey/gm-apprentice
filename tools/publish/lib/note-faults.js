@@ -305,9 +305,10 @@ function startNoteAudit(input) {
     }
     if (marked.probe && !marked.probe.test(html)) return false;
     const lower = String(html).toLowerCase();
-    return marked.names.some((runs) => runs.length === 0
-      || (runs.length === 1 ? lower.includes(runs[0])
-        : new RegExp(runs.map(esc).join('[^\\p{L}\\p{N}]{0,12}'), 'u').test(lower)));
+    // Every word of a name must be there (a plain search), and then in order with little
+    // between them. "Little" is read loosely, which only sends a page on to the second render.
+    return marked.names.some((runs) => runs.every((run) => lower.includes(run))
+      && (runs.length < 2 || new RegExp(runs.map(esc).join('[^a-z0-9]{0,12}')).test(lower)));
   }
 
   function printed(page, marked, html, storyHtml) {
