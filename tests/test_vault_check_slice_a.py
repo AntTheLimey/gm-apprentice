@@ -1083,6 +1083,48 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(self.rows, f"{LEAKY}:10"), self.rows)
         self.assertFalse(rows_for(self.rows, f"{LEAKY}:27"), self.rows)
 
+    @staticmethod
+    def old_tool_withheld_by(lines, exclude_sections):
+        """A publish tool older than 1.16.0, which hid a heading only by
+        its exact title: a stand-in for `withheld_by`."""
+        excludes = {e.casefold() for e in exclude_sections}
+        out, level = [], None
+        for line in lines:
+            m = re.match(r"^(#{1,6})\s+(.+?)\s*$", line)
+            if m and level is not None and len(m[1]) <= level:
+                level = None
+            if m and level is None and m[2].casefold() in excludes:
+                level = len(m[1])
+            out.append("GM Notes" if level is not None else None)
+        return out
+
+    def test_a_site_on_an_older_tool_gets_the_dressed_heading_error(self):
+        # Hidden by the current tool (no row, above); published by an older
+        # one, and then the heading defeats the exclude list.
+        with mock.patch.object(vaultlib, "withheld_by",
+                               self.old_tool_withheld_by):
+            rows = vc.check_gm_leak(LEAK, None)
+        self.assertIn(
+            f"ERROR\t{LEAKY}:10\tbold-wrapped heading 'GM Notes' defeats "
+            f"the exclude list and publishes — remove the ** or move it "
+            f"under ## GM Notes", rows)
+        self.assertIn(
+            f"ERROR\t{LEAKY}:27\tbold-wrapped heading 'GM Notes' defeats "
+            f"the exclude list and publishes — remove the * or move it "
+            f"under ## GM Notes", rows)
+
+    def test_any_dressing_of_an_excluded_heading_that_publishes_is_an_error(self):
+        for raw in ("GM Notes:", "[[GM Notes]]", "GM&ensp;Notes", "GM Notes ##"):
+            with self.subTest(raw):
+                state = vaultlib.LineState(
+                    lineno=3, line=f"## {raw}", in_code=False, gm_depth=0,
+                    spoiler_depth=0, excluded_by=None, heading=(2, raw),
+                    marker=None)
+                rows = vc._heading_leak("Bob.md", state, ["GM Notes"])
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(
+                    "ERROR\tBob.md:3\tdecorated heading"), rows)
+
     def test_keeper_facing_sibling_heading_warns(self):
         # A wrap-template GM heading: the row carries the re-nest advice.
         self.assertTrue(rows_for(self.rows, f"WARNING\t{LEAKY}:14\tGM-only heading "
@@ -1979,6 +2021,24 @@ class NoPublishToolTests(unittest.TestCase):
         rows = vc.check_gm_leak(vault, None)
         self.assertFalse(rows_for(rows, "WARNING\t(vault)\t"), rows)
         self.assertTrue(rows_for(rows, "WARNING\tBob.md"), rows)
+
+    DRESSED = ("---\ntype: npc\n---\n\n# Bob\n\nPublic.\n\n"
+               "## **GM Notes**\n\nSECRET\n")
+
+    def test_without_the_tool_a_dressed_hidden_heading_is_never_waved_through(self):
+        # Nothing here can tell whether the site hides `## **GM Notes**`.
+        # A vault with a site is stopped with an ERROR, not given a clean
+        # report; one with no site publishes nothing and says so.
+        for site, expect in ((True, "ERROR\t(vault)\tgm-leak could not ask"),
+                             (False, "INFO\t(vault)\tgm-leak ")):
+            with self.subTest(site=site):
+                vault = self.vault(site, switch=None if site else "false")
+                (vault / "Bob.md").write_text(self.DRESSED, encoding="utf-8")
+                self.no_tool()
+                rows = vc.check_gm_leak(vault, None, fix=True)
+                self.assertEqual(len(rows), 1, rows)
+                self.assertTrue(rows[0].startswith(expect), rows)
+                self.assertEqual(read(vault, "Bob.md"), self.DRESSED)
 
     def test_without_the_tool_the_switch_is_read_here(self):
         # No node: on stops the check, as an unset switch with a site_dir

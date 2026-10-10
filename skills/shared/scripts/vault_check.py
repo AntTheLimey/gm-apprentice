@@ -70,7 +70,8 @@ Keeper keyword, or names a GM Notes subsection of the wrap-up template
 (`World State`, …: the pre-fix 1.8.3 migration left some top-level); INFO is a Keeper-facing bold label or callout —
 prose the GM has to judge, not auto-movable. A heading written with
 emphasis, a colon or a link (`### **GM Notes**`) is the excluded
-section: the site hides it, so it is not a finding. `--fix` re-nests
+section: the site hides it, so it is not a finding (unless the site's
+publish tool is older than 1.16.0, which does not: then it is an ERROR). `--fix` re-nests
 only the `##` sections the site withholds by its own rule (a
 handout's Keeper sections) under `## GM Notes`, demoting each and its
 sub-headings a level; keyword WARNINGs and INFO rows never move. `--renest-excludes` is the 1.8.3 migration:
@@ -2164,6 +2165,24 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
     level, raw = state.heading
     m = EMPHASIS_RE.match(raw)
     title = m.group(2).strip() if m else raw
+    if _bare_section_title(raw) in {_bare_section_title(e) for e in excludes}:
+        # A heading the site hides never reaches here: `scan_body` has
+        # already marked it excluded, as the site's tool answered. This one
+        # is on the exclude list under another spelling and the tool did
+        # NOT hide it: a site pinned to a publish tool older than 1.16.0
+        # (which read only an exact title), and so it publishes. The
+        # remedy names the marker actually used, so the `*`/`_` spellings
+        # do not send the GM hunting for asterisks that are not there.
+        how = ("bold-wrapped" if m else "decorated")
+        if m:
+            fix = f"remove the {m.group(1)} or move it under ## GM Notes"
+        else:
+            fix = "write it plainly or move it under ## GM Notes"
+        if level == 1:
+            fix = ("rename the page title or move the page out of the "
+                   "published folders")
+        return [f"ERROR\t{rel}:{state.lineno}\t{how} heading "
+                f"'{title}' defeats the exclude list and publishes — {fix}"]
     # Before the keyword check: "Keeper Checklist" is a wrap-template heading
     # and must get the re-nest advice, not the generic keyword row.
     if title.casefold() in {t.casefold() for t in WRAP_TEMPLATE_SUBSECTIONS}:
