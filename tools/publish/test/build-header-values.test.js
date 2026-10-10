@@ -191,3 +191,25 @@ test('C1: a bare note name in a badge prints as words, not with its underscores'
     }
   } finally { v.cleanup(); }
 });
+
+// The badge fields of TYPE_BADGE_FIELDS that name a note are found_by, author, location, origin
+// (C1); every other one is a type label, a date, a number or a status, so is not read as a name.
+// A PC's display_meta names whatever field the GM likes: one that names a note reads as a name.
+test('C1b: a bare note name in a PC display_meta badge prints as words; free text keeps its underscores', () => {
+  const { cardProblems } = require('./helpers/card-subset');
+  const v = buildVault({
+    'Characters/Ada Quill.md': '---\ntype: pc\nplayer_name: Pat\ndisplay_meta: [location, origin, leadership, occupation, status]\nlocation: Old_Town\norigin: "[[Safe_House]]"\nleadership: The_Boss\noccupation: field_agent\nstatus: on_leave\n---\n## Background\n\nBody.\n',
+    'Locations/Safe House.md': '---\ntype: location\n---\nBody.\n',
+  }, {});
+  try {
+    const html = v.read('characters', 'ada-quill.html');
+    const text = pageText(html);
+    for (const want of ['Location Old Town', 'Origin Safe House', 'Leadership The Boss', 'Occupation field_agent', 'Status on_leave']) {
+      assert.ok(text.includes(want), `${want}: ${text.slice(0, 400)}`);
+    }
+    const cards = JSON.parse(v.read('previews.json'));
+    const card = cards['characters/ada-quill.html'];
+    assert.ok(card.f.some(([, value]) => value === 'Old Town'), JSON.stringify(card));
+    assert.deepStrictEqual(cardProblems(card, text).problems, []);
+  } finally { v.cleanup(); }
+});

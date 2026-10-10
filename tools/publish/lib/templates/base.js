@@ -1,4 +1,4 @@
-const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue, plainRefValue } = require('../processor');
+const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('../processor');
 const { typeLabelText } = require('../kind-label');
 
 const DIR_LABELS = {
@@ -171,9 +171,6 @@ const TYPE_BADGE_FIELDS = {
 
 // The seeded Document template writes `doc_type` and `date` (entity-schema.md).
 const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date', document_type: 'doc_type', date_written: 'date' };
-
-// Badge fields whose value is a note's name, bare or in a wikilink.
-const NOTE_NAME_FIELDS = new Set(['found_by', 'author', 'location', 'origin']);
 
 // A header value as the reader sees it: a wikilink as its label, a Date as the date written,
 // a snake_case type label as words. The one definition for every badge the page headers
