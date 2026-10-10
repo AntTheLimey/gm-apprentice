@@ -71,7 +71,7 @@ other skills. Everything else is a doer with a specific job:
 | **Advisor** | ttrpg-expert | Rules, GM craft, RPG techniques. No vault writes; other skills read its references but it never calls them. |
 | **Adventure creation** | the-midwife | Draws ideas out of the GM, shapes them into a playable starting point with an adventure brief and vault scaffold. |
 | **Campaign organization** | campaign-organizer | Owns the vault schema and file layout. Structures and links — doesn't generate narrative content. |
-| **Quality assurance** | campaign-qa | Detects problems — doesn't fix them. Hands off to campaign-organizer (structure) or ttrpg-expert (content). |
+| **Quality assurance** | campaign-qa | Finds problems and fixes each on your say. Hands off to campaign-organizer (structure) or ttrpg-expert (content) when a fix needs them. |
 | **Session lifecycle** | session-prep → play → wrapup | Prep bridges wrap-up to the next session; play is at-the-table; wrap-up turns raw notes into canon and feeds prep. |
 | **Content ingestion** | vault-ingest | Classifies old material, interviews the GM, hands off to campaign-organizer and session-wrapup. |
 | **Content publication** | publish-site | Reads the vault, generates HTML. No vault writes. |

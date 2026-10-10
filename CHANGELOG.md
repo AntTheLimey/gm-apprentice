@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.42] — 2026-10-10
+
+### Added
+
+- **The build names faults in your notes.** After its other warnings the
+  build prints at most one line for each kind of fault, with a count and
+  the worst three: a note that published pages link to but that has no
+  page of its own, so its name prints as plain words; a stray `%%` that
+  hides text; a code block that never closes, so hidden text below it is
+  published as code; and a secret name from `gm_aliases` typed in the
+  open. A site with none of these prints nothing new.
+- **campaign-qa fixes them or asks: the Site Faults check.** It takes the
+  same list from the site's own tool. For a typing fault it shows the
+  line and fixes it on your yes. For a note that is named but has no
+  page, it proposes which parts stay in the open and which move under
+  `## GM Notes`, shows you the split, and on your yes publishes the page
+  and updates the publish manifest. A plan, scene or play note that is
+  named gets its link turned into plain words instead of a page.
+- **A no is remembered.** Say a note stays hidden and the reason is
+  written beside it in the publish manifest, beginning `stays hidden:`.
+  It is not counted or asked about again.
+- **`doctor --site` lists the same faults** (`NAMED_NO_PAGE`,
+  `COMMENT_STRAY`, `FENCE_UNCLOSED`, `ALIAS_IN_PROSE`), and takes
+  `--vault`. A link to a note that exists but has no page is listed once,
+  under `NAMED_NO_PAGE`, and no longer under `LINK_UNRESOLVED`.
+- **`explain "<note>" --shown`** prints a note as a reader would get it:
+  the frontmatter and body after everything hidden is cut.
+- **`links.py unlink --in NOTE [--as WORDS]`** turns links to a note that
+  exists into plain words on the named pages.
+- **`vault_check.py <vault> site-faults`** asks the site's tool for the
+  list.
+
+### Fixed
+
+- A `%%` or `<!--` inside an indented code block is kept, as in a fenced
+  one.
+- A `%%comment%%` in a frontmatter value is cut wherever the value
+  prints.
+- A hidden heading written with `&ensp;`, `&emsp;`, `&shy;` or a
+  zero-width space in place of the space is still hidden.
+- Removing a comment or a hidden block no longer turns the paragraph
+  above it into a heading when a `---` line follows.
+- The vault check reads `%%` comments in a session hub the way the site
+  does, and its error for a dressed-up hidden heading that a site's tool
+  did not hide is back.
+- `manifest apply --exclude` accepts a note in a folder the site leaves
+  out.
+- A bare note name in a header badge or a PC's `display_meta`
+  (`found_by: Anna_Lindqvist`) prints as words, on the page and on its
+  card.
+- A card's opening lines keep their space where one block follows
+  another, and no longer open with a note's Source or Reconstruction
+  Note callout.
+- The warning for an unknown `link_previews` value names every value it
+  takes.
+- A note whose `type` is `constructor`, `toString` and the like builds as
+  an unknown type; it failed the build.
+- A frontmatter `title: 1984` builds; it failed the build.
+
 ## [1.10.41] — 2026-10-10
 
 ### Added
