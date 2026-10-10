@@ -155,3 +155,24 @@ test('every card string occurs in its own built page, on every fixture vault tha
   assert.strictEqual(excerpts.length, KNOWN_EXCERPT_COUNT,
     `excerpts needing the non-adjacent rule changed:\n${excerpts.map((l) => `${l.page}: ${JSON.stringify(l.value)}`).join('\n')}`);
 });
+
+// Listing containers (each row already a summary) opt out of cards; running prose does not.
+test('listing containers carry data-no-preview, and only when previews are on', () => {
+  const LANDING = ['pc-roster', 'npc-grid', 'location-grid', 'explore-grid'];
+  const INDEX = [['characters', 'card-grid'], ['locations', 'locations-page'], ['factions', 'intel-briefing']];
+  const check = (keys, on) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'previews-listing-'));
+    try {
+      quietBuild(prepareFixture('redesign-full', root, { keys }));
+      const read = (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8');
+      const marked = (html, cls) => new RegExp(`<div class="${cls}"( data-no-preview)?>`).exec(html);
+      const landing = read('index.html');
+      for (const cls of LANDING) { const m = marked(landing, cls); assert.ok(m, `${cls} on the landing page`); assert.strictEqual(Boolean(m[1]), on, `${cls} on=${on}`); }
+      for (const [dir, cls] of INDEX) { const m = marked(read(dir, 'index.html'), cls); assert.ok(m, `${cls} in ${dir}`); assert.strictEqual(Boolean(m[1]), on, `${dir} ${cls} on=${on}`); }
+      assert.ok(!/class="recap[^"]*"[^>]*data-no-preview/.test(landing), 'recap prose is not opted out');
+      if (!on) for (const f of ['index.html', 'characters/index.html', 'locations/index.html']) assert.ok(!read(f).includes('data-no-preview'), f);
+    } finally { fs.rmSync(root, { recursive: true, force: true }); }
+  };
+  check({}, true);
+  check({ link_previews: 'off' }, false);
+});

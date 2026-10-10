@@ -1177,6 +1177,96 @@ tr:nth-child(even) {
   font-size: 0.85rem;
 }
 
+/* ===== LINK PREVIEW CARD (js/previews.js appends it to <body>) =====
+   Above the top nav (100) and its dropdown (200); below the phone menu (300) and the search overlay (400).
+   Every text colour is --text on --bg-card (--text-muted and an accent fill fall under 4.5:1 on some themes);
+   the Open page button is marked by its accent border, not an accent fill. */
+.link-preview {
+  position: absolute;
+  z-index: 250;
+  box-sizing: border-box;
+  width: min(320px, calc(100vw - 24px));
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 0.875rem;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+  font-family: var(--font-body);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.lp-head { display: flex; gap: 0.75rem; align-items: center; }
+.lp-img {
+  width: 56px;
+  height: 56px;
+  flex: none;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  object-fit: cover;
+  object-position: top center;
+}
+.lp-name {
+  margin: 0;
+  font-family: var(--font-heading);
+  font-size: 1.125rem;
+  line-height: 1.2;
+}
+.lp-kind {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.2rem;
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.lp-draft {
+  padding: 0 0.3rem;
+  border: 1px solid var(--text);
+  border-radius: 3px;
+  letter-spacing: 0.06em;
+}
+.lp-facts {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.2rem 0.6rem;
+  margin: 0;
+  font-size: 0.8125rem;
+}
+.lp-facts dt {
+  padding-top: 0.125rem;
+  font-family: var(--font-heading);
+  font-size: 0.6875rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text);
+}
+.lp-facts dd { margin: 0; }
+.lp-text { margin: 0; color: var(--text); }
+.lp-open {
+  align-self: flex-start;
+  padding: 0.5rem 0.875rem;
+  background: var(--bg-card);
+  color: var(--text);
+  border: 2px solid var(--accent);
+  border-radius: 0.375rem;
+  font-family: var(--font-heading);
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .link-preview { animation: lp-in 0.12s ease-out; }
+  @keyframes lp-in { from { opacity: 0; transform: translateY(3px); } }
+}
+
 /* PC roster grid */
 .pc-roster {
   display: grid;

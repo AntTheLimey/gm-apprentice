@@ -1,6 +1,6 @@
 const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
 const { refTarget } = require('../wikilink');
-const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts } = require('./base');
+const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
   getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs,
   getRecentEvents, getExploreDescriptions,
@@ -133,7 +133,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     }).join('\n');
     teamZone = `<div class="dashboard-section">
   <h2>The Team</h2>
-  <div class="pc-roster">${pcCards}</div>
+  <div class="pc-roster"${noPreviewAttr()}>${pcCards}</div>
 </div>`;
   }
 
@@ -148,7 +148,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     }).join('\n');
     memoriamZone = `<div class="dashboard-section">
   <h2>In Memoriam</h2>
-  <div class="in-memoriam">${entries}</div>
+  <div class="in-memoriam"${noPreviewAttr()}>${entries}</div>
 </div>`;
   }
 
@@ -172,7 +172,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     }).join('\n');
     npcZone = `<div class="dashboard-section">
   <h2>NPCs in Play</h2>
-  <div class="npc-grid">${npcCards}</div>
+  <div class="npc-grid"${noPreviewAttr()}>${npcCards}</div>
   <a class="recap-link" href="characters/npcs/index.html">View all ${npcTotal} NPCs &rarr;</a>
 </div>`;
   }
@@ -191,7 +191,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     }).join('\n');
     locationZone = `<div class="dashboard-section">
   <h2>Latest Locations</h2>
-  <div class="location-grid">${locCards}</div>
+  <div class="location-grid"${noPreviewAttr()}>${locCards}</div>
 </div>`;
   }
 
@@ -212,7 +212,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
     }).join('\n');
     eventZone = `<div class="dashboard-section">
   <h2>Latest Events</h2>
-  <div class="card-grid">${eventCards}</div>
+  <div class="card-grid"${noPreviewAttr()}>${eventCards}</div>
 </div>`;
   }
 
@@ -259,7 +259,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const exploreZone = exploreCards
     ? `<div class="dashboard-section">
   <h2>Explore the World</h2>
-  <div class="explore-grid">${exploreCards}</div>
+  <div class="explore-grid"${noPreviewAttr()}>${exploreCards}</div>
 </div>`
     : '';
 
@@ -268,7 +268,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const quickLinkZone = quickLinks.length > 0
     ? `<div class="dashboard-section">
   <h2>Quick Links</h2>
-  <div class="quick-links">${quickLinks.map(page =>
+  <div class="quick-links"${noPreviewAttr()}>${quickLinks.map(page =>
     `<a class="quick-link" href="${escapeHtml(encodeHref(page.outputPath))}">${escapeHtml(page.displayTitle)}</a>`
   ).join('\n')}</div>
 </div>`
