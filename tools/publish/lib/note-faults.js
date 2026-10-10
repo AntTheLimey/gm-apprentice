@@ -23,7 +23,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parseNote, valueStrays } = require('./frontmatter');
-const { wikilinkRe, parseWikilink } = require('./wikilink');
+const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { gmAliasList, gmAliasKey, wikiTargetLabel, humanizeName } = require('./processor');
@@ -321,8 +321,10 @@ function startNoteAudit(input) {
     // The body as published feeds what is made from a note beside its page: its opening
     // lines on a card or an index, the recap a hub or the landing page takes.
     const publishedMarkdown = typeof page.publishedMarkdown === 'string' ? links(page.publishedMarkdown, true) : page.publishedMarkdown;
-    // The title a page prints is read from the frontmatter when the note is scanned.
-    const displayTitle = links(page.displayTitle, false);
+    // The title a page prints is read from the frontmatter when the note is scanned, with a
+    // labelled link in it already turned into its label: the marked title is made the same way.
+    const displayTitle = typeof fm.title === 'string' && page.displayTitle === labelsForLinks(fm.title)
+      ? labelsForLinks(frontmatter.title) : links(page.displayTitle, false);
     source = storyRelOf(page);
     const storyMarkdown = page.storyMarkdown ? links(page.storyMarkdown, true) : page.storyMarkdown;
     return ids.length === 0 ? null : { markdown, publishedMarkdown, storyMarkdown, frontmatter, displayTitle, ids };

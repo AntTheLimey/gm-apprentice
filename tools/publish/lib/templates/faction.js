@@ -4,6 +4,7 @@ const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitI
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { canonicalNfc } = require('../unicode');
+const { linkText } = require('../wikilink');
 
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
   const fm = page.frontmatter;
@@ -41,7 +42,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     const rels = p.frontmatter.relationships;
     if (!rels || !Array.isArray(rels)) return false;
     return rels.some(r => {
-      const target = canonicalNfc(String(r.target || '').replace(/\[\[|\]\]/g, '').trim());
+      const target = canonicalNfc(linkText(r.target || '').key.trim());
       return target === factionTitle && (r.type === 'member_of' || r.type === 'assigned_to');
     });
   });

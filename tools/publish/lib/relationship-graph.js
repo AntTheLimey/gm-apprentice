@@ -1,7 +1,7 @@
 const { escapeHtml, encodeHref } = require('./processor');
 const { backlinksOf } = require('./backlinks');
 const { canonicalNfc, nfcLookupTable, truncateGraphemes } = require('./unicode');
-const { relationshipRef } = require('./wikilink');
+const { linkText } = require('./wikilink');
 
 const SHAPE_MAP = {
   pc: 'circle',
@@ -39,15 +39,15 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
 
   const nodes = new Map();
   const edges = [];
-  // A target written with a label (`[[Vesper_Hale|the stranger]]`) that has no page is a
-  // node called by its label: the GM chose those words, and the note's own name must not
-  // print beside them. (A labelled target that has a page is read as it always was.)
+  // A target written with a label (`[[Vesper_Hale|the stranger]]`) is the note it names. One
+  // that has a page is that page's node, under the page's own title: a page is one node,
+  // however each relationship labels it. One with no page is a node called by its label:
+  // the GM chose those words, and the note's own name is not printed (wikilink.js linkText).
   const labels = new Map();
   const targetOf = (value) => {
-    const ref = relationshipRef(value);
-    const target = canonicalNfc(ref.target);
-    if (!ref.label || pageMap[target]) return canonicalNfc(String(value).replace(/\[\[|\]\]/g, '').trim());
-    if (!labels.has(target)) labels.set(target, ref.label);
+    const ref = linkText(value);
+    const target = canonicalNfc(ref.key.trim());
+    if (ref.labelled && !labels.has(target)) labels.set(target, ref.words.trim());
     return target;
   };
 

@@ -413,11 +413,95 @@ describe('the connections graph', () => {
     assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md', 'People/Cy_Dunn.md'], ['the stranger']]]);
   });
 
-  it('a labelled target that has a page is read as it always was', () => {
+  it('a labelled target that has a page is that page: linked, and called by the label in the row, the sidebar and the cards', () => {
+    const { configPath, root } = site({
+      'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn|the baker]]')),
+      'People/Cy_Dunn.md': npcNote('Cy.'),
+      'Places/Quay.md': `---\ntype: location\n${rel('[[Cy_Dunn|the baker]]')}---\n\nA quay.\n`,
+    });
+    fromBuild(configPath);
+    const bo = fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8');
+    const quay = fs.readFileSync(path.join(root, 'docs', 'places', 'quay.html'), 'utf8');
+    for (const html of [bo, quay]) {
+      assert.ok(!/Cy[ _]Dunn\|/.test(html), 'the target is printed beside the label');
+      assert.match(html, /<a href="[^"]*cy-dunn\.html"[^>]*>the baker<\/a>/);
+    }
+    // The NPC page's connection card, and the sidebar of a page that has one.
+    assert.match(bo, /<a class="rel-card" href="cy-dunn\.html">[^]*?<div class="rel-name">the baker<\/div>/);
+    assert.match(quay, /<li><a href="[^"]*cy-dunn\.html">the baker<\/a> <span class="sidebar-badge">knows<\/span><\/li>/);
+    // In the graph a page is one node, under its own title, and it is a link.
+    assert.match(bo, /<a href="cy-dunn\.html"><g[^>]*>[^]*?<text[^>]*>Cy Dunn<\/text>/);
+  });
+
+  it('the graph reads a labelled target as the note it names', () => {
     const { buildRelationshipGraph } = require('../lib/relationship-graph');
     const page = (title, relationships) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type: 'npc', relationships } });
-    const graph = buildRelationshipGraph('A', [page('A', [{ target: '[[B|the baker]]', type: 'knows' }]), page('B', [])], {});
-    assert.deepStrictEqual(graph.nodes.map((n) => [n.id, n.displayTitle, n.outputPath]), [['A', 'A', 'A.html'], ['B|the baker', 'B|the baker', null]]);
+    const graph = buildRelationshipGraph('A', [page('A', [{ target: '[[B|the baker]]', type: 'knows' }, { target: '[[Gone|the stranger]]', type: 'fears' }]), page('B', [])], {});
+    assert.deepStrictEqual(graph.nodes.map((n) => [n.id, n.displayTitle, n.outputPath]),
+      [['A', 'A', 'A.html'], ['B', 'B', 'B.html'], ['Gone', 'the stranger', null]]);
+  });
+});
+
+describe('a labelled link never prints its target, whatever prints the field', () => {
+  // `[[Hidden note|label]]` in a field of a note of some type. Each row is a place the tool
+  // reads that field for a page: the name must be in no file the build writes.
+  const CASES = [
+    ['creature', 'Creatures', 'location'], ['creature', 'Creatures', 'first_appearance'], ['creature', 'Creatures', 'subtype'],
+    ['creature', 'Creatures', 'abilities', true],
+    ['faction', 'Factions', 'leadership'], ['faction', 'Factions', 'goals', true], ['faction', 'Factions', 'relationships'],
+    ['item', 'Items', 'current_holder'], ['item', 'Items', 'origin'], ['item', 'Items', 'tl'],
+    ['location', 'Locations', 'first_appearance'], ['location', 'Locations', 'parent_location'],
+    ['npc', 'Characters/NPCs', 'location'], ['npc', 'Characters/NPCs', 'first_appearance'], ['npc', 'Characters/NPCs', 'relationships'],
+    ['npc', 'Characters/NPCs', 'title'], ['npc', 'Characters/NPCs', 'status'], ['npc', 'Characters/NPCs', 'occupation'],
+    ['event', 'Events', 'location'], ['event', 'Events', 'outcome'],
+    ['session', 'Sessions', 'location'],
+    ['chapter', 'Chapters', 'overview'],
+    ['pc', 'Characters/PCs', 'key_traits', true],
+  ];
+  const walk = (dir, out = []) => {
+    for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+      const f = path.join(dir, e.name);
+      if (e.isDirectory()) walk(f, out); else if (/\.(html|json)$/.test(f)) out.push(f);
+    }
+    return out;
+  };
+
+  it('on every page, index, card and search entry the build writes', () => {
+    const files = {};
+    const wanted = [];
+    CASES.forEach(([type, folder, field, list], n) => {
+      const name = `Vesper${n}q`;
+      const label = `zzlabel${n}q`;
+      const link = `[[${name}_Hale|${label} stranger]]`;
+      files[`Hidden/${name}_Hale.md`] = hidden();
+      const lines = [`type: ${type}`];
+      if (type === 'pc') lines.push('player_name: Pat');
+      if (type === 'event') lines.push('in_game_date: "1925-03-04"');
+      if (type === 'session') lines.push('session_number: 1', 'status: played', 'in_game_date: "1925-03-05"');
+      if (field === 'relationships') lines.push(`relationships:\n  - target: "${link}"\n    type: knows`);
+      else if (list) lines.push(`${field}:\n  - "${link}"`);
+      else lines.push(`${field}: "${link}"`);
+      files[`${folder}/Case${n}.md`] = `---\n${lines.join('\n')}\n---\n\nOpen body.\n`;
+      wanted.push({ name, label, what: `${type}.${field}` });
+    });
+    const { configPath, root } = site(files);
+    fromBuild(configPath);
+    const built = walk(path.join(root, 'docs')).map((f) => [path.relative(path.join(root, 'docs'), f), fs.readFileSync(f, 'utf8')]);
+    for (const { name, label, what } of wanted) {
+      const named = built.filter(([, text]) => text.includes(name)).map(([f]) => f);
+      assert.deepStrictEqual(named, [], `${what}: the hidden note's name is in ${named.join(', ')}`);
+      assert.ok(built.some(([, text]) => text.includes(label)), `${what}: the label is printed nowhere`);
+    }
+  });
+
+  it('and the audit still counts the label as a name the page prints, a title\'s among them', async () => {
+    const found = await faults({
+      'Hidden/Old_Tam.md': hidden(),
+      'People/Cy_Dunn.md': '---\ntype: npc\ntitle: "Cy Dunn, heir of [[Old_Tam|the old man]]"\n---\n\nAn heir.\n',
+      'People/Bo_Pike.md': npcNote('Bo.', 'status: "[[Old_Tam|ward of the old man]]"\n'),
+    }, 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed.slice().sort()]),
+      [['Hidden/Old_Tam.md', ['People/Bo_Pike.md', 'People/Cy_Dunn.md'], ['the old man', 'ward of the old man']]]);
   });
 });
 

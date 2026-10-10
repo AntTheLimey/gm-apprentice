@@ -4,6 +4,7 @@ const { parseNote, cutValueComments, commentFields } = require('./frontmatter');
 const { shapeFrontmatter } = require('./frontmatter-shape');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
+const { linkText, labelsForLinks } = require('./wikilink');
 
 function slugify(name) {
   const slug = name
@@ -149,7 +150,8 @@ function scanVaultReport(config, { quiet = false } = {}) {
 
         const baseName = path.basename(entry.name, '.md');
         // A YAML number (`title: 1984`) is the title as a string.
-        const displayTitle = (frontmatter.title ? String(frontmatter.title) : '') || baseName.replace(/_/g, ' ');
+        // A labelled link in a title prints its label wherever the title goes (wikilink.js).
+        const displayTitle = (frontmatter.title ? labelsForLinks(String(frontmatter.title)) : '') || baseName.replace(/_/g, ' ');
         const slug = slugify(baseName);
         const outputPath = outputDir
           ? outputDir + '/' + slug + '.html'
@@ -259,7 +261,7 @@ function buildLinkMap(pages) {
       if (title in map) continue;
       const supersededBy = page.frontmatter.superseded_by;
       if (supersededBy) {
-        const targetName = canonicalNfc(String(supersededBy).replace(/\[\[|\]\]/g, '').trim());
+        const targetName = canonicalNfc(linkText(supersededBy).key.trim());
         map[title] = map[targetName] || page.outputPath;
       } else {
         map[title] = page.outputPath;

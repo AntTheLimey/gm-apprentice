@@ -1,6 +1,6 @@
 const { escapeHtml, relativePath, encodeHref } = require('../processor');
 const { kindLabel } = require('../kind-label');
-const { relationshipRef } = require('../wikilink');
+const { linkText } = require('../wikilink');
 
 function normalizeRelationships(raw, linkMap) {
   if (!raw) return [];
@@ -17,15 +17,14 @@ function normalizeRelationships(raw, linkMap) {
     return [];
   }
   return list.map(r => {
-    // A target written with a label that has no page is called by its label, never by the
-    // note's own name (wikilink.js). One that has a page is read as it always was.
-    const ref = relationshipRef(r.target);
-    const hidden = ref.label !== '' && !(linkMap && linkMap[ref.target]);
-    const target = hidden ? ref.target : String(r.target).replace(/\[\[|\]\]/g, '');
+    // A target written with a label is looked up by its name and called by its label, with
+    // or without a page (wikilink.js linkText).
+    const ref = linkText(r.target);
+    const target = ref.key;
     return {
       type: r.type,
       target,
-      label: hidden ? ref.label : '',
+      label: ref.labelled ? ref.words.trim() : '',
       targetPath: linkMap ? linkMap[target] : null,
     };
   });

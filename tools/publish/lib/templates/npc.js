@@ -1,5 +1,6 @@
 const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativeHref, renderMetaValue, publishedSource, encodeHref } = require('../processor');
+const { linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -59,8 +60,9 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   // --- Zone 4: Where to find them (compact location card) ---
   let locationCardHtml = '';
   if (fm.location) {
-    const locTitle = String(fm.location).replace(/\[\[|\]\]/g, '').trim();
-    const locDisplay = locTitle.replace(/_/g, ' ');
+    const loc = linkText(fm.location, { humanize: true });
+    const locTitle = loc.key.trim();
+    const locDisplay = loc.words.trim();
     const locPath = linkMap ? linkMap[locTitle] : null;
     if (locPath) {
       const href = encodeHref(relativeHref(page.outputPath, locPath));

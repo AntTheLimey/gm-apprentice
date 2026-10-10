@@ -4,6 +4,7 @@
 // preview card (previews.js) both read it, so they cannot disagree.
 const { publishedSource, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('./processor');
 const { excerptFromMarkdown } = require('./excerpt');
+const { labelsForLinks } = require('./wikilink');
 
 const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
@@ -34,7 +35,8 @@ function pcEpithetText(page) {
   const traits = Array.isArray(fm.key_traits)
     ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
     : String(fm.key_traits || '');
-  return traits.trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
+  // Printed as it stands, on the page and on the card: a labelled link in it prints its label.
+  return labelsForLinks(traits).trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
 }
 
 module.exports = { headerMetaFields, headerMeta, pcEpithetText };

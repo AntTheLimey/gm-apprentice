@@ -15,6 +15,7 @@ const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
+const { linkText } = require('./wikilink');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -1102,7 +1103,9 @@ function buildSite(options) {
           const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
           const chapterSessions = (pages || []).filter(p => {
             if (p.frontmatter.type !== 'session') return false;
-            const chapterRef = canonicalNfc(String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim());
+            // A labelled link names its chapter by the target; its label is words to match on too.
+            const chapterLink = linkText(p.frontmatter.chapter || '');
+            const chapterRef = canonicalNfc(chapterLink.key.trim());
             if (!chapterRef) return false;
             // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
             if (chapterRef === chapterFileTitle) return true;
@@ -1110,7 +1113,8 @@ function buildSite(options) {
             if (chapterRef === chapterFilename) return true;
             // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
             //    (e.g. "Harbour" in "Chapter 1 — Harbour: The Lantern Guild")
-            if (chapterTitleNorm && chapterRef.toLowerCase().includes(chapterTitleNorm)) return true;
+            if (chapterTitleNorm && (chapterRef.toLowerCase().includes(chapterTitleNorm)
+              || canonicalNfc(chapterLink.words).toLowerCase().includes(chapterTitleNorm))) return true;
             return false;
           }).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
 

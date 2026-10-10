@@ -3,7 +3,7 @@ const { canonicalNfc } = require('./unicode');
 const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
 const { bareSectionTitle } = require('./pc-prose');
-const { wikilinkRe, parseWikilink } = require('./wikilink');
+const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
 const md = createRenderer();
 
@@ -24,8 +24,11 @@ function valueText(value) {
   return String(value == null ? '' : value);
 }
 
+// Every piece of a note's text a template prints goes through here, so this is also where
+// a labelled link left in it (a field printed whole) is reduced to its label: the target of
+// `[[Vesper_Hale|the stranger]]` is never printed (wikilink.js labelsForLinks).
 function escapeHtml(str) {
-  return (str instanceof Date ? dateText(str) : String(str || ''))
+  return labelsForLinks(str instanceof Date ? dateText(str) : String(str || ''))
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
