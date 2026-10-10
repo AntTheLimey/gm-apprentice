@@ -27,7 +27,9 @@ All campaign content falls into three categories:
   line stays, whether the line is a paragraph, a table cell, a list
   item, a quote or a heading. `%%` in a fenced code block or in
   inline code is literal text and stays. An unclosed `%%` hides the
-  rest of the note and prints a build warning.
+  rest of the note and prints a build warning. That includes a stray
+  `%%` in prose, such as `100%% done`: it starts a comment, as it does
+  in Obsidian.
 - Frontmatter fields in `exclude_fields` (default:
   `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`)
 - Files whose frontmatter says `publish: false` — in **every** mode,
@@ -54,6 +56,10 @@ target. A heading with other words (`GM Notes on travel`) or a trailing
 dash or emoji is a different section and is not hidden. A name in
 `exclude_sections` and in `publish_include_sections` is read the same
 way.
+
+A heading line written inside a fenced code block is code, not a heading:
+it neither starts nor ends a hidden section. A fence that is never closed
+is not trusted, so a heading after it is still read as a heading.
 
 ### Frontmatter is not covered by the fence
 

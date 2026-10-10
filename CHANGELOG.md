@@ -88,8 +88,10 @@ These changes reach every site, whatever the setting.
   `gm-leak --fix` no longer moves it.
 - **A note with no page was still in the search.** A world-flags note
   (`type: world_flags`) never gets a page, but its words were in the
-  search and a result opened a page that was not there. It is now left
-  out of the search.
+  search and a result opened a page that was not there, and its name
+  and links showed in the directory index, the relationship graph and
+  "Mentioned in" lists. It is now left out of the search, the index
+  lists, the graph and "Mentioned in".
 - **Obsidian comments were published (#305).** Text between `%%` marks,
   on one line or over several, is hidden in Obsidian and was printed on
   the site. It is now cut everywhere the page text is used. The text
@@ -97,6 +99,15 @@ These changes reach every site, whatever the setting.
   the heading `Plan`. A `%%` in a code block or in code between
   backticks is shown as written. **A `%%` that is never closed hides
   the rest of the note**, as it does in Obsidian, and the build says so.
+- **A heading shown in a code block no longer hides the rest of the
+  note.** A line such as `## GM Notes` inside a fenced block is code. It
+  used to start a hidden section, so the text after the block vanished;
+  it now neither starts nor ends one. A real heading after the block
+  still hides. A heading pasted with a full-width colon, zero-width
+  characters, a soft hyphen or `&nbsp;` is read as the words it shows.
+- **A page no longer lists itself under "Mentioned in" because of its
+  own dataview query**, and the text of a dataview query is no longer
+  searchable. Only what a reader can see counts.
 
 Publish tool 1.16.0.
 
