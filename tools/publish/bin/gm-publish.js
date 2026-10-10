@@ -266,11 +266,12 @@ the built-in default). bodyWithheld marks a session index whose body the site
 withholds because its Wrap-Up publishes.
 
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
-  --shown            Also print the frontmatter and body a reader gets
+  --shown            Also print what the site holds of the note, read off
+                     its page as built
   --json             Emit the whole chain as an object
   --all              Every file at once (needs --json)
-  --vault <dir>      With --all: read this vault through the site's rules
-                     instead of the vault the config names
+  --vault <dir>      Read this vault through the site's rules instead of
+                     the vault the config names
   --help, -h         Show this help
 `,
   'vault-setting': `
@@ -363,8 +364,11 @@ file is gone, and played sessions in no manifest section. It also finds four
 faults in the notes themselves, the ones that change what the site shows:
 NAMED_NO_PAGE (a note with no page, named on a published page, so its name
 prints as plain words), COMMENT_STRAY (a %% that is not a comment), FENCE_UNCLOSED
-(a code fence never closed, with a hidden marker below it) and ALIAS_IN_PROSE (a
-gm_aliases name printed in a page's text). The build prints one line for each.
+(a code fence never properly closed, with a hidden marker below it that the page
+prints) and ALIAS_IN_PROSE (a gm_aliases name printed on a page). To find them
+the site is built in memory, every page rendered and nothing written, so the
+names are read off the pages as built and the list is the build's own. The build
+prints one line for each.
 A note whose Excluded entry in the manifest begins "stays hidden:" is settled:
 left out of the report, kept in --json with "settled": true. Each finding names
 the edit that fixes it. Exits 1 only on an error, not on a warning. The human
