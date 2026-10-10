@@ -232,7 +232,9 @@ secret in the open:
 2. Turn the telling links into words:
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "<note name>" --in "<page>"`
    (a preview; again with `--write`). Where two notes share the name,
-   give the note's vault path as the name.
+   give the note's vault path as the name. A link that gives no path
+   then prints as `KEPT`: read each line, and when it means this note
+   run the command again with `--bare`.
 3. Run `SITE explain "<note>" --shown` again and read all of it: the
    page, the card and the search lines. Nothing that moved and nothing
    secret may be anywhere in it. What it prints is all the site would
@@ -275,8 +277,11 @@ Not something in the world, so never a page. Offer:
   A link with its own wording keeps it. Where a link has none and the
   note's name would read as a file name (`Scene 02 Quay`), add
   `--as "<words>"` with wording the GM agrees. Read the preview, then
-  run it again with `--write`. It changes every link to the note on
-  those pages, hidden parts included; where the GM wants a private
+  run it again with `--write`. Where two notes share the name, give
+  the vault path as the name; a link with no path prints as `KEPT`,
+  and `--bare` turns it once the GM has agreed it means this note. It
+  changes every link to the note on those pages, hidden parts
+  included; where the GM wants a private
   link kept, edit the open lines by hand instead.
 - **Reword** a sentence that only made sense as a link, by hand.
 - **A link in frontmatter.** `unlink` leaves frontmatter alone and

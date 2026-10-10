@@ -5,7 +5,7 @@
     links.py VAULT retarget NAME NOTE [--keep-text] [--write]
     links.py VAULT unlink NAME [NAME ...] [--write]
     links.py VAULT unlink NAME [NAME ...] --in NOTE [--in NOTE ...]
-                          [--as WORDS] [--write]
+                          [--as WORDS] [--bare] [--write]
 
 With no command it prints a report and writes nothing: a header line, then
 one tab-separated row per broken name.
@@ -42,7 +42,8 @@ to stop a published page naming a note that has no page, while every
 other note keeps its link. Where two notes share a name, give NAME with
 its path (`Plans/Scene`): only links that lead to that note are turned, a
 link to the other is left, and a link that gives no path is left and
-listed as KEPT. `--as WORDS` gives the words for a link that
+listed as KEPT. `--bare` turns those too: for when the GM has looked at
+the lines and they mean this note. `--as WORDS` gives the words for a link that
 has no display text of its own, where the note's name would read as a file
 name (`[[Scene_02_Quay]]` becomes WORDS); a link with display text keeps
 it.
@@ -266,7 +267,7 @@ KEPT = {
     "frontmatter": "a frontmatter link is relationship data; left as written",
     "embed": "an embed has no words to leave; left as written",
     "ambiguous": "more than one note has this name and the link gives no "
-                 "path; left as written",
+                 "path; left as written (--bare turns it too)",
 }
 
 
@@ -330,7 +331,7 @@ def _rewrite(rel: str, text: str, match: Match, fix: Fix,
             if wanted is False:
                 return m.group(0)
             if wanted is not True:
-                p.kept.append((rel, ll.lineno, m.group(0), KEPT[wanted]))
+                p.kept.append((rel, ll.lineno, m.group(0), wanted))
                 return m.group(0)
             parsed = _parse_link(m.group(1))
             if parsed is None:
@@ -404,7 +405,8 @@ def plan_retarget(vault: Path, name: str, note: str,
 
 def plan_unlink(vault: Path, names: list[str],
                 within: list[str] | None = None,
-                bare: str | None = None) -> Plan:
+                bare: str | None = None,
+                take_bare: bool = False) -> Plan:
     """`within` keeps the fix to those notes, and then a name need not be
     broken: a link to a note that exists is turned into words there."""
     if not within:
@@ -417,7 +419,7 @@ def plan_unlink(vault: Path, names: list[str],
             raise LinksError(f"there is no note {note}")
         only.add(rel)
     return _plan(vault, set(), _unlink_as(bare), only,
-                 _names_match(vault, names, sorted(notes)))
+                 _names_match(vault, names, sorted(notes), take_bare))
 
 
 def _segments(path: str) -> list[str]:
@@ -430,13 +432,15 @@ def _segments(path: str) -> list[str]:
     return [normalize(part) for part in path.split("/") if part.strip()]
 
 
-def _names_match(vault: Path, names: list[str], notes: list[str]) -> Match:
+def _names_match(vault: Path, names: list[str], notes: list[str],
+                 take_bare: bool = False) -> Match:
     """The links `unlink --in` is for: those that go to the note each NAME
     means, and to no other. Two notes can share a name in different
     folders. A NAME given with its path means that one: a link written
     with a path must lead to it, and a link written bare is taken only
-    when no other note has the name (otherwise it is left and listed). A
-    bare NAME that two notes share is refused."""
+    when no other note has the name (otherwise it is left and listed,
+    or taken with `take_bare`). A bare NAME that two notes share is
+    refused."""
     asked: list[tuple[list[str], list[list[str]]]] = []
     for name in names:
         want = _segments(name)
@@ -469,6 +473,8 @@ def _names_match(vault: Path, names: list[str], notes: list[str]) -> Match:
             elif not same or same == [note]:
                 return True
             elif note in same:
+                if take_bare:
+                    return True
                 verdict = "ambiguous"
         return verdict
     return match
@@ -535,6 +541,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--in", dest="within", action="append", metavar="NOTE")
     ap.add_argument("--as", dest="bare", metavar="WORDS")
+    ap.add_argument("--bare", dest="take_bare", action="store_true")
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"links.py: not a directory: {args.vault.as_posix()}",
@@ -551,8 +558,8 @@ def main(argv: list[str] | None = None) -> int:
         usage = "--keep-text goes with retarget"
     if args.within and args.command != "unlink":
         usage = "--in goes with unlink"
-    elif args.bare is not None and not args.within:
-        usage = "--as goes with unlink --in"
+    elif (args.bare is not None or args.take_bare) and not args.within:
+        usage = "--as and --bare go with unlink --in"
     elif args.bare is not None and not args.bare.strip():
         usage = "--as takes the words to print"
     if usage:
@@ -567,7 +574,7 @@ def main(argv: list[str] | None = None) -> int:
                               args.keep_text)
         else:
             p = plan_unlink(args.vault, args.names, args.within,
-                            args.bare)
+                            args.bare, args.take_bare)
         if args.write:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
