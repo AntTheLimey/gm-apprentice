@@ -57,11 +57,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- A relationship whose target is written with a label
-  (`target: "[[Vesper_Hale|the stranger]]"`) and has no page printed the
-  note's own name beside the label on the Connections graph, in the
-  sidebar and on an NPC's connection cards, on that page and on its
-  neighbours' graphs. It prints the label alone now.
+- A link written with a label in frontmatter
+  (`location: "[[Vesper_Hale|the stranger]]"`, a relationship's
+  `target`, a title) prints its label everywhere, and never the note's
+  own name. Index cards, the landing page, the timeline, the
+  Connections graph, the sidebar, an NPC's connection cards and the
+  search entry used to print `Vesper Hale|the stranger`. Where the note
+  has a page, a relationship now links to it under the label.
 - A `%%comment%%` in a frontmatter value is cut wherever the value
   prints. A `%%` in backticks there is left as written.
 - A hidden heading written with `&ensp;`, `&emsp;`, `&shy;` or a
