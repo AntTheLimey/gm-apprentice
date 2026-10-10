@@ -586,11 +586,10 @@ function stripMarkedBlocks(markdown, markerName) {
   return warnings.length > 0 ? { text, warnings } : text;
 }
 
-// A comment cut whole must not change what the lines around it mean: with the comment line
-// gone, a paragraph line above and a `---` / `===` line below would join into a Setext
-// heading. A blank line keeps them apart.
-function setextRisk(kept, stillInComment, next) {
-  return !stillInComment && kept.length > 0 && kept[kept.length - 1].trim() !== ''
+// Whether a paragraph line `prev` above a `---` / `===` line `next` would join it into a
+// Setext heading (once the lines between them are cut).
+function setextRisk(prev, next) {
+  return typeof prev === 'string' && prev.trim() !== ''
     && typeof next === 'string' && /^ {0,3}(-+|=+)\s*$/.test(next);
 }
 
@@ -813,7 +812,6 @@ function htmlComments(markdown) {
     }
 
     if (kept.trim() === '' && line.trim() !== '') {
-      if (setextRisk(result, inComment, lines[n + 1])) { result.push(''); from.push(n); }
       continue;
     }
     result.push(kept);
@@ -895,7 +893,6 @@ function obsidianComments(markdown) {
 
     // A line that was only comment goes whole; one with text around a comment keeps it.
     if (kept.trim() === '' && (line.trim() !== '' || startedInComment)) {
-      if (setextRisk(result, inComment, lines[n + 1])) { result.push(''); from.push(n); }
       continue;
     }
     result.push(kept);
@@ -1147,6 +1144,18 @@ function playerSafeMarkdown(markdown, options = {}) {
   return { text, warnings };
 }
 
+// Whatever a strip cut, the lines around the cut must mean what they did: a paragraph line,
+// something cut whole, then a `---` / `===` line would join into a Setext heading. A blank
+// line, mapped to the first line cut, keeps them apart. One rule for every strip.
+function keepApart(lines, from) {
+  for (let k = lines.length - 2; k >= 0; k--) {
+    if (from[k + 1] > from[k] + 1 && setextRisk(lines[k], lines[k + 1])) {
+      lines.splice(k + 1, 0, '');
+      from.splice(k + 1, 0, from[k] + 1);
+    }
+  }
+}
+
 // The strips of playerSafeMarkdown, in its order, before any section is filtered: the
 // lines left, `from` (the line of `text` each came from) and the strips' warnings.
 // playerSafeMarkdown and the stub cut both take this, so the cut cannot be made on a
@@ -1170,6 +1179,7 @@ function strippedLines(text, excludeCallouts) {
     const result = strip(lines === null ? text : lines.join('\n'));
     from = before === null ? result.from : result.from.map(i => before[i]);
     lines = result.lines;
+    keepApart(lines, from);
     if (result.warnings) warnings.push(...result.warnings);
   }
   return { lines, from, warnings };
