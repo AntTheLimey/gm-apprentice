@@ -121,12 +121,22 @@ function excerptFromMarkdown(source, opts = {}) {
   text = text.replace(/[*_`]+/g, '');
   text = text.replace(/\s+/g, ' ').trim();
 
-  // The first sentence: up to the first stop that is not a title's ("Mr. Bennet").
+  // The first sentence (or the first `opts.sentences`): up to a stop that is not a title's
+  // ("Mr. Bennet"). A run that would pass `limit` falls back to the sentences before it.
+  const wanted = opts.sentences || 1;
   const stop = /[.!?](?=\s)/g;
+  let found = 0;
+  let best = '';
   for (let m = stop.exec(text); m; m = stop.exec(text)) {
     const sentence = text.slice(0, m.index + 1);
-    if (m.index > 0 && !ABBREVIATION_RE.test(sentence)) return sentence;
+    if (m.index === 0 || ABBREVIATION_RE.test(sentence)) continue;
+    found++;
+    if (wanted === 1) return sentence;
+    if (sentence.length > limit) break;
+    best = sentence;
+    if (found === wanted) return best;
   }
+  if (best) return best;
   if (text.length <= limit) return text;
   const cut = text.slice(0, limit);
   const lastSpace = cut.lastIndexOf(' ');
