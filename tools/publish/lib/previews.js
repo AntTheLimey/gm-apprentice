@@ -50,7 +50,8 @@ function oneLine(text) {
 function rowsFor(page, ctx) {
   const fm = page.frontmatter || {};
   if (fm.type === 'pc') {
-    return [['Player', valueText(fm.player_name)], ...headerMeta(fm)];
+    // The CoC folio prints the player (its identity plate) but none of the header badges.
+    return [['Player', valueText(fm.player_name)], ...(ctx && ctx.cocFolio ? [] : headerMeta(fm))];
   }
   if (!own(FACT_FIELDS, fm.type)) return [];
   return FACT_FIELDS[fm.type].map(([label, fields, how]) => {
@@ -85,8 +86,8 @@ function cardFor(page, ctx) {
   const facts = factsFor(page, ctx);
   if (facts.length) card.f = facts;
 
-  // ctx.pcEpithet is false for the CoC folio, whose page shows no epithet to repeat.
-  const opening = fm.type === 'pc' ? (ctx && ctx.pcEpithet === false ? '' : pcEpithetText(page)) : excerptFromMarkdown(publishedSource(page), {
+  // ctx.cocFolio: the CoC folio shows no epithet to repeat (and no header badges, see rowsFor).
+  const opening = fm.type === 'pc' ? (ctx && ctx.cocFolio ? '' : pcEpithetText(page)) : excerptFromMarkdown(publishedSource(page), {
     sentences: 2, limit: EXCERPT_LIMIT, excludeSections: (ctx && ctx.excludeSections) || [], wordUnderscores: true, prose: true,
   });
   if (opening) card.x = capped(opening, EXCERPT_LIMIT);
@@ -101,13 +102,28 @@ function cardFor(page, ctx) {
   return card;
 }
 
+// A note the build writes no page for (a world-flags file is internal tracking). The one
+// definition: the render loop and the card list both ask it, so a note with no page has no card.
+function getsNoPage(page) {
+  return (page.frontmatter || {}).type === 'world_flags';
+}
+
 function buildPreviews(pages, ctx) {
   const out = {};
   for (const page of pages) {
+    if (getsNoPage(page)) continue;
     const card = cardFor(page, ctx);
     if (card) out[page.outputPath.split(path.sep).join('/')] = card;
   }
   return out;
 }
 
-module.exports = { cardFor, buildPreviews };
+// The last guard, run once the pages are written: a card whose key is not a file the build
+// wrote is dropped, whatever skipped that page. `isBuilt` takes the key (a '/'-joined path).
+function onlyBuiltPages(cards, isBuilt) {
+  const out = {};
+  for (const key of Object.keys(cards)) if (isBuilt(key)) out[key] = cards[key];
+  return out;
+}
+
+module.exports = { cardFor, buildPreviews, getsNoPage, onlyBuiltPages };

@@ -126,6 +126,8 @@ test('every card string occurs in its own built page, on every fixture vault tha
       }
       const cards = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'previews.json'), 'utf8'));
       for (const [rel, card] of Object.entries(cards)) {
+        // Every key names a file the build wrote.
+        if (!fs.existsSync(path.join(root, 'docs', ...rel.split('/')))) failures.push(`${name}/${rel}: a card with no page`);
         const html = fs.readFileSync(path.join(root, 'docs', ...rel.split('/')), 'utf8');
         const { problems } = cardProblems(card, pageText(html));
         for (const pr of problems) failures.push(`${name}/${rel}: ${pr}`);
@@ -225,5 +227,43 @@ test('a card is a subset of its page for the shapes that once differed', () => {
     assert.ok((cards['sessions/session-2.html'].f || []).some(([l]) => l === 'In-game date'));
     assert.ok(pageText(v.read('sessions', 'session-2.html')).includes('In-game: March 5th 1925'));
     assert.ok(!pageText(v.read('sessions', 'session-1.html')).includes('March 4th 1925'));
+  } finally { v.cleanup(); }
+});
+
+// A note the build writes no page for has no card, and no card key is a file that was not built.
+test('a world-flags note has no page and no card; every card key is a built file', () => {
+  const { read, root } = buildVault({
+    '_meta/vault-config.md': CONFIG(''),
+    'Characters/NPCs/Hallam.md': '---\ntype: npc\noccupation: Warden\n---\nKeeper of the gate.\n',
+    'Locations/_flags.md': '---\ntype: world_flags\n---\n## Canon\n\n- The mayor is secretly the cult leader. Zebrafish warning.\n',
+  });
+  try {
+    assert.ok(!fs.existsSync(path.join(root, 'docs', 'locations', 'flags.html')), 'the page is not built');
+    const text = read('previews.json');
+    assert.ok(!text.includes('cult leader') && !text.includes('Zebrafish'), 'its words are not in the cards');
+    for (const key of Object.keys(JSON.parse(text))) assert.ok(fs.existsSync(path.join(root, 'docs', ...key.split('/'))), key);
+    assert.deepStrictEqual(Object.keys(JSON.parse(text)), ['characters/npcs/hallam.html']);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
+});
+
+test('onlyBuiltPages drops a card whose page file does not exist, whatever skipped it', () => {
+  const { onlyBuiltPages } = require('../lib/previews');
+  const cards = { 'a/x.html': { t: 'X' }, 'a/y.html': { t: 'Y' } };
+  assert.deepStrictEqual(onlyBuiltPages(cards, (k) => k === 'a/x.html'), { 'a/x.html': { t: 'X' } });
+});
+
+// On a Call of Cthulhu folio a PC card shows what the folio prints, not the header badges
+// a custom display_meta would give another system's page.
+test('a CoC folio PC card is a subset of its page when display_meta names a badge the folio lacks', () => {
+  const files = {
+    'Characters/Ada Quill.md': '---\ntype: pc\nplayer_name: Pat\noccupation: Antiquarian\ndisplay_meta: [allegiance, occupation]\nallegiance: Wyvern Lodge Xq\n---\n## Stat Sheet\n\nSTR 50\n',
+  };
+  const v = buildSmallVault(files, { extraConfig: '  system: coc-7e\n' });
+  try {
+    const cards = JSON.parse(v.read('previews.json'));
+    const card = cards['characters/ada-quill.html'];
+    assert.ok(card, Object.keys(cards).join());
+    assert.ok(!JSON.stringify(card).includes('Wyvern'), JSON.stringify(card));
+    assert.deepStrictEqual(cardProblems(card, pageText(v.read('characters', 'ada-quill.html'))).problems, []);
   } finally { v.cleanup(); }
 });

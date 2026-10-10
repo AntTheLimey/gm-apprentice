@@ -12,6 +12,7 @@ const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSaf
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
+const { getsNoPage } = require('./previews');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -819,16 +820,6 @@ function build(options = {}) {
     console.log('  search disabled — skipping search-index.json');
   }
 
-  // Link-preview cards: `pages` is the published list here (publishedPages ran above, so a
-  // publish: false page and an excluded draft are absent) and each page already carries its
-  // filtered frontmatter and publishedMarkdown. cleanOutput() wipes a stale previews.json.
-  if (publishConfig.link_previews !== 'off') {
-    const { buildPreviews } = require('./previews');
-    const { usesCocFolio } = require('./templates/pc');
-    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, pcEpithet: !usesCocFolio(publishConfig, sheetsOff) })));
-    console.log('  wrote previews.json');
-  }
-
   write404();
 
   const navFor = generateNav(pages, { hasStory, timelineHref });
@@ -857,7 +848,7 @@ function build(options = {}) {
   let anyDressed = false;
   for (const page of pages) {
     try {
-      if (page.frontmatter.type === 'world_flags') continue;
+      if (getsNoPage(page)) continue;
       if (page.frontmatter.portrait) {
         const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
         if (basename && imageMap[basename]) usedImages.add(basename);
@@ -1129,6 +1120,19 @@ function build(options = {}) {
         console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
       }
     }
+  }
+
+  // Link-preview cards, written once every page is: `pages` is the published list (a
+  // publish: false page and an excluded draft are absent), each page carries its filtered
+  // frontmatter and publishedMarkdown, and a card is kept only if its page file exists.
+  // cleanOutput() wipes a stale previews.json.
+  if (publishConfig.link_previews !== 'off') {
+    const { buildPreviews, onlyBuiltPages } = require('./previews');
+    const { usesCocFolio } = require('./templates/pc');
+    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+    const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
+    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(built));
+    console.log('  wrote previews.json');
   }
 
   // Copy images — in player mode, only copy images referenced by published pages. This

@@ -236,8 +236,13 @@ describe('a card keeps the underscores its page prints', () => {
 
 describe('a PC card opens with what the PC page opens with', () => {
   it('has no opening lines when the page shows none (the CoC folio)', () => {
-    const card = cardFor(page('pc', { key_traits: ['Curious'] }, 'Prose.'), { ...ctx, pcEpithet: false });
+    const card = cardFor(page('pc', { key_traits: ['Curious'] }, 'Prose.'), { ...ctx, cocFolio: true });
     assert.strictEqual(card.x, undefined);
+  });
+  it('shows a folio PC the player only, not the display_meta badges the folio never prints', () => {
+    const fm = { player_name: 'Pat', display_meta: ['allegiance', 'age'], allegiance: 'Wyvern Lodge', age: 31 };
+    assert.deepStrictEqual(cardFor(page('pc', fm, 'Prose.'), { ...ctx, cocFolio: true }).f, [['Player', 'Pat']]);
+    assert.deepStrictEqual(cardFor(page('pc', fm, 'Prose.'), ctx).f, [['Player', 'Pat'], ['Allegiance', 'Wyvern Lodge'], ['Age', '31']]);
   });
   it('uses key_traits when there are any', () => {
     const card = cardFor(page('pc', { key_traits: ['Curious', 'Stubborn'] }, 'Body prose. More prose.'), ctx);
