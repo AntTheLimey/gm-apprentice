@@ -1323,6 +1323,16 @@ class GmLeakFixTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Lighthouse.md"), text)
 
+    def test_a_level_one_heading_never_moves(self):
+        # The handout rule is for `##` sections; a title called Context stays.
+        text = ("---\ntype: document\n---\n\n# Context\n\n"
+                "Body text.\n")
+        vault = self.vault_with(text, "Title.md")
+        rows = vc.check_gm_leak(vault, None, fix=True)
+        self.assertFalse(rows_for(rows, "FIXED"), rows)
+        self.assertFalse(rows_for(rows, "WOULD-FIX"), rows)
+        self.assertEqual(read(vault, "Title.md"), text)
+
     # ---- C2: a moved block never splits a fence ------------------------
 
     def test_a_moved_block_extends_to_the_closer_it_opened(self):
