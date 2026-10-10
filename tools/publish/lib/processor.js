@@ -779,9 +779,23 @@ function htmlComments(markdown) {
   // close, and must not toggle the fence off and expose the rest of the block to stripping.
   let fenceMarker = null;
   let inComment = false;
+  // Indented code, as the renderer's parser reads it (one that continues a paragraph or a
+  // list item is no code), passes through as a fence does. A parser that fails reads none:
+  // nothing is then literal, which cannot leak.
+  let indented = new Set();
+  try {
+    const found = findHeadings(lines.join('\n'));
+    indented = new Set([...found.inCode].filter(l => !found.inFence.has(l)));
+  } catch (err) { /* no code is trusted */ }
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
+    // A comment already open runs on through "code" until its closing -->.
+    if (!inComment && fenceMarker === null && indented.has(n)) {
+      result.push(line);
+      from.push(n);
+      continue;
+    }
     const fence = inComment ? null : /^\s*(```|~~~)/.exec(line);
     if (fence) {
       if (fenceMarker === null) fenceMarker = fence[1];
