@@ -479,7 +479,10 @@ function build(options = {}) {
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
   }
 
-  pages = published;
+  // A note the build writes no page for (previews.js getsNoPage) leaves the list here, with
+  // the unpublished: the link map, backlinks, graphs, indexes, search and cards all read
+  // `pages`, so none of them can name it or link to a file that is not built.
+  pages = published.filter(p => !getsNoPage(p));
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
