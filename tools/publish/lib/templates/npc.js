@@ -80,7 +80,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   if (rels.length > 0) {
     const cards = rels.map(r => {
       const target = String(r.target).replace(/\[\[|\]\]/g, '').trim();
-      const display = target.replace(/_/g, ' ');
+      const display = r.label || target.replace(/_/g, ' ');
       const relType = String(r.type || '').replace(/_/g, ' ');
       const targetPath = linkMap ? linkMap[target] : null;
       const href = targetPath ? encodeHref(relativeHref(page.outputPath, targetPath)) : null;

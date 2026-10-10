@@ -66,6 +66,18 @@ function refTarget(value) {
   return canonicalNfc(parseWikilink(String(value == null ? '' : value).replace(/\[\[|\]\]/g, '')).raw.trim());
 }
 
+// A relationship's target as its readers take it: the name to look the page up by, and the
+// label the GM gave the link ('' when none). `[[Vesper_Hale|the stranger]]` is looked up as
+// Vesper_Hale and, when that note has no page, printed as "the stranger": the label is how
+// the GM chose to name it, and the target's own name must not print beside it. A target
+// with no label is returned as written, brackets gone.
+function relationshipRef(value) {
+  const inner = String(value == null ? '' : value).replace(/\[\[|\]\]/g, '').trim();
+  const w = parseWikilink(inner);
+  const label = w.display.trim();
+  return label ? { target: w.name.trim(), label } : { target: inner, label: '' };
+}
+
 // Split a markdown table row on its cell pipes, not on the pipe inside a `[[link|alias]]` or
 // after a backslash (`\|`). Like `line.split('|')`: the pieces join back to the line with `|`,
 // the first is what sits before the first pipe.
@@ -84,4 +96,4 @@ function splitTableRow(line) {
   return out;
 }
 
-module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget };
+module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget, relationshipRef };

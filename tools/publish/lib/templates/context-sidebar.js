@@ -1,5 +1,6 @@
 const { escapeHtml, relativePath, encodeHref } = require('../processor');
 const { kindLabel } = require('../kind-label');
+const { relationshipRef } = require('../wikilink');
 
 function normalizeRelationships(raw, linkMap) {
   if (!raw) return [];
@@ -16,10 +17,15 @@ function normalizeRelationships(raw, linkMap) {
     return [];
   }
   return list.map(r => {
-    const target = String(r.target).replace(/\[\[|\]\]/g, '');
+    // A target written with a label that has no page is called by its label, never by the
+    // note's own name (wikilink.js). One that has a page is read as it always was.
+    const ref = relationshipRef(r.target);
+    const hidden = ref.label !== '' && !(linkMap && linkMap[ref.target]);
+    const target = hidden ? ref.target : String(r.target).replace(/\[\[|\]\]/g, '');
     return {
       type: r.type,
       target,
+      label: hidden ? ref.label : '',
       targetPath: linkMap ? linkMap[target] : null,
     };
   });
@@ -40,7 +46,7 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
   if (relationships && relationships.length > 0) {
     const items = relationships.map(r => {
       const href = r.targetPath ? encodeHref(relativePath(currentDir, r.targetPath)) : null;
-      const name = escapeHtml(String(r.target || '').replace(/_/g, ' '));
+      const name = escapeHtml(r.label || String(r.target || '').replace(/_/g, ' '));
       const link = href ? `<a href="${href}">${name}</a>` : name;
       // A relationship may have no type (left out, or a value that was only a comment).
       const type = escapeHtml(String(r.type || '').replace(/_/g, ' '));
