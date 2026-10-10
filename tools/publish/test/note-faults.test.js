@@ -429,11 +429,13 @@ describe('doctor --site report', () => {
 });
 
 describe('the build stays quiet, then says one line per code', () => {
+  let lastWarnings = [];
   function buildWarnings(configPath) {
     const warns = [];
     const log = console.log; const warn = console.warn;
     console.log = () => {}; console.warn = (...a) => warns.push(a.join(' '));
     try { build({ configPath }); } finally { console.log = log; console.warn = warn; }
+    lastWarnings = warns;
     return warns.filter((w) => /Site Faults/.test(w));
   }
 
@@ -462,6 +464,14 @@ describe('the build stays quiet, then says one line per code', () => {
     const stray = lines.find((l) => /%%/.test(l));
     assert.strictEqual(stray,
       "  WARNING: 1 stray %% in published notes (Characters/Mara_Quill.md line 5) — campaign-qa's Site Faults check fixes it.");
+  });
+
+  it('comes after every other warning', () => {
+    const { configPath } = site({ 'Characters/Mara_Quill.md': npc('M', 'a [[Gone]] 50%% b'), 'Characters/Gone.md': npc('G', 'x') }, { excluded: ['Characters/Gone.md'] });
+    assert.strictEqual(buildWarnings(configPath).length, 2);
+    const others = lastWarnings.filter((w) => !/Site Faults/.test(w));
+    assert.ok(others.length > 0, 'the fixture should carry another warning (settings left in vault.config.json)');
+    assert.ok(lastWarnings.lastIndexOf(others[others.length - 1]) < lastWarnings.findIndex((w) => /Site Faults/.test(w)));
   });
 
   it('leaves settled findings out of the count, and prints no line when all are settled', () => {

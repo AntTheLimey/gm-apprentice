@@ -1411,16 +1411,6 @@ function build(options = {}) {
     console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
 
-  // Faults in the notes themselves: one line per code, after every other warning, and
-  // nothing for a vault with none. The same detectors `doctor --site` lists in full.
-  const noteFaults = findNoteFaults({
-    vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
-    publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
-    view: (page) => ({ ...stripFacts.get(page), text: page.publishedMarkdown, frontmatter: page.frontmatter }),
-  });
-  if (options.onNoteFaults) options.onNoteFaults(noteFaults);
-  for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
-
   // Settings that still live in the site file. One line, so it is the thing the GM reads.
   for (const line of legacyWarning(publishConfig.legacy, rawConfig)) console.warn(`  ${line}`);
 
@@ -1435,6 +1425,16 @@ function build(options = {}) {
     : `  WARNING: ${subject} ${is} deployed on this site but publish.${key} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set publish.${key} to true to keep ${them}, or to false to remove ${its} functions.`);
   if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
   if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
+
+  // Faults in the notes themselves: one line per code, after every other warning, and
+  // nothing for a vault with none. The same detectors `doctor --site` lists in full.
+  const noteFaults = findNoteFaults({
+    vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
+    publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
+    view: (page) => ({ ...stripFacts.get(page), text: page.publishedMarkdown, frontmatter: page.frontmatter }),
+  });
+  if (options.onNoteFaults) options.onNoteFaults(noteFaults);
+  for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);
