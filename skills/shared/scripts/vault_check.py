@@ -151,6 +151,7 @@ from collections import Counter
 import sys
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
+from html.entities import html5 as _HTML5
 import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -1959,24 +1960,41 @@ def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
 
 
 _HK_WIKILINK = re.compile(r"\[\[((?:[^\]|\\]|\\(?!\|))+(?:\\?\|[^\]]*)?)\]\]")
+# JavaScript's `\w` is the ASCII letters, digits and `_`; Python's takes in
+# every letter, so the class is written out.
+_HK_W = "A-Za-z0-9_"
 _HK_PAIRS = [
     re.compile(r"(\*\*|__|~~|==)(.+?)\1"),
-    re.compile(r"(?<![\w*])(\*)(?=\S)(.+?)(?<=\S)\1(?![\w*])"),
-    re.compile(r"(?<![\w_])(_)(?=\S)(.+?)(?<=\S)\1(?![\w_])"),
+    re.compile(rf"(?<![{_HK_W}*])(\*)(?=\S)(.+?)(?<=\S)\1(?![{_HK_W}*])"),
+    re.compile(rf"(?<![{_HK_W}])(_)(?=\S)(.+?)(?<=\S)\1(?![{_HK_W}])"),
     re.compile(r"(`+)([^`]+?)\1"),
 ]
 _HK_EDGE = re.compile(r"^[*_~=`\s]+|[*_~=`\s]+$")
 
 
-_HK_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'",
-             "nbsp": "\u00a0", "shy": "\u00ad", "zwnj": "\u200c", "zwj": "\u200d",
-             "ensp": "\u2002", "emsp": "\u2003", "emsp13": "\u2004",
-             "emsp14": "\u2005", "thinsp": "\u2009"}
+def _hk_class(ranges: str) -> re.Pattern[str]:
+    """A character class from hex code-point ranges ("9-d 20 85")."""
+    return re.compile("[" + "".join(
+        "-".join(re.escape(chr(int(cp, 16))) for cp in r.split("-"))
+        for r in ranges.split()) + "]")
+
+
+# heading-key.js SPACE_RANGES and INVISIBLE_RANGES: every Unicode space,
+# and every character that prints nothing. The shared vectors hold both
+# lists, and both sides are tested against them.
+_HK_SPACE_RANGES = "9-d 20 85 a0 1680 2000-200a 2028-2029 202f 205f 2800 3000"
+_HK_INVISIBLE_RANGES = (
+    "0-8 e-1f 7f-84 86-9f ad 34f 61c 115f-1160 17b4-17b5 180b-180f 200b-200f 202a-202e "
+    "2060-206f 3164 fe00-fe0f feff ffa0 fff0-fffb 1bca0-1bca3 1d173-1d17a e0000-e0fff")
+_HK_SPACE = _hk_class(_HK_SPACE_RANGES)
+_HK_INVISIBLE = _hk_class(_HK_INVISIBLE_RANGES)
 
 
 def _hk_decode_entities(text: str) -> str:
-    """The entities heading-key.js reads (templates/gurps/tables.js
-    `decodeEntities` and its own DRESSING_ENTITIES): numeric ones and the named ones."""
+    """The character references heading-key.js `decodeReferences` reads:
+    numeric ones, and every named one the Markdown renderer decodes (the
+    HTML5 list, which `html.entities.html5` is too). A name not known as
+    typed is tried in small letters."""
     def one(m: re.Match) -> str:
         body = m.group(1)
         if body[0] == "#":
@@ -1988,7 +2006,8 @@ def _hk_decode_entities(text: str) -> str:
             if 0 < cp <= 0x10FFFF and not 0xD800 <= cp <= 0xDFFF:
                 return chr(cp)
             return m.group(0)
-        return _HK_NAMED.get(body.lower(), m.group(0))
+        return (_HTML5.get(body + ";") or _HTML5.get(body.lower() + ";")
+                or m.group(0))
     return re.sub(r"&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);", one, text,
                   flags=re.I)
 
@@ -1997,13 +2016,14 @@ def _bare_section_title(title: str) -> str:
     """heading-key.js `headingKey` (the label reading): lower-cased, with
     emphasis, link brackets, a `{#id}` block, a `^block-id`, closing `#`s,
     a trailing colon and spacing removed, so `**Skills**`, `Skills:` and
-    `skills` are one section. The tool's titles and the file's headings
+    `skills` are one section. Character references are decoded, every
+    Unicode space is a space and every invisible character is dropped. The tool's titles and the file's headings
     both go through this, so a spelling cannot make them differ.
     tools/publish/test/fixtures/heading-key-vectors.json pins both."""
     text = _hk_decode_entities(title)
     text = unicodedata.normalize("NFC", text)
-    text = re.sub(r"[\u200b-\u200d\u2060\ufeff\u00ad]", "", text)
-    text = re.sub(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000]", " ", text)
+    text = _HK_SPACE.sub(" ", text)
+    text = _HK_INVISIBLE.sub("", text)
 
     def label(m: re.Match) -> str:
         body = m.group(1)
@@ -2023,7 +2043,7 @@ def _bare_section_title(title: str) -> str:
     for _ in range(12):
         before = s
         s = re.sub(r"\s*\{[#.][^}]*\}\s*$", "", s)
-        s = re.sub(r"\s+\^[\w-]+\s*$", "", s)
+        s = re.sub(rf"\s+\^[{_HK_W}-]+\s*$", "", s)
         s = re.sub(r"(^|\s+)#+\s*$", "", s)
         s = re.sub(r"[:\uff1a]\s*$", "", s).strip()
         for pair in _HK_PAIRS:

@@ -4324,6 +4324,23 @@ class GmLeakSheetsOffTests(unittest.TestCase):
                 self.assertEqual(vc._bare_section_title(case["title"]),
                                  case["key"])
 
+    def test_the_space_and_invisible_classes_are_the_publish_tools(self):
+        # heading-key.js holds the same two lists; the vectors pin both, and
+        # each character is read as its class says.
+        path = (Path(__file__).resolve().parent.parent / "tools" / "publish"
+                / "test" / "fixtures" / "heading-key-vectors.json")
+        vectors = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(vc._HK_SPACE_RANGES, vectors["spaces"])
+        self.assertEqual(vc._HK_INVISIBLE_RANGES, vectors["invisible"])
+        for ranges, want in ((vectors["spaces"], "gm notes"),
+                             (vectors["invisible"], "gmnotes")):
+            for part in ranges.split():
+                ends = [int(cp, 16) for cp in part.split("-")]
+                for cp in range(ends[0], ends[-1] + 1):
+                    self.assertEqual(
+                        vc._bare_section_title(f"GM{chr(cp)}Notes"), want,
+                        hex(cp))
+
     def test_a_kept_section_is_scanned_though_the_tool_lists_its_title(self):
         # An HTML heading the tool withheld is reported by its text; the real
         # `## Background` it shares a name with still publishes.

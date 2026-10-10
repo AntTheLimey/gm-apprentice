@@ -4,7 +4,7 @@ const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
-const { headingKey, headingKeys, titleNamedIn } = require('./heading-key');
+const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
 const md = createRenderer();
 
 function renderMarkdown(markdown) {
@@ -120,6 +120,9 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
 // `Clues` is a prefix: "Clues, if Katherine walks the servants' course" is the
 // same section. A GM who wants one of these on the site renames the heading.
 const DOCUMENT_KEEPER_SECTION_RE = /^(context|clues\b.*|(physical )?prop notes|delivery( notes)?)$/i;
+// The same names with their spacing taken out, for a title that carries an invisible
+// character (heading-key.js squashedKeys).
+const DOCUMENT_KEEPER_SQUASHED_RE = /^(context|clues.*|(physical)?propnotes|delivery(notes)?)$/i;
 
 // `handout` is the alias index_build.py accepts for `document`.
 function isDocumentPage(frontmatter) {
@@ -136,7 +139,9 @@ function exclusionReason(title, excludeSections = [], frontmatter = null, level 
   // `## GM Notes`; a spelling must not be the way one reaches the site (heading-key.js).
   if (titleNamedIn(title, excludeSections)) return 'excluded';
   // `## **Context**` and `## Clues:` are the same sections, too.
-  if (level === 2 && isDocumentPage(frontmatter) && headingKeys(title).some(k => DOCUMENT_KEEPER_SECTION_RE.test(k))) {
+  if (level === 2 && isDocumentPage(frontmatter)
+      && (headingKeys(title).some(k => DOCUMENT_KEEPER_SECTION_RE.test(k))
+        || squashedKeys(title).some(k => DOCUMENT_KEEPER_SQUASHED_RE.test(k)))) {
     return 'excluded';
   }
   if (pcKeepRuleApplies(frontmatter, rules) && level <= 2) {
