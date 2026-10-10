@@ -1,5 +1,6 @@
 // tools/publish/lib/frontmatter.js
 const matter = require('gray-matter');
+const { markerRe } = require('./markers');
 
 // The one way this tool splits a note into frontmatter and body.
 //
@@ -13,14 +14,21 @@ function parseNote(text) {
   return matter(text, {});
 }
 
-// One reading of the `%%` in a frontmatter string, the way the body's strip reads a line
-// (processor.js obsidianComments): a `%%` opens a comment, the next `%%` closes it, one never
-// closed hides the rest of the value, and a `%%` inside an inline code span (backticks) is
-// literal text. Returns the text left and the kind of each stray opener: UNCLOSED for one
-// that never closes, GLUED for one that closes but sits straight after a number.
-function readPercent(value) {
+// One reading of what hides text in a frontmatter string. The value is read once, left to
+// right, by the rule the body's `%%` strip follows (processor.js obsidianComments):
+//
+//   %% … %%                                a comment
+//   <!-- … -->                             a comment
+//   <!-- gm-only --> … <!-- /gm-only -->   a hidden block (spoiler too), read by markers.js
+//
+// Each is cut with what it holds. One that is never closed hides the rest of the value. Any
+// of them inside an inline code span (backticks) is literal text and stays.
+// Returns the text left and each stray: { kind, mark }. UNCLOSED is one that never closes;
+// GLUED is a `%%` that closes but sits straight after a number.
+function readValue(value) {
   let kept = '';
   const strays = [];
+  const opener = markerRe(undefined, 'y');
   for (let i = 0; i < value.length;) {
     const ch = value[i];
     if (ch === '`') {
@@ -34,9 +42,24 @@ function readPercent(value) {
     }
     if (ch === '%' && value[i + 1] === '%') {
       const close = value.indexOf('%%', i + 2);
-      if (close === -1) { strays.push('UNCLOSED'); break; }
-      if (gluedBefore(value, i)) strays.push('GLUED');
+      if (close === -1) { strays.push({ kind: 'UNCLOSED', mark: '%%' }); break; }
+      if (gluedBefore(value, i)) strays.push({ kind: 'GLUED', mark: '%%' });
       i = close + 2;
+      continue;
+    }
+    if (ch === '<' && value.startsWith('<!--', i)) {
+      opener.lastIndex = i;
+      const m = opener.exec(value);
+      if (m && m[1] === '') {
+        const name = m[2].toLowerCase();
+        const stop = blockEnd(value, i + m[0].length, name);
+        if (stop === -1) { strays.push({ kind: 'UNCLOSED', mark: `<!-- ${name} -->` }); break; }
+        i = stop;
+        continue;
+      }
+      const close = value.indexOf('-->', i + 4);
+      if (close === -1) { strays.push({ kind: 'UNCLOSED', mark: '<!--' }); break; }
+      i = close + 3;
       continue;
     }
     kept += ch;
@@ -45,14 +68,30 @@ function readPercent(value) {
   return { kept, strays };
 }
 
-// A `%%` comment in a frontmatter value is cut the way the body's is. Only strings are
-// read, at any depth; a value that was nothing but a comment goes, and the space left where
-// a comment sat is closed up. Run on the parsed data of a note the site is built from, so
-// no output can print the marker or its words.
+// Where the hidden block of marker `name` whose opener ends at `from` ends: past the closer
+// that matches it, a block of the same name inside it closing first. -1: it never does.
+function blockEnd(value, from, name) {
+  const marker = markerRe(name);
+  marker.lastIndex = from;
+  let depth = 1;
+  let m;
+  while ((m = marker.exec(value)) !== null) {
+    depth += m[1] === '/' ? -1 : 1;
+    if (depth === 0) return m.index + m[0].length;
+  }
+  return -1;
+}
+
+const holdsMark = (text) => text.includes('%%') || text.includes('<!--');
+
+// A comment or a hidden block in a frontmatter value is cut (readValue). Only strings are
+// read, at any depth; a value that was nothing but hidden text goes, and the space left
+// where a cut was made is closed up. Run on the parsed data of a note the site is built
+// from, so no output can print the marker or its words.
 function cutValueComments(value) {
   if (typeof value === 'string') {
-    if (!value.includes('%%')) return value;
-    const { kept } = readPercent(value);
+    if (!holdsMark(value)) return value;
+    const { kept } = readValue(value);
     return kept === value ? value : kept.replace(/ {2,}/g, ' ').trim();
   }
   if (Array.isArray(value)) {
@@ -76,26 +115,26 @@ function gluedBefore(text, index) {
   return /\p{N}$/u.test(String(text).slice(Math.max(0, index - 2), index));
 }
 
-// The stray `%%` in one string or nested value, read the way the cut above reads them.
-function percentStrays(value) {
-  if (Array.isArray(value)) return value.flatMap(percentStrays);
-  if (value && typeof value === 'object') return Object.values(value).flatMap(percentStrays);
-  if (typeof value !== 'string' || !value.includes('%%')) return [];
-  return readPercent(value).strays;
+// The strays in one string or nested value, read the way the cut above reads them.
+function valueStrays(value) {
+  if (Array.isArray(value)) return value.flatMap(valueStrays);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(valueStrays);
+  if (typeof value !== 'string' || !holdsMark(value)) return [];
+  return readValue(value).strays;
 }
 
-// Every string leaf of parsed frontmatter that holds a `%%`, with a path to it
+// Every string leaf of parsed frontmatter that holds a `%%` or a `<!--`, with a path to it
 // (`list[1]`, `deep.key`). Read before cutValueComments, which removes what this reports.
-function percentFields(data, prefix = '') {
+function commentFields(data, prefix = '') {
   const out = [];
   if (typeof data === 'string') {
-    if (data.includes('%%')) out.push({ field: prefix, value: data });
+    if (holdsMark(data)) out.push({ field: prefix, value: data });
   } else if (Array.isArray(data)) {
-    data.forEach((v, i) => out.push(...percentFields(v, `${prefix}[${i}]`)));
+    data.forEach((v, i) => out.push(...commentFields(v, `${prefix}[${i}]`)));
   } else if (data && typeof data === 'object' && Object.getPrototypeOf(data) === Object.prototype) {
-    for (const [key, v] of Object.entries(data)) out.push(...percentFields(v, prefix ? `${prefix}.${key}` : key));
+    for (const [key, v] of Object.entries(data)) out.push(...commentFields(v, prefix ? `${prefix}.${key}` : key));
   }
   return out;
 }
 
-module.exports = { parseNote, cutValueComments, gluedBefore, percentStrays, percentFields };
+module.exports = { parseNote, cutValueComments, gluedBefore, valueStrays, commentFields };

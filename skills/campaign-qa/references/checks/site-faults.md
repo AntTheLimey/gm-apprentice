@@ -103,8 +103,8 @@ there on a yes.
 
 ## COMMENT_STRAY
 
-A `%%` that is not a comment. The row quotes the line, or the
-frontmatter field.
+A `%%` that is not a comment, or a comment left open in a frontmatter
+field. The row quotes the line, or the frontmatter field.
 
 - **Straight after a number** (`10%% now … 5%% later`): everything
   between the two is hidden. If a percent sign was meant, propose a
@@ -114,6 +114,10 @@ frontmatter field.
   the closing `%%` where the comment ends, or removing the stray one.
 - A `%%` in indented text (four spaces or a tab) is a comment like any
   other. Only a fenced code block shows one as written.
+- **A `<!--`, `<!-- gm-only -->` or `<!-- spoiler -->` never closed in
+  a frontmatter field:** it hides the rest of the field. Propose the
+  closing `-->` or closing marker where the hidden words end, or
+  removing the opener.
 
 ## NAMED_NO_PAGE
 

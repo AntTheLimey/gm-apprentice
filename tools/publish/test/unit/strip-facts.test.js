@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { strippedLines, playerSafeMarkdown } = require('../../lib/processor');
-const { gluedBefore, percentStrays, percentFields } = require('../../lib/frontmatter');
+const { gluedBefore, valueStrays, commentFields } = require('../../lib/frontmatter');
 
 const facts = (text) => strippedLines(text, false);
 // The facts that show on a page: what playerSafeMarkdown hands back (noteFacts).
@@ -78,16 +78,33 @@ describe('percent strays in a frontmatter value', () => {
     assert.strictEqual(gluedBefore('_%%', 1), false);
   });
   it('a clean comment and a plain value are nothing', () => {
-    assert.deepStrictEqual(percentStrays('Hello %% note %% there'), []);
-    assert.deepStrictEqual(percentStrays('no marker'), []);
+    assert.deepStrictEqual(valueStrays('Hello %% note %% there'), []);
+    assert.deepStrictEqual(valueStrays('no marker'), []);
   });
   it('names the kind for a string, and finds one in a list or a nested value', () => {
-    assert.deepStrictEqual(percentStrays('50%% off'), ['UNCLOSED']);
-    assert.deepStrictEqual(percentStrays('100%% done and 50%% off'), ['GLUED']);
+    assert.deepStrictEqual(valueStrays('50%% off'), [{ kind: 'UNCLOSED', mark: '%%' }]);
+    assert.deepStrictEqual(valueStrays('100%% done and 50%% off'), [{ kind: 'GLUED', mark: '%%' }]);
+    assert.deepStrictEqual(valueStrays(['fine', { deep: '50%% off' }]), [{ kind: 'UNCLOSED', mark: '%%' }]);
   });
-  it('percentFields lists the string leaves that hold a %%, with a path to each', () => {
+  it('commentFields lists the string leaves that hold a %% or a <!--, with a path to each', () => {
     assert.deepStrictEqual(
-      percentFields({ title: 'a', note: 'x%%y', list: ['ok', 'p%%q'], deep: { k: '%% z' }, n: 3 }),
-      [{ field: 'note', value: 'x%%y' }, { field: 'list[1]', value: 'p%%q' }, { field: 'deep.k', value: '%% z' }]);
+      commentFields({ title: 'a', note: 'x%%y', list: ['ok', 'p%%q'], deep: { k: '%% z' }, n: 3, html: 'a <!-- b' }),
+      [{ field: 'note', value: 'x%%y' }, { field: 'list[1]', value: 'p%%q' }, { field: 'deep.k', value: '%% z' }, { field: 'html', value: 'a <!-- b' }]);
+  });
+});
+
+describe('an HTML comment or a hidden block never closed in a frontmatter value', () => {
+  it('a closed one is nothing', () => {
+    assert.deepStrictEqual(valueStrays('Clerk <!-- note --> of works'), []);
+    assert.deepStrictEqual(valueStrays('Clerk <!-- gm-only -->spy<!-- /gm-only --> of works'), []);
+    assert.deepStrictEqual(valueStrays('Clerk <!-- SPOILER -->spy<!-- /spoiler -->'), []);
+  });
+  it('an unclosed one is named by its mark', () => {
+    assert.deepStrictEqual(valueStrays('Clerk <!-- note'), [{ kind: 'UNCLOSED', mark: '<!--' }]);
+    assert.deepStrictEqual(valueStrays('Clerk <!-- GM-Only --> spy'), [{ kind: 'UNCLOSED', mark: '<!-- gm-only -->' }]);
+    assert.deepStrictEqual(valueStrays('Clerk <!-- spoiler --> spy <!-- /gm-only -->'), [{ kind: 'UNCLOSED', mark: '<!-- spoiler -->' }]);
+  });
+  it('one in backticks is literal', () => {
+    assert.deepStrictEqual(valueStrays('write `<!--` to open one'), []);
   });
 });

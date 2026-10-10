@@ -363,7 +363,8 @@ absent images, wikilinks that match no published page, manifest entries whose
 file is gone, and played sessions in no manifest section. It also finds four
 faults in the notes themselves, the ones that change what the site shows:
 NAMED_NO_PAGE (a note with no page, named on a published page, so its name
-prints as plain words), COMMENT_STRAY (a %% that is not a comment), FENCE_UNCLOSED
+prints as plain words), COMMENT_STRAY (a %% that is not a comment, or a comment never closed in a
+frontmatter value), FENCE_UNCLOSED
 (a code fence never properly closed, with a hidden marker below it that the page
 prints) and ALIAS_IN_PROSE (a gm_aliases name printed on a page). To find them
 the site is built in memory, every page rendered and nothing written, so the

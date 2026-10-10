@@ -340,6 +340,29 @@ describe('COMMENT_STRAY', () => {
     assert.strictEqual(f.text, '50%% off');
   });
 
+  it('finds an HTML comment never closed in a frontmatter value, and says what to add', async () => {
+    const files = { 'Characters/Mara_Quill.md': '---\ntype: npc\noccupation: "Baker <!-- and a spy"\n---\n\nFine.\n' };
+    const [f] = await faults(files, {}, 'COMMENT_STRAY');
+    assert.deepStrictEqual(f, {
+      code: 'COMMENT_STRAY', severity: 'warning', path: 'Characters/Mara_Quill.md',
+      detail: 'the occupation: value holds a <!-- that is never closed, so it hides the rest of the value',
+      fix: 'add the closing --> where the comment ends, or take the <!-- out',
+      where: 'frontmatter', kind: 'UNCLOSED', mark: '<!--', line: null, field: 'occupation', text: 'Baker <!-- and a spy',
+    });
+  });
+
+  it('finds a hidden block never closed in a frontmatter value', async () => {
+    const files = { 'Characters/Mara_Quill.md': '---\ntype: npc\noccupation: "Baker <!-- GM-ONLY --> and a spy"\n---\n\nFine.\n' };
+    const [f] = await faults(files, {}, 'COMMENT_STRAY');
+    assert.strictEqual(f.detail, 'the occupation: value holds a <!-- gm-only --> that is never closed, so it hides the rest of the value');
+    assert.strictEqual(f.fix, 'add the closing <!-- /gm-only --> where the hidden text ends, or take the marker out');
+  });
+
+  it('is silent for a closed HTML comment or hidden block in a frontmatter value', async () => {
+    const files = { 'Characters/Mara_Quill.md': '---\ntype: npc\noccupation: "Baker <!-- note --> and <!-- gm-only -->spy<!-- /gm-only -->"\n---\n\nFine.\n' };
+    assert.deepStrictEqual(await faults(files, {}, 'COMMENT_STRAY'), []);
+  });
+
   it('is silent for a clean comment in a frontmatter value', async () => {
     const files = { 'Characters/Mara_Quill.md': '---\ntype: npc\noccupation: "Baker %% note %%"\n---\n\nFine.\n' };
     assert.deepStrictEqual(await faults(files, {}, 'COMMENT_STRAY'), []);
@@ -515,6 +538,16 @@ describe('the build stays quiet, then says one line per code', () => {
   it('prints nothing for a vault with no fault', () => {
     const { configPath } = site({ 'Characters/Mara_Quill.md': npc('M', 'Plain.') });
     assert.deepStrictEqual(buildWarnings(configPath), []);
+  });
+
+  it('the build line counts one as a stray comment mark', () => {
+    const { configPath } = site({
+      'Characters/Mara_Quill.md': '---\ntype: npc\noccupation: "Baker <!-- and a spy"\n---\n\nFine.\n',
+      'Characters/Other.md': npc('O', 'It is 50%% off.'),
+    });
+    assert.deepStrictEqual(buildWarnings(configPath), [
+      "  WARNING: 2 stray comment marks in published notes (Characters/Mara_Quill.md occupation:, Characters/Other.md line 5) — campaign-qa's Site Faults check fixes these.",
+    ]);
   });
 
   it('prints one line per code: the count, the worst three by pages, and where to go', () => {

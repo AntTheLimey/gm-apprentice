@@ -4,7 +4,8 @@
 //
 //   NAMED_NO_PAGE   a vault note with no page, linked from a published page that prints its
 //                   name as plain words
-//   COMMENT_STRAY   a `%%` that is not a comment (unclosed, or straight after a number)
+//   COMMENT_STRAY   a `%%` that is not a comment (unclosed, or straight after a number);
+//                   in a frontmatter value, also a comment or hidden block never closed
 //   FENCE_UNCLOSED  a code fence never closed, so a hidden marker below it is not obeyed
 //   ALIAS_IN_PROSE  a `gm_aliases` name printed on a published page
 //
@@ -17,7 +18,7 @@
 // The build runs the audit; `doctor --site` runs the build in memory and lists what it found.
 const fs = require('fs');
 const path = require('path');
-const { parseNote, percentStrays } = require('./frontmatter');
+const { parseNote, valueStrays } = require('./frontmatter');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -384,15 +385,19 @@ function startNoteAudit(input) {
           where: 'body', kind: stray.kind, line, field: null, text: sourceLine(stray.line),
         });
       }
-      for (const entry of page.percentValues || []) {
-        for (const kind of percentStrays(entry.value)) {
+      for (const entry of page.commentValues || []) {
+        for (const { kind, mark } of valueStrays(entry.value)) {
           found.push({
             code: 'COMMENT_STRAY', severity: 'warning', path: rel,
             detail: kind === 'UNCLOSED'
-              ? `the ${entry.field}: value holds a %% that is never closed, so it hides the rest of the value`
+              ? `the ${entry.field}: value holds a ${mark} that is never closed, so it hides the rest of the value`
               : `the ${entry.field}: value holds a %% straight after a number, so it hides what lies between it and the next %%`,
-            fix: 'write a single % or "percent", or put the sign in backticks, unless it is meant as a comment',
-            where: 'frontmatter', kind, line: null, field: entry.field, text: clip(entry.value),
+            fix: mark === '%%'
+              ? 'write a single % or "percent", or put the sign in backticks, unless it is meant as a comment'
+              : mark === '<!--'
+                ? 'add the closing --> where the comment ends, or take the <!-- out'
+                : `add the closing ${mark.replace('<!-- ', '<!-- /')} where the hidden text ends, or take the marker out`,
+            where: 'frontmatter', kind, mark, line: null, field: entry.field, text: clip(entry.value),
           });
         }
       }
@@ -504,7 +509,9 @@ function summaryLines(findings) {
       lines.push(`${n} ${plural(n, 'note is', 'notes are')} named on published pages but ${plural(n, 'has', 'have')} no page, so the name prints as plain words (most named: ${worst.join(', ')}) — ${where} ${these}.`);
     } else if (code === 'COMMENT_STRAY') {
       const worst = rows.slice(0, WORST).map((f) => (f.where === 'frontmatter' ? `${f.path} ${f.field}:` : `${f.path}${f.line ? ` line ${f.line}` : ''}`));
-      lines.push(`${n} stray %% in published notes (${worst.join(', ')}) — ${where} ${these}.`);
+      // A comment or hidden block never closed in a frontmatter value is counted here too.
+      const what = rows.every((f) => !f.mark || f.mark === '%%') ? 'stray %%' : plural(n, 'stray comment mark', 'stray comment marks');
+      lines.push(`${n} ${what} in published notes (${worst.join(', ')}) — ${where} ${these}.`);
     } else if (code === 'FENCE_UNCLOSED') {
       const worst = rows.slice(0, WORST).map((f) => `${f.path}${f.line ? ` line ${f.line}` : ''}`);
       lines.push(`${n} published ${plural(n, 'note has a code fence that never closes', 'notes have a code fence that never closes')}, so hidden text below it is published (${worst.join(', ')}) — ${where} ${these}.`);
