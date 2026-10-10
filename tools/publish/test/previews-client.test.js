@@ -567,3 +567,62 @@ test('after Escape, leaving the link and coming back reopens its card', async ()
   await p.runTimers(1000);
   assert.ok(p.card(), 'back on the link, it opens');
 });
+
+const leavePage = (p) => (p.win.listeners.pagehide || []).forEach((fn) => fn({}));
+const returnToPage = (p) => (p.win.listeners.pageshow || []).forEach((fn) => fn({ persisted: true }));
+
+test('a hover card is closed when the page is left, and a pending open does not fire on return', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  assert.ok(p.card());
+  leavePage(p);
+  assert.strictEqual(p.card(), null);
+  assert.strictEqual(p.links.hallam.getAttribute('aria-describedby'), null);
+  returnToPage(p);
+  assert.strictEqual(p.card(), null);
+  assert.strictEqual(p.timers.length, 0, 'no timer survives');
+
+  // A fast click: the 300 ms timer is frozen with the page and must not fire on return.
+  p.fire(p.links.inn, 'pointerover', { pointerType: 'mouse' });
+  leavePage(p);
+  returnToPage(p);
+  await p.runTimers(300);
+  assert.strictEqual(p.card(), null);
+});
+
+test('a touch card is closed on leaving, and after Back the first tap opens the card again', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await p.flush();
+  p.fire(p.links.hallam, 'click');
+  assert.ok(p.card());
+  leavePage(p);
+  returnToPage(p);
+  assert.strictEqual(p.card(), null);
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  const tap = p.fire(p.links.hallam, 'click');
+  assert.ok(tap.prevented, 'the first tap after Back opens the card, it does not navigate');
+  assert.ok(p.card());
+});
+
+test('a page shown from the cache starts clean even if pagehide never reached it', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await p.flush();
+  p.fire(p.links.hallam, 'click');
+  assert.ok(p.card());
+  returnToPage(p);
+  assert.strictEqual(p.card(), null);
+});
+
+test('in desktop mode a touch does not fetch the cards file', async () => {
+  const p = setup({ mode: 'desktop' });
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await p.flush();
+  assert.strictEqual(p.fetched(), 0);
+  const on = setup();
+  on.fire(on.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await on.flush();
+  assert.strictEqual(on.fetched(), 1, 'the control: with previews on a touch fetches');
+});

@@ -311,7 +311,7 @@
     main.addEventListener('pointerdown', function (e) {
       state.lastPointer = e.pointerType || 'mouse';
       var link = linkOf(e.target);
-      if (state.lastPointer === 'touch' && link && keyOf(link)) load();
+      if (mode === 'on' && state.lastPointer === 'touch' && link && keyOf(link)) load();
     });
 
     main.addEventListener('click', function (e) {
@@ -339,6 +339,20 @@
       if (t && ((state.card.contains && state.card.contains(t)) || (state.owner.contains && state.owner.contains(t)))) return;
       close();
     });
+
+    // A page left by a link is kept whole by the browser (back/forward cache): its open card,
+    // hover and frozen timers would come back with it. Leave nothing behind, and start clean
+    // when the page is shown again.
+    function reset() {
+      state.hover = null;
+      state.under = null;
+      state.escaped = false;
+      state.escapedOn = null;
+      state.lastPointer = 'mouse';
+      close();
+    }
+    win.addEventListener('pagehide', reset);
+    win.addEventListener('pageshow', function (e) { if (e && e.persisted) reset(); });
 
     win.addEventListener('scroll', function () {
       if (state.card && state.touch) close();
