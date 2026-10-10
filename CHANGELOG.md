@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.43] — 2026-10-10
+
+### Added
+
+- `links.py unlink --in … --bare` also turns a link that gives no path
+  where two notes share the name. Without it such a link is left and
+  listed, as before. campaign-qa's Site Faults check uses it once the
+  GM has read the lines and agreed they mean the note named.
+
+### Fixed
+
+- `links.py unlink --in` given a note's path, on a page whose link to
+  it gives no path while two notes share the name, stopped with a
+  `KeyError` instead of listing the link as left (#330).
+
 ## [1.10.42] — 2026-10-10
 
 ### Added
