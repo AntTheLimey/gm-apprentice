@@ -335,8 +335,16 @@ fix for each failing row.
 --site audits the vault instead of the machine: the stale build-tool pin,
 folders missing from folderMap, files with no type:, portraits pointing at
 absent images, wikilinks that match no published page, manifest entries whose
-file is gone, and played sessions in no manifest section. Each finding names
-the edit that fixes it. Exits 1 only on an error, not on a warning.
+file is gone, and played sessions in no manifest section. It also finds four
+faults in the notes themselves, the ones that change what the site shows:
+NAMED_NO_PAGE (a note with no page, named on a published page, so its name
+prints as plain words), COMMENT_STRAY (a %% that is not a comment), FENCE_UNCLOSED
+(a code fence never closed, with a hidden marker below it) and ALIAS_IN_PROSE (a
+gm_aliases name printed in a page's text). The build prints one line for each.
+A note whose Excluded entry in the manifest begins "stays hidden:" is settled:
+left out of the report, kept in --json with "settled": true. Each finding names
+the edit that fixes it. Exits 1 only on an error, not on a warning. The human
+report lists 20 rows per note-fault code; --json has them all.
 
   --host <host>              cloudflare-pages (default) or github-pages
   --site                     Audit the vault named by --config
