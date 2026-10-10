@@ -20,6 +20,7 @@ Usage:
   vault_check.py VAULT gm-leak --renest-excludes [--fix]
   vault_check.py VAULT pc-body [--folder SUB] [--file REL ...] [--newer-than REL]
   vault_check.py VAULT wrapup [--file REL] [--fix]
+  vault_check.py VAULT site-faults [--file REL ...]
   vault_check.py VAULT version
   vault_check.py VAULT active-pcs
   vault_check.py VAULT all
@@ -116,6 +117,18 @@ its findings first and then a repair row per action — `WOULD-FIX` on
 a dry run, `FIXED` when `--fix` applies them; `wrapup` also prints
 `UNCHANGED` for a conformant file. Both join `all` as a dry run:
 `all` never writes.
+
+`site-faults` lists the faults in the notes that change what the site
+shows: a note with no page that a published page names, a stray `%%`, a
+code fence never closed above a hidden marker, a `gm_aliases` name in a
+page's text. The list is the site's publish tool's (`doctor --site
+--json`); nothing about it is worked out here. A note the GM has settled
+("stays hidden:" beside its Excluded entry) is counted in a closing INFO
+row and not listed. A row names the first three pages that name a note;
+`--file` keeps one note's rows and lists every page. It prints one INFO
+row for a vault with no site, and one for a site whose tool is from before
+these findings. It sits outside `all`: the list is long and has its own
+procedure (campaign-qa's Site Faults).
 
 Two commands are gates rather than reports and sit outside `all`:
 `version` emits one row whose first column is a verdict
@@ -1689,6 +1702,132 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
     return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
                  f"hide on a site ({why}). This vault has no site "
                  f"(publish.site is not on), so nothing publishes{todo}"]
+
+
+# The four faults in a NOTE that change what the site shows, as the publish
+# tool's `doctor --site --json` names them.
+NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "FENCE_UNCLOSED", "COMMENT_STRAY",
+                    "NAMED_NO_PAGE")
+# How many of the pages naming a note a row lists; `--file` lists them all.
+SITE_FAULT_PAGES = 3
+
+
+def _one_line(value: object) -> str:
+    return " ".join(str(value if value is not None else "").split())
+
+
+def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
+    """One finding of the tool's, as a row. Its words are the tool's own;
+    nothing is worked out here."""
+    code, level = f["code"], str(f.get("severity", "warning")).upper()
+    path = _one_line(f.get("path")) or "(vault)"
+    if code == "NAMED_NO_PAGE":
+        kind = f.get("kind")
+        what = (f"{kind} ({f.get('type')})" if kind else "no type")
+        pages = [_one_line(p) for p in f.get("pages") or []]
+        shown = pages if whole else pages[:SITE_FAULT_PAGES]
+        more = len(pages) - len(shown)
+        printed = ", ".join(f'"{_one_line(w)}"' for w in f.get("printed") or [])
+        reason = _one_line(f.get("reason"))
+        count = f.get("pageCount", len(pages))
+        msg = (f"NAMED_NO_PAGE: {what}, named on {count} "
+               f"published page{'' if count == 1 else 's'} as {printed}; "
+               f"no page because {f.get('why')}; "
+               + (f"reason written: {reason}; " if reason else "no reason written; ")
+               + "named on: " + "; ".join(shown)
+               + (f"; +{more} more (--file lists them all)" if more > 0 else ""))
+    elif code == "COMMENT_STRAY":
+        msg = (f"COMMENT_STRAY: {_one_line(f.get('detail'))} | "
+               f"{_one_line(f.get('text'))}")
+    elif code == "FENCE_UNCLOSED":
+        msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
+    else:
+        msg = (f"ALIAS_IN_PROSE: \"{_one_line(f.get('alias'))}\" (a secret "
+               f"name of {_one_line(f.get('owner'))}), printed "
+               f"{f.get('count')} time{'' if f.get('count') == 1 else 's'} | "
+               f"{_one_line(f.get('context'))}")
+    return f"{level}\t{path}\t{msg}"
+
+
+def check_site_faults(vault: Path, files: list[str] | None = None
+                      ) -> list[str]:
+    """The faults in the vault's notes that change what its site shows, as
+    the site's own publish tool lists them (`doctor --site --json`): a note
+    with no page named on a published page, a stray `%%`, an unclosed code
+    fence over a hidden marker, a secret name printed in a page's text.
+
+    Every rule is the tool's. This asks, and prints its findings as rows;
+    a finding the GM settled ("stays hidden:" in the manifest) is counted,
+    not listed. A vault with no site has nothing to ask about. A tool from
+    before these findings answers without them, and the row says so rather
+    than report a clean site. `files` keeps the findings on those notes,
+    with every page that names each."""
+    tool, why, fix, has_site = _lines_tool(vault)
+    if not has_site:
+        return [f"INFO\t(vault)\tsite-faults has no site to check: "
+                f"{SITE_IS_OFF} in {VAULT_CONFIG}"]
+    if tool is None:
+        return [f"ERROR\t(vault)\tsite-faults could not ask the publish tool "
+                f"({why}) — nothing checked; {fix}"]
+    _publishes, _on, site = vault_site(vault)
+    node = shutil.which("node")
+    if not node or site is None:
+        return [f"ERROR\t(vault)\tsite-faults could not ask the publish tool "
+                f"(node is not on PATH) — nothing checked; {fix}"]
+    try:
+        # Read to the end of the pipe: the answer runs to hundreds of KB on
+        # a large vault, and the tool exits only once it is flushed (#279).
+        proc = subprocess.run(
+            [node, str(tool), "doctor", "--site", "--json", "--config",
+             str(site / "vault.config.json"), "--vault", str(vault.resolve())],
+            capture_output=True, text=True, encoding="utf-8",
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
+    except subprocess.TimeoutExpired:
+        return [f"ERROR\t(vault)\tsite-faults: the publish tool did not "
+                f"answer within {PUBLISH_TOOL_TIMEOUT}s — nothing checked"]
+    except OSError as e:
+        return [f"ERROR\t(vault)\tsite-faults: node could not run "
+                f"({e.__class__.__name__}) — nothing checked"]
+    try:
+        answer = json.loads(proc.stdout)
+        findings = answer["findings"]
+        # `counts.settled` came in with the note faults: a tool without it
+        # has no such findings to give, which is not a clean site.
+        settled = answer["counts"]["settled"]
+        if not isinstance(findings, list) or not isinstance(settled, int):
+            raise TypeError
+        findings = [f for f in findings if isinstance(f, dict)]
+    except (ValueError, KeyError, TypeError):
+        return ["INFO\t(vault)\tsite-faults not run: the publish tool this "
+                "site builds with is from before this check and does not "
+                "list these faults — nothing checked; the vault migration "
+                "brings the site's tool up to date"]
+    rows = [f"ERROR\t{_one_line(f.get('path')) or '(vault)'}\t"
+            f"{f.get('code')}: {_one_line(f.get('detail'))} — "
+            f"{_one_line(f.get('fix'))}"
+            for f in findings if f.get("severity") == "error"]
+    if rows:
+        return rows + ["ERROR\t(vault)\tsite-faults: the site audit stopped "
+                       "at the error above — nothing else checked"]
+    only = ({unicodedata.normalize("NFC", rel) for rel in files}
+            if files else None)
+    for f in findings:
+        if f.get("code") not in NOTE_FAULT_CODES or f.get("settled"):
+            continue
+        if only is not None and unicodedata.normalize(
+                "NFC", str(f.get("path"))) not in only:
+            continue
+        rows.append(_site_fault_row(f, whole=only is not None))
+    if rows:
+        # The tool that answered and the site file it read, so a fix is made
+        # with the same two (`explain --shown`, `manifest apply`).
+        rows.insert(0, f"INFO\t(site)\tthe site's tool: node \"{tool}\" "
+                       f"<command> --config \"{site / 'vault.config.json'}\"")
+    if settled and only is None:
+        rows.append(f"INFO\t(vault)\t{settled} "
+                    f"{'note is' if settled == 1 else 'notes are'} settled "
+                    f"as \"stays hidden\" and not raised")
+    return rows
 
 
 def _tool_gone_row(check: str, e: Exception) -> str:
@@ -4733,6 +4872,7 @@ def main() -> int:
                                         "timeline", "read-aloud",
                                         "relationships", "sessions",
                                         "gm-leak", "pc-body", "wrapup",
+                                        "site-faults",
                                         "version", "active-pcs", "all"])
     ap.add_argument("--folder",
                     help="restrict the frontmatter, tables, relationships, "
@@ -4741,8 +4881,9 @@ def main() -> int:
                     help="restrict the check to one vault-relative file "
                          "(e.g. \"Chapters/C3/Sessions/Session 07/"
                          "Chapter_03_Session_07_Wrap_Up.md\") — repeatable "
-                         "for tables, relationships and pc-body; wrapup "
-                         "takes only the first if given more than one")
+                         "for tables, relationships, pc-body and "
+                         "site-faults; wrapup takes only the first if given "
+                         "more than one")
     ap.add_argument("--newer-than",
                     help="restrict tables/relationships/pc-body to files "
                          "with an mtime at or after this vault-relative "
@@ -4806,6 +4947,11 @@ def main() -> int:
         return code
     if args.command == "active-pcs":
         emit("active-pcs", list_active_pcs(args.vault))
+        return 0
+    # The site's own audit, asked whole: a long list with its own fixes
+    # (campaign-qa's Site Faults), so it stays out of `all` too.
+    if args.command == "site-faults":
+        emit("site-faults", check_site_faults(args.vault, args.file))
         return 0
 
     explain = ExplainAll(args.vault)
