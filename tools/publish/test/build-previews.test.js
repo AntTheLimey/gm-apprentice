@@ -303,7 +303,12 @@ test('a faction, item or location of a hostile sub-type groups and labels as any
       'Locations/Odd.md': `---\ntype: location\nlocation_type: ${hostile}\n---\nA place.\n`,
     });
     try {
-      for (const dir of ['factions', 'items', 'locations']) assert.ok(v.read(dir, 'index.html').includes('Odd'), `${dir} ${hostile}`);
+      for (const dir of ['factions', 'items', 'locations']) {
+        const index = v.read(dir, 'index.html');
+        assert.ok(index.includes('Odd'), `${dir} ${hostile}`);
+        // The group is titled by the sub-type as written, not by what Object.prototype holds under that name.
+        assert.ok(!/native code|\[object Object\]/.test(index), `${dir} ${hostile}: the section title is a prototype member`);
+      }
     } finally { v.cleanup(); }
   }
 });
