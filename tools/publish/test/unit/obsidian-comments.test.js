@@ -69,6 +69,13 @@ describe('%% comments (Obsidian), #305', () => {
       assert.ok(got.includes('after'), got);
     }
   });
+  it('leaves %% alone in an indented code block, as in a fenced one', () => {
+    const got = safe('intro\n\n    code %%x%% here\n    more\n\nafter %%gone%%').text;
+    assert.ok(got.includes('    code %%x%% here'), got);
+    assert.ok(!got.includes('gone'), got);
+    // An indented line that continues a paragraph is no code: its comment is cut.
+    assert.strictEqual(safe('para\n    lazy %%gone%% line').text, 'para\n    lazy  line');
+  });
   it('a comment still closes on a line the markdown parser would call code', () => {
     assert.strictEqual(safe('a\n%%\n```\n%%\nb').text, 'a\nb');
   });

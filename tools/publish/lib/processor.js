@@ -819,8 +819,8 @@ function htmlComments(markdown) {
 // Obsidian comments: `%% a comment %%`, on one line or across many. Obsidian hides them;
 // the site must too (#305). A `%%` opens a comment and the next `%%` closes it, wherever
 // each sits on a line. A `%%` never closed hides everything to the end of the note: that is
-// what Obsidian shows, and the reading that cannot leak. `%%` in a fenced code block or an
-// inline code span is literal text. A comment inside a table cell, list item, quote or
+// what Obsidian shows, and the reading that cannot leak. `%%` in a fenced or indented code
+// block or an inline code span is literal text. A comment inside a table cell, list item, quote or
 // heading is cut out of that line and the rest of the line stays.
 // Runs after the HTML-comment strip (a `%%` inside `<!-- -->` is part of that comment) and
 // returns the strips' shape: the lines left, and `from` (the line of the input each came from).
@@ -830,11 +830,11 @@ function obsidianComments(markdown) {
   const from = [];
   const warnings = [];
   let inComment = false;
-  // Fenced code is whatever the renderer's parser calls a fence (any length, tilde, in a quote
-  // or a list item), the same reading findHeadings gives the section filter. A parser that
-  // fails reads no fence: nothing is then literal, which cannot leak.
+  // Code is whatever the renderer's parser calls a fence (any length, tilde, in a quote or a
+  // list item) or an indented block, the same reading findHeadings gives the section filter.
+  // A parser that fails reads no code: nothing is then literal, which cannot leak.
   let inFence = new Set();
-  try { ({ inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no fence is trusted */ }
+  try { ({ inCode: inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no code is trusted */ }
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
