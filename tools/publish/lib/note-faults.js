@@ -312,7 +312,11 @@ function findNoteFaults(input) {
       const name = baseName(rel);
       let fix;
       if (kind === 'entity') {
-        fix = `move what only you should know under a ## GM Notes heading in ${rel}, then list it under Publishing in _meta/publish-manifest.md so it gets a page; or leave it hidden and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
+        // Listing a note under Publishing gives it a page only when the manifest is what holds it back.
+        const page = String(record.why).startsWith('MANIFEST_')
+          ? `then list it under Publishing in _meta/publish-manifest.md so it gets a page`
+          : `but the manifest is not what keeps it off the site (${record.why}): run explain "${rel}" for the rule`;
+        fix = `move what only you should know under a ## GM Notes heading in ${rel}, ${page}; or leave it hidden and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
       } else if (kind === 'working') {
         fix = `turn the link to ${name} into plain words or reword the sentence; a working note like this never gets a page`;
       } else {

@@ -59,6 +59,19 @@ describe('NAMED_NO_PAGE', () => {
     'Characters/Vesper_Hale.md': npc('Vesper', 'Secret: he is the ferryman.'),
   };
 
+  it('the fix says listing under Publishing gives a page only when the manifest is what holds the note back', async () => {
+    const byManifest = await faults(base, { excluded: ['Characters/Vesper_Hale.md'] }, 'NAMED_NO_PAGE');
+    assert.match(byManifest[0].fix, /then list it under Publishing in _meta\/publish-manifest\.md so it gets a page/);
+    const byNote = await faults({
+      'Characters/Mara_Quill.md': npc('Mara', 'She met [[Vesper_Hale]] at the quay.'),
+      'Characters/Vesper_Hale.md': npc('Vesper', 'Secret.', 'publish: false\n'),
+    }, {}, 'NAMED_NO_PAGE');
+    assert.strictEqual(byNote[0].why, 'PUBLISH_FALSE');
+    assert.ok(!/so it gets a page/.test(byNote[0].fix), byNote[0].fix);
+    assert.match(byNote[0].fix, /the manifest is not what keeps it off the site \(PUBLISH_FALSE\): run explain "Characters\/Vesper_Hale\.md" for the rule/);
+    assert.match(byNote[0].fix, /stays hidden: <why>/);
+  });
+
   it('finds a withheld note named, as plain words, on a published page', async () => {
     const found = await faults(base, { excluded: ['Characters/Vesper_Hale.md — page body reveals the ferry'] }, 'NAMED_NO_PAGE');
     assert.strictEqual(found.length, 1);
