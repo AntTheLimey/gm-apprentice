@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.41] — 2026-10-09
+
+### Added
+
+- **Link preview cards on the site.** Rest the pointer on a link to
+  another page of the site and, after a third of a second, a small card
+  opens: the page's picture when it has one, its name, its kind (NPC,
+  Location, Session and so on), up to three facts, and its opening line
+  or two. Keyboard focus opens it too, and Escape or moving away closes
+  it. A screen reader reads the card as the link's description. On a
+  phone the first tap opens the card, which has an "Open page" button; a
+  second tap on the link, or the button, goes to the page. A tap
+  elsewhere or a scroll closes it.
+- **Which pages get a card.** Every page with a note behind it has one.
+  There are no cards on the menus, the breadcrumb, search results, or the
+  tiles and rows of the landing and index pages.
+- **A card holds only what its own page shows.** It is made at build
+  time from the page's player-visible text and fields, and a test checks
+  every card against its built page.
+- **A setting to turn the cards off, `publish.link_previews`.** `on` is
+  the default. `desktop` keeps the cards for a mouse and keyboard only,
+  so a tap on a phone goes straight to the page. `off` removes them. An
+  unknown value counts as `on`, with a build warning. **Every site gains
+  the cards at its next build.** To turn them off, ask the apprentice;
+  it sets the value for you. The setting is in `docs/site-settings.md`.
+- **Two new files on the site.** `previews.json` is fetched once, on the
+  first hover or tap, and `js/previews.js` runs the cards. With the
+  setting off, every page is exactly as it was.
+
+SIZE-SENTENCE-TASK-7
+
+Publish tool 1.16.0.
+
 ## [1.10.40] — 2026-10-09
 
 ### Added
