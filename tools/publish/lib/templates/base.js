@@ -185,7 +185,7 @@ function headerValueText(field, raw) {
 }
 
 function metadataBadgesFor(frontmatter) {
-  const fields = TYPE_BADGE_FIELDS[frontmatter.type];
+  const fields = Object.prototype.hasOwnProperty.call(TYPE_BADGE_FIELDS, frontmatter.type) ? TYPE_BADGE_FIELDS[frontmatter.type] : null;
   if (!fields) return '';
 
   const badges = [];

@@ -267,3 +267,43 @@ test('a CoC folio PC card is a subset of its page when display_meta names a badg
     assert.deepStrictEqual(cardProblems(card, pageText(v.read('characters', 'ada-quill.html'))).problems, []);
   } finally { v.cleanup(); }
 });
+
+// A note's `type` is a word the GM wrote: one that is also a property of every object
+// (`constructor`, `__proto__`...) must build as an unknown type, not break a lookup table.
+for (const hostile of ['constructor', 'toString', '__proto__', 'hasOwnProperty', 'valueOf', 'isPrototypeOf', '__defineGetter__']) {
+  test(`a note of type ${hostile} builds as an unknown type, in listings, graphs and cards`, () => {
+    const v = buildSmallVault({
+      'Characters/Hostile.md': `---\ntype: ${hostile}\nrelationships:\n  - target: "[[Mara]]"\n    type: ally\n---\nA strange one. Known to [[Mara]].\n`,
+      'Characters/Mara.md': `---\ntype: npc\nrelationships:\n  - target: "[[Hostile]]"\n    type: knows\n---\nShe knows [[Hostile]].\n`,
+    });
+    try {
+      const cards = JSON.parse(v.read('previews.json'));
+      assert.strictEqual(cards['characters/hostile.html'].t, 'Hostile');
+      assert.strictEqual(cards['characters/hostile.html'].f, undefined, 'no facts for an unknown type');
+      assert.ok(v.read('characters', 'hostile.html').includes('A strange one.'));
+      assert.ok(v.read('characters', 'index.html').includes('Hostile'));
+    } finally { v.cleanup(); }
+  });
+}
+
+test('a note of a hostile type draws as a plain circle in the relationship graph', () => {
+  const { buildRelationshipGraph } = require('../lib/relationship-graph');
+  for (const hostile of ['constructor', 'toString', '__proto__']) {
+    const page = (title, type) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type, relationships: [{ target: 'B', type: 'ally' }] } });
+    const graph = buildRelationshipGraph('A', [page('A', hostile), page('B', 'npc')], []);
+    assert.strictEqual(graph.nodes.find((n) => n.id === 'A').shape, 'circle', hostile);
+  }
+});
+
+test('a faction, item or location of a hostile sub-type groups and labels as any other', () => {
+  for (const hostile of ['constructor', 'toString', '__proto__']) {
+    const v = buildSmallVault({
+      'Factions/Odd.md': `---\ntype: faction\nfaction_type: ${hostile}\n---\nA faction.\n`,
+      'Items/Odd.md': `---\ntype: item\nitem_type: ${hostile}\n---\nAn item.\n`,
+      'Locations/Odd.md': `---\ntype: location\nlocation_type: ${hostile}\n---\nA place.\n`,
+    });
+    try {
+      for (const dir of ['factions', 'items', 'locations']) assert.ok(v.read(dir, 'index.html').includes('Odd'), `${dir} ${hostile}`);
+    } finally { v.cleanup(); }
+  }
+});

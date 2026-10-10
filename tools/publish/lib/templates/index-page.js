@@ -298,7 +298,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = nul
   // Group ROOT cards: by the (unpublished) parent name if one was
   // declared, else by location_type, else "Other" — same region
   // semantics as before, but only true roots get cards now.
-  const byRegion = {};
+  const byRegion = Object.create(null);
   for (const node of roots) {
     const p = node.page;
     const parentRef = p.frontmatter.parent_location;
@@ -580,7 +580,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
     government: 'Government Agencies',
   };
 
-  const byType = {};
+  const byType = Object.create(null);
   for (const p of factions) {
     const ft = String(p.frontmatter.faction_type || p.frontmatter.factionType || 'other').toLowerCase();
     if (!byType[ft]) byType[ft] = [];
@@ -642,7 +642,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
   }
 
   const sections = orderedTypes.map(ft => {
-    const label = TYPE_LABELS[ft] || (ft.charAt(0).toUpperCase() + ft.slice(1));
+    const label = (Object.prototype.hasOwnProperty.call(TYPE_LABELS, ft) && TYPE_LABELS[ft]) || (ft.charAt(0).toUpperCase() + ft.slice(1));
     const cards = byType[ft].map(renderCard).join('\n');
     return `<section class="intel-section">
   <h2 class="intel-section-title">${escapeHtml(label)}</h2>
@@ -824,7 +824,7 @@ function renderArmory(pages, indexDir) {
     'alien material': 'Alien Materials',
   };
 
-  const byType = {};
+  const byType = Object.create(null);
   for (const p of items) {
     const raw = (p.frontmatter.item_type || p.frontmatter.itemType || '').toLowerCase();
     const key = raw || 'other';
@@ -859,7 +859,7 @@ function renderArmory(pages, indexDir) {
   }
 
   const sections = orderedTypes.map(type => {
-    const label = TYPE_LABELS[type] || (type.charAt(0).toUpperCase() + type.slice(1));
+    const label = (Object.prototype.hasOwnProperty.call(TYPE_LABELS, type) && TYPE_LABELS[type]) || (type.charAt(0).toUpperCase() + type.slice(1));
     const itemsHtml = byType[type].map(renderItem).join('\n');
     return `<section class="armory-section">
   <h2 class="armory-section-title">${escapeHtml(label)}</h2>

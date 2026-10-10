@@ -47,7 +47,7 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
       displayTitle: page ? page.displayTitle : title.replace(/_/g, ' '),
       outputPath: page ? page.outputPath : null,
       type: page ? page.frontmatter.type : 'unknown',
-      shape: SHAPE_MAP[(page ? page.frontmatter.type : '')] || 'circle',
+      shape: (page && Object.prototype.hasOwnProperty.call(SHAPE_MAP, page.frontmatter.type) && SHAPE_MAP[page.frontmatter.type]) || 'circle',
       hop,
     });
   }
