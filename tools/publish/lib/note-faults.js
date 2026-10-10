@@ -68,10 +68,14 @@ const MORE_ENTITIES = {
   middot: '·', bull: '•', times: '×', copy: '©', nbsp: ' ', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', apos: "'",
 };
 const PRINTED_ATTRS = /\s(?:alt|title|aria-label|content|placeholder)="([^"]*)"/gi;
+// With the `data-…` values a page carries for its filters and scripts: not printed, but in
+// the page a visitor is sent.
+const CARRIED_ATTRS = /\s(?:alt|title|aria-label|content|placeholder|data-[a-z0-9-]+)="([^"]*)"/gi;
 
 // The text a built page shows, one line per block, entities decoded. Scripts and styles
 // are not text. `attributes: true` adds the words a tag carries in `alt`, `title`,
-// `aria-label` and `content`. `links` says what to do with the words of a link to another
+// `aria-label` and `content` (`'all'`: in a `data-…` attribute and on a link's own tag as
+// well). `links` says what to do with the words of a link to another
 // page of the site (that page's own name): true keeps them, false leaves them out, 'fence'
 // keeps them between LINK_OPEN and LINK_CLOSE so a reader can tell them from the page's own.
 const LINK_OPEN = '\u0002';
@@ -86,11 +90,13 @@ function pageText(html, { links = true, attributes = false, spaced = false } = {
     .replace(/[\u0002\u0003]/g, '');
   if (links !== true) {
     s = s.replace(/<a\b([^>]*)>([\s\S]*?)<\/a\s*>/gi, (whole, attrs, inner) => (
-      /\shref="(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(attrs) ? inner : links === 'fence' ? `${LINK_OPEN}${inner}${LINK_CLOSE}` : ' '));
+      /\shref="(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(attrs) ? inner
+        // 'all': the link's own tag stays, for the words it carries.
+        : links === 'fence' ? `${attributes === 'all' ? `<a${attrs}>` : ''}${LINK_OPEN}${inner}${LINK_CLOSE}` : ' '));
   }
   s = s.replace(/<\/?([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g, (whole, tag, attrs) => {
     let extra = '';
-    if (attributes) for (const m of attrs.matchAll(PRINTED_ATTRS)) extra += ` ${m[1]} `;
+    if (attributes) for (const m of attrs.matchAll(attributes === 'all' ? CARRIED_ATTRS : PRINTED_ATTRS)) extra += ` ${m[1]} `;
     const name = tag.toLowerCase();
     return (BLOCK_TAGS.has(name) ? '\n' : spaced && BOX_TAGS.has(name) ? ' ' : '') + extra;
   });
@@ -405,7 +411,9 @@ function startNoteAudit(input) {
     const whole = String(html);
     const headEnd = whole.search(/<\/head\s*>/i);
     const bodyHtml = headEnd === -1 ? whole : whole.slice(headEnd);
-    const blank = (text) => text.replace(/\u0002[^\u0003]*\u0003/g, (m) => LINK_OPEN.repeat(m.length));
+    // On an index page a link is a whole card (a name, and fields of the note under it), so
+    // there nothing is blanked: every word on it is taken from some note.
+    const blank = (text) => (out !== null ? text : text.replace(/\u0002[^\u0003]*\u0003/g, (m) => LINK_OPEN.repeat(m.length)));
     const body = foldQuotes(pageText(bodyHtml, { links: 'fence' }));
     const bodyOwn = blank(body);
     let boxes = null;
@@ -421,7 +429,8 @@ function startNoteAudit(input) {
         matches = [...blank(boxes).matchAll(a.re)];
       }
       if (matches.length === 0) {
-        if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: true }));
+        // An index page's cards are links that carry a note's fields in their attributes.
+        if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: out !== null ? 'all' : true }));
         text = rest;
         matches = [...blank(rest).matchAll(a.re)].slice(0, 1);
       }

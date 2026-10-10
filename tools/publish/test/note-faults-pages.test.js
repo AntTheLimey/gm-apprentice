@@ -345,6 +345,25 @@ describe('a name only an index or listing page prints', () => {
     assert.strictEqual(byPath.get('Creatures/Mire_Hound.md').owner, 'Characters/NPCs/Mr_Grey.md');
   });
 
+  it('ALIAS_IN_PROSE: found in the words an index card prints under a name, which sit inside the card\'s link', async () => {
+    const { configPath, root } = site({
+      'Characters/NPCs/Mr_Grey.md': npcs('gm_aliases: ["The Watcher"]\n'),
+      'Events/Ball.md': '---\ntype: event\noccupation: "Servant of The Watcher"\n---\n\nA ball.\n',
+    });
+    const found = (await fromDoctor(configPath)).filter((f) => f.code === 'ALIAS_IN_PROSE');
+    assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'ALIAS_IN_PROSE'), found);
+    assert.match(fs.readFileSync(path.join(root, 'docs', 'events', 'index.html'), 'utf8'), /<a [^>]*>[^]*?Servant of The Watcher[^]*?<\/a>/);
+    assert.deepStrictEqual(found.map((f) => [f.path, f.listings]), [['Events/Ball.md', ['events/index.html']]]);
+  });
+
+  it('ALIAS_IN_PROSE: found where an index card only carries it, in an attribute its filter reads', async () => {
+    const found = await faults({
+      'Characters/NPCs/Mr_Grey.md': npcs('gm_aliases: ["The Watcher"]\n'),
+      'Events/Ball.md': '---\ntype: event\nstatus: "The Watcher"\n---\n\nA ball.\n',
+    }, 'ALIAS_IN_PROSE');
+    assert.deepStrictEqual(found.map((f) => [f.path, f.listings]), [['Events/Ball.md', ['events/index.html']]]);
+  });
+
   it('is silent for a field no page of the site prints', async () => {
     assert.deepStrictEqual(await faults({
       'Hidden/Old_Tam.md': hidden(),
