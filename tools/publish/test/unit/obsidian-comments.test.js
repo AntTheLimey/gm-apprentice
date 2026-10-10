@@ -69,11 +69,11 @@ describe('%% comments (Obsidian), #305', () => {
       assert.ok(got.includes('after'), got);
     }
   });
-  it('leaves %% alone in an indented code block, as in a fenced one', () => {
+  it('cuts a %% comment in an indented code block: only a fence shows one', () => {
     const got = safe('intro\n\n    code %%x%% here\n    more\n\nafter %%gone%%').text;
-    assert.ok(got.includes('    code %%x%% here'), got);
+    assert.ok(got.includes('    code  here'), got);
+    assert.ok(!got.includes('%%'), got);
     assert.ok(!got.includes('gone'), got);
-    // An indented line that continues a paragraph is no code: its comment is cut.
     assert.strictEqual(safe('para\n    lazy %%gone%% line').text, 'para\n    lazy  line');
   });
   it('a comment-only line between a paragraph and a --- line does not turn the paragraph into a heading', () => {

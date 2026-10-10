@@ -758,7 +758,9 @@ function calloutLines(markdown, exclude) {
 }
 
 // Remove every `<!-- ... -->` comment, including multi-line ones, outside fenced code
-// blocks. Authors keep private notes (UNVERIFIED flags, change logs, import provenance)
+// blocks. A comment in indented (four-space or tab) code is cut like any other: one that
+// opens there runs on over lines that are not code, so reading it as literal would publish
+// them. Authors keep private notes (UNVERIFIED flags, change logs, import provenance)
 // as comments; the renderer runs with `html: false`, so anything left here is escaped and
 // printed as visible body text. Must run AFTER stripGmOnly/stripSpoiler, whose block
 // markers are themselves comments.
@@ -780,23 +782,9 @@ function htmlComments(markdown) {
   // close, and must not toggle the fence off and expose the rest of the block to stripping.
   let fenceMarker = null;
   let inComment = false;
-  // Indented code, as the renderer's parser reads it (one that continues a paragraph or a
-  // list item is no code), passes through as a fence does. A parser that fails reads none:
-  // nothing is then literal, which cannot leak.
-  let indented = new Set();
-  try {
-    const found = findHeadings(lines.join('\n'));
-    indented = new Set([...found.inCode].filter(l => !found.inFence.has(l)));
-  } catch (err) { /* no code is trusted */ }
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
-    // A comment already open runs on through "code" until its closing -->.
-    if (!inComment && fenceMarker === null && indented.has(n)) {
-      result.push(line);
-      from.push(n);
-      continue;
-    }
     const fence = inComment ? null : /^\s*(```|~~~)/.exec(line);
     if (fence) {
       if (fenceMarker === null) fenceMarker = fence[1];
@@ -826,9 +814,7 @@ function htmlComments(markdown) {
       }
     }
 
-    if (kept.trim() === '' && line.trim() !== '') {
-      continue;
-    }
+    if (kept.trim() === '' && line.trim() !== '') continue;
     result.push(kept);
     from.push(n);
   }
@@ -843,8 +829,9 @@ function htmlComments(markdown) {
 // Obsidian comments: `%% a comment %%`, on one line or across many. Obsidian hides them;
 // the site must too (#305). A `%%` opens a comment and the next `%%` closes it, wherever
 // each sits on a line. A `%%` never closed hides everything to the end of the note: that is
-// what Obsidian shows, and the reading that cannot leak. `%%` in a fenced or indented code
-// block or an inline code span is literal text. A comment inside a table cell, list item, quote or
+// what Obsidian shows, and the reading that cannot leak. `%%` in a fenced code block or an
+// inline code span is literal text; in indented (four-space or tab) code it is a comment and
+// is cut, as an HTML comment there is. A comment inside a table cell, list item, quote or
 // heading is cut out of that line and the rest of the line stays.
 // Runs after the HTML-comment strip (a `%%` inside `<!-- -->` is part of that comment) and
 // returns the strips' shape: the lines left, and `from` (the line of the input each came from).
@@ -854,12 +841,12 @@ function obsidianComments(markdown) {
   const from = [];
   const warnings = [];
   let inComment = false;
-  // Code is whatever the renderer's parser calls a fence (any length, tilde, in a quote or a
-  // list item) or an indented block, the same reading findHeadings gives the section filter.
-  // A parser that fails reads no code: nothing is then literal, which cannot leak.
+  // Fenced code is whatever the renderer's parser calls a fence (any length, tilde, in a quote
+  // or a list item), the same reading findHeadings gives the section filter. A parser that
+  // fails reads no fence: nothing is then literal, which cannot leak.
   let inFence = new Set();
   let openFence = null;
-  try { ({ inCode: inFence, openFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no code is trusted */ }
+  try { ({ inFence, openFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no fence is trusted */ }
   // Every opener, for the note-faults audit: where it sat, whether it closed, and whether it
   // was glued to the word before it ("100%% done").
   const openers = [];

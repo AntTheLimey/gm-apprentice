@@ -43,9 +43,9 @@ describe('lines: cut', () => {
     const { cut } = answer({ op: 'cut', text });
     assert.deepStrictEqual(cut, ['a  b', null, null, null, null, 'kept', '', null, null, 'end']);
   });
-  it('is the build\'s own strip chain: a line that holds only a comment is gone, code is kept', () => {
+  it('is the build\'s own strip chain: fenced code is kept, a comment in indented code is cut', () => {
     const { cut } = answer({ op: 'cut', text: '```\n%%x\n```\n    %%y%%' });
-    assert.deepStrictEqual(cut, ['```', '%%x', '```', '    %%y%%']);
+    assert.deepStrictEqual(cut, ['```', '%%x', '```', null]);
   });
 });
 
