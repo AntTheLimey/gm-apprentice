@@ -95,8 +95,8 @@ describe('a frontmatter value of the wrong type does not stop the build', () => 
     } finally { v.cleanup(); }
   });
 
-  it('a one-item list in status keeps a planned note off a player site, as the plain value does', () => {
-    for (const lines of ['status: planned', 'status:\n  - planned']) {
+  it('a one-item list in status, or a list inside one, keeps a planned note off a player site, as the plain value does', () => {
+    for (const lines of ['status: planned', 'status:\n  - planned', 'status: [[planned]]', 'status:\n  - [planned]']) {
       const v = buildWith(lines, { mode: 'player' });
       try {
         assert.strictEqual(v.thrown, null);

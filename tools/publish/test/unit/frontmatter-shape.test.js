@@ -29,11 +29,26 @@ describe('shapeFrontmatter: a field read as one piece of text', () => {
     ]);
   });
   it('does not read a set of named values, an empty list or a list that holds one', () => {
-    for (const value of [{ now: 'alive' }, [], [{ a: 'b' }], [['a']], ['a', null]]) {
+    for (const value of [{ now: 'alive' }, [], [{ a: 'b' }], [[{ a: 'b' }]], [[]]]) {
       const got = shapeFrontmatter({ type: 'npc', status: value });
       assert.deepStrictEqual(got.frontmatter, { type: 'npc' }, JSON.stringify(value));
       assert.deepStrictEqual(got.wrong, [{ field: 'status', problem: 'is not a plain value, so it is not read; write one value' }]);
     }
+  });
+  it('reads a list inside a list as its items, so `[[planned]]` typed without quotes is still read', () => {
+    for (const value of [[['planned']], [[['planned']]], ['planned', null], [null, ['planned']]]) {
+      const got = shapeFrontmatter({ type: 'npc', status: value });
+      assert.deepStrictEqual(got.frontmatter, { type: 'npc', status: 'planned' }, JSON.stringify(value));
+      assert.deepStrictEqual(got.wrong, [{ field: 'status', problem: 'is a list where one value is expected; it is read as "planned"' }]);
+    }
+    const names = shapeFrontmatter({ type: 'npc', gm_aliases: [[['The Watcher']], 'Old Tam'], aliases: [['Jon']] });
+    assert.deepStrictEqual(names.frontmatter, { type: 'npc', gm_aliases: ['The Watcher', 'Old Tam'], aliases: ['Jon'] });
+    assert.deepStrictEqual(names.wrong, []);
+  });
+  it('reads `type: false` as no type', () => {
+    const got = shapeFrontmatter({ type: false, status: 'alive' });
+    assert.deepStrictEqual(got.frontmatter, { status: 'alive' });
+    assert.deepStrictEqual(got.wrong, []);
   });
   it('does not change the object it was given', () => {
     const fm = { type: 'npc', status: ['a'] };
@@ -54,7 +69,7 @@ describe('shapeFrontmatter: a field read as a list', () => {
   });
   it('drops an item that is not a plain value, and says so', () => {
     const got = shapeFrontmatter({ abilities: ['Flight', { name: 'Bite' }, ['x']] });
-    assert.deepStrictEqual(got.frontmatter, { abilities: ['Flight'] });
+    assert.deepStrictEqual(got.frontmatter, { abilities: ['Flight', 'x'] });
     assert.deepStrictEqual(got.wrong, [{ field: 'abilities', problem: 'holds an item that is not a plain value; that item is not read' }]);
   });
   it('does not read a value that is not a list, and says so', () => {
@@ -130,5 +145,14 @@ describe('the scanner shapes what it reads and names what was wrong', () => {
   });
   it('the lists of fields are what the build test sweeps', () => {
     assert.ok(TEXT_FIELDS.includes('status') && 'aliases' in LIST_FIELDS && RECORD_LIST_FIELDS.includes('relationships'));
+  });
+});
+
+describe('parseNote: a value that refers to itself', () => {
+  const { parseNote, cutValueComments, commentFields } = require('../../lib/frontmatter');
+  it('is cut at the reference back, so every reader reaches an end', () => {
+    const { data } = parseNote('---\ntype: npc\ntags: &a [one, *a]\nbox: &b\n  in: *b\n  name: Tam\nsame: &c [x]\nagain: *c\n---\nbody\n');
+    assert.deepStrictEqual(data, { type: 'npc', tags: ['one', null], box: { in: null, name: 'Tam' }, same: ['x'], again: ['x'] });
+    assert.doesNotThrow(() => { cutValueComments(data); commentFields(data); shapeFrontmatter(data); });
   });
 });

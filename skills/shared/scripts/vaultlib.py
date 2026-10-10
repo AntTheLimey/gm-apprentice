@@ -867,10 +867,15 @@ def marker_re(*words: str) -> re.Pattern[str]:
     and spacing inside the comment do not matter. Group 1 is `/` for a
     closer, group 2 the name as typed. No words: both markers.
     tools/publish/test/fixtures/marker-vectors.json pins both sides."""
-    names = "|".join(re.escape(w) for w in words or
+    # Capitals are spelled out letter by letter: `re.I` on text also
+    # reads "ſ" as "s" and "ı" as "i", which the tool does not.
+    def any_case(word: str) -> str:
+        return "".join(f"[{c.lower()}{c.upper()}]" if c.isalpha()
+                       else re.escape(c) for c in word)
+    names = "|".join(any_case(w) for w in words or
                      tuple(word for _, word in _MARKERS))
     return re.compile(rf"<!--{_MARKER_SPACE}*(/?){_MARKER_SPACE}*({names})"
-                      rf"{_MARKER_SPACE}*-->", re.I)
+                      rf"{_MARKER_SPACE}*-->")
 
 
 GM_MARKER_RE = marker_re("gm-only")

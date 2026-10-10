@@ -35,6 +35,9 @@ const isPlain = (v) => typeof v === 'string' || typeof v === 'number' || typeof 
 const isDate = (v) => v instanceof Date;
 // An unquoted `2026-07-02` is a Date at UTC midnight: its UTC day is the day as written.
 const plainText = (v) => (isDate(v) ? (isNaN(v) ? '' : v.toISOString().slice(0, 10)) : String(v));
+// An unquoted `[[planned]]` is a list inside a list to YAML. It is read as its items, so a
+// value that keeps a note off the site, or a secret name, is not lost with the brackets.
+const flat = (v) => (Array.isArray(v) ? v.flat(Infinity).filter((x) => x != null) : v);
 
 // `frontmatter` with every listed field in its expected shape (the same object when nothing
 // had to change), and what was wrong: [{ field, problem }], each problem a clause that
@@ -49,8 +52,10 @@ function shapeFrontmatter(frontmatter) {
   };
 
   for (const field of TEXT_FIELDS) {
-    const value = frontmatter[field];
+    const value = flat(frontmatter[field]);
     if (value == null || typeof value === 'string') continue;
+    // `type: false` is no type, as an empty one is.
+    if (field === 'type' && typeof value === 'boolean') { set(field, undefined); continue; }
     if (isPlain(value) || isDate(value)) { set(field, plainText(value)); continue; }
     if (Array.isArray(value) && value.length > 0 && value.every((v) => isPlain(v) || isDate(v))) {
       const text = value.map(plainText).join(', ');
@@ -68,7 +73,7 @@ function shapeFrontmatter(frontmatter) {
     if (Array.isArray(value)) {
       if (value.every((v) => typeof v === 'string')) continue;
       // An empty item (`-` and nothing) goes without a word; a number or a date is its text.
-      const full = value.filter((v) => v != null);
+      const full = flat(value);
       const kept = full.filter((v) => isPlain(v) || isDate(v)).map(plainText);
       set(field, kept);
       if (kept.length < full.length) wrong.push({ field, problem: 'holds an item that is not a plain value; that item is not read' });

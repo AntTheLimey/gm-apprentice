@@ -105,7 +105,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   anything but a list in `aliases`, `abilities`, `weaknesses` or
   `notable_traits`, no longer stops the build. The build names the note
   and the field. An `aliases:` written as one bare name was never read;
-  the build now says so.
+  the build now says so. A list inside a list (`status: [[planned]]`
+  typed without quotes) is read as its items, as before, and a value
+  that refers to itself is cut at the reference.
 
 ## [1.10.41] — 2026-10-10
 

@@ -32,6 +32,9 @@
     {"line": "<!-- //gm-only -->", "found": []},
     {"line": "<!- gm-only ->", "found": []},
     {"line": "gm-only", "found": []},
-    {"line": "<!-- a comment -->", "found": []}
+    {"line": "<!-- a comment -->", "found": []},
+    {"line": "<!-- ſpoiler -->", "found": []},
+    {"line": "<!-- spoıler -->", "found": []},
+    {"line": "<!-- SPOİLER -->", "found": []}
   ]
 }

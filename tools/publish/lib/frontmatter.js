@@ -10,8 +10,23 @@ const { markerRe } = require('./markers');
 // "success" with empty data, and reads as a note with no `type:` instead of a broken
 // one (#287). The cache also hands two identical notes the same `data` object. Passing
 // options turns the cache off.
+//
+// A YAML value may refer to itself (`tags: &a [*a]`). Every reader below and across the
+// tool walks a value to its leaves, so the reference back is cut here, once, to nothing.
 function parseNote(text) {
-  return matter(text, {});
+  const note = matter(text, {});
+  uncycle(note.data, []);
+  return note;
+}
+
+function uncycle(value, above) {
+  if (!value || typeof value !== 'object' || value instanceof Date) return;
+  above.push(value);
+  for (const key of Object.keys(value)) {
+    if (above.includes(value[key])) value[key] = null;
+    else uncycle(value[key], above);
+  }
+  above.pop();
 }
 
 // One reading of what hides text in a frontmatter string. The value is read once, left to
