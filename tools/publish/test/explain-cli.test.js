@@ -65,10 +65,11 @@ function capture() {
 }
 
 describe('explain', () => {
-  // --shown: the frontmatter and body a reader gets, from the audit's own reader view.
+  // --shown: what the site holds of the note, read off the page the build makes of it.
   const hiddenNote = [
-    '---', 'type: session', 'status: played', 'occupation: Ferryman', 'secrets: he is the informant',
+    '---', 'type: npc', 'occupation: Ferryman', 'nationality: Quay-born', 'secrets: he is the informant',
     'gm_aliases: [Old Smuggler]', 'aliases: [Vesper, Old Smuggler]', 'publish_exclude_fields: [occupation]',
+    'private_memo: never printed anywhere',
     'relationships:', '  - target: "[[Mara]]"', '    type: knows',
     '  - target: "[[The Cult]]"', '    type: serves', '    gm_only: true', '---', '',
     '## Overview', '', 'A ferryman on the quay.', '',
@@ -76,58 +77,135 @@ describe('explain', () => {
     '## GM Notes', '', 'He runs the ferry for the cult.', '',
     '## Statistics', '', 'STR 50', '',
   ].join('\n');
+  const npcSite = (vault) => {
+    const configPath = siteFor(vault);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    config.folderMap.People = 'people';
+    fs.writeFileSync(configPath, JSON.stringify(config));
+    return configPath;
+  };
 
-  it('--shown prints what a reader gets: published frontmatter and the body after every cut', async () => {
+  it('--shown prints the page as the build makes it: what it prints is there, what it does not is not', async () => {
     const vault = makeVault();
-    write(vault, 'Sessions/Vesper.md', hiddenNote);
+    write(vault, 'People/Vesper.md', hiddenNote);
     const c = capture();
-    const rc = await runExplain({ configPath: siteFor(vault), target: 'Sessions/Vesper.md', shown: true }, c.deps);
+    const rc = await runExplain({ configPath: npcSite(vault), target: 'People/Vesper.md', shown: true }, c.deps);
     assert.strictEqual(rc, 0);
     const text = c.text();
     assert.match(text, /^ {2}VERDICT: publishes at /m);
-    assert.match(text, /^ {2}what a reader gets of this page \(nothing else of the note is on the site\):$/m);
-    const view = text.slice(text.indexOf('what a reader gets'));
-    assert.match(view, /^ {4}A ferryman on the quay\.$/m);
-    // An H2 after GM Notes ends the hidden section: the view shows it, so a split that
+    assert.match(text, /^ {2}what the site holds of this note, read off the page as the build makes it:$/m);
+    const view = text.slice(text.indexOf('what the site holds'));
+    const page = view.slice(view.indexOf('its page:'), view.indexOf('its link-preview card:'));
+    assert.match(page, /^ {4}A ferryman on the quay\.$/m);
+    // An H2 after GM Notes ends the hidden section: the page shows it, so a split that
     // left one behind is seen before the note publishes.
-    assert.match(view, /^ {4}## Statistics$/m);
-    for (const gone of ['cult', 'Ferryman', 'informant', 'Old Smuggler', 'private aside', 'publish_exclude_fields']) {
+    assert.match(page, /^ {4}Statistics$/m);
+    assert.match(page, /STR 50/);
+    // A header field the page prints, and a relationship it lists, are on the page.
+    assert.match(page, /Quay-born/);
+    assert.match(page, /Mara/);
+    for (const gone of ['cult', 'Ferryman', 'informant', 'Old Smuggler', 'private aside', 'publish_exclude_fields', 'never printed', 'private_memo']) {
       assert.ok(!view.includes(gone), `${gone} is in the view:\n${view}`);
     }
-    assert.match(view, /target: '\[\[Mara\]\]'/);
-    assert.match(view, /^ {6}- Vesper$/m);
+    // The search finds the note by its public alias, which the page does not print.
+    assert.match(view, /what the search finds it by[^\n]*\n {4}title: Vesper\n(?: {4}subtitle: [^\n]*\n)? {4}aliases: Vesper\n/);
+    assert.match(view, /Nothing else of this note's body and fields is on the site\. Other pages that link the note still print its name\./);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('--shown --json adds shown: { frontmatter, markdown }, and plain --json has no such key', async () => {
+  it('--shown --json adds shown: { from, page, story, card, search }, and plain --json has no such key', async () => {
     const vault = makeVault();
-    write(vault, 'Sessions/Vesper.md', hiddenNote);
+    write(vault, 'People/Vesper.md', hiddenNote);
+    const configPath = npcSite(vault);
     const c = capture();
-    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Vesper.md', shown: true, json: true }, c.deps);
+    await runExplain({ configPath, target: 'People/Vesper.md', shown: true, json: true }, c.deps);
     const { shown } = JSON.parse(c.out.join(''));
-    assert.deepStrictEqual(shown.frontmatter.relationships, [{ target: '[[Mara]]', type: 'knows' }]);
-    assert.ok(!('occupation' in shown.frontmatter) && !('secrets' in shown.frontmatter));
-    assert.ok(shown.markdown.startsWith('## Overview') && !shown.markdown.includes('cult'));
+    assert.strictEqual(shown.from, 'page');
+    assert.ok(shown.page.includes('A ferryman on the quay.') && !shown.page.includes('cult'), shown.page);
+    assert.strictEqual(shown.story, null);
+    assert.strictEqual(shown.card.t, 'Vesper');
+    assert.deepStrictEqual(shown.search.aliases, ['Vesper']);
+    assert.ok(shown.search.body.trim().startsWith('## Overview') && !shown.search.body.includes('cult'));
     const plain = capture();
-    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Vesper.md', json: true }, plain.deps);
+    await runExplain({ configPath, target: 'People/Vesper.md', json: true }, plain.deps);
     assert.ok(!('shown' in JSON.parse(plain.out.join(''))));
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('--shown answers for a note that does not publish, and shows nothing of a publish: false note', async () => {
+  it('--shown builds a note the manifest withholds as if it published, and writes nothing', async () => {
+    const vault = makeVault();
+    write(vault, 'People/Vesper.md', hiddenNote);
+    write(vault, 'People/Mara.md', '---\ntype: npc\n---\n\nShe met [[Vesper]].\n');
+    write(vault, '_meta/publish-manifest.md', '---\nmode: player\n---\n\n## Publishing (1 files)\n\n- [x] People/Mara.md\n\n## Excluded (1 files)\n\n- [x] People/Vesper.md\n');
+    const configPath = npcSite(vault);
+    const c = capture();
+    await runExplain({ configPath, target: 'People/Vesper.md', shown: true }, c.deps);
+    assert.match(c.text(), /VERDICT: does not publish/);
+    assert.match(c.text(), /what the site holds of this note, if it published, read off the page as the build makes it:/);
+    assert.match(c.text(), /^ {4}A ferryman on the quay\.$/m);
+    assert.ok(!c.text().includes('cult'));
+    assert.ok(!fs.existsSync(path.join(path.dirname(configPath), 'docs')), 'the in-memory build wrote a site');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--shown on a session index whose Wrap-Up is published shows the recap its page prints, not its withheld body', async () => {
+    const vault = makeVault();
+    write(vault, 'Sessions/Session_09.md', '---\ntype: session\nsession_number: 9\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Session_09_Wrap_Up]]"\n---\n\n## Prep\n\nPrep only words.\n');
+    write(vault, 'Sessions/Session_09_Wrap_Up.md', '---\ntype: session_wrap\nsession: "[[Session_09]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Narrative Recap\n\nThe recap as played.\n');
+    write(vault, '_meta/vault-config.md', '---\npublish:\n  mode: full\n---\n');
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_09.md', shown: true, json: true }, c.deps);
+    const { shown, bodyWithheld } = JSON.parse(c.out.join(''));
+    assert.strictEqual(bodyWithheld, true);
+    assert.ok(shown.page.includes('The recap as played.'), shown.page);
+    assert.ok(!shown.page.includes('Prep only words'), shown.page);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--shown shows a PC\'s story page with it, and a story file asked about alone shows the story page', async () => {
+    const configPath = siteForFixtureStory();
+    const c = capture();
+    await runExplain({ configPath, target: 'Characters/PCs/Adrien.md', shown: true, json: true }, c.deps);
+    const pc = JSON.parse(c.out.join('')).shown;
+    assert.strictEqual(pc.from, 'page');
+    assert.ok(pc.page && pc.story, JSON.stringify(Object.keys(pc)));
+    const s = capture();
+    await runExplain({ configPath, target: 'Characters/PCs/Adrien_Story.md', shown: true, json: true }, s.deps);
+    const story = JSON.parse(s.out.join('')).shown;
+    assert.strictEqual(story.page, null);
+    assert.strictEqual(story.story, pc.story);
+  });
+
+  it('--shown answers for a note the build makes no page of, and shows nothing of a publish: false note', async () => {
     const vault = makeVault();
     write(vault, 'Elsewhere/Loose.md', '---\nname: Loose\n---\n\nOpen words.\n\n## GM Notes\n\nHidden words.\n');
     write(vault, 'Sessions/Off.md', '---\ntype: session\nstatus: played\npublish: false\n---\n\nNever shown.\n');
     const c = capture();
     await runExplain({ configPath: siteFor(vault), target: 'Elsewhere/Loose.md', shown: true }, c.deps);
-    assert.match(c.text(), /what a reader gets of this page, if it published/);
+    assert.match(c.text(), /the site can build no page of this note as it stands \([A-Z_]+\), so this is the note after every cut a page gets, if it published:/);
+    assert.match(c.text(), /^ {4}name: Loose$/m);
     assert.match(c.text(), /^ {4}Open words\.$/m);
     assert.ok(!c.text().includes('Hidden words'));
+    const j = capture();
+    await runExplain({ configPath: siteFor(vault), target: 'Elsewhere/Loose.md', shown: true, json: true }, j.deps);
+    assert.deepStrictEqual(JSON.parse(j.out.join('')).shown, { from: 'note', frontmatter: { name: 'Loose' }, markdown: 'Open words.' });
     const off = capture();
     await runExplain({ configPath: siteFor(vault), target: 'Sessions/Off.md', shown: true }, off.deps);
     assert.ok(!off.text().includes('Never shown'));
-    assert.match(off.text(), /body as published:\n {4}\(none\)/);
+    assert.match(off.text(), /what the site holds of this note: nothing — it is marked publish: false/);
     fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('--vault answers for that vault through the site\'s rules, not the one the site file names', async () => {
+    const vault = makeVault();
+    const other = makeVault();
+    write(other, 'Sessions/Session_07.md', '---\ntype: session\nsession_number: 7\nstatus: played\n---\n\n## Narrative Recap\n\nOnly in the other vault.\n');
+    const c = capture();
+    await runExplain({ configPath: siteFor(vault), vaultPath: other, target: 'Sessions/Session_07.md', shown: true }, c.deps);
+    assert.match(c.text(), /Only in the other vault\./);
+    assert.ok(!c.text().includes('The team reached the docks'));
+    fs.rmSync(vault, { recursive: true, force: true });
+    fs.rmSync(other, { recursive: true, force: true });
   });
 
   it('walks the chain and names the output path for a published page', async () => {

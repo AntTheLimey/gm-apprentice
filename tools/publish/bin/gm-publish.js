@@ -151,15 +151,21 @@ decision the build makes, so a file it calls "publish" is a file the build
 publishes. The tool only shows the drift — which files are correctly
 excluded versus missing is the GM's call.
 
-  manifest diff [--config <path>] [--json]
+  manifest diff [--config <path>] [--vault <dir>] [--json]
                      List files the manifest does not mention (with the bucket,
                      code and reason for each), entries whose file is gone, and
-                     the per-section unchanged counts
+                     the per-section unchanged counts. An entry for a note in a
+                     folder the site leaves out is listed apart: its file is
+                     there, and --prune keeps it.
   manifest apply [--publish <path>]... [--exclude "<path>=<reason>"]...
-                 [--decide <path>]... [--prune] [--config <path>] [--json]
+                 [--decide <path>]... [--prune] [--config <path>] [--vault <dir>]
+                 [--json]
                      Move paths between the three sections and rewrite the file.
                      --prune drops entries with no file on disk. A path that
                      matches no vault file is an error and nothing is written.
+                     --vault (diff and apply): read and write this vault's
+                     manifest through the site's rules, as doctor --site --vault
+                     audits it, so a fix lands in the vault that was audited.
   manifest rename --vault <dir> --from <vault path> --to <vault path> --json
                  [--name <spelling>]... [--config <site vault.config.json>]
                      What renaming a note would change in the files this tool
@@ -222,7 +228,7 @@ vault_check uses it instead of keeping a copy of the build's filters.
 A request that cannot be answered gets {"error":"…"}.
 `,
   explain: `
-gm-apprentice-publish explain <vault-relative path> [--shown] [--config <path>] [--json]
+gm-apprentice-publish explain <vault-relative path> [--shown] [--config <path>] [--vault <dir>] [--json]
 gm-apprentice-publish explain --all --json [--config <path>] [--vault <dir>]
 
 Prints the chain the build walks for one file — directory, type, publish mode,
@@ -234,12 +240,22 @@ rather than the whole vault.
 
   gm-apprentice-publish explain "Sessions/Session 7.md"
 
-With --shown, follows with what a reader gets of the page, or would get if
-it published: its frontmatter as published (excluded fields, gm_only
-relationships and gm_aliases gone) and its body after every cut the build
-makes. Text that is not there is not on the site. Use it to check a note
-before listing it under Publishing. With --json it is "shown":
-{ frontmatter, markdown }.
+With --shown, follows with what the site holds of the note, or would hold if
+it published. The site is built in memory with the note given a page, and
+the answer is read off that page: the text of the page as built (and of a
+PC's story page), its link-preview card, and what the search finds it by
+(title, subtitle, aliases and every word of the body as published; a PC's
+page prints only some of its sections, the search reads them all). Nothing
+else of the note's body and fields is on the site; other pages that link it
+still print its name. Use it to check a note before listing it under
+Publishing. With --json it is "shown": { from: "page", page, story, card,
+search: { title, subtitle, aliases, body } }. A note the build can make no
+page of (no type, a folder not on the site) is shown as its frontmatter as
+published and its body after every cut: { from: "note", frontmatter,
+markdown }. A publish: false note: { from: "none" }.
+
+--vault answers for that vault through the site's rules (a working copy,
+or the vault doctor --site --vault audited).
 
 With --all, prints one JSON object for every file the vault walk sees:
 { vaultPath, switches, excludeSections, pages: [{ path, type, publishes,
@@ -745,14 +761,15 @@ if (command === 'explain') {
     printSubcommandHelp('explain');
     process.exit(1);
   }
-  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json', '--shown': 'shown' });
+  // --vault: answer for this vault through the site's rules, as `doctor --site --vault` audits it.
+  const parsed = parseSubcommandArgs(args.slice(2), { '--json': 'json', '--shown': 'shown' }, { '--vault': 'vault' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('explain');
     process.exit(1);
   }
   const { runExplain } = require('../lib/explain-cli.js');
-  runExplain({ configPath: parsed.configPath, target, json: !!parsed.flags.json, shown: !!parsed.flags.shown })
+  runExplain({ configPath: parsed.configPath, vaultPath: parsed.flags.vault, target, json: !!parsed.flags.json, shown: !!parsed.flags.shown })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;
@@ -801,7 +818,7 @@ if (command === 'manifest') {
     // --vault: vault_check asks about the vault it is checking, which need not be the
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
-      : verb === 'rename' ? { '--vault': 'vault', '--from': 'from', '--to': 'to' } : {},
+      : verb === 'rename' ? { '--vault': 'vault', '--from': 'from', '--to': 'to' } : { '--vault': 'vault' },
     verb === 'apply' ? { '--publish': 'publish', '--exclude': 'exclude', '--decide': 'decide' }
       : verb === 'rename' ? { '--name': 'names' } : {},
   );

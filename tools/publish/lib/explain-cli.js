@@ -157,11 +157,13 @@ async function runExplain(options, deps) {
   const canonStatus = frontmatter ? getCanonStatus(frontmatter) : null;
   const section = manifestSectionOf(manifest, target);
 
-  // --shown: what a reader gets of this page, or would if it published: the frontmatter
-  // as published and the body after every cut the build makes (readerView, the audit's
-  // own). For a note the scanner made no page of, the file is read here. A `publish:
-  // false` note shows nothing. Not replicated: a PC note whose headings a link label
-  // shifts, which the build withholds whole while character sheets are off.
+  // --shown: what the site holds of this note, or would if it published. The build is run
+  // in memory with the note built as if it published, and what comes back is read off the
+  // page it made: the text of the page (and of a PC's story page), its link-preview card,
+  // and what the search index holds. So it is the page, not a second reading of the note.
+  // A note the build can make no page of (no type, a folder not on the site) has no
+  // template to print it: for that one the frontmatter as published and the body after
+  // every cut are shown instead, and `from` says so. A `publish: false` note shows nothing.
   let shown = null;
   if (opts.shown && !frontmatterError) {
     let source = page;
@@ -171,11 +173,19 @@ async function runExplain(options, deps) {
         source = { markdown: parsed.content, frontmatter: parsed.data || {} };
       } catch (e) { source = null; }
     }
-    if (source && publishMode(source.frontmatter) !== 'none') {
-      const view = readerView(source, publishConfig, { bodyWithheld: hubBodyUnpublished, rel: target });
-      shown = { frontmatter: view.frontmatter, markdown: view.safe.text.replace(/\n{3,}/g, '\n\n').trim() };
+    if (source && publishMode(source.frontmatter) === 'none') {
+      shown = { from: 'none' };
     } else if (source) {
-      shown = { frontmatter: {}, markdown: '' };
+      let built = null;
+      try {
+        built = require('./build').build({ configPath: survey.configPath, vaultPath, rawConfig: d.config, inMemory: true, shownFor: target }).shown;
+      } catch (e) { built = null; }
+      if (built && (built.page !== null || built.story !== null)) {
+        shown = Object.assign({ from: 'page' }, built);
+      } else {
+        const view = readerView(source, publishConfig, { bodyWithheld: hubBodyUnpublished, rel: target });
+        shown = { from: 'note', frontmatter: view.frontmatter, markdown: view.safe.text.replace(/\n{3,}/g, '\n\n').trim() };
+      }
     }
   }
 
@@ -241,19 +251,52 @@ async function runExplain(options, deps) {
   }
   if (opts.shown) {
     out('');
+    const block = (text) => { for (const line of (text || '(nothing)').split('\n')) out(`    ${line}`); };
     if (!shown) {
-      out('  what a reader gets: unknown — the note could not be read');
+      out('  what the site holds of this note: unknown — the note could not be read');
       return 0;
     }
-    out(`  what a reader gets of this page${publishes ? '' : ', if it published'} (nothing else of the note is on the site):`);
+    if (shown.from === 'none') {
+      out('  what the site holds of this note: nothing — it is marked publish: false, so no page is built from it');
+      return 0;
+    }
+    const iff = publishes || mergedInto ? '' : ', if it published';
+    if (shown.from === 'note') {
+      out(`  the site can build no page of this note as it stands (${verdict.code}), so this is the note after every cut a page gets${iff}:`);
+      out('');
+      out('  frontmatter as published (a page prints some of these fields, the search and the cards read others):');
+      block(Object.keys(shown.frontmatter).length
+        ? yaml.safeDump(shown.frontmatter, { lineWidth: -1, skipInvalid: true }).trimEnd() : '(none)');
+      out('');
+      out('  body as published:');
+      block(shown.markdown);
+      return 0;
+    }
+    out(`  what the site holds of this note${iff}, read off the page as the build makes it:`);
+    if (shown.page !== null) {
+      out('');
+      out('  its page:');
+      block(shown.page);
+    }
+    if (shown.story !== null) {
+      out('');
+      out('  its story page:');
+      block(shown.story);
+    }
+    if (shown.card) {
+      out('');
+      out('  its link-preview card:');
+      block([shown.card.t, shown.card.k, ...(shown.card.f || []).map(([label, value]) => `${label}: ${value}`), shown.card.x].filter(Boolean).join('\n'));
+    }
+    if (shown.search) {
+      out('');
+      out('  what the search finds it by (not all of it is printed on the page):');
+      block([`title: ${shown.search.title}`, shown.search.subtitle ? `subtitle: ${shown.search.subtitle}` : '',
+        shown.search.aliases.length ? `aliases: ${shown.search.aliases.join(', ')}` : '',
+        'every word of the body as published:', shown.search.body.replace(/\n{3,}/g, '\n\n').trim() || '(nothing)'].filter(Boolean).join('\n'));
+    }
     out('');
-    out('  frontmatter as published:');
-    const fields = Object.keys(shown.frontmatter).length
-      ? yaml.safeDump(shown.frontmatter, { lineWidth: -1, skipInvalid: true }).trimEnd() : '(none)';
-    for (const line of fields.split('\n')) out(`    ${line}`);
-    out('');
-    out('  body as published:');
-    for (const line of (shown.markdown || '(none)').split('\n')) out(`    ${line}`);
+    out('  Nothing else of this note\'s body and fields is on the site. Other pages that link the note still print its name.');
   }
   return 0;
 }
