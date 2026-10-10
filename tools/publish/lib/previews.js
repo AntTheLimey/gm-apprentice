@@ -77,7 +77,7 @@ function cardFor(page, ctx) {
   const fm = page.frontmatter || {};
   const title = page.displayTitle || page.title;
   if (!title) return null;
-  const card = { t: title, k: kindLabel(fm.type) };
+  const card = { t: String(title), k: kindLabel(fm.type) };
 
   const facts = factsFor(fm);
   if (facts.length) card.f = facts;

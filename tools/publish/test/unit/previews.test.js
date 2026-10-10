@@ -122,6 +122,13 @@ describe('a PC card and the page header share their badges', () => {
   });
 });
 
+describe('a card title is always a string', () => {
+  it('writes a numeric or boolean title as text', () => {
+    assert.strictEqual(cardFor(page('wiki', {}, 'A.', { displayTitle: 1984 }), ctx).t, '1984');
+    assert.strictEqual(cardFor(page('wiki', {}, 'A.', { displayTitle: true }), ctx).t, 'true');
+  });
+});
+
 describe('buildPreviews', () => {
   it('keys cards by output path and skips a page with no title', () => {
     const map = buildPreviews([page('npc', {}, 'A.'), { outputPath: 'y.html', frontmatter: {}, displayTitle: '' }], ctx);
