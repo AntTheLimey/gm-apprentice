@@ -37,24 +37,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hover or keyboard focus, or, on a phone, shortly after the page loads,
   so the first tap already finds it. It is about 188 KB (57 KB as sent)
   for a 613-page campaign and 114 KB (32 KB) for a 402-page one.
-- **A player character's card** shows the badges from its page header and
-  its epithet line. A draft page's card says Draft.
-- **With the setting off** no page changes, no cards file is written and
-  the script is not copied. Every site's `css/style.css` gains the card's
-  rules.
+- **A player character's card** shows the player and the badges from its
+  page header, and its epithet line. On a Call of Cthulhu folio, which
+  prints neither the badges nor an epithet, it shows the player only. A
+  draft page's card says Draft.
+- **With the setting off** a site gets no cards, no cards file and no
+  script. Every site's `css/style.css` gains the card's rules.
 
 ### Fixed
+
+These changes reach every site, whatever the setting.
 
 - **A date in a page header shows as written.** An unquoted date such as
   `play_date: 2026-07-02` used to print as a long machine string, a day
   early. It now reads `2026-07-02`, on every kind of page.
-- **A name in a header shows as a name.** A clue's "found by", a
-  document's author and an item's origin or holder no longer print
-  `[[ ]]` brackets, `Target|alias` or underscore-joined file names; a
-  faction's leader and territory, an event's place and outcome and a PC's
-  badges follow the same rule.
+- **A name in a header shows as a name, and links when it can.** A
+  clue's "found by", a document's author and an item's origin or holder
+  no longer print `[[ ]]` brackets or `Target|alias`; a faction's leader
+  and territory, an event's place and outcome and a PC's badges follow
+  the same rule. A name of a published page in a header is now a link. A bare underscore-joined name (for
+  example `Anna_Lindqvist`) prints as the name in an item's holder or
+  origin, a faction's leader or territory and an event's place; in the
+  other badges it still prints as written.
 - **A type shown in a header reads as words.** `plot_thread` now reads
-  "Plot thread".
+  "Plot thread". The "Mentioned in" list names a page's kind the same
+  way as the preview card: "NPC", "Session" (for a Wrap-Up too) and
+  "Plot thread", where it used to print the raw type such as `npc` or
+  `session_wrap`.
 - **An item's holder is no longer cut short.** A holder such as
   `[[Nathaniel]] (and / or [[Cleo]])` printed as "or Cleo)"; it now shows
   whole.
