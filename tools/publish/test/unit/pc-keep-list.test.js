@@ -383,9 +383,9 @@ describe('bareSectionTitle', () => {
     assert.strictEqual(bareSectionTitle('_Skills_'), 'skills');
     assert.strictEqual(bareSectionTitle('Notes:'), 'notes');
   });
-  it('leaves two emphasised spans alone', () => {
-    assert.strictEqual(bareSectionTitle('**A** and **B**'), '**a** and **b**');
-    assert.strictEqual(bareSectionTitle('*A* and *B*'), '*a* and *b*');
-    assert.strictEqual(bareSectionTitle('_a_b_'), '_a_b_');
+  it('reads two emphasised spans as the words they show', () => {
+    assert.strictEqual(bareSectionTitle('**A** and **B**'), 'a and b');
+    assert.strictEqual(bareSectionTitle('*A* and *B*'), 'a and b');
+    assert.strictEqual(bareSectionTitle('snake_case_name'), 'snake_case_name');
   });
 });

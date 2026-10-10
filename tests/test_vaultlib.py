@@ -430,6 +430,30 @@ class ScanBodyTests(unittest.TestCase):
         self.assertFalse(by_line[4].published)
         self.assertNotIn("hidden", vl.publisher_lines(text, ["GM Notes"]))
 
+    def test_a_dressed_excluded_heading_is_hidden_by_the_tool(self):
+        # The tool is the one reading of what is hidden (heading-key.js):
+        # a bold, coloured, linked or id-marked `GM Notes` is that section.
+        for heading in ("## **GM Notes**", "## GM Notes:", "## [[GM Notes]]",
+                        "## GM Notes {#gm}", "## _GM Notes_ ##"):
+            with self.subTest(heading=heading):
+                out = "\n".join(vl.publisher_lines(
+                    f"# Bob\n\n{heading}\nhidden\n\n## Open\nshown\n",
+                    ["GM Notes"]))
+                self.assertNotIn("hidden", out)
+                self.assertIn("shown", out)
+        # Other words are another section.
+        out = "\n".join(vl.publisher_lines(
+            "# Bob\n\n## GM Notes on travel\nshown\n", ["GM Notes"]))
+        self.assertIn("shown", out)
+
+    def test_obsidian_comments_are_hidden_by_the_tool(self):
+        text = ("a %%gone%% b\n\n%%\nblock gone\n%%\n\n`%%kept%%`\n\n"
+                "tail\n%% never closed\nrest gone\n")
+        out = "\n".join(vl.publisher_lines(text, []))
+        self.assertNotIn("gone", out)
+        self.assertIn("`%%kept%%`", out)
+        self.assertIn("tail", out)
+
     def test_a_heading_inside_a_gm_block_ends_no_exclusion(self):
         # The mirror case: an exclusion opened outside the block is not
         # closed by a shallower heading the publish tool has stripped.

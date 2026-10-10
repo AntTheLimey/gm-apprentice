@@ -3,6 +3,7 @@ const { canonicalNfc } = require('./unicode');
 const lunr = require('lunr');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { stripTags } = require('./strip-tags');
+const { getsNoPage } = require('./previews');
 
 function stripMarkdown(md) {
   return stripTags(md)  // tags typed in a body are markup, not searchable prose
@@ -31,7 +32,11 @@ function refFor(i) {
   return i.toString(36);
 }
 
-function buildSearchIndex(pages) {
+function buildSearchIndex(allPages) {
+  // A note the build writes no page for has no search entry: a result would open a page
+  // that is not there, and its words would be findable. previews.js has the one
+  // predicate, the render loop and the cards ask it too.
+  const pages = allPages.filter(page => !getsNoPage(page));
   const documents = {};
 
   pages.forEach((page, i) => {

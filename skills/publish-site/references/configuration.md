@@ -37,6 +37,7 @@ publish:
 | Landing tagline | `publish.theme.tagline` | One-sentence hook under the title on the landing page (default: none) |
 | Footer | `publish.footer` | Text for the footer of every page (default: none) |
 | Search | `publish.search` | `false` (or `no`, `off`) leaves out the search index (default: `true`) |
+| Link previews | `publish.link_previews` | `on` (default), `desktop` or `off` (`yes` and `no` read as `on` and `off`). The card a reader sees on resting on, focusing or tapping a link to another page. `desktop` leaves touch taps as they were. Set it for the GM with `npx gm-apprentice-publish vault-setting --set link_previews='"desktop"'` from the site directory. An unknown value is `on`, with a build warning |
 | Game system | `publish.system` | Selects the PC character-sheet renderer. Values in `schema-reference.md` § Site-level configuration fields |
 | Folder map | `publish.folder_map` | Maps vault folders to site output paths. A folder holding typed pages with no entry is skipped with a build warning. Default: empty; `init` writes the standard map |
 | Attachments directory | `publish.attachments_dir` | Vault folder holding images (default: `_attachments`) |
@@ -44,7 +45,7 @@ publish:
 | Live stats | `publish.live_stats` | Switch (default: off). See § Switches |
 | Inbox | `publish.inbox` | Switch (default: off). See § Switches |
 | PC prose sections | `publish.pc_prose_sections` | Extra `##` headings a PC page keeps when character sheets are off (default: none). See § Switches |
-| Excluded sections | `publish.exclude_sections` | H2 headings to strip (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
+| Excluded sections | `publish.exclude_sections` | Headings to strip, at any level, with everything under them (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
 | Excluded callouts | `publish.exclude_callouts` | Strip Obsidian callouts (`> [!type]`): `true` for all, or an array of types (default: `false`; scaffolded sites set `true`) |
 | Excluded fields | `publish.exclude_fields` | Frontmatter fields to strip (default: `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
 | Excluded directories | `publish.exclude_dirs` | Vault directories to skip (default: `["_meta", "_Templates"]`). Spelling is normalized (trailing `/`, leading `./`, backslashes, an absolute path inside the vault) and matched case-insensitively, so `"NPCs/Hidden/"` and `"npcs/hidden"` exclude the same folder |
@@ -480,8 +481,8 @@ Two rows behave differently:
 
 Settings that never had a site-file form (`mode`, `exclude_drafts`,
 `theme`, `four_oh_four`, `overrides`, `section_titles`,
-`pc_prose_sections`, `character_sheets`, `sheet_skin`, `sheet_frame`,
-`setting_year`) are read from the vault file only.
+`pc_prose_sections`, `link_previews`, `character_sheets`, `sheet_skin`,
+`sheet_frame`, `setting_year`) are read from the vault file only.
 
 ### Moving the settings
 

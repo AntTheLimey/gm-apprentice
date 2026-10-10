@@ -4,7 +4,7 @@
 // the one place outside `init` and `migrate-config` that writes them. migrate.py asks
 // this rather than read the theme or decide which fonts come from Google itself.
 //
-//   vault-setting --json                      -> { defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame, dndbeyondSync }
+//   vault-setting --json                      -> { defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame, dndbeyondSync, linkPreviews }
 //   vault-setting --set <key>=<json> --json   -> { written: [keys] }
 const fs = require('fs');
 const path = require('path');
@@ -19,6 +19,7 @@ const SETTABLE = {
   'sheet_skin': (v) => typeof v === 'string' && Object.prototype.hasOwnProperty.call(SKINS, v),
   'sheet_frame': (v) => v === 'none' || FRAME_IDS.includes(v),
   'dndbeyond_sync': (v) => v === 'build' || v === 'manual',
+  'link_previews': (v) => v === 'on' || v === 'desktop' || v === 'off',
 };
 
 function siteConfigPath(options) {
@@ -66,6 +67,8 @@ function read(options) {
     sheetFrame: asString(rawPublish(vaultPath).sheet_frame),
     // When the D&D Beyond sync runs: 'build' or 'manual' (null when the line is not there).
     dndbeyondSync: asString(rawPublish(vaultPath).dndbeyond_sync),
+    // Hover preview cards: 'on', 'desktop' or 'off' (null when the line is not there or is a YAML boolean).
+    linkPreviews: asString(rawPublish(vaultPath).link_previews),
   };
 }
 

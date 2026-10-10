@@ -1,10 +1,10 @@
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativePath, relativeHref, publishedSource, encodeHref } = require('../processor');
 const { canonicalNfc } = require('../unicode');
+const { headerMeta, headerMetaFields, pcEpithetText } = require('../pc-header-meta');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
-const { excerptFromMarkdown } = require('../excerpt');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher } = require('./pc-registry');
@@ -12,19 +12,9 @@ const { sheetSourceOf } = require('../sheet-source');
 const { resolveLook, isDressed } = require('../skins');
 const { framedPortrait } = require('../skins/portrait');
 
-const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
-
-function formatLabel(fieldName) {
-  return fieldName
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, c => c.toUpperCase());
-}
-
 function renderMetaSpans(fm) {
-  const fields = Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS;
-  return fields
-    .filter(field => fm[field] != null && fm[field] !== '')
-    .map(field => `<span><span class="label">${escapeHtml(formatLabel(field))}</span> ${escapeHtml(String(fm[field]))}</span>`)
+  return headerMeta(fm)
+    .map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(String(value))}</span>`)
     .join('\n    ');
 }
 
@@ -51,6 +41,12 @@ function isGurpsSystem(publishConfig) {
 
 function isCocSystem(publishConfig) {
   return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
+}
+
+// Whether a PC page is the CoC parchment folio (sheets on, CoC system). That page has no
+// epithet under the masthead; every other PC page opens with one.
+function usesCocFolio(publishConfig, sheetsOff) {
+  return isCocSystem(publishConfig) && !sheetsOff;
 }
 
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
@@ -355,10 +351,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // prose. A sheet's body opens with stat tables, label lines and tick-boxes; the
   // excerpt drops them, so the quote is never "Playbook: Cutter Insight Prowess Resolve…".
   let epithet = '';
-  const traitsText = Array.isArray(fm.key_traits)
-    ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
-    : String(fm.key_traits || '');
-  const quoteText = traitsText.trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
+  const quoteText = pcEpithetText(page);
   if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
 
   // Status-bar tier off ⇒ no live vitals UI anywhere. Null out every live input
@@ -409,7 +402,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   if (sheetsOff) {
     // Who the character is, then the line saying why there is no sheet; the kept prose follows.
     // A fact the header's meta badges already show is not said twice.
-    const headerFields = new Set((Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS)
+    const headerFields = new Set(headerMetaFields(fm)
       .filter(field => fm[field] != null && fm[field] !== ''));
     // ... but only when the header shows the same value the strip would: a header that shows
     // a raw "ca. 150" leaves the strip's valid total (from the Points Summary) in place.
@@ -421,7 +414,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const strip = pairs.length
       ? `<div class="pc-identity">\n${pairs.map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(value)}</span>`).join('\n')}\n</div>\n`
       : '';
-    const metaFields = Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS;
+    const metaFields = headerMetaFields(fm);
     const kept = metaFields.includes('sheet_source') ? sheetSourceOf(fm) : '';
     const keptLine = kept ? ` This sheet is kept: ${escapeHtml(kept)}.` : '';
     sheetContent = `${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
@@ -484,7 +477,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
-  if (cocSheet && !sheetsOff) {
+  if (usesCocFolio(publishConfig, sheetsOff)) {
     const portraitUrl = hasPortrait
       ? (((portraitImg(fm, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
       : '';
@@ -566,4 +559,4 @@ ${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
   });
 }
 
-module.exports = { pageTabs, pcTemplate };
+module.exports = { pageTabs, pcTemplate, usesCocFolio };

@@ -10,7 +10,7 @@ All campaign content falls into three categories:
 - All prep files: sessions/scenes with `status: planned | prepped`,
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
-- H2 sections listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
+- Sections whose heading is listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
 - On a `type: document` page, a handout's own Keeper sections, whatever
   `exclude_sections` says: `Context`, any heading starting `Clues`,
   `Prop Notes`, `Physical Prop Notes`, `Delivery`, `Delivery Notes`.
@@ -21,6 +21,15 @@ All campaign content falls into three categories:
   stripped before render and never reach the site. Comments inside
   fenced code blocks are preserved. An unclosed `<!--` strips to end
   of file and prints a build warning.
+- **Obsidian comments, `%% ... %%`.** Inline, or across several lines
+  with `%%` on its own line above and below. A `%%` opens a comment
+  and the next `%%` closes it; the text around a comment on the same
+  line stays, whether the line is a paragraph, a table cell, a list
+  item, a quote or a heading. `%%` in a fenced code block or in
+  inline code is literal text and stays. An unclosed `%%` hides the
+  rest of the note and prints a build warning. That includes a stray
+  `%%` in prose, such as `100%% done`: it starts a comment, as it does
+  in Obsidian.
 - Frontmatter fields in `exclude_fields` (default:
   `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`)
 - Files whose frontmatter says `publish: false` — in **every** mode,
@@ -33,7 +42,24 @@ All campaign content falls into three categories:
 - On a `publish: stub` file, everything except the sections named in
   `publish_include_sections`. Everything in this list is withheld
   first, so a named section under a withheld heading, or inside a
-  `gm-only` block, a spoiler block or an HTML comment, stays withheld.
+  `gm-only` block, a spoiler block or a comment, stays withheld.
+
+A heading is matched by its words, not its dressing. `## GM Notes`,
+`## GM Notes:`, `## **GM Notes**`, `## _GM Notes_`, `## GM Notes {#gm}`,
+`## GM Notes ^gm`, `## [[GM Notes]]`, `## GM Notes ##`, `## gm  notes`
+and a Setext heading (`GM Notes` underlined with `---`) are all the same
+section. Emphasis (`*`, `_`, `~~`, `==`, backticks), a trailing `{#id}`
+or `{.class}`, a trailing `^block-id`, closing `#`s, one trailing colon,
+link brackets and spacing are ignored, and case does not matter. A link
+with a label (`[[Plans|GM Notes]]`) counts as both its label and its
+target. A heading with other words (`GM Notes on travel`) or a trailing
+dash or emoji is a different section and is not hidden. A name in
+`exclude_sections` and in `publish_include_sections` is read the same
+way.
+
+A heading line written inside a fenced code block is code, not a heading:
+it neither starts nor ends a hidden section. A fence that is never closed
+is not trusted, so a heading after it is still read as a heading.
 
 ### Frontmatter is not covered by the fence
 

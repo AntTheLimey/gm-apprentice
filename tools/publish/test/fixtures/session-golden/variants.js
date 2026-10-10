@@ -72,8 +72,9 @@ function mainBlocks(docs) {
       if (e.isDirectory()) walk(full);
       else if (/^session-.*\.html$/.test(e.name)) {
         const html = fs.readFileSync(full, 'utf8');
-        const m = html.match(/<main class="content">[\s\S]*?<\/main>/);
-        blocks[path.relative(docs, full).split(path.sep).join('/')] = m ? m[0] : null;
+        // The link-previews attribute is not part of what these goldens pin.
+        const m = html.match(/<main class="content"(?: data-previews="[a-z]+")?>[\s\S]*?<\/main>/);
+        blocks[path.relative(docs, full).split(path.sep).join('/')] = m ? m[0].replace(' data-previews="on"', '').replace(' data-previews="desktop"', '') : null;
       }
     }
   };

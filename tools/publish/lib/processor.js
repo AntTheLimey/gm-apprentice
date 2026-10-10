@@ -2,14 +2,28 @@ const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
+const { headingKey, headingKeys, titleNamedIn } = require('./heading-key');
 const md = createRenderer();
 
 function renderMarkdown(markdown) {
   return md.render(markdown);
 }
 
+// A frontmatter Date (an unquoted `2026-07-02`) as the date the GM wrote: YAML reads it as
+// UTC midnight, so its UTC day is the written one (String() would print a long machine
+// string a day early in a western timezone).
+function dateText(date) {
+  return isNaN(date) ? '' : date.toISOString().slice(0, 10);
+}
+
+// What a header prints for a frontmatter value.
+function valueText(value) {
+  if (value instanceof Date) return dateText(value);
+  return String(value == null ? '' : value);
+}
+
 function escapeHtml(str) {
-  return String(str || '')
+  return (str instanceof Date ? dateText(str) : String(str || ''))
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -116,11 +130,11 @@ function isDocumentPage(frontmatter) {
 // the keep-list, level 1-2 only), or null. isExcludedSection and the strip both
 // ask this, so the explanation cannot drift from the strip.
 function exclusionReason(title, excludeSections = [], frontmatter = null, level = 2, rules = {}) {
-  const lower = String(title).trim().toLowerCase();
-  if ((excludeSections || []).some(s => lower === String(s).toLowerCase())) return 'excluded';
-  // `## **Context**` and `## Clues:` are the same sections; a spelling must not
-  // be the way one reaches the site.
-  if (level === 2 && isDocumentPage(frontmatter) && DOCUMENT_KEEPER_SECTION_RE.test(bareSectionTitle(lower))) {
+  // `## **GM Notes**`, `## GM Notes:` and `## GM Notes {#gm}` are the same section as
+  // `## GM Notes`; a spelling must not be the way one reaches the site (heading-key.js).
+  if (titleNamedIn(title, excludeSections)) return 'excluded';
+  // `## **Context**` and `## Clues:` are the same sections, too.
+  if (level === 2 && isDocumentPage(frontmatter) && headingKeys(title).some(k => DOCUMENT_KEEPER_SECTION_RE.test(k))) {
     return 'excluded';
   }
   if (pcKeepRuleApplies(frontmatter, rules) && level <= 2) {
@@ -128,7 +142,7 @@ function exclusionReason(title, excludeSections = [], frontmatter = null, level 
       .filter(s => typeof s === 'string')
       .map(bareSectionTitle)
       .filter(t => t !== '');
-    if (!keep.includes(bareSectionTitle(lower))) return 'sheet';
+    if (!keep.includes(headingKey(title))) return 'sheet';
   }
   return null;
 }
@@ -181,6 +195,7 @@ function findHeadings(text, parse) {
   const tokens = (parse || parseBlocks)(text);
   const headingAt = new Map();   // first line -> { end, level, title, nested, atx }
   const inCode = new Set();      // lines of fenced or indented code, at any depth
+  const inFence = new Set();     // lines of fenced code only, at any depth
   const source = text.split('\n');
   let openFence = null;          // first line of a top-level fence that is never closed
   for (let t = 0; t < tokens.length; t++) {
@@ -202,10 +217,17 @@ function findHeadings(text, parse) {
         atx: tok.markup.startsWith('#'),   // not underlined (setext)
       });
     } else if (tok.type === 'fence' || tok.type === 'code_block') {
-      for (let l = tok.map[0]; l < tok.map[1]; l++) inCode.add(l);
+      for (let l = tok.map[0]; l < tok.map[1]; l++) {
+        inCode.add(l);
+        if (tok.type === 'fence') inFence.add(l);
+      }
     }
   }
-  return { headingAt, inCode, openFence };
+  // Code the section filter may trust: a line in a closed block is code, not a heading. Lines
+  // from a fence that is never closed on are not trusted (an unclosed fence above a
+  // `## GM Notes` must not be the way it is published), so they read as ordinary text.
+  const settled = new Set([...inCode].filter(l => openFence === null || l < openFence));
+  return { headingAt, inCode, inFence, settled, openFence };
 }
 
 // A cell's inline markdown through the build's own renderer, typographer and all, so a
@@ -273,8 +295,9 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
   const withheldBy = [];   // per line: the title of the section withholding it, or null
   let headingAt;
   let openFence;
+  let settled;
   try {
-    ({ headingAt, openFence } = findHeadings(lines.join('\n'), rules.parse));
+    ({ headingAt, openFence, settled } = findHeadings(lines.join('\n'), rules.parse));
   } catch (err) {
     if (typeof rules.warn === 'function') rules.warn(`section filter: could not parse the note, body withheld (${err.message})`);
     stripped.push({ title: '(unparsed note)', reason: 'excluded' });
@@ -286,7 +309,8 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
 
   for (let i = 0; i < lines.length; i++) {
     const h = headingAt.get(i);
-    const margin = marginHeading(lines[i]);
+    // A line of a closed code block is code: it neither starts nor ends a section.
+    const margin = settled.has(i) ? null : marginHeading(lines[i]);
     // Both readings, of the same heading: text over an underline can itself look
     // like a margin heading (`## x` typed with a non-breaking space, then `===`).
     if (excluding && h && h.atx && h.title !== '' && margin && Math.max(h.level, margin.level) <= excludeLevel) {
@@ -300,7 +324,7 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
     // A withheld heading met while one is running can only widen it: a shallower
     // one takes over the level, so a `# GM Notes` under `## GM Notes` is not ended
     // by the next `##`.
-    for (const seen of [h, margin, h || margin ? null : looseHeading(lines, i)]) {
+    for (const seen of [h, margin, h || margin || settled.has(i) ? null : looseHeading(lines, i)]) {
       const reason = seen ? exclusionReason(seen.title, excludeSections, frontmatter, seen.level, {}) : null;
       if (!reason) continue;
       if (excluding) {
@@ -439,9 +463,12 @@ function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
 function stubView(markdown, includeSections, withhold) {
   const source = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const flags = source.map(() => false);
+  // Read the way the exclude list is (heading-key.js), by the title's label alone: a kept
+  // section is the risky direction, so a link's target never opens one.
   const wanted = (Array.isArray(includeSections) ? includeSections : [])
     .filter(s => typeof s === 'string')
-    .map(s => s.toLowerCase());
+    .map(headingKey)
+    .filter(k => k !== '');
   if (wanted.length === 0) return { kept: [], flags };
 
   // What the whole note publishes, each line with the line of the note it came from.
@@ -452,8 +479,9 @@ function stubView(markdown, includeSections, withhold) {
   lines = lines.filter((_, i) => withheldBy[i] === null);
 
   let headingAt;
+  let settled;
   try {
-    ({ headingAt } = findHeadings(lines.join('\n')));
+    ({ headingAt, settled } = findHeadings(lines.join('\n')));
   } catch (err) {
     return { kept: [], flags };
   }
@@ -469,23 +497,24 @@ function stubView(markdown, includeSections, withhold) {
   for (let i = 0; i < lines.length; i++) {
     const parsed = headingAt.get(i);
     const h = parsed && !parsed.nested ? parsed : null;
-    const margin = marginHeading(lines[i]);
+    // A line of a closed code block is code: it neither opens nor closes a kept section.
+    const margin = settled.has(i) ? null : marginHeading(lines[i]);
     // For closing, hashes at the margin count with or without a title.
-    const hashes = MARGIN_HEADING_RE.exec(lines[i]);
+    const hashes = settled.has(i) ? null : MARGIN_HEADING_RE.exec(lines[i]);
     const level = Math.min(h ? h.level : 7, hashes ? hashes[1].length : 7);
     if (keeping && level <= keepLevel) keeping = false;
-    // The title compared is the line's own text after the hashes, as it always was
-    // (`## Overview ##` is not "Overview" here); the parser's part is to say the
-    // line is a real heading, at that level, and not code.
-    const written = hashes ? hashes[2].trim().toLowerCase() : null;
-    if (h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written)) {
+    // The title compared is read by both of the readings (the line's own text after the
+    // hashes, and the parser's); the parser's part is also to say the line is a real
+    // heading, at that level, and not code.
+    const written = hashes ? headingKey(hashes[2]) : null;
+    if (h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written) && wanted.includes(headingKey(h.title))) {
       keeping = true;
       keepLevel = h.level;
     } else if (keeping) {
       // A wanted title only one reading sees opens nothing, but it does what it
       // always did to a section already open: sets the level it closes at.
       for (const seen of [h, margin, written === null ? null : { title: written, level: hashes[1].length }]) {
-        if (seen && wanted.includes(seen.title.toLowerCase())) keepLevel = Math.max(keepLevel, seen.level);
+        if (seen && wanted.includes(headingKey(seen.title))) keepLevel = Math.max(keepLevel, seen.level);
       }
     }
     if (keeping) {
@@ -787,6 +816,84 @@ function htmlComments(markdown) {
   return { text: result.join('\n'), warnings, lines: result, from };
 }
 
+// Obsidian comments: `%% a comment %%`, on one line or across many. Obsidian hides them;
+// the site must too (#305). A `%%` opens a comment and the next `%%` closes it, wherever
+// each sits on a line. A `%%` never closed hides everything to the end of the note: that is
+// what Obsidian shows, and the reading that cannot leak. `%%` in a fenced code block or an
+// inline code span is literal text. A comment inside a table cell, list item, quote or
+// heading is cut out of that line and the rest of the line stays.
+// Runs after the HTML-comment strip (a `%%` inside `<!-- -->` is part of that comment) and
+// returns the strips' shape: the lines left, and `from` (the line of the input each came from).
+function obsidianComments(markdown) {
+  const lines = String(markdown || '').split('\n');
+  const result = [];
+  const from = [];
+  const warnings = [];
+  let inComment = false;
+  // Fenced code is whatever the renderer's parser calls a fence (any length, tilde, in a quote
+  // or a list item), the same reading findHeadings gives the section filter. A parser that
+  // fails reads no fence: nothing is then literal, which cannot leak.
+  let inFence = new Set();
+  try { ({ inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no fence is trusted */ }
+
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
+    const startedInComment = inComment;
+    // A comment already open runs on through "code" until its closing %%.
+    if (!inComment && inFence.has(n)) {
+      result.push(line);
+      from.push(n);
+      continue;
+    }
+
+    let kept = '';
+    let i = 0;
+    while (i < line.length) {
+      if (inComment) {
+        const end = line.indexOf('%%', i);
+        if (end === -1) { i = line.length; break; }
+        inComment = false;
+        i = end + 2;
+        continue;
+      }
+      const ch = line[i];
+      if (ch === '`') {
+        // An inline code span: a run of backticks to the next run of the same length on
+        // the line. One that never closes is no span, so a `%%` after it still counts.
+        let run = 1;
+        while (line[i + run] === '`') run++;
+        const close = new RegExp('(?<!`)`{' + run + '}(?!`)').exec(line.slice(i + run));
+        if (close) {
+          const stop = i + run + close.index + run;
+          kept += line.slice(i, stop);
+          i = stop;
+        } else {
+          kept += line.slice(i, i + run);
+          i += run;
+        }
+        continue;
+      }
+      if (ch === '%' && line[i + 1] === '%') {
+        inComment = true;
+        i += 2;
+        continue;
+      }
+      kept += ch;
+      i++;
+    }
+
+    // A line that was only comment goes whole; one with text around a comment keeps it.
+    if (kept.trim() === '' && (line.trim() !== '' || startedInComment)) continue;
+    result.push(kept);
+    from.push(n);
+  }
+
+  if (inComment) {
+    warnings.push('unclosed %% comment: content stripped to end of file');
+  }
+  return { text: result.join('\n'), warnings, lines: result, from };
+}
+
 // Strip a single leading H1 from the markdown body. Templates inject their own H1
 // from the page title, so the author's `# Title` line at the top would render as a duplicate.
 function stripLeadingH1(markdown) {
@@ -901,7 +1008,7 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
 // Render a frontmatter-derived display value (summary, occupation, …) as HTML, resolving
 // any `[[wikilink]]` it carries the way body prose does. Everything else is escaped.
 function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
-  const text = String(raw == null ? '' : raw);
+  const text = valueText(raw);
   const out = [];
   const pattern = wikilinkRe();
   let last = 0;
@@ -922,8 +1029,49 @@ function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
 // Plain-text form of the above, for values rendered inside an enclosing <a> (card
 // subtitles, landing tiles) where a nested anchor would be invalid HTML.
 function plainMetaValue(raw) {
-  return String(raw == null ? '' : raw)
+  return valueText(raw)
     .replace(wikilinkRe(), (m) => parseWikiRef(m).label);
+}
+
+// A header value that names a page (an item's holder, a faction's leader, an event's place):
+// either a bare name or one wikilink spanning the whole value (a reference), or running
+// text with wikilinks inside it. A reference links to its page when the site has one;
+// running text shows each link as its label. The text a reader sees is plainRefValue.
+function wholeReference(text) {
+  if (!text.includes('[[')) return true;
+  const m = wikilinkRe('').exec(text);
+  return Boolean(m) && m.index === 0 && m[0].length === text.length;
+}
+
+// The target and label of a whole-reference value. Only a bracketed `[[…]]` goes through the
+// wikilink parser (which reads `#`, `^` and `|`); a bare value is a name as written.
+function referenceParts(text) {
+  return text.includes('[[') ? parseWikiRef(text) : { target: text, label: humanizeName(text) };
+}
+
+// What a reference value names: { target, label } for a whole reference (target is the
+// link-map name), { target: '', label } for running text (nothing to link to), null when empty.
+// The one definition the page headers, the location sidebar and the preview cards share.
+function referenceOf(raw) {
+  const text = valueText(raw).trim();
+  if (!text) return null;
+  return wholeReference(text) ? referenceParts(text) : { target: '', label: plainMetaValue(text) };
+}
+
+function plainRefValue(raw) {
+  const ref = referenceOf(raw);
+  return ref ? ref.label : '';
+}
+
+function refMetaValue(raw, linkMap = {}, currentOutputPath = '') {
+  const text = valueText(raw).trim();
+  if (!text) return '';
+  if (!wholeReference(text)) return renderMetaValue(text, linkMap, currentOutputPath);
+  const { target, label } = referenceParts(text);
+  const targetPath = (linkMap || {})[target];
+  return targetPath
+    ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}">${escapeHtml(label)}</a>`
+    : escapeHtml(label);
 }
 
 function separateBoldLabelLines(markdown) {
@@ -998,9 +1146,12 @@ function strippedLines(text, excludeCallouts) {
     (t) => markedBlocks(t, 'gm-only'),
     (t) => markedBlocks(t, 'spoiler'),
     htmlComments,
+    obsidianComments,
     (t) => calloutLines(t, excludeCallouts),
   ];
   for (const strip of strips) {
+    // Nothing is left: no step has anything to do, and a join/split would invent a line.
+    if (lines !== null && lines.length === 0) break;
     const before = from;
     const result = strip(lines === null ? text : lines.join('\n'));
     from = before === null ? result.from : result.from.map(i => before[i]);
@@ -1070,31 +1221,12 @@ function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = 
 }
 
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
-  let markdown = page.markdown.replace(/\r/g, '');
   const warnings = [];
-  markdown = stripDataview(markdown);
-  const gmResult = stripGmOnly(markdown);
-  if (gmResult.warnings) {
-    warnings.push(...gmResult.warnings);
-    markdown = gmResult.text;
-  } else {
-    markdown = gmResult;
-  }
-  const spoilerResult = stripSpoiler(markdown);
-  if (spoilerResult.warnings) {
-    warnings.push(...spoilerResult.warnings);
-    markdown = spoilerResult.text;
-  } else {
-    markdown = spoilerResult;
-  }
-  const commentResult = stripHtmlComments(markdown);
-  if (commentResult.warnings) {
-    warnings.push(...commentResult.warnings);
-    markdown = commentResult.text;
-  } else {
-    markdown = commentResult;
-  }
-  markdown = stripCallouts(markdown, options.excludeCallouts);
+  // The strip chain is strippedLines', whole: the page, the published view the search and
+  // the cards read, the stub cut and the CLIs all take the same one.
+  const stripped = strippedLines(page.markdown.replace(/\r/g, ''), options.excludeCallouts);
+  warnings.push(...stripped.warnings);
+  let markdown = stripped.lines.join('\n');
   // A note whose title line is itself withheld (`# GM Notes`) has that section
   // removed before the title is dropped: once the line is gone nothing below would
   // know its section had started, and the body used to publish.
@@ -1381,4 +1513,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

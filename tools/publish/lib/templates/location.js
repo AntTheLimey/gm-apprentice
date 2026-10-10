@@ -1,7 +1,7 @@
 const { backlinksOf } = require('../backlinks');
 const { refTarget } = require('../wikilink');
-const { escapeHtml, relativeHref, parseWikiRef, publishedSource, encodeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts } = require('./base');
+const { escapeHtml, relativeHref, publishedSource, encodeHref, plainRefValue, referenceOf } = require('../processor');
+const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
@@ -25,10 +25,10 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   // Parse `[[Target|Alias]]` once: target keeps underscores for the linkMap lookup, label
   // is the alias or the humanized target. Reused by the breadcrumb and the sidebar below.
-  const parent = fm.parent_location ? parseWikiRef(fm.parent_location) : null;
-  const parentTarget = parent && linkMap ? linkMap[parent.target] : null;
+  const parent = referenceOf(fm.parent_location);
+  const parentTarget = parent && parent.target && linkMap ? linkMap[parent.target] : null;
   const crumbs = generateBreadcrumbs(page.outputPath, parent ? {
-    parentLocation: parent.label,
+    parentLocation: plainRefValue(fm.parent_location),
     // Breadcrumb hrefs are relative to the current page; linkMap holds the root-relative
     // output path, so make it relative or it resolves under the current dir and 404s.
     parentLocationHref: parentTarget ? encodeHref(relativeHref(page.outputPath, parentTarget)) : null,
@@ -38,8 +38,8 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
   // --- Zone 1: Hero Banner ---
   const hasPortrait = fm.portrait && imageMap && imageMap[String(fm.portrait).split('/').pop()];
   const badges = [];
-  if (fm.location_type) badges.push(fm.location_type);
-  if (fm.atmosphere) badges.push(fm.atmosphere);
+  if (fm.location_type) badges.push(headerValueText('location_type', fm.location_type));
+  if (fm.atmosphere) badges.push(headerValueText('atmosphere', fm.atmosphere));
   const badgeHtml = badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('');
 
   let heroBanner;

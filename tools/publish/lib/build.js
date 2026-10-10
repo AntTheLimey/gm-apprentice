@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -8,10 +8,11 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pcLiveKe
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { strippedLines, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
+const { getsNoPage } = require('./previews');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -207,6 +208,9 @@ function build(options = {}) {
     const destDir = path.join(outputDir, 'js');
     for (const file of fs.readdirSync(jsDir)) {
       if (!file.endsWith('.js')) continue;
+      // The link-preview script is for a site that has the cards file; with previews off no
+      // page loads it, so it is not copied.
+      if (file === 'previews.js' && publishConfig.link_previews === 'off') continue;
       const src = path.join(jsDir, file);
       const dest = path.join(destDir, file);
       ensureDir(dest);
@@ -475,7 +479,10 @@ function build(options = {}) {
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
   }
 
-  pages = published;
+  // A note the build writes no page for (previews.js getsNoPage) leaves the list here, with
+  // the unpublished: the link map, backlinks, graphs, indexes, search and cards all read
+  // `pages`, so none of them can name it or link to a file that is not built.
+  pages = published.filter(p => !getsNoPage(p));
 
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
@@ -587,13 +594,8 @@ function build(options = {}) {
     if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
   for (const page of pages) {
-    const gmStripped = stripGmOnly(page.markdown || '');
-    const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
-    const spoilerStripped = stripSpoiler(afterGm);
-    const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
-    const commentStripped = stripHtmlComments(afterSpoiler);
-    const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
+    const text = strippedLines(String(page.markdown || ''), excludeCallouts).lines.join('\n');
+    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, page.sourceFrontmatter || page.frontmatter,
       { pcKeepSections });   // its warnings are the page render's to print, once
   }
 
@@ -768,6 +770,7 @@ function build(options = {}) {
     console.warn(`publish.theme.default_mode "${publishConfig.theme.default_mode}" has no effect: `
       + 'it needs a genre preset (theme.genre) and no custom theme.palette, the themes with two palettes');
   }
+  configureLinkPreviews(publishConfig.link_previews);
   copyCSS();
   copyJS();
   copyGenreCSS();
@@ -843,7 +846,7 @@ function build(options = {}) {
   let anyDressed = false;
   for (const page of pages) {
     try {
-      if (page.frontmatter.type === 'world_flags') continue;
+      if (getsNoPage(page)) continue;
       if (page.frontmatter.portrait) {
         const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
         if (basename && imageMap[basename]) usedImages.add(basename);
@@ -1115,6 +1118,19 @@ function build(options = {}) {
         console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
       }
     }
+  }
+
+  // Link-preview cards, written once every page is: `pages` is the published list (a
+  // publish: false page and an excluded draft are absent), each page carries its filtered
+  // frontmatter and publishedMarkdown, and a card is kept only if its page file exists.
+  // cleanOutput() wipes a stale previews.json.
+  if (publishConfig.link_previews !== 'off') {
+    const { buildPreviews, onlyBuiltPages } = require('./previews');
+    const { usesCocFolio } = require('./templates/pc');
+    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+    const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
+    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(built));
+    console.log('  wrote previews.json');
   }
 
   // Copy images — in player mode, only copy images referenced by published pages. This

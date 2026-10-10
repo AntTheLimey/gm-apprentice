@@ -52,6 +52,18 @@ describe('lines: sections', () => {
   });
 });
 
+describe('lines: a fenced heading is code', () => {
+  it('a heading-shaped line in a closed fence neither starts nor ends a withheld section', () => {
+    const text = '## Open\n```\n## GM Notes\n```\nprose\n## GM Notes\nsecret\n```\n## Other\n```\nstill secret\n## Next\npublic';
+    const { withheldBy } = answer({ op: 'sections', text, excludeSections: ['GM Notes'] });
+    const lines = text.split('\n');
+    assert.deepStrictEqual(lines.filter((_, i) => withheldBy[i] === null),
+      ['## Open', '```', '## GM Notes', '```', 'prose', '## Next', 'public']);
+    const published = answer({ op: 'published', text, excludeSections: ['GM Notes'] }).text;
+    assert.ok(published.includes('prose') && !published.includes('secret'));
+  });
+});
+
 describe('lines: stub', () => {
   it('flags the lines keepOnlySections keeps', () => {
     const { kept } = answer({ op: 'stub', text: NOTE, include: ['overview'] });

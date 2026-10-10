@@ -106,11 +106,19 @@ describe('excerptFromMarkdown', () => {
     assert.ok(!out.includes('construct'), 'must not leak excluded content');
   });
 
-  it('matches an excluded heading with an em-dash suffix', () => {
+  it('does not read a dash suffix as the excluded name: those are other words', () => {
     const md = '## GM Notes —\n\nThe director is secretly a construct built by the syndicate.\n';
     const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
-    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+    assert.ok(out.includes('construct'), 'a different heading is not the excluded one');
   });
+
+  for (const heading of ['## [[GM Notes]]', '## ~~GM Notes~~', '## ==GM Notes==', '## `GM Notes`', '## GM Notes ^gm', '## [[Secrets|GM Notes]]', '## GM  Notes', '## **GM Notes:**']) {
+    it(`matches the excluded heading written ${JSON.stringify(heading)}`, () => {
+      const md = `Intro line here.\n\n${heading}\n\nThe director is secretly a construct built by the syndicate.\n`;
+      const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+      assert.ok(!out.includes('construct'), out);
+    });
+  }
 });
 
 describe('excerptFromMarkdown sanitization (issue #87)', () => {
@@ -225,5 +233,20 @@ describe('excerptFromMarkdown edge stops', () => {
   });
   it('returns the whole text when it ends on a title', () => {
     assert.strictEqual(excerptFromMarkdown('Hello Mr.'), 'Hello Mr.');
+  });
+});
+
+describe('excerptFromMarkdown prose mode and tables in a blockquote', () => {
+  const opts = { prose: true, sentences: 2, limit: 200 };
+  it('stops at a table inside a blockquote, as it does at one outside', () => {
+    const md = '> **THE PARTNERSHIP**\n> *Abstract for the year ending the 30th April 1814*\n>\n> | | Sa. Rs. |\n> |---|---|\n> | To the Hospital | 2,000 |\n';
+    const got = excerptFromMarkdown(md, opts);
+    assert.ok(!got.includes('|'), got);
+    assert.ok(!got.includes('Sa. Rs'), got);
+    assert.strictEqual(got, 'THE PARTNERSHIP Abstract for the year ending the 30th April 1814');
+  });
+  it('skips a quoted table that opens the note and reads on to the prose', () => {
+    const md = '> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nThe gate is old. It creaks.\n';
+    assert.strictEqual(excerptFromMarkdown(md, opts), 'The gate is old. It creaks.');
   });
 });

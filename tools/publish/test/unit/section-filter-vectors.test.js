@@ -110,10 +110,16 @@ describe('section filter: a PC page with character sheets off', () => {
 });
 
 describe('section filter: stub pages open only where both readings agree', () => {
-  it('a title the two readings spell differently opens nothing, as before', () => {
-    assert.strictEqual(keepOnlySections('x\n## GM  Notes\nSECRET\n', ['GM Notes']), '');
-    assert.strictEqual(keepOnlySections('x\n## GM Notes ##\nSECRET\n', ['GM Notes']), '');
+  it('a heading the GM names opens, however it is dressed (one reading: heading-key.js)', () => {
+    assert.strictEqual(keepOnlySections('x\n## GM  Notes\nkept\n', ['GM Notes']), '## GM  Notes\nkept\n');
+    assert.strictEqual(keepOnlySections('x\n## GM Notes ##\nkept\n', ['GM Notes']), '## GM Notes ##\nkept\n');
+    assert.strictEqual(keepOnlySections('x\n## **Overview**:\nkept\n', ['overview']), '## **Overview**:\nkept\n');
     assert.strictEqual(keepOnlySections('x\n## GM Notes\nkept\n', ['GM Notes']), '## GM Notes\nkept\n');
+  });
+  it('a different word, or a link target behind a label, opens nothing', () => {
+    assert.strictEqual(keepOnlySections('x\n## Overview of travel\nno\n', ['Overview']), '');
+    assert.strictEqual(keepOnlySections('x\n## [[Overview|Travel]]\nno\n', ['Overview']), '');
+    assert.strictEqual(keepOnlySections('x\n## [[Travel|Overview]]\nyes\n', ['Overview']), '## [[Travel|Overview]]\nyes\n');
   });
   it('a heading and an include entry that are written the same way still match', () => {
     assert.strictEqual(keepOnlySections('## GM  Notes\nkept', ['GM  Notes']), '## GM  Notes\nkept');

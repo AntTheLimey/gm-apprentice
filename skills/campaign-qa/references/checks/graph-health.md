@@ -99,16 +99,16 @@ connections are implied by traversal rather than direct.
 
 **Un-fenced GM-only content:** `vault_check.py gm-leak` produces
 the findings — ERROR for an orphan `<!-- /gm-only -->` closer
-(everything above it publishes) or a bold-wrapped excluded
-heading like `### **GM Notes**`; WARNING for an unclosed opener
+(everything above it publishes); WARNING for an unclosed opener
 or a published heading whose title contains an exclude-list
 entry or Keeper keyword; INFO for a Keeper-facing bold label or
 callout. The keyword list ("keeper", "secret", "tactic",
 "confidential", "gm-only", "dm notes", …) lives in the script,
 not here. This is exactly the shape of content that silently
 leaks to the published site (an NPC's tactical notes under a
-bold-wrapped `### **Keeper Notes**` heading defeat exact-string
-matching the same way a genuinely un-fenced heading does).
+heading that is not on the exclude list). A heading on the list is
+hidden however it is dressed (`### **GM Notes**`, `### GM Notes:`), so it is
+not a finding.
 The script skips notes the site does not publish, so it only flags
 content that would actually reach the site.
 Severity: Critical if the vault has a site (`publish.site` is on,

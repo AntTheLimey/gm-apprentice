@@ -1,6 +1,6 @@
 const { refTarget, parseWikilink } = require('../wikilink');
 const { escapeHtml, relativePath, resolveWikiLinks, renderMetaValue, plainMetaValue, encodeHref, publishedSource, renderMarkdown } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, portraitImg, getCanonStatus } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, portraitImg, noPreviewAttr, getCanonStatus } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
 const { canonicalNfc, nfcLookupTable } = require('../unicode');
@@ -280,7 +280,7 @@ function renderGroupedLocationsPage(pages, indexDir, imageMap, grouping) {
 </section>`
     : '';
 
-  return `<div class="locations-page locations-grouped">
+  return `<div class="locations-page locations-grouped"${noPreviewAttr()}>
   ${pageCaption}
   <div class="loc-system-grid">${sectionsHtml}\n${ungroupedHtml}</div>
 </div>`;
@@ -356,7 +356,7 @@ function renderLocationsPage(pages, indexDir, imageMap = {}, publishConfig = nul
 </section>`;
   }).join('\n');
 
-  return `<div class="locations-page">${sections}</div>`;
+  return `<div class="locations-page"${noPreviewAttr()}>${sections}</div>`;
 }
 
 function renderChapterList(pages, indexDir) {
@@ -500,7 +500,7 @@ function renderChapterList(pages, indexDir) {
     orphanHtml = `<div class="chapter-card"><h3>Other Sessions</h3><ul>${items}</ul></div>`;
   }
 
-  return `<div class="story-progression">${chapterCards}\n${orphanHtml}</div>`;
+  return `<div class="story-progression"${noPreviewAttr()}>${chapterCards}\n${orphanHtml}</div>`;
 }
 
 function renderBestiary(pages, indexDir) {
@@ -564,7 +564,7 @@ function renderBestiary(pages, indexDir) {
 </article>`;
   }).join('\n');
 
-  return `<div class="bestiary">${cards}</div>`;
+  return `<div class="bestiary"${noPreviewAttr()}>${cards}</div>`;
 }
 
 function renderFactions(pages, indexDir, imageMap = {}) {
@@ -650,7 +650,7 @@ function renderFactions(pages, indexDir, imageMap = {}) {
 </section>`;
   }).join('\n');
 
-  return `<div class="intel-briefing">${sections}</div>`;
+  return `<div class="intel-briefing"${noPreviewAttr()}>${sections}</div>`;
 }
 
 // Every document in a handout-heavy vault is a per-character prop, so a flat A–Z grid buries
@@ -705,7 +705,7 @@ function renderDocuments(pages, indexDir, imageMap = {}) {
 </section>`;
   }).join('\n');
 
-  return `<div class="documents-page">${sections}</div>`;
+  return `<div class="documents-page"${noPreviewAttr()}>${sections}</div>`;
 }
 
 function extractMdSections(markdown) {
@@ -867,7 +867,7 @@ function renderArmory(pages, indexDir) {
 </section>`;
   }).join('\n');
 
-  return `<div class="armory">${sections}</div>`;
+  return `<div class="armory"${noPreviewAttr()}>${sections}</div>`;
 }
 
 function cleanRef(str) {
@@ -947,7 +947,7 @@ function renderNPCTable(pages, dir, imageMap = {}, linkMap = {}) {
   }).join('\n');
 
   return `${filterHtml}
-<div class="npc-table-wrap">
+<div class="npc-table-wrap"${noPreviewAttr()}>
 <table class="npc-table sortable-table">
 <thead>
 <tr>
@@ -1040,7 +1040,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
   ${subtitle ? `<div class="card-subtitle">${escapeHtml(subtitle)}</div>` : ''}
 </a>`;
     }).join('\n');
-    bodyContent = `<div class="card-grid">${cardItems}</div>`;
+    bodyContent = `<div class="card-grid"${noPreviewAttr()}>${cardItems}</div>`;
   }
 
   let locationTreeHtml = '';

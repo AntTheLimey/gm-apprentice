@@ -7,6 +7,110 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.41] — 2026-10-10
+
+### Added
+
+- **Link preview cards on the site.** Rest the pointer on a link to
+  another page of the site and, after a third of a second, a small card
+  opens: the page's picture when it has one, its name, its kind (NPC,
+  Location, Session and so on), up to three facts, and its opening line
+  or two. Keyboard focus opens it too, and Escape or moving away closes
+  it. A screen reader reads the card as the link's description. On a
+  phone the first tap opens the card, which has an "Open page" button; a
+  second tap on the link, or the button, goes to the page. A tap
+  elsewhere or a scroll closes it.
+- **Which pages get a card.** Every page with a note behind it has one.
+  There are no cards on the menus, the breadcrumb, search results, or the
+  tiles and rows of the landing and index pages.
+- **A card holds only what its own page shows.** It is made at build
+  time from the page's player-visible text and fields, and a test checks
+  every card against its built page.
+- **A setting to turn the cards off, `publish.link_previews`.** `on` is
+  the default. `desktop` keeps the cards for a mouse and keyboard only,
+  so a tap on a phone goes straight to the page. `off` removes them.
+  `yes` and `no` read as `on` and `off`; any other unknown value counts
+  as `on`, with a build warning. **Every site gains
+  the cards at its next build.** To turn them off, ask the apprentice;
+  it sets the value for you. The setting is in `docs/site-settings.md`.
+- **Two new files on the site.** `previews.json` holds the cards and
+  `js/previews.js` runs them. The cards file is fetched once: on the first
+  hover or keyboard focus, or, on a phone, shortly after the page loads,
+  so the first tap already finds it. It is about 188 KB (57 KB as sent)
+  for a 613-page campaign and 114 KB (32 KB) for a 402-page one.
+- **A player character's card** shows the player and the badges from its
+  page header, and its epithet line. On a Call of Cthulhu folio, which
+  prints neither the badges nor an epithet, it shows the player only. A
+  draft page's card says Draft.
+- **With the setting off** a site gets no cards, no cards file and no
+  script. Every site's `css/style.css` gains the card's rules.
+
+### Fixed
+
+These changes reach every site, whatever the setting.
+
+- **A date in a page header shows as written.** An unquoted date such as
+  `play_date: 2026-07-02` used to print as a long machine string, a day
+  early. It now reads `2026-07-02`, on every kind of page.
+- **A name in a header shows as a name, and links when it can.** A
+  clue's "found by", a document's author and an item's origin or holder
+  no longer print `[[ ]]` brackets or `Target|alias`; a faction's leader
+  and territory, an event's place and outcome and a PC's badges follow
+  the same rule. A name of a published page in a header is now a link. A bare underscore-joined name (for
+  example `Anna_Lindqvist`) prints as the name in an item's holder or
+  origin, a faction's leader or territory and an event's place; in the
+  other badges it still prints as written.
+- **A type shown in a header reads as words.** `plot_thread` now reads
+  "Plot thread". The "Mentioned in" list names a page's kind the same
+  way as the preview card: "NPC", "Session" (for a Wrap-Up too) and
+  "Plot thread", where it used to print the raw type such as `npc` or
+  `session_wrap`.
+- **An item's holder is no longer cut short.** A holder such as
+  `[[Nathaniel]] (and / or [[Cleo]])` printed as "or Cleo)"; it now shows
+  whole.
+
+#### Hidden material that was reaching a site
+
+- **A hidden heading written with decoration was published.** With
+  `GM Notes` on your exclude list, `## GM Notes` was hidden but
+  `## GM Notes:`, `## **GM Notes**`, `## _GM Notes_`, `## GM Notes {#gm}`,
+  `## [[GM Notes]]` and a Setext heading written the same way were
+  shown, with everything under them. A heading is now matched by its
+  words: bold, italics, strike-through, highlight, code, a trailing
+  colon, an id or class block, a block id, link brackets, closing `#`s,
+  spacing and case no longer matter, in the page, the search, the
+  opening lines on cards, and the headings you keep on a stub page. A
+  heading with other words (`## GM Notes on travel`, or one ending in a
+  dash or an emoji) is a different section and still shows. A link with a
+  label (`[[Plans|GM Notes]]`) counts as both the label and the target.
+  If you wrote such a heading and meant it to show, give it other words.
+  The vault check no longer reports one of these as a leak, and
+  `gm-leak --fix` no longer moves it.
+- **A note with no page was still in the search.** A world-flags note
+  (`type: world_flags`) never gets a page, but its words were in the
+  search and a result opened a page that was not there, and its name
+  and links showed in the directory index, the relationship graph and
+  "Mentioned in" lists. It is now left out of the search, the index
+  lists, the graph and "Mentioned in".
+- **Obsidian comments were published (#305).** Text between `%%` marks,
+  on one line or over several, is hidden in Obsidian and was printed on
+  the site. It is now cut everywhere the page text is used. The text
+  around a comment on the same line stays, so `## Plan %%secret%%` is
+  the heading `Plan`. A `%%` in a code block or in code between
+  backticks is shown as written. **A `%%` that is never closed hides
+  the rest of the note**, as it does in Obsidian, and the build says so.
+- **A heading shown in a code block no longer hides the rest of the
+  note.** A line such as `## GM Notes` inside a fenced block is code. It
+  used to start a hidden section, so the text after the block vanished;
+  it now neither starts nor ends one. A real heading after the block
+  still hides. A heading pasted with a full-width colon, zero-width
+  characters, a soft hyphen or `&nbsp;` is read as the words it shows.
+- **A page no longer lists itself under "Mentioned in" because of its
+  own dataview query**, and the text of a dataview query is no longer
+  searchable. Only what a reader can see counts.
+
+Publish tool 1.16.0.
+
 ## [1.10.40] — 2026-10-09
 
 ### Added

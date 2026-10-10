@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.40"
+current_version: "1.10.41"
 ---
 
 # Vault Migration Record
@@ -47,3 +47,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.38 | D&D Beyond sync: no vault change. A PC note syncs only when it carries a dndbeyond link; a synced character gets a memory file under _meta/dndbeyond/ | — |
 | 1.10.39 | None (publish tool only, 1.15.3) | |
 | 1.10.40 | None (publish tool only, 1.15.4) | |
+| 1.10.41 | Link previews: no vault change. A site that sets nothing gains the cards at its next build. The site's publish tool is repinned to 1.16.0 by the every-pass repin | — |

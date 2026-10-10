@@ -1,4 +1,5 @@
-const { relativePath, escapeHtml, encodeImageUrl } = require('../processor');
+const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue } = require('../processor');
+const { typeLabelText } = require('../kind-label');
 
 const DIR_LABELS = {
   'campaign': 'Campaign',
@@ -36,8 +37,22 @@ function rootPath(outputPath) {
 
 function clientScripts(outputPath) {
   const root = rootPath(outputPath);
-  return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
+  const scripts = [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
+  if (linkPreviews !== 'off') scripts.push(root + 'js/previews.js');
+  return scripts;
 }
+
+// The link-previews mode for this build ('on', 'desktop' or 'off'), set once by
+// configureLinkPreviews before any page renders. Module state for the reason
+// colorModeHead is: build() is synchronous.
+let linkPreviews = 'off';
+function configureLinkPreviews(mode) { linkPreviews = mode === 'on' || mode === 'desktop' ? mode : 'off'; }
+function linkPreviewsOn() { return linkPreviews !== 'off'; }
+// Marks a listing container (a card grid, a list of rows) whose links get no preview card; empty when
+// previews are off so an off build stays byte-identical.
+function noPreviewAttr() { return linkPreviewsOn() ? ' data-no-preview' : ''; }
+// The attribute the page script reads off <main>; empty when previews are off.
+function previewsAttr() { return linkPreviews !== 'off' ? ` data-previews="${linkPreviews}"` : ''; }
 
 // The color-mode <head> script (#260), set once per build by configureColorMode. It
 // goes first in <head> so data-theme is set before any stylesheet paints.
@@ -82,7 +97,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
 
 ${navHtml}
 
-<main class="content"${mainAttrs || ''}>
+<main class="content"${mainAttrs || ''}${previewsAttr()}>
 ${breadcrumbs}
 ${content}
 </main>
@@ -157,6 +172,14 @@ const TYPE_BADGE_FIELDS = {
 // The seeded Document template writes `doc_type` and `date` (entity-schema.md).
 const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date', document_type: 'doc_type', date_written: 'date' };
 
+// A header value as the reader sees it: a wikilink as its label, a Date as the date written,
+// a snake_case type label as words. The one definition for every badge the page headers
+// print and for the matching facts on the link preview cards.
+function headerValueText(field, raw) {
+  const text = plainMetaValue(raw).trim();
+  return /(?:^|_)type$/.test(String(field)) ? typeLabelText(text) : text;
+}
+
 function metadataBadgesFor(frontmatter) {
   const fields = TYPE_BADGE_FIELDS[frontmatter.type];
   if (!fields) return '';
@@ -168,8 +191,7 @@ function metadataBadgesFor(frontmatter) {
       raw = frontmatter[FIELD_FALLBACKS[field]];
     }
     if (raw === undefined || raw === null || raw === '') continue;
-    // Strip wiki-link brackets if present
-    const value = String(raw).replace(/\[\[|\]\]/g, '').trim();
+    const value = headerValueText(field, raw);
     if (!value) continue;
     badges.push(`<span class="metadata-badge">${escapeHtml(value)}</span>`);
   }
@@ -209,10 +231,15 @@ module.exports = {
   cssPath,
   rootPath,
   clientScripts,
+  configureLinkPreviews,
+  linkPreviewsOn,
+  noPreviewAttr,
+  previewsAttr,
   baseShell,
   getCanonStatus,
   canonStatusBadge,
   TYPE_BADGE_FIELDS,
+  headerValueText,
   metadataBadgesFor,
   portraitImg,
   configureColorMode,
