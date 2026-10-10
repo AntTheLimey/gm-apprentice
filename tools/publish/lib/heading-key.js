@@ -53,14 +53,17 @@ function clean(text) {
   return s.replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
-// Every reading of `title`, the label reading first, without duplicates or empties.
-function headingKeys(title) {
-  // A pasted heading can carry what the eye does not see: entities (`GM&nbsp;Notes`),
-  // zero-width characters and soft hyphens, a BOM. All are removed or read as the space
-  // they stand for. Other characters the GM typed (a period, a footnote mark) are words.
-  const text = decodeEntities(String(title == null ? '' : title)).normalize('NFC')
-    .replace(/[\u200b-\u200d\u2060\ufeff\u00ad]/g, '')
-    .replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ');
+// Entities decodeEntities does not know, that a pasted heading can carry: the invisible
+// ones (soft hyphen, zero-width non-joiner and joiner) and the wide spaces.
+const DRESSING_ENTITIES = {
+  shy: '\u00ad', zwnj: '\u200c', zwj: '\u200d',
+  ensp: '\u2002', emsp: '\u2003', emsp13: '\u2004', emsp14: '\u2005', thinsp: '\u2009',
+};
+const ZERO_WIDTH = /[\u200b-\u200d\u2060\ufeff]/g;
+const SPACES = /[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g;
+
+// The readings of one pre-normalised `text`: the label first, then the wikilink target.
+function readings(text) {
   const asLabel = text.replace(WIKILINK_RE, (_, body) => {
     const w = parseWikilink(body);
     return (w.display || w.name || w.raw).trim();
@@ -71,6 +74,26 @@ function headingKeys(title) {
     keys.push(clean(text.replace(WIKILINK_RE, (_, body) => parseWikilink(body).name.trim())));
   }
   WIKILINK_RE.lastIndex = 0;
+  return keys;
+}
+
+// Every reading of `title`, the label reading first, without duplicates or empties.
+function headingKeys(title) {
+  // A pasted heading can carry what the eye does not see: entities (`GM&nbsp;Notes`),
+  // zero-width characters and soft hyphens, a BOM. All are removed or read as the space
+  // they stand for. Other characters the GM typed (a period, a footnote mark) are words.
+  const decoded = decodeEntities(String(title == null ? '' : title)
+    .replace(/&([a-z][a-z0-9]*);/gi, (whole, name) => DRESSING_ENTITIES[name.toLowerCase()] || whole))
+    .normalize('NFC');
+  const text = decoded.replace(ZERO_WIDTH, '').replace(/\u00ad/g, '').replace(SPACES, ' ');
+  const keys = readings(text);
+  // A zero-width character may stand in for the space between two words (`GM<ZWSP>Notes`).
+  // For hiding, that reading counts too; the label reading above stays the one that keeps.
+  if (ZERO_WIDTH.test(decoded)) {
+    ZERO_WIDTH.lastIndex = 0;
+    keys.push(...readings(decoded.replace(ZERO_WIDTH, ' ').replace(/\u00ad/g, '').replace(SPACES, ' ')));
+  }
+  ZERO_WIDTH.lastIndex = 0;
   return [...new Set(keys)].filter(k => k !== '');
 }
 

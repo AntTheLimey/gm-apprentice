@@ -1815,12 +1815,14 @@ _HK_EDGE = re.compile(r"^[*_~=`\s]+|[*_~=`\s]+$")
 
 
 _HK_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'",
-             "nbsp": "\u00a0"}
+             "nbsp": "\u00a0", "shy": "\u00ad", "zwnj": "\u200c", "zwj": "\u200d",
+             "ensp": "\u2002", "emsp": "\u2003", "emsp13": "\u2004",
+             "emsp14": "\u2005", "thinsp": "\u2009"}
 
 
 def _hk_decode_entities(text: str) -> str:
     """The entities heading-key.js reads (templates/gurps/tables.js
-    `decodeEntities`): numeric ones and the six named ones."""
+    `decodeEntities` and its own DRESSING_ENTITIES): numeric ones and the named ones."""
     def one(m: re.Match) -> str:
         body = m.group(1)
         if body[0] == "#":
