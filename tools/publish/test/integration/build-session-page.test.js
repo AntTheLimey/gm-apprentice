@@ -137,7 +137,7 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
 
     it('keeps the title, main wrapper and badge block exactly as the wiki page renders them', () => {
       const html = find('session-01-arrival.html');
-      assert.match(html, /<main class="content">/);
+      assert.match(html, /<main class="content"(?: data-previews="[a-z]+")?>/);
       assert.match(html, /<h1 class="page-title">Session 01 - Arrival<\/h1>/);
       assert.ok(html.includes(badges('1', '2026-01-17', 'reviewed')), 'badge block changed');
     });

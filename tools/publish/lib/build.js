@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -768,6 +768,7 @@ function build(options = {}) {
     console.warn(`publish.theme.default_mode "${publishConfig.theme.default_mode}" has no effect: `
       + 'it needs a genre preset (theme.genre) and no custom theme.palette, the themes with two palettes');
   }
+  configureLinkPreviews(publishConfig.link_previews);
   copyCSS();
   copyJS();
   copyGenreCSS();
@@ -813,6 +814,16 @@ function build(options = {}) {
     console.log('  wrote js/lunr.js');
   } else {
     console.log('  search disabled — skipping search-index.json');
+  }
+
+  // Link-preview cards: `pages` is the published list here (publishedPages ran above, so a
+  // publish: false page and an excluded draft are absent) and each page already carries its
+  // filtered frontmatter and publishedMarkdown. cleanOutput() wipes a stale previews.json.
+  if (publishConfig.link_previews !== 'off') {
+    const { buildPreviews } = require('./previews');
+    const { usesCocFolio } = require('./templates/pc');
+    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(buildPreviews(pages, { imageMap, excludeSections, pcEpithet: !usesCocFolio(publishConfig, sheetsOff) })));
+    console.log('  wrote previews.json');
   }
 
   write404();

@@ -118,7 +118,11 @@ function excerptFromMarkdown(source, opts = {}) {
     return w.display || w.raw.replace(/_/g, ' ');
   });
   text = text.replace(/\[\[([^\]]+)\]\]/g, (_, t) => t.replace(/_/g, ' '));  // e.g. an empty target
-  text = text.replace(/[*_`]+/g, '');
+  // opts.wordUnderscores: an underscore between letters or digits is part of the word (the
+  // page prints it), so only emphasis underscores at a word edge go.
+  text = opts.wordUnderscores
+    ? text.replace(/[*`]+/g, '').replace(/(?<![\p{L}\p{N}])_+|_+(?![\p{L}\p{N}])/gu, '')
+    : text.replace(/[*_`]+/g, '');
   text = text.replace(/\s+/g, ' ').trim();
 
   // The first sentence (or the first `opts.sentences`): up to a stop that is not a title's

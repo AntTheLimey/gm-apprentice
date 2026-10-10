@@ -36,8 +36,18 @@ function rootPath(outputPath) {
 
 function clientScripts(outputPath) {
   const root = rootPath(outputPath);
-  return [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
+  const scripts = [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
+  if (linkPreviews !== 'off') scripts.push(root + 'js/previews.js');
+  return scripts;
 }
+
+// The link-previews mode for this build ('on', 'desktop' or 'off'), set once by
+// configureLinkPreviews before any page renders. Module state for the reason
+// colorModeHead is: build() is synchronous.
+let linkPreviews = 'off';
+function configureLinkPreviews(mode) { linkPreviews = mode === 'on' || mode === 'desktop' ? mode : 'off'; }
+// The attribute the page script reads off <main>; empty when previews are off.
+function previewsAttr() { return linkPreviews !== 'off' ? ` data-previews="${linkPreviews}"` : ''; }
 
 // The color-mode <head> script (#260), set once per build by configureColorMode. It
 // goes first in <head> so data-theme is set before any stylesheet paints.
@@ -82,7 +92,7 @@ function baseShell({ title, siteTitle, cssHref, navHtml, rootHref, content, foot
 
 ${navHtml}
 
-<main class="content"${mainAttrs || ''}>
+<main class="content"${mainAttrs || ''}${previewsAttr()}>
 ${breadcrumbs}
 ${content}
 </main>
@@ -209,6 +219,8 @@ module.exports = {
   cssPath,
   rootPath,
   clientScripts,
+  configureLinkPreviews,
+  previewsAttr,
   baseShell,
   getCanonStatus,
   canonStatusBadge,

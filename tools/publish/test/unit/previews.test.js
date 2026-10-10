@@ -128,3 +128,28 @@ describe('buildPreviews', () => {
     assert.deepStrictEqual(Object.keys(map), ['x/npc.html']);
   });
 });
+
+describe('a card keeps the underscores its page prints', () => {
+  it('keeps an underscore inside a word and drops emphasis underscores', () => {
+    const card = cardFor(page('wiki', {}, 'The code is MARKER_NINE_ok and _this_ is emphasised.'), ctx);
+    assert.strictEqual(card.x, 'The code is MARKER_NINE_ok and this is emphasised.');
+  });
+  it('the default excerpt is unchanged', () => {
+    assert.strictEqual(excerptFromMarkdown('MARKER_NINE_ok here.'), 'MARKERNINEok here.');
+  });
+});
+
+describe('a PC card opens with what the PC page opens with', () => {
+  it('has no opening lines when the page shows none (the CoC folio)', () => {
+    const card = cardFor(page('pc', { key_traits: ['Curious'] }, 'Prose.'), { ...ctx, pcEpithet: false });
+    assert.strictEqual(card.x, undefined);
+  });
+  it('uses key_traits when there are any', () => {
+    const card = cardFor(page('pc', { key_traits: ['Curious', 'Stubborn'] }, 'Body prose. More prose.'), ctx);
+    assert.strictEqual(card.x, 'Curious, Stubborn');
+  });
+  it('otherwise the first sentence of the body, as the page quotes it', () => {
+    const card = cardFor(page('pc', {}, 'First prose. Second prose.'), ctx);
+    assert.strictEqual(card.x, 'First prose.');
+  });
+});

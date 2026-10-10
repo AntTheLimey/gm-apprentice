@@ -44,6 +44,12 @@ function isCocSystem(publishConfig) {
   return ['coc-7e', 'coc', 'regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase());
 }
 
+// Whether a PC page is the CoC parchment folio (sheets on, CoC system). That page has no
+// epithet under the masthead; every other PC page opens with one.
+function usesCocFolio(publishConfig, sheetsOff) {
+  return isCocSystem(publishConfig) && !sheetsOff;
+}
+
 // System label shown in the CoC masthead era line when the PC has no explicit `era`.
 function cocSystemLabel(publishConfig) {
   return ['regency-cthulhu', 'coc-7e-regency'].includes(String((publishConfig || {}).system || '').toLowerCase())
@@ -475,7 +481,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     : '';
 
   // --- CoC parchment folio (branch off the generic assembly) ---
-  if (cocSheet && !sheetsOff) {
+  if (usesCocFolio(publishConfig, sheetsOff)) {
     const portraitUrl = hasPortrait
       ? (((portraitImg(fm, page.outputPath, imageMap || {}) || '').match(/src="([^"]+)"/) || [])[1] || '')
       : '';
@@ -557,4 +563,4 @@ ${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
   });
 }
 
-module.exports = { pageTabs, pcTemplate };
+module.exports = { pageTabs, pcTemplate, usesCocFolio };
