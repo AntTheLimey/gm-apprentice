@@ -69,6 +69,35 @@ These changes reach every site, whatever the setting.
   `[[Nathaniel]] (and / or [[Cleo]])` printed as "or Cleo)"; it now shows
   whole.
 
+#### Hidden material that was reaching a site
+
+- **A hidden heading written with decoration was published.** With
+  `GM Notes` on your exclude list, `## GM Notes` was hidden but
+  `## GM Notes:`, `## **GM Notes**`, `## _GM Notes_`, `## GM Notes {#gm}`,
+  `## [[GM Notes]]` and a Setext heading written the same way were
+  shown, with everything under them. A heading is now matched by its
+  words: bold, italics, strike-through, highlight, code, a trailing
+  colon, an id or class block, a block id, link brackets, closing `#`s,
+  spacing and case no longer matter, in the page, the search, the
+  opening lines on cards, and the headings you keep on a stub page. A
+  heading with other words (`## GM Notes on travel`, or one ending in a
+  dash or an emoji) is a different section and still shows. A link with a
+  label (`[[Plans|GM Notes]]`) counts as both the label and the target.
+  If you wrote such a heading and meant it to show, give it other words.
+  The vault check no longer reports one of these as a leak, and
+  `gm-leak --fix` no longer moves it.
+- **A note with no page was still in the search.** A world-flags note
+  (`type: world_flags`) never gets a page, but its words were in the
+  search and a result opened a page that was not there. It is now left
+  out of the search.
+- **Obsidian comments were published (#305).** Text between `%%` marks,
+  on one line or over several, is hidden in Obsidian and was printed on
+  the site. It is now cut everywhere the page text is used. The text
+  around a comment on the same line stays, so `## Plan %%secret%%` is
+  the heading `Plan`. A `%%` in a code block or in code between
+  backticks is shown as written. **A `%%` that is never closed hides
+  the rest of the note**, as it does in Obsidian, and the build says so.
+
 Publish tool 1.16.0.
 
 ## [1.10.40] — 2026-10-09

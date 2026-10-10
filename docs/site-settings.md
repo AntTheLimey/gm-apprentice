@@ -120,7 +120,7 @@ These decide which notes, and which parts of a note, reach the site.
 | `publish.folder_map` | Which vault folders are published, and the web address each gets | A vault folder and its address, one pair to a line | Nothing is mapped; setting up a site writes the standard map |
 | `publish.attachments_dir` | The vault folder that holds pictures | A folder name | `_attachments` |
 | `publish.exclude_dirs` | Vault folders never published | A list of folders | `_meta`, `_Templates` |
-| `publish.exclude_sections` | Headings whose text is never published, on any page | A list of headings | `GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile` |
+| `publish.exclude_sections` | Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link) | A list of headings | `GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile` |
 | `publish.exclude_fields` | Fields in the block at the top of a note (between its `---` lines) that are never shown | A list of field names | `secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability` |
 | `publish.exclude_callouts` | Whether Obsidian callouts (`> [!note]`) are left out | `true` for all, `false` for none, or a list of callout types | `false`; a site set up by the apprentice starts at `true` |
 | `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | `true` or `false` | `false`: drafts publish with a "Draft" badge |
