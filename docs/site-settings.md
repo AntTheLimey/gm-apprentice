@@ -104,7 +104,8 @@ two words. Do not write `yes` or `no` for them.
 
 With link previews on, a first tap on a phone opens the card and a second
 tap follows the link; `desktop` keeps the cards for a mouse and keyboard
-only.
+only. `yes` and `no` are not values for this setting (`no` gives a
+warning and counts as `on`).
 
 Set `publish.site: false` to stop publishing without losing the site
 folder's path. With the site off nothing is built.

@@ -32,11 +32,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unknown value counts as `on`, with a build warning. **Every site gains
   the cards at its next build.** To turn them off, ask the apprentice;
   it sets the value for you. The setting is in `docs/site-settings.md`.
-- **Two new files on the site.** `previews.json` is fetched once, on the
-  first hover or tap, and `js/previews.js` runs the cards. With the
-  setting off, every page is exactly as it was.
+- **Two new files on the site.** `previews.json` holds the cards and
+  `js/previews.js` runs them. The cards file is fetched once: on the first
+  hover or keyboard focus, or, on a phone, shortly after the page loads,
+  so the first tap already finds it. It is about 188 KB (57 KB as sent)
+  for a 613-page campaign and 114 KB (32 KB) for a 402-page one.
+- **A player character's card** shows the badges from its page header and
+  its epithet line. A draft page's card says Draft.
+- **With the setting off** no page changes, no cards file is written and
+  the script is not copied. Every site's `css/style.css` gains the card's
+  rules.
 
-SIZE-SENTENCE-TASK-7
+### Fixed
+
+- **A date in a page header shows as written.** An unquoted date such as
+  `play_date: 2026-07-02` used to print as a long machine string, a day
+  early. It now reads `2026-07-02`, on every kind of page.
+- **A name in a header shows as a name.** A clue's "found by", a
+  document's author and an item's origin or holder no longer print
+  `[[ ]]` brackets, `Target|alias` or underscore-joined file names; a
+  faction's leader and territory, an event's place and outcome and a PC's
+  badges follow the same rule.
+- **A type shown in a header reads as words.** `plot_thread` now reads
+  "Plot thread".
+- **An item's holder is no longer cut short.** A holder such as
+  `[[Nathaniel]] (and / or [[Cleo]])` printed as "or Cleo)"; it now shows
+  whole.
 
 Publish tool 1.16.0.
 

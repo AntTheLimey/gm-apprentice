@@ -236,3 +236,17 @@ test('refuses a link_previews value that is not on, desktop or off, and writes n
   assert.deepEqual(err, ['Error: "phone" is not a value link_previews takes']);
   assert.equal(config(s), before);
 });
+
+test('link_previews "on" and "off" are written quoted and read back as those words, not as booleans', () => {
+  const yaml = require('js-yaml');
+  for (const word of ['on', 'off']) {
+    const s = scratch('  mode: player\n');
+    assert.deepEqual(run(s, [`link_previews=${JSON.stringify(word)}`]).data, { written: ['link_previews'] });
+    const line = config(s).split('\n').find((l) => /^ {2}link_previews:/.test(l));
+    assert.ok(line, 'the line is written');
+    // Bare YAML `on` / `off` would read back as true / false: the file must say it is a string.
+    const read = yaml.load(config(s).split('---')[1]).publish.link_previews;
+    assert.strictEqual(read, word, `${line} reads back as ${JSON.stringify(read)}`);
+    assert.equal(run(s, []).data.linkPreviews, word);
+  }
+});
