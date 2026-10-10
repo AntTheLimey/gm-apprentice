@@ -47,10 +47,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or would if it published, read off the page as the build makes it:
   the text of the page, a PC's story page, the image files that publish
   with it, its link-preview card, and what the search finds it by.
+  When the site cannot be built it says so and exits with an error.
 - **`explain` and `manifest diff` / `apply` take `--vault`**, so a fix
   is checked and recorded in the vault that was audited.
 - **`links.py unlink --in NOTE [--as WORDS]`** turns links to a note that
-  exists into plain words on the named pages.
+  exists into plain words on the named pages. A NAME given with its
+  path means that note only; a link to another note of the same name is
+  left.
 - **`vault_check.py <vault> site-faults`** asks the site's tool for the
   list, and names the tool, the site file and the vault to use for each
   fix.
@@ -64,6 +67,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Connections graph, the sidebar, an NPC's connection cards and the
   search entry used to print `Vesper Hale|the stranger`. Where the note
   has a page, a relationship now links to it under the label.
+- A list typed where one value belongs that holds a value which keeps
+  a note off a player site (`status: [planned, alive]`,
+  `canon_status: [AUTHORITATIVE, DRAFT]`, `stage`, `source`, a scene's
+  `cut`) keeps the note off, as that value alone would. It was read as
+  one joined text that no rule knew, and the note published. The build
+  says which value it took.
+- On the Connections graph a page is one node whichever of its names a
+  relationship uses, its title or an alias.
 - A `%%comment%%` in a frontmatter value is cut wherever the value
   prints. A `%%` in backticks there is left as written.
 - A hidden heading written with `&ensp;`, `&emsp;`, `&shy;` or a

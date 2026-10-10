@@ -22,8 +22,12 @@ changes the next time it is published.
 
 ## Reading the rows
 
-- `INFO (vault) site-faults has no site to check`: skip this check
-  and say nothing about it, in the conversation or the report.
+- `INFO (vault) site-faults has no site to check: publish.site is not
+  on`: skip this check and say nothing about it, in the conversation or
+  the report.
+- `INFO (vault) site-faults has no site to check (<why>); <fix>`: the
+  publish tool could not read the vault's settings. Give the GM the
+  reason and the fix as written; nothing was checked.
 - `INFO (vault) site-faults not run: … from before this check`: the
   site builds with an older publish tool. Never ask the GM to update
   anything by hand. Run the version check (`SKILL.md`): on `MISMATCH`
@@ -227,7 +231,8 @@ secret in the open:
    close below it. Make the frontmatter changes.
 2. Turn the telling links into words:
    `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/links.py" "<vault>" unlink "<note name>" --in "<page>"`
-   (a preview; again with `--write`).
+   (a preview; again with `--write`). Where two notes share the name,
+   give the note's vault path as the name.
 3. Run `SITE explain "<note>" --shown` again and read all of it: the
    page, the card and the search lines. Nothing that moved and nothing
    secret may be anywhere in it. What it prints is all the site would
