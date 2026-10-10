@@ -1,11 +1,10 @@
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativePath, relativeHref, publishedSource, encodeHref } = require('../processor');
 const { canonicalNfc } = require('../unicode');
-const { headerMeta, headerMetaFields } = require('../pc-header-meta');
+const { headerMeta, headerMetaFields, pcEpithetText } = require('../pc-header-meta');
 const { baseShell, cssPath, rootPath, clientScripts, portraitImg } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { getInitials } = require('./landing-data');
-const { excerptFromMarkdown } = require('../excerpt');
 const { liveDataScript } = require('./gurps/live-data');
 const { liveScriptHrefs, clientFor } = require('./live-mount');
 const { getConsumedTitleMatcher } = require('./pc-registry');
@@ -352,10 +351,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   // prose. A sheet's body opens with stat tables, label lines and tick-boxes; the
   // excerpt drops them, so the quote is never "Playbook: Cutter Insight Prowess Resolve…".
   let epithet = '';
-  const traitsText = Array.isArray(fm.key_traits)
-    ? fm.key_traits.map(t => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
-    : String(fm.key_traits || '');
-  const quoteText = traitsText.trim() || excerptFromMarkdown(publishedSource(page), { skipSheetLines: true });
+  const quoteText = pcEpithetText(page);
   if (quoteText) epithet = `<div class="pull-quote">${escapeHtml(quoteText)}</div>`;
 
   // Status-bar tier off ⇒ no live vitals UI anywhere. Null out every live input

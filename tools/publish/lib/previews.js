@@ -6,7 +6,7 @@ const path = require('path');
 const { publishedSource, plainMetaValue, portraitBasename } = require('./processor');
 const { excerptFromMarkdown } = require('./excerpt');
 const { getCanonStatus } = require('./templates/base');
-const { headerMeta } = require('./pc-header-meta');
+const { headerMeta, pcEpithetText } = require('./pc-header-meta');
 const { inGameDateText } = require('./templates/session');
 
 const VALUE_LIMIT = 120;
@@ -73,25 +73,6 @@ function factsFor(fm) {
   return facts;
 }
 
-// A PC's page opens with an epithet, not its prose: key_traits when there are any,
-// otherwise the first sentence of the body with the sheet's own lines dropped (pc.js). The
-// card says the same, so it never shows words the page does not.
-function pcOpening(page, ctx) {
-  const fm = page.frontmatter;
-  const traits = Array.isArray(fm.key_traits)
-    ? fm.key_traits.map((t) => String(t == null ? '' : t).trim()).filter(Boolean).join(', ')
-    : String(fm.key_traits || '').trim();
-  if (traits) {
-    if (traits.length <= 200) return traits;
-    const cut = traits.slice(0, 200);
-    const space = cut.lastIndexOf(' ');
-    return (space > 0 ? cut.slice(0, space) : cut).trimEnd() + '…';
-  }
-  return excerptFromMarkdown(publishedSource(page), {
-    limit: 200, excludeSections: (ctx && ctx.excludeSections) || [], skipSheetLines: true,
-  });
-}
-
 function cardFor(page, ctx) {
   const fm = page.frontmatter || {};
   const title = page.displayTitle || page.title;
@@ -102,7 +83,7 @@ function cardFor(page, ctx) {
   if (facts.length) card.f = facts;
 
   // ctx.pcEpithet is false for the CoC folio, whose page shows no epithet to repeat.
-  const opening = fm.type === 'pc' ? (ctx && ctx.pcEpithet === false ? '' : pcOpening(page, ctx)) : excerptFromMarkdown(publishedSource(page), {
+  const opening = fm.type === 'pc' ? (ctx && ctx.pcEpithet === false ? '' : pcEpithetText(page)) : excerptFromMarkdown(publishedSource(page), {
     sentences: 2, limit: 200, excludeSections: (ctx && ctx.excludeSections) || [], wordUnderscores: true,
   });
   if (opening) card.x = opening;
