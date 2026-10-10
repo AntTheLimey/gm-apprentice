@@ -47,6 +47,9 @@ function buildRelationshipGraph(centerTitle, pages, backlinks) {
   const targetOf = (value) => {
     const ref = linkText(value);
     const target = canonicalNfc(ref.key.trim());
+    // A page is one node whichever of its names the link uses: its title, or an alias.
+    const page = pageMap[target];
+    if (page) return canonicalNfc(page.title);
     if (ref.labelled && !labels.has(target)) labels.set(target, ref.words.trim());
     return target;
   };
