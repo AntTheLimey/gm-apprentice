@@ -97,9 +97,14 @@ two words. Do not write `yes` or `no` for them.
 | `publish.site_title` | The name in the menu bar and the browser tab | Text | No title; setting up a site writes one |
 | `publish.footer` | A line at the foot of every page | Text | No footer |
 | `publish.search` | The search box | `true` or `false` | `true` |
+| `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone | `on`, `desktop` (hover only; on a phone a tap goes straight to the page) or `off` | `on` |
 | `publish.system` | The game system, which decides how a character sheet is drawn | `coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark) | A plain character page with no system's sheet |
 | `publish.four_oh_four.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
 | `setting_year` | An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. It sits at the left edge, beside `publish:`, as in the example above | A year | Nothing shown |
+
+With link previews on, a first tap on a phone opens the card and a second
+tap follows the link; `desktop` keeps the cards for a mouse and keyboard
+only.
 
 Set `publish.site: false` to stop publishing without losing the site
 folder's path. With the site off nothing is built.

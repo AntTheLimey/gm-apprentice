@@ -37,6 +37,7 @@ publish:
 | Landing tagline | `publish.theme.tagline` | One-sentence hook under the title on the landing page (default: none) |
 | Footer | `publish.footer` | Text for the footer of every page (default: none) |
 | Search | `publish.search` | `false` (or `no`, `off`) leaves out the search index (default: `true`) |
+| Link previews | `publish.link_previews` | `on` (default), `desktop` or `off`. The card a reader sees on resting on, focusing or tapping a link to another page. `desktop` leaves touch taps as they were. Set it for the GM with `npx gm-apprentice-publish vault-setting --set link_previews='"desktop"'` from the site directory. An unknown value is `on`, with a build warning |
 | Game system | `publish.system` | Selects the PC character-sheet renderer. Values in `schema-reference.md` § Site-level configuration fields |
 | Folder map | `publish.folder_map` | Maps vault folders to site output paths. A folder holding typed pages with no entry is skipped with a build warning. Default: empty; `init` writes the standard map |
 | Attachments directory | `publish.attachments_dir` | Vault folder holding images (default: `_attachments`) |
@@ -480,8 +481,8 @@ Two rows behave differently:
 
 Settings that never had a site-file form (`mode`, `exclude_drafts`,
 `theme`, `four_oh_four`, `overrides`, `section_titles`,
-`pc_prose_sections`, `character_sheets`, `sheet_skin`, `sheet_frame`,
-`setting_year`) are read from the vault file only.
+`pc_prose_sections`, `link_previews`, `character_sheets`, `sheet_skin`,
+`sheet_frame`, `setting_year`) are read from the vault file only.
 
 ### Moving the settings
 
