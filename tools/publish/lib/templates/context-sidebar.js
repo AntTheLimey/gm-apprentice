@@ -1,4 +1,5 @@
 const { escapeHtml, relativePath, encodeHref } = require('../processor');
+const { typeLabelText } = require('../kind-label');
 
 function normalizeRelationships(raw, linkMap) {
   if (!raw) return [];
@@ -50,7 +51,7 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
   if (backlinks && backlinks.length > 0) {
     const items = backlinks.map(b => {
       const href = encodeHref(relativePath(currentDir, b.outputPath));
-      return `<li><a href="${href}">${escapeHtml(b.displayTitle)}</a> <span class="sidebar-badge">${escapeHtml(b.type)}</span></li>`;
+      return `<li><a href="${href}">${escapeHtml(b.displayTitle)}</a> <span class="sidebar-badge">${escapeHtml(typeLabelText(b.type))}</span></li>`;
     });
     sections.push(`<h3>Mentioned In</h3>\n<ul>${items.join('\n')}</ul>`);
   }

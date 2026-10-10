@@ -95,3 +95,15 @@ test('A2: an item holder is shown whole in its real shapes, never cut at a slash
     }
   } finally { v.cleanup(); }
 });
+
+test('B3: the "Mentioned in" list names a snake_case page type as words', () => {
+  const v = site({
+    'Characters/Hallam.md': '---\ntype: npc\n---\nBody.\n',
+    'Wrapups/Night One.md': '---\ntype: session_wrap\n---\nHallam was there: [[Hallam]].\n',
+  });
+  try {
+    const html = v.read('characters', 'hallam.html');
+    assert.ok(!html.includes('sidebar-badge">session_wrap'), 'raw type name');
+    assert.match(html, /sidebar-badge">Session wrap</);
+  } finally { v.cleanup(); }
+});
