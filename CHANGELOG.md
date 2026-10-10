@@ -15,9 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   build prints at most one line for each kind of fault, with a count and
   the worst three: a note that published pages link to but that has no
   page of its own, so its name prints as plain words; a stray `%%` that
-  hides text; a code block that never closes, so hidden text below it is
-  published as code; and a secret name from `gm_aliases` typed in the
-  open. A site with none of these prints nothing new.
+  hides text; a code block that never properly closes, so hidden text
+  below it is published; and a secret name from `gm_aliases` printed in
+  the open. The names are read off each page as it is built, so a page
+  is counted only when it prints the name, in its text, its header, a
+  PC's story page or anywhere else the page shows it. A fault that lies
+  wholly under a hidden heading is not counted. A site with none of
+  these prints nothing new.
 - **campaign-qa fixes them or asks: the Site Faults check.** It takes the
   same list from the site's own tool. For a typing fault it shows the
   line and fixes it on your yes. For a note that is named but has no
@@ -30,21 +34,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   It is not counted or asked about again.
 - **`doctor --site` lists the same faults** (`NAMED_NO_PAGE`,
   `COMMENT_STRAY`, `FENCE_UNCLOSED`, `ALIAS_IN_PROSE`), and takes
-  `--vault`. A link to a note that exists but has no page is listed once,
-  under `NAMED_NO_PAGE`, and no longer under `LINK_UNRESOLVED`.
-- **`explain "<note>" --shown`** prints a note as a reader would get it:
-  the frontmatter and body after everything hidden is cut.
+  `--vault`. It builds the site in memory to find them, writing
+  nothing, so its list is the build's. A link to a note that exists but
+  has no page is listed once, under `NAMED_NO_PAGE`, and no longer
+  under `LINK_UNRESOLVED`.
+- **`explain "<note>" --shown`** prints what the site holds of a note,
+  or would if it published, read off the page as the build makes it:
+  the text of the page, a PC's story page, its link-preview card, and
+  what the search finds it by.
+- **`explain` and `manifest diff` / `apply` take `--vault`**, so a fix
+  is checked and recorded in the vault that was audited.
 - **`links.py unlink --in NOTE [--as WORDS]`** turns links to a note that
   exists into plain words on the named pages.
 - **`vault_check.py <vault> site-faults`** asks the site's tool for the
-  list.
+  list, and names the tool, the site file and the vault to use for each
+  fix.
 
 ### Fixed
 
-- A `%%` or `<!--` inside an indented code block is kept, as in a fenced
-  one.
 - A `%%comment%%` in a frontmatter value is cut wherever the value
-  prints.
+  prints. A `%%` in backticks there is left as written.
 - A hidden heading written with `&ensp;`, `&emsp;`, `&shy;` or a
   zero-width space in place of the space is still hidden.
 - Removing a comment or a hidden block no longer turns the paragraph
@@ -53,7 +62,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   does, and its error for a dressed-up hidden heading that a site's tool
   did not hide is back.
 - `manifest apply --exclude` accepts a note in a folder the site leaves
-  out.
+  out, `manifest diff` no longer lists such an entry as removed, and
+  `--publish` on one says why it cannot be listed.
+- A relationship with no `type` builds; it failed the page.
 - A bare note name in a header badge or a PC's `display_meta`
   (`found_by: Ilse_Karsh`) prints as words, on the page and on its
   card.
