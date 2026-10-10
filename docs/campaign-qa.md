@@ -4,7 +4,7 @@
 
 Your campaign's quality inspector. campaign-qa reads your campaign vault and systematically finds problems — contradictions, timeline errors, confusingly similar names, missing clues, broken links, and orphaned entities.
 
-It runs six audit modes, then walks you through each finding one at a time so you can fix or dismiss it. Nothing gets changed without your approval.
+It runs its audit modes, then walks you through each finding one at a time so you can fix or dismiss it. Nothing gets changed without your approval.
 
 ## When to Use It
 
@@ -58,6 +58,22 @@ Reach for campaign-qa when you need to:
 - "Find broken links in my campaign notes"
 - "Which NPCs have no relationships defined?"
 - "Are there any stale stubs I should fill in?"
+
+### Site Faults
+
+For a campaign with a published site.
+
+- "The site build warned about notes with no page. Fix them"
+- "Players can see Baron Vesper's name but he has no page"
+- "Check my notes for anything that shows wrong on the site"
+
+Claude lists the notes whose names appear on the site without a page
+of their own. For each NPC or place it proposes what the players may
+see and moves the rest under GM Notes, so the page can be published
+without giving anything away. Say no and the note stays hidden; you are
+not asked about it again. It also finds a stray `%%` that hides text,
+a code block left open over hidden text, and a secret name written
+out on a public page.
 
 ### Full Audit
 
