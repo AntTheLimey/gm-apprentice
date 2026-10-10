@@ -66,7 +66,7 @@
     var base = href ? href.replace('index.html', '') : './';
     var pageUrl = win.location.href;
     var rootUrl;
-    try { rootUrl = new URL(base, pageUrl).href; } catch (e) { return; }
+    try { rootUrl = new URL(base || './', pageUrl).href; } catch (e) { return; }
 
     var state = {
       cards: null, loading: null, failed: false,
@@ -84,7 +84,7 @@
             return r.text ? r.text().then(JSON.parse) : r.json();
           })
           .then(function (data) {
-            if (!data || typeof data !== 'object') throw new Error('bad previews');
+            if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('bad previews');
             state.cards = data;
           })
           .catch(function () { state.failed = true; });
@@ -108,7 +108,25 @@
       if (!state.cards) return null;
       var key = keyOf(link);
       if (!key || !Object.prototype.hasOwnProperty.call(state.cards, key)) return null;
-      return state.cards[key];
+      var card = state.cards[key];
+      return validCard(card) ? card : null;
+    }
+
+    function isText(v) { return v === undefined || typeof v === 'string'; }
+
+    function validCard(c) {
+      if (!c || typeof c !== 'object' || typeof c.t !== 'string' || typeof c.k !== 'string') return false;
+      if (!isText(c.x) || !isText(c.i)) return false;
+      if (c.f === undefined) return true;
+      return Array.isArray(c.f) && c.f.every(function (f) {
+        return Array.isArray(f) && typeof f[0] === 'string' && typeof f[1] === 'string';
+      });
+    }
+
+    function imageSrc(path) {
+      var parts = path.split('/');
+      var ok = parts.every(function (p) { return p && p !== '.' && p !== '..'; });
+      return ok ? base + parts.map(encodeURIComponent).join('/') : null;
     }
 
     function text(tag, cls, value) {
@@ -123,9 +141,10 @@
       card.setAttribute('id', 'link-preview');
       card.setAttribute('role', 'tooltip');
       var head = text('div', 'lp-head');
-      if (data.i) {
+      var src = data.i ? imageSrc(data.i) : null;
+      if (src) {
         var img = text('img', 'lp-img');
-        img.setAttribute('src', base + String(data.i).split('/').map(encodeURIComponent).join('/'));
+        img.setAttribute('src', src);
         img.setAttribute('alt', '');
         img.setAttribute('loading', 'lazy');
         head.appendChild(img);
@@ -194,10 +213,14 @@
       state.card = card;
       state.owner = link;
       state.touch = !!touch;
-      card.addEventListener('pointerover', function () { clearTimeout(state.closeT); });
+      card.addEventListener('pointerover', function () {
+        clearTimeout(state.closeT);
+        state.hover = link;
+      });
       card.addEventListener('pointerout', function (e) {
         var to = e.relatedTarget;
         if (to && (card.contains(to) || (state.owner && state.owner.contains(to)))) return;
+        state.hover = null;
         scheduleClose();
       });
     }
@@ -210,12 +233,14 @@
 
     main.addEventListener('pointerover', function (e) {
       if (e.pointerType === 'touch') return;
+      state.lastPointer = 'mouse';
       var link = linkOf(e.target);
       if (!link || state.hover === link) return;
       state.hover = link;
       clearTimeout(state.closeT);
       clearTimeout(state.openT);
       if (state.owner === link) return;
+      if (state.card && state.cards && !cardFor(link)) close();
       var swap = !!state.card;
       var go = function () {
         if (state.hover !== link) return;
@@ -245,8 +270,10 @@
     });
 
     main.addEventListener('focusout', function (e) {
-      if (linkOf(e.target) && state.card && !state.touch) close();
+      if (state.card && !state.touch && linkOf(e.target) === state.owner) close();
     });
+
+    main.addEventListener('pointercancel', function () { state.lastPointer = 'mouse'; });
 
     main.addEventListener('pointerdown', function (e) {
       state.lastPointer = e.pointerType || 'mouse';
@@ -257,6 +284,7 @@
     main.addEventListener('click', function (e) {
       var pointer = state.lastPointer;
       state.lastPointer = 'mouse';
+      if (e.detail === 0) pointer = 'keyboard';
       var link = linkOf(e.target);
       if (!link || pointer !== 'touch' || !state.cards) return;
       if (!cardFor(link)) return;

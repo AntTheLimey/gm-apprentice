@@ -82,12 +82,12 @@ const CARDS = {
   'locations/inn.html': { t: '<b>Inn</b>', k: '<img src=x onerror=alert(1)>', f: [['<i>a</i>', '<img src=x onerror=alert(1)>']], x: '<script>x</script>', d: 1 },
 };
 
-function setup({ mode = 'on', fetchImpl } = {}) {
+function setup({ mode = 'on', fetchImpl, brandHref = '../../index.html', pageUrl = ROOT + 'characters/pcs/mara.html', cards = CARDS, hrefs = {} } = {}) {
   const timers = [];
   let tid = 0;
   const html = new Node('html');
   const body = html.appendChild(new Node('body'));
-  const brand = body.appendChild(new Node('a', { classes: ['nav-brand'], attrs: { href: '../../index.html' } }));
+  const brand = body.appendChild(new Node('a', { classes: ['nav-brand'], attrs: { href: brandHref } }));
   const nav = body.appendChild(new Node('nav'));
   const crumbs = body.appendChild(new Node('div', { classes: ['breadcrumbs'] }));
   const main = body.appendChild(new Node('main', { classes: ['content'] }));
@@ -95,8 +95,8 @@ function setup({ mode = 'on', fetchImpl } = {}) {
   const quiet = main.appendChild(new Node('div', { attrs: { 'data-no-preview': '' } }));
   const mk = (parent, href) => parent.appendChild(new Node('a', { attrs: { href } }));
   const links = {
-    hallam: mk(main, '../npcs/hallam.html'), inn: mk(main, '../../locations/inn.html'),
-    unknown: mk(main, '../npcs/nobody.html'), self: mk(main, 'mara.html#x'),
+    hallam: mk(main, hrefs.hallam || '../npcs/hallam.html'), inn: mk(main, '../../locations/inn.html'),
+    unknown: mk(main, '../npcs/nobody.html'), nocard: mk(main, '../npcs/nocard.html'), self: mk(main, 'mara.html#x'),
     nav: mk(nav, '../npcs/hallam.html'), crumb: mk(crumbs, '../npcs/hallam.html'), quiet: mk(quiet, '../npcs/hallam.html'),
   };
   const other = body.appendChild(new Node('p'));
@@ -107,17 +107,18 @@ function setup({ mode = 'on', fetchImpl } = {}) {
     addEventListener: (t, fn) => { (doc.listeners[t] = doc.listeners[t] || []).push(fn); },
   };
   const win = {
-    location: { href: ROOT + 'characters/pcs/mara.html' }, innerWidth: 1000, innerHeight: 800,
+    location: { href: pageUrl }, innerWidth: 1000, innerHeight: 800,
     pageXOffset: 0, pageYOffset: 0, listeners: {},
     addEventListener: (t, fn) => { (win.listeners[t] = win.listeners[t] || []).push(fn); },
   };
   let fetched = 0;
-  const fetchFn = fetchImpl || (() => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(CARDS)) }));
+  const fetchUrls = [];
+  const fetchFn = fetchImpl || (() => Promise.resolve({ ok: true, text: () => Promise.resolve(JSON.stringify(cards)) }));
   const ctx = {
     document: doc, window: win, URL, Promise, JSON, Object, String, Math,
     setTimeout: (fn, ms) => { timers.push({ id: ++tid, fn, ms }); return tid; },
     clearTimeout: (id) => { const i = timers.findIndex((t) => t.id === id); if (i >= 0) timers.splice(i, 1); },
-    fetch: (...a) => { fetched++; return fetchFn(...a); },
+    fetch: (...a) => { fetched++; fetchUrls.push(a[0]); return fetchFn(...a); },
   };
   vm.runInNewContext(SOURCE, ctx);
   const flush = () => new Promise((r) => setImmediate(r));
@@ -134,7 +135,7 @@ function setup({ mode = 'on', fetchImpl } = {}) {
     await flush();
   };
   const card = () => body.find((n) => n.classes.includes('link-preview'))[0] || null;
-  return { doc, win, main, body, links, other, timers, fire, runTimers, flush, card, fetched: () => fetched, ctx };
+  return { doc, win, main, body, links, other, timers, fire, runTimers, flush, card, fetched: () => fetched, fetchUrls, ctx };
 }
 
 const textsOf = (n) => n.find(() => true).map((x) => x.textContent).filter(Boolean);
@@ -334,4 +335,126 @@ test('the script does nothing without data-previews, and loads in Node', async (
   assert.strictEqual(p.card(), null);
   assert.strictEqual(p.fetched(), 0);
   assert.strictEqual(p.win.listeners.scroll, undefined);
+});
+
+// ---- fix round 1 ----
+test('the site root is found from each shape of nav-brand href', async () => {
+  const cases = [
+    { brandHref: 'index.html', pageUrl: ROOT + 'about.html', hrefs: { hallam: 'characters/npcs/hallam.html' }, fetchUrl: 'previews.json', img: 'images/characters/hallam.webp' },
+    { brandHref: '../../index.html', pageUrl: ROOT + 'characters/pcs/mara.html', hrefs: {}, fetchUrl: '../../previews.json', img: '../../images/characters/hallam.webp' },
+    { brandHref: '/campaign/index.html', pageUrl: ROOT + '404.html', hrefs: { hallam: '/campaign/characters/npcs/hallam.html' }, fetchUrl: '/campaign/previews.json', img: '/campaign/images/characters/hallam.webp' },
+  ];
+  for (const c of cases) {
+    const p = setup(c);
+    p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+    await p.runTimers(300);
+    assert.ok(p.card(), c.brandHref);
+    assert.deepStrictEqual(p.fetchUrls, [c.fetchUrl]);
+    assert.strictEqual(p.card().find((n) => n.tag === 'img')[0].attrs.src, c.img);
+  }
+});
+
+test('link, card, away and back onto the link inside 150 ms keeps the card; after it closed, re-entering reopens', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  const c = p.card();
+  p.fire(p.links.hallam, 'pointerout', { pointerType: 'mouse', relatedTarget: c });
+  p.fire(c, 'pointerover', { pointerType: 'mouse' });
+  p.fire(c, 'pointerout', { pointerType: 'mouse', relatedTarget: p.other });
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(150);
+  assert.ok(p.card(), 'the close timer was cleared');
+  p.fire(p.links.hallam, 'pointerout', { pointerType: 'mouse', relatedTarget: p.other });
+  await p.runTimers(150);
+  assert.strictEqual(p.card(), null);
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  assert.ok(p.card(), 'reopens');
+});
+
+test('a cancelled touch, then a keyboard Enter or a mouse click, follows the link', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await p.flush();
+  p.fire(p.links.hallam, 'pointercancel', { pointerType: 'touch' });
+  assert.ok(!p.fire(p.links.hallam, 'click', { detail: 0 }).prevented);
+  assert.strictEqual(p.card(), null);
+
+  const q = setup();
+  q.fire(q.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await q.flush();
+  assert.ok(!q.fire(q.links.hallam, 'click', { detail: 0 }).prevented, 'Enter with no pointerup/cancel seen');
+});
+
+test('a touch tap, then mouse hover and a mouse click, each act by their own pointer', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  await p.flush();
+  assert.ok(p.fire(p.links.hallam, 'click', { detail: 1 }).prevented);
+  p.fire(p.other, 'pointerdown', { pointerType: 'touch' });
+  p.fire(p.links.inn, 'pointerover', { pointerType: 'mouse' });
+  assert.ok(!p.fire(p.links.inn, 'click', { detail: 1 }).prevented, 'mouse hover then click, no pointerdown seen');
+  p.fire(p.links.inn, 'pointerdown', { pointerType: 'touch' });
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'mouse' });
+  assert.ok(!p.fire(p.links.hallam, 'click', { detail: 1 }).prevented);
+});
+
+test('an image path with dot segments gets no image', async () => {
+  for (const i of ['../secret.png', './a.png', 'images/../../x.png', 'images//x.png']) {
+    const p = setup({ cards: { 'characters/npcs/hallam.html': { t: 'H', k: 'NPC', i } } });
+    p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+    await p.runTimers(300);
+    assert.ok(p.card(), i);
+    assert.strictEqual(p.card().find((n) => n.tag === 'img').length, 0, i);
+  }
+});
+
+test('moving from a card to a link that has no card closes the first', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  p.fire(p.links.hallam, 'pointerout', { pointerType: 'mouse', relatedTarget: p.links.nocard });
+  p.fire(p.links.nocard, 'pointerover', { pointerType: 'mouse' });
+  assert.strictEqual(p.card(), null);
+});
+
+test('moving from a card to a link that has a key but no card closes the first', async () => {
+  const p = setup({ cards: { ...CARDS, 'characters/npcs/nocard.html': undefined } });
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  p.fire(p.links.hallam, 'pointerout', { pointerType: 'mouse', relatedTarget: p.links.nocard });
+  p.fire(p.links.nocard, 'pointerover', { pointerType: 'mouse' });
+  assert.strictEqual(p.card(), null);
+});
+
+test('focus leaving another link leaves a hover card alone', async () => {
+  const p = setup();
+  p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+  await p.runTimers(300);
+  p.fire(p.links.inn, 'focusout');
+  assert.ok(p.card());
+  p.fire(p.links.hallam, 'focusout');
+  assert.strictEqual(p.card(), null);
+});
+
+test('wrongly shaped files and cards leave links as they are, throwing nothing', async () => {
+  const bad = [
+    [], null, 'text', 5,
+    { 'characters/npcs/hallam.html': null },
+    { 'characters/npcs/hallam.html': { t: 5, k: 'NPC' } },
+    { 'characters/npcs/hallam.html': { t: 'H', k: 'NPC', f: 'Role' } },
+    { 'characters/npcs/hallam.html': { t: 'H', k: 'NPC', f: [['a']] } },
+    { 'characters/npcs/hallam.html': { t: 'H', k: 'NPC', f: [5] } },
+    { 'characters/npcs/hallam.html': { t: 'H', k: 'NPC', x: {} } },
+  ];
+  for (const cards of bad) {
+    const p = setup({ cards });
+    p.fire(p.links.hallam, 'pointerover', { pointerType: 'mouse' });
+    await p.runTimers(300);
+    assert.strictEqual(p.card(), null, JSON.stringify(cards));
+    p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+    await p.flush();
+    assert.ok(!p.fire(p.links.hallam, 'click', { detail: 1 }).prevented, JSON.stringify(cards));
+  }
 });
