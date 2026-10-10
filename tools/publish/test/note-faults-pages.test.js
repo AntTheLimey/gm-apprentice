@@ -476,7 +476,7 @@ describe('a labelled link never prints its target, whatever prints the field', (
       files[`Hidden/${name}_Hale.md`] = hidden();
       const lines = [`type: ${type}`];
       if (type === 'pc') lines.push('player_name: Pat');
-      if (type === 'event') lines.push('in_game_date: "1925-03-04"');
+      if (type === 'event') lines.push('in_game_date: "1925-03-04"', 'date: "1925-03-04"');
       if (type === 'session') lines.push('session_number: 1', 'status: played', 'in_game_date: "1925-03-05"');
       if (field === 'relationships') lines.push(`relationships:\n  - target: "${link}"\n    type: knows`);
       else if (list) lines.push(`${field}:\n  - "${link}"`);
@@ -492,6 +492,23 @@ describe('a labelled link never prints its target, whatever prints the field', (
       assert.deepStrictEqual(named, [], `${what}: the hidden note's name is in ${named.join(', ')}`);
       assert.ok(built.some(([, text]) => text.includes(label)), `${what}: the label is printed nowhere`);
     }
+  });
+
+  it('a labelled link to a page is that page where a field is used to find one: a faction\'s members, a place\'s parent, a session\'s chapter', () => {
+    const { configPath, root } = site({
+      'Factions/Guild.md': '---\ntype: faction\n---\n\nA guild.\n',
+      'Characters/NPCs/Bo_Pike.md': '---\ntype: npc\nrelationships:\n  - target: "[[Guild|the old firm]]"\n    type: member_of\n---\n\nBo.\n',
+      'Locations/Quay.md': '---\ntype: location\n---\n\nA quay.\n',
+      'Locations/Shed.md': '---\ntype: location\nparent_location: "[[Quay|the waterfront]]"\n---\n\nA shed.\n',
+      'Chapters/Chapter_1.md': '---\ntype: chapter\n---\n\nA chapter.\n',
+      'Sessions/Session_1.md': '---\ntype: session\nsession_number: 1\nstatus: played\nchapter: "[[Chapter_1|the first part]]"\n---\n\nPlayed.\n',
+    });
+    fromBuild(configPath);
+    const read = (...parts) => fs.readFileSync(path.join(root, 'docs', ...parts), 'utf8');
+    assert.match(read('factions', 'guild.html'), /<div class="members"><h3>Members<\/h3><ul><li><a href="[^"]*bo-pike\.html">Bo Pike<\/a><\/li>/);
+    // The shed is filed under its parent on the places index, not as a place of its own region.
+    assert.match(read('locations', 'index.html'), /loc-children[^]*shed\.html/);
+    assert.match(read('chapters', 'chapter-1.html'), /session-1\.html/);
   });
 
   it('and the audit still counts the label as a name the page prints, a title\'s among them', async () => {

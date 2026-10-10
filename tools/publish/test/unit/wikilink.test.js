@@ -308,3 +308,15 @@ describe('linkText: a frontmatter value that names a note, read for a page that 
     assert.strictEqual(labelsForLinks('[[Old_Tam\\|the old man]]'), 'the old man');
   });
 });
+
+describe('a labelled superseded_by names the note that took over', () => {
+  const { buildLinkMap } = require('../../lib/scanner');
+  it('links to the old name go to the new page', () => {
+    const page = (title, frontmatter) => ({ title, displayTitle: title, outputPath: `${title.toLowerCase()}.html`, vaultPath: title, frontmatter });
+    const map = buildLinkMap([
+      page('Old', { type: 'npc', canon_status: 'SUPERSEDED', superseded_by: '[[New|the new one]]' }),
+      page('New', { type: 'npc' }),
+    ]);
+    assert.strictEqual(map.Old, 'new.html');
+  });
+});
