@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -1154,6 +1154,22 @@ function buildSite(options) {
   const audit = startNoteAudit({
     vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
     publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
+    // Whether a frontmatter value (`occupation`, `relationships[0].description`) is still in
+    // the frontmatter the site reads. Asked of publishedFrontmatter itself, the one function
+    // that removes fields (the exclude lists, the note's own list, gm_aliases, a gm_only
+    // relationship), with the note as it was read and with the field put back in case its
+    // whole value was a comment and the cut took it.
+    printsField: (page, fieldPath) => {
+      const top = String(fieldPath).split(/[.[]/)[0];
+      const source = page.sourceFrontmatter || page.frontmatter || {};
+      const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};
+      const own = (o) => Object.prototype.hasOwnProperty.call(o, top);
+      if (own(source) && !own(page.frontmatter || {})) return false;
+      if (!own(source) && !own(publishedFrontmatter({ ...source, [top]: 'x' }, excludeFields, overridesForFile))) return false;
+      // One relationship of several: it is gone when it is marked gm_only.
+      const row = /^relationships\[(\d+)\]/.exec(String(fieldPath));
+      return !(row && Array.isArray(source.relationships) && isGmOnlyEdge(source.relationships[Number(row[1])]));
+    },
   });
   const shown = { page: null, story: null };
   const markedOf = new Map();   // page -> its links to no-page notes, marked (null when it has none)

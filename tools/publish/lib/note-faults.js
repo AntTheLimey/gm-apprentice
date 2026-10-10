@@ -189,6 +189,8 @@ function fileLine(readFile, abs, source, bodyLine) {
  * @param {object|null} input.manifest loadManifest() output
  * @param {function} input.relOf       page -> vault-relative path
  * @param {function} input.getsNoPage  page -> true for a published note with no page
+ * @param {function} input.printsField (page, path of a frontmatter value) -> false when the
+ *   site removes that field from the page's frontmatter before anything reads it
  * @param {function} [input.readFile]
  * @returns {object} the audit:
  *   read(rel, html, out)              a page as it was built, looked through for secret names;
@@ -533,6 +535,8 @@ function startNoteAudit(input) {
         });
       }
       for (const entry of page.commentValues || []) {
+        // A field the site removes prints nothing, so a stray in it changes nothing shown.
+        if (!input.printsField(page, entry.field)) continue;
         for (const { kind, mark } of valueStrays(entry.value)) {
           found.push({
             code: 'COMMENT_STRAY', severity: 'warning', path: rel,
