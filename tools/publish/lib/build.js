@@ -1162,7 +1162,7 @@ function buildSite(options) {
   // holds of it. null when the build makes no page of it.
   function shownOf() {
     if (!shownPage || !pages.includes(shownPage)) return null;
-    const text = (html) => (html === null ? null : pageText(mainOf(html)));
+    const text = (html) => (html === null ? null : pageText(mainOf(html), { spaced: true }));
     const fm = shownPage.frontmatter || {};
     let card = null;
     if (publishConfig.link_previews !== 'off') {

@@ -281,6 +281,11 @@ describe('pageText', () => {
     const html = '<p>See <a href="../x.html">Other Page</a> and <a href="https://example.com">the paper</a>.</p>';
     assert.strictEqual(pageText(html, { links: false }), 'See and the paper.');
   });
+  it('can set a sheet\'s small boxes apart for reading, where the plain reading joins them', () => {
+    const html = '<div><span class="k">ST</span><span class="v">12</span></div>';
+    assert.strictEqual(pageText(html), 'ST12');
+    assert.strictEqual(pageText(html, { spaced: true }), 'ST 12');
+  });
   it('can add the words a tag carries', () => {
     assert.strictEqual(pageText('<p>x<img alt="a sketch" src="a.png"></p>', { attributes: true }), 'x a sketch');
   });

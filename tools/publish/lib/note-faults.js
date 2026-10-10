@@ -71,7 +71,10 @@ const PRINTED_ATTRS = /\s(?:alt|title|aria-label|content|placeholder)="([^"]*)"/
 // keeps them between LINK_OPEN and LINK_CLOSE so a reader can tell them from the page's own.
 const LINK_OPEN = '\u0002';
 const LINK_CLOSE = '\u0003';
-function pageText(html, { links = true, attributes = false } = {}) {
+// `spaced: true` is for reading: the small inline boxes a sheet is made of (a stat's label
+// and its number) are set apart by a space instead of run together.
+const BOX_TAGS = new Set(['span', 'small', 'label', 'abbr', 'tspan', 'b', 'i', 'kbd', 'sup', 'sub', 'a']);
+function pageText(html, { links = true, attributes = false, spaced = false } = {}) {
   let s = String(html || '')
     .replace(/<(script|style|template)\b[\s\S]*?<\/\1\s*>/gi, '\n')
     .replace(/<!--[\s\S]*?-->/g, '')
@@ -83,7 +86,8 @@ function pageText(html, { links = true, attributes = false } = {}) {
   s = s.replace(/<\/?([a-zA-Z][a-zA-Z0-9-]*)\b([^>]*)>/g, (whole, tag, attrs) => {
     let extra = '';
     if (attributes) for (const m of attrs.matchAll(PRINTED_ATTRS)) extra += ` ${m[1]} `;
-    return (BLOCK_TAGS.has(tag.toLowerCase()) ? '\n' : '') + extra;
+    const name = tag.toLowerCase();
+    return (BLOCK_TAGS.has(name) ? '\n' : spaced && BOX_TAGS.has(name) ? ' ' : '') + extra;
   });
   return decodeEntities(s).replace(/&([a-z]+);/gi, (whole, name) => MORE_ENTITIES[name.toLowerCase()] || whole)
     .replace(MARK_RE, '').split('\n')
