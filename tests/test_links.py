@@ -356,6 +356,19 @@ class UnlinkTests(unittest.TestCase):
         self.assertEqual(got.returncode, 2)
         self.assertIn("--as goes with unlink --in", got.stderr)
 
+    def test_as_words_with_a_pipe_stay_in_one_table_cell(self):
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "| when | what |\n|---|---|\n"
+                              "| noon | [[Dinner_Scene]] |\n\n"
+                              "Then [[Dinner_Scene]].\n"})
+        p = links.plan_unlink(vault, ["Dinner_Scene"], ["People/Host.md"],
+                              "dinner | welcome")
+        self.assertEqual(p.texts["People/Host.md"],
+                         "| when | what |\n|---|---|\n"
+                         "| noon | dinner \\| welcome |\n\n"
+                         "Then dinner | welcome.\n")
+
     def test_within_refuses_a_note_that_is_not_there(self):
         vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
         with self.assertRaises(links.LinksError) as cm:

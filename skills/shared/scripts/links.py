@@ -41,7 +41,7 @@ filename only one note has), and NAME may be a note that exists: the way
 to stop a published page naming a note that has no page, while every
 other note keeps its link. `--as WORDS` gives the words for a link that
 has no display text of its own, where the note's name would read as a file
-name (`[[Scene_06_Dinner]]` becomes WORDS); a link with display text keeps
+name (`[[Scene_02_Quay]]` becomes WORDS); a link with display text keeps
 it.
 
 Both fixes print what they would change and write nothing without
@@ -288,6 +288,9 @@ def _unlink_as(bare: str | None) -> Fix:
             return None, "embed"
         dest, _sub, shown = parsed
         words = shown.lstrip("\\")[1:].strip() if shown else ""
+        if not words and bare and line.lstrip(" \t>").startswith("|"):
+            # In a table cell a bare pipe in the words would end the cell.
+            return re.sub(r"(?<!\\)\|", r"\\|", bare), ""
         return words or bare or link_name(dest), ""
     return fix
 
