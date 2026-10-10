@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { parseNote, cutValueComments } = require('./frontmatter');
+const { parseNote, cutValueComments, percentFields } = require('./frontmatter');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
 
@@ -115,6 +115,8 @@ function scanVaultReport(config, { quiet = false } = {}) {
           malformed.push({ rel: relPath, fullPath, message: e.message });
           continue;
         }
+        // Read before the cut removes them: the note-faults audit reports a stray `%%` in a value.
+        const percentValues = raw.includes('%%') ? percentFields(frontmatter) : [];
         frontmatter = cutValueComments(frontmatter);
 
         if (!frontmatter.type) { untyped.push(relPath); continue; } // skip files without typed frontmatter
@@ -164,6 +166,7 @@ function scanVaultReport(config, { quiet = false } = {}) {
           outputDir: outputDir || '',
           frontmatter,
           markdown: content,
+          ...(percentValues.length > 0 ? { percentValues } : {}),
         });
       }
     }

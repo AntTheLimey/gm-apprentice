@@ -46,4 +46,43 @@ function cutValueComments(value) {
   return value;
 }
 
-module.exports = { parseNote, cutValueComments };
+// Whether the character just before `index` in `text` is a letter or a number: a `%%` there
+// is glued to a word ("100%%"), which is a percent sign typed twice, not a comment opener.
+function gluedBefore(text, index) {
+  return /[\p{L}\p{N}]$/u.test(String(text).slice(Math.max(0, index - 2), index));
+}
+
+// The stray `%%` in one string or nested value, read the way the cut above and the body's
+// strip read them: a `%%` opens, the next closes. Each opener that is never closed is
+// UNCLOSED; each that closes but is glued to the word before it is GLUED.
+function percentStrays(value) {
+  if (Array.isArray(value)) return value.flatMap(percentStrays);
+  if (value && typeof value === 'object') return Object.values(value).flatMap(percentStrays);
+  if (typeof value !== 'string' || !value.includes('%%')) return [];
+  const kinds = [];
+  for (let i = 0; i < value.length;) {
+    const open = value.indexOf('%%', i);
+    if (open === -1) break;
+    const close = value.indexOf('%%', open + 2);
+    if (close === -1) { kinds.push('UNCLOSED'); break; }
+    if (gluedBefore(value, open)) kinds.push('GLUED');
+    i = close + 2;
+  }
+  return kinds;
+}
+
+// Every string leaf of parsed frontmatter that holds a `%%`, with a path to it
+// (`list[1]`, `deep.key`). Read before cutValueComments, which removes what this reports.
+function percentFields(data, prefix = '') {
+  const out = [];
+  if (typeof data === 'string') {
+    if (data.includes('%%')) out.push({ field: prefix, value: data });
+  } else if (Array.isArray(data)) {
+    data.forEach((v, i) => out.push(...percentFields(v, `${prefix}[${i}]`)));
+  } else if (data && typeof data === 'object' && Object.getPrototypeOf(data) === Object.prototype) {
+    for (const [key, v] of Object.entries(data)) out.push(...percentFields(v, prefix ? `${prefix}.${key}` : key));
+  }
+  return out;
+}
+
+module.exports = { parseNote, cutValueComments, gluedBefore, percentStrays, percentFields };

@@ -1,5 +1,6 @@
 const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
+const { gluedBefore } = require('./frontmatter');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { headingKey, headingKeys, titleNamedIn } = require('./heading-key');
@@ -857,7 +858,11 @@ function obsidianComments(markdown) {
   // list item) or an indented block, the same reading findHeadings gives the section filter.
   // A parser that fails reads no code: nothing is then literal, which cannot leak.
   let inFence = new Set();
-  try { ({ inCode: inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no code is trusted */ }
+  let openFence = null;
+  try { ({ inCode: inFence, openFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no code is trusted */ }
+  // Every opener, for the note-faults audit: where it sat, whether it closed, and whether it
+  // was glued to the word before it ("100%% done").
+  const openers = [];
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
@@ -876,6 +881,7 @@ function obsidianComments(markdown) {
         const end = line.indexOf('%%', i);
         if (end === -1) { i = line.length; break; }
         inComment = false;
+        openers[openers.length - 1].closed = true;
         i = end + 2;
         continue;
       }
@@ -898,6 +904,7 @@ function obsidianComments(markdown) {
       }
       if (ch === '%' && line[i + 1] === '%') {
         inComment = true;
+        openers.push({ line: n, glued: gluedBefore(line, i), closed: false });
         i += 2;
         continue;
       }
@@ -916,7 +923,22 @@ function obsidianComments(markdown) {
   if (inComment) {
     warnings.push('unclosed %% comment: content stripped to end of file');
   }
-  return { text: result.join('\n'), warnings, lines: result, from };
+  const strays = openers.filter(o => !o.closed || o.glued)
+    .map(o => ({ line: o.line, kind: o.closed ? 'GLUED' : 'UNCLOSED' }));
+  return { text: result.join('\n'), warnings, lines: result, from, strays, fence: hiddenBelowFence(lines, openFence) };
+}
+
+// A top-level code fence that is never closed turns everything below it into code, and the
+// strips read code as literal: a marker down there is published instead of obeyed. The fence
+// line and the first marker below it, or null when nothing hidden lies below (or the fence closes).
+const HIDDEN_MARKER_RE = /%%|<!--\s*\/?\s*(gm-only|spoiler)\s*-->|<!--/;
+function hiddenBelowFence(lines, openFence) {
+  if (openFence === null || openFence === undefined) return null;
+  for (let l = openFence + 1; l < lines.length; l++) {
+    const m = HIDDEN_MARKER_RE.exec(lines[l]);
+    if (m) return { line: openFence, marker: m[1] || (m[0] === '%%' ? '%%' : '<!--'), markerLine: l };
+  }
+  return null;
 }
 
 // Strip a single leading H1 from the markdown body. Templates inject their own H1
@@ -1157,11 +1179,11 @@ function portraitBasename(frontmatter) {
 // (unclosed markers), for the caller to log wherever its warnings go.
 function playerSafeMarkdown(markdown, options = {}) {
   const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts);
-  const { warnings } = stripped;
+  const { warnings, strays, openFence } = stripped;
   let text = stripped.lines.join('\n');
   text = filterSections(text, options.excludeSections, options.frontmatter,
     { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m) });
-  return { text, warnings };
+  return { text, warnings, strays, openFence };
 }
 
 // Whatever a strip cut, the lines around the cut must mean what they did: a paragraph line,
@@ -1184,6 +1206,9 @@ function strippedLines(text, excludeCallouts) {
   const warnings = [];
   let lines = null;
   let from = null;
+  // What the %% strip found that the note-faults audit reports, mapped to lines of `text`.
+  let strays = [];
+  let openFence = null;
   const strips = [
     dataviewLines,
     (t) => markedBlocks(t, 'gm-only'),
@@ -1201,8 +1226,13 @@ function strippedLines(text, excludeCallouts) {
     lines = result.lines;
     keepApart(lines, from);
     if (result.warnings) warnings.push(...result.warnings);
+    if (result.strays) strays = result.strays.map(s => ({ line: before === null ? s.line : before[s.line], kind: s.kind }));
+    if (result.fence) {
+      const at = (l) => (before === null ? l : before[l]);
+      openFence = { line: at(result.fence.line), marker: result.fence.marker, markerLine: at(result.fence.markerLine) };
+    }
   }
-  return { lines, from, warnings };
+  return { lines, from, warnings, strays, openFence };
 }
 
 const HEADINGS_UNSTABLE_WARNING = 'a link or embed label changes this note\'s headings; nothing after its title is published while character sheets are off. Fix the label.';
