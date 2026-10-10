@@ -294,8 +294,8 @@ describe('the look for a name in a page only ever sends more pages to the second
       ['Hidden/Old_Tam.md', ['People/Cy_Dunn.md'], ['Tam & Co']],
     ]);
   });
-  it('finds a label with bold inside it, with a typed character reference, and one the typographer rewrites', async () => {
-    for (const label of ['**Old** Tam', 'O**l**d Tam', 'Caf&eacute; Tam', 'Tam (tm) Co', 'Corwin->Thides']) {
+  it('finds a label with markup inside it, with a typed character reference, and one the typographer rewrites', async () => {
+    for (const label of ['**Old** Tam', 'Feather**stone** Hall', 'Old_Tam the `elder`', 'Caf&eacute; Tam', 'Tam (tm) Co', 'Corwin->Thides']) {
       const found = await faults({
         'Hidden/Old_Tam.md': hidden(),
         'People/Bo_Pike.md': npcNote(`Intro.\n\n## Seen\n\nWe met [[Old_Tam|${label}]] today.`),
@@ -362,6 +362,17 @@ describe('a name only an index or listing page prints', () => {
       'Events/Ball.md': '---\ntype: event\nstatus: "The Watcher"\n---\n\nA ball.\n',
     }, 'ALIAS_IN_PROSE');
     assert.deepStrictEqual(found.map((f) => [f.path, f.listings]), [['Events/Ball.md', ['events/index.html']]]);
+  });
+
+  it('NAMED_NO_PAGE: a name the landing page prints from a recap is counted, and the finding names the landing page', async () => {
+    const [f] = await faults({
+      'Hidden/Old_Tam.md': hidden(),
+      'Sessions/Session_1.md': '---\ntype: session\nsession_number: 1\nstatus: played\ndocuments:\n  wrap_up: "[[Session_1_Wrap_Up]]"\n---\n\nPrep.\n',
+      'Sessions/Session_1_Wrap_Up.md': '---\ntype: session_wrap\nsession: "[[Session_1]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Narrative Recap\n\nThey met [[Old_Tam]] at the quay.\n',
+    }, 'NAMED_NO_PAGE');
+    assert.ok(f.pages.includes('Sessions/Session_1_Wrap_Up.md'), JSON.stringify(f.pages));
+    assert.ok(f.listings.includes('index.html'), JSON.stringify(f.listings));
+    assert.deepStrictEqual(f.viaListing, []);
   });
 
   it('is silent for a field no page of the site prints', async () => {

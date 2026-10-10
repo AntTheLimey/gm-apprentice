@@ -334,7 +334,8 @@ function startNoteAudit(input) {
   // is ruled out only when one of its words, as letters and digits, is nowhere in the HTML.
   // Whatever stands between the words there (a space, `&amp;`, a tag) is not looked at. A
   // word the renderer may itself change is not asked for (a `(c)` or `(tm)`, a character
-  // reference), and a name that carries markup inside it is never ruled out.
+  // reference). Markup inside a name needs no care: it is not letters, so the name's words
+  // are already the pieces it leaves.
   function mayPrint(marked, html) {
     if (marked.names === undefined) {
       const names = new Map();
@@ -342,11 +343,12 @@ function startNoteAudit(input) {
         const { words } = marks[id - 1];
         if (names.has(words)) continue;
         const plain = words.replace(/\((?:c|r|tm|p)\)/gi, ' ').replace(/&[a-z0-9#]+;/gi, ' ');
-        names.set(words, /[*_`~=\\<[\]^$]/.test(words) ? null : (plain.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []));
+        names.set(words, plain.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []);
       }
       marked.names = [...names.values()];
-      marked.always = marked.names.some((runs) => runs === null || runs.length === 0);
-      const longest = marked.names.map((runs) => (runs || []).slice().sort((x, y) => y.length - x.length)[0]);
+      // A name with no letter or digit left to look for is never ruled out.
+      marked.always = marked.names.some((runs) => runs.length === 0);
+      const longest = marked.names.map((runs) => runs.slice().sort((x, y) => y.length - x.length)[0]);
       // One pass over the raw HTML settles most pages: the longest word of any of the names.
       marked.probe = marked.always ? null : new RegExp([...new Set(longest)].map(esc).join('|'), 'i');
     }

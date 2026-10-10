@@ -146,3 +146,20 @@ describe('a hidden heading joined by an entity or a zero-width character is in n
     } finally { v.cleanup(); }
   });
 });
+
+describe('ignoringMark: the audit\'s mark is taken out of a title only while it runs', () => {
+  const { headingKeys, ignoringMark } = require('../../lib/heading-key');
+  const MARK = /\u2060[\u200c\u200d]+\u2060/g;
+  it('reads a title that holds the mark as the title without it, and never keeps that reading', () => {
+    const title = 'GM\u2060\u200d\u2060Notes';
+    // Inside: the mark is gone, so this is the one word it is without it.
+    assert.deepStrictEqual([...ignoringMark(MARK, () => headingKeys(title))], ['gmnotes']);
+    // Outside, the same characters are the GM's own, and may stand for a space.
+    assert.ok(headingKeys(title).includes('gm notes'), JSON.stringify(headingKeys(title)));
+    assert.deepStrictEqual([...ignoringMark(MARK, () => headingKeys(title))], ['gmnotes']);
+  });
+  it('puts the reader back as it was when the work throws', () => {
+    assert.throws(() => ignoringMark(MARK, () => { throw new Error('x'); }));
+    assert.ok(headingKeys('GM\u2060\u200c\u2060Notes').includes('gm notes'));
+  });
+});
