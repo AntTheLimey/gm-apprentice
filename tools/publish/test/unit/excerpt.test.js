@@ -106,11 +106,19 @@ describe('excerptFromMarkdown', () => {
     assert.ok(!out.includes('construct'), 'must not leak excluded content');
   });
 
-  it('matches an excluded heading with an em-dash suffix', () => {
+  it('does not read a dash suffix as the excluded name: those are other words', () => {
     const md = '## GM Notes —\n\nThe director is secretly a construct built by the syndicate.\n';
     const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
-    assert.ok(!out.includes('construct'), 'must not leak excluded content');
+    assert.ok(out.includes('construct'), 'a different heading is not the excluded one');
   });
+
+  for (const heading of ['## [[GM Notes]]', '## ~~GM Notes~~', '## ==GM Notes==', '## `GM Notes`', '## GM Notes ^gm', '## [[Secrets|GM Notes]]', '## GM  Notes', '## **GM Notes:**']) {
+    it(`matches the excluded heading written ${JSON.stringify(heading)}`, () => {
+      const md = `Intro line here.\n\n${heading}\n\nThe director is secretly a construct built by the syndicate.\n`;
+      const out = excerptFromMarkdown(md, { excludeSections: ['GM Notes'] });
+      assert.ok(!out.includes('construct'), out);
+    });
+  }
 });
 
 describe('excerptFromMarkdown sanitization (issue #87)', () => {

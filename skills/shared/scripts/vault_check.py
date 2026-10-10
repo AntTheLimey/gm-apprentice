@@ -64,15 +64,16 @@ frontmatter: a `type:` of
 published and always skipped, even under `_meta/`; `publish: none`
 pages are skipped and `publish: stub` pages are scanned only over
 the sections they ship. ERROR is an orphan `<!-- /gm-only -->`
-closer (everything above it publishes) or a bold-wrapped excluded
-heading like `### **GM Notes**`; WARNING is an unclosed opener or a
+closer (everything above it publishes); WARNING is an unclosed opener or a
 published heading whose title contains an exclude-list entry or
 Keeper keyword, or names a GM Notes subsection of the wrap-up template
 (`World State`, …: the pre-fix 1.8.3 migration left some top-level); INFO is a Keeper-facing bold label or callout —
-prose the GM has to judge, not auto-movable. `--fix` re-nests only
-the bold-wrapped ERROR headings under `## GM Notes`, demoting each
-and its sub-headings a level; keyword WARNINGs, INFO rows and level-1
-headings never move. `--renest-excludes` is the 1.8.3 migration:
+prose the GM has to judge, not auto-movable. A heading written with
+emphasis, a colon or a link (`### **GM Notes**`) is the excluded
+section: the site hides it, so it is not a finding. `--fix` re-nests
+only the `##` sections the site withholds by its own rule (a
+handout's Keeper sections) under `## GM Notes`, demoting each and its
+sub-headings a level; keyword WARNINGs and INFO rows never move. `--renest-excludes` is the 1.8.3 migration:
 it re-nests every heading titled with a current `exclude_sections`
 entry (hidden today or not), then collapses the list to
 `["GM Notes"]` (a vault with no list keeps the defaults). It walks
@@ -1803,19 +1804,53 @@ def sheet_withheld_sections(answer: ToolAnswer) -> dict[str, set[str]]:
         return {}
 
 
-def _bare_section_title(title: str) -> str:
-    """pc-prose.js `bareSectionTitle`: lower-cased, one layer of emphasis
-    and a trailing colon removed, so `**Skills**`, `Skills:` and `skills`
-    are one section. The tool's titles and the file's headings both go
-    through this, so a spelling cannot make them differ."""
-    def un_colon(t: str) -> str:
-        return re.sub(r":$", "", t).strip()
+_HK_WIKILINK = re.compile(r"\[\[((?:[^\]|\\]|\\(?!\|))+(?:\\?\|[^\]]*)?)\]\]")
+_HK_PAIRS = [
+    re.compile(r"(\*\*|__|~~|==)(.+?)\1"),
+    re.compile(r"(?<![\w*])(\*)(?=\S)(.+?)(?<=\S)\1(?![\w*])"),
+    re.compile(r"(?<![\w_])(_)(?=\S)(.+?)(?<=\S)\1(?![\w_])"),
+    re.compile(r"(`+)([^`]+?)\1"),
+]
+_HK_EDGE = re.compile(r"^[*_~=`\s]+|[*_~=`\s]+$")
 
-    def unwrap(t: str) -> str:
-        # One pair wrapping the whole title; a marker inside means two spans.
-        m = re.match(r"^(\*\*|\*|__|_)(.+)\1$", t)
-        return m.group(2).strip() if m and m.group(1) not in m.group(2) else t
-    return un_colon(unwrap(un_colon(title.strip().lower())))
+
+def _bare_section_title(title: str) -> str:
+    """heading-key.js `headingKey` (the label reading): lower-cased, with
+    emphasis, link brackets, a `{#id}` block, a `^block-id`, closing `#`s,
+    a trailing colon and spacing removed, so `**Skills**`, `Skills:` and
+    `skills` are one section. The tool's titles and the file's headings
+    both go through this, so a spelling cannot make them differ.
+    tools/publish/test/fixtures/heading-key-vectors.json pins both."""
+    text = unicodedata.normalize("NFC", title)
+    text = re.sub(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000]", " ", text)
+
+    def label(m: re.Match) -> str:
+        body = m.group(1)
+        pipe = body.find("|")
+        raw = body if pipe == -1 else body[:pipe]
+        shown = "" if pipe == -1 else body[pipe + 1:]
+        if shown.strip():
+            return shown.strip()
+        if pipe != -1 and raw.endswith("\\"):
+            raw = raw[:-1]
+        frag = re.search(r"[#^]", raw)
+        name = raw if frag is None else raw[:frag.start()]
+        return re.sub(r"(?i)\.md$", "", name).strip() or raw.strip()
+    s = _HK_WIKILINK.sub(label, text)
+    s = re.sub(r"<[^>]*>", "", s)
+    s = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", s)
+    for _ in range(12):
+        before = s
+        s = re.sub(r"\s*\{[#.][^}]*\}\s*$", "", s)
+        s = re.sub(r"\s+\^[\w-]+\s*$", "", s)
+        s = re.sub(r"(^|\s+)#+\s*$", "", s)
+        s = re.sub(r":\s*$", "", s).strip()
+        for pair in _HK_PAIRS:
+            s = pair.sub(r"\2", s)
+        s = _HK_EDGE.sub("", s)
+        if s == before:
+            break
+    return re.sub(r"\s+", " ", s).strip().lower()
 
 
 _LOOSE_HEADING_RE = re.compile(r"^\s{0,3}#{1,2}(\s|$)")
@@ -2037,12 +2072,9 @@ LABELLED_FIELD_RE = re.compile(r"^\*\*[A-Za-z][^*]*:\*\*")
 CALLOUT_RE = re.compile(r"^>\s*\[!(\w[\w-]*)\]\s*(.*)")
 # "GM" as a word — "gm" inside "Kingman" is not a Keeper marker.
 GM_WORD_RE = re.compile(r"\bgm\b")
-# Emphasis wrapping a whole heading title. `### **GM Notes**` is the case
-# that matters: processor.js `filterSections` compares the raw title, so
-# the asterisks turn an excluded section into a published one. Single
-# markers are in the alternation too — `### *GM Notes*` defeats the
-# exclude list in exactly the same way, and landing it at WARNING would
-# under-state a section that publishes in full.
+# Emphasis wrapping a whole heading title, for the title shown in a row.
+# Whether the site hides such a heading is the publish tool's answer
+# (heading-key.js reads `### **GM Notes**` as `GM Notes`), never this pattern's.
 EMPHASIS_RE = re.compile(r"^(\*\*|\*|__|_)(.+?)\1$")
 
 FENCE_PROBLEM_RE = re.compile(r"^line (\d+): (.*)$")
@@ -2094,20 +2126,6 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
     level, raw = state.heading
     m = EMPHASIS_RE.match(raw)
     title = m.group(2).strip() if m else raw
-    if title.casefold() in {s.casefold() for s in excludes}:
-        # An unwrapped exact match never reaches here: `scan_body` has
-        # already marked that line excluded, exactly as the site would.
-        # Only the emphasis-wrapped spelling survives to publish. The
-        # remedy names the marker actually used, so the `*`/`_` spellings
-        # do not send the GM hunting for asterisks that are not there.
-        marker = m.group(1) if m else "**"
-        remedy = (f"remove the {marker} or move it under ## GM Notes"
-                  if level > 1 else
-                  "rename the page title or move the page out of the "
-                  "published folders")
-        return [f"ERROR\t{rel}:{state.lineno}\tbold-wrapped heading "
-                f"'{title}' defeats the exclude list and publishes — "
-                f"{remedy}"]
     # Before the keyword check: "Keeper Checklist" is a wrap-template heading
     # and must get the re-nest advice, not the generic keyword row.
     if title.casefold() in {t.casefold() for t in WRAP_TEMPLATE_SUBSECTIONS}:
@@ -2186,8 +2204,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     it is the first thing to read, not the fifth.
 
     Every call also plans the heading re-nest (`WOULD-FIX` rows); `fix`
-    writes it (`FIXED`). What moves: the ERROR bold-wrapped exclude
-    matches, and `##` sections the publish tool withholds by its own rule
+    writes it (`FIXED`). What moves: `##` sections the publish tool withholds by its own rule
     (`explain --all`'s `strippedSections`, #280). Keyword-only WARNING
     headings and INFO rows are the GM's call and are never moved.
 

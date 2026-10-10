@@ -2,6 +2,8 @@
 // The `##` sections of a PC note that still publish when character sheets are off.
 // A keep-list: anything not named here is withheld, so a homebrew stat section
 // never reaches the site by being unknown.
+const { headingKey } = require('./heading-key');
+
 const PC_PROSE_SECTIONS = [
   'Background', 'Current Status', 'Notes', 'Relationships', 'Appearances',
   // CoC
@@ -48,18 +50,12 @@ function retiredSheetFieldsMessage(names) {
 }
 
 // A heading's title with its dressing removed, lower-cased: `**Background**`,
-// `*Background*`, `Background:` and `background` are one section. The document
-// rule and the keep-list both compare through this, so a spelling is never the
+// `*Background*`, `Background:`, `Background {#bg}` and `background` are one section.
+// The document rule and the keep-list both compare through this (heading-key.js, the one
+// reading the exclude list and the stub keep-list use too), so a spelling is never the
 // way a section reaches the site.
 function bareSectionTitle(title) {
-  const lower = String(title).trim().toLowerCase();
-  // One pair wrapping the whole title; a marker inside means two spans (`**A** and **B**`).
-  const unwrap = (t) => {
-    const m = /^(\*\*|\*|__|_)(.+)\1$/.exec(t);
-    return m && !m[2].includes(m[1]) ? m[2].trim() : t;
-  };
-  const unColon = (t) => t.replace(/:$/, '').trim();
-  return unColon(unwrap(unColon(lower)));
+  return headingKey(title);
 }
 
 // null when sheets are on (no rule). Otherwise the built-in list plus the GM's

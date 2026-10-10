@@ -8,31 +8,7 @@
 // headings and stripped from the excerpt, never leaked as literal "##" prose.
 const HEADING_RE = /^\s*(#{1,6})\s+(.+?)\s*$/;
 const { wikilinkRe, parseWikilink } = require('./wikilink');
-
-// Normalizes a captured heading's text before comparing it against
-// excludeSections, so decorations that don't change the heading's identity
-// (closing-hash, {#anchor}, emphasis markers, trailing colon/dashes) can't defeat
-// the exclusion match. Strips iteratively to handle composed decorations in any order.
-function normalizeHeadingText(text) {
-  let normalized = text;
-  let changed = true;
-  let iterations = 0;
-  const maxIterations = 10;
-
-  while (changed && iterations < maxIterations) {
-    const before = normalized;
-    normalized = normalized
-      .replace(/\s*\{#[^}]*\}\s*$/, '')   // heading-id anchor, e.g. {#gm-notes}
-      .replace(/\s*#+\s*$/, '')           // closing-hash decoration, e.g. "## Title ##"
-      .replace(/[:–—-]\s*$/, '')          // trailing colon, en-dash, em-dash, or hyphen
-      .replace(/[*_`]+/g, '')             // emphasis / code markers
-      .trim();
-    changed = before !== normalized;
-    iterations++;
-  }
-
-  return normalized.toLowerCase();
-}
+const { titleNamedIn } = require('./heading-key');
 
 // Elements whose text is structure, not prose, and must never reach a pull-quote:
 // section headings, callout titles, tables, and figure captions.
@@ -101,7 +77,7 @@ function typographic(text) {
 // excerpt stops at the first block that is not prose (a heading, a table, a rule, a callout
 // title) once it has any prose, so it never joins two blocks the page shows apart.
 function excerptFromMarkdown(source, opts = {}) {
-  const excludeSections = (opts.excludeSections || []).map(s => String(s).trim().toLowerCase());
+  const excludeSections = opts.excludeSections || [];
   const limit = opts.limit || 200;
 
   // Comments carry private authoring notes, and the length cap can truncate one mid-marker.
@@ -125,7 +101,7 @@ function excerptFromMarkdown(source, opts = {}) {
   for (let i = 0; i < sourceLines.length; i++) {
     const line = sourceLines[i];
     const h = line.match(HEADING_RE);
-    if (h && excludeSections.includes(normalizeHeadingText(h[2]))) break;
+    if (h && titleNamedIn(h[2], excludeSections)) break;
     if (h) { if (endsProse()) break; continue; }       // drop heading lines
     const t = line.trim();
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { if (endsProse()) break; continue; }    // horizontal rules

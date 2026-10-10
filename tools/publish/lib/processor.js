@@ -2,6 +2,7 @@ const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
+const { headingKey, headingKeys, titleNamedIn } = require('./heading-key');
 const md = createRenderer();
 
 function renderMarkdown(markdown) {
@@ -129,11 +130,11 @@ function isDocumentPage(frontmatter) {
 // the keep-list, level 1-2 only), or null. isExcludedSection and the strip both
 // ask this, so the explanation cannot drift from the strip.
 function exclusionReason(title, excludeSections = [], frontmatter = null, level = 2, rules = {}) {
-  const lower = String(title).trim().toLowerCase();
-  if ((excludeSections || []).some(s => lower === String(s).toLowerCase())) return 'excluded';
-  // `## **Context**` and `## Clues:` are the same sections; a spelling must not
-  // be the way one reaches the site.
-  if (level === 2 && isDocumentPage(frontmatter) && DOCUMENT_KEEPER_SECTION_RE.test(bareSectionTitle(lower))) {
+  // `## **GM Notes**`, `## GM Notes:` and `## GM Notes {#gm}` are the same section as
+  // `## GM Notes`; a spelling must not be the way one reaches the site (heading-key.js).
+  if (titleNamedIn(title, excludeSections)) return 'excluded';
+  // `## **Context**` and `## Clues:` are the same sections, too.
+  if (level === 2 && isDocumentPage(frontmatter) && headingKeys(title).some(k => DOCUMENT_KEEPER_SECTION_RE.test(k))) {
     return 'excluded';
   }
   if (pcKeepRuleApplies(frontmatter, rules) && level <= 2) {
@@ -141,7 +142,7 @@ function exclusionReason(title, excludeSections = [], frontmatter = null, level 
       .filter(s => typeof s === 'string')
       .map(bareSectionTitle)
       .filter(t => t !== '');
-    if (!keep.includes(bareSectionTitle(lower))) return 'sheet';
+    if (!keep.includes(headingKey(title))) return 'sheet';
   }
   return null;
 }
@@ -452,9 +453,12 @@ function keptSectionFlags(markdown, includeSections = [], withhold = {}) {
 function stubView(markdown, includeSections, withhold) {
   const source = String(markdown).replace(/\r\n?/g, '\n').split('\n');
   const flags = source.map(() => false);
+  // Read the way the exclude list is (heading-key.js), by the title's label alone: a kept
+  // section is the risky direction, so a link's target never opens one.
   const wanted = (Array.isArray(includeSections) ? includeSections : [])
     .filter(s => typeof s === 'string')
-    .map(s => s.toLowerCase());
+    .map(headingKey)
+    .filter(k => k !== '');
   if (wanted.length === 0) return { kept: [], flags };
 
   // What the whole note publishes, each line with the line of the note it came from.
@@ -487,18 +491,18 @@ function stubView(markdown, includeSections, withhold) {
     const hashes = MARGIN_HEADING_RE.exec(lines[i]);
     const level = Math.min(h ? h.level : 7, hashes ? hashes[1].length : 7);
     if (keeping && level <= keepLevel) keeping = false;
-    // The title compared is the line's own text after the hashes, as it always was
-    // (`## Overview ##` is not "Overview" here); the parser's part is to say the
-    // line is a real heading, at that level, and not code.
-    const written = hashes ? hashes[2].trim().toLowerCase() : null;
-    if (h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written)) {
+    // The title compared is read by both of the readings (the line's own text after the
+    // hashes, and the parser's); the parser's part is also to say the line is a real
+    // heading, at that level, and not code.
+    const written = hashes ? headingKey(hashes[2]) : null;
+    if (h && h.atx && hashes && h.level === hashes[1].length && wanted.includes(written) && wanted.includes(headingKey(h.title))) {
       keeping = true;
       keepLevel = h.level;
     } else if (keeping) {
       // A wanted title only one reading sees opens nothing, but it does what it
       // always did to a section already open: sets the level it closes at.
       for (const seen of [h, margin, written === null ? null : { title: written, level: hashes[1].length }]) {
-        if (seen && wanted.includes(seen.title.toLowerCase())) keepLevel = Math.max(keepLevel, seen.level);
+        if (seen && wanted.includes(headingKey(seen.title))) keepLevel = Math.max(keepLevel, seen.level);
       }
     }
     if (keeping) {

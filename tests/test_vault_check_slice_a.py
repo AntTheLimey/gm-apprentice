@@ -1068,14 +1068,11 @@ class GmLeakCommandTests(unittest.TestCase):
     def setUp(self):
         self.rows = vc.check_gm_leak(LEAK, None)
 
-    def test_bold_wrapped_exclude_heading_is_an_error(self):
-        # processor.js filterSections compares the raw title, so the `**`
-        # defeats the exclude list and the section publishes.
-        self.assertIn(
-            f"ERROR\t{LEAKY}:10\tbold-wrapped heading 'GM Notes' defeats "
-            f"the exclude list and publishes — remove the ** or move it "
-            f"under ## GM Notes",
-            self.rows)
+    def test_an_emphasised_exclude_heading_is_hidden_by_the_site_so_no_row(self):
+        # heading-key.js reads `### **GM Notes**` and `### *GM Notes*` as
+        # `GM Notes`: the site withholds them, so there is nothing to report.
+        self.assertFalse(rows_for(self.rows, f"{LEAKY}:10"), self.rows)
+        self.assertFalse(rows_for(self.rows, f"{LEAKY}:27"), self.rows)
 
     def test_keeper_facing_sibling_heading_warns(self):
         # A wrap-template GM heading: the row carries the re-nest advice.
@@ -1092,15 +1089,6 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertIn(
             f"INFO\t{LEAKY}:20\tcallout [!warning] Keeper eyes only reads "
             f"Keeper-facing — confirm it should publish",
-            self.rows)
-
-    def test_single_asterisk_emphasis_is_the_same_error(self):
-        # `### *GM Notes*` defeats filterSections exactly as `**` does;
-        # the remedy names the marker that is actually there.
-        self.assertIn(
-            f"ERROR\t{LEAKY}:27\tbold-wrapped heading 'GM Notes' defeats "
-            f"the exclude list and publishes — remove the * or move it "
-            f"under ## GM Notes",
             self.rows)
 
     def test_publish_false_files_are_skipped(self):
@@ -1188,11 +1176,10 @@ class GmLeakCommandTests(unittest.TestCase):
                 self.assertFalse(rows_for(self.rows, rel), self.rows)
 
     def test_that_is_every_row(self):
-        # 8 findings and no WOULD-FIX: Config.md's and Stub.md's heading
+        # 6 findings and no WOULD-FIX: Config.md's and Stub.md's heading
         # rows are keyword WARNINGs, which `--fix` never moves (#228), and
-        # Leaky.md's ERRORs sit beside its own unbalanced fence, so the
-        # whole file is refused.
-        self.assertEqual(len(self.rows), 8, self.rows)
+        # Leaky.md's emphasised `GM Notes` headings are withheld by the site.
+        self.assertEqual(len(self.rows), 6, self.rows)
 
     def test_folder_restricts_the_walk(self):
         rows = vc.check_gm_leak(LEAK, "Characters/NPCs")
@@ -1227,14 +1214,16 @@ def assert_fences_ordered(case, text):
 
 
 class GmLeakFixTests(unittest.TestCase):
-    """`vault_check.py VAULT gm-leak --fix` — re-nests the bold-wrapped
-    ERROR headings only (issue #228)."""
+    """`vault_check.py VAULT gm-leak --fix` — re-nests the `##` sections the
+    site withholds by its own rule (a handout's Keeper sections) and nothing
+    else (issue #228). An emphasised excluded heading needs no move: the site
+    hides it."""
 
     LEAKING = (
-        "---\ntype: npc\n---\n\n"
+        "---\ntype: document\n---\n\n"
         "# Villain\n\n"
         "Some player-facing description.\n\n"
-        "## **Keeper Secrets**\n\n"
+        "## Context\n\n"
         "The villain's true plan is X.\n\n"
         "### Sub Detail\n\n"
         "More secret detail.\n\n"
@@ -1258,7 +1247,7 @@ class GmLeakFixTests(unittest.TestCase):
         rows = vc.check_gm_leak(vault, None, fix=True)
         self.assertTrue(rows_for(rows, "FIXED\tVillain.md"), rows)
         after = read(vault, "Villain.md")
-        self.assertIn("## GM Notes\n\n### **Keeper Secrets**\n", after)
+        self.assertIn("## GM Notes\n\n### Context\n", after)
         self.assertIn("#### Sub Detail", after)
         self.assertFalse(vc.check_gm_leak(vault, None))
 
@@ -1286,20 +1275,20 @@ class GmLeakFixTests(unittest.TestCase):
             "Ordinary notes that stay put.", read(vault, "Villain.md"))
 
     def test_appends_to_an_existing_gm_notes(self):
-        text = ("---\ntype: npc\n---\n\n# Bob\n\nPlayer text.\n\n"
+        text = ("---\ntype: document\n---\n\n# Bob\n\nPlayer text.\n\n"
                 "## GM Notes\n\nSome existing gm content here.\n\n"
-                "## **Keeper Secrets**\n\nSecret text.\n")
+                "## Context\n\nSecret text.\n")
         vault = self.vault_with(text, "Bob.md")
         rows = vc.check_gm_leak(vault, None, fix=True)
         self.assertTrue(rows_for(rows, "FIXED\tBob.md"), rows)
         after = read(vault, "Bob.md")
         self.assertEqual(after.count("## GM Notes"), 1)
         self.assertIn(
-            "Some existing gm content here.\n\n### **Keeper Secrets**", after)
+            "Some existing gm content here.\n\n### Context", after)
 
     def test_unbalanced_fence_blocks_the_whole_file(self):
-        text = ("---\ntype: npc\n---\n\n# X\n\nPlayer text.\n\n"
-                "## **Keeper Secrets**\n\nhidden text\n<!-- /gm-only -->\n"
+        text = ("---\ntype: document\n---\n\n# X\n\nPlayer text.\n\n"
+                "## Context\n\nhidden text\n<!-- /gm-only -->\n"
                 "more text\n")
         vault = self.vault_with(text, "Leaky.md")
         rows = vc.check_gm_leak(vault, None, fix=True)
@@ -1334,19 +1323,11 @@ class GmLeakFixTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Lighthouse.md"), text)
 
-    def test_a_level_one_heading_never_moves(self):
-        text = ("---\ntype: npc\n---\n\n# **Keeper Secrets**\n\n"
-                "Body text.\n")
-        vault = self.vault_with(text, "Title.md")
-        rows = vc.check_gm_leak(vault, None, fix=True)
-        self.assertFalse(rows_for(rows, "FIXED"), rows)
-        self.assertEqual(read(vault, "Title.md"), text)
-
     # ---- C2: a moved block never splits a fence ------------------------
 
     def test_a_moved_block_extends_to_the_closer_it_opened(self):
-        text = ("---\ntype: npc\n---\n\n# Bob\n\nPlayer text.\n\n"
-                "## **Keeper Secrets**\n\n<!-- gm-only -->\nHe lied.\n\n"
+        text = ("---\ntype: document\n---\n\n# Bob\n\nPlayer text.\n\n"
+                "## Context\n\n<!-- gm-only -->\nHe lied.\n\n"
                 "## Motive\n\nRevenge for his brother.\n<!-- /gm-only -->\n\n"
                 "## Public\n\nEveryone knows this.\n")
         vault = self.vault_with(text, "Bob.md")
@@ -1354,7 +1335,7 @@ class GmLeakFixTests(unittest.TestCase):
         after = read(vault, "Bob.md")
         assert_fences_ordered(self, after)
         hidden = vc.hidden_lines(after, ["GM Notes", "Keeper Secrets"],
-                                 {"type": "npc"})
+                                 {"type": "document"})
         self.assertIn("Revenge for his brother.", hidden)
         self.assertNotIn("Everyone knows this.", hidden)
         self.assertFalse(vc.check_gm_leak(vault, None))
@@ -1362,9 +1343,9 @@ class GmLeakFixTests(unittest.TestCase):
     # ---- C4: a fenced ## GM Notes takes the block inside its fence -----
 
     def test_fenced_gm_notes_mid_file(self):
-        text = ("---\ntype: npc\n---\n\n# Bob\n\n<!-- gm-only -->\n"
+        text = ("---\ntype: document\n---\n\n# Bob\n\n<!-- gm-only -->\n"
                 "## GM Notes\n\nOld notes.\n<!-- /gm-only -->\n\n"
-                "## Description\n\nTall.\n\n## **Keeper Secrets**\n\n"
+                "## Description\n\nTall.\n\n## Context\n\n"
                 "He lied.\n\n## Later\n\nShown.\n")
         vault = self.vault_with(text, "Bob.md")
         vc.check_gm_leak(vault, None, fix=True)
@@ -1378,7 +1359,7 @@ class GmLeakFixTests(unittest.TestCase):
         self.assertEqual(read(vault, "Bob.md"), once)
 
     def test_fenced_gm_notes_at_eof(self):
-        text = ("---\ntype: npc\n---\n\n# Bob\n\n## **Keeper Secrets**\n\n"
+        text = ("---\ntype: document\n---\n\n# Bob\n\n## Context\n\n"
                 "He lied.\n\n<!-- gm-only -->\n## GM Notes\n\nOld notes.\n"
                 "<!-- /gm-only -->\n")
         vault = self.vault_with(text, "Bob.md")
@@ -1692,8 +1673,8 @@ class RenestReviewRegressionTests(unittest.TestCase):
         self.assertNotIn("SECRET-after-code", published)
         self.assertNotIn("Roll table", published)
 
-    FENCED_MOVE = ("---\ntype: npc\n---\n\n# C\n\nPublic.\n\n"
-                   "## **Keeper Secrets**\n\n```\n## World State\n```\n"
+    FENCED_MOVE = ("---\ntype: document\n---\n\n# C\n\nPublic.\n\n"
+                   "## Context\n\n```\n## World State\n```\n"
                    "SECRET\n")
 
     def test_a_moved_block_with_a_code_fence_heading_moves(self):
@@ -1752,16 +1733,16 @@ class RenestReviewRegressionTests(unittest.TestCase):
     # ---- I1: moved blocks land before any nested excluded heading ----
 
     def test_moved_blocks_are_not_swallowed_by_a_nested_exclusion(self):
-        text = ("---\ntype: npc\n---\n\n# R\n\n## Look\n\nPublic.\n\n"
+        text = ("---\ntype: document\n---\n\n# R\n\n## Look\n\nPublic.\n\n"
                 "## GM Notes\n\nGeneral GM text.\n\n### World State\n\n"
-                "SECRET-WS\n\n## **World State**\n\nSECRET-BOLD\n")
+                "SECRET-WS\n\n## Context\n\nSECRET-BOLD\n")
         config = ('---\npublish:\n  exclude_sections: [GM Notes, '
                   'World State]\n---\n')
         vault = self.vault(config, {"R.md": text})
         rows = vc.check_gm_leak(vault, None, fix=True)
         self.assertTrue(rows_for(rows, "FIXED\tR.md"), rows)
         after = read(vault, "R.md")
-        self.assertIn("General GM text.\n\n### **World State**", after)
+        self.assertIn("General GM text.\n\n### Context", after)
         self.assertNotIn("SECRET", self.published(vault, "R.md"))
         self.assertFalse(after.endswith("\n\n"), after)
 
@@ -1978,7 +1959,7 @@ class NoPublishToolTests(unittest.TestCase):
         (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
         self.assertFalse(rows_for(rows, "WARNING\t(vault)\t"), rows)
-        self.assertTrue(rows_for(rows, "ERROR\tBob.md"), rows)
+        self.assertTrue(rows_for(rows, "WARNING\tBob.md"), rows)
 
     def test_without_the_tool_the_switch_is_read_here(self):
         # No node: on stops the check, as an unset switch with a site_dir
@@ -2150,8 +2131,8 @@ class NoPublishToolTests(unittest.TestCase):
         self.assertEqual(read(vault, "Jean.md"), before)
         self.assertEqual(read(vault, "Bob.md"), self.LEAKY)
 
-    LEAKY = ("---\ntype: npc\n---\n\n# Bob\n\nPublic.\n\n"
-             "## **GM Notes**\n\nSECRET\n")
+    LEAKY = ("---\ntype: document\n---\n\n# Bob\n\nPublic.\n\n"
+             "## Context\n\nSECRET\n")
 
     def pinned_site(self, package=None, installed=None):
         """A vault whose site has this package.json and, optionally, an
@@ -4159,10 +4140,13 @@ class GmLeakSheetsOffTests(unittest.TestCase):
     and never planned for a re-nest."""
     HERO = ("---\ntype: pc\n---\n\n## Background\n\nA sailor.\n\n"
             "## Skills\n\n**Keeper-only:** x\n\n"
-            "## **GM Notes**\n\nThe sailor is a spy.\n")
+            "## Context\n\nThe sailor is a spy.\n")
 
     def vault(self, **stub):
         vault = make_vault(self)
+        # The site withholds a `## Context` of its own rule (a handout's);
+        # that is what a re-nest moves. An emphasised `GM Notes` needs no move.
+        stub.setdefault("stripped", {"Hero.md": ["Context"]})
         stub_publish_tool(self, vault, **stub)
         (vault / "Hero.md").write_text(self.HERO, encoding="utf-8")
         return vault
@@ -4172,7 +4156,7 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "bold label 'Keeper-only'"), rows)
         self.assertTrue(rows_for(rows, "WOULD-FIX\tHero.md"), rows)
         rows = vc.check_gm_leak(self.vault(sheet_withheld={
-            "Hero.md": ["Skills", "**GM Notes**"]}), None)
+            "Hero.md": ["Skills", "Context"]}), None)
         self.assertFalse(rows_for(rows, "Hero.md"), rows)
 
     def test_only_the_named_sections_leave_the_scan(self):
@@ -4182,14 +4166,15 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "WOULD-FIX\tHero.md"), rows)
 
     def test_fix_plans_no_renest_for_a_withheld_section(self):
-        vault = self.vault(sheet_withheld={"Hero.md": ["Skills", "**GM Notes**"]})
+        vault = self.vault(sheet_withheld={"Hero.md": ["Skills", "Context"]})
         rows = vc.check_gm_leak(vault, None, fix=True)
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Hero.md"), self.HERO)
 
     def _scan(self, body, withheld, fix=False):
         vault = make_vault(self)
-        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": withheld})
+        stub_publish_tool(self, vault, sheet_withheld={"Hero.md": withheld},
+                          stripped={"Hero.md": ["Context"]})
         (vault / "Hero.md").write_text("---\ntype: pc\n---\n\n" + body,
                                        encoding="utf-8")
         return vc.check_gm_leak(vault, None, fix=fix)
@@ -4228,13 +4213,13 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         self.assertFalse(rows_for(rows, self.LABEL), rows)
 
     def test_fix_plans_a_renest_only_for_the_published_section(self):
-        rows = self._scan("## **GM Notes**\n\nx\n\n## Skills\n\ny\n\n"
+        rows = self._scan("## Context\n\nx\n\n## Skills\n\ny\n\n"
                           "## Background\n\nz\n", ["Skills"])
         self.assertEqual(len(rows_for(rows, "WOULD-FIX\tHero.md")), 1, rows)
-        rows = self._scan("## Skills\n\n## **GM Notes**\n\nx\n\n"
-                          "## Background\n\nz\n", ["Skills", "**GM Notes**"])
+        rows = self._scan("## Skills\n\n## Context\n\nx\n\n"
+                          "## Background\n\nz\n", ["Skills", "Context"])
         self.assertFalse(rows_for(rows, "WOULD-FIX"), rows)
-        rows = self._scan("## Skills\n\nBrawling\n\n## **GM Notes**\n\nx\n",
+        rows = self._scan("## Skills\n\nBrawling\n\n## Context\n\nx\n",
                           ["Skills"], fix=True)
         self.assertEqual(len(rows_for(rows, "FIXED\tHero.md")), 1, rows)
 
@@ -4244,11 +4229,21 @@ class GmLeakSheetsOffTests(unittest.TestCase):
         # Both sides go through the tool's own normalisation.
         self.assertEqual(vc._bare_section_title("**A** and **B**"),
                          vc._bare_section_title("**a** and **b**"))
-        # Never unwrapped to `a** and **b`: two spans stay as written.
-        self.assertEqual(vc._bare_section_title("**A** and **B**"),
-                         "**a** and **b**")
+        # Each span is unwrapped, never the pair around the whole.
+        self.assertEqual(vc._bare_section_title("**A** and **B**"), "a and b")
         self.assertEqual(vc._bare_section_title("**Skills**:"), "skills")
-        self.assertEqual(vc._bare_section_title("_a_b_"), "_a_b_")
+
+    def test_bare_section_title_agrees_with_the_publish_tools_vectors(self):
+        # heading-key.js and this port read a heading the same way; the
+        # shared vectors are the proof, so a case added to one reaches both.
+        path = (Path(__file__).resolve().parent.parent / "tools" / "publish"
+                / "test" / "fixtures" / "heading-key-vectors.json")
+        cases = json.loads(path.read_text(encoding="utf-8"))["cases"]
+        self.assertGreater(len(cases), 20)
+        for case in cases:
+            with self.subTest(title=case["title"]):
+                self.assertEqual(vc._bare_section_title(case["title"]),
+                                 case["key"])
 
     def test_a_kept_section_is_scanned_though_the_tool_lists_its_title(self):
         # An HTML heading the tool withheld is reported by its text; the real
