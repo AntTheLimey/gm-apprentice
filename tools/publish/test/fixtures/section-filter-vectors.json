@@ -110,7 +110,14 @@
     {"name": "a different heading \"GM Notes and more\" is not the excluded one", "text": "# T\n## GM Notes and more\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM Notes and more\nvisible\n## Next\npublic", "stripped": []},
     {"name": "a different heading \"Not GM Notes\" is not the excluded one", "text": "# T\n## Not GM Notes\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## Not GM Notes\nvisible\n## Next\npublic", "stripped": []},
     {"name": "the exclude list entry is read the same way as a heading", "text": "# T\n## GM Notes\nsecret\n## Next\npublic", "excludes": ["**gm notes**:"], "kept": "# T\n## Next\npublic", "stripped": ["GM Notes"]},
-    {"name": "a decorated heading ends at a decorated sibling's level, not before", "text": "## **GM Notes**\nsecret\n### Deeper\nsecret too\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## Next\npublic", "stripped": ["**GM Notes**"]}
+    {"name": "a decorated heading ends at a decorated sibling's level, not before", "text": "## **GM Notes**\nsecret\n### Deeper\nsecret too\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## Next\npublic", "stripped": ["**GM Notes**"]},
+    {"name": "an excluded heading with a full-width colon is withheld", "text": "# T\n## GM Notes：\nsecret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## Next\npublic", "stripped": ["GM Notes："]},
+    {"name": "an excluded heading with a zero-width space inside is withheld", "text": "# T\n## GM​ Notes\nsecret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## Next\npublic", "stripped": ["GM​ Notes"]},
+    {"name": "an excluded heading with a soft hyphen is withheld", "text": "# T\n## GM Notes­\nsecret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## Next\npublic", "stripped": ["GM Notes­"]},
+    {"name": "an excluded heading written with &nbsp; is withheld", "text": "# T\n## GM&nbsp;Notes\nsecret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## Next\npublic", "stripped": ["GM&nbsp;Notes"]},
+    {"name": "a heading \"GM Notes (secret)\" is another section", "text": "# T\n## GM Notes (secret)\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM Notes (secret)\nvisible\n## Next\npublic", "stripped": []},
+    {"name": "a heading \"GM Notes.\" is another section", "text": "# T\n## GM Notes.\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM Notes.\nvisible\n## Next\npublic", "stripped": []},
+    {"name": "a heading \"GM_Notes\" is another section", "text": "# T\n## GM_Notes\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM_Notes\nvisible\n## Next\npublic", "stripped": []}
   ],
   "keepOnly": [
     { "name": "keeps only the named section",

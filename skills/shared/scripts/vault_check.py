@@ -1814,6 +1814,29 @@ _HK_PAIRS = [
 _HK_EDGE = re.compile(r"^[*_~=`\s]+|[*_~=`\s]+$")
 
 
+_HK_NAMED = {"amp": "&", "lt": "<", "gt": ">", "quot": '"', "apos": "'",
+             "nbsp": "\u00a0"}
+
+
+def _hk_decode_entities(text: str) -> str:
+    """The entities heading-key.js reads (templates/gurps/tables.js
+    `decodeEntities`): numeric ones and the six named ones."""
+    def one(m: re.Match) -> str:
+        body = m.group(1)
+        if body[0] == "#":
+            try:
+                cp = (int(body[2:], 16) if body[1] in "xX"
+                      else int(body[1:], 10))
+            except ValueError:
+                return m.group(0)
+            if 0 < cp <= 0x10FFFF and not 0xD800 <= cp <= 0xDFFF:
+                return chr(cp)
+            return m.group(0)
+        return _HK_NAMED.get(body.lower(), m.group(0))
+    return re.sub(r"&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);", one, text,
+                  flags=re.I)
+
+
 def _bare_section_title(title: str) -> str:
     """heading-key.js `headingKey` (the label reading): lower-cased, with
     emphasis, link brackets, a `{#id}` block, a `^block-id`, closing `#`s,
@@ -1821,7 +1844,9 @@ def _bare_section_title(title: str) -> str:
     `skills` are one section. The tool's titles and the file's headings
     both go through this, so a spelling cannot make them differ.
     tools/publish/test/fixtures/heading-key-vectors.json pins both."""
-    text = unicodedata.normalize("NFC", title)
+    text = _hk_decode_entities(title)
+    text = unicodedata.normalize("NFC", text)
+    text = re.sub(r"[\u200b-\u200d\u2060\ufeff\u00ad]", "", text)
     text = re.sub(r"[\u00a0\u2000-\u200a\u202f\u205f\u3000]", " ", text)
 
     def label(m: re.Match) -> str:
@@ -1844,7 +1869,7 @@ def _bare_section_title(title: str) -> str:
         s = re.sub(r"\s*\{[#.][^}]*\}\s*$", "", s)
         s = re.sub(r"\s+\^[\w-]+\s*$", "", s)
         s = re.sub(r"(^|\s+)#+\s*$", "", s)
-        s = re.sub(r":\s*$", "", s).strip()
+        s = re.sub(r"[:\uff1a]\s*$", "", s).strip()
         for pair in _HK_PAIRS:
             s = pair.sub(r"\2", s)
         s = _HK_EDGE.sub("", s)

@@ -7,7 +7,8 @@
 //
 //   emphasis        **GM Notes**  _GM Notes_  ~~GM Notes~~  ==GM Notes==  `GM Notes`
 //   link brackets   [[GM Notes]]  [[Target|GM Notes]]  [GM Notes](page)
-//   trailing marks  {#id} / {.class} block, ^block-id, closing #s, one colon
+//   trailing marks  {#id} / {.class} block, ^block-id, closing #s, one colon (full-width too)
+//   invisible       zero-width characters, soft hyphen, BOM; entities (&nbsp; &amp;)
 //   spacing, case   GM  Notes   gm notes
 //
 // What is NOT dressing: a different word (`GM Notes on travel`), a trailing dash or
@@ -22,6 +23,7 @@
 // skills/shared/scripts/vault_check.py `_bare_section_title` is this function's
 // primary reading in Python; test/fixtures/heading-key-vectors.json pins both.
 const { parseWikilink } = require('./wikilink');
+const { decodeEntities } = require('./templates/gurps/tables');
 
 const WIKILINK_RE = /\[\[((?:[^\]|\\]|\\(?!\|))+(?:\\?\|[^\]]*)?)\]\]/g;
 const PAIRS = [
@@ -42,7 +44,7 @@ function clean(text) {
       .replace(/\s*\{[#.][^}]*\}\s*$/, '')            // {#id} {.class}
       .replace(/\s+\^[\w-]+\s*$/, '')                 // ^block-id
       .replace(/(^|\s+)#+\s*$/, '')                   // closing ##
-      .replace(/:\s*$/, '')                           // one trailing colon
+      .replace(/[:\uff1a]\s*$/, '')                   // one trailing colon, full-width too
       .trim();
     for (const pair of PAIRS) s = s.replace(pair, '$2');
     s = s.replace(EDGE_MARKS, '');
@@ -53,7 +55,12 @@ function clean(text) {
 
 // Every reading of `title`, the label reading first, without duplicates or empties.
 function headingKeys(title) {
-  const text = String(title == null ? '' : title).normalize('NFC').replace(/[  -   　]/g, ' ');
+  // A pasted heading can carry what the eye does not see: entities (`GM&nbsp;Notes`),
+  // zero-width characters and soft hyphens, a BOM. All are removed or read as the space
+  // they stand for. Other characters the GM typed (a period, a footnote mark) are words.
+  const text = decodeEntities(String(title == null ? '' : title)).normalize('NFC')
+    .replace(/[\u200b-\u200d\u2060\ufeff\u00ad]/g, '')
+    .replace(/[\u00a0\u2000-\u200a\u202f\u205f\u3000]/g, ' ');
   const asLabel = text.replace(WIKILINK_RE, (_, body) => {
     const w = parseWikilink(body);
     return (w.display || w.name || w.raw).trim();

@@ -36,6 +36,19 @@
     {"title": "Notes:", "key": "notes", "keys": ["notes"]},
     {"title": "**", "key": "", "keys": []},
     {"title": "###", "key": "", "keys": []},
-    {"title": "", "key": "", "keys": []}
+    {"title": "", "key": "", "keys": []},
+    {"title": "GM Notes：", "key": "gm notes", "keys": ["gm notes"]},
+    {"title": "GM​Notes", "key": "gmnotes", "keys": ["gmnotes"]},
+    {"title": "﻿GM Notes", "key": "gm notes", "keys": ["gm notes"]},
+    {"title": "GM­Notes", "key": "gmnotes", "keys": ["gmnotes"]},
+    {"title": "GM&nbsp;Notes", "key": "gm notes", "keys": ["gm notes"]},
+    {"title": "GM &amp; Notes", "key": "gm & notes", "keys": ["gm & notes"]},
+    {"title": "GM‌ ‍Notes⁠", "key": "gm notes", "keys": ["gm notes"]},
+    {"title": "**GM Notes：**", "key": "gm notes", "keys": ["gm notes"]},
+    {"title": "GM&#8203;Notes", "key": "gmnotes", "keys": ["gmnotes"]},
+    {"title": "GM Notes (secret)", "key": "gm notes (secret)", "keys": ["gm notes (secret)"]},
+    {"title": "GM Notes.", "key": "gm notes.", "keys": ["gm notes."]},
+    {"title": "GM_Notes", "key": "gm_notes", "keys": ["gm_notes"]},
+    {"title": "GM Notes¹", "key": "gm notes¹", "keys": ["gm notes¹"]}
   ]
 }
