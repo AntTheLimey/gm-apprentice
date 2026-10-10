@@ -195,6 +195,7 @@ function findHeadings(text, parse) {
   const tokens = (parse || parseBlocks)(text);
   const headingAt = new Map();   // first line -> { end, level, title, nested, atx }
   const inCode = new Set();      // lines of fenced or indented code, at any depth
+  const inFence = new Set();     // lines of fenced code only, at any depth
   const source = text.split('\n');
   let openFence = null;          // first line of a top-level fence that is never closed
   for (let t = 0; t < tokens.length; t++) {
@@ -216,10 +217,17 @@ function findHeadings(text, parse) {
         atx: tok.markup.startsWith('#'),   // not underlined (setext)
       });
     } else if (tok.type === 'fence' || tok.type === 'code_block') {
-      for (let l = tok.map[0]; l < tok.map[1]; l++) inCode.add(l);
+      for (let l = tok.map[0]; l < tok.map[1]; l++) {
+        inCode.add(l);
+        if (tok.type === 'fence') inFence.add(l);
+      }
     }
   }
-  return { headingAt, inCode, openFence };
+  // Code the section filter may trust: a line in a closed block is code, not a heading. Lines
+  // from a fence that is never closed on are not trusted (an unclosed fence above a
+  // `## GM Notes` must not be the way it is published), so they read as ordinary text.
+  const settled = new Set([...inCode].filter(l => openFence === null || l < openFence));
+  return { headingAt, inCode, inFence, settled, openFence };
 }
 
 // A cell's inline markdown through the build's own renderer, typographer and all, so a
@@ -287,8 +295,9 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
   const withheldBy = [];   // per line: the title of the section withholding it, or null
   let headingAt;
   let openFence;
+  let settled;
   try {
-    ({ headingAt, openFence } = findHeadings(lines.join('\n'), rules.parse));
+    ({ headingAt, openFence, settled } = findHeadings(lines.join('\n'), rules.parse));
   } catch (err) {
     if (typeof rules.warn === 'function') rules.warn(`section filter: could not parse the note, body withheld (${err.message})`);
     stripped.push({ title: '(unparsed note)', reason: 'excluded' });
@@ -300,7 +309,8 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
 
   for (let i = 0; i < lines.length; i++) {
     const h = headingAt.get(i);
-    const margin = marginHeading(lines[i]);
+    // A line of a closed code block is code: it neither starts nor ends a section.
+    const margin = settled.has(i) ? null : marginHeading(lines[i]);
     // Both readings, of the same heading: text over an underline can itself look
     // like a margin heading (`## x` typed with a non-breaking space, then `===`).
     if (excluding && h && h.atx && h.title !== '' && margin && Math.max(h.level, margin.level) <= excludeLevel) {
@@ -314,7 +324,7 @@ function walkExcludeList(lines, excludeSections, frontmatter, rules) {
     // A withheld heading met while one is running can only widen it: a shallower
     // one takes over the level, so a `# GM Notes` under `## GM Notes` is not ended
     // by the next `##`.
-    for (const seen of [h, margin, h || margin ? null : looseHeading(lines, i)]) {
+    for (const seen of [h, margin, h || margin || settled.has(i) ? null : looseHeading(lines, i)]) {
       const reason = seen ? exclusionReason(seen.title, excludeSections, frontmatter, seen.level, {}) : null;
       if (!reason) continue;
       if (excluding) {
@@ -469,8 +479,9 @@ function stubView(markdown, includeSections, withhold) {
   lines = lines.filter((_, i) => withheldBy[i] === null);
 
   let headingAt;
+  let settled;
   try {
-    ({ headingAt } = findHeadings(lines.join('\n')));
+    ({ headingAt, settled } = findHeadings(lines.join('\n')));
   } catch (err) {
     return { kept: [], flags };
   }
@@ -486,9 +497,10 @@ function stubView(markdown, includeSections, withhold) {
   for (let i = 0; i < lines.length; i++) {
     const parsed = headingAt.get(i);
     const h = parsed && !parsed.nested ? parsed : null;
-    const margin = marginHeading(lines[i]);
+    // A line of a closed code block is code: it neither opens nor closes a kept section.
+    const margin = settled.has(i) ? null : marginHeading(lines[i]);
     // For closing, hashes at the margin count with or without a title.
-    const hashes = MARGIN_HEADING_RE.exec(lines[i]);
+    const hashes = settled.has(i) ? null : MARGIN_HEADING_RE.exec(lines[i]);
     const level = Math.min(h ? h.level : 7, hashes ? hashes[1].length : 7);
     if (keeping && level <= keepLevel) keeping = false;
     // The title compared is read by both of the readings (the line's own text after the
@@ -817,18 +829,18 @@ function obsidianComments(markdown) {
   const result = [];
   const from = [];
   const warnings = [];
-  let fenceMarker = null;
   let inComment = false;
+  // Fenced code is whatever the renderer's parser calls a fence (any length, tilde, in a quote
+  // or a list item), the same reading findHeadings gives the section filter. A parser that
+  // fails reads no fence: nothing is then literal, which cannot leak.
+  let inFence = new Set();
+  try { ({ inFence } = findHeadings(lines.join('\n'))); } catch (err) { /* no fence is trusted */ }
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
     const startedInComment = inComment;
-    const fence = inComment ? null : /^\s*(```|~~~)/.exec(line);
-    if (fence) {
-      if (fenceMarker === null) fenceMarker = fence[1];
-      else if (fenceMarker === fence[1]) fenceMarker = null;
-    }
-    if (fenceMarker !== null || fence) {
+    // A comment already open runs on through "code" until its closing %%.
+    if (!inComment && inFence.has(n)) {
       result.push(line);
       from.push(n);
       continue;
@@ -1138,6 +1150,8 @@ function strippedLines(text, excludeCallouts) {
     (t) => calloutLines(t, excludeCallouts),
   ];
   for (const strip of strips) {
+    // Nothing is left: no step has anything to do, and a join/split would invent a line.
+    if (lines !== null && lines.length === 0) break;
     const before = from;
     const result = strip(lines === null ? text : lines.join('\n'));
     from = before === null ? result.from : result.from.map(i => before[i]);

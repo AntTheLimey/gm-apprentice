@@ -41,6 +41,7 @@ describe('L1: a heading written with decoration is hidden like a plain one', () 
       files[`Locations/Place ${i}.md`] = `---\ntype: location\n---\nPublic words ${i}.\n\n## ${h}\n\nHIDDENHEAD${i} text.\n\n## Open\n\nSHOWN${i} text.\n`;
     });
     files['Locations/Setext.md'] = '---\ntype: location\n---\nPublic.\n\n**GM Notes**\n-----\n\nHIDDENSETEXT text.\n\n## Open\n\nSHOWNSETEXT text.\n';
+    files['Locations/Fenced.md'] = '---\ntype: location\n---\nPublic.\n\n```\n## GM Notes\n```\n\nSHOWNAFTERFENCE text.\n\n## GM Notes\n\nHIDDENAFTERFENCE text.\n';
     files['Locations/Different.md'] = '---\ntype: location\n---\nPublic.\n\n## GM Notes on travel\n\nSHOWNTRAVEL text.\n\n## GM Notes -\n\nSHOWNDASH text.\n';
     site = buildVault(files, { extraConfig: '  exclude_sections: ["GM Notes"]\n' });
   });
@@ -55,6 +56,10 @@ describe('L1: a heading written with decoration is hidden like a plain one', () 
   it('hides a decorated setext heading', () => {
     assert.deepStrictEqual(mentions(path.join(site.root, 'docs'), 'HIDDENSETEXT'), []);
     assert.ok(site.read('locations', 'setext.html').includes('SHOWNSETEXT'));
+  });
+  it('a heading shown in a code block is code: the prose after it stays, a real one after hides', () => {
+    assert.deepStrictEqual(mentions(path.join(site.root, 'docs'), 'HIDDENAFTERFENCE'), []);
+    assert.ok(site.read('locations', 'fenced.html').includes('SHOWNAFTERFENCE'));
   });
   it('does not hide a heading with other words, or a dash', () => {
     const html = site.read('locations', 'different.html');

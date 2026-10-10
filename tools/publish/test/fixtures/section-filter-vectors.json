@@ -11,8 +11,8 @@
       "text": "## GM Notes\nsecret\n\n    ## Example\n\nstill secret", "excludes": ["GM Notes"], "kept": "", "stripped": ["GM Notes"] },
     { "name": "an unclosed fence inside the withheld section runs to the end of the note",
       "text": "## GM Notes\nsecret\n```\n## Next\nstill secret", "excludes": ["GM Notes"], "kept": "", "stripped": ["GM Notes"] },
-    { "name": "an excluded title shown in a code block still starts a withheld section, as it always did",
-      "text": "## How to\n```\n## GM Notes\n```\ntext\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## How to\n```\n## Next\npublic", "stripped": ["GM Notes"] },
+    { "name": "an excluded title shown in a closed code block is code: it hides nothing",
+      "text": "## How to\n```\n## GM Notes\n```\ntext\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## How to\n```\n## GM Notes\n```\ntext\n## Next\npublic", "stripped": [] },
     { "name": "an unclosed fence above an excluded heading does not publish it",
       "text": "## Public\n```\nexample\n## GM Notes\nsecret\n## Next\nmore", "excludes": ["GM Notes"], "kept": "## Public\n```\nexample", "stripped": ["GM Notes"] },
     { "name": "a mismatched fence above an excluded heading does not publish it",
@@ -117,15 +117,20 @@
     {"name": "an excluded heading written with &nbsp; is withheld", "text": "# T\n## GM&nbsp;Notes\nsecret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## Next\npublic", "stripped": ["GM&nbsp;Notes"]},
     {"name": "a heading \"GM Notes (secret)\" is another section", "text": "# T\n## GM Notes (secret)\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM Notes (secret)\nvisible\n## Next\npublic", "stripped": []},
     {"name": "a heading \"GM Notes.\" is another section", "text": "# T\n## GM Notes.\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM Notes.\nvisible\n## Next\npublic", "stripped": []},
-    {"name": "a heading \"GM_Notes\" is another section", "text": "# T\n## GM_Notes\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM_Notes\nvisible\n## Next\npublic", "stripped": []}
+    {"name": "a heading \"GM_Notes\" is another section", "text": "# T\n## GM_Notes\nvisible\n## Next\npublic", "excludes": ["GM Notes"], "kept": "# T\n## GM_Notes\nvisible\n## Next\npublic", "stripped": []},
+    {"name": "a fenced excluded title and the prose after the fence stay; a real one after the fence hides", "text": "## How to\n```\n## GM Notes\n```\nprose\n## GM Notes\nsecret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## How to\n```\n## GM Notes\n```\nprose\n## Next\npublic", "stripped": ["GM Notes"]},
+    {"name": "a four-backtick fence holding a three-backtick line keeps a fenced excluded title as code", "text": "## How to\n````\n```\n## GM Notes\n```\n````\nprose\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## How to\n````\n```\n## GM Notes\n```\n````\nprose\n## Next\npublic", "stripped": []},
+    {"name": "a tilde fence keeps a fenced excluded title as code", "text": "## How to\n~~~\n## GM Notes\n~~~\nprose", "excludes": ["GM Notes"], "kept": "## How to\n~~~\n## GM Notes\n~~~\nprose", "stripped": []},
+    {"name": "a fence inside a list item keeps a fenced excluded title as code", "text": "## How to\n- item\n\n  ```\n  ## GM Notes\n  ```\n\nprose\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## How to\n- item\n\n  ```\n  ## GM Notes\n  ```\n\nprose\n## Next\npublic", "stripped": []},
+    {"name": "a fenced heading does not end a withheld section either", "text": "## GM Notes\nsecret\n```\n## Other\n```\nstill secret\n## Next\npublic", "excludes": ["GM Notes"], "kept": "## Next\npublic", "stripped": ["GM Notes"]}
   ],
   "keepOnly": [
     { "name": "keeps only the named section",
       "text": "# T\nintro\n## Overview\npublic\n## GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic" },
     { "name": "a fenced heading with an included title keeps nothing",
       "text": "## GM Notes\nsecret\n```\n## Overview\n```\nstill secret", "include": ["Overview"], "kept": "" },
-    { "name": "a heading-shaped line in a code block still ends a kept section, as it always did",
-      "text": "## Overview\npublic\n```\n## Example\n```\nafter\n## GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic\n```" },
+    { "name": "a heading-shaped line in a closed code block does not end a kept section",
+      "text": "## Overview\npublic\n```\n## Example\n```\nafter\n## GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic\n```\n## Example\n```\nafter" },
     { "name": "an unclosed fence in a kept section does not keep the next section",
       "text": "## Overview\npublic\n```\nsample\n## GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic\n```\nsample" },
     { "name": "an underlined heading ends a kept section",
@@ -140,9 +145,10 @@
       "text": "## Overview\npublic\n##\u00a0GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic" },
     { "name": "a heading inside a blockquote is never the kept section",
       "text": "## GM Notes\n> ## Overview\n> secret quote\n\nsecret", "include": ["Overview"], "kept": "" },
-    { "name": "a wanted title shown in a code block still sets where the kept section ends",
-      "text": "# Overview\nintro\n```\n## Overview\n```\n## Secret prep\nhidden", "include": ["Overview"], "kept": "# Overview\nintro\n```\n## Overview\n```" },
+    { "name": "a wanted title shown in a closed code block changes nothing about where the kept section ends",
+      "text": "# Overview\nintro\n```\n## Overview\n```\n## Secret prep\nhidden", "include": ["Overview"], "kept": "# Overview\nintro\n```\n## Overview\n```\n## Secret prep\nhidden" },
     { "name": "a wanted title typed with a non-breaking space sets where the kept section ends",
-      "text": "# Overview\nintro\n##\u00a0Overview\nx\n## Secret prep\nhidden", "include": ["Overview"], "kept": "# Overview\nintro\n##\u00a0Overview\nx" }
+      "text": "# Overview\nintro\n##\u00a0Overview\nx\n## Secret prep\nhidden", "include": ["Overview"], "kept": "# Overview\nintro\n##\u00a0Overview\nx" },
+    {"name": "a fenced heading inside a kept section neither ends it nor is skipped", "text": "## Overview\npublic\n```\n## GM Notes\n```\nmore public\n## GM Notes\nsecret", "include": ["Overview"], "kept": "## Overview\npublic\n```\n## GM Notes\n```\nmore public"}
   ]
 }

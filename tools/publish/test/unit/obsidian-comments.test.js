@@ -56,6 +56,29 @@ describe('%% comments (Obsidian), #305', () => {
     assert.deepStrictEqual(keptSectionFlags(note, ['Overview']), [true, true, false, false, false, true, false, false]);
     assert.strictEqual(keepOnlySections(note, ['Overview']), '## Overview\npublic\nmore public ');
   });
+  it('leaves %% alone in a fence longer than three backticks, a tilde fence, and a fence in a quote or list item', () => {
+    for (const text of [
+      '````\n```\n%%x%%\n```\n````\nafter %%gone%%',
+      '~~~\n%%x%%\n~~~\nafter %%gone%%',
+      '> ```\n> %%x%%\n> ```\n\nafter %%gone%%',
+      '- item\n\n  ```\n  %%x%%\n  ```\n\nafter %%gone%%',
+    ]) {
+      const got = safe(text).text;
+      assert.ok(got.includes('%%x%%'), JSON.stringify(text) + ' -> ' + JSON.stringify(got));
+      assert.ok(!got.includes('gone'), got);
+      assert.ok(got.includes('after'), got);
+    }
+  });
+  it('a comment still closes on a line the markdown parser would call code', () => {
+    assert.strictEqual(safe('a\n%%\n```\n%%\nb').text, 'a\nb');
+  });
+  it('when every line is stripped no line is left over, and no line map entry is missing', () => {
+    for (const text of ['%%\na\n%%', '<!-- a -->', '%% a <!-- %%\nB\n-->']) {
+      const { lines, from } = strippedLines(text, false);
+      assert.deepStrictEqual(lines, [], text);
+      assert.deepStrictEqual(from, [], text);
+    }
+  });
   it('the page render is the same strip', () => {
     const { html } = processContent({ markdown: '# T\nLead %%HIDDENWORD%% tail\n\n%%\nHIDDENBLOCK\n%%\n', frontmatter: {}, outputPath: 'a/b.html' }, {}, ['GM Notes']);
     assert.ok(!/HIDDEN/.test(html), html);
