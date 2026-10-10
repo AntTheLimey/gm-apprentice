@@ -334,6 +334,26 @@ describe('manifest apply', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('records a decision on a note in a folder the site leaves out, and will not list it under Publishing', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_Templates'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_Templates', 'Lore.md'), '---\ntype: world_domain\n---\n\nLore.\n');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    const rc = await runManifest({ verb: 'apply', configPath, exclude: ['_Templates/Lore.md=stays hidden: reference only'] }, c.deps);
+    assert.strictEqual(rc, 0, c.text());
+    assert.match(c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
+      /- \[x\] _Templates\/Lore\.md — stays hidden: reference only\n/);
+
+    const refused = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, publish: ['_Templates/Lore.md'] }, refused.deps), 1);
+    assert.match(refused.text(), /no such file in the vault: _Templates\/Lore\.md/);
+    const outside = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, exclude: ['../elsewhere.md=x'] }, outside.deps), 1);
+    assert.deepStrictEqual(outside.writes, {});
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('rejects a path that matches no vault file and writes nothing', async () => {
     const vault = copyVault('auto-exclude');
     const { configPath } = siteFor(vault);

@@ -272,8 +272,16 @@ async function runApply(options, deps, survey) {
 
   // Validate before touching anything: a typo that half-applies leaves the GM with
   // a manifest they have to reconstruct to find out what happened.
+  // A note in a folder the site leaves out is not in the walked list, and it can still be
+  // named on a published page: the GM's "it stays hidden" is recorded for it like any other
+  // (doctor --site NAMED_NO_PAGE). It cannot be listed under Publishing, where it would
+  // read as published and is not.
   const onDisk = new Set(files);
-  const missing = moves.filter((m) => !onDisk.has(m.rel));
+  const inVault = (rel) => {
+    const full = path.resolve(vaultPath, rel);
+    return full.startsWith(path.resolve(vaultPath) + path.sep) && /\.md$/i.test(rel) && exists(full);
+  };
+  const missing = moves.filter((m) => !onDisk.has(m.rel) && !(m.section !== 'publishing' && inVault(m.rel)));
   if (missing.length > 0) {
     for (const m of missing) out(`no such file in the vault: ${m.rel}`);
     out('Nothing was written. Run `gm-publish manifest diff` for the paths the vault actually has.');
