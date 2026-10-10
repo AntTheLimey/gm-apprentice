@@ -29,7 +29,6 @@ const { decodeEntities } = require('./templates/gurps/tables');
 const CODES = ['ALIAS_IN_PROSE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE'];
 const WORST = 3;
 const CONTEXT = 80;
-const IMAGE_EXT = /\.(jpe?g|png|webp|gif|svg)$/i;
 const STAYS_HIDDEN = /^\s*stays\s+hidden\s*:/i;
 
 const fold = (name) => canonicalNfc(name).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -241,7 +240,6 @@ function startNoteAudit(input) {
       return text.replace(wikilinkRe('g', withBang), (whole, body) => {
         const parsed = parseWikilink(body);
         const bang = whole.startsWith('!') ? '!' : '';
-        if (bang && IMAGE_EXT.test(parsed.raw.trim())) return whole;
         const hit = lookup(parsed);
         if (!hit) return whole;
         covered.add(canonicalNfc(parsed.name.trim()));
@@ -250,8 +248,7 @@ function startNoteAudit(input) {
         const words = label && !secretKeys.has(gmAliasKey(label)) ? label
           : hit.viaAlias ? hit.record.displayTitle : wikiTargetLabel(parsed.raw);
         if (!words) return whole;
-        // `\|`, so a link in a table cell stays one cell.
-        return `${bang}[[${parsed.raw}\\|${tag(hit.record, words)}${words}]]`;
+        return `${bang}[[${parsed.raw}|${tag(hit.record, words)}${words}]]`;
       });
     };
     const deep = (value) => {
@@ -275,7 +272,7 @@ function startNoteAudit(input) {
         if (!hit) return r;
         covered.add(canonicalNfc(parsed.name.trim()));
         const words = humanizeName(parsed.name.trim());
-        return Object.assign({}, r, { target: `[[${parsed.raw}\\|${tag(hit.record, words)}${words}]]` });
+        return Object.assign({}, r, { target: `[[${parsed.raw}|${tag(hit.record, words)}${words}]]` });
       });
     }
     const markdown = links(page.markdown || '', true);
