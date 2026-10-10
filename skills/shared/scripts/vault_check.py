@@ -1819,10 +1819,13 @@ def check_site_faults(vault: Path, files: list[str] | None = None
             continue
         rows.append(_site_fault_row(f, whole=only is not None))
     if rows:
-        # The tool that answered and the site file it read, so a fix is made
-        # with the same two (`explain --shown`, `manifest apply`).
+        # The tool that answered, the site file it read and the vault it
+        # audited, so a fix is checked and recorded with the same three
+        # (`explain --shown`, `manifest apply`): the site file may name
+        # another vault than the one asked about.
         rows.insert(0, f"INFO\t(site)\tthe site's tool: node \"{tool}\" "
-                       f"<command> --config \"{site / 'vault.config.json'}\"")
+                       f"<command> --config \"{site / 'vault.config.json'}\""
+                       f" --vault \"{vault.resolve()}\"")
     if settled and only is None:
         rows.append(f"INFO\t(vault)\t{settled} "
                     f"{'note is' if settled == 1 else 'notes are'} settled "

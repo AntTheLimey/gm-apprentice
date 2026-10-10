@@ -113,6 +113,10 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertEqual(rows[0].split("\t")[:2], ["INFO", "(site)"])
         self.assertIn(str(site / "vault.config.json"), rows[0])
         self.assertIn("gm-publish.js", rows[0])
+        # And the vault that was audited: a fix command acts on that one.
+        self.assertTrue(rows[0].endswith(
+            f'<command> --config "{site / "vault.config.json"}" '
+            f'--vault "{vault.resolve()}"'), rows[0])
 
     def test_the_other_three_faults_each_get_a_row(self):
         vault, _site = make(self, {
@@ -126,8 +130,8 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertEqual(sorted(by_code), [
             "ALIAS_IN_PROSE", "COMMENT_STRAY", "FENCE_UNCLOSED"], rows)
         self.assertTrue(all(r.split("\t")[1] == MARA for r in rows), rows)
-        self.assertIn("COMMENT_STRAY: a %% on line 5 is glued to the word "
-                      "before it", by_code["COMMENT_STRAY"])
+        self.assertIn("COMMENT_STRAY: a %% on line 5 comes straight after a "
+                      "number", by_code["COMMENT_STRAY"])
         self.assertTrue(by_code["COMMENT_STRAY"].endswith(
             "| Paid 100%% now, 50%% later."), rows)
         self.assertIn(f"\"Old Smuggler\" (a secret name of {VESPER}), "
