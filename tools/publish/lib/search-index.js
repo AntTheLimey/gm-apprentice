@@ -86,4 +86,4 @@ function buildSearchIndex(allPages) {
   };
 }
 
-module.exports = { buildSearchIndex };
+module.exports = { subtitleOf: getSubtitle, buildSearchIndex };

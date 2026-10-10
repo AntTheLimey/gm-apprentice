@@ -152,13 +152,24 @@ describe('NAMED_NO_PAGE', () => {
     assert.deepStrictEqual(f.pages, ['Characters/Mara_Quill.md']);
   });
 
-  it('does not count an image embed, or a note whose name is also a published page', async () => {
+  it('does not count a note whose name is also a published page', async () => {
     const files = Object.assign({}, base, {
-      'Characters/Mara_Quill.md': npc('Mara', 'See ![[portrait.png]] and [[Vesper_Hale]].'),
+      'Characters/Mara_Quill.md': npc('Mara', 'See [[Vesper_Hale]].'),
       'Locations/Vesper_Hale.md': '---\ntype: location\n---\n\nA place.\n',
     });
     // Two notes share a name; the published one claims it.
     assert.deepStrictEqual(await faults(files, { excluded: ['Characters/Vesper_Hale.md'] }, 'NAMED_NO_PAGE'), []);
+  });
+
+  it('does not count an image embed, even when a hidden note has the image\'s name', async () => {
+    const files = {
+      'Characters/Mara_Quill.md': npc('Mara', 'See ![[Sketch.png]] here.'),
+      'Characters/Sketch.png.md': npc('S', 'Notes about the sketch.'),
+    };
+    assert.deepStrictEqual(await faults(files, { excluded: ['Characters/Sketch.png.md'] }, 'NAMED_NO_PAGE'), []);
+    // The same note linked as a note is counted: the embed above was left out for being an image.
+    files['Characters/Mara_Quill.md'] = npc('Mara', 'See [[Sketch.png]] here.');
+    assert.strictEqual((await faults(files, { excluded: ['Characters/Sketch.png.md'] }, 'NAMED_NO_PAGE')).length, 1);
   });
 
   it('does not count a hidden note whose name is an alias of a published page', async () => {
@@ -233,15 +244,18 @@ describe('NAMED_NO_PAGE', () => {
     assert.strictEqual(found.find((f) => f.path.endsWith('Vesper_Hale.md')).reason, 'stays hidden: the ferry is the twist');
   });
 
-  it('a "stays hidden:" note under Needs Decision is not settled (only an Excluded entry is)', async () => {
+  it('a "stays hidden:" reason beside a Publishing entry is not settled (only an Excluded entry is)', async () => {
     const files = {
       'Characters/Mara_Quill.md': npc('Mara', 'Met [[Vesper_Hale]].'),
-      'Characters/Vesper_Hale.md': npc('V', 'x'),
+      // Listed under Publishing, and kept off the site by its own frontmatter.
+      'Characters/Vesper_Hale.md': npc('V', 'x', 'publish: false\n'),
     };
-    const { vault, configPath } = site(files, { publish: ['Characters/Mara_Quill.md'] });
-    fs.appendFileSync(path.join(vault, '_meta', 'publish-manifest.md'), '\n## Needs Decision (1 files)\n\n- [ ] Characters/Vesper_Hale.md — stays hidden: x\n');
+    const { vault, configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Vesper_Hale.md — stays hidden: x'] });
+    assert.match(fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8'), /## Publishing[^#]*Vesper_Hale\.md — stays hidden: x/);
     const { json } = await doctor(configPath, { json: true });
-    assert.strictEqual(json.findings.find((f) => f.code === 'NAMED_NO_PAGE').settled, false);
+    const found = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
+    assert.strictEqual(found.reason, 'stays hidden: x');
+    assert.strictEqual(found.settled, false);
   });
 
   it('reads a GM alias link as naming the note that owns it, printing the owner\'s title', async () => {
@@ -382,23 +396,25 @@ describe('ALIAS_IN_PROSE', () => {
     assert.deepStrictEqual(f, {
       code: 'ALIAS_IN_PROSE', severity: 'warning', path: 'Characters/Mara_Quill.md',
       detail: f.detail, fix: f.fix,
-      alias: 'Old Smuggler', owner: 'Characters/Vesper_Hale.md', count: 1,
+      // As often as the page prints it: an NPC page prints its opening line twice (the pull quote).
+      alias: 'Old Smuggler', owner: 'Characters/Vesper_Hale.md', count: 2,
       context: 'Everyone feared the old smuggler of the quay.',
     });
     assert.match(f.fix, /public name/);
     assert.match(f.fix, /link the name/);
   });
 
-  it('shows the sentence as written, a link and all', async () => {
-    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'She met [[Vesper_Hale]] and the old smuggler.') });
+  it('shows the sentence as the page prints it', async () => {
+    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'She met [[Vesper_Hale]] and the **old** smuggler.') });
     const [f] = await faults(files, {}, 'ALIAS_IN_PROSE');
-    assert.strictEqual(f.context, 'She met [[Vesper_Hale]] and the old smuggler.');
+    assert.strictEqual(f.context, 'She met Vesper Hale and the old smuggler.');
   });
 
   it('counts each page once per alias, with how many times it appears', async () => {
-    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'The Old Smuggler. Then the old smuggler again.') });
-    const [f] = await faults(files, {}, 'ALIAS_IN_PROSE');
-    assert.strictEqual(f.count, 2);
+    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'Intro.\n\n## Rumours\n\nThe Old Smuggler. Then the old smuggler again.') });
+    const found = await faults(files, {}, 'ALIAS_IN_PROSE');
+    assert.strictEqual(found.length, 1);
+    assert.strictEqual(found[0].count, 2);
   });
 
   it('is silent when the name is inside a link, or only part of a longer word', async () => {
@@ -549,8 +565,8 @@ describe('the build stays quiet, then says one line per code', () => {
       'Characters/Mara_Quill.md': npc('M', 'The old smuggler.\n\n```\ncode\n<!-- gm-only -->\nx\n<!-- /gm-only -->\n'),
     };
     const lines = buildWarnings(site(files).configPath);
-    assert.ok(lines.some((l) => /^ {2}WARNING: 1 GM alias is printed in the text of published pages \(Old Smuggler 1 page\)/.test(l)), lines.join('\n'));
-    assert.ok(lines.some((l) => /^ {2}WARNING: 1 published note has a code fence that never closes, so hidden text below it is published as code \(Characters\/Mara_Quill\.md line 7\)/.test(l)), lines.join('\n'));
+    assert.ok(lines.some((l) => /^ {2}WARNING: 1 GM alias is printed on published pages \(Old Smuggler 1 page\)/.test(l)), lines.join('\n'));
+    assert.ok(lines.some((l) => /^ {2}WARNING: 1 published note has a code fence that never closes, so hidden text below it is published \(Characters\/Mara_Quill\.md line 7\)/.test(l)), lines.join('\n'));
   });
 
   it('builds and the doctor return the same findings on one vault', async () => {

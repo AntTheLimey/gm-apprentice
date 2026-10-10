@@ -4,6 +4,8 @@ const { strippedLines, playerSafeMarkdown } = require('../../lib/processor');
 const { gluedBefore, percentStrays, percentFields } = require('../../lib/frontmatter');
 
 const facts = (text) => strippedLines(text, false);
+// The facts that show on a page: what playerSafeMarkdown hands back (noteFacts).
+const shown = (text, options = {}) => playerSafeMarkdown(text, options);
 
 describe('strippedLines reports a stray %% from the strip it already runs', () => {
   it('a clean comment is no stray', () => {
@@ -39,21 +41,21 @@ describe('strippedLines reports a stray %% from the strip it already runs', () =
   });
 });
 
-describe('strippedLines reports an unclosed fence with a hidden marker below it', () => {
+describe('a hidden marker a page prints because a fence above it never closed', () => {
   it('a closed fence is nothing', () => {
-    assert.strictEqual(facts('```\ncode\n```\n<!-- gm-only -->\nx\n<!-- /gm-only -->').openFence, null);
+    assert.strictEqual(shown('```\ncode\n```\n<!-- gm-only -->\nx\n<!-- /gm-only -->').openFence, null);
   });
   it('an unclosed fence with nothing hidden below it is nothing to report', () => {
-    assert.strictEqual(facts('```\ncode\nmore').openFence, null);
+    assert.strictEqual(shown('```\ncode\nmore').openFence, null);
   });
   it('names the fence line and the first hidden marker below it', () => {
-    const got = facts('intro\n```\ncode\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\n');
+    const got = shown('intro\n```\ncode\n<!-- gm-only -->\nsecret\n<!-- /gm-only -->\n');
     assert.deepStrictEqual(got.openFence, { line: 1, marker: 'gm-only', markerLine: 3 });
   });
   it('knows each marker kind: %%, spoiler and a plain html comment', () => {
-    assert.strictEqual(facts('~~~\na\n%% c %%').openFence.marker, '%%');
-    assert.strictEqual(facts('```\na\n<!-- spoiler -->\nb\n<!-- /spoiler -->').openFence.marker, 'spoiler');
-    assert.strictEqual(facts('```\na\n<!-- a note -->').openFence.marker, '<!--');
+    assert.strictEqual(shown('~~~\na\n%% c %%').openFence.marker, '%%');
+    assert.strictEqual(shown('```\na\n<!-- spoiler -->\nb\n<!-- /spoiler -->').openFence.marker, 'spoiler');
+    assert.strictEqual(shown('```\na\n<!-- a note -->').openFence.marker, '<!--');
   });
   it('the hidden text really is published as code', () => {
     const got = playerSafeMarkdown('```\ncode\n<!-- gm-only -->\nsecretword\n<!-- /gm-only -->\n');
@@ -61,16 +63,18 @@ describe('strippedLines reports an unclosed fence with a hidden marker below it'
     assert.ok(got.openFence);
   });
   it('a tilde fence in a note whose backtick fence closed is nothing', () => {
-    assert.strictEqual(facts('```\na\n```\n\n~~~\nb\n~~~\n%% c %%').openFence, null);
+    assert.strictEqual(shown('```\na\n```\n\n~~~\nb\n~~~\n%% c %%').openFence, null);
   });
 });
 
 describe('percent strays in a frontmatter value', () => {
-  it('gluedBefore: a letter or number just before the position', () => {
+  it('gluedBefore: a digit just before the position', () => {
     assert.strictEqual(gluedBefore('100%% x', 3), true);
     assert.strictEqual(gluedBefore('a %% x', 2), false);
     assert.strictEqual(gluedBefore('%% x', 0), false);
-    assert.strictEqual(gluedBefore('é%%', 1), true);
+    // A comment typed straight after a word is a comment, not a percent sign.
+    assert.strictEqual(gluedBefore('é%%', 1), false);
+    assert.strictEqual(gluedBefore('text%%', 4), false);
     assert.strictEqual(gluedBefore('_%%', 1), false);
   });
   it('a clean comment and a plain value are nothing', () => {

@@ -4,16 +4,16 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { strippedLines, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
-const { findNoteFaults, summaryLines } = require('./note-faults');
+const { startNoteAudit, summaryLines, pageText, mainOf } = require('./note-faults');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -66,17 +66,38 @@ function legacyWarning(legacy, rawConfig) {
   return [moved, ...byHand.map((c) => `WARNING: ${c}.`)].filter(Boolean);
 }
 
+// Run `fn` with the console quiet: the in-memory build prints nothing, and a page rendered a
+// second time for the audit must not repeat its warnings.
+function quietly(fn) {
+  const saved = { log: console.log, warn: console.warn, error: console.error };
+  console.log = console.warn = console.error = () => {};
+  try { return fn(); } finally { Object.assign(console, saved); }
+}
+
+// Build the site. With `options.inMemory` every page is rendered exactly as it would be
+// written, and nothing is written, cleaned, copied or printed: `doctor --site` and
+// `explain --shown` read the site this way, so what they report is what the build makes.
+//   options.vaultPath   another vault through this site's rules (`--vault`)
+//   options.rawConfig   the site file already parsed
+//   options.shownFor    in memory: a vault-relative note path; the result's `shown` is what
+//                       the site holds of it, built as if it published
+// Returns { noteFaults, shown }.
 function build(options = {}) {
+  return options.inMemory ? quietly(() => buildSite(options)) : buildSite(options);
+}
+
+function buildSite(options) {
+  const dry = options.inMemory === true;
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
   const configDir = path.dirname(resolvedConfigPath);
-  const rawConfig = loadVaultConfig(resolvedConfigPath);
-  rawConfig.vaultPath = path.resolve(configDir, rawConfig.vaultPath);
+  const rawConfig = options.rawConfig ? Object.assign({}, options.rawConfig) : loadVaultConfig(resolvedConfigPath);
+  rawConfig.vaultPath = options.vaultPath ? path.resolve(options.vaultPath) : path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
-  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
+  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir || './docs');
   const off = siteOff(publishConfig.switches);
-  if (off) throw new Error(off);
+  if (off && !dry) throw new Error(off);
 
   const host = config.host || 'github-pages';
   if (host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
@@ -137,6 +158,7 @@ function build(options = {}) {
   }
 
   function cleanOutput() {
+    if (dry) return;
     if (!fs.existsSync(outputDir)) return;
     assertSafeOutputDir();
     const preserve = Array.isArray(config.preserveDirs) ? config.preserveDirs : [];
@@ -155,6 +177,7 @@ function build(options = {}) {
   // Every stylesheet the build writes goes through scopeColorScheme, so its light-mode
   // rules also answer to the reader's toggle (#260).
   function copyCSS() {
+    if (dry) return;
     const src = path.join(__dirname, '../css/style.css');
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
@@ -171,6 +194,7 @@ function build(options = {}) {
   const GOOGLE_FONTS_IMPORT_RE = /^@import\s+url\(['"]?https?:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com)[^)]*\)\s*;\s*$/;
 
   function copyGenreCSS() {
+    if (dry) return;
     if (!genrePreset) return;
     const src = path.join(__dirname, `../css/themes/${genrePreset}.css`);
     const dest = path.join(outputDir, `css/themes/${genrePreset}.css`);
@@ -194,6 +218,7 @@ function build(options = {}) {
   function copyOverridesCSS() {
     const src = path.join(configDir, 'css/overrides.css');
     if (!fs.existsSync(src)) return false;
+    if (dry) return true;
     const dest = path.join(outputDir, 'css/overrides.css');
     // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
@@ -204,6 +229,7 @@ function build(options = {}) {
   }
 
   function copyJS() {
+    if (dry) return;
     const jsDir = path.join(__dirname, '../js');
     if (!fs.existsSync(jsDir)) return;
     const destDir = path.join(outputDir, 'js');
@@ -248,6 +274,7 @@ function build(options = {}) {
   }
 
   function copyFontFiles(files) {
+    if (dry) return;
     for (const f of files) {
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
@@ -261,6 +288,7 @@ function build(options = {}) {
   }
 
   function writeThemeCSS() {
+    if (dry) return;
     warnGoogleFonts();
     const css = scopeColorScheme(generateThemeCSS(publishConfig.theme, { selfHostCss: selfHostedFonts().css }));
     const dest = path.join(outputDir, 'css/theme.css');
@@ -280,6 +308,7 @@ function build(options = {}) {
   // otherwise a mistyped `files[].path` (e.g. a GM's .md page) would get copied straight
   // into the public site.
   function copyThemeFonts() {
+    if (dry) return;
     const fontsCfg = publishConfig.theme.fonts || {};
     copySelfHostedFonts();
     const files = Array.isArray(fontsCfg.files) ? fontsCfg.files : [];
@@ -317,10 +346,12 @@ function build(options = {}) {
   }
 
   function writeNoJekyll() {
+    if (dry) return;
     fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
   }
 
   function write404() {
+    if (dry) return;
     const html = fourOhFourTemplate({
       siteTitle: config.siteTitle,
       siteUrl: config.siteUrl,
@@ -343,6 +374,7 @@ function build(options = {}) {
   }
 
   function copyImages(imageMap) {
+    if (dry) return;
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
@@ -352,7 +384,7 @@ function build(options = {}) {
   }
 
   // Main build logic
-  assertSafeOutputDir();
+  if (!dry) assertSafeOutputDir();
   // publishConfig.exclude_dirs is already the normalized union of vault.config.json's
   // legacy `excludeDirs` and `publish.exclude_dirs` from vault-config.md (config.js's
   // unionExcludeDirs), but the raw `config` object handed to the scanner still only
@@ -433,6 +465,17 @@ function build(options = {}) {
   const { verdicts, published } = publishedPages(pages, {
     vaultPath: config.vaultPath, publishConfig, manifest, relOf: vaultRelPathOf,
   });
+  // In memory, for `explain --shown`: the note asked about is built as if it published, so
+  // what it would put on the site can be read before it is given a page. A story companion
+  // is shown with its PC. A `publish: false` note is never built.
+  const shownRel = dry && options.shownFor ? canonicalNfc(options.shownFor) : null;
+  const shownPage = shownRel === null ? null
+    : pages.find(p => vaultRelPathOf(p) === shownRel)
+      || pages.find(p => p.storyMarkdown && vaultRelPathOf(p).replace(/\.md$/i, STORY_SUFFIX) === shownRel) || null;
+  if (shownPage && !publishesPage(verdicts.get(shownPage)) && publishMode(shownPage.frontmatter) !== 'none') {
+    verdicts.set(shownPage, { bucket: 'publish', code: 'OK', reason: 'built as if it published', outputPath: shownPage.outputPath });
+    published.push(shownPage);
+  }
   const withCode = (...codes) => pages.filter(p => codes.includes(verdicts.get(p).code));
 
   const draftExcluded = withCode('DRAFT_EXCLUDED');
@@ -526,6 +569,7 @@ function build(options = {}) {
   for (const page of pages) {
     if (hubPairs.has(page)) hubWrapUps.set(page, hubPairs.get(page));
   }
+  const stubFacts = new Map();
   hubWrapUps.linked = hubPairs.linked;
   for (const page of pages) {
     if (hubWrapUps.has(page)) page.markdown = '';
@@ -542,7 +586,11 @@ function build(options = {}) {
       // unclosed marker is reported from here: the cut text no longer holds it.
       const withhold = { excludeSections, excludeCallouts, frontmatter: page.frontmatter,
         warn: (message) => console.warn(`  WARNING: ${page.outputPath}: ${message}`) };
-      page.markdown = keepOnlySections(page.markdown || '', include, withhold);
+      // The cut text no longer holds a stray %% or an unclosed fence either: kept for the audit.
+      const source = String(page.markdown || '');
+      const cut = stubCut(source, include, withhold);
+      stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
+      page.markdown = cut.text;
       // A PC's story companion is a SEPARATE file paired in by the scanner and
       // rendered on its own page. Reducing only page.markdown left a stubbed PC
       // publishing its complete story — the same content the stub exists to
@@ -601,9 +649,15 @@ function build(options = {}) {
   for (const page of pages) {
     const source = String(page.markdown || '');
     const stripped = strippedLines(source, excludeCallouts);
-    stripFacts.set(page, { source, strays: stripped.strays, openFence: stripped.openFence });
+    const fm = page.sourceFrontmatter || page.frontmatter;
+    // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
+    // hides anyway (noteFacts) is none; a note withheld whole shows none.
+    stripFacts.set(page, stubFacts.get(page) || {
+      source,
+      ...noteFacts(stripped, (lines) => (page.headingsUnstable ? lines.map(() => false) : keptFlags(lines, excludeSections, fm, { pcKeepSections }))),
+    });
     const text = stripped.lines.join('\n');
-    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, page.sourceFrontmatter || page.frontmatter,
+    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, fm,
       { pcKeepSections });   // its warnings are the page render's to print, once
   }
 
@@ -748,7 +802,7 @@ function build(options = {}) {
   // dropped at copy time. Correct, just wasted work — and unavoidable without emitting a
   // `src` before knowing the extension it will end up with.
   let imagesTmpDir = null;
-  if (resolveImageConfig(publishConfig.images).optimize) {
+  if (!dry && resolveImageConfig(publishConfig.images).optimize) {
     imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));
     const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir);
     if (stats.reason) {
@@ -788,7 +842,7 @@ function build(options = {}) {
 
   let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
-  if (publishConfig.theme.campaign_image) {
+  if (!dry && publishConfig.theme.campaign_image) {
     const imgVal = publishConfig.theme.campaign_image;
     if (!imgVal.startsWith('http://') && !imgVal.startsWith('https://')) {
       const vaultRoot = path.resolve(config.vaultPath);
@@ -811,7 +865,9 @@ function build(options = {}) {
   writeNoJekyll();
 
   // Write search index (only if search is enabled)
-  if (searchData) {
+  if (dry) {
+    // nothing is written
+  } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
     fs.writeFileSync(searchDest, JSON.stringify(searchData));
     console.log('  wrote search-index.json');
@@ -850,217 +906,294 @@ function build(options = {}) {
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
+  // The party board the roster page carries, made once every PC page has been rendered.
+  const roster = { board: null, partyManifest: null, live: false };
   const dressedSkins = new Set();
   let anyDressed = false;
+  // One page as the site prints it: { html }, or { roster: processed } for the party roster,
+  // which is rendered once every PC has been (renderRoster). `fx` is where the render's side
+  // effects go (images used, warnings, party-board entries, the sheet tallies, a dressed
+  // sheet): the build's own (`liveFx`), or throwaway ones when the audit renders a page again.
+  function renderPage(page, fx) {
+    const usedImages = fx.usedImages;
+    if (page.frontmatter.portrait) {
+      const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
+      if (basename && imageMap[basename]) usedImages.add(basename);
+    }
+    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections });
+    fx.warn(page.outputPath, processed.warnings);
+    let html;
+
+    if (isRoster(page)) return { roster: processed };
+
+    switch (page.frontmatter.type) {
+      case 'pc': {
+        // Warnings are dropped here, not ignored: processContent above ran this same
+        // strip chain over the same markdown and already reported them.
+        let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
+        // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
+        // brackets of an `![[image.png]]` embed and would flatten it to literal text.
+        filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
+          portraitBasename: portraitBasename(page.frontmatter),
+        });
+        filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
+        const sections = extractSections(filtered);
+
+        let storyHtml;
+        if (page.storyMarkdown) {
+          const storyPage = {
+            markdown: page.storyMarkdown,
+            frontmatter: {},
+            outputPath: page.outputPath,
+          };
+          const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
+          fx.warn(page.outputPath, storyProcessed.warnings);
+          storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
+        }
+
+        const system = publishConfig.system;
+        // With sheets off the renderer is never called: no sheet, tab, panel, island or party entry exists to leak.
+        const systemRenderer = sheetsOff ? null : getRenderer(system);
+        const meta = {
+          system,
+          campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
+          pcSlug: pcLiveKey(page.sourceFrontmatter || page.frontmatter, page.title),
+          buildVersion: require('crypto').createHash('sha1')
+            .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
+          live: publishConfig.live.stats === true,
+        };
+        const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
+        // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.
+        // A string sheet that is only passed-through text placed no stats.
+        const systemOut = (rendered && typeof rendered === 'object')
+          ? rendered
+          : { sheetHtml: rendered || null, sheetless: !!rendered && !hasSheetStructure(rendered) };
+        // A PC page with no sheet says nothing on its Character Sheet tab, and
+        // nothing else would tell the GM. A renderer reports it by returning no
+        // sheetHtml, or `sheetless` when (CoC) its frame renders regardless.
+        // `sheet_source` on the PC records that the sheet is kept elsewhere, which
+        // is the answer, not a gap. Read from the source frontmatter:
+        // `exclude_fields` may hide it from the page. A stub publishes named
+        // sections only, so it is not expected to carry a sheet.
+        const sourceFm = page.sourceFrontmatter || page.frontmatter;
+        const sheetSource = sheetSourceOf(sourceFm);
+        // The identity strip reads the note with GM content stripped but before the keep-list,
+        // for this and nothing else. A note whose headings shift has no readable body.
+        let identity = [];
+        if (sheetsOff) {
+          const identityText = page.headingsUnstable ? '' : resolveWikiLinks(
+            playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm }).text,
+            linkMap, page.outputPath);
+          identity = pcIdentity(system, page.frontmatter, extractSections(identityText));
+        }
+        const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
+        const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
+        if (sheetless && sheetExpected) fx.sheetlessPcs.push(page.displayTitle || page.title);
+        // A frontmatter stat is not read; with sheets off no sheet is built, so nothing is lost.
+        if (!sheetsOff) {
+          const retired = retiredSheetFieldsFor(sourceFm, system);
+          if (retired.length) fx.retiredFieldPcs.push({ rel: vaultRelPathOf(page), names: retired });
+        }
+        // A system renderer may report structural warnings (e.g. a CoC sheet whose body
+        // diverges from the contract and parses near-empty, #107). Surface them like other
+        // page warnings instead of shipping a silently-broken sheet — unless the sheet is
+        // empty on purpose (kept elsewhere, or a stub).
+        if (systemOut.warnings && systemOut.warnings.length && !(sheetless && !sheetExpected)) {
+          fx.warn(page.outputPath, systemOut.warnings);
+        }
+        // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
+        // off the roster's Party Status board (#265).
+        if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter)) {
+          // Root-relative output path of the PC portrait, for the party-board
+          // thumbnail. Resolved the same way portraitImg does (imageMap keyed
+          // by bare basename → the scanner's relPath under images/).
+          const pBase = portraitBasename(page.frontmatter);
+          const pEntry = pBase && imageMap ? imageMap[pBase] : null;
+          const portrait = pEntry ? 'images/' + pEntry.relPath : null;
+          fx.partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData || systemOut.boardOnly });
+        }
+        html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
+          publishConfig,
+          pages,
+          systemSheetHtml: systemOut.sheetHtml || null,
+          systemCombatHtml: systemOut.combatHtml || null,
+          systemEquipmentHtml: systemOut.equipmentHtml || null,
+          systemSpellsHtml: systemOut.spellsHtml || null,
+          systemVitalsHtml: systemOut.vitalsHtml || null,
+          systemLiveData: systemOut.liveData || null,
+          systemStatusPanelHtml: systemOut.statusPanelHtml || null,
+          systemRecordHtml: systemOut.recordHtml || null,
+          systemStatusBarHtml: systemOut.statusBarHtml || null,
+          identity,
+          sheetsOff,
+          // The PC's own events (#323), not the campaign's: the landing page has those.
+          timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: 15, from: page.outputPath }),
+          onLook: fx.onLook,
+          storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
+        });
+        break;
+      }
+      case 'npc':
+        html = npcTemplate(page, processed, navFor, config, imageMap, {
+          pages, linkMap, publishConfig,
+        });
+        break;
+      case 'creature':
+        html = creatureTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
+        break;
+      case 'location':
+        html = locationTemplate(page, processed, navFor, config, imageMap, {
+          pages, linkMap, publishConfig,
+        });
+        break;
+      case 'item':
+        html = itemTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
+        break;
+      case 'faction':
+      case 'organization':
+        html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages, { publishConfig });
+        break;
+      case 'event':
+        html = eventTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
+        break;
+      case 'heritage':
+        html = heritageTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
+        break;
+      case 'world_domain':
+        html = worldDomainTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
+        break;
+      default: {
+        let extraSidebar = {};
+        if (page.frontmatter.type === 'session') {
+          // A hub whose body is withheld (#276) takes its NPCs and events from the
+          // Wrap-Up — who actually appeared — since its own links were prep, not play.
+          const wrapUp = hubWrapUps.get(page);
+          const source = wrapUp || page;
+          const sessionMentionedNPCs = (pages || []).filter(p =>
+            p.frontmatter.type === 'npc' &&
+            backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
+          ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
+
+          const sessionEvents = (pages || []).filter(p =>
+            p.frontmatter.type === 'event' &&
+            backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
+          ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
+
+          extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
+          if (wrapUp) {
+            // The page shell stays the wiki page's; only the article body is generated.
+            const chapter = chapterOfSession(page, pages);
+            processed.html = sessionBodyHtml(page, { wrapUp, chapter });
+          }
+        }
+        if (page.frontmatter.type === 'chapter') {
+          // All three comparisons below are author-typed `chapter:` ref vs filename-derived
+          // title, matched with `===`/`includes` rather than through a lookup table, so both
+          // sides are canonicalized to NFC here (#139) — otherwise an accented chapter shows
+          // an empty constituent-sessions sidebar.
+          const chapterTitle = canonicalNfc(String(page.frontmatter.title || page.displayTitle || ''));
+          const chapterTitleNorm = chapterTitle.toLowerCase();
+          const chapterFileTitle = canonicalNfc(page.title);
+          const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
+          const chapterSessions = (pages || []).filter(p => {
+            if (p.frontmatter.type !== 'session') return false;
+            const chapterRef = canonicalNfc(String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim());
+            if (!chapterRef) return false;
+            // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
+            if (chapterRef === chapterFileTitle) return true;
+            // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
+            if (chapterRef === chapterFilename) return true;
+            // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
+            //    (e.g. "London" in "Chapter 1 — London: The Orphean Society")
+            if (chapterTitleNorm && chapterRef.toLowerCase().includes(chapterTitleNorm)) return true;
+            return false;
+          }).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
+
+          extraSidebar = { constituentSessions: chapterSessions };
+        }
+        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, extraSidebar, pages });
+        break;
+      }
+    }
+    return { html };
+  }
+
+  function renderRoster(page, processed) {
+    const boardHtml = (roster.board && roster.partyManifest)
+      ? roster.board.renderBoard(roster.partyManifest, page.outputPath, { live: roster.live })
+      : null;
+    const islandHtml = (roster.live && roster.board && roster.partyManifest)
+      ? partyDataScript(roster.partyManifest, roster.board.scriptId) : null;
+    return wikiTemplate(page, processed, navFor, config, imageMap, {
+      publishConfig, linkMap, pages,
+      partyBoardHtml: boardHtml, partyDataScript: islandHtml,
+      partyClientScripts: (roster.live && boardHtml) ? roster.board.clientScripts : [],
+    });
+  }
+
+  const liveFx = {
+    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs,
+    onLook: (look, p) => {
+      for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
+      if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
+    },
+  };
+  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], onLook: () => {} });
+
+  // The note-faults audit reads each page as it is written (`seen`), and at the end renders
+  // again the pages that link a note with no page (`namedOnPages`).
+  const audit = startNoteAudit({
+    vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
+    publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
+  });
+  const shown = { page: null, story: null };
+  const markedOf = new Map();   // page -> its links to no-page notes, marked (null when it has none)
+  const toRender = new Map();   // the pages that may print one of those names: rendered a second time
+  function seen(rel, html, page, isStory) {
+    audit.read(rel, html);
+    if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
+    if (toRender.has(page)) return;
+    if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
+    const marked = markedOf.get(page);
+    if (marked && audit.mayPrint(marked, html)) toRender.set(page, marked);
+  }
+  // What the site holds of the note `explain --shown` asked about: the text of its page as
+  // built (and of a PC's story page), its link-preview card, and what the search index
+  // holds of it. null when the build makes no page of it.
+  function shownOf() {
+    if (!shownPage || !pages.includes(shownPage)) return null;
+    const text = (html) => (html === null ? null : pageText(mainOf(html)));
+    const fm = shownPage.frontmatter || {};
+    let card = null;
+    if (publishConfig.link_previews !== 'off') {
+      const { cardFor } = require('./previews');
+      const { usesCocFolio } = require('./templates/pc');
+      card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+    }
+    const { subtitleOf } = require('./search-index');
+    return {
+      // A story companion asked about by its own path shows the story page alone.
+      page: vaultRelPathOf(shownPage) === shownRel ? text(shown.page) : null,
+      story: text(shown.story),
+      card,
+      search: searchEnabled ? {
+        title: shownPage.displayTitle || '', subtitle: subtitleOf(fm),
+        aliases: Array.isArray(fm.aliases) ? fm.aliases : [],
+        body: shownPage.publishedMarkdown || '',
+      } : null,
+    };
+  }
+
   for (const page of pages) {
     try {
       if (getsNoPage(page)) continue;
-      if (page.frontmatter.portrait) {
-        const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
-        if (basename && imageMap[basename]) usedImages.add(basename);
-      }
-      const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections });
-      logWarnings(page.outputPath, processed.warnings);
-      let html;
-
-      if (isRoster(page)) { deferredRosters.push({ page, processed }); continue; }
-
-      switch (page.frontmatter.type) {
-        case 'pc': {
-          // Warnings are dropped here, not ignored: processContent above ran this same
-          // strip chain over the same markdown and already reported them.
-          let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
-          // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
-          // brackets of an `![[image.png]]` embed and would flatten it to literal text.
-          filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
-            portraitBasename: portraitBasename(page.frontmatter),
-          });
-          filtered = resolveWikiLinks(filtered, linkMap, page.outputPath);
-          const sections = extractSections(filtered);
-
-          let storyHtml;
-          if (page.storyMarkdown) {
-            const storyPage = {
-              markdown: page.storyMarkdown,
-              frontmatter: {},
-              outputPath: page.outputPath,
-            };
-            const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
-            logWarnings(page.outputPath, storyProcessed.warnings);
-            storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
-          }
-
-          const system = publishConfig.system;
-          // With sheets off the renderer is never called: no sheet, tab, panel, island or party entry exists to leak.
-          const systemRenderer = sheetsOff ? null : getRenderer(system);
-          const meta = {
-            system,
-            campaignId: require('./scanner').slugify(config.siteTitle || 'campaign'),
-            pcSlug: pcLiveKey(page.sourceFrontmatter || page.frontmatter, page.title),
-            buildVersion: require('crypto').createHash('sha1')
-              .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
-            live: publishConfig.live.stats === true,
-          };
-          const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
-          // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.
-          // A string sheet that is only passed-through text placed no stats.
-          const systemOut = (rendered && typeof rendered === 'object')
-            ? rendered
-            : { sheetHtml: rendered || null, sheetless: !!rendered && !hasSheetStructure(rendered) };
-          // A PC page with no sheet says nothing on its Character Sheet tab, and
-          // nothing else would tell the GM. A renderer reports it by returning no
-          // sheetHtml, or `sheetless` when (CoC) its frame renders regardless.
-          // `sheet_source` on the PC records that the sheet is kept elsewhere, which
-          // is the answer, not a gap. Read from the source frontmatter:
-          // `exclude_fields` may hide it from the page. A stub publishes named
-          // sections only, so it is not expected to carry a sheet.
-          const sourceFm = page.sourceFrontmatter || page.frontmatter;
-          const sheetSource = sheetSourceOf(sourceFm);
-          // The identity strip reads the note with GM content stripped but before the keep-list,
-          // for this and nothing else. A note whose headings shift has no readable body.
-          let identity = [];
-          if (sheetsOff) {
-            const identityText = page.headingsUnstable ? '' : resolveWikiLinks(
-              playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm }).text,
-              linkMap, page.outputPath);
-            identity = pcIdentity(system, page.frontmatter, extractSections(identityText));
-          }
-          const sheetless = !!systemRenderer && (!systemOut.sheetHtml || systemOut.sheetless === true);
-          const sheetExpected = !sheetSource && publishMode(sourceFm) !== 'stub';
-          if (sheetless && sheetExpected) sheetlessPcs.push(page.displayTitle || page.title);
-          // A frontmatter stat is not read; with sheets off no sheet is built, so nothing is lost.
-          if (!sheetsOff) {
-            const retired = retiredSheetFieldsFor(sourceFm, system);
-            if (retired.length) retiredFieldPcs.push({ rel: vaultRelPathOf(page), names: retired });
-          }
-          // A system renderer may report structural warnings (e.g. a CoC sheet whose body
-          // diverges from the contract and parses near-empty, #107). Surface them like other
-          // page warnings instead of shipping a silently-broken sheet — unless the sheet is
-          // empty on purpose (kept elsewhere, or a stub).
-          if (systemOut.warnings && systemOut.warnings.length && !(sheetless && !sheetExpected)) {
-            logWarnings(page.outputPath, systemOut.warnings);
-          }
-          // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
-          // off the roster's Party Status board (#265).
-          if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter)) {
-            // Root-relative output path of the PC portrait, for the party-board
-            // thumbnail. Resolved the same way portraitImg does (imageMap keyed
-            // by bare basename → the scanner's relPath under images/).
-            const pBase = portraitBasename(page.frontmatter);
-            const pEntry = pBase && imageMap ? imageMap[pBase] : null;
-            const portrait = pEntry ? 'images/' + pEntry.relPath : null;
-            partyEntries.push({ name: page.displayTitle || page.title, outputPath: page.outputPath, portrait, data: systemOut.liveData || systemOut.boardOnly });
-          }
-          html = pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml, {
-            publishConfig,
-            pages,
-            systemSheetHtml: systemOut.sheetHtml || null,
-            systemCombatHtml: systemOut.combatHtml || null,
-            systemEquipmentHtml: systemOut.equipmentHtml || null,
-            systemSpellsHtml: systemOut.spellsHtml || null,
-            systemVitalsHtml: systemOut.vitalsHtml || null,
-            systemLiveData: systemOut.liveData || null,
-            systemStatusPanelHtml: systemOut.statusPanelHtml || null,
-            systemRecordHtml: systemOut.recordHtml || null,
-            systemStatusBarHtml: systemOut.statusBarHtml || null,
-            identity,
-            sheetsOff,
-            // The PC's own events (#323), not the campaign's: the landing page has those.
-            timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: 15, from: page.outputPath }),
-            onLook: (look, p) => {
-              for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
-              if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
-            },
-            storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
-          });
-          break;
-        }
-        case 'npc':
-          html = npcTemplate(page, processed, navFor, config, imageMap, {
-            pages, linkMap, publishConfig,
-          });
-          break;
-        case 'creature':
-          html = creatureTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
-          break;
-        case 'location':
-          html = locationTemplate(page, processed, navFor, config, imageMap, {
-            pages, linkMap, publishConfig,
-          });
-          break;
-        case 'item':
-          html = itemTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
-          break;
-        case 'faction':
-        case 'organization':
-          html = factionTemplate(page, processed, navFor, config, imageMap, linkMap, pages, { publishConfig });
-          break;
-        case 'event':
-          html = eventTemplate(page, processed, navFor, config, imageMap, linkMap, { publishConfig });
-          break;
-        case 'heritage':
-          html = heritageTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
-          break;
-        case 'world_domain':
-          html = worldDomainTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
-          break;
-        default: {
-          let extraSidebar = {};
-          if (page.frontmatter.type === 'session') {
-            // A hub whose body is withheld (#276) takes its NPCs and events from the
-            // Wrap-Up — who actually appeared — since its own links were prep, not play.
-            const wrapUp = hubWrapUps.get(page);
-            const source = wrapUp || page;
-            const sessionMentionedNPCs = (pages || []).filter(p =>
-              p.frontmatter.type === 'npc' &&
-              backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
-            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
-
-            const sessionEvents = (pages || []).filter(p =>
-              p.frontmatter.type === 'event' &&
-              backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
-            ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
-
-            extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
-            if (wrapUp) {
-              // The page shell stays the wiki page's; only the article body is generated.
-              const chapter = chapterOfSession(page, pages);
-              processed.html = sessionBodyHtml(page, { wrapUp, chapter });
-            }
-          }
-          if (page.frontmatter.type === 'chapter') {
-            // All three comparisons below are author-typed `chapter:` ref vs filename-derived
-            // title, matched with `===`/`includes` rather than through a lookup table, so both
-            // sides are canonicalized to NFC here (#139) — otherwise an accented chapter shows
-            // an empty constituent-sessions sidebar.
-            const chapterTitle = canonicalNfc(String(page.frontmatter.title || page.displayTitle || ''));
-            const chapterTitleNorm = chapterTitle.toLowerCase();
-            const chapterFileTitle = canonicalNfc(page.title);
-            const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
-            const chapterSessions = (pages || []).filter(p => {
-              if (p.frontmatter.type !== 'session') return false;
-              const chapterRef = canonicalNfc(String(p.frontmatter.chapter || '').replace(/\[\[|\]\]/g, '').trim());
-              if (!chapterRef) return false;
-              // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
-              if (chapterRef === chapterFileTitle) return true;
-              // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
-              if (chapterRef === chapterFilename) return true;
-              // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
-              //    (e.g. "London" in "Chapter 1 — London: The Orphean Society")
-              if (chapterTitleNorm && chapterRef.toLowerCase().includes(chapterTitleNorm)) return true;
-              return false;
-            }).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
-
-            extraSidebar = { constituentSessions: chapterSessions };
-          }
-          html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, extraSidebar, pages });
-          break;
-        }
-      }
-
+      const out = renderPage(page, liveFx);
+      if (out.roster) { deferredRosters.push({ page, processed: out.roster }); continue; }
+      seen(vaultRelPathOf(page), out.html, page, false);
+      if (dry) continue;
       const outPath = path.join(outputDir, page.outputPath);
       ensureDir(outPath);
-      fs.writeFileSync(outPath, html);
+      fs.writeFileSync(outPath, out.html);
       console.log(`  wrote ${page.outputPath}`);
     } catch (e) {
       errorCount++;
@@ -1069,7 +1202,7 @@ function build(options = {}) {
   }
 
   // Written only when a PC page was dressed; an untouched site gets no skins.css.
-  if (anyDressed) {
+  if (anyDressed && !dry) {
     const dest = path.join(outputDir, 'css/skins.css');
     ensureDir(dest);
     // The skins' typefaces come from the vault's font cache and are served from the site,
@@ -1091,15 +1224,13 @@ function build(options = {}) {
     // published values. When the status-bar tier is on it also goes live
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
-    const board = sheetsOff ? null : boardFor(publishConfig.system);
-    const live = publishConfig.live.stats;
-    // Named partyManifest (not manifest) to avoid shadowing the outer vault
-    // manifest. Guarded like every other render path so a manifest-build failure
+    roster.board = sheetsOff ? null : boardFor(publishConfig.system);
+    roster.live = publishConfig.live.stats;
+    // Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
-    let partyManifest = null;
-    if (board) {
+    if (roster.board) {
       try {
-        partyManifest = board.buildManifest(partyCampaignId, partyEntries);
+        roster.partyManifest = roster.board.buildManifest(partyCampaignId, partyEntries);
       } catch (e) {
         errorCount++;
         console.error(`  ERROR building party manifest: ${e.message}`);
@@ -1107,16 +1238,9 @@ function build(options = {}) {
     }
     for (const deferredRoster of deferredRosters) {
       try {
-        const boardHtml = (board && partyManifest)
-          ? board.renderBoard(partyManifest, deferredRoster.page.outputPath, { live })
-          : null;
-        const islandHtml = (live && board && partyManifest)
-          ? partyDataScript(partyManifest, board.scriptId) : null;
-        const html = wikiTemplate(deferredRoster.page, deferredRoster.processed, navFor, config, imageMap, {
-          publishConfig, linkMap, pages,
-          partyBoardHtml: boardHtml, partyDataScript: islandHtml,
-          partyClientScripts: (live && boardHtml) ? board.clientScripts : [],
-        });
+        const html = renderRoster(deferredRoster.page, deferredRoster.processed);
+        seen(vaultRelPathOf(deferredRoster.page), html, deferredRoster.page, false);
+        if (dry) continue;
         const outPath = path.join(outputDir, deferredRoster.page.outputPath);
         ensureDir(outPath);
         fs.writeFileSync(outPath, html);
@@ -1132,7 +1256,7 @@ function build(options = {}) {
   // publish: false page and an excluded draft are absent), each page carries its filtered
   // frontmatter and publishedMarkdown, and a card is kept only if its page file exists.
   // cleanOutput() wipes a stale previews.json.
-  if (publishConfig.link_previews !== 'off') {
+  if (!dry && publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
     const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
@@ -1235,12 +1359,13 @@ function build(options = {}) {
     return rendered;
   }
 
-  publishConfig._banners = buildBanners(Object.keys(DIR_LABELS));
+  publishConfig._banners = dry ? {} : buildBanners(Object.keys(DIR_LABELS));
 
   const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
   for (const [dir, label] of Object.entries(DIR_LABELS)) {
+    if (dry) break;
     if (dir === 'characters/pcs' && pcRedirectTarget) {
       const depth = dir.split('/').length;
       const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
@@ -1283,7 +1408,7 @@ function build(options = {}) {
   // Timeline page
   const { timelineTemplate } = require('./templates/timeline-page');
 
-  if (generatesTimeline) {
+  if (generatesTimeline && !dry) {
     const fullTimelineContent = renderTimelineHTML(timelineData);
     const timelineHtml = timelineTemplate(fullTimelineContent, navFor, config, publishConfig);
     const timelinePath = path.join(outputDir, 'timeline.html');
@@ -1310,22 +1435,30 @@ function build(options = {}) {
     return items.length ? `<ul>${items.join('')}</ul>` : '';
   }
 
-  function buildCharacterStories() {
+  // A PC's story page (its `_Story.md` companion), as it is written. `fx` as for renderPage.
+  function renderCharacterStory(pc, fx) {
     const { slugify } = require('./scanner');
+    const outputPath = `story/characters/${slugify(pc.title)}.html`;
+    const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
+    const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts });
+    fx.warn(outputPath, processed.warnings);
+    const story = {
+      title: pc.displayTitle, outputPath, html: processed.html,
+      sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
+    };
+    const html = characterStoryPage(story, config, publishConfig, navFor);
+    if (fx === liveFx) seen(audit.storyRelOf(pc), html, pc, true);
+    return { story, html };
+  }
+
+  function buildCharacterStories() {
     const stories = [];
     for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
-      const outputPath = `story/characters/${slugify(pc.title)}.html`;
-      const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
-      const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
-      logWarnings(outputPath, processed.warnings);
-      const story = {
-        title: pc.displayTitle, outputPath, html: processed.html,
-        sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
-      };
-      const full = path.join(outputDir, outputPath);
+      const { story, html } = renderCharacterStory(pc, liveFx);
+      const full = path.join(outputDir, story.outputPath);
       ensureDir(full);
-      fs.writeFileSync(full, characterStoryPage(story, config, publishConfig, navFor));
-      console.log(`  wrote ${outputPath}`);
+      fs.writeFileSync(full, html);
+      console.log(`  wrote ${story.outputPath}`);
       stories.push(story);
     }
     return stories;
@@ -1352,12 +1485,18 @@ function build(options = {}) {
     return { spine, characterStories, hasStory: !!(spine.length || characterStories.length) };
   }
 
-  buildStory();
+  if (dry) {
+    for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
+      try { renderCharacterStory(pc, liveFx); } catch (e) { /* a story that fails to render prints nothing */ }
+    }
+  } else {
+    buildStory();
 
-  // Landing page
-  const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps);
-  fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
-  console.log('  wrote index.html');
+    // Landing page
+    const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps);
+    fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
+    console.log('  wrote index.html');
+  }
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
   // is a decision and never lands here; one in Needs Decision or in no section does.
@@ -1366,7 +1505,7 @@ function build(options = {}) {
   // that pairs and publishes gets ticked; the rest — no Wrap-Up at all (recap-in-hub
   // vaults), a Wrap-Up not reviewed yet or not publishing, a stale site pin — are asked
   // about, each with publish-played's own reason.
-  if (unpublishedPlayedSessions.length > 0) {
+  if (unpublishedPlayedSessions.length > 0 && !dry) {
     let plan = null;
     try {
       const { planPublishPlayed, surveyVault } = require('./manifest-cli');
@@ -1427,14 +1566,44 @@ function build(options = {}) {
   if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
 
   // Faults in the notes themselves: one line per code, after every other warning, and
-  // nothing for a vault with none. The same detectors `doctor --site` lists in full.
-  const noteFaults = findNoteFaults({
-    vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
-    publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
-    view: (page) => ({ ...stripFacts.get(page), text: page.publishedMarkdown, frontmatter: page.frontmatter }),
+  // nothing for a vault with none. `doctor --site` lists the same findings in full.
+  // A note with no page is named where a page prints the words of a link to it. Which
+  // links a page prints is the page's own business (its template, its sections), so each
+  // page that links such a note and may be printing its name (`seen`) is rendered once more
+  // with those links marked, by the same renderPage, and the marks that come out in the
+  // HTML are the names it prints.
+  quietly(() => {
+    for (const page of pages) {
+      const marked = toRender.get(page);
+      if (!marked) continue;
+      const own = { markdown: page.markdown, storyMarkdown: page.storyMarkdown, frontmatter: page.frontmatter, displayTitle: page.displayTitle };
+      page.markdown = marked.markdown;
+      page.frontmatter = marked.frontmatter;
+      page.displayTitle = marked.displayTitle;
+      if (own.storyMarkdown) page.storyMarkdown = marked.storyMarkdown;
+      let html = '';
+      let storyHtml = '';
+      try {
+        const out = renderPage(page, scratchFx());
+        html = out.roster ? renderRoster(page, out.roster) : out.html;
+      } catch (e) { /* a page that does not render prints no name */ }
+      try {
+        if (own.storyMarkdown && page.frontmatter.type === 'pc') storyHtml = renderCharacterStory(page, scratchFx()).html;
+      } catch (e) { /* nor does its story */ }
+      page.markdown = own.markdown;
+      page.frontmatter = own.frontmatter;
+      page.displayTitle = own.displayTitle;
+      if (own.storyMarkdown) page.storyMarkdown = own.storyMarkdown;
+      audit.printed(page, marked, html, storyHtml);
+    }
   });
+  const noteFaults = audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
+
+  if (dry) {
+    return { noteFaults, shown: shownOf() };
+  }
 
   if (errorCount > 0) {
     console.log(`Done with ${errorCount} error(s).`);
@@ -1443,6 +1612,7 @@ function build(options = {}) {
     throw err;
   }
   console.log('Done!');
+  return { noteFaults, shown: null };
 }
 
 module.exports = { build };

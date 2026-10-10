@@ -20,7 +20,7 @@ const { decidePage, publishesPage } = require('./publish-decision');
 const {
   parseWikiRef, portraitBasename, playerSafeMarkdown, publishMode, keepOnlySections, publishedFrontmatter, pcHeadingsUnstable,
 } = require('./processor');
-const { findNoteFaults } = require('./note-faults');
+const { CODES: NOTE_FAULT_CODES } = require('./note-faults');
 const { getsNoPage } = require('./previews');
 const { pairHubs } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
@@ -31,15 +31,15 @@ const UNTYPED_ROW_CAP = 20;
 const LINK_ROW_CAP = 30;
 // The note-fault codes list this many rows in the human report; --json has them all.
 const FAULT_ROW_CAP = 20;
-const FAULT_CODES = new Set(['ALIAS_IN_PROSE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE']);
+const FAULT_CODES = new Set(NOTE_FAULT_CODES);
 const NEAREST_LIMIT = 3;
 const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
-  'CONFIG_INVALID', 'VAULT_MISSING', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
+  'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
-  'ALIAS_IN_PROSE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE',
+  ...NOTE_FAULT_CODES,
 ];
 
 // Sørensen–Dice over character bigrams: enough to tell "Dr_Armitag" from
@@ -127,9 +127,10 @@ function emit(out, findings, vaultLabel, asJson) {
   return errors === 0 ? 0 : 1;
 }
 
-// What a reader gets of one page: the build's own cuts in the build's order (a session index
-// whose Wrap-Up is published has no body, a stub keeps only the sections it names), then the
-// page's strip chain, and its frontmatter as published. `explain --shown` prints it.
+// A note's body and frontmatter after the build's own cuts, in the build's order (a session
+// index whose Wrap-Up is published has no body, a stub keeps only the sections it names),
+// then the strip chain, and the frontmatter as published. The dead-link check reads the body;
+// `explain --shown` prints both for a note the build can make no page of.
 function readerView(page, publishConfig, { bodyWithheld = false, rel = '', pcKeepSections = pcKeepList(publishConfig) } = {}) {
   let source = bodyWithheld ? '' : (page.markdown || '');
   if (publishMode(page.frontmatter) === 'stub') {
@@ -190,6 +191,7 @@ async function runSiteDoctor(options, deps) {
     )], vaultPath, asJson);
   }
 
+  const rawSiteConfig = config;
   const resolved = resolveConfig(config, vaultPath);
   config = resolved.config;
   const publishConfig = resolved.publishConfig;
@@ -217,18 +219,13 @@ async function runSiteDoctor(options, deps) {
   const allNotes = scanAllNotes(vaultPath);
   const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes });
 
-  // What a reader gets of a page (readerView), run once per page; the dead-link check and
-  // the note-fault detectors both read it.
+  // The body a reader gets of a page (readerView), for the dead-link check.
   const pcKeepSections = pcKeepList(publishConfig);
-  const views = new Map();
-  const viewOf = (page) => {
-    if (views.has(page)) return views.get(page);
-    const { source, safe, frontmatter } = readerView(page, publishConfig, { bodyWithheld: hubPairs.has(page), rel: relOf(page), pcKeepSections });
+  const bodyOf = (page) => {
+    const { safe } = readerView(page, publishConfig, { bodyWithheld: hubPairs.has(page), rel: relOf(page), pcKeepSections });
     const unstable = pcKeepSections && pcHeadingsUnstable(page, linkMap, publishConfig.exclude_sections, attachments,
       { excludeCallouts: publishConfig.exclude_callouts, pcKeepSections });
-    const view = { source, text: unstable ? '' : safe.text, strays: safe.strays, openFence: safe.openFence, frontmatter };
-    views.set(page, view);
-    return view;
+    return unstable ? '' : safe.text;
   };
 
   const findings = [];
@@ -322,10 +319,19 @@ async function runSiteDoctor(options, deps) {
   // --- faults in the notes themselves ---------------------------------------
   // Found first: a link to a note that exists but has no page is NAMED_NO_PAGE's, so the
   // dead-link check below leaves it out rather than say it twice.
-  const noteFaults = findNoteFaults({
-    vaultPath, notes: allNotes, corpus, verdicts, report, published, linkMap, publishConfig, manifest,
-    relOf, getsNoPage, view: viewOf, readFile,
-  });
+  // They are the build's: it is run here in memory (every page rendered, nothing written),
+  // so this list is the one the build prints its summary of.
+  // A build that cannot run is an error, never a clean list.
+  let noteFaults = Object.assign([], { namedTargets: new Set() });
+  try {
+    ({ noteFaults } = require('./build').build({ configPath, vaultPath, rawConfig: rawSiteConfig, inMemory: true }));
+  } catch (err) {
+    findings.push(finding(
+      'NOTE_FAULTS_UNCHECKED', 'error', vaultPath,
+      `the site could not be built in memory, so the faults in its notes were not looked for: ${String(err.message).split('\n')[0]}`,
+      'run `gm-publish build` and fix what it reports, then run the audit again',
+    ));
+  }
 
   // --- what the published pages point at ----------------------------------
   const linkRows = [];
@@ -344,7 +350,7 @@ async function runSiteDoctor(options, deps) {
     // Only the body a reader will actually get: a dead link inside a GM Notes
     // section is not on the site and is not the GM's problem today. Nor is anything
     // in a session index's body once the site withholds it (#276).
-    const body = viewOf(page).text;
+    const body = bodyOf(page);
     const seen = new Set();
     for (const match of body.matchAll(wikilinkRe('g', true))) {
       const { target } = parseWikiRef(match[1]);

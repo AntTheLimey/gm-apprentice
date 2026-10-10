@@ -40,9 +40,10 @@ function renderContextSidebar({ backlinks, relationships, parentEntity, events, 
   if (relationships && relationships.length > 0) {
     const items = relationships.map(r => {
       const href = r.targetPath ? encodeHref(relativePath(currentDir, r.targetPath)) : null;
-      const name = escapeHtml(r.target.replace(/_/g, ' '));
+      const name = escapeHtml(String(r.target || '').replace(/_/g, ' '));
       const link = href ? `<a href="${href}">${name}</a>` : name;
-      const type = escapeHtml(r.type.replace(/_/g, ' '));
+      // A relationship may have no type (left out, or a value that was only a comment).
+      const type = escapeHtml(String(r.type || '').replace(/_/g, ' '));
       return `<li>${link} <span class="sidebar-badge">${type}</span></li>`;
     });
     sections.push(`<h3>Relationships</h3>\n<ul>${items.join('\n')}</ul>`);
