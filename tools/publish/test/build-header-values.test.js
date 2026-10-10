@@ -175,3 +175,19 @@ test('B-M1: a location prints its parent whole in the sidebar, and its card says
     }
   } finally { v.cleanup(); }
 });
+
+test('C1: a bare note name in a badge prints as words, not with its underscores', () => {
+  const v = site({
+    'Clues/C.md': '---\ntype: clue\nfound_by: Anna_Lindqvist\n---\nBody.\n',
+    'Documents/D.md': '---\ntype: document\nauthor: Ramkanta_Sett\n---\nBody.\n',
+    'Items/I.md': '---\ntype: item\norigin: Safe_House\n---\nBody.\n',
+  });
+  try {
+    for (const [p, text] of [[['clues', 'c.html'], 'Anna Lindqvist'], [['documents', 'd.html'], 'Ramkanta Sett'],
+      [['items', 'i.html'], 'Safe House']]) {
+      const h = header(v.read(...p));
+      assert.ok(h.includes(text), `${p.join('/')} should show ${text}: ${h}`);
+      assert.ok(!h.includes('_'), `${p.join('/')} keeps an underscore: ${h}`);
+    }
+  } finally { v.cleanup(); }
+});
