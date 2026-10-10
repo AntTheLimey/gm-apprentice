@@ -177,11 +177,16 @@ async function runExplain(options, deps) {
     if (source && publishMode(source.frontmatter) === 'none') {
       shown = { from: 'none' };
     } else if (source) {
+      // A build that fails is not a build that makes no page: the first is an error, said
+      // as one, and never answered with the note's own text as if nothing more were on the site.
       let built = null;
+      let failed = null;
       try {
         built = require('./build').build({ configPath: survey.configPath, vaultPath, rawConfig: d.config, inMemory: true, shownFor: target }).shown;
-      } catch (e) { built = null; }
-      if (built && (built.page !== null || built.story !== null)) {
+      } catch (e) { failed = String((e && e.message) || e).split('\n')[0]; }
+      if (failed !== null) {
+        shown = { from: 'error', error: failed };
+      } else if (built && (built.page !== null || built.story !== null)) {
         shown = Object.assign({ from: 'page' }, built);
       } else {
         const view = readerView(source, publishConfig, { bodyWithheld: hubBodyUnpublished, rel: target });
@@ -215,7 +220,7 @@ async function runExplain(options, deps) {
       bodyWithheld: hubBodyUnpublished,
       ...(opts.shown ? { shown } : {}),
     }, null, 2));
-    return 0;
+    return shown && shown.from === 'error' ? 1 : 0;
   }
 
   out(target);
@@ -256,6 +261,10 @@ async function runExplain(options, deps) {
     if (!shown) {
       out('  what the site holds of this note: unknown — the note could not be read');
       return 0;
+    }
+    if (shown.from === 'error') {
+      out(`  what the site holds of this note: could not be read — the site could not be built in memory: ${shown.error}`);
+      return 1;
     }
     if (shown.from === 'none') {
       out('  what the site holds of this note: nothing — it is marked publish: false, so no page is built from it');
