@@ -15,6 +15,11 @@ describe('excerptFromMarkdown sentences', () => {
     assert.strictEqual(excerptFromMarkdown(src), 'First one.');
     assert.strictEqual(excerptFromMarkdown(src, { sentences: 2 }), 'First one. Second one.');
   });
+  it('keeps both sentences when the second ends the text', () => {
+    assert.strictEqual(excerptFromMarkdown('Keeper of the gate. He trusts nobody.', { sentences: 2 }), 'Keeper of the gate. He trusts nobody.');
+    assert.strictEqual(excerptFromMarkdown('A. B.', { sentences: 2 }), 'A. B.');
+    assert.strictEqual(excerptFromMarkdown('A. B.'), 'A.');
+  });
   it('stops at the limit even inside the second sentence', () => {
     const long = 'Short. ' + 'word '.repeat(80) + 'end.';
     const got = excerptFromMarkdown(long, { sentences: 2, limit: 200 });
@@ -93,6 +98,27 @@ describe('cardFor', () => {
     const card = cardFor(page('event', { outcome: 'x'.repeat(400) }, ''), ctx);
     assert.ok(card.f[0][1].length <= 121);
     assert.ok(card.f[0][1].endsWith('…'));
+  });
+});
+
+describe('values as the page prints them', () => {
+  it('joins a session in-game date range the way the session page does', () => {
+    const f = cardFor(page('session', { in_game_date: ['1 May', '3 May'] }, ''), ctx).f;
+    assert.deepStrictEqual(f, [['In-game date', '1 May – 3 May']]);
+  });
+  it('prints a list in another header the way String() does', () => {
+    assert.deepStrictEqual(cardFor(page('event', { in_game_date: ['1 May', '3 May'] }, ''), ctx).f, [['Date', '1 May,3 May']]);
+  });
+});
+
+describe('a PC card and the page header share their badges', () => {
+  const { headerMeta } = require('../../lib/pc-header-meta');
+  it('shows the same labels and values, in order', () => {
+    for (const fm of [{ player_name: 'Sam', occupation: 'Smith', age: 31, nationality: 'Welsh' },
+      { player_name: 'Sam', display_meta: ['age', 'home_town', 'occupation'], age: 31, home_town: 'Bath', occupation: 'Smith' }]) {
+      const expected = [['Player', 'Sam'], ...headerMeta(fm).map(([l, v]) => [l, String(v)])].slice(0, 3);
+      assert.deepStrictEqual(cardFor(page('pc', fm, ''), ctx).f, expected);
+    }
   });
 });
 

@@ -6,6 +6,8 @@ const path = require('path');
 const { publishedSource, plainMetaValue, portraitBasename } = require('./processor');
 const { excerptFromMarkdown } = require('./excerpt');
 const { getCanonStatus } = require('./templates/base');
+const { headerMeta } = require('./pc-header-meta');
+const { inGameDateText } = require('./templates/session');
 
 const VALUE_LIMIT = 120;
 const MAX_FACTS = 3;
@@ -18,8 +20,8 @@ const KIND_LABELS = {
 };
 
 // [label, frontmatter fields tried in order]; the first three with a value are shown. Each
-// is a field the kind's own page shows (header badges or body); the pc entry is built from
-// the page header's own list in pcFacts.
+// is a field the kind's own page shows (header badges or body); a PC's come from the
+// page header's own list (pc-header-meta.js).
 const FACT_FIELDS = {
   npc: [['Role', ['occupation']], ['Status', ['status']], ['Rank', ['rank']], ['Nationality', ['nationality']]],
   creature: [['Kind', ['creature_type']]],
@@ -31,10 +33,6 @@ const FACT_FIELDS = {
   chapter: [['Chapter', ['sort_order']]],
 };
 
-// The header badges a PC page shows after the player (templates/pc.js renderMetaSpans):
-// the note's display_meta list, else these.
-const PC_DEFAULT_META = ['occupation', 'age', 'nationality'];
-
 function kindLabel(type) {
   const t = String(type || '').trim();
   if (KIND_LABELS[t]) return KIND_LABELS[t];
@@ -42,29 +40,31 @@ function kindLabel(type) {
   return words ? words[0].toUpperCase() + words.slice(1) : 'Page';
 }
 
+// A value as its page prints it: a list is whatever String() makes of it (the headers
+// print String(value)); a session's in-game date is joined by rowsFor, as its page does.
 function plain(value) {
   if (value == null || value === '') return '';
   if (value instanceof Date) return isNaN(value) ? '' : value.toISOString().slice(0, 10);
-  const text = (Array.isArray(value) ? value.map(plainMetaValue).join(', ') : plainMetaValue(value)).replace(/\s+/g, ' ').trim();
+  const text = plainMetaValue(String(value)).replace(/\s+/g, ' ').trim();
   return text.length > VALUE_LIMIT ? text.slice(0, VALUE_LIMIT).trimEnd() + '…' : text;
 }
 
-// Same label the page header gives a display_meta field (templates/pc.js formatLabel).
-function metaLabel(field) {
-  return String(field).replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-function pcFacts(fm) {
-  const fields = Array.isArray(fm.display_meta) ? fm.display_meta : PC_DEFAULT_META;
-  return [['Player', ['player_name']], ...fields.map((f) => [metaLabel(f), [String(f)]])];
+// [label, rawValue] rows for a kind, before any value is shown.
+function rowsFor(fm) {
+  if (fm.type === 'pc') {
+    return [['Player', fm.player_name], ...headerMeta(fm)];
+  }
+  return (FACT_FIELDS[fm.type] || []).map(([label, fields]) => {
+    const field = fields.find((f) => fm[f] != null && fm[f] !== '');
+    const raw = field ? fm[field] : null;
+    return [label, fm.type === 'session' && field === 'in_game_date' ? inGameDateText(raw) : raw];
+  });
 }
 
 function factsFor(fm) {
-  const table = fm.type === 'pc' ? pcFacts(fm) : (FACT_FIELDS[fm.type] || []);
   const facts = [];
-  for (const [label, fields] of table) {
-    const field = fields.find((f) => fm[f] != null && fm[f] !== '');
-    const value = field ? plain(fm[field]) : '';
+  for (const [label, raw] of rowsFor(fm)) {
+    const value = plain(raw);
     if (!value) continue;
     if (label === 'Status' && ORDINARY_STATUS.has(value.toLowerCase())) continue;
     facts.push([label, value]);

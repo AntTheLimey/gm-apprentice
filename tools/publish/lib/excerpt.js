@@ -136,6 +136,9 @@ function excerptFromMarkdown(source, opts = {}) {
     best = sentence;
     if (found === wanted) return best;
   }
+  // The last sentence's stop ends the text, so the loop (which wants a space after) never
+  // counted it; a text that fits whole is all of its sentences.
+  if (wanted > 1 && text.length <= limit) return text;
   if (best) return best;
   if (text.length <= limit) return text;
   const cut = text.slice(0, limit);
