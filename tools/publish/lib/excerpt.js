@@ -117,7 +117,9 @@ function excerptFromMarkdown(source, opts = {}) {
   working = stripHtml(working);
 
   const kept = [];
-  const sourceLines = working.split('\n');
+  // A reader sees a quoted table as a table, so for the prose the quote marks are dropped
+  // before any line is judged (a quoted heading, rule or table row is then one of those).
+  const sourceLines = working.split('\n').map(l => (opts.prose ? l.replace(/^\s*(?:>[ \t]?)+/, '') : l));
   // A block that is not prose: skipped before any prose, the end of the excerpt after it.
   const endsProse = () => opts.prose && kept.some(l => l.trim());
   for (let i = 0; i < sourceLines.length; i++) {

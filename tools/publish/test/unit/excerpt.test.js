@@ -227,3 +227,18 @@ describe('excerptFromMarkdown edge stops', () => {
     assert.strictEqual(excerptFromMarkdown('Hello Mr.'), 'Hello Mr.');
   });
 });
+
+describe('excerptFromMarkdown prose mode and tables in a blockquote', () => {
+  const opts = { prose: true, sentences: 2, limit: 200 };
+  it('stops at a table inside a blockquote, as it does at one outside', () => {
+    const md = '> **THE PARTNERSHIP**\n> *Abstract for the year ending the 30th April 1814*\n>\n> | | Sa. Rs. |\n> |---|---|\n> | To the Hospital | 2,000 |\n';
+    const got = excerptFromMarkdown(md, opts);
+    assert.ok(!got.includes('|'), got);
+    assert.ok(!got.includes('Sa. Rs'), got);
+    assert.strictEqual(got, 'THE PARTNERSHIP Abstract for the year ending the 30th April 1814');
+  });
+  it('skips a quoted table that opens the note and reads on to the prose', () => {
+    const md = '> | a | b |\n> |---|---|\n> | 1 | 2 |\n\nThe gate is old. It creaks.\n';
+    assert.strictEqual(excerptFromMarkdown(md, opts), 'The gate is old. It creaks.');
+  });
+});

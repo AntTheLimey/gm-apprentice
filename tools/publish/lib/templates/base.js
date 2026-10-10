@@ -47,11 +47,11 @@ function clientScripts(outputPath) {
 // colorModeHead is: build() is synchronous.
 let linkPreviews = 'off';
 function configureLinkPreviews(mode) { linkPreviews = mode === 'on' || mode === 'desktop' ? mode : 'off'; }
-// The attribute the page script reads off <main>; empty when previews are off.
 function linkPreviewsOn() { return linkPreviews !== 'off'; }
 // Marks a listing container (a card grid, a list of rows) whose links get no preview card; empty when
 // previews are off so an off build stays byte-identical.
 function noPreviewAttr() { return linkPreviewsOn() ? ' data-no-preview' : ''; }
+// The attribute the page script reads off <main>; empty when previews are off.
 function previewsAttr() { return linkPreviews !== 'off' ? ` data-previews="${linkPreviews}"` : ''; }
 
 // The color-mode <head> script (#260), set once per build by configureColorMode. It

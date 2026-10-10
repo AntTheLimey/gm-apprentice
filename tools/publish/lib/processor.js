@@ -955,10 +955,18 @@ function referenceParts(text) {
   return text.includes('[[') ? parseWikiRef(text) : { target: text, label: humanizeName(text) };
 }
 
-function plainRefValue(raw) {
+// What a reference value names: { target, label } for a whole reference (target is the
+// link-map name), { target: '', label } for running text (nothing to link to), null when empty.
+// The one definition the page headers, the location sidebar and the preview cards share.
+function referenceOf(raw) {
   const text = valueText(raw).trim();
-  if (!text) return '';
-  return wholeReference(text) ? referenceParts(text).label : plainMetaValue(text);
+  if (!text) return null;
+  return wholeReference(text) ? referenceParts(text) : { target: '', label: plainMetaValue(text) };
+}
+
+function plainRefValue(raw) {
+  const ref = referenceOf(raw);
+  return ref ? ref.label : '';
 }
 
 function refMetaValue(raw, linkMap = {}, currentOutputPath = '') {
@@ -1427,4 +1435,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, refMetaValue, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

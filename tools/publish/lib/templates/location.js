@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
 const { refTarget } = require('../wikilink');
-const { escapeHtml, relativeHref, parseWikiRef, publishedSource, encodeHref, plainRefValue } = require('../processor');
+const { escapeHtml, relativeHref, publishedSource, encodeHref, plainRefValue, referenceOf } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
@@ -25,8 +25,8 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 
   // Parse `[[Target|Alias]]` once: target keeps underscores for the linkMap lookup, label
   // is the alias or the humanized target. Reused by the breadcrumb and the sidebar below.
-  const parent = fm.parent_location ? parseWikiRef(fm.parent_location) : null;
-  const parentTarget = parent && linkMap ? linkMap[parent.target] : null;
+  const parent = referenceOf(fm.parent_location);
+  const parentTarget = parent && parent.target && linkMap ? linkMap[parent.target] : null;
   const crumbs = generateBreadcrumbs(page.outputPath, parent ? {
     parentLocation: plainRefValue(fm.parent_location),
     // Breadcrumb hrefs are relative to the current page; linkMap holds the root-relative

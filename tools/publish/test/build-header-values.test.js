@@ -158,3 +158,20 @@ test('B-I2: an event header value is one inline run inside its flex item, whatev
     assert.match(css, /\.char-header \.meta \.meta-value\s*\{[^}]*display:\s*inline;/);
   } finally { v.cleanup(); }
 });
+
+test('B-M1: a location prints its parent whole in the sidebar, and its card says no more than the page', () => {
+  const { cardProblems } = require('./helpers/card-subset');
+  const v = buildVault({
+    'Locations/Quay.md': '---\ntype: location\nparent_location: "Met [[Xylo]] at / the docks (twice)"\n---\nBody.\n',
+    'Locations/Quay Two.md': '---\ntype: location\nparent_location: "[[Xylo|LABEL]] shown at night"\n---\nBody.\n',
+    'Locations/Xylo.md': '---\ntype: location\npublish: false\n---\nBody.\n',
+  }, {});
+  try {
+    const cards = JSON.parse(v.read('previews.json'));
+    for (const [file, want] of [['quay', 'Met Xylo at / the docks (twice)'], ['quay-two', 'LABEL shown at night']]) {
+      const html = v.read('locations', `${file}.html`);
+      assert.ok(pageText(html).includes(`Parent ${want}`), `${file}: ${pageText(html).slice(0, 300)}`);
+      assert.deepStrictEqual(cardProblems(cards[`locations/${file}.html`], pageText(html)).problems, []);
+    }
+  } finally { v.cleanup(); }
+});

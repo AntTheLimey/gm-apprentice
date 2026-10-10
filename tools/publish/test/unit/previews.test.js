@@ -253,3 +253,12 @@ describe('a PC card opens with what the PC page opens with', () => {
     assert.strictEqual(card.x, 'First prose.');
   });
 });
+
+describe('kind labels', () => {
+  const { kindLabel } = require('../../lib/kind-label');
+  it('reads a roster and a group as the words a reader expects', () => {
+    assert.strictEqual(kindLabel('pc_roster'), 'PC roster');
+    assert.strictEqual(kindLabel('npc_group'), 'NPC group');
+    assert.strictEqual(kindLabel('plot_thread'), 'Plot thread');
+  });
+});

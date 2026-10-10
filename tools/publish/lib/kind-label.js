@@ -6,6 +6,7 @@ const KIND_LABELS = {
   npc: 'NPC', pc: 'Player character', creature: 'Creature', location: 'Location',
   faction: 'Faction', item: 'Item', event: 'Event', session: 'Session', session_wrap: 'Session',
   chapter: 'Chapter', clue: 'Clue', document: 'Document',
+  pc_roster: 'PC roster', npc_group: 'NPC group',
 };
 
 // An own-property lookup: a type named `constructor` or `__proto__` is not a kind.
