@@ -76,6 +76,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A note whose `type` is `constructor`, `toString` and the like builds as
   an unknown type; it failed the build.
 - A frontmatter `title: 1984` builds; it failed the build.
+- A `<!-- GM-ONLY -->` or `<!-- Spoiler -->` marker in capitals, or with
+  a space after the `/` of its closer, is a marker. It was read as a
+  plain comment and the block was published. The vault scripts read a
+  marker the same way.
+- An HTML comment, or a gm-only or spoiler block, in a frontmatter
+  value is cut wherever the value prints, as a `%%` comment is. One
+  never closed hides the rest of the value, and the build and the Site
+  Faults check name the field. One in backticks is left as written.
+- A hidden heading is still hidden when its words are joined by any
+  character reference (`&hairsp;`, `&numsp;`, `&puncsp;`,
+  `&ZeroWidthSpace;`, `&NoBreak;`, `&Tab;` and the rest), any Unicode
+  space, or an invisible character, in a word and between words alike.
+- A list or a set of named values where the site reads one value
+  (`status`, `canon_status`, `item_type`, `location_type`, `type`), or
+  anything but a list in `aliases`, `abilities`, `weaknesses` or
+  `notable_traits`, no longer stops the build. The build names the note
+  and the field. An `aliases:` written as one bare name was never read;
+  the build now says so.
 
 ## [1.10.41] — 2026-10-10
 
