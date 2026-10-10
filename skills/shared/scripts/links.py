@@ -39,7 +39,10 @@ and an embed are left alone and listed as KEPT.
 With `--in`, `unlink` works only in the notes named (vault paths, or a
 filename only one note has), and NAME may be a note that exists: the way
 to stop a published page naming a note that has no page, while every
-other note keeps its link. `--as WORDS` gives the words for a link that
+other note keeps its link. Where two notes share a name, give NAME with
+its path (`Plans/Scene`): only links that lead to that note are turned, a
+link to the other is left, and a link that gives no path is left and
+listed as KEPT. `--as WORDS` gives the words for a link that
 has no display text of its own, where the note's name would read as a file
 name (`[[Scene_02_Quay]]` becomes WORDS); a link with display text keeps
 it.
@@ -262,6 +265,8 @@ Fix = Callable[[tuple[str, str, str], bool, bool, str],
 KEPT = {
     "frontmatter": "a frontmatter link is relationship data; left as written",
     "embed": "an embed has no words to leave; left as written",
+    "ambiguous": "more than one note has this name and the link gives no "
+                 "path; left as written",
 }
 
 
@@ -277,6 +282,15 @@ def _retarget(new: str, keep_text: bool) -> Fix:
     return fix
 
 
+def _in_table_row(line: str) -> bool:
+    """Whether a line is a table row: it holds a cell pipe, at the margin
+    or not (`noon | [[Scene]] | next` is a row too). The pipe inside a
+    link and an escaped one are not cell pipes. A line of prose with a
+    pipe in it reads as a row, which only costs a backslash that Markdown
+    does not print."""
+    return re.search(r"(?<!\\)\|", LINK_RE.sub("", line)) is not None
+
+
 def _unlink_as(bare: str | None) -> Fix:
     """Turn a link into its words: its display text, else `bare` when
     given, else the name as written."""
@@ -288,7 +302,7 @@ def _unlink_as(bare: str | None) -> Fix:
             return None, "embed"
         dest, _sub, shown = parsed
         words = shown.lstrip("\\")[1:].strip() if shown else ""
-        if not words and bare and line.lstrip(" \t>").startswith("|"):
+        if not words and bare and _in_table_row(line):
             # In a table cell a bare pipe in the words would end the cell.
             return re.sub(r"(?<!\\)\|", r"\\|", bare), ""
         return words or bare or link_name(dest), ""
@@ -298,7 +312,12 @@ def _unlink_as(bare: str | None) -> Fix:
 _unlink = _unlink_as(None)
 
 
-def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
+# Whether a link (its body) is one the fix is for: True, False, or a key of
+# KEPT when it might be and is left alone.
+Match = Callable[[str], "bool | str"]
+
+
+def _rewrite(rel: str, text: str, match: Match, fix: Fix,
              p: Plan) -> str:
     out: list[str] = []
     for ll in link_lines(text):
@@ -307,7 +326,11 @@ def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
             continue
 
         def sub(m: re.Match[str], ll: LinkLine = ll) -> str:
-            if link_target(m.group(1)) not in targets:
+            wanted = match(m.group(1))
+            if wanted is False:
+                return m.group(0)
+            if wanted is not True:
+                p.kept.append((rel, ll.lineno, m.group(0), KEPT[wanted]))
                 return m.group(0)
             parsed = _parse_link(m.group(1))
             if parsed is None:
@@ -325,7 +348,12 @@ def _rewrite(rel: str, text: str, targets: set[str], fix: Fix,
 
 
 def _plan(vault: Path, targets: set[str], fix: Fix,
-          only: set[str] | None = None) -> Plan:
+          only: set[str] | None = None, match: Match | None = None) -> Plan:
+    """`targets` are link targets by name (`link_target`); `match`, when
+    given, decides link by link instead (a name given with its path)."""
+    if match is None:
+        def match(body: str) -> bool:
+            return link_target(body) in targets
     p = Plan(vault)
     for rel in _walk(vault, ".md"):
         if only is not None and _nfc(rel) not in only:
@@ -333,12 +361,12 @@ def _plan(vault: Path, targets: set[str], fix: Fix,
         text = _read(vault, rel)
         if text is None:
             for body in LINK_RE.findall(_raw(vault, rel)):
-                if link_target(body) in targets:
+                if match(body) is not False:
                     raise LinksError(
                         f"{rel} is not valid UTF-8 and links to "
                         f"{link_name(body)}; fix its encoding first")
             continue
-        new = _rewrite(rel, text, targets, fix, p)
+        new = _rewrite(rel, text, match, fix, p)
         if new != text:
             p.originals[rel], p.texts[rel] = text, new
     return p
@@ -388,8 +416,62 @@ def plan_unlink(vault: Path, names: list[str],
         if rel not in notes:
             raise LinksError(f"there is no note {note}")
         only.add(rel)
-    return _plan(vault, {link_target(n) for n in names},
-                 _unlink_as(bare), only)
+    return _plan(vault, set(), _unlink_as(bare), only,
+                 _names_match(vault, names, sorted(notes)))
+
+
+def _segments(path: str) -> list[str]:
+    """A note path or a link's destination as its folders and name, each
+    read the way a link is (`normalize`), `.md` and any #heading off."""
+    path = path.replace("\\", "/").split("#")[0].split("^")[0]
+    path = path.strip().strip("/")
+    if path.lower().endswith(".md"):
+        path = path[:-3]
+    return [normalize(part) for part in path.split("/") if part.strip()]
+
+
+def _names_match(vault: Path, names: list[str], notes: list[str]) -> Match:
+    """The links `unlink --in` is for: those that go to the note each NAME
+    means, and to no other. Two notes can share a name in different
+    folders. A NAME given with its path means that one: a link written
+    with a path must lead to it, and a link written bare is taken only
+    when no other note has the name (otherwise it is left and listed). A
+    bare NAME that two notes share is refused."""
+    asked: list[tuple[list[str], list[list[str]]]] = []
+    for name in names:
+        want = _segments(name)
+        if not want:
+            continue
+        same = [_segments(n) for n in notes if _segments(n)[-1:] == want[-1:]]
+        if len(want) == 1 and len(same) > 1:
+            found = [n for n in notes if _segments(n)[-1:] == want[-1:]]
+            raise LinksError(f"{len(found)} notes are named {name}: "
+                             f"{', '.join(found)}; give the path")
+        # The note NAME means: the one its path ends, else the path as given
+        # (a note that is not there: every link to the name is a broken one).
+        meant = [s for s in same if s[-len(want):] == want]
+        asked.append((meant[0] if meant else want, same))
+
+    def match(body: str) -> bool | str:
+        parsed = _parse_link(body)
+        dest = _segments(parsed[0] if parsed else link_name(body))
+        if not dest:
+            return False
+        verdict: bool | str = False
+        for note, same in asked:
+            if dest[-1] != note[-1]:
+                continue
+            if len(dest) > 1:
+                # With no note of the name at all, a bare NAME is a broken
+                # link's, whatever folder each link gives it.
+                if note[-len(dest):] == dest or (not same and len(note) == 1):
+                    return True
+            elif not same or same == [note]:
+                return True
+            elif note in same:
+                verdict = "ambiguous"
+        return verdict
+    return match
 
 
 def apply(p: Plan) -> None:

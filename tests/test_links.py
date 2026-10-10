@@ -369,6 +369,66 @@ class UnlinkTests(unittest.TestCase):
                          "| noon | dinner \\| welcome |\n\n"
                          "Then dinner | welcome.\n")
 
+    def test_as_words_with_a_pipe_stay_in_one_cell_of_a_row_with_no_leading_pipe(self):
+        vault = make_vault(self, {
+            "Plans/Dinner_Scene.md": "The scene.\n",
+            "People/Host.md": "when | what | then\n---|---|---\n"
+                              "noon | [[Dinner_Scene]] | next\n"})
+        p = links.plan_unlink(vault, ["Dinner_Scene"], ["People/Host.md"],
+                              "dinner | welcome")
+        self.assertEqual(p.texts["People/Host.md"],
+                         "when | what | then\n---|---|---\n"
+                         "noon | dinner \\| welcome | next\n")
+
+    def test_a_name_given_with_its_path_leaves_a_link_to_another_note_of_that_name(self):
+        vault = make_vault(self, {
+            "Plans/Scene.md": "x\n", "Other/Scene.md": "y\n",
+            "People/Host.md": "At [[Plans/Scene]], not [[Other/Scene]], "
+                              "nor [[Scene]], and [[Plans/Scene|the plan]].\n"})
+        p = links.plan_unlink(vault, ["Plans/Scene"], ["People/Host.md"])
+        # The bare link could be either note: it is left, and listed.
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At Scene, not [[Other/Scene]], nor [[Scene]], "
+                         "and the plan.\n")
+        self.assertEqual([(k[2], k[3]) for k in p.kept],
+                         [("[[Scene]]", links.KEPT["ambiguous"])])
+
+    def test_a_bare_link_is_turned_when_it_can_only_be_the_note_named_by_path(self):
+        vault = make_vault(self, {
+            "Plans/Scene.md": "x\n",
+            "People/Host.md": "At [[Scene]] and [[Plans/Scene]] and "
+                              "[[Elsewhere/Scene]].\n"})
+        p = links.plan_unlink(vault, ["Plans/Scene"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At Scene and Scene and [[Elsewhere/Scene]].\n")
+        # A bare name is the same one note here.
+        q = links.plan_unlink(vault, ["Scene"], ["People/Host.md"])
+        self.assertEqual(q.texts["People/Host.md"],
+                         "At Scene and Scene and [[Elsewhere/Scene]].\n")
+
+    def test_a_path_that_names_no_note_leaves_a_bare_link_to_the_note_that_is_there(self):
+        vault = make_vault(self, {
+            "Other/Scene.md": "y\n",
+            "People/Host.md": "At [[Scene]] and [[Plans/Scene]].\n"})
+        p = links.plan_unlink(vault, ["Plans/Scene"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At [[Scene]] and Scene.\n")
+
+    def test_a_bare_name_with_no_note_takes_its_links_whatever_folder_they_give(self):
+        vault = make_vault(self, {
+            "People/Host.md": "At [[Gone]] and [[Old/Gone]] and [[Old/Other]].\n"})
+        p = links.plan_unlink(vault, ["Gone"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "At Gone and Gone and [[Old/Other]].\n")
+
+    def test_a_bare_name_that_two_notes_share_is_refused(self):
+        vault = make_vault(self, {
+            "Plans/Scene.md": "x\n", "Other/Scene.md": "y\n",
+            "People/Host.md": "At [[Plans/Scene]].\n"})
+        with self.assertRaises(links.LinksError) as caught:
+            links.plan_unlink(vault, ["Scene"], ["People/Host.md"])
+        self.assertIn("give the path", str(caught.exception))
+
     def test_within_refuses_a_note_that_is_not_there(self):
         vault = make_vault(self, {"A.md": "[[B]]\n", "B.md": "x\n"})
         with self.assertRaises(links.LinksError) as cm:
