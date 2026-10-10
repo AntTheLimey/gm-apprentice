@@ -373,6 +373,13 @@ describe('ALIAS_IN_PROSE', () => {
       context: 'Everyone feared the old smuggler of the quay.',
     });
     assert.match(f.fix, /public name/);
+    assert.match(f.fix, /link the name/);
+  });
+
+  it('shows the sentence as written, a link and all', async () => {
+    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'She met [[Vesper_Hale]] and the old smuggler.') });
+    const [f] = await faults(files, {}, 'ALIAS_IN_PROSE');
+    assert.strictEqual(f.context, 'She met [[Vesper_Hale]] and the old smuggler.');
   });
 
   it('counts each page once per alias, with how many times it appears', async () => {

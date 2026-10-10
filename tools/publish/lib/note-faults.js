@@ -267,7 +267,8 @@ function findNoteFaults(input) {
       }
     }
     if (aliasRes.length > 0 && v.text) {
-      const prose = String(v.text).replace(wikilinkRe('g', true), ' ');
+      // Links blanked to the same length, so a match's position is its place in the text too.
+      const prose = String(v.text).replace(wikilinkRe('g', true), (m) => ' '.repeat(m.length));
       const lower = prose.toLowerCase();
       for (const a of aliasRes) {
         if (!lower.includes(a.lower.trim().split(/\s+/)[0])) continue;
@@ -280,8 +281,8 @@ function findNoteFaults(input) {
         findings.push({
           code: 'ALIAS_IN_PROSE', severity: 'warning', path: rel,
           detail: `"${a.alias}", a name you keep secret in gm_aliases${a.rel === rel ? '' : ` (of ${a.rel})`}, is printed in the page text${matches.length > 1 ? ` ${matches.length} times` : ''}`,
-          fix: `reword the sentence to use the public name, or move it under ## GM Notes; a link [[public name]] is rewritten for you`,
-          alias: a.alias, owner: a.rel, count: matches.length, context: clip(prose.slice(start, stop).trim(), 2 * CONTEXT + a.alias.length),
+          fix: `reword the sentence to use the public name, or link the name ([[${a.alias}]]): the build prints the page's public title for a linked GM alias`,
+          alias: a.alias, owner: a.rel, count: matches.length, context: clip(String(v.text).slice(start, stop).trim(), 2 * CONTEXT + a.alias.length),
         });
       }
     }
