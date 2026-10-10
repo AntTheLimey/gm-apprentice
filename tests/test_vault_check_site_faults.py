@@ -118,6 +118,20 @@ class SiteFaultRowsTests(unittest.TestCase):
             f'<command> --config "{site / "vault.config.json"}" '
             f'--vault "{vault.resolve()}"'), rows[0])
 
+    def test_a_vault_file_the_tool_refused_is_said_with_its_fix_not_as_a_site_that_is_off(self):
+        vault, _site = make(self, {MARA: npc("x")}, site=False)
+        # The switch reads off, and the file is not valid YAML further down.
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish:\n  site: false\n  theme: [unclosed\n---\n",
+            encoding="utf-8")
+        rows = vc.check_site_faults(vault)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            "INFO\t(vault)\tsite-faults has no site to check (the publish "
+            "tool refused"), rows)
+        self.assertIn("; fix _meta/vault-config.md", rows[0])
+        self.assertNotIn("publish.site is not on", rows[0])
+
     def test_a_row_says_which_pages_only_an_index_page_prints_from(self):
         row = vc._site_fault_row({
             "code": "NAMED_NO_PAGE", "severity": "warning",

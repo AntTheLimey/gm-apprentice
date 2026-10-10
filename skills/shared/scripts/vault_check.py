@@ -1776,8 +1776,14 @@ def check_site_faults(vault: Path, files: list[str] | None = None
     with every page that names each."""
     tool, why, fix, has_site = _lines_tool(vault)
     if not has_site:
-        return [f"INFO\t(vault)\tsite-faults has no site to check: "
-                f"{SITE_IS_OFF} in {VAULT_CONFIG}"]
+        if why == SITE_IS_OFF:
+            return [f"INFO\t(vault)\tsite-faults has no site to check: "
+                    f"{SITE_IS_OFF} in {VAULT_CONFIG}"]
+        # The switch reads off, but the publish tool could not be asked (a
+        # vault file it will not parse): say that, and what to fix.
+        todo = f"; {fix}" if fix else ""
+        return [f"INFO\t(vault)\tsite-faults has no site to check "
+                f"({why}){todo}"]
     if tool is None:
         return [f"ERROR\t(vault)\tsite-faults could not ask the publish tool "
                 f"({why}) — nothing checked; {fix}"]
