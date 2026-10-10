@@ -13,7 +13,7 @@ being open.
 | Ranked/prose search | `vault_search.py` |
 | Backlinks, orphans, ambiguous links, dead ends | `graph_check.py` |
 | Rename or move a note, rewriting every link to it (dry run first; `--apply` to do it) | `relink.py VAULT OLD NEW` |
-| Broken links by kind, with the note each may mean; point a misspelt link at the right note, or turn a link into plain words (dry run first; `--write`) | `links.py VAULT`, `links.py VAULT retarget NAME NOTE`, `links.py VAULT unlink NAME...` |
+| Broken links by kind, with the note each may mean; point a misspelt link at the right note, or turn a link into plain words, vault-wide or only on named pages (dry run first; `--write`) | `links.py VAULT`, `links.py VAULT retarget NAME NOTE`, `links.py VAULT unlink NAME... [--in NOTE]` |
 | Place text you wrote: start a Wrap-Up, add its sections, story entries, log lines, timeline lines (dry run first; `--write`) | `vault_write.py` |
 | Entity schema validation, name similarity, index drift, stale drafts, changed-since listing | `vault_check.py` |
 | Vault/plugin version gate | `vault_check.py version` |
@@ -21,6 +21,7 @@ being open.
 | Publish-safety scan (unfenced Keeper content, fence balance; + `--fix` re-nest) | `vault_check.py gm-leak` |
 | PC body skeleton / Current Status placement / missing or unfilled Stat Sheet | `vault_check.py pc-body` |
 | Wrap-Up conformance (+ `--fix` re-nest) | `vault_check.py wrapup` |
+| Faults in the notes that change what the site shows (a named note with no page, a stray `%%`, an unclosed fence, a secret name in prose) | `vault_check.py site-faults` |
 | Active PC roster | `vault_check.py active-pcs` |
 | Session-prep context bundle (one call) | `session_context.py` |
 | At-table plan brief | `session_context.py --play` |
@@ -36,7 +37,7 @@ being open.
 | Ingest image filing | `ingest_images.py` |
 | Player-safe PC sheet view | `gm-publish sheet show --player-safe` |
 | Site rebuild (repoint, manifest, deploy+verify) | `gm-publish update-pin` / `manifest diff` / `deploy --verify` |
-| Site audit / why didn't this page publish | `gm-publish doctor --site` / `explain PATH` |
+| Site audit / why didn't this page publish / what a reader gets of it | `gm-publish doctor --site` / `explain PATH` / `explain PATH --shown` |
 
 Use Grep when you know the term. Never hand-build a link map with
 Grep — `graph_check.py` does it in one pass.

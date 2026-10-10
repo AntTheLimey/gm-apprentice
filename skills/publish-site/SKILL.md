@@ -144,7 +144,9 @@ Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`
 first; for one missing page, `node "$TOOL" explain "<vault-relative
 path>"`. Then use `references/troubleshooting.md`: name the failure
 mode, explain the cause plainly, guide the fix step by step, and
-offer to apply it.
+offer to apply it. A build warning that ends "campaign-qa's Site
+Faults check fixes these" is a fault in the notes: hand it to
+campaign-qa.
 
 ### 4. Schema migrations
 ("I added a new entity type", "campaign-organizer was updated",

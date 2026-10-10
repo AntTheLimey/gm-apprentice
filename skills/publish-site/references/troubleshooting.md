@@ -15,6 +15,12 @@ explain "<vault-relative path>"` prints the exact chain the build walked
 and its verdict. The failure modes below name which finding code each
 one is and give the deeper why.
 
+Four of its codes are faults in the notes, not in the build:
+`NAMED_NO_PAGE`, `COMMENT_STRAY`, `FENCE_UNCLOSED` and `ALIAS_IN_PROSE`.
+The build prints one closing warning for each, ending "campaign-qa's
+Site Faults check fixes these". Hand those to campaign-qa
+(`campaign-qa/references/checks/site-faults.md`); do not fix them here.
+
 ---
 
 ## Failure 1: "Portraits not showing"
@@ -196,8 +202,14 @@ frontmatter exactly, the link will not resolve.
 
 Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
 `LINK_UNRESOLVED` row names the page and the `[[target]]` that matches no
-published page — its fix line already suggests the nearest real page
+note — its fix line already suggests the nearest real page
 name when one is close enough to be the likely typo.
+
+A link to a note that exists but has no page is not a broken link and
+is not listed here. The site prints its name as plain words, and the
+audit lists the note once as `NAMED_NO_PAGE`, with the pages that name
+it. campaign-qa's Site Faults check gives the note a page with its
+secrets hidden, or records that it stays hidden.
 
 ### Fix
 
