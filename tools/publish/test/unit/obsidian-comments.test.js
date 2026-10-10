@@ -76,6 +76,15 @@ describe('%% comments (Obsidian), #305', () => {
     // An indented line that continues a paragraph is no code: its comment is cut.
     assert.strictEqual(safe('para\n    lazy %%gone%% line').text, 'para\n    lazy  line');
   });
+  it('a comment-only line between a paragraph and a --- line does not turn the paragraph into a heading', () => {
+    assert.strictEqual(safe('text\n%%c%%\n---\nafter').text, 'text\n\n---\nafter');
+    assert.strictEqual(safe('text\n<!-- c -->\n---\nafter').text, 'text\n\n---\nafter');
+    assert.strictEqual(safe('text\n%%\nc\n%%\n===').text, 'text\n\n===');
+    // Nothing to keep apart: no paragraph above, or the underline is not one.
+    assert.strictEqual(safe('%%c%%\n---').text, '---');
+    assert.strictEqual(safe('text\n\n%%c%%\n---').text, 'text\n\n---');
+    assert.strictEqual(safe('text\n%%c%%\nmore').text, 'text\nmore');
+  });
   it('a comment still closes on a line the markdown parser would call code', () => {
     assert.strictEqual(safe('a\n%%\n```\n%%\nb').text, 'a\nb');
   });

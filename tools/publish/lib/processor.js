@@ -586,6 +586,14 @@ function stripMarkedBlocks(markdown, markerName) {
   return warnings.length > 0 ? { text, warnings } : text;
 }
 
+// A comment cut whole must not change what the lines around it mean: with the comment line
+// gone, a paragraph line above and a `---` / `===` line below would join into a Setext
+// heading. A blank line keeps them apart.
+function setextRisk(kept, stillInComment, next) {
+  return !stillInComment && kept.length > 0 && kept[kept.length - 1].trim() !== ''
+    && typeof next === 'string' && /^ {0,3}(-+|=+)\s*$/.test(next);
+}
+
 // The strip as lines, and `from`: the line of `markdown` each of them came from.
 function markedBlocks(markdown, markerName) {
   // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
@@ -804,7 +812,10 @@ function htmlComments(markdown) {
       }
     }
 
-    if (kept.trim() === '' && line.trim() !== '') continue;
+    if (kept.trim() === '' && line.trim() !== '') {
+      if (setextRisk(result, inComment, lines[n + 1])) { result.push(''); from.push(n); }
+      continue;
+    }
     result.push(kept);
     from.push(n);
   }
@@ -883,7 +894,10 @@ function obsidianComments(markdown) {
     }
 
     // A line that was only comment goes whole; one with text around a comment keeps it.
-    if (kept.trim() === '' && (line.trim() !== '' || startedInComment)) continue;
+    if (kept.trim() === '' && (line.trim() !== '' || startedInComment)) {
+      if (setextRisk(result, inComment, lines[n + 1])) { result.push(''); from.push(n); }
+      continue;
+    }
     result.push(kept);
     from.push(n);
   }
