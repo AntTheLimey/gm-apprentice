@@ -12,12 +12,16 @@
 // in Miskatonic_Library.md" is only half an answer.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport, buildLinkMap, scanAttachments, pairStoryFiles, slugify } = require('./scanner');
+const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
-const { parseWikiRef, portraitBasename, playerSafeMarkdown } = require('./processor');
+const {
+  parseWikiRef, portraitBasename, playerSafeMarkdown, publishMode, keepOnlySections, publishedFrontmatter, pcHeadingsUnstable,
+} = require('./processor');
+const { findNoteFaults } = require('./note-faults');
+const { getsNoPage } = require('./previews');
 const { pairHubs } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe } = require('./wikilink');
@@ -25,6 +29,9 @@ const { pinnedVersionOf } = require('./update-pin');
 
 const UNTYPED_ROW_CAP = 20;
 const LINK_ROW_CAP = 30;
+// The note-fault codes list this many rows in the human report; --json has them all.
+const FAULT_ROW_CAP = 20;
+const FAULT_CODES = new Set(['ALIAS_IN_PROSE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE']);
 const NEAREST_LIMIT = 3;
 const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
@@ -32,6 +39,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 const CODE_ORDER = [
   'CONFIG_INVALID', 'VAULT_MISSING', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
+  'ALIAS_IN_PROSE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE',
 ];
 
 // Sørensen–Dice over character bigrams: enough to tell "Dr_Armitag" from
@@ -83,33 +91,38 @@ function plural(n, word) {
 }
 
 function emit(out, findings, vaultLabel, asJson) {
-  const errors = findings.filter((f) => f.severity === 'error').length;
-  const warnings = findings.length - errors;
+  // A note a manifest reason marks "stays hidden:" is settled: whole in --json, left out of
+  // the report and the counts.
+  const open = findings.filter((f) => !f.settled);
+  const errors = open.filter((f) => f.severity === 'error').length;
+  const warnings = open.length - errors;
   if (asJson) {
     out(JSON.stringify({
       ok: errors === 0,
       findings,
-      counts: { errors, warnings, total: findings.length },
+      counts: { errors, warnings, total: open.length, settled: findings.length - open.length },
     }, null, 2));
     return errors === 0 ? 0 : 1;
   }
 
   out(`Site audit (${vaultLabel}) — ${plural(errors, 'error')}, ${plural(warnings, 'warning')}`);
-  if (findings.length === 0) {
+  if (open.length === 0) {
     out('No findings.');
     return 0;
   }
-  const codes = [...new Set(findings.map((f) => f.code))]
+  const codes = [...new Set(open.map((f) => f.code))]
     .sort((a, b) => CODE_ORDER.indexOf(a) - CODE_ORDER.indexOf(b));
   for (const code of codes) {
-    const rows = findings.filter((f) => f.code === code);
+    const rows = open.filter((f) => f.code === code);
     const severity = rows[0].severity;
     out('');
     out(`${code} (${plural(rows.length, severity)})`);
-    for (const row of rows) {
+    const shown = FAULT_CODES.has(code) ? rows.slice(0, FAULT_ROW_CAP) : rows;
+    for (const row of shown) {
       out(`  ${row.path} — ${row.detail}`);
       out(`      → ${row.fix}`);
     }
+    if (shown.length < rows.length) out(`  +${rows.length - shown.length} more — run with --json for the whole list`);
   }
   return errors === 0 ? 0 : 1;
 }
@@ -170,13 +183,49 @@ async function runSiteDoctor(options, deps) {
   // an orphan — the build folds its content into the PC page.
   const corpus = pages.slice();
   pairStoryFiles(pages, vaultPath);
-  const published = pages.filter((page) => publishesPage(
-    decidePage(page, { rel: relOf(page), publishConfig, manifest })));
+  const verdicts = new Map(pages.map((page) => [page, decidePage(page, { rel: relOf(page), publishConfig, manifest })]));
+  // A note the build writes no page for (a world-flags file) is not in its link map either.
+  const published = pages.filter((page) => publishesPage(verdicts.get(page)) && !getsNoPage(page));
   const linkMap = buildLinkMap(published);
   const linkNames = Object.keys(linkMap);
   // Which session index bodies the site withholds, paired as the build pairs (GM
   // aliases rewritten first; session-hub.js pairHubs).
-  const hubPairs = pairHubs(corpus, published, { vaultPath });
+  const allNotes = scanAllNotes(vaultPath);
+  const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes });
+
+  // What a reader gets of a page: the build's own cuts in the build's order (a session index
+  // whose Wrap-Up is published has no body, a stub keeps only the sections it names), then
+  // the page's strip chain. Run once per page; the dead-link check and the note-fault
+  // detectors both read it.
+  const excludeFields = publishConfig.exclude_fields;
+  const fieldOverrides = (publishConfig.overrides && publishConfig.overrides.fields) || {};
+  const pcKeepSections = pcKeepList(publishConfig);
+  const views = new Map();
+  const viewOf = (page) => {
+    if (views.has(page)) return views.get(page);
+    let source = hubPairs.has(page) ? '' : (page.markdown || '');
+    if (publishMode(page.frontmatter) === 'stub') {
+      const include = Array.isArray(page.frontmatter.publish_include_sections) ? page.frontmatter.publish_include_sections : [];
+      source = keepOnlySections(source, include, {
+        excludeSections: publishConfig.exclude_sections, excludeCallouts: publishConfig.exclude_callouts,
+        frontmatter: page.frontmatter, warn: () => {},
+      });
+    }
+    const safe = playerSafeMarkdown(source, {
+      excludeCallouts: publishConfig.exclude_callouts,
+      excludeSections: publishConfig.exclude_sections,
+      pcKeepSections,
+      frontmatter: page.frontmatter,
+    });
+    const unstable = pcKeepSections && pcHeadingsUnstable(page, linkMap, publishConfig.exclude_sections, attachments,
+      { excludeCallouts: publishConfig.exclude_callouts, pcKeepSections });
+    const view = {
+      source, text: unstable ? '' : safe.text, strays: safe.strays, openFence: safe.openFence,
+      frontmatter: publishedFrontmatter(page.frontmatter, excludeFields, fieldOverrides[relOf(page)] || {}),
+    };
+    views.set(page, view);
+    return view;
+  };
 
   const findings = [];
 
@@ -266,6 +315,14 @@ async function runSiteDoctor(options, deps) {
     ));
   }
 
+  // --- faults in the notes themselves ---------------------------------------
+  // Found first: a link to a note that exists but has no page is NAMED_NO_PAGE's, so the
+  // dead-link check below leaves it out rather than say it twice.
+  const noteFaults = findNoteFaults({
+    vaultPath, notes: allNotes, corpus, verdicts, report, published, linkMap, publishConfig, manifest,
+    relOf, getsNoPage, view: viewOf, readFile,
+  });
+
   // --- what the published pages point at ----------------------------------
   const linkRows = [];
   for (const page of published) {
@@ -283,17 +340,12 @@ async function runSiteDoctor(options, deps) {
     // Only the body a reader will actually get: a dead link inside a GM Notes
     // section is not on the site and is not the GM's problem today. Nor is anything
     // in a session index's body once the site withholds it (#276).
-    const body = hubPairs.has(page) ? '' : playerSafeMarkdown(page.markdown || '', {
-      excludeCallouts: publishConfig.exclude_callouts,
-      excludeSections: publishConfig.exclude_sections,
-      pcKeepSections: pcKeepList(publishConfig),
-      frontmatter: page.frontmatter,
-    }).text;
+    const body = viewOf(page).text;
     const seen = new Set();
     for (const match of body.matchAll(wikilinkRe('g', true))) {
       const { target } = parseWikiRef(match[1]);
       const key = canonicalNfc(target);
-      if (!target || seen.has(key) || key in linkMap) continue;
+      if (!target || seen.has(key) || key in linkMap || noteFaults.namedTargets.has(key)) continue;
       seen.add(key);
       const near = nearestNames(target, linkNames);
       linkRows.push(finding(
@@ -363,6 +415,8 @@ async function runSiteDoctor(options, deps) {
       }
     }
   }
+
+  findings.push(...noteFaults);
 
   return emit(out, findings, vaultPath, asJson);
 }

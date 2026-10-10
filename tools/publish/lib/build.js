@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pcLiveKey } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -13,6 +13,7 @@ const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
+const { findNoteFaults, summaryLines } = require('./note-faults');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -495,7 +496,8 @@ function build(options = {}) {
   // pairHubs does that rewrite (in place, `apply`) and then pairs each session index with
   // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
   // take too, so all three pair on the same frontmatter (#276).
-  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true });
+  const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
+  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
@@ -593,8 +595,14 @@ function build(options = {}) {
     page.headingsUnstable = pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections });
     if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
+  // What the strip chain reports as it runs (a stray %%, an unclosed fence), kept for the
+  // note-faults audit at the end: the chain is not run a second time for it.
+  const stripFacts = new Map();
   for (const page of pages) {
-    const text = strippedLines(String(page.markdown || ''), excludeCallouts).lines.join('\n');
+    const source = String(page.markdown || '');
+    const stripped = strippedLines(source, excludeCallouts);
+    stripFacts.set(page, { source, strays: stripped.strays, openFence: stripped.openFence });
+    const text = stripped.lines.join('\n');
     page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, page.sourceFrontmatter || page.frontmatter,
       { pcKeepSections });   // its warnings are the page render's to print, once
   }
@@ -1402,6 +1410,16 @@ function build(options = {}) {
     const more = n > shown.length ? `, and ${n - shown.length} more` : '';
     console.warn(`  WARNING: the build skipped ${n} note${n === 1 ? '' : 's'} whose frontmatter is not valid YAML: ${shown.join('; ')}${more} — a skipped note has no page on the site, and a skipped story file (…_Story.md) is missing from its PC's page. Fix the frontmatter and rebuild. \`vault_check.py <vault> frontmatter\` lists each file.`);
   }
+
+  // Faults in the notes themselves: one line per code, after every other warning, and
+  // nothing for a vault with none. The same detectors `doctor --site` lists in full.
+  const noteFaults = findNoteFaults({
+    vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
+    publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
+    view: (page) => ({ ...stripFacts.get(page), text: page.publishedMarkdown, frontmatter: page.frontmatter }),
+  });
+  if (options.onNoteFaults) options.onNoteFaults(noteFaults);
+  for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
   // Settings that still live in the site file. One line, so it is the thing the GM reads.
   for (const line of legacyWarning(publishConfig.legacy, rawConfig)) console.warn(`  ${line}`);

@@ -863,10 +863,12 @@ function obsidianComments(markdown) {
   // Every opener, for the note-faults audit: where it sat, whether it closed, and whether it
   // was glued to the word before it ("100%% done").
   const openers = [];
+  const hiddenLines = new Set();   // lines that began inside a comment: cut, so not "published as code"
 
   for (let n = 0; n < lines.length; n++) {
     const line = lines[n];
     const startedInComment = inComment;
+    if (startedInComment) hiddenLines.add(n);
     // A comment already open runs on through "code" until its closing %%.
     if (!inComment && inFence.has(n)) {
       result.push(line);
@@ -925,16 +927,17 @@ function obsidianComments(markdown) {
   }
   const strays = openers.filter(o => !o.closed || o.glued)
     .map(o => ({ line: o.line, kind: o.closed ? 'GLUED' : 'UNCLOSED' }));
-  return { text: result.join('\n'), warnings, lines: result, from, strays, fence: hiddenBelowFence(lines, openFence) };
+  return { text: result.join('\n'), warnings, lines: result, from, strays, fence: hiddenBelowFence(lines, openFence, hiddenLines) };
 }
 
 // A top-level code fence that is never closed turns everything below it into code, and the
 // strips read code as literal: a marker down there is published instead of obeyed. The fence
 // line and the first marker below it, or null when nothing hidden lies below (or the fence closes).
 const HIDDEN_MARKER_RE = /%%|<!--\s*\/?\s*(gm-only|spoiler)\s*-->|<!--/;
-function hiddenBelowFence(lines, openFence) {
+function hiddenBelowFence(lines, openFence, hiddenLines) {
   if (openFence === null || openFence === undefined) return null;
   for (let l = openFence + 1; l < lines.length; l++) {
+    if (hiddenLines.has(l)) continue;
     const m = HIDDEN_MARKER_RE.exec(lines[l]);
     if (m) return { line: openFence, marker: m[1] || (m[0] === '%%' ? '%%' : '<!--'), markerLine: l };
   }
@@ -1587,4 +1590,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
