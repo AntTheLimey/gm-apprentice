@@ -1161,6 +1161,23 @@ def withheld_by(lines: list[str], exclude_sections: Iterable[str]
     return [v if isinstance(v, str) else None for v in verdicts]
 
 
+def cut_lines(lines: list[str]) -> list[str | None]:
+    """For each line, what the publish tool's strip chain leaves of it
+    (gm-only and spoiler blocks, HTML and `%%` comments), or None when
+    the chain removes the line. `PublishToolUnavailable` when it cannot
+    be asked, or answers without the `cut` op (a tool older than the one
+    that added it)."""
+    if not lines:
+        return []
+    answer = PUBLISH_LINES.ask({"op": "cut", "text": "\n".join(lines)})
+    cut = answer.get("cut")
+    if (not isinstance(cut, list) or len(cut) != len(lines)
+            or not all(c is None or isinstance(c, str) for c in cut)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer does not match the note's lines")
+    return cut
+
+
 def stub_kept(lines: list[str], include: Iterable[Any]) -> list[bool]:
     """For each line, whether a `publish: stub` page with these
     `publish_include_sections` keeps it. The publish tool's own answer."""
@@ -1415,7 +1432,8 @@ def strip_comment_spans(line: str, in_comment: bool) -> tuple[str, bool]:
     """One line with its HTML comment spans removed, as `stripHtmlComments`
     leaves it: (kept text, whether a comment is still open at line end).
     For a check that needs line numbers and reads comments as the
-    publisher does."""
+    publisher does. HTML comments only: `%%` comments are the publish tool's
+    to read (`cut_lines`); this is for a vault with no site to ask."""
     kept, i = "", 0
     while i < len(line):
         if in_comment:

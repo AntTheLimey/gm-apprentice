@@ -684,6 +684,15 @@ class SessionsCommandTests(unittest.TestCase):
         self.assertFalse(rows_for(vc.check_sessions(vault),
                                   "session index body"))
 
+    def test_percent_comments_in_a_hub_are_not_prose(self):
+        # The publish tool's strip chain reads `%%` comments; the Python
+        # copy of the HTML comment strip does not, so the tool is asked.
+        vault = self.hub_vault(
+            "%% Metadata only. %%\n\n%%\nkey prep, a note to self\n%%\n"
+            "<!-- gm-only -->\n## GM Notes\n\n- Key prep\n<!-- /gm-only -->\n")
+        self.assertFalse(rows_for(vc.check_sessions(vault),
+                                  "session index body"))
+
     def test_hub_the_site_does_not_withhold_is_not_flagged(self):
         # The publish tool decides (#276): no Wrap-Up it pairs and
         # publishes, no row — the body is the session's published record.

@@ -186,6 +186,7 @@ from vaultlib import (  # noqa: F401
     site_unasked,
     vault_site,
     strip_comment_spans,
+    cut_lines,
     read_publish_list,
     read_publish_scalar,
     resolve_exclude_sections,
@@ -1111,22 +1112,32 @@ def _hub_body_rows(rel: str, text: str) -> list[str]:
     withholds the hub body, so nothing leaks. It is still bookkeeping in
     the wrong document — the skills that need it read the Plan and the
     Wrap-Up, not the hub — so the row names where each kind belongs.
-    Comments are read as the publisher reads them (`strip_comment_spans`),
-    so the template's own comment line is not prose. The caller gates on
+    Comments are read as the publisher reads them (`cut_lines`, the tool's own
+    strip chain; `strip_comment_spans` when it cannot be asked), so the
+    template's own comment line is not prose. The caller gates on
     the Wrap-Up: without one the body is the session's only published
     record, and prose there is expected.
     """
     states, _problems = scan_body(text, ())
     loose: list[LineState] = []
+    # The tool's strip chain knows `%%` comments; HTML comments alone are read
+    # here when it cannot be asked (a site pinned to a tool without `cut`).
+    try:
+        cut = cut_lines([s.line for s in states])
+    except PublishToolUnavailable:
+        cut = None
     in_comment = False
-    for s in states:
+    for i, s in enumerate(states):
         if s.gm_depth or s.spoiler_depth or s.marker is not None:
             continue
         if s.in_code:
             if s.line.strip():
                 loose.append(s)
             continue
-        kept, in_comment = strip_comment_spans(s.line, in_comment)
+        if cut is not None:
+            kept = cut[i] or ""
+        else:
+            kept, in_comment = strip_comment_spans(s.line, in_comment)
         if kept.strip() and not (s.heading is not None and s.heading[0] == 1):
             loose.append(s)
     if not loose:
