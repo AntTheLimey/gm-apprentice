@@ -291,19 +291,23 @@ function startNoteAudit(input) {
   // them), are somewhere in its HTML. Most links to a note with no page sit in a hidden part
   // or in a field the page does not print; such a page needs no second render to say so.
   function mayPrint(marked, html) {
-    const lower = String(html).toLowerCase();
-    const tried = new Set();
-    for (const m of marked.marks) {
-      const words = m.words.toLowerCase();
-      if (tried.has(words)) continue;
-      tried.add(words);
-      const runs = words.match(/[\p{L}\p{N}]+/gu);
-      if (!runs) return true;
-      // The longest word first, as plain text: most pages are settled by it alone.
-      if (!lower.includes(runs.slice().sort((x, y) => y.length - x.length)[0])) continue;
-      if (runs.length === 1 || new RegExp(runs.map(esc).join('[^\\p{L}\\p{N}]{0,12}'), 'u').test(lower)) return true;
+    if (marked.probe === undefined) {
+      // Each marked name as its words (letters and digits), longest word first.
+      const names = new Map();
+      for (const m of marked.marks) {
+        const words = m.words.toLowerCase();
+        if (!names.has(words)) names.set(words, words.match(/[\p{L}\p{N}]+/gu) || []);
+      }
+      marked.names = [...names.values()];
+      const longest = marked.names.map((runs) => runs.slice().sort((x, y) => y.length - x.length)[0]);
+      // One pass over the raw HTML settles most pages: the longest word of any of the names.
+      marked.probe = longest.some((w) => !w) ? null : new RegExp([...new Set(longest)].map(esc).join('|'), 'i');
     }
-    return false;
+    if (marked.probe && !marked.probe.test(html)) return false;
+    const lower = String(html).toLowerCase();
+    return marked.names.some((runs) => runs.length === 0
+      || (runs.length === 1 ? lower.includes(runs[0])
+        : new RegExp(runs.map(esc).join('[^\\p{L}\\p{N}]{0,12}'), 'u').test(lower)));
   }
 
   function printed(page, marked, html, storyHtml) {

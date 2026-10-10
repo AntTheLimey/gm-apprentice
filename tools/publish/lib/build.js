@@ -940,7 +940,9 @@ function buildSite(options) {
         const sections = extractSections(filtered);
 
         let storyHtml;
-        if (page.storyMarkdown) {
+        // The page links to the story's own page (storyHref below) and prints none of it;
+        // rendering it here registers the images it uses. The audit's second render needs neither.
+        if (page.storyMarkdown && fx === liveFx) {
           const storyPage = {
             markdown: page.storyMarkdown,
             frontmatter: {},
