@@ -26,7 +26,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null });
+  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -218,4 +218,21 @@ test('refuses a dndbeyond_sync value that is not build or manual, and writes not
     assert.deepEqual(err, [`Error: ${json} is not a value dndbeyond_sync takes`], json);
     assert.equal(config(s), before, json);
   }
+});
+
+test('sets link_previews to on, desktop or off and reports it back', () => {
+  const s = scratch('  mode: player\n');
+  assert.equal(run(s, []).data.linkPreviews, null);
+  assert.deepEqual(run(s, ['link_previews="desktop"']).data, { written: ['link_previews'] });
+  assert.match(config(s), /^ {2}link_previews: desktop$/m);
+  assert.equal(run(s, []).data.linkPreviews, 'desktop');
+});
+
+test('refuses a link_previews value that is not on, desktop or off, and writes nothing', () => {
+  const s = scratch('  mode: player\n');
+  const before = config(s);
+  const { rc, err } = run(s, ['link_previews="phone"']);
+  assert.equal(rc, 1);
+  assert.deepEqual(err, ['Error: "phone" is not a value link_previews takes']);
+  assert.equal(config(s), before);
 });

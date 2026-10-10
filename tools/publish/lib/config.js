@@ -115,6 +115,18 @@ function publishModeFrom(raw, warn = console.warn) {
   return 'player';
 }
 
+// `link_previews` is `on`, `desktop` or `off`. YAML reads a bare `on` or `off` as true or
+// false, so those count too. Left out is on; anything else is on, and said.
+function linkPreviewsFrom(raw, warn = console.warn) {
+  if (raw === undefined) return 'on';
+  if (raw === true) return 'on';
+  if (raw === false) return 'off';
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
+  if (value === 'on' || value === 'desktop' || value === 'off') return value;
+  warn(`config: publish.link_previews ${JSON.stringify(raw)} is not on, desktop or off; using on`);
+  return 'on';
+}
+
 function defaultModeFrom(raw, warn = console.warn) {
   const mode = normalizeDefaultMode(raw);
   if (raw != null && String(raw).trim().toLowerCase() !== mode) {
@@ -411,6 +423,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
 
   const merged = {
     mode: publishModeFrom(publish.mode, warn),
+    link_previews: linkPreviewsFrom(publish.link_previews, warn),
     site_title: picked.site_title ?? null,
     footer: picked.footer ?? null,
     search: searchFrom(picked.search, publish.search !== undefined ? 'publish.search' : 'vault.config.json searchEnabled', warn),
