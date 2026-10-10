@@ -1,4 +1,5 @@
-const { relativePath, escapeHtml, encodeImageUrl } = require('../processor');
+const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue } = require('../processor');
+const { typeLabelText } = require('../kind-label');
 
 const DIR_LABELS = {
   'campaign': 'Campaign',
@@ -171,6 +172,14 @@ const TYPE_BADGE_FIELDS = {
 // The seeded Document template writes `doc_type` and `date` (entity-schema.md).
 const FIELD_FALLBACKS = { in_game_date: 'date', play_date: 'actual_date', document_type: 'doc_type', date_written: 'date' };
 
+// A header value as the reader sees it: a wikilink as its label, a Date as the date written,
+// a snake_case type label as words. The one definition for every badge the page headers
+// print and for the matching facts on the link preview cards.
+function headerValueText(field, raw) {
+  const text = plainMetaValue(raw).trim();
+  return /(?:^|_)type$/.test(String(field)) ? typeLabelText(text) : text;
+}
+
 function metadataBadgesFor(frontmatter) {
   const fields = TYPE_BADGE_FIELDS[frontmatter.type];
   if (!fields) return '';
@@ -182,8 +191,7 @@ function metadataBadgesFor(frontmatter) {
       raw = frontmatter[FIELD_FALLBACKS[field]];
     }
     if (raw === undefined || raw === null || raw === '') continue;
-    // Strip wiki-link brackets if present
-    const value = String(raw).replace(/\[\[|\]\]/g, '').trim();
+    const value = headerValueText(field, raw);
     if (!value) continue;
     badges.push(`<span class="metadata-badge">${escapeHtml(value)}</span>`);
   }
@@ -231,6 +239,7 @@ module.exports = {
   getCanonStatus,
   canonStatusBadge,
   TYPE_BADGE_FIELDS,
+  headerValueText,
   metadataBadgesFor,
   portraitImg,
   configureColorMode,

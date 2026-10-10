@@ -8,8 +8,21 @@ function renderMarkdown(markdown) {
   return md.render(markdown);
 }
 
+// A frontmatter Date (an unquoted `2026-07-02`) as the date the GM wrote: YAML reads it as
+// UTC midnight, so its UTC day is the written one (String() would print a long machine
+// string a day early in a western timezone).
+function dateText(date) {
+  return isNaN(date) ? '' : date.toISOString().slice(0, 10);
+}
+
+// What a header prints for a frontmatter value.
+function valueText(value) {
+  if (value instanceof Date) return dateText(value);
+  return String(value == null ? '' : value);
+}
+
 function escapeHtml(str) {
-  return String(str || '')
+  return (str instanceof Date ? dateText(str) : String(str || ''))
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -901,7 +914,7 @@ function resolveImageEmbeds(markdown, imageMap, currentOutputPath, usedImages, o
 // Render a frontmatter-derived display value (summary, occupation, …) as HTML, resolving
 // any `[[wikilink]]` it carries the way body prose does. Everything else is escaped.
 function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
-  const text = String(raw == null ? '' : raw);
+  const text = valueText(raw);
   const out = [];
   const pattern = wikilinkRe();
   let last = 0;
@@ -922,8 +935,35 @@ function renderMetaValue(raw, linkMap = {}, currentOutputPath = '') {
 // Plain-text form of the above, for values rendered inside an enclosing <a> (card
 // subtitles, landing tiles) where a nested anchor would be invalid HTML.
 function plainMetaValue(raw) {
-  return String(raw == null ? '' : raw)
+  return valueText(raw)
     .replace(wikilinkRe(), (m) => parseWikiRef(m).label);
+}
+
+// A header value that names a page (an item's holder, a faction's leader, an event's place):
+// either a bare name or one wikilink spanning the whole value (a reference), or running
+// text with wikilinks inside it. A reference links to its page when the site has one;
+// running text shows each link as its label. The text a reader sees is plainRefValue.
+function wholeReference(text) {
+  if (!text.includes('[[')) return true;
+  const m = wikilinkRe('').exec(text);
+  return Boolean(m) && m.index === 0 && m[0].length === text.length;
+}
+
+function plainRefValue(raw) {
+  const text = valueText(raw).trim();
+  if (!text) return '';
+  return wholeReference(text) ? parseWikiRef(text).label : plainMetaValue(text);
+}
+
+function refMetaValue(raw, linkMap = {}, currentOutputPath = '') {
+  const text = valueText(raw).trim();
+  if (!text) return '';
+  if (!wholeReference(text)) return renderMetaValue(text, linkMap, currentOutputPath);
+  const { target, label } = parseWikiRef(text);
+  const targetPath = (linkMap || {})[target];
+  return targetPath
+    ? `<a href="${encodeHref(relativeHref(currentOutputPath, targetPath))}">${escapeHtml(label)}</a>`
+    : escapeHtml(label);
 }
 
 function separateBoldLabelLines(markdown) {
@@ -1381,4 +1421,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, refMetaValue, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

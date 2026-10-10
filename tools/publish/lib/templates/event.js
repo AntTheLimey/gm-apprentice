@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
-const { escapeHtml, relativePath, humanizeName, wikiTargetLabel, encodeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
+const { escapeHtml, relativePath, wikiTargetLabel, encodeHref, renderMetaValue, refMetaValue } = require('../processor');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { WIKILINK_SOURCE, parseWikilink } = require('../wikilink');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -32,7 +32,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
 
   const badges = [];
-  if (fm.event_type) badges.push(fm.event_type);
+  if (fm.event_type) badges.push(headerValueText('event_type', fm.event_type));
 
   const badgeHtml = badges.length > 0
     ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
@@ -41,23 +41,10 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
   const metaItems = [];
   const dateVal = fm.in_game_date || fm.date;
   if (dateVal) {
-    metaItems.push(`<span><span class="label">Date</span> ${escapeHtml(dateVal)}</span>`);
+    metaItems.push(`<span><span class="label">Date</span> ${escapeHtml(headerValueText('date', dateVal))}</span>`);
   }
   if (fm.location) {
-    const locRaw = String(fm.location).trim();
-    const locMatch = locRaw.match(new RegExp('^' + WIKILINK_SOURCE + '$'));
-    const locLink = locMatch ? parseWikilink(locMatch[1]) : null;
-    const locTarget = locLink ? locLink.raw.trim() : locRaw.replace(/\[\[|\]\]/g, '').trim();
-    // Humanize the slug unless an explicit |alias was given (Sealed_Anatomical_Theatre → …).
-    const locDisplay = locLink && locLink.display.trim() ? locLink.display.trim()
-      : (locMatch ? wikiTargetLabel(locTarget) : humanizeName(locTarget));
-    const locPath = linkMap?.[locTarget];
-    if (locPath) {
-      const href = encodeHref(relativePath(currentDir, locPath));
-      metaItems.push(`<span><span class="label">Location</span> <a href="${href}">${escapeHtml(locDisplay)}</a></span>`);
-    } else {
-      metaItems.push(`<span><span class="label">Location</span> ${escapeHtml(locDisplay)}</span>`);
-    }
+    metaItems.push(`<span><span class="label">Location</span> ${refMetaValue(fm.location, linkMap, page.outputPath)}</span>`);
   }
 
   const metaHtml = metaItems.length > 0
@@ -73,7 +60,7 @@ function eventTemplate(page, processedContent, navFor, config, imageMap, linkMap
 
   let outcomeHtml = '';
   if (fm.outcome) {
-    outcomeHtml = `<div class="event-outcome"><strong>Outcome:</strong> ${escapeHtml(fm.outcome)}</div>`;
+    outcomeHtml = `<div class="event-outcome"><strong>Outcome:</strong> ${renderMetaValue(fm.outcome, linkMap, page.outputPath)}</div>`;
   }
 
   let participantsHtml = '';

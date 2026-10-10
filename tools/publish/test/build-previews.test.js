@@ -136,23 +136,24 @@ test('every card string occurs in its own built page, on every fixture vault tha
   assert.ok(checked > 60, `checked ${checked} cards`);
 
   // The known looser passes. A new one is a card drifting from its page: it fails here,
-  // naming the page and the card string.
-  const KNOWN_FACTS = [
-    // The page prints the raw wikilink target, "Leadership: The_Pallid_Mask".
-    'redesign-full/factions/cult-of-the-yellow-sign.html|Led by',
-    // The page prints the date as a long Date string ("Fri Jul 31 2026 ..."), with a timezone shift.
-    'with-landing-config/sessions/session-01.html|Played',
-  ];
-  // Excerpts whose two sentences both occur on the page but not next to each other (the page
-  // shows the first as a pull-quote or lede, the second further down). Expected count today.
-  const KNOWN_EXCERPT_COUNT = 10;
-  const facts = looseSeen.filter((l) => l.label !== 'excerpt');
+  // naming the page and the card string. Nothing but an excerpt may pass loosely.
   const excerpts = looseSeen.filter((l) => l.label === 'excerpt');
-  const unknownFacts = facts.filter((l) => !KNOWN_FACTS.includes(`${l.page}|${l.label}`))
-    .map((l) => `${l.page}: ${l.label}=${JSON.stringify(l.value)}`);
-  assert.deepStrictEqual(unknownFacts, [], 'a card fact passed only by the word rule');
-  assert.strictEqual(facts.length, KNOWN_FACTS.length, 'a known fact no longer needs the word rule; drop it from KNOWN_FACTS');
-  assert.strictEqual(excerpts.length, KNOWN_EXCERPT_COUNT,
+  assert.deepStrictEqual(looseSeen.filter((l) => l.label !== 'excerpt'), [], 'a card fact passed loosely');
+  // Excerpts whose two sentences both occur on the page but not next to each other (the page
+  // shows the first as a pull-quote or lede, the second further down). Pinned by page name.
+  const KNOWN_EXCERPT_PAGES = [
+    'clean-schema/campaign/campaign-overview.html',
+    'clean-schema/events/battle.html',
+    'html-comment-leak/chapters/chapter 1 - test/session-1.html',
+    'minimal/locations/test-location.html',
+    'redesign-full/sessions/session-1.html',
+    'with-creature/creatures/test-creature.html',
+    'with-dashboard/sessions/session-1.html',
+    'with-dashboard/sessions/session-2.html',
+    'with-gm-only-markers/locations/catacombs.html',
+    'with-item/items & artifacts/test-sword.html',
+  ];
+  assert.deepStrictEqual(excerpts.map((l) => l.page).sort(), KNOWN_EXCERPT_PAGES,
     `excerpts needing the non-adjacent rule changed:\n${excerpts.map((l) => `${l.page}: ${JSON.stringify(l.value)}`).join('\n')}`);
 });
 

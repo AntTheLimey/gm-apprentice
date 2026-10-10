@@ -20,7 +20,7 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
   const meta = v => renderMetaValue(v, linkMap || {}, page.outputPath);
   if (fm.occupation) metaParts.push(`<span><span class="label">Role</span> ${meta(fm.occupation)}</span>`);
   if (fm.nationality) metaParts.push(`<span><span class="label">Nationality</span> ${meta(fm.nationality)}</span>`);
-  if (fm.status) metaParts.push(`<span><span class="label">Status</span> ${escapeHtml(fm.status)}</span>`);
+  if (fm.status) metaParts.push(`<span><span class="label">Status</span> ${meta(fm.status)}</span>`);
   if (fm.age) metaParts.push(`<span><span class="label">Age</span> ${escapeHtml(String(fm.age))}</span>`);
   if (fm.rank) metaParts.push(`<span><span class="label">Rank</span> ${meta(fm.rank)}</span>`);
   const metaHtml = metaParts.join('\n');

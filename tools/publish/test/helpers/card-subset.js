@@ -29,22 +29,18 @@ function pageText(html) {
 
 const collapse = (s) => plainQuotes(String(s)).replace(/\s+/g, ' ').trim();
 
-// The rule. The title `t` and the excerpt `x` (a trailing "…" removed) must occur in the
-// page text exactly. A fact value passes when it occurs exactly, OR when every
-// whitespace-separated word of it does: this allows the three places a page header prints
-// a raw form where the card prints the clean one (a wikilink with its brackets,
-// `Target|alias`, and an unquoted date printed as a long date string; for a value shaped
-// YYYY-MM-DD the year in the page text is enough).
-// One further allowance, for an excerpt only: the excerpt skips headings and tables, so on a
-// page with a sheet its two sentences can sit in separate blocks. It passes when each
-// sentence occurs exactly (reported in `loose`, label 'excerpt').
-// Returns { problems: [string], loose: [{value, why}] }; loose lists fact values that
-// passed only by the word rule.
+// The rule. The title `t`, the excerpt `x` and every fact value, each with a trailing "…"
+// removed (the card cuts long text; the page does not), must occur in the page text exactly.
+// One allowance, for an excerpt only: the excerpt skips headings and tables, so on a page
+// with a sheet its two sentences can sit in separate blocks. It passes when each sentence
+// occurs exactly (reported in `loose`, label 'excerpt').
+// Returns { problems: [string], loose: [{label, value}] }; loose lists the excerpts that
+// passed only by that allowance.
 function cardProblems(card, text) {
   const problems = [];
   const loose = [];
   const has = (s) => text.includes(collapse(s));
-  if (!has(card.t)) problems.push(`title ${JSON.stringify(card.t)}`);
+  if (!has(card.t.replace(/…$/, ''))) problems.push(`title ${JSON.stringify(card.t)}`);
   if (card.x != null) {
     const x = card.x.replace(/…$/, '');
     if (!has(x)) {
@@ -53,11 +49,7 @@ function cardProblems(card, text) {
     }
   }
   for (const [label, value] of card.f || []) {
-    if (has(value)) continue;
-    const iso = /^(\d{4})-\d{2}-\d{2}$/.exec(value);
-    const words = iso ? [iso[1]] : collapse(value).split(' ');
-    if (words.every((w) => text.includes(w))) loose.push({ label, value });
-    else problems.push(`fact ${label}=${JSON.stringify(value)}`);
+    if (!has(value.replace(/…$/, ''))) problems.push(`fact ${label}=${JSON.stringify(value)}`);
   }
   return { problems, loose };
 }

@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
-const { escapeHtml, relativePath, parseWikiRef, encodeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
+const { escapeHtml, refMetaValue } = require('../processor');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
@@ -26,40 +26,21 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
 
   // Metadata badges
   const badges = [];
-  if (fm.item_type) badges.push(fm.item_type);
-  if (fm.rarity) badges.push(fm.rarity);
+  if (fm.item_type) badges.push(headerValueText('item_type', fm.item_type));
+  if (fm.rarity) badges.push(headerValueText('rarity', fm.rarity));
 
   const badgeHtml = badges.length > 0
     ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
     : '';
 
-  // Current holder link
-  let holderHtml = '';
-  if (fm.current_holder) {
-    const { target: holderName, label: holderLabel } = parseWikiRef(fm.current_holder);
-    const holderPath = linkMap?.[holderName];
-    const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    if (holderPath) {
-      const href = encodeHref(relativePath(currentDir, holderPath));
-      holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> <a href="${href}">${escapeHtml(holderLabel)}</a></p>`;
-    } else {
-      holderHtml = `<p class="item-holder"><strong>Current Holder:</strong> ${escapeHtml(holderLabel)}</p>`;
-    }
-  }
-
-  // Origin link (similar pattern)
-  let originHtml = '';
-  if (fm.origin) {
-    const { target: originName, label: originLabel } = parseWikiRef(fm.origin);
-    const originPath = linkMap?.[originName];
-    const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    if (originPath) {
-      const href = encodeHref(relativePath(currentDir, originPath));
-      originHtml = `<p class="item-origin"><strong>Origin:</strong> <a href="${href}">${escapeHtml(originLabel)}</a></p>`;
-    } else {
-      originHtml = `<p class="item-origin"><strong>Origin:</strong> ${escapeHtml(originLabel)}</p>`;
-    }
-  }
+  // Holder and origin: a name links to its page when the site has one; running text shows
+  // its links as their labels (refMetaValue). The card's "Held by" reads the same rule.
+  const holderHtml = fm.current_holder
+    ? `<p class="item-holder"><strong>Current Holder:</strong> ${refMetaValue(fm.current_holder, linkMap, page.outputPath)}</p>`
+    : '';
+  const originHtml = fm.origin
+    ? `<p class="item-origin"><strong>Origin:</strong> ${refMetaValue(fm.origin, linkMap, page.outputPath)}</p>`
+    : '';
 
   const headerCard = `
 <div class="char-header">

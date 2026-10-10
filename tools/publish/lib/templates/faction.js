@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
-const { escapeHtml, relativePath, encodeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
+const { escapeHtml, relativePath, encodeHref, refMetaValue } = require('../processor');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { canonicalNfc } = require('../unicode');
@@ -13,8 +13,8 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
 
   // Metadata badges
   const badges = [];
-  if (fm.faction_type) badges.push(fm.faction_type);
-  if (fm.alignment) badges.push(fm.alignment);
+  if (fm.faction_type) badges.push(headerValueText('faction_type', fm.faction_type));
+  if (fm.alignment) badges.push(headerValueText('alignment', fm.alignment));
 
   const badgeHtml = badges.length > 0
     ? `<div class="metadata-badges">${badges.map(b => `<span class="metadata-badge">${escapeHtml(b)}</span>`).join('\n')}</div>`
@@ -25,33 +25,13 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     ? `<div class="goals"><h3>Goals</h3><ul>${fm.goals.map(g => `<li>${escapeHtml(g)}</li>`).join('')}</ul></div>`
     : '';
 
-  // Leadership link
-  let leadershipHtml = '';
-  if (fm.leadership) {
-    const leaderName = String(fm.leadership).replace(/\[\[|\]\]/g, '').trim();
-    const leaderPath = linkMap?.[leaderName];
-    const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    if (leaderPath) {
-      const href = encodeHref(relativePath(currentDir, leaderPath));
-      leadershipHtml = `<p class="faction-leadership"><strong>Leadership:</strong> <a href="${href}">${escapeHtml(leaderName)}</a></p>`;
-    } else {
-      leadershipHtml = `<p class="faction-leadership"><strong>Leadership:</strong> ${escapeHtml(leaderName)}</p>`;
-    }
-  }
-
-  // Territory link
-  let territoryHtml = '';
-  if (fm.territory) {
-    const territoryName = String(fm.territory).replace(/\[\[|\]\]/g, '').trim();
-    const territoryPath = linkMap?.[territoryName];
-    const currentDir = page.outputPath.substring(0, page.outputPath.lastIndexOf('/'));
-    if (territoryPath) {
-      const href = encodeHref(relativePath(currentDir, territoryPath));
-      territoryHtml = `<p class="faction-territory"><strong>Territory:</strong> <a href="${href}">${escapeHtml(territoryName)}</a></p>`;
-    } else {
-      territoryHtml = `<p class="faction-territory"><strong>Territory:</strong> ${escapeHtml(territoryName)}</p>`;
-    }
-  }
+  // Leadership and territory: a name links to its page; running text shows its links as labels.
+  const leadershipHtml = fm.leadership
+    ? `<p class="faction-leadership"><strong>Leadership:</strong> ${refMetaValue(fm.leadership, linkMap, page.outputPath)}</p>`
+    : '';
+  const territoryHtml = fm.territory
+    ? `<p class="faction-territory"><strong>Territory:</strong> ${refMetaValue(fm.territory, linkMap, page.outputPath)}</p>`
+    : '';
 
   // Member rollup: find entities with member_of or assigned_to relationships pointing to this faction
   // NFC on both sides (#139): the relationship target is author-typed, the faction title is
