@@ -643,18 +643,18 @@ describe('location sub-location card excerpts (shared helper)', () => {
 
   const parent = {
     title: 'Sector_9K', displayTitle: 'Sector 9-K',
-    outputPath: 'locations/sector-7g.html',
+    outputPath: 'locations/sector-9k.html',
     frontmatter: { type: 'location' }, markdown: '',
   };
   const sparseChild = {
     title: 'Tarn_Reach', displayTitle: 'Tarn Reach',
-    outputPath: 'locations/nova-nexus.html',
+    outputPath: 'locations/tarn-reach.html',
     frontmatter: { type: 'location', parent_location: '[[Sector_9K]]' },
     markdown: '## Overview\n\n## GM Notes\n\nThe owner launders syndicate money through the bar.\n',
   };
   const proseChild = {
     title: 'Mooring_Ring', displayTitle: 'Mooring Ring',
-    outputPath: 'locations/docking-ring.html',
+    outputPath: 'locations/mooring-ring.html',
     frontmatter: { type: 'location', parent_location: '[[Sector_9K]]' },
     markdown: '## Overview\n\nCargo moves at all hours here. Nobody asks questions.\n',
   };
