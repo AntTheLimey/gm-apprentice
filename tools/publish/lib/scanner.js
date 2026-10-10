@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { parseNote } = require('./frontmatter');
+const { parseNote, cutValueComments } = require('./frontmatter');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
 
@@ -115,6 +115,7 @@ function scanVaultReport(config, { quiet = false } = {}) {
           malformed.push({ rel: relPath, fullPath, message: e.message });
           continue;
         }
+        frontmatter = cutValueComments(frontmatter);
 
         if (!frontmatter.type) { untyped.push(relPath); continue; } // skip files without typed frontmatter
 

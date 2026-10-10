@@ -101,3 +101,12 @@ describe('%% comments (Obsidian), #305', () => {
     assert.match(html, /Lead\s+tail/);
   });
 });
+
+describe('%% comments in a frontmatter value', () => {
+  const { cutValueComments } = require('../../lib/frontmatter');
+  it('cuts a span, an unclosed one to the end, and a value that was only comment', () => {
+    assert.deepStrictEqual(
+      cutValueComments({ a: 'x %%y%% z', b: 'keep %%open', c: '%%all%%', d: ['p %%q%%', '%%r%%', 'ok'], n: 3, e: { f: 'g %%h%%' } }),
+      { a: 'x z', b: 'keep', d: ['p', 'ok'], n: 3, e: { f: 'g' } });
+  });
+});

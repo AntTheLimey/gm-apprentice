@@ -142,3 +142,31 @@ describe('L2: the search index lists only pages that exist', () => {
     assert.ok(checked > 60, `checked ${checked} entries`);
   });
 });
+
+// B4: a %% comment in a frontmatter value is cut like one in the body.
+describe('a %% comment in a frontmatter value is in no output file', () => {
+  let site;
+  before(() => {
+    site = buildVault({
+      'NPCs/Smith.md': [
+        '---', 'type: npc', 'title: Smith %%QQTITLE%% Jones',
+        'occupation: Smith %%QQOCC%% and smelter', 'description: Tall %%QQDESC%% man',
+        'aliases: ["Old %%QQALIAS%% Name"]', 'status: "%%QQWHOLE%%"', '---',
+        'Public words.', '',
+      ].join('\n'),
+      'Locations/Cellar.md': '---\ntype: location\n---\nThe cellar, where [[Smith]] waits.\n',
+    });
+  });
+  after(() => site.cleanup());
+
+  it('names none of the commented words, and prints no marker', () => {
+    const root = path.join(site.root, 'docs');
+    assert.deepStrictEqual(mentions(root, 'QQ'), []);
+    assert.deepStrictEqual(mentions(root, '%%'), []);
+  });
+  it('keeps the words around the comment', () => {
+    const html = site.read('npcs', 'smith.html');
+    assert.ok(html.includes('Smith  Jones') || html.includes('Smith Jones'), html.slice(0, 500));
+    assert.ok(html.includes('smelter'));
+  });
+});
