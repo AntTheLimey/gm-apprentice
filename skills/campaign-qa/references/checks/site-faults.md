@@ -33,7 +33,9 @@ changes the next time it is published.
 - `ERROR` rows: the site's tool could not be asked, or its audit
   stopped. Nothing was checked. Treat a tool that is missing or not
   installed as the older tool above; report any other row as it reads.
-  Stop this check either way.
+  Stop this check either way. `NOTE_FAULTS_UNCHECKED` means a page of
+  the site could not be built, so the list would be short: the row
+  names the page. That is publish-site's to fix; run this again after.
 - `INFO (site) the site's tool: node "<tool>" <command> --config
   "<config>" --vault "<vault>"`: the tool, the site file and the vault
   to use for every `SITE` command below. `SITE explain "<note>"` means
@@ -87,6 +89,9 @@ or the name of another page it links. Show the sentence. Offer:
   linked secret name.
 - Where the name is part of another page's title, that page's row is
   the one to fix; this one goes with it.
+- A row that ends "printed on the index or listing page: …" is a name
+  an index page prints from one of the note's frontmatter fields (a
+  creature's `subtype`, a chapter's `overview`). Reword that field.
 
 If the GM says the name is no longer a secret, move it from
 `gm_aliases` to `aliases` on the owning note instead.
@@ -127,7 +132,16 @@ how many pages name it and as what words, which rule keeps it off the
 site, the reason the GM wrote in the manifest if there is one, and the
 first pages that name it. A page is counted only when it prints the
 name: a link in a hidden part, or in a field that page does not show,
-is not. A PC's story page is listed as its `…_Story.md` file.
+is not. A PC's story page is listed as its `…_Story.md` file. A page
+whose connections graph shows the name is counted too, though the link
+is in a neighbour's relationships.
+
+Where the row ends "printed only by an index or listing page (…) from:
+…", the notes after "from:" do not print the name on their own page.
+A page built from many notes does (an NPC index prints each NPC's
+`first_appearance`, the landing page a recap). The link is in a
+frontmatter field of the note named, so `unlink` will not reach it:
+handle it as "A link in frontmatter" below, whatever kind the note is.
 
 Work most-named first, in batches of 3 to 5 notes, one question per
 batch. The GM can answer for the batch or note by note, and can stop
@@ -142,9 +156,10 @@ that shows what the players know and keeps the rest hidden.
 
 - `SITE explain "<note>" --shown` prints what the site would hold of
   the note if it published as it stands, read off the page as the
-  build makes it: the text of the page, its link-preview card, and
-  what the search finds it by (title, aliases, every word of the body
-  as published).
+  build makes it: the text of the page, the image files that publish
+  with it (its portrait is one), its link-preview card, and what the
+  search finds it by (title, aliases, every word of the body as
+  published).
 - What the players know is what published pages already say. Search
   the pages that name the note for its name and read around each hit.
   A fact that is only in the note, a plan or a hidden section is not

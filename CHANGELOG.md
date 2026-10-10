@@ -19,7 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   below it is published; and a secret name from `gm_aliases` printed in
   the open. The names are read off each page as it is built, so a page
   is counted only when it prints the name, in its text, its header, a
-  PC's story page or anywhere else the page shows it. A fault that lies
+  PC's story page, its connections graph or anywhere else the page
+  shows it. An index page, the timeline, the story and the landing page
+  are read too: a name one of them prints is counted against the note
+  it is taken from, and the finding names the page. A fault that lies
   wholly under a hidden heading is not counted. A site with none of
   these prints nothing new.
 - **campaign-qa fixes them or asks: the Site Faults check.** It takes the
@@ -35,13 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`doctor --site` lists the same faults** (`NAMED_NO_PAGE`,
   `COMMENT_STRAY`, `FENCE_UNCLOSED`, `ALIAS_IN_PROSE`), and takes
   `--vault`. It builds the site in memory to find them, writing
-  nothing, so its list is the build's. A link to a note that exists but
-  has no page is listed once, under `NAMED_NO_PAGE`, and no longer
-  under `LINK_UNRESOLVED`.
+  nothing, so its list is the build's. When a page cannot be built it
+  says the list is incomplete, as an error (`NOTE_FAULTS_UNCHECKED`). A
+  link to a note that exists but has no page is listed once, under
+  `NAMED_NO_PAGE`, and no longer under `LINK_UNRESOLVED`. It also lists
+  frontmatter values of the wrong type (`FRONTMATTER_MISTYPED`).
 - **`explain "<note>" --shown`** prints what the site holds of a note,
   or would if it published, read off the page as the build makes it:
-  the text of the page, a PC's story page, its link-preview card, and
-  what the search finds it by.
+  the text of the page, a PC's story page, the image files that publish
+  with it, its link-preview card, and what the search finds it by.
 - **`explain` and `manifest diff` / `apply` take `--vault`**, so a fix
   is checked and recorded in the vault that was audited.
 - **`links.py unlink --in NOTE [--as WORDS]`** turns links to a note that
@@ -52,6 +57,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- A relationship whose target is written with a label
+  (`target: "[[Vesper_Hale|the stranger]]"`) and has no page printed the
+  note's own name beside the label on the Connections graph, in the
+  sidebar and on an NPC's connection cards, on that page and on its
+  neighbours' graphs. It prints the label alone now.
 - A `%%comment%%` in a frontmatter value is cut wherever the value
   prints. A `%%` in backticks there is left as written.
 - A hidden heading written with `&ensp;`, `&emsp;`, `&shy;` or a
