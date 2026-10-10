@@ -42,17 +42,17 @@ class ReportTests(unittest.TestCase):
         return rows[0]
 
     def test_same_ignores_punctuation(self):
-        row = self.one({"Locations/Acheron's Rest.md": "x\n",
-                        "A.md": "[[Acherons Rest]]\n"})
+        row = self.one({"Locations/Dunmoor's Rest.md": "x\n",
+                        "A.md": "[[Dunmoors Rest]]\n"})
         self.assertEqual(row.kind, "NEAR")
         self.assertEqual(row.candidates,
-                         [("Locations/Acheron's Rest.md", "same")])
+                         [("Locations/Dunmoor's Rest.md", "same")])
 
     def test_same_ignores_emoji_and_accents(self):
-        row = self.one({"NPCs/Doctor_Emile_Carreau.md": "x\n",
-                        "A.md": "[[🩸 Doctor Émile Carreau]]\n"})
+        row = self.one({"NPCs/Doctor_Jorund_Vale.md": "x\n",
+                        "A.md": "[[🩸 Doctor Jórund Vale]]\n"})
         self.assertEqual(row.candidates,
-                         [("NPCs/Doctor_Emile_Carreau.md", "same")])
+                         [("NPCs/Doctor_Jorund_Vale.md", "same")])
 
     def test_close_is_a_likely_typo(self):
         row = self.one({"Locations/Barabazar.md": "x\n",
@@ -60,9 +60,9 @@ class ReportTests(unittest.TestCase):
         self.assertEqual(row.candidates, [("Locations/Barabazar.md", "close")])
 
     def test_part_is_extra_words_before_or_after(self):
-        row = self.one({"NPCs/Thomas Wyndham.md": "x\n",
-                        "A.md": "[[Captain Thomas Wyndham]]\n"})
-        self.assertEqual(row.candidates, [("NPCs/Thomas Wyndham.md", "part")])
+        row = self.one({"NPCs/Corvin Hollis.md": "x\n",
+                        "A.md": "[[Captain Corvin Hollis]]\n"})
+        self.assertEqual(row.candidates, [("NPCs/Corvin Hollis.md", "part")])
 
     def test_a_copy_suffix_is_a_part_not_a_typo(self):
         row = self.one({"Vienna Summary.md": "x\n",
@@ -115,10 +115,10 @@ class ReportTests(unittest.TestCase):
 
     def test_best_candidate_first_and_at_most_three(self):
         row = self.one({
-            "NPCs/Savarin.md": "x\n", "NPCs/Mathilde Savarin.md": "x\n",
-            "NPCs/Madame Savarin.md": "x\n", "Docs/Letter to Savarin.md": "x\n",
-            "A.md": "[[savarin!]]\n"})
-        self.assertEqual(row.candidates[0], ("NPCs/Savarin.md", "same"))
+            "NPCs/Karsh.md": "x\n", "NPCs/Meribel Karsh.md": "x\n",
+            "NPCs/Madame Karsh.md": "x\n", "Docs/Letter to Karsh.md": "x\n",
+            "A.md": "[[karsh!]]\n"})
+        self.assertEqual(row.candidates[0], ("NPCs/Karsh.md", "same"))
         self.assertEqual(len(row.candidates), 3)
         self.assertEqual({tag for _, tag in row.candidates[1:]}, {"part"})
 

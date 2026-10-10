@@ -128,12 +128,12 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
   });
 
   it('drops rendered image tags', () => {
-    const html = '<p><img src="../images/Thides System.png" alt="Thides System"> A dead-end star. More.</p>';
+    const html = '<p><img src="../images/Tarn System.png" alt="Tarn System"> A dead-end star. More.</p>';
     assert.strictEqual(excerptFromMarkdown(html), 'A dead-end star.');
   });
 
   it('drops raw image markdown', () => {
-    const md = '## Overview\n\n![Thides System](../images/Thides System.png)\n\nA charted dead-end. More.';
+    const md = '## Overview\n\n![Tarn System](../images/Tarn System.png)\n\nA charted dead-end. More.';
     assert.strictEqual(excerptFromMarkdown(md), 'A charted dead-end.');
   });
 
@@ -159,8 +159,8 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
   });
 
   it('de-links a wikilink anchor without leaving a stray space', () => {
-    const html = '<p><a href="x.html">Shackleton Magellan</a>’s enemy walks in. More.</p>';
-    assert.strictEqual(excerptFromMarkdown(html), 'Shackleton Magellan’s enemy walks in.');
+    const html = '<p><a href="x.html">Odrin Kell</a>’s enemy walks in. More.</p>';
+    assert.strictEqual(excerptFromMarkdown(html), 'Odrin Kell’s enemy walks in.');
   });
 
   it('does not fuse adjacent paragraphs into one word', () => {
@@ -176,7 +176,7 @@ describe('excerptFromMarkdown sanitization (issue #87)', () => {
 
 describe('excerptFromMarkdown sentence end', () => {
   it('does not stop at a title', () => {
-    assert.strictEqual(excerptFromMarkdown('Mr. James Bennet is a clerk. He is quiet.'), 'Mr. James Bennet is a clerk.');
+    assert.strictEqual(excerptFromMarkdown('Mr. Jorund Vale is a clerk. He is quiet.'), 'Mr. Jorund Vale is a clerk.');
     assert.strictEqual(excerptFromMarkdown('She met Col. Moreau and Dr. Ward at St. Malo. Then left.'), 'She met Col. Moreau and Dr. Ward at St. Malo.');
   });
   it('still stops at the first full stop otherwise', () => {

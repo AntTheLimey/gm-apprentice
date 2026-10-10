@@ -208,7 +208,7 @@ Not something in the world, so never a page. Offer:
   words:
   `links.py "<vault>" unlink "<note name>" --in "<page>" [--in "<page>" …]`.
   A link with its own wording keeps it. Where a link has none and the
-  note's name would read as a file name (`Scene 06 Dinner`), add
+  note's name would read as a file name (`Scene 02 Quay`), add
   `--as "<words>"` with wording the GM agrees. Read the preview, then
   run it again with `--write`. It changes every link to the note on
   those pages, hidden parts included; where the GM wants a private

@@ -32,16 +32,16 @@ test('B1: an unquoted date in a header prints as written (YYYY-MM-DD), on every 
 
 test('B2: a wikilink in a header prints as its label on every template that prints it', () => {
   const v = site({
-    'Clues/C.md': '---\ntype: clue\nfound_by: "[[Anna_Lindqvist]] (Brenner); [[Target_Name|alias]]"\n---\nBody.\n',
-    'Documents/D.md': '---\ntype: document\nauthor: "[[Ramkanta_Sett]] as registrar"\n---\nBody.\n',
+    'Clues/C.md': '---\ntype: clue\nfound_by: "[[Ilse_Karsh]] (Hollis); [[Target_Name|alias]]"\n---\nBody.\n',
+    'Documents/D.md': '---\ntype: document\nauthor: "[[Hesper_Dunmoor]] as registrar"\n---\nBody.\n',
     'Items/I.md': '---\ntype: item\norigin: "[[Safe_House|Thaliastrasse 12]]"\ncurrent_holder: "[[A_B]] (held for [[C_D]])"\n---\nBody.\n',
     'Events/E.md': '---\ntype: event\noutcome: "Won by [[Left_Side|the left]]"\nlocation: "[[Old_Town|the old town]] (north)"\n---\nBody.\n',
     'Factions/F.md': '---\ntype: faction\nleadership: "[[The_Boss|Boss]]"\nterritory: "[[Big_Area]]"\n---\nBody.\n',
   });
   try {
     const want = [
-      [['clues', 'c.html'], 'Anna Lindqvist (Brenner); alias'],
-      [['documents', 'd.html'], 'Ramkanta Sett as registrar'],
+      [['clues', 'c.html'], 'Ilse Karsh (Hollis); alias'],
+      [['documents', 'd.html'], 'Hesper Dunmoor as registrar'],
       [['items', 'i.html'], 'Thaliastrasse 12'],
       [['items', 'i.html'], 'A B (held for C D)'],
       [['events', 'e.html'], 'Won by the left'],
@@ -178,12 +178,12 @@ test('B-M1: a location prints its parent whole in the sidebar, and its card says
 
 test('C1: a bare note name in a badge prints as words, not with its underscores', () => {
   const v = site({
-    'Clues/C.md': '---\ntype: clue\nfound_by: Anna_Lindqvist\n---\nBody.\n',
-    'Documents/D.md': '---\ntype: document\nauthor: Ramkanta_Sett\n---\nBody.\n',
+    'Clues/C.md': '---\ntype: clue\nfound_by: Ilse_Karsh\n---\nBody.\n',
+    'Documents/D.md': '---\ntype: document\nauthor: Hesper_Dunmoor\n---\nBody.\n',
     'Items/I.md': '---\ntype: item\norigin: Safe_House\n---\nBody.\n',
   });
   try {
-    for (const [p, text] of [[['clues', 'c.html'], 'Anna Lindqvist'], [['documents', 'd.html'], 'Ramkanta Sett'],
+    for (const [p, text] of [[['clues', 'c.html'], 'Ilse Karsh'], [['documents', 'd.html'], 'Hesper Dunmoor'],
       [['items', 'i.html'], 'Safe House']]) {
       const h = header(v.read(...p));
       assert.ok(h.includes(text), `${p.join('/')} should show ${text}: ${h}`);

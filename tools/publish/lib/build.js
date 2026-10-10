@@ -1104,7 +1104,7 @@ function buildSite(options) {
             // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
             if (chapterRef === chapterFilename) return true;
             // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
-            //    (e.g. "London" in "Chapter 1 — London: The Orphean Society")
+            //    (e.g. "Harbour" in "Chapter 1 — Harbour: The Lantern Guild")
             if (chapterTitleNorm && chapterRef.toLowerCase().includes(chapterTitleNorm)) return true;
             return false;
           }).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));

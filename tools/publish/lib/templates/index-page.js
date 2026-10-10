@@ -387,8 +387,8 @@ function renderChapterList(pages, indexDir) {
 
   // How strongly a ref names this chapter. 2 = the two titles are the same once a
   // "Chapter 3 — " prefix is discounted on either side. 1 = the chapter's own title
-  // appears inside a longer ref ("Chapter 1 — London: The Orphean Society" naming
-  // "London") — the direction both sibling matchers implement. 0 = no claim.
+  // appears inside a longer ref ("Chapter 1 — Harbour: The Lantern Guild" naming
+  // "Harbour") — the direction both sibling matchers implement. 0 = no claim.
   //
   // The reverse of that substring test, ref-inside-title, is deliberately absent: it
   // is what let `[[Vienna]]` claim both "Vienna" and "The Vienna Files", and it is

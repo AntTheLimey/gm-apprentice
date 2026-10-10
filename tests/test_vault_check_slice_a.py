@@ -3502,7 +3502,7 @@ class WrapupCommandTests(unittest.TestCase):
 
     def test_a_decimal_chapter_wrap_up_filename_is_conformant(self):
         rows = vc.wrapup_filename_findings(
-            "Chapters/Chapter 0.1 - The Beginning/Chapter_0.1_Wrap_Up.md")
+            "Chapters/Chapter 0.1 - The Prologue/Chapter_0.1_Wrap_Up.md")
         self.assertEqual([(f.level, f.message) for f in rows],
                          [("INFO", "chapter-level wrap-up filename — "
                                    "conformant as-is")])

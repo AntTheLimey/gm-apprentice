@@ -205,7 +205,7 @@ test('the landing recap, its text and its links are not opted out; the story and
 // a reference nested in running text.
 test('a card is a subset of its page for the shapes that once differed', () => {
   const holders = ['[[Name]]', '[[Name|alias]]', 'Name (note)', 'Name / Other', '[[A]] (held for [[B]])',
-    '[[Nathaniel]] (and / or [[Cleo]])', 'n/a — federal fleet vessel', 'Anna_Lindqvist'];
+    '[[Corvin]] (and / or [[Meribel]])', 'n/a — federal fleet vessel', 'Ilse_Karsh'];
   const files = {
     'Sessions/Session 1.md': '---\ntype: session\nsession_number: 1\nin_game_date: "March 4th 1925"\nplay_date: 2026-07-02\n---\nPrep notes for the night.\n',
     'Sessions/Session 2.md': '---\ntype: session\nsession_number: 2\nin_game_date: "March 5th 1925"\nplay_date: 2026-07-09\n---\nPrep notes.\n',

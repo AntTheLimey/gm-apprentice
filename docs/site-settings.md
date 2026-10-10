@@ -249,16 +249,16 @@ The apprentice does the setting up and writes the switch for you.
 | `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
 | `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
 
-Name a note the way a link does, by its file name: `Hugh_Cavendish`, not
-"Hugh Cavendish". A name that matches no published page gives a build
+Name a note the way a link does, by its file name: `Osric_Marlow`, not
+"Osric Marlow". A name that matches no published page gives a build
 warning.
 
 ```yaml
 publish:
   landing:
     max_npcs: 6
-    featured_npcs: ["Hugh_Cavendish", "Margaret_Cavendish"]
-    quick_links: ["Calcutta_City_Map"]
+    featured_npcs: ["Osric_Marlow", "Edda_Marlow"]
+    quick_links: ["Harbour_City_Map"]
 ```
 
 ## Lists and pictures
@@ -279,7 +279,7 @@ publish:
     locations:
       image: _attachments/sector-map.webp
       link: _attachments/sector-map-large.webp
-      alt: "Star chart of Sector 7-G"
+      alt: "Star chart of Sector 9-K"
     factions: _attachments/factions-hero.svg
 ```
 

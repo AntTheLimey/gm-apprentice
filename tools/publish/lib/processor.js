@@ -32,7 +32,7 @@ function escapeHtml(str) {
 }
 
 // Turn a wiki-link slug/target into human-readable display text (underscores → spaces).
-// Used wherever a raw entity name would otherwise show, e.g. Lord_Percival_Harcourt.
+// Used wherever a raw entity name would otherwise show, e.g. Lord_Edric_Fenwick.
 function humanizeName(s) {
   return String(s == null ? '' : s).replace(/_/g, ' ');
 }
@@ -96,8 +96,8 @@ function resolveWikiLinks(markdown, linkMap, currentOutputPath) {
     // not change which page it is. (The site has no heading anchors to jump to, so the link
     // goes to the page.) A name only a literal spelling matches still does.
     const target = linkMap[raw] ? raw : parsed.name;
-    // Without an explicit |alias, humanize the slug (Lord_Percival_Harcourt → Lord Percival
-    // Harcourt) so neither resolved link text nor unresolved plain text shows raw underscores.
+    // Without an explicit |alias, humanize the slug (Lord_Edric_Fenwick → Lord Edric
+    // Fenwick) so neither resolved link text nor unresolved plain text shows raw underscores.
     const targetPath = linkMap[target];
     const display = displayText || wikiTargetLabel(targetPath ? target : raw);
     if (!targetPath) return display;
@@ -1090,7 +1090,7 @@ const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
 
 // Percent-encode each path segment of an output-path-derived href/src. A destination
 // containing a raw space — which vault attachments and subfolder names routinely do
-// ("Chrome Jockey.png", "Sessions/Session 02/") — is not a valid markdown or HTML
+// ("Brass Compass.png", "Sessions/Session 02/") — is not a valid markdown or HTML
 // destination: markdown-it emits the whole `[text](path)`/`![alt](path)` as literal text
 // and the typographer then rewrites a leading `../` into a `…/` ellipsis. Parens are
 // encoded too: markdown-it only tolerates balanced ones inside a destination.

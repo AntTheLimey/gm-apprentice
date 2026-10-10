@@ -123,17 +123,17 @@ describe('rootPath', () => {
 
 describe('parseParticipant', () => {
   it('parses [[Entity]] (annotation)', () => {
-    const result = parseParticipant('[[Anna_Lindqvist]] (rescued)');
-    assert.strictEqual(result.target, 'Anna_Lindqvist'); // raw target preserved for lookup
-    assert.strictEqual(result.display, 'Anna Lindqvist'); // display humanized (no underscores)
+    const result = parseParticipant('[[Ilse_Karsh]] (rescued)');
+    assert.strictEqual(result.target, 'Ilse_Karsh'); // raw target preserved for lookup
+    assert.strictEqual(result.display, 'Ilse Karsh'); // display humanized (no underscores)
     assert.strictEqual(result.annotation, 'rescued');
     assert.strictEqual(result.isLink, true);
   });
 
   it('parses [[Entity|Display Name]] (annotation)', () => {
-    const result = parseParticipant('[[Anna_Lindqvist|Anna Lindqvist]] (rescued from control)');
-    assert.strictEqual(result.target, 'Anna_Lindqvist');
-    assert.strictEqual(result.display, 'Anna Lindqvist');
+    const result = parseParticipant('[[Ilse_Karsh|Ilse Karsh]] (rescued from control)');
+    assert.strictEqual(result.target, 'Ilse_Karsh');
+    assert.strictEqual(result.display, 'Ilse Karsh');
     assert.strictEqual(result.annotation, 'rescued from control');
     assert.strictEqual(result.isLink, true);
   });
@@ -178,7 +178,7 @@ describe('parseParticipant', () => {
   });
 
   it('keeps an explicit alias verbatim (does not over-humanize)', () => {
-    const result = parseParticipant('[[Anna_Lindqvist|Madame A_B]]');
+    const result = parseParticipant('[[Ilse_Karsh|Madame A_B]]');
     assert.strictEqual(result.display, 'Madame A_B', 'explicit alias preserved as written');
   });
 });

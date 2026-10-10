@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `manifest apply --exclude` accepts a note in a folder the site leaves
   out.
 - A bare note name in a header badge or a PC's `display_meta`
-  (`found_by: Anna_Lindqvist`) prints as words, on the page and on its
+  (`found_by: Ilse_Karsh`) prints as words, on the page and on its
   card.
 - A card's opening lines keep their space where one block follows
   another, and no longer open with a note's Source or Reconstruction
@@ -116,7 +116,7 @@ These changes reach every site, whatever the setting.
   no longer print `[[ ]]` brackets or `Target|alias`; a faction's leader
   and territory, an event's place and outcome and a PC's badges follow
   the same rule. A name of a published page in a header is now a link. A bare underscore-joined name (for
-  example `Anna_Lindqvist`) prints as the name in an item's holder or
+  example `Ilse_Karsh`) prints as the name in an item's holder or
   origin, a faction's leader or territory and an event's place; in the
   other badges it still prints as written.
 - **A type shown in a header reads as words.** `plot_thread` now reads
@@ -706,7 +706,7 @@ Publish tool 1.12.4.
   two pages with one title (an NPC and a PC) no longer list each other's
   mentions.
 - Renaming a note whose name another note shares (an NPC and a PC both
-  called `Charlotte_Thorne`) keeps every bare `[[Charlotte_Thorne]]` link, in each
+  called `Meribel_Hollis`) keeps every bare `[[Meribel_Hollis]]` link, in each
   spelling, going where the site sends it, instead of leaving them to resolve to the
   other note. Without a site, the same-folder rule applies as before.
 - Renaming a PC also renames its story file, so the story stays on its
@@ -1160,7 +1160,7 @@ asks for it, run `update-pin --site <site-dir>` and run it again.
   it now skips the sheet's own lines: bold label lines, tick-boxes and
   unfilled `{placeholders}`. A PC whose body has no prose still gets
   no quote. Publish tool 1.11.44.
-- **A pull quote stopped at a title.** "Mr. James Bennet was a poet."
+- **A pull quote stopped at a title.** "Mr. Jorund Vale was a poet."
   was quoted as "Mr.". The first sentence no longer ends at Mr., Mrs.,
   Dr., St., Col. and the like. This applies to NPC and location quotes
   and listing-card excerpts too.
@@ -3353,7 +3353,7 @@ CLI never overwrites a live element directly.
   every query, campaign-qa, and the mobRPG sync read) are independent; neither
   implies the other. Writing only the scalar leaves a note correctly nested on
   the published site while being an orphan in the graph — the state all three
-  Entertainment District venues were in. Documented in
+  Lantern Quarter venues were in. Documented in
   `shared/relationship-normalization.md`, with a campaign-qa graph-health check
   for each direction of the mismatch plus one for childless interposed
   containers.
@@ -3365,14 +3365,14 @@ CLI never overwrites a live element directly.
   derives an affiliation's event type from what the edge points AT — its GUI
   offers Reign/Employ only on a Political element and Leadership/Membership only
   on an Organization. `suggest` used a flat predicate→eventType table that knew
-  nothing about the endpoints, so `serves` fired `Employ` at Corvid Financial and
-  Kinetic Logistics, both Organizations: a pairing the GUI cannot produce. Events
+  nothing about the endpoints, so `serves` fired `Employ` at Halcyon Freight and
+  Brightwater Haulage, both Organizations: a pairing the GUI cannot produce. Events
   are now resolved through that grid from the endpoints' real kinds (canon
   `element_kind` for a linked note, the proposed kind for a net-new one) and named
   the way mobRPG names them — person first, mobRPG's own title word and
-  preposition (`"Marek Solano, Member of Corvid Financial"`, not
-  `"Marek Solano, serves Corvid Financial"`), including for edges authored
-  group-first like `Corvid Financial employs Marek Solano`. A per-world
+  preposition (`"Tomas Reed, Member of Halcyon Freight"`, not
+  `"Tomas Reed, serves Halcyon Freight"`), including for edges authored
+  group-first like `Halcyon Freight employs Tomas Reed`. A per-world
   `relationshipTypes` entry overrides the grid only when it *differs* from the
   ontology default, since `map init`/`map sync` write an entry for every predicate
   they discover. The rel/ externalRef is unchanged, so nothing re-files as net-new.
@@ -3407,7 +3407,7 @@ CLI never overwrites a live element directly.
 - **`pull-canon` no longer scaffolds junk vault notes** — `_scaffoldable`
   rejected reified-relationship refs (`rel/`) but let description-suggestion refs
   (`desc/`, minted by the retired `suggest-desc`) through, so an accepted
-  `space_game:desc/Items & Artifacts/Type II3-A` card scaffolded a stub at a
+  `my_campaign:desc/Items/Mark IV Rig` card scaffolded a stub at a
   spurious top-level `desc/` folder for an element that was already linked. Both
   reserved roots are now rejected, and scaffolding additionally requires the ref's
   first path segment to be a directory the vault already has — so the next verb to
@@ -3574,8 +3574,8 @@ against wiki-link targets, so entities whose display title differs from their
 filename can never be featured. That does not reproduce: `scanner.js` sets
 `page.title` to the **filename base** (the H1 goes to `displayTitle`, which
 recency never reads), and the mention pattern already stops its capture at the
-`|`. An NPC filed as `Margaret_Cavendish.md` with H1 `Margaret "Meg" Cavendish`,
-referenced only as `[[Margaret_Cavendish|Meg]]`, scores and is returned. The
+`|`. An NPC filed as `Edda_Marlow.md` with H1 `Edda "Eddie" Marlow`,
+referenced only as `[[Edda_Marlow|Eddie]]`, scores and is returned. The
 scoring path was left alone; the two fixes above are what actually produced the
 reported symptom.
 
@@ -5211,7 +5211,7 @@ Publish tool 1.9.0. Fixes the eight open publish-site issues.
   chapter links lost `chapters/`). Added a `relativeHref(fromFile, toFile)`
   helper and routed all file-to-file links through it.
 - **Wikilinks no longer render as raw underscore slugs (B1).** Body links
-  showed `Lord_Percival_Harcourt`; display text is now humanized (underscores
+  showed `Lord_Edric_Fenwick`; display text is now humanized (underscores
   to spaces) for resolved and unresolved links, leaving explicit aliases
   untouched.
 - **The 404 page is themed (B4).** It loaded `style.css` + `theme.css` but
