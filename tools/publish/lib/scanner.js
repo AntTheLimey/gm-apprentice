@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { parseNote, cutValueComments, commentFields } = require('./frontmatter');
+const { shapeFrontmatter } = require('./frontmatter-shape');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
 
@@ -92,6 +93,9 @@ function scanVaultReport(config, { quiet = false } = {}) {
   // own bucket rather than silently vanishing — `doctor --site` and `explain` need
   // to say the file itself is broken, not "no type:".
   const malformed = [];
+  // Frontmatter values of the wrong type, in notes with a `type:`: { rel, field, problem }.
+  // Each was put into shape or left unread, so the build goes on; the GM is told.
+  const mistyped = [];
   // Output path -> the vault-relative source that first claimed it. Stripping combining
   // marks (#139) collapses names that used to slug apart ("Renée"/"Renee" both give
   // renee.html), and the later page silently overwrites the earlier one on disk.
@@ -119,7 +123,14 @@ function scanVaultReport(config, { quiet = false } = {}) {
         // comment or hidden block never closed, in a value.
         const commentValues = raw.includes('%%') || raw.includes('<!--') ? commentFields(frontmatter) : [];
         frontmatter = cutValueComments(frontmatter);
+        // A value of the wrong type in a field read as text or as a list (frontmatter-shape.js).
+        const shaped = shapeFrontmatter(frontmatter);
+        frontmatter = shaped.frontmatter;
 
+        // Said for a note the site reads, and for a `type:` that could not be read at all.
+        for (const { field, problem } of shaped.wrong) {
+          if (frontmatter.type || field === 'type') mistyped.push({ rel: relPath, field, problem });
+        }
         if (!frontmatter.type) { untyped.push(relPath); continue; } // skip files without typed frontmatter
 
         const dirRel = path.relative(vaultPath, dir);
@@ -174,7 +185,7 @@ function scanVaultReport(config, { quiet = false } = {}) {
   }
 
   walk(vaultPath);
-  return { pages, untyped, unmapped, malformed };
+  return { pages, untyped, unmapped, malformed, mistyped };
 }
 
 // The build's entry point: the pages, with the three "could not publish this"
@@ -183,12 +194,20 @@ function scanVault(config) {
   return warnScanReport(scanVaultReport(config));
 }
 
+const MISTYPED_SHOWN = 10;
+
 // Prints what the walk could not publish and hands back the pages. The build keeps
 // the report too, to repeat the unparseable files where the GM reads (#287).
 function warnScanReport(report) {
-  const { pages, untyped, unmapped, malformed } = report;
+  const { pages, untyped, unmapped, malformed, mistyped = [] } = report;
   for (const { fullPath, message } of malformed) {
     console.warn(`scanner: skipping ${fullPath} — malformed frontmatter: ${message}`);
+  }
+  for (const { rel, field, problem } of mistyped.slice(0, MISTYPED_SHOWN)) {
+    console.warn(`scanner: ${rel} — ${field}: ${problem}.`);
+  }
+  if (mistyped.length > MISTYPED_SHOWN) {
+    console.warn(`scanner: and ${mistyped.length - MISTYPED_SHOWN} more frontmatter value(s) of the wrong type.`);
   }
   for (const { dir } of unmapped) {
     console.warn(`scanner: skipping "${dir}" — not in publish.folder_map; typed pages inside will not publish. Add it to publish.folder_map in _meta/vault-config.md to publish, or to publish.exclude_dirs to silence this warning.`);
