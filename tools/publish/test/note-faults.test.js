@@ -89,6 +89,9 @@ describe('NAMED_NO_PAGE', () => {
       kind: 'entity',
       type: 'npc',
       settled: false,
+      // No index or listing page prints it.
+      listings: [],
+      viaListing: [],
     });
     assert.match(found[0].detail, /Vesper Hale/);
     assert.match(found[0].fix, /GM Notes/);
@@ -422,6 +425,7 @@ describe('ALIAS_IN_PROSE', () => {
       // As often as the page prints it: an NPC page prints its opening line twice (the pull quote).
       alias: 'Old Smuggler', owner: 'Characters/Vesper_Hale.md', count: 2,
       context: 'Everyone feared the old smuggler of the quay.',
+      listings: [],
     });
     assert.match(f.fix, /public name/);
     assert.match(f.fix, /link the name/);

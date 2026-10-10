@@ -13,8 +13,12 @@
 // prints. The names are decided by the page as the build makes it: every link to a note
 // with no page is given an invisible mark in its words, the page is rendered once more by
 // the build's own renderer, and a mark that comes out in the HTML is a name the page prints.
-// A secret name is looked for in the text of the page that was written. The stray `%%` and
-// the unclosed fence are facts the strip chain reports as it runs (processor.js noteFacts).
+// That holds for every page the build writes: a note's own page and a PC's story page, and
+// the pages built from many notes (the section indexes, the timeline, the story, the landing
+// page), where a name is counted against the note the link is written in. The names on a
+// page's connections graph are read from the graph the page holds. A secret name is looked
+// for in the text of each page that was written. The stray `%%` and the unclosed fence are
+// facts the strip chain reports as it runs (processor.js noteFacts).
 // The build runs the audit; `doctor --site` runs the build in memory and lists what it found.
 const fs = require('fs');
 const path = require('path');
@@ -103,7 +107,9 @@ function mainOf(html) {
 
 // How a name is compared with the text of a page: the renderer turns a straight quote into
 // a curly one, and a page may carry either.
-const foldQuotes = (text) => String(text).replace(/[‘’ʼ′]/g, "'").replace(/[“”″]/g, '"');
+const foldQuotes = (text) => String(text).replace(/[\u2018\u2019\u02bc\u2032]/g, "'").replace(/[\u201c\u201d\u2033]/g, '"')
+  // A character that prints nothing (a zero-width space or joiner, a soft hyphen) does not make a different name.
+  .replace(/[\u200b-\u200d\u2060\ufeff\u00ad]/g, '');
 
 // Why each vault note has no page, or null when it has one. A scanned page carries the
 // publish decision's own code; a note the scan never turned into a page gets the reason
@@ -179,10 +185,14 @@ function fileLine(readFile, abs, source, bodyLine) {
  * @param {function} input.getsNoPage  page -> true for a published note with no page
  * @param {function} [input.readFile]
  * @returns {object} the audit:
- *   read(rel, html)                   a page as it was built: looked through for secret names
- *   mark(page)                        the page's markdown, story, frontmatter and title with every link
- *                                     to a no-page note marked, or null when it has none
+ *   read(rel, html, out)              a page as it was built, looked through for secret names;
+ *                                     `out` (its path on the site) for a page not built from one note
+ *   mark(page)                        the page's texts with every link to a no-page note marked,
+ *                                     or null when it has none
+ *   mayPrint(marked, html)            false only when the built page cannot be printing any of them
  *   printed(page, marked, html, storyHtml)  the marked page as rendered: which marks came out
+ *   listing(out, html)                a page built from many notes, rendered with every note marked
+ *   graph(page, nodes)                the nodes of the connections graph the page holds
  *   findings(facts)                   every finding; facts(page) -> { source, strays, openFence }
  */
 function startNoteAudit(input) {
@@ -217,7 +227,10 @@ function startNoteAudit(input) {
   const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const aliasRes = [...aliasOwners.values()].map((a) => ({
     ...a,
-    re: new RegExp('(?<![\\p{L}\\p{N}])' + esc(foldQuotes(a.alias.trim())).replace(/\s+/g, '\\s+') + '(?![\\p{L}\\p{N}])', 'giu'),
+    // Between the words of a name a space, an underscore or a hyphen all read as the same
+    // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
+    re: new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(a.alias.trim()).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
+      + '(?![\\p{L}\\p{N}])', 'giu'),
   }));
   // One cheap look at the raw HTML decides whether a page is read at all: the longest word
   // of each secret name. A name with no word of three letters is looked for on every page.
@@ -226,20 +239,35 @@ function startNoteAudit(input) {
     : probeWords.some((w) => w.length < 3) ? /(?:)/
       : new RegExp([...new Set(probeWords)].map(esc).join('|'), 'iu');
 
-  const named = new Map();     // rel -> { record, pages: Set, printed: Map }
+  // rel -> { record, pages: Set (notes whose own page prints the name), via: Map (note ->
+  // the index and listing pages that print the name from it), printed: Map }
+  const named = new Map();
   const covered = new Set();   // link targets (NFC) that name a note with no page
   const aliasHits = [];
+  const marks = [];            // marks[id - 1] = { record, words, source }, for the whole vault
   const storyRelOf = (page) => input.relOf(page).replace(/\.md$/i, STORY_SUFFIX);
 
   const lookup = (parsed) => {
     if (input.linkMap[parsed.raw] || input.linkMap[parsed.name]) return null;
     return index.get(fold(parsed.name)) || index.get(fold(parsed.name.split('/').pop())) || null;
   };
+  const entryOf = (record) => {
+    let entry = named.get(record.rel);
+    if (!entry) { entry = { record, pages: new Set(), via: new Map(), printed: new Map() }; named.set(record.rel, entry); }
+    return entry;
+  };
+  const sawWords = (entry, words) => {
+    if (!entry.printed.has(words.toLowerCase())) entry.printed.set(words.toLowerCase(), words);
+  };
 
+  // Every text of `page` a page of the site is built from (its body, the body as published,
+  // its story, its frontmatter, its title), each with every link to a no-page note marked.
+  // null when it holds no such link. A mark knows the note its link is written in.
   function mark(page) {
     if (index.size === 0) return null;
-    const marks = [];   // marks[id - 1] = { record, words }
-    const tag = (record, words) => { marks.push({ record, words, target: record.rel }); return markOf(marks.length); };
+    const ids = [];
+    let source = input.relOf(page);
+    const tag = (record, words) => { marks.push({ record, words, source }); ids.push(marks.length); return markOf(marks.length); };
     const links = (text, withBang) => {
       if (typeof text !== 'string' || !text.includes('[[')) return text;
       return text.replace(wikilinkRe('g', withBang), (whole, body) => {
@@ -253,7 +281,10 @@ function startNoteAudit(input) {
         const words = label && !secretKeys.has(gmAliasKey(label)) ? label
           : hit.viaAlias ? hit.record.displayTitle : wikiTargetLabel(parsed.raw);
         if (!words) return whole;
-        return `${bang}[[${parsed.raw}|${tag(hit.record, words)}${words}]]`;
+        // The label the marked link carries is the one the heading reader would read off the
+        // plain link (its own label, else the target's name), so a heading that holds the link
+        // names the same section marked and unmarked.
+        return `${bang}[[${parsed.raw}|${tag(hit.record, words)}${parsed.display || parsed.name}]]`;
       });
     };
     const deep = (value) => {
@@ -281,53 +312,91 @@ function startNoteAudit(input) {
       });
     }
     const markdown = links(page.markdown || '', true);
-    const storyMarkdown = page.storyMarkdown ? links(page.storyMarkdown, true) : page.storyMarkdown;
+    // The body as published feeds what is made from a note beside its page: its opening
+    // lines on a card or an index, the recap a hub or the landing page takes.
+    const publishedMarkdown = typeof page.publishedMarkdown === 'string' ? links(page.publishedMarkdown, true) : page.publishedMarkdown;
     // The title a page prints is read from the frontmatter when the note is scanned.
     const displayTitle = links(page.displayTitle, false);
-    return marks.length === 0 ? null : { markdown, storyMarkdown, frontmatter, displayTitle, marks };
+    source = storyRelOf(page);
+    const storyMarkdown = page.storyMarkdown ? links(page.storyMarkdown, true) : page.storyMarkdown;
+    return ids.length === 0 ? null : { markdown, publishedMarkdown, storyMarkdown, frontmatter, displayTitle, ids };
   }
 
-  // Whether a page as built could be printing one of the names `marked` holds: the words of
-  // some marked link, read loosely (letters and digits in order, whatever stands between
-  // them), are somewhere in its HTML. Most links to a note with no page sit in a hidden part
-  // or in a field the page does not print; such a page needs no second render to say so.
+  // Whether a page as built could be printing one of the names `marked` holds. Most links to
+  // a note with no page sit in a hidden part or in a field the page does not print; such a
+  // page needs no second render to say so. The test may only ever say yes too often: a name
+  // is ruled out only when one of its words, as letters and digits, is nowhere in the HTML.
+  // Whatever stands between the words there (a space, `&amp;`, a tag) is not looked at. A
+  // word the renderer may itself change is not asked for (a `(c)` or `(tm)`, a character
+  // reference), and a name that carries markup inside it is never ruled out.
   function mayPrint(marked, html) {
-    if (marked.probe === undefined) {
-      // Each marked name as its words (letters and digits), longest word first.
+    if (marked.names === undefined) {
       const names = new Map();
-      for (const m of marked.marks) {
-        const words = m.words.toLowerCase();
-        if (!names.has(words)) names.set(words, words.match(/[\p{L}\p{N}]+/gu) || []);
+      for (const id of marked.ids) {
+        const { words } = marks[id - 1];
+        if (names.has(words)) continue;
+        const plain = words.replace(/\((?:c|r|tm|p)\)/gi, ' ').replace(/&[a-z0-9#]+;/gi, ' ');
+        names.set(words, /[*_`~=\\<[\]^$]/.test(words) ? null : (plain.toLowerCase().match(/[\p{L}\p{N}]+/gu) || []));
       }
       marked.names = [...names.values()];
-      const longest = marked.names.map((runs) => runs.slice().sort((x, y) => y.length - x.length)[0]);
+      marked.always = marked.names.some((runs) => runs === null || runs.length === 0);
+      const longest = marked.names.map((runs) => (runs || []).slice().sort((x, y) => y.length - x.length)[0]);
       // One pass over the raw HTML settles most pages: the longest word of any of the names.
-      marked.probe = longest.some((w) => !w) ? null : new RegExp([...new Set(longest)].map(esc).join('|'), 'i');
+      marked.probe = marked.always ? null : new RegExp([...new Set(longest)].map(esc).join('|'), 'i');
     }
-    if (marked.probe && !marked.probe.test(html)) return false;
+    if (marked.always) return true;
+    if (!marked.probe.test(html)) return false;
     const lower = String(html).toLowerCase();
-    // Every word of a name must be there (a plain search), and then in order with little
-    // between them. "Little" is read loosely, which only sends a page on to the second render.
-    return marked.names.some((runs) => runs.every((run) => lower.includes(run))
-      && (runs.length < 2 || new RegExp(runs.map(esc).join('[^a-z0-9]{0,12}')).test(lower)));
+    return marked.names.some((runs) => runs.every((run) => lower.includes(run)));
   }
 
+  // The marked page as rendered: each mark that came out is a name the page prints.
   function printed(page, marked, html, storyHtml) {
     const note = (rel, ids) => {
       for (const id of ids) {
-        const m = marked.marks[id - 1];
+        const m = marks[id - 1];
         if (!m) continue;
-        let entry = named.get(m.record.rel);
-        if (!entry) { entry = { record: m.record, pages: new Set(), printed: new Map() }; named.set(m.record.rel, entry); }
+        const entry = entryOf(m.record);
         entry.pages.add(rel);
-        if (!entry.printed.has(m.words.toLowerCase())) entry.printed.set(m.words.toLowerCase(), m.words);
+        sawWords(entry, m.words);
       }
     };
     note(input.relOf(page), marksIn(html));
     if (storyHtml) note(storyRelOf(page), marksIn(storyHtml));
   }
 
-  function read(rel, html) {
+  // A page that is not one note's own (an index, the landing page, the timeline, a story
+  // chapter), rendered with every note marked: a mark that came out is a name that page
+  // prints from the note the link is written in. It is counted against that note, which is
+  // the file the fix is made in, and the finding names the page.
+  function listing(out, html) {
+    for (const id of marksIn(html)) {
+      const m = marks[id - 1];
+      if (!m) continue;
+      const entry = entryOf(m.record);
+      if (!entry.via.has(m.source)) entry.via.set(m.source, new Set());
+      entry.via.get(m.source).add(out);
+      sawWords(entry, m.words);
+    }
+  }
+
+  // A name a page's connections graph prints: the graph draws a relationship's target that
+  // has no page as a labelled node, on the page of either end and of their neighbours.
+  function graph(page, nodes) {
+    if (index.size === 0) return;
+    for (const node of nodes) {
+      if (node.outputPath || !node.hop) continue;
+      const hit = lookup(parseWikilink(String(node.id)));
+      if (!hit) continue;
+      const entry = entryOf(hit.record);
+      entry.pages.add(input.relOf(page));
+      sawWords(entry, node.displayTitle);
+    }
+  }
+
+  // A page as it was built, looked through for secret names. `rel` is the note it is built
+  // from; for a page that is not one note's own, `out` is its path on the site instead.
+  function read(rel, html, out = null) {
     if (!probe || !probe.test(html)) return;
     // The page's own text first; a name found only in its <head> or in a tag's words (the
     // tab title, a description, an image's alt) is on the site too.
@@ -335,14 +404,22 @@ function startNoteAudit(input) {
     // it is blanked for the search and kept for the sentence shown.
     const whole = String(html);
     const headEnd = whole.search(/<\/head\s*>/i);
+    const bodyHtml = headEnd === -1 ? whole : whole.slice(headEnd);
     const blank = (text) => text.replace(/\u0002[^\u0003]*\u0003/g, (m) => LINK_OPEN.repeat(m.length));
-    const body = foldQuotes(pageText(headEnd === -1 ? whole : whole.slice(headEnd), { links: 'fence' }));
+    const body = foldQuotes(pageText(bodyHtml, { links: 'fence' }));
     const bodyOwn = blank(body);
+    let boxes = null;
     let rest = null;
     for (const a of aliasRes) {
       a.re.lastIndex = 0;
       let text = body;
       let matches = [...bodyOwn.matchAll(a.re)];
+      if (matches.length === 0) {
+        // A sheet's small boxes run a label and its value together ("TL" and the name).
+        if (boxes === null) boxes = foldQuotes(pageText(bodyHtml, { links: 'fence', spaced: true }));
+        text = boxes;
+        matches = [...blank(boxes).matchAll(a.re)];
+      }
       if (matches.length === 0) {
         if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: true }));
         text = rest;
@@ -353,12 +430,69 @@ function startNoteAudit(input) {
       const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
       const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
       aliasHits.push({
-        code: 'ALIAS_IN_PROSE', severity: 'warning', path: rel,
-        detail: `"${a.alias}", a name you keep secret in gm_aliases${a.rel === rel ? '' : ` (of ${a.rel})`}, is printed on the page${matches.length > 1 ? ` ${matches.length} times` : ''}`,
-        fix: `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${a.alias}]]): the build prints the page's public title for a linked GM alias`,
-        alias: a.alias, owner: a.rel, count: matches.length, context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
+        alias: a.alias, owner: a.rel, re: a.re, rel, out, count: matches.length,
+        context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
       });
     }
+  }
+
+  // The secret-name findings. A name printed on a note's own page is that note's. One that
+  // an index or listing page prints is counted against each note the page could have it
+  // from (a note whose title, published frontmatter or published body holds the name), and
+  // against the page itself when no note does.
+  function aliasFindings() {
+    const out = new Map();   // "path\nalias" -> finding
+    const fixLine = (alias) => `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
+    for (const hit of aliasHits.filter((h) => h.out === null)) {
+      out.set(`${hit.rel}\n${hit.alias}`, {
+        code: 'ALIAS_IN_PROSE', severity: 'warning', path: hit.rel,
+        detail: `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === hit.rel ? '' : ` (of ${hit.owner})`}, is printed on the page${hit.count > 1 ? ` ${hit.count} times` : ''}`,
+        fix: fixLine(hit.alias),
+        alias: hit.alias, owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+      });
+    }
+    const listed = aliasHits.filter((h) => h.out !== null);
+    if (listed.length === 0) return [...out.values()];
+    const strings = (value, into) => {
+      if (typeof value === 'string') into.push(value);
+      else if (Array.isArray(value)) value.forEach((v) => strings(v, into));
+      else if (isPlain(value)) Object.values(value).forEach((v) => strings(v, into));
+      return into;
+    };
+    const textOf = new Map();
+    const holds = (page, re) => {
+      if (!textOf.has(page)) {
+        textOf.set(page, foldQuotes(strings(page.frontmatter || {}, [String(page.displayTitle || ''), String(page.publishedMarkdown || '')]).join('\n')));
+      }
+      re.lastIndex = 0;
+      return re.test(textOf.get(page));
+    };
+    for (const hit of listed) {
+      // A section index lists the notes of its own folder: where one of those holds the
+      // name, it is theirs. Any other page (the landing page, the timeline) may have it from
+      // any note.
+      const holders = input.published.filter((page) => holds(page, hit.re));
+      const dir = /\/index\.html$/.test(hit.out) ? hit.out.replace(/index\.html$/, '') : null;
+      const inDir = dir === null ? [] : holders.filter((page) => String(page.outputPath).startsWith(dir));
+      const sources = (inDir.length > 0 ? inDir : holders).map((page) => input.relOf(page)).sort();
+      for (const rel of sources.length > 0 ? sources : [hit.out]) {
+        const key = `${rel}\n${hit.alias}`;
+        if (!out.has(key)) {
+          out.set(key, {
+            code: 'ALIAS_IN_PROSE', severity: 'warning', path: rel,
+            detail: sources.length > 0
+              ? `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
+              : `"${hit.alias}", a name you keep secret in gm_aliases (of ${hit.owner}), is printed on this page of the site, which is not built from one note`,
+            fix: fixLine(hit.alias),
+            alias: hit.alias, owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+          });
+        }
+        const finding = out.get(key);
+        if (!finding.listings.includes(hit.out)) finding.listings.push(hit.out);
+      }
+    }
+    for (const finding of out.values()) finding.listings.sort();
+    return [...out.values()];
   }
 
   function findings(facts) {
@@ -417,7 +551,7 @@ function startNoteAudit(input) {
       }
     }
 
-    found.push(...aliasHits);
+    found.push(...aliasFindings());
     // --- NAMED_NO_PAGE: one finding per note --------------------------------------------
     if (named.size > 0) {
       let annotations = null;   // the manifest's written reasons, read only when something is named
@@ -437,7 +571,11 @@ function startNoteAudit(input) {
         const settled = !!(listed && listed.section === 'excluded' && reason && STAYS_HIDDEN.test(reason));
         const type = typeOfNote(record, readFile, input.vaultPath);
         const kind = kindOfType(type);
-        const pagesNaming = [...entry.pages].sort();
+        // A note whose own page prints the name, and a note an index or listing page prints
+        // it from, are both pages that name it; the second kind is said apart.
+        const pagesNaming = [...new Set([...entry.pages, ...entry.via.keys()])].sort();
+        const viaListing = [...entry.via.keys()].filter((p) => !entry.pages.has(p)).sort();
+        const listings = [...new Set([...entry.via.values()].flatMap((outs) => [...outs]))].sort();
         const printed = [...entry.printed.values()];
         const name = baseName(rel);
         let fix;
@@ -454,9 +592,11 @@ function startNoteAudit(input) {
         }
         found.push({
           code: 'NAMED_NO_PAGE', severity: 'warning', path: rel,
-          detail: `has no page (${record.why}) but is named on ${plural(pagesNaming.length, '1 published page', `${pagesNaming.length} published pages`)} as ${printed.slice(0, 3).map((w) => `"${w}"`).join(', ')}${printed.length > 3 ? ', …' : ''}`,
+          detail: `has no page (${record.why}) but is named on ${plural(pagesNaming.length, '1 published page', `${pagesNaming.length} published pages`)} as ${printed.slice(0, 3).map((w) => `"${w}"`).join(', ')}${printed.length > 3 ? ', …' : ''}`
+            + (viaListing.length > 0 ? `; for ${viaListing.length} of them it is an index or listing page that prints the name, from that note (${listings.slice(0, 2).join(', ')}${listings.length > 2 ? ', …' : ''})` : ''),
           fix,
           why: record.why, reason, pages: pagesNaming, pageCount: pagesNaming.length, printed, kind, type, settled,
+          listings, viaListing,
         });
       }
     }
@@ -468,7 +608,7 @@ function startNoteAudit(input) {
     return sorted;
   }
 
-  return { read, mark, mayPrint, printed, findings, storyRelOf };
+  return { read, mark, mayPrint, printed, listing, graph, findings, storyRelOf };
 }
 
 // A no-page note's `type`: from its scanned page, else from its file (the scan never read a
@@ -526,4 +666,4 @@ function summaryLines(findings) {
   return lines;
 }
 
-module.exports = { startNoteAudit, summaryLines, kindOfType, pageText, mainOf, CODES };
+module.exports = { startNoteAudit, summaryLines, kindOfType, pageText, mainOf, CODES, MARK_RE };

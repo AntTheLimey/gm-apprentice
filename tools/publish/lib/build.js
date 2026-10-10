@@ -13,7 +13,8 @@ const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
-const { startNoteAudit, summaryLines, pageText, mainOf } = require('./note-faults');
+const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
+const { ignoringMark } = require('./heading-key');
 const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
 const { siteOff } = require('./switches');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -899,6 +900,8 @@ function buildSite(options) {
     if (crestBase && imageMap[crestBase]) usedImages.add(crestBase);
   }
   let errorCount = 0;
+  const renderErrors = [];   // what failed to render, for a caller that gets no console (the in-memory build)
+  let auditGaps = 0;         // pages the note-faults audit could not render a second time
   const partyEntries = [];
   // PCs whose system has a sheet renderer that produced no sheet (#273).
   const sheetlessPcs = [];
@@ -1154,6 +1157,10 @@ function buildSite(options) {
   function seen(rel, html, page, isStory) {
     audit.read(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
+    // The connections graph is drawn before the page is and set into it whole: where the
+    // page holds it, the names on its nodes are names the page prints.
+    const drawn = isStory ? null : entityGraphs[page.title];
+    if (drawn && html.includes(drawn)) audit.graph(page, entityGraphData[page.title].nodes);
     if (toRender.has(page)) return;
     if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
     const marked = markedOf.get(page);
@@ -1165,6 +1172,12 @@ function buildSite(options) {
   function shownOf() {
     if (!shownPage || !pages.includes(shownPage)) return null;
     const text = (html) => (html === null ? null : pageText(mainOf(html), { spaced: true }));
+    // The image files the page shows (a portrait, an embed): they are copied to the site with it.
+    const images = [...new Set([shown.page, shown.story].filter(Boolean)
+      .flatMap((html) => [...mainOf(html).matchAll(/<img\b[^>]*\ssrc="([^"]+)"/gi)].map((m) => m[1]))
+      .filter((src) => !/^(?:[a-z][a-z0-9+.-]*:|\/\/)/i.test(src))
+      .map((src) => { try { return decodeURIComponent(src); } catch (e) { return src; } })
+      .map((src) => src.replace(/^(?:\.\.?\/)+/, '')))].sort();
     const fm = shownPage.frontmatter || {};
     let card = null;
     if (publishConfig.link_previews !== 'off') {
@@ -1177,6 +1190,7 @@ function buildSite(options) {
       // A story companion asked about by its own path shows the story page alone.
       page: vaultRelPathOf(shownPage) === shownRel ? text(shown.page) : null,
       story: text(shown.story),
+      images,
       card,
       search: searchEnabled ? {
         title: shownPage.displayTitle || '', subtitle: subtitleOf(fm),
@@ -1199,6 +1213,7 @@ function buildSite(options) {
       console.log(`  wrote ${page.outputPath}`);
     } catch (e) {
       errorCount++;
+      renderErrors.push(`${page.outputPath}: ${e.message}`);
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
     }
   }
@@ -1235,6 +1250,7 @@ function buildSite(options) {
         roster.partyManifest = roster.board.buildManifest(partyCampaignId, partyEntries);
       } catch (e) {
         errorCount++;
+        renderErrors.push(`the party board: ${e.message}`);
         console.error(`  ERROR building party manifest: ${e.message}`);
       }
     }
@@ -1249,6 +1265,7 @@ function buildSite(options) {
         console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
       } catch (e) {
         errorCount++;
+        renderErrors.push(`${deferredRoster.page.outputPath}: ${e.message}`);
         console.error(`  ERROR rendering roster ${deferredRoster.page.outputPath}: ${e.message}`);
       }
     }
@@ -1366,60 +1383,68 @@ function buildSite(options) {
   const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
-  for (const [dir, label] of Object.entries(DIR_LABELS)) {
-    if (dry) break;
-    if (dir === 'characters/pcs' && pcRedirectTarget) {
-      const depth = dir.split('/').length;
-      const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
-      const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
-      const outPath = path.join(outputDir, dir, 'index.html');
-      ensureDir(outPath);
-      fs.writeFileSync(outPath, redirectHtml);
-      console.log(`  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
-      continue;
-    }
-    // Redirect events/ at the timeline only when one exists; with no timeline the redirect
-    // would dangle, so fall through and give events its own index.
-    if (dir === 'events' && timelineHref) {
-      const rel = encodeHref(relativePath(dir, timelineHref));
-      const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
-      const outPath = path.join(outputDir, dir, 'index.html');
-      ensureDir(outPath);
-      fs.writeFileSync(outPath, redirectHtml);
-      console.log(`  wrote ${dir}/index.html (redirect → ${timelineHref})`);
-      continue;
-    }
-    let dirPages = [];
-    for (const [pageDir, pageDirPages] of Object.entries(dirs)) {
-      if (pageDir === dir || pageDir.startsWith(dir + '/')) {
-        dirPages = dirPages.concat(pageDirPages);
-      }
-    }
-    const authoredIndex = dirPages.find(p => p.outputPath === dir + '/index.html');
-    if (authoredIndex) {
-      console.log(`  skipped ${dir}/index.html (authored index page)`);
-      continue;
-    }
-    const indexHtml = indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap);
-    const outPath = path.join(outputDir, dir, 'index.html');
-    ensureDir(outPath);
-    fs.writeFileSync(outPath, indexHtml);
-    console.log(`  wrote ${dir}/index.html`);
-  }
-
-  // Timeline page
   const { timelineTemplate } = require('./templates/timeline-page');
 
-  if (generatesTimeline && !dry) {
-    const fullTimelineContent = renderTimelineHTML(timelineData);
-    const timelineHtml = timelineTemplate(fullTimelineContent, navFor, config, publishConfig);
-    const timelinePath = path.join(outputDir, 'timeline.html');
-    ensureDir(timelinePath);
-    fs.writeFileSync(timelinePath, timelineHtml);
-    console.log('  wrote timeline.html');
+  // Every page of the site that is not one note's own, in the order the build writes them:
+  // the section indexes, the timeline, the story chapters, the story's contents page and the
+  // landing page. Each prints words taken from many notes. `emit(out, html, said)` gets the
+  // page's path on the site, its HTML and the line the build prints for it. `live` is the
+  // build's own pass; the audit's pass (every note marked) asks for the pages again and
+  // skips what holds no note's words (a redirect) and what is a note's own page (a PC's story).
+  function eachListing(emit, live) {
+    for (const [dir, label] of Object.entries(DIR_LABELS)) {
+      if (dir === 'characters/pcs' && pcRedirectTarget) {
+        const depth = dir.split('/').length;
+        const rel = encodeHref('../'.repeat(depth) + pcRedirectTarget);
+        const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Player Characters</a></body></html>`;
+        if (live) emit(`${dir}/index.html`, redirectHtml, `  wrote ${dir}/index.html (redirect → ${pcRedirectTarget})`);
+        continue;
+      }
+      // Redirect events/ at the timeline only when one exists; with no timeline the redirect
+      // would dangle, so fall through and give events its own index.
+      if (dir === 'events' && timelineHref) {
+        const rel = encodeHref(relativePath(dir, timelineHref));
+        const redirectHtml = `<!DOCTYPE html><html><head><meta http-equiv="refresh" content="0;url=${rel}"><link rel="canonical" href="${rel}"></head><body><a href="${rel}">Timeline</a></body></html>`;
+        if (live) emit(`${dir}/index.html`, redirectHtml, `  wrote ${dir}/index.html (redirect → ${timelineHref})`);
+        continue;
+      }
+      let dirPages = [];
+      for (const [pageDir, pageDirPages] of Object.entries(dirs)) {
+        if (pageDir === dir || pageDir.startsWith(dir + '/')) {
+          dirPages = dirPages.concat(pageDirPages);
+        }
+      }
+      const authoredIndex = dirPages.find(p => p.outputPath === dir + '/index.html');
+      if (authoredIndex) {
+        if (live) console.log(`  skipped ${dir}/index.html (authored index page)`);
+        continue;
+      }
+      emit(`${dir}/index.html`, indexTemplate(dir, label, dirPages, navFor, config, publishConfig, imageMap), `  wrote ${dir}/index.html`);
+    }
 
-    publishConfig._timelineStrip = renderTimelineStrip(timelineData, { maxEvents: 15 });
+    // Timeline page
+    if (generatesTimeline) {
+      // The events are read from the notes as they stand: marked, in the audit's pass.
+      const data = live ? timelineData : buildTimelineData(pages);
+      emit('timeline.html', timelineTemplate(renderTimelineHTML(data), navFor, config, publishConfig), '  wrote timeline.html');
+      publishConfig._timelineStrip = renderTimelineStrip(data, { maxEvents: 15 });
+    }
+
+    // The story: its chapters, each PC's own story, its contents page.
+    const spine = buildStorySpine(pages, linkMap, hubWrapUps);
+    for (const unit of spine) {
+      unit.refsHtml = renderRefsHtml(unit);
+      emit(unit.outputPath, renderStoryUnit(unit, config, publishConfig, navFor), `  wrote ${unit.outputPath}`);
+    }
+    if (live) characterStories = buildCharacterStories();
+    if (spine.length || characterStories.length) {
+      emit('story.html', storyLanding(spine, characterStories, config, publishConfig, navFor), '  wrote story.html');
+    }
+
+    // Landing page
+    emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps), '  wrote index.html');
   }
+  let characterStories = [];
 
   function renderRefsHtml(unit) {
     const refs = unitRefs(unit);
@@ -1457,48 +1482,26 @@ function buildSite(options) {
     const stories = [];
     for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
       const { story, html } = renderCharacterStory(pc, liveFx);
+      stories.push(story);
+      if (dry) continue;
       const full = path.join(outputDir, story.outputPath);
       ensureDir(full);
       fs.writeFileSync(full, html);
       console.log(`  wrote ${story.outputPath}`);
-      stories.push(story);
     }
     return stories;
   }
 
-  function buildStory() {
-    const spine = buildStorySpine(pages, linkMap, hubWrapUps);
-    for (const unit of spine) {
-      unit.refsHtml = renderRefsHtml(unit);
-      const html = renderStoryUnit(unit, config, publishConfig, navFor);
-      const outPath = path.join(outputDir, unit.outputPath);
-      ensureDir(outPath);
-      fs.writeFileSync(outPath, html);
-      console.log(`  wrote ${unit.outputPath}`);
-    }
-    const characterStories = buildCharacterStories();
-    if (spine.length || characterStories.length) {
-      const landing = storyLanding(spine, characterStories, config, publishConfig, navFor);
-      const lp = path.join(outputDir, 'story.html');
-      ensureDir(lp);
-      fs.writeFileSync(lp, landing);
-      console.log('  wrote story.html');
-    }
-    return { spine, characterStories, hasStory: !!(spine.length || characterStories.length) };
-  }
-
-  if (dry) {
-    for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
-      try { renderCharacterStory(pc, liveFx); } catch (e) { /* a story that fails to render prints nothing */ }
-    }
-  } else {
-    buildStory();
-
-    // Landing page
-    const landingHtml = landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps);
-    fs.writeFileSync(path.join(outputDir, 'index.html'), landingHtml);
-    console.log('  wrote index.html');
-  }
+  // Written, and read by the note-faults audit for a secret name. In memory nothing is
+  // written, and every one of them is still made: what they print is part of the site.
+  eachListing((out, html, said) => {
+    audit.read(null, html, out);
+    if (dry) return;
+    const full = path.join(outputDir, out);
+    ensureDir(full);
+    fs.writeFileSync(full, html);
+    console.log(said);
+  }, true);
 
   // Last thing before "Done", so it is the line the GM reads (#277). A session in Excluded
   // is a decision and never lands here; one in Needs Decision or in no section does.
@@ -1574,37 +1577,66 @@ function buildSite(options) {
   // page that links such a note and may be printing its name (`seen`) is rendered once more
   // with those links marked, by the same renderPage, and the marks that come out in the
   // HTML are the names it prints.
-  quietly(() => {
+  //
+  // A page that is not one note's own prints words from many notes: an index its entries'
+  // fields, the landing page a recap, a story chapter a session's cast. Those are rendered
+  // once more too, with every note marked at once, and a mark that comes out there is
+  // counted against the note the link is written in (audit.listing).
+  //
+  // While either runs, the heading reader takes the mark out of a title before reading it,
+  // so a heading that holds a marked link hides or shows what it does in the build proper.
+  const FIELDS = ['markdown', 'publishedMarkdown', 'storyMarkdown', 'frontmatter', 'displayTitle'];
+  const putOn = (page, marked) => {
+    const own = {};
+    for (const f of FIELDS) {
+      own[f] = page[f];
+      if (f in page && marked[f] !== undefined) page[f] = marked[f];
+    }
+    return own;
+  };
+  const takeOff = (page, own) => { for (const f of FIELDS) if (f in page) page[f] = own[f]; };
+  quietly(() => ignoringMark(MARK_RE, () => {
     for (const page of pages) {
       const marked = toRender.get(page);
       if (!marked) continue;
-      const own = { markdown: page.markdown, storyMarkdown: page.storyMarkdown, frontmatter: page.frontmatter, displayTitle: page.displayTitle };
-      page.markdown = marked.markdown;
-      page.frontmatter = marked.frontmatter;
-      page.displayTitle = marked.displayTitle;
-      if (own.storyMarkdown) page.storyMarkdown = marked.storyMarkdown;
+      const own = putOn(page, marked);
       let html = '';
       let storyHtml = '';
       try {
         const out = renderPage(page, scratchFx());
         html = out.roster ? renderRoster(page, out.roster) : out.html;
-      } catch (e) { /* a page that does not render prints no name */ }
+      } catch (e) { auditGaps++; }
       try {
         if (own.storyMarkdown && page.frontmatter.type === 'pc') storyHtml = renderCharacterStory(page, scratchFx()).html;
-      } catch (e) { /* nor does its story */ }
-      page.markdown = own.markdown;
-      page.frontmatter = own.frontmatter;
-      page.displayTitle = own.displayTitle;
-      if (own.storyMarkdown) page.storyMarkdown = own.storyMarkdown;
+      } catch (e) { auditGaps++; }
+      takeOff(page, own);
       audit.printed(page, marked, html, storyHtml);
     }
-  });
+
+    // The landing page also reads notes that have no page (the campaign overview).
+    for (const page of corpus) if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
+    const everyMarked = [...markedOf].filter(([, marked]) => marked);
+    if (everyMarked.length === 0) return;
+    const owns = everyMarked.map(([page, marked]) => putOn(page, marked));
+    const strip = publishConfig._timelineStrip;
+    try {
+      eachListing((out, html) => audit.listing(out, html), false);
+    } catch (e) {
+      auditGaps++;
+    } finally {
+      everyMarked.forEach(([page], k) => takeOff(page, owns[k]));
+      publishConfig._timelineStrip = strip;
+    }
+  }));
+  if (auditGaps > 0) {
+    console.warn(`  WARNING: the note-faults check could not read ${auditGaps} page${auditGaps === 1 ? '' : 's'} a second time; a note named there with no page may be missing from its list.`);
+  }
   const noteFaults = audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
   if (dry) {
-    return { noteFaults, shown: shownOf() };
+    return { noteFaults, shown: shownOf(), renderErrors, auditGaps };
   }
 
   if (errorCount > 0) {

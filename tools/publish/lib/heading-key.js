@@ -108,13 +108,42 @@ function readings(text) {
   return keys;
 }
 
+// The note-faults audit renders a page a second time with an invisible mark in the label of
+// some links (note-faults.js). A heading that holds such a link must name the same section
+// it does unmarked, so while that render runs the mark is taken out before a title is read.
+// Never set outside it: in every other reading these characters are the GM's own.
+let auditMark = null;
+function ignoringMark(pattern, fn) {
+  const was = auditMark;
+  auditMark = pattern;
+  try { return fn(); } finally { auditMark = was; }
+}
+
 // `title` with its character references decoded, in NFC.
 function decoded(title) {
-  return decodeReferences(String(title == null ? '' : title)).normalize('NFC');
+  const text = String(title == null ? '' : title);
+  return decodeReferences(auditMark ? text.replace(auditMark, '') : text).normalize('NFC');
 }
 
 // Every reading of `title`, the label reading first, without duplicates or empties.
+// A build reads the same few titles (each heading of each note, each excluded name) many
+// times over, so the readings of a title are kept. They depend on the title alone, bar the
+// audit's mark (ignoringMark), under which nothing is kept or reused.
+const kept = new Map();
+const KEPT_MOST = 20000;
 function headingKeys(title) {
+  if (auditMark) return readKeys(title);
+  const text = String(title == null ? '' : title);
+  let keys = kept.get(text);
+  if (keys === undefined) {
+    if (kept.size >= KEPT_MOST) kept.clear();
+    keys = Object.freeze(readKeys(text));
+    kept.set(text, keys);
+  }
+  return keys;
+}
+
+function readKeys(title) {
   // A pasted heading can carry what the eye does not see: entities (`GM&nbsp;Notes`),
   // zero-width characters and soft hyphens, a BOM. All are removed or read as the space
   // they stand for. Other characters the GM typed (a period, a footnote mark) are words.
@@ -155,4 +184,4 @@ function titleNamedIn(title, names) {
   return loose.some(k => squashed.has(k));
 }
 
-module.exports = { headingKey, headingKeys, squashedKeys, titleNamedIn, SPACE_RANGES, INVISIBLE_RANGES };
+module.exports = { headingKey, headingKeys, squashedKeys, titleNamedIn, SPACE_RANGES, INVISIBLE_RANGES, ignoringMark };

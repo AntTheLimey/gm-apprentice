@@ -132,6 +132,22 @@ describe('explain', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('--shown names the image files that publish with the page: the portrait and an embed', async () => {
+    const vault = makeVault();
+    write(vault, 'People/Vesper.md', '---\ntype: npc\nportrait: vesper.png\n---\n\nA ferryman.\n\n![[quay map.png]]\n');
+    write(vault, '_attachments/vesper.png', 'x');
+    write(vault, '_attachments/quay map.png', 'x');
+    write(vault, '_attachments/unused.png', 'x');
+    const configPath = npcSite(vault);
+    const c = capture();
+    await runExplain({ configPath, target: 'People/Vesper.md', shown: true, json: true }, c.deps);
+    assert.deepStrictEqual(JSON.parse(c.out.join('')).shown.images, ['images/quay map.png', 'images/vesper.png']);
+    const human = capture();
+    await runExplain({ configPath, target: 'People/Vesper.md', shown: true }, human.deps);
+    assert.match(human.text(), /^ {2}image files that publish with it:\n {4}images\/quay map\.png\n {4}images\/vesper\.png$/m);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('--shown builds a note the manifest withholds as if it published, and writes nothing', async () => {
     const vault = makeVault();
     write(vault, 'People/Vesper.md', hiddenNote);

@@ -106,6 +106,19 @@ describe('doctor --site', () => {
     assert.ok(!fs.existsSync(path.join(path.dirname(configPath), 'docs')), 'the audit wrote a site');
   });
 
+  it('lists a frontmatter value of the wrong type, which the build read as best it could', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-mistyped-'));
+    write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\nstatus: [alive, well]\naliases: {a: 1}\n---\n\nFine.\n');
+    const { configPath } = siteFor(vault);
+    const cap = capture();
+    const rc = await runSiteDoctor({ configPath, json: true }, cap.deps);
+    const found = JSON.parse(cap.text()).findings.filter((f) => f.code === 'FRONTMATTER_MISTYPED');
+    assert.deepStrictEqual(found.map((f) => [f.severity, f.path]), [['warning', 'Characters/NPCs/Odd.md'], ['warning', 'Characters/NPCs/Odd.md']]);
+    assert.match(found.map((f) => f.detail).join('\n'), /^status: is a list where one value is expected/m);
+    assert.match(found.map((f) => f.detail).join('\n'), /^aliases: /m);
+    assert.strictEqual(rc, 0);
+  });
+
   it('says so, as an error, when the site cannot be built in memory: never a clean list', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-broken-'));
     write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');

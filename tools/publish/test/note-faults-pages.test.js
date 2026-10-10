@@ -272,6 +272,213 @@ describe('a relationship whose type is only a comment', () => {
   });
 });
 
+describe('the look for a name in a page only ever sends more pages to the second render', () => {
+  // The page prints "Marsh & Sons"; its HTML holds `&amp;` between the words.
+  const amp = { 'Hidden/Marsh_&_Sons.md': hidden() };
+  const named = async (files) => pagesOf(await faults(Object.assign({}, amp, { 'Hidden/Old_Tam.md': hidden() }, files), 'NAMED_NO_PAGE'), 'Hidden/Marsh_&_Sons.md');
+
+  it('finds a name with an & in it in the body', async () => {
+    assert.deepStrictEqual(await named({ 'People/Bo_Pike.md': npcNote('Intro.\n\n## Seen\n\nWe met [[Marsh_&_Sons]] today.') }), ['People/Bo_Pike.md']);
+  });
+  it('finds it in a frontmatter field the page prints', async () => {
+    assert.deepStrictEqual(await named({ 'People/Bo_Pike.md': npcNote('Intro.', 'location: "[[Marsh_&_Sons]]"\n') }), ['People/Bo_Pike.md']);
+  });
+  it('finds it in a table cell, and as a label with an & in it', async () => {
+    const found = await faults(Object.assign({}, amp, {
+      'Hidden/Old_Tam.md': hidden(),
+      'People/Bo_Pike.md': npcNote('Intro.\n\n## Seen\n\n| who | where |\n|---|---|\n| x | [[Marsh_&_Sons]] |\n'),
+      'People/Cy_Dunn.md': npcNote('Intro.\n\n## Seen\n\n| who |\n|---|\n| [[Old_Tam\\|Tam & Co]] |\n'),
+    }), 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [
+      ['Hidden/Marsh_&_Sons.md', ['People/Bo_Pike.md'], ['Marsh & Sons']],
+      ['Hidden/Old_Tam.md', ['People/Cy_Dunn.md'], ['Tam & Co']],
+    ]);
+  });
+  it('finds a label with bold inside it, with a typed character reference, and one the typographer rewrites', async () => {
+    for (const label of ['**Old** Tam', 'O**l**d Tam', 'Caf&eacute; Tam', 'Tam (tm) Co', 'Corwin->Thides']) {
+      const found = await faults({
+        'Hidden/Old_Tam.md': hidden(),
+        'People/Bo_Pike.md': npcNote(`Intro.\n\n## Seen\n\nWe met [[Old_Tam|${label}]] today.`),
+      }, 'NAMED_NO_PAGE');
+      assert.deepStrictEqual(found.map((f) => f.pages), [['People/Bo_Pike.md']], label);
+    }
+  });
+});
+
+describe('a name only an index or listing page prints', () => {
+  const npcs = (extra) => `---\ntype: npc\n${extra}---\n\nA guest.\n`;
+
+  it('NAMED_NO_PAGE: counted against the note whose field supplies the words, and the finding names the index page', async () => {
+    const { configPath, root } = site({
+      'Hidden/Old_Tam.md': hidden(),
+      'Characters/NPCs/Bo_Pike.md': npcs('first_appearance: "[[Old_Tam]]"\n'),
+    });
+    const found = (await fromDoctor(configPath)).filter((f) => f.code === 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE'), found);
+    // The ground truth: the NPC's own page does not print the field, the index does.
+    assert.ok(!/Old Tam/.test(fs.readFileSync(path.join(root, 'docs', 'characters', 'npcs', 'bo-pike.html'), 'utf8')));
+    assert.match(fs.readFileSync(path.join(root, 'docs', 'characters', 'npcs', 'index.html'), 'utf8'), /Old Tam/);
+    assert.strictEqual(found.length, 1);
+    assert.deepStrictEqual([found[0].path, found[0].pages, found[0].viaListing, found[0].listings],
+      ['Hidden/Old_Tam.md', ['Characters/NPCs/Bo_Pike.md'], ['Characters/NPCs/Bo_Pike.md'], ['characters/npcs/index.html']]);
+    assert.match(found[0].detail, /for 1 of them it is an index or listing page that prints the name, from that note \(characters\/npcs\/index\.html\)/);
+  });
+
+  it('NAMED_NO_PAGE: a note whose own page prints the name too is not said to be index-only', async () => {
+    const [f] = await faults({
+      'Hidden/Old_Tam.md': hidden(),
+      'Characters/NPCs/Bo_Pike.md': `---\ntype: npc\nfirst_appearance: "[[Old_Tam]]"\n---\n\nIntro.\n\n## Seen\n\nWith [[Old_Tam]].\n`,
+    }, 'NAMED_NO_PAGE');
+    assert.deepStrictEqual([f.pages, f.viaListing, f.listings], [['Characters/NPCs/Bo_Pike.md'], [], ['characters/npcs/index.html']]);
+    assert.ok(!/index or listing page/.test(f.detail), f.detail);
+  });
+
+  it('ALIAS_IN_PROSE: a secret name an index page prints from a note\'s field is reported against that note', async () => {
+    const found = await faults({
+      'Characters/NPCs/Mr_Grey.md': npcs('gm_aliases: ["The Watcher"]\n'),
+      'Creatures/Mire_Hound.md': '---\ntype: creature\nsubtype: "Hound of The Watcher"\n---\n\nA hound.\n',
+      'Chapters/Chapter_1.md': '---\ntype: chapter\noverview: "In which The Watcher is met."\n---\n\nA chapter.\n',
+    }, 'ALIAS_IN_PROSE');
+    const byPath = new Map(found.map((f) => [f.path, f]));
+    assert.deepStrictEqual(byPath.get('Creatures/Mire_Hound.md').listings, ['creatures/index.html']);
+    assert.deepStrictEqual(byPath.get('Chapters/Chapter_1.md').listings, ['chapters/index.html']);
+    assert.strictEqual(byPath.get('Creatures/Mire_Hound.md').owner, 'Characters/NPCs/Mr_Grey.md');
+  });
+
+  it('is silent for a field no page of the site prints', async () => {
+    assert.deepStrictEqual(await faults({
+      'Hidden/Old_Tam.md': hidden(),
+      'Characters/NPCs/Mr_Grey.md': npcs('gm_aliases: ["The Watcher"]\n'),
+      'Characters/NPCs/Bo_Pike.md': npcs('private_memo: "[[Old_Tam]] and The Watcher"\n'),
+    }), []);
+  });
+});
+
+describe('the connections graph', () => {
+  const rel = (target, extra = '') => `relationships:\n  - target: "${target}"\n    type: knows\n${extra}`;
+
+  it('a name the graph prints on a page is counted on that page, two links away too', async () => {
+    const found = await faults({
+      'Hidden/Old_Tam.md': hidden(),
+      'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn]]')),
+      'People/Cy_Dunn.md': npcNote('Cy.', rel('[[Old_Tam]]')),
+    }, 'NAMED_NO_PAGE');
+    // Cy's page prints the relationship; Bo's page prints the name only on its graph.
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages]), [['Hidden/Old_Tam.md', ['People/Bo_Pike.md', 'People/Cy_Dunn.md']]]);
+  });
+
+  it('holds only the label of a labelled target that has no page: the note\'s own name is on neither page', async () => {
+    const { configPath, root } = site({
+      'Hidden/Vesper_Hale.md': hidden('portrait: secret.png\noccupation: Spy\naliases: [The Shade]\n'),
+      'People/Bo_Pike.md': npcNote('Bo.', rel('[[Vesper_Hale|the stranger]]', '    description: "owes him money"\n  - target: "[[Cy_Dunn]]"\n    type: knows\n')),
+      'People/Cy_Dunn.md': npcNote('Cy.', rel('[[Bo_Pike]]')),
+    });
+    const found = fromBuild(configPath);
+    assert.deepStrictEqual(await fromDoctor(configPath), found);
+    for (const page of ['bo-pike.html', 'cy-dunn.html']) {
+      const html = fs.readFileSync(path.join(root, 'docs', 'people', page), 'utf8');
+      assert.ok(/the stranger/.test(html), `${page} lacks the label`);
+      for (const secret of ['Vesper', 'Spy', 'Shade', 'secret.png']) assert.ok(!html.includes(secret), `${page} prints ${secret}`);
+    }
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md', 'People/Cy_Dunn.md'], ['the stranger']]]);
+  });
+
+  it('a labelled target that has a page is read as it always was', () => {
+    const { buildRelationshipGraph } = require('../lib/relationship-graph');
+    const page = (title, relationships) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type: 'npc', relationships } });
+    const graph = buildRelationshipGraph('A', [page('A', [{ target: '[[B|the baker]]', type: 'knows' }]), page('B', [])], {});
+    assert.deepStrictEqual(graph.nodes.map((n) => [n.id, n.displayTitle, n.outputPath]), [['A', 'A', 'A.html'], ['B|the baker', 'B|the baker', null]]);
+  });
+});
+
+describe('a heading that holds a link to a note with no page', () => {
+  const extra = '  exclude_sections:\n    - GM Notes\n    - Notes on Old Tam\n';
+  const run = async (body) => {
+    const { configPath, root } = site({ 'Hidden/Old_Tam.md': hidden(), 'Hidden/Notes.md': hidden(), 'Hidden/Brass_Key.md': hidden(), 'People/Bo_Pike.md': npcNote(body) }, extra);
+    const found = (await fromDoctor(configPath)).filter((f) => f.code === 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE'), found);
+    return { paths: found.map((f) => f.path), html: fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8') };
+  };
+
+  it('is hidden or shown in the second render exactly as in the build: a heading the build shows', async () => {
+    // The build reads this title as "notes on old_tam", which is not the excluded name, and
+    // shows the section. A mark that changed the reading would hide it, and miss both links.
+    const { paths, html } = await run('Intro.\n\n## Notes on [[Old_Tam]]\n\nThe [[Brass_Key]] is here.\n');
+    assert.match(html, /Brass Key/);
+    assert.deepStrictEqual(paths, ['Hidden/Brass_Key.md', 'Hidden/Old_Tam.md']);
+  });
+  it('a heading whose link is run on to a word, which the build shows as another word', async () => {
+    const { paths, html } = await run('Intro.\n\n## GM[[Notes]]\n\nThe [[Brass_Key]] is here.\n');
+    assert.match(html, /Brass Key/);
+    assert.deepStrictEqual(paths, ['Hidden/Brass_Key.md', 'Hidden/Notes.md']);
+  });
+  it('a heading the build hides', async () => {
+    const { paths, html } = await run('Intro.\n\n## [[Old_Tam|GM Notes]]\n\nThe [[Brass_Key]] is here.\n');
+    assert.ok(!/Brass Key/.test(html));
+    assert.deepStrictEqual(paths, []);
+  });
+});
+
+describe('ALIAS_IN_PROSE: spellings and places that used to slip by', () => {
+  const owner = { 'People/Mr_Grey.md': '---\ntype: npc\ngm_aliases: ["The Watcher", "Zorvek", "Old-Nick"]\n---\n\nA quiet man.\n' };
+  const aliases = async (files) => (await faults(Object.assign({}, owner, files), 'ALIAS_IN_PROSE')).map((f) => [f.path, f.alias]);
+
+  it('finds the name as the whole value of a stat box, where the label and the value run together', async () => {
+    assert.deepStrictEqual(await aliases({ 'Items/Odd_Rig.md': '---\ntype: item\ntl: Zorvek\n---\n\nA rig.\n' }), [['Items/Odd_Rig.md', 'Zorvek']]);
+  });
+  it('finds it typed with an underscore or a hyphen for the space, and with a space for the hyphen', async () => {
+    for (const typed of ['The_Watcher', 'The-Watcher', 'the  watcher', 'Old Nick', 'Old_Nick']) {
+      const got = await aliases({ 'People/Case.md': npcNote(`Intro.\n\n## Seen\n\nThey fear ${typed} at night.`) });
+      assert.strictEqual(got.length, 1, typed);
+    }
+  });
+  it('finds it with a character that prints nothing set between its words', async () => {
+    assert.strictEqual((await aliases({ 'People/Case.md': npcNote('Intro.\n\n## Seen\n\nThey fear The​ Watcher at night.') })).length, 1);
+  });
+  it('still leaves a longer word alone', async () => {
+    assert.deepStrictEqual(await aliases({ 'People/Case.md': npcNote('Intro.\n\n## Seen\n\nThe Watchers and Zorveks.') }), []);
+  });
+});
+
+describe('a page that fails to render', () => {
+  // The story link of a PC page asks the scanner for a slug: made to fail once, for one PC.
+  const scanner = require('../lib/scanner');
+  const failingOnce = (title, fn) => {
+    const real = scanner.slugify;
+    let failed = false;
+    scanner.slugify = (name) => {
+      if (name === title && !failed) { failed = true; throw new Error('made to fail'); }
+      return real(name);
+    };
+    return Promise.resolve().then(fn).finally(() => { scanner.slugify = real; });
+  };
+  const files = {
+    'Hidden/Old_Tam.md': hidden(),
+    'People/Bo_Pike.md': npcNote('Intro.\n\n## Seen\n\nWith [[Old_Tam]].'),
+    'PCs/Doomed.md': '---\ntype: pc\nplayer_name: Pat\n---\n\n# Doomed\n\n## Background\n\nMet [[Old_Tam]] at 100%% and 50%% pay.\n',
+    'PCs/Doomed_Story.md': '---\ntype: character-story\n---\n\nA story.\n',
+  };
+
+  it('doctor --site says the list is incomplete, as an error, and keeps the findings it did make', async () => {
+    const { configPath } = site(files);
+    const out = [];
+    const rc = await failingOnce('Doomed', () => runSiteDoctor({ configPath, json: true }, { out: (l) => out.push(String(l)), detect: () => null }));
+    const all = JSON.parse(out.join('')).findings;
+    const unchecked = all.filter((f) => f.code === 'NOTE_FAULTS_UNCHECKED');
+    assert.strictEqual(unchecked.length, 1, JSON.stringify(all.map((f) => f.code)));
+    assert.strictEqual(unchecked[0].severity, 'error');
+    assert.match(unchecked[0].detail, /1 page could not be rendered in memory \(pcs\/doomed\.html: made to fail\).*the list is incomplete/);
+    assert.strictEqual(rc, 1);
+    // The page that did render is still read.
+    assert.deepStrictEqual(all.filter((f) => f.code === 'NAMED_NO_PAGE').map((f) => f.pages), [['People/Bo_Pike.md']]);
+  });
+  it('the same vault with nothing failing has no such error, and reads the PC too', async () => {
+    const found = await fromDoctor(site(files).configPath);
+    assert.deepStrictEqual(found.map((f) => f.code), ['COMMENT_STRAY', 'NAMED_NO_PAGE']);
+    assert.deepStrictEqual(found[1].pages, ['PCs/Doomed.md', 'People/Bo_Pike.md']);
+  });
+});
+
 describe('pageText', () => {
   it('reads a page a block to a line, with inline markup joined, entities decoded and scripts left out', () => {
     const html = '<main><h1>A &amp; B</h1><p>one <strong>tw</strong>o<br>three</p><script>var x = "no";</script><ul><li>four</li></ul></main>';

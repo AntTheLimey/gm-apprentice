@@ -38,6 +38,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
   'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
+  'FRONTMATTER_MISTYPED',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
   ...NOTE_FAULT_CODES,
 ];
@@ -308,6 +309,22 @@ async function runSiteDoctor(options, deps) {
       'add `type:` to the frontmatter',
     ));
   }
+  // A value of the wrong type, which the build read as best it could or left unread.
+  const mistyped = report.mistyped || [];
+  for (const { rel, field, problem } of mistyped.slice(0, UNTYPED_ROW_CAP)) {
+    findings.push(finding(
+      'FRONTMATTER_MISTYPED', 'warning', rel,
+      `${field}: ${problem}`,
+      `write ${field}: as the kind of value it takes (one value, or a list of plain values)`,
+    ));
+  }
+  if (mistyped.length > UNTYPED_ROW_CAP) {
+    findings.push(finding(
+      'FRONTMATTER_MISTYPED', 'warning', `+${mistyped.length - UNTYPED_ROW_CAP} more`,
+      'also hold a frontmatter value of the wrong type',
+      'the build names each note and field',
+    ));
+  }
   for (const { rel, message } of report.malformed) {
     findings.push(finding(
       'FILE_UNPARSEABLE', 'warning', rel,
@@ -324,7 +341,19 @@ async function runSiteDoctor(options, deps) {
   // A build that cannot run is an error, never a clean list.
   let noteFaults = Object.assign([], { namedTargets: new Set() });
   try {
-    ({ noteFaults } = require('./build').build({ configPath, vaultPath, rawConfig: rawSiteConfig, inMemory: true }));
+    const built = require('./build').build({ configPath, vaultPath, rawConfig: rawSiteConfig, inMemory: true });
+    noteFaults = built.noteFaults;
+    // A page that failed to render was not read, so the list is not the whole of it. The
+    // findings that were made stand; the error says the list is short and why.
+    const unread = built.renderErrors.length + built.auditGaps;
+    if (unread > 0) {
+      const first = built.renderErrors[0];
+      findings.push(finding(
+        'NOTE_FAULTS_UNCHECKED', 'error', vaultPath,
+        `${plural(unread, 'page')} could not be rendered in memory${first ? ` (${first.split('\n')[0]})` : ''}, so the faults in the notes were not all looked for: the list is incomplete`,
+        'run `gm-publish build` and fix the page it reports, then run the audit again',
+      ));
+    }
   } catch (err) {
     findings.push(finding(
       'NOTE_FAULTS_UNCHECKED', 'error', vaultPath,

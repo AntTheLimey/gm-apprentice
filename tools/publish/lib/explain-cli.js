@@ -284,6 +284,11 @@ async function runExplain(options, deps) {
       out('  its story page:');
       block(shown.story);
     }
+    if (shown.images && shown.images.length > 0) {
+      out('');
+      out('  image files that publish with it:');
+      block(shown.images.join('\n'));
+    }
     if (shown.card) {
       out('');
       out('  its link-preview card:');

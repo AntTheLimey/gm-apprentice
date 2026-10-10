@@ -243,13 +243,14 @@ rather than the whole vault.
 With --shown, follows with what the site holds of the note, or would hold if
 it published. The site is built in memory with the note given a page, and
 the answer is read off that page: the text of the page as built (and of a
-PC's story page), its link-preview card, and what the search finds it by
+PC's story page), the image files that publish with it (a portrait, an
+embed), its link-preview card, and what the search finds it by
 (title, subtitle, aliases and every word of the body as published; a PC's
 page prints only some of its sections, the search reads them all). Nothing
 else of the note's body and fields is on the site; other pages that link it
 still print its name. Use it to check a note before listing it under
-Publishing. With --json it is "shown": { from: "page", page, story, card,
-search: { title, subtitle, aliases, body } }. A note the build can make no
+Publishing. With --json it is "shown": { from: "page", page, story, images,
+card, search: { title, subtitle, aliases, body } }. A note the build can make no
 page of (no type, a folder not on the site) is shown as its frontmatter as
 published and its body after every cut: { from: "note", frontmatter,
 markdown }. A publish: false note: { from: "none" }.
@@ -358,18 +359,27 @@ Cloudflare Pages, gh for GitHub Pages) with its authentication, and prints a
 fix for each failing row.
 
 --site audits the vault instead of the machine: the stale build-tool pin,
-folders missing from folderMap, files with no type:, portraits pointing at
-absent images, wikilinks that match no published page, manifest entries whose
-file is gone, and played sessions in no manifest section. It also finds four
-faults in the notes themselves, the ones that change what the site shows:
-NAMED_NO_PAGE (a note with no page, named on a published page, so its name
-prints as plain words), COMMENT_STRAY (a %% that is not a comment, or a comment never closed in a
-frontmatter value), FENCE_UNCLOSED
-(a code fence never properly closed, with a hidden marker below it that the page
-prints) and ALIAS_IN_PROSE (a gm_aliases name printed on a page). To find them
-the site is built in memory, every page rendered and nothing written, so the
-names are read off the pages as built and the list is the build's own. The build
-prints one line for each.
+folders missing from folderMap, files with no type:, frontmatter values of the
+wrong type, portraits pointing at absent images, wikilinks that match no
+published page, manifest entries whose file is gone, and played sessions in no
+manifest section. It also finds four faults in the notes themselves, the ones
+that change what the site shows:
+  NAMED_NO_PAGE   a note with no page, named on a published page, so its name
+                  prints as plain words
+  COMMENT_STRAY   a %% that is not a comment, or a comment never closed in a
+                  frontmatter value
+  FENCE_UNCLOSED  a code fence never properly closed, with a hidden marker
+                  below it that the page prints
+  ALIAS_IN_PROSE  a gm_aliases name printed on a page
+To find them the site is built in memory, every page rendered and nothing
+written, so the names are read off the pages as built and the list is the
+build's own. That is every page: a note's own, a PC's story, the section
+indexes, the timeline, the story and the landing page, and the names on a
+page's connections graph. A name an index or listing page prints is counted
+against the note it is taken from, and the finding names the page
+("listings"). When a page cannot be rendered the list is not complete, and the
+audit says so with an error (NOTE_FAULTS_UNCHECKED). The build prints one line
+for each of the four.
 A note whose Excluded entry in the manifest begins "stays hidden:" is settled:
 left out of the report, kept in --json with "settled": true. Each finding names
 the edit that fixes it. Exits 1 only on an error, not on a warning. The human
