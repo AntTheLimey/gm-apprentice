@@ -51,6 +51,17 @@ class BriefWrapupUnitTests(unittest.TestCase):
         self.assertIn("### Name Conflicts (export vs. vault canon)\n(omitted", out)
         self.assertIn("<!-- /gm-only -->", out)
 
+    def test_a_dropped_block_ends_at_a_marker_in_any_capitals(self):
+        for marker in ("<!-- /GM-ONLY -->", "<!--Gm-Only-->",
+                       "<!-- / gm-only -->"):
+            with self.subTest(marker=marker):
+                body = ("## Memorable Moments\n\nDropped words.\n\n"
+                        f"{marker}\n\nKept words.\n")
+                out = sc.brief_wrapup(body)
+                self.assertNotIn("Dropped words", out)
+                self.assertIn(marker, out)
+                self.assertIn("Kept words.", out)
+
     def test_no_op_when_nothing_to_drop(self):
         body = "## Narrative Recap\n\nText.\n\n## GM Notes\n\n### World State\n\nDay 1.\n"
         self.assertEqual(sc.brief_wrapup(body), body)

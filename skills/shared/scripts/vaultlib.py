@@ -855,6 +855,33 @@ def atx_title(raw: str) -> str:
     renders as "GM Notes"), as processor.js `walkSections` reads it."""
     return _ATX_CLOSE_RE.sub("", raw.strip()).strip()
 _MARKERS = (("gm", "gm-only"), ("spoiler", "spoiler"))
+# Everything either side calls a space (Python's `\s` and JavaScript's
+# differ by these).
+_MARKER_SPACE = r"[\s\x1c-\x1f\x85\ufeff]"
+
+
+def marker_re(*words: str) -> re.Pattern[str]:
+    """The publish tool's one reading of a gm-only or spoiler marker
+    (tools/publish/lib/markers.js `markerRe`): an HTML comment holding
+    the name and nothing else, `/` before the name for a closer. Capitals
+    and spacing inside the comment do not matter. Group 1 is `/` for a
+    closer, group 2 the name as typed. No words: both markers.
+    tools/publish/test/fixtures/marker-vectors.json pins both sides."""
+    names = "|".join(re.escape(w) for w in words or
+                     tuple(word for _, word in _MARKERS))
+    return re.compile(rf"<!--{_MARKER_SPACE}*(/?){_MARKER_SPACE}*({names})"
+                      rf"{_MARKER_SPACE}*-->", re.I)
+
+
+GM_MARKER_RE = marker_re("gm-only")
+_ANY_MARKER_RE = marker_re()
+
+
+def markers_in(line: str) -> list[tuple[int, str, bool]]:
+    """Every gm-only and spoiler marker in `line`, in order, as
+    (position, "gm-only" or "spoiler", is a closer)."""
+    return [(m.start(), m.group(2).lower(), m.group(1) == "/")
+            for m in _ANY_MARKER_RE.finditer(line)]
 
 
 # --------------------------------------------------------------------------
@@ -1260,10 +1287,7 @@ def scan_body(text: str,
     closers and blocks left open at EOF.
     """
     excludes = [str(s) for s in exclude_sections]
-    marker_res = {
-        name: re.compile(rf"<!--\s*(/?){re.escape(word)}\s*-->")
-        for name, word in _MARKERS
-    }
+    names = {word: name for name, word in _MARKERS}
     stacks: dict[str, list[tuple[bool, int]]] = {n: [] for n, _ in _MARKERS}
     depths = {name: 0 for name, _ in _MARKERS}
     open_lines: dict[str, list[int]] = {name: [] for name, _ in _MARKERS}
@@ -1300,11 +1324,8 @@ def scan_body(text: str,
             # HTML wrapper, several per line), exactly as stripMarkedBlocks
             # does. `marker` is only set for a line that STARTS with one — the
             # own-line shape the wrap-up structure fixes reason about.
-            found = []
-            for name, _word in _MARKERS:
-                for mm in marker_res[name].finditer(line):
-                    found.append((mm.start(), name, mm.group(1) == "/"))
-            found.sort()
+            found = [(pos, names[word], is_close)
+                     for pos, word, is_close in markers_in(line)]
             for idx, (pos, name, is_close) in enumerate(found):
                 inline = line[:pos].strip() != ""
                 if idx == 0 and not inline:

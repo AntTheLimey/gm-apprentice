@@ -1736,6 +1736,14 @@ class Group2Tests(unittest.TestCase):
         self.assertEqual(code, 1)
         self.assertIn("in the text given, not in the note", out)
 
+    def test_a_marker_in_capitals_in_the_text_given_is_refused_too(self):
+        vault = wrap_vault(self)
+        before = read(vault, WRAP_REL)
+        code, out = add(vault, "## Aside\n\nx\n<!-- GM-ONLY -->\n")
+        self.assertEqual(code, 1)
+        self.assertIn("in the text given, not in the note", out)
+        self.assertEqual(read(vault, WRAP_REL), before)
+
     # 2.12
     def test_a_null_play_notes_is_absent(self):
         for value in ("null", "~", '""', '"[[]]"'):

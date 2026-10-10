@@ -20,6 +20,7 @@ const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
 const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
+const { markersIn } = require('./markers');
 const yaml = require('js-yaml');
 const { nearestNames, readerView } = require('./site-doctor');
 
@@ -140,7 +141,7 @@ async function runExplain(options, deps) {
   const stripped = frontmatterError ? null
     : [...new Set(strippedSectionTitles(markdown, excludeSections, frontmatter, { pcKeepSections: pcKeepList(publishConfig) }))];
   const sheetWithheld = frontmatterError || !page ? null : sheetWithheldOf(publishConfig, markdown, frontmatter);
-  const gmOnlyBlocks = frontmatterError ? null : (markdown.match(/<!--\s*gm-only\s*-->/g) || []).length;
+  const gmOnlyBlocks = frontmatterError ? null : markersIn(markdown).filter((m) => m.name === 'gm-only' && !m.close).length;
 
   const publishes = publishesPage(verdict);
   // Whether this is a session index whose body the site withholds (#276).

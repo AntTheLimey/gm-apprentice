@@ -1,6 +1,7 @@
 const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
 const { gluedBefore } = require('./frontmatter');
+const { markerRe: markerPattern } = require('./markers');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink } = require('./wikilink');
 const { headingKey, headingKeys, titleNamedIn } = require('./heading-key');
@@ -626,7 +627,8 @@ function setextRisk(prev, next) {
 // The strip as lines, and `from`: the line of `markdown` each of them came from.
 function markedBlocks(markdown, markerName) {
   // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
-  const markerRe = new RegExp(`<!--\\s*(/?)${markerName}\\s*-->`, 'g');
+  // Capitals and spacing inside the comment do not matter (markers.js).
+  const markerRe = markerPattern(markerName);
   // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
   // closer shown inside a fenced example would end the block early. Callers that
   // pass raw gray-matter content (build.js's published view) keep CRLF.
@@ -951,9 +953,9 @@ function obsidianComments(markdown) {
 // closed (or closed in a way one of the strips does not read as closing), and the text it
 // should hide is published. Fences are the renderer's parser's (findHeadings).
 // Each: { at (index in `lines`), marker, fenceAt (the fence line above, or null) }.
-const SHOWN_MARKER_RE = /<!--\s*\/?\s*(gm-only|spoiler)\s*-->|<!--|%%/;
-const SHOWN_HTML_MARKER_RE = /<!--\s*\/?\s*(gm-only|spoiler)\s*-->|<!--/;
-const SHOWN_BLOCK_MARKER_RE = /<!--\s*\/?\s*(gm-only|spoiler)\s*-->/;
+const SHOWN_BLOCK_MARKER_RE = markerPattern(undefined, '');
+const SHOWN_HTML_MARKER_RE = new RegExp(SHOWN_BLOCK_MARKER_RE.source + '|<!--', 'i');
+const SHOWN_MARKER_RE = new RegExp(SHOWN_HTML_MARKER_RE.source + '|%%', 'i');
 const FENCE_LOOK_RE = /^\s*(`{3,}|~{3,})/;
 // `blocksOnly`: the gm-only and spoiler markers alone, for the lines as the two block strips
 // leave them (the comment strip that runs next reads a fence its own way and can cut a
@@ -983,7 +985,7 @@ function markersShown(lines, blocksOnly = false) {
       if (above.length) fenceAt = above[above.length - 1];
       else for (let l = i - 1; l >= 0 && fenceAt === null; l--) if (FENCE_LOOK_RE.test(lines[l])) fenceAt = l;
     }
-    out.push({ at: i, marker: m[1] || (m[0] === '%%' ? '%%' : '<!--'), fenceAt });
+    out.push({ at: i, marker: m[2] ? m[2].toLowerCase() : (m[0] === '%%' ? '%%' : '<!--'), fenceAt });
   }
   return out;
 }

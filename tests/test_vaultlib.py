@@ -558,6 +558,42 @@ class VersionTests(unittest.TestCase):
         self.assertEqual(got[0], expected)
 
 
+class MarkerTests(unittest.TestCase):
+    """A gm-only or spoiler marker is read the way the publish tool reads
+    it (tools/publish/lib/markers.js), in any capitals or spacing."""
+
+    VECTORS = (ROOT / "tools" / "publish" / "test" / "fixtures"
+               / "marker-vectors.json")
+
+    def test_markers_in_agrees_with_the_publish_tools_vectors(self):
+        cases = json.loads(self.VECTORS.read_text(encoding="utf-8"))["cases"]
+        self.assertGreater(len(cases), 20)
+        for case in cases:
+            with self.subTest(line=case["line"]):
+                got = [{"name": name, "close": close}
+                       for _pos, name, close in vl.markers_in(case["line"])]
+                self.assertEqual(got, case["found"])
+
+    def test_a_block_marked_in_capitals_is_hidden(self):
+        for opener, closer in (("<!-- GM-ONLY -->", "<!-- /GM-ONLY -->"),
+                               ("<!--Gm-Only-->", "<!-- / gm-only -->"),
+                               ("<!-- SPOILER -->", "<!-- /Spoiler -->")):
+            with self.subTest(opener=opener):
+                text = f"Open.\n{opener}\nSecret.\n{closer}\nAfter.\n"
+                states, problems = vl.scan_body(text, exclude_sections=[])
+                self.assertEqual(problems, [])
+                self.assertEqual([s.published for s in states],
+                                 [True, False, False, False, True])
+                word = "spoiler" if "spoiler" in opener.lower() else "gm"
+                self.assertEqual(states[1].marker, f"open-{word}")
+                self.assertEqual(states[3].marker, f"close-{word}")
+
+    def test_an_orphan_closer_in_capitals_is_a_problem(self):
+        _states, problems = vl.scan_body("Open.\n<!-- /GM-ONLY -->\n", [])
+        self.assertEqual(len(problems), 1)
+        self.assertIn("<!-- /gm-only --> with no opener", problems[0])
+
+
 class VaultQueryTests(unittest.TestCase):
     def build(self, d: str) -> Path:
         vault = Path(d)
