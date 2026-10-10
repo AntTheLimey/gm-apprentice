@@ -262,3 +262,25 @@ describe('excerptFromMarkdown blocks in HTML', () => {
     assert.strictEqual(excerptFromMarkdown("<a>Magellan</a>'s ship<em>s</em> sail.", opts), "Magellan's ships sail.");
   });
 });
+
+describe('excerptFromMarkdown provenance callouts', () => {
+  const opts = { prose: true, sentences: 2, limit: 200 };
+  const prose = 'The party reached the gate. It was shut.';
+  it('skips the Source callout a wrap-up opens with, however long, and reads on to the prose', () => {
+    const md = `# Chapter 1 · Session 8 — Wrap-Up\n\n> [!info] Source\n> Ingested verbatim from the old notes.\n> Nothing was changed.\n\n## Narrative Recap\n\n${prose}\n`;
+    assert.strictEqual(excerptFromMarkdown(md, opts), prose);
+  });
+  it('skips the Reconstruction Note callout of the ingest templates', () => {
+    const md = `> [!info] Reconstruction Note\n> Rebuilt from two transcripts; session 3 is missing.\n\n${prose}\n`;
+    assert.strictEqual(excerptFromMarkdown(md, opts), prose);
+  });
+  it('keeps prose that merely says so, and callouts of other titles', () => {
+    assert.strictEqual(excerptFromMarkdown('Ingested verbatim from the old notes. Then more.', opts), 'Ingested verbatim from the old notes. Then more.');
+    const quote = '> [!info] Rumour\n> The well is cursed. Nobody drinks from it.\n';
+    assert.strictEqual(excerptFromMarkdown(quote, opts), 'The well is cursed. Nobody drinks from it.');
+  });
+  it('is a card matter only: the plain excerpt is unchanged', () => {
+    const md = '> [!info] Source\n> Ingested verbatim.\n\nBody text here.\n';
+    assert.notStrictEqual(excerptFromMarkdown(md, {}), 'Body text here.');
+  });
+});

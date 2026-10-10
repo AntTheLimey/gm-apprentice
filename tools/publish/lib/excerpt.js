@@ -33,6 +33,11 @@ const SHEET_LINE_RE = /^\*\*[^*]+\*\*:?$|^\*\*[^*]+:\*\*|^\*\*[^*]+\*\*:|^\*\*[^
 const PLACEHOLDER_RE = /(?:^[ \t]*[-*+][ \t]+)?\{[^{}]{0,400}\}/gm;
 
 // A full stop after one of these is not the end of a sentence.
+// A callout that says where a note came from, not what happens in it: the wrap-up template's
+// and vault_write.py's `> [!info] Source`, and the ingest templates' `> [!info] Reconstruction
+// Note`. Its whole quoted block is no opening line for a card.
+const PROVENANCE_CALLOUT_RE = /^\s*>\s*\[![A-Za-z][\w-]*\][-+]?\s*(?:Source|Reconstruction Note)\s*$/i;
+
 const ABBREVIATION_RE = /\b(?:Mr|Mrs|Ms|Mx|Dr|St|Sr|Jr|Lt|Col|Capt|Sgt|Maj|Gen|Cmdr|Prof|Rev|Hon|Mme|Mlle|Msgr)\.$/;
 
 function stripHtml(text) {
@@ -95,7 +100,16 @@ function excerptFromMarkdown(source, opts = {}) {
   const kept = [];
   // A reader sees a quoted table as a table, so for the prose the quote marks are dropped
   // before any line is judged (a quoted heading, rule or table row is then one of those).
-  const sourceLines = working.split('\n').map(l => (opts.prose ? l.replace(/^\s*(?:>[ \t]?)+/, '') : l));
+  let rawLines = working.split('\n');
+  if (opts.prose) {
+    const rest = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      if (!PROVENANCE_CALLOUT_RE.test(rawLines[i])) { rest.push(rawLines[i]); continue; }
+      while (i + 1 < rawLines.length && /^\s*>/.test(rawLines[i + 1])) i++;
+    }
+    rawLines = rest;
+  }
+  const sourceLines = rawLines.map(l => (opts.prose ? l.replace(/^\s*(?:>[ \t]?)+/, '') : l));
   // A block that is not prose: skipped before any prose, the end of the excerpt after it.
   const endsProse = () => opts.prose && kept.some(l => l.trim());
   for (let i = 0; i < sourceLines.length; i++) {
