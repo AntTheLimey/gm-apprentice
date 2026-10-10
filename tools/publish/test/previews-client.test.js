@@ -393,6 +393,21 @@ test('a cancelled touch, then a keyboard Enter or a mouse click, follows the lin
   assert.ok(!q.fire(q.links.hallam, 'click', { detail: 0 }).prevented, 'Enter with no pointerup/cancel seen');
 });
 
+// Pinned, not fixed: a click that reports detail 0 is a keyboard Enter (which must follow the
+// link at once) and also what some assistive technology sends for a tap. The page cannot tell
+// them apart: such a tap may come with no pointer events at all, or with a pointerdown and
+// pointerup just like an ordinary tap that a later Enter follows. So detail 0 follows the link.
+test('a click with detail 0 follows the link whatever pointer events came before it', async () => {
+  const p = setup();
+  await p.flush();
+  assert.ok(!p.fire(p.links.hallam, 'click', { detail: 0 }).prevented, 'no pointer events at all');
+  p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
+  p.fire(p.links.hallam, 'pointerup', { pointerType: 'touch' });
+  await p.flush();
+  assert.ok(!p.fire(p.links.hallam, 'click', { detail: 0 }).prevented, 'a touch down and up, then detail 0');
+  assert.strictEqual(p.card(), null);
+});
+
 test('a touch tap, then mouse hover and a mouse click, each act by their own pointer', async () => {
   const p = setup();
   p.fire(p.links.hallam, 'pointerdown', { pointerType: 'touch' });
