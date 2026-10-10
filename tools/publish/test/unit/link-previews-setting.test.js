@@ -30,12 +30,12 @@ describe('publish.link_previews', () => {
       assert.deepStrictEqual(valueOf(`  link_previews: ${line}\n`), { value: want, said: [] }, line);
     }
   });
-  it('is on for anything else, and says so once, naming the three values', () => {
+  it('is on for anything else, and says so once, naming every value it takes', () => {
     for (const line of ['maybe', 'none', 'mobile', '3', '[on]', '', '""']) {
       const { value, said } = valueOf(`  link_previews: ${line}\n`);
       assert.strictEqual(value, 'on', line);
       assert.strictEqual(said.length, 1, line);
-      assert.match(said[0], /publish\.link_previews .* is not on, desktop or off; using on/);
+      assert.match(said[0], /publish\.link_previews .* is not on, desktop, off, yes, no, true or false; using on/);
     }
   });
 });
