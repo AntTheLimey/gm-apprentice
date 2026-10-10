@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, pcLiveKe
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { strippedLines, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -591,13 +591,8 @@ function build(options = {}) {
     if (page.headingsUnstable) console.warn(`  WARNING: ${page.outputPath}: ${HEADINGS_UNSTABLE_WARNING}`);
   }
   for (const page of pages) {
-    const gmStripped = stripGmOnly(page.markdown || '');
-    const afterGm = typeof gmStripped === 'string' ? gmStripped : gmStripped.text;
-    const spoilerStripped = stripSpoiler(afterGm);
-    const afterSpoiler = typeof spoilerStripped === 'string' ? spoilerStripped : spoilerStripped.text;
-    const commentStripped = stripHtmlComments(afterSpoiler);
-    const text = typeof commentStripped === 'string' ? commentStripped : commentStripped.text;
-    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(stripCallouts(text, excludeCallouts), excludeSections, page.sourceFrontmatter || page.frontmatter,
+    const text = strippedLines(String(page.markdown || ''), excludeCallouts).lines.join('\n');
+    page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(text, excludeSections, page.sourceFrontmatter || page.frontmatter,
       { pcKeepSections });   // its warnings are the page render's to print, once
   }
 

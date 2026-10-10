@@ -804,6 +804,84 @@ function htmlComments(markdown) {
   return { text: result.join('\n'), warnings, lines: result, from };
 }
 
+// Obsidian comments: `%% a comment %%`, on one line or across many. Obsidian hides them;
+// the site must too (#305). A `%%` opens a comment and the next `%%` closes it, wherever
+// each sits on a line. A `%%` never closed hides everything to the end of the note: that is
+// what Obsidian shows, and the reading that cannot leak. `%%` in a fenced code block or an
+// inline code span is literal text. A comment inside a table cell, list item, quote or
+// heading is cut out of that line and the rest of the line stays.
+// Runs after the HTML-comment strip (a `%%` inside `<!-- -->` is part of that comment) and
+// returns the strips' shape: the lines left, and `from` (the line of the input each came from).
+function obsidianComments(markdown) {
+  const lines = String(markdown || '').split('\n');
+  const result = [];
+  const from = [];
+  const warnings = [];
+  let fenceMarker = null;
+  let inComment = false;
+
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
+    const startedInComment = inComment;
+    const fence = inComment ? null : /^\s*(```|~~~)/.exec(line);
+    if (fence) {
+      if (fenceMarker === null) fenceMarker = fence[1];
+      else if (fenceMarker === fence[1]) fenceMarker = null;
+    }
+    if (fenceMarker !== null || fence) {
+      result.push(line);
+      from.push(n);
+      continue;
+    }
+
+    let kept = '';
+    let i = 0;
+    while (i < line.length) {
+      if (inComment) {
+        const end = line.indexOf('%%', i);
+        if (end === -1) { i = line.length; break; }
+        inComment = false;
+        i = end + 2;
+        continue;
+      }
+      const ch = line[i];
+      if (ch === '`') {
+        // An inline code span: a run of backticks to the next run of the same length on
+        // the line. One that never closes is no span, so a `%%` after it still counts.
+        let run = 1;
+        while (line[i + run] === '`') run++;
+        const close = new RegExp('(?<!`)`{' + run + '}(?!`)').exec(line.slice(i + run));
+        if (close) {
+          const stop = i + run + close.index + run;
+          kept += line.slice(i, stop);
+          i = stop;
+        } else {
+          kept += line.slice(i, i + run);
+          i += run;
+        }
+        continue;
+      }
+      if (ch === '%' && line[i + 1] === '%') {
+        inComment = true;
+        i += 2;
+        continue;
+      }
+      kept += ch;
+      i++;
+    }
+
+    // A line that was only comment goes whole; one with text around a comment keeps it.
+    if (kept.trim() === '' && (line.trim() !== '' || startedInComment)) continue;
+    result.push(kept);
+    from.push(n);
+  }
+
+  if (inComment) {
+    warnings.push('unclosed %% comment: content stripped to end of file');
+  }
+  return { text: result.join('\n'), warnings, lines: result, from };
+}
+
 // Strip a single leading H1 from the markdown body. Templates inject their own H1
 // from the page title, so the author's `# Title` line at the top would render as a duplicate.
 function stripLeadingH1(markdown) {
@@ -1056,6 +1134,7 @@ function strippedLines(text, excludeCallouts) {
     (t) => markedBlocks(t, 'gm-only'),
     (t) => markedBlocks(t, 'spoiler'),
     htmlComments,
+    obsidianComments,
     (t) => calloutLines(t, excludeCallouts),
   ];
   for (const strip of strips) {
@@ -1128,31 +1207,12 @@ function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = 
 }
 
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
-  let markdown = page.markdown.replace(/\r/g, '');
   const warnings = [];
-  markdown = stripDataview(markdown);
-  const gmResult = stripGmOnly(markdown);
-  if (gmResult.warnings) {
-    warnings.push(...gmResult.warnings);
-    markdown = gmResult.text;
-  } else {
-    markdown = gmResult;
-  }
-  const spoilerResult = stripSpoiler(markdown);
-  if (spoilerResult.warnings) {
-    warnings.push(...spoilerResult.warnings);
-    markdown = spoilerResult.text;
-  } else {
-    markdown = spoilerResult;
-  }
-  const commentResult = stripHtmlComments(markdown);
-  if (commentResult.warnings) {
-    warnings.push(...commentResult.warnings);
-    markdown = commentResult.text;
-  } else {
-    markdown = commentResult;
-  }
-  markdown = stripCallouts(markdown, options.excludeCallouts);
+  // The strip chain is strippedLines', whole: the page, the published view the search and
+  // the cards read, the stub cut and the CLIs all take the same one.
+  const stripped = strippedLines(page.markdown.replace(/\r/g, ''), options.excludeCallouts);
+  warnings.push(...stripped.warnings);
+  let markdown = stripped.lines.join('\n');
   // A note whose title line is itself withheld (`# GM Notes`) has that section
   // removed before the title is dropped: once the line is gone nothing below would
   // know its section had started, and the body used to publish.
@@ -1439,4 +1499,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

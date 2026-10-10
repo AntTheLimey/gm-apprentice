@@ -62,6 +62,44 @@ describe('L1: a heading written with decoration is hidden like a plain one', () 
   });
 });
 
+// L3: Obsidian comments.
+describe('L3: %% comments are hidden', () => {
+  let site;
+  before(() => {
+    site = buildVault({
+      'Locations/Cellar.md': [
+        '---', 'type: location', '---',
+        'Inline one %%HIDDENINLINE%% inline two.',
+        '', '%%', 'HIDDENBLOCKONE', 'HIDDENBLOCKTWO', '%%', '',
+        'Two on a line: a %%HIDDENA%% b %%HIDDENB%% c.',
+        '', '| Col | Other |', '|---|---|', '| cell %%HIDDENCELL%% | y |', '',
+        '- item %%HIDDENLIST%% end', '', '> quoted %%HIDDENQUOTE%% end', '',
+        '## Plan %%HIDDENHEADING%%', '', 'Plan words.', '',
+        '## GM Notes', '', 'HIDDENEXCLUDEDSTART', '%%', 'HIDDENSPAN', '## Next', '%%', 'HIDDENEXCLUDEDEND', '',
+        '## After', '', 'SHOWNAFTER', '',
+        'Code `%%SHOWNCODE%%` stays.', '', '```', '%%SHOWNFENCE', '```', '',
+      ].join('\n'),
+      'Locations/Unclosed.md': '---\ntype: location\n---\nShown before.\n\n%% never closed\n\nHIDDENUNCLOSED\n\n## Later\n\nHIDDENLATER\n',
+    }, { extraConfig: '  exclude_sections: ["GM Notes"]\n' });
+  });
+  after(() => site.cleanup());
+
+  it('has none of the commented words in any output file', () => {
+    const root = path.join(site.root, 'docs');
+    for (const w of ['HIDDENINLINE', 'HIDDENBLOCKONE', 'HIDDENBLOCKTWO', 'HIDDENA\\b', 'HIDDENB\\b', 'HIDDENCELL', 'HIDDENLIST', 'HIDDENQUOTE', 'HIDDENHEADING', 'HIDDENEXCLUDED', 'HIDDENSPAN', 'HIDDENUNCLOSED', 'HIDDENLATER']) {
+      assert.deepStrictEqual(mentions(root, w), [], w);
+    }
+  });
+  it('keeps the text around a comment and %% shown as code', () => {
+    const html = site.read('locations', 'cellar.html');
+    assert.match(html, /Inline one\s+inline two/);
+    assert.match(html, /a\s+b\s+c\./);
+    assert.ok(html.includes('SHOWNAFTER') && html.includes('SHOWNCODE') && html.includes('SHOWNFENCE'));
+    assert.match(html, /<h2[^>]*>Plan\s*<\/h2>/);
+    assert.ok(site.read('locations', 'unclosed.html').includes('Shown before.'));
+  });
+});
+
 // L2: a note with no page has no search entry.
 describe('L2: the search index lists only pages that exist', () => {
   it('leaves out a world-flags note, words and all', () => {
