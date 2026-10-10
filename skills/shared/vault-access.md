@@ -37,7 +37,7 @@ being open.
 | Ingest image filing | `ingest_images.py` |
 | Player-safe PC sheet view | `gm-publish sheet show --player-safe` |
 | Site rebuild (repoint, manifest, deploy+verify) | `gm-publish update-pin` / `manifest diff` / `deploy --verify` |
-| Site audit / why didn't this page publish / what a reader gets of it | `gm-publish doctor --site` / `explain PATH` / `explain PATH --shown` |
+| Site audit / why didn't this page publish / what the site holds of a note, read off its page as built | `gm-publish doctor --site` / `explain PATH` / `explain PATH --shown` |
 
 Use Grep when you know the term. Never hand-build a link map with
 Grep — `graph_check.py` does it in one pass.
