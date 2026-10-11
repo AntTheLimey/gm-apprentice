@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.44] — 2026-10-10
+
+### Added
+
+- **Tone words are a fixed list.** A relationship's `tone` is one of 27
+  words in three families (positive, negative, neutral); the nuance
+  goes in its description. `tones.py` lists the tones a vault uses that
+  are off the list and rewrites the ones a rule can place (cordial to
+  friendly, dread to ominous), every note or none.
+- Updating a vault offers that tidy as a yes or no. campaign-qa's new
+  Tone Words check puts the remaining words to the GM a few at a time.
+- `vault_check.py relationships` warns about a tone off the list when a
+  note is written.
+
+### Changed
+
+- `professional` is a neutral tone; it was listed as positive.
+- `links.py`'s all-or-nothing writer now lives in `migrate_core.py` and
+  is shared with `tones.py` (no change in what `links.py` does).
+
 ## [1.10.43] — 2026-10-10
 
 ### Added
