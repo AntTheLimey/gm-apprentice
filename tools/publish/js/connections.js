@@ -12,7 +12,8 @@
   var GAP = 14;
   var TONE_CLASS = { w: 'cx-warm', h: 'cx-hostile', n: 'cx-neutral' };
   var TONE_WORD = { w: 'warm', h: 'hostile', n: 'neutral' };
-  var WEB_SIZE = 720;
+  var SMALL = 1.3;           // a web on a narrow screen is shrunk to fit, so its marks are drawn this much larger
+  var ROOMY = 720;           // from this width a tree row has room for its kind and sessions
 
   function has(object, key) { return Object.prototype.hasOwnProperty.call(object, key); }
 
@@ -54,29 +55,165 @@
     };
   }
 
-  // Names on one ring, in group order, one empty slot between groups. Angles run clockwise
-  // from the top; a band is the arc its group covers.
-  function webLayout(groups, size) {
+  // ---- the web's geometry ----
+  // Everything is in the drawing's own units, one to a CSS pixel when the column is wide
+  // enough, with the subject at 0, 0. Angles run clockwise from the top.
+  var WEB = {
+    row: 16,          // the least room between two neighbouring names where they start
+    nameGap: 13,      // from a name's mark to its first letter
+    spineIn: 30,      // a group's arc sits this far inside the ring of marks
+    labelIn: 52,      // and its label this far inside (clear of the arc in a tall typeface too)
+    labelHigh: 9,     // the height of a label's capitals
+    labelClear: 8,    // from a group's line to the start of its label
+    bandGap: 20,      // from the end of one group's label to the next group's line
+    rootLine: 18,
+    minRadius: 118,
+    fullRadius: 150,
+    pad: 8
+  };
+
+  // A width for a text when nothing can be measured: on the generous side, so a layout made
+  // from it has room to spare.
+  function estimate(text, kind) {
+    var n = String(text).length;
+    if (kind === 'band') return n * 9.4;
+    if (kind === 'root') return n * 9.2;
+    return n * 7.4;
+  }
+
+  // The subject's name in the fewest balanced lines that keep its disc small: every line
+  // lies inside the disc of radius r.
+  function rootBlock(subject, measure) {
+    var words = String(subject).split(/\s+/).filter(Boolean);
+    if (!words.length) words = ['?'];
+    var widths = words.map(function (w) { return measure(w, 'root'); });
+    var space = measure('n', 'root') * 0.55;
+    var all = 0;
+    var longest = 0;
+    widths.forEach(function (w) { all += w + space; longest = Math.max(longest, w); });
+    var best = null;
+    for (var count = 1; count <= Math.min(words.length, 8); count++) {
+      var limit = Math.max(longest, (all / count) * 1.12);
+      var lines = [];
+      var line = null;
+      words.forEach(function (word, i) {
+        if (line && line.w + space + widths[i] <= limit) { line.text += ' ' + word; line.w += space + widths[i]; }
+        else { line = { text: word, w: widths[i] }; lines.push(line); }
+      });
+      var r = 0;
+      lines.forEach(function (l, i) {
+        l.y = (i - (lines.length - 1) / 2) * WEB.rootLine;
+        r = Math.max(r, Math.sqrt((l.w / 2) * (l.w / 2) + (Math.abs(l.y) + WEB.rootLine / 2) * (Math.abs(l.y) + WEB.rootLine / 2)));
+      });
+      if (!best || r < best.r - 0.5) best = { r: r, lines: lines };
+    }
+    return { r: Math.max(30, Math.ceil(best.r + 7)), lines: best.lines };
+  }
+
+  // The subject in the middle, a line out to each group, the group's arc, and its names on
+  // one ring with each name set outward. A group takes the arc its names need or its label
+  // needs, whichever is longer, so a label is never longer than its arc; the ring grows
+  // until every group fits, and the names then spread to fill it. The box is what was drawn
+  // and no more, so a tab with one name is a short strip, not an empty ring.
+  //   opts.subject  the name in the middle
+  //   opts.measure  (text, 'name' | 'band' | 'root') -> width; an estimate when not given
+  //   opts.clip     the longest name drawn, in characters (opts.clipLabel for a group's label)
+  //   opts.compact  keep the ring as small as the names and labels allow (a narrow screen
+  //                 shrinks the whole drawing to fit, so a smaller drawing is larger type)
+  function webLayout(groups, opts) {
+    opts = opts || {};
+    var measure = opts.measure || estimate;
+    var clipAt = opts.clip || 26;
+    var FULL = 2 * Math.PI;
+    var root = rootBlock(opts.subject || '', measure);
     var total = 0;
-    groups.forEach(function (g) { total += g.d.length; });
-    var slots = total + (groups.length > 1 ? groups.length : 0);
-    var step = slots ? (2 * Math.PI) / slots : 0;
-    var c = size / 2;
-    var radius = size * 0.208;
+    var sets = groups.map(function (group) {
+      var label = clip(group.n, opts.clipLabel || 28);
+      total += group.d.length;
+      return {
+        label: label, w: measure(label, 'band') + 4,
+        names: group.d.map(function (item) { var t = clip(item.t, clipAt); return { text: t, w: measure(t, 'name') }; })
+      };
+    });
+    var empty = { box: { x: -root.r - WEB.pad, y: -root.r - WEB.pad, w: 2 * (root.r + WEB.pad), h: 2 * (root.r + WEB.pad) }, radius: 0, spine: 0, labelRadius: 0, root: root, nodes: [], bands: [], step: 0 };
+    if (!total) return empty;
+
+    // A handful of names keep a small ring; more than that and the ring is the full size.
+    var R = Math.max(total > 4 && !opts.compact ? WEB.fullRadius : WEB.minRadius, root.r + WEB.labelIn + 16);
+    function gapFor(R, s) { return Math.max(s, WEB.bandGap / (R - WEB.labelIn)); }
+    function spanFor(R, s, set) {
+      var rl = R - WEB.labelIn;
+      return Math.max((set.names.length - 1) * s, (WEB.labelClear + set.w) / rl);
+    }
+    function around(R, s) {
+      var sum = sets.length * gapFor(R, s);
+      sets.forEach(function (set) { sum += spanFor(R, s, set); });
+      return sum;
+    }
+    function least(R) { return WEB.row / (R + WEB.nameGap); }
+    // Room to breathe while the ring is small, then only what the names must have.
+    while (!opts.compact && R < WEB.fullRadius && around(R, (WEB.row * 1.4) / (R + WEB.nameGap)) > FULL) R += 4;
+    for (var tries = 0; tries < 200 && around(R, least(R)) > FULL; tries++) {
+      R = Math.ceil(R * Math.min(1.5, Math.max(1.02, around(R, least(R)) / FULL)));
+    }
+    var lo = least(R);
+    var hi = FULL;
+    for (var n = 0; n < 50; n++) {
+      var mid = (lo + hi) / 2;
+      if (around(R, mid) > FULL) hi = mid; else lo = mid;
+    }
+    var step = lo;
+    var rl = R - WEB.labelIn;
+    var gap = gapFor(R, step);
+    var xs = [-root.r, root.r];
+    var ys = [-root.r, root.r];
+    function at(r, a) { return [r * Math.sin(a), -r * Math.cos(a)]; }
+    function seen(p) { xs.push(p[0]); ys.push(p[1]); }
+
     var nodes = [];
     var bands = [];
-    var slot = 0;
-    groups.forEach(function (group, g) {
-      var from = slot * step;
-      group.d.forEach(function (item, index) {
-        var angle = (slot + 0.5) * step;
-        nodes.push({ group: g, index: index, angle: angle, x: c + radius * Math.sin(angle), y: c - radius * Math.cos(angle) });
-        slot++;
+    // One or two names sit at the sides, where a name set outward reads level.
+    var angle = total <= 2 ? Math.PI / 2 : 0;
+    sets.forEach(function (set, g) {
+      var from = angle;
+      var span = spanFor(R, step, set);
+      set.names.forEach(function (name, index) {
+        var a = from + index * step;
+        var p = at(R, a);
+        var deg = ((a * 180) / Math.PI) % 360;
+        var right = deg < 180;
+        var start = at(R + WEB.nameGap, a);
+        // the name's own box, turned: from its first letter out to its last, half a row each side
+        var along = [Math.sin(a), -Math.cos(a)];
+        var across = [Math.cos(a), Math.sin(a)];
+        var corners = [[0, -1], [0, 1], [1, -1], [1, 1]].map(function (c) {
+          return [start[0] + along[0] * name.w * c[0] + across[0] * (WEB.row / 2) * c[1], start[1] + along[1] * name.w * c[0] + across[1] * (WEB.row / 2) * c[1]];
+        });
+        corners.forEach(seen);
+        [[-16, 0], [16, 0], [0, -16], [0, 16]].forEach(function (d) { seen([p[0] + d[0], p[1] + d[1]]); });
+        nodes.push({ group: g, index: index, angle: a, x: p[0], y: p[1], text: name.text, w: name.w, tx: start[0], ty: start[1], right: right, turn: right ? deg - 90 : deg + 90, corners: corners });
       });
-      bands.push({ label: group.n, from: from, to: slot * step });
-      if (groups.length > 1) slot++;
+      var to = from + (set.names.length - 1) * step;
+      var labelFrom = from + WEB.labelClear / rl;
+      var labelTo = from + span;
+      var middle = (labelFrom + labelTo) / 2;
+      bands.push({ label: set.label, w: set.w, from: from, to: to, labelFrom: labelFrom, labelTo: labelTo, flip: Math.cos(middle) < -0.2 });
+      for (var a = from; a <= labelTo + 1e-9; a += Math.min(0.08, Math.max(1e-3, labelTo - from))) { seen(at(rl - 2, a)); seen(at(R - WEB.spineIn + 2, a)); }
+      seen(at(rl - 2, labelTo)); seen(at(R - WEB.spineIn + 2, labelTo));
+      angle += span + gap;
     });
-    return { nodes: nodes, bands: bands, center: c, radius: radius };
+    var minX = Math.min.apply(null, xs) - WEB.pad;
+    var minY = Math.min.apply(null, ys) - WEB.pad;
+    return {
+      box: { x: Math.floor(minX), y: Math.floor(minY), w: Math.ceil(Math.max.apply(null, xs) + WEB.pad - Math.floor(minX)), h: Math.ceil(Math.max.apply(null, ys) + WEB.pad - Math.floor(minY)) },
+      radius: R, spine: R - WEB.spineIn, labelRadius: rl, root: root, nodes: nodes, bands: bands, step: step
+    };
+  }
+
+  // A web is drawn one unit to a pixel and shrunk to its column. Below this share of its
+  // size its 13px names are under 9px, and it is not drawn.
+  function readable(drawingWidth, columnWidth) {
+    return columnWidth >= drawingWidth * 0.7;
   }
 
   function nextTab(current, count, key) {
@@ -164,46 +301,136 @@
     return { s: isText(data.s) ? data.s : '', tabs: tabs, mentions: mentions };
   }
 
-  // The lines of a tree from where the rows and group headings were measured (centres, in
-  // the container's own coordinates), so a row of any height has a line that meets it.
-  //   rows      [{ x, y, o }]            the mark of each name, in order: the line ends at x, y
-  //   branches  [{ x, y, first, count }] each group's dot, and which rows are its own
-  //   g         { narrow, rootX, rootY } the subject's dot
-  // Wide: a curve from the subject to each group, then to each name. Narrow: an indented
-  // trunk with an elbow to each name.
-  function treeLines(rows, branches, g) {
+  // ---- the tree's lines ----
+  // Where the lines of a tree run, from the boxes its parts were measured at (in the
+  // container's own coordinates). No line enters a box of text: each kind of line has a
+  // channel of its own that no text is set in.
+  //   subject  the subject's name          { left, right, top, bottom }
+  //   heads    each group's heading cell   [{ left, right, top, bottom, count }]
+  //   marks    each name's mark, in order  [{ left, top, bottom, o }]
+  // Wide: the subject's dot is at the right of its name; a curve runs from it to the left
+  // edge of the headings' column and then level, under the heading (which is set in the top
+  // half of its cell), to the group's dot at the right of that column; a curve runs from
+  // there to each name's mark across the gap between the two columns.
+  // Narrow: a trunk down the left edge, an arm to each heading's dot, a spine down from
+  // that dot past the group's names, and a short arm from the spine to each mark.
+  // A name's own line carries its tone; a line shared by a group carries none.
+  function treeLines(subject, heads, marks, narrow) {
     var paths = [];
-    var dots = [{ x: g.rootX, y: g.rootY, r: g.narrow ? 7 : 9, kind: 'root' }];
+    var dots = [];
     var f = function (v) { return Math.round(v * 10) / 10; };
-    if (g.narrow && branches.length) {
-      paths.push({ d: 'M' + f(g.rootX) + ' ' + f(g.rootY) + 'V' + f(branches[branches.length - 1].y), tone: null, kind: 'trunk' });
+    var mid = function (b) { return (b.top + b.bottom) / 2; };
+    var first = 0;
+    var rootX = narrow ? subject.left + 10 : subject.right + 14;
+    var rootY = mid(subject);
+    var column = Infinity;
+    heads.forEach(function (h) { column = Math.min(column, h.left); });
+    if (narrow && heads.length) {
+      paths.push({ d: 'M' + f(rootX) + ' ' + f(rootY) + 'V' + f(mid(heads[heads.length - 1])), tone: null, kind: 'trunk' });
     }
-    branches.forEach(function (b) {
-      if (g.narrow) {
-        paths.push({ d: 'M' + f(g.rootX) + ' ' + f(b.y) + 'H' + f(b.x), tone: null, kind: 'trunk' });
+    heads.forEach(function (h) {
+      var y = mid(h);
+      var x = narrow ? h.left - 10 : h.right + 12;
+      if (narrow) {
+        paths.push({ d: 'M' + f(rootX) + ' ' + f(y) + 'H' + f(x), tone: null, kind: 'trunk' });
+        if (h.count) paths.push({ d: 'M' + f(x) + ' ' + f(y) + 'V' + f(mid(marks[first + h.count - 1])), tone: null, kind: 'trunk' });
       } else {
-        var mx = (g.rootX + b.x) / 2;
-        paths.push({ d: 'M' + f(g.rootX) + ' ' + f(g.rootY) + 'C' + f(mx) + ' ' + f(g.rootY) + ' ' + f(mx) + ' ' + f(b.y) + ' ' + f(b.x) + ' ' + f(b.y), tone: null, kind: 'trunk' });
+        var end = column - 6;
+        var bend = (rootX + end) / 2;
+        paths.push({ d: 'M' + f(rootX) + ' ' + f(rootY) + 'C' + f(bend) + ' ' + f(rootY) + ' ' + f(bend) + ' ' + f(y) + ' ' + f(end) + ' ' + f(y) + 'H' + f(x), tone: null, kind: 'trunk' });
       }
-      dots.push({ x: b.x, y: b.y, r: g.narrow ? 4 : 5, kind: 'branch' });
-      for (var k = 0; k < b.count; k++) {
-        var row = rows[b.first + k];
+      dots.push({ x: x, y: y, r: narrow ? 4 : 5, kind: 'branch' });
+      for (var k = 0; k < h.count; k++) {
+        var mark = marks[first + k];
+        var my = mid(mark);
+        var mx = mark.left - 3;
         var d;
-        if (g.narrow) {
-          d = 'M' + f(b.x) + ' ' + f(k ? rows[b.first + k - 1].y : b.y) + 'V' + f(row.y) + 'H' + f(row.x);
+        if (narrow) {
+          d = 'M' + f(x) + ' ' + f(my) + 'H' + f(mx);
         } else {
-          var m = (b.x + row.x) / 2;
-          d = 'M' + f(b.x) + ' ' + f(b.y) + 'C' + f(m) + ' ' + f(b.y) + ' ' + f(m) + ' ' + f(row.y) + ' ' + f(row.x) + ' ' + f(row.y);
+          var m = (x + mx) / 2;
+          d = 'M' + f(x) + ' ' + f(y) + 'C' + f(m) + ' ' + f(y) + ' ' + f(m) + ' ' + f(my) + ' ' + f(mx) + ' ' + f(my);
         }
-        paths.push({ d: d, tone: row.o || null, kind: 'leaf' });
+        paths.push({ d: d, tone: mark.o || null, kind: 'leaf' });
       }
+      first += h.count;
     });
+    dots.push({ x: rootX, y: rootY, r: 7, kind: 'root' });
     return { paths: paths, dots: dots };
+  }
+
+  // ---- colours ----
+  // A colour as [r, g, b, a] from what a browser reports for one, or null.
+  function parseColour(s) {
+    if (typeof s !== 'string') return null;
+    s = s.trim();
+    var m = /^rgba?\(([^)]+)\)$/i.exec(s);
+    var scale = 1;
+    if (!m) { m = /^color\(srgb\s+([^)]+)\)$/i.exec(s); scale = 255; }
+    if (!m) return null;
+    var parts = m[1].split(/[\s,\/]+/).filter(Boolean);
+    if (parts.length < 3) return null;
+    var out = [];
+    for (var i = 0; i < 3; i++) {
+      var v = parseFloat(parts[i]);
+      if (isNaN(v)) return null;
+      out.push(Math.max(0, Math.min(255, v * scale)));
+    }
+    var alpha = parts.length > 3 ? parseFloat(parts[3]) : 1;
+    if (isNaN(alpha)) return null;
+    if (/%$/.test(parts[3] || '')) alpha /= 100;
+    out.push(Math.max(0, Math.min(1, alpha)));
+    return out;
+  }
+
+  function luminance(c) {
+    var f = function (v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); };
+    return 0.2126 * f(c[0]) + 0.7152 * f(c[1]) + 0.0722 * f(c[2]);
+  }
+
+  function contrast(a, b) {
+    var x = luminance(a);
+    var y = luminance(b);
+    return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05);
+  }
+
+  function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+
+  // One colour laid over another, by the first one's alpha.
+  function over(top, base) { return mix(base, top, top.length > 3 ? top[3] : 1); }
+
+  // A colour that can be read on every one of the grounds: the colour itself when it reaches
+  // `need` on each, else moved toward the text colour a tenth at a time until it does, and
+  // the text colour when nothing on the way does. So it is never worse than the plain text.
+  function ink(colour, text, grounds, need) {
+    for (var i = 0; i < 10; i++) {
+      var c = mix(colour, text, i / 10).map(Math.round);   // as it will be written, in whole numbers
+      var ok = true;
+      for (var g = 0; g < grounds.length; g++) if (contrast(c, grounds[g]) < need) ok = false;
+      if (ok) return c;
+    }
+    return [text[0], text[1], text[2]];
+  }
+
+  // The section's colours from a palette: p.text, p.muted, p.accent, p.success, p.danger
+  // and p.grounds (what they are drawn on). Words need 4.5 to 1; marks and lines 3 to 1.
+  function inks(p) {
+    var g = p.grounds;
+    return {
+      muted: ink(p.muted, p.text, g, 4.5),
+      accent: ink(p.accent, p.text, g, 4.5),
+      'warm-ink': ink(p.success, p.text, g, 4.5),
+      'hostile-ink': ink(p.danger, p.text, g, 4.5),
+      warm: ink(p.success, p.text, g, 3),
+      hostile: ink(p.danger, p.text, g, 3),
+      trunk: ink(mix(p.muted, g[0], 0.3), p.text, g, 3)
+    };
   }
 
   var api = {
     treatmentFor: treatmentFor, treeLayout: treeLayout, webLayout: webLayout, nextTab: nextTab,
-    tapAction: tapAction, toneClass: toneClass, sessionsText: sessionsText, treeLines: treeLines, safeHref: safeHref
+    tapAction: tapAction, toneClass: toneClass, sessionsText: sessionsText, treeLines: treeLines, safeHref: safeHref,
+    parseColour: parseColour, contrast: contrast, ink: ink, inks: inks, readable: readable
   };
 
   function init(doc, win) {
@@ -314,8 +541,27 @@
         entry.panel.appendChild(mentionsView(entry));
       }
       refresh();
+      reveal(entry.button);
       if (focus && entry.button.focus) entry.button.focus();
     }
+
+    // The tab row scrolls sideways on a narrow screen: the chosen tab is brought into it,
+    // and an edge that has more tabs beyond it fades (cx-more-start, cx-more-end).
+    function reveal(button) {
+      if (typeof button.offsetLeft !== 'number' || typeof tablist.clientWidth !== 'number') return;
+      var left = button.offsetLeft;
+      var right = left + button.offsetWidth;
+      if (left < tablist.scrollLeft + 28) tablist.scrollLeft = Math.max(0, left - 28);
+      else if (right > tablist.scrollLeft + tablist.clientWidth - 28) tablist.scrollLeft = right - tablist.clientWidth + 28;
+      hint();
+    }
+    function hint() {
+      var spare = tablist.scrollWidth - tablist.clientWidth;
+      var at = tablist.scrollLeft;
+      tablist.classList[at > 2 ? 'add' : 'remove']('cx-more-start');
+      tablist.classList[at < spare - 2 ? 'add' : 'remove']('cx-more-end');
+    }
+    tablist.addEventListener('scroll', hint);
 
     tablist.addEventListener('keydown', function (e) {
       if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].indexOf(e.key) < 0) return;
@@ -418,7 +664,9 @@
       var flatIndex = 0;
       entry.tab.g.forEach(function (group, g) {
         var branch = make('li', 'cx-branch');
-        var head = make('p', 'cx-group', group.n);
+        var head = make('p', 'cx-group');
+        var label = make('span', 'cx-label', group.n);
+        head.appendChild(label);
         var headId = 'cx-' + n + '-' + entry.id + '-g' + g;
         head.setAttribute('id', headId);
         var leaves = make('ul', 'cx-leaves');
@@ -443,46 +691,40 @@
         branch.appendChild(head);
         branch.appendChild(leaves);
         list.appendChild(branch);
-        heads.push({ el: head, count: group.d.length });
+        heads.push({ el: head, label: label, count: group.d.length });
       });
       wrap.appendChild(lines);
       wrap.appendChild(subject);
       wrap.appendChild(list);
-      entry.tree = { wrap: wrap, lines: lines, subject: subject, heads: heads, marks: marks, narrow: null, sig: '' };
+      entry.tree = { wrap: wrap, lines: lines, subject: subject, heads: heads, marks: marks, shape: '', sig: '' };
       return wrap;
     }
 
-    // Wide or narrow from the container's own width, then the lines from the measured
-    // centres. Does nothing while the container has no width (a hidden tab).
+    // Wide or narrow from the container's own width, then the lines from where the parts
+    // landed. Does nothing while the container has no width (a hidden tab).
     function layoutTree(entry) {
       var t = entry.tree;
       if (!t) return;
       var box = t.wrap.getBoundingClientRect();
       if (!(box.width > 0)) return;
       var narrow = box.width < NARROW;
-      if (narrow !== t.narrow) {
-        t.narrow = narrow;
-        t.wrap.setAttribute('class', 'cx-tree-wrap ' + (narrow ? 'cx-narrow' : 'cx-wide'));
+      var shape = narrow ? 'cx-narrow' : box.width < ROOMY ? 'cx-wide' : 'cx-wide cx-roomy';
+      if (shape !== t.shape) {
+        t.shape = shape;
+        t.wrap.setAttribute('class', 'cx-tree-wrap ' + shape);
         box = t.wrap.getBoundingClientRect();
         if (!(box.width > 0)) return;
       }
-      var sig = [Math.round(box.width), Math.round(box.height), narrow].join('/');
+      var sig = [Math.round(box.width), Math.round(box.height), shape].join('/');
       if (sig === t.sig) return;
       t.sig = sig;
       var at = function (el) {
         var r = el.getBoundingClientRect();
-        return { left: r.left - box.left, right: r.right - box.left, x: (r.left + r.right) / 2 - box.left, y: (r.top + r.bottom) / 2 - box.top };
+        return { left: r.left - box.left, right: r.right - box.left, top: r.top - box.top, bottom: r.bottom - box.top };
       };
-      var subject = at(t.subject);
-      var rows = t.marks.map(function (m) { var c = at(m.el); return { x: c.left - 4, y: c.y, o: m.o }; });
-      var first = 0;
-      var branches = t.heads.map(function (h) {
-        var c = at(h.el);
-        var b = { x: narrow ? c.left - 10 : c.right + 10, y: c.y, first: first, count: h.count };
-        first += h.count;
-        return b;
-      });
-      var geo = treeLines(rows, branches, { narrow: narrow, rootX: Math.max(7, subject.left - 14), rootY: subject.y });
+      var heads = t.heads.map(function (h) { var b = at(h.el); b.count = h.count; return b; });
+      var marks = t.marks.map(function (m) { var b = at(m.el); b.o = m.o; return b; });
+      var geo = treeLines(at(t.subject), heads, marks, narrow);
       var w = Math.round(box.width);
       var h = Math.round(box.height);
       clear(t.lines);
@@ -499,47 +741,82 @@
 
     // ---- the web ----
 
-    function webView(entry) {
-      var S = WEB_SIZE;
-      var lay = webLayout(entry.tab.g, S);
-      var c = lay.center;
-      var R = lay.radius;
-      var root = svg('svg', 'cx-web', { viewBox: '0 0 ' + S + ' ' + S, role: 'group', 'aria-label': 'Web of ' + entry.label });
+    // The width of a text as the page will draw it, from a hidden drawing with the web's own
+    // type; an estimate where that cannot be had.
+    var ruler = null;
+    function measure(text, kind) {
+      var guess = estimate(text, kind);
+      if (!ruler) {
+        var scratch = svg('svg', 'cx-ruler', { 'aria-hidden': 'true', focusable: 'false', width: 0, height: 0 });
+        ruler = svg('text', 'cx-name');
+        scratch.appendChild(ruler);
+        app.appendChild(scratch);
+      }
+      if (typeof ruler.getComputedTextLength !== 'function') return guess;
+      ruler.setAttribute('class', kind === 'band' ? 'cx-band' : kind === 'root' ? 'cx-root' : 'cx-name');
+      ruler.textContent = text;
+      var w = ruler.getComputedTextLength();
+      return w > 0 ? w + 1 : guess;
+    }
+
+    // A tone's mark in the web: the same three shapes as everywhere else.
+    function webMark(item, x, y, k) {
+      if (item.o === 'h') {
+        var d = 7.5 * k;
+        return svg('path', 'cx-mark cx-hostile', { d: 'M' + x + ' ' + (y - d) + 'L' + (x + d) + ' ' + y + 'L' + x + ' ' + (y + d) + 'L' + (x - d) + ' ' + y + 'Z' });
+      }
+      return svg('circle', withTone('cx-mark', item.o), { cx: x, cy: y, r: (item.o === 'w' ? 6 : 5) * k });
+    }
+
+    // The web's layout for a column, worked out once per kind (and again when a font arrives).
+    // A wide column takes it as it comes. A narrow one takes the first that can still be read
+    // when shrunk to fit: names at full length, or names and labels cut short on a small
+    // ring; when neither can, there is no web for this width (null) and the tree is drawn.
+    function webPlan(entry, width) {
+      var plans = entry.plans || (entry.plans = {});
+      function plan(key, opts) {
+        if (!plans[key]) {
+          opts.subject = data.s;
+          opts.measure = measure;
+          plans[key] = webLayout(entry.tab.g, opts);
+          plans[key].key = key;
+        }
+        return plans[key];
+      }
+      if (width >= NARROW) return plan('wide', {});
+      var full = plan('full', { compact: true });
+      if (readable(full.box.w, width)) return full;
+      var short = plan('short', { compact: true, clip: 14, clipLabel: 14 });
+      return readable(short.box.w, width) ? short : null;
+    }
+
+    function webView(entry, lay) {
+      var narrow = lay.key !== 'wide';
+      var k = narrow ? SMALL : 1;
+      var box = lay.box;
+      var f = function (v) { return Math.round(v * 100) / 100; };
+      var root = svg('svg', narrow ? 'cx-web cx-small' : 'cx-web', { viewBox: box.x + ' ' + box.y + ' ' + box.w + ' ' + box.h, width: box.w, height: box.h, role: 'group', 'aria-label': 'Web of ' + entry.label });
       root.setAttribute('data-no-preview', '');
       var edges = svg('g', 'cx-edges', { 'aria-hidden': 'true' });
       var bandLayer = svg('g', 'cx-bands', { 'aria-hidden': 'true' });
       var nodes = svg('g', 'cx-nodes');
-      function pt(r, a) { return [c + r * Math.sin(a), c - r * Math.cos(a)]; }
-
-      lay.nodes.forEach(function (node, i) {
-        var flat = entry.flat[i];
-        var item = flat.item;
-        edges.appendChild(svg('line', withTone('cx-edge', item.o), { x1: c, y1: c, x2: node.x, y2: node.y }));
-        var g = item.h ? svg('a', 'cx-node', { href: item.h }) : svg('g', 'cx-node cx-text', { tabindex: '0', role: 'img' });
-        g.setAttribute('data-cx-i', i);
-        g.setAttribute('aria-label', item.t + ', ' + flat.group + (item.o ? ', ' + TONE_WORD[item.o] : ''));
-        g.appendChild(svg('circle', withTone('cx-dot cx-mark', item.o), { cx: node.x, cy: node.y, r: 6 }));
-        var deg = (node.angle * 180) / Math.PI;
-        var right = deg % 360 < 180;
-        var t = pt(R + 12, node.angle);
-        var label = svg('text', 'cx-name', { x: t[0], y: t[1], dy: 4, 'text-anchor': right ? 'start' : 'end',
-          transform: 'rotate(' + (right ? deg - 90 : deg + 90) + ' ' + t[0] + ' ' + t[1] + ')' });
-        label.textContent = clip(item.t, 26);
-        g.appendChild(label);
-        nodes.appendChild(g);
-      });
+      function pt(r, a) { return [f(r * Math.sin(a)), f(-r * Math.cos(a))]; }
+      function arc(r, from, to, back) {
+        var a = pt(r, back ? to : from);
+        var b = pt(r, back ? from : to);
+        return 'M' + a[0] + ' ' + a[1] + 'A' + r + ' ' + r + ' 0 ' + (to - from > Math.PI ? 1 : 0) + ' ' + (back ? 0 : 1) + ' ' + b[0] + ' ' + b[1];
+      }
 
       lay.bands.forEach(function (band, g) {
-        var span = band.to - band.from;
-        var mid = band.from + span / 2;
-        var la = Math.min(span, 2 * Math.PI * 0.8) / 2 - 0.02;
-        var bottom = Math.cos(mid) < -0.2;
-        var r = R - 22 + (bottom ? 9 : 0);
-        var a = pt(r, bottom ? mid + la : mid - la);
-        var b = pt(r, bottom ? mid - la : mid + la);
+        var inner = pt(lay.root.r, band.from);
+        var outer = pt(lay.spine, band.from);
+        edges.appendChild(svg('line', 'cx-edge cx-trunk', { x1: inner[0], y1: inner[1], x2: outer[0], y2: outer[1] }));
+        if (band.to > band.from) edges.appendChild(svg('path', 'cx-edge cx-trunk', { d: arc(lay.spine, band.from, band.to, false) }));
+        edges.appendChild(svg('circle', 'cx-dot cx-branch-dot', { cx: outer[0], cy: outer[1], r: 3 }));
+        // The label runs along its own arc; under the middle it is turned to read the right way up.
         var id = 'cx-' + n + '-' + entry.id + '-band' + g;
-        bandLayer.appendChild(svg('path', 'cx-band-path', { id: id, fill: 'none',
-          d: 'M' + a[0] + ' ' + a[1] + 'A' + r + ' ' + r + ' 0 ' + (la * 2 > Math.PI ? 1 : 0) + ' ' + (bottom ? 0 : 1) + ' ' + b[0] + ' ' + b[1] }));
+        var r = lay.labelRadius + (band.flip ? WEB.labelHigh : 0);
+        bandLayer.appendChild(svg('path', 'cx-band-path', { id: id, fill: 'none', d: arc(r, band.labelFrom, band.labelTo, band.flip) }));
         var text = svg('text', 'cx-band');
         var along = svg('textPath', null, { href: '#' + id, startOffset: '50%', 'text-anchor': 'middle' });
         along.textContent = band.label;
@@ -547,13 +824,35 @@
         bandLayer.appendChild(text);
       });
 
+      lay.nodes.forEach(function (node, i) {
+        var flat = entry.flat[i];
+        var item = flat.item;
+        var x = f(node.x);
+        var y = f(node.y);
+        var from = pt(lay.spine, node.angle);
+        edges.appendChild(svg('line', withTone('cx-edge', item.o), { x1: from[0], y1: from[1], x2: x, y2: y }));
+        var g = item.h ? svg('a', 'cx-node', { href: item.h }) : svg('g', 'cx-node cx-text', { tabindex: '0', role: 'img' });
+        g.setAttribute('data-cx-i', i);
+        g.setAttribute('data-no-preview', '');
+        g.setAttribute('aria-label', item.t + ', ' + flat.group + (item.o ? ', ' + TONE_WORD[item.o] : ''));
+        g.appendChild(svg('circle', 'cx-hit', { cx: x, cy: y, r: 14 }));
+        g.appendChild(svg('circle', 'cx-ring', { cx: x, cy: y, r: 11.5 * k }));
+        g.appendChild(webMark(item, x, y, k));
+        var label = svg('text', 'cx-name', { x: f(node.tx), y: f(node.ty), dy: 4.5, 'text-anchor': node.right ? 'start' : 'end',
+          transform: 'rotate(' + f(node.turn) + ' ' + f(node.tx) + ' ' + f(node.ty) + ')' });
+        label.textContent = node.text;
+        g.appendChild(label);
+        nodes.appendChild(g);
+      });
+
       root.appendChild(edges);
-      root.appendChild(svg('circle', 'cx-hub', { cx: c, cy: c, r: R - 34, 'aria-hidden': 'true' }));
       root.appendChild(bandLayer);
-      root.appendChild(svg('circle', 'cx-dot cx-root-dot', { cx: c, cy: c, r: 34 }));
-      var centre = svg('text', 'cx-root', { x: c, y: c + 6, 'text-anchor': 'middle', 'font-size': 16 });
-      centre.textContent = clip(data.s.split(/\s+/)[0] || data.s, 11);
-      root.appendChild(centre);
+      root.appendChild(svg('circle', 'cx-dot cx-root-dot', { cx: 0, cy: 0, r: lay.root.r }));
+      lay.root.lines.forEach(function (line) {
+        var centre = svg('text', 'cx-root', { x: 0, y: f(line.y), dy: 5, 'text-anchor': 'middle' });
+        centre.textContent = line.text;
+        root.appendChild(centre);
+      });
       root.appendChild(nodes);
       return root;
     }
@@ -623,19 +922,23 @@
       if (!entry || entry.mentions) return;
       var width = widthOf(app);
       if (width <= 0 && mode !== 'cards') return;
+      hint();
       var how = treatmentFor(mode, entry.count, width);
-      if (!entry.drawn || entry.how !== how) build(entry, how);
+      var plan = how === 'web' ? webPlan(entry, width) : null;
+      if (how === 'web' && !plan) how = 'tree';
+      if (!entry.drawn || entry.how !== how || entry.plan !== plan) build(entry, how, plan);
       if (entry.how === 'tree') layoutTree(entry);
     }
 
-    function build(entry, how) {
+    function build(entry, how, plan) {
       if (entry.tree && observer) observer.unobserve(entry.tree.wrap);
       entry.tree = null;
       clear(entry.panel);
       entry.drawn = true;
       entry.how = how;
+      entry.plan = plan;
       if (how === 'cards') entry.panel.appendChild(cardsView(entry));
-      else if (how === 'web') interactive(entry, webView(entry));
+      else if (how === 'web') interactive(entry, webView(entry, plan));
       else {
         interactive(entry, treeView(entry));
         if (observer) observer.observe(entry.tree.wrap);
@@ -653,9 +956,88 @@
       app.appendChild(key);
     }
 
+    // ---- the section's colours ----
+    // The stylesheet draws everything in the plain text colour. Here the palette's own
+    // muted, accent, success and danger colours are read as the page resolves them, each is
+    // checked against what it is drawn on (inks), and the ones that can be read are handed
+    // to the stylesheet as --cxi-* (on the page) and --cxc-* (on a card or the strip, which
+    // a sheet skin gives inks of their own). A colour that cannot be read is left out, and
+    // the stylesheet falls back to the text colour.
+    var probes = null;
+    function colourAt(el, value) {
+      el.style.color = value;
+      return parseColour(win.getComputedStyle(el).color);
+    }
+    function groundBehind(el) {
+      var stack = [];
+      for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
+        var c = parseColour(win.getComputedStyle(e).backgroundColor);
+        if (!c) return null;
+        if (c[3] > 0) { stack.push(c); if (c[3] >= 1) break; }
+      }
+      var base = [255, 255, 255];
+      for (var i = stack.length - 1; i >= 0; i--) base = over(stack[i], base);
+      return base;
+    }
+    function css(c) { return 'rgb(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ')'; }
+    function paintScope(prefix, probe, card) {
+      var names = ['muted', 'accent', 'warm-ink', 'hostile-ink', 'warm', 'hostile', 'trunk', 'ground', 'hover'];
+      names.forEach(function (name) { section.style.removeProperty('--cx' + prefix + '-' + name); });
+      var ground = groundBehind(probe);
+      if (!ground) return;
+      var p = { grounds: [ground] };
+      var raw = { text: 'var(--text)', muted: 'var(--text-muted)', accent: 'var(--accent)', success: 'var(--success)', danger: 'var(--danger)' };
+      for (var key in raw) {
+        if (!has(raw, key)) continue;
+        var c = colourAt(probe, raw[key]);
+        if (!c) return;
+        p[key] = over(c, ground);
+      }
+      // What else the words sit on: a card's portrait disc, or a row under the pointer.
+      var other = colourAt(probe, card ? 'var(--bg)' : 'var(--accent-dim)');
+      var second = other ? over(other, ground) : null;
+      if (second && (card || contrast(p.text, second) >= 4.5)) p.grounds.push(second);
+      else second = null;
+      var out = inks(p);
+      for (var name in out) if (has(out, name)) section.style.setProperty('--cx' + prefix + '-' + name, css(out[name]));
+      section.style.setProperty('--cx' + prefix + '-ground', css(ground));
+      if (second && !card) section.style.setProperty('--cx' + prefix + '-hover', css(second));
+    }
+    function paint() {
+      if (typeof win.getComputedStyle !== 'function' || !section.style || typeof section.style.setProperty !== 'function') return;
+      if (!probes) {
+        probes = [make('span', 'cx-probe'), make('span', 'cx-probe cx-strip')];
+        probes.forEach(function (probe) { probe.setAttribute('aria-hidden', 'true'); app.appendChild(probe); });
+      }
+      try {
+        paintScope('i', probes[0], false);
+        paintScope('c', probes[1], true);
+      } catch (e) { /* the stylesheet's own colours stand */ }
+    }
+
     // Live before anything is measured, so the plain lists are already out of the way.
     section.appendChild(app);
+    paint();
     section.classList.add('cx-live');
+    // The light and dark switch, and a change of the reader's own scheme, change the palette.
+    if (typeof win.MutationObserver === 'function' && doc.documentElement) {
+      new win.MutationObserver(paint).observe(doc.documentElement, { attributes: true, attributeFilter: ['data-theme', 'class', 'style'] });
+    }
+    if (typeof win.matchMedia === 'function') {
+      var scheme = win.matchMedia('(prefers-color-scheme: dark)');
+      if (scheme && scheme.addEventListener) scheme.addEventListener('change', paint);
+    }
+    // A font that arrives after the first drawing changes what every text measures.
+    if (doc.fonts && doc.fonts.ready && typeof doc.fonts.ready.then === 'function') {
+      doc.fonts.ready.then(function () {
+        entries.forEach(function (entry) {
+          entry.plans = null;
+          if (entry.how === 'web') entry.how = '';
+          if (entry.tree) entry.tree.sig = '';
+        });
+        refresh();
+      });
+    }
 
     // A size change (a tab that was hidden opening, a window resize, a font arriving) draws
     // or lays out again. Without ResizeObserver the window's resize stands in.

@@ -26,19 +26,88 @@ test('the tree gives every item a row, in order, and grows with them', () => {
   assert.deepStrictEqual(narrow.branches.map((b) => [b.label, b.first, b.count]), [['G0', 0, 2], ['G1', 2, 3]]);
 });
 
-test('the web puts every item on the ring, none on another', () => {
-  const { nodes, bands } = api.webLayout(groups(3, 4), 600);
-  assert.strictEqual(nodes.length, 7);
-  const seen = new Set(nodes.map((n) => `${Math.round(n.x)},${Math.round(n.y)}`));
-  assert.strictEqual(seen.size, 7);
-  assert.deepStrictEqual(bands.map((b) => b.label), ['G0', 'G1']);
-  for (const n of nodes) assert.ok(n.x >= 0 && n.x <= 600 && n.y >= 0 && n.y <= 600);
+// ---- the web's geometry ----
+
+const FULL = 2 * Math.PI;
+const SHAPES = [[1], [2], [1, 1], [3, 4], [20], [1, 1, 1, 1, 1, 1, 1, 1, 1], [25, 3, 1], [1, 25, 1], [60, 10], [2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2]];
+const LABELS = ['Knows', 'Member of the household of', 'Enemy of', 'Child of', 'Was once the sworn rival of', 'Employs', 'Located at', 'Friend of', 'Owns'];
+const webGroups = (sizes) => sizes.map((n, g) => ({ n: LABELS[g % LABELS.length], d: Array.from({ length: n }, (_, i) => ({ t: i % 3 ? `Name ${g}-${i}` : `A Much Longer Name Than Most ${g}-${i}` })) }));
+// the text widths the layout was given, so a test asks of it what the page asks
+const measured = (text, kind) => text.length * (kind === 'band' ? 9.1 : kind === 'root' ? 8.7 : 6.9);
+const within = (a) => ((a % FULL) + FULL) % FULL;
+
+test('the web puts every name on one ring, in order, inside the drawing', () => {
+  for (const sizes of SHAPES) {
+    const lay = api.webLayout(webGroups(sizes), { subject: 'Emma Wentworth', measure: measured });
+    const total = sizes.reduce((a, b) => a + b, 0);
+    assert.strictEqual(lay.nodes.length, total, String(sizes));
+    assert.deepStrictEqual(lay.bands.map((b) => b.label), webGroups(sizes).map((g) => g.n.length > 28 ? g.n.slice(0, 27) + '…' : g.n));
+    const { x, y, w, h } = lay.box;
+    for (const n of lay.nodes) {
+      assert.ok(Math.abs(Math.hypot(n.x, n.y) - lay.radius) < 1e-6, 'on the ring');
+      for (const [cx, cy] of [[n.x, n.y], ...n.corners]) assert.ok(cx >= x && cx <= x + w && cy >= y && cy <= y + h, `${sizes}: a name or its mark lies outside the drawing`);
+    }
+    assert.ok(x <= -lay.root.r && y <= -lay.root.r && x + w >= lay.root.r && y + h >= lay.root.r, 'the subject is inside');
+  }
 });
 
-test('the web leaves a gap of one slot between groups', () => {
-  const { nodes } = api.webLayout(groups(2, 2), 600);
-  const step = (2 * Math.PI) / 6;
-  assert.ok(Math.abs(nodes[2].angle - nodes[1].angle - 2 * step) < 1e-9);
+test('no two names of a web meet: neighbours are a row apart where they start', () => {
+  for (const sizes of SHAPES) {
+    const lay = api.webLayout(webGroups(sizes), { subject: 'Emma', measure: measured });
+    const start = lay.radius + 13;
+    lay.nodes.forEach((n, i) => {
+      const next = lay.nodes[(i + 1) % lay.nodes.length];
+      if (next === n) return;
+      const turn = within(next.angle - n.angle);
+      assert.ok(turn * start >= 16 - 1e-6 || turn > Math.PI, `${sizes}: names ${i} and ${i + 1} are ${(turn * start).toFixed(1)} apart`);
+    });
+  }
+});
+
+test('every group label of a web has an arc as long as its words, and no two arcs overlap', () => {
+  for (const sizes of SHAPES) {
+    const lay = api.webLayout(webGroups(sizes), { subject: 'Emma', measure: measured });
+    lay.bands.forEach((band, g) => {
+      const room = (band.labelTo - band.labelFrom) * lay.labelRadius;
+      assert.ok(room >= measured(band.label, 'band'), `${sizes}: "${band.label}" needs ${measured(band.label, 'band')} and has ${room.toFixed(1)}`);
+      assert.ok(band.labelFrom > band.from, 'the label starts clear of its own line');
+      const next = lay.bands[(g + 1) % lay.bands.length];
+      const gap = within(next.from - band.labelTo);
+      // the next group's line (and so its label) starts after this label ends, with room between
+      assert.ok(gap * lay.labelRadius >= 19.9 && gap < Math.PI * 2 - 1e-6, `${sizes}: label ${g} runs into group ${(g + 1) % lay.bands.length}`);
+      assert.ok(band.to <= band.labelTo + 1e-9 || band.to - band.from <= band.labelTo - band.from + 1e-9);
+    });
+    const used = lay.bands.reduce((sum, b) => sum + (b.labelTo - b.from), 0);
+    assert.ok(used < FULL, `${sizes}: the groups take ${used.toFixed(2)} of a turn`);
+    assert.ok(lay.labelRadius > lay.root.r + 8, 'labels are outside the subject');
+    assert.ok(lay.spine > lay.labelRadius + 9 + 4, 'a group arc is outside its label');
+  }
+});
+
+test('a web of one name is a short strip, not an empty ring', () => {
+  const lay = api.webLayout(webGroups([1]), { subject: 'Emma', measure: measured });
+  assert.ok(lay.box.h < lay.radius * 1.5, `height ${lay.box.h} for radius ${lay.radius}`);
+  assert.ok(Math.abs(lay.nodes[0].y) < 1e-6 && lay.nodes[0].x > 0, 'the name is set level, to the right');
+  const two = api.webLayout(webGroups([2]), { subject: 'Emma', measure: measured });
+  assert.ok(two.nodes.every((n) => Math.abs(n.y) < 1e-6), 'two names sit level, one each side');
+});
+
+test('the subject of a web is whole, in lines that fit its disc, however long the name', () => {
+  for (const subject of ['Emma', 'Emma Wentworth', 'Mr Bartholomew Fitzwilliam-Throckmorton of the Upper Hawthorne Grange Estate and Surrounds', 'Supercalifragilisticexpialidocious']) {
+    const lay = api.webLayout(webGroups([3, 4]), { subject, measure: measured });
+    assert.strictEqual(lay.root.lines.map((l) => l.text).join(' '), subject);
+    for (const line of lay.root.lines) {
+      const half = measured(line.text, 'root') / 2;
+      assert.ok(Math.hypot(half, Math.abs(line.y) + 9) <= lay.root.r, `"${line.text}" is inside the disc`);
+    }
+    assert.ok(lay.labelRadius > lay.root.r + 8);
+  }
+});
+
+test('a long name on the ring is cut to the length asked for', () => {
+  const g = [{ n: 'Knows', d: [{ t: 'Mr Bartholomew Fitzwilliam-Throckmorton of the Upper Hawthorne Grange' }, { t: 'Bo' }, { t: 'Cy' }] }];
+  assert.strictEqual(api.webLayout(g, { measure: measured }).nodes[0].text.length, 26);
+  assert.strictEqual(api.webLayout(g, { measure: measured, clip: 18 }).nodes[0].text.length, 18);
 });
 
 test('arrow keys move between tabs and wrap', () => {
@@ -283,6 +352,7 @@ test('the web draws each item as an svg link with a name, none as a link without
   assert.ok('data-no-preview' in web.attrs);
   const nodes = web.querySelectorAll('[data-cx-i]');
   assert.deepStrictEqual(nodes.map((n) => n.tag), ['a', 'g']);
+  assert.ok(nodes.every((n) => 'data-no-preview' in n.attrs));
   assert.strictEqual(nodes[0].getAttribute('href'), 'ann.html');
   assert.strictEqual(nodes[0].getAttribute('aria-label'), 'Ann, Family, warm');
   assert.strictEqual(nodes[1].getAttribute('href'), null);
@@ -428,6 +498,19 @@ test('without a ResizeObserver the window resize stands in, and a 0 width still 
   assert.ok(p.secs[0].querySelector('ul.cx-tree'));
 });
 
+test('a web the phone would shrink past reading is drawn as the tree, a small one stays a web', () => {
+  assert.strictEqual(api.readable(500, 358), true);
+  assert.strictEqual(api.readable(569, 358), false);
+  const nine = tab('things', 'Things', Array.from({ length: 9 }, (_, i) => grp(`A heading of some length ${i}`, item(`A thing with a longish name ${i}`))));
+  const phone = setup([{ mode: 'web', json: island([nine]) }], { width: 358 });
+  assert.ok(phone.secs[0].querySelector('ul.cx-tree'));
+  assert.strictEqual(phone.secs[0].querySelector('svg.cx-web'), null);
+  const small = setup([{ mode: 'web', json: island([PEOPLE]) }], { width: 358 });
+  assert.ok(small.secs[0].querySelector('svg.cx-web'));
+  const desk = setup([{ mode: 'web', json: island([nine]) }], { width: 900 });
+  assert.ok(desk.secs[0].querySelector('svg.cx-web'));
+});
+
 test('the tab shown later is drawn for the width it has then', () => {
   const many = tab('places', 'Places', [grp('All', ...Array.from({ length: 17 }, (_, i) => item(`P${i}`)))]);
   const p = setup([{ mode: 'web', json: island([PEOPLE, many]) }], { width: 900 });
@@ -457,22 +540,163 @@ test('rows are in the flow: no inline position, top or height on anything in the
   }
 });
 
-test('lines end at each name\u2019s own centre, whatever the row heights', () => {
-  const rows = [{ x: 100, y: 20, o: 'w' }, { x: 100, y: 90, o: 'h' }, { x: 100, y: 400, o: null }];
-  const branches = [{ x: 60, y: 55, first: 0, count: 2 }, { x: 60, y: 400, first: 2, count: 1 }];
+// ---- the tree's lines ----
+
+// Points along a path of M, C, H and V commands, close enough together that none can step
+// over a box.
+function pointsOf(d) {
+  const out = [];
+  let x = 0; let y = 0;
+  for (const m of d.matchAll(/([MCHV])([^MCHV]*)/g)) {
+    const v = m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number);
+    if (m[1] === 'M') { [x, y] = v; out.push([x, y]); }
+    if (m[1] === 'H') { for (let t = 0; t <= 1; t += 1 / 400) out.push([x + (v[0] - x) * t, y]); x = v[0]; }
+    if (m[1] === 'V') { for (let t = 0; t <= 1; t += 1 / 400) out.push([x, y + (v[0] - y) * t]); y = v[0]; }
+    if (m[1] === 'C') {
+      for (let t = 0; t <= 1; t += 1 / 800) {
+        const u = 1 - t;
+        out.push([u * u * u * x + 3 * u * u * t * v[0] + 3 * u * t * t * v[2] + t * t * t * v[4], u * u * u * y + 3 * u * u * t * v[1] + 3 * u * t * t * v[3] + t * t * t * v[5]]);
+      }
+      x = v[4]; y = v[5];
+    }
+  }
+  return out;
+}
+
+// A tree laid out as the stylesheet lays it out: the boxes treeLines is given (the subject,
+// each heading's cell, each mark) and the boxes of every word (the subject, each heading's
+// words, each name). `sizes` is the number of names in each group; `rows` their heights.
+function layTree(sizes, { narrow, width, rowHigh = () => 30, labelWide = () => 90, labelHigh = () => 16, subjectWide = 150, subjectHigh = 26 }) {
+  const texts = []; const heads = []; const marks = [];
+  let subject;
+  if (narrow) {
+    subject = { left: 0, right: width, top: 0, bottom: subjectHigh };
+    texts.push({ what: 'subject', left: 28, right: Math.min(width, 28 + subjectWide), top: 0, bottom: subjectHigh });
+    let y = subjectHigh + 16;
+    sizes.forEach((count, g) => {
+      const high = labelHigh(g);
+      heads.push({ left: 34, right: width, top: y, bottom: y + high + 12, count });
+      texts.push({ what: `heading ${g}`, left: 34, right: 34 + labelWide(g), top: y + 6, bottom: y + 6 + high });
+      y += high + 14;
+      for (let k = 0; k < count; k++) {
+        const high = rowHigh(g, k);
+        marks.push({ left: 50, right: 61, top: y + 9, bottom: y + 20, o: 'w' });
+        texts.push({ what: `name ${g}-${k}`, left: 71, right: width - 8, top: y + 4, bottom: y + high - 4 });
+        y += high;
+      }
+      y += 14;
+    });
+  } else {
+    const gap = Math.max(48, Math.min(96, width * 0.09));
+    const first = Math.min(subjectWide, width * 0.24);
+    const tree = first + gap;
+    const labels = Math.min(Math.max(...sizes.map((_, g) => labelWide(g))), (width - tree) * 0.3);
+    const names = tree + labels + 56;
+    let y = 0;
+    sizes.forEach((count, g) => {
+      let high = 0;
+      for (let k = 0; k < count; k++) high += rowHigh(g, k);
+      const cell = 2 * labelHigh(g) + 10;      // the words, a gap, and as much again below
+      const band = Math.max(high, cell);
+      const top = y + (band - cell) / 2;
+      heads.push({ left: tree, right: tree + labels, top, bottom: top + cell, count });
+      texts.push({ what: `heading ${g}`, left: tree + labels - Math.min(labels, labelWide(g)), right: tree + labels, top, bottom: top + labelHigh(g) });
+      let ry = y + (band - high) / 2;
+      for (let k = 0; k < count; k++) {
+        const high = rowHigh(g, k);
+        marks.push({ left: names + 8, right: names + 19, top: ry + 9, bottom: ry + 20, o: k % 2 ? 'h' : null });
+        texts.push({ what: `name ${g}-${k}`, left: names + 29, right: width - 8, top: ry + 4, bottom: ry + high - 4 });
+        ry += high;
+      }
+      y += band + 14;
+    });
+    const all = y - 14;
+    subject = { left: 0, right: first, top: (all - subjectHigh) / 2, bottom: (all + subjectHigh) / 2 };
+    texts.push({ what: 'subject', ...subject });
+  }
+  return { subject, heads, marks, texts };
+}
+
+const TREES = [
+  { sizes: [1] }, { sizes: [1, 1, 1, 1, 1, 1, 1, 1, 1] }, { sizes: [25] }, { sizes: [3, 1, 25, 2] }, { sizes: [2, 2, 1, 1, 1, 6, 8] },
+  { sizes: [1, 12, 1], rowHigh: (g, k) => (k % 4 === 0 ? 74 : 30) },
+  { sizes: [1, 1, 4], labelWide: () => 400, labelHigh: (g) => (g === 1 ? 48 : 16) },
+  { sizes: [5, 5], subjectWide: 900, subjectHigh: 240 },
+];
+
+test('no line of a tree passes through a word, at any width, whatever the groups', () => {
   for (const narrow of [false, true]) {
-    const { paths, dots } = api.treeLines(rows, branches, { narrow, rootX: 10, rootY: 5 });
+    for (const width of narrow ? [300, 390, 559] : [560, 561, 700, 768, 1000, 1400]) {
+      TREES.forEach((shape, n) => {
+        const t = layTree(shape.sizes, { ...shape, narrow, width });
+        const { paths } = api.treeLines(t.subject, t.heads, t.marks, narrow);
+        for (const path of paths) {
+          for (const [x, y] of pointsOf(path.d)) {
+            const hit = t.texts.find((b) => x > b.left - 1 && x < b.right + 1 && y > b.top - 1 && y < b.bottom + 1);
+            assert.ok(!hit, `tree ${n} at ${width}${narrow ? ' narrow' : ''}: a ${path.kind} line passes through ${hit && hit.what} at ${x.toFixed(0)}, ${y.toFixed(0)} (${path.d})`);
+          }
+        }
+      });
+    }
+  }
+});
+
+test('lines end at each name’s own mark, whatever the row heights', () => {
+  for (const narrow of [false, true]) {
+    const t = layTree([2, 1], { narrow, width: narrow ? 390 : 900, rowHigh: (g, k) => (g === 0 && k === 1 ? 90 : 30) });
+    t.marks[0].o = 'w'; t.marks[1].o = 'h'; t.marks[2].o = null;
+    const { paths, dots } = api.treeLines(t.subject, t.heads, t.marks, narrow);
     const leaves = paths.filter((x) => x.kind === 'leaf');
     assert.strictEqual(leaves.length, 3);
     leaves.forEach((leaf, i) => {
-      const end = narrow ? /V([-\d.]+)H([-\d.]+)$/.exec(leaf.d) : /([-\d.]+) ([-\d.]+)$/.exec(leaf.d);
-      const got = narrow ? [Number(end[2]), Number(end[1])] : [Number(end[1]), Number(end[2])];
-      assert.deepStrictEqual(got, [100, rows[i].y], `${narrow ? 'narrow' : 'wide'} ${i}`);
+      const end = pointsOf(leaf.d).pop();
+      const mark = t.marks[i];
+      assert.ok(Math.abs(end[0] - (mark.left - 3)) < 0.06 && Math.abs(end[1] - (mark.top + mark.bottom) / 2) < 0.06, `${narrow ? 'narrow' : 'wide'} ${i}`);
     });
     assert.deepStrictEqual(leaves.map((l) => l.tone), ['w', 'h', null]);
     assert.strictEqual(dots.filter((d) => d.kind === 'branch').length, 2);
-    assert.ok(dots.some((d) => d.kind === 'root'));
+    assert.strictEqual(dots.filter((d) => d.kind === 'root').length, 1);
   }
+});
+
+test('a name’s own line carries its tone; every line a group shares carries none', () => {
+  const t = layTree([3], { narrow: true, width: 390 });
+  t.marks[0].o = 'w'; t.marks[1].o = null; t.marks[2].o = 'h';
+  const { paths } = api.treeLines(t.subject, t.heads, t.marks, true);
+  const toned = paths.filter((x) => x.tone);
+  assert.deepStrictEqual(toned.map((x) => x.kind), ['leaf', 'leaf']);
+  // a name's own line is the level arm to its mark: it never runs down past another name
+  for (const leaf of paths.filter((x) => x.kind === 'leaf')) assert.match(leaf.d, /^M[-\d.]+ [-\d.]+H[-\d.]+$/);
+  const spine = paths.filter((x) => x.kind === 'trunk' && /V/.test(x.d));
+  assert.ok(spine.length >= 2 && spine.every((x) => x.tone === null));
+});
+
+// ---- colours ----
+
+test('a browser’s colour words are read, anything else is not', () => {
+  assert.deepStrictEqual(api.parseColour('rgb(10, 20, 30)'), [10, 20, 30, 1]);
+  assert.deepStrictEqual(api.parseColour('rgba(10, 20, 30, 0.5)'), [10, 20, 30, 0.5]);
+  assert.deepStrictEqual(api.parseColour('rgb(10 20 30 / 50%)'), [10, 20, 30, 0.5]);
+  assert.deepStrictEqual(api.parseColour('color(srgb 1 0 0.2)'), [255, 0, 51, 1]);
+  for (const bad of ['oklch(0.5 0.1 20)', 'red', '', null, 'rgb(a, b, c)']) assert.strictEqual(api.parseColour(bad), null, String(bad));
+});
+
+test('a derived colour reaches its contrast on every ground, or is the text colour itself', () => {
+  let seed = 7;
+  const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+  const colour = () => [Math.floor(rnd() * 256), Math.floor(rnd() * 256), Math.floor(rnd() * 256)];
+  for (let n = 0; n < 500; n++) {
+    const text = colour(); const grounds = n % 2 ? [colour()] : [colour(), colour()];
+    for (const need of [3, 4.5]) {
+      const got = api.ink(colour(), text, grounds, need);
+      assert.ok(grounds.every((g) => api.contrast(got, g) >= need) || got.every((v, i) => v === text[i]), `pair ${n}`);
+    }
+  }
+  // a colour that already reads is left alone
+  assert.deepStrictEqual(api.ink([0, 0, 0], [40, 40, 40], [[255, 255, 255]], 4.5), [0, 0, 0]);
+  const all = api.inks({ text: [20, 20, 20], muted: [150, 150, 150], accent: [200, 170, 90], success: [60, 180, 90], danger: [240, 80, 70], grounds: [[250, 250, 250]] });
+  for (const name of ['muted', 'accent', 'warm-ink', 'hostile-ink']) assert.ok(api.contrast(all[name], [250, 250, 250]) >= 4.5, name);
+  for (const name of ['warm', 'hostile', 'trunk']) assert.ok(api.contrast(all[name], [250, 250, 250]) >= 3, name);
 });
 
 test('only a plain relative path is a link', () => {

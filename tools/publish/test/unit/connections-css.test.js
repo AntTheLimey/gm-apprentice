@@ -11,15 +11,40 @@ test('the plain lists are hidden only once the script has drawn', () => {
   assert.doesNotMatch(css, /(?<!\.cx-live )\.cx-plain\s*\{[^}]*display:\s*none/);
 });
 
-test('printing shows the plain lists and hides the tabs, strip and key', () => {
+test('printing shows the plain lists and hides everything the script drew', () => {
   const print = css.slice(css.lastIndexOf('@media print'));
   assert.match(print, /\.cx \.cx-app\s*\{[^}]*display:\s*none/);
   assert.match(print, /\.cx\.cx-live \.cx-plain\s*\{[^}]*display:\s*block/);
 });
 
+test('the tabs, the strip and the key are all inside what printing hides', () => {
+  const script = fs.readFileSync(path.join(__dirname, '..', '..', 'js', 'connections.js'), 'utf8');
+  assert.match(script, /app\.appendChild\(tablist\)/);
+  assert.match(script, /app\.appendChild\(panel\)/);
+  assert.match(script, /app\.appendChild\(key\)/);
+  assert.match(script, /entry\.panel\.appendChild\(strip\)/);
+});
+
 test('a tone is a shape as well as a colour', () => {
   assert.match(css, /\.cx-mark\.cx-warm\s*\{[^}]*background/);
-  assert.match(css, /\.cx-mark\.cx-hostile\s*\{[^}]*border-style:\s*dashed/);
+  // hostile is a diamond, not a ring: told from the other two by its outline alone
+  assert.match(css, /span\.cx-mark\.cx-hostile\s*\{[^}]*border-radius:\s*0[^}]*transform:\s*rotate\(45deg\)/);
+  assert.match(block, /\.cx-edge\.cx-hostile\s*\{[^}]*stroke-dasharray/);
+});
+
+test('without the script every colour of the section is the text colour', () => {
+  for (const name of ['muted', 'accent', 'warm-ink', 'hostile-ink', 'warm', 'hostile', 'trunk']) {
+    assert.match(block, new RegExp(`--cx-${name}:\\s*var\\(--cxi-${name},\\s*var\\(--text\\)\\)`), name);
+  }
+  assert.doesNotMatch(block, /color-mix/);
+});
+
+test('a focused tab or row draws its ring inside itself, where nothing clips it', () => {
+  assert.match(block, /\.cx-tab:focus-visible,\s*\.cx-row:focus-visible\s*\{[^}]*outline-offset:\s*-2px/);
+});
+
+test('a circle\u2019s radius is an attribute, never a style', () => {
+  assert.doesNotMatch(block, /[{;\s]r:\s*\d/);
 });
 
 test('every class the section writes has a rule', () => {
