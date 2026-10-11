@@ -84,18 +84,59 @@ function refTarget(value) {
 function linkText(value, { humanize = false } = {}) {
   const text = String(value == null ? '' : value);
   const spaced = (s) => (humanize ? s.replace(/_/g, ' ') : s);
-  const whole = wikilinkRe('').exec(text.trim());
-  const only = whole && whole.index === 0 && whole[0].length === text.trim().length ? parseWikilink(whole[1]) : null;
+  const only = onlyLink(text.trim());
   const labelled = !!only && only.display.trim() !== '';
   // The value with its brackets off, as these readers always took it: the key of a value
   // with no label, and the words of one.
   const bare = text.replace(/\[\[|\]\]/g, '');
-  const words = text.replace(wikilinkRe('g'), (link, body) => {
-    const w = parseWikilink(body);
-    const label = w.display.trim();
-    return label ? `\u0000${label}\u0000` : body;
-  }).replace(/\[\[|\]\]/g, '').split('\u0000').map((part, n) => (n % 2 ? part : spaced(part))).join('');
+  // Each label is kept between two marks while links are read to a fixed point, so a
+  // link nested in a label, or a label holding a `]`, comes down to the label it shows
+  // and only the words outside a label are humanized.
+  let depth = 0;
+  let words = '';
+  for (const part of markLabels(text).split(/([\u0001\u0002])/)) {
+    if (part === MARK_OPEN) depth++;
+    else if (part === MARK_CLOSE) depth = Math.max(0, depth - 1);
+    else if (part) words += depth ? part.replace(/\[\[|\]\]/g, '') : spaced(part.replace(/\[\[|\]\]/g, ''));
+  }
   return { words, key: labelled ? only.name.trim() : bare, labelled };
+}
+
+// The one link a value is made of, read loosely: `[[target|label]]` where the label may hold
+// a `]` or a whole link. Strict first; then the outer brackets are taken off and the rest is
+// the link if its own brackets pair up (so `[[A|x]] and [[B|y]]` is not one link).
+function onlyLink(text) {
+  const strict = wikilinkRe('').exec(text);
+  if (strict && strict.index === 0 && strict[0].length === text.length) return parseWikilink(strict[1]);
+  if (!text.startsWith('[[') || !text.endsWith(']]') || text.length < 5) return null;
+  const inner = text.slice(2, -2);
+  let open = 0;
+  for (const token of inner.match(/\[\[|\]\]/g) || []) {
+    open += token === '[[' ? 1 : -1;
+    if (open < 0) return null;
+  }
+  const link = parseWikilink(inner);
+  return open === 0 && !/[[\]]/.test(link.raw) ? link : null;
+}
+
+const MARK_OPEN = '\u0001';
+const MARK_CLOSE = '\u0002';
+// `text` with every labelled link replaced by its label between marks, applied until the text
+// stops changing (each pass that changes it makes it shorter). A link with no label stays as
+// written. If the bound were ever reached the links still standing are cut out whole.
+function markLabels(text) {
+  let s = String(text).replace(/[\u0001\u0002]/g, '');
+  const bound = s.length + 1;
+  const mark = (label) => MARK_OPEN + label + MARK_CLOSE;
+  for (let i = 0; i <= bound; i++) {
+    const next = s.replace(wikilinkRe('g'), (link, body) => {
+      const label = parseWikilink(body).display.trim();
+      return label ? mark(label) : body;
+    }).replace(LOOSE_LABELLED_RE, (_, label) => mark(label.trim()));
+    if (next === s) return s;
+    s = next;
+  }
+  return s.replace(wikilinkRe('g'), '');
 }
 
 // `text` with every labelled link in it turned into its label. For text that goes to the

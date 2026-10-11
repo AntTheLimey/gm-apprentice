@@ -115,6 +115,19 @@ test('a relationship marked gm_only in any spelling of yes is hidden at both end
   }
 });
 
+test('a relationship target whose label holds a ] or a link prints the label and no target', () => {
+  const targets = ['[[Xqzghost_Agent|agent [X] of the cult]]', '[[Xqzouter_One|[[Xqzinner_Two|[[Xqzcore_Three|the veiled one]]]]]]'];
+  const files = { 'NPCs/Alice.md': note('type: npc\nrelationships:\n' + targets.map((t) => `  - target: "${t}"\n    type: knows`).join('\n'), 'Alice.') };
+  const s = buildVault(files); sites.push(s);
+  for (const f of walk(path.join(s.root, 'docs')).filter((x) => TEXT_FILE.test(x))) {
+    const body = fs.readFileSync(f, 'utf8');
+    assert.ok(!/Xqz/i.test(body), `${path.relative(s.root, f)} prints a target`);
+  }
+  const alice = s.read('npcs', 'alice.html');
+  assert.match(alice, /<span class="cx-name">agent \[X\] of the cult<\/span>/);
+  assert.match(alice, /<span class="cx-name">the veiled one<\/span>/);
+});
+
 test('a target with no page is in the page\'s data island by its words, and its key is not', () => {
   const html = site().read('npcs', 'emma.html');
   const island = JSON.parse(html.match(/<script[^>]*class="cx-data"[^>]*>([^]*?)<\/script>/)[1].replace(/\\u003c/gi, '<'));

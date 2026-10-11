@@ -301,6 +301,25 @@ describe('linkText: a frontmatter value that names a note, read for a page that 
     assert.strictEqual(linkText('[[Old_Tam]] and [[Vesper_Hale|snake_case]]', { humanize: true }).words, 'Old Tam and snake_case');
     assert.strictEqual(linkText('Old_Tam', { humanize: true }).key, 'Old_Tam');
   });
+  it('a label holding a lone ] prints the label, and the target is still the key', () => {
+    assert.deepStrictEqual(linkText('[[Ghost_Agent|agent [X] of the cult]]', { humanize: true }), { words: 'agent [X] of the cult', key: 'Ghost_Agent', labelled: true });
+    assert.deepStrictEqual(linkText('[[Ghost_Agent|agent [deceased]]]'), { words: 'agent [deceased]', key: 'Ghost_Agent', labelled: true });
+    const running = linkText('Seen with [[Ghost_Agent|a man [X] in grey]] and [[Old_Tam]]', { humanize: true });
+    assert.strictEqual(running.words, 'Seen with a man [X] in grey and Old Tam');
+    assert.ok(!running.words.includes('Ghost'));
+  });
+  it('a link nested in a label prints the innermost label and no target', () => {
+    const one = linkText('[[ZZA|[[ZZB|[[ZZC|the veiled one]]]]]]');
+    assert.deepStrictEqual(one, { words: 'the veiled one', key: 'ZZA', labelled: true });
+    const two = linkText('[[ZZA|[[ZZB|two deep]]]]', { humanize: true });
+    assert.strictEqual(two.words, 'two deep');
+    assert.strictEqual(linkText('see [[ZZA|[[ZZB|c_d]]]] now', { humanize: true }).words, 'see c_d now');
+  });
+  it('two links side by side are not one labelled link', () => {
+    const got = linkText('[[A|x]] and [[B|y]]');
+    assert.strictEqual(got.labelled, false);
+    assert.strictEqual(got.words, 'x and y');
+  });
   it('labelsForLinks turns only labelled links into their labels', () => {
     assert.strictEqual(labelsForLinks('Heir of [[Old_Tam|the old man]] and [[Bo_Pike]]'), 'Heir of the old man and [[Bo_Pike]]');
     assert.strictEqual(labelsForLinks('a | b and [[Bo_Pike]]'), 'a | b and [[Bo_Pike]]');
