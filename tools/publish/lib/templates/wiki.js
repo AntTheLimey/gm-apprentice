@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg, connectionsSection } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { orderedSessions } = require('../story-spine');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
@@ -89,8 +89,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     storyNav = `<div class="story-nav">${prevLink}${nextLink}</div>`;
   }
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+  const graphHtml = connectionsSection(page, publishConfig);
 
   const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;

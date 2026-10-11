@@ -68,7 +68,7 @@ function refTarget(value) {
 
 // A frontmatter value that names a note (`location`, `first_appearance`, a relationship's
 // `target`), read for a page that prints it outside the note's own page: an index card, the
-// landing page, the timeline, the connections graph. The ONE reader for those, so each
+// landing page, the timeline, Connections. The ONE reader for those, so each
 // prints what the note's own page prints for the link (processor.js referenceOf):
 //
 //   words     what to print. A link with a label prints its label; one without prints its

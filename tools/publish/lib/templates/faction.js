@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativePath, encodeHref, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { canonicalNfc } = require('../unicode');
@@ -72,8 +72,7 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
     currentOutputPath: page.outputPath,
   });
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+  const graphHtml = connectionsSection(page, publishConfig);
 
   const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const contentHtml = sidebar

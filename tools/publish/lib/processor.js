@@ -1513,7 +1513,7 @@ function isGmOnlyEdge(rel) {
 }
 
 // One page's frontmatter as a reader may see it. Everything derived from
-// frontmatter — the relationship graph, backlinks, the search index, sheet
+// frontmatter — Connections, backlinks, the search index, sheet
 // meta rows — must be built from THIS, never from the raw frontmatter.
 //
 // Three layers, in order:

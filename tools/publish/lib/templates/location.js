@@ -1,7 +1,7 @@
 const { backlinksOf } = require('../backlinks');
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, publishedSource, encodeHref, plainRefValue, referenceOf } = require('../processor');
-const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText } = require('./base');
+const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText, connectionsSection } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
@@ -148,8 +148,7 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
     currentOutputPath: page.outputPath,
   });
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+  const graphHtml = connectionsSection(page, publishConfig);
 
   const mainContent = [heroBanner, pullQuote, bodyContent, processedContent.relationships, subLocationsHtml, whosHereHtml, timelineHtml, graphHtml]
     .filter(Boolean).join('\n');

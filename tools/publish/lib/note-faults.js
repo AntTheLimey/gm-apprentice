@@ -16,7 +16,7 @@
 // That holds for every page the build writes: a note's own page and a PC's story page, and
 // the pages built from many notes (the section indexes, the timeline, the story, the landing
 // page), where a name is counted against the note the link is written in. The names on a
-// page's connections graph are read from the graph the page holds. A secret name is looked
+// page's Connections are read from the model the page holds. A secret name is looked
 // for in the text of each page that was written. The stray `%%` and the unclosed fence are
 // facts the strip chain reports as it runs (processor.js noteFacts).
 // The build runs the audit; `doctor --site` runs the build in memory and lists what it found.
@@ -200,7 +200,7 @@ function fileLine(readFile, abs, source, bodyLine) {
  *   mayPrint(marked, html)            false only when the built page cannot be printing any of them
  *   printed(page, marked, html, storyHtml)  the marked page as rendered: which marks came out
  *   listing(out, html)                a page built from many notes, rendered with every note marked
- *   graph(page, nodes)                the nodes of the connections graph the page holds
+ *   connections(page, model)          the names a page's Connections prints
  *   findings(facts)                   every finding; facts(page) -> { source, strays, openFence }
  */
 function startNoteAudit(input) {
@@ -392,17 +392,21 @@ function startNoteAudit(input) {
     }
   }
 
-  // A name a page's connections graph prints: the graph draws a relationship's target that
-  // has no page as a labelled node, on the page of either end and of their neighbours.
-  function graph(page, nodes) {
+  // A name a page's Connections prints: a relationship's target that has no page is an
+  // item called by its label or its name, on the page of the note that declares it.
+  function connections(page, model) {
     if (index.size === 0) return;
-    for (const node of nodes) {
-      if (node.outputPath || !node.hop) continue;
-      const hit = lookup(parseWikilink(String(node.id)));
-      if (!hit) continue;
-      const entry = entryOf(hit.record);
-      entry.pages.add(input.relOf(page));
-      sawWords(entry, node.displayTitle);
+    for (const tab of model.tabs) {
+      for (const group of tab.groups) {
+        for (const item of group.items) {
+          if (item.outputPath || !item.key) continue;
+          const hit = lookup(parseWikilink(String(item.key)));
+          if (!hit) continue;
+          const entry = entryOf(hit.record);
+          entry.pages.add(input.relOf(page));
+          sawWords(entry, item.title);
+        }
+      }
     }
   }
 
@@ -625,7 +629,7 @@ function startNoteAudit(input) {
     return sorted;
   }
 
-  return { read, mark, mayPrint, printed, listing, graph, findings, storyRelOf };
+  return { read, mark, mayPrint, printed, listing, connections, findings, storyRelOf };
 }
 
 // A no-page note's `type`: from its scanned page, else from its file (the scan never read a

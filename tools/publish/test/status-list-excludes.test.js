@@ -9,7 +9,6 @@ const { build } = require('../lib/build');
 const { runExplain } = require('../lib/explain-cli');
 const { runSiteDoctor } = require('../lib/site-doctor');
 const { shapeFrontmatter } = require('../lib/frontmatter-shape');
-const { buildRelationshipGraph } = require('../lib/relationship-graph');
 
 const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });

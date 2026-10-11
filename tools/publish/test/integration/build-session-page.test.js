@@ -159,6 +159,7 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
       const html = find('session-01-arrival.html');
       assert.ok(html.includes('NPCs Appearing'));
       assert.ok(html.includes('Mrs Hale'));
+      assert.match(html, /<h4>Appearing<\/h4>[^]*Mrs Hale/);
     });
 
     it('the search index carries none of it', () => {

@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
 const { escapeHtml, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
@@ -57,8 +57,7 @@ function itemTemplate(page, processedContent, navFor, config, imageMap, linkMap,
     currentOutputPath: page.outputPath,
   });
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+  const graphHtml = connectionsSection(page, publishConfig);
 
   const mainContent = `${headerCard}\n${badgeHtml}\n${statBlock}\n${holderHtml}\n${originHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const contentHtml = sidebar

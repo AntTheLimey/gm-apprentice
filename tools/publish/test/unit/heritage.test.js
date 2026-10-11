@@ -1,6 +1,7 @@
-const { describe, it } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const { heritageTemplate } = require('../../lib/templates/heritage');
+const { configureConnections } = require('../../lib/templates/base');
 const { worldDomainTemplate } = require('../../lib/templates/world-domain');
 
 const stubNav = () => '<nav></nav>';
@@ -50,11 +51,15 @@ describe('heritageTemplate', () => {
     assert.ok(!html.includes('heritage-stats'), 'should not render stat card when no stats');
   });
 
-  it('renders relationship graph when provided', () => {
-    const context = { publishConfig: { _entityGraphs: { 'Elves': '<svg>graph</svg>' }, _backlinks: {} } };
-    const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
-    assert.ok(html.includes('Connections'), 'should render graph heading');
-    assert.ok(html.includes('<svg>graph</svg>'), 'should include graph SVG');
+  it('renders the Connections section when the build has one', () => {
+    const model = { subject: { title: 'Elves', outputPath: 'elves.html' }, mentions: [{ label: 'NPCs', items: [{ title: 'Legolas', outputPath: 'legolas.html', kind: 'NPC' }] }], tabs: [] };
+    configureConnections('tree');
+    try {
+      const context = { publishConfig: { _connections: { for: () => model }, _backlinks: {} } };
+      const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
+      assert.ok(html.includes('class="cx"'), 'should render the section');
+      assert.ok(html.includes('Legolas'), 'should list what the model holds');
+    } finally { configureConnections('off'); }
   });
 
   it('renders context sidebar with backlinks', () => {

@@ -12,7 +12,7 @@ const { canonicalNfc } = require('./unicode');
 //
 // This file is the ONE pairing rule, and pairHubs the one place it runs. build.js pairs
 // once, on the unreduced frontmatter, empties the paired hub bodies before the published
-// view is computed (so search, backlinks and the relationship graph agree with the page),
+// view is computed (so search, backlinks and Connections agree with the page),
 // and hands the same map to the session page, the Saga, the landing recap and recency —
 // none of which pairs on its own. `manifest publish-played` ticks a hub only when
 // pairHubs says its body will be withheld, `doctor --site` and `explain` report from it,

@@ -1,5 +1,5 @@
 const { scopeColorScheme, headScript, storageKey } = require('./color-mode');
-const { configureColorMode, configureLinkPreviews } = require('./templates/base');
+const { configureColorMode, configureLinkPreviews, configureConnections } = require('./templates/base');
 const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
@@ -240,6 +240,8 @@ function buildSite(options) {
       // The link-preview script is for a site that has the cards file; with previews off no
       // page loads it, so it is not copied.
       if (file === 'previews.js' && publishConfig.link_previews === 'off') continue;
+      // Likewise the Connections script: with Connections off no page holds a section or loads it.
+      if (file === 'connections.js' && publishConfig.connections === 'off') continue;
       const src = path.join(jsDir, file);
       const dest = path.join(destDir, file);
       ensureDir(dest);
@@ -526,7 +528,7 @@ function buildSite(options) {
   }
 
   // A note the build writes no page for (previews.js getsNoPage) leaves the list here, with
-  // the unpublished: the link map, backlinks, graphs, indexes, search and cards all read
+  // the unpublished: the link map, backlinks, Connections, indexes, search and cards all read
   // `pages`, so none of them can name it or link to a file that is not built.
   pages = published.filter(p => !getsNoPage(p));
 
@@ -548,9 +550,9 @@ function buildSite(options) {
   // derived is built from it.
   //
   // This used to run ~80 lines further down, after backlinks, the search index
-  // and the relationship graphs had all already read the raw frontmatter — so
+  // and Connections had all already read the raw frontmatter — so
   // excluding a field removed it from the page and left it in every derived
-  // view (#166). Excluding `relationships` still drew the graph, with the
+  // view (#166). Excluding `relationships` still drew the old graph, with the
   // secret targets as node labels; excluding `occupation` still shipped it as
   // the search-index subtitle. The link map is built above and is what redirect
   // resolution actually consults, so `aliases`/`canon_status` are safe to strip
@@ -559,7 +561,7 @@ function buildSite(options) {
   // A session index with a published Wrap-Up has its body withheld (#276; the rule is
   // session-hub.js's). Decided for every page before this loop reduces any frontmatter,
   // and the body emptied inside it, before the published view is computed, so search,
-  // backlinks, recency, the relationship graph and the landing fallback agree with the
+  // backlinks, recency, Connections and the landing fallback agree with the
   // page. A hub linking a prepped NPC who never appeared must not become that NPC's
   // "Mentioned in".
   //
@@ -633,7 +635,7 @@ function buildSite(options) {
 
   // Compute each page's "published view" — markdown with gm-only/spoiler blocks and
   // excluded sections removed — once, so derived widgets (backlinks, recency, the
-  // relationship graph) never surface names that only appear in unpublished content
+  // Connections) never surface names that only appear in unpublished content
   // (B6 spoiler leak). Spoiler blocks are unrevealed narrative content, not permanent
   // secrets, but they're just as unpublished until reconcile's reveal step strips the
   // fence — until then they must never surface in a derived widget either.
@@ -759,19 +761,57 @@ function buildSite(options) {
   publishConfig._recentNPCs = recentNPCs;
   publishConfig._recentLocations = recentLocations;
 
-  const { buildRelationshipGraph, renderRelationshipSVG } = require('./relationship-graph');
-
-  const entityGraphData = {};
-  const entityGraphs = {};
-  for (const page of pages) {
-    const graph = buildRelationshipGraph(page.title, pages, backlinks);
-    if (graph.nodes.length > 1) {
-      entityGraphData[page.title] = graph;
-      entityGraphs[page.title] = renderRelationshipSVG(graph, { currentOutputPath: page.outputPath });
+  // What each page's subject is connected to (lib/connections.js), built once from the
+  // published list. The pairs handed over are `hubWrapUps` (hub page -> its Wrap-Up, only
+  // for hubs in `pages`), not the raw `hubPairs`, which also pairs unpublished hubs.
+  const { buildConnections, isEmpty: noConnections } = require('./connections');
+  const connectionExtras = new Map();
+  publishConfig._connections = publishConfig.connections === 'off' ? null
+    : buildConnections({ pages, linkMap, backlinks, hubPairs: hubWrapUps, imageMap, extras: connectionExtras });
+  // The lists a session or chapter page gathers (who appeared, what happened, which sessions
+  // a chapter holds). `for(page)` reads `connectionExtras` lazily, so filling it after the
+  // index is built is sound; nothing asks for a model until a page renders.
+  function connectionExtrasFor(page) {
+    const extras = [];
+    if (page.frontmatter.type === 'session') {
+      // A hub whose body is withheld (#276) takes its NPCs and events from the
+      // Wrap-Up — who actually appeared — since its own links were prep, not play.
+      const source = hubWrapUps.get(page) || page;
+      const appearedIn = (p) => backlinksOf(backlinks, p).some(b => b.title === source.title);
+      for (const p of pages) if (p.frontmatter.type === 'npc' && appearedIn(p)) extras.push({ group: 'Appearing', page: p });
+      for (const p of pages) if (p.frontmatter.type === 'event' && appearedIn(p)) extras.push({ group: 'Events', page: p });
     }
+    if (page.frontmatter.type === 'chapter') {
+      // All three comparisons below are author-typed `chapter:` ref vs filename-derived
+      // title, matched with `===`/`includes` rather than through a lookup table, so both
+      // sides are canonicalized to NFC here (#139) — otherwise an accented chapter lists
+      // no sessions.
+      const chapterTitle = canonicalNfc(String(page.frontmatter.title || page.displayTitle || ''));
+      const chapterTitleNorm = chapterTitle.toLowerCase();
+      const chapterFileTitle = canonicalNfc(page.title);
+      const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
+      for (const p of pages) {
+        if (p.frontmatter.type !== 'session') continue;
+        // A labelled link names its chapter by the target; its label is words to match on too.
+        const chapterLink = linkText(p.frontmatter.chapter || '');
+        const chapterRef = canonicalNfc(chapterLink.key.trim());
+        if (!chapterRef) continue;
+        if (chapterRef === chapterFileTitle      // 1. the filename stem (e.g. "Chapter_1_Overview")
+          || chapterRef === chapterFilename      // 2. the stem with underscores as spaces
+          // 3. case-insensitive substring: the chapter's display title appears in the session's
+          //    chapter ref (e.g. "Harbour" in "Chapter 1 — Harbour: The Lantern Guild")
+          || (chapterTitleNorm && (chapterRef.toLowerCase().includes(chapterTitleNorm)
+            || canonicalNfc(chapterLink.words).toLowerCase().includes(chapterTitleNorm)))) {
+          extras.push({ group: 'Sessions', page: p });
+        }
+      }
+    }
+    return extras;
   }
-  console.log(`Generated ${Object.keys(entityGraphs).length} relationship graphs`);
-  publishConfig._entityGraphs = entityGraphs;
+  for (const page of pages) {
+    const extras = connectionExtrasFor(page);
+    if (extras.length) connectionExtras.set(page, extras);
+  }
 
   // Where the timeline actually lives. Decided after field filtering — so an excluded
   // `in_game_date` can't resurrect a timeline the GM meant to suppress — but before the nav
@@ -835,6 +875,7 @@ function buildSite(options) {
       + 'it needs a genre preset (theme.genre) and no custom theme.palette, the themes with two palettes');
   }
   configureLinkPreviews(publishConfig.link_previews);
+  configureConnections(publishConfig.connections);
   copyCSS();
   copyJS();
   copyGenreCSS();
@@ -1069,56 +1110,19 @@ function buildSite(options) {
         html = worldDomainTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
         break;
       default: {
-        let extraSidebar = {};
+        // The sidebar's lists are the same ones Connections gathers (Task 6 removes the sidebar).
+        const gathered = connectionExtras.get(page) || [];
+        const listed = (group) => gathered.filter(e => e.group === group).map(e => ({ displayTitle: e.page.displayTitle, outputPath: e.page.outputPath, type: e.page.frontmatter.type }));
+        const extraSidebar = page.frontmatter.type === 'session'
+          ? { mentionedNPCs: listed('Appearing'), events: listed('Events').map(({ type, ...rest }) => rest) }
+          : page.frontmatter.type === 'chapter' ? { constituentSessions: listed('Sessions') } : {};
         if (page.frontmatter.type === 'session') {
-          // A hub whose body is withheld (#276) takes its NPCs and events from the
-          // Wrap-Up — who actually appeared — since its own links were prep, not play.
           const wrapUp = hubWrapUps.get(page);
-          const source = wrapUp || page;
-          const sessionMentionedNPCs = (pages || []).filter(p =>
-            p.frontmatter.type === 'npc' &&
-            backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
-          ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'npc' }));
-
-          const sessionEvents = (pages || []).filter(p =>
-            p.frontmatter.type === 'event' &&
-            backlinksOf(publishConfig._backlinks, p).some(b => b.title === source.title)
-          ).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath }));
-
-          extraSidebar = { mentionedNPCs: sessionMentionedNPCs, events: sessionEvents };
           if (wrapUp) {
             // The page shell stays the wiki page's; only the article body is generated.
             const chapter = chapterOfSession(page, pages);
             processed.html = sessionBodyHtml(page, { wrapUp, chapter });
           }
-        }
-        if (page.frontmatter.type === 'chapter') {
-          // All three comparisons below are author-typed `chapter:` ref vs filename-derived
-          // title, matched with `===`/`includes` rather than through a lookup table, so both
-          // sides are canonicalized to NFC here (#139) — otherwise an accented chapter shows
-          // an empty constituent-sessions sidebar.
-          const chapterTitle = canonicalNfc(String(page.frontmatter.title || page.displayTitle || ''));
-          const chapterTitleNorm = chapterTitle.toLowerCase();
-          const chapterFileTitle = canonicalNfc(page.title);
-          const chapterFilename = chapterFileTitle.replace(/_/g, ' ');
-          const chapterSessions = (pages || []).filter(p => {
-            if (p.frontmatter.type !== 'session') return false;
-            // A labelled link names its chapter by the target; its label is words to match on too.
-            const chapterLink = linkText(p.frontmatter.chapter || '');
-            const chapterRef = canonicalNfc(chapterLink.key.trim());
-            if (!chapterRef) return false;
-            // 1. Exact match against page filename stem (e.g. "Chapter_1_Overview")
-            if (chapterRef === chapterFileTitle) return true;
-            // 2. Match against filename stem with underscores as spaces (e.g. "Chapter 1 Overview")
-            if (chapterRef === chapterFilename) return true;
-            // 3. Case-insensitive substring: chapter's display title appears in the session's chapter ref
-            //    (e.g. "Harbour" in "Chapter 1 — Harbour: The Lantern Guild")
-            if (chapterTitleNorm && (chapterRef.toLowerCase().includes(chapterTitleNorm)
-              || canonicalNfc(chapterLink.words).toLowerCase().includes(chapterTitleNorm))) return true;
-            return false;
-          }).map(p => ({ displayTitle: p.displayTitle, outputPath: p.outputPath, type: 'session' }));
-
-          extraSidebar = { constituentSessions: chapterSessions };
         }
         html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, extraSidebar, pages });
         break;
@@ -1177,10 +1181,10 @@ function buildSite(options) {
   function seen(rel, html, page, isStory) {
     audit.read(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
-    // The connections graph is drawn before the page is and set into it whole: where the
-    // page holds it, the names on its nodes are names the page prints.
-    const drawn = isStory ? null : entityGraphs[page.title];
-    if (drawn && html.includes(drawn)) audit.graph(page, entityGraphData[page.title].nodes);
+    // The names in a page's Connections are names the page prints: one with no page behind
+    // it is looked up as the graph's nodes were.
+    const model = !isStory && publishConfig._connections && html.includes('class="cx"') ? publishConfig._connections.for(page) : null;
+    if (model && !noConnections(model)) audit.connections(page, model);
     if (toRender.has(page)) return;
     if (!markedOf.has(page)) markedOf.set(page, audit.mark(page));
     const marked = markedOf.get(page);

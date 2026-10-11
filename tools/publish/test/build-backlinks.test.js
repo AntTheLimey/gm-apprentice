@@ -22,14 +22,14 @@ function buildVault(files) {
 
 const CONFIG = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
 
-test('a page only mentioned in a session keeps its connections graph and its mentioned-in sidebar', () => {
+test('a page only mentioned in a session keeps its Connections section and its mentioned-in sidebar', () => {
   const { read, root } = buildVault({
     '_meta/vault-config.md': CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n',
     'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Hallam]].\n',
   });
   const html = read('characters', 'npcs', 'hallam.html');
-  assert.match(html, /class="relationship-graph"/);
+  assert.match(html, /class="cx"/);
   assert.match(html, /mentioned_in|Mentioned In/i);
   assert.match(html, /sessions\/s1\.html|s1\.html/);
   fs.rmSync(root, { recursive: true, force: true });

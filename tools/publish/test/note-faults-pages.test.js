@@ -384,20 +384,21 @@ describe('a name only an index or listing page prints', () => {
   });
 });
 
-describe('the connections graph', () => {
+describe('a page\'s Connections', () => {
   const rel = (target, extra = '') => `relationships:\n  - target: "${target}"\n    type: knows\n${extra}`;
 
-  it('a name the graph prints on a page is counted on that page, two links away too', async () => {
+  it('a name Connections prints on a page is counted on that page, and only the pages that print it', async () => {
     const found = await faults({
       'Hidden/Old_Tam.md': hidden(),
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn]]')),
       'People/Cy_Dunn.md': npcNote('Cy.', rel('[[Old_Tam]]')),
     }, 'NAMED_NO_PAGE');
-    // Cy's page prints the relationship; Bo's page prints the name only on its graph.
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages]), [['Hidden/Old_Tam.md', ['People/Bo_Pike.md', 'People/Cy_Dunn.md']]]);
+    // Cy's page prints the relationship. Connections lists one step only, so Bo's page, two
+    // links away, no longer prints the name (the old ring graph did) and is not counted.
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages]), [['Hidden/Old_Tam.md', ['People/Cy_Dunn.md']]]);
   });
 
-  it('holds only the label of a labelled target that has no page: the note\'s own name is on neither page', async () => {
+  it('holds only the label of a labelled target that has no page: the note\'s own name is on no page', async () => {
     const { configPath, root } = site({
       'Hidden/Vesper_Hale.md': hidden('portrait: secret.png\noccupation: Spy\naliases: [The Shade]\n'),
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Vesper_Hale|the stranger]]', '    description: "owes him money"\n  - target: "[[Cy_Dunn]]"\n    type: knows\n')),
@@ -407,10 +408,11 @@ describe('the connections graph', () => {
     assert.deepStrictEqual(await fromDoctor(configPath), found);
     for (const page of ['bo-pike.html', 'cy-dunn.html']) {
       const html = fs.readFileSync(path.join(root, 'docs', 'people', page), 'utf8');
-      assert.ok(/the stranger/.test(html), `${page} lacks the label`);
+      // Only Bo declares the relationship; Connections lists one step, so Cy's page has no label.
+      assert.strictEqual(/the stranger/.test(html), page === 'bo-pike.html', `${page}: the label`);
       for (const secret of ['Vesper', 'Spy', 'Shade', 'secret.png']) assert.ok(!html.includes(secret), `${page} prints ${secret}`);
     }
-    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md', 'People/Cy_Dunn.md'], ['the stranger']]]);
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md'], ['the stranger']]]);
   });
 
   it('a labelled target that has a page is that page: linked, and called by the label in the row, the sidebar and the cards', () => {
@@ -429,16 +431,21 @@ describe('the connections graph', () => {
     // The NPC page's connection card, and the sidebar of a page that has one.
     assert.match(bo, /<a class="rel-card" href="cy-dunn\.html">[^]*?<div class="rel-name">the baker<\/div>/);
     assert.match(quay, /<li><a href="[^"]*cy-dunn\.html">the baker<\/a> <span class="sidebar-badge">knows<\/span><\/li>/);
-    // In the graph a page is one node, under its own title, and it is a link.
-    assert.match(bo, /<a href="cy-dunn\.html"><g[^>]*>[^]*?<text[^>]*>Cy Dunn<\/text>/);
+    // In Connections a page is one item, under its own title, and it is a link.
+    assert.match(bo, /<section class="cx"[^]*<a href="cy-dunn\.html">Cy Dunn<\/a>/);
   });
 
-  it('the graph reads a labelled target as the note it names', () => {
-    const { buildRelationshipGraph } = require('../lib/relationship-graph');
-    const page = (title, relationships) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type: 'npc', relationships } });
-    const graph = buildRelationshipGraph('A', [page('A', [{ target: '[[B|the baker]]', type: 'knows' }, { target: '[[Gone|the stranger]]', type: 'fears' }]), page('B', [])], {});
-    assert.deepStrictEqual(graph.nodes.map((n) => [n.id, n.displayTitle, n.outputPath]),
-      [['A', 'A', 'A.html'], ['B', 'B', 'B.html'], ['Gone', 'the stranger', null]]);
+  it('Connections reads a labelled target as the note it names, and a page-less one by its label only', () => {
+    const { buildConnections } = require('../lib/connections');
+    const { buildLinkMap } = require('../lib/scanner');
+    const { buildBacklinks } = require('../lib/backlinks');
+    const page = (title, relationships) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type: 'npc', relationships }, markdown: '', publishedMarkdown: '' });
+    const pages = [page('A', [{ target: '[[B|the baker]]', type: 'knows' }, { target: '[[Gone|the stranger]]', type: 'fears' }]), page('B', [])];
+    const linkMap = buildLinkMap(pages);
+    const model = buildConnections({ pages, linkMap, backlinks: buildBacklinks(pages, linkMap) }).for(pages[0]);
+    const items = model.tabs.flatMap((t) => t.groups).flatMap((g) => g.items);
+    assert.deepStrictEqual(items.map((i) => [i.title, i.outputPath]).sort(), [['B', 'B.html'], ['the stranger', null]]);
+    assert.ok(items.every((i) => i.title !== 'Gone'), 'no item is called by the hidden name');
   });
 });
 

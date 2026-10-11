@@ -145,12 +145,13 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     };
 
     for (const { edge, to } of outgoing.get(page) || []) {
-      if (to.page === page || (!to.page && !to.name)) continue;
+      if (to.page === page || (!to.page && !to.name) || (to.page && isIndex(to.page))) continue;
       note(add(to.page, to, tabOf(to.page), groupLabel(edge.type, 'out')), edge, true);
     }
     for (const { edge, from } of incoming.get(page) || []) {
       note(add(from, null, tabOf(from), groupLabel(edge.type, 'in')), edge, false);
     }
+    // A parent with no page stays in Places, as a name with no link.
     if (typeOf(page) === 'location' && typeof page.frontmatter.parent_location === 'string') {
       const parent = resolve(page.frontmatter.parent_location);
       if (parent.page !== page && (parent.page || parent.name)) add(parent.page, parent, 'places', 'Part of');

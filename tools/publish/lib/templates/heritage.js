@@ -1,6 +1,6 @@
 const { backlinksOf } = require('../backlinks');
 const { escapeHtml } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg } = require('./base');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, connectionsSection } = require('./base');
 const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
@@ -49,8 +49,7 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
     currentOutputPath: page.outputPath,
   });
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+  const graphHtml = connectionsSection(page, publishConfig);
 
   const mainContent = `${headerCard}\n${badgeHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
   const contentHtml = sidebar
