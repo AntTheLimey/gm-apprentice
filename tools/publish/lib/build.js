@@ -1510,6 +1510,20 @@ function buildSite(options) {
     return stories;
   }
 
+  // The search index holds a subtitle read from fields a page may not print at all
+  // (`occupation` on a location): read for a secret name as the page is, note by note.
+  if (searchData) {
+    const byHref = new Map(pages.map((p) => [p.outputPath, p]));
+    const escapeText = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    const strings = (v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(strings)
+      : v && typeof v === 'object' ? Object.values(v).flatMap(strings) : []);
+    for (const doc of Object.values(searchData.documents)) {
+      const page = byHref.get(doc.href);
+      const text = strings(doc.subtitle).join(' ');
+      if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index');
+    }
+  }
+
   // Written, and read by the note-faults audit for a secret name. In memory nothing is
   // written, and every one of them is still made: what they print is part of the site.
   eachListing((out, html, said) => {
