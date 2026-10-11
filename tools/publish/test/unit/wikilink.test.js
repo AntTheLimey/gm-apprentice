@@ -337,3 +337,23 @@ describe('labelsForLinksFully', () => {
     assert.strictEqual(labelsForLinksFully(null), '');
   });
 });
+
+describe('labelsForLinks: embeds and a ] inside a link', () => {
+  const { labelsForLinks } = require('../../lib/wikilink');
+  const { escapeHtml } = require('../../lib/processor');
+  it('an embed with a size prints nothing, not "!300"', () => {
+    assert.strictEqual(escapeHtml('![[map.png|300]]'), '');
+    assert.strictEqual(labelsForLinks('a ![[map.png|300]] b'), 'a  b');
+    assert.strictEqual(labelsForLinks('![[map.png]]'), '![[map.png]]');
+  });
+  it('a ] inside the label or the target still prints only the label', () => {
+    assert.strictEqual(labelsForLinks('[[Vesper_Hale|a]b]]'), 'a]b');
+    assert.strictEqual(labelsForLinks('[[Vesper]Hale|the stranger]]'), 'the stranger');
+    assert.strictEqual(labelsForLinks('x [[Vesper]Hale|the]stranger]] y [[Bo_Pike]]'), 'x the]stranger y [[Bo_Pike]]');
+    assert.strictEqual(escapeHtml('[[Vesper_Hale|a]b]]'), 'a]b');
+  });
+  it('an unlabelled link, or two links side by side, are left as written', () => {
+    assert.strictEqual(labelsForLinks('[[A]] | [[B]]'), '[[A]] | [[B]]');
+    assert.strictEqual(labelsForLinks('[[A]] and [[B|c]]'), '[[A]] and c');
+  });
+});

@@ -105,8 +105,19 @@ function linkText(value, { humanize = false } = {}) {
 function labelsForLinks(text) {
   const s = String(text == null ? '' : text);
   if (!s.includes('[[') || !s.includes('|')) return s;
-  return s.replace(wikilinkRe('g'), (whole, body) => parseWikilink(body).display.trim() || whole);
+  // An embed with a pipe (`![[map.png|300]]`: the pipe is a size, not a label) prints
+  // nothing, never its target and never the stray `!300`. A link left unread by the pattern
+  // above because `]` stands inside it is read loosely, up to the first `]]`: the label is
+  // everything after the pipe, so its target still does not print.
+  return s.replace(wikilinkRe('g', true), (whole, body) => {
+    const label = parseWikilink(body).display.trim();
+    if (whole[0] === '!') return label || body.includes('|') ? '' : whole;
+    return label || whole;
+  }).replace(LOOSE_LABELLED_RE, (_, label) => label.trim());
 }
+// `[[target|label]]` where target or label holds a lone `]`: a target stops at the first `|`
+// and may hold no `[[` or `]]`; the label runs to the first `]]`.
+const LOOSE_LABELLED_RE = /\[\[(?:(?!\]\]|\[\[)[^|\n])*\|([^\n]*?)\]\]/g;
 
 // `labelsForLinks` applied until the text stops changing, so a link nested in a label
 // (`[[A|[[B|c]]]]`) comes down to `c` and no target is left standing. Each pass that changes
