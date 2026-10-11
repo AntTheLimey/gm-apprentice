@@ -280,3 +280,15 @@ test('own counts the lines kept: a blank line is neither kept nor counted', () =
   const item = group(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people', 'Serves').items[0];
   assert.deepStrictEqual([item.lines, item.own], [['Old friends.'], 1]);
 });
+
+test('a target with words beside a labelled link: no page gives label and words, a page is found', () => {
+  const noPage = page('A', 'npc', { relationships: [{ target: '[[Vesper_Hale|the stranger]] (briefly)', type: 'knows' }] });
+  const m = buildConnections(ctx([noPage])).for(noPage);
+  const item = tab(m, 'other').groups[0].items[0];
+  assert.strictEqual(item.title, 'the stranger (briefly)');
+  assert.ok(!JSON.stringify({ ...m, tabs: m.tabs.map((t) => ({ ...t, groups: t.groups.map((g) => ({ ...g, items: g.items.map(({ key, ...rest }) => rest) })) })) }).includes('Vesper'));
+  const a = page('A', 'npc', { relationships: [{ target: '[[Vesper_Hale|the stranger]] (briefly)', type: 'knows' }] });
+  const vesper = page('Vesper_Hale', 'npc');
+  const found = buildConnections(ctx([a, vesper])).for(a);
+  assert.deepStrictEqual(group(found, 'people', 'Knows').items.map((i) => [i.title, i.outputPath]), [['Vesper Hale', 'p/vesper_hale.html']]);
+});

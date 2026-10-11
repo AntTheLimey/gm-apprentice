@@ -5,7 +5,7 @@
 // a gm-only relationship, an excluded field and a note with no page never get this far.
 // Nothing here reads sourceFrontmatter or page.markdown.
 const { backlinksOf } = require('./backlinks');
-const { linkText, labelsForLinksFully } = require('./wikilink');
+const { linkText, labelsForLinksFully, wikilinkRe, parseWikilink } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { kindLabel } = require('./kind-label');
 const { orderedSessions } = require('./story-spine');
@@ -69,7 +69,11 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
   // label, or its name with underscores read as spaces: wikilink.js linkText).
   const resolve = (value) => {
     const ref = linkText(value, { humanize: true });
-    const name = canonicalNfc(ref.key.split(/[#^]/)[0].replace(/\.md$/i, '').trim());
+    // One link with words beside it ("[[Name|label]] (briefly)") names that link's page;
+    // two or more name none, so the item stays unlinked.
+    const links = String(value).match(wikilinkRe('g')) || [];
+    const key = !ref.labelled && links.length === 1 ? parseWikilink(wikilinkRe('').exec(links[0])[1]).name.trim() : ref.key;
+    const name = canonicalNfc(key.split(/[#^]/)[0].replace(/\.md$/i, '').trim());
     const out = name ? linkMap[name] : undefined;
     return { page: (typeof out === 'string' && byPath.get(out)) || null, name, words: ref.words.trim() };
   };
