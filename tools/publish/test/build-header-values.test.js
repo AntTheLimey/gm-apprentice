@@ -212,3 +212,15 @@ test('C1b: a bare note name in a PC display_meta badge prints as words; free tex
     assert.deepStrictEqual(cardProblems(card, text).problems, []);
   } finally { v.cleanup(); }
 });
+
+test('C1c: a custom display_meta field holding a bare note name prints it as words', () => {
+  const v = buildVault({
+    'Characters/Ada Quill.md': '---\ntype: pc\nplayer_name: Pat\ndisplay_meta: [patron, rival, code]\npatron: Old_Tom\nrival: "[[Vesper_Hale|the stranger]]"\ncode: red_fox\n---\n## Background\n\nBody.\n',
+  }, {});
+  try {
+    const text = pageText(v.read('characters', 'ada-quill.html'));
+    for (const want of ['Patron Old Tom', 'Rival the stranger', 'Code red_fox']) assert.ok(text.includes(want), `${want}: ${text.slice(0, 400)}`);
+    const card = JSON.parse(v.read('previews.json'))['characters/ada-quill.html'];
+    assert.ok(card.f.some(([, value]) => value === 'Old Tom'), JSON.stringify(card));
+  } finally { v.cleanup(); }
+});
