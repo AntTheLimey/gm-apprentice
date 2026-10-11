@@ -34,7 +34,6 @@ from vaultlib import (  # noqa: E402,F401
     chapter_key,
     chapter_of,
     extract_frontmatter,
-    gm_only_hides,
     parse_session_number,
     scalar_value,
     wikilink_target,
@@ -368,25 +367,6 @@ class RelationshipEdge:
     tone_lines: list[int] = field(default_factory=list)
     target: str = ""
     description: str = ""
-    tone: str = ""            # the first `tone:` value, unquoted
-    gm_only: bool = False     # true exactly when the site drops the edge
-
-
-def _site_drops_edge(value: str) -> bool:
-    """Does `gm_only: <value>` make the site drop the edge? The raw line
-    value read by vaultlib `gm_only_hides`, which mirrors `isGmOnlyEdge` in
-    tools/publish/lib/processor.js: true, the words yes, on and 1 in any
-    capitals and padding, quoted or not, and an unquoted number equal to 1
-    (`1.0` too, which YAML reads as the number)."""
-    text = value.strip()
-    word = scalar_value(text)
-    if not QUOTED_SCALAR_RE.match(text):
-        try:
-            if float(word) == 1:
-                return True
-        except ValueError:
-            pass
-    return gm_only_hides(word)
 
 
 EDGE_KEY_RE = re.compile(r"^(-\s+)?([\w-]+):\s*(.*)$")
@@ -433,10 +413,6 @@ def iter_relationship_edges(content: str) -> Iterator[RelationshipEdge]:
         key, value = m.group(2), m.group(3)
         if key == "tone":
             edge.tone_lines.append(lineno)
-            if not edge.tone:
-                edge.tone = scalar_value(value)
-        elif key == "gm_only":
-            edge.gm_only = _site_drops_edge(value)
         elif key == "target":
             edge.target = scalar_value(value)
         elif key == "description":

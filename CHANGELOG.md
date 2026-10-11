@@ -22,17 +22,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   list that reads on a phone), `web` (the subject in the middle, names
   around it) or `cards`; `off` leaves the section out. Set it with
   `vault-setting --set connections='"web"'`.
-- `tones.py VAULT shown` lists the hostile ties the site shows, and
-  campaign-qa's Tone Words check walks them.
-- Updating a vault with a site and a relationship tone says once that
-  the site now shows the tone.
 
 ### Changed
 
 - **A relationship's tone is now shown on the site**, as warm, hostile
   or neutral, never as the word. A relationship whose tone gives
-  something away wants `gm_only: true` or another tone, and campaign-qa
-  lists the hostile ones.
+  something away wants `gm_only: true` or another tone.
 - The right-hand sidebar, the Relationships list in the body, the NPC
   Connections cards and the ring graph are gone; their content is in the
   tabs. A page's Connections shows one step, not neighbours of
@@ -43,9 +38,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `publish:` values that now make a stub which used to publish the note
   whole: `"Stub"`, `" stub "` and `["stub"]`.
 - A relationship marked `gm_only` with `yes`, `on`, `1` or a quoted
-  true in capitals or with spaces (`"True"`, `" true "`) is now hidden, as `true` always was. The
-  site and the vault scripts read it the same way, so `tones.py shown`
-  does not list such a tie.
+  true in capitals or with spaces (`"True"`, `" true "`) is now hidden
+  on the site, as `true` always was.
 - A labelled link to a note that has a published page shows that page's
   own title in Connections, not the label; a label stands in only where
   there is no page.
@@ -74,8 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The audit for secret names finds one around zero-width characters or
   held only by the search index, and ignores a mark the vault wrote
   itself.
-- `publish: None`, `False` and `[false]` withhold a note, in the site's
-  tool and in the vault scripts.
+- `publish: None`, `False` and `[false]` withhold a note.
 - A note named `constructor.md`, or a link to `constructor`, no longer
   stops the build.
 - A custom `display_meta` field holding a bare note name prints it as

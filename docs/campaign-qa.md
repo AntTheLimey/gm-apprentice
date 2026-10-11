@@ -69,14 +69,8 @@ ones your notes use that are not. The near misses (cordial, dread) it
 tidies on one yes, or all but the ones you name. For the rest it reads
 the relationships that use each word and brings you one table: the
 word, how often it is used, the standard word it proposes and why. You
-accept the table or mark it up; it asks only where it cannot tell, and it
-writes the tidied tones into your notes.
-
-The site shows each relationship's tone as warm, hostile or neutral.
-Every tone check tells you how many hostile ties the site shows. Say
-yes to the offer, or ask "what does the site show of who is against
-whom?", and Claude lists them a few at a time. For each you say leave,
-re-tone or hide, and Claude writes the change into the note.
+accept the table or mark it up; it asks only where it cannot tell. You
+never edit a note yourself.
 
 ### Site Faults
 

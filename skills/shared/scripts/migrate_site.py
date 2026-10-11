@@ -592,24 +592,6 @@ def find_fonts(vault: Path) -> list[Item]:
                   f"address; the look does not change"], apply)]
 
 
-def find_tone_shown(vault: Path) -> list[Item]:
-    """1.10.45: the site shows a relationship's tone, as warm, hostile or
-    neutral (never the word). A notice, said once: a check with a release
-    is not offered again once the vault is stamped past it. Only a vault
-    with a site and at least one tone has anything to be told."""
-    import tones    # it imports migrate_core, as this module does
-
-    site, _has_config = configured_site(vault)
-    if site is None or not tones.survey(vault):
-        return []
-    return [Item("tone-shown", PERSON, [
-        "relationship tones (site)\tthe site now shows each relationship's "
-        "tone as warm, hostile or neutral, never the word itself. A tone "
-        "that gives a secret away wants `gm_only: true` on that "
-        "relationship, or another tone. campaign-qa's Tone Words check "
-        "lists the hostile ties the site shows"])]
-
-
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check("config-to-vault", None, 2,
@@ -623,8 +605,6 @@ SITE_CHECKS: list[Check] = [
           find_fonts, asks_site=True, choices=("fonts-self-host",)),
     Check("postbuild", "1.10.17", 3, "the site's postbuild script",
           find_postbuild),
-    Check("tone-shown", "1.10.45", 3, "relationship tones shown on the site",
-          find_tone_shown),
     Check("publish-played", "1.10.18", 4, "played sessions are registered",
           find_publish_played, asks_site=True, choices=("played:",)),
     Check("session-recaps", "1.10.18", 4, "recaps kept in session indexes",
