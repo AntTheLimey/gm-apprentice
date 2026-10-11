@@ -125,6 +125,8 @@ def _checked_sets(sets: dict[str, str], used: set[str]) -> dict[str, str]:
     out = {}
     for old, new in sets.items():
         old, new = tone_key(old), tone_key(new)
+        if out.get(old, new) != new:
+            raise TonesError(f"{old} is set to both {out[old]} and {new}")
         if new not in listed:
             raise TonesError(f"{new} is not a listed tone; the list is: "
                              f"{', '.join(listed)}")
@@ -142,33 +144,49 @@ def plan_fix(vault: Path, near: bool, sets: dict[str, str]) -> Plan:
     listed = tone_families()
     sets = _checked_sets(sets, {tone_key(u.raw) for u in uses
                                 if u.raw not in listed})
+
+    def becomes(raw: str) -> str | None:
+        if raw in listed:
+            return None
+        return sets.get(tone_key(raw)) or (tone_proposal(raw) if near
+                                           else None)
+
     p = Plan(vault)
-    by_note: dict[str, list[tuple[Use, str]]] = {}
+    # The survey only says which notes hold a stray this run would change.
+    # Its line numbers are not used: it reads with universal newlines, which
+    # can number lines differently from the bytes this rewrites.
+    seen: dict[str, list[Use]] = {}
     for u in uses:
-        if u.raw in listed:
-            continue
-        new = sets.get(tone_key(u.raw)) or (tone_proposal(u.raw) if near
-                                            else None)
-        if new:
-            by_note.setdefault(u.rel, []).append((u, new))
-    for rel, wanted in by_note.items():
+        if becomes(u.raw):
+            seen.setdefault(u.rel, []).append(u)
+    for rel, wanted in seen.items():
         text = _read(vault, rel)
         if text is None:
             raise TonesError(f"{rel} is not UTF-8 text; fix the file, "
                              f"then run it again")
-        # The survey read the note with universal newlines; this splits on
-        # "\n" only, so a bare "\r" note can number lines differently. The
-        # word check below keeps such a tone rather than rewrite a wrong line.
+        # One text, one numbering: the tone lines are found in the same
+        # text that is split and rewritten.
         lines = text.split("\n")
-        for u, new in wanted:
-            m = (TONE_LINE_RE.match(lines[u.lineno - 1])
-                 if u.lineno <= len(lines) else None)
-            if not m or m.group("word").strip() != u.raw:
-                p.kept.append((rel, u.lineno, u.raw))
+        pending = Counter(u.raw for u in wanted)
+        for lineno, raw in iter_relationship_tones(text):
+            new = becomes(raw)
+            if not new:
                 continue
-            lines[u.lineno - 1] = (f"{m.group('head')}{m.group('q')}{new}"
-                                   f"{m.group('q')}{m.group('tail')}")
-            p.changes.append(Change(rel, u.lineno, u.raw, new))
+            pending[raw] -= 1
+            m = (TONE_LINE_RE.match(lines[lineno - 1])
+                 if lineno <= len(lines) else None)
+            if not m or m.group("word").strip() != raw:
+                p.kept.append((rel, lineno, raw))
+                continue
+            lines[lineno - 1] = (f"{m.group('head')}{m.group('q')}{new}"
+                                 f"{m.group('q')}{m.group('tail')}")
+            p.changes.append(Change(rel, lineno, raw, new))
+        # A stray the survey saw but the strict reading did not (the
+        # frontmatter is not found in the exact text): listed, not rewritten.
+        for u in wanted:
+            if pending[u.raw] > 0:
+                pending[u.raw] -= 1
+                p.kept.append((rel, u.lineno, u.raw))
         after = "\n".join(lines)
         if after != text:
             p.originals[rel], p.texts[rel] = text, after

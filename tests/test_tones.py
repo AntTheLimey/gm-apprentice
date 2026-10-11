@@ -253,25 +253,57 @@ class FixTests(VaultCase):
 
     def test_a_note_that_is_not_utf8_stops_the_run(self):
         self.put("NPCs/A.md", note("    tone: dread"))
-        (self.vault / "NPCs" / "B.md").write_bytes(
-            note("    tone: dread").encode("utf-8") + b"\xff\xfe")
+        bad = note("    tone: dread").encode("utf-8") + b"\xff\xfe"
+        (self.vault / "NPCs" / "B.md").write_bytes(bad)
         with self.assertRaises(tones.TonesError) as raised:
             tones.plan_fix(self.vault, near=True, sets={})
         self.assertIn("NPCs/B.md is not UTF-8 text", str(raised.exception))
         self.assertIn("tone: dread", self.get("NPCs/A.md"))
+        self.assertEqual((self.vault / "NPCs" / "B.md").read_bytes(), bad)
 
-    def test_a_bare_cr_line_ending_never_rewrites_a_wrong_line(self):
-        # The survey reads "\r" as a line break; the fix splits on "\n"
-        # only, so the line numbers differ. The word guard must keep the
-        # tone, never touch another line.
+    def test_a_bare_cr_inside_a_line_still_hits_the_right_lines(self):
+        text = ("---\ntype: npc\nnote: a\rb\nrelationships:\n"
+                '  - target: "[[A]]"\n    type: knows\n    tone: dread\n'
+                '  - target: "[[B]]"\n    type: knows\n    tone: dread\n'
+                '  - target: "[[C]]"\n    type: knows\n    tone: dread\n'
+                "---\nBody\n")
+        self.put("NPCs/A.md", text)
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        tones.apply(p)
+        self.assertEqual(self.get("NPCs/A.md"),
+                         text.replace("tone: dread", "tone: ominous"))
+        self.assertEqual([c.lineno for c in p.changes], [7, 10, 13])
+        self.assertEqual(p.kept, [])
+
+    def test_an_all_cr_note_is_listed_and_left_byte_for_byte(self):
         text = note("    tone: dread", "    tone: dread").replace("\n", "\r")
         self.put("NPCs/A.md", text)
-        before = self.get("NPCs/A.md")
         p = tones.plan_fix(self.vault, near=True, sets={})
         self.assertEqual(p.changes, [])
         self.assertEqual(len(p.kept), 2)
         tones.apply(p)
-        self.assertEqual(self.get("NPCs/A.md"), before)
+        self.assertEqual(self.get("NPCs/A.md"), text)
+
+    def test_untouched_lines_keep_their_bytes(self):
+        for eol in ("\n", "\r\n"):
+            text = note('    tone: "Cordial"  # c', "    tone: warm",
+                        "    tone: dread").replace("\n", eol)
+            self.put("NPCs/A.md", text)
+            tones.apply(tones.plan_fix(self.vault, near=True, sets={}))
+            old, new = text.split("\n"), self.get("NPCs/A.md").split("\n")
+            self.assertEqual(len(old), len(new))
+            self.assertEqual([i for i in range(len(old)) if old[i] != new[i]],
+                             [5, 11])
+
+    def test_two_set_keys_for_one_word_are_refused(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        with self.assertRaises(tones.TonesError) as raised:
+            tones.plan_fix(self.vault, near=False,
+                           sets={"Dread": "ominous", "dread": "tense"})
+        self.assertIn("dread is set to both", str(raised.exception))
+        p = tones.plan_fix(self.vault, near=False,
+                           sets={"Dread": "ominous", "dread": "ominous"})
+        self.assertEqual(len(p.changes), 1)
 
     def test_a_note_with_a_byte_order_mark_is_left_alone(self):
         self.put("NPCs/A.md", "﻿" + note("    tone: dread"))
