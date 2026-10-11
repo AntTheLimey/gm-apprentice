@@ -41,7 +41,7 @@ test('the web puts every name on one ring, in order, inside the drawing', () => 
     const lay = api.webLayout(webGroups(sizes), { subject: 'Emma Wentworth', measure: measured });
     const total = sizes.reduce((a, b) => a + b, 0);
     assert.strictEqual(lay.nodes.length, total, String(sizes));
-    assert.deepStrictEqual(lay.bands.map((b) => b.label), webGroups(sizes).map((g) => g.n.length > 28 ? g.n.slice(0, 27) + '…' : g.n));
+    assert.deepStrictEqual(lay.bands.map((b) => b.label), webGroups(sizes).map((g) => g.n), 'every label whole');
     const { x, y, w, h } = lay.box;
     for (const n of lay.nodes) {
       assert.ok(Math.abs(Math.hypot(n.x, n.y) - lay.radius) < 1e-6, 'on the ring');
@@ -102,6 +102,15 @@ test('the subject of a web is whole, in lines that fit its disc, however long th
     }
     assert.ok(lay.labelRadius > lay.root.r + 8);
   }
+});
+
+test('a group label is whole on a wide web, however long, and cut only when asked', () => {
+  const long = 'Was once the reluctant keeper of the keys of';
+  const g = [{ n: long, d: [{ t: 'Ann' }] }, { n: 'Knows', d: [{ t: 'Bo' }, { t: 'Cy' }, { t: 'Di' }, { t: 'Ed' }] }];
+  const lay = api.webLayout(g, { measure: measured });
+  assert.strictEqual(lay.bands[0].label, long);
+  assert.ok((lay.bands[0].labelTo - lay.bands[0].labelFrom) * lay.labelRadius >= measured(long, 'band'));
+  assert.strictEqual(api.webLayout(g, { measure: measured, clipLabel: 14 }).bands[0].label.length, 14);
 });
 
 test('a long name on the ring is cut to the length asked for', () => {

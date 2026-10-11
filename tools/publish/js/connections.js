@@ -128,7 +128,7 @@
     var root = rootBlock(opts.subject || '', measure);
     var total = 0;
     var sets = groups.map(function (group) {
-      var label = clip(group.n, opts.clipLabel || 28);
+      var label = clip(group.n, opts.clipLabel || 60);
       total += group.d.length;
       return {
         label: label, w: measure(label, 'band') + 4,
@@ -402,11 +402,13 @@
   // A colour that can be read on every one of the grounds: the colour itself when it reaches
   // `need` on each, else moved toward the text colour a tenth at a time until it does, and
   // the text colour when nothing on the way does. So it is never worse than the plain text.
+  // It must clear the need by a hair (SPARE), so a browser's own rounding cannot undo it.
+  var SPARE = 0.03;
   function ink(colour, text, grounds, need) {
     for (var i = 0; i < 10; i++) {
       var c = mix(colour, text, i / 10).map(Math.round);   // as it will be written, in whole numbers
       var ok = true;
-      for (var g = 0; g < grounds.length; g++) if (contrast(c, grounds[g]) < need) ok = false;
+      for (var g = 0; g < grounds.length; g++) if (contrast(c, grounds[g]) < need + SPARE) ok = false;
       if (ok) return c;
     }
     return [text[0], text[1], text[2]];
@@ -995,7 +997,7 @@
       }
       // What else the words sit on: a card's portrait disc, or a row under the pointer.
       var other = colourAt(probe, card ? 'var(--bg)' : 'var(--accent-dim)');
-      var second = other ? over(other, ground) : null;
+      var second = other ? over(other, ground).map(Math.round) : null;   // as it will be painted
       if (second && (card || contrast(p.text, second) >= 4.5)) p.grounds.push(second);
       else second = null;
       var out = inks(p);
