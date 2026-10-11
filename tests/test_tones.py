@@ -333,5 +333,27 @@ class FixTests(VaultCase):
         self.assertIn("tone: neutral\n", text)
 
 
+import vault_check as vc  # noqa: E402
+
+
+class CheckTests(VaultCase):
+    def test_stray_tones_are_warnings_beside_the_predicate_errors(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: central",
+                                   "    tone: warm"))
+        self.assertEqual(vc.check_relationships(self.vault), [
+            "WARNING\tNPCs/A.md:6\ttone 'dread' is off the list; "
+            "use 'ominous' (tones.py tidies these)",
+            "WARNING\tNPCs/A.md:9\ttone 'central' is off the list; "
+            "pick a listed tone (shared/entity-schema.md, Tones)",
+        ])
+
+    def test_file_scope_applies(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        self.put("NPCs/B.md", note("    tone: dread"))
+        rows = vc.check_relationships(self.vault, files=["NPCs/B.md"])
+        self.assertEqual(len(rows), 1)
+        self.assertIn("NPCs/B.md:6", rows[0])
+
+
 if __name__ == "__main__":
     unittest.main()
