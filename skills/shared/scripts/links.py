@@ -68,7 +68,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import graph_check
-from migrate_core import StepFailed, write_text_atomic
+from migrate_core import StepFailed, write_all_or_none, write_text_atomic
 from relink import (
     RelinkError,
     _nfc,
@@ -482,40 +482,12 @@ def _names_match(vault: Path, names: list[str], notes: list[str],
 
 def apply(p: Plan) -> None:
     """Write every note of the plan, or leave the vault exactly as it was."""
-    written: list[str] = []
     try:
-        for rel in sorted(p.texts):
-            if _read(p.vault, rel) != p.originals[rel]:
-                raise LinksError(f"{rel} changed while the fix was being "
-                                 f"made; run it again")
-            written.append(rel)  # before the write: an interrupt mid-write
-            write_text_atomic(p.vault / rel, p.texts[rel])
-    except BaseException as e:
-        stuck, edited = [], []
-        for rel in written:
-            try:
-                now = _read(p.vault, rel)
-                if now == p.originals[rel]:
-                    continue  # never changed: nothing to put back
-                if now != p.texts[rel]:
-                    edited.append(rel)  # not this run's text: not ours to undo
-                    continue
-                write_text_atomic(p.vault / rel, p.originals[rel])
-            except BaseException:
-                stuck.append(rel)
-        said = str(e) or type(e).__name__
-        if stuck:
-            said += (f"; these notes could not be put back and still have "
-                     f"the new links: {', '.join(stuck)}")
-        if edited:
-            said += (f"; these notes were changed by something else while "
-                     f"the fix ran and were left as they are: "
-                     f"{', '.join(edited)}")
-        if not stuck and not edited:
-            said += "; the vault is as it was"
-        if isinstance(e, KeyboardInterrupt):
-            raise KeyboardInterrupt(said) from None
-        raise LinksError(said) from e
+        write_all_or_none(p.vault, p.originals, p.texts, read=_read,
+                          what="the fix", holds="the new links",
+                          write=write_text_atomic)
+    except StepFailed as e:
+        raise LinksError(str(e)) from e
 
 
 def rows(p: Plan, done: bool = False) -> list[str]:

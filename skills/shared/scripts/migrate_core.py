@@ -81,6 +81,54 @@ def write_text_atomic(path: Path, text: str) -> None:
                 pass
 
 
+def write_all_or_none(vault: Path, originals: dict[str, str],
+                      texts: dict[str, str], *,
+                      read: Callable[[Path, str], str | None],
+                      what: str = "the fix",
+                      holds: str = "the new text",
+                      write: Callable[[Path, str], None] | None = None) -> None:
+    """Write every note of `texts`, or leave the vault exactly as it was.
+    `originals` is each note's text when the change was planned: a note
+    that differs now stops the run. `read` is the caller's own reader, so
+    the comparison is made the way the plan was; `write` is the caller's
+    own writer (default `write_text_atomic`)."""
+    write = write or write_text_atomic
+    written: list[str] = []
+    try:
+        for rel in sorted(texts):
+            if read(vault, rel) != originals[rel]:
+                raise StepFailed(f"{rel} changed while {what} was being "
+                                 f"made; run it again")
+            written.append(rel)  # before the write: an interrupt mid-write
+            write(vault / rel, texts[rel])
+    except BaseException as e:
+        stuck, edited = [], []
+        for rel in written:
+            try:
+                now = read(vault, rel)
+                if now == originals[rel]:
+                    continue  # never changed: nothing to put back
+                if now != texts[rel]:
+                    edited.append(rel)  # not this run's text: not ours to undo
+                    continue
+                write(vault / rel, originals[rel])
+            except BaseException:
+                stuck.append(rel)
+        said = str(e) or type(e).__name__
+        if stuck:
+            said += (f"; these notes could not be put back and still have "
+                     f"{holds}: {', '.join(stuck)}")
+        if edited:
+            said += (f"; these notes were changed by something else while "
+                     f"{what} ran and were left as they are: "
+                     f"{', '.join(edited)}")
+        if not stuck and not edited:
+            said += "; the vault is as it was"
+        if isinstance(e, KeyboardInterrupt):
+            raise KeyboardInterrupt(said) from None
+        raise StepFailed(said) from e
+
+
 def _read_note(path: Path) -> tuple[list[str], int, str]:
     """(the note's lines with endings, where its frontmatter closes, its
     byte-order mark or ""). Raises StepFailed when the file cannot be read

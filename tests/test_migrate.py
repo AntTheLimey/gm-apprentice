@@ -20,7 +20,8 @@ import migrate_site  # noqa: E402
 import vault_check as vc  # noqa: E402
 from vaultlib import extract_frontmatter  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
-                          StepFailed, edit_frontmatter, write_text_atomic)
+                          StepFailed, edit_frontmatter, write_all_or_none,
+                          write_text_atomic)
 from site_fixture import give_site  # noqa: E402
 
 PLUGIN = "1.10.33"
@@ -748,6 +749,40 @@ class RealToolTests(unittest.TestCase):
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertEqual(self.run_real(vault, "plan")[1].splitlines()[1],
                          "up to date")
+
+
+class WriteAllOrNoneTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault = Path(self.tmp.name)
+        for name in ("a.md", "b.md"):
+            (self.vault / name).write_text(f"old {name}\n", encoding="utf-8",
+                                           newline="")
+        self.originals = {"a.md": "old a.md\n", "b.md": "old b.md\n"}
+        self.texts = {"a.md": "new a\n", "b.md": "new b\n"}
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    @staticmethod
+    def read(vault, rel):
+        return (vault / rel).read_text(encoding="utf-8")
+
+    def test_writes_every_note(self):
+        write_all_or_none(self.vault, self.originals, self.texts,
+                          read=self.read)
+        self.assertEqual(self.read(self.vault, "a.md"), "new a\n")
+        self.assertEqual(self.read(self.vault, "b.md"), "new b\n")
+
+    def test_a_note_changed_meanwhile_stops_it_and_nothing_is_written(self):
+        (self.vault / "b.md").write_text("someone else\n", encoding="utf-8")
+        with self.assertRaises(StepFailed) as raised:
+            write_all_or_none(self.vault, self.originals, self.texts,
+                              read=self.read, what="the tidy")
+        self.assertIn("b.md changed while the tidy was being made",
+                      str(raised.exception))
+        self.assertIn("the vault is as it was", str(raised.exception))
+        self.assertEqual(self.read(self.vault, "a.md"), "old a.md\n")
 
 
 if __name__ == "__main__":
