@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.44] — 2026-10-10
+
+### Added
+
+- **Tone words are a fixed list.** A relationship's `tone` is one of 27
+  words in three families (positive, negative, neutral); the nuance
+  goes in its description. `tones.py` lists the tones a vault uses that
+  are off the list and rewrites the ones a rule can place (cordial to
+  friendly, dread to ominous), every note or none. `--except WORD`
+  leaves a word as written, and `--set OLD=NEW` gives a word the listed
+  one the GM chose. `tones.py VAULT uses` lists every use of the words
+  no rule places: the note and line, the word, and that relationship's
+  target and description.
+- Updating a vault offers that tidy as a yes or no. campaign-qa's new
+  Tone Words check offers it too, all or all but the words the GM
+  names. For the remaining words it reads the relationships and brings
+  the GM one table of proposals to accept or mark up, asking only where
+  it cannot tell.
+- Updating a vault also brings the vault's own tone list up to date,
+  with the rest of the update: where `_meta/entity-types.md` or
+  `_meta/relationship-types.md` lists the old tone words, the list
+  becomes the 27, and the relationships example a 1.10.29 to 1.10.43
+  vault was created with gets the plugin's current text and the Tones
+  paragraph. Only that text changes; a list written in a shape the
+  update does not recognise is left alone.
+- `vault_check.py relationships` warns about a tone off the list and
+  names the listed word to use. session-wrapup and vault-ingest correct
+  it on the relationships they wrote; an older one waits for
+  campaign-qa.
+
+### Changed
+
+- `professional` is a neutral tone; it was listed as positive.
+- `links.py`'s all-or-nothing writer now lives in `migrate_core.py` and
+  is shared with `tones.py` (no change in what `links.py` does).
+
+### Fixed
+
+- A note that opens with an empty frontmatter block (`---` then `---`)
+  no longer has its body read as frontmatter by `vault_check.py
+  relationships` and the schema validation, which could report body
+  text as a relationship.
+
 ## [1.10.43] — 2026-10-10
 
 ### Added

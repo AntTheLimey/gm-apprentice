@@ -1,0 +1,94 @@
+# Tone Words
+
+A relationship's `tone` is one of 27 listed words (`shared/entity-schema.md`,
+Tones). This check finds tones off the list and tidies them. The GM
+answers; you run the tool. The GM never edits a note and is never told
+to.
+
+```bash
+python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/tones.py" "<vault>"
+```
+
+Below, `tones.py` stands for that command, vault included. It reads the
+whole vault whatever scope the GM chose, and a fix changes a word
+everywhere it is used: say so when the scope was narrower.
+
+The first line counts every tone, the listed ones, and the two kinds of
+stray (`near`, `ask`). Then one row per stray word. No rows: say in a
+line that the tones are tidy, and stop. In a report, strays are Info.
+In a Full Audit, report the two counts; do not run `uses` or ask
+anything until the report has been presented.
+
+## NEAR rows: one yes
+
+A `NEAR` row is a stray a rule can place: the word, the listed word it
+becomes, how many times. A row whose two words match is a listed word
+written with capitals or extra spaces.
+
+1. Show the rows as a short table (word, becomes, count).
+2. Ask once: "Tidy these?" The GM may take all, take all but some,
+   place a word differently, or decline.
+3. Run the fix (see Running a fix):
+   - all: `tones.py fix --near`
+   - all but some: `tones.py fix --near --except WORD`, one `--except`
+     for each row declined, WORD as the row prints it. Once a row is
+     declined, never run `--near` without its `--except`.
+   - only a few: no `--near`; `--set OLD=NEW` for each row taken, NEW
+     being the row's listed word. A row whose two words match cannot
+     be set: take it with `--near` and an `--except` for every other
+     row not taken.
+   - a word placed differently: add `--set OLD=NEW` for it; it wins
+     over the rule and over an `--except`
+4. Say how many tones changed in how many notes (the last line).
+
+## ASK rows: one table
+
+An `ASK` row is a word no rule can place (word, count, up to three
+notes); `--near` never changes it. Propose only listed words: the
+three `#` lines.
+
+1. `tones.py uses` lists every use, tab-separated: `note:line`, the
+   word, the target, the description. Read that listing. Open a note
+   only where a row's description is empty or does not settle it.
+2. Show one table, however few the words: word, count, proposed listed
+   word, why in a few words. Put `ask: X or Y` where the descriptions
+   do not settle it, or the word means different things in different
+   relationships. A word that names the tie, not a feeling (`sibling`,
+   `central`): `neutral` or the tone the description supports, marked
+   "not a feeling".
+3. Take the answer in one go (all; all but these; these become X).
+   What the GM leaves stays as written and is reported next time.
+4. Apply it in one fix: `tones.py fix --set old1=new1 --set old2=new2`
+
+One `--set` changes every use. To split a word, name the uses each way
+in the question; on a yes, write the listed word on the fewer uses'
+tone lines yourself, then `--set` the rest. Where the old word held
+something the listed word loses (`tragic` becoming `negative`, any
+"not a feeling" word), offer to add it to that relationship's
+`description`; on a yes, write it yourself, there and on the tie's
+line under `## Related`.
+
+## Running a fix
+
+Run it once to preview (`WOULD-CHANGE` rows; nothing is written), then
+again with `--write` added (`CHANGED` rows). Every note is written or
+none is.
+
+`--set` refuses an OLD that is already a listed word, a NEW that is
+not listed, an OLD no relationship has, and one OLD given two NEWs;
+`--except` refuses a word no `NEAR` row has: one line, exit 1, nothing
+written. Correct it and run it again.
+
+A `KEPT` row, in either run, is a tone on a line the tool will not
+rewrite (odd quoting or line endings). Change that tone by hand: open
+the note and give the line the word this run was giving that tone
+(your `--set` for it, else its `NEAR` row's listed word), never a word
+of your own, and say so.
+
+## What this check never does
+
+- It never changes `strength` or a relationship's kind, and never a
+  `description` without a yes.
+- It never reads notes under `_QA`, `_archive`, `_Templates` or
+  `_inbox`.
+- It never invents a tone word. The list changes only in the plugin.

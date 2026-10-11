@@ -167,10 +167,13 @@ from schema_rules import (
     extract_frontmatter,
     inverse_predicates,
     iter_relationship_predicates,
+    iter_relationship_tones,
     chapter_key,
     parse_session_number,
     predicate_problem,
     predicate_vocabulary,
+    tone_families,
+    tone_proposal,
 )
 # LINK_RE, SKIP_DIRS and PC_INACTIVE_STATUS are re-exported: they were part
 # of this module's surface before vaultlib existed.
@@ -773,7 +776,9 @@ def check_relationships(vault: Path, folder: str | None = None,
     inverse-inference and no publish step knows about it, so the edge is
     written and then silently ignored (issue #130 — one session's entity
     generation invented eleven of them). ERROR, with the nearest
-    sanctioned predicates so the fix is a rename, not a hunt.
+    sanctioned predicates so the fix is a rename, not a hunt. A tone off
+    the listed words is a WARNING, with the listed word to use when a
+    rule gives one.
 
     `folder`/`files`/`newer_than` scope the walk to what a run just
     touched — a full vault's off-vocabulary backlog otherwise buries
@@ -783,6 +788,7 @@ def check_relationships(vault: Path, folder: str | None = None,
         # Warm the inverse map here too: predicate_problem() reads it through
         # a second cache, and an unguarded load there would abort `all`.
         inverse_predicates()
+        tones = tone_families()
     except (OSError, ValueError, KeyError, TypeError) as e:
         return [f"ERROR\t(vault)\tcannot read the predicate vocabulary "
                 f"from shared/gm-apprentice-ontology.json: {e}"]
@@ -794,6 +800,14 @@ def check_relationships(vault: Path, folder: str | None = None,
             rows.append(f"ERROR\t{rel}:{lineno}\t"
                         f"{predicate_problem(key, predicate)} "
                         f"(map it via shared/relationship-normalization.md)")
+        for lineno, tone in iter_relationship_tones(text):
+            if tone in tones:
+                continue
+            fix = tone_proposal(tone)
+            rows.append(
+                f"WARNING\t{rel}:{lineno}\ttone '{tone}' is off the list; "
+                + (f"use '{fix}'" if fix else
+                   "pick a listed tone (shared/entity-schema.md, Tones)"))
     return rows
 
 

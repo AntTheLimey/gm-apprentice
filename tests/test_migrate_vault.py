@@ -1102,5 +1102,420 @@ class TwoHiddenBlocksTests(WrapupFixture):
                       f"round GM Notes", lines)
 
 
+class ToneWordsTests(unittest.TestCase):
+    NOTE = ("---\ntype: npc\nrelationships:\n"
+            '  - target: "[[A]]"\n    type: knows\n    tone: {tone}\n---\n')
+
+    def setUp(self):
+        self.vault = make_vault(self)
+
+    def put(self, rel, text, eol="\n"):
+        path = self.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.replace("\n", eol).encode("utf-8"))
+
+    def get(self, rel):
+        return (self.vault / rel).read_bytes().decode("utf-8")
+
+    def test_nothing_is_offered_to_a_tidy_vault(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="warm"))
+        self.assertEqual(mv.find_tone_words(self.vault), [])
+
+    def test_only_ask_words_means_no_choice(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="central"))
+        self.assertEqual(mv.find_tone_words(self.vault), [])
+
+    def test_tidy_rewrites_the_near_words_only(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
+        self.put("NPCs/B.md", self.NOTE.format(tone="central"))
+        (item,) = mv.find_tone_words(self.vault)
+        self.assertEqual(item.id, "tone-words")
+        self.assertEqual(item.group, CHOICE)
+        self.assertEqual(item.wants, "tidy or leave")
+        self.assertIn("1 tone word tidied to the standard list by rule",
+                      item.lines[0])
+        self.assertIn("1 for you to pick later in campaign-qa",
+                      item.lines[0])
+        self.assertIn("dread -> ominous (1)", item.lines)
+        done = item.apply("tidy")
+        self.assertEqual(done, ["NPCs/A.md:6: dread -> ominous"])
+        self.assertIn("tone: ominous", self.get("NPCs/A.md"))
+        self.assertIn("tone: central", self.get("NPCs/B.md"))
+
+    def test_tidy_keeps_crlf(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"), eol="\r\n")
+        (item,) = mv.find_tone_words(self.vault)
+        item.apply("tidy")
+        self.assertEqual(self.get("NPCs/A.md"),
+                         self.NOTE.format(tone="ominous").replace("\n", "\r\n"))
+
+    def test_tidy_says_which_strays_it_kept(self):
+        # An all-CR note is read as tones but is not a line the fix takes.
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"), eol="\r")
+        self.put("NPCs/B.md", self.NOTE.format(tone="dread"))
+        (item,) = mv.find_tone_words(self.vault)
+        before = self.get("NPCs/A.md")
+        done = item.apply("tidy")
+        self.assertEqual(done, [
+            "NPCs/B.md:6: dread -> ominous",
+            "NPCs/A.md:6: dread left as written (not a plain tone line)"])
+        self.assertEqual(self.get("NPCs/A.md"), before)
+
+    def test_leave_writes_nothing(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
+        (item,) = mv.find_tone_words(self.vault)
+        self.assertEqual(item.apply("leave"),
+                         ["left the tone words as they are"])
+        self.assertIn("tone: dread", self.get("NPCs/A.md"))
+
+    def test_any_other_answer_is_refused(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
+        (item,) = mv.find_tone_words(self.vault)
+        with self.assertRaises(StepFailed):
+            item.apply("yes")
+
+    def test_the_check_is_registered_for_this_release(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-words")
+        self.assertEqual((check.release, check.band, check.choices),
+                         ("1.10.44", 3, ("tone-words=",)))
+
+
+OLD_LIST = ("friendly, romantic, respectful, professional, hostile, fearful, "
+            "distrustful, contemptuous, neutral, unknown, complicated")
+
+
+class ToneListTests(unittest.TestCase):
+    """`_meta` files name the tone words; the update makes that the 27."""
+
+    ENTITY = "_meta/entity-types.md"
+    RELS = "_meta/relationship-types.md"
+    # The two shapes real vaults hold, the lines around the list only.
+    CANTICLE = ("```\n\nTone values: " + OLD_LIST + "\n\n"
+                "Strength: 1–10 (1–2 weak, 9–10 defining)\n")
+    DEAD = ("**Genre filter for this campaign:** `universal` + `scifi`.\n\n"
+            "**tone** ∈ friendly | romantic | respectful | professional "
+            "| hostile | fearful | distrustful |\n"
+            "contemptuous | neutral | unknown | complicated. "
+            "**strength** 1–10.\n\n")
+
+    def setUp(self):
+        self.vault = make_vault(self)
+        self.words = list(mv.tone_families())
+
+    def put(self, rel, text):
+        with (self.vault / rel).open("w", encoding="utf-8", newline="") as f:
+            f.write(text)
+
+    def get(self, rel):
+        with (self.vault / rel).open("r", encoding="utf-8", newline="") as f:
+            return f.read()
+
+    def applied(self):
+        (item,) = mv.find_tone_list(self.vault)
+        return item, item.apply(None)
+
+    def test_the_entity_types_line_becomes_the_listed_words(self):
+        self.put(self.ENTITY, self.CANTICLE)
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertEqual((item.id, item.group, item.wants),
+                         ("tone-list", WILL, None))
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the tone list becomes the 27 listed "
+            "words"])
+        self.assertEqual(item.apply(None), [
+            "_meta/entity-types.md: the tone list is now the 27 listed "
+            "words"])
+        self.assertEqual(
+            self.get(self.ENTITY),
+            self.CANTICLE.replace(OLD_LIST, ", ".join(self.words)))
+
+    def test_the_relationship_types_line_keeps_the_text_around_the_list(self):
+        self.put(self.RELS, self.DEAD)
+        item, _done = self.applied()
+        self.assertEqual(item.lines, [
+            "_meta/relationship-types.md: the tone list becomes the 27 "
+            "listed words"])
+        self.assertEqual(
+            self.get(self.RELS),
+            "**Genre filter for this campaign:** `universal` + `scifi`.\n\n"
+            "**tone** ∈ " + " | ".join(self.words)
+            + ". **strength** 1–10.\n\n")
+
+    def test_both_files_are_one_item(self):
+        self.put(self.ENTITY, self.CANTICLE)
+        self.put(self.RELS, self.DEAD)
+        item, done = self.applied()
+        self.assertEqual(len(item.lines), 2)
+        self.assertEqual(len(done), 2)
+        self.assertIn(", ".join(self.words), self.get(self.ENTITY))
+        self.assertIn(" | ".join(self.words), self.get(self.RELS))
+
+    def test_crlf_line_endings_are_kept(self):
+        self.put(self.ENTITY, self.CANTICLE.replace("\n", "\r\n"))
+        self.put(self.RELS, self.DEAD.replace("\n", "\r\n"))
+        self.applied()
+        self.assertEqual(
+            self.get(self.ENTITY),
+            self.CANTICLE.replace(OLD_LIST, ", ".join(self.words))
+            .replace("\n", "\r\n"))
+        self.assertEqual(
+            self.get(self.RELS),
+            ("**Genre filter for this campaign:** `universal` + `scifi`.\n\n"
+             "**tone** ∈ " + " | ".join(self.words)
+             + ". **strength** 1–10.\n\n").replace("\n", "\r\n"))
+
+    def test_a_second_pass_offers_nothing(self):
+        self.put(self.ENTITY, self.CANTICLE)
+        self.put(self.RELS, self.DEAD)
+        self.applied()
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_a_current_list_is_left_alone(self):
+        for text in ("Tone values: " + ", ".join(self.words) + "\n",
+                     "Tones: " + ",\n".join(reversed(self.words)) + ".\n"):
+            self.put(self.ENTITY, text)
+            self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_no_list_and_no_file_offer_nothing(self):
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+        self.put(self.ENTITY, "# Entity Types\n\n    tone: respectful\n\n"
+                 "Extraction defaults: `tone: neutral`, `strength: 5`\n")
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_a_new_vaults_files_offer_nothing(self):
+        self.assertEqual(mv.find_tone_list(whole_vault(self)), [])
+
+    def test_text_after_the_list_on_its_line_survives(self):
+        self.put(self.ENTITY, "Tone: " + OLD_LIST + ". Strength 1-10.\n")
+        self.applied()
+        self.assertEqual(self.get(self.ENTITY),
+                         "Tone: " + ", ".join(self.words)
+                         + ". Strength 1-10.\n")
+
+    def test_a_wrapped_list_becomes_one_line(self):
+        self.put(self.ENTITY,
+                 "Intro.\n\nTone values: friendly, romantic, respectful,\n"
+                 "professional, hostile, fearful, distrustful,\n"
+                 "  contemptuous, neutral, unknown, complicated\n\nNext.\n")
+        self.applied()
+        self.assertEqual(self.get(self.ENTITY),
+                         "Intro.\n\nTone values: " + ", ".join(self.words)
+                         + "\n\nNext.\n")
+
+    def test_two_lists_in_one_file_are_both_replaced(self):
+        self.put(self.ENTITY, "Tone values: " + OLD_LIST + "\n\nMiddle.\n\n"
+                 "**tone** ∈ friendly|hostile|neutral|unknown|fearful."
+                 " End.\n")
+        item, done = self.applied()
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the 2 tone lists become the 27 listed "
+            "words"])
+        self.assertEqual(done, [
+            "_meta/entity-types.md: the 2 tone lists are now the 27 listed "
+            "words"])
+        self.assertEqual(self.get(self.ENTITY),
+                         "Tone values: " + ", ".join(self.words)
+                         + "\n\nMiddle.\n\n**tone** ∈ "
+                         + "|".join(self.words) + ". End.\n")
+
+    def test_only_the_stale_list_of_two_is_replaced(self):
+        self.put(self.ENTITY, "Tone values: " + ", ".join(self.words)
+                 + "\n\nTones: " + OLD_LIST + "\n")
+        item, _done = self.applied()
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the tone list becomes the 27 listed "
+            "words"])
+        self.assertEqual(self.get(self.ENTITY),
+                         "Tone values: " + ", ".join(self.words)
+                         + "\n\nTones: " + ", ".join(self.words) + "\n")
+
+    def test_a_list_this_step_cannot_delimit_is_left_alone(self):
+        for text in (
+                # a word outside both lists
+                "Tone values: " + OLD_LIST + ", smitten\n",
+                "Tone values: wary, " + OLD_LIST + "\n",
+                "Tone values: " + OLD_LIST.replace("neutral", "Neutral")
+                + "\n",
+                # fewer than five words
+                "Tone values: friendly, hostile, neutral, unknown\n",
+                # no label on the list's first line
+                "Tone values:\n" + OLD_LIST + "\n",
+                "Values: " + OLD_LIST + "\n",
+                "Milestone values: " + OLD_LIST + "\n",
+                # two separators in one list
+                "Tone values: friendly, hostile | neutral, unknown, cold\n",
+                # ends in neither a full stop nor a blank line
+                "Tone values: " + OLD_LIST + " (pick one)\n",
+                "Tone values: " + OLD_LIST + "\nand whatever fits.\n",
+                "Tone values: " + OLD_LIST + ",\n",
+                "| tone | " + OLD_LIST + " |\n",
+                "Tone values: `friendly`, `hostile`, `neutral`, `unknown`, "
+                "`cold`\n"):
+            with self.subTest(text=text):
+                self.put(self.ENTITY, text)
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+                self.assertEqual(self.get(self.ENTITY), text)
+
+    def test_a_half_list_is_never_taken_for_the_whole(self):
+        by_family = "; ".join(
+            ", ".join(w for w, f in mv.tone_families().items() if f == fam)
+            for fam in ("positive", "negative", "neutral"))
+        for text in (
+                "Tone values: friendly; romantic, respectful, professional, "
+                "hostile, fearful.\n",
+                "Tone values: " + by_family + ".\n",
+                "Tone values: friendly, romantic, naïve, respectful, "
+                "professional, hostile, fearful, distrustful.\n",
+                "Tone values: friendly, romantic or respectful, "
+                "professional, hostile, fearful, distrustful.\n",
+                # "tone" earlier on the line is not a label for the list
+                "Tones used in this campaign: hostile, fearful, cold, tense, "
+                "ominous.\n",
+                "The tone of the house is cold, formal, professional, "
+                "cautious, transactional.\n",
+                "- **tone** (optional): friendly, hostile, neutral, unknown, "
+                "complicated\n",
+                "In tone she was friendly, warm, loyal, devoted, "
+                "protective.\n",
+                "Tones of voice: friendly, formal, cold, warm, hostile.\n",
+                "Use tone-neutral words: friendly, formal, cold, warm, "
+                "hostile.\n",
+                "Tone values (the only ones this table uses): friendly, "
+                "hostile, neutral, unknown, complicated.\n",
+                # a full stop that is not the end of a sentence
+                "Tone values: " + OLD_LIST + ".md\n",
+                "Tone values: " + OLD_LIST + ".5\n",
+                "Tone values: " + OLD_LIST + "...\n",
+                # bare carriage returns: the label is on its own line
+                "Tone values:\r" + OLD_LIST + "\r",
+                "tone\rMilestone values: " + OLD_LIST + "\r"):
+            with self.subTest(text=text):
+                self.put(self.ENTITY, text)
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+                self.assertEqual(self.get(self.ENTITY), text)
+
+    def test_labels_it_knows(self):
+        for label in ("Tone values: ", "**tone** ∈ ", "Tones: ",
+                      "**Tone:** ", "- `tone` = ", "tone — ",
+                      "Strength 1-10. **tone** ∈ ", "Tone values:\t"):
+            with self.subTest(label=label):
+                self.put(self.ENTITY, label + OLD_LIST + ". After.\n")
+                self.applied()
+                self.assertEqual(
+                    self.get(self.ENTITY),
+                    label + ", ".join(self.words) + ". After.\n")
+
+    # What vault_scaffold wrote into _meta/entity-types.md from 1.10.29 to
+    # 1.10.43: entity-schema.md's relationships example as it was then.
+    SCAFFOLDED = (
+        "relationships:\n"
+        '  - target: "[[Target Entity Name]]"\n'
+        "    type: member_of       # From _meta/relationship-types.md\n"
+        "    tone: respectful      # friendly | romantic | respectful\n"
+        "                          # professional | hostile | fearful\n"
+        "                          # distrustful | contemptuous | neutral\n"
+        "                          # unknown | complicated\n"
+        "    strength: 7           # 1-10 (1-2 weak, 9-10 defining)\n")
+    DEFAULTS = (
+        "Extraction defaults: `tone: neutral` and `strength: 5` when the\n"
+        "source is ambiguous; `bidirectional: false` unless inherently\n"
+        "symmetric; a `description` traceable to source text; `gm_only`\n"
+        "omitted unless the edge's *existence* is the secret.\n")
+    NOW = SCAFFOLDED.replace(
+        "# friendly | romantic | respectful\n"
+        "                          # professional | hostile | fearful\n"
+        "                          # distrustful | contemptuous | neutral\n"
+        "                          # unknown | complicated\n",
+        "# one listed word; see Tones below\n")
+
+    def tones_paragraph(self):
+        schema = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+        at = schema.index("**Tones.**")
+        return schema[at:schema.index("\n\n", at)] + "\n"
+
+    def test_the_old_text_is_what_main_scaffolded(self):
+        schema = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+        self.assertIn(self.NOW, schema)
+        self.assertIn(self.DEFAULTS + "\n" + self.tones_paragraph(), schema)
+
+    def test_the_scaffolded_comment_becomes_the_plugins_text(self):
+        old = ("```yaml\n" + self.SCAFFOLDED + "```\n\n" + self.DEFAULTS
+               + "\n### Publish control fields\n")
+        new = ("```yaml\n" + self.NOW + "```\n\n" + self.DEFAULTS + "\n"
+               + self.tones_paragraph() + "\n### Publish control fields\n")
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                self.put(self.ENTITY, old.replace("\n", eol))
+                (item,) = mv.find_tone_list(self.vault)
+                self.assertEqual(item.group, WILL)
+                self.assertEqual(item.lines, [
+                    "_meta/entity-types.md: the old tone words leave the "
+                    "relationships example, and the Tones paragraph (the 27 "
+                    "listed words) is added"])
+                self.assertEqual(item.apply(None), [
+                    "_meta/entity-types.md: the relationships example and "
+                    "the Tones paragraph now match the plugin's"])
+                self.assertEqual(self.get(self.ENTITY),
+                                 new.replace("\n", eol))
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_the_comment_alone_when_the_paragraph_has_no_exact_place(self):
+        for rest in ("",                                    # no defaults
+                     self.DEFAULTS.replace("5", "6"),       # edited
+                     self.DEFAULTS + "\n" + self.DEFAULTS,  # twice
+                     self.DEFAULTS + "\n**Tones.** Mine.\n"):
+            with self.subTest(rest=rest):
+                self.put(self.ENTITY, self.SCAFFOLDED + "\n" + rest)
+                (item,) = mv.find_tone_list(self.vault)
+                self.assertEqual(item.lines, [
+                    "_meta/entity-types.md: the old tone words leave the "
+                    "relationships example"])
+                item.apply(None)
+                self.assertEqual(self.get(self.ENTITY),
+                                 self.NOW + "\n" + rest)
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_a_comment_that_is_not_exactly_the_old_one_is_left_alone(self):
+        for text in (
+                self.SCAFFOLDED.replace("# unknown | complicated",
+                                        "# unknown | complicated | wary"),
+                self.SCAFFOLDED.replace("# professional | hostile | fearful\n"
+                                        "                          ", ""),
+                self.SCAFFOLDED.replace("| neutral\n", "| neutral\n\n"),
+                self.SCAFFOLDED.replace("# unknown", "unknown")):
+            with self.subTest(text=text):
+                self.put(self.ENTITY, text)
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+                self.assertEqual(self.get(self.ENTITY), text)
+
+    def test_the_comment_and_a_list_in_one_file(self):
+        self.put(self.ENTITY, self.SCAFFOLDED + "\nTone values: " + OLD_LIST
+                 + "\n")
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertEqual(len(item.lines), 2)
+        item.apply(None)
+        self.assertEqual(self.get(self.ENTITY), self.NOW + "\nTone values: "
+                         + ", ".join(self.words) + "\n")
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_a_file_that_is_not_utf8_is_left_alone(self):
+        raw = ("Tone values: " + OLD_LIST + "\n\ncafé\n").encode("latin-1")
+        (self.vault / self.ENTITY).write_bytes(raw)
+        self.put(self.RELS, self.DEAD)
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertEqual(len(item.lines), 1)
+        item.apply(None)
+        self.assertEqual((self.vault / self.ENTITY).read_bytes(), raw)
+
+    def test_the_old_words_are_the_only_ones_named_here(self):
+        self.assertEqual(", ".join(mv.OLD_TONES), OLD_LIST)
+
+    def test_the_check_is_registered_for_this_release(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-list")
+        self.assertEqual((check.release, check.band, check.choices,
+                          check.asks_site),
+                         ("1.10.44", 3, (), False))
+
+
 if __name__ == "__main__":
     unittest.main()

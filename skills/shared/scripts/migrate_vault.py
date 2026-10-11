@@ -13,6 +13,7 @@ from pathlib import Path
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, stopped, write_text_atomic)
+from schema_rules import tone_families
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
 from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
@@ -776,6 +777,215 @@ def find_timeline_page(vault: Path) -> list[Item]:
                   f"entries)"], apply)]
 
 
+def find_tone_words(vault: Path) -> list[Item]:
+    """1.10.44: a relationship's tone is one of the listed words. Offers
+    the rewrites a rule gives (cordial -> friendly). A word with no rule
+    is campaign-qa's to ask about and is never touched here."""
+    import tones    # it imports migrate_core, as this module does
+
+    report = tones.report_lines(tones.survey(vault))
+    near = [r.split("\t") for r in report if r.startswith("NEAR\t")]
+    if not near:
+        return []
+    n_near = sum(int(r[3]) for r in near)
+    n_ask = sum(int(r.split("\t")[2]) for r in report
+                if r.startswith("ASK\t"))
+
+    def words(n: int) -> str:
+        return f"{n} tone word{'' if n == 1 else 's'}"
+
+    head = (f"tidy: {words(n_near)} tidied to the standard list by rule"
+            + (f"; {n_ask} for you to pick later in campaign-qa"
+               if n_ask else "")
+            + "; leave: keep them as written")
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("tidy", "leave"):
+            raise StepFailed("tone-words takes tidy or leave")
+        if value == "leave":
+            return ["left the tone words as they are"]
+        try:
+            p = tones.plan_fix(vault, near=True, sets={})
+            tones.apply(p)
+        except tones.TonesError as e:
+            raise StepFailed(str(e)) from e
+        return [*(f"{c.rel}:{c.lineno}: {c.before} -> {c.after}"
+                  for c in p.changes),
+                *(f"{rel}:{lineno}: {tone} left as written "
+                  f"(not a plain tone line)"
+                  for rel, lineno, tone in p.kept)]
+
+    return [Item("tone-words", CHOICE,
+                 [head, *(f"{w} -> {to} ({n})" for _, w, to, n in near)],
+                 apply, wants="tidy or leave")]
+
+
+# --- the tone list in _meta ---------------------------------------------------
+
+TONE_LIST_FILES = ("_meta/entity-types.md", "_meta/relationship-types.md")
+# The eleven tone words a vault's `_meta` files listed before 1.10.44. They
+# are frozen here, and nowhere else, because a list written then is known by
+# them: the words to write come from the ontology (`tone_families`).
+OLD_TONES = ("friendly", "romantic", "respectful", "professional", "hostile",
+             "fearful", "distrustful", "contemptuous", "neutral", "unknown",
+             "complicated")
+_LIST_WORD = r"[A-Za-z][A-Za-z_-]*"
+_LIST_GAP = r"[ \t]*(?:\r?\n[ \t]*)?"      # blanks, and at most one line break
+_LIST_SEP = rf"{_LIST_GAP}[,|]{_LIST_GAP}"
+# Five or more words with only a comma or a pipe between each two.
+WORD_RUN_RE = re.compile(rf"(?<![\w-]){_LIST_WORD}(?:{_LIST_SEP}{_LIST_WORD})"
+                         rf"{{4,}}(?![\w-])")
+# What may follow a list: a full stop that ends a sentence, or the end of
+# its paragraph.
+RUN_END_RE = re.compile(
+    r"[ \t]*(?:\.(?=\s|\Z)|(?:\r?\n[ \t]*)?\Z|\r?\n[ \t]*\r?\n)")
+# What must come straight before a list, to the end of the text before it
+# on its line: the word, at most one more word (`Tone values`), then `:`,
+# `=`, `∈` or a dash, with any emphasis marks.
+TONE_LABEL_RE = re.compile(
+    r"(?<![\w-])tones?(?![\w-])[*`_]*(?:[ \t]+[A-Za-z]+)?[*`_]*[ \t]*"
+    r"[:=∈–—-][*`_]*[ \t]*\Z", re.I)
+# The comment vault_scaffold.py copied into _meta/entity-types.md from
+# 1.10.29 to 1.10.43 (entity-schema.md's relationships example as it was):
+# the old words, three to a `#` line, beside and under the `tone:` line.
+_OLD_ROWS = [" \\| ".join(OLD_TONES[i:i + 3]) for i in range(0, 11, 3)]
+OLD_COMMENT_RE = re.compile(
+    r"^(?P<head>[ \t]*tone:[ \t]*[a-z]+[ \t]+)# " + _OLD_ROWS[0]
+    + "".join(rf"[ \t]*\r?\n[ \t]*# {row}" for row in _OLD_ROWS[1:])
+    + r"(?=[ \t]*\r?$)", re.M)
+# The same line in the plugin's schema today, and the paragraph it points to.
+NEW_COMMENT_RE = re.compile(r"^[ \t]*tone:[ \t]*[a-z]+[ \t]+(#[^\n]*?)[ \t]*$",
+                            re.M)
+TONES_MARK = "**Tones.**"
+
+
+def _stale_tone_lists(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, replacement) for each list of tone words in `text` that
+    is not the listed words: the words and their separators, nothing else.
+    A list is five or more words, each an old or a listed tone, with one
+    kind of separator, straight after a label on its first line that says
+    `tone`, ending at a full stop or its paragraph's end. Anything else is
+    not a list this step can delimit, and is left out."""
+    listed = list(tone_families())
+    known = set(listed) | set(OLD_TONES)
+    out = []
+    for m in WORD_RUN_RE.finditer(text):
+        run = m.group(0)
+        words = re.findall(_LIST_WORD, run)
+        seps = re.findall(_LIST_SEP, run)
+        line_start = max(text.rfind("\n", 0, m.start()),
+                         text.rfind("\r", 0, m.start())) + 1
+        if (not set(words) <= known or set(words) == set(listed)
+                or len({s.strip() for s in seps}) != 1
+                or not TONE_LABEL_RE.search(text[line_start:m.start()])
+                or not RUN_END_RE.match(text, m.end())):
+            continue
+        mark = seps[0].strip()
+        joiner = next((s for s in seps if "\n" not in s),
+                      ", " if mark == "," else f" {mark} ")
+        out.append((m.start(), m.end(), joiner.join(listed)))
+    return out
+
+
+def _schema_tone_text() -> tuple[str, str, str] | None:
+    """From the plugin's entity-schema.md: the comment on the example's
+    `tone:` line, the paragraph before the Tones paragraph, and the Tones
+    paragraph. None when the schema no longer has that shape."""
+    schema = (SHARED / "entity-schema.md").read_text(encoding="utf-8")
+    comment = NEW_COMMENT_RE.search(schema)
+    paragraphs = schema.split("\n\n")
+    at = next((i for i, p in enumerate(paragraphs)
+               if p.startswith(TONES_MARK)), 0)
+    if not comment or at == 0:
+        return None
+    return comment.group(1), paragraphs[at - 1], paragraphs[at]
+
+
+def _old_tone_comment(text: str) -> tuple[list[tuple[int, int, str]], bool]:
+    """The edits that bring a scaffolded relationships example up to the
+    plugin's, and whether the Tones paragraph is among them. The comment
+    is taken only when it is exactly the old one, once. The paragraph is
+    added only when the file has none and holds, exactly once and ending
+    its paragraph, the paragraph the plugin's schema puts before it."""
+    found = list(OLD_COMMENT_RE.finditer(text))
+    now = _schema_tone_text()
+    if len(found) != 1 or now is None:
+        return [], False
+    comment, before, tones = now
+    m = found[0]
+    edits = [(m.start(), m.end(), m.group("head") + comment)]
+    eol = "\r\n" if "\r\n" in text else "\n"
+    anchor = before.replace("\n", eol)
+    at = text.find(anchor) + len(anchor)
+    if (TONES_MARK in text or text.count(anchor) != 1
+            or not re.match(r"(?:\r?\n){2}|(?:\r?\n)?\Z", text[at:])):
+        return edits, False
+    return [*edits, (at, at, eol * 2 + tones.replace("\n", eol))], True
+
+
+def find_tone_list(vault: Path) -> list[Item]:
+    """1.10.44: where a `_meta` schema file lists the tone words, the list
+    becomes the listed words; and the relationships example a 1.10.29 to
+    1.10.43 scaffold wrote, with the old words in a comment, becomes the
+    plugin's. A file that is not UTF-8, and a list this step cannot
+    delimit exactly, are left as they are."""
+    n_words = len(tone_families())
+
+    def stale(rel: str) -> tuple[str, list[tuple[int, int, str]], list[str],
+                                 list[str]]:
+        """The file's text, its edits, and a line per kind of edit: what
+        will be done, and what was."""
+        path = vault / rel
+        if not path.is_file():
+            return "", [], [], []
+        try:
+            with path.open("r", encoding="utf-8", newline="") as f:
+                text = f.read()
+        except UnicodeDecodeError:
+            return "", [], [], []
+        except OSError as e:
+            raise StepFailed(f"{rel} cannot be read "
+                             f"({e.__class__.__name__})") from e
+        lists = _stale_tone_lists(text)
+        comment, paragraph = _old_tone_comment(text)
+        will, did = [], []
+        if lists:
+            n = len(lists)
+            what = "the tone list" if n == 1 else f"the {n} tone lists"
+            will.append(f"{rel}: {what} {'becomes' if n == 1 else 'become'} "
+                        f"the {n_words} listed words")
+            did.append(f"{rel}: {what} {'is' if n == 1 else 'are'} now the "
+                       f"{n_words} listed words")
+        if comment:
+            will.append(
+                f"{rel}: the old tone words leave the relationships example"
+                + (f", and the Tones paragraph (the {n_words} listed words) "
+                   f"is added" if paragraph else ""))
+            did.append(
+                f"{rel}: the relationships example"
+                + (" and the Tones paragraph now match"
+                   if paragraph else " now matches") + " the plugin's")
+        return text, sorted(lists + comment), will, did
+
+    lines = [line for rel in TONE_LIST_FILES for line in stale(rel)[2]]
+    if not lines:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in TONE_LIST_FILES:
+            text, edits, _will, did = stale(rel)
+            if not edits:
+                continue
+            for start, end, new in reversed(edits):
+                text = text[:start] + new + text[end:]
+            write_text_atomic(vault / rel, text)
+            done += did
+        return done
+
+    return [Item("tone-list", WILL, lines, apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -799,6 +1009,10 @@ VAULT_CHECKS: list[Check] = [
           choices=("wrapup-sections=",)),
     Check("wrapup-sections-key", None, 2, "the retired player-sections list",
           find_wrapup_sections_key),
+    Check("tone-words", "1.10.44", 3, "tone words",
+          find_tone_words, choices=("tone-words=",)),
+    Check("tone-list", "1.10.44", 3, "the tone list in _meta",
+          find_tone_list),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
