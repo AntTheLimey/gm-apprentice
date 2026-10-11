@@ -482,8 +482,9 @@ Two rows behave differently:
 
 Settings that never had a site-file form (`mode`, `exclude_drafts`,
 `theme`, `four_oh_four`, `overrides`, `section_titles`,
-`pc_prose_sections`, `link_previews`, `connections`, `character_sheets`, `sheet_skin`,
-`sheet_frame`, `setting_year`) are read from the vault file only.
+`pc_prose_sections`, `link_previews`, `connections`,
+`character_sheets`, `sheet_skin`, `sheet_frame`, `setting_year`)
+are read from the vault file only.
 
 ### Moving the settings
 

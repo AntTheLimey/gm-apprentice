@@ -752,6 +752,39 @@ class PersonRowTests(unittest.TestCase):
         self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])
 
 
+class ToneShownNoticeTests(unittest.TestCase):
+    NOTE = ("---\ntype: npc\nrelationships:\n"
+            '  - target: "[[A]]"\n    type: knows\n    tone: hostile\n---\n')
+
+    def vault_with(self, note=NOTE, **kw):
+        vault = make_vault(self, **kw)
+        (vault / "NPCs").mkdir()
+        (vault / "NPCs" / "B.md").write_text(note, encoding="utf-8")
+        return vault
+
+    def test_a_site_vault_with_a_tone_is_told_once_what_the_site_now_shows(self):
+        (item,) = ms.find_tone_shown(self.vault_with())
+        self.assertEqual(item.id, "tone-shown")
+        self.assertEqual(item.group, PERSON)
+        text = " ".join(item.lines)
+        for word in ("warm", "hostile", "neutral", "Tone Words"):
+            self.assertIn(word, text)
+        self.assertTrue(all("\t" in line for line in item.lines))
+
+    def test_nothing_to_say_without_a_site_or_without_a_tone(self):
+        self.assertEqual(ms.find_tone_shown(self.vault_with(site=False)), [])
+        quiet = self.NOTE.replace("    tone: hostile\n", "")
+        self.assertEqual(ms.find_tone_shown(self.vault_with(note=quiet)), [])
+
+    def test_it_is_offered_once_by_the_release_that_shows_tone(self):
+        check = {c.name: c for c in ms.SITE_CHECKS}["tone-shown"]
+        self.assertEqual(check.release, "1.10.45")
+        # Release-gated: a vault at or past 1.10.45 is not offered it again.
+        names = lambda v: [c.name for c in migrate.offered(ms.SITE_CHECKS, v, "1.10.45")]
+        self.assertIn("tone-shown", names("1.10.44"))
+        self.assertNotIn("tone-shown", names("1.10.45"))
+
+
 class SheetSourceTests(unittest.TestCase):
     PC = '---\nname: "Ada"\ntype: pc\n---\n\n## Stat Sheet\n\nTBD\n'
 

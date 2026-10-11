@@ -262,6 +262,19 @@ test('sets connections to tree, web, cards or off and reports it back', () => {
   assert.equal(run(s, []).data.connections, 'web');
 });
 
+test('connections "off" is written quoted and read back as the word, not as a boolean', () => {
+  const yaml = require('js-yaml');
+  const s = scratch('  mode: player\n');
+  assert.deepEqual(run(s, [`connections=${JSON.stringify('off')}`]).data, { written: ['connections'] });
+  const line = config(s).split('\n').find((l) => /^ {2}connections:/.test(l));
+  assert.ok(line, 'the line is written');
+  // A YAML 1.1 reader (the vault scripts) reads a bare off as false: the quotes keep it the word.
+  assert.match(line, /: ["']off["']$/, line);
+  const read = yaml.load(config(s).split('---')[1]).publish.connections;
+  assert.strictEqual(read, 'off', `${line} reads back as ${JSON.stringify(read)}`);
+  assert.equal(run(s, []).data.connections, 'off');
+});
+
 test('refuses a connections value that is not tree, web, cards or off, and writes nothing', () => {
   const s = scratch('  mode: player\n');
   const before = config(s);

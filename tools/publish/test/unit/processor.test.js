@@ -19,6 +19,11 @@ describe('escapeHtml', () => {
     assert.strictEqual(escapeHtml(null), '');
     assert.strictEqual(escapeHtml(undefined), '');
   });
+
+  it('leaves no target of a labelled link, however deep one is nested in another\'s label', () => {
+    assert.strictEqual(escapeHtml('x [[A|[[B|c]]]] y'), 'x c y');
+    assert.strictEqual(escapeHtml('x [[A|[[B|[[C|d]]]]]] y'), 'x d y');
+  });
 });
 
 describe('relativePath', () => {

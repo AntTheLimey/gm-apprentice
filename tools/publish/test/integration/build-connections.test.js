@@ -45,6 +45,18 @@ test('hidden material: no gm-only edge either way, no hidden note, no excluded f
   assert.match(s.read('npcs', 'emma.html'), /<span class="cx-name">the stranger<\/span>/);
 });
 
+test('a target with no page is in the page\'s data island by its words, and its key is not', () => {
+  const html = site().read('npcs', 'emma.html');
+  const island = JSON.parse(html.match(/<script[^>]*class="cx-data"[^>]*>([^]*?)<\/script>/)[1].replace(/\\u003c/gi, '<'));
+  const items = island.t.flatMap((tab) => tab.g.flatMap((group) => group.d));
+  const stranger = items.find((it) => it.t === 'the stranger');
+  assert.ok(stranger, 'the item is in the island');
+  assert.strictEqual(stranger.h, null);
+  assert.ok(!('key' in stranger), 'the island item carries no key');
+  assert.ok(!JSON.stringify(island).includes('Vesper'), 'the target behind the label is not in the island');
+  assert.ok(!/"key"/.test(html), 'no key anywhere in the page');
+});
+
 test('each mode builds; off leaves no section and no script', () => {
   for (const mode of ['web', 'cards']) {
     assert.match(site(`  connections: ${mode}\n`).read('npcs', 'emma.html'), new RegExp(`data-cx-mode="${mode}"`));

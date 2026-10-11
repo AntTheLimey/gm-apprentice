@@ -252,7 +252,7 @@ describe('templates read the escaped link', () => {
       frontmatter: { type: 'location', parent_location: '[[Sector_7G\\|Sector]]' },
       markdown: '## Overview\n\nCargo moves at all hours here.\n' };
     const ctx = { pages: [parent, child], linkMap: {}, publishConfig: { exclude_sections: [], _backlinks: {} } };
-    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' }, () => '',
+    const html = locationTemplate(parent, { html: '<p>x</p>' }, () => '',
       { siteTitle: 'T', attachmentsDir: '_attachments' }, {}, ctx);
     assert.ok(html.includes('Docking Ring'), 'child listed under its parent');
   });
@@ -266,7 +266,7 @@ describe('fix round 2: old semantics kept', () => {
       frontmatter: { type: 'location', parent_location: '[[_Hub]]' },
       markdown: '## Overview\n\nCargo moves at all hours here.\n' };
     const ctx = { pages: [hub, child], linkMap: {}, publishConfig: { exclude_sections: [], _backlinks: {} } };
-    const html = locationTemplate(hub, { html: '<p>x</p>', relationships: '' }, () => '',
+    const html = locationTemplate(hub, { html: '<p>x</p>' }, () => '',
       { siteTitle: 'T', attachmentsDir: '_attachments' }, {}, ctx);
     assert.ok(html.includes('Dock'), 'child listed under _Hub');
   });

@@ -347,7 +347,7 @@ describe('pcTemplate with a D&D sheet', () => {
     systemSheetHtml: out.sheetHtml, systemCombatHtml: out.combatHtml, systemSpellsHtml: out.spellsHtml,
     systemEquipmentHtml: out.equipmentHtml, systemVitalsHtml: out.vitalsHtml,
   });
-  const build = (system, out) => pcTemplate(page, { html: '', relationships: '' }, sections, noop, cfg, {}, undefined, ctx(system, out));
+  const build = (system, out) => pcTemplate(page, { html: '' }, sections, noop, cfg, {}, undefined, ctx(system, out));
 
   it('drops the sections the sheet consumed and keeps the prose ones', () => {
     const html = build('dnd-5e-2024', renderDnDSheet(page.frontmatter, sections));
