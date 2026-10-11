@@ -15,11 +15,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   words in three families (positive, negative, neutral); the nuance
   goes in its description. `tones.py` lists the tones a vault uses that
   are off the list and rewrites the ones a rule can place (cordial to
-  friendly, dread to ominous), every note or none.
+  friendly, dread to ominous), every note or none. `--except WORD`
+  leaves a word as written, and `--set OLD=NEW` gives a word the listed
+  one the GM chose.
 - Updating a vault offers that tidy as a yes or no. campaign-qa's new
-  Tone Words check puts the remaining words to the GM a few at a time.
-- `vault_check.py relationships` warns about a tone off the list when a
-  note is written.
+  Tone Words check offers it too, all or all but the words the GM
+  names, and puts the remaining words to the GM a few at a time.
+- `vault_check.py relationships` warns about a tone off the list and
+  names the listed word to use. session-wrapup and vault-ingest correct
+  it on the relationships they wrote; an older one waits for
+  campaign-qa.
 
 ### Changed
 

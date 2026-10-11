@@ -182,7 +182,9 @@ python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" \
 
 Walk each ERROR row with the GM fix-or-dismiss: rename to the
 suggested predicate, re-store an inverse on the other endpoint, or
-drop the edge if it is not entity-to-entity.
+drop the edge if it is not entity-to-entity. The tone WARNING rows
+belong to the Tone Words check (`tone-words.md`): change nothing for
+them here, and in a Full Audit do not report them twice.
 
 The check enforces the **full** vocabulary, not a genre subset an
 older vault may hold — a predicate that is globally sanctioned but

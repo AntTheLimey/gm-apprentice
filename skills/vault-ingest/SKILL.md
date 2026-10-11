@@ -162,7 +162,10 @@ approval it becomes `reviewed` and AUTHORITATIVE.
 After all buckets:
 - Deduplicate entities — `vault_check.py names`
 - Cross-bucket relationship chains — `graph_check.py all`,
-  `vault_check.py relationships`
+  `vault_check.py relationships` (a tone WARNING on a relationship
+  this ingest wrote: use the word the row names, or where it names
+  none the listed word that fits, `shared/entity-schema.md` Tones;
+  leave any other to campaign-qa and never run `tones.py` here)
 - Timeline consistency across buckets — by eye (`vault_check.py
   timeline` does not check cross-bucket ordering)
 - Entity status progression — `vault_check.py stale-drafts`

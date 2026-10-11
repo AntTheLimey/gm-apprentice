@@ -59,6 +59,17 @@ Reach for campaign-qa when you need to:
 - "Which NPCs have no relationships defined?"
 - "Are there any stale stubs I should fill in?"
 
+### Tone Words
+
+- "Tidy the tones in my campaign"
+- "Which relationship tones are off the list?"
+
+A relationship's tone is one of 27 standard words. Claude lists the
+ones your notes use that are not. The near misses (cordial, dread) it
+tidies on one yes, or all but the ones you name. For the rest it reads
+the relationship and offers two or three standard words to pick from.
+You never edit a note yourself.
+
 ### Site Faults
 
 For a campaign with a published site.
