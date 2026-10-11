@@ -21,7 +21,8 @@
     return mode;
   }
 
-  // Rows and branch points for the tree. A row's y is its centre. Wide: one trunk from the
+  // An estimate of the tree's rows and branch points for a width, for when nothing can be
+  // measured. The page draws from measured rows (treeLines). A row's y is its centre. Wide: one trunk from the
   // subject to each group, then a curve to each name. Narrow: a heading row per group and
   // an indented elbow to each name.
   function treeLayout(groups, width) {
@@ -112,48 +113,113 @@
 
   function clip(s, n) { return s.length > n ? s.slice(0, n - 1) + '…' : s; }
 
+  // Only a relative path the build wrote is a link: no scheme, no leading slash or backslash,
+  // no space or control character. Anything else is no link, and the item is drawn as text.
   function safeHref(h) {
     if (typeof h !== 'string' || !h) return null;
-    return /^\s*(javascript|data|vbscript):/i.test(h) ? null : h;
+    if (/[\u0000- \u007f-\u009f\\]/.test(h)) return null;
+    if (h.charAt(0) === '/' || /^[a-z][a-z0-9+.-]*:/i.test(h)) return null;
+    return h;
   }
 
-  // The island as the script uses it, or null when it is not the shape the build writes.
+  var isText = function (v) { return typeof v === 'string'; };
+
+  // One item, or null when it has no name. A field that is the wrong shape is dropped, so
+  // nothing prints "undefined".
+  function validItem(it) {
+    if (!it || typeof it !== 'object' || !isText(it.t) || !it.t) return null;
+    var s = it.s;
+    var sessions = Array.isArray(s) && typeof s[0] === 'number' && s[0] > 0 && isText(s[1]) && isText(s[2]) ? [s[0], s[1], s[2]] : null;
+    return {
+      t: it.t, h: safeHref(it.h), k: isText(it.k) ? it.k : '',
+      o: has(TONE_CLASS, it.o) ? it.o : null,
+      l: Array.isArray(it.l) ? it.l.filter(isText) : [],
+      f: typeof it.f === 'number' && it.f >= 0 ? Math.floor(it.f) : 0,
+      s: sessions, i: safeHref(it.i)
+    };
+  }
+
+  // The island as the script uses it, or null when nothing usable is left. A malformed item,
+  // group or tab is skipped; the rest is kept.
   function normalise(data) {
-    if (!data || typeof data !== 'object' || !Array.isArray(data.t)) return null;
+    if (!data || typeof data !== 'object' || Array.isArray(data) || !Array.isArray(data.t)) return null;
     var tabs = [];
     data.t.forEach(function (tab) {
-      if (!tab || typeof tab !== 'object' || !Array.isArray(tab.g)) return;
-      var groups = tab.g.filter(function (g) { return g && Array.isArray(g.d); }).map(function (g) {
-        return { n: String(g.n), d: g.d.filter(function (it) { return it && typeof it === 'object'; }).map(function (it) {
-          return {
-            t: String(it.t), h: safeHref(it.h), k: it.k ? String(it.k) : '',
-            o: has(TONE_CLASS, it.o) ? it.o : null,
-            l: Array.isArray(it.l) ? it.l.map(String) : [],
-            f: typeof it.f === 'number' ? it.f : 0,
-            s: Array.isArray(it.s) ? it.s : null, i: safeHref(it.i)
-          };
-        }) };
-      }).filter(function (g) { return g.d.length; });
-      if (groups.length) tabs.push({ id: String(tab.id), n: String(tab.n), g: groups });
+      if (!tab || typeof tab !== 'object' || !isText(tab.id) || !isText(tab.n) || !Array.isArray(tab.g)) return;
+      var groups = [];
+      tab.g.forEach(function (g) {
+        if (!g || typeof g !== 'object' || !isText(g.n) || !Array.isArray(g.d)) return;
+        var d = g.d.map(validItem).filter(Boolean);
+        if (d.length) groups.push({ n: g.n, d: d });
+      });
+      if (groups.length) tabs.push({ id: tab.id, n: tab.n, g: groups });
     });
-    var mentions = (Array.isArray(data.m) ? data.m : []).filter(function (g) { return g && Array.isArray(g.d); }).map(function (g) {
-      return { n: String(g.n), d: g.d.filter(function (p) { return Array.isArray(p) && safeHref(p[1]); }).map(function (p) { return [String(p[0]), p[1]]; }) };
-    }).filter(function (g) { return g.d.length; });
-    return { s: String(data.s || ''), tabs: tabs, mentions: mentions };
+    var mentions = [];
+    (Array.isArray(data.m) ? data.m : []).forEach(function (g) {
+      if (!g || typeof g !== 'object' || !isText(g.n) || !Array.isArray(g.d)) return;
+      var d = g.d.filter(function (q) { return Array.isArray(q) && isText(q[0]) && q[0] && safeHref(q[1]); }).map(function (q) { return [q[0], q[1]]; });
+      if (d.length) mentions.push({ n: g.n, d: d });
+    });
+    if (!tabs.length && !mentions.length) return null;
+    return { s: isText(data.s) ? data.s : '', tabs: tabs, mentions: mentions };
+  }
+
+  // The lines of a tree from where the rows and group headings were measured (centres, in
+  // the container's own coordinates), so a row of any height has a line that meets it.
+  //   rows      [{ x, y, o }]            the mark of each name, in order: the line ends at x, y
+  //   branches  [{ x, y, first, count }] each group's dot, and which rows are its own
+  //   g         { narrow, rootX, rootY } the subject's dot
+  // Wide: a curve from the subject to each group, then to each name. Narrow: an indented
+  // trunk with an elbow to each name.
+  function treeLines(rows, branches, g) {
+    var paths = [];
+    var dots = [{ x: g.rootX, y: g.rootY, r: g.narrow ? 7 : 9, kind: 'root' }];
+    var f = function (v) { return Math.round(v * 10) / 10; };
+    if (g.narrow && branches.length) {
+      paths.push({ d: 'M' + f(g.rootX) + ' ' + f(g.rootY) + 'V' + f(branches[branches.length - 1].y), tone: null, kind: 'trunk' });
+    }
+    branches.forEach(function (b) {
+      if (g.narrow) {
+        paths.push({ d: 'M' + f(g.rootX) + ' ' + f(b.y) + 'H' + f(b.x), tone: null, kind: 'trunk' });
+      } else {
+        var mx = (g.rootX + b.x) / 2;
+        paths.push({ d: 'M' + f(g.rootX) + ' ' + f(g.rootY) + 'C' + f(mx) + ' ' + f(g.rootY) + ' ' + f(mx) + ' ' + f(b.y) + ' ' + f(b.x) + ' ' + f(b.y), tone: null, kind: 'trunk' });
+      }
+      dots.push({ x: b.x, y: b.y, r: g.narrow ? 4 : 5, kind: 'branch' });
+      for (var k = 0; k < b.count; k++) {
+        var row = rows[b.first + k];
+        var d;
+        if (g.narrow) {
+          d = 'M' + f(b.x) + ' ' + f(k ? rows[b.first + k - 1].y : b.y) + 'V' + f(row.y) + 'H' + f(row.x);
+        } else {
+          var m = (b.x + row.x) / 2;
+          d = 'M' + f(b.x) + ' ' + f(b.y) + 'C' + f(m) + ' ' + f(b.y) + ' ' + f(m) + ' ' + f(row.y) + ' ' + f(row.x) + ' ' + f(row.y);
+        }
+        paths.push({ d: d, tone: row.o || null, kind: 'leaf' });
+      }
+    });
+    return { paths: paths, dots: dots };
   }
 
   var api = {
     treatmentFor: treatmentFor, treeLayout: treeLayout, webLayout: webLayout, nextTab: nextTab,
-    tapAction: tapAction, toneClass: toneClass, sessionsText: sessionsText
+    tapAction: tapAction, toneClass: toneClass, sessionsText: sessionsText, treeLines: treeLines, safeHref: safeHref
   };
 
   function init(doc, win) {
     var sections = doc.querySelectorAll ? doc.querySelectorAll('section.cx') : [];
     for (var n = 0; n < sections.length; n++) {
-      try { enhance(doc, win, sections[n], n); } catch (e) { /* leave the lists as built */ }
+      try { enhance(doc, win, sections[n], n); } catch (e) { undo(sections[n]); }
     }
   }
   api.init = init;
+
+  // A section that failed part-way goes back to the lists as built.
+  function undo(section) {
+    var app = section.querySelector('div.cx-app');
+    if (app && app.parentNode) app.parentNode.removeChild(app);
+    section.classList.remove('cx-live');
+  }
 
   function enhance(doc, win, section, n) {
     var island = section.querySelector('script.cx-data');
@@ -226,10 +292,11 @@
       if (entry.flat) entry.flat.forEach(function (f) { if (f.item.o) anyTone = true; });
     });
 
-    function panelWidth() {
-      var r = app.getBoundingClientRect ? app.getBoundingClientRect() : null;
-      var w = r && r.width ? Math.floor(r.width) : 0;
-      return w || Math.floor(win.innerWidth || 0) || 340;
+    // The measured width of an element: 0 while it is hidden or not yet laid out. Nothing
+    // that needs a width is drawn from a 0.
+    function widthOf(el) {
+      var r = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+      return r && r.width > 0 ? r.width : 0;
     }
 
     function show(k, focus) {
@@ -242,7 +309,11 @@
         else entry.panel.setAttribute('hidden', '');
       });
       var entry = entries[k];
-      if (!entry.drawn) draw(entry);
+      if (entry.mentions && !entry.drawn) {
+        entry.drawn = true;
+        entry.panel.appendChild(mentionsView(entry));
+      }
+      refresh();
       if (focus && entry.button.focus) entry.button.focus();
     }
 
@@ -334,84 +405,96 @@
     }
 
     // ---- the tree ----
+    // Rows are plain HTML in the page's flow, so a long name wraps and its row grows. The
+    // lines are drawn afterwards (layoutTree) from where the rows and headings ended up.
 
-    function treeView(entry, width) {
-      var lay = treeLayout(entry.tab.g, width);
-      var wrap = make('div', 'cx-tree-wrap ' + (lay.narrow ? 'cx-narrow' : 'cx-wide'));
-      wrap.style.position = 'relative';
-      wrap.style.height = lay.height + 'px';
-      var lines = svg('svg', 'cx-lines', { viewBox: '0 0 ' + width + ' ' + lay.height, width: width, height: lay.height, 'aria-hidden': 'true', focusable: 'false' });
-      lines.style.position = 'absolute';
-      lines.style.left = '0';
-      lines.style.top = '0';
-      lines.style.pointerEvents = 'none';
+    function treeView(entry) {
+      var wrap = make('div', 'cx-tree-wrap cx-wide');
+      var lines = svg('svg', 'cx-lines', { 'aria-hidden': 'true', focusable: 'false' });
+      var subject = make('p', 'cx-subject', data.s);
       var list = make('ul', 'cx-tree');
-      var rx = lay.root.x;
-      var ry = lay.root.y;
-      var bx = lay.trunkX;
-      var lx = lay.leafX;
-      var rowAt = lay.rows;
-
-      function place(li, left, top, w, h) {
-        li.style.position = 'absolute';
-        li.style.left = left + 'px';
-        li.style.top = top + 'px';
-        li.style.width = w + 'px';
-        li.style.height = h + 'px';
-      }
-      function edge(d, tone) { lines.appendChild(svg('path', withTone('cx-edge', tone), { d: d })); }
-      function trunk(d) { lines.appendChild(svg('path', 'cx-edge cx-trunk', { d: d })); }
-
-      var subject = make('li', 'cx-subject', data.s);
-      if (lay.narrow) place(subject, rx + 14, 4, width - rx - 14, 24);
-      else place(subject, 0, ry - 42, Math.max(0, bx - 12), 24);
-      list.appendChild(subject);
-
-      if (lay.narrow && lay.branches.length) {
-        trunk('M' + rx + ' 23V' + lay.branches[lay.branches.length - 1].y);
-      }
-      lay.branches.forEach(function (b, g) {
-        var group = entry.tab.g[g];
-        var head = make('li', 'cx-group', b.label);
-        if (lay.narrow) {
-          place(head, bx + 10, b.y - 10, width - bx - 10, 20);
-          trunk('M' + rx + ' ' + b.y + 'H' + bx);
-        } else {
-          place(head, 0, b.y - 26, Math.max(0, bx - 12), 20);
-          trunk('M' + rx + ' ' + ry + 'C' + (bx * 0.55) + ' ' + ry + ' ' + (bx * 0.55) + ' ' + b.y + ' ' + bx + ' ' + b.y);
-        }
-        lines.appendChild(svg('circle', 'cx-dot cx-branch-dot', { cx: bx, cy: b.y, r: lay.narrow ? 4 : 5 }));
-        list.appendChild(head);
-        group.d.forEach(function (item, k) {
-          var flatIndex = b.first + k;
-          var y = rowAt[flatIndex].y;
+      var heads = [];
+      var marks = [];
+      var flatIndex = 0;
+      entry.tab.g.forEach(function (group, g) {
+        var branch = make('li', 'cx-branch');
+        var head = make('p', 'cx-group', group.n);
+        var headId = 'cx-' + n + '-' + entry.id + '-g' + g;
+        head.setAttribute('id', headId);
+        var leaves = make('ul', 'cx-leaves');
+        leaves.setAttribute('aria-labelledby', headId);
+        group.d.forEach(function (item) {
           var li = make('li', 'cx-item');
-          place(li, lx - 5, y - ROW / 2, width - lx + 5, ROW);
           var row = make(item.h ? 'a' : 'span', 'cx-row' + (item.h ? '' : ' cx-text'));
           if (item.h) row.setAttribute('href', item.h);
           else row.setAttribute('tabindex', '0');
           row.setAttribute('data-no-preview', '');
           row.setAttribute('data-cx-i', flatIndex);
-          row.appendChild(make('span', withTone('cx-mark', item.o)));
+          var mark = make('span', withTone('cx-mark', item.o));
+          row.appendChild(mark);
           row.appendChild(make('span', 'cx-name', item.t));
-          if (!lay.narrow) {
-            var meta = [item.k, countText(item.s)].filter(Boolean).join(' · ');
-            if (meta) row.appendChild(make('span', 'cx-meta', meta));
-          }
+          var meta = [item.k, countText(item.s)].filter(Boolean).join(' · ');
+          if (meta) row.appendChild(make('span', 'cx-meta', meta));
           li.appendChild(row);
-          list.appendChild(li);
-          if (lay.narrow) {
-            edge('M' + bx + ' ' + (k ? rowAt[flatIndex - 1].y : b.y + 4) + 'V' + y + 'H' + (lx - 8), item.o);
-          } else {
-            var mx = (bx + lx) / 2;
-            edge('M' + bx + ' ' + b.y + 'C' + mx + ' ' + b.y + ' ' + mx + ' ' + y + ' ' + lx + ' ' + y, item.o);
-          }
+          leaves.appendChild(li);
+          marks.push({ el: mark, o: item.o });
+          flatIndex++;
         });
+        branch.appendChild(head);
+        branch.appendChild(leaves);
+        list.appendChild(branch);
+        heads.push({ el: head, count: group.d.length });
       });
-      lines.appendChild(svg('circle', 'cx-dot cx-root-dot', { cx: rx, cy: lay.narrow ? 16 : ry, r: lay.narrow ? 7 : 9 }));
       wrap.appendChild(lines);
+      wrap.appendChild(subject);
       wrap.appendChild(list);
+      entry.tree = { wrap: wrap, lines: lines, subject: subject, heads: heads, marks: marks, narrow: null, sig: '' };
       return wrap;
+    }
+
+    // Wide or narrow from the container's own width, then the lines from the measured
+    // centres. Does nothing while the container has no width (a hidden tab).
+    function layoutTree(entry) {
+      var t = entry.tree;
+      if (!t) return;
+      var box = t.wrap.getBoundingClientRect();
+      if (!(box.width > 0)) return;
+      var narrow = box.width < NARROW;
+      if (narrow !== t.narrow) {
+        t.narrow = narrow;
+        t.wrap.setAttribute('class', 'cx-tree-wrap ' + (narrow ? 'cx-narrow' : 'cx-wide'));
+        box = t.wrap.getBoundingClientRect();
+        if (!(box.width > 0)) return;
+      }
+      var sig = [Math.round(box.width), Math.round(box.height), narrow].join('/');
+      if (sig === t.sig) return;
+      t.sig = sig;
+      var at = function (el) {
+        var r = el.getBoundingClientRect();
+        return { left: r.left - box.left, right: r.right - box.left, x: (r.left + r.right) / 2 - box.left, y: (r.top + r.bottom) / 2 - box.top };
+      };
+      var subject = at(t.subject);
+      var rows = t.marks.map(function (m) { var c = at(m.el); return { x: c.left - 4, y: c.y, o: m.o }; });
+      var first = 0;
+      var branches = t.heads.map(function (h) {
+        var c = at(h.el);
+        var b = { x: narrow ? c.left - 10 : c.right + 10, y: c.y, first: first, count: h.count };
+        first += h.count;
+        return b;
+      });
+      var geo = treeLines(rows, branches, { narrow: narrow, rootX: Math.max(7, subject.left - 14), rootY: subject.y });
+      var w = Math.round(box.width);
+      var h = Math.round(box.height);
+      clear(t.lines);
+      t.lines.setAttribute('width', w);
+      t.lines.setAttribute('height', h);
+      t.lines.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+      geo.paths.forEach(function (p) {
+        t.lines.appendChild(svg('path', 'cx-edge' + (p.kind === 'trunk' ? ' cx-trunk' : p.tone ? ' ' + toneClass(p.tone) : ''), { d: p.d }));
+      });
+      geo.dots.forEach(function (d) {
+        t.lines.appendChild(svg('circle', 'cx-dot cx-' + d.kind + '-dot', { cx: d.x, cy: d.y, r: d.r }));
+      });
     }
 
     // ---- the web ----
@@ -532,16 +615,31 @@
       return wrap;
     }
 
-    function draw(entry) {
+    // Draw the open tab for the width it has now, and lay out a tree's lines. Called when a
+    // tab is shown and whenever a container's size changes. The treatment comes from the
+    // measured width; a tab that is hidden, or not yet laid out, is drawn when it has one.
+    function refresh() {
+      var entry = entries[current];
+      if (!entry || entry.mentions) return;
+      var width = widthOf(app);
+      if (width <= 0 && mode !== 'cards') return;
+      var how = treatmentFor(mode, entry.count, width);
+      if (!entry.drawn || entry.how !== how) build(entry, how);
+      if (entry.how === 'tree') layoutTree(entry);
+    }
+
+    function build(entry, how) {
+      if (entry.tree && observer) observer.unobserve(entry.tree.wrap);
+      entry.tree = null;
       clear(entry.panel);
       entry.drawn = true;
-      entry.drawnWidth = panelWidth();
-      if (entry.mentions) { entry.panel.appendChild(mentionsView(entry)); return; }
-      var how = treatmentFor(mode, entry.count, entry.drawnWidth);
       entry.how = how;
       if (how === 'cards') entry.panel.appendChild(cardsView(entry));
       else if (how === 'web') interactive(entry, webView(entry));
-      else interactive(entry, treeView(entry, entry.drawnWidth));
+      else {
+        interactive(entry, treeView(entry));
+        if (observer) observer.observe(entry.tree.wrap);
+      }
     }
 
     if (anyTone) {
@@ -555,23 +653,24 @@
       app.appendChild(key);
     }
 
+    // Live before anything is measured, so the plain lists are already out of the way.
     section.appendChild(app);
-    show(0, false);
     section.classList.add('cx-live');
 
-    // A new width draws the open tab again (the tree is laid out in pixels); the others wait.
-    var resizeTimer = 0;
-    win.addEventListener('resize', function () {
-      clearTimeout(resizeTimer);
-      resizeTimer = setTimeout(function () {
-        var w = panelWidth();
-        entries.forEach(function (entry, i) {
-          if (!entry.drawn || entry.mentions || entry.drawnWidth === w) return;
-          if (i === current) draw(entry);
-          else entry.drawn = false;
-        });
-      }, 120);
-    });
+    // A size change (a tab that was hidden opening, a window resize, a font arriving) draws
+    // or lays out again. Without ResizeObserver the window's resize stands in.
+    var observer = null;
+    if (typeof win.ResizeObserver === 'function') {
+      observer = new win.ResizeObserver(function () { refresh(); });
+      observer.observe(app);
+    } else {
+      var timer = 0;
+      win.addEventListener('resize', function () {
+        clearTimeout(timer);
+        timer = setTimeout(refresh, 120);
+      });
+    }
+    show(0, false);
   }
 
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

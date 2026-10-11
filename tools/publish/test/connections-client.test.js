@@ -81,7 +81,8 @@ function matchOne(node, sel) {
 }
 
 class Node {
-  constructor(tag) {
+  constructor(tag, size) {
+    this.size = size || { width: 0 }; this.order = Node.count = (Node.count || 0) + 1;
     this.tag = tag; this.classes = []; this.attrs = {}; this.children = []; this.parent = null;
     this.listeners = {}; this.style = {}; this._text = ''; this.focused = false; this.innerHTMLWrites = [];
     const self = this;
@@ -95,13 +96,23 @@ class Node {
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(''); }
   set textContent(v) { this._text = String(v); this.children = []; }
   get lastChild() { return this.children[this.children.length - 1] || null; }
+  get parentNode() { return this.parent; }
   appendChild(c) { c.parent = this; this.children.push(c); return c; }
   removeChild(c) { this.children = this.children.filter((x) => x !== c); c.parent = null; }
   setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'class') this.classes = String(v).split(/\s+/).filter(Boolean); }
   getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; }
   removeAttribute(k) { delete this.attrs[k]; }
   addEventListener(t, fn) { (this.listeners[t] = this.listeners[t] || []).push(fn); }
-  getBoundingClientRect() { return { width: 0 }; }
+  // The page's measurements are the test's to set: the app and the tree container are as wide
+  // as size.width (0 = hidden); anything else is a 28px-high box stacked by creation order.
+  getBoundingClientRect() {
+    if (this.classes.includes('cx-app') || this.classes.includes('cx-tree-wrap')) {
+      const w = this.size.width;
+      return { left: 0, right: w, top: 0, bottom: w ? 400 : 0, width: w, height: w ? 400 : 0 };
+    }
+    const top = this.order * 30;
+    return { left: 0, right: 100, top, bottom: top + 28, width: 100, height: 28 };
+  }
   focus() { this.focused = true; }
   closest(sel) { for (let n = this; n; n = n.parent) if (sel.split(',').some((s) => matchOne(n, s))) return n; return null; }
   all(pred) { return [this, ...this.children.flatMap((c) => c.all(pred))].filter(pred); }
@@ -115,16 +126,19 @@ const tab = (id, n, g) => ({ id, n, g });
 const grp = (n, ...d) => ({ n, d });
 
 // A page with sections: each is { mode, json } where json is a string, an object or null (no island).
-function setup(sections, { width = 1000 } = {}) {
-  const body = new Node('body');
+// `width` is what the section measures (0 = hidden); `resize(w)` changes it and tells every
+// ResizeObserver, as a browser would. `noObserver` leaves the window without one.
+function setup(sections, { width = 1000, noObserver = false } = {}) {
+  const size = { width };
+  const body = new Node('body', size);
   const secs = sections.map((s) => {
-    const section = body.appendChild(new Node('section'));
+    const section = body.appendChild(new Node('section', size));
     section.setAttribute('class', 'cx');
     section.setAttribute('data-cx-mode', s.mode);
     section.setAttribute('aria-labelledby', 'cx-heading');
-    section.appendChild(new Node('div')).setAttribute('class', 'cx-plain');
+    section.appendChild(new Node('div', size)).setAttribute('class', 'cx-plain');
     if (s.json !== null) {
-      const script = section.appendChild(new Node('script'));
+      const script = section.appendChild(new Node('script', size));
       script.setAttribute('class', 'cx-data');
       script.textContent = typeof s.json === 'string' ? s.json : JSON.stringify(s.json);
     }
@@ -133,17 +147,22 @@ function setup(sections, { width = 1000 } = {}) {
   const doc = {
     body,
     querySelectorAll: (sel) => body.querySelectorAll(sel),
-    createElement: (tag) => new Node(tag),
-    createElementNS: (ns, tag) => new Node(tag),
+    createElement: (tag) => new Node(tag, size),
+    createElementNS: (ns, tag) => new Node(tag, size),
   };
-  const win = { innerWidth: width, listeners: {}, addEventListener: (t, fn) => { (win.listeners[t] = win.listeners[t] || []).push(fn); } };
+  const observers = [];
+  const win = { listeners: {}, addEventListener: (t, fn) => { (win.listeners[t] = win.listeners[t] || []).push(fn); } };
+  if (!noObserver) {
+    win.ResizeObserver = class { constructor(fn) { this.fn = fn; this.watched = new Set(); observers.push(this); } observe(n) { this.watched.add(n); } unobserve(n) { this.watched.delete(n); } disconnect() {} };
+  }
   api.init(doc, win);
   const fire = (node, type, extra = {}) => {
     const ev = { type, target: node, prevented: false, preventDefault() { this.prevented = true; }, ...extra };
     for (let n = node; n; n = n.parent) (n.listeners[type] || []).forEach((fn) => fn(ev));
     return ev;
   };
-  return { body, secs, doc, win, fire };
+  const resize = (w) => { size.width = w; observers.forEach((o) => o.fn([])); };
+  return { body, secs, doc, win, fire, resize, observers, size };
 }
 
 const tabsOf = (section) => section.querySelectorAll('button');
@@ -351,18 +370,160 @@ test('two sections get ids that do not collide; a javascript: href is never a li
   assert.strictEqual(p.secs[1].querySelectorAll('a').length, 0);
 });
 
-test('a redraw at a new width keeps the chosen item', () => {
+test('a width change lays the tree out again and keeps the chosen item', () => {
   const p = setup([{ mode: 'tree', json: island([PEOPLE]) }], { width: 1000 });
   const s = p.secs[0];
+  assert.ok(s.querySelector('div.cx-wide'));
   p.fire(s.querySelectorAll('[data-cx-i]')[1], 'focusin');
+  p.resize(390);
+  assert.ok(s.querySelector('div.cx-narrow'));
+  assert.ok(s.querySelectorAll('[data-cx-i]')[1].classes.includes('cx-sel'));
+  assert.ok(s.querySelector('div.cx-strip').textContent.includes('Bo'));
+});
+
+test('a section that measures 0 at load draws nothing, then draws when it has a width', () => {
+  for (const mode of ['tree', 'web']) {
+    const p = setup([{ mode, json: island([PEOPLE]) }], { width: 0 });
+    const s = p.secs[0];
+    assert.ok(s.classes.includes('cx-live'));
+    assert.strictEqual(s.querySelector('ul.cx-tree'), null, mode);
+    assert.strictEqual(s.querySelector('svg.cx-web'), null, mode);
+    assert.strictEqual(s.querySelector('div.cx-tree-wrap'), null, mode);
+    p.resize(600);
+    assert.ok(mode === 'tree' ? s.querySelector('ul.cx-tree') : s.querySelector('svg.cx-web'), mode);
+  }
+});
+
+test('a tree draws its lines only once the container has a width', () => {
+  const p = setup([{ mode: 'tree', json: island([PEOPLE]) }], { width: 0 });
+  assert.strictEqual(p.secs[0].querySelectorAll('path').length, 0);
+  p.resize(900);
+  const paths = p.secs[0].querySelectorAll('path');
+  assert.ok(paths.length >= 3 + 2, 'a path per group and per name');
+  assert.ok(paths.every((x) => /^M[-\d.]/.test(x.getAttribute('d')) && !x.getAttribute('d').includes('NaN')));
+  assert.strictEqual(p.secs[0].querySelector('svg.cx-lines').getAttribute('aria-hidden'), 'true');
+});
+
+test('a 17-item web switches to the tree when the width falls from 900 to 390', () => {
+  const many = tab('people', 'People', [grp('All', ...Array.from({ length: 17 }, (_, i) => item(`N${i}`)))]);
+  const p = setup([{ mode: 'web', json: island([many]) }], { width: 900 });
+  const s = p.secs[0];
+  assert.ok(s.querySelector('svg.cx-web'));
+  p.resize(390);
+  assert.ok(s.querySelector('ul.cx-tree'));
+  assert.strictEqual(s.querySelector('svg.cx-web'), null);
+  p.resize(900);
+  assert.ok(s.querySelector('svg.cx-web'));
+});
+
+test('without a ResizeObserver the window resize stands in, and a 0 width still draws nothing', () => {
+  const p = setup([{ mode: 'tree', json: island([PEOPLE]) }], { width: 0, noObserver: true });
+  assert.strictEqual(p.secs[0].querySelector('ul.cx-tree'), null);
   const real = global.setTimeout;
   global.setTimeout = (fn) => { fn(); return 1; };
   try {
-    p.win.innerWidth = 390;
-    (p.win.listeners.resize || []).forEach((fn) => fn());
+    p.size.width = 700;
+    p.win.listeners.resize.forEach((fn) => fn());
   } finally { global.setTimeout = real; }
-  assert.ok(s.querySelector('div.cx-narrow'));
-  const rows = s.querySelectorAll('[data-cx-i]');
-  assert.ok(rows[1].classes.includes('cx-sel'));
-  assert.ok(s.querySelector('div.cx-strip').textContent.includes('Bo'));
+  assert.ok(p.secs[0].querySelector('ul.cx-tree'));
+});
+
+test('the tab shown later is drawn for the width it has then', () => {
+  const many = tab('places', 'Places', [grp('All', ...Array.from({ length: 17 }, (_, i) => item(`P${i}`)))]);
+  const p = setup([{ mode: 'web', json: island([PEOPLE, many]) }], { width: 900 });
+  p.resize(390);
+  p.fire(tabsOf(p.secs[0])[1], 'click');
+  assert.ok(panelsOf(p.secs[0])[1].querySelector('ul.cx-tree'));
+});
+
+test('the tree is a list of groups, each a labelled nested list, in reading order', () => {
+  const p = setup([{ mode: 'tree', json: island([PEOPLE]) }]);
+  const s = p.secs[0];
+  const branches = s.querySelectorAll('li.cx-branch');
+  assert.strictEqual(branches.length, 2);
+  for (const b of branches) {
+    const head = b.querySelector('p.cx-group');
+    const leaves = b.querySelector('ul.cx-leaves');
+    assert.strictEqual(leaves.getAttribute('aria-labelledby'), head.getAttribute('id'));
+    assert.strictEqual(b.children[0], head);
+  }
+  assert.deepStrictEqual(s.querySelectorAll('[data-cx-i]').map((r) => r.textContent.slice(0, 2)), ['An', 'Bo', 'Cy']);
+});
+
+test('rows are in the flow: no inline position, top or height on anything in the tree', () => {
+  const p = setup([{ mode: 'tree', json: island([PEOPLE]) }]);
+  for (const n of p.secs[0].querySelector('div.cx-tree-wrap').all(() => true)) {
+    for (const k of ['position', 'top', 'height', 'left', 'width']) assert.strictEqual(n.style[k], undefined, `${n.tag}.${k}`);
+  }
+});
+
+test('lines end at each name\u2019s own centre, whatever the row heights', () => {
+  const rows = [{ x: 100, y: 20, o: 'w' }, { x: 100, y: 90, o: 'h' }, { x: 100, y: 400, o: null }];
+  const branches = [{ x: 60, y: 55, first: 0, count: 2 }, { x: 60, y: 400, first: 2, count: 1 }];
+  for (const narrow of [false, true]) {
+    const { paths, dots } = api.treeLines(rows, branches, { narrow, rootX: 10, rootY: 5 });
+    const leaves = paths.filter((x) => x.kind === 'leaf');
+    assert.strictEqual(leaves.length, 3);
+    leaves.forEach((leaf, i) => {
+      const end = narrow ? /V([-\d.]+)H([-\d.]+)$/.exec(leaf.d) : /([-\d.]+) ([-\d.]+)$/.exec(leaf.d);
+      const got = narrow ? [Number(end[2]), Number(end[1])] : [Number(end[1]), Number(end[2])];
+      assert.deepStrictEqual(got, [100, rows[i].y], `${narrow ? 'narrow' : 'wide'} ${i}`);
+    });
+    assert.deepStrictEqual(leaves.map((l) => l.tone), ['w', 'h', null]);
+    assert.strictEqual(dots.filter((d) => d.kind === 'branch').length, 2);
+    assert.ok(dots.some((d) => d.kind === 'root'));
+  }
+});
+
+test('only a plain relative path is a link', () => {
+  for (const bad of ['javascript:alert(1)', 'java\tscript:x', '//evil.example/x', '/abs', 'data:text/html,x', 'https://x', 'a\\b', ' x.html', '', null, 5]) {
+    assert.strictEqual(api.safeHref(bad), null, String(bad));
+  }
+  assert.strictEqual(api.safeHref('../npcs/a%20b.html'), '../npcs/a%20b.html');
+  assert.strictEqual(api.safeHref('images/people/h.png'), 'images/people/h.png');
+});
+
+test('a bad link or image is no link or image: the item is text', () => {
+  const t = tab('people', 'People', [grp('Family', item('Ann', { h: '//evil.example/x', i: 'java\tscript:x' }))]);
+  for (const mode of ['tree', 'web', 'cards']) {
+    const p = setup([{ mode, json: island([t]) }]);
+    assert.strictEqual(p.secs[0].querySelectorAll('a').length, 0, mode);
+    assert.strictEqual(p.secs[0].querySelectorAll('img').length, 0, mode);
+  }
+});
+
+test('a malformed item, group or tab is skipped and nothing prints undefined', () => {
+  const good = item('Good');
+  const t = tab('people', 'People', [
+    grp('Family', good, { h: 'x.html' }, { t: 5 }, null, item('Odd', { l: 'not an array', s: [1, 'only'], k: 7, f: 'x' })),
+    { n: 'Broken', d: 'nope' }, { d: [item('NoName')] }, grp('Empty'),
+  ]);
+  const bad = [{ id: 'a', n: 'A', g: 'nope' }, { id: 'b', g: [] }, null, 'x', { id: 'c', n: 'C', g: [grp('Z', { t: '' })] }];
+  for (const mode of ['tree', 'web', 'cards']) {
+    const p = setup([{ mode, json: { t: [...bad, t], m: [{ n: 'M', d: 'x' }, { n: 'M2', d: [['ok', 'ok.html'], ['bad', '//x'], [5, 'y.html'], 'z'] }, null] } }]);
+    const s = p.secs[0];
+    assert.ok(s.classes.includes('cx-live'), mode);
+    const shown = () => s.querySelector('div.cx-app').textContent;
+    assert.ok(!/undefined|null|NaN/.test(shown()), mode);
+    assert.deepStrictEqual(tabsOf(s).map((x) => x.getAttribute('aria-label')), ['People 2', 'Mentions 1'], mode);
+    const row = s.querySelector('[data-cx-i]');
+    if (row) p.fire(row, 'focusin');
+    assert.ok(!/undefined|null|NaN/.test(shown()), mode);
+  }
+});
+
+test('a missing or malformed island shape leaves the section as built', () => {
+  for (const json of [{ t: [] }, { t: [{ id: 'a', n: 'A', g: 'x' }] }, { t: [tab('a', 'A', [grp('G', { t: 3 })])], m: [] }, { t: 'x' }]) {
+    const p = setup([{ mode: 'tree', json }]);
+    assert.ok(!p.secs[0].classes.includes('cx-live'), JSON.stringify(json));
+    assert.strictEqual(p.secs[0].querySelector('div.cx-app'), null);
+  }
+});
+
+test('the section is live before anything is measured', () => {
+  const orig = Node.prototype.getBoundingClientRect;
+  const seen = [];
+  Node.prototype.getBoundingClientRect = function () { const s = this.closest('section'); seen.push(!!s && s.classes.includes('cx-live')); return orig.call(this); };
+  try { setup([{ mode: 'tree', json: island([PEOPLE]) }]); } finally { Node.prototype.getBoundingClientRect = orig; }
+  assert.ok(seen.length > 0 && seen.every(Boolean));
 });
