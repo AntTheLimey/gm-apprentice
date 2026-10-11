@@ -4094,8 +4094,172 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
   .pf2e-attributes { grid-template-columns: repeat(3, 1fr); }
 }
 
+/* Connections */
+/* Warm and hostile are the site's success and danger, pulled toward the text colour so they hold
+   4.5:1 on every preset in both schemes; the marks carry the meaning by shape as well (filled,
+   dashed and hollow, hollow). Muted text is the site's muted colour moved toward the text colour,
+   because a preset's own muted colour can sit under 4.5:1 on its background (noir does).
+   The words (warm, hostile) and the accent used as text or as a filled dot are moved further, the
+   accent because the preset's own accent is under 3:1 on some light backgrounds.
+   Set again on a card and the strip, which a sheet skin gives their own inks. */
+.cx, .cx-card, .cx-strip {
+  --cx-warm: color-mix(in srgb, var(--text) 35%, var(--success));
+  --cx-hostile: color-mix(in srgb, var(--text) 35%, var(--danger));
+  --cx-warm-ink: color-mix(in srgb, var(--text) 60%, var(--success));
+  --cx-hostile-ink: color-mix(in srgb, var(--text) 60%, var(--danger));
+  --cx-accent: color-mix(in srgb, var(--accent) 60%, var(--text));
+  --cx-muted: color-mix(in srgb, var(--text-muted) 60%, var(--text));
+  --cx-neutral: var(--cx-muted);
+  --cx-trunk: color-mix(in srgb, var(--cx-muted) 85%, var(--bg));
+}
+.cx { margin-top: 2.5rem; min-width: 0; max-width: 100%; }
+/* the site's h2 is the preset's accent, under 4.5:1 on some light presets; this heading is read as text */
+.cx #cx-heading { margin: 0 0 0.75rem; color: var(--cx-accent); }
+.cx-app { min-width: 0; }
+.cx-panel { min-width: 0; }
+.cx-panel[hidden] { display: none; }
+
+/* the lists, for a reader without the script, the search index and a printer */
+.cx.cx-live .cx-plain { display: none; }
+.cx-plain :is(h3, h4, h5, h6) { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cx-muted); font-weight: 600; margin: 1rem 0 0.4rem; }
+.cx-plain :is(h3, h4, h5, h6):has(+ :is(h3, h4, h5, h6)) { font-size: 1.05rem; letter-spacing: 0; text-transform: none; color: var(--text); font-family: var(--font-heading); margin: 1.4rem 0 0; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+.cx-plain a { color: var(--cx-accent); }
+.cx-plain ul { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+.cx-plain li { margin: 0 0 0.5rem; }
+.cx-line, .cx-sess { display: block; color: var(--cx-muted); }
+.cx-sess { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.cx-from { color: var(--cx-muted); }
+.cx-kind { display: inline-block; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cx-muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; margin-left: 6px; font-weight: 600; line-height: 1.5; vertical-align: baseline; }
+.cx-tone { font-weight: 600; }
+.cx-tone.cx-warm { color: var(--cx-warm-ink); }
+.cx-tone.cx-hostile { color: var(--cx-hostile-ink); }
+.cx-tone.cx-neutral { color: var(--cx-neutral); }
+.cx-mentions, .cx-mlist { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 0.5rem; padding: 0; list-style: none; }
+.cx-plain .cx-mentions li, .cx-mlist li { margin: 0; }
+.cx-mlist a { color: var(--cx-accent); text-decoration: none; }
+.cx-mlist a:hover { text-decoration: underline; }
+
+/* the mark: shape first (filled warm, dashed hollow hostile, hollow neutral), colour second */
+span.cx-mark { display: inline-block; flex: none; width: 10px; height: 10px; border-radius: 50%; border: 2px solid var(--cx-neutral); background: transparent; }
+span.cx-mark.cx-warm { background: var(--cx-warm); border-color: var(--cx-warm); }
+span.cx-mark.cx-hostile { border-style: dashed; border-color: var(--cx-hostile); }
+span.cx-mark.cx-neutral { border-color: var(--cx-neutral); }
+.cx-key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--cx-muted); margin: 0.9rem 0 0; }
+.cx-key-item { display: inline-flex; align-items: center; gap: 6px; }
+
+/* tabs: one row that scrolls sideways inside its own box */
+.cx-tabs { display: flex; gap: 4px; overflow-x: auto; max-width: 100%; border-bottom: 1px solid var(--border); margin-bottom: 1rem; scrollbar-width: thin; }
+.cx-tab { flex: none; font: 600 0.9rem/1.5 var(--font-body); color: var(--cx-muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.6rem 0.65rem; min-height: 44px; cursor: pointer; white-space: nowrap; }
+.cx-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--cx-accent); }
+.cx-tab:hover { color: var(--text); }
+.cx-n { font-weight: 400; color: var(--cx-muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+.cx-tab:focus-visible, .cx-row:focus-visible, .cx-open:focus-visible, .cx-card a:focus-visible { outline: 2px solid var(--cx-accent); outline-offset: 2px; }
+
+/* the tree: rows in the page's flow; the script draws the lines behind them from where they landed */
+.cx-tree-wrap { position: relative; padding-bottom: 0.25rem; }
+svg.cx-lines { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.cx-subject, .cx-tree { position: relative; z-index: 1; }
+.cx-subject { text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 6px var(--bg); margin: 0 0 1rem; padding-left: 28px; font: 600 1.35rem/1.2 var(--font-heading); color: var(--text); overflow-wrap: anywhere; }
+.cx-tree, .cx-leaves { list-style: none; margin: 0; padding: 0; }
+.cx-branch { margin: 0 0 14px; }
+.cx-branch:last-child { margin-bottom: 0; }
+.cx-group { margin: 0; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cx-muted); font-weight: 600; line-height: 1.3; }
+.cx-item { margin: 0; }
+a.cx-row, span.cx-row { display: flex; align-items: flex-start; gap: 12px; padding: 4px 6px 4px 0; min-height: 28px; color: var(--text); text-decoration: none; border-radius: 3px; cursor: pointer; }
+span.cx-row.cx-text { cursor: default; }
+a.cx-row:hover { text-decoration: none; background: var(--accent-dim); }
+.cx-row .cx-mark { margin-top: 5px; }
+.cx-name { min-width: 0; overflow-wrap: anywhere; font-size: 0.95rem; line-height: 1.45; }
+a.cx-row .cx-name { color: var(--text); }
+.cx-row.cx-sel .cx-name { font-weight: 600; color: var(--cx-accent); }
+.cx-row.cx-sel .cx-mark { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--cx-accent); }
+.cx-meta { margin-left: auto; padding-left: 12px; flex: none; max-width: 45%; font-size: 0.78rem; line-height: 1.7; color: var(--cx-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.cx-wide .cx-branch { display: grid; grid-template-columns: 34% minmax(0, 1fr); column-gap: 56px; align-items: center; }
+/* the trunk curves arrive from above, so the heading sits below the line that reaches its dot: the box is padded above, and the script puts the dot at the box's middle */
+.cx-wide .cx-group { text-align: right; padding-top: 26px; text-shadow: 0 0 3px var(--bg), 0 0 3px var(--bg), 0 0 6px var(--bg); }
+.cx-narrow .cx-group { margin: 0 0 2px 34px; padding: 6px 0; }
+.cx-narrow .cx-leaves { margin-left: 50px; }
+.cx-narrow .cx-meta { display: none; }
+.cx-narrow .cx-subject { font-size: 1.2rem; }
+path.cx-edge, line.cx-edge { fill: none; stroke: var(--cx-neutral); stroke-width: 1.4; }
+.cx-edge.cx-warm { stroke: var(--cx-warm); }
+.cx-edge.cx-hostile { stroke: var(--cx-hostile); stroke-dasharray: 5 3; }
+.cx-edge.cx-trunk { stroke: var(--cx-trunk); }
+circle.cx-dot { fill: var(--bg); stroke: var(--cx-neutral); stroke-width: 2; }
+circle.cx-branch-dot { stroke: var(--cx-trunk); }
+circle.cx-root-dot { fill: var(--cx-accent); stroke: var(--cx-accent); }
+
+/* the web */
+svg.cx-web { display: block; width: 100%; max-width: 720px; height: auto; margin-inline: auto; }
+svg.cx-web text { font-family: var(--font-body); fill: var(--text); }
+svg.cx-web text.cx-name { font-size: 13px; }
+/* the edges run under the band names, so each name is cut out of them with a stroke in the page colour */
+svg.cx-web text.cx-band { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; fill: var(--cx-muted); font-weight: 600; stroke: var(--bg); stroke-width: 4px; paint-order: stroke; stroke-linejoin: round; }
+svg.cx-web text.cx-root { font-family: var(--font-heading); font-weight: 700; fill: var(--bg); }
+.cx-hub { fill: var(--bg); }
+.cx-node { cursor: pointer; outline: none; }
+.cx-node.cx-text { cursor: default; }
+.cx-node.cx-sel text { font-weight: 600; fill: var(--cx-accent); }
+.cx-node.cx-sel circle.cx-mark, .cx-node:focus-visible circle.cx-mark { stroke-width: 4; }
+.cx-node:focus-visible text.cx-name { fill: var(--cx-accent); text-decoration: underline; }
+circle.cx-mark { fill: var(--bg); stroke: var(--cx-neutral); }
+circle.cx-mark.cx-warm { fill: var(--cx-warm); stroke: var(--cx-warm); }
+circle.cx-mark.cx-hostile { stroke: var(--cx-hostile); stroke-dasharray: 3 2; }
+
+/* the line under a tree or a web */
+.cx-strip { margin-top: 14px; padding: 12px 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: center; }
+.cx-strip:empty { display: none; }
+.cx-strip p { margin: 0; }
+.cx-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); display: grid; place-items: center; font: 600 1rem var(--font-heading); color: var(--cx-muted); grid-row: span 2; object-fit: cover; }
+/* .content img (above) would square the portrait and add its margin */
+.cx img.cx-avatar { display: block; border-radius: 50%; margin: 0; max-width: none; width: 44px; height: 44px; }
+.cx .cx-card img.cx-avatar { width: 38px; height: 38px; }
+.cx-strip-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.cx-strip-rel { color: var(--cx-muted); font-size: 0.9rem; min-width: 0; }
+.cx-strip .cx-line, .cx-strip .cx-sess, .cx-strip .cx-open { grid-column: 1 / -1; }
+.cx-strip .cx-line { color: var(--text); margin-top: 6px; }
+.cx-strip .cx-line + .cx-line { margin-top: 0; }
+.cx-open { color: var(--cx-accent); justify-self: start; font-size: 0.9rem; font-weight: 600; padding: 4px 0; }
+
+/* cards */
+.cx-cards { min-width: 0; }
+.cx-cards .cx-group, .cx-mentions-wrap .cx-group { margin: 1.25rem 0 0.5rem; }
+.cx-cards .cx-group:first-child, .cx-mentions-wrap .cx-group:first-child { margin-top: 0; }
+.cx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.cx-card { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; min-width: 0; }
+.cx-card p { margin: 0; }
+.cx-card .cx-avatar { width: 38px; height: 38px; font-size: 0.9rem; }
+.cx-card-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.cx-card-name .cx-name { font-size: 1rem; }
+.cx-card-name a.cx-name { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.cx-card-tone { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; }
+.cx-card .cx-line, .cx-card .cx-sess { grid-column: 1 / -1; font-size: 0.9rem; }
+.cx-card .cx-line { margin-top: 4px; }
+
+/* the web is drawn in a 720 box that shrinks with the screen, so on a phone its type is set larger to stay near 10px */
+@media (max-width: 640px) {
+  svg.cx-web text.cx-name { font-size: 19px; }
+  svg.cx-web text.cx-band { font-size: 14px; stroke-width: 5px; }
+  svg.cx-web text.cx-root { font-size: 19px; }
+  circle.cx-mark { r: 9px; }
+}
+@media (pointer: coarse) {
+  a.cx-row, span.cx-row { min-height: 44px; padding-top: 10px; padding-bottom: 10px; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cx-tab, a.cx-row { transition: color 0.15s, background-color 0.15s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx, .cx * { transition: none; animation: none; }
+}
+/* end Connections */
+
 /* ===== PRINT ===== */
 @media print {
+  /* Connections: the lists, not the tabs */
+  .cx .cx-app { display: none; }
+  .cx.cx-live .cx-plain { display: block; }
+
   .top-nav,
   .mobile-nav-overlay,
   .nav-search-btn,

@@ -41,11 +41,11 @@ main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-blk, .pf2e-sheet, .fitd-sheet) { border: 0; outline: var(--sk-edge, 1px solid var(--border)); outline-offset: -1px; }
 /* the tile's inks, for the tiles above, the CoC sheet, and the cards: whatever else paints a tile colour where it can sit on the ground */
 main.content[data-skin]:where(:not([data-skin=plain])) :is(.dnd5e-vitals, .dnd5e-blk, .blk, .wide, .hero-cinematic, .tab-bar, .gl-status-panel, .pf2e-sheet, .fitd-sheet, .rules-ref, .coc-sheet-root,
-  .callout, th, .accordion-header, .section-nav, .entity-card, .cx-card, .stat-block, .event-outcome, .cr-text, .cr-code, .cr-send) {
+  .callout, th, .accordion-header, .section-nav, .entity-card, .cx-card, .cx-strip, .stat-block, .event-outcome, .cr-text, .cr-code, .cr-send) {
   --bg: var(--sk-well); --text: var(--sk-t-text); --text-muted: var(--sk-t-muted); --accent: var(--sk-t-accent); --danger: var(--sk-t-danger);
 }
 /* a card with no colour of its own in style.css would inherit the ground's; this weighs nothing, so any rule there still wins */
-:where(main.content[data-skin]:where(:not([data-skin=plain]))) :where(.callout, th, .accordion-header, .section-nav, .entity-card, .cx-card, .stat-block, .event-outcome) { color: var(--text); }
+:where(main.content[data-skin]:where(:not([data-skin=plain]))) :where(.callout, th, .accordion-header, .section-nav, .entity-card, .cx-card, .cx-strip, .stat-block, .event-outcome) { color: var(--text); }
 main.content[data-skin]:where(:not([data-skin=plain])) .cr-send { color: var(--bg-card); }
 /* the change-request code box has no rule of its own in style.css, so under a skin's colour scheme it would be the browser's field */
 main.content[data-skin]:where(:not([data-skin=plain])) .cr-code { background-color: var(--bg-card); color: var(--text); }
