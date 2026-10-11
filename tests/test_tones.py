@@ -107,5 +107,71 @@ class DocTests(unittest.TestCase):
                 self.assertIn(word, text[start:], f"{rel}: {word}")
 
 
+import tempfile  # noqa: E402
+
+import tones  # noqa: E402
+
+
+def note(*tone_lines):
+    edges = "".join(f'  - target: "[[T{i}]]"\n    type: knows\n{line}\n'
+                    for i, line in enumerate(tone_lines))
+    return f"---\ntype: npc\nrelationships:\n{edges}---\nBody\n"
+
+
+class VaultCase(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.vault = Path(self.tmp.name)
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def put(self, rel, text, newline=""):
+        path = self.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8", newline=newline)
+
+    def get(self, rel):
+        return (self.vault / rel).read_bytes().decode("utf-8")
+
+
+class ReportTests(VaultCase):
+    def test_report(self):
+        self.put("NPCs/A.md", note("    tone: warm", "    tone: Cordial",
+                                   "    tone: cordial"))
+        self.put("NPCs/B.md", note("    tone: Warm", "    tone: hostile",
+                                   "    tone: neutral", "    tone: friendly",
+                                   "    tone: ominous"))
+        self.put("NPCs/C.md", note("    tone: central"))
+        self.assertEqual(tones.report_lines(tones.survey(self.vault)), [
+            "# tones: 9  listed: 5  near: 3  ask: 1",
+            "NEAR\tcordial\tfriendly\t2",
+            "NEAR\twarm\twarm\t1",
+            "ASK\tcentral\t1\tNPCs/C.md",
+        ])
+
+    def test_old_records_and_templates_are_not_read(self):
+        for folder in ("_QA", "_archive", "_Templates", "_inbox"):
+            self.put(f"{folder}/X.md", note("    tone: dread"))
+        self.assertEqual(tones.report_lines(tones.survey(self.vault)),
+                         ["# tones: 0  listed: 0  near: 0  ask: 0"])
+
+    def test_ask_row_names_at_most_three_notes(self):
+        for name in "DCBA":
+            self.put(f"NPCs/{name}.md", note("    tone: tragic"))
+        self.assertEqual(tones.report_lines(tones.survey(self.vault))[1],
+                         "ASK\ttragic\t4\tNPCs/A.md; NPCs/B.md; NPCs/C.md")
+
+    def test_main_prints_the_report(self):
+        import contextlib
+        import io
+        self.put("NPCs/A.md", note("    tone: dread"))
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            code = tones.main([str(self.vault)])
+        self.assertEqual(code, 0)
+        self.assertIn("NEAR\tdread\tominous\t1", out.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()
