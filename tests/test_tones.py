@@ -756,9 +756,43 @@ class ShownTests(VaultCase):
         self.assertEqual(code, 0)
         self.assertEqual(rows[0].split("\t"), [
             "NPCs/Emma.md:6", "hostile", "[[Hallam]]", "Wants his chair."])
-        self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
-        self.assertFalse(any("Cult" in r or "Mara" in r or "Tom" in r
-                             for r in rows))
+        # `Cold` is a stray, but the site reads it as cold: hostile.
+        self.assertEqual(rows[1].split("\t")[:3],
+                         ["NPCs/Emma.md:17", "Cold", "[[Tom]]"])
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+        self.assertFalse(any("Cult" in r or "Mara" in r for r in rows))
+
+    def test_tones_are_read_the_way_the_site_reads_them(self):
+        # The rule toneFamily (tools/publish/lib/ontology.js) applies: trim,
+        # lower-case, look up. A change to either side must change both.
+        for written in ("HOSTILE", '" hostile"', '"hostile "', "Cold"):
+            with self.subTest(written=written):
+                note = ("---\ntype: npc\nrelationships:\n"
+                        '  - target: "[[A]]"\n    type: knows\n'
+                        f"    tone: {written}\n---\nB\n")
+                _, rows, _ = self.run_shown({"NPCs/E.md": note}, {"NPCs/E.md"})
+                self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
+                self.assertEqual(rows[0].split("\t")[1],
+                                 written.strip('"'))
+        self.assertEqual(tones.site_family(" Hostile "), "negative")
+        self.assertIsNone(tones.site_family("grim"))
+
+    def test_a_note_that_hides_its_relationships_lists_nothing(self):
+        for hide in ("publish_exclude_fields: [relationships]\n",
+                     "publish_exclude_fields:\n  - relationships\n"):
+            with self.subTest(hide=hide):
+                note = self.NOTE.replace("type: npc\n", "type: npc\n" + hide)
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": note},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_a_campaign_that_excludes_relationships_lists_nothing(self):
+        cfg = ("---\npublish:\n  exclude_fields:\n    - secrets\n"
+               "    - relationships\n---\n")
+        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                     "_meta/vault-config.md": cfg},
+                                    {"NPCs/Emma.md"})
+        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
 
     def test_a_note_the_site_does_not_publish_is_left_out(self):
         code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE}, set())
@@ -782,7 +816,7 @@ class ShownTests(VaultCase):
         nfc = unicodedata.normalize("NFC", nfd)
         code, rows, _ = self.run_shown({nfd: self.NOTE}, {nfc})
         self.assertEqual(code, 0)
-        self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
 
     def test_a_note_that_is_not_utf8_does_not_crash(self):
         (self.vault / "NPCs").mkdir()
@@ -791,15 +825,14 @@ class ShownTests(VaultCase):
         code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
                                        {"NPCs/Emma.md", "NPCs/Bad.md"})
         self.assertEqual(code, 0)
-        self.assertEqual(rows[-1], "# 2 hostile ties shown on 2 notes")
+        self.assertEqual(rows[-1], "# 4 hostile ties shown on 2 notes")
 
-    def test_a_map_form_relationship_block_does_not_crash(self):
+    def test_a_map_form_relationships_block_has_no_tones_so_lists_nothing(self):
         code, rows, _ = self.run_shown(
             {"NPCs/Map.md": "---\ntype: npc\nrelationships:\n"
              "  Hallam: hostile\n  tone: hostile\n---\nBody\n"},
             {"NPCs/Map.md"})
-        self.assertEqual(code, 0)
-        self.assertTrue(rows[-1].startswith("# "))
+        self.assertEqual((code, rows), (0, ["# 0 hostile ties shown on 0 notes"]))
 
 
 class EdgeToneTests(unittest.TestCase):
@@ -810,7 +843,12 @@ class EdgeToneTests(unittest.TestCase):
             + body + "---\n"))
 
     def test_gm_only_is_read_like_the_site_reads_it(self):
-        for line, want in (("gm_only: true", True), ('gm_only: "true"', True),
+        # js-yaml 3: bare true/True/TRUE are the boolean; a quoted scalar is
+        # a string and only exactly 'true' matches (processor.js isGmOnlyEdge).
+        for line, want in (("gm_only: true", True), ("gm_only: True", True),
+                           ("gm_only: TRUE", True), ('gm_only: "true"', True),
+                           ("gm_only: 'true'", True), ('gm_only: "True"', False),
+                           ("gm_only: yes", False), ("gm_only: on", False),
                            ("gm_only: false", False), ("type: knows", False)):
             with self.subTest(line=line):
                 self.assertEqual(self.edges(line)[0].gm_only, want)

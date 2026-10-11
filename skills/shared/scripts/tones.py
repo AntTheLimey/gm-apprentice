@@ -72,11 +72,11 @@ from schema_rules import (
     iter_relationship_edges,
     iter_relationship_tones,
     tone_families,
-    tone_family,
     tone_key,
     tone_proposal,
 )
-from vaultlib import is_unchecked_source, vault_files
+from vaultlib import (extract_frontmatter, is_unchecked_source,
+                      read_publish_list, vault_files)
 
 
 class TonesError(Exception):
@@ -178,16 +178,36 @@ def use_lines(uses: list[Use], words: Iterable[str]) -> list[str]:
     return out + [f"# {len(out)} use(s) of {len(wanted)} word(s)"]
 
 
+def site_family(raw: str) -> str | None:
+    """The family the site shows a tone as. The same rule as `toneFamily`
+    in tools/publish/lib/ontology.js: trimmed and lower-cased, then looked
+    up in the list (`tone_family` itself is exact, to find strays)."""
+    return tone_families().get(tone_key(raw))
+
+
+def _hides_relationships(fields: object) -> bool:
+    if isinstance(fields, str):
+        fields = re.split(r"[\s,\[\]]+", fields)
+    return isinstance(fields, list) and "relationships" in fields
+
+
 def shown_lines(vault: Path, published: set[str]) -> list[str]:
     """One row per hostile tie a published note shows, then a count."""
     rows: list[str] = []
     notes: set[str] = set()
+    # The vault's own exclude_fields; a list only the site file holds is not
+    # known here, and its notes are listed (the safe side).
+    if _hides_relationships(read_publish_list(vault, "exclude_fields").value):
+        published = set()
     for rel, text in vault_files(vault):
         if (is_unchecked_source(rel)
                 or unicodedata.normalize("NFC", rel) not in published):
             continue
+        fm = extract_frontmatter(text) or {}
+        if _hides_relationships(fm.get("publish_exclude_fields")):
+            continue
         for edge in iter_relationship_edges(text):
-            if edge.gm_only or tone_family(edge.tone) != "negative":
+            if edge.gm_only or site_family(edge.tone) != "negative":
                 continue
             line = edge.tone_lines[0] if edge.tone_lines else 0
             rows.append("\t".join([

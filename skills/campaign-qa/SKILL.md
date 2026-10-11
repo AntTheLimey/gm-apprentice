@@ -163,8 +163,9 @@ checks, also:
 Relationship tones off the 27 listed words. The ones a rule can place
 take one yes; for the rest, read their uses and bring the GM one table
 of proposals to mark up. Also run on "tidy the tones" and after a
-migration that left words to pick. It also walks the hostile ties
-the site shows (`tones.py shown`) so the GM can leave, re-tone or hide each.
+migration that left words to pick. It also counts the hostile ties the
+site shows (`tones.py shown`) as one Info line, and walks them with the GM
+(leave, re-tone or hide each) only on a yes.
 
 ### D&D Sheets — `references/checks/dnd-sheets.md`
 

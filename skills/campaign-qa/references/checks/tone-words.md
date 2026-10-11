@@ -89,14 +89,20 @@ of your own, and say so.
 
 The site shows each relationship's tone as warm, hostile or neutral. A
 hostile tie can give something away (who fears whom, who resents whom).
-Run this the first time a vault's site builds on publish tool 1.18.0 or
-later, and when the GM asks what the site shows of who is against whom.
 
 `tones.py shown` lists every relationship with a negative tone that is
-not `gm_only`, on a note the site publishes: note and line, the tone,
-the target, the description. Exit 1 means the site's tool could not be
-asked: say so and stop. A last line of `# 0 hostile ties` means there
-is nothing to walk: say so in a line.
+not `gm_only`, on a note the site publishes: note and line, the tone as
+written, the target, the description. It reads a tone the way the site
+does, so `Cold` and `HOSTILE` count. Exit 1 means the site's tool could
+not be asked.
+
+Every time this check runs, run `tones.py shown` and add its count to
+the report as one Info line: "N hostile ties show on the site". Say
+nothing when the vault has no site or the tool could not be asked. With
+N above 0, offer the walk in one short sentence beside that line. Walk
+the ties only when the GM asks what the site shows of who is against
+whom, or says yes to that offer; never without a yes. If the GM
+declines, do not offer it again in the same session.
 
 Put the rows to the GM three to five at a time as a table (who, toward
 whom, tone, the line). For each the GM says one of:
@@ -111,6 +117,12 @@ A batch answer ("leave all of these", "hide the two about Hallam") is
 fine. Record nothing for a `leave`: the list is short enough to show
 again. Do not rebuild or deploy the site; say the changes show at the
 next build.
+
+The list errs on the side of showing more. The site colours an item by
+the first relationship it has to a target, so a later hostile tie to the
+same target may be listed that the site does not colour. A campaign that
+hides `relationships` only in the site's own config file, not in
+`vault-config.md`, still has its ties listed.
 
 ## What this check never does
 

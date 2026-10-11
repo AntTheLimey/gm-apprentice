@@ -368,7 +368,19 @@ class RelationshipEdge:
     target: str = ""
     description: str = ""
     tone: str = ""            # the first `tone:` value, unquoted
-    gm_only: bool = False     # `gm_only: true` or `"true"`, as the site reads it
+    gm_only: bool = False     # true exactly when the site drops the edge
+
+
+def _site_drops_edge(value: str) -> bool:
+    """Does `gm_only: <value>` make the site drop the edge? Mirrors
+    `isGmOnlyEdge` in tools/publish/lib/processor.js: the boolean true or
+    the exact string 'true'. js-yaml 3 reads bare `true`, `True` and `TRUE`
+    as the boolean (not `yes` or `on`); a quoted scalar is a string, so only
+    exactly `"true"` counts (`"True"` is shown)."""
+    text = value.strip()
+    if QUOTED_SCALAR_RE.match(text):
+        return scalar_value(text) == "true"
+    return scalar_value(text) in ("true", "True", "TRUE")
 
 
 EDGE_KEY_RE = re.compile(r"^(-\s+)?([\w-]+):\s*(.*)$")
@@ -418,7 +430,7 @@ def iter_relationship_edges(content: str) -> Iterator[RelationshipEdge]:
             if not edge.tone:
                 edge.tone = scalar_value(value)
         elif key == "gm_only":
-            edge.gm_only = scalar_value(value).strip().lower() == "true"
+            edge.gm_only = _site_drops_edge(value)
         elif key == "target":
             edge.target = scalar_value(value)
         elif key == "description":
