@@ -119,6 +119,27 @@ describe('doctor --site', () => {
     assert.strictEqual(rc, 0);
   });
 
+  it('lists every wrongly-typed value the build warns about, field for field', async () => {
+    const { TEXT_FIELDS, LIST_FIELDS, RECORD_LIST_FIELDS } = require('../lib/frontmatter-shape');
+    const fields = [...TEXT_FIELDS.filter((f) => f !== 'type'), ...Object.keys(LIST_FIELDS), ...RECORD_LIST_FIELDS];
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-allwrong-'));
+    for (const [n, shape] of [['a', (f) => `${f}: 7`], ['b', (f) => `${f}:\n  now: one`], ['c', (f) => `${f}:\n  - one\n  - two`]]) {
+      write(vault, `Characters/NPCs/Odd_${n}.md`, `---\ntype: npc\n${fields.map(shape).join('\n')}\n---\n\nFine.\n`);
+    }
+    const { configPath } = siteFor(vault);
+    const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    const { scanVaultReport } = require('../lib/scanner');
+    const { mistyped } = scanVaultReport({ ...config, vaultPath: vault, folderMap: config.folderMap });
+    assert.ok(mistyped.length > 3);
+    const cap = capture();
+    await runSiteDoctor({ configPath, json: true }, cap.deps);
+    const found = JSON.parse(cap.text()).findings.filter((f) => f.code === 'FRONTMATTER_MISTYPED');
+    const rows = found.filter((f) => !f.path.startsWith('+'));
+    assert.strictEqual(rows.length, Math.min(mistyped.length, 20));
+    assert.deepStrictEqual(rows.map((f) => `${f.path} ${f.detail}`),
+      mistyped.slice(0, 20).map((m) => `${m.rel} ${m.field}: ${m.problem}`));
+  });
+
   it('says so, as an error, when the site cannot be built in memory: never a clean list', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-broken-'));
     write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
