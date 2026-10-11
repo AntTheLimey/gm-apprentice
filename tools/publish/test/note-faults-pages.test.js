@@ -446,6 +446,47 @@ describe('a page\'s Connections', () => {
     const items = model.tabs.flatMap((t) => t.groups).flatMap((g) => g.items);
     assert.deepStrictEqual(items.map((i) => [i.title, i.outputPath]).sort(), [['B', 'B.html'], ['the stranger', null]]);
     assert.ok(items.every((i) => i.title !== 'Gone'), 'no item is called by the hidden name');
+    // Nothing else the model holds names it either (`key` is the build's own, never printed),
+    // nor does the section drawn from it.
+    const printable = JSON.stringify(model, (k, v) => (k === 'key' ? undefined : v));
+    assert.ok(!printable.includes('Gone'), printable);
+    const { renderConnections } = require('../lib/templates/connections');
+    assert.ok(!renderConnections(model, { mode: 'tree', currentOutputPath: 'A.html' }).includes('Gone'));
+  });
+
+  it('a no-page note named only in Connections is reported on that page', async () => {
+    // A PC page: the map form of `relationships` is not a list of rows, so its body
+    // Relationships list prints nothing, and a PC page has no relationship cards and no
+    // context sidebar. Connections is the only part of the page that prints the label, and
+    // the test checks that: it holds as the body list, cards and sidebar of other pages go.
+    const files = {
+      'Hidden/Vesper_Hale.md': hidden(),
+      'People/Bo_Pike.md': `---\ntype: pc\nrelationships:\n  knows:\n    - "[[Vesper_Hale|the stranger]]"\n---\n\nBo.\n`,
+    };
+    const { configPath, root } = site(files);
+    const found = fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md'], ['the stranger']]]);
+    const html = fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8');
+    const block = /<section class="cx"[^]*?<\/section>/.exec(html)[0];
+    assert.ok(block.includes('the stranger'));
+    assert.ok(!html.replace(block, '').includes('the stranger'), 'another part of the page prints the label: ' + html.replace(block, '').split('\n').filter((l) => l.includes('the stranger')).join(' // '));
+    assert.ok(!html.includes('Vesper'));
+  });
+
+  it('startNoteAudit.connections counts a key-only item against the page that holds it', () => {
+    const { startNoteAudit } = require('../lib/note-faults');
+    const page = { title: 'Bo', displayTitle: 'Bo', outputPath: 'people/bo.html', frontmatter: { type: 'npc' } };
+    const audit = startNoteAudit({
+      vaultPath: '/v', notes: [{ vaultPath: 'Hidden/Old_Tam', frontmatter: { type: 'npc' }, displayTitle: 'Old Tam' }],
+      corpus: [page], verdicts: new Map(), report: { malformed: [], untyped: [], unmapped: [] }, published: [page], linkMap: {},
+      publishConfig: {}, manifest: null, relOf: (p) => `People/${p.title}.md`, getsNoPage: () => false, printsField: () => true, readFile: () => '',
+    });
+    const item = (extra) => ({ title: 'the old one', kind: '', tone: null, lines: [], own: 0, sessions: null, image: null, ...extra });
+    audit.connections(page, { tabs: [{ groups: [{ items: [item({ outputPath: 'people/x.html', key: 'Old_Tam' }), item({ outputPath: null })] }] }] });
+    assert.deepStrictEqual(audit.findings(() => ({})).filter((f) => f.code === 'NAMED_NO_PAGE'), [], 'an item with a page, or no key, is not counted');
+    audit.connections(page, { tabs: [{ groups: [{ items: [item({ outputPath: null, key: 'Old_Tam' })] }] }] });
+    const found = audit.findings(() => ({})).filter((f) => f.code === 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Old_Tam.md', ['People/Bo.md'], ['the old one']]]);
   });
 });
 

@@ -160,6 +160,16 @@ test("a location's parent is an item in Places under Part of", () => {
   assert.deepStrictEqual(names(group(m, 'places', 'Part of')), ['Inn']);
 });
 
+test('a parent_location with no page is an unlinked item in Places under Part of, called by its words', () => {
+  const labelled = page('Cellar', 'location', { parent_location: '[[Old_Inn|the old inn]]' });
+  const plain = page('Attic', 'location', { parent_location: '[[Old_Inn]]' });
+  const m = buildConnections(ctx([labelled, plain])).for(labelled);
+  const item = group(m, 'places', 'Part of').items[0];
+  assert.deepStrictEqual([item.title, item.outputPath, item.key], ['the old inn', null, 'Old_Inn']);
+  const p = group(buildConnections(ctx([labelled, plain])).for(plain), 'places', 'Part of').items[0];
+  assert.deepStrictEqual([p.title, p.outputPath], ['Old Inn', null]);
+});
+
 test('extras become items in their own group and leave the mentions', () => {
   const ch = page('Chapter_1', 'chapter');
   const s1 = page('Session_1', 'session', { session_number: 1 }, ['Chapter_1']);

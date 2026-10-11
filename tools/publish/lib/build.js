@@ -1110,7 +1110,8 @@ function buildSite(options) {
         html = worldDomainTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
         break;
       default: {
-        // The sidebar's lists are the same ones Connections gathers (Task 6 removes the sidebar).
+        // The page sidebar lists the same sessions, NPCs and events that Connections gathers, so it
+        // reads them from the one set rather than finding them a second time.
         const gathered = connectionExtras.get(page) || [];
         const listed = (group) => gathered.filter(e => e.group === group).map(e => ({ displayTitle: e.page.displayTitle, outputPath: e.page.outputPath, type: e.page.frontmatter.type }));
         const extraSidebar = page.frontmatter.type === 'session'
@@ -1182,7 +1183,7 @@ function buildSite(options) {
     audit.read(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
     // The names in a page's Connections are names the page prints: one with no page behind
-    // it is looked up as the graph's nodes were.
+    // it is looked up in the note index and counted against this page.
     const model = !isStory && publishConfig._connections && html.includes('class="cx"') ? publishConfig._connections.for(page) : null;
     if (model && !noConnections(model)) audit.connections(page, model);
     if (toRender.has(page)) return;
