@@ -75,8 +75,8 @@ from schema_rules import (
     tone_key,
     tone_proposal,
 )
-from vaultlib import (extract_frontmatter, is_unchecked_source,
-                      read_publish_list, vault_files)
+from vaultlib import (_frontmatter_lines, extract_frontmatter,
+                      is_unchecked_source, read_publish_list, vault_files)
 
 
 class TonesError(Exception):
@@ -186,9 +186,32 @@ def site_family(raw: str) -> str | None:
 
 
 def _hides_relationships(fields: object) -> bool:
-    if isinstance(fields, str):
-        fields = re.split(r"[\s,\[\]]+", fields)
+    """Does this exclude list strip `relationships` on the site? Only a YAML
+    list does, and it matches an item exactly (processor.js filterFields and
+    publishedFrontmatter): a string, `Relationships` or `relationships ` is
+    ignored there, so the ties stay listed."""
     return isinstance(fields, list) and "relationships" in fields
+
+
+def _campaign_hides_relationships(vault: Path) -> bool:
+    """The vault file's `publish.exclude_fields` strips `relationships`, and
+    no `publish.overrides` entry mentions it (a per-note `include` would
+    re-admit it for that note; which notes is not worked out, so none is
+    skipped)."""
+    cfg = read_publish_list(vault, "exclude_fields")
+    if not _hides_relationships(cfg.value):
+        return False
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return False
+    lines = _frontmatter_lines(text) or []
+    start, end = cfg.span or (0, 0)
+    outside = lines[:start] + lines[end:]
+    return not (any(re.match(r"\s*[\"']?overrides[\"']?\s*:", ln)
+                    for ln in outside)
+                and any("relationships" in ln for ln in outside))
 
 
 def shown_lines(vault: Path, published: set[str]) -> list[str]:
@@ -197,7 +220,7 @@ def shown_lines(vault: Path, published: set[str]) -> list[str]:
     notes: set[str] = set()
     # The vault's own exclude_fields; a list only the site file holds is not
     # known here, and its notes are listed (the safe side).
-    if _hides_relationships(read_publish_list(vault, "exclude_fields").value):
+    if _campaign_hides_relationships(vault):
         published = set()
     for rel, text in vault_files(vault):
         if (is_unchecked_source(rel)

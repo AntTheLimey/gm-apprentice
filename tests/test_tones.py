@@ -786,9 +786,52 @@ class ShownTests(VaultCase):
                                             {"NPCs/Emma.md"})
                 self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
 
+    def test_only_a_real_list_hides_a_notes_relationships(self):
+        # The site reads publish_exclude_fields only as a list, and matches
+        # an item exactly (processor.js publishedFrontmatter).
+        for hide in ("publish_exclude_fields: relationships\n",
+                     'publish_exclude_fields: "relationships"\n',
+                     "publish_exclude_fields: relationships, secrets\n",
+                     "publish_exclude_fields: [Relationships]\n",
+                     'publish_exclude_fields: ["relationships "]\n',
+                     "publish_exclude_fields:\n  - Relationships\n"):
+            with self.subTest(hide=hide):
+                note = self.NOTE.replace("type: npc\n", "type: npc\n" + hide)
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": note},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    CAMPAIGN = ("---\npublish:\n  exclude_fields:\n    - secrets\n"
+                "    - relationships\n%s---\n")
+
     def test_a_campaign_that_excludes_relationships_lists_nothing(self):
-        cfg = ("---\npublish:\n  exclude_fields:\n    - secrets\n"
-               "    - relationships\n---\n")
+        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                     "_meta/vault-config.md":
+                                     self.CAMPAIGN % ""}, {"NPCs/Emma.md"})
+        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_campaign_exclude_only_counts_as_a_list_spelled_exactly(self):
+        for cfg in ("---\npublish:\n  exclude_fields: relationships\n---\n",
+                    "---\npublish:\n  exclude_fields: [Relationships]\n---\n"):
+            with self.subTest(cfg=cfg):
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                             "_meta/vault-config.md": cfg},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    def test_an_override_naming_relationships_lifts_the_campaign_skip(self):
+        cfg = self.CAMPAIGN % ("  overrides:\n    fields:\n"
+                               '      "NPCs/Emma.md":\n'
+                               "        include: [relationships]\n")
+        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                     "_meta/vault-config.md": cfg},
+                                    {"NPCs/Emma.md"})
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    def test_an_override_for_another_field_keeps_the_campaign_skip(self):
+        cfg = self.CAMPAIGN % ("  overrides:\n    fields:\n"
+                               '      "NPCs/Emma.md":\n'
+                               "        include: [secrets]\n")
         _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
                                      "_meta/vault-config.md": cfg},
                                     {"NPCs/Emma.md"})
