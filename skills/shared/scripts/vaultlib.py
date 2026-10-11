@@ -1900,10 +1900,10 @@ def publish_mode(fm: dict[str, Any] | None) -> Literal["all", "stub", "none"]:
     return "all"
 
 
-def _flat_list(value: list) -> list:
+def _flat_list(value: list[Any]) -> list[Any]:
     """`value` with every list inside it opened out, as JavaScript's
     `flat(Infinity)`."""
-    out: list = []
+    out: list[Any] = []
     for item in value:
         out.extend(_flat_list(item) if isinstance(item, list) else [item])
     return out
