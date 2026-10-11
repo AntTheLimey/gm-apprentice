@@ -1218,7 +1218,7 @@ class ToneListTests(unittest.TestCase):
         self.put(self.ENTITY, self.CANTICLE)
         (item,) = mv.find_tone_list(self.vault)
         self.assertEqual((item.id, item.group, item.wants),
-                         ("tone-list", CHOICE, None))
+                         ("tone-list", WILL, None))
         self.assertEqual(item.lines, [
             "_meta/entity-types.md: the tone list becomes the 27 listed "
             "words"])
@@ -1372,7 +1372,7 @@ class ToneListTests(unittest.TestCase):
         check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-list")
         self.assertEqual((check.release, check.band, check.choices,
                           check.asks_site),
-                         ("1.10.44", 3, ("tone-list",), False))
+                         ("1.10.44", 3, (), False))
 
 
 if __name__ == "__main__":

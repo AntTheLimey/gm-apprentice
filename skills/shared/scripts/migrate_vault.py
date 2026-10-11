@@ -910,7 +910,7 @@ def find_tone_list(vault: Path) -> list[Item]:
             done.append(line(rel, len(spans), True))
         return done
 
-    return [Item("tone-list", CHOICE,
+    return [Item("tone-list", WILL,
                  [line(rel, n, False) for rel, n in found.items()], apply)]
 
 
@@ -940,7 +940,7 @@ VAULT_CHECKS: list[Check] = [
     Check("tone-words", "1.10.44", 3, "tone words",
           find_tone_words, choices=("tone-words=",)),
     Check("tone-list", "1.10.44", 3, "the tone list in _meta",
-          find_tone_list, choices=("tone-list",)),
+          find_tone_list),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",

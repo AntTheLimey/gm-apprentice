@@ -620,6 +620,38 @@ class WrapupSectionsEngineTests(unittest.TestCase):
         self.assertIn("up to date", out)
 
 
+class ToneListEngineTests(unittest.TestCase):
+    def test_a_plain_apply_refreshes_the_list_with_no_choice(self):
+        import migrate_vault as mv
+        vault = make_vault(self, "1.10.43")
+        path = vault / "_meta" / "relationship-types.md"
+        with path.open("w", encoding="utf-8", newline="") as f:
+            f.write("**tone** \u2208 friendly | romantic | respectful | "
+                    "professional | hostile |\r\nfearful | neutral. "
+                    "**strength** 1\u201310.\r\n")
+        checks = [c for c in mv.VAULT_CHECKS if c.name == "tone-list"]
+        with mock.patch.object(migrate, "plugin_version",
+                               return_value=("1.10.44", "test")):
+            out = io.StringIO()
+            with mock.patch.object(migrate, "CHECKS", checks), \
+                    contextlib.redirect_stdout(out):
+                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
+                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
+                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
+        shown = out.getvalue()
+        self.assertIn("## Will do", shown)
+        self.assertNotIn("## Your choice", shown)
+        self.assertIn("tone-list\t_meta/relationship-types.md: the tone list "
+                      "is now the 27 listed words", shown)
+        self.assertTrue(shown.rstrip().endswith("up to date"))
+        self.assertEqual(stamp_of(vault), "1.10.44")
+        with path.open("r", encoding="utf-8", newline="") as f:
+            self.assertEqual(
+                f.read(), "**tone** \u2208 "
+                + " | ".join(mv.tone_families())
+                + ". **strength** 1\u201310.\r\n")
+
+
 class EditFrontmatterTests(unittest.TestCase):
     def test_failure_leaves_the_note_and_no_temp_file(self):
         vault = make_vault(self)
