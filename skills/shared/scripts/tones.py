@@ -3,6 +3,7 @@
 tidy them.
 
     tones.py VAULT
+    tones.py VAULT uses [WORD ...]
     tones.py VAULT fix [--near [--except WORD ...]] [--set OLD=NEW ...]
                        [--write]
 
@@ -18,6 +19,12 @@ stray word.
 When there are ASK rows, three `#` lines after them give the listed
 words by family, for the GM to pick from. Notes under `_QA`, `_archive`,
 `_Templates` and `_inbox` are not read.
+
+`uses` prints every use of a stray word, one row each, and writes
+nothing: `note:line`, a tab, the word. With no WORD it takes every ASK
+word, commonest first; with WORDs, those strays (NEAR or ASK) in the
+order given. A last `#` line counts the uses and the words. A WORD that
+is listed, or that no relationship has, is refused.
 
 `fix` rewrites strays. `--near` takes every NEAR row; `--except WORD`
 (repeatable, with --near only) leaves that row's word as written.
@@ -96,6 +103,29 @@ def report_lines(uses: list[Use]) -> list[str]:
     return [f"# tones: {len(uses)}  listed: {len(uses) - len(strays)}  "
             f"near: {sum(count[w] for w in near)}  "
             f"ask: {sum(count[w] for w in ask)}", *rows]
+
+
+def use_lines(uses: list[Use], words: Iterable[str]) -> list[str]:
+    """`note:line<TAB>word` for every use of each stray in `words`, or of
+    every word no rule places when there are none."""
+    listed = tone_families()
+    where: dict[str, list[Use]] = {}
+    for u in uses:
+        if u.raw not in listed:
+            where.setdefault(tone_key(u.raw), []).append(u)
+    wanted = list(dict.fromkeys(tone_key(w) for w in words))
+    for w in wanted:
+        if w in listed:
+            raise TonesError(f"{w} is a listed tone")
+        if w not in where:
+            raise TonesError(f"no relationship has the tone {w}")
+    if not wanted:
+        wanted = sorted((w for w, found in where.items()
+                         if not tone_proposal(found[0].raw)),
+                        key=lambda w: (-len(where[w]), w))
+    out = [f"{u.rel}:{u.lineno}\t{w}" for w in wanted
+           for u in sorted(where[w], key=lambda u: (u.rel, u.lineno))]
+    return out + [f"# {len(out)} use(s) of {len(wanted)} word(s)"]
 
 
 # A tone line the fix may rewrite: the word is the whole value, bare or
@@ -244,7 +274,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="List a vault's stray tone words, and tidy them.")
     ap.add_argument("vault", type=Path)
-    ap.add_argument("command", nargs="?", choices=["fix"])
+    ap.add_argument("command", nargs="?", choices=["fix", "uses"])
+    ap.add_argument("words", nargs="*", metavar="WORD")
     ap.add_argument("--near", action="store_true")
     ap.add_argument("--except", dest="excepts", action="append",
                     metavar="WORD")
@@ -256,9 +287,11 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 2
     usage = None
-    if args.command is None and (args.near or args.excepts or args.sets
+    if args.command != "fix" and (args.near or args.excepts or args.sets
                                  or args.write):
         usage = "--near, --except, --set and --write go with fix"
+    elif args.command == "fix" and args.words:
+        usage = "only uses takes words; fix takes --set OLD=NEW"
     elif args.excepts and not args.near:
         usage = "--except goes with --near"
     elif args.command == "fix" and not (args.near or args.sets):
@@ -275,6 +308,9 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command is None:
             print("\n".join(report_lines(survey(args.vault))))
+            return 0
+        if args.command == "uses":
+            print("\n".join(use_lines(survey(args.vault), args.words)))
             return 0
         p = plan_fix(args.vault, args.near, sets, args.excepts or ())
         if args.write:

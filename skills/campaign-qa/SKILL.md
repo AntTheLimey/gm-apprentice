@@ -161,8 +161,9 @@ checks, also:
 ### Tone Words — `references/checks/tone-words.md`
 
 Relationship tones off the 27 listed words. The ones a rule can place
-take one yes; the rest are put to the GM a few at a time. Also run on
-"tidy the tones" and after a migration that left words to pick.
+take one yes; for the rest, read their uses and bring the GM one table
+of proposals to mark up. Also run on "tidy the tones" and after a
+migration that left words to pick.
 
 ### D&D Sheets — `references/checks/dnd-sheets.md`
 

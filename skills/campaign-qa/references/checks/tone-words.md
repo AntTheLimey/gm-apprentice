@@ -41,30 +41,30 @@ written with capitals or extra spaces.
      over the rule and over an `--except`
 4. Say how many tones changed in how many notes (the last line).
 
-## ASK rows: the GM picks
+## ASK rows: one table
 
-An `ASK` row is a word no rule can place: the word, how many times, up
-to three notes that use it. `--near` never changes these. After the
-rows, three `#` lines give the listed words by family: offer from
-those.
+An `ASK` row is a word no rule can place (word, count, up to three
+notes); `--near` never changes it. Propose only listed words: the
+three `#` lines.
 
-1. Take three to five words at a time, in the order printed (commonest
-   first).
-2. For each, find a relationship with that tone in one of the named
-   notes (its `description` usually says what was meant) and offer two
-   or three listed words that fit, your pick first. Offer "leave it"
-   too. One answer changes every use, so for a word used more than
-   once read more than one of them first.
-3. Apply the batch in one fix:
-   `tones.py fix --set old1=new1 --set old2=new2`
-4. Carry on until no `ASK` rows remain or the GM stops. What is left
-   stays as written and is reported again next time.
+1. `tones.py uses` lists every use (`note:line`, a tab, the word).
+   Read each relationship's `description` there.
+2. Show one table, however few the words: word, count, proposed listed
+   word, why in a few words. Put `ask: X or Y` where the descriptions
+   do not settle it, or the word means different things in different
+   relationships. A word that names the tie, not a feeling (`sibling`,
+   `central`): `neutral` or the tone the description supports, marked
+   "not a feeling".
+3. Take the answer in one go (all; all but these; these become X).
+   What the GM leaves stays as written and is reported next time.
+4. Apply it in one fix: `tones.py fix --set old1=new1 --set old2=new2`
 
-One `--set` changes every use of the word in the vault. Where the old
-word held something the listed word loses (`tragic` becoming
-`negative`), offer to add the nuance to that relationship's
-`description`, and write it yourself, there and on the tie's line under
-`## Related`. Change a description only on a yes.
+One `--set` changes every use. If the GM wants a word split, first
+write the listed word on the fewer uses' tone lines yourself, then
+`--set` the rest. Where the old word held something the listed word
+loses (`tragic` becoming `negative`, any "not a feeling" word), offer
+to add it to that relationship's `description`; on a yes, write it
+yourself, there and on the tie's line under `## Related`.
 
 ## Running a fix
 
@@ -78,10 +78,10 @@ not listed, an OLD no relationship has, and one OLD given two NEWs;
 written. Correct it and run it again.
 
 A `KEPT` row, in either run, is a tone on a line the tool will not
-rewrite (odd quoting or line endings). This is the one tone you change
-by hand: open that note and give the line the word this run was giving
-that tone (your `--set` for it, else its `NEAR` row's listed word),
-never a word of your own, and say so.
+rewrite (odd quoting or line endings). Change that tone by hand: open
+the note and give the line the word this run was giving that tone
+(your `--set` for it, else its `NEAR` row's listed word), never a word
+of your own, and say so.
 
 ## What this check never does
 

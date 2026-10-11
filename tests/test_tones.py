@@ -528,6 +528,66 @@ class FixTests(VaultCase):
         self.assertIn("tone: neutral\n", text)
 
 
+class UsesTests(VaultCase):
+    def fill(self):
+        self.put("NPCs/B.md", note("    tone: tragic", "    tone: warm",
+                                   "    tone: Central"))
+        self.put("NPCs/A.md", note("    tone: dread", '    tone: "tragic"'))
+        self.put("Locations/C.md", note("    tone: tragic")
+                 .replace("\n", "\r\n"))
+
+    def test_with_no_word_it_lists_every_use_of_the_words_no_rule_places(self):
+        self.fill()
+        self.assertEqual(tones.use_lines(tones.survey(self.vault), []), [
+            "Locations/C.md:6\ttragic",
+            "NPCs/A.md:9\ttragic",
+            "NPCs/B.md:6\ttragic",
+            "NPCs/B.md:12\tcentral",
+            "# 4 use(s) of 2 word(s)"])
+
+    def test_named_words_are_listed_in_the_order_given(self):
+        self.fill()
+        self.assertEqual(
+            tones.use_lines(tones.survey(self.vault),
+                            [" CENTRAL ", "dread", "central"]),
+            ["NPCs/B.md:12\tcentral", "NPCs/A.md:6\tdread",
+             "# 2 use(s) of 2 word(s)"])
+
+    def test_a_vault_with_nothing_to_ask_about(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: warm"))
+        self.assertEqual(tones.use_lines(tones.survey(self.vault), []),
+                         ["# 0 use(s) of 0 word(s)"])
+
+    def test_a_word_that_is_not_a_stray_is_refused(self):
+        self.fill()
+        for word, why in (("warm", "warm is a listed tone"),
+                          ("bleak", "no relationship has the tone bleak")):
+            with self.assertRaises(tones.TonesError) as caught:
+                tones.use_lines(tones.survey(self.vault), ["tragic", word])
+            self.assertEqual(str(caught.exception), why)
+
+    def test_command_line(self):
+        self.fill()
+        before = {rel: self.get(rel) for rel in
+                  ("NPCs/A.md", "NPCs/B.md", "Locations/C.md")}
+        self.assertEqual(self.run_main("uses", "central"),
+                         (0, "NPCs/B.md:12\tcentral\n"
+                             "# 1 use(s) of 1 word(s)\n", ""))
+        code, out, err = self.run_main("uses")
+        self.assertEqual((code, len(out.splitlines()), err), (0, 5, ""))
+        self.assertEqual(self.run_main("uses", "warm"),
+                         (1, "", "tones.py: warm is a listed tone\n"))
+        self.assertEqual(
+            self.run_main("uses", "central", "--write"),
+            (2, "", "tones.py: --near, --except, --set and --write go "
+                    "with fix\n"))
+        self.assertEqual(
+            self.run_main("fix", "central", "--near"),
+            (2, "", "tones.py: only uses takes words; fix takes --set "
+                    "OLD=NEW\n"))
+        self.assertEqual({rel: self.get(rel) for rel in before}, before)
+
+
 import vault_check as vc  # noqa: E402
 
 

@@ -17,10 +17,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   are off the list and rewrites the ones a rule can place (cordial to
   friendly, dread to ominous), every note or none. `--except WORD`
   leaves a word as written, and `--set OLD=NEW` gives a word the listed
-  one the GM chose.
+  one the GM chose. `tones.py VAULT uses` lists every use of the words
+  no rule places, as `note:line` and the word.
 - Updating a vault offers that tidy as a yes or no. campaign-qa's new
   Tone Words check offers it too, all or all but the words the GM
-  names, and puts the remaining words to the GM a few at a time.
+  names. For the remaining words it reads the relationships and brings
+  the GM one table of proposals to accept or mark up, asking only where
+  it cannot tell.
+- Updating a vault also offers to bring the vault's own tone list up to
+  date: where `_meta/entity-types.md` or `_meta/relationship-types.md`
+  lists the old tone words, the list becomes the 27. Only the words
+  change; a list written in a shape the update does not recognise is
+  left alone.
 - `vault_check.py relationships` warns about a tone off the list and
   names the listed word to use. session-wrapup and vault-ingest correct
   it on the relationships they wrote; an older one waits for

@@ -67,8 +67,10 @@ Reach for campaign-qa when you need to:
 A relationship's tone is one of 27 standard words. Claude lists the
 ones your notes use that are not. The near misses (cordial, dread) it
 tidies on one yes, or all but the ones you name. For the rest it reads
-the relationship and offers two or three standard words to pick from.
-You never edit a note yourself.
+the relationships that use each word and brings you one table: the
+word, how often it is used, the standard word it proposes and why. You
+accept the table or mark it up; it asks only where it cannot tell. You
+never edit a note yourself.
 
 ### Site Faults
 
