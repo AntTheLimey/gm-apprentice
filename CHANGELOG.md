@@ -32,6 +32,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `links.py`'s all-or-nothing writer now lives in `migrate_core.py` and
   is shared with `tones.py` (no change in what `links.py` does).
 
+### Fixed
+
+- A note that opens with an empty frontmatter block (`---` then `---`)
+  no longer has its body read as frontmatter by `vault_check.py
+  relationships` and the schema validation, which could report body
+  text as a relationship.
+
 ## [1.10.43] — 2026-10-10
 
 ### Added
