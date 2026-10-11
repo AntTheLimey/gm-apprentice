@@ -41,7 +41,7 @@
     "trusted": "trusting",
     "deferential": "respectful", "reverent": "respectful", "admiring": "respectful",
     "adversarial": "hostile", "violent": "hostile", "dangerous": "hostile",
-    "terrified": "fearful", "anxious": "fearful", "horrified": "fearful", "uneasy": "fearful", "unsettled": "fearful", "traumatised": "fearful",
+    "terrified": "fearful", "anxious": "fearful", "horrified": "fearful", "uneasy": "fearful", "unsettled": "fearful", "traumatised": "fearful", "traumatized": "fearful",
     "suspicious": "distrustful",
     "dismissive": "contemptuous", "condescending": "contemptuous", "disapproving": "contemptuous",
     "strained": "tense",

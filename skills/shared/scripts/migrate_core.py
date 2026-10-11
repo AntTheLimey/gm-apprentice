@@ -86,7 +86,8 @@ def write_all_or_none(vault: Path, originals: dict[str, str],
                       read: Callable[[Path, str], str | None],
                       what: str = "the fix",
                       holds: str = "the new text",
-                      write: Callable[[Path, str], None] | None = None) -> None:
+                      write: Callable[[Path, str], None] | None = None
+                      ) -> None:
     """Write every note of `texts`, or leave the vault exactly as it was.
     `originals` is each note's text when the change was planned: a note
     that differs now stops the run. `read` is the caller's own reader, so

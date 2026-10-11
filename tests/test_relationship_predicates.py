@@ -319,6 +319,7 @@ class CheckRelationshipsTests(unittest.TestCase):
             sr._ontology.cache_clear()
             sr.predicate_vocabulary.cache_clear()
             sr.inverse_predicates.cache_clear()
+            sr.tone_families.cache_clear()
 
     def test_missing_ontology_reports_instead_of_crashing(self):
         rows = self.missing_ontology_rows(sr.predicate_vocabulary,
@@ -333,6 +334,11 @@ class CheckRelationshipsTests(unittest.TestCase):
         rows = self.missing_ontology_rows(sr.inverse_predicates)
         self.assertEqual(len(rows), 1)
         self.assertIn("predicate vocabulary", rows[0])
+
+    def test_missing_ontology_caught_with_only_the_tone_list_cold(self):
+        rows = self.missing_ontology_rows(sr.tone_families)
+        self.assertEqual(len(rows), 1)
+        self.assertTrue(rows[0].startswith("ERROR\t(vault)\t"), rows[0])
 
 
 class VaultCheckCommandTests(unittest.TestCase):
@@ -415,6 +421,7 @@ class ValidateSchemaRelationshipTests(unittest.TestCase):
             sr._ontology.cache_clear()
             sr.predicate_vocabulary.cache_clear()
             sr.inverse_predicates.cache_clear()
+            sr.tone_families.cache_clear()
 
     def test_missing_ontology_reports_instead_of_tracebacking(self):
         code, out = self.missing_ontology_campaign(sr.predicate_vocabulary,

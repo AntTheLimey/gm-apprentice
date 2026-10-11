@@ -240,6 +240,12 @@ def tone_proposal(raw: object) -> str | None:
 
 
 TONE_KEY_RE = re.compile(r"^(?:-\s+)?(tone):\s*(.*)$")
+# `---` straight after `---`: the frontmatter is empty. FRONTMATTER_RE wants
+# a line between the two, so on such a note it runs on to the next `---` in
+# the body and hands back body text.
+EMPTY_FRONTMATTER_RE = re.compile(r"^---\r?\n---(?:\r?\n|$)")
+# YAML's spellings of "no value".
+NO_TONE = frozenset({"null", "~"})
 
 
 def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
@@ -248,7 +254,7 @@ def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
     `relationships:` block. `top_level_only` leaves out a block nested
     under another key (the machine-managed `mobrpg:` node's)."""
     match = FRONTMATTER_RE.match(content)
-    if not match:
+    if not match or EMPTY_FRONTMATTER_RE.match(content):
         return
     block_indent = None
     scalar_indent = None
@@ -303,9 +309,9 @@ def iter_relationship_predicates(content: str):
 
 def iter_relationship_tones(content: str) -> Iterator[tuple[int, str]]:
     """Yield (lineno, tone as written) for every edge of the note's own
-    `relationships:` block that gives a tone. A blank `tone:` is no tone.
-    Line numbers are 1-based within the file."""
+    `relationships:` block that gives a tone. A blank `tone:` is no tone,
+    and so is `null` or `~`. Line numbers are 1-based within the file."""
     for lineno, _key, value in _iter_relationship_keys(
             content, TONE_KEY_RE, True):
-        if value:
+        if value and value.lower() not in NO_TONE:
             yield lineno, value

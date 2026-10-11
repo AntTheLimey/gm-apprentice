@@ -806,7 +806,7 @@ def check_relationships(vault: Path, folder: str | None = None,
             fix = tone_proposal(tone)
             rows.append(
                 f"WARNING\t{rel}:{lineno}\ttone '{tone}' is off the list; "
-                + (f"use '{fix}' (tones.py tidies these)" if fix else
+                + (f"use '{fix}'" if fix else
                    "pick a listed tone (shared/entity-schema.md, Tones)"))
     return rows
 

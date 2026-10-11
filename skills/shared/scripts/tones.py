@@ -3,7 +3,8 @@
 tidy them.
 
     tones.py VAULT
-    tones.py VAULT fix [--near] [--set OLD=NEW ...] [--write]
+    tones.py VAULT fix [--near [--except WORD ...]] [--set OLD=NEW ...]
+                       [--write]
 
 A relationship's `tone` is one of the words in
 `shared/gm-apprentice-ontology.json`. With no command this prints a
@@ -14,14 +15,17 @@ stray word.
     ASK   word, how many times, up to three notes that hold it: no rule
           says what it should become, so the GM picks
 
-Notes under `_QA`, `_archive`, `_Templates` and `_inbox` are not read.
+When there are ASK rows, three `#` lines after them give the listed
+words by family, for the GM to pick from. Notes under `_QA`, `_archive`,
+`_Templates` and `_inbox` are not read.
 
-`fix` rewrites strays. `--near` takes every NEAR row. `--set OLD=NEW`
-(repeatable) rewrites the stray OLD to the listed word NEW, and wins
-over a NEAR rule for the same word. It prints what it would change and
-writes nothing without --write. With --write every note is written or
-none is. Only the tone word changes: quotes, spacing, a trailing comment
-and line endings are kept.
+`fix` rewrites strays. `--near` takes every NEAR row; `--except WORD`
+(repeatable, with --near only) leaves that row's word as written.
+`--set OLD=NEW` (repeatable) rewrites the stray OLD to the listed word
+NEW, and wins over a NEAR rule and an --except for the same word. It
+prints what it would change and writes nothing without --write. With
+--write every note is written or none is. Only the tone word changes:
+quotes, spacing, a trailing comment and line endings are kept.
 
 Exit: 0 done or a clean preview; 1 refused or failed (one line why);
 2 usage error.
@@ -33,6 +37,7 @@ import argparse
 import re
 import sys
 from collections import Counter
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -83,6 +88,11 @@ def report_lines(uses: list[Use]) -> list[str]:
     for w in order(ask):
         notes = sorted({u.rel for u in strays if tone_key(u.raw) == w})[:3]
         rows.append(f"ASK\t{w}\t{count[w]}\t{'; '.join(notes)}")
+    if ask:
+        # What the GM picks from, so nothing else need be read for it.
+        for family in dict.fromkeys(listed.values()):
+            words = [w for w, f in listed.items() if f == family]
+            rows.append(f"# {family}: {', '.join(words)}")
     return [f"# tones: {len(uses)}  listed: {len(uses) - len(strays)}  "
             f"near: {sum(count[w] for w in near)}  "
             f"ask: {sum(count[w] for w in ask)}", *rows]
@@ -118,12 +128,20 @@ def _read(vault: Path, rel: str) -> str | None:
         return (vault / rel).read_bytes().decode("utf-8")
     except UnicodeDecodeError:
         return None
+    except OSError as e:
+        raise TonesError(f"{rel} cannot be read ({e.__class__.__name__}); "
+                         f"run it again") from e
 
 
-def _checked_sets(sets: dict[str, str], used: set[str]) -> dict[str, str]:
+Sets = dict[str, str] | Iterable[tuple[str, str]]
+
+
+def _checked_sets(sets: Sets, used: set[str]) -> dict[str, str]:
+    """OLD -> NEW as compared, from the pairs as given: a word given two
+    different targets is refused, so the pairs must not be merged first."""
     listed = tone_families()
-    out = {}
-    for old, new in sets.items():
+    out: dict[str, str] = {}
+    for old, new in (sets.items() if isinstance(sets, dict) else sets):
         old, new = tone_key(old), tone_key(new)
         if out.get(old, new) != new:
             raise TonesError(f"{old} is set to both {out[old]} and {new}")
@@ -138,18 +156,25 @@ def _checked_sets(sets: dict[str, str], used: set[str]) -> dict[str, str]:
     return out
 
 
-def plan_fix(vault: Path, near: bool, sets: dict[str, str]) -> Plan:
+def plan_fix(vault: Path, near: bool, sets: Sets,
+             excepts: Iterable[str] = ()) -> Plan:
     """What `fix` would write. Changes nothing."""
     uses = survey(vault)
     listed = tone_families()
     sets = _checked_sets(sets, {tone_key(u.raw) for u in uses
                                 if u.raw not in listed})
+    near_words = {tone_key(u.raw) for u in uses if tone_proposal(u.raw)}
+    skip = {tone_key(word) for word in excepts}
+    unused = sorted(skip - near_words)
+    if unused:
+        raise TonesError(f"no NEAR row has the tone {unused[0]}")
 
     def becomes(raw: str) -> str | None:
         if raw in listed:
             return None
-        return sets.get(tone_key(raw)) or (tone_proposal(raw) if near
-                                           else None)
+        key = tone_key(raw)
+        return sets.get(key) or (tone_proposal(raw)
+                                 if near and key not in skip else None)
 
     p = Plan(vault)
     # The survey only says which notes hold a stray this run would change.
@@ -221,6 +246,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", nargs="?", choices=["fix"])
     ap.add_argument("--near", action="store_true")
+    ap.add_argument("--except", dest="excepts", action="append",
+                    metavar="WORD")
     ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW")
     ap.add_argument("--write", action="store_true")
     args = ap.parse_args(argv)
@@ -229,16 +256,19 @@ def main(argv: list[str] | None = None) -> int:
               file=sys.stderr)
         return 2
     usage = None
-    if args.command is None and (args.near or args.sets or args.write):
-        usage = "--near, --set and --write go with fix"
+    if args.command is None and (args.near or args.excepts or args.sets
+                                 or args.write):
+        usage = "--near, --except, --set and --write go with fix"
+    elif args.excepts and not args.near:
+        usage = "--except goes with --near"
     elif args.command == "fix" and not (args.near or args.sets):
         usage = "fix takes --near, --set OLD=NEW, or both"
-    sets: dict[str, str] = {}
+    sets: list[tuple[str, str]] = []
     for pair in args.sets or []:
         old, sep, new = pair.partition("=")
         if not sep or not old.strip() or not new.strip():
             usage = "--set takes OLD=NEW"
-        sets[old] = new
+        sets.append((old, new))
     if usage:
         print(f"tones.py: {usage}", file=sys.stderr)
         return 2
@@ -246,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.command is None:
             print("\n".join(report_lines(survey(args.vault))))
             return 0
-        p = plan_fix(args.vault, args.near, sets)
+        p = plan_fix(args.vault, args.near, sets, args.excepts or ())
         if args.write:
             apply(p)
         print("\n".join(rows(p, done=args.write)))

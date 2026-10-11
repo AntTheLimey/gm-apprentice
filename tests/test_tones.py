@@ -2,6 +2,7 @@
 """Tone words: the fixed list, the near-miss table, and the tools on them."""
 
 import json
+import re
 import sys
 import unittest
 from pathlib import Path
@@ -97,17 +98,65 @@ class IterTests(unittest.TestCase):
                          [(7, "Cordial"), (13, "warm")])
 
 
+    def test_an_empty_frontmatter_has_no_relationships(self):
+        # `---` straight after `---` closes the frontmatter: a later `---`
+        # in the body does not, and the body is never read as YAML.
+        for eol in ("\n", "\r\n"):
+            text = ("---\n---\nText.\n\nrelationships:\n"
+                    '  - target: "[[X]]"\n    type: bogus\n    tone: wary\n'
+                    "\n---\n\nMore.\n").replace("\n", eol)
+            self.assertEqual(list(sr.iter_relationship_tones(text)), [])
+            self.assertEqual(list(sr.iter_relationship_predicates(text)), [])
+        self.assertEqual(list(sr.iter_relationship_tones("---\n---")), [])
+
+    def test_a_null_tone_is_no_tone(self):
+        text = note("    tone: null", "    tone: ~", "    tone: Null",
+                    "    tone: dread")
+        self.assertEqual(list(sr.iter_relationship_tones(text)),
+                         [(15, "dread")])
+
+
+def doc_families(text):
+    """The words a document lists under each family, from its table row
+    (relationship-patterns.md) or its `**Tones.**` sentence
+    (entity-schema.md)."""
+    start = text.index("## Tones") if "## Tones" in text \
+        else text.index("**Tones.**")
+    part = text[start:]
+    row = re.search(r"^\| (positive,[^|]*)\|([^|]*)\|([^|]*)\|$", part, re.M)
+    if row:
+        cells = row.groups()
+    else:
+        cells = re.search(r"one of:(.*?)\(positive\);(.*?)\(negative\);"
+                          r"(.*?)\(neutral\)", part, re.S).groups()
+    return {family: [w.strip() for w in cell.split(",")]
+            for family, cell in zip(("positive", "negative", "neutral"),
+                                    cells)}
+
+
 class DocTests(unittest.TestCase):
-    def test_both_documents_name_every_listed_word(self):
+    def test_both_documents_list_exactly_the_words_by_family(self):
         for rel in ("skills/ttrpg-expert/relationship-patterns.md",
                     "skills/shared/entity-schema.md"):
             text = (REPO / rel).read_text(encoding="utf-8")
-            start = text.index("Tones")
-            for word in sr.tone_families():
-                self.assertIn(word, text[start:], f"{rel}: {word}")
+            self.assertEqual(doc_families(text), LISTED, rel)
+
+    def test_every_template_tone_is_listed(self):
+        seen = 0
+        for path in sorted((REPO / "skills" / "shared" /
+                            "templates").glob("*.md")):
+            for line in path.read_text(encoding="utf-8").splitlines():
+                m = re.match(r"\s+tone:\s*([^#\s]+)", line)
+                if m:
+                    seen += 1
+                    self.assertIn(m.group(1), sr.tone_families(), path.name)
+        self.assertGreater(seen, 10)
 
 
+import contextlib  # noqa: E402
+import io  # noqa: E402
 import tempfile  # noqa: E402
+from unittest import mock  # noqa: E402
 
 import tones  # noqa: E402
 
@@ -134,6 +183,13 @@ class VaultCase(unittest.TestCase):
     def get(self, rel):
         return (self.vault / rel).read_bytes().decode("utf-8")
 
+    def run_main(self, *args):
+        """(exit code, stdout, stderr) of `tones.py VAULT args`."""
+        out, err = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            code = tones.main([str(self.vault), *args])
+        return code, out.getvalue(), err.getvalue()
+
 
 class ReportTests(VaultCase):
     def test_report(self):
@@ -148,7 +204,38 @@ class ReportTests(VaultCase):
             "NEAR\tcordial\tfriendly\t2",
             "NEAR\twarm\twarm\t1",
             "ASK\tcentral\t1\tNPCs/C.md",
+            "# positive: positive, friendly, warm, loving, romantic, loyal, "
+            "devoted, protective, trusting, respectful",
+            "# negative: negative, hostile, fearful, distrustful, "
+            "contemptuous, tense, cold, resentful, predatory, ominous",
+            "# neutral: neutral, unknown, complicated, cautious, "
+            "transactional, formal, professional",
         ])
+
+    def test_the_list_is_printed_only_when_the_gm_has_words_to_pick(self):
+        self.put("NPCs/A.md", note("    tone: Cordial"))
+        self.assertEqual(tones.report_lines(tones.survey(self.vault)), [
+            "# tones: 1  listed: 0  near: 1  ask: 0",
+            "NEAR\tcordial\tfriendly\t1"])
+
+    def test_report_over_a_crlf_note(self):
+        self.put("NPCs/A.md", note("    tone: Cordial", "    tone: warm")
+                 .replace("\n", "\r\n"))
+        self.assertEqual(tones.report_lines(tones.survey(self.vault)), [
+            "# tones: 2  listed: 1  near: 1  ask: 0",
+            "NEAR\tcordial\tfriendly\t1"])
+
+    def test_a_vault_that_is_not_a_directory_is_a_usage_error(self):
+        import contextlib
+        import io
+        self.put("file.md", "x")
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err):
+            code = tones.main([str(self.vault / "file.md")])
+            gone = tones.main([str(self.vault / "NOT_A_DIRECTORY")])
+        self.assertEqual((code, gone), (2, 2))
+        self.assertIn("tones.py: not a directory: ", err.getvalue())
+        self.assertEqual(len(err.getvalue().splitlines()), 2)
 
     def test_old_records_and_templates_are_not_read(self):
         for folder in ("_QA", "_archive", "_Templates", "_inbox"):
@@ -305,6 +392,114 @@ class FixTests(VaultCase):
                            sets={"Dread": "ominous", "dread": "ominous"})
         self.assertEqual(len(p.changes), 1)
 
+    def test_the_same_word_set_twice_is_refused(self):
+        # A list of pairs, as main gives them: nothing collapses first.
+        self.put("NPCs/A.md", note("    tone: dread"))
+        with self.assertRaises(tones.TonesError) as raised:
+            tones.plan_fix(self.vault, near=False,
+                           sets=[("dread", "ominous"), ("dread", "tense")])
+        self.assertEqual(str(raised.exception),
+                         "dread is set to both ominous and tense")
+        p = tones.plan_fix(self.vault, near=False,
+                           sets=[("dread", "ominous"), ("dread", "ominous")])
+        self.assertEqual(len(p.changes), 1)
+
+    def test_the_same_word_set_twice_on_the_command_line(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        before = self.get("NPCs/A.md")
+        code, _out, err = self.run_main(
+            "fix", "--set", "dread=ominous", "--set", "dread=tense",
+            "--write")
+        self.assertEqual(code, 1)
+        self.assertEqual(err, "tones.py: dread is set to both ominous and "
+                              "tense\n")
+        self.assertEqual(self.get("NPCs/A.md"), before)
+        code, out, _err = self.run_main(
+            "fix", "--set", "dread=ominous", "--set", "dread=ominous")
+        self.assertEqual(code, 0)
+        self.assertIn("WOULD-CHANGE\tNPCs/A.md:6\tdread -> ominous", out)
+
+    def test_except_leaves_a_near_word_alone(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: Dread",
+                                   "    tone: cordial", "    tone: Warm"))
+        p = tones.plan_fix(self.vault, near=True, sets={},
+                           excepts=[" DREAD ", "warm"])
+        self.assertEqual([(c.before, c.after) for c in p.changes],
+                         [("cordial", "friendly")])
+        self.assertEqual(p.kept, [])
+
+    def test_a_set_wins_over_an_except_for_the_same_word(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: cordial"))
+        p = tones.plan_fix(self.vault, near=True, sets={"dread": "tense"},
+                           excepts=["dread"])
+        self.assertEqual([(c.before, c.after) for c in p.changes],
+                         [("dread", "tense"), ("cordial", "friendly")])
+
+    def test_an_except_no_near_row_has_is_refused(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: central",
+                                   "    tone: warm"))
+        for word in ("cordial", "central", "warm"):
+            with self.assertRaises(tones.TonesError) as raised:
+                tones.plan_fix(self.vault, near=True, sets={},
+                               excepts=[word])
+            self.assertEqual(str(raised.exception),
+                             f"no NEAR row has the tone {word}")
+
+    def test_except_on_the_command_line(self):
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: cordial",
+                                   "    tone: grim"))
+        before = self.get("NPCs/A.md")
+        for args in (("fix", "--set", "dread=tense", "--except", "cordial"),
+                     ("--except", "cordial"),
+                     ("fix", "--except", "cordial")):
+            code, _out, err = self.run_main(*args)
+            self.assertEqual(code, 2, args)
+            self.assertEqual(len(err.splitlines()), 1, args)
+        code, _out, err = self.run_main("fix", "--near", "--except", "wary",
+                                        "--write")
+        self.assertEqual((code, err),
+                         (1, "tones.py: no NEAR row has the tone wary\n"))
+        self.assertEqual(self.get("NPCs/A.md"), before)
+        code, out, _err = self.run_main(
+            "fix", "--near", "--except", "dread", "--except", "grim",
+            "--write")
+        self.assertEqual(code, 0)
+        self.assertEqual(out, "CHANGED\tNPCs/A.md:9\tcordial -> friendly\n"
+                              "# 1 tone(s) in 1 note(s)\n")
+        self.assertEqual(self.get("NPCs/A.md"),
+                         before.replace("cordial", "friendly"))
+
+    def test_a_note_that_vanishes_after_the_survey_is_one_line(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        self.put("NPCs/B.md", note("    tone: dread"))
+        before = self.get("NPCs/A.md")
+        real = tones.survey
+
+        def survey_then_lose(vault):
+            uses = real(vault)
+            (self.vault / "NPCs" / "B.md").unlink()
+            return uses
+
+        with mock.patch.object(tones, "survey", survey_then_lose):
+            code, out, err = self.run_main("fix", "--near", "--write")
+        self.assertEqual(code, 1)
+        self.assertEqual(out, "")
+        self.assertEqual(err, "tones.py: NPCs/B.md cannot be read "
+                              "(FileNotFoundError); run it again\n")
+        self.assertEqual(self.get("NPCs/A.md"), before)
+
+    def test_an_empty_frontmatter_note_is_never_rewritten(self):
+        text = ("---\n---\nSome text.\n\n```yaml\nrelationships:\n"
+                '  - target: "[[X]]"\n    tone: wary\n```\n\n---\n\nMore.\n')
+        self.put("Chapters/A.md", text)
+        self.assertEqual(tones.report_lines(tones.survey(self.vault)),
+                         ["# tones: 0  listed: 0  near: 0  ask: 0"])
+        self.put("NPCs/B.md", note("    tone: wary"))
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        tones.apply(p)
+        self.assertEqual(list(p.texts), ["NPCs/B.md"])
+        self.assertEqual(self.get("Chapters/A.md"), text)
+
     def test_a_note_with_a_byte_order_mark_is_left_alone(self):
         self.put("NPCs/A.md", "﻿" + note("    tone: dread"))
         before = self.get("NPCs/A.md")
@@ -342,10 +537,20 @@ class CheckTests(VaultCase):
                                    "    tone: warm"))
         self.assertEqual(vc.check_relationships(self.vault), [
             "WARNING\tNPCs/A.md:6\ttone 'dread' is off the list; "
-            "use 'ominous' (tones.py tidies these)",
+            "use 'ominous'",
             "WARNING\tNPCs/A.md:9\ttone 'central' is off the list; "
             "pick a listed tone (shared/entity-schema.md, Tones)",
         ])
+
+    def test_error_rows_come_before_a_notes_tone_warnings(self):
+        self.put("NPCs/A.md", (
+            "---\ntype: npc\nrelationships:\n"
+            '  - target: "[[A]]"\n    type: knows\n    tone: dread\n'
+            '  - target: "[[B]]"\n    type: frenemy_of\n    tone: warm\n'
+            "---\n"))
+        rows = vc.check_relationships(self.vault)
+        self.assertEqual([r.split("\t")[:2] for r in rows],
+                         [["ERROR", "NPCs/A.md:8"], ["WARNING", "NPCs/A.md:6"]])
 
     def test_file_scope_applies(self):
         self.put("NPCs/A.md", note("    tone: dread"))

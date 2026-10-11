@@ -784,6 +784,25 @@ class WriteAllOrNoneTests(unittest.TestCase):
         self.assertIn("the vault is as it was", str(raised.exception))
         self.assertEqual(self.read(self.vault, "a.md"), "old a.md\n")
 
+    def test_a_write_that_fails_on_the_second_note_puts_the_first_back(self):
+        done = []
+
+        def write(path, text):
+            if path.name == "b.md" and text == "new b\n":
+                raise StepFailed("b.md cannot be written (PermissionError)")
+            done.append((path.name, text))
+            path.write_text(text, encoding="utf-8", newline="")
+
+        with self.assertRaises(StepFailed) as raised:
+            write_all_or_none(self.vault, self.originals, self.texts,
+                              read=self.read, write=write)
+        self.assertEqual(str(raised.exception),
+                         "b.md cannot be written (PermissionError); "
+                         "the vault is as it was")
+        self.assertEqual(done, [("a.md", "new a\n"), ("a.md", "old a.md\n")])
+        self.assertEqual(self.read(self.vault, "a.md"), "old a.md\n")
+        self.assertEqual(self.read(self.vault, "b.md"), "old b.md\n")
+
 
 if __name__ == "__main__":
     unittest.main()

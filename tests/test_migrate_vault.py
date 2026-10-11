@@ -1102,10 +1102,6 @@ class TwoHiddenBlocksTests(WrapupFixture):
                       f"round GM Notes", lines)
 
 
-if __name__ == "__main__":
-    unittest.main()
-
-
 class ToneWordsTests(unittest.TestCase):
     NOTE = ("---\ntype: npc\nrelationships:\n"
             '  - target: "[[A]]"\n    type: knows\n    tone: {tone}\n---\n')
@@ -1182,3 +1178,7 @@ class ToneWordsTests(unittest.TestCase):
         check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-words")
         self.assertEqual((check.release, check.band, check.choices),
                          ("1.10.44", 3, ("tone-words=",)))
+
+
+if __name__ == "__main__":
+    unittest.main()
