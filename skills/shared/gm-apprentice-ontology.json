@@ -1,6 +1,6 @@
 {
   "$comment": "gm-apprentice knowledge-graph ontology export for the mobRPG team. Reconciled from skills/shared/entity-schema.md (authoritative) and skills/ttrpg-expert/relationship-patterns.md. mobRPG stores relationships two ways and this export describes both. mobrpg_relation_type maps a predicate onto WorldElementRelationType (Parent|Child|Link|Spouse) — a backend enum, stable across worlds. Parent/Child/Spouse are GENEALOGY between people (their only consumer is PersonService.getSiblings: find a person's parents, then their other children) and the backend auto-creates the reciprocal row for them; (S,Parent,T) reads 'S is the parent of T'. Place containment is NOT modelled with them — it is a Link, which is a single row with no reciprocal. mobrpg_event_type maps onto a reified event, whose eventTypes are per-world created classifiers. A predicate with a non-null mobrpg_relation_type is stored as a direct relation and its mobrpg_event_type does not apply; null means reify as an event. null/Generic predicates preserve their name on event.title.",
-  "version": "1.2",
+  "version": "1.3",
   "source_of_truth": "skills/shared/entity-schema.md",
   "entity_types": {
     "abstract": ["person", "character", "agent", "place", "artifact", "narrative", "world"],
@@ -29,9 +29,30 @@
     "description": {"type": "string", "required": false}
   },
   "tones": {
-    "positive": ["friendly", "romantic", "respectful", "professional"],
-    "negative": ["hostile", "fearful", "distrustful", "contemptuous"],
-    "neutral": ["neutral", "unknown", "complicated"]
+    "positive": ["positive", "friendly", "warm", "loving", "romantic", "loyal", "devoted", "protective", "trusting", "respectful"],
+    "negative": ["negative", "hostile", "fearful", "distrustful", "contemptuous", "tense", "cold", "resentful", "predatory", "ominous"],
+    "neutral": ["neutral", "unknown", "complicated", "cautious", "transactional", "formal", "professional"]
+  },
+  "tone_near": {
+    "cordial": "friendly", "collegial": "friendly", "collaborative": "friendly", "companionable": "friendly", "sympathetic": "friendly", "compassionate": "friendly", "pleased": "friendly", "grateful": "friendly",
+    "affectionate": "loving", "fond": "loving", "tender": "loving", "maternal": "loving", "paternal": "loving",
+    "dedicated": "loyal", "dutiful": "loyal", "obedient": "loyal",
+    "fanatical": "devoted", "zealous": "devoted", "idolatrous": "devoted",
+    "trusted": "trusting",
+    "deferential": "respectful", "reverent": "respectful", "admiring": "respectful",
+    "adversarial": "hostile", "violent": "hostile", "dangerous": "hostile",
+    "terrified": "fearful", "anxious": "fearful", "horrified": "fearful", "uneasy": "fearful", "unsettled": "fearful", "traumatised": "fearful",
+    "suspicious": "distrustful",
+    "dismissive": "contemptuous", "condescending": "contemptuous", "disapproving": "contemptuous",
+    "strained": "tense",
+    "cool": "cold",
+    "manipulative": "predatory", "controlling": "predatory", "corrupting": "predatory",
+    "dread": "ominous", "chilling": "ominous", "grim": "ominous", "doomed": "ominous", "haunted": "ominous", "harrowing": "ominous", "grave": "ominous",
+    "wary": "cautious",
+    "mercenary": "transactional", "utilitarian": "transactional", "instrumental": "transactional", "strategic": "transactional",
+    "businesslike": "professional", "clinical": "professional",
+    "complex": "complicated", "conflicted": "complicated", "unresolved": "complicated",
+    "mysterious": "unknown", "uncertain": "unknown"
   },
   "strength_scale": {"1-2": "weak", "3-4": "moderate", "5-6": "significant", "7-8": "strong", "9-10": "defining"},
   "storage_rule": "Single-direction only; inverse is implied, not stored. Symmetric predicates stored once with bidirectional=true.",

@@ -187,10 +187,7 @@ first_appearance: ""    # recommended, not enforced — link to scene or session
 relationships:
   - target: "[[Target Entity Name]]"
     type: member_of       # From _meta/relationship-types.md
-    tone: respectful      # friendly | romantic | respectful
-                          # professional | hostile | fearful
-                          # distrustful | contemptuous | neutral
-                          # unknown | complicated
+    tone: respectful      # one listed word; see Tones below
     strength: 7           # 1-10 (1-2 weak, 9-10 defining)
     bidirectional: false
     description: "Serves as lieutenant"
@@ -208,6 +205,14 @@ Extraction defaults: `tone: neutral` and `strength: 5` when the
 source is ambiguous; `bidirectional: false` unless inherently
 symmetric; a `description` traceable to source text; `gm_only`
 omitted unless the edge's *existence* is the secret.
+
+**Tones.** `tone` is always one of: positive, friendly, warm, loving,
+romantic, loyal, devoted, protective, trusting, respectful (positive);
+negative, hostile, fearful, distrustful, contemptuous, tense, cold,
+resentful, predatory, ominous (negative); neutral, unknown,
+complicated, cautious, transactional, formal, professional (neutral).
+The nuance goes in `description`. The list is
+`shared/gm-apprentice-ontology.json`'s `tones`.
 
 ### Publish control fields
 

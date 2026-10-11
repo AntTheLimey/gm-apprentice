@@ -190,6 +190,9 @@ class RelationshipPatternsDocTests(unittest.TestCase):
         "friendly", "romantic", "respectful", "professional", "hostile",
         "fearful", "distrustful", "contemptuous", "neutral", "unknown",
         "complicated",
+        "positive", "negative", "warm", "loving", "loyal", "devoted",
+        "protective", "trusting", "tense", "cold", "resentful", "predatory",
+        "ominous", "cautious", "transactional", "formal",
     }
     # A line that names a predicate in order to warn against it.
     NEGATIVE_LINE_MARKERS = ("not in the vocabulary", "never as", "never ",
@@ -306,13 +309,14 @@ class CheckRelationshipsTests(unittest.TestCase):
         original = sr.ONTOLOGY_PATH
         sr.predicate_vocabulary()  # warm both caches from the real export
         sr.inverse_predicates()
-        for cache in caches_to_clear:
+        for cache in (sr._ontology, *caches_to_clear):
             cache.cache_clear()
         sr.ONTOLOGY_PATH = original.with_name("no-such-ontology.json")
         try:
             return vc.check_relationships(FIXTURE)
         finally:
             sr.ONTOLOGY_PATH = original
+            sr._ontology.cache_clear()
             sr.predicate_vocabulary.cache_clear()
             sr.inverse_predicates.cache_clear()
 
@@ -401,13 +405,14 @@ class ValidateSchemaRelationshipTests(unittest.TestCase):
         original = sr.ONTOLOGY_PATH
         sr.predicate_vocabulary()  # warm both caches from the real export
         sr.inverse_predicates()
-        for cache in caches_to_clear:
+        for cache in (sr._ontology, *caches_to_clear):
             cache.cache_clear()
         sr.ONTOLOGY_PATH = original.with_name("no-such-ontology.json")
         try:
             return self.run_campaign(FIXTURE)
         finally:
             sr.ONTOLOGY_PATH = original
+            sr._ontology.cache_clear()
             sr.predicate_vocabulary.cache_clear()
             sr.inverse_predicates.cache_clear()
 

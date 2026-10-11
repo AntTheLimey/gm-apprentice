@@ -12,9 +12,12 @@ other shared vault primitive; the names callers have always imported
 from here are re-exported below so nothing had to be rewritten.
 """
 
+from __future__ import annotations
+
 import json
 import re
 import sys
+from collections.abc import Iterator
 from difflib import get_close_matches
 from functools import lru_cache
 from pathlib import Path
@@ -150,8 +153,13 @@ FRONTMATTER_KEY_RE = re.compile(r"^([\w-]+):\s*(.*)$")
 BLOCK_SCALAR_OPEN_RE = re.compile(r"^(\s*(?:-\s+)?)[\w-]+:\s*[|>][0-9+-]*\s*(?:#.*)?$")
 
 
+@lru_cache(maxsize=1)
+def _ontology() -> dict:
+    return json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))
+
+
 def _ontology_predicates() -> list[dict]:
-    return json.loads(ONTOLOGY_PATH.read_text(encoding="utf-8"))["predicates"]
+    return _ontology()["predicates"]
 
 
 @lru_cache(maxsize=1)
@@ -196,14 +204,49 @@ def predicate_problem(key: str, predicate: str) -> str:
     return f"{problem} — no close match"
 
 
-def iter_relationship_predicates(content: str):
-    """Yield (lineno, key, predicate) for every edge in a `relationships:` block.
+# Tone words
+#
+# A relationship's `tone` is one of the listed words, in one of three
+# families. The list and the near-miss table live in the ontology export;
+# nothing else names a tone word.
 
-    Covers both storage shapes: the authored top-level block (`type:`) and
-    the `mobrpg:` node's nested one (`predicate:`). Block style only — a
-    `relationships: []` or inline-flow value carries no edges to check.
-    Line numbers are 1-based within the file, so findings are navigable.
-    """
+def tone_key(raw: object) -> str:
+    """A tone as it is compared: trimmed, inner spaces single, lower case."""
+    return " ".join(str(raw).split()).lower()
+
+
+@lru_cache(maxsize=1)
+def tone_families() -> dict[str, str]:
+    """Listed tone word -> its family (positive, negative, neutral)."""
+    return {word: family
+            for family, words in _ontology()["tones"].items()
+            for word in words}
+
+
+def tone_family(raw: object) -> str | None:
+    """The family of a tone written exactly as listed, else None."""
+    return tone_families().get(raw) if isinstance(raw, str) else None
+
+
+def tone_proposal(raw: object) -> str | None:
+    """The listed word a stray tone should become, or None when no rule
+    says (and None for a tone that is already listed)."""
+    if not isinstance(raw, str) or raw in tone_families():
+        return None
+    key = tone_key(raw)
+    if key in tone_families():
+        return key
+    return _ontology().get("tone_near", {}).get(key)
+
+
+TONE_KEY_RE = re.compile(r"^(?:-\s+)?(tone):\s*(.*)$")
+
+
+def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
+                            top_level_only: bool):
+    """Yield (lineno, key, value) for each `key_re` line on an edge of a
+    `relationships:` block. `top_level_only` leaves out a block nested
+    under another key (the machine-managed `mobrpg:` node's)."""
     match = FRONTMATTER_RE.match(content)
     if not match:
         return
@@ -231,7 +274,9 @@ def iter_relationship_predicates(content: str):
             # A trailing comment is not a value: `relationships:  # later`
             # still opens a block whose edges follow.
             value = key.group(2).strip()
-            block_indent = indent if not value or value.startswith("#") else None
+            opens = not value or value.startswith("#")
+            block_indent = indent if opens and not (
+                top_level_only and indent > 0) else None
             continue
         opener = BLOCK_SCALAR_OPEN_RE.match(line)
         if opener:
@@ -239,7 +284,28 @@ def iter_relationship_predicates(content: str):
             continue
         if block_indent is None:
             continue
-        edge = RELATIONSHIP_KEY_RE.match(stripped)
+        edge = key_re.match(stripped)
         if edge:
             # +2: line 1 is the opening `---`, so frontmatter starts at 2.
             yield offset + 2, edge.group(1), scalar_value(edge.group(2))
+
+
+def iter_relationship_predicates(content: str):
+    """Yield (lineno, key, predicate) for every edge in a `relationships:` block.
+
+    Covers both storage shapes: the authored top-level block (`type:`) and
+    the `mobrpg:` node's nested one (`predicate:`). Block style only — a
+    `relationships: []` or inline-flow value carries no edges to check.
+    Line numbers are 1-based within the file, so findings are navigable.
+    """
+    yield from _iter_relationship_keys(content, RELATIONSHIP_KEY_RE, False)
+
+
+def iter_relationship_tones(content: str) -> Iterator[tuple[int, str]]:
+    """Yield (lineno, tone as written) for every edge of the note's own
+    `relationships:` block that gives a tone. A blank `tone:` is no tone.
+    Line numbers are 1-based within the file."""
+    for lineno, _key, value in _iter_relationship_keys(
+            content, TONE_KEY_RE, True):
+        if value:
+            yield lineno, value

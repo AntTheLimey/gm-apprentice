@@ -222,11 +222,16 @@ this table and the export in step.
 
 ## Tones
 
-Optional emotional colour on any edge. One of:
+Emotional colour on any edge. Always one of these words; the nuance
+goes in `description`.
 
 | Positive | Negative | Neutral |
 |----------|----------|---------|
-| friendly, romantic, respectful, professional | hostile, fearful, distrustful, contemptuous | neutral, unknown, complicated |
+| positive, friendly, warm, loving, romantic, loyal, devoted, protective, trusting, respectful | negative, hostile, fearful, distrustful, contemptuous, tense, cold, resentful, predatory, ominous | neutral, unknown, complicated, cautious, transactional, formal, professional |
+
+`positive` and `negative` are for a tie that is plainly one or the
+other and no more. A tone off this list is flagged by
+`vault_check.py relationships` and tidied by `tones.py`.
 
 Tone is how the *source* feels about the *target*. A `rival_of`
 edge can be `respectful` (honourable competition) or `hostile`;
