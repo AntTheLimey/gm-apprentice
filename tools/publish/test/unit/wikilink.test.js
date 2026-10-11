@@ -357,3 +357,10 @@ describe('labelsForLinks: embeds and a ] inside a link', () => {
     assert.strictEqual(labelsForLinks('[[A]] and [[B|c]]'), '[[A]] and c');
   });
 });
+
+describe('a labelled link inside backticks in a value (kept as it is: the hiding side)', () => {
+  const { labelsForLinks } = require('../../lib/wikilink');
+  it('prints the label, not the link as typed, so the target is not shown', () => {
+    assert.strictEqual(labelsForLinks('`[[Vesper_Hale|the stranger]]`'), '`the stranger`');
+  });
+});
