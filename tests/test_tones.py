@@ -173,5 +173,133 @@ class ReportTests(VaultCase):
         self.assertIn("NEAR\tdread\tominous\t1", out.getvalue())
 
 
+class FixTests(VaultCase):
+    def test_near_rewrites_and_keeps_the_rest_of_the_line(self):
+        self.put("NPCs/A.md", note('    tone: "Cordial"  # per S3',
+                                   "    tone: 'dread'", "    tone: Warm",
+                                   "    tone: central", "    tone: hostile"))
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        tones.apply(p)
+        text = self.get("NPCs/A.md")
+        self.assertIn('    tone: "friendly"  # per S3\n', text)
+        self.assertIn("    tone: 'ominous'\n", text)
+        self.assertIn("    tone: warm\n", text)
+        self.assertIn("    tone: central\n", text)
+        self.assertEqual(tones.rows(p, done=True), [
+            "CHANGED\tNPCs/A.md:6\tCordial -> friendly",
+            "CHANGED\tNPCs/A.md:9\tdread -> ominous",
+            "CHANGED\tNPCs/A.md:12\tWarm -> warm",
+            "# 3 tone(s) in 1 note(s)",
+        ])
+
+    def test_preview_writes_nothing_and_matches_the_write(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        before = self.get("NPCs/A.md")
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        self.assertEqual(self.get("NPCs/A.md"), before)
+        self.assertEqual(tones.rows(p)[0],
+                         "WOULD-CHANGE\tNPCs/A.md:6\tdread -> ominous")
+        tones.apply(p)
+        self.assertEqual(self.get("NPCs/A.md"), p.texts["NPCs/A.md"])
+
+    def test_crlf_note_changes_only_the_word(self):
+        self.put("NPCs/A.md", note("    tone: dread").replace("\n", "\r\n"))
+        before = self.get("NPCs/A.md")
+        tones.apply(tones.plan_fix(self.vault, near=True, sets={}))
+        self.assertEqual(self.get("NPCs/A.md"),
+                         before.replace("tone: dread", "tone: ominous"))
+
+    def test_set_wins_over_near_and_works_without_it(self):
+        self.put("NPCs/A.md", note("    tone: cordial", "    tone: central",
+                                   "    tone: dread"))
+        tones.apply(tones.plan_fix(
+            self.vault, near=False,
+            sets={"cordial": "professional", "Central": "neutral"}))
+        text = self.get("NPCs/A.md")
+        self.assertIn("tone: professional\n", text)
+        self.assertIn("tone: neutral\n", text)
+        self.assertIn("tone: dread\n", text)
+
+    def test_refusals(self):
+        self.put("NPCs/A.md", note("    tone: central", "    tone: warm"))
+        for sets, said in (({"central": "ominouss"}, "not a listed tone"),
+                           ({"warm": "friendly"}, "already a listed tone"),
+                           ({"sibling": "neutral"}, "no relationship has")):
+            with self.assertRaises(tones.TonesError) as raised:
+                tones.plan_fix(self.vault, near=False, sets=sets)
+            self.assertIn(said, str(raised.exception))
+
+    def test_other_tone_text_is_never_touched(self):
+        text = ("---\ntype: npc\ntone: dread\nrelationships:\n"
+                '  - target: "[[A]]"\n    type: knows\n'
+                "    description: |\n      tone: dread\n"
+                "mobrpg:\n  relationships:\n    - predicate: knows\n"
+                "      tone: dread\n---\ntone: dread\n")
+        self.put("NPCs/A.md", text)
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        self.assertEqual(p.texts, {})
+        self.assertEqual(tones.rows(p), ["# 0 tone(s) in 0 note(s)"])
+
+    def test_a_line_it_cannot_rewrite_is_kept_and_listed(self):
+        # A word holding a quote mark is read as a tone but is not a line
+        # the fix's pattern takes, so it is listed and left.
+        self.put("NPCs/A.md", note("    tone: rock'n", "    tone: dread"))
+        p = tones.plan_fix(self.vault, near=True, sets={"rock'n": "neutral"})
+        self.assertEqual(len(p.changes), 1)
+        self.assertEqual(p.kept, [("NPCs/A.md", 6, "rock'n")])
+        self.assertIn("tone: rock'n", p.texts["NPCs/A.md"])
+        self.assertEqual(tones.rows(p)[-1],
+                         "# 1 tone(s) in 1 note(s), 1 left as written")
+
+    def test_a_note_that_is_not_utf8_stops_the_run(self):
+        self.put("NPCs/A.md", note("    tone: dread"))
+        (self.vault / "NPCs" / "B.md").write_bytes(
+            note("    tone: dread").encode("utf-8") + b"\xff\xfe")
+        with self.assertRaises(tones.TonesError) as raised:
+            tones.plan_fix(self.vault, near=True, sets={})
+        self.assertIn("NPCs/B.md is not UTF-8 text", str(raised.exception))
+        self.assertIn("tone: dread", self.get("NPCs/A.md"))
+
+    def test_a_bare_cr_line_ending_never_rewrites_a_wrong_line(self):
+        # The survey reads "\r" as a line break; the fix splits on "\n"
+        # only, so the line numbers differ. The word guard must keep the
+        # tone, never touch another line.
+        text = note("    tone: dread", "    tone: dread").replace("\n", "\r")
+        self.put("NPCs/A.md", text)
+        before = self.get("NPCs/A.md")
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        self.assertEqual(p.changes, [])
+        self.assertEqual(len(p.kept), 2)
+        tones.apply(p)
+        self.assertEqual(self.get("NPCs/A.md"), before)
+
+    def test_a_note_with_a_byte_order_mark_is_left_alone(self):
+        self.put("NPCs/A.md", "﻿" + note("    tone: dread"))
+        before = self.get("NPCs/A.md")
+        p = tones.plan_fix(self.vault, near=True, sets={})
+        tones.apply(p)
+        self.assertEqual(self.get("NPCs/A.md"), before)
+
+    def test_command_line(self):
+        import contextlib
+        import io
+        self.put("NPCs/A.md", note("    tone: dread", "    tone: central"))
+        err = io.StringIO()
+        with contextlib.redirect_stderr(err), \
+                contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(tones.main([str(self.vault), "fix"]), 2)
+            self.assertEqual(tones.main([str(self.vault), "--near"]), 2)
+            self.assertEqual(tones.main(
+                [str(self.vault), "fix", "--set", "central"]), 2)
+            self.assertEqual(tones.main(
+                [str(self.vault), "fix", "--set", "central=nope"]), 1)
+            self.assertEqual(tones.main(
+                [str(self.vault), "fix", "--near", "--set",
+                 "central=neutral", "--write"]), 0)
+        text = self.get("NPCs/A.md")
+        self.assertIn("tone: ominous\n", text)
+        self.assertIn("tone: neutral\n", text)
+
+
 if __name__ == "__main__":
     unittest.main()

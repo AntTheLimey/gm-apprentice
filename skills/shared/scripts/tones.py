@@ -30,11 +30,13 @@ Exit: 0 done or a clean preview; 1 refused or failed (one line why);
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
+from migrate_core import StepFailed, write_all_or_none
 from schema_rules import (
     iter_relationship_tones,
     tone_families,
@@ -86,6 +88,112 @@ def report_lines(uses: list[Use]) -> list[str]:
             f"ask: {sum(count[w] for w in ask)}", *rows]
 
 
+# A tone line the fix may rewrite: the word is the whole value, bare or
+# in one pair of matching quotes, with nothing after it but a comment.
+TONE_LINE_RE = re.compile(
+    r"""^(?P<head>\s*(?:-\s+)?tone:[ \t]*)(?P<q>["']?)"""
+    r"""(?P<word>[^"'#\r\n]*?)(?P=q)(?P<tail>[ \t]*(?:\#[^\r\n]*)?\r?)$""")
+
+
+@dataclass
+class Change:
+    rel: str
+    lineno: int
+    before: str
+    after: str
+
+
+@dataclass
+class Plan:
+    vault: Path
+    originals: dict[str, str] = field(default_factory=dict)
+    texts: dict[str, str] = field(default_factory=dict)
+    changes: list[Change] = field(default_factory=list)
+    kept: list[tuple[str, int, str]] = field(default_factory=list)
+
+
+def _read(vault: Path, rel: str) -> str | None:
+    """The note exactly as it is on disk, or None when it is not UTF-8."""
+    try:
+        return (vault / rel).read_bytes().decode("utf-8")
+    except UnicodeDecodeError:
+        return None
+
+
+def _checked_sets(sets: dict[str, str], used: set[str]) -> dict[str, str]:
+    listed = tone_families()
+    out = {}
+    for old, new in sets.items():
+        old, new = tone_key(old), tone_key(new)
+        if new not in listed:
+            raise TonesError(f"{new} is not a listed tone; the list is: "
+                             f"{', '.join(listed)}")
+        if old in listed:
+            raise TonesError(f"{old} is already a listed tone")
+        if old not in used:
+            raise TonesError(f"no relationship has the tone {old}")
+        out[old] = new
+    return out
+
+
+def plan_fix(vault: Path, near: bool, sets: dict[str, str]) -> Plan:
+    """What `fix` would write. Changes nothing."""
+    uses = survey(vault)
+    listed = tone_families()
+    sets = _checked_sets(sets, {tone_key(u.raw) for u in uses
+                                if u.raw not in listed})
+    p = Plan(vault)
+    by_note: dict[str, list[tuple[Use, str]]] = {}
+    for u in uses:
+        if u.raw in listed:
+            continue
+        new = sets.get(tone_key(u.raw)) or (tone_proposal(u.raw) if near
+                                            else None)
+        if new:
+            by_note.setdefault(u.rel, []).append((u, new))
+    for rel, wanted in by_note.items():
+        text = _read(vault, rel)
+        if text is None:
+            raise TonesError(f"{rel} is not UTF-8 text; fix the file, "
+                             f"then run it again")
+        # The survey read the note with universal newlines; this splits on
+        # "\n" only, so a bare "\r" note can number lines differently. The
+        # word check below keeps such a tone rather than rewrite a wrong line.
+        lines = text.split("\n")
+        for u, new in wanted:
+            m = (TONE_LINE_RE.match(lines[u.lineno - 1])
+                 if u.lineno <= len(lines) else None)
+            if not m or m.group("word").strip() != u.raw:
+                p.kept.append((rel, u.lineno, u.raw))
+                continue
+            lines[u.lineno - 1] = (f"{m.group('head')}{m.group('q')}{new}"
+                                   f"{m.group('q')}{m.group('tail')}")
+            p.changes.append(Change(rel, u.lineno, u.raw, new))
+        after = "\n".join(lines)
+        if after != text:
+            p.originals[rel], p.texts[rel] = text, after
+    return p
+
+
+def apply(p: Plan) -> None:
+    """Write every note of the plan, or leave the vault exactly as it was."""
+    try:
+        write_all_or_none(p.vault, p.originals, p.texts, read=_read,
+                          what="the tidy", holds="the new tones")
+    except StepFailed as e:
+        raise TonesError(str(e)) from e
+
+
+def rows(p: Plan, done: bool = False) -> list[str]:
+    verb = "CHANGED" if done else "WOULD-CHANGE"
+    out = [f"{verb}\t{c.rel}:{c.lineno}\t{c.before} -> {c.after}"
+           for c in p.changes]
+    out += [f"KEPT\t{rel}:{lineno}\t{tone}\tnot a plain tone line; "
+            f"edit the note" for rel, lineno, tone in p.kept]
+    return out + [f"# {len(p.changes)} tone(s) in {len(p.texts)} note(s)"
+                  + (f", {len(p.kept)} left as written" if p.kept else "")]
+
+
 def main(argv: list[str] | None = None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -94,12 +202,43 @@ def main(argv: list[str] | None = None) -> int:
         description="List a vault's stray tone words, and tidy them.")
     ap.add_argument("vault", type=Path)
     ap.add_argument("command", nargs="?", choices=["fix"])
+    ap.add_argument("--near", action="store_true")
+    ap.add_argument("--set", dest="sets", action="append", metavar="OLD=NEW")
+    ap.add_argument("--write", action="store_true")
     args = ap.parse_args(argv)
     if not args.vault.is_dir():
         print(f"tones.py: not a directory: {args.vault.as_posix()}",
               file=sys.stderr)
         return 2
-    print("\n".join(report_lines(survey(args.vault))))
+    usage = None
+    if args.command is None and (args.near or args.sets or args.write):
+        usage = "--near, --set and --write go with fix"
+    elif args.command == "fix" and not (args.near or args.sets):
+        usage = "fix takes --near, --set OLD=NEW, or both"
+    sets: dict[str, str] = {}
+    for pair in args.sets or []:
+        old, sep, new = pair.partition("=")
+        if not sep or not old.strip() or not new.strip():
+            usage = "--set takes OLD=NEW"
+        sets[old] = new
+    if usage:
+        print(f"tones.py: {usage}", file=sys.stderr)
+        return 2
+    try:
+        if args.command is None:
+            print("\n".join(report_lines(survey(args.vault))))
+            return 0
+        p = plan_fix(args.vault, args.near, sets)
+        if args.write:
+            apply(p)
+        print("\n".join(rows(p, done=args.write)))
+    except TonesError as e:
+        print(f"tones.py: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt as e:
+        print(f"tones.py: interrupted; {e}" if str(e)
+              else "tones.py: interrupted", file=sys.stderr)
+        return 130
     return 0
 
 
