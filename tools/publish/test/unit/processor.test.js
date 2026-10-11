@@ -661,6 +661,13 @@ describe('publishMode (#167)', () => {
   });
 });
 
+describe('publishMode (shared vectors; vaultlib.publish_mode must agree)', () => {
+  const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'publish-mode-vectors.json'), 'utf8'));
+  for (const v of VECTORS.cases) {
+    it(`${JSON.stringify(v.frontmatter)} is ${v.mode}`, () => assert.strictEqual(publishMode(v.frontmatter), v.mode));
+  }
+});
+
 describe('keepOnlySections (#167)', () => {
   const md = '# Title\n\npreamble\n\n## Overview\n\npublic\n\n## The Climax\n\nsecret\n';
 

@@ -1475,12 +1475,17 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
 // How much of a file to publish, from its own `publish:` frontmatter key.
 // 'all' (default), 'stub' (page shell, body suppressed), 'none' (no page).
 // Absent/true/anything unrecognized means 'all' — a typo must not silently
-// unpublish a page, and must not silently publish one either, so only the two
-// explicit opt-outs are honoured.
+// unpublish a page. A value that says no is read in any capitals and trimmed
+// (`False`, `None`), and a list is read item by item: any item that says no
+// wins over the rest, as does `stub` over `all`. Reading more of these as a
+// no only ever shows less. skills/shared/scripts/vaultlib.py `publish_mode`
+// is this function; test/fixtures/publish-mode-vectors.json pins both.
 function publishMode(frontmatter) {
   const raw = frontmatter && frontmatter.publish;
-  if (raw === false || raw === 'false' || raw === 'none') return 'none';
-  if (raw === 'stub') return 'stub';
+  const items = (Array.isArray(raw) ? raw.flat(Infinity) : [raw])
+    .map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v));
+  if (items.some((v) => v === false || v === 'false' || v === 'none')) return 'none';
+  if (items.includes('stub')) return 'stub';
   return 'all';
 }
 

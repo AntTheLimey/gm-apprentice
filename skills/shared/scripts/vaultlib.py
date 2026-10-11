@@ -1864,21 +1864,30 @@ def publish_mode(fm: dict[str, Any] | None) -> Literal["all", "stub", "none"]:
     that never reaches a reader.
 
     Absent, `true`, or anything unrecognised means "all", exactly as
-    there: a typo must not silently unpublish a page, and must not
-    silently convince a check that a page is safe.
-
-    The comparison is literal, as it is there. `publish: False` reaches
-    the publish tool through a real YAML parser as boolean false and IS
-    dropped, while this module's frontmatter reader hands back the string
-    "False" and calls it "all" — an over-report, which is the direction a
-    leak check is allowed to be wrong in.
+    there. A value that says no is read in any capitals and trimmed
+    (`False`, `None`; this module's frontmatter reader hands back strings
+    where a real YAML parser gives a boolean), and a list is read item
+    by item with the no winning, as there.
+    tools/publish/test/fixtures/publish-mode-vectors.json pins both.
     """
     raw = (fm or {}).get("publish")
-    if raw is False or (isinstance(raw, str) and raw in PUBLISH_NONE_VALUES):
+    items = _flat_list(raw) if isinstance(raw, list) else [raw]
+    items = [i.strip().lower() if isinstance(i, str) else i for i in items]
+    if any(i is False or (isinstance(i, str) and i in PUBLISH_NONE_VALUES)
+           for i in items):
         return "none"
-    if raw == "stub":
+    if "stub" in [i for i in items if isinstance(i, str)]:
         return "stub"
     return "all"
+
+
+def _flat_list(value: list) -> list:
+    """`value` with every list inside it opened out, as JavaScript's
+    `flat(Infinity)`."""
+    out: list = []
+    for item in value:
+        out.extend(_flat_list(item) if isinstance(item, list) else [item])
+    return out
 
 
 # --------------------------------------------------------------------------
