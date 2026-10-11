@@ -16,8 +16,8 @@ everywhere it is used: say so when the scope was narrower.
 The first line counts every tone, the listed ones, and the two kinds of
 stray (`near`, `ask`). Then one row per stray word. No rows: say in a
 line that the tones are tidy, and stop. In a report, strays are Info.
-In a Full Audit, report the two counts and ask nothing until the
-report has been presented.
+In a Full Audit, report the two counts; do not run `uses` or ask
+anything until the report has been presented.
 
 ## NEAR rows: one yes
 
@@ -47,8 +47,9 @@ An `ASK` row is a word no rule can place (word, count, up to three
 notes); `--near` never changes it. Propose only listed words: the
 three `#` lines.
 
-1. `tones.py uses` lists every use (`note:line`, a tab, the word).
-   Read each relationship's `description` there.
+1. `tones.py uses` lists every use, tab-separated: `note:line`, the
+   word, the target, the description. Read that listing. Open a note
+   only where a row's description is empty or does not settle it.
 2. Show one table, however few the words: word, count, proposed listed
    word, why in a few words. Put `ask: X or Y` where the descriptions
    do not settle it, or the word means different things in different
@@ -59,12 +60,13 @@ three `#` lines.
    What the GM leaves stays as written and is reported next time.
 4. Apply it in one fix: `tones.py fix --set old1=new1 --set old2=new2`
 
-One `--set` changes every use. If the GM wants a word split, first
-write the listed word on the fewer uses' tone lines yourself, then
-`--set` the rest. Where the old word held something the listed word
-loses (`tragic` becoming `negative`, any "not a feeling" word), offer
-to add it to that relationship's `description`; on a yes, write it
-yourself, there and on the tie's line under `## Related`.
+One `--set` changes every use. To split a word, name the uses each way
+in the question; on a yes, write the listed word on the fewer uses'
+tone lines yourself, then `--set` the rest. Where the old word held
+something the listed word loses (`tragic` becoming `negative`, any
+"not a feeling" word), offer to add it to that relationship's
+`description`; on a yes, write it yourself, there and on the tie's
+line under `## Related`.
 
 ## Running a fix
 

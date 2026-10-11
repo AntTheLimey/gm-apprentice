@@ -20,11 +20,17 @@ When there are ASK rows, three `#` lines after them give the listed
 words by family, for the GM to pick from. Notes under `_QA`, `_archive`,
 `_Templates` and `_inbox` are not read.
 
-`uses` prints every use of a stray word, one row each, and writes
-nothing: `note:line`, a tab, the word. With no WORD it takes every ASK
-word, commonest first; with WORDs, those strays (NEAR or ASK) in the
-order given. A last `#` line counts the uses and the words. A WORD that
-is listed, or that no relationship has, is refused.
+`uses` prints every use of a stray word, one tab-separated row each,
+and writes nothing:
+
+    note:line, the word, the relationship's target as written, and its
+    description on one line (cut at 300 characters with an ellipsis;
+    empty when it has none)
+
+With no WORD it takes every ASK word, commonest first; with WORDs, the
+strays (NEAR or ASK) that compare equal to each, in the order given. A
+last `#` line counts the uses and the words. A WORD no stray compares
+equal to is refused.
 
 `fix` rewrites strays. `--near` takes every NEAR row; `--except WORD`
 (repeatable, with --near only) leaves that row's word as written.
@@ -50,6 +56,7 @@ from pathlib import Path
 
 from migrate_core import StepFailed, write_all_or_none
 from schema_rules import (
+    iter_relationship_edges,
     iter_relationship_tones,
     tone_families,
     tone_key,
@@ -67,6 +74,8 @@ class Use:
     rel: str
     lineno: int
     raw: str
+    target: str = ""        # the edge's target, as written
+    description: str = ""   # the edge's description, on one line
 
 
 def survey(vault: Path) -> list[Use]:
@@ -75,8 +84,15 @@ def survey(vault: Path) -> list[Use]:
     for rel, text in vault_files(vault):
         if is_unchecked_source(rel):
             continue
-        uses += [Use(rel, lineno, raw)
-                 for lineno, raw in iter_relationship_tones(text)]
+        found = list(iter_relationship_tones(text))
+        if not found:
+            continue
+        edges = {lineno: edge for edge in iter_relationship_edges(text)
+                 for lineno in edge.tone_lines}
+        for lineno, raw in found:
+            edge = edges.get(lineno)
+            uses.append(Use(rel, lineno, raw, edge.target if edge else "",
+                            edge.description if edge else ""))
     return uses
 
 
@@ -105,9 +121,20 @@ def report_lines(uses: list[Use]) -> list[str]:
             f"ask: {sum(count[w] for w in ask)}", *rows]
 
 
+DESCRIPTION_CAP = 300
+
+
+def _one_line(text: str, cap: int | None = None) -> str:
+    text = " ".join(text.split())
+    if cap is not None and len(text) > cap:
+        return text[:cap].rstrip() + "\u2026"
+    return text
+
+
 def use_lines(uses: list[Use], words: Iterable[str]) -> list[str]:
-    """`note:line<TAB>word` for every use of each stray in `words`, or of
-    every word no rule places when there are none."""
+    """`note:line<TAB>word<TAB>target<TAB>description` for every use of
+    each stray in `words`, or of every word no rule places when there are
+    none."""
     listed = tone_families()
     where: dict[str, list[Use]] = {}
     for u in uses:
@@ -115,15 +142,15 @@ def use_lines(uses: list[Use], words: Iterable[str]) -> list[str]:
             where.setdefault(tone_key(u.raw), []).append(u)
     wanted = list(dict.fromkeys(tone_key(w) for w in words))
     for w in wanted:
-        if w in listed:
-            raise TonesError(f"{w} is a listed tone")
         if w not in where:
-            raise TonesError(f"no relationship has the tone {w}")
+            raise TonesError(f"{w} is a listed tone" if w in listed
+                             else f"no relationship has the tone {w}")
     if not wanted:
         wanted = sorted((w for w, found in where.items()
                          if not tone_proposal(found[0].raw)),
                         key=lambda w: (-len(where[w]), w))
-    out = [f"{u.rel}:{u.lineno}\t{w}" for w in wanted
+    out = [f"{u.rel}:{u.lineno}\t{w}\t{_one_line(u.target)}\t"
+           f"{_one_line(u.description, DESCRIPTION_CAP)}" for w in wanted
            for u in sorted(where[w], key=lambda u: (u.rel, u.lineno))]
     return out + [f"# {len(out)} use(s) of {len(wanted)} word(s)"]
 

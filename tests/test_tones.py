@@ -539,10 +539,10 @@ class UsesTests(VaultCase):
     def test_with_no_word_it_lists_every_use_of_the_words_no_rule_places(self):
         self.fill()
         self.assertEqual(tones.use_lines(tones.survey(self.vault), []), [
-            "Locations/C.md:6\ttragic",
-            "NPCs/A.md:9\ttragic",
-            "NPCs/B.md:6\ttragic",
-            "NPCs/B.md:12\tcentral",
+            "Locations/C.md:6\ttragic\t[[T0]]\t",
+            "NPCs/A.md:9\ttragic\t[[T1]]\t",
+            "NPCs/B.md:6\ttragic\t[[T0]]\t",
+            "NPCs/B.md:12\tcentral\t[[T2]]\t",
             "# 4 use(s) of 2 word(s)"])
 
     def test_named_words_are_listed_in_the_order_given(self):
@@ -550,13 +550,89 @@ class UsesTests(VaultCase):
         self.assertEqual(
             tones.use_lines(tones.survey(self.vault),
                             [" CENTRAL ", "dread", "central"]),
-            ["NPCs/B.md:12\tcentral", "NPCs/A.md:6\tdread",
+            ["NPCs/B.md:12\tcentral\t[[T2]]\t",
+             "NPCs/A.md:6\tdread\t[[T0]]\t",
              "# 2 use(s) of 2 word(s)"])
 
     def test_a_vault_with_nothing_to_ask_about(self):
         self.put("NPCs/A.md", note("    tone: dread", "    tone: warm"))
         self.assertEqual(tones.use_lines(tones.survey(self.vault), []),
                          ["# 0 use(s) of 0 word(s)"])
+
+    EDGES = (
+        "---\ntype: npc\nrelationships:\n"
+        '  - target: "[[Ana Ruiz|Ana]]"\n'
+        "    type: knows\n"
+        '    description: "Owes her a debt: a large one"  # s3\n'
+        "    tone: tragic\n"
+        "  - tone: tragic\n"
+        "    target: '[[Bo]]'\n"
+        "    description: |\n"
+        "      First line,\twith a tab.\n"
+        "\n"
+        "      tone: second line\n"
+        "    strength: 4\n"
+        "  - target: \"[[Cy]]\"\n"
+        "    tone: tragic\n"
+        "    type: knows\n"
+        "  - target: Dee\n"
+        "    tone: tragic\n"
+        "    description: plain text that runs\n"
+        "      on to a second line\n"
+        "    strength: 2\n"
+        "  - target: \"[[Eve]]\"\n"
+        "    tone: tragic\n"
+        "    description: >-\n"
+        "      " + "word " * 80 + "\n"
+        "  - target: \"[[Fay]]\"\n"
+        "    tone: warm\n"
+        "    description: \"not a stray\"\n"
+        "mobrpg:\n  relationships:\n    - predicate: knows\n"
+        "      tone: tragic\n      description: \"machine\"\n"
+        "---\nBody\n")
+
+    def test_each_row_carries_the_edges_target_and_description(self):
+        long = ("word " * 80).strip()
+        want = [
+            "NPCs/A.md:7\ttragic\t[[Ana Ruiz|Ana]]\t"
+            "Owes her a debt: a large one",
+            "NPCs/A.md:8\ttragic\t[[Bo]]\t"
+            "First line, with a tab. tone: second line",
+            "NPCs/A.md:16\ttragic\t[[Cy]]\t",
+            "NPCs/A.md:19\ttragic\tDee\t"
+            "plain text that runs on to a second line",
+            "NPCs/A.md:24\ttragic\t[[Eve]]\t" + long[:300].rstrip() + "\u2026",
+            "# 5 use(s) of 1 word(s)"]
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                self.put("NPCs/A.md", self.EDGES.replace("\n", eol))
+                self.assertEqual(
+                    tones.use_lines(tones.survey(self.vault), []), want)
+
+    def test_the_edge_walker_leaves_the_other_readings_alone(self):
+        self.assertEqual(
+            [(e.tone_lines, e.target) for e in
+             sr.iter_relationship_edges(self.EDGES)],
+            [([7], "[[Ana Ruiz|Ana]]"), ([8], "[[Bo]]"), ([16], "[[Cy]]"),
+             ([19], "Dee"), ([24], "[[Eve]]"), ([28], "[[Fay]]")])
+        self.assertEqual(list(sr.iter_relationship_tones(self.EDGES)),
+                         [(7, "tragic"), (8, "tragic"), (16, "tragic"),
+                          (19, "tragic"), (24, "tragic"), (28, "warm")])
+        self.assertEqual(
+            [n for n, _k, _v in sr.iter_relationship_predicates(self.EDGES)],
+            [5, 17, 32])
+        self.assertEqual(list(sr.iter_relationship_edges(NOTE))[0].description,
+                         "tone: dread a line of prose")
+
+    def test_a_word_names_every_stray_that_compares_equal_to_it(self):
+        self.put("NPCs/A.md", note("    tone: Friendly", "    tone: friendly",
+                                   "    tone: ' FRIENDLY'"))
+        for word in ("friendly", "Friendly"):
+            self.assertEqual(
+                tones.use_lines(tones.survey(self.vault), [word]),
+                ["NPCs/A.md:6\tfriendly\t[[T0]]\t",
+                 "NPCs/A.md:12\tfriendly\t[[T2]]\t",
+                 "# 2 use(s) of 1 word(s)"])
 
     def test_a_word_that_is_not_a_stray_is_refused(self):
         self.fill()
@@ -571,7 +647,7 @@ class UsesTests(VaultCase):
         before = {rel: self.get(rel) for rel in
                   ("NPCs/A.md", "NPCs/B.md", "Locations/C.md")}
         self.assertEqual(self.run_main("uses", "central"),
-                         (0, "NPCs/B.md:12\tcentral\n"
+                         (0, "NPCs/B.md:12\tcentral\t[[T2]]\t\n"
                              "# 1 use(s) of 1 word(s)\n", ""))
         code, out, err = self.run_main("uses")
         self.assertEqual((code, len(out.splitlines()), err), (0, 5, ""))

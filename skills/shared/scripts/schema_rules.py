@@ -18,6 +18,7 @@ import json
 import re
 import sys
 from collections.abc import Iterator
+from dataclasses import dataclass, field
 from difflib import get_close_matches
 from functools import lru_cache
 from pathlib import Path
@@ -248,11 +249,13 @@ EMPTY_FRONTMATTER_RE = re.compile(r"^---\r?\n---(?:\r?\n|$)")
 NO_TONE = frozenset({"null", "~"})
 
 
-def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
-                            top_level_only: bool):
-    """Yield (lineno, key, value) for each `key_re` line on an edge of a
-    `relationships:` block. `top_level_only` leaves out a block nested
-    under another key (the machine-managed `mobrpg:` node's)."""
+def _iter_relationship_lines(content: str, top_level_only: bool):
+    """Yield (lineno, kind, indent, raw line) for each line inside a
+    `relationships:` block: `key` for a line of YAML, `open` for a key
+    that opens a block scalar, `text` for a line of that scalar's text.
+    `top_level_only` leaves out a block nested under another key (the
+    machine-managed `mobrpg:` node's). This is the one walk of the block;
+    the readers below take what they need from it."""
     match = FRONTMATTER_RE.match(content)
     if not match or EMPTY_FRONTMATTER_RE.match(content):
         return
@@ -269,6 +272,8 @@ def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
         # `relationships:` block does not open one.
         if scalar_indent is not None:
             if indent > scalar_indent:
+                if block_indent is not None:
+                    yield offset + 2, "text", indent, line
                 continue
             scalar_indent = None
         # The block ends at the next key at or above its own indent.
@@ -287,13 +292,24 @@ def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
         opener = BLOCK_SCALAR_OPEN_RE.match(line)
         if opener:
             scalar_indent = len(opener.group(1))
+            if block_indent is not None:
+                yield offset + 2, "open", indent, line
             continue
         if block_indent is None:
             continue
-        edge = key_re.match(stripped)
+        # +2: line 1 is the opening `---`, so frontmatter starts at 2.
+        yield offset + 2, "key", indent, line
+
+
+def _iter_relationship_keys(content: str, key_re: re.Pattern[str],
+                            top_level_only: bool):
+    """Yield (lineno, key, value) for each `key_re` line on an edge of a
+    `relationships:` block."""
+    for lineno, kind, _indent, line in _iter_relationship_lines(
+            content, top_level_only):
+        edge = key_re.match(line.strip()) if kind == "key" else None
         if edge:
-            # +2: line 1 is the opening `---`, so frontmatter starts at 2.
-            yield offset + 2, edge.group(1), scalar_value(edge.group(2))
+            yield lineno, edge.group(1), scalar_value(edge.group(2))
 
 
 def iter_relationship_predicates(content: str):
@@ -315,3 +331,65 @@ def iter_relationship_tones(content: str) -> Iterator[tuple[int, str]]:
             content, TONE_KEY_RE, True):
         if value and value.lower() not in NO_TONE:
             yield lineno, value
+
+
+@dataclass
+class RelationshipEdge:
+    """One edge of a note's own `relationships:` block, as `tones.py uses`
+    shows it."""
+    tone_lines: list[int] = field(default_factory=list)
+    target: str = ""
+    description: str = ""
+
+
+EDGE_KEY_RE = re.compile(r"^(-\s+)?([\w-]+):\s*(.*)$")
+
+
+def iter_relationship_edges(content: str) -> Iterator[RelationshipEdge]:
+    """Yield each edge of the note's own `relationships:` block: the lines
+    of its `tone:` keys (the numbers `iter_relationship_tones` gives), its
+    `target` as written, and its `description` on one line (a block
+    scalar's lines, or a value that runs on to more-indented lines, joined
+    with single spaces; empty when there is none)."""
+    edge: RelationshipEdge | None = None
+    column = 0                    # where this edge's keys start
+    key = ""                      # the key the last line belongs to
+    parts: list[str] = []         # the description, as it arrives
+    folded = False                # it came from a block scalar
+
+    def finished(e: RelationshipEdge) -> RelationshipEdge:
+        text = " ".join(" ".join(parts).split())
+        e.description = text if folded else scalar_value(text)
+        return e
+
+    for lineno, kind, indent, line in _iter_relationship_lines(content, True):
+        bare = line.strip()
+        if kind == "text":
+            if edge and key == "description":
+                parts.append(bare)
+            continue
+        m = EDGE_KEY_RE.match(bare)
+        dash = bare.startswith("-")
+        if not dash and edge and (indent > column or not m):
+            # A value that runs on: more indented than the edge's keys.
+            if key == "description" and indent > column:
+                parts.append(bare)
+            continue
+        if dash:
+            if edge:
+                yield finished(edge)
+            edge, parts, folded = RelationshipEdge(), [], False
+            column = indent + (len(m.group(1)) if m else 2)
+            key = ""
+        if not edge or not m:
+            continue
+        key, value = m.group(2), m.group(3)
+        if key == "tone":
+            edge.tone_lines.append(lineno)
+        elif key == "target":
+            edge.target = scalar_value(value)
+        elif key == "description":
+            folded = kind == "open"
+            parts = [] if folded else [value]
+    if edge:
+        yield finished(edge)
