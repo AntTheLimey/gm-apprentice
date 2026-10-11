@@ -640,7 +640,12 @@ function markedBlocks(markdown, markerName) {
   // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
   // closer shown inside a fenced example would end the block early. Callers that
   // pass raw gray-matter content (build.js's published view) keep CRLF.
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  // A marker split over lines ("<!--\ngm-only\n-->") is one marker on its first line; the
+  // line breaks it held follow it, so every line after it stays on its own line number.
+  const lines = String(markdown).replace(/\r\n?/g, '\n')
+    .replace(markerPattern(markerName), (whole) => (whole.includes('\n')
+      ? whole.replace(/\n/g, ' ') + whole.replace(/[^\n]/g, '') : whole))
+    .split('\n');
   const result = [];
   const warnings = [];
   const stack = [];
