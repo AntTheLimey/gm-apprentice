@@ -216,6 +216,14 @@
     return columnWidth >= drawingWidth * 0.7;
   }
 
+  // A row's meta (kind and sessions) that has wrapped under its name: it is drawn and its top
+  // is at or below the name's bottom. CSS then sets it against the name, so it reads as that
+  // row's own and not the next row's.
+  function metaStacked(name, meta) {
+    if (!name || !meta || !meta.offsetParent) return false;
+    return meta.offsetTop >= name.offsetTop + name.offsetHeight - 2;
+  }
+
   function nextTab(current, count, key) {
     if (key === 'ArrowRight') return (current + 1) % count;
     if (key === 'ArrowLeft') return (current + count - 1) % count;
@@ -449,7 +457,7 @@
   }
 
   var api = {
-    treatmentFor: treatmentFor, treeLayout: treeLayout, webLayout: webLayout, nextTab: nextTab,
+    treatmentFor: treatmentFor, treeLayout: treeLayout, webLayout: webLayout, nextTab: nextTab, metaStacked: metaStacked,
     tapAction: tapAction, toneClass: toneClass, sessionsText: sessionsText, treeLines: treeLines, safeHref: safeHref,
     parseColour: parseColour, groundOf: groundOf, contrast: contrast, ink: ink, inks: inks, readable: readable
   };
@@ -738,6 +746,14 @@
         box = t.wrap.getBoundingClientRect();
         if (!(box.width > 0)) return;
       }
+      // Rows whose meta wrapped under the name are marked first: that changes the height.
+      var rows = t.wrap.querySelectorAll ? t.wrap.querySelectorAll('.cx-row') : [];
+      var stacked = [];
+      var r;
+      for (r = 0; r < rows.length; r++) rows[r].classList.remove('cx-stacked');
+      for (r = 0; r < rows.length; r++) stacked.push(metaStacked(rows[r].querySelector('.cx-name'), rows[r].querySelector('.cx-meta')));
+      for (r = 0; r < rows.length; r++) if (stacked[r]) rows[r].classList.add('cx-stacked');
+      box = t.wrap.getBoundingClientRect();
       var sig = [Math.round(box.width), Math.round(box.height), shape].join('/');
       if (sig === t.sig) return;
       t.sig = sig;

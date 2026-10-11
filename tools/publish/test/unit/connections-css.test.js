@@ -90,3 +90,8 @@ test('a long unbroken word (a pasted URL) wraps inside its card, line, strip and
   // the plain lists, and the mentions that sit side by side in them
   assert.match(block, /\.cx-plain li,\s*\.cx-mentions li,\s*\.cx-mlist li\s*\{[^}]*overflow-wrap:\s*anywhere/);
 });
+
+test('a meta line that wraps under its name is set against the name, not at the row\u2019s right edge', () => {
+  assert.match(block, /\.cx-row\.cx-stacked \.cx-meta\s*\{[^}]*margin-left:\s*0/);
+  assert.match(block, /\.cx-row\.cx-stacked \.cx-meta\s*\{[^}]*text-align:\s*left/);
+});

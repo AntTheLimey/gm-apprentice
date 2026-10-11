@@ -128,6 +128,16 @@ test('arrow keys move between tabs and wrap', () => {
   assert.strictEqual(api.nextTab(1, 3, 'a'), 1);
 });
 
+test('a meta line that sits below its name is stacked; one beside it is not', () => {
+  const name = { offsetTop: 10, offsetHeight: 20 };
+  assert.strictEqual(api.metaStacked(name, { offsetTop: 32, offsetHeight: 16, offsetParent: {} }), true);
+  assert.strictEqual(api.metaStacked(name, { offsetTop: 10, offsetHeight: 16, offsetParent: {} }), false);
+  assert.strictEqual(api.metaStacked(name, { offsetTop: 14, offsetHeight: 16, offsetParent: {} }), false);
+  // a hidden meta (not drawn) is never stacked; a row with no meta has nothing to stack
+  assert.strictEqual(api.metaStacked(name, { offsetTop: 0, offsetHeight: 0, offsetParent: null }), false);
+  assert.strictEqual(api.metaStacked(name, null), false);
+});
+
 test('on touch the first tap selects and the second follows', () => {
   const a = {}; const b = {};
   assert.strictEqual(api.tapAction(null, a, 'touch'), 'select');

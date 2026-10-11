@@ -4200,6 +4200,7 @@ a.cx-row .cx-name { color: var(--text); }
    be broken inside a word to make room: the meta goes under the name instead. */
 .cx-roomy a.cx-row, .cx-roomy span.cx-row { flex-wrap: wrap; }
 .cx-roomy .cx-row .cx-name { flex: 1 1 8rem; }
+.cx-row.cx-stacked .cx-meta { margin-left: 0; padding-left: 0; text-align: left; }
 /* wide: the subject, then the groups' headings, then the names, in three columns. The gaps between
    the columns are where the curves run, so no curve meets a word. A heading is set in the top half of
    its cell; the line to the group's dot runs level through the middle of the cell, under the heading. */
