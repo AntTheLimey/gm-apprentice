@@ -1104,3 +1104,81 @@ class TwoHiddenBlocksTests(WrapupFixture):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ToneWordsTests(unittest.TestCase):
+    NOTE = ("---\ntype: npc\nrelationships:\n"
+            '  - target: "[[A]]"\n    type: knows\n    tone: {tone}\n---\n')
+
+    def setUp(self):
+        self.vault = make_vault(self)
+
+    def put(self, rel, text, eol="\n"):
+        path = self.vault / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(text.replace("\n", eol).encode("utf-8"))
+
+    def get(self, rel):
+        return (self.vault / rel).read_bytes().decode("utf-8")
+
+    def test_nothing_is_offered_to_a_tidy_vault(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="warm"))
+        self.assertEqual(mv.find_tone_words(self.vault), [])
+
+    def test_only_ask_words_means_no_choice(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="central"))
+        self.assertEqual(mv.find_tone_words(self.vault), [])
+
+    def test_tidy_rewrites_the_near_words_only(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
+        self.put("NPCs/B.md", self.NOTE.format(tone="central"))
+        (item,) = mv.find_tone_words(self.vault)
+        self.assertEqual(item.id, "tone-words")
+        self.assertEqual(item.group, CHOICE)
+        self.assertEqual(item.wants, "tidy or leave")
+        self.assertIn("1 tone word tidied to the standard list by rule",
+                      item.lines[0])
+        self.assertIn("1 for you to pick later in campaign-qa",
+                      item.lines[0])
+        self.assertIn("dread -> ominous (1)", item.lines)
+        done = item.apply("tidy")
+        self.assertEqual(done, ["NPCs/A.md:6: dread -> ominous"])
+        self.assertIn("tone: ominous", self.get("NPCs/A.md"))
+        self.assertIn("tone: central", self.get("NPCs/B.md"))
+
+    def test_tidy_keeps_crlf(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"), eol="\r\n")
+        (item,) = mv.find_tone_words(self.vault)
+        item.apply("tidy")
+        self.assertEqual(self.get("NPCs/A.md"),
+                         self.NOTE.format(tone="ominous").replace("\n", "\r\n"))
+
+    def test_tidy_says_which_strays_it_kept(self):
+        # An all-CR note is read as tones but is not a line the fix takes.
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"), eol="\r")
+        self.put("NPCs/B.md", self.NOTE.format(tone="dread"))
+        (item,) = mv.find_tone_words(self.vault)
+        before = self.get("NPCs/A.md")
+        done = item.apply("tidy")
+        self.assertEqual(done, [
+            "NPCs/B.md:6: dread -> ominous",
+            "NPCs/A.md:6: dread left as written (not a plain tone line)"])
+        self.assertEqual(self.get("NPCs/A.md"), before)
+
+    def test_leave_writes_nothing(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
+        (item,) = mv.find_tone_words(self.vault)
+        self.assertEqual(item.apply("leave"),
+                         ["left the tone words as they are"])
+        self.assertIn("tone: dread", self.get("NPCs/A.md"))
+
+    def test_any_other_answer_is_refused(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
+        (item,) = mv.find_tone_words(self.vault)
+        with self.assertRaises(StepFailed):
+            item.apply("yes")
+
+    def test_the_check_is_registered_for_this_release(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-words")
+        self.assertEqual((check.release, check.band, check.choices),
+                         ("1.10.44", 3, ("tone-words=",)))

@@ -776,6 +776,49 @@ def find_timeline_page(vault: Path) -> list[Item]:
                   f"entries)"], apply)]
 
 
+def find_tone_words(vault: Path) -> list[Item]:
+    """1.10.44: a relationship's tone is one of the listed words. Offers
+    the rewrites a rule gives (cordial -> friendly). A word with no rule
+    is campaign-qa's to ask about and is never touched here."""
+    import tones    # it imports migrate_core, as this module does
+
+    report = tones.report_lines(tones.survey(vault))
+    near = [r.split("\t") for r in report if r.startswith("NEAR\t")]
+    if not near:
+        return []
+    n_near = sum(int(r[3]) for r in near)
+    n_ask = sum(int(r.split("\t")[2]) for r in report
+                if r.startswith("ASK\t"))
+
+    def words(n: int) -> str:
+        return f"{n} tone word{'' if n == 1 else 's'}"
+
+    head = (f"tidy: {words(n_near)} tidied to the standard list by rule"
+            + (f"; {n_ask} for you to pick later in campaign-qa"
+               if n_ask else "")
+            + "; leave: keep them as written")
+
+    def apply(value: str | None) -> list[str]:
+        if value not in ("tidy", "leave"):
+            raise StepFailed("tone-words takes tidy or leave")
+        if value == "leave":
+            return ["left the tone words as they are"]
+        try:
+            p = tones.plan_fix(vault, near=True, sets={})
+            tones.apply(p)
+        except tones.TonesError as e:
+            raise StepFailed(str(e)) from e
+        return [*(f"{c.rel}:{c.lineno}: {c.before} -> {c.after}"
+                  for c in p.changes),
+                *(f"{rel}:{lineno}: {tone} left as written "
+                  f"(not a plain tone line)"
+                  for rel, lineno, tone in p.kept)]
+
+    return [Item("tone-words", CHOICE,
+                 [head, *(f"{w} -> {to} ({n})" for _, w, to, n in near)],
+                 apply, wants="tidy or leave")]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -799,6 +842,8 @@ VAULT_CHECKS: list[Check] = [
           choices=("wrapup-sections=",)),
     Check("wrapup-sections-key", None, 2, "the retired player-sections list",
           find_wrapup_sections_key),
+    Check("tone-words", "1.10.44", 3, "tone words",
+          find_tone_words, choices=("tone-words=",)),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",

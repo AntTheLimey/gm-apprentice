@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.43"
+current_version: "1.10.44"
 ---
 
 # Vault Migration Record
@@ -50,3 +50,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.41 | Link previews: no vault change. A site that sets nothing gains the cards at its next build. The site's publish tool is repinned to 1.16.0 by the every-pass repin | — |
 | 1.10.42 | Site faults: no vault change. The build names faults in notes and campaign-qa fixes them or asks. The site's publish tool is repinned to 1.17.0 by the every-pass repin | — |
 | 1.10.43 | `links.py unlink --in` fix: no vault change | — |
+| 1.10.44 | A relationship's tone is one of 27 listed words: tones a rule can place (cordial to friendly) are rewritten on a yes; the rest are asked about in campaign-qa | `tone-words` |
