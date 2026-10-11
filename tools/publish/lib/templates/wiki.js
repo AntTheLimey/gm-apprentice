@@ -43,15 +43,13 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
   const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;
 
-  const contentHtml = mainContent;
-
   return baseShell({
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: (partyBoardHtml ? partyBoardHtml + '\n' : '') + contentHtml + (partyDataScript ? '\n' + partyDataScript : ''),
+    content: (partyBoardHtml ? partyBoardHtml + '\n' : '') + mainContent + (partyDataScript ? '\n' + partyDataScript : ''),
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,

@@ -42,15 +42,13 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
   const graphHtml = connectionsSection(page, publishConfig);
 
   const mainContent = `${headerCard}\n${badgeHtml}\n${processedContent.html}\n${graphHtml}`;
-  const contentHtml = mainContent;
-
   return baseShell({
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: contentHtml,
+    content: mainContent,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,

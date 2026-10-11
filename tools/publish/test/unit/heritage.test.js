@@ -14,7 +14,7 @@ describe('heritageTemplate', () => {
     outputPath: 'heritages/elves.html',
     frontmatter: { type: 'heritage' },
   };
-  const baseContent = { html: '<p>Graceful folk.</p>', relationships: '' };
+  const baseContent = { html: '<p>Graceful folk.</p>' };
 
   it('renders stat card with lifespan range', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, lifespan_range: [100, 750] } };

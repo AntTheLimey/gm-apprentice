@@ -57,6 +57,45 @@ test('B2: a wikilink in a header prints as its label on every template that prin
   } finally { v.cleanup(); }
 });
 
+test('B3: a snake_case type label in a header prints as words', () => {
+  const v = site({
+    'Locations/L.md': '---\ntype: location\nlocation_type: government_quarter\n---\nBody.\n',
+    'Events/E.md': '---\ntype: event\nevent_type: betrayal_event\n---\nBody.\n',
+    'Items/I.md': '---\ntype: item\nitem_type: plot_thread\n---\nBody.\n',
+    'Clues/C.md': '---\ntype: clue\nclue_type: physical_clue\n---\nBody.\n',
+    'Factions/F.md': '---\ntype: faction\nfaction_type: secret_society\n---\nBody.\n',
+  });
+  try {
+    for (const [p, text] of [[['locations', 'l.html'], 'Government quarter'], [['events', 'e.html'], 'Betrayal event'],
+      [['items', 'i.html'], 'Plot thread'], [['clues', 'c.html'], 'Physical clue'], [['factions', 'f.html'], 'Secret society']]) {
+      const h = header(v.read(...p));
+      assert.ok(h.includes(text), `${p.join('/')}: ${h}`);
+      assert.ok(!h.includes('_'), `${p.join('/')} keeps an underscore: ${h}`);
+    }
+  } finally { v.cleanup(); }
+});
+
+test('A2: an item holder is shown whole in its real shapes, never cut at a slash or bracket', () => {
+  const holders = {
+    A: ['[[Name]]', 'Name'],
+    B: ['[[Name|alias]]', 'alias'],
+    C: ['Name (note)', 'Name (note)'],
+    D: ['Name / Other', 'Name / Other'],
+    E: ['[[A]] (held for [[B]])', 'A (held for B)'],
+    F: ['[[Nathaniel]] (and / or [[Cleo]])', 'Nathaniel (and / or Cleo)'],
+    G: ['n/a — federal fleet vessel', 'n/a — federal fleet vessel'],
+  };
+  const files = {};
+  for (const [k, [raw]] of Object.entries(holders)) files[`Items/Item ${k}.md`] = `---\ntype: item\ncurrent_holder: ${JSON.stringify(raw)}\n---\nBody.\n`;
+  const v = site(files);
+  try {
+    for (const [k, [raw, want]] of Object.entries(holders)) {
+      const h = header(v.read('items', `item-${k.toLowerCase()}.html`));
+      assert.ok(h.includes(`Current Holder: ${want}`), `${raw}: ${h}`);
+    }
+  } finally { v.cleanup(); }
+});
+
 test('B3: the Mentions list files a page under its tab heading, never under a raw type name', () => {
   const v = site({
     'Characters/Hallam.md': '---\ntype: npc\n---\nBody.\n',

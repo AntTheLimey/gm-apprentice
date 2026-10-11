@@ -430,7 +430,8 @@ describe('a page\'s Connections', () => {
     // label is all that prints.
     for (const html of [bo, quay]) {
       assert.ok(!/Cy[ _]Dunn\|/.test(html), 'the target is printed beside the label');
-      assert.match(html, /<section class="cx"[^]*<a href="[^"]*cy-dunn\.html">Cy Dunn<\/a>/);
+      const block = /<section class="cx"[^]*?<\/section>/.exec(html)[0];
+      assert.match(block, /<a href="[^"]*cy-dunn\.html">Cy Dunn<\/a>/);
     }
   });
 
