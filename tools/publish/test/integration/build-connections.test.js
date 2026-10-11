@@ -1,13 +1,19 @@
 'use strict';
 const { test, after } = require('node:test');
 const assert = require('node:assert');
+const fs = require('fs');
+const path = require('path');
+const matter = require('gray-matter');
 const { buildVault } = require('../helpers/build-vault');
+const { publishedFrontmatter } = require('../../lib/processor');
+const { labelsForLinksFully } = require('../../lib/wikilink');
 
 const note = (fm, body = '') => `---\n${fm}\n---\n${body}\n`;
 const FILES = {
-  'NPCs/Emma.md': note('type: npc\nrelationships:\n  - target: "[[Hallam]]"\n    type: serves\n    tone: loyal\n    description: His secretary.\n  - target: "[[Vesper_Hale|the stranger]]"\n    type: fears\n  - target: "[[Cult_Leader]]"\n    type: serves\n    gm_only: true\n    description: Secretly hers.', 'Emma works at [[Docks]].'),
+  'NPCs/Emma.md': note('type: npc\nrelationships:\n  - target: "[[Hallam]]"\n    type: serves\n    tone: loyal\n    description: His secretary.\n  - target: "[[Vesper_Hale|the stranger]]"\n    type: fears\n  - target: "[[Elias Crowe]]"\n    type: fears\n    description: Saw him once.\n  - target: "[[Cult_Leader]]"\n    type: serves\n    gm_only: true\n    description: Secretly hers.', 'Emma works at [[Docks]].'),
   'NPCs/Hallam.md': note('type: npc\nrelationships:\n  - target: "[[Emma]]"\n    type: distrusts\n    tone: cold\n    description: Watches her.\n    gm_only: true', 'Hallam.'),
-  'NPCs/Cult_Leader.md': note('type: npc\npublish: false', 'Hidden. Knows [[Emma]].'),
+  'NPCs/Cult_Leader.md': note('type: npc\npublish: false\nrelationships:\n  - target: "[[Emma]]"\n    type: hunts\n    tone: predatory\n    description: Wants Emma dead, HIDDENLINE.', 'Hidden. Knows [[Emma]].'),
+  'NPCs/Lord_Vane.md': note('type: npc\naliases: [Vane]\ngm_aliases: ["Elias Crowe"]\nrelationships:\n  - target: "[[Emma]]"\n    type: employs\n    description: Pays her wages.', 'Vane.'),
   'NPCs/Quiet.md': note('type: npc\npublish_exclude_fields: [relationships]\nrelationships:\n  - target: "[[Emma]]"\n    type: blackmails\n    description: Holds the letters.', 'Quiet.'),
   'Locations/Docks.md': note('type: location', 'The docks. [[Emma]] is often here.'),
   'World/Magic.md': note('type: world_domain\nrules:\n  - rule: Magic costs blood.', 'Magic.'),
@@ -34,15 +40,66 @@ test('a page that only mentions the subject is under Mentions', () => {
   assert.match(site().read('npcs', 'emma.html'), /<h3>Mentions<\/h3>[^]*<a href="\.\.\/locations\/docks\.html">Docks<\/a>/);
 });
 
-test('hidden material: no gm-only edge either way, no hidden note, no excluded field, no name behind a label', () => {
+const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+  .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+const TEXT_FILE = /\.(html|json|js|css|xml|txt|webmanifest)$/i;
+
+test('hidden material: nothing of a gm-only edge, a hidden note, an excluded field, a GM alias or a name behind a label is in any built file', () => {
   const s = site();
-  for (const file of [['npcs', 'emma.html'], ['npcs', 'hallam.html'], ['npcs', 'quiet.html'], ['locations', 'docks.html']]) {
-    const html = s.read(...file);
-    for (const secret of ['Cult', 'Secretly hers', 'Watches her', 'distrust', 'Holds the letters', 'lackmail', 'Vesper']) {
-      assert.ok(!html.includes(secret), `${file.join('/')} holds "${secret}"`);
+  const files = walk(path.join(s.root, 'docs')).filter((f) => TEXT_FILE.test(f));
+  assert.ok(files.some((f) => f.endsWith('search-index.json')), 'the search index is among the files read');
+  assert.ok(files.some((f) => f.endsWith(path.join('npcs', 'emma.html'))), 'a page is among the files read');
+  // Names and lines that only a hidden thing holds. `Cult` also stands for Cult_Leader.
+  const secrets = ['Cult', 'Secretly hers', 'Watches her', 'distrust', 'Holds the letters', 'lackmail', 'Vesper',
+    'Elias', 'Crowe', 'HIDDENLINE', 'Wants Emma dead', 'hunts', 'predatory'];
+  for (const file of files) {
+    const body = fs.readFileSync(file, 'utf8');
+    for (const secret of secrets) {
+      assert.ok(!body.includes(secret), `${path.relative(s.root, file)} holds "${secret}"`);
     }
   }
-  assert.match(s.read('npcs', 'emma.html'), /<span class="cx-name">the stranger<\/span>/);
+  const emma = s.read('npcs', 'emma.html');
+  assert.match(emma, /<span class="cx-name">the stranger<\/span>/);
+  // A GM alias as a target is the note it names, under that note's own title.
+  assert.match(emma, /<a href="lord-vane\.html">Lord Vane<\/a>/);
+});
+
+// Every note's relationship lines as a page may print them: the published frontmatter
+// (gm-only edges dropped), each description read as the page reads it.
+function publishedLines() {
+  const lines = new Map();
+  for (const [rel, text] of Object.entries(FILES)) {
+    const fm = publishedFrontmatter(matter(text).data, []);
+    const list = Array.isArray(fm.relationships) ? fm.relationships : [];
+    lines.set(path.basename(rel, '.md').toLowerCase().replace(/_/g, '-'),
+      list.map((r) => labelsForLinksFully(String(r.description || '')).replace(/\s+/g, ' ').trim()).filter(Boolean));
+  }
+  return lines;
+}
+const islandOfHtml = (html) => JSON.parse(html.match(/<script[^>]*class="cx-data"[^>]*>([^]*?)<\/script>/)[1].replace(/\\u003c/gi, '<'));
+
+test('every line in a page\'s Connections is in the published frontmatter of its subject or of the item\'s page', () => {
+  const s = site();
+  const lines = publishedLines();
+  let checked = 0;
+  for (const file of walk(path.join(s.root, 'docs')).filter((f) => f.endsWith('.html'))) {
+    const html = fs.readFileSync(file, 'utf8');
+    if (!/class="cx-data"/.test(html)) continue;
+    const subject = path.basename(file, '.html');
+    for (const tab of islandOfHtml(html).t) {
+      for (const group of tab.g) {
+        for (const item of group.d) {
+          const other = item.h ? path.basename(item.h, '.html') : null;
+          for (const line of item.l) {
+            checked++;
+            const allowed = [...(lines.get(subject) || []), ...(other ? lines.get(other) || [] : [])];
+            assert.ok(allowed.includes(line), `${subject}: "${line}" is in neither ${subject} nor ${other}`);
+          }
+        }
+      }
+    }
+  }
+  assert.ok(checked >= 3, `the lines were read (${checked})`);
 });
 
 test('a target with no page is in the page\'s data island by its words, and its key is not', () => {
