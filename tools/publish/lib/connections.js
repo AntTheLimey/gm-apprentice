@@ -5,7 +5,7 @@
 // a gm-only relationship, an excluded field and a note with no page never get this far.
 // Nothing here reads sourceFrontmatter or page.markdown.
 const { backlinksOf } = require('./backlinks');
-const { linkText } = require('./wikilink');
+const { linkText, labelsForLinks } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { kindLabel } = require('./kind-label');
 const { orderedSessions } = require('./story-spine');
@@ -37,6 +37,10 @@ function tabOf(page) {
 
 // A note's relationships as a flat list, from the list form (`- target: ..`) or the map
 // form (`ally: [A, B]`). Anything that is not a relationship is skipped, never thrown on.
+// Text the GM typed (a type, a description) is reduced as the page prints it, a labelled
+// link to its label (wikilink.js labelsForLinks), so no reader of the model sees a target
+// the GM kept off the site.
+const printed = (text) => labelsForLinks(text).replace(/\s+/g, ' ').trim();
 function edgesOf(frontmatter) {
   const raw = frontmatter && frontmatter.relationships;
   const out = [];
@@ -44,9 +48,9 @@ function edgesOf(frontmatter) {
     if (typeof target !== 'string' || !target.trim()) return;
     out.push({
       target,
-      type: typeof type === 'string' ? type.trim() : '',
+      type: typeof type === 'string' ? printed(type) : '',
       tone,
-      line: typeof description === 'string' ? description.replace(/\s+/g, ' ').trim() : '',
+      line: typeof description === 'string' ? printed(description) : '',
     });
   };
   if (Array.isArray(raw)) {
@@ -131,7 +135,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
           tab, group,
           item: other
             ? { title: other.displayTitle || other.title, outputPath: other.outputPath, kind: kindLabel(typeOf(other)), tone: null, lines: [], own: 0, sessions: shared(page, other), image: imageOf(other) }
-            : { title: noPage.words || noPage.name.replace(/_/g, ' '), outputPath: null, kind: '', tone: null, lines: [], own: 0, sessions: null, image: null, key: noPage.name },
+            : { title: printed(noPage.words) || noPage.name.replace(/_/g, ' '), outputPath: null, kind: '', tone: null, lines: [], own: 0, sessions: null, image: null, key: noPage.name },
         });
       }
       return items.get(id).item;
@@ -157,7 +161,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
       if (parent.page !== page && (parent.page || parent.name)) add(parent.page, parent, 'places', 'Part of');
     }
     for (const extra of (extras && extras.get(page)) || []) {
-      if (extra.page && extra.page !== page) add(extra.page, null, tabOf(extra.page), extra.group);
+      if (extra.page && extra.page !== page) add(extra.page, null, tabOf(extra.page), printed(extra.group));
     }
 
     const byTitle = (a, b) => String(a.title).localeCompare(String(b.title));

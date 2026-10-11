@@ -224,3 +224,24 @@ test('300 pages each related to one hub build without rescanning every page for 
   assert.ok(Date.now() - started < 20000, 'took ' + (Date.now() - started) + ' ms');
   assert.strictEqual(index.for(hub).tabs[0].groups[0].items.length, 300);
 });
+
+test('a labelled link in a description, a type or a target never carries its target', () => {
+  const emma = page('Emma', 'npc', { relationships: [
+    { target: '[[Hallam]]', type: 'serves', description: 'Meets [[Vesper_Hale|the stranger]] at night.' },
+    { target: '[[Quill_Smith|the smith]] and [[Ivy_Rook|the thief]]', type: 'knows' },
+    { target: '[[Hallam]]', type: '[[Vesper_Hale|odd]] tie' },
+  ] });
+  const hallam = page('Hallam', 'npc');
+  const m = buildConnections(ctx([emma, hallam])).for(emma);
+  assert.deepStrictEqual(group(m, 'people', 'Serves').items[0].lines, ['Meets the stranger at night.']);
+  const noPage = tab(m, 'other').groups.flatMap((g) => g.items).find((i) => i.outputPath === null);
+  assert.strictEqual(noPage.title, 'the smith and the thief');
+  const shown = JSON.stringify({ ...m, tabs: m.tabs.map((t) => ({ ...t, groups: t.groups.map((g) => ({ ...g, items: g.items.map(({ key, ...rest }) => rest) })) })) });
+  for (const hidden of ['Vesper', 'Quill', 'Ivy', '[[']) assert.ok(!shown.includes(hidden), hidden);
+});
+
+test('an unlabelled link in a description reads as the page prints it', () => {
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: 'serves', description: 'Sister of [[Old_Tom]].' }] });
+  const m = buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma);
+  assert.deepStrictEqual(group(m, 'people', 'Serves').items[0].lines, ['Sister of [[Old_Tom]].']);
+});

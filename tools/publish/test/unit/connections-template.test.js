@@ -94,3 +94,77 @@ test('U+2028, U+2029 and <!-- in an island string round-trip and leave one </scr
   assert.ok(!html.slice(html.indexOf('class="cx-data"')).includes('<!--'));
   assert.deepStrictEqual(island(html).t[0].g[0].d[0].l, lines);
 });
+
+test('a quote mark (apostrophe) in a path stays as it is in the href, safe inside double quotes', () => {
+  const html = renderConnections(model([item({ outputPath: "npcs/o'tom.html" })]), { mode: 'tree', currentOutputPath: 'npcs/emma.html' });
+  assert.ok(html.includes(`<a href="o'tom.html">`));
+  assert.strictEqual(island(html).t[0].g[0].d[0].h, "o'tom.html");
+});
+
+test('hostile and neutral tones are printed in the list and the island', () => {
+  for (const [tone, code] of [['hostile', 'h'], ['neutral', 'n']]) {
+    const html = renderConnections(model([item({ tone })]), { mode: 'tree', currentOutputPath: 'npcs/emma.html' });
+    assert.ok(html.includes(`<span class="cx-tone cx-${tone}">${tone}</span>`));
+    assert.strictEqual(island(html).t[0].g[0].d[0].o, code);
+  }
+});
+
+test('any other tone is not printed and the island has none', () => {
+  const html = renderConnections(model([item({ tone: 'loyal" onclick="x' })]), { mode: 'tree', currentOutputPath: 'npcs/emma.html' });
+  assert.ok(!html.includes('cx-tone'));
+  assert.ok(!html.includes('onclick'));
+  assert.strictEqual(island(html).t[0].g[0].d[0].o, null);
+});
+
+test('only tree, web and cards are modes; anything else gives nothing', () => {
+  for (const mode of ['tree', 'web', 'cards']) assert.match(renderConnections(model(), { mode, currentOutputPath: 'a.html' }), new RegExp(`data-cx-mode="${mode}"`));
+  for (const mode of ['off', 'x" onload="y', undefined, '']) assert.strictEqual(renderConnections(model(), { mode, currentOutputPath: 'a.html' }), '');
+});
+
+test('a heading other than h2 to h5 is h2', () => {
+  for (const heading of ['h1', 'h6', 'p', 'h2 onclick', undefined]) {
+    assert.match(renderConnections(model(), { mode: 'tree', currentOutputPath: 'a.html', heading }), /<h2 id="cx-heading">/);
+  }
+  assert.match(renderConnections(model(), { mode: 'tree', currentOutputPath: 'a.html', heading: 'h5' }), /<h5 id="cx-heading">Connections<\/h5>\n[^]*<h6>People<\/h6>\s*<h6>Serves<\/h6>/);
+});
+
+test('mentions sit one level down under heading h3', () => {
+  const html = renderConnections(model([], [{ label: 'Sessions', items: [{ title: 'Session 1', outputPath: 'sessions/s1.html', kind: 'Session' }] }]), { mode: 'tree', currentOutputPath: 'a.html', heading: 'h3' });
+  assert.match(html, /<h4>Mentions<\/h4>\s*<h5>Sessions<\/h5>\s*<ul class="cx-mentions">/);
+});
+
+test('a mention with no path is skipped, never href="null"; a group left empty goes', () => {
+  const html = renderConnections(model([], [
+    { label: 'Sessions', items: [{ title: 'Gone', outputPath: null, kind: 'Session' }, { title: 'Session 1', outputPath: 'sessions/s1.html', kind: 'Session' }] },
+    { label: 'Places', items: [{ title: 'Nowhere', outputPath: null, kind: 'Location' }] },
+  ]), { mode: 'tree', currentOutputPath: 'a.html' });
+  assert.ok(!html.includes('null') && !html.includes('Gone') && !html.includes('Nowhere') && !html.includes('Places'));
+  assert.deepStrictEqual(island(html).m, [{ n: 'Sessions', d: [['Session 1', 'sessions/s1.html']] }]);
+});
+
+test('a model whose line is already reduced shows the label and not the target anywhere', () => {
+  const html = renderConnections(model([item({ lines: ['Meets the stranger at night.'] })]), { mode: 'tree', currentOutputPath: 'npcs/emma.html' });
+  assert.ok(html.includes('the stranger') && !html.includes('Vesper'));
+});
+
+test('a labelled link in a string is its label in the list and the island alike', () => {
+  const html = renderConnections(model([item({ lines: ['Meets [[Vesper_Hale|the stranger]].'] })]), { mode: 'tree', currentOutputPath: 'npcs/emma.html' });
+  assert.ok(!html.includes('Vesper'));
+  assert.deepStrictEqual(island(html).t[0].g[0].d[0].l, ['Meets the stranger.']);
+});
+
+test('every string in the island is what the list shows, entities decoded', () => {
+  const hostile = '[[A|b]] <b> & "q"';
+  const shown = 'b <b> & "q"';
+  const html = renderConnections(model([item({ title: hostile, kind: hostile, lines: [hostile], sessions: { count: 2, first: hostile, last: hostile } })], [{ label: hostile, items: [{ title: hostile, outputPath: 'x/y.html', kind: 'X' }] }]), { mode: 'tree', currentOutputPath: 'npcs/emma.html' });
+  const list = html.slice(0, html.indexOf('<script'));
+  const decode = (s) => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  const text = decode(list.replace(/<[^>]*>/g, '\n'));
+  const d = island(html);
+  const item0 = d.t[0].g[0].d[0];
+  for (const s of [item0.t, item0.k, item0.l[0], item0.s[1], item0.s[2], d.m[0].n, d.m[0].d[0][0]]) {
+    assert.strictEqual(s, shown);
+    assert.ok(text.includes(s), s);
+  }
+  assert.ok(!JSON.stringify(d).includes('A|'), JSON.stringify(d));
+});
