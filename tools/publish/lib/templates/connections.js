@@ -6,17 +6,20 @@
 // Hrefs are not run through escapeHtml: encodeHref percent-encodes every segment (& " < > and
 // space included), so what it returns is already safe inside a quoted attribute.
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
-const { labelsForLinks } = require('../wikilink');
+const { labelsForLinksFully } = require('../wikilink');
 
 const TONE_CODE = { warm: 'w', hostile: 'h', neutral: 'n' };
 const MODES = new Set(['tree', 'web', 'cards']);
 const HEADINGS = new Set(['h2', 'h3', 'h4', 'h5']);
 // The island holds what the list shows: text reduced as escapeHtml reduces it (a labelled
 // link to its label), then only the tones and mentions that are printed at all.
-const text = (value) => labelsForLinks(value);
+const text = (value) => labelsForLinksFully(value);
 const toneOf = (it) => (own(TONE_CODE, it.tone) ? it.tone : null);
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 const linesOf = (it) => (it.lines || []).map(text).filter((line) => line !== '');
+// How many of the kept lines come from the page's own note: counted among the kept ones, so
+// a line dropped as empty never leaves the count past the list.
+const ownOf = (it) => (it.lines || []).slice(0, it.own || 0).map(text).filter((line) => line !== '').length;
 const mentionsOf = (model) => model.mentions
   .map((group) => ({ label: group.label, items: group.items.filter((it) => it.outputPath) }))
   .filter((group) => group.items.length);
@@ -39,7 +42,7 @@ function islandOf(model, currentOutputPath) {
       g: tab.groups.map((group) => ({
         n: text(group.label),
         d: group.items.map((it) => ({
-          t: text(it.title), h: href(it.outputPath), k: text(it.kind), o: toneOf(it) ? TONE_CODE[it.tone] : null, l: linesOf(it), f: it.own || 0,
+          t: text(it.title), h: href(it.outputPath), k: text(it.kind), o: toneOf(it) ? TONE_CODE[it.tone] : null, l: linesOf(it), f: ownOf(it),
           s: it.sessions ? [it.sessions.count, text(it.sessions.first), text(it.sessions.last)] : null, i: href(it.image),
         })),
       })),

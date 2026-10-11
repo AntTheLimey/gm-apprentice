@@ -320,3 +320,15 @@ describe('a labelled superseded_by names the note that took over', () => {
     assert.strictEqual(map.Old, 'new.html');
   });
 });
+
+describe('labelsForLinksFully', () => {
+  const { labelsForLinksFully } = require('../../lib/wikilink');
+  it('reduces a link nested in a label to the innermost label', () => {
+    assert.strictEqual(labelsForLinksFully('[[A|[[B|c]]]]'), 'c');
+    assert.strictEqual(labelsForLinksFully('x [[A|[[B|[[C|d]]]]]] [[E]]'), 'x d [[E]]');
+  });
+  it('leaves plain text and unlabelled links alone', () => {
+    assert.strictEqual(labelsForLinksFully('Heir of [[Bo_Pike]]'), 'Heir of [[Bo_Pike]]');
+    assert.strictEqual(labelsForLinksFully(null), '');
+  });
+});

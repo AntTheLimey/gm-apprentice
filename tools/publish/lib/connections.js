@@ -5,7 +5,7 @@
 // a gm-only relationship, an excluded field and a note with no page never get this far.
 // Nothing here reads sourceFrontmatter or page.markdown.
 const { backlinksOf } = require('./backlinks');
-const { linkText, labelsForLinks } = require('./wikilink');
+const { linkText, labelsForLinksFully } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { kindLabel } = require('./kind-label');
 const { orderedSessions } = require('./story-spine');
@@ -40,7 +40,7 @@ function tabOf(page) {
 // Text the GM typed (a type, a description) is reduced as the page prints it, a labelled
 // link to its label (wikilink.js labelsForLinks), so no reader of the model sees a target
 // the GM kept off the site.
-const printed = (text) => labelsForLinks(text).replace(/\s+/g, ' ').trim();
+const printed = (text) => labelsForLinksFully(text).replace(/\s+/g, ' ').trim();
 function edgesOf(frontmatter) {
   const raw = frontmatter && frontmatter.relationships;
   const out = [];

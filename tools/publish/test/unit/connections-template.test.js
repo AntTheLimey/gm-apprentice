@@ -168,3 +168,15 @@ test('every string in the island is what the list shows, entities decoded', () =
   }
   assert.ok(!JSON.stringify(d).includes('A|'), JSON.stringify(d));
 });
+
+test('f counts only the own lines that are kept, and never passes the list', () => {
+  const { l, f } = islandOf(model([item({ lines: ['', 'Mine.', 'Theirs.'], own: 2 })]), 'npcs/emma.html').t[0].g[0].d[0];
+  assert.deepStrictEqual([l, f], [['Mine.', 'Theirs.'], 1]);
+  const all = islandOf(model([item({ lines: ['', ''], own: 2 })]), 'npcs/emma.html').t[0].g[0].d[0];
+  assert.deepStrictEqual([all.l, all.f], [[], 0]);
+});
+
+test('a nested labelled link in a line is reduced to its label in the island', () => {
+  const d = islandOf(model([item({ lines: ['[[A|[[B|c]]]]'], own: 1 })]), 'npcs/emma.html').t[0].g[0].d[0];
+  assert.deepStrictEqual(d.l, ['c']);
+});

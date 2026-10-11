@@ -266,3 +266,17 @@ test('a path-form target ([[Folder/Name]]) reaches the page, alias or not, and n
   assert.ok(items.length >= 1 && items.every((i) => i.outputPath === 'p/drageby.html' && i.title === 'Drageby'), JSON.stringify(items));
   assert.ok(!JSON.stringify(m).includes('Locations/'));
 });
+
+test('a link nested in a label comes down to the label, so the model holds no target', () => {
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: 'serves', description: 'Meets [[Vesper_Hale|[[Old_Tom|the stranger]]]] at night.' }] });
+  const m = buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma);
+  assert.deepStrictEqual(group(m, 'people', 'Serves').items[0].lines, ['Meets the stranger at night.']);
+});
+
+test('own counts the lines kept: a blank line is neither kept nor counted', () => {
+  const emma = page('Emma', 'npc', { relationships: [
+    { target: 'Hallam', type: 'serves', description: '   ' },
+    { target: 'Hallam', type: 'knows', description: 'Old friends.' }] });
+  const item = group(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people', 'Serves').items[0];
+  assert.deepStrictEqual([item.lines, item.own], [['Old friends.'], 1]);
+});

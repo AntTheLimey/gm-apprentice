@@ -108,6 +108,19 @@ function labelsForLinks(text) {
   return s.replace(wikilinkRe('g'), (whole, body) => parseWikilink(body).display.trim() || whole);
 }
 
+// `labelsForLinks` applied until the text stops changing (a few rounds at most), so a link
+// nested in a label (`[[A|[[B|c]]]]`) comes down to `c` and no target is left standing. For
+// the Connections model and island, which hold only what a page shows.
+function labelsForLinksFully(text) {
+  let s = String(text == null ? '' : text);
+  for (let i = 0; i < 8; i++) {
+    const next = labelsForLinks(s);
+    if (next === s) break;
+    s = next;
+  }
+  return s;
+}
+
 // Split a markdown table row on its cell pipes, not on the pipe inside a `[[link|alias]]` or
 // after a backslash (`\|`). Like `line.split('|')`: the pieces join back to the line with `|`,
 // the first is what sits before the first pipe.
@@ -126,4 +139,4 @@ function splitTableRow(line) {
   return out;
 }
 
-module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget, linkText, labelsForLinks };
+module.exports = { splitTableRow, WIKILINK_SOURCE, wikilinkRe, parseWikilink, firstWikilinkTarget, refTarget, linkText, labelsForLinks, labelsForLinksFully };
