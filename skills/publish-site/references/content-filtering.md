@@ -39,7 +39,7 @@ All campaign content falls into three categories:
 - Fields named in a file's own `publish_exclude_fields`, on that file
   only, merged over the global `exclude_fields`.
 - Relationship edges marked `gm_only: true` — removed from the page,
-  its relationship graph, and the search index.
+  its Connections (at both ends), and the search index.
 - On a `publish: stub` file, everything except the sections named in
   `publish_include_sections`. Everything in this list is withheld
   first, so a named section under a withheld heading, or inside a
@@ -68,11 +68,25 @@ is not trusted, so a heading after it is still read as a heading.
 frontmatter, and it never has had — so a secret that lives in a field
 (`occupation`, `key_traits`) or in a relationship target is not
 protected by fencing the body, and neither are the views derived from
-those fields: the character sheet, the Connections graph, the search
+those fields: the character sheet, the Connections, the search
 index. That is what `publish_exclude_fields` and edge-level `gm_only`
 are for. Reach for them whenever the *fact of the field* is the secret
 — a traitor whose `occupation` names their true allegiance, or an edge
 to the cult leader whose existence gives the game away.
+
+### Connections follows the same rules
+
+A page's Connections holds only what some published page shows. A
+note that does not publish is not listed, an edge marked `gm_only`
+is gone at both ends, a note that excludes `relationships` lists
+none (the other notes' edges to it still show there), and a link
+with a label prints the label, never the name behind it.
+
+**The tone is shown.** Each relationship appears as warm (a positive
+tone), hostile (negative) or neutral, never as the word itself. A
+tie whose tone gives something away (a hostile edge to the person
+the party trusts) wants `gm_only: true` or another tone;
+campaign-qa's Tone Words check lists the hostile ties the site shows.
 
 ### Always included
 

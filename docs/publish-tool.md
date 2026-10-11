@@ -16,10 +16,19 @@ The generated site has one page per entity in your vault:
   without overwhelming the reader.
 - **Locations** — Location pages with a parent-location breadcrumb so
   readers can orient themselves geographically.
-- **Factions and organizations** — Faction pages that automatically
-  list members by pulling `member_of` relationships from across the vault.
+- **Factions and organizations** — Faction pages whose Connections list
+  members by pulling `member_of` relationships from across the vault.
 - **Creatures** — Compact stat block pages for quick encounter reference.
 - **Items** — Item pages with damage, weight, cost, and current holder.
+- **Connections** — Every page ends in a Connections section: what the
+  page's subject is tied to, in tabs by kind (people, places,
+  organisations and so on), in both directions, with the GM's line for
+  each tie, how many sessions the two share, and whether the tie is
+  warm, hostile or neutral (never the tone word). Pages that only
+  mention the subject sit in a last Mentions tab. It is drawn as a
+  tree, a web or cards (`publish.connections`; see
+  [site-settings.md](site-settings.md)). It shows only what a published
+  page shows: a `gm_only` relationship is gone at both ends.
 - **Events, clues, documents, and more** — A smart fallback template
   displays any other entity type with its frontmatter fields as badges
   followed by the body content.

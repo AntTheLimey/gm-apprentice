@@ -7,6 +7,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.45] — 2026-10-11
+
+### Added
+
+- **Connections.** Every page ends in a Connections section: what the
+  page's subject is tied to, in tabs by kind (People, Places,
+  Organisations, Things, Events, Papers, Creatures, Sessions, Other).
+  Both ends of a relationship show it, the other end worded by the
+  inverse. Each name carries its kind, whether the tie is warm, hostile
+  or neutral, the GM's line for it and how many sessions the two share.
+  Pages that only mention the subject sit in a last Mentions tab.
+- `publish.connections` draws it as `tree` (the default, a branching
+  list that reads on a phone), `web` (the subject in the middle, names
+  around it) or `cards`; `off` leaves the section out. Set it with
+  `vault-setting --set connections='"web"'`.
+- `tones.py VAULT shown` lists the hostile ties the site shows, and
+  campaign-qa's Tone Words check walks them.
+- Updating a vault with a site and a relationship tone says once that
+  the site now shows the tone.
+
+### Changed
+
+- **A relationship's tone is now shown on the site**, as warm, hostile
+  or neutral, never as the word. A relationship whose tone gives
+  something away wants `gm_only: true` or another tone, and campaign-qa
+  lists the hostile ones.
+- The right-hand sidebar, the Relationships list in the body, the NPC
+  Connections cards and the ring graph are gone; their content is in the
+  tabs. A page's Connections shows one step, not neighbours of
+  neighbours. World Rules on a world page sit in the page.
+- `publish:` values that now withhold a note which used to publish:
+  `"None"`, `"NONE"` and `"False"` written as strings, a value with
+  spaces round it, and any list holding a no.
+- `publish:` values that now make a stub which used to publish the note
+  whole: `"Stub"`, `" stub "` and `["stub"]`.
+- Under 560px a web falls back to the tree when its names would be too
+  small to read.
+- The detail card for a chosen name keeps to the bottom of the window.
+- Publish tool 1.18.0.
+
+### Fixed
+
+- A relationship's inverse name (`served_by`, `has_member`, a kinship
+  name) is worded from the other end as the page words it, not left raw
+  (8db16d2d).
+- A relationship target with words beside one link (`[[Name|label]]
+  (briefly)`) finds that link's page (1f576744).
+- Aliases, nested type fields and a PC's `player_name` show a labelled
+  link as its label in search and previews (15467d85).
+- A `gm-only` or spoiler marker split over lines is read in a note's
+  body; before, the text it should hide was published (01a6881d).
+- A link written inside backticks in a value is pinned as it is
+  printed (71a04587).
+- A frontmatter value holding `<!--` keeps the rule the body follows,
+  and is pinned (812f248f).
+- `vault_check` reads a legacy entity name and a link whose target is
+  only spaces as the site does (5b2ce25b).
+- An embed with a pipe (`![[map.png|300]]`) and a labelled link holding
+  a lone `]` print nothing of the target (8cfd6afb).
+- The Clues rule for a heading with an invisible character is pinned
+  (462cb812).
+- The audit for secret names finds one around zero-width characters or
+  held only by the search index, and ignores a mark the vault wrote
+  itself (52ccdde1).
+- `publish: None`, `False` and `[false]` withhold a note, in the site's
+  tool and in the vault scripts (b2a47e59).
+- `doctor --site` lists every wrongly-typed value the build warns about
+  (85f486d7).
+- A note named `constructor.md`, or a link to `constructor`, no longer
+  stops the build (7b3c853d).
+- A custom `display_meta` field holding a bare note name prints it as
+  words (43769920).
+- A label with a link nested three deep leaves no target behind.
+- A section on a sheet skin's gradient paper reads that paper as its
+  ground, so a web's centre name and hollow marks show in the dark
+  scheme.
+- A tree row too narrow for its kind and sessions beside the name puts
+  them under it, so no name breaks inside a word.
+- The ontology export refuses a tone family the site does not show.
+
+---
+
 ## [1.10.44] — 2026-10-10
 
 ### Added

@@ -137,7 +137,7 @@ site, the reason the GM wrote in the manifest if there is one, and the
 first pages that name it. A page is counted only when it prints the
 name: a link in a hidden part, or in a field that page does not show,
 is not. A PC's story page is listed as its `…_Story.md` file. A page
-whose connections graph shows the name is counted too, though the link
+whose Connections show the name is counted too, though the link
 is in a neighbour's relationships.
 
 Where the row ends "printed only by an index or listing page (…) from:

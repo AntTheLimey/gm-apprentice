@@ -198,8 +198,7 @@ Body content renders below the participants section.
 
 The heritage template renders a stat card (lifespan, maturity,
 height) beside the portrait, with notable traits as badge pills
-below. Body content follows, then the relationship graph and
-context sidebar.
+below. Body content follows, then the page's Connections.
 
 ---
 
@@ -210,11 +209,11 @@ context sidebar.
 | Field | Status | Description |
 |-------|--------|-------------|
 | `summary` | Optional | One-line description rendered as a subtitle below the page title |
-| `rules` | Optional | List of rule objects with `rule` (or `id`) field — rendered in a sidebar panel |
-| `publish_rules` | Optional | Set to `false` to suppress the rules sidebar even when `rules` is present |
+| `rules` | Optional | List of rule objects with `rule` (or `id`) field — listed in the page |
+| `publish_rules` | Optional | Set to `false` to leave the rules out even when `rules` is present |
 
-The world domain template renders body content with an optional
-rules sidebar. Each rule object's `rule` (or `id`) field is
+The world domain template renders body content with the rules in
+the page. Each rule object's `rule` (or `id`) field is
 displayed as a list item.
 
 **World flags** (`type: world_flags`) are excluded from the
@@ -278,8 +277,8 @@ session's folder or chapter) — the index body is withheld from the page
 and from search, backlinks and the landing. The page then shows, under the
 title and badges: the chapter (linked, if its page publishes), the
 `in_game_date`, the opening of the Wrap-Up's recap and a "Read the
-full session" link to the Wrap-Up. Its "NPCs Appearing" and "Events"
-sidebar lists come from the Wrap-Up. It never lists `scenes:`. With
+full session" link to the Wrap-Up. Its who-appeared and events
+lists, in its Connections, come from the Wrap-Up. It never lists `scenes:`. With
 no published Wrap-Up the index body publishes as written.
 `explain <session index>` says which applies.
 
@@ -302,7 +301,7 @@ These fields are read by all templates if present:
 | `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED / STUB — renders a canon status badge (see below) |
 | `source_confidence`, `confidence` | Legacy names for `canon_status` — honored at read time for unmigrated vaults, never written |
 | `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
-| `relationships` | List of `{ target, type, description }` objects rendered as a Relationships section |
+| `relationships` | List of `{ target, type, description, tone }` objects shown in the page's Connections, by kind, in both directions (the other end words it by the inverse). The tone shows as warm, hostile or neutral, never the word |
 | `tags` | Used for NPC importance scoring on the landing page; not rendered on entity pages |
 
 ### Canon Status Badges
