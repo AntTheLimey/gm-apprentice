@@ -1849,7 +1849,6 @@ def effective_exclude_sections(vault: Path,
 # Publish gating
 # --------------------------------------------------------------------------
 
-# The two explicit opt-outs processor.js honours, and nothing else.
 GM_ONLY_YES_WORDS = ("true", "yes", "on", "1")
 
 
@@ -1869,6 +1868,7 @@ def gm_only_hides(value: Any) -> bool:
     return isinstance(value, str) and value.strip().lower() in GM_ONLY_YES_WORDS
 
 
+# The two explicit opt-outs processor.js honours, and nothing else.
 PUBLISH_NONE_VALUES = ("false", "none")
 
 
