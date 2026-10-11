@@ -249,10 +249,20 @@ EMPTY_FRONTMATTER_RE = re.compile(r"^---\r?\n---(?:\r?\n|$)")
 NO_TONE = frozenset({"null", "~"})
 
 
+# A key whose value starts a quoted scalar. Group 1 gives the key's own
+# column, as BLOCK_SCALAR_OPEN_RE's does; group 2 the quote; group 3 the rest.
+QUOTED_OPEN_RE = re.compile(r"""^(\s*(?:-\s+)?)[\w-]+:\s*(["'])(.*)$""")
+# Up to and including the quote that closes a scalar, from inside it: a
+# backslash pair is skipped in double quotes, a doubled quote in single.
+QUOTE_CLOSE_RE = {'"': re.compile(r'(?:\\.|[^"\\])*"'),
+                  "'": re.compile(r"(?:''|[^'])*'(?!')")}
+
+
 def _iter_relationship_lines(content: str, top_level_only: bool):
     """Yield (lineno, kind, indent, raw line) for each line inside a
     `relationships:` block: `key` for a line of YAML, `open` for a key
-    that opens a block scalar, `text` for a line of that scalar's text.
+    that opens a block scalar, `text` for a line of that scalar's text or
+    a later line of a quoted value that runs over several lines.
     `top_level_only` leaves out a block nested under another key (the
     machine-managed `mobrpg:` node's). This is the one walk of the block;
     the readers below take what they need from it."""
@@ -261,11 +271,24 @@ def _iter_relationship_lines(content: str, top_level_only: bool):
         return
     block_indent = None
     scalar_indent = None
+    quote: tuple[str, int] | None = None   # an open quote, its key's column
     for offset, line in enumerate(match.group(1).split("\n")):
         stripped = line.strip()
         if not stripped:
             continue
         indent = len(line) - len(line.lstrip())
+        # Inside a quoted value left open (`description: "He spoke`), every
+        # more-indented line is its text until the quote closes. YAML wants
+        # those lines indented past the key, so a quote that is never closed
+        # ends at the next sibling key or item and hides nothing after it.
+        if quote is not None:
+            if indent > quote[1]:
+                if block_indent is not None:
+                    yield offset + 2, "text", indent, line
+                if QUOTE_CLOSE_RE[quote[0]].match(stripped):
+                    quote = None
+                continue
+            quote = None
         # Inside a block scalar (`description: |`), every more-indented line is
         # literal text, not YAML. A relationship description whose prose begins
         # `type:` is not an edge, and a folded note that quotes a whole
@@ -295,6 +318,10 @@ def _iter_relationship_lines(content: str, top_level_only: bool):
             if block_indent is not None:
                 yield offset + 2, "open", indent, line
             continue
+        quoted = QUOTED_OPEN_RE.match(line.rstrip("\r"))
+        if quoted and not QUOTE_CLOSE_RE[quoted.group(2)].match(
+                quoted.group(3)):
+            quote = (quoted.group(2), len(quoted.group(1)))
         if block_indent is None:
             continue
         # +2: line 1 is the opening `---`, so frontmatter starts at 2.

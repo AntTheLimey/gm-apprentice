@@ -173,6 +173,57 @@ class IterRelationshipPredicatesTests(unittest.TestCase):
     def test_no_frontmatter_yields_nothing(self):
         self.assertEqual(list(sr.iter_relationship_predicates("# Just a body\n")), [])
 
+    def edges(self, *lines, eol="\n"):
+        text = "\n".join(["---", "type: npc", "relationships:", *lines,
+                          "---", ""]).replace("\n", eol)
+        return list(sr.iter_relationship_predicates(text))
+
+    def test_a_multi_line_quoted_value_is_text_not_keys(self):
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                self.assertEqual(self.edges(
+                    '  - target: "[[X]]"',
+                    '    description: "She said \\"no\\" and',
+                    '      type: of_thing she meant',
+                    '',
+                    '      predicate: another" # done',
+                    '    type: bogus_one',
+                    "  - description: 'It''s her",
+                    "        type: in_single_quotes'' still",
+                    "      type: closing'",
+                    '    type: bogus_two', eol=eol),
+                    [(9, "type", "bogus_one"), (13, "type", "bogus_two")])
+
+    def test_an_unclosed_quote_hides_nothing_past_the_next_key(self):
+        self.assertEqual(self.edges(
+            '  - target: "[[X]]"',
+            '    description: "never closed',
+            '      type: hidden_text',
+            '    type: bogus_one',
+            "  - description: 'never closed either",
+            '  - type: bogus_two',
+            '    target: "[[Y]]"'),
+            [(7, "type", "bogus_one"), (9, "type", "bogus_two")])
+
+    def test_a_plain_value_with_a_quote_in_it_opens_nothing(self):
+        self.assertEqual(self.edges(
+            "  - target: \"[[X]]\"",
+            "    description: the captain's man",
+            "    type: bogus_one",
+            "  - description: he said \"go",
+            "    type: bogus_two",
+            "  - target: 'one line'",
+            "    type: bogus_three",
+            "  - description: \"closed\" # with a \" in the comment",
+            "    type: bogus_four"),
+            [(6, "type", "bogus_one"), (8, "type", "bogus_two"),
+             (10, "type", "bogus_three"), (12, "type", "bogus_four")])
+
+    def test_a_quoted_value_outside_the_block_cannot_open_it(self):
+        text = ('---\ntype: npc\nsummary: "It reads\n  relationships:\n'
+                '    - type: not_an_edge"\n---\n')
+        self.assertEqual(list(sr.iter_relationship_predicates(text)), [])
+
 
 class RelationshipPatternsDocTests(unittest.TestCase):
     """`ttrpg-expert/relationship-patterns.md` is what two skills route to

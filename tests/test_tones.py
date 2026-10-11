@@ -624,6 +624,71 @@ class UsesTests(VaultCase):
         self.assertEqual(list(sr.iter_relationship_edges(NOTE))[0].description,
                          "tone: dread a line of prose")
 
+    QUOTED = (
+        "---\ntype: npc\nrelationships:\n"
+        '  - target: "[[Ana]]"\n'
+        '    description: "He spoke in a \\"flat\\"\n'
+        "      tone: dread, mostly\n"
+        "\n"
+        '      tone: cordial at the end"  # s3\n'
+        "    tone: dread\n"
+        "  - target: '[[Bo]]'\n"
+        "    tone: tragic\n"
+        "    description: 'It''s\n"
+        "      tone: dread'\n"
+        "  - target: \"[[Cy]]\"\n"
+        "    description: the captain's man\n"
+        "    tone: Cordial\n"
+        "  - target: \"[[Di]]\"\n"
+        '    description: "never closed\n'
+        "      tone: dread\n"
+        "    tone: tragic\n"
+        "  - tone: cordial\n"
+        '    target: "[[Ed]]"\n'
+        "---\nBody\n")
+
+    def test_a_multi_line_quoted_description_is_not_a_tone(self):
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                text = self.QUOTED.replace("\n", eol)
+                self.assertEqual(
+                    list(sr.iter_relationship_tones(text)),
+                    [(9, "dread"), (11, "tragic"), (16, "Cordial"),
+                     (20, "tragic"), (21, "cordial")])
+                self.put("NPCs/A.md", text)
+                self.assertEqual(
+                    tones.use_lines(tones.survey(self.vault), []),
+                    ["NPCs/A.md:11\ttragic\t[[Bo]]\tIt''s tone: dread",
+                     "NPCs/A.md:20\ttragic\t[[Di]]\t"
+                     '"never closed tone: dread',
+                     "# 2 use(s) of 1 word(s)"])
+                self.assertEqual(
+                    tones.use_lines(tones.survey(self.vault), ["dread"]),
+                    ["NPCs/A.md:9\tdread\t[[Ana]]\t"
+                     'He spoke in a \\"flat\\" tone: dread, mostly '
+                     "tone: cordial at the end",
+                     "# 1 use(s) of 1 word(s)"])
+
+    def test_a_fix_leaves_a_quoted_descriptions_text_alone(self):
+        for eol in ("\n", "\r\n"):
+            with self.subTest(eol=eol):
+                self.put("NPCs/A.md", self.QUOTED.replace("\n", eol))
+                code, out, err = self.run_main("fix", "--near", "--write")
+                self.assertEqual((code, err), (0, ""))
+                self.assertEqual(out.splitlines(), [
+                    "CHANGED\tNPCs/A.md:9\tdread -> ominous",
+                    "CHANGED\tNPCs/A.md:16\tCordial -> friendly",
+                    "CHANGED\tNPCs/A.md:21\tcordial -> friendly",
+                    "# 3 tone(s) in 1 note(s)"])
+                want = (self.QUOTED
+                        .replace("# s3\n    tone: dread\n",
+                                 "# s3\n    tone: ominous\n")
+                        .replace("    tone: Cordial\n", "    tone: friendly\n")
+                        .replace("  - tone: cordial\n",
+                                 "  - tone: friendly\n"))
+                self.assertEqual(self.get("NPCs/A.md"),
+                                 want.replace("\n", eol))
+
     def test_a_word_names_every_stray_that_compares_equal_to_it(self):
         self.put("NPCs/A.md", note("    tone: Friendly", "    tone: friendly",
                                    "    tone: ' FRIENDLY'"))
