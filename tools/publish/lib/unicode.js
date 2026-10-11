@@ -43,7 +43,11 @@ function canonicalNfc(value) {
 //     and must canonicalize at both the write and the read. `recency.js`, `story-spine.js`,
 //     and the chapter matcher in `build.js` are the ones that exist today.
 function nfcLookupTable(map) {
-  return new Proxy(map, {
+  // A table of author-typed names has no prototype to answer for them: `table['constructor']`
+  // is a name with no entry, not Object's constructor. A plain object given here is copied
+  // into one that has none (an own `__proto__` key survives the copy as a name).
+  const table = Object.getPrototypeOf(map) === null ? map : Object.assign(Object.create(null), map);
+  return new Proxy(table, {
     get(target, prop, receiver) {
       if (typeof prop === 'string') {
         const key = canonicalNfc(prop);
