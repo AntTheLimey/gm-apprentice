@@ -4195,6 +4195,10 @@ a.cx-row .cx-name { color: var(--text); }
 .cx-row.cx-text.cx-sel .cx-name, svg.cx-web .cx-node.cx-text.cx-sel text, svg.cx-web .cx-node.cx-text:focus-visible text { text-decoration: none; }
 .cx-meta { display: none; margin-left: auto; padding-left: 12px; flex: none; white-space: nowrap; font-size: 0.78rem; line-height: 1.7; color: var(--cx-muted); text-align: right; font-variant-numeric: tabular-nums; }
 .cx-roomy .cx-meta { display: block; }
+/* In a column that is only just roomy the meta may not fit beside a long name, and the name would
+   be broken inside a word to make room: the meta goes under the name instead. */
+.cx-roomy a.cx-row, .cx-roomy span.cx-row { flex-wrap: wrap; }
+.cx-roomy .cx-row .cx-name { flex: 1 1 8rem; }
 /* wide: the subject, then the groups' headings, then the names, in three columns. The gaps between
    the columns are where the curves run, so no curve meets a word. A heading is set in the top half of
    its cell; the line to the group's dot runs level through the middle of the cell, under the heading. */

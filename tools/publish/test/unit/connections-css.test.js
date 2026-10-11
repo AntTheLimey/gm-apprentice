@@ -72,3 +72,9 @@ test('no colour is written as a literal in the Connections block', () => {
   assert.ok(block.length > 500);
   assert.doesNotMatch(block.replace(/var\([^)]*\)/g, ''), /#[0-9a-fA-F]{3,8}\b|rgb\(/);
 });
+
+test('a row whose kind and sessions do not fit beside the name puts them under it, so no name breaks mid-word', () => {
+  assert.match(block, /\.cx-roomy a\.cx-row,\s*\.cx-roomy span\.cx-row\s*\{[^}]*flex-wrap:\s*wrap/);
+  // the name takes what is left, so it is never pushed under its own mark
+  assert.match(block, /\.cx-roomy \.cx-row \.cx-name\s*\{[^}]*flex:\s*1 1 8rem/);
+});
