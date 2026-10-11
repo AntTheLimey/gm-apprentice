@@ -1492,9 +1492,16 @@ function publishMode(frontmatter) {
 // The GM-only marker on a single relationship edge. Frontmatter carries no
 // body prose, so `<!-- gm-only -->` has no meaning here — an edge whose very
 // existence is the secret (a "loyal escort" who `serves` the cult leader)
-// needs its own flag.
+// needs its own flag. The YAML reader gives `yes` and `on` as strings and a
+// GM may quote or pad any of them, so the flag hides the edge for true, the
+// number 1, and the words true, yes, on and 1, trimmed and in any capitals.
+// Reading more of these as a yes only ever shows less.
+// skills/shared/scripts/vaultlib.py `gm_only_hides` is this function;
+// test/fixtures/gm-only-vectors.json pins both.
 function isGmOnlyEdge(rel) {
-  return !!(rel && (rel.gm_only === true || rel.gm_only === 'true'));
+  const v = rel && rel.gm_only;
+  if (v === true || v === 1) return true;
+  return typeof v === 'string' && ['true', 'yes', 'on', '1'].includes(v.trim().toLowerCase());
 }
 
 // One page's frontmatter as a reader may see it. Everything derived from

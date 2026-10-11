@@ -1850,6 +1850,25 @@ def effective_exclude_sections(vault: Path,
 # --------------------------------------------------------------------------
 
 # The two explicit opt-outs processor.js honours, and nothing else.
+GM_ONLY_YES_WORDS = ("true", "yes", "on", "1")
+
+
+def gm_only_hides(value: Any) -> bool:
+    """Whether a relationship's `gm_only: <value>` hides the edge.
+
+    Mirrors tools/publish/lib/processor.js `isGmOnlyEdge`: true, the number
+    1, and the words true, yes, on and 1, trimmed and in any capitals. A
+    real YAML parser gives `yes` and `on` as strings and a GM may quote or
+    pad any of them. Reading more of these as a yes only hides more.
+    tools/publish/test/fixtures/gm-only-vectors.json pins both.
+    """
+    if value is True:
+        return True
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return value == 1
+    return isinstance(value, str) and value.strip().lower() in GM_ONLY_YES_WORDS
+
+
 PUBLISH_NONE_VALUES = ("false", "none")
 
 

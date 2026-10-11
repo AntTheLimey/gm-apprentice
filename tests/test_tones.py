@@ -762,6 +762,15 @@ class ShownTests(VaultCase):
         self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
         self.assertFalse(any("Cult" in r or "Mara" in r for r in rows))
 
+    def test_a_tie_marked_gm_only_in_any_spelling_of_yes_is_not_shown(self):
+        for written in ("yes", "on", "1", "Yes", '"true"', '" True "'):
+            with self.subTest(written=written):
+                note = ("---\ntype: npc\nrelationships:\n"
+                        '  - target: "[[A]]"\n    type: rival_of\n'
+                        f"    tone: hostile\n    gm_only: {written}\n---\nB\n")
+                _, rows, _ = self.run_shown({"NPCs/E.md": note}, {"NPCs/E.md"})
+                self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
     def test_tones_are_read_the_way_the_site_reads_them(self):
         # The rule toneFamily (tools/publish/lib/ontology.js) applies: trim,
         # lower-case, look up. A change to either side must change both.
@@ -886,13 +895,20 @@ class EdgeToneTests(unittest.TestCase):
             + body + "---\n"))
 
     def test_gm_only_is_read_like_the_site_reads_it(self):
-        # js-yaml 3: bare true/True/TRUE are the boolean; a quoted scalar is
-        # a string and only exactly 'true' matches (processor.js isGmOnlyEdge).
+        # The site hides an edge for true, the words true/yes/on and 1 in any
+        # capitals and padding, quoted or not (processor.js isGmOnlyEdge);
+        # reading more as a yes only hides more.
         for line, want in (("gm_only: true", True), ("gm_only: True", True),
                            ("gm_only: TRUE", True), ('gm_only: "true"', True),
-                           ("gm_only: 'true'", True), ('gm_only: "True"', False),
-                           ("gm_only: yes", False), ("gm_only: on", False),
-                           ("gm_only: false", False), ("type: knows", False)):
+                           ("gm_only: 'true'", True), ('gm_only: "True"', True),
+                           ('gm_only: " true "', True), ("gm_only: yes", True),
+                           ("gm_only: Yes # why", True), ('gm_only: "YES"', True),
+                           ("gm_only: on", True), ("gm_only: 1", True),
+                           ('gm_only: "1"', True), ("gm_only: 1.0", True),
+                           ("gm_only: false", False), ("gm_only: no", False),
+                           ("gm_only: off", False), ("gm_only: 0", False),
+                           ("gm_only: 2", False), ("gm_only:", False),
+                           ("type: knows", False)):
             with self.subTest(line=line):
                 self.assertEqual(self.edges(line)[0].gm_only, want)
 

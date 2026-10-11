@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, publishMode, keepOnlySections, keptSectionFlags, publishedFrontmatter, playerSafeMarkdown } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, publishMode, keepOnlySections, keptSectionFlags, publishedFrontmatter, playerSafeMarkdown, isGmOnlyEdge } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -671,6 +671,21 @@ describe('publishMode (shared vectors; vaultlib.publish_mode must agree)', () =>
   for (const v of VECTORS.cases) {
     it(`${JSON.stringify(v.frontmatter)} is ${v.mode}`, () => assert.strictEqual(publishMode(v.frontmatter), v.mode));
   }
+});
+
+describe('isGmOnlyEdge (shared vectors; vaultlib.gm_only_hides must agree)', () => {
+  const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'gm-only-vectors.json'), 'utf8'));
+  for (const v of VECTORS.cases) {
+    it(`gm_only ${JSON.stringify(v.value)} ${v.hides ? 'hides' : 'does not hide'} the edge`, () => assert.strictEqual(isGmOnlyEdge({ gm_only: v.value }), v.hides));
+  }
+  it('an edge with no gm_only, or no edge, is not hidden', () => {
+    assert.strictEqual(isGmOnlyEdge({}), false);
+    assert.strictEqual(isGmOnlyEdge(null), false);
+  });
+  it('publishedFrontmatter drops an edge marked with yes, on, 1 or a quoted true', () => {
+    const edges = ['yes', 'on', '1', ' True '].map((g) => ({ target: 'A', gm_only: g }));
+    assert.strictEqual(publishedFrontmatter({ relationships: [...edges, { target: 'B' }] }).relationships.length, 1);
+  });
 });
 
 describe('keepOnlySections (#167)', () => {

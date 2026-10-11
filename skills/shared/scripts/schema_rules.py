@@ -34,6 +34,7 @@ from vaultlib import (  # noqa: E402,F401
     chapter_key,
     chapter_of,
     extract_frontmatter,
+    gm_only_hides,
     parse_session_number,
     scalar_value,
     wikilink_target,
@@ -372,15 +373,20 @@ class RelationshipEdge:
 
 
 def _site_drops_edge(value: str) -> bool:
-    """Does `gm_only: <value>` make the site drop the edge? Mirrors
-    `isGmOnlyEdge` in tools/publish/lib/processor.js: the boolean true or
-    the exact string 'true'. js-yaml 3 reads bare `true`, `True` and `TRUE`
-    as the boolean (not `yes` or `on`); a quoted scalar is a string, so only
-    exactly `"true"` counts (`"True"` is shown)."""
+    """Does `gm_only: <value>` make the site drop the edge? The raw line
+    value read by vaultlib `gm_only_hides`, which mirrors `isGmOnlyEdge` in
+    tools/publish/lib/processor.js: true, the words yes, on and 1 in any
+    capitals and padding, quoted or not, and an unquoted number equal to 1
+    (`1.0` too, which YAML reads as the number)."""
     text = value.strip()
-    if QUOTED_SCALAR_RE.match(text):
-        return scalar_value(text) == "true"
-    return scalar_value(text) in ("true", "True", "TRUE")
+    word = scalar_value(text)
+    if not QUOTED_SCALAR_RE.match(text):
+        try:
+            if float(word) == 1:
+                return True
+        except ValueError:
+            pass
+    return gm_only_hides(word)
 
 
 EDGE_KEY_RE = re.compile(r"^(-\s+)?([\w-]+):\s*(.*)$")

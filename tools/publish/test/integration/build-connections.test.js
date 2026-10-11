@@ -102,6 +102,19 @@ test('every line in a page\'s Connections is in the published frontmatter of its
   assert.ok(checked >= 3, `the lines were read (${checked})`);
 });
 
+test('a relationship marked gm_only in any spelling of yes is hidden at both ends', () => {
+  const spellings = ['true', 'True', '"true"', '" true "', 'yes', 'YES', 'on', '"On"', '1'];
+  const files = { 'NPCs/Alice.md': note('type: npc', 'Alice.') };
+  spellings.forEach((g, n) => {
+    files[`NPCs/Other_${n}.md`] = note(`type: npc\nrelationships:\n  - target: "[[Alice]]"\n    type: hunts\n    description: SECRETLINE${n}\n    gm_only: ${g}`, `Other ${n}.`);
+  });
+  const s = buildVault(files); sites.push(s);
+  for (const f of walk(path.join(s.root, 'docs')).filter((x) => TEXT_FILE.test(x))) {
+    const body = fs.readFileSync(f, 'utf8');
+    assert.ok(!/SECRETLINE|Hunted|hunts/i.test(body), `${path.relative(s.root, f)} shows a gm_only edge`);
+  }
+});
+
 test('a target with no page is in the page\'s data island by its words, and its key is not', () => {
   const html = site().read('npcs', 'emma.html');
   const island = JSON.parse(html.match(/<script[^>]*class="cx-data"[^>]*>([^]*?)<\/script>/)[1].replace(/\\u003c/gi, '<'));

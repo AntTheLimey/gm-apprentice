@@ -1,0 +1,27 @@
+{
+ "_about": "isGmOnlyEdge (processor.js) and vaultlib.gm_only_hides: whether a relationship's `gm_only` value hides the edge. The YAML reader gives `yes` and `on` as strings, so the word is read in any capitals, trimmed, and 1 counts as yes. Reading more as yes only hides more. Both sides must give `hides` for every `value`.",
+ "cases": [
+  { "value": true, "hides": true },
+  { "value": "true", "hides": true },
+  { "value": "True", "hides": true },
+  { "value": "TRUE", "hides": true },
+  { "value": " true ", "hides": true },
+  { "value": "yes", "hides": true },
+  { "value": "Yes", "hides": true },
+  { "value": " YES ", "hides": true },
+  { "value": "on", "hides": true },
+  { "value": "ON", "hides": true },
+  { "value": "1", "hides": true },
+  { "value": 1, "hides": true },
+  { "value": false, "hides": false },
+  { "value": "false", "hides": false },
+  { "value": "no", "hides": false },
+  { "value": "off", "hides": false },
+  { "value": "", "hides": false },
+  { "value": 0, "hides": false },
+  { "value": 2, "hides": false },
+  { "value": null, "hides": false },
+  { "value": ["true"], "hides": false },
+  { "value": "truthy", "hides": false }
+ ]
+}
