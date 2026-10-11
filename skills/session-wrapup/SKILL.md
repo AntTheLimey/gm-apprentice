@@ -212,7 +212,9 @@ presenting receipts: `vault_check.py frontmatter --folder <dir>`
 per folder touched, `vault_check.py relationships` with `--file
 <path>` repeated for every vault-relative path Step 4 created,
 edited or re-pointed — new/updated entities, re-pointed container
-children, cross-entity claim targets, Event files — `vault_check.py
+children, cross-entity claim targets, Event files (fix a tone
+WARNING too: the word the row names, else the listed one that fits,
+`shared/entity-schema.md` Tones) — `vault_check.py
 pc-body` with `--file Characters/PCs/{Name}.md` repeated for every
 PC refreshed in 3c (a WARNING about a missing or untouched
 `## Stat Sheet`: `shared/pc-body-structure.md` § A sheet kept
