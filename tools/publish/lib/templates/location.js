@@ -1,9 +1,7 @@
-const { backlinksOf } = require('../backlinks');
 const { refTarget } = require('../wikilink');
 const { escapeHtml, relativeHref, publishedSource, encodeHref, plainRefValue, referenceOf } = require('../processor');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, headerValueText, connectionsSection } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
-const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
 const { canonicalNfc } = require('../unicode');
@@ -21,10 +19,9 @@ function matchesRef(refValue, title) {
 function locationTemplate(page, processedContent, navFor, config, imageMap, context) {
   const { pages, linkMap, publishConfig } = context || {};
   const fm = page.frontmatter;
-  const backlinks = backlinksOf((publishConfig || {})._backlinks, page);
 
   // Parse `[[Target|Alias]]` once: target keeps underscores for the linkMap lookup, label
-  // is the alias or the humanized target. Reused by the breadcrumb and the sidebar below.
+  // is the alias or the humanized target. Reused by the breadcrumb.
   const parent = referenceOf(fm.parent_location);
   const parentTarget = parent && parent.target && linkMap ? linkMap[parent.target] : null;
   const crumbs = generateBreadcrumbs(page.outputPath, parent ? {
@@ -137,25 +134,12 @@ function locationTemplate(page, processedContent, navFor, config, imageMap, cont
 </div>`;
   }
 
-  // --- Context Sidebar ---
-  const sidebar = renderContextSidebar({
-    backlinks,
-    parentEntity: parent ? {
-      name: parent.label,
-      path: parentTarget,
-    } : null,
-    relationships: normalizeRelationships(fm.relationships, linkMap),
-    currentOutputPath: page.outputPath,
-  });
-
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = [heroBanner, pullQuote, bodyContent, processedContent.relationships, subLocationsHtml, whosHereHtml, timelineHtml, graphHtml]
+  const mainContent = [heroBanner, pullQuote, bodyContent, subLocationsHtml, whosHereHtml, timelineHtml, graphHtml]
     .filter(Boolean).join('\n');
 
-  const contentHtml = sidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
-    : mainContent;
+  const contentHtml = mainContent;
 
   return baseShell({
     title: page.displayTitle,

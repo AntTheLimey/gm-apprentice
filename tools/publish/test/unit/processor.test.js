@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, renderRelationships, publishMode, keepOnlySections, keptSectionFlags, publishedFrontmatter, playerSafeMarkdown } = require('../../lib/processor');
+const { escapeHtml, relativePath, relativeHref, parseWikiRef, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripLeadingH1, stripGmOnly, stripSpoiler, stripCallouts, filterFields, publishMode, keepOnlySections, keptSectionFlags, publishedFrontmatter, playerSafeMarkdown } = require('../../lib/processor');
 
 describe('escapeHtml', () => {
   it('escapes angle brackets', () => {
@@ -484,20 +484,6 @@ describe('filterFields', () => {
     const fm = { type: 'npc', secrets: 'Still here' };
     const result = filterFields(fm, []);
     assert.deepStrictEqual(result, { type: 'npc', secrets: 'Still here' });
-  });
-});
-
-describe('renderRelationships', () => {
-  it('replaces underscores with spaces in target display text', () => {
-    const frontmatter = {
-      relationships: [
-        { target: '[[Captain_James_Harker]]', type: 'allied_with' },
-      ],
-    };
-    const linkMap = {};
-    const result = renderRelationships(frontmatter, linkMap, 'characters/pcs/test.html');
-    assert.ok(result.includes('Captain James Harker'), 'Should display underscores as spaces');
-    assert.ok(!result.includes('Captain_James_Harker'), 'Should not contain raw underscored name');
   });
 });
 

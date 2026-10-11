@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { resolveWikiLinks, renderRelationships, renderMetaValue, encodeHref, encodeImageUrl } = require('../../lib/processor');
+const { resolveWikiLinks, renderMetaValue, encodeHref, encodeImageUrl } = require('../../lib/processor');
 const { createRenderer } = require('../../lib/markdown');
 
 // Mirrors the options createRenderer() actually uses in lib/markdown.js — a mismatch here
@@ -31,16 +31,6 @@ describe('resolveWikiLinks percent-encodes link destinations (#145)', () => {
     const linkMap = { Widget: 'items/Widget (Mk2).html' };
     const result = resolveWikiLinks('See [[Widget]]', linkMap, 'index.html');
     assert.strictEqual(result, 'See [Widget](items/Widget%20%28Mk2%29.html)');
-  });
-});
-
-describe('renderRelationships percent-encodes the target href (#145)', () => {
-  it('encodes a space in the target output path', () => {
-    const frontmatter = { relationships: [{ target: 'Session 02', type: 'ally' }] };
-    const linkMap = { Session_02: 'chronicle/Sessions/Session 02/x.html' };
-    frontmatter.relationships[0].target = 'Session_02';
-    const html = renderRelationships(frontmatter, linkMap, 'chronicle/other/y.html');
-    assert.match(html, /href="\.\.\/Sessions\/Session%2002\/x\.html"/);
   });
 });
 
@@ -75,15 +65,6 @@ describe('path-form wikilinks show the note name, not the folder', () => {
   it('resolves [[Folder/Name]] in prose and labels it with the basename', () => {
     const out = resolveWikiLinks('From [[Locations/Drageby]].', linkMap, 'characters/x.html');
     assert.strictEqual(out, 'From [Drageby](../locations/drageby.html).');
-  });
-  it('resolves and labels a path target in a relationship list, alias or not', () => {
-    const html = renderRelationships({ relationships: [
-      { target: '[[Locations/Drageby]]', type: 'located_at' },
-      { target: '[[Locations/Drageby|the town]]', type: 'part_of' },
-    ] }, linkMap, 'characters/x.html');
-    assert.match(html, /href="\.\.\/locations\/drageby\.html" class="entity-link">Drageby</);
-    assert.match(html, /class="entity-link">the town</);
-    assert.doesNotMatch(html, /Locations\//);
   });
 });
 

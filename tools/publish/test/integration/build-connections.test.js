@@ -10,6 +10,7 @@ const FILES = {
   'NPCs/Cult_Leader.md': note('type: npc\npublish: false', 'Hidden. Knows [[Emma]].'),
   'NPCs/Quiet.md': note('type: npc\npublish_exclude_fields: [relationships]\nrelationships:\n  - target: "[[Emma]]"\n    type: blackmails\n    description: Holds the letters.', 'Quiet.'),
   'Locations/Docks.md': note('type: location', 'The docks. [[Emma]] is often here.'),
+  'World/Magic.md': note('type: world_domain\nrules:\n  - rule: Magic costs blood.', 'Magic.'),
   'Sessions/Session_1.md': note('type: session\nsession_number: 1', '[[Emma]] met [[Hallam]].'),
 };
 const sites = [];
@@ -53,4 +54,24 @@ test('each mode builds; off leaves no section and no script', () => {
   assert.ok(!html.includes('class="cx"') && !html.includes('connections.js'));
   assert.ok(!off.exists('js', 'connections.js'));
   assert.ok(site().exists('js', 'connections.js'));
+});
+
+test('no page keeps the sidebar, the body list or the NPC cards', () => {
+  const s = site();
+  for (const file of [['npcs', 'emma.html'], ['npcs', 'hallam.html'], ['locations', 'docks.html'], ['sessions', 'session-1.html']]) {
+    const html = s.read(...file);
+    for (const old of ['context-sidebar', 'content-with-sidebar', 'relationship-list', 'relationship-cards', 'rel-card', 'Mentioned In', 'sidebar-badge']) {
+      assert.ok(!html.includes(old), `${file.join('/')} still has ${old}`);
+    }
+  }
+});
+
+test("a session page's NPCs are in its Connections, under Appearing", () => {
+  assert.match(site().read('sessions', 'session-1.html'), /<h4>Appearing<\/h4>\s*<ul>\s*<li><a href="[^"]*emma\.html">Emma<\/a>/);
+});
+
+test('World Rules sit in the page, not beside it', () => {
+  const html = site().read('world', 'magic.html');
+  assert.match(html, /<section class="world-rules"><h2>World Rules<\/h2><ul><li>Magic costs blood\.<\/li><\/ul><\/section>/);
+  assert.ok(!html.includes('<aside'));
 });

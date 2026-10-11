@@ -342,65 +342,6 @@ img {
   padding: 1.5rem 1rem 3rem;
 }
 
-/* Content with sidebar layout */
-.content-with-sidebar {
-  max-width: 70rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
-}
-@media (min-width: 1024px) {
-  .content-with-sidebar {
-    grid-template-columns: 1fr 18rem;
-  }
-  /* Sparse sidebar (≤1 section): don't reserve the 18rem column and squeeze the article
-     into a narrow strip with an empty right gutter. Use one comfortably-wide centred
-     column; the lone sidebar box flows beneath the prose. */
-  .content-with-sidebar.content-sidebar-sparse {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 60rem;
-  }
-}
-
-/* ===== CONTEXT SIDEBAR ===== */
-.context-sidebar {
-  font-size: 0.875rem;
-}
-.context-sidebar h3 {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  margin: 1.25rem 0 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border);
-}
-.context-sidebar h3:first-child {
-  margin-top: 0;
-}
-.context-sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.context-sidebar li {
-  padding: 0.3rem 0;
-  margin: 0;
-}
-.context-sidebar li a {
-  color: var(--text);
-}
-.context-sidebar li a:hover {
-  color: var(--accent);
-}
-.context-sidebar .sidebar-badge {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-left: 0.35rem;
-}
-
 /* ===== TYPOGRAPHY ===== */
 .page-title {
   font-size: 1.75rem;
@@ -1752,64 +1693,6 @@ tr:nth-child(even) {
   color: var(--accent);
 }
 
-/* Relationship web (visual cards) */
-.relationship-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 0.75rem;
-  margin: 1rem 0;
-}
-.rel-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
-  text-decoration: none;
-  color: var(--text);
-  transition: border-color 0.15s;
-  display: block;
-}
-.rel-card:hover {
-  border-color: var(--accent);
-  text-decoration: none;
-}
-.rel-card .rel-type {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
-  margin-bottom: 0.25rem;
-}
-.rel-card .rel-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-/* Relationship list (legacy) */
-.relationship-list {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
-}
-.relationship-list li {
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
-}
-.relationship-list li:last-child {
-  border-bottom: none;
-}
-.relationship-list .rel-label {
-  color: var(--accent);
-  font-weight: 600;
-  margin-right: 0.3rem;
-}
-.relationship-list .rel-label::after {
-  content: ":";
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
 /* ===== SEARCH OVERLAY ===== */
 .search-overlay {
   display: none;
@@ -1974,21 +1857,21 @@ tr:nth-child(even) {
   opacity: 1;
 }
 
-/* ===== SVG RELATIONSHIP GRAPH ===== */
-.relationship-graph {
+/* ===== CAMPAIGN ROUTE MAP ===== */
+.route-map {
   margin: 2rem 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.relationship-graph svg {
+.route-map svg {
   width: 100%;
   min-width: 20rem;
   height: auto;
 }
-.relationship-graph svg a text {
+.route-map svg a text {
   fill: var(--text);
 }
-.relationship-graph svg a:hover text {
+.route-map svg a:hover text {
   fill: var(--accent);
 }
 
@@ -4236,7 +4119,6 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
     color: #000;
     background: #fff;
   }
-  .content-with-sidebar { grid-template-columns: 1fr; }
   .story-prose { break-before: page; }
 
   /* GURPS sheet print rules */
@@ -4459,3 +4341,8 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
   .gl-party-table tbody tr { border-bottom: 1px solid var(--border); }
   .gl-party-table tbody tr:last-child { border-bottom: 0; }
 }
+
+/* World Rules, in the page under the title */
+.world-rules { margin: 1.5rem 0; padding: 1rem 1.25rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; }
+.world-rules h2 { margin-top: 0; font-size: 1.1rem; }
+.world-rules ul { margin: 0; padding-left: 1.2rem; }

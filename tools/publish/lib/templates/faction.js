@@ -1,7 +1,5 @@
-const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativePath, encodeHref, refMetaValue } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
-const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { canonicalNfc } = require('../unicode');
 const { linkText } = require('../wikilink');
@@ -9,7 +7,6 @@ const { linkText } = require('../wikilink');
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
-  const backlinks = backlinksOf(publishConfig._backlinks, page);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   // Metadata badges
@@ -66,18 +63,10 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
-  const sidebar = renderContextSidebar({
-    backlinks,
-    relationships: normalizeRelationships(fm.relationships, linkMap),
-    currentOutputPath: page.outputPath,
-  });
-
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
-  const contentHtml = sidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
-    : mainContent;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${graphHtml}`;
+  const contentHtml = mainContent;
 
   return baseShell({
     title: page.displayTitle,

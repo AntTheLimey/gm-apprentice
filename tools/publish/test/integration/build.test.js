@@ -1509,9 +1509,10 @@ describe('build integration', () => {
       assert.ok(npcHtml.includes('breadcrumbs'));
     });
 
-    it('generates context sidebar with backlinks on NPC page', () => {
+    it('puts the NPC page\'s links in its Connections section, with no sidebar', () => {
       const npcHtml = fs.readFileSync(path.join(outputDir, 'docs', 'characters', 'npcs', 'dr-armitage.html'), 'utf-8');
-      assert.ok(npcHtml.includes('context-sidebar'));
+      assert.ok(!npcHtml.includes('context-sidebar') && !npcHtml.includes('content-with-sidebar'));
+      assert.ok(npcHtml.includes('class="cx"'));
     });
 
     it('generates relationship graph SVG on entity pages', () => {

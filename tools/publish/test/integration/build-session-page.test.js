@@ -157,7 +157,7 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
 
     it('lists the NPCs the Wrap-Up names, not the ones the hub prepped', () => {
       const html = find('session-01-arrival.html');
-      assert.ok(html.includes('NPCs Appearing'));
+      assert.ok(!html.includes('NPCs Appearing') && !html.includes('context-sidebar'), 'the sidebar is gone');
       assert.ok(html.includes('Mrs Hale'));
       assert.match(html, /<h4>Appearing<\/h4>[^]*Mrs Hale/);
     });
@@ -172,7 +172,7 @@ The coach left before dawn with [[Mrs Hale]] waving from the INNYARDWAVE porch.
 
     it('a hub link to a prepped NPC creates no backlink', () => {
       assert.ok(!find('prepped-villain.html').includes('session-01-arrival'),
-        'hub link became a "Mentioned in" backlink');
+        'hub link became a Mentions entry');
     });
 
     it('the landing quotes the Wrap-Up, never the hub', () => {

@@ -255,3 +255,14 @@ test('an unlabelled link in a description reads as the page prints it', () => {
   const m = buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma);
   assert.deepStrictEqual(group(m, 'people', 'Serves').items[0].lines, ['Sister of [[Old_Tom]].']);
 });
+
+test('a path-form target ([[Folder/Name]]) reaches the page, alias or not, and names no folder', () => {
+  const a = page('A', 'npc', { relationships: [
+    { target: '[[Locations/Drageby]]', type: 'located_at' },
+    { target: '[[Locations/Drageby|the town]]', type: 'part_of' }] });
+  const drageby = { ...page('Drageby', 'location'), vaultPath: 'Locations/Drageby' };
+  const m = buildConnections(ctx([a, drageby])).for(a);
+  const items = m.tabs.flatMap((t) => t.groups).flatMap((g) => g.items);
+  assert.ok(items.length >= 1 && items.every((i) => i.outputPath === 'p/drageby.html' && i.title === 'Drageby'), JSON.stringify(items));
+  assert.ok(!JSON.stringify(m).includes('Locations/'));
+});

@@ -8,14 +8,14 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
   const linkMap = (context || {}).linkMap || publishConfig._linkMap || {};
   const meta = v => renderMetaValue(v, linkMap, page.outputPath);
 
-  let rulesSidebar = '';
+  let rulesHtml = '';
   const publishRules = fm.publish_rules !== false;
   if (publishRules && fm.rules && Array.isArray(fm.rules) && fm.rules.length > 0) {
-    const rulesHtml = fm.rules.map(r => {
+    const items = fm.rules.map(r => {
       const desc = meta(r.rule || r.id || '');
       return `<li>${desc}</li>`;
     }).join('\n');
-    rulesSidebar = `<aside class="world-rules-sidebar"><h3>World Rules</h3><ul>${rulesHtml}</ul></aside>`;
+    rulesHtml = `<section class="world-rules"><h2>World Rules</h2><ul>${items}</ul></section>`;
   }
 
   const summaryHtml = fm.summary
@@ -31,18 +31,14 @@ function worldDomainTemplate(page, processedContent, navFor, config, imageMap, c
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
-  const mainContent = `${headerHtml}\n${processedContent.html}`;
-  const contentHtml = rulesSidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${rulesSidebar}</div>`
-    : mainContent;
-
+  const mainContent = [headerHtml, rulesHtml, processedContent.html].filter(Boolean).join('\n');
   return baseShell({
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: contentHtml,
+    content: mainContent,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,

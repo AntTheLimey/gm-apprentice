@@ -214,7 +214,7 @@ function buildRouteMap(page, pages) {
     svg += `<text x="${x}" y="${y + 22}" text-anchor="middle" font-size="10" fill="var(--text,#c9d1d9)">${escapeHtml(label)}</text>`;
   });
   svg += '</svg>';
-  return `<div class="relationship-graph" style="margin-bottom:2rem"><h3>Campaign Route</h3>${svg}</div>`;
+  return `<div class="route-map" style="margin-bottom:2rem"><h3>Campaign Route</h3>${svg}</div>`;
 }
 
 const ALL_TABS = ['sheet', 'combat', 'spells', 'equipment', 'story', 'journey'];
@@ -417,13 +417,13 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const metaFields = headerMetaFields(fm);
     const kept = metaFields.includes('sheet_source') ? sheetSourceOf(fm) : '';
     const keptLine = kept ? ` This sheet is kept: ${escapeHtml(kept)}.` : '';
-    sheetContent = `${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${sectionNav}\n${accordions}\n${processedContent.relationships}`;
+    sheetContent = `${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${sectionNav}\n${accordions}`;
   } else if (systemHtml) {
     const liveClient = liveData ? clientFor(publishConfig.system) : null;
     const island = liveClient ? '\n' + liveDataScript(liveData, liveClient.domId) : '';
-    sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}\n${processedContent.relationships}${island}`;
+    sheetContent = `${systemHtml}\n${sectionNav}\n${accordions}${island}`;
   } else {
-    sheetContent = `${sectionNav}\n${accordions}\n${processedContent.relationships}`;
+    sheetContent = `${sectionNav}\n${accordions}`;
   }
 
   // --- Equipment Tab ---

@@ -1072,30 +1072,6 @@ function leadingH1Withheld(markdown, excludeSections, frontmatter) {
   return walkExcludeList(lines.slice(0, end + 1), excludeSections, frontmatter, {}).withheldBy[first] !== null;
 }
 
-function renderRelationships(frontmatter, linkMap, currentOutputPath) {
-  const rels = frontmatter.relationships;
-  if (!rels || !Array.isArray(rels)) return '';
-  const valid = rels.filter(r => r.target && r.type);
-  if (valid.length === 0) return '';
-
-  const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
-  const items = valid.map(r => {
-    const { target: targetName, label } = parseWikiRef(r.target);
-    const targetPath = linkMap[targetName];
-    const escapedName = escapeHtml(label);
-    const link = targetPath
-      ? `<a href="${encodeHref(relativePath(currentDir, targetPath))}" class="entity-link">${escapedName}</a>`
-      : escapedName;
-    const typeRaw = String(r.type).replace(/_/g, ' ');
-    const typeCapitalized = typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1);
-    const type = escapeHtml(typeCapitalized);
-    const desc = r.description ? ` &mdash; ${escapeHtml(r.description)}` : '';
-    return `<li><strong class="rel-label">${type}</strong> ${link}${desc}</li>`;
-  });
-
-  return `<h2>Relationships</h2>\n<ul class="relationship-list">\n${items.join('\n')}\n</ul>`;
-}
-
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
 
 // Percent-encode each path segment of an output-path-derived href/src. A destination
@@ -1206,7 +1182,7 @@ function referenceParts(text) {
 
 // What a reference value names: { target, label } for a whole reference (target is the
 // link-map name), { target: '', label } for running text (nothing to link to), null when empty.
-// The one definition the page headers, the location sidebar and the preview cards share.
+// The one definition the page headers, the location breadcrumb and the preview cards share.
 function referenceOf(raw) {
   const text = valueText(raw).trim();
   if (!text) return null;
@@ -1444,8 +1420,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   });
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   const html = md.render(markdown);
-  const relationships = renderRelationships(page.frontmatter, linkMap, page.outputPath);
-  return { html, relationships, warnings };
+  return { html, warnings };
 }
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates). The
@@ -1704,4 +1679,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

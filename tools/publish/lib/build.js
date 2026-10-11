@@ -563,7 +563,7 @@ function buildSite(options) {
   // and the body emptied inside it, before the published view is computed, so search,
   // backlinks, recency, Connections and the landing fallback agree with the
   // page. A hub linking a prepped NPC who never appeared must not become that NPC's
-  // "Mentioned in".
+  // "Mentions".
   //
   // The pairs are computed HERE, once, on the unreduced frontmatter, and handed to every
   // reader — the session page, the Saga, the landing recap and recency. None of them
@@ -1110,13 +1110,6 @@ function buildSite(options) {
         html = worldDomainTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap });
         break;
       default: {
-        // The page sidebar lists the same sessions, NPCs and events that Connections gathers, so it
-        // reads them from the one set rather than finding them a second time.
-        const gathered = connectionExtras.get(page) || [];
-        const listed = (group) => gathered.filter(e => e.group === group).map(e => ({ displayTitle: e.page.displayTitle, outputPath: e.page.outputPath, type: e.page.frontmatter.type }));
-        const extraSidebar = page.frontmatter.type === 'session'
-          ? { mentionedNPCs: listed('Appearing'), events: listed('Events').map(({ type, ...rest }) => rest) }
-          : page.frontmatter.type === 'chapter' ? { constituentSessions: listed('Sessions') } : {};
         if (page.frontmatter.type === 'session') {
           const wrapUp = hubWrapUps.get(page);
           if (wrapUp) {
@@ -1125,7 +1118,7 @@ function buildSite(options) {
             processed.html = sessionBodyHtml(page, { wrapUp, chapter });
           }
         }
-        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, extraSidebar, pages });
+        html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages });
         break;
       }
     }

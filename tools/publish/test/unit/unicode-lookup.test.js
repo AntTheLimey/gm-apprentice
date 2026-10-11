@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { buildLinkMap, scanAttachments } = require('../../lib/scanner');
-const { resolveWikiLinks, renderRelationships, renderMetaValue, resolveImageEmbeds } = require('../../lib/processor');
+const { resolveWikiLinks, renderMetaValue, resolveImageEmbeds } = require('../../lib/processor');
 const { portraitImg } = require('../../lib/templates/base');
 const { pairHubs } = require('../../lib/session-hub');
 
@@ -71,12 +71,6 @@ describe('linkMap lookups across unicode normal forms (#139)', () => {
     const map = buildLinkMap([pageNamed(NFD)]);
     const out = resolveWikiLinks(`Met [[${NFC}]] at the docks.`, map, 'sessions/session-01.html');
     assert.strictEqual(out, `Met [${NFC}](../${OUT}) at the docks.`);
-  });
-
-  it('links a relationship target typed in the other normal form', () => {
-    const map = buildLinkMap([pageNamed(NFD)]);
-    const html = renderRelationships({ relationships: [{ target: NFC, type: 'ally' }] }, map, 'characters/pcs/rook.html');
-    assert.ok(html.includes(`href="../npcs/alena-gonzalez.html"`), html);
   });
 
   it('links a frontmatter wikilink typed in the other normal form', () => {
@@ -187,7 +181,7 @@ describe('derived title tables across unicode normal forms (#139)', () => {
   // Same defect class as linkMap, found auditing every table keyed by author-typed text:
   // buildBacklinks keys off the words inside a `[[wikilink]]` but is read back with the
   // scanned page title, and Connections resolves wikilink targets against page
-  // titles. A mismatch drops the "Mentioned in" sidebar entry, or draws the entity twice —
+  // titles. A mismatch drops the Mentions entry, or draws the entity twice —
   // once as a resolved item, once as a dangling one.
   const { buildBacklinks } = require('../../lib/backlinks');
   const { buildConnections } = require('../../lib/connections');

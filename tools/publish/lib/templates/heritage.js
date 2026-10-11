@@ -1,14 +1,10 @@
-const { backlinksOf } = require('../backlinks');
 const { escapeHtml } = require('../processor');
 const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, connectionsSection } = require('./base');
-const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function heritageTemplate(page, processedContent, navFor, config, imageMap, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
-  const linkMap = (context || {}).linkMap || {};
-  const backlinks = backlinksOf(publishConfig._backlinks, page);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   const badges = [];
@@ -43,18 +39,10 @@ function heritageTemplate(page, processedContent, navFor, config, imageMap, cont
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
-  const sidebar = renderContextSidebar({
-    backlinks,
-    relationships: normalizeRelationships(fm.relationships, linkMap),
-    currentOutputPath: page.outputPath,
-  });
-
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = `${headerCard}\n${badgeHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
-  const contentHtml = sidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
-    : mainContent;
+  const mainContent = `${headerCard}\n${badgeHtml}\n${processedContent.html}\n${graphHtml}`;
+  const contentHtml = mainContent;
 
   return baseShell({
     title: page.displayTitle,

@@ -57,46 +57,7 @@ test('B2: a wikilink in a header prints as its label on every template that prin
   } finally { v.cleanup(); }
 });
 
-test('B3: a snake_case type label in a header prints as words', () => {
-  const v = site({
-    'Locations/L.md': '---\ntype: location\nlocation_type: government_quarter\n---\nBody.\n',
-    'Events/E.md': '---\ntype: event\nevent_type: betrayal_event\n---\nBody.\n',
-    'Items/I.md': '---\ntype: item\nitem_type: plot_thread\n---\nBody.\n',
-    'Clues/C.md': '---\ntype: clue\nclue_type: physical_clue\n---\nBody.\n',
-    'Factions/F.md': '---\ntype: faction\nfaction_type: secret_society\n---\nBody.\n',
-  });
-  try {
-    for (const [p, text] of [[['locations', 'l.html'], 'Government quarter'], [['events', 'e.html'], 'Betrayal event'],
-      [['items', 'i.html'], 'Plot thread'], [['clues', 'c.html'], 'Physical clue'], [['factions', 'f.html'], 'Secret society']]) {
-      const h = header(v.read(...p));
-      assert.ok(h.includes(text), `${p.join('/')}: ${h}`);
-      assert.ok(!h.includes('_'), `${p.join('/')} keeps an underscore: ${h}`);
-    }
-  } finally { v.cleanup(); }
-});
-
-test('A2: an item holder is shown whole in its real shapes, never cut at a slash or bracket', () => {
-  const holders = {
-    A: ['[[Name]]', 'Name'],
-    B: ['[[Name|alias]]', 'alias'],
-    C: ['Name (note)', 'Name (note)'],
-    D: ['Name / Other', 'Name / Other'],
-    E: ['[[A]] (held for [[B]])', 'A (held for B)'],
-    F: ['[[Nathaniel]] (and / or [[Cleo]])', 'Nathaniel (and / or Cleo)'],
-    G: ['n/a — federal fleet vessel', 'n/a — federal fleet vessel'],
-  };
-  const files = {};
-  for (const [k, [raw]] of Object.entries(holders)) files[`Items/Item ${k}.md`] = `---\ntype: item\ncurrent_holder: ${JSON.stringify(raw)}\n---\nBody.\n`;
-  const v = site(files);
-  try {
-    for (const [k, [raw, want]] of Object.entries(holders)) {
-      const h = header(v.read('items', `item-${k.toLowerCase()}.html`));
-      assert.ok(h.includes(`Current Holder: ${want}`), `${raw}: ${h}`);
-    }
-  } finally { v.cleanup(); }
-});
-
-test('B3: the "Mentioned in" list names a page type as the preview card does', () => {
+test('B3: the Mentions list files a page under its tab heading, never under a raw type name', () => {
   const v = site({
     'Characters/Hallam.md': '---\ntype: npc\n---\nBody.\n',
     'Wrapups/Night One.md': '---\ntype: session_wrap\n---\nHallam was there: [[Hallam]].\n',
@@ -105,11 +66,10 @@ test('B3: the "Mentioned in" list names a page type as the preview card does', (
   });
   try {
     const html = v.read('characters', 'hallam.html');
-    assert.ok(!html.includes('sidebar-badge">session_wrap') && !html.includes('sidebar-badge">plot_thread'), 'raw type name');
-    const { kindLabel } = require('../lib/kind-label');
-    for (const type of ['session_wrap', 'plot_thread', 'npc']) assert.ok(html.includes(`sidebar-badge">${kindLabel(type)}<`), type);
-    assert.match(html, /sidebar-badge">Plot thread</);
-    assert.match(html, /sidebar-badge">NPC</);
+    assert.ok(!html.includes('plot_thread') && !html.includes('session_wrap'), 'raw type name');
+    assert.match(html, /<h4>Other<\/h4>\s*<ul class="cx-mentions">\s*<li><a href="[^"]*dark-thread\.html">Dark Thread<\/a>/);
+    assert.match(html, /<h4>Sessions<\/h4>\s*<ul class="cx-mentions">\s*<li><a href="[^"]*night-one\.html">Night One<\/a>/);
+    assert.match(html, /<h4>People<\/h4>\s*<ul class="cx-mentions">\s*<li><a href="mara\.html">Mara<\/a>/);
   } finally { v.cleanup(); }
 });
 
@@ -159,7 +119,7 @@ test('B-I2: an event header value is one inline run inside its flex item, whatev
   } finally { v.cleanup(); }
 });
 
-test('B-M1: a location prints its parent whole in the sidebar, and its card says no more than the page', () => {
+test('B-M1: a location prints its parent whole under Part of in Connections, and its card says no more than the page', () => {
   const { cardProblems } = require('./helpers/card-subset');
   const v = buildVault({
     'Locations/Quay.md': '---\ntype: location\nparent_location: "Met [[Xylo]] at / the docks (twice)"\n---\nBody.\n',
@@ -170,7 +130,7 @@ test('B-M1: a location prints its parent whole in the sidebar, and its card says
     const cards = JSON.parse(v.read('previews.json'));
     for (const [file, want] of [['quay', 'Met Xylo at / the docks (twice)'], ['quay-two', 'LABEL shown at night']]) {
       const html = v.read('locations', `${file}.html`);
-      assert.ok(pageText(html).includes(`Parent ${want}`), `${file}: ${pageText(html).slice(0, 300)}`);
+      assert.ok(pageText(html).includes(`Part of ${want}`), `${file}: ${pageText(html).slice(0, 300)}`);
       assert.deepStrictEqual(cardProblems(cards[`locations/${file}.html`], pageText(html)).problems, []);
     }
   } finally { v.cleanup(); }

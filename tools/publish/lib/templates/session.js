@@ -15,7 +15,7 @@ function shownInGameDate(fm, wrapUp) {
 
 // The article body of a session page whose hub body is withheld (#276: the session has a
 // published Wrap-Up, see session-hub.js). The page shell — title, metadata badges,
-// portrait, sidebar, graph — stays the wiki page's, unchanged; this replaces only the
+// portrait, Connections — stays the wiki page's, unchanged; this replaces only the
 // rendered hub body:
 //
 //   the chapter (linked, and only when its page publishes) and the in-game date

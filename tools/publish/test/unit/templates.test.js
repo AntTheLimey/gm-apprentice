@@ -387,29 +387,12 @@ describe('displayTitle usage', () => {
     assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
   });
 
-  it('flags a sparse sidebar (≤1 section) for single-column layout (B2)', () => {
-    const page = {
-      title: 'Spot', displayTitle: 'Spot', outputPath: 'locations/spot.html',
-      frontmatter: { type: 'location' },
-    };
-    const processed = { html: '<p>x</p>', relationships: '' };
-    const context = {
-      publishConfig: { _backlinks: { Spot: [
-        { title: 'S1', displayTitle: 'Session 1', outputPath: 'sessions/s1.html', type: 'session' },
-      ] } },
-      linkMap: {}, pages: [],
-    };
-    const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {}, context);
-    assert.ok(html.includes('content-with-sidebar'), 'should render the sidebar layout');
-    assert.ok(html.includes('content-sidebar-sparse'), 'a one-section sidebar should be flagged sparse');
-  });
-
-  it('does not flag a rich sidebar (≥2 sections)', () => {
+  it('has no sidebar, whatever mentions or relationships the page has; the body is still there', () => {
     const page = {
       title: 'Spot', displayTitle: 'Spot', outputPath: 'locations/spot.html',
       frontmatter: { type: 'location', relationships: { ally: ['[[Bob]]'] } },
     };
-    const processed = { html: '<p>x</p>', relationships: '' };
+    const processed = { html: '<p>x</p>' };
     const context = {
       publishConfig: { _backlinks: { Spot: [
         { title: 'S1', displayTitle: 'Session 1', outputPath: 'sessions/s1.html', type: 'session' },
@@ -417,8 +400,8 @@ describe('displayTitle usage', () => {
       linkMap: { Bob: 'characters/npcs/bob.html' }, pages: [],
     };
     const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {}, context);
-    assert.ok(html.includes('content-with-sidebar'), 'should render the sidebar layout');
-    assert.ok(!html.includes('content-sidebar-sparse'), 'two sections should not be flagged sparse');
+    for (const old of ['content-with-sidebar', 'content-sidebar-sparse', 'context-sidebar', 'Mentioned In']) assert.ok(!html.includes(old), old);
+    assert.ok(html.includes('<p>x</p>'), 'the body is in the page');
   });
 });
 

@@ -415,7 +415,7 @@ describe('a page\'s Connections', () => {
     assert.deepStrictEqual(found.map((f) => [f.path, f.pages, f.printed]), [['Hidden/Vesper_Hale.md', ['People/Bo_Pike.md'], ['the stranger']]]);
   });
 
-  it('a labelled target that has a page is that page: linked, and called by the label in the row, the sidebar and the cards', () => {
+  it('a labelled target that has a page is that page: linked, and shown under its own title', () => {
     const { configPath, root } = site({
       'People/Bo_Pike.md': npcNote('Bo.', rel('[[Cy_Dunn|the baker]]')),
       'People/Cy_Dunn.md': npcNote('Cy.'),
@@ -424,15 +424,14 @@ describe('a page\'s Connections', () => {
     fromBuild(configPath);
     const bo = fs.readFileSync(path.join(root, 'docs', 'people', 'bo-pike.html'), 'utf8');
     const quay = fs.readFileSync(path.join(root, 'docs', 'places', 'quay.html'), 'utf8');
+    // The label is a way of naming a note. When the note has a page, Connections shows that
+    // page under its own title (the spec, follow-up item 12): the label hides no name here,
+    // because the page already links to it. A target with no page is the test above: its
+    // label is all that prints.
     for (const html of [bo, quay]) {
       assert.ok(!/Cy[ _]Dunn\|/.test(html), 'the target is printed beside the label');
-      assert.match(html, /<a href="[^"]*cy-dunn\.html"[^>]*>the baker<\/a>/);
+      assert.match(html, /<section class="cx"[^]*<a href="[^"]*cy-dunn\.html">Cy Dunn<\/a>/);
     }
-    // The NPC page's connection card, and the sidebar of a page that has one.
-    assert.match(bo, /<a class="rel-card" href="cy-dunn\.html">[^]*?<div class="rel-name">the baker<\/div>/);
-    assert.match(quay, /<li><a href="[^"]*cy-dunn\.html">the baker<\/a> <span class="sidebar-badge">knows<\/span><\/li>/);
-    // In Connections a page is one item, under its own title, and it is a link.
-    assert.match(bo, /<section class="cx"[^]*<a href="cy-dunn\.html">Cy Dunn<\/a>/);
   });
 
   it('Connections reads a labelled target as the note it names, and a page-less one by its label only', () => {

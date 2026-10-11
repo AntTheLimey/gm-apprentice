@@ -3,7 +3,6 @@ const { escapeHtml, relativeHref, renderMetaValue, publishedSource, encodeHref }
 const { linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, canonStatusBadge, portraitImg, clientScripts, connectionsSection } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
-const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
 const { getInitials } = require('./landing-data');
 const { excerptFromMarkdown } = require('../excerpt');
 
@@ -76,29 +75,6 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
     }
   }
 
-  // --- Zone 5: Relationship web ("Connections") as visual cards ---
-  const rels = normalizeRelationships(fm.relationships, linkMap);
-  let relCardsHtml = '';
-  if (rels.length > 0) {
-    const cards = rels.map(r => {
-      const target = String(r.target).replace(/\[\[|\]\]/g, '').trim();
-      const display = r.label || target.replace(/_/g, ' ');
-      const relType = String(r.type || '').replace(/_/g, ' ');
-      const targetPath = linkMap ? linkMap[target] : null;
-      const href = targetPath ? encodeHref(relativeHref(page.outputPath, targetPath)) : null;
-      const tag = href ? 'a' : 'div';
-      const hrefAttr = href ? ` href="${href}"` : '';
-      return `<${tag} class="rel-card"${hrefAttr}>
-  <div class="rel-type">${escapeHtml(relType)}</div>
-  <div class="rel-name">${escapeHtml(display)}</div>
-</${tag}>`;
-    }).join('\n');
-    relCardsHtml = `<div class="whos-here">
-  <h2>Connections</h2>
-  <div class="relationship-cards">${cards}</div>
-</div>`;
-  }
-
   // --- Zone 6: Story arc timeline (session appearances) ---
   const sessionBacklinks = backlinks
     .filter(b => b.type === 'session')
@@ -121,21 +97,12 @@ function npcTemplate(page, processedContent, navFor, config, imageMap, context) 
 </div>`;
   }
 
-  // --- Context Sidebar ---
-  const sidebar = renderContextSidebar({
-    backlinks,
-    relationships: rels,
-    currentOutputPath: page.outputPath,
-  });
-
   const graphHtml = connectionsSection(page, publishConfig);
 
-  const mainContent = [heroBanner, pullQuote, bodyContent, processedContent.relationships, locationCardHtml, relCardsHtml, arcTimelineHtml, graphHtml]
+  const mainContent = [heroBanner, pullQuote, bodyContent, locationCardHtml, arcTimelineHtml, graphHtml]
     .filter(Boolean).join('\n');
 
-  const contentHtml = sidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
-    : mainContent;
+  const contentHtml = mainContent;
 
   return baseShell({
     title: page.displayTitle,
