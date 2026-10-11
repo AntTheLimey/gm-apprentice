@@ -4134,8 +4134,9 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
 .cx-plain :is(h3, h4, h5, h6):has(+ :is(h3, h4, h5, h6)) { font-size: 1.05rem; letter-spacing: 0; text-transform: none; color: var(--text); font-family: var(--font-heading); margin: 1.4rem 0 0; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
 .cx-plain a { color: var(--cx-accent); text-decoration: underline; text-underline-offset: 2px; }
 .cx-plain ul { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+.cx-plain li, .cx-mentions li, .cx-mlist li { overflow-wrap: anywhere; }
 .cx-plain li { margin: 0 0 0.5rem; }
-.cx-line, .cx-sess { display: block; color: var(--cx-muted); }
+.cx-line, .cx-sess { display: block; min-width: 0; overflow-wrap: anywhere; color: var(--cx-muted); }
 .cx-plain .cx-line { font-size: 0.92rem; }
 .cx-sess { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
 .cx-from { color: var(--cx-muted); }
@@ -4254,7 +4255,7 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 .cx img.cx-avatar { display: block; border-radius: 50%; margin: 0; max-width: none; width: 44px; height: 44px; }
 .cx .cx-card img.cx-avatar { width: 38px; height: 38px; }
 .cx-strip-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
-.cx-strip-rel { color: var(--cx-muted); font-size: 0.9rem; min-width: 0; }
+.cx-strip-rel { color: var(--cx-muted); font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; }
 .cx-strip .cx-line, .cx-strip .cx-sess, .cx-strip .cx-open { grid-column: 1 / -1; }
 .cx-strip .cx-line { color: var(--text); margin-top: 6px; }
 .cx-strip .cx-line + .cx-line { margin-top: 0; }

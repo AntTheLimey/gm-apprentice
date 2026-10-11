@@ -78,3 +78,15 @@ test('a row whose kind and sessions do not fit beside the name puts them under i
   // the name takes what is left, so it is never pushed under its own mark
   assert.match(block, /\.cx-roomy \.cx-row \.cx-name\s*\{[^}]*flex:\s*1 1 8rem/);
 });
+
+test('a long unbroken word (a pasted URL) wraps inside its card, line, strip and list instead of widening the page', () => {
+  // a description line, in the lists, a card and the strip
+  assert.match(block, /\.cx-line,\s*\.cx-sess\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(block, /\.cx-line,\s*\.cx-sess\s*\{[^}]*min-width:\s*0/);
+  // a name, a group label and the strip's relation line
+  assert.match(block, /\.cx-name\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(block, /\.cx-group\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(block, /\.cx-strip-rel\s*\{[^}]*overflow-wrap:\s*anywhere/);
+  // the plain lists, and the mentions that sit side by side in them
+  assert.match(block, /\.cx-plain li,\s*\.cx-mentions li,\s*\.cx-mlist li\s*\{[^}]*overflow-wrap:\s*anywhere/);
+});
