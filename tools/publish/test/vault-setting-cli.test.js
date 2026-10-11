@@ -26,7 +26,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null });
+  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null, connections: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -252,4 +252,26 @@ test('link_previews "on" and "off" are written quoted and read back as those wor
     assert.strictEqual(read, word, `${line} reads back as ${JSON.stringify(read)}`);
     assert.equal(run(s, []).data.linkPreviews, word);
   }
+});
+
+test('sets connections to tree, web, cards or off and reports it back', () => {
+  const s = scratch('  mode: player\n');
+  assert.equal(run(s, []).data.connections, null);
+  assert.deepEqual(run(s, ['connections="web"']).data, { written: ['connections'] });
+  assert.match(config(s), /^ {2}connections: web$/m);
+  assert.equal(run(s, []).data.connections, 'web');
+});
+
+test('refuses a connections value that is not tree, web, cards or off, and writes nothing', () => {
+  const s = scratch('  mode: player\n');
+  const before = config(s);
+  const { rc, err } = run(s, ['connections="graph"']);
+  assert.equal(rc, 1);
+  assert.deepEqual(err, ['Error: "graph" is not a value connections takes']);
+  assert.equal(config(s), before);
+});
+
+test('reads a connections line already in the vault file', () => {
+  const s = scratch('  mode: player\n  connections: cards\n');
+  assert.equal(run(s, []).data.connections, 'cards');
 });
