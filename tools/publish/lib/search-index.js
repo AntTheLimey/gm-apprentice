@@ -19,8 +19,17 @@ function stripMarkdown(md) {
 function getSubtitle(fm) {
   const value = fm.occupation || fm.location_type || fm.faction_type || fm.factionType || fm.event_type || fm.type || '';
   // A search result prints this as it stands: a labelled link in it prints its label.
-  if (Array.isArray(value)) return value.map((v) => (typeof v === 'string' ? labelsForLinks(v) : v));
-  return typeof value === 'string' ? labelsForLinks(value) : value;
+  return reduced(value);
+}
+
+// A value with every string in it (however deep, a sub-key or a list) reduced the same way.
+function reduced(value) {
+  if (typeof value === 'string') return labelsForLinks(value);
+  if (Array.isArray(value)) return value.map(reduced);
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, reduced(v)]));
+  }
+  return value;
 }
 
 // Search results must reflect only what readers can see, so prefer each page's published
@@ -72,7 +81,7 @@ function buildSearchIndex(allPages) {
       this.add({
         id: refFor(i),
         title: canonicalNfc(page.displayTitle),
-        aliases: Array.isArray(fm.aliases) ? canonicalNfc(fm.aliases.join(' ')) : '',
+        aliases: Array.isArray(fm.aliases) ? canonicalNfc(fm.aliases.map((a) => labelsForLinks(a)).join(' ')) : '',
         type: fm.type || '',
         // Whole published body (#267). It used to be cut at 500 characters, which hid every
         // name mentioned in the second half of a recap. Results show only title/type/subtitle

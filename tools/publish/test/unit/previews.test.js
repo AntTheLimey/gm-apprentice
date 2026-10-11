@@ -262,3 +262,11 @@ describe('kind labels', () => {
     assert.strictEqual(kindLabel('plot_thread'), 'Plot thread');
   });
 });
+
+describe('a PC player_name', () => {
+  it('shows a labelled link as its label', () => {
+    const card = cardFor(page('pc', { player_name: '[[Vesper_Hale|Sam]]' }, ''), ctx);
+    assert.ok(!JSON.stringify(card).includes('Vesper'), JSON.stringify(card));
+    assert.deepStrictEqual(card.f[0], ['Player', 'Sam']);
+  });
+});
