@@ -64,3 +64,13 @@ test('a symmetric kind and a name that is both a type and an inverse read as the
     }
   }
 });
+
+test('a kind typed with a capital, a space or a hyphen is found as the ontology spells it', () => {
+  for (const typed of ['Member_Of', 'member of', ' Member-Of ', 'MEMBER_OF']) {
+    assert.strictEqual(groupLabel(typed, 'in'), 'Has member', typed);
+    assert.strictEqual(groupLabel(typed, 'out'), 'Member of', typed);
+  }
+  assert.strictEqual(groupLabel('Parent Of', 'in'), 'Family');
+  assert.strictEqual(groupLabel('Has Member', 'in'), 'Member of');
+  assert.strictEqual(groupLabel('Old Rival', 'in'), 'Old Rival (named by)');
+});

@@ -295,6 +295,16 @@ test('arrow keys on the tablist move selection and focus', () => {
   assert.strictEqual(other.prevented, false);
 });
 
+test('a key chord with Alt, Ctrl or Cmd on a tab is left to the browser', () => {
+  const p = setup([{ mode: 'tree', json: island([PEOPLE, PLACES]) }]);
+  const s = p.secs[0];
+  for (const mod of ['altKey', 'ctrlKey', 'metaKey']) {
+    const ev = p.fire(s.querySelector('div.cx-tabs'), 'keydown', { key: 'ArrowLeft', [mod]: true });
+    assert.strictEqual(ev.prevented, false, mod);
+    assert.strictEqual(tabsOf(s)[0].getAttribute('aria-selected'), 'true', mod);
+  }
+});
+
 test('a web on a phone with a crowded tab is drawn as the tree', () => {
   const many = tab('people', 'People', [grp('All', ...Array.from({ length: 17 }, (_, i) => item(`N${i}`)))]);
   const phone = setup([{ mode: 'web', json: island([many]) }], { width: 390 });

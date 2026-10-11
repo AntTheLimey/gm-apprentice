@@ -40,7 +40,14 @@ function tabOf(page) {
 // Text the GM typed (a type, a description) is reduced as the page prints it, a labelled
 // link to its label (wikilink.js labelsForLinks), so no reader of the model sees a target
 // the GM kept off the site.
-const printed = (text) => labelsForLinksFully(text).replace(/\s+/g, ' ').trim();
+// An unlabelled link prints as its name (underscores read as spaces), a markdown link as its
+// text and an embed not at all, so no bracket and no file name reaches the page.
+const printed = (text) => {
+  const reduced = labelsForLinksFully(text)
+    .replace(/!\[\[[^\]]*\]\]/g, '')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
+  return linkText(reduced, { humanize: true }).words.replace(/\s+/g, ' ').trim();
+};
 function edgesOf(frontmatter) {
   const raw = frontmatter && frontmatter.relationships;
   const out = [];
@@ -111,9 +118,10 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
     }
     return sessionsOf.get(page);
   };
+  const natural = (a, b) => String(a).localeCompare(String(b), undefined, { numeric: true });
   const bySessionOrder = (a, b) => (order.has(a.outputPath) ? order.get(a.outputPath) : Infinity)
     - (order.has(b.outputPath) ? order.get(b.outputPath) : Infinity)
-    || String(a.displayTitle).localeCompare(String(b.displayTitle));
+    || natural(a.displayTitle, b.displayTitle);
   const shared = (page, other) => {
     const mine = sessionsLinking(page);
     const both = [...sessionsLinking(other).values()].filter((s) => mine.has(s.outputPath)).sort(bySessionOrder);
@@ -168,7 +176,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
       if (extra.page && extra.page !== page) add(extra.page, null, tabOf(extra.page), printed(extra.group));
     }
 
-    const byTitle = (a, b) => String(a.title).localeCompare(String(b.title));
+    const byTitle = (a, b) => natural(a.title, b.title);
     for (const [id, label] of TABS) {
       const groups = new Map();
       for (const entry of items.values()) {
@@ -199,7 +207,7 @@ function buildConnections({ pages, linkMap, backlinks, hubPairs, imageMap, extra
       for (const [id, label] of ordered) {
         const members = groups.get(id);
         if (!members) continue;
-        members.sort(id === 'sessions' ? bySessionOrder : (a, b) => String(a.displayTitle).localeCompare(String(b.displayTitle)));
+        members.sort(id === 'sessions' ? bySessionOrder : (a, b) => natural(a.displayTitle, b.displayTitle));
         model.mentions.push({ label, items: members.map((p) => ({ title: p.displayTitle || p.title, outputPath: p.outputPath, kind: kindLabel(typeOf(p)) })) });
       }
     }

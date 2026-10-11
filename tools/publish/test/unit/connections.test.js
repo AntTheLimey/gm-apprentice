@@ -250,10 +250,18 @@ test('a labelled link in a description, a type or a target never carries its tar
   for (const hidden of ['Vesper', 'Quill', 'Ivy', '[[']) assert.ok(!shown.includes(hidden), hidden);
 });
 
-test('an unlabelled link in a description reads as the page prints it', () => {
-  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: 'serves', description: 'Sister of [[Old_Tom]].' }] });
+test('an unlabelled link in a description prints as its name, with no brackets; a markdown link as its text; an embed not at all', () => {
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: 'serves', description: 'Sister of [[Old_Tom]], see [her file](Hidden_Note.md). ![[map.png]]' }] });
   const m = buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma);
-  assert.deepStrictEqual(group(m, 'people', 'Serves').items[0].lines, ['Sister of [[Old_Tom]].']);
+  assert.deepStrictEqual(group(m, 'people', 'Serves').items[0].lines, ['Sister of Old Tom, see her file.']);
+});
+
+test('names that differ by a number are in number order', () => {
+  const a = page('A', 'npc', { relationships: [{ target: 'Bystander_10', type: 'knows' }, { target: 'Bystander_2', type: 'knows' }] });
+  const pages = [a, page('Bystander_10', 'npc'), page('Bystander_2', 'npc'), page('Bystander_1', 'npc', {}, ['A']), page('Bystander_9', 'npc', {}, ['A']), page('Bystander_11', 'npc', {}, ['A'])];
+  const m = buildConnections(ctx(pages)).for(a);
+  assert.deepStrictEqual(names(group(m, 'people', 'Knows')), ['Bystander 2', 'Bystander 10']);
+  assert.deepStrictEqual(m.mentions[0].items.map((i) => i.title), ['Bystander 1', 'Bystander 9', 'Bystander 11']);
 });
 
 test('a path-form target ([[Folder/Name]]) reaches the page, alias or not, and names no folder', () => {

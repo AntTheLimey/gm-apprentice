@@ -36,7 +36,10 @@ function words(type) {
 // The heading a group of connections sits under. `direction` is 'out' for a relationship
 // the page's own note declares and 'in' for one another note declares about it.
 function groupLabel(type, direction) {
-  const key = typeof type === 'string' ? type.trim() : '';
+  const written = typeof type === 'string' ? type.trim() : '';
+  // A kind typed `Member_Of`, `member of` or `member-of` is the ontology's `member_of`.
+  const spelled = written.toLowerCase().replace(/[\s-]+/g, '_');
+  const key = predicates.has(spelled) || inverses.has(spelled) ? spelled : written;
   const p = predicates.get(key);
   if (p) {
     if (p.category === 'kinship') return 'Family';

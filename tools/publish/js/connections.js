@@ -586,6 +586,8 @@
 
     tablist.addEventListener('keydown', function (e) {
       if (['ArrowRight', 'ArrowLeft', 'Home', 'End'].indexOf(e.key) < 0) return;
+      // Alt+Left is the browser's Back, Cmd+Left its line start: not the tabs' keys.
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
       e.preventDefault();
       show(nextTab(current, entries.length, e.key), true);
     });
@@ -1061,7 +1063,13 @@
     // or lays out again. Without ResizeObserver the window's resize stands in.
     var observer = null;
     if (typeof win.ResizeObserver === 'function') {
-      observer = new win.ResizeObserver(function () { refresh(); });
+      // Drawn on the next frame: a change of size made inside the observer's own callback
+      // makes the browser raise a window error ("loop completed with undelivered
+      // notifications") that no one can act on.
+      observer = new win.ResizeObserver(function () {
+        if (typeof win.requestAnimationFrame === 'function') win.requestAnimationFrame(refresh);
+        else refresh();
+      });
       observer.observe(app);
     } else {
       var timer = 0;
