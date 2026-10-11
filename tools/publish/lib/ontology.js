@@ -11,6 +11,12 @@ for (const [family, words] of Object.entries(data.tones)) {
   for (const word of words) families.set(word, FAMILY_WORD[family] || 'neutral');
 }
 const predicates = new Map(data.predicates.map((p) => [p.type, p]));
+// A name that is some predicate's `inverse` (child_of, served_by) is that predicate seen
+// from the other end. A name that is also a `type` is read as the type (symmetric kinds).
+const inverses = new Map();
+for (const p of data.predicates) {
+  if (!predicates.has(p.inverse) && !inverses.has(p.inverse)) inverses.set(p.inverse, p);
+}
 
 // 'warm', 'hostile' or 'neutral'; null when the relationship has no tone. A word off the
 // list (a vault not yet tidied) is neutral.
@@ -35,6 +41,11 @@ function groupLabel(type, direction) {
   if (p) {
     if (p.category === 'kinship') return 'Family';
     return words(direction === 'in' && !p.symmetric ? p.inverse : p.type);
+  }
+  const base = inverses.get(key);
+  if (base) {
+    if (base.category === 'kinship') return 'Family';
+    return words(direction === 'in' ? base.type : key);
   }
   const label = words(key);
   if (!label) return 'Connected';

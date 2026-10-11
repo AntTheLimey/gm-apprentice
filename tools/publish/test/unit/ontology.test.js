@@ -35,3 +35,32 @@ test('a kind the ontology lacks is read as written', () => {
   assert.strictEqual(groupLabel(undefined, 'in'), 'Connected');
   assert.strictEqual(groupLabel('__proto__', 'out'), 'Proto');
 });
+
+test('an inverse name is its predicate seen from the other end', () => {
+  assert.strictEqual(groupLabel('served_by', 'out'), 'Served by');
+  assert.strictEqual(groupLabel('served_by', 'in'), 'Serves');
+  assert.strictEqual(groupLabel('has_member', 'out'), 'Has member');
+  assert.strictEqual(groupLabel('has_member', 'in'), 'Member of');
+});
+
+test('every kinship inverse reads Family both ways', () => {
+  const { predicates } = require('../../lib/ontology.json');
+  const inverses = predicates.filter((p) => p.category === 'kinship').map((p) => p.inverse);
+  assert.ok(inverses.includes('child_of') && inverses.includes('descendant_of'));
+  for (const name of inverses) {
+    assert.strictEqual(groupLabel(name, 'out'), 'Family', name);
+    assert.strictEqual(groupLabel(name, 'in'), 'Family', name);
+  }
+});
+
+test('a symmetric kind and a name that is both a type and an inverse read as the type', () => {
+  assert.strictEqual(groupLabel('friend_of', 'in'), 'Friend of');
+  const { predicates } = require('../../lib/ontology.json');
+  const types = new Set(predicates.map((p) => p.type));
+  for (const p of predicates) {
+    if (types.has(p.inverse) && p.inverse !== p.type) {
+      const q = predicates.find((x) => x.type === p.inverse);
+      assert.strictEqual(groupLabel(p.inverse, 'out'), groupLabel(q.type, 'out'));
+    }
+  }
+});
