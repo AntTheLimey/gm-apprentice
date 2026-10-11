@@ -760,3 +760,28 @@ test('the section is live before anything is measured', () => {
   try { setup([{ mode: 'tree', json: island([PEOPLE]) }]); } finally { Node.prototype.getBoundingClientRect = orig; }
   assert.ok(seen.length > 0 && seen.every(Boolean));
 });
+
+// ---- the ground a section is drawn on ----
+
+test('a paper painted by a background image is the ground, not the colour behind it', () => {
+  // A sheet skin paints its paper with a gradient over a transparent background-colour; in the
+  // dark scheme the body behind it is dark, the paper is not.
+  const paper = [251, 246, 231];
+  const body = [26, 20, 16, 1];
+  const chain = [
+    { color: [0, 0, 0, 0], image: 'none' },                                  // the section
+    { color: [0, 0, 0, 0], image: 'linear-gradient(rgb(251, 246, 231), rgba(255, 250, 235, 0.35))' },   // the paper
+    { color: [0, 0, 0, 0], image: 'none' },
+    body && { color: body, image: 'none' },                                  // body
+  ];
+  assert.deepStrictEqual(api.groundOf(chain, paper), paper);
+  // No image: the colour behind stands, as it did.
+  assert.deepStrictEqual(api.groundOf([{ color: [0, 0, 0, 0], image: 'none' }, { color: body, image: 'none' }], paper), [26, 20, 16]);
+  // A translucent layer over the paper is laid over the paper.
+  const over = api.groundOf([{ color: [0, 0, 0, 0.5], image: 'none' }, { color: [0, 0, 0, 0], image: 'url(paper.png)' }], paper);
+  assert.deepStrictEqual(over.map(Math.round), [126, 123, 116]);
+  // A colour that cannot be read is no ground at all.
+  assert.strictEqual(api.groundOf([{ color: null, image: 'none' }], paper), null);
+  // Missing image information (an older engine) changes nothing.
+  assert.deepStrictEqual(api.groundOf([{ color: [10, 20, 30, 1] }], paper), [10, 20, 30]);
+});

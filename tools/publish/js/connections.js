@@ -399,6 +399,25 @@
   // One colour laid over another, by the first one's alpha.
   function over(top, base) { return mix(base, top, top.length > 3 ? top[3] : 1); }
 
+  // What an element is drawn on, from its own layer outward (`chain`: each ancestor's
+  // background colour, null when unreadable, and its background image). A layer with an image
+  // and less than full colour is paper painted by the image (a sheet skin's gradient): the
+  // palette's own ground at that point (`paper`) stands for it, rather than the colour behind
+  // the page, which in the dark scheme is dark.
+  function groundOf(chain, paper) {
+    var stack = [], base = [255, 255, 255];
+    for (var i = 0; i < chain.length; i++) {
+      var c = chain[i].color;
+      if (!c) return null;
+      if (c.length < 4) c = [c[0], c[1], c[2], 1];
+      if (c[3] > 0) { stack.push(c); if (c[3] >= 1) break; }
+      var image = chain[i].image;
+      if (paper && image && image !== 'none') { base = paper.slice(0, 3); break; }
+    }
+    for (var j = stack.length - 1; j >= 0; j--) base = over(stack[j], base);
+    return base;
+  }
+
   // A colour that can be read on every one of the grounds: the colour itself when it reaches
   // `need` on each, else moved toward the text colour a tenth at a time until it does, and
   // the text colour when nothing on the way does. So it is never worse than the plain text.
@@ -432,7 +451,7 @@
   var api = {
     treatmentFor: treatmentFor, treeLayout: treeLayout, webLayout: webLayout, nextTab: nextTab,
     tapAction: tapAction, toneClass: toneClass, sessionsText: sessionsText, treeLines: treeLines, safeHref: safeHref,
-    parseColour: parseColour, contrast: contrast, ink: ink, inks: inks, readable: readable
+    parseColour: parseColour, groundOf: groundOf, contrast: contrast, ink: ink, inks: inks, readable: readable
   };
 
   function init(doc, win) {
@@ -971,15 +990,12 @@
       return parseColour(win.getComputedStyle(el).color);
     }
     function groundBehind(el) {
-      var stack = [];
+      var chain = [];
       for (var e = el; e && e.nodeType === 1; e = e.parentElement) {
-        var c = parseColour(win.getComputedStyle(e).backgroundColor);
-        if (!c) return null;
-        if (c[3] > 0) { stack.push(c); if (c[3] >= 1) break; }
+        var cs = win.getComputedStyle(e);
+        chain.push({ color: parseColour(cs.backgroundColor), image: cs.backgroundImage });
       }
-      var base = [255, 255, 255];
-      for (var i = stack.length - 1; i >= 0; i--) base = over(stack[i], base);
-      return base;
+      return groundOf(chain, colourAt(el, 'var(--bg)'));
     }
     function css(c) { return 'rgb(' + Math.round(c[0]) + ', ' + Math.round(c[1]) + ', ' + Math.round(c[2]) + ')'; }
     function paintScope(prefix, probe, card) {
