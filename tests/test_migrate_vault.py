@@ -1180,5 +1180,200 @@ class ToneWordsTests(unittest.TestCase):
                          ("1.10.44", 3, ("tone-words=",)))
 
 
+OLD_LIST = ("friendly, romantic, respectful, professional, hostile, fearful, "
+            "distrustful, contemptuous, neutral, unknown, complicated")
+
+
+class ToneListTests(unittest.TestCase):
+    """`_meta` files name the tone words; the update makes that the 27."""
+
+    ENTITY = "_meta/entity-types.md"
+    RELS = "_meta/relationship-types.md"
+    # The two shapes real vaults hold, the lines around the list only.
+    CANTICLE = ("```\n\nTone values: " + OLD_LIST + "\n\n"
+                "Strength: 1–10 (1–2 weak, 9–10 defining)\n")
+    DEAD = ("**Genre filter for this campaign:** `universal` + `scifi`.\n\n"
+            "**tone** ∈ friendly | romantic | respectful | professional "
+            "| hostile | fearful | distrustful |\n"
+            "contemptuous | neutral | unknown | complicated. "
+            "**strength** 1–10.\n\n")
+
+    def setUp(self):
+        self.vault = make_vault(self)
+        self.words = list(mv.tone_families())
+
+    def put(self, rel, text):
+        with (self.vault / rel).open("w", encoding="utf-8", newline="") as f:
+            f.write(text)
+
+    def get(self, rel):
+        with (self.vault / rel).open("r", encoding="utf-8", newline="") as f:
+            return f.read()
+
+    def applied(self):
+        (item,) = mv.find_tone_list(self.vault)
+        return item, item.apply(None)
+
+    def test_the_entity_types_line_becomes_the_listed_words(self):
+        self.put(self.ENTITY, self.CANTICLE)
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertEqual((item.id, item.group, item.wants),
+                         ("tone-list", CHOICE, None))
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the tone list becomes the 27 listed "
+            "words"])
+        self.assertEqual(item.apply(None), [
+            "_meta/entity-types.md: the tone list is now the 27 listed "
+            "words"])
+        self.assertEqual(
+            self.get(self.ENTITY),
+            self.CANTICLE.replace(OLD_LIST, ", ".join(self.words)))
+
+    def test_the_relationship_types_line_keeps_the_text_around_the_list(self):
+        self.put(self.RELS, self.DEAD)
+        item, _done = self.applied()
+        self.assertEqual(item.lines, [
+            "_meta/relationship-types.md: the tone list becomes the 27 "
+            "listed words"])
+        self.assertEqual(
+            self.get(self.RELS),
+            "**Genre filter for this campaign:** `universal` + `scifi`.\n\n"
+            "**tone** ∈ " + " | ".join(self.words)
+            + ". **strength** 1–10.\n\n")
+
+    def test_both_files_are_one_item(self):
+        self.put(self.ENTITY, self.CANTICLE)
+        self.put(self.RELS, self.DEAD)
+        item, done = self.applied()
+        self.assertEqual(len(item.lines), 2)
+        self.assertEqual(len(done), 2)
+        self.assertIn(", ".join(self.words), self.get(self.ENTITY))
+        self.assertIn(" | ".join(self.words), self.get(self.RELS))
+
+    def test_crlf_line_endings_are_kept(self):
+        self.put(self.ENTITY, self.CANTICLE.replace("\n", "\r\n"))
+        self.put(self.RELS, self.DEAD.replace("\n", "\r\n"))
+        self.applied()
+        self.assertEqual(
+            self.get(self.ENTITY),
+            self.CANTICLE.replace(OLD_LIST, ", ".join(self.words))
+            .replace("\n", "\r\n"))
+        self.assertEqual(
+            self.get(self.RELS),
+            ("**Genre filter for this campaign:** `universal` + `scifi`.\n\n"
+             "**tone** ∈ " + " | ".join(self.words)
+             + ". **strength** 1–10.\n\n").replace("\n", "\r\n"))
+
+    def test_a_second_pass_offers_nothing(self):
+        self.put(self.ENTITY, self.CANTICLE)
+        self.put(self.RELS, self.DEAD)
+        self.applied()
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_a_current_list_is_left_alone(self):
+        for text in ("Tone values: " + ", ".join(self.words) + "\n",
+                     "Tones: " + ",\n".join(reversed(self.words)) + ".\n"):
+            self.put(self.ENTITY, text)
+            self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_no_list_and_no_file_offer_nothing(self):
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+        self.put(self.ENTITY, "# Entity Types\n\n    tone: respectful\n\n"
+                 "Extraction defaults: `tone: neutral`, `strength: 5`\n")
+        self.assertEqual(mv.find_tone_list(self.vault), [])
+
+    def test_a_new_vaults_files_offer_nothing(self):
+        self.assertEqual(mv.find_tone_list(whole_vault(self)), [])
+
+    def test_text_after_the_list_on_its_line_survives(self):
+        self.put(self.ENTITY, "Tone: " + OLD_LIST + ". Strength 1-10.\n")
+        self.applied()
+        self.assertEqual(self.get(self.ENTITY),
+                         "Tone: " + ", ".join(self.words)
+                         + ". Strength 1-10.\n")
+
+    def test_a_wrapped_list_becomes_one_line(self):
+        self.put(self.ENTITY,
+                 "Intro.\n\nTone values: friendly, romantic, respectful,\n"
+                 "professional, hostile, fearful, distrustful,\n"
+                 "  contemptuous, neutral, unknown, complicated\n\nNext.\n")
+        self.applied()
+        self.assertEqual(self.get(self.ENTITY),
+                         "Intro.\n\nTone values: " + ", ".join(self.words)
+                         + "\n\nNext.\n")
+
+    def test_two_lists_in_one_file_are_both_replaced(self):
+        self.put(self.ENTITY, "Tone values: " + OLD_LIST + "\n\nMiddle.\n\n"
+                 "**tone** ∈ friendly|hostile|neutral|unknown|fearful."
+                 " End.\n")
+        item, done = self.applied()
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the 2 tone lists become the 27 listed "
+            "words"])
+        self.assertEqual(done, [
+            "_meta/entity-types.md: the 2 tone lists are now the 27 listed "
+            "words"])
+        self.assertEqual(self.get(self.ENTITY),
+                         "Tone values: " + ", ".join(self.words)
+                         + "\n\nMiddle.\n\n**tone** ∈ "
+                         + "|".join(self.words) + ". End.\n")
+
+    def test_only_the_stale_list_of_two_is_replaced(self):
+        self.put(self.ENTITY, "Tone values: " + ", ".join(self.words)
+                 + "\n\nTones: " + OLD_LIST + "\n")
+        item, _done = self.applied()
+        self.assertEqual(item.lines, [
+            "_meta/entity-types.md: the tone list becomes the 27 listed "
+            "words"])
+        self.assertEqual(self.get(self.ENTITY),
+                         "Tone values: " + ", ".join(self.words)
+                         + "\n\nTones: " + ", ".join(self.words) + "\n")
+
+    def test_a_list_this_step_cannot_delimit_is_left_alone(self):
+        for text in (
+                # a word outside both lists
+                "Tone values: " + OLD_LIST + ", smitten\n",
+                "Tone values: wary, " + OLD_LIST + "\n",
+                "Tone values: " + OLD_LIST.replace("neutral", "Neutral")
+                + "\n",
+                # fewer than five words
+                "Tone values: friendly, hostile, neutral, unknown\n",
+                # no label on the list's first line
+                "Tone values:\n" + OLD_LIST + "\n",
+                "Values: " + OLD_LIST + "\n",
+                "Milestone values: " + OLD_LIST + "\n",
+                # two separators in one list
+                "Tone values: friendly, hostile | neutral, unknown, cold\n",
+                # ends in neither a full stop nor a blank line
+                "Tone values: " + OLD_LIST + " (pick one)\n",
+                "Tone values: " + OLD_LIST + "\nand whatever fits.\n",
+                "Tone values: " + OLD_LIST + ",\n",
+                "| tone | " + OLD_LIST + " |\n",
+                "Tone values: `friendly`, `hostile`, `neutral`, `unknown`, "
+                "`cold`\n"):
+            with self.subTest(text=text):
+                self.put(self.ENTITY, text)
+                self.assertEqual(mv.find_tone_list(self.vault), [])
+                self.assertEqual(self.get(self.ENTITY), text)
+
+    def test_a_file_that_is_not_utf8_is_left_alone(self):
+        raw = ("Tone values: " + OLD_LIST + "\n\ncafé\n").encode("latin-1")
+        (self.vault / self.ENTITY).write_bytes(raw)
+        self.put(self.RELS, self.DEAD)
+        (item,) = mv.find_tone_list(self.vault)
+        self.assertEqual(len(item.lines), 1)
+        item.apply(None)
+        self.assertEqual((self.vault / self.ENTITY).read_bytes(), raw)
+
+    def test_the_old_words_are_the_only_ones_named_here(self):
+        self.assertEqual(", ".join(mv.OLD_TONES), OLD_LIST)
+
+    def test_the_check_is_registered_for_this_release(self):
+        check = next(c for c in mv.VAULT_CHECKS if c.name == "tone-list")
+        self.assertEqual((check.release, check.band, check.choices,
+                          check.asks_site),
+                         ("1.10.44", 3, ("tone-list",), False))
+
+
 if __name__ == "__main__":
     unittest.main()

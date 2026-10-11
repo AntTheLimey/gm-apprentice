@@ -13,6 +13,7 @@ from pathlib import Path
 import relink
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, stopped, write_text_atomic)
+from schema_rules import tone_families
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
 from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
@@ -819,6 +820,100 @@ def find_tone_words(vault: Path) -> list[Item]:
                  apply, wants="tidy or leave")]
 
 
+# --- the tone list in _meta ---------------------------------------------------
+
+TONE_LIST_FILES = ("_meta/entity-types.md", "_meta/relationship-types.md")
+# The eleven tone words a vault's `_meta` files listed before 1.10.44. They
+# are frozen here, and nowhere else, because a list written then is known by
+# them: the words to write come from the ontology (`tone_families`).
+OLD_TONES = ("friendly", "romantic", "respectful", "professional", "hostile",
+             "fearful", "distrustful", "contemptuous", "neutral", "unknown",
+             "complicated")
+_LIST_WORD = r"[A-Za-z][A-Za-z_-]*"
+_LIST_GAP = r"[ \t]*(?:\r?\n[ \t]*)?"      # blanks, and at most one line break
+_LIST_SEP = rf"{_LIST_GAP}[,|]{_LIST_GAP}"
+# Five or more words with only a comma or a pipe between each two.
+WORD_RUN_RE = re.compile(rf"(?<![\w-]){_LIST_WORD}(?:{_LIST_SEP}{_LIST_WORD})"
+                         rf"{{4,}}(?![\w-])")
+# What may follow a list: a full stop, or the end of its paragraph.
+RUN_END_RE = re.compile(r"[ \t]*(?:\.|(?:\r?\n[ \t]*)?\Z|\r?\n[ \t]*\r?\n)")
+TONE_LABEL_RE = re.compile(r"\btones?\b", re.I)
+
+
+def _stale_tone_lists(text: str) -> list[tuple[int, int, str]]:
+    """(start, end, replacement) for each list of tone words in `text` that
+    is not the listed words: the words and their separators, nothing else.
+    A list is five or more words, each an old or a listed tone, with one
+    kind of separator, after a label on its first line that says `tone`,
+    ending at a full stop or its paragraph's end. Anything else is not a
+    list this step can delimit, and is left out."""
+    listed = list(tone_families())
+    known = set(listed) | set(OLD_TONES)
+    out = []
+    for m in WORD_RUN_RE.finditer(text):
+        run = m.group(0)
+        words = re.findall(_LIST_WORD, run)
+        seps = re.findall(_LIST_SEP, run)
+        label = text[text.rfind("\n", 0, m.start()) + 1:m.start()]
+        if (not set(words) <= known or set(words) == set(listed)
+                or len({s.strip() for s in seps}) != 1
+                or not TONE_LABEL_RE.search(label)
+                or not RUN_END_RE.match(text, m.end())):
+            continue
+        mark = seps[0].strip()
+        joiner = next((s for s in seps if "\n" not in s),
+                      ", " if mark == "," else f" {mark} ")
+        out.append((m.start(), m.end(), joiner.join(listed)))
+    return out
+
+
+def find_tone_list(vault: Path) -> list[Item]:
+    """1.10.44: where a `_meta` schema file lists the tone words, the list
+    becomes the listed words. A file that is not UTF-8, and a list this
+    step cannot delimit exactly, are left as they are."""
+    def stale(rel: str) -> tuple[str, list[tuple[int, int, str]]]:
+        path = vault / rel
+        if not path.is_file():
+            return "", []
+        try:
+            with path.open("r", encoding="utf-8", newline="") as f:
+                text = f.read()
+        except UnicodeDecodeError:
+            return "", []
+        except OSError as e:
+            raise StepFailed(f"{rel} cannot be read "
+                             f"({e.__class__.__name__})") from e
+        return text, _stale_tone_lists(text)
+
+    n_words = len(tone_families())
+
+    def line(rel: str, n: int, done: bool) -> str:
+        what = "the tone list" if n == 1 else f"the {n} tone lists"
+        verb = (("is now" if n == 1 else "are now") if done
+                else ("becomes" if n == 1 else "become"))
+        return f"{rel}: {what} {verb} the {n_words} listed words"
+
+    found = {rel: len(stale(rel)[1]) for rel in TONE_LIST_FILES}
+    found = {rel: n for rel, n in found.items() if n}
+    if not found:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        done = []
+        for rel in found:
+            text, spans = stale(rel)
+            if not spans:
+                continue
+            for start, end, new in reversed(spans):
+                text = text[:start] + new + text[end:]
+            write_text_atomic(vault / rel, text)
+            done.append(line(rel, len(spans), True))
+        return done
+
+    return [Item("tone-list", CHOICE,
+                 [line(rel, n, False) for rel, n in found.items()], apply)]
+
+
 VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
@@ -844,6 +939,8 @@ VAULT_CHECKS: list[Check] = [
           find_wrapup_sections_key),
     Check("tone-words", "1.10.44", 3, "tone words",
           find_tone_words, choices=("tone-words=",)),
+    Check("tone-list", "1.10.44", 3, "the tone list in _meta",
+          find_tone_list, choices=("tone-list",)),
     Check("mobrpg-sections", "1.10.13", 3, "mobRPG vault-only sections",
           find_mobrpg_sections, choices=("mobrpg-sections",)),
     Check("heritage-notes", "1.10.15", 4, "mobRPG heritage notes",
