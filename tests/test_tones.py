@@ -729,6 +729,99 @@ class UsesTests(VaultCase):
         self.assertEqual({rel: self.get(rel) for rel in before}, before)
 
 
+class ShownTests(VaultCase):
+    def run_shown(self, files, published, eol=""):
+        for rel, text in files.items():
+            self.put(rel, text, newline=eol)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(tones, "published_notes",
+                               return_value=published), \
+                contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(err):
+            code = tones.main([str(self.vault), "shown"])
+        return code, out.getvalue().splitlines(), err.getvalue()
+
+    NOTE = ("---\ntype: npc\nrelationships:\n"
+            "  - target: \"[[Hallam]]\"\n    type: rival_of\n"
+            "    tone: hostile\n    description: Wants his chair.\n"
+            "  - target: \"[[Mara]]\"\n    type: knows\n    tone: warm\n"
+            "  - target: \"[[Cult]]\"\n    type: serves\n"
+            "    tone: fearful\n    gm_only: true\n"
+            "  - target: \"[[Tom]]\"\n    type: knows\n    tone: Cold\n"
+            "---\nBody.\n")
+
+    def test_lists_negative_tones_that_are_not_gm_only(self):
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
+                                       {"NPCs/Emma.md"})
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[0].split("\t"), [
+            "NPCs/Emma.md:6", "hostile", "[[Hallam]]", "Wants his chair."])
+        self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
+        self.assertFalse(any("Cult" in r or "Mara" in r or "Tom" in r
+                             for r in rows))
+
+    def test_a_note_the_site_does_not_publish_is_left_out(self):
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE}, set())
+        self.assertEqual((code, rows),
+                         (0, ["# 0 hostile ties shown on 0 notes"]))
+
+    def test_refuses_when_the_site_cannot_be_asked(self):
+        code, rows, err = self.run_shown({"NPCs/Emma.md": self.NOTE}, None)
+        self.assertEqual((code, rows), (1, []))
+        self.assertIn("publish", err)
+
+    def test_crlf_notes_give_the_same_line_numbers(self):
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
+                                       {"NPCs/Emma.md"}, eol="\r\n")
+        self.assertEqual((code, rows[0].split("\t")[:3]), (
+            0, ["NPCs/Emma.md:6", "hostile", "[[Hallam]]"]))
+
+    def test_an_accented_note_name_matches_the_nfc_published_path(self):
+        import unicodedata
+        nfd = unicodedata.normalize("NFD", "NPCs/Zo\u00eb.md")
+        nfc = unicodedata.normalize("NFC", nfd)
+        code, rows, _ = self.run_shown({nfd: self.NOTE}, {nfc})
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
+
+    def test_a_note_that_is_not_utf8_does_not_crash(self):
+        (self.vault / "NPCs").mkdir()
+        (self.vault / "NPCs/Bad.md").write_bytes(
+            self.NOTE.encode("utf-8") + b"\xff\xfe")
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
+                                       {"NPCs/Emma.md", "NPCs/Bad.md"})
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 2 notes")
+
+    def test_a_map_form_relationship_block_does_not_crash(self):
+        code, rows, _ = self.run_shown(
+            {"NPCs/Map.md": "---\ntype: npc\nrelationships:\n"
+             "  Hallam: hostile\n  tone: hostile\n---\nBody\n"},
+            {"NPCs/Map.md"})
+        self.assertEqual(code, 0)
+        self.assertTrue(rows[-1].startswith("# "))
+
+
+class EdgeToneTests(unittest.TestCase):
+    def edges(self, *lines):
+        body = "".join(f"    {x}\n" for x in lines)
+        return list(sr.iter_relationship_edges(
+            '---\ntype: npc\nrelationships:\n  - target: "[[A]]"\n'
+            + body + "---\n"))
+
+    def test_gm_only_is_read_like_the_site_reads_it(self):
+        for line, want in (("gm_only: true", True), ('gm_only: "true"', True),
+                           ("gm_only: false", False), ("type: knows", False)):
+            with self.subTest(line=line):
+                self.assertEqual(self.edges(line)[0].gm_only, want)
+
+    def test_tone_is_unquoted_and_loses_a_trailing_comment(self):
+        self.assertEqual(
+            self.edges('tone: "hostile"  # s3')[0].tone, "hostile")
+        self.assertEqual(self.edges("tone: cold # s3")[0].tone, "cold")
+        self.assertEqual(self.edges("type: knows")[0].tone, "")
+
+
 import vault_check as vc  # noqa: E402
 
 

@@ -367,6 +367,8 @@ class RelationshipEdge:
     tone_lines: list[int] = field(default_factory=list)
     target: str = ""
     description: str = ""
+    tone: str = ""            # the first `tone:` value, unquoted
+    gm_only: bool = False     # `gm_only: true` or `"true"`, as the site reads it
 
 
 EDGE_KEY_RE = re.compile(r"^(-\s+)?([\w-]+):\s*(.*)$")
@@ -413,6 +415,10 @@ def iter_relationship_edges(content: str) -> Iterator[RelationshipEdge]:
         key, value = m.group(2), m.group(3)
         if key == "tone":
             edge.tone_lines.append(lineno)
+            if not edge.tone:
+                edge.tone = scalar_value(value)
+        elif key == "gm_only":
+            edge.gm_only = scalar_value(value).strip().lower() == "true"
         elif key == "target":
             edge.target = scalar_value(value)
         elif key == "description":

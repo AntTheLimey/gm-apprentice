@@ -72,6 +72,11 @@ word, how often it is used, the standard word it proposes and why. You
 accept the table or mark it up; it asks only where it cannot tell. You
 never edit a note yourself.
 
+The site shows each tie's tone as warm, hostile or neutral. Ask "what
+does the site show of who is against whom?" and Claude lists the hostile
+ties on published notes, a few at a time. For each you say leave, re-tone
+or hide; it makes the edit for you.
+
 ### Site Faults
 
 For a campaign with a published site.
