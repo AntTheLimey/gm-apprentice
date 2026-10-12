@@ -102,9 +102,9 @@ the findings — ERROR for an orphan `<!-- /gm-only -->` closer
 (everything above it publishes); WARNING for an unclosed opener
 or a published heading whose title contains an exclude-list
 entry or Keeper keyword; INFO for a Keeper-facing bold label or
-callout. The keyword list ("keeper", "secret", "tactic",
-"confidential", "gm-only", "dm notes", …) lives in the script,
-not here. This is exactly the shape of content that silently
+callout. The keyword list ("secret", "tactic", "confidential",
+"gm-only", …) and the reading of "Keeper" (the GM, not a job like
+"Innkeeper" or "Lighthouse Keeper") live in the script, not here. This is exactly the shape of content that silently
 leaks to the published site (an NPC's tactical notes under a
 heading that is not on the exclude list). A heading on the list is
 hidden however it is dressed (`### **GM Notes**`, `### GM Notes:`), so it is

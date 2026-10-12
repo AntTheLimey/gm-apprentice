@@ -1233,6 +1233,37 @@ class GmLeakCommandTests(unittest.TestCase):
                         rows)
         self.assertTrue(rows_for(rows, "callout [!note] Keeper only"), rows)
 
+    def test_keeper_is_the_gm_unless_a_word_before_it_makes_it_a_job(self):
+        # #316: "Lighthouse Keeper" is an occupation; "Keeper" alone, or
+        # after a function word, is the GM. The plural and "Keeper_Notes"
+        # still count.
+        clean = ("Lighthouse Keeper", "Park Keeper", "(Lighthouse Keeper)",
+                 "The Lighthouse Keeper", "the Park Keeper's lodge",
+                 "Frau X (Lighthouse Keeper)", "Innkeeper")
+        flagged = ("Keeper Notes", "Keeper's Notes", "KEEPER ONLY",
+                   "For the Keeper:", "keeper-only", "Keeper/GM",
+                   "GM/Keeper", "Notes for the Keeper", "Keeper",
+                   "For Keepers only", "Keeper_Notes", "Notes: Keeper only",
+                   "Secrets — Keeper")
+        for title in clean:
+            with self.subTest(clean=title):
+                self.assertFalse(vc._keeper_text(title, []))
+        for title in flagged:
+            with self.subTest(flagged=title):
+                self.assertTrue(vc._keeper_text(title, []))
+
+    def test_a_callout_type_and_title_are_read_apart(self):
+        # "note" before "Keeper only" must not make it a job.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "> [!note] Keeper only: he lies.\n\n"
+            "> [!note] The Lighthouse Keeper's lodge\n\n"
+            "> [!keeper_notes] Lamp\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(sorted(r.split("\t")[1] for r in rows_for(
+            rows, "Bob.md")), ["Bob.md:11", "Bob.md:7"], rows)
+
     def test_a_config_exclude_entry_silences_its_own_section(self):
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:6"), self.rows)
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:10"), self.rows)
@@ -1401,7 +1432,8 @@ class GmLeakFixTests(unittest.TestCase):
                 "## Tactics\n\nHold the stairs.\n")
         vault = self.vault_with(text, "Lighthouse.md")
         rows = vc.check_gm_leak(vault, None, fix=True)
-        self.assertEqual(len(leak_heading_rows(rows, "Lighthouse.md")), 5,
+        # "The Lighthouse Keeper" is a job and does not flag (#316).
+        self.assertEqual(len(leak_heading_rows(rows, "Lighthouse.md")), 4,
                          rows)
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Lighthouse.md"), text)

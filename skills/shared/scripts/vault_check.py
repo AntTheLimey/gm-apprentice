@@ -2323,11 +2323,18 @@ def check_sessions(vault: Path) -> list[str]:
 
 # graph-health.md, "Un-fenced GM-only content". Matched as substrings of a
 # casefolded title, so "Tactics" hits "tactic" and "Secrets" hits "secret".
-# "Keeper" is the exception (KEEPER_WORD_RE): as a substring it also hits
-# Innkeeper, Housekeeper, Shopkeeper and the like (#316).
+# "Keeper" is the exception (`_keeper_word`): a whole word, and a job when
+# another word comes right before it (#316).
 KEEPER_WORDS = ("gm only", "gm-only", "dm only", "secret",
                 "tactic", "confidential", "spoiler")
-KEEPER_WORD_RE = re.compile(r"\bkeeper\b")
+# Keeper or Keepers, not inside a longer word; "_" and "-" end it.
+KEEPER_WORD_RE = re.compile(r"(?<![^\W_])keepers?(?![^\W_])")
+# The whitespace-separated token just before it.
+BEFORE_WORD_RE = re.compile(r"(\S+)\s+$")
+PLAIN_WORD_RE = re.compile(r"\W*[^\W\d_][\w'’-]*")
+# A word before "Keeper" that leaves it meaning the GM ("For the Keeper").
+FUNCTION_WORDS = frozenset(("the", "a", "an", "for", "to", "of", "by", "from",
+                            "with", "and", "or", "your"))
 
 # Types the publish pipeline never builds a page for. Nothing in them can
 # leak however it is written, and flagging their (correctly) Keeper-facing
@@ -2382,10 +2389,24 @@ def _fence_rows(rel: str, problems: list[str],
     return rows
 
 
+def _keeper_word(text: str) -> bool:
+    """Does `text` say Keeper, the GM? "Lighthouse Keeper" is a job: the
+    word before it is a content word. Nothing before it, punctuation, or a
+    function word ("For the Keeper") leaves it the GM."""
+    low = text.casefold()
+    for m in KEEPER_WORD_RE.finditer(low):
+        before = BEFORE_WORD_RE.search(low[:m.start()])
+        if before and PLAIN_WORD_RE.fullmatch(before.group(1)):
+            if before.group(1).strip("(*_[\"“‘'") not in FUNCTION_WORDS:
+                continue
+        return True
+    return False
+
+
 def _keeper_text(text: str, excludes: list[str]) -> bool:
     """Does this title or label read as Keeper-facing?"""
     low = text.casefold()
-    return (KEEPER_WORD_RE.search(low) is not None
+    return (_keeper_word(low)
             or any(word in low for word in KEEPER_WORDS)
             or any(s.casefold() in low for s in excludes))
 
@@ -2632,7 +2653,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             if callout:
                 ctype, title = callout.group(1), callout.group(2).strip()
                 low = f"{ctype} {title}".casefold()
-                if GM_WORD_RE.search(low) or KEEPER_WORD_RE.search(low):
+                if GM_WORD_RE.search(low) or _keeper_word(ctype) or _keeper_word(title):
                     label = f"[!{ctype}] {title}".strip()
                     rows.append(f"INFO\t{rel}:{state.lineno}\tcallout {label} "
                                 f"reads Keeper-facing — confirm it should "
