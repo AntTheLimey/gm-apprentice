@@ -9,6 +9,9 @@ item -> items) and fills the vault file's `portrait: ""` frontmatter when the
 entity is linked (its element_id appears in a vault `mobrpg:` node). Existing
 attachments are never overwritten (a colliding name gets a " (mobRPG)" suffix)
 and a non-empty portrait field is left alone — both cases are reported instead.
+An upstream image whose bytes match a file the vault already holds for the note
+(the colliding name, its " (mobRPG)" copy, the current portrait) is not saved
+again; it is counted as unchanged. That check downloads the image, dry-run too.
 
 The mobRPG element_id -> vault-file map comes from the vault's own `mobrpg:`
 nodes (the single source of truth); there is no sidecar crosswalk.
@@ -210,6 +213,23 @@ def _local_images(vault_dir: str, txt: str, index: dict,
     return found, unresolved
 
 
+def _read(path: str) -> bytes:
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
+def _portrait_files(vault_dir: str, txt: str, index: dict) -> list[str]:
+    """The file a note's `portrait:` names, resolved the way `_local_images`
+    does (vault-relative path, else a unique attachment basename); [] if none."""
+    m = _PORTRAIT.search(txt.split("\n---", 1)[0] if txt.startswith("---") else "")
+    ref = m.group(1).strip() if m else ""
+    if not ref:
+        return []
+    direct = os.path.join(vault_dir, ref)
+    hits = [direct] if os.path.isfile(direct) else index.get(os.path.basename(ref).lower(), [])
+    return hits if len(hits) == 1 else []
+
+
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
@@ -355,7 +375,8 @@ def run(argv: list[str]) -> int:
 
     found = _scan(args.world, token)
     print(f"{len(found)} entities with images")
-    wired = occupied = saved = 0
+    wired = occupied = saved = unchanged = 0
+    index = _attachment_index(vault_dir)
     for ent in found:
         vp = id_to_path.get(ent["id"])
         # For an unlinked entity the stem is the API-supplied name, and the
@@ -366,42 +387,62 @@ def run(argv: list[str]) -> int:
             os.path.splitext(os.path.basename(vp))[0] if vp else ent["name"])
         folder = FOLDER[ent["kind"]]
         attach_root = os.path.realpath(os.path.join(vault_dir, "_attachments"))
+        full = os.path.join(vault_dir, vp) if vp else None
+        text = open(full, encoding="utf-8").read() if full else ""
         for i, img in enumerate(ent["images"]):
             ext = _safe_ext(os.path.splitext(img["url"].split("?")[0])[1])
-            fname = f"{base}{'' if i == 0 else f' {i + 1}'}{ext}"
-            dest = os.path.join(vault_dir, "_attachments", folder, fname)
-            if os.path.exists(dest):
-                fname = f"{base}{'' if i == 0 else f' {i + 1}'} (mobRPG){ext}"
-                dest = os.path.join(vault_dir, "_attachments", folder, fname)
+            stem = f"{base}{'' if i == 0 else f' {i + 1}'}"
+            dest = os.path.join(vault_dir, "_attachments", folder, f"{stem}{ext}")
+            beside = os.path.join(vault_dir, "_attachments", folder, f"{stem} (mobRPG){ext}")
+            first = bool(vp) and i == 0
+            has_portrait = first and bool(
+                re.search(r'^portrait:\s*"[^"]+"\s*$', text, flags=re.M))
+            data = match = None
+            # Something of this note's may already hold the image: compare the
+            # upstream bytes with the file in the way, its earlier " (mobRPG)"
+            # copy and the current portrait before writing a second copy.
+            if os.path.exists(dest) or has_portrait:
+                data = _download(img["url"])
+                held = [dest, beside] + (_portrait_files(vault_dir, text, index) if has_portrait else [])
+                match = next((h for h in held if os.path.isfile(h) and _within(attach_root, h)
+                              and _read(h) == data), None)
+                if match:
+                    dest = match
+                elif os.path.exists(dest):
+                    dest = beside
+                    if has_portrait:
+                        print(f"  upstream image differs from the current portrait: {ent['name']}")
             if not _within(attach_root, dest):
                 print(f"  SKIPPED (path escapes _attachments): {ent['name']}",
                       file=sys.stderr)
                 continue
-            rel = f"_attachments/{folder}/{fname}"
-            fresh = not os.path.exists(dest)
-            if args.execute and fresh:
+            rel = os.path.relpath(dest, vault_dir).replace(os.sep, "/")
+            if args.execute and not os.path.exists(dest):
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                data = _download(img["url"])
                 with open(dest, "wb") as fh:
-                    fh.write(data)
-            if not vp or i > 0:
+                    fh.write(data if data is not None else _download(img["url"]))
+            if not first:
+                if match:
+                    unchanged += 1
+                    continue
                 saved += 1
                 print(f"  saved only ({'no vault file' if not vp else 'extra image'}): "
                       f"{ent['name']} -> {rel}")
                 continue
-            full = os.path.join(vault_dir, vp)
-            text = open(full, encoding="utf-8").read()
             if re.search(r'^portrait:\s*""\s*$', text, flags=re.M):
                 if args.execute:
                     text = re.sub(r'^portrait:\s*""\s*$', f'portrait: "{rel}"',
                                    text, count=1, flags=re.M)
                     open(full, "w", encoding="utf-8").write(text)
                 wired += 1
-            elif re.search(r'^portrait:\s*"[^"]+"\s*$', text, flags=re.M):
-                occupied += 1
-                print(f"  portrait already set, saved beside it: {ent['name']} -> {rel}")
+            elif has_portrait:
+                if match:
+                    unchanged += 1
+                else:
+                    occupied += 1
+                    print(f"  portrait already set, saved beside it: {ent['name']} -> {rel}")
     print(f"{'wired' if args.execute else 'would wire'}: {wired}, "
-          f"occupied: {occupied}, saved-only: {saved}")
+          f"occupied: {occupied}, unchanged: {unchanged}, saved-only: {saved}")
 
     gen = client._request("GET", f"/world/{args.world}/generated/images", token=token) or {}
     for g in gen.get("content", []) if isinstance(gen, dict) else []:

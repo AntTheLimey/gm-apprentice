@@ -106,6 +106,62 @@ def test_occupied_portrait_left_alone_and_reported(tmp_path, monkeypatch, capsys
     assert "portrait already set" in capsys.readouterr().out
 
 
+def _wire_pull(monkeypatch, payload):
+    pages = _pages()
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: pages.get((m, p), {}))
+    monkeypatch.setattr(images, "_download", lambda url: payload)
+
+
+def test_identical_upstream_image_is_not_saved_beside_an_occupied_portrait(
+        tmp_path, monkeypatch, capsys):
+    # #308: the bytes already in the vault must not be written a second time.
+    note = _note(tmp_path, portrait='portrait: "_attachments/characters/vela.png"')
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "vela.png").write_bytes(b"same")
+    _wire_pull(monkeypatch, b"same")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert sorted(f.name for f in att.iterdir()) == ["vela.png"]
+    out = capsys.readouterr().out
+    assert "unchanged: 1" in out
+    assert "saved beside it" not in out
+
+
+def test_identical_image_under_another_portrait_name_is_not_duplicated(tmp_path, monkeypatch):
+    _note(tmp_path, portrait='portrait: "_attachments/characters/Vela Portrait.png"')
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "Vela Portrait.png").write_bytes(b"same")
+    _wire_pull(monkeypatch, b"same")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert sorted(f.name for f in att.iterdir()) == ["Vela Portrait.png"]
+
+
+def test_different_upstream_image_is_saved_beside_and_said_to_differ(
+        tmp_path, monkeypatch, capsys):
+    _note(tmp_path, portrait='portrait: "_attachments/characters/vela.png"')
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "vela.png").write_bytes(b"old")
+    _wire_pull(monkeypatch, b"new")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert (att / "vela (mobRPG).png").read_bytes() == b"new"
+    assert (att / "vela.png").read_bytes() == b"old"
+    assert "differs from the current portrait" in capsys.readouterr().out
+
+
+def test_identical_existing_attachment_is_wired_not_copied(tmp_path, monkeypatch):
+    note = _note(tmp_path)          # portrait empty, but vela.png is already there
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "vela.png").write_bytes(b"same")
+    _wire_pull(monkeypatch, b"same")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert sorted(f.name for f in att.iterdir()) == ["vela.png"]
+    assert 'portrait: "_attachments/characters/vela.png"' in note.read_text(encoding="utf-8")
+
+
 def test_download_refuses_non_https_schemes():
     # The image URL comes from the world API. urlopen speaks file: too, so an
     # unchecked URL turns `images --execute` into a local-file read.
