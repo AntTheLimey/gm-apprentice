@@ -43,6 +43,15 @@ and in its frontmatter fields. A marker works in capitals too. A stray
 `%%` in prose, such as `100%% done`, starts a comment as it does in
 Obsidian, and the build warns.
 
+A note whose own name is a secret carries `withheld: true`. The build
+looks for its file name, title and aliases in everything the site
+holds (page text, the search index, a copied picture's file name) and
+warns where one is printed. A link to it with no label of its own
+prints a neutral word for the kind of note (a person, a place or a
+thing) in place of the name. Nothing on the site says the note is
+withheld. The warnings are reports: the build still builds, even when
+a note marked withheld is published (that one is an error).
+
 Wiki-links between vault files become live hyperlinks in the site.
 Portrait images from your vault's attachments folder are copied across
 automatically.

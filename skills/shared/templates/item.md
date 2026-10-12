@@ -8,6 +8,7 @@ asOfSession: ""
 lastUpdated: ""
 aliases: []
 gm_aliases: []        # the item's true name, if it has one: links resolve, never published
+withheld: false       # true: this note's own name is a secret; the site build looks for it in published text
 tags: []
 item_type: ""         # weapon, armor, vehicle, treasure, relic, tool, consumable
 current_holder: ""    # "[[Who has it now]]"

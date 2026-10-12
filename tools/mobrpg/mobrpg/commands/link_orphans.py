@@ -1,8 +1,9 @@
 """mobrpg link-orphans — auto-link obvious orphan entities after a mobRPG
 import/extract, and write a report of what was (or would be) linked.
 
-Conservative, structural rules only, evaluated against the `--systems` names
-given on the command line (there is no hardcoded system list):
+Conservative, structural rules only, evaluated against the star systems the
+vault already holds (every note named "<X> System"); `--systems` overrides that
+list. There is no hardcoded system list:
   - "<System> <ROMAN>"            planet  -> part_of "<System> System"
   - "<System> <ROMAN> <LETTER>"   moon    -> part_of "<System> <ROMAN>"  (else system)
   - "<System> <LETTER>"           body    -> part_of "<System> System"
@@ -50,6 +51,29 @@ def vault_entity_names(vault: str) -> set:
     return out
 
 
+_SYSTEM_SUFFIX = re.compile(r"^(.+?)\s+system$", re.I)
+_STAR_SYSTEM = re.compile(r'^location_type:\s*["\']?\s*star system\s*["\']?\s*$', re.I | re.M)
+
+
+def vault_systems(vault: str) -> list[str]:
+    """Star system names the vault holds, from its Locations notes: a note called
+    "<X> System" (any case), or a note whose `location_type` is "star system"
+    whatever its name. Longest first, so "Corwin Prime" is tried before
+    "Corwin". Other folders are ignored (an item "Defense System" is no star)."""
+    found = set()
+    for path in glob.glob(os.path.join(vault, "Locations", "*.md")):
+        stem = os.path.splitext(os.path.basename(path))[0]
+        m = _SYSTEM_SUFFIX.match(stem)
+        if m:
+            found.add(m.group(1))
+            continue
+        with open(path, encoding="utf-8") as fh:
+            fm = re.match(r"^---\r?\n(.*?)\r?\n---", fh.read(), flags=re.S)
+        if fm and _STAR_SYSTEM.search(fm.group(1)):
+            found.add(stem)
+    return sorted(found, key=lambda n: (-len(n), n))
+
+
 def vault_has_rels(vault: str) -> set:
     """Names whose VAULT file already has a relationship target. Orphan status
     must be judged from the live vault, NOT the mobRPG extract — a merged file
@@ -62,32 +86,55 @@ def vault_has_rels(vault: str) -> set:
     return out
 
 
-def derive_parent(name: str, exists: set, systems: list[str]) -> str | None:
+def vault_location_names(vault: str) -> set:
+    return {os.path.splitext(os.path.basename(p))[0]
+            for p in glob.glob(os.path.join(vault, "Locations", "*.md"))}
+
+
+def _system_note(sys_: str, locations: set) -> str:
+    """The real name of a system's note: "<Sys> System" in any case, else the
+    bare name (a `location_type: star system` note)."""
+    lower = {n.lower(): n for n in locations}
+    return lower.get(f"{sys_} system".lower()) or lower.get(sys_.lower()) or f"{sys_} System"
+
+
+def derive_parent(name: str, exists: set, systems: list[str],
+                  locations: set | None = None) -> str | None:
+    """`locations` (default: `exists`) is where a parent may come from: a
+    system, planet or moon is a location note, never an NPC or item that
+    happens to share the name."""
+    lower = {n.lower(): n for n in (exists if locations is None else locations)}
     for sys_ in systems:
-        sysname = f"{sys_} System"
+        # The system's own note: "<Sys> System" in any case, else a note named
+        # for the system itself (a `location_type: star system` note).
+        sysname = lower.get(f"{sys_} system".lower()) or lower.get(sys_.lower())
         # --systems is operator input interpolated into patterns below. A name
         # carrying a regex metacharacter ("St. John", "Alpha (Prime)") would
         # otherwise match the wrong things, or raise re.error outright.
-        esc = re.escape(sys_)
-        if name == sysname or name == sys_:
+        # The system's name is matched in any case; the rest of each pattern
+        # (numerals, letters, "Gate", "Belt") stays as written.
+        esc = f"(?i:{re.escape(sys_)})"
+        if sysname and name.lower() == sysname.lower():
             return None
+        # the star: the bare system name, when a distinct "<Sys> System" note exists
+        if name.lower() == sys_.lower():
+            return sysname
         # moon: "<Sys> <ROMAN> <LETTER>"
         m = re.fullmatch(rf"{esc}\s+({ROMAN})\s+([A-Z])", name)
         if m:
-            parent = f"{sys_} {m.group(1)}"
-            return parent if parent in exists else (sysname if sysname in exists else None)
+            return lower.get(f"{sys_} {m.group(1)}".lower()) or sysname
         # planet: "<Sys> <ROMAN>"
         if re.fullmatch(rf"{esc}\s+{ROMAN}", name):
-            return sysname if sysname in exists else None
+            return sysname
         # body: "<Sys> <LETTER>"
         if re.fullmatch(rf"{esc}\s+[A-Z]", name):
-            return sysname if sysname in exists else None
-        # gate: contains "Gate" and the system token
-        if "Gate" in name and name.startswith(sys_):
-            return sysname if sysname in exists else None
-        # belt: "<Sys>ian Belt" or "<Sys> Belt"
-        if re.search(rf"{esc}(ian)?\s+Belt", name):
-            return sysname if sysname in exists else None
+            return sysname
+        # gate: contains "Gate" and starts with the whole system name
+        if "Gate" in name and re.match(rf"{esc}(?!\w)", name):
+            return sysname
+        # belt: "<Sys>ian Belt" or "<Sys> Belt", the whole name
+        if re.fullmatch(rf"{esc}(?:ian)?\s+Belt", name):
+            return sysname
     return None
 
 
@@ -184,29 +231,44 @@ def run(argv: list[str]) -> int:
     ap.add_argument("--out", required=True, help="output dir for the report/json")
     ap.add_argument("--systems", default="",
                     help="comma-separated star system names the structural naming "
-                         "rules apply to (e.g. 'Corwin,Eris,Thides'); default none")
+                         "rules apply to (e.g. 'Corwin,Eris,Thides'); default: every "
+                         "'<X> System' note in the vault")
     ap.add_argument("--execute", action="store_true",
                     help="write the derived relationships into the vault (default: dry-run)")
     args = ap.parse_args(argv)
 
     vault = os.path.expanduser(args.vault)
-    systems = [s.strip() for s in args.systems.split(",") if s.strip()]
+    # longest first, like the vault-derived list, so "Corwin Prime Gate" is tried
+    # against "Corwin Prime" before "Corwin"
+    systems = sorted((s.strip() for s in args.systems.split(",") if s.strip()),
+                     key=lambda n: (-len(n), n))
 
     extract = json.load(open(args.extract, encoding="utf-8"))
     id_of = {e["name"]: e["id"] for e in extract["entities"]}
     exists = vault_entity_names(vault)
+    locations = vault_location_names(vault)
+    in_vault = vault_systems(vault)
+    given = bool(systems)
+    if not given:
+        systems = in_vault
+    given_lower = {x.lower() for x in systems}
+    left_out = [x for x in in_vault if x.lower() not in given_lower]
     already_linked = vault_has_rels(vault)   # judge orphan status from the vault
 
     linked, still, unwritable = [], [], []
+    would_match = []   # orphans a vault system not in --systems would have linked
     for e in extract["entities"]:
         name, kind = e["name"], e["kind"]
         if e.get("relationships") or name in already_linked:
             continue  # not an orphan (per live vault state)
         target = rtype = why = None
         if kind in ("landfeature", "political"):
-            p = derive_parent(name, exists, systems)
+            p = derive_parent(name, exists, systems, locations)
             if p:
                 target, rtype, why = p, "part_of", "structural containment"
+            elif left_out and (q := derive_parent(name, exists, left_out, locations)):
+                would_match.append((kind, name, q))
+                continue          # reported in its own section, not as "still orphan"
         elif kind == "item":
             mk = derive_maker(e.get("body_md", ""), exists)
             if mk:
@@ -255,6 +317,8 @@ def run(argv: list[str]) -> int:
     os.makedirs(outdir, exist_ok=True)
 
     head = f"# Orphan auto-linking report — {len(linked)} linked, {len(still)} still orphan"
+    if would_match:
+        head += f", {len(would_match)} match a system not in --systems"
     if unwritable:
         head += f", {len(unwritable)} could not be written"
     rep = [head + "\n"]
@@ -279,6 +343,18 @@ def run(argv: list[str]) -> int:
         rep.append("| entity | edge target |\n|---|---|")
         for l in misaligned:
             rep.append(f"| {l['entity']} | {l['target']} |")
+    if not systems:
+        rep.append("\n## Naming rules did not run\n")
+        rep.append("The vault has no `<X> System` note and `--systems` was not given, "
+                   "so the structural naming rules (planets, moons, gates, belts) "
+                   "had no system to match against.\n")
+    if would_match:
+        rep.append("\n## Matches a naming rule for a system not in --systems\n")
+        rep.append("These would link if their system were listed: "
+                   + ", ".join(left_out) + ".\n")
+        rep.append("| entity | would be part_of |\n|---|---|")
+        for _k, n, t in sorted(would_match, key=lambda w: w[1]):
+            rep.append(f"| {n} | {t} |")
     rep.append("\n## Still orphan (need manual judgement)\n")
     for k, n in sorted(still):
         rep.append(f"- [{k}] {n}")
@@ -287,13 +363,22 @@ def run(argv: list[str]) -> int:
 
     with open(os.path.join(outdir, "orphan-linking.json"), "w", encoding="utf-8") as fh:
         json.dump({"linked": linked, "still_orphan": still,
+                   "not_in_systems": would_match,
                    "unwritable": [{"entity": n, "kind": k, "type": t, "target": tgt}
                                   for k, n, tgt, t in unwritable]},
                   fh, indent=2, ensure_ascii=False)
 
     if not args.execute and linked:
         print("dry-run — pass --execute to write the vault edits above")
-    print(f"linked {len(linked)}, still orphan {len(still)}")
+    print(f"linked {len(linked)}, still orphan {len(still)}"
+          + (f", {len(would_match)} match a system not in --systems" if would_match else ""))
+    if given and left_out:
+        print(f"NOTE: the vault also has {', '.join(_system_note(x, locations) for x in left_out)} "
+              f"which --systems leaves out; {len(would_match)} orphan(s) match a "
+              f"naming rule for them (see the report). Drop --systems to use them all.")
+    elif not systems:
+        print("NOTE: structural naming rules did not run: the vault has no "
+              "'<X> System' note and --systems was not given.")
     if misaligned:
         print(f"WARNING: {len(misaligned)} note(s) keep a parent_location: that "
               f"does not match the new part_of edge — see the report",

@@ -365,8 +365,8 @@ fix for each failing row.
 folders missing from folderMap, files with no type:, frontmatter values of the
 wrong type, portraits pointing at absent images, wikilinks that match no
 published page, manifest entries whose file is gone, and played sessions in no
-manifest section. It also finds four faults in the notes themselves, the ones
-that change what the site shows:
+manifest section. It also finds faults in the notes themselves, the ones that
+change what the site shows:
   NAMED_NO_PAGE   a note with no page, named on a published page, so its name
                   prints as plain words
   COMMENT_STRAY   a %% that is not a comment, or a comment never closed in a
@@ -374,6 +374,20 @@ that change what the site shows:
   FENCE_UNCLOSED  a code fence never properly closed, with a hidden marker
                   below it that the page prints
   ALIAS_IN_PROSE  a gm_aliases name printed on a page
+  WITHHELD_IN_PROSE
+                  the file name, title or alias of a note marked withheld: true,
+                  printed on a page, in the address of a link, held by the
+                  search index or the link previews, or carried in a copied
+                  file's name
+  WITHHELD_PUBLISHED
+                  a note marked withheld: true that the site publishes (an
+                  error; the build still builds)
+  WITHHELD_NAME_PUBLIC
+                  a withheld name a published page answers to as well, which so
+                  cannot be looked for
+  WITHHELD_FLAG_UNREADABLE
+                  a withheld: value that is not true or false, read as not
+                  withheld
 To find them the site is built in memory, every page rendered and nothing
 written, so the names are read off the pages as built and the list is the
 build's own. That is every page: a note's own, a PC's story, the section
@@ -381,10 +395,14 @@ indexes, the timeline, the story and the landing page, and the names on a
 page's Connections section. A name an index or listing page prints is counted
 against the note it is taken from, and the finding names the page
 ("listings"). When a page cannot be rendered the list is not complete, and the
-audit says so with an error (NOTE_FAULTS_UNCHECKED). The build prints one line
-for each of the four.
+audit says so with an error (NOTE_FAULTS_UNCHECKED). The build prints a closing
+warning for each code (one line each; a withheld: value that cannot be read gets
+a line per note). A page that links a note marked withheld is an error, not a
+warning (NAMED_NO_PAGE); it is still only a report, and the build goes on.
 A note whose Excluded entry in the manifest begins "stays hidden:" is settled:
-left out of the report, kept in --json with "settled": true. Each finding names
+left out of the report, kept in --json with "settled": true. That answers the link
+report (NAMED_NO_PAGE) only: a withheld name printed in text cannot be settled.
+Each finding names
 the edit that fixes it. Exits 1 only on an error, not on a warning. The human
 report lists 20 rows per note-fault code; --json has them all.
 

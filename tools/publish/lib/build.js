@@ -6,7 +6,7 @@ const os = require('os');
 const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
-const { resolveBanner, renderBanner, defaultAlt, isSvg } = require('./banners');
+const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
@@ -883,6 +883,7 @@ function buildSite(options) {
   copyThemeFonts();
   publishConfig._overridesCss = copyOverridesCSS();
 
+  const campaignImageSource = publishConfig.theme.campaign_image;
   let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
   if (!dry && publishConfig.theme.campaign_image) {
@@ -1174,6 +1175,7 @@ function buildSite(options) {
   const toRender = new Map();   // the pages that may print one of those names: rendered a second time
   function seen(rel, html, page, isStory) {
     audit.read(rel, html);
+    audit.readAddresses(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
     // The names in a page's Connections are names the page prints: one with no page behind
     // it is looked up in the note index and counted against this page.
@@ -1293,13 +1295,24 @@ function buildSite(options) {
   // publish: false page and an excluded draft are absent), each page carries its filtered
   // frontmatter and publishedMarkdown, and a card is kept only if its page file exists.
   // cleanOutput() wipes a stale previews.json.
-  if (!dry && publishConfig.link_previews !== 'off') {
+  if (publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
     const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
-    const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
-    fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(built));
-    console.log('  wrote previews.json');
+    // The cards are read for withheld names in their own right, whatever the pages print (and
+    // also when nothing is written): every string of every card, under the note it is made from.
+    const byHref = new Map(pages.map((p) => [p.outputPath, p]));
+    const cardStrings = (v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(cardStrings) : []);
+    for (const [key, card] of Object.entries(cards)) {
+      const page = byHref.get(key);
+      const text = Object.values(card).flatMap(cardStrings).join('\n');
+      if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p></main>`, null, 'the link previews', 'withheld');
+    }
+    if (!dry) {
+      const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
+      fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(built));
+      console.log('  wrote previews.json');
+    }
   }
 
   // Copy images — in player mode, only copy images referenced by published pages. This
@@ -1352,8 +1365,7 @@ function buildSite(options) {
   // land on images/banners/_banner.png, and whichever copied last would show on both pages.
   // The dir may itself contain a slash ("characters/npcs"), so flatten it to one segment.
   function copyBannerAsset(sourceFull, dir) {
-    const slug = String(dir).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
-    const outRel = `images/banners/${slug}/${path.basename(sourceFull)}`;
+    const outRel = `images/banners/${bannerSlug(dir)}/${path.basename(sourceFull)}`;
     const dest = path.join(outputDir, outRel);
     ensureDir(dest);
     fs.copyFileSync(sourceFull, dest);
@@ -1521,6 +1533,42 @@ function buildSite(options) {
       const page = byHref.get(doc.href);
       const text = strings(doc.subtitle).join(' ');
       if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index');
+      // Every other string of the entry the search shows (its title, its type).
+      const rest = strings(Object.entries(doc).filter(([k]) => k !== 'href' && k !== 'subtitle').map(([, v]) => v)).join('\n');
+      if (page && rest) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(rest)}</p></main>`, null, 'the search index', 'withheld');
+    }
+    // And every field of every record the index is built from, whichever fields it holds: its
+    // aliases are words no page prints. Withheld names only, as the page text is read for the rest.
+    for (const { page, record } of searchData.records) {
+      const text = strings(Object.entries(record).filter(([k]) => k !== 'id').map(([, v]) => v)).join('\n');
+      if (text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index', 'withheld');
+    }
+  }
+
+  // The files copied to the site are named after the vault's files: a withheld name in one of
+  // them is in the address of the file. Attachments, then the other files a site copies from
+  // the vault: the campaign image, a section banner and a font.
+  for (const [name, entry] of Object.entries(imageMap)) {
+    if (publishConfig.mode === 'player' && !usedImages.has(name)) continue;
+    audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: entry.sourcePath })), `images/${entry.relPath}`);
+  }
+  {
+    const vaultRoot = path.resolve(config.vaultPath);
+    const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
+    const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
+    if (campaignImageSource && !/^https?:\/\//.test(campaignImageSource) && there(campaignImageSource)) {
+      audit.readFileName(rel(campaignImageSource), `images/${path.basename(campaignImageSource)}`);
+    }
+    for (const dir of Object.keys(DIR_LABELS)) {
+      const entry = resolveBanner(dir, { vaultPath: config.vaultPath, folderMap: config.folderMap, banners: publishConfig.banners });
+      if (!entry) continue;
+      for (const file of copiedBannerFiles(entry)) {
+        if (there(file)) audit.readFileName(rel(file), `images/banners/${bannerSlug(dir)}/${path.basename(file)}`);
+      }
+    }
+    const fonts = (publishConfig.theme.fonts && Array.isArray(publishConfig.theme.fonts.files)) ? publishConfig.theme.fonts.files : [];
+    for (const f of fonts) {
+      if (f && f.path && there(f.path)) audit.readFileName(rel(f.path), `fonts/${fontOutputPath(f.path)}`);
     }
   }
 

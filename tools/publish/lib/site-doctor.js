@@ -20,7 +20,7 @@ const { decidePage, publishesPage } = require('./publish-decision');
 const {
   parseWikiRef, portraitBasename, playerSafeMarkdown, publishMode, keepOnlySections, publishedFrontmatter, pcHeadingsUnstable,
 } = require('./processor');
-const { CODES: NOTE_FAULT_CODES } = require('./note-faults');
+const { CODES: NOTE_FAULT_CODES, PAGES_SHOWN } = require('./note-faults');
 const { getsNoPage } = require('./previews');
 const { pairHubs } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
@@ -115,12 +115,19 @@ function emit(out, findings, vaultLabel, asJson) {
     .sort((a, b) => CODE_ORDER.indexOf(a) - CODE_ORDER.indexOf(b));
   for (const code of codes) {
     const rows = open.filter((f) => f.code === code);
-    const severity = rows[0].severity;
+    // One code can hold errors and warnings (NAMED_NO_PAGE: an error when its note is withheld).
+    const severities = ['error', 'warning'].filter((sev) => rows.some((r) => (r.severity === 'error') === (sev === 'error')));
     out('');
-    out(`${code} (${plural(rows.length, severity)})`);
+    out(`${code} (${severities.map((sev) => plural(rows.filter((r) => (r.severity === 'error') === (sev === 'error')).length, sev)).join(', ')})`);
     const shown = FAULT_CODES.has(code) ? rows.slice(0, FAULT_ROW_CAP) : rows;
     for (const row of shown) {
       out(`  ${row.path} — ${row.detail}`);
+      // The pages that link a note with no page: the first few by name; the JSON has them all.
+      if (code === 'NAMED_NO_PAGE' && Array.isArray(row.pages) && row.pages.length > 0) {
+        const first = row.pages.slice(0, PAGES_SHOWN);
+        const more = row.pages.length - first.length;
+        out(`      named on: ${first.join(', ')}${more > 0 ? ` (+${more} more; --json lists them all)` : ''}`);
+      }
       out(`      → ${row.fix}`);
     }
     if (shown.length < rows.length) out(`  +${rows.length - shown.length} more — run with --json for the whole list`);

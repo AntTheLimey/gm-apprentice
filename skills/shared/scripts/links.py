@@ -46,7 +46,8 @@ listed as KEPT. `--bare` turns those too: for when the GM has looked at
 the lines and they mean this note. `--as WORDS` gives the words for a link that
 has no display text of its own, where the note's name would read as a file
 name (`[[Scene_02_Quay]]` becomes WORDS); a link with display text keeps
-it.
+it. A link with no words to a note marked `withheld: true` is KEPT until
+`--as` gives them: the name is the secret, so it is never the words.
 
 Both fixes print what they would change and write nothing without
 --write. With --write every note is written or none is. Links in a code
@@ -83,7 +84,10 @@ from vaultlib import (
     LINK_RE,
     UNCHECKED_DIRS,
     LinkLine,
+    extract_frontmatter,
     is_unchecked_source,
+    is_withheld,
+    link_aliases,
     link_lines,
     link_name,
     link_target,
@@ -268,6 +272,9 @@ KEPT = {
     "embed": "an embed has no words to leave; left as written",
     "ambiguous": "more than one note has this name and the link gives no "
                  "path; left as written (--bare turns it too)",
+    "withheld": "the note is marked withheld and this link gives no words, "
+                "so unlinking would print its name; left as written (--as "
+                "WORDS gives the words)",
 }
 
 
@@ -292,9 +299,10 @@ def _in_table_row(line: str) -> bool:
     return re.search(r"(?<!\\)\|", LINK_RE.sub("", line)) is not None
 
 
-def _unlink_as(bare: str | None) -> Fix:
+def _unlink_as(bare: str | None, withheld: set[str] | None = None) -> Fix:
     """Turn a link into its words: its display text, else `bare` when
-    given, else the name as written."""
+    given, else the name as written. The name of a withheld note is never
+    the words: such a link with none of its own is kept."""
     def fix(parsed: tuple[str, str, str], embed: bool, in_fm: bool,
             line: str) -> tuple[str | None, str]:
         if in_fm:
@@ -306,6 +314,9 @@ def _unlink_as(bare: str | None) -> Fix:
         if not words and bare and _in_table_row(line):
             # In a table cell a bare pipe in the words would end the cell.
             return re.sub(r"(?<!\\)\|", r"\\|", bare), ""
+        if withheld and not words and not bare and \
+                normalize(link_name(dest).split("/")[-1]) in withheld:
+            return None, "withheld"
         return words or bare or link_name(dest), ""
     return fix
 
@@ -418,8 +429,33 @@ def plan_unlink(vault: Path, names: list[str],
         if rel not in notes:
             raise LinksError(f"there is no note {note}")
         only.add(rel)
-    return _plan(vault, set(), _unlink_as(bare), only,
+    withheld = _withheld_names(vault, names)
+    return _plan(vault, set(), _unlink_as(bare, withheld), only,
                  _names_match(vault, names, sorted(notes), take_bare))
+
+
+def _withheld_names(vault: Path, names: list[str]) -> set[str]:
+    """Which of NAMES mean a note marked `withheld: true`, as the
+    `normalize`d last part of the name. A NAME is the note's file name, its
+    title, or one of its aliases or gm_aliases (a link may use any of them,
+    and unlinking one would print it)."""
+    wanted = {_segments(n)[-1] for n in names if _segments(n)}
+    found: set[str] = set()
+    for rel in _walk(vault, ".md"):
+        try:
+            fm = extract_frontmatter((vault / rel).read_text(encoding="utf-8"))
+        except (OSError, UnicodeError):
+            continue
+        if fm is None or not is_withheld(fm):
+            continue
+        own = [_stem(rel), str(fm.get("title") or "")] + link_aliases(fm)
+        if isinstance(fm.get("aliases"), str):
+            own.append(fm["aliases"])
+        for name in own:
+            key = normalize(name.strip().strip("[]").split("/")[-1])
+            if key in wanted:
+                found.add(key)
+    return found
 
 
 def _segments(path: str) -> list[str]:

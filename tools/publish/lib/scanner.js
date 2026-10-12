@@ -422,16 +422,20 @@ function scanAllNotes(vaultPath) {
       let text = '';
       try {
         text = fs.readFileSync(full, 'utf8');
-        // Only a note that declares aliases needs its frontmatter parsed — or a session
+        // Only a note that declares aliases (or is `withheld`) needs its frontmatter parsed — or a session
         // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
-        if (/^(gm_)?aliases:/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
+        if (/^(?:(?:gm_)?aliases|withheld):/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.
         if (/^gm_aliases:/m.test(text)) {
           console.warn(`WARNING: ${path.relative(vaultPath, full)} has gm_aliases but its frontmatter `
             + `can't be read (${err.message.split('\n')[0]}); those names are NOT hidden on the site.`);
+        }
+        if (/^withheld:/m.test(text)) {
+          console.warn(`WARNING: ${path.relative(vaultPath, full)} has withheld but its frontmatter `
+            + `can't be read (${err.message.split('\n')[0]}); its name is NOT looked for on the site.`);
         }
       }
       out.push({

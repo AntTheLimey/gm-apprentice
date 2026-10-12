@@ -34,8 +34,10 @@ changes the next time it is published.
   the migration brings the site's tool up to date, then run this
   again. Otherwise put one line in the report's recommendations:
   Site Faults was not run, and will be after the next plugin update.
-- `ERROR` rows: the site's tool could not be asked, or its audit
-  stopped. Nothing was checked. Treat a tool that is missing or not
+- `ERROR` rows that are not a finding (`NAMED_NO_PAGE` and
+  `WITHHELD_PUBLISHED` are findings, walked below):
+  the site's tool could not be asked, or its audit stopped. Nothing
+  was checked. Treat a tool that is missing or not
   installed as the older tool above; report any other row as it reads.
   Stop this check either way. `NOTE_FAULTS_UNCHECKED` means a page of
   the site could not be built, so the list would be short: the row
@@ -46,8 +48,9 @@ changes the next time it is published.
   `node "<tool>" explain "<note>" --config "<config>" --vault "<vault>"`.
   Keep all three: the site file may name another copy of the vault,
   and a fix must land in the vault that was checked.
-- `WARNING` rows: the findings, one each. Every finding prints as
-  `WARNING`; the table below says how much each one matters.
+- `WARNING` rows, and `ERROR` rows for `NAMED_NO_PAGE` and
+  `WITHHELD_PUBLISHED`: the findings,
+  one each. The table below says how much each one matters.
 - A closing `INFO … settled as "stays hidden"` row: notes the GM has
   already said no to. Never raise them; give the count in the report.
 - No rows at all: the site has none of these faults. Say so in a line.
@@ -58,6 +61,11 @@ every page that names it. Use it to confirm each fix.
 | Row | Report it as | Why |
 |-----|--------------|-----|
 | `ALIAS_IN_PROSE` | Critical | A secret name is on the site now |
+| `WITHHELD_IN_PROSE` | Critical | The name of a note you marked withheld is on the site now |
+| `NAMED_NO_PAGE`, withheld (`ERROR`) | Critical | A published page links a withheld note |
+| `WITHHELD_PUBLISHED` (`ERROR`) | Critical | A withheld note is on the site under its name |
+| `WITHHELD_NAME_PUBLIC` | Warning | A withheld name is not looked for |
+| `WITHHELD_FLAG_UNREADABLE` | Warning | The flag does nothing until it is fixed |
 | `FENCE_UNCLOSED` | Critical | Hidden text is on the site now |
 | `COMMENT_STRAY` | Warning | Text the GM wrote is missing from the site |
 | `NAMED_NO_PAGE`, entity | Warning | Players read a name and cannot look it up |
@@ -99,6 +107,48 @@ or the name of another page it links. Show the sentence. Offer:
 
 If the GM says the name is no longer a secret, move it from
 `gm_aliases` to `aliases` on the owning note instead.
+
+## WITHHELD_IN_PROSE
+
+A note marked `withheld: true` keeps its own name secret: its file
+name, title and `aliases`. The row gives the page the name is on (an
+attachment's path when the name is in a copied file's name), the name,
+the withheld note, how often it is printed and the sentence. Offer, as
+for `ALIAS_IN_PROSE`: **reword** it to what the players know; or in
+body text **link** the note, which prints a neutral word for the
+kind of note in its place.
+For an attachment, rename the file and the embeds that name it.
+
+A name in plain text has no "leave it" answer, and `stays hidden:`
+does not settle this row: the GM rewords the sentence, links the note
+(the neutral word prints), or takes `withheld: true` off. Where the name
+is an ordinary word and not the secret ("Zorn" is also a town), that
+last one is the answer.
+
+A row that says "in the address of a link" is a Markdown-style link
+(`[x](Lord_Zorn.md)`): turn it into a `[[wiki-link]]` or plain words.
+A row that says "link previews" or "search index" names a text the site
+builds from the note's own fields: reword the field.
+
+## WITHHELD_PUBLISHED
+
+A note marked `withheld: true` is on the site under its name: the row
+names its page. Ask which was meant. If the name is no secret, take
+`withheld: true` off. If it is, stop the note publishing: `publish:
+false` in its frontmatter, or out of Publishing in the manifest
+(`SITE manifest apply --exclude "<note>"`). Edit on a yes.
+
+## WITHHELD_NAME_PUBLIC
+
+A withheld name is also the name of another published page, so it is
+not looked for. Offer a new title or alias for the page that answers to
+the name, or to take `withheld: true` off.
+
+## WITHHELD_FLAG_UNREADABLE
+
+A `withheld:` value that is not true or false (`tru`, a list) is read as
+not withheld, so the note's name is not looked for. Show the value and
+propose `withheld: true` or `withheld: false` as the GM says.
 
 ## FENCE_UNCLOSED
 
@@ -146,6 +196,13 @@ A page built from many notes does (an NPC index prints each NPC's
 `first_appearance`, the landing page a recap). The link is in a
 frontmatter field of the note named, so `unlink` will not reach it:
 handle it as "A link in frontmatter" below, whatever kind the note is.
+
+An `ERROR` row, `withheld entity`, is a note marked `withheld: true`:
+it must stay off the site, so there is no page to give it. The links
+print a neutral word. Offer the `unlink` command in the row's fix with
+`--as` wording the GM agrees. If the neutral word will do, that is a
+"stays hidden" for this row only: it settles the link report and
+nothing else. Skip steps 1 to 4 below.
 
 Work most-named first, in batches of 3 to 5 notes, one question per
 batch. The GM can answer for the batch or note by note, and can stop

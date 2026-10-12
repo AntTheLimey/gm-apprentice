@@ -62,6 +62,9 @@ function buildSearchIndex(allPages) {
     };
   });
 
+  // The records the index is made of, as they are handed to lunr: `{ page, record }`. A text
+  // the index holds that the page does not print is read through these (note-faults.js).
+  const records = [];
   const idx = lunr(function() {
     // No stemmer (#267). This is a wiki of proper names, and the English stemmer mangles them
     // ("Alderic" is indexed as "alder"), which puts a one-letter typo two edits away from the
@@ -78,7 +81,7 @@ function buildSearchIndex(allPages) {
 
     pages.forEach((page, i) => {
       const fm = page.frontmatter;
-      this.add({
+      const record = {
         id: refFor(i),
         title: canonicalNfc(page.displayTitle),
         aliases: Array.isArray(fm.aliases) ? canonicalNfc(fm.aliases.map((a) => labelsForLinks(a)).join(' ')) : '',
@@ -88,14 +91,19 @@ function buildSearchIndex(allPages) {
         // (documents above), so there is no separate snippet to keep short. NFC first (#139) so
         // two spellings of one vault index the same terms.
         body: canonicalNfc(stripMarkdown(publishedText(page))),
-      });
+      };
+      records.push({ page, record });
+      this.add(record);
     });
   });
 
-  return {
+  const built = {
     index: idx.toJSON(),
     documents,
   };
+  // Not part of the file that is written (JSON.stringify skips what is not enumerable).
+  Object.defineProperty(built, 'records', { value: records, enumerable: false });
+  return built;
 }
 
 module.exports = { subtitleOf: getSubtitle, buildSearchIndex };

@@ -8,6 +8,7 @@ asOfSession: ""
 lastUpdated: ""
 aliases: []
 gm_aliases: []        # its real name, if it operates behind a front: links resolve, never published
+withheld: false       # true: this note's own name is a secret; the site build looks for it in published text
 tags: []
 faction_type: ""      # government, corporation, cult, guild, military, criminal, university…
 goals: []

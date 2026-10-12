@@ -59,6 +59,19 @@ function resolveBanner(dir, { vaultPath, folderMap, banners }) {
   return conventional ? { image: conventional, link: null, alt: null } : null;
 }
 
+/**
+ * The folder a section's banner files are copied into on the site, and the files an entry
+ * copies (the inline SVG with no link is content, not a file). One definition: the copy and
+ * the check of copied file names both ask it.
+ */
+function bannerSlug(dir) {
+  return String(dir).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
+}
+
+function copiedBannerFiles(entry) {
+  return [entry.image, entry.link].filter((file) => file && !(file === entry.image && isSvg(file) && !entry.link));
+}
+
 /** Alt text derived from a filename when the config supplies none. */
 function defaultAlt(imagePath) {
   return path.basename(String(imagePath))
@@ -94,6 +107,8 @@ function renderBanner({ svg, imageHref, linkHref, alt }) {
 }
 
 module.exports = {
+  bannerSlug,
+  copiedBannerFiles,
   resolveBanner, renderBanner, normalizeEntry, sourceFolderFor,
   findConventionBanner, defaultAlt, isSvg, BANNER_EXTS,
 };

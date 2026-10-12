@@ -9,6 +9,9 @@ item -> items) and fills the vault file's `portrait: ""` frontmatter when the
 entity is linked (its element_id appears in a vault `mobrpg:` node). Existing
 attachments are never overwritten (a colliding name gets a " (mobRPG)" suffix)
 and a non-empty portrait field is left alone — both cases are reported instead.
+An upstream image whose bytes match a file the vault already holds for the note
+(the colliding name, its " (mobRPG)" copy, the current portrait) is not saved
+again; it is counted as unchanged. That check downloads the image, dry-run too.
 
 The mobRPG element_id -> vault-file map comes from the vault's own `mobrpg:`
 nodes (the single source of truth); there is no sidecar crosswalk.
@@ -123,18 +126,30 @@ def _node_paths(vault_dir: str) -> dict:
             if nd.get("element_id")}
 
 
-def _scan(world: str, token: str) -> list[dict]:
-    """Every entity, across all kinds, that carries at least one Image file."""
-    found = []
+def _scan(world: str, token: str) -> tuple[list[dict], list[str], int]:
+    """(every entity, across all kinds, that carries at least one Image file;
+    the kinds skipped because their list endpoint was not JSON; how many
+    entities could not be read)."""
+    found, skipped, failed = [], [], 0
     for kind in KINDS:
         page = 0
         while True:
-            r = client._request("GET", f"/world/{world}/{kind}", token=token,
-                                 query={"page": page, "size": 50})
+            try:
+                r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                     query={"page": page, "size": 50})
+            except client.NotJsonError as e:
+                print(f"  SKIPPED kind {kind} ({e.body}): {e.url}", file=sys.stderr)
+                skipped.append(kind)
+                break
             if not isinstance(r, dict):
                 break
             for e in r.get("content", []):
-                d = client._request("GET", f"/world/{world}/{kind}/{e['id']}", token=token) or {}
+                try:
+                    d = client._request("GET", f"/world/{world}/{kind}/{e['id']}", token=token) or {}
+                except client.ApiError as err:
+                    print(f"  FAILED reading {kind} {e['id']}: HTTP {err.status}", file=sys.stderr)
+                    failed += 1
+                    continue
                 imgs = [f for f in (d.get("files") or []) if f.get("type") == "Image"]
                 if imgs:
                     found.append({"kind": kind, "id": e["id"], "name": d.get("name"),
@@ -144,7 +159,7 @@ def _scan(world: str, token: str) -> list[dict]:
             if page >= total - 1:
                 break
             page += 1
-    return found
+    return found, skipped, failed
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".gif", ".webp"}
@@ -202,6 +217,23 @@ def _local_images(vault_dir: str, txt: str, index: dict,
         if hits[0] not in found:
             found.append(hits[0])
     return found, unresolved
+
+
+def _read(path: str) -> bytes:
+    with open(path, "rb") as fh:
+        return fh.read()
+
+
+def _portrait_files(vault_dir: str, txt: str, index: dict) -> list[str]:
+    """The file a note's `portrait:` names, resolved the way `_local_images`
+    does (vault-relative path, else a unique attachment basename); [] if none."""
+    m = _PORTRAIT.search(txt.split("\n---", 1)[0] if txt.startswith("---") else "")
+    ref = m.group(1).strip() if m else ""
+    if not ref:
+        return []
+    direct = os.path.join(vault_dir, ref)
+    hits = [direct] if os.path.isfile(direct) else index.get(os.path.basename(ref).lower(), [])
+    return hits if len(hits) == 1 else []
 
 
 def _sha(data: bytes) -> str:
@@ -347,9 +379,24 @@ def run(argv: list[str]) -> int:
 
     id_to_path = _node_paths(vault_dir)
 
-    found = _scan(args.world, token)
-    print(f"{len(found)} entities with images")
-    wired = occupied = saved = 0
+    try:
+        found, skipped, failed = _scan(args.world, token)
+    except client.ApiError as e:
+        print(f"ERROR: could not list the world ({e.url}): HTTP {e.status}", file=sys.stderr)
+        return 1
+    if len(skipped) == len(KINDS):
+        print("ERROR: every kind's list endpoint answered with something other than "
+              "JSON (a login page or the wrong host?); nothing was scanned",
+              file=sys.stderr)
+        return 1
+    note = f", {len(skipped)} kind skipped" if len(skipped) == 1 else (
+        f", {len(skipped)} kinds skipped" if skipped else "")
+    if skipped:
+        note += f" ({', '.join(skipped)})"
+    print(f"{len(found)} entities with images{note}")
+    wired = occupied = saved = unchanged = 0
+    index = _attachment_index(vault_dir)
+    vault_root = os.path.realpath(vault_dir)
     for ent in found:
         vp = id_to_path.get(ent["id"])
         # For an unlinked entity the stem is the API-supplied name, and the
@@ -360,46 +407,100 @@ def run(argv: list[str]) -> int:
             os.path.splitext(os.path.basename(vp))[0] if vp else ent["name"])
         folder = FOLDER[ent["kind"]]
         attach_root = os.path.realpath(os.path.join(vault_dir, "_attachments"))
+        full = os.path.join(vault_dir, vp) if vp else None
+        try:
+            text = open(full, encoding="utf-8").read() if full else ""
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"  could not read the note for {ent['name']} ({e}); skipped",
+                  file=sys.stderr)
+            failed += 1
+            continue
         for i, img in enumerate(ent["images"]):
             ext = _safe_ext(os.path.splitext(img["url"].split("?")[0])[1])
-            fname = f"{base}{'' if i == 0 else f' {i + 1}'}{ext}"
-            dest = os.path.join(vault_dir, "_attachments", folder, fname)
-            if os.path.exists(dest):
-                fname = f"{base}{'' if i == 0 else f' {i + 1}'} (mobRPG){ext}"
-                dest = os.path.join(vault_dir, "_attachments", folder, fname)
-            if not _within(attach_root, dest):
+            stem = f"{base}{'' if i == 0 else f' {i + 1}'}"
+            dest = os.path.join(vault_dir, "_attachments", folder, f"{stem}{ext}")
+            beside = os.path.join(vault_dir, "_attachments", folder, f"{stem} (mobRPG){ext}")
+            first = bool(vp) and i == 0
+            has_portrait = first and bool(
+                re.search(r'^portrait:\s*"[^"]+"\s*$', text, flags=re.M))
+            data = match = None
+            differs = False
+            comparing = False
+            # Something of this note's may already hold the image: compare the
+            # upstream bytes with the file in the way, its earlier " (mobRPG)"
+            # copy and the current portrait (anywhere in the vault; this only
+            # reads) before writing a second copy.
+            try:
+                if os.path.exists(dest) or has_portrait:
+                    comparing = True
+                    data = _download(img["url"])
+                    portrait = _portrait_files(vault_dir, text, index) if has_portrait else []
+                    readable = lambda h: os.path.isfile(h) and _within(vault_root, h)  # noqa: E731
+                    on_portrait = next((h for h in portrait if readable(h) and _read(h) == data), None)
+                    match = on_portrait or next(
+                        (h for h in (dest, beside) if readable(h) and _read(h) == data), None)
+                    differs = has_portrait and not on_portrait
+                    if match:
+                        dest = match
+                    elif os.path.exists(dest):
+                        dest = beside
+                elif args.execute:
+                    data = _download(img["url"])
+            except (ValueError, OSError) as e:
+                what = ("could not compare {} with the upstream image" if comparing
+                        else "could not download the image for {}")
+                print(f"  {what.format(ent['name'])} ({e}); skipped", file=sys.stderr)
+                failed += 1
+                continue
+            if not _within(attach_root, dest) and not (match and _within(vault_root, dest)):
                 print(f"  SKIPPED (path escapes _attachments): {ent['name']}",
                       file=sys.stderr)
                 continue
-            rel = f"_attachments/{folder}/{fname}"
-            fresh = not os.path.exists(dest)
-            if args.execute and fresh:
+            rel = os.path.relpath(dest, vault_dir).replace(os.sep, "/")
+            if args.execute and not os.path.exists(dest):
                 os.makedirs(os.path.dirname(dest), exist_ok=True)
-                data = _download(img["url"])
                 with open(dest, "wb") as fh:
                     fh.write(data)
-            if not vp or i > 0:
+            if not first:
+                if match:
+                    unchanged += 1
+                    continue
                 saved += 1
                 print(f"  saved only ({'no vault file' if not vp else 'extra image'}): "
                       f"{ent['name']} -> {rel}")
                 continue
-            full = os.path.join(vault_dir, vp)
-            text = open(full, encoding="utf-8").read()
             if re.search(r'^portrait:\s*""\s*$', text, flags=re.M):
                 if args.execute:
                     text = re.sub(r'^portrait:\s*""\s*$', f'portrait: "{rel}"',
                                    text, count=1, flags=re.M)
                     open(full, "w", encoding="utf-8").write(text)
                 wired += 1
-            elif re.search(r'^portrait:\s*"[^"]+"\s*$', text, flags=re.M):
-                occupied += 1
-                print(f"  portrait already set, saved beside it: {ent['name']} -> {rel}")
+            elif has_portrait:
+                if differs and not match:
+                    # only a copy this run is about to write is news; one already
+                    # in the vault that equals upstream is settled
+                    occupied += 1
+                    print(f"  portrait already set, upstream image differs from the "
+                          f"current portrait, saved beside it: {ent['name']} -> {rel}")
+                else:
+                    unchanged += 1
     print(f"{'wired' if args.execute else 'would wire'}: {wired}, "
-          f"occupied: {occupied}, saved-only: {saved}")
+          f"occupied: {occupied}, unchanged: {unchanged}, saved-only: {saved}, "
+          f"failed: {failed}")
 
-    gen = client._request("GET", f"/world/{args.world}/generated/images", token=token) or {}
+    try:
+        gen = client._request("GET", f"/world/{args.world}/generated/images", token=token) or {}
+    except client.NotJsonError:
+        # a world with none can answer with the HTML shell, as `race` does
+        print("  no generated images listed (the endpoint did not answer with JSON)",
+              file=sys.stderr)
+        gen = {}
+    except client.ApiError as e:
+        print(f"ERROR: could not list the world's generated images "
+              f"({e.url}): {e.body or 'HTTP ' + str(e.status)}", file=sys.stderr)
+        return 1
     for g in gen.get("content", []) if isinstance(gen, dict) else []:
         print(f"world-level generated image (attach by hand): {g.get('url')}")
     if not args.execute:
         print("dry-run — pass --execute to download and wire")
-    return 0
+    return 1 if failed else 0

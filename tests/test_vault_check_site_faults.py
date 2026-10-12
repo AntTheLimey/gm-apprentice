@@ -83,6 +83,7 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True):
 
 MARA = "Characters/Mara_Quill.md"
 VESPER = "Characters/Vesper_Hale.md"
+ZORN = "Characters/Lord_Zorn.md"
 
 
 def findings(rows):
@@ -181,6 +182,82 @@ class SiteFaultRowsTests(unittest.TestCase):
                       by_code["ALIAS_IN_PROSE"])
         self.assertIn("FENCE_UNCLOSED: the code fence on line 9 never "
                       "closes", by_code["FENCE_UNCLOSED"])
+
+    def test_a_withheld_name_printed_on_a_page_is_a_row(self):
+        vault, _site = make(self, {
+            MARA: npc("Lord Zorn rides at dawn."),
+            ZORN: npc("The duke.", "withheld: true\n")}, excluded=[ZORN])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(rows, [
+            f"WARNING\t{MARA}\tWITHHELD_IN_PROSE: \"Lord Zorn\" (a withheld "
+            f"note: {ZORN}), printed 2 times | Lord Zorn rides at dawn."])
+
+    def test_a_withheld_note_that_publishes_is_an_error_row_that_does_not_stop_the_audit(self):
+        vault, _site = make(self, {
+            MARA: npc("She met [[Vesper_Hale]]."),
+            ZORN: npc("The duke.", "withheld: true\n"),
+            VESPER: npc("A ferryman.")}, excluded=[VESPER])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual([r.split("\t")[:2] for r in rows],
+                         [["ERROR", ZORN], ["WARNING", VESPER]], rows)
+        self.assertIn("WITHHELD_PUBLISHED: is marked withheld and is being "
+                      "published: page characters/lord-zorn.html", rows[0])
+        self.assertIn("remove withheld", rows[0])
+        self.assertFalse(any("audit stopped" in r for r in rows), rows)
+
+    def test_a_withheld_name_that_another_published_page_answers_to_is_a_row(self):
+        vault, _site = make(self, {
+            MARA: npc("Mara Quill walks."),
+            ZORN: npc("The duke.", "withheld: true\naliases: [Mara Quill]\n")},
+            excluded=[ZORN])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith(
+            f"WARNING\t{ZORN}\tWITHHELD_NAME_PUBLIC: "), rows)
+        self.assertIn("take withheld: true off", rows[0])
+
+    def test_a_withheld_flag_that_cannot_be_read_is_a_row(self):
+        vault, _site = make(self, {
+            MARA: npc("Plain."),
+            ZORN: npc("The duke.", "withheld: tru\n")}, excluded=[ZORN])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual(rows, [
+            f"WARNING\t{ZORN}\tWITHHELD_FLAG_UNREADABLE: withheld: tru is not "
+            f"true or false, so the note is read as not withheld — write "
+            f"withheld: true or false"])
+
+    def test_a_link_to_a_withheld_note_is_an_error_row_that_does_not_stop_the_audit(self):
+        vault, _site = make(self, {
+            MARA: npc("She met [[Lord_Zorn]] and [[Vesper_Hale]]."),
+            ZORN: npc("The duke.", "withheld: true\n"),
+            VESPER: npc("A ferryman.")}, excluded=[ZORN, VESPER])
+        rows = findings(vc.check_site_faults(vault))
+        self.assertEqual([r.split("\t")[:2] for r in rows], [
+            ["ERROR", ZORN], ["WARNING", VESPER]], rows)
+        self.assertIn("NAMED_NO_PAGE: withheld entity (npc), named on 1",
+                      rows[0])
+        self.assertIn("as \"someone\"", rows[0])
+        self.assertFalse(any("audit stopped" in r for r in rows), rows)
+
+    def test_a_withheld_name_in_text_cannot_be_settled(self):
+        vault, _site = make(self, {
+            MARA: npc("Lord Zorn rides at dawn."),
+            ZORN: npc("The duke.", "withheld: true\n")},
+            excluded=[f"{ZORN} — stays hidden: Zorn is also a town"])
+        rows = vc.check_site_faults(vault)
+        listed = [r for r in findings(rows) if "WITHHELD_IN_PROSE" in r]
+        self.assertEqual(len(listed), 1, rows)
+        self.assertFalse(any("settled" in r for r in rows), rows)
+
+    def test_stays_hidden_settles_the_link_report_of_a_withheld_note(self):
+        vault, _site = make(self, {
+            MARA: npc("She met [[Lord_Zorn]]."),
+            ZORN: npc("The duke.", "withheld: true\n")},
+            excluded=[f"{ZORN} — stays hidden: the neutral word will do"])
+        rows = vc.check_site_faults(vault)
+        self.assertEqual(findings(rows), [])
+        self.assertEqual(rows[-1], "INFO\t(vault)\t1 note is settled as "
+                                   "\"stays hidden\" and not raised")
 
     def test_a_settled_note_is_counted_and_not_listed(self):
         vault, _site = make(self, {
