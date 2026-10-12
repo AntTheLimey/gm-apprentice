@@ -176,3 +176,13 @@ def test_mid_pagination_failure_is_not_reported_as_a_short_list(monkeypatch):
     monkeypatch.setattr(client, "_request", fake)
     with pytest.raises(client.ApiError):
         rel_baseline._get_relations("w1", "person", "e1", "tok")
+
+
+def test_match_node_resolves_the_exact_note_before_the_folded_key():
+    # #262: "The Woodland Ghost" (inn) and "Woodland Ghost" (creature) share a key.
+    node = {"element_id": "corwin",
+            "relationships": [{"predicate": "part_of", "target": "[[The Woodland Ghost]]"}]}
+    structural = {("corwin", "Link", "inn-id"): "rel-1"}
+    eids, _ = rb.match_node(node, {}, structural, {}, _map(),
+                            id_by_file={"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"})
+    assert eids == {"part_of|[[The Woodland Ghost]]": "rel-1"}

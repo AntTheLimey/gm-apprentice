@@ -27,6 +27,7 @@ import re
 from mobrpg import client
 from mobrpg.commands import map_cmd
 from mobrpg.commands import pull
+from mobrpg.commands import suggest
 from mobrpg.commands.suggest import _key, _mapped_type
 
 # Structural WorldElementRelation types (entity↔entity), as opposed to reified
@@ -92,7 +93,7 @@ def _target_name(raw: str) -> str:
 
 
 def match_node(node, id_by_key, structural_idx, reified_idx, mp,
-               subject_kind=None, kind_by_key=None) -> tuple[dict, list]:
+               subject_kind=None, kind_by_key=None, id_by_file=None) -> tuple[dict, list]:
     """Match one node's relationships against the upstream indexes.
 
     Returns (event_ids, reviews). `event_ids` is keyed the way pull-canon's node
@@ -113,7 +114,9 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp,
             continue
         pred = r.get("predicate")
         name = _target_name(r.get("target"))
-        tgt = id_by_key.get(_key(name))
+        # exact note name first (#262); the folded key drops "The"/"Lord", and
+        # suggest.node_index leaves out a key two linked notes share
+        tgt = (id_by_file or {}).get(suggest._target_stem(name)) or id_by_key.get(_key(name))
         if not tgt:
             continue
         # Resolve through the SAME entry point `suggest` emits with. An

@@ -513,9 +513,55 @@ def node_index(vault) -> tuple[dict, set, set]:
                 if r.get("event_id"):
                     tgt = re.sub(r"^\[\[|\]\]$", "", (r.get("target") or "")).split("|")[0]
                     linked.add((subj, r.get("predicate"), _key(tgt)))
+    _, ambiguous = node_files(vault)
+    for k in ambiguous:
+        idx.pop(k, None)                             # two linked notes fold here: resolve neither (#262)
     for k, eid in aliases:
-        idx.setdefault(k, eid)                       # a real entity name always wins over an alias
+        if k not in ambiguous:
+            idx.setdefault(k, eid)                   # a real entity name always wins over an alias
     return idx, linked, submitted
+
+
+def _stem(name: str) -> str:
+    """A note's file stem as a wikilink spells it: NFC, underscores as spaces."""
+    return unicodedata.normalize("NFC", name or "").replace("_", " ").strip()
+
+
+def _target_stem(target: str) -> str:
+    """The note a relationship target or wikilink names: no brackets, alias or heading."""
+    return _stem(re.sub(r"^\[\[|\]\]$", "", (target or "").strip()).split("|")[0].split("#")[0])
+
+
+def node_files(vault) -> tuple[dict, set]:
+    """({note file stem (NFC): element_id}, ambiguous keys) for every linked note.
+
+    The stem is what a `[[wikilink]]` names, so it is matched before the folded
+    `_key` (#262). `_key` drops articles and honorifics, so "The Woodland Ghost"
+    and "Woodland Ghost" — a place and a creature — share a key. A key two linked
+    notes share is ambiguous: the folded fallback must resolve neither."""
+    by_file: dict = {}
+    notes_by_key: dict = {}
+    vault = os.path.expanduser(vault)
+    for folder in map_cmd.FOLDERS:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            nd = node.read_node(open(p, encoding="utf-8").read())
+            if not nd or not nd.get("element_id"):
+                continue
+            stem = _stem(os.path.splitext(os.path.basename(p))[0])
+            by_file[stem] = nd["element_id"]
+            notes_by_key.setdefault(_key(stem), set()).add(stem)
+    return by_file, {k for k, stems in notes_by_key.items() if len(stems) > 1}
+
+
+def _resolve_target(tgt_raw, tgt_key, by_key, by_file, ambiguous):
+    """(value, is_ambiguous): exact file stem first, then the folded key, which
+    resolves nothing when two linked notes share it."""
+    hit = (by_file or {}).get(_target_stem(tgt_raw))
+    if hit:
+        return hit, False
+    if tgt_key in (ambiguous or ()):
+        return None, True
+    return (by_key or {}).get(tgt_key), False
 
 
 def link_index(vault) -> dict:
@@ -586,8 +632,12 @@ def _resolve(mp, pred, subj_key, tgt_key, kind_by_key):
 
 def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
                        vault, namespace, ref_seed,
-                       ref_by_key=None, kind_by_key=None) -> tuple[list[dict], list[str]]:
+                       ref_by_key=None, kind_by_key=None, id_by_file=None, ambiguous=None,
+                       ref_by_file=None) -> tuple[list[dict], list[str]]:
     """Build the relationship items for one entity.
+
+    A target resolves by exact file stem (`id_by_file`, `ref_by_file`) before the
+    folded key; a folded key in `ambiguous` resolves to nothing (#262).
 
     Targets resolve in three tiers: (1) an already-upstream element → its real
     id; (2) a *net-new* entity being created in this same push (its key is in
@@ -608,8 +658,15 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         if (subj_key, pred, tgt_key) in linked_triples:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (already linked)")
             continue
-        tgt_id = ent_id_by_key.get(tgt_key)
-        tgt_ref = None if tgt_id else ref_by_key.get(tgt_key)
+        tgt_id, amb = _resolve_target(tgt_raw, tgt_key, ent_id_by_key, id_by_file, ambiguous)
+        tgt_ref = None
+        if not tgt_id and not amb:
+            tgt_ref, amb = _resolve_target(tgt_raw, tgt_key, ref_by_key, ref_by_file, ambiguous)
+        if amb and not tgt_id and not tgt_ref:
+            skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (ambiguous: "
+                           f"two notes share that name once articles and titles are ignored; "
+                           f"link the exact note name)")
+            continue
         if not tgt_id and not tgt_ref:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (target not a world element)")
             continue
@@ -704,7 +761,7 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
 
 
 def partition_entities(entities, ent_id_by_key,
-                       submitted_keys=None) -> tuple[list[dict], list[dict], list[dict]]:
+                       submitted_keys=None, id_by_file=None) -> tuple[list[dict], list[dict], list[dict]]:
     """Split entities into (net_new, linked, submitted).
 
     An entity whose name (or an alias, via the caller's key index) already
@@ -714,12 +771,19 @@ def partition_entities(entities, ent_id_by_key,
     card for it is already in the reviewer's queue (or was rejected), so re-filing
     would duplicate it. The rest are *net-new* and get a full CreateElement
     cluster. Linked entities' genuine relationship deltas are the job of the
-    relationship-baseline pass, not of re-mirroring the whole graph on every push."""
+    relationship-baseline pass, not of re-mirroring the whole graph on every push.
+
+    With `id_by_file` (#262) a note is linked only when its own file stem is a
+    linked note's. A note that merely folds to a linked note's key — "Woodland
+    Ghost" beside the linked inn "The Woodland Ghost" — is a different note and
+    gets created; if it is really the same element, the live-world check that
+    follows holds it for `adopt`. Without `id_by_file` the folded key decides."""
     submitted_keys = submitted_keys or set()
+    files = {_stem(k) for k in (id_by_file or {})}
     net_new, linked, submitted = [], [], []
     for ent in entities:
         k = _key(ent["name"])
-        if k in ent_id_by_key:
+        if (_stem(ent["name"]) in files) if id_by_file is not None else (k in ent_id_by_key):
             linked.append(ent)
         elif k in submitted_keys:
             submitted.append(ent)
@@ -728,7 +792,8 @@ def partition_entities(entities, ent_id_by_key,
     return net_new, linked, submitted
 
 
-def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples) -> int:
+def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples,
+                            id_by_file=None, ambiguous=None, ref_by_file=None) -> int:
     """How many relationships hang off already-linked entities and *would* be
     genuine new edges (target resolves, not already linked) — i.e. the deltas the
     baseline pass will carry. Reported so a skipped-linked push never silently
@@ -740,20 +805,24 @@ def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples) -
             tgt_key = _key(rel["target"])
             if (subj, rel["predicate"], tgt_key) in linked_triples:
                 continue
-            if tgt_key in ent_id_by_key or tgt_key in ref_by_key:
+            hit = (_resolve_target(rel["target"], tgt_key, ent_id_by_key, id_by_file, ambiguous)[0]
+                   or _resolve_target(rel["target"], tgt_key, ref_by_key, ref_by_file, ambiguous)[0])
+            if hit:
                 held += 1
     return held
 
 
 def build_group(entity, mp, ent_id_by_key, linked_triples, race_id,
                 vault, namespace, seq, ref_by_key=None,
-                kind_by_key=None) -> tuple[list[dict], list[str]]:
+                kind_by_key=None, id_by_file=None, ambiguous=None,
+                ref_by_file=None) -> tuple[list[dict], list[str]]:
     ref = f"e{seq}"
     items = element_items(entity, mp, ref, vault, namespace)
     cls_items, reports = classifier_items(entity, mp, ref, race_id, ref)
     rel_items, skipped = relationship_items(entity, mp, ref, ent_id_by_key, linked_triples,
                                             vault, namespace, ref, ref_by_key,
-                                            kind_by_key)
+                                            kind_by_key, id_by_file, ambiguous,
+                                            ref_by_file)
     return items + cls_items + rel_items, reports + skipped
 
 
@@ -1092,6 +1161,7 @@ def run(argv: list[str]) -> int:
     # treated as net-new; give it a node first (via the live name-match reconcile)
     # rather than trusting any sidecar crosswalk.
     ent_id_by_key, linked, submitted_keys = node_index(args.vault)
+    id_by_file, ambiguous = node_files(args.vault)
 
     # An already-upstream entity must NOT be re-filed as a brand-new CreateElement
     # (that filed 140 of Space's 169 Tranche-A entities as bogus creates). Only
@@ -1100,7 +1170,7 @@ def run(argv: list[str]) -> int:
     # Entities with a pending/dismissed suggestion already in the queue are also
     # held — re-filing would duplicate the card the reviewer already has.
     net_new, linked_ents, submitted_ents = partition_entities(
-        entities, ent_id_by_key, submitted_keys)
+        entities, ent_id_by_key, submitted_keys, id_by_file)
 
     # Anything that already exists live but has no node must not be re-filed:
     # its create is skipped as already claimed and the edges that hang off it
@@ -1127,6 +1197,11 @@ def run(argv: list[str]) -> int:
     # instead of being skipped for want of an upstream id. (Linked targets resolve
     # to their real id via ent_id_by_key, which is consulted first.)
     ref_by_key = {_key(ent["name"]): f"e{i}" for i, ent in enumerate(net_new, 1)}
+    ref_by_file = {_stem(ent["name"]): f"e{i}" for i, ent in enumerate(net_new, 1)}
+    new_by_key: dict = {}
+    for ent in net_new:                            # two net-new notes sharing a key: resolve neither
+        new_by_key.setdefault(_key(ent["name"]), set()).add(_stem(ent["name"]))
+    ambiguous = ambiguous | {k for k, st in new_by_key.items() if len(st) > 1}
     for i, ent in enumerate(net_new, 1):           # aliases resolve too; names already set win
         for al in ent.get("aliases", []):
             ref_by_key.setdefault(_key(al), f"e{i}")
@@ -1148,7 +1223,7 @@ def run(argv: list[str]) -> int:
     for i, ent in enumerate(net_new, 1):
         items, reports = build_group(ent, mp, ent_id_by_key, linked, race_id,
                                      args.vault, namespace, i, ref_by_key,
-                                     kind_by_key)
+                                     kind_by_key, id_by_file, ambiguous, ref_by_file)
         groups.append(items)
         refs.append(f"e{i}")
         all_reports.extend(reports)
@@ -1172,7 +1247,8 @@ def run(argv: list[str]) -> int:
         print(f"  [dedup] collapsed {collapsed} duplicate classifier-type create(s) "
               f"into shared types")
     if linked_ents:
-        held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked)
+        held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked,
+                                       id_by_file, ambiguous, ref_by_file)
         # Be precise about what "held" means: this run emits NO edges for linked
         # entities. `pull-canon --baseline` reconciles the ones that already exist
         # upstream (stamping event_ids); the remainder are genuinely-new edges on

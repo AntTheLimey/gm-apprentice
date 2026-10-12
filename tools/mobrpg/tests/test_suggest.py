@@ -1246,3 +1246,110 @@ def test_heritages_never_shadow_push_notes_or_hide_new_entities(tmp_path):
     assert suggest.link_index(str(tmp_path))[suggest._key("Drageby")] == "P"
     idx, _linked, _submitted = suggest.node_index(str(tmp_path))
     assert suggest._key("Hill Folk") not in idx
+
+
+# ---- #262: "The X" and "X" are two notes, not one folded key ----
+
+def _linked_note(root, folder, stem, eid):
+    from mobrpg import node
+    (root / folder).mkdir(parents=True, exist_ok=True)
+    nd = {"world_id": "", "external_ref": f"w:{folder}/{stem}", "element_id": eid,
+          "element_kind": "LandFeature", "review_state": "accepted",
+          "relationships": [], "languages": []}
+    (root / folder / f"{stem}.md").write_text(
+        "---\ntype: location\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+
+def test_node_files_maps_exact_stems_and_flags_a_shared_key(tmp_path):
+    _linked_note(tmp_path, "Locations", "The Woodland Ghost", "inn-id")
+    _linked_note(tmp_path, "Locations", "Woodland Ghost", "creature-id")
+    _linked_note(tmp_path, "Locations", "Lord Vane", "vane-id")
+    by_file, ambiguous = suggest.node_files(str(tmp_path))
+    assert by_file["The Woodland Ghost"] == "inn-id"
+    assert by_file["Woodland Ghost"] == "creature-id"
+    assert ambiguous == {suggest._key("Woodland Ghost")}
+    # node_index must not let the last note win the shared key
+    idx, _, _ = suggest.node_index(str(tmp_path))
+    assert suggest._key("Woodland Ghost") not in idx
+    assert idx[suggest._key("Lord Vane")] == "vane-id"
+
+
+def test_partition_creates_a_note_whose_name_only_folds_to_a_linked_one():
+    ents = [{"name": "Woodland Ghost"}, {"name": "The Woodland Ghost"}]
+    by_key = {suggest._key("The Woodland Ghost"): "inn-id"}
+    by_file = {"The Woodland Ghost": "inn-id"}
+    net_new, linked, _ = suggest.partition_entities(ents, by_key, id_by_file=by_file)
+    assert [e["name"] for e in net_new] == ["Woodland Ghost"]
+    assert [e["name"] for e in linked] == ["The Woodland Ghost"]
+
+
+def test_partition_matches_exact_stem_nfc_and_underscores():
+    import unicodedata
+    stem = unicodedata.normalize("NFD", "Róbert Vane")
+    ents = [{"name": "Róbert Vane"}, {"name": "Marsh Hag"}]
+    by_file = {stem: "r-id", "Marsh_Hag": "m-id"}
+    _, linked, _ = suggest.partition_entities(ents, {}, id_by_file=by_file)
+    assert len(linked) == 2
+
+
+def _edge_ent(tmp_path, target):
+    return {"path": str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md"), "name": "Imogen Bellamy",
+            "relationships": [{"target": target, "predicate": "knows", "desc": ""}]}
+
+
+def test_edge_resolves_to_the_exact_file_not_the_folded_key(tmp_path):
+    by_file = {"The Woodland Ghost": "inn-id", "Woodland Ghost": "creature-id"}
+    ambiguous = {suggest._key("Woodland Ghost")}
+    for target, want in (("[[The Woodland Ghost]]", "inn-id"), ("[[Woodland Ghost|the ghost]]", "creature-id")):
+        items, skipped = suggest.relationship_items(
+            _edge_ent(tmp_path, target), _map(), "e1", {}, set(), str(tmp_path), "w", "e1",
+            id_by_file=by_file, ambiguous=ambiguous)
+        assert want in json.dumps(items), (target, items, skipped)
+
+
+def test_edge_by_folded_key_still_resolves_when_unambiguous(tmp_path):
+    items, skipped = suggest.relationship_items(
+        _edge_ent(tmp_path, "[[Vane]]"), _map(), "e1", {suggest._key("Lord Vane"): "vane-id"},
+        set(), str(tmp_path), "w", "e1", id_by_file={"Lord Vane": "vane-id"}, ambiguous=set())
+    assert "vane-id" in json.dumps(items)
+
+
+def test_edge_by_ambiguous_folded_key_is_reported_not_guessed(tmp_path):
+    by_file = {"The Woodland Ghost": "inn-id", "Woodland Ghost": "creature-id"}
+    items, skipped = suggest.relationship_items(
+        _edge_ent(tmp_path, "[[Lady Woodland Ghost]]"), _map(), "e1", {}, set(), str(tmp_path), "w", "e1",
+        id_by_file=by_file, ambiguous={suggest._key("Woodland Ghost")})
+    assert "inn-id" not in json.dumps(items) and "creature-id" not in json.dumps(items)
+    assert any("ambiguous" in s for s in skipped)
+
+
+def test_held_count_uses_exact_stem(tmp_path):
+    ent = _edge_ent(tmp_path, "[[The Woodland Ghost]]")
+    n = suggest.held_relationship_count(
+        [ent], {}, {}, set(), id_by_file={"The Woodland Ghost": "inn-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert n == 1
+    n = suggest.held_relationship_count(
+        [_edge_ent(tmp_path, "[[Lady Woodland Ghost]]")], {}, {}, set(),
+        id_by_file={}, ambiguous={suggest._key("Woodland Ghost")})
+    assert n == 0
+
+
+def test_run_creates_the_creature_beside_a_linked_inn_and_reports_ambiguity(tmp_path, monkeypatch, capsys):
+    _linked_note(tmp_path, "Locations", "The Woodland Ghost", "inn-id")
+    (tmp_path / "Creatures").mkdir()
+    (tmp_path / "Creatures/Woodland Ghost.md").write_text(
+        "---\ntype: creature\n---\nA ghost.\n", encoding="utf-8")
+    (tmp_path / "_meta").mkdir()
+    import shutil
+    # reuse an existing vault's map via the helper the other run tests use
+    d = _two_npc_vault(tmp_path / "x")
+    shutil.copy(d / "_meta/mobrpg-map.json", tmp_path / "_meta/mobrpg-map.json")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: _empty_live())
+    assert suggest.run(["w1", "--vault", str(tmp_path), "--out", str(tmp_path / "out")]) == 0
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    created = [it["payload"]["name"] for it in batch["suggestions"]
+               if it.get("operation") == "CreateElement" and it.get("externalRef")]
+    assert "Woodland Ghost" in created
