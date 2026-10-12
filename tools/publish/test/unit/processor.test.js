@@ -673,6 +673,46 @@ describe('publishMode (shared vectors; vaultlib.publish_mode must agree)', () =>
   }
 });
 
+describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', () => {
+  const { isWithheld, gmAliasRewriter, WITHHELD_PLACEHOLDER, publishedFrontmatter: published } = require('../../lib/processor');
+  const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'gm-only-vectors.json'), 'utf8'));
+  for (const v of VECTORS.cases) {
+    it(`withheld ${JSON.stringify(v.value)} ${v.hides ? 'is' : 'is not'} withheld`, () => assert.strictEqual(isWithheld({ withheld: v.value }), v.hides));
+  }
+  it('absent frontmatter, or none, is not withheld', () => {
+    assert.strictEqual(isWithheld({}), false);
+    assert.strictEqual(isWithheld(null), false);
+    assert.strictEqual(isWithheld(undefined), false);
+  });
+  it('publishedFrontmatter never carries the flag', () => {
+    assert.ok(!('withheld' in published({ type: 'npc', withheld: true, occupation: 'x' })));
+  });
+  it('the rewriter labels an unlabelled link to a withheld note, keeps a label, an anchor and a pipe escaped for a table', () => {
+    const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { type: 'npc', withheld: true, aliases: ['Duke Zorn'] } },
+      { title: 'Mara', displayTitle: 'Mara', frontmatter: { type: 'npc' } }];
+    const rw = gmAliasRewriter(pages, [pages[1]]);
+    assert.strictEqual(rw.markdown('[[Lord_Zorn]] [[lord zorn#Past]] [[NPCs/Duke Zorn]] [[Lord_Zorn|the stranger]] [[Mara]]'),
+      `[[Lord_Zorn|${WITHHELD_PLACEHOLDER}]] [[lord zorn#Past|${WITHHELD_PLACEHOLDER}]] [[NPCs/Duke Zorn|${WITHHELD_PLACEHOLDER}]] [[Lord_Zorn|the stranger]] [[Mara]]`);
+    assert.strictEqual(rw.markdown('| [[Lord_Zorn]] |'), `| [[Lord_Zorn|${WITHHELD_PLACEHOLDER}]] |`);
+  });
+  it('the rewriter labels a bare name in a field that holds a page name, not in an ordinary field', () => {
+    const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { withheld: true } }];
+    const rw = gmAliasRewriter(pages, []);
+    const fm = rw.frontmatter({ location: 'Lord Zorn', occupation: 'Lord Zorn', relationships: [{ target: 'Lord Zorn', type: 'fears' }, { target: '[[Lord Zorn]]', type: 'knows' }], title: 'Lord Zorn' });
+    assert.strictEqual(fm.location, `[[Lord Zorn|${WITHHELD_PLACEHOLDER}]]`);
+    assert.strictEqual(fm.occupation, 'Lord Zorn');
+    assert.strictEqual(fm.relationships[0].target, `[[Lord Zorn|${WITHHELD_PLACEHOLDER}]]`);
+    assert.strictEqual(fm.relationships[1].target, `[[Lord Zorn|${WITHHELD_PLACEHOLDER}]]`);
+  });
+  it('a vault with no withheld note and no gm_aliases has no rewriter', () => {
+    assert.strictEqual(gmAliasRewriter([{ title: 'A', frontmatter: { type: 'npc', withheld: false } }], []), null);
+  });
+  it('a name a published page answers to is not rewritten', () => {
+    const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { withheld: true } }];
+    assert.strictEqual(gmAliasRewriter(pages, pages), null);
+  });
+});
+
 describe('isGmOnlyEdge (shared vectors; vaultlib.gm_only_hides must agree)', () => {
   const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'gm-only-vectors.json'), 'utf8'));
   for (const v of VECTORS.cases) {

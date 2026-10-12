@@ -8,6 +8,11 @@
 //                   in a frontmatter value, also a comment or hidden block never closed
 //   FENCE_UNCLOSED  a code fence never closed, so a hidden marker below it is not obeyed
 //   ALIAS_IN_PROSE  a `gm_aliases` name printed on a published page
+//   WITHHELD_IN_PROSE    the file name, title or alias of a note marked `withheld: true`,
+//                        printed on a published page, in the search index or in the file
+//                        name of a copied attachment (#291)
+//   WITHHELD_NAME_PUBLIC a withheld name that a published page also answers to, which so
+//                        cannot be searched for
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -26,13 +31,15 @@ const { parseNote, valueStrays } = require('./frontmatter');
 const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
 const { decidePage, publishesPage } = require('./publish-decision');
-const { gmAliasList, gmAliasKey, wikiTargetLabel, humanizeName } = require('./processor');
+const { gmAliasList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld, WITHHELD_PLACEHOLDER } = require('./processor');
 const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE'];
+const CODES = ['ALIAS_IN_PROSE', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE'];
 const WORST = 3;
+// The human report names this many of the pages that link a note with no page.
+const PAGES_SHOWN = 3;
 const CONTEXT = 80;
 const STAYS_HIDDEN = /^\s*stays\s+hidden\s*:/i;
 
@@ -208,6 +215,7 @@ function startNoteAudit(input) {
   const scanned = new Map(input.corpus.map((p) => [input.relOf(p), p]));
   const secretKeys = new Set();
   const aliasOwners = new Map();   // folded alias -> { alias, rel }
+  const withheldOwners = new Map();   // folded name of a `withheld: true` note -> { alias, rel }
   const noPage = [];               // records: { rel, why, page, frontmatter, displayTitle }
   const skipped = {
     malformed: new Set(input.report.malformed.map((m) => canonicalNfc(m.rel))),
@@ -224,6 +232,15 @@ function startNoteAudit(input) {
       secretKeys.add(gmAliasKey(alias));
       if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel });
     }
+    // A withheld note's own names: its file name, its title and its aliases (its gm_aliases
+    // are searched as every gm_aliases name is).
+    if (isWithheld(fm)) {
+      for (const name of [baseName(rel).replace(/_/g, ' '), note.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
+        ...(Array.isArray(fm.aliases) ? fm.aliases : [])]) {
+        const text = typeof name === 'string' ? name.trim() : '';
+        if (text && !withheldOwners.has(fold(text))) withheldOwners.set(fold(text), { alias: text, rel });
+      }
+    }
     const why = noPageReason(rel, page, input, skipped);
     if (why) noPage.push({ rel, page, why, frontmatter: fm, displayTitle: note.displayTitle || baseName(rel).replace(/_/g, ' ') });
   }
@@ -232,14 +249,24 @@ function startNoteAudit(input) {
   const publicNames = new Set(Object.keys(input.linkMap).map(fold));
   const index = noPage.length > 0 ? indexNoPageNotes(noPage, publicNames) : new Map();
   for (const key of [...aliasOwners.keys()]) if (publicNames.has(key)) aliasOwners.delete(key);
+  // A withheld name a published page also answers to is on the site already, so it cannot
+  // be searched for: it is told once (WITHHELD_NAME_PUBLIC) and left out of the search. A
+  // name gm_aliases already searches is that search's.
+  const collisions = [];
+  for (const [key, owner] of [...withheldOwners]) {
+    if (aliasOwners.has(key)) withheldOwners.delete(key);
+    else if (publicNames.has(key)) { collisions.push({ ...owner, key }); withheldOwners.delete(key); }
+  }
   const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const matcher = (alias) => new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(alias.trim()).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
+    + '(?![\\p{L}\\p{N}])', 'giu');
   const aliasRes = [...aliasOwners.values()].map((a) => ({
     ...a,
+    kind: 'alias',
     // Between the words of a name a space, an underscore or a hyphen all read as the same
     // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
-    re: new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(a.alias.trim()).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
-      + '(?![\\p{L}\\p{N}])', 'giu'),
-  }));
+    re: matcher(a.alias),
+  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })));
   // One cheap look at the raw HTML decides whether a page is read at all: the longest word
   // of each secret name. A name with no word of three letters is looked for on every page.
   const probeWords = aliasRes.map((a) => (foldQuotes(a.alias).match(/[\p{L}\p{N}]+/gu) || []).sort((x, y) => y.length - x.length)[0] || '');
@@ -438,8 +465,10 @@ function startNoteAudit(input) {
 
   // A page as it was built, looked through for secret names. `rel` is the note it is built
   // from; for a page that is not one note's own, `out` is its path on the site instead.
-  function read(rel, html, out = null, where = 'the page') {
-    if (!probe || !mayHold(html)) return;
+  // `only: 'withheld'` looks for withheld names alone (a text the search index holds that no
+  // page prints, which has never been read for gm_aliases names).
+  function read(rel, html, out = null, where = 'the page', only = null) {
+    if (!probe || (only && !aliasRes.some((a) => a.kind === only)) || !mayHold(html)) return;
     // The page's own text first; a name found only in its <head> or in a tag's words (the
     // tab title, a description, an image's alt) is on the site too.
     // What a link to another page prints is that page's public name, not this page's words:
@@ -455,6 +484,7 @@ function startNoteAudit(input) {
     let boxes = null;
     let rest = null;
     for (const a of aliasRes) {
+      if (only && a.kind !== only) continue;
       a.re.lastIndex = 0;
       let text = body;
       let matches = [...bodyOwn.matchAll(a.re)];
@@ -475,8 +505,24 @@ function startNoteAudit(input) {
       const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
       const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
       aliasHits.push({
-        alias: a.alias, owner: a.rel, re: a.re, rel, out, where, count: matches.length,
+        kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, rel, out, where, count: matches.length,
         context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
+      });
+    }
+  }
+
+  // A copied file (an attachment) whose name carries a withheld name. `file` is its path in
+  // the vault, `copied` its path on the site. The name is on the site in the file's address.
+  function readFileName(file, copied = file) {
+    if (!aliasRes.some((a) => a.kind === 'withheld')) return;
+    const address = foldQuotes(String(copied).replace(/\.[^./]+$/, ''));
+    for (const a of aliasRes) {
+      if (a.kind !== 'withheld') continue;
+      a.re.lastIndex = 0;
+      if (!a.re.test(address)) continue;
+      aliasHits.push({
+        kind: 'withheld', alias: a.alias, owner: a.rel, re: a.re, rel: file, out: null, where: 'file', count: 1,
+        context: path.posix.basename(String(copied)),
       });
     }
   }
@@ -485,21 +531,36 @@ function startNoteAudit(input) {
   // an index or listing page prints is counted against each note the page could have it
   // from (a note whose title, published frontmatter or published body holds the name), and
   // against the page itself when no note does.
-  function aliasFindings() {
+  function aliasFindings(kind = 'alias') {
+    const withheld = kind === 'withheld';
+    const code = withheld ? 'WITHHELD_IN_PROSE' : 'ALIAS_IN_PROSE';
     const out = new Map();   // "path\nalias" -> finding
-    const fixLine = (alias) => `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
-    for (const hit of aliasHits.filter((h) => h.out === null)) {
+    const fixLine = (alias, owner, file) => {
+      if (file) return `rename the file, and the embeds that name it, so that its name does not hold "${alias}"`;
+      if (withheld) {
+        return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints "${WITHHELD_PLACEHOLDER}" in place of a withheld note's name; where it is an ordinary word and not the name, record that with manifest apply --exclude "${owner}=stays hidden: <why>"`;
+      }
+      return `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
+    };
+    const told = (hit, rel) => (withheld
+      ? `"${hit.alias}", the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `a note you marked withheld (${hit.owner})`}`
+      : `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`);
+    const base = (hit) => (withheld ? { name: hit.alias } : { alias: hit.alias });
+    const hits = aliasHits.filter((h) => h.kind === kind);
+    for (const hit of hits.filter((h) => h.out === null)) {
       // A name a note's own page prints is told as that; the same name only the search index
       // holds (read after the pages) is told only when the page does not print it.
       if (hit.where !== 'the page' && out.has(`${hit.rel}\n${hit.alias}`)) continue;
       out.set(`${hit.rel}\n${hit.alias}`, {
-        code: 'ALIAS_IN_PROSE', severity: 'warning', path: hit.rel,
-        detail: `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === hit.rel ? '' : ` (of ${hit.owner})`}, is printed on ${hit.where}${hit.count > 1 ? ` ${hit.count} times` : ''}`,
-        fix: fixLine(hit.alias),
-        alias: hit.alias, owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+        code, severity: 'warning', path: hit.rel,
+        detail: hit.where === 'file'
+          ? `${told(hit, hit.rel)}, is in the file name of an attachment the site copies`
+          : `${told(hit, hit.rel)}, is printed on ${hit.where}${hit.count > 1 ? ` ${hit.count} times` : ''}`,
+        fix: fixLine(hit.alias, hit.owner, hit.where === 'file'),
+        ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
       });
     }
-    const listed = aliasHits.filter((h) => h.out !== null);
+    const listed = hits.filter((h) => h.out !== null);
     if (listed.length === 0) return [...out.values()];
     const strings = (value, into) => {
       if (typeof value === 'string') into.push(value);
@@ -526,13 +587,14 @@ function startNoteAudit(input) {
       for (const rel of sources.length > 0 ? sources : [hit.out]) {
         const key = `${rel}\n${hit.alias}`;
         if (!out.has(key)) {
+          const secret = withheld ? 'a note you marked withheld' : 'a name you keep secret in gm_aliases';
           out.set(key, {
-            code: 'ALIAS_IN_PROSE', severity: 'warning', path: rel,
+            code, severity: 'warning', path: rel,
             detail: sources.length > 0
-              ? `"${hit.alias}", a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
-              : `"${hit.alias}", a name you keep secret in gm_aliases (of ${hit.owner}), is printed on this page of the site, which is not built from one note`,
-            fix: fixLine(hit.alias),
-            alias: hit.alias, owner: hit.owner, count: hit.count, context: hit.context, listings: [],
+              ? `"${hit.alias}", ${withheld ? `the name of ${hit.owner === rel ? 'this note, which you marked withheld' : `${secret} (${hit.owner})`}` : `a name you keep secret in gm_aliases${hit.owner === rel ? '' : ` (of ${hit.owner})`}`}, is in this note's title, frontmatter or text, and an index or listing page prints it`
+              : `"${hit.alias}", ${withheld ? `the name of ${secret} (${hit.owner})` : `a name you keep secret in gm_aliases (of ${hit.owner})`}, is printed on this page of the site, which is not built from one note`,
+            fix: fixLine(hit.alias, hit.owner, false),
+            ...base(hit), owner: hit.owner, count: hit.count, context: hit.context, listings: [],
           });
         }
         const finding = out.get(key);
@@ -602,18 +664,45 @@ function startNoteAudit(input) {
     }
 
     found.push(...aliasFindings());
+    let annotations = null;   // the manifest's written reasons, read only when something is named
+    const reasons = () => {
+      if (annotations) return annotations;
+      annotations = new Map();
+      try {
+        const { parseAnnotatedManifest } = require('./manifest-cli');
+        annotations = parseAnnotatedManifest(readFile(path.join(input.vaultPath, '_meta', 'publish-manifest.md')));
+      } catch (e) { /* no manifest, or none readable: no reasons */ }
+      return annotations;
+    };
+    // --- the names of withheld notes ---------------------------------------------------
+    // Settled the way a NAMED_NO_PAGE finding is: a "stays hidden:" reason written beside the
+    // withheld note's Excluded entry in the manifest.
+    const settle = (finding, ownerRel) => {
+      const listed = reasons().get(ownerRel);
+      const reason = (listed && listed.annotation) || null;
+      return Object.assign(finding, {
+        reason, settled: !!(listed && listed.section === 'excluded' && reason && STAYS_HIDDEN.test(reason)),
+      });
+    };
+    for (const finding of aliasFindings('withheld')) found.push(settle(finding, finding.owner));
+    for (const c of collisions) {
+      const answers = Object.entries(input.linkMap).find(([key]) => fold(key) === c.key);
+      const answering = answers ? input.published.find((p) => p.outputPath === answers[1]) : null;
+      const pageRel = answering ? input.relOf(answering) : null;
+      const itself = pageRel === c.rel;
+      found.push(settle({
+        code: 'WITHHELD_NAME_PUBLIC', severity: 'warning', path: c.rel,
+        detail: itself
+          ? `"${c.alias}" is withheld, but this note is published, so its name is on the site`
+          : `"${c.alias}" is withheld, but ${pageRel ? `the published page ${pageRel}` : 'a published page'} answers to the same name, so it is not looked for on the site`,
+        fix: itself
+          ? 'take withheld: true off the note, or keep the note off the site'
+          : `take withheld: true off this note, or give ${pageRel || 'the published page'} another title or alias`,
+        name: c.alias, owner: c.rel, page: pageRel,
+      }, c.rel));
+    }
     // --- NAMED_NO_PAGE: one finding per note --------------------------------------------
     if (named.size > 0) {
-      let annotations = null;   // the manifest's written reasons, read only when something is named
-      const reasons = () => {
-        if (annotations) return annotations;
-        annotations = new Map();
-        try {
-          const { parseAnnotatedManifest } = require('./manifest-cli');
-          annotations = parseAnnotatedManifest(readFile(path.join(input.vaultPath, '_meta', 'publish-manifest.md')));
-        } catch (e) { /* no manifest, or none readable: no reasons */ }
-        return annotations;
-      };
       for (const [rel, entry] of named) {
         const { record } = entry;
         const listed = reasons().get(rel);
@@ -628,8 +717,13 @@ function startNoteAudit(input) {
         const listings = [...new Set([...entry.via.values()].flatMap((outs) => [...outs]))].sort();
         const printed = [...entry.printed.values()];
         const name = baseName(rel);
+        // A note marked withheld: a published page linking it is an error (still only a report),
+        // and the words it prints are the placeholder, not its name.
+        const withheld = isWithheld(record.frontmatter);
         let fix;
-        if (kind === 'entity') {
+        if (withheld) {
+          fix = `${name} is marked withheld, so it stays off the site: turn the links to it into the words the players know (links.py unlink "${rel.replace(/\.md$/, '')}" --in "<page>" --as "<words>"), or leave "${WITHHELD_PLACEHOLDER}" and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
+        } else if (kind === 'entity') {
           // Listing a note under Publishing gives it a page only when the manifest is what holds it back.
           const page = String(record.why).startsWith('MANIFEST_')
             ? `then list it under Publishing in _meta/publish-manifest.md so it gets a page`
@@ -641,12 +735,13 @@ function startNoteAudit(input) {
           fix = `give ${rel} a type: in its frontmatter, then decide whether it gets a page or the link becomes plain words`;
         }
         found.push({
-          code: 'NAMED_NO_PAGE', severity: 'warning', path: rel,
-          detail: `has no page (${record.why}) but is named on ${plural(pagesNaming.length, '1 published page', `${pagesNaming.length} published pages`)} as ${printed.slice(0, 3).map((w) => `"${w}"`).join(', ')}${printed.length > 3 ? ', …' : ''}`
+          code: 'NAMED_NO_PAGE', severity: withheld ? 'error' : 'warning', path: rel,
+          detail: `has no page (${record.why}) but is ${withheld ? 'linked from' : 'named on'} ${plural(pagesNaming.length, '1 published page', `${pagesNaming.length} published pages`)} as ${printed.slice(0, 3).map((w) => `"${w}"`).join(', ')}${printed.length > 3 ? ', …' : ''}`
             + (viaListing.length > 0 ? `; for ${viaListing.length} of them it is an index or listing page that prints the name, from that note (${listings.slice(0, 2).join(', ')}${listings.length > 2 ? ', …' : ''})` : ''),
           fix,
           why: record.why, reason, pages: pagesNaming, pageCount: pagesNaming.length, printed, kind, type, settled,
           listings, viaListing,
+          ...(withheld ? { withheld: true } : {}),
         });
       }
     }
@@ -658,7 +753,7 @@ function startNoteAudit(input) {
     return sorted;
   }
 
-  return { read, mark, mayPrint, printed, listing, connections, findings, storyRelOf };
+  return { read, readFileName, mark, mayPrint, printed, listing, connections, findings, storyRelOf };
 }
 
 // A no-page note's `type`: from its scanned page, else from its file (the scan never read a
@@ -677,6 +772,7 @@ function sortFindings(findings) {
   const rank = (f) => CODES.indexOf(f.code);
   return findings.slice().sort((a, b) => {
     if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    if (a.code === 'NAMED_NO_PAGE' && a.severity !== b.severity) return a.severity === 'error' ? -1 : 1;
     if (a.code === 'NAMED_NO_PAGE' && a.pageCount !== b.pageCount) return b.pageCount - a.pageCount;
     if (a.path !== b.path) return a.path < b.path ? -1 : 1;
     return (a.line || 0) - (b.line || 0);
@@ -705,6 +801,15 @@ function summaryLines(findings) {
     } else if (code === 'FENCE_UNCLOSED') {
       const worst = rows.slice(0, WORST).map((f) => `${f.path}${f.line ? ` line ${f.line}` : ''}`);
       lines.push(`${n} published ${plural(n, 'note has a code fence that never closes', 'notes have a code fence that never closes')}, so hidden text below it is published (${worst.join(', ')}) — ${where} ${these}.`);
+    } else if (code === 'WITHHELD_IN_PROSE') {
+      const byName = new Map();
+      for (const f of rows) byName.set(f.name, (byName.get(f.name) || 0) + 1);
+      const worst = [...byName].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
+        .map(([name, pages]) => `${name} ${pages} ${plural(pages, 'page', 'pages')}`);
+      lines.push(`${byName.size} withheld ${plural(byName.size, 'name is', 'names are')} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byName.size, 'it', 'these')}.`);
+    } else if (code === 'WITHHELD_NAME_PUBLIC') {
+      const names = [...new Set(rows.map((f) => f.name))];
+      lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);
     } else {
       const byAlias = new Map();
       for (const f of rows) byAlias.set(f.alias, (byAlias.get(f.alias) || 0) + 1);
@@ -716,4 +821,4 @@ function summaryLines(findings) {
   return lines;
 }
 
-module.exports = { startNoteAudit, summaryLines, kindOfType, pageText, mainOf, CODES, MARK_RE };
+module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE };

@@ -44,6 +44,15 @@ function refFor(i) {
   return i.toString(36);
 }
 
+const aliasesIndexed = (fm) => (Array.isArray(fm.aliases) ? canonicalNfc(fm.aliases.map((a) => labelsForLinks(a)).join(' ')) : '');
+const bodyIndexed = (page) => canonicalNfc(stripMarkdown(publishedText(page)));
+
+// The words the index takes from a page besides its title: its aliases and its whole body.
+// The note-faults audit reads them for a withheld name.
+function indexedTextOf(page) {
+  return `${aliasesIndexed(page.frontmatter || {})}\n${bodyIndexed(page)}`;
+}
+
 function buildSearchIndex(allPages) {
   // A note the build writes no page for has no search entry: a result would open a page
   // that is not there, and its words would be findable. previews.js has the one
@@ -81,13 +90,13 @@ function buildSearchIndex(allPages) {
       this.add({
         id: refFor(i),
         title: canonicalNfc(page.displayTitle),
-        aliases: Array.isArray(fm.aliases) ? canonicalNfc(fm.aliases.map((a) => labelsForLinks(a)).join(' ')) : '',
+        aliases: aliasesIndexed(fm),
         type: fm.type || '',
         // Whole published body (#267). It used to be cut at 500 characters, which hid every
         // name mentioned in the second half of a recap. Results show only title/type/subtitle
         // (documents above), so there is no separate snippet to keep short. NFC first (#139) so
         // two spellings of one vault index the same terms.
-        body: canonicalNfc(stripMarkdown(publishedText(page))),
+        body: bodyIndexed(page),
       });
     });
   });
@@ -98,4 +107,4 @@ function buildSearchIndex(allPages) {
   };
 }
 
-module.exports = { subtitleOf: getSubtitle, buildSearchIndex };
+module.exports = { subtitleOf: getSubtitle, buildSearchIndex, indexedTextOf };
