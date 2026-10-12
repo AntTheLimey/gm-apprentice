@@ -1868,6 +1868,16 @@ def gm_only_hides(value: Any) -> bool:
     return isinstance(value, str) and value.strip().lower() in GM_ONLY_YES_WORDS
 
 
+def is_withheld(frontmatter: dict[str, Any] | None) -> bool:
+    """Whether a note's own name is a secret (`withheld: true`, #291).
+
+    Read exactly as `gm_only` is, so the two flags read alike: this is
+    `gm_only_hides` on the `withheld` field. Mirrors
+    tools/publish/lib/processor.js `isWithheld`; absent means false.
+    """
+    return gm_only_hides((frontmatter or {}).get("withheld"))
+
+
 # The two explicit opt-outs processor.js honours, and nothing else.
 PUBLISH_NONE_VALUES = ("false", "none")
 

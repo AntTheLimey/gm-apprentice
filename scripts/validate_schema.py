@@ -229,6 +229,15 @@ def validate_file(filepath: Path, content: str | None = None) -> list[str]:
                             f"(e.g. \"[[Plan Name]]\"), got {item!r}"
                         )
 
+    # `withheld` (optional): true makes the note's own name a secret the site
+    # build searches for. The build reads yes, on and 1 as true as well; the
+    # schema asks for the real word.
+    if "withheld" in frontmatter:
+        value = frontmatter["withheld"]
+        if not (isinstance(value, bool)
+                or (isinstance(value, str) and value.strip().lower() in ("true", "false"))):
+            errors.append("Field 'withheld' must be true or false")
+
     # Validate portrait field — only allowed for supported entity types
     portrait = frontmatter.get("portrait")
     if portrait:

@@ -168,12 +168,22 @@ the owning page's title before publishing or pushing. Obsidian only
 resolves links through `aliases`, so to make such a link work in
 Obsidian, list the name under both fields. It still stays off the site.
 
+`withheld` (optional boolean, absent means false) marks a note whose
+own name is a secret: an NPC the players must not hear of yet. Its file
+name, title and `aliases` are then looked for in everything the site
+publishes, and an unlabelled `[[link]]` to it prints a neutral
+placeholder in place of the name. `gm_aliases` rewrites a secret name;
+`withheld` finds one. Write `true` or `false`; the build also reads
+`yes`, `on` and `1` as true, as it does for `gm_only`. It is a note's
+own flag and is never published.
+
 ```yaml
 ---
 type: npc              # From the type hierarchy
 canon_status: DRAFT    # DRAFT | AUTHORITATIVE | SUPERSEDED | STUB
 aliases: []             # recommended, not enforced
 gm_aliases: []          # optional — secret names; resolve links, never published
+withheld: false         # optional — true: this note's own name is a secret
 tags: []                # recommended, not enforced
 source_document: ""     # recommended, not enforced
 campaign: ""            # recommended, not enforced

@@ -8,6 +8,7 @@ asOfSession: ""
 lastUpdated: ""
 aliases: []
 gm_aliases: []        # secret names: links resolve, never published
+withheld: false       # true: this note's own name is a secret; the site build looks for it in published text
 tags: []
 location_type: ""     # city, district, building, room, wilderness, ship…
 parent_location: ""   # "[[The place this sits inside]]"

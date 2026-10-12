@@ -298,6 +298,7 @@ These fields are read by all templates if present:
 |-------|-------------|
 | `aliases` | List of alternate names used for wiki-link resolution |
 | `gm_aliases` | Secret alternate names: they resolve wiki-links but are never published. The build rewrites each one, in links and bare frontmatter values, to the owning page's title (plain text if that page isn't published). A name listed in both `aliases` and `gm_aliases` is removed from the published `aliases` |
+| `withheld` | `true` makes the note's own name a secret: its file name, title and `aliases` are searched for in everything the build publishes, and an unlabelled link to it prints a neutral placeholder. Absent means false; never published. Read as `gm_only` is (`true`, `yes`, `on`, `1`) |
 | `canon_status` | DRAFT / AUTHORITATIVE / SUPERSEDED / STUB — renders a canon status badge (see below) |
 | `source_confidence`, `confidence` | Legacy names for `canon_status` — honored at read time for unmigrated vaults, never written |
 | `superseded_by` | `[[wiki-link]]` — SUPERSEDED entities redirect links to this target |
