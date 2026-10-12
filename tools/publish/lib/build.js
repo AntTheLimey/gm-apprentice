@@ -1009,6 +1009,7 @@ function buildSite(options) {
           buildVersion: require('crypto').createHash('sha1')
             .update(JSON.stringify({ f: page.frontmatter, s: sections })).digest('hex').slice(0, 12),
           live: publishConfig.live.stats === true,
+          tohit: publishConfig.tohit_calculator === 'on',
         };
         const rendered = systemRenderer ? systemRenderer(page.frontmatter, sections, meta) : null;
         // A renderer returns an object (CoC, GURPS, D&D), or (PF2e, FitD) the sheet as a string.
@@ -1069,6 +1070,7 @@ function buildSite(options) {
           systemSpellsHtml: systemOut.spellsHtml || null,
           systemVitalsHtml: systemOut.vitalsHtml || null,
           systemLiveData: systemOut.liveData || null,
+          systemTohitData: systemOut.tohitData || null,
           systemStatusPanelHtml: systemOut.statusPanelHtml || null,
           systemRecordHtml: systemOut.recordHtml || null,
           systemStatusBarHtml: systemOut.statusBarHtml || null,

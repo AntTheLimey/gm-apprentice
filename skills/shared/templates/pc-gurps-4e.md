@@ -101,6 +101,9 @@ motivations, and description.}
 
 ## Techniques
 
+<!-- A technique's level is written without any one weapon's own bonus
+     (a Weapon Bond, a Balanced weapon), as the Skills table writes a skill. -->
+
 | Name | Default | Points | Effective |
 |------|---------|--------|-----------|
 | | | | |
@@ -137,15 +140,24 @@ Top 5 multi-step combat sequences for quick reference.
 
 ## Melee Weapons
 
-| Weapon | Skill | Damage | Reach | Parry |
-|--------|-------|--------|-------|-------|
-| | | | | |
+<!-- Notes: the weapon's own bonuses, one per `;`, a name and a signed
+     number: `Weapon Bond +1; Balanced +1`. The Skill cell's level
+     includes them. -->
+
+| Weapon | Skill | Damage | Reach | Parry | Notes |
+|--------|-------|--------|-------|-------|-------|
+| | | | | | |
 
 ## Ranged Weapons
 
-| Weapon | Skill | Damage | Acc | Range | RoF | Shots | Bulk |
-|--------|-------|--------|-----|-------|-----|-------|------|
-| | | | | | | | |
+<!-- Notes: sighting aids, one per `;`, a name and a signed number, with
+     `Acc` after it for an aiming bonus: `Scope +2 Acc; HUD link +1 Acc;
+     Laser sight +1`. Write `Fixed scope +4 Acc` for a fixed-power scope.
+     The Skill cell's level includes any bonus the weapon's own row names. -->
+
+| Weapon | Skill | Damage | Acc | Range | RoF | Shots | ST | Bulk | Rcl | Notes |
+|--------|-------|--------|-----|-------|-----|-------|----|------|-----|-------|
+| | | | | | | | | | | |
 
 ## Active Defenses
 

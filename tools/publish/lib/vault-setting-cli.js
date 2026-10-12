@@ -4,7 +4,7 @@
 // the one place outside `init` and `migrate-config` that writes them. migrate.py asks
 // this rather than read the theme or decide which fonts come from Google itself.
 //
-//   vault-setting --json                      -> { excludeSectionsOwn, excludeFieldsOwn, defaultExcludeSections, defaultExcludeFields, defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame, dndbeyondSync, linkPreviews, connections }
+//   vault-setting --json                      -> { excludeSectionsOwn, excludeFieldsOwn, defaultExcludeSections, defaultExcludeFields, defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame, dndbeyondSync, linkPreviews, tohitCalculator, connections }
 //   vault-setting --set <key>=<json> --json   -> { written: [keys] }
 const fs = require('fs');
 const path = require('path');
@@ -21,6 +21,7 @@ const SETTABLE = {
   'sheet_frame': (v) => v === 'none' || FRAME_IDS.includes(v),
   'dndbeyond_sync': (v) => v === 'build' || v === 'manual',
   'link_previews': (v) => v === 'on' || v === 'desktop' || v === 'off',
+  'tohit_calculator': (v) => v === 'on' || v === 'off',
   'connections': (v) => v === 'tree' || v === 'web' || v === 'cards' || v === 'off',
   // The two lists a vault can own. Written whole, as a list of headings or field names. An
   // empty list is allowed: the vault then owns a list that hides nothing of the built-ins.
@@ -86,6 +87,8 @@ function read(options) {
     dndbeyondSync: asString(rawPublish(vaultPath).dndbeyond_sync),
     // Hover preview cards: 'on', 'desktop' or 'off' (null when the line is not there or is a YAML boolean).
     linkPreviews: asString(rawPublish(vaultPath).link_previews),
+    // The GURPS to-hit calculator: 'on' or 'off' (null when the line is not there or is a YAML boolean).
+    tohitCalculator: asString(rawPublish(vaultPath).tohit_calculator),
     // How Connections is drawn: 'tree', 'web', 'cards' or 'off' (null when the line is not there or is a YAML boolean).
     connections: asString(rawPublish(vaultPath).connections),
   };

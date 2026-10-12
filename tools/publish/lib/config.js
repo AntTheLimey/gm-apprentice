@@ -129,6 +129,19 @@ function linkPreviewsFrom(raw, warn = console.warn) {
   return 'on';
 }
 
+// `tohit_calculator` is `on` or `off`: the to-hit calculator on a GURPS character's Combat tab.
+// A bare YAML `on`/`off` reads as true/false and `yes`/`no` are taken too. Left out is on;
+// anything else is on, and said.
+function tohitCalculatorFrom(raw, warn = console.warn) {
+  if (raw === undefined || raw === true) return 'on';
+  if (raw === false) return 'off';
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
+  if (value === 'on' || value === 'yes' || value === 'true') return 'on';
+  if (value === 'off' || value === 'no' || value === 'false') return 'off';
+  warn(`config: publish.tohit_calculator ${JSON.stringify(raw)} is not on, off, yes, no, true or false; using on`);
+  return 'on';
+}
+
 // `connections` picks how a page's Connections section is drawn: `tree`, `web`, `cards`,
 // or `off` for no section. YAML reads a bare `off` or `no` as false and `on` or `yes` as
 // true, so those count: false is off, true is tree. Left out is tree; anything else is
@@ -441,6 +454,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const merged = {
     mode: publishModeFrom(publish.mode, warn),
     link_previews: linkPreviewsFrom(publish.link_previews, warn),
+    tohit_calculator: tohitCalculatorFrom(publish.tohit_calculator, warn),
     connections: connectionsFrom(publish.connections, warn),
     site_title: picked.site_title ?? null,
     footer: picked.footer ?? null,

@@ -42,6 +42,7 @@ publish:
 | Footer | `publish.footer` | Text for the footer of every page (default: none) |
 | Search | `publish.search` | `false` (or `no`, `off`) leaves out the search index (default: `true`) |
 | Link previews | `publish.link_previews` | `on` (default), `desktop` or `off` (`yes` and `no` read as `on` and `off`). The card a reader sees on resting on, focusing or tapping a link to another page. `desktop` leaves touch taps as they were. Set it for the GM with `npx gm-apprentice-publish vault-setting --set link_previews='"desktop"'` from the site directory. An unknown value is `on`, with a build warning |
+| To-hit calculator | `publish.tohit_calculator` | `on` (default) or `off` (`yes`, `true` and `no`, `false` read as `on` and `off`). The to-hit calculator on a GURPS character's Combat tab, which lists the character's weapons and adds up the bonuses written on the sheet. With `off` the page carries neither the calculator nor a link to its script. Set it for the GM with `npx gm-apprentice-publish vault-setting --set tohit_calculator='"off"'` from the site directory. An unknown value is `on`, with a build warning |
 | Connections | `publish.connections` | `tree` (default), `web`, `cards` or `off` (`yes` and `true` read as `tree`, `no` and `false` as `off`). How the Connections section on a page is drawn: what the subject is tied to, in tabs by kind, with pages that only mention it in a last tab. `off` leaves out the section and the list of mentions. Set it for the GM with `npx gm-apprentice-publish vault-setting --set connections='"web"'` from the site directory. An unknown value is `tree`, with a build warning |
 | Game system | `publish.system` | Selects the PC character-sheet renderer. Values in `schema-reference.md` § Site-level configuration fields |
 | Folder map | `publish.folder_map` | Maps vault folders to site output paths. A folder holding typed pages with no entry is skipped with a build warning. Default: empty; `init` writes the standard map |
@@ -486,7 +487,7 @@ Two rows behave differently:
 
 Settings that never had a site-file form (`mode`, `exclude_drafts`,
 `theme`, `four_oh_four`, `overrides`, `section_titles`,
-`pc_prose_sections`, `link_previews`, `connections`,
+`pc_prose_sections`, `link_previews`, `tohit_calculator`, `connections`,
 `character_sheets`, `sheet_skin`, `sheet_frame`, `setting_year`)
 are read from the vault file only.
 

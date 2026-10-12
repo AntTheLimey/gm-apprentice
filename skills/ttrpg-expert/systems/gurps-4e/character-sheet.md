@@ -163,11 +163,49 @@ Written levels: None / Broken / Semi-literate / Literate
 
 ## Combat — Ranged Weapons
 
-| Weapon | Skill | Damage | Acc | Range | RoF | Shots | Bulk | Rcl | Notes |
-|--------|-------|--------|-----|-------|-----|-------|------|-----|-------|
-| | | | | | | | | | |
-| | | | | | | | | | |
-| | | | | | | | | | |
+| Weapon | Skill | Damage | Acc | Range | RoF | Shots | ST | Bulk | Rcl | Notes |
+|--------|-------|--------|-----|-------|-----|-------|----|------|-----|-------|
+| | | | | | | | | | | |
+| | | | | | | | | | | |
+| | | | | | | | | | | |
+
+## Bonuses the Sheet's Calculator Reads
+
+The published sheet adds up a weapon's to-hit bonuses from what is
+written on it. Write them in these forms (the examples are invented).
+
+- **Weapon row, Notes:** the weapon's own bonuses, one per `;`, a name
+  and a signed number: `Weapon Bond +1; Balanced +1`. They are already in
+  the Skill cell's level, so the calculator names them and does not add
+  them again. A damage, parry or Bulk figure is not a to-hit bonus.
+- **Ranged row, Notes:** sighting aids the same way. `Acc` after the
+  number marks an aiming bonus, one that counts only when aiming:
+  `Scope +2 Acc; HUD link +1 Acc; Laser sight +1`. A scope and a HUD
+  link always need Aim. A laser sight, reflex sight, targeting program
+  and silhouette program apply with or without Aim whatever the note
+  says; a smartgun waits for Aim when marked `Acc`. `Fixed scope +4 Acc`
+  for a fixed-power scope.
+- **Acc cell:** a scope can go here as `6+2` (Acc 6, scope +2).
+- **Skill cell:** the skill and the weapon's level, `Broadsword-14`,
+  `Broadsword 14`, `Broadsword (14)` or `Broadsword = 14`; the level
+  includes the row's own bonuses. Names match the Skills table, and
+  `Guns (LMG)` stands for `Guns (Light Machine Gun)`.
+- **Character-wide aids:** an Equipment item or Advantage whose name
+  starts with the aid name and a signed number (`Laser sight +1`), or a
+  `;`-separated piece of the item's Notes in that form (`Targeting
+  program +2`). A mention in a sentence is not an aid. Write `backup`,
+  `superseded` or `spare` in the Notes of one you do not use and it
+  starts unticked; of several programs only the best starts ticked.
+- **Traits:** `Telescopic Vision 2`, `Night Vision 3`; with no number,
+  level 1.
+- **Techniques:** `Targeted Attack (Broadsword Swing/Neck)` and
+  `Dual-Weapon Attack (Broadsword)`, with the level in the Techniques
+  table.
+- **A technique's level leaves out any one weapon's bonus**, as the
+  Skills table does for a skill. The bonus belongs on the weapon's row.
+  Example: a Weapon Bond +1 blade is `Broadsword-15` on its row with
+  `Weapon Bond +1` in its Notes, and Targeted Attack (Broadsword
+  Swing/Neck) is written at the level it has without the bond.
 
 ## Active Defenses
 

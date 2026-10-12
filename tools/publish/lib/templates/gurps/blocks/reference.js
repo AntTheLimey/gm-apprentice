@@ -73,4 +73,4 @@ ${speedRangeTable}
 </details>`;
 }
 
-module.exports = { renderReference };
+module.exports = { renderReference, HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS };

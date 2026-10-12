@@ -95,6 +95,26 @@ test('parenthetical (specialized) skill cell yields positive flat to-hit (case 3
   assert.deepEqual(d.weapons['Blaster'].toHit, [15, 15, 15, 15, 15]);
 });
 
+test('same-named attacks stay three separate entries, each with its own table and place', () => {
+  const m = sixModel();
+  m.skills = [];
+  m.melee = [
+    { weapon: 'Knife', skill: 'Rapier-15', parry: '11' },
+    { weapon: 'Knife', skill: 'Rapier-12', parry: '9' },
+  ];
+  m.ranged = [{ weapon: 'Knife', skill: 'Rapier-13' }];
+  const d = buildLiveData(m, { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' });
+  assert.equal(Object.keys(d.weapons).length, 3);
+  // The first melee row of a name keeps the plain name as its key.
+  assert.deepEqual(d.weapons['Knife'].toHit, [16, 15, 14, 13, 12]);
+  assert.deepEqual([d.weapons['Knife'].key, d.weapons['Knife'].table, d.weapons['Knife'].nth], ['Knife', 'melee', 0]);
+  const rest = Object.values(d.weapons).filter(w => w !== d.weapons['Knife']);
+  const second = rest.find(w => w.table === 'melee');
+  const third = rest.find(w => w.table === 'ranged');
+  assert.deepEqual([second.key, second.nth, second.toHit[1]], ['Knife', 1, 12]);
+  assert.deepEqual([third.key, third.nth, third.toHit[1], third.parry], ['Knife', 0, 13, null]);
+});
+
 test('returns null when no encumbrance table or no weighted items', () => {
   const m = sixModel(); m.encumbrance = [];
   assert.equal(buildLiveData(m, { campaignId: 'c', pcSlug: 'p', buildVersion: 'v' }), null);

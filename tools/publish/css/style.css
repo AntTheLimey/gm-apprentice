@@ -3592,6 +3592,116 @@ sup.fn { font-size: 9px; color: var(--text-muted); vertical-align: super; line-h
   gap: 12px;
 }
 
+/* === To-hit calculator (GURPS Combat tab) ===
+   Left, the situation in named groups, each header carrying its own subtotal;
+   right, the answer and the itemised list. Under 780px it is one column, answer first. */
+.tohit { overflow: visible; }
+.tohit h2 { justify-content: space-between; }
+.tohit .th-mode {
+  font-size: 11px; letter-spacing: 0.06em; padding: 2px 8px; border-radius: 999px;
+  background: var(--accent-dim); color: var(--text); text-transform: none;
+}
+.tohit .th-body { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; padding: 12px; }
+.tohit .th-ctrls, .tohit .th-out, .tohit .th-groups { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.tohit .th-out { gap: 10px; }
+.tohit .th-weapon { display: grid; gap: 4px; min-width: 0; }
+.tohit .th-lbl { font-size: 11.5px; color: var(--text); }
+.tohit select, .tohit input[type="number"] {
+  font: inherit; font-size: 13px; width: 100%; min-width: 0; box-sizing: border-box;
+  background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 6px 7px;
+}
+.tohit input::placeholder { color: var(--text-muted); opacity: 1; }
+.tohit select:focus-visible, .tohit input:focus-visible, .tohit button:focus-visible, .tohit summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 1px;
+}
+.tohit .th-wline { margin: 0; font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.tohit .th-sugg { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; font-size: 11.5px; color: var(--text); }
+.tohit .th-sugg:empty { display: none; }
+.tohit .th-chip {
+  font: inherit; font-size: 12px; cursor: pointer; border: 1px solid var(--accent); color: var(--text);
+  background: transparent; border-radius: 999px; padding: 3px 10px; max-width: 100%;
+}
+.tohit .th-chip[aria-pressed="true"] { background: var(--accent-dim); border-width: 2px; padding: 2px 9px; font-weight: 700; }
+
+.tohit details.th-grp { border: 1px solid var(--border); border-radius: 6px; background: var(--bg); min-width: 0; }
+.tohit details.th-grp > summary {
+  list-style: none; cursor: pointer; display: flex; align-items: baseline; gap: 8px; padding: 7px 10px; min-width: 0;
+}
+.tohit details.th-grp > summary::-webkit-details-marker { display: none; }
+.tohit .th-gname { font-size: 12px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; white-space: nowrap; }
+.tohit .th-gname::before { content: "\25B8"; display: inline-block; width: 1em; color: var(--text-muted); }
+.tohit details[open] > summary .th-gname::before { content: "\25BE"; }
+.tohit .th-gwhat { flex: 1; min-width: 0; font-size: 11.5px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tohit .th-gsum { font-weight: 600; color: var(--text); font-variant-numeric: tabular-nums; min-width: 2.5em; text-align: right; }
+.tohit .th-gfields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 4px 10px 10px; }
+.tohit .th-f { display: grid; gap: 3px; align-content: start; min-width: 0; }
+.tohit .th-f.th-wide, .tohit .th-checks { grid-column: 1 / -1; }
+.tohit .th-pair { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.tohit .th-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; min-width: 0; }
+.tohit .th-c { font-size: 12.5px; color: var(--text); display: inline-flex; align-items: center; gap: 5px; cursor: pointer; min-width: 0; }
+.tohit .th-c input { accent-color: var(--accent); width: 16px; height: 16px; margin: 0; flex-shrink: 0; }
+.tohit .th-c input:disabled + span { color: var(--text-muted); }
+.tohit .th-hint { font-size: 11.5px; color: var(--text); font-style: italic; }
+.tohit .th-hint[hidden] { display: none; }
+.tohit select:disabled { opacity: 0.55; }
+.tohit .th-from { font-size: 10px; letter-spacing: 0.04em; color: var(--text); border: 1px solid var(--accent); border-radius: 3px; padding: 0 4px; }
+
+.tohit .th-big { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: flex-end; }
+.tohit .th-stick, .tohit .th-sub { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: flex-end; }
+.tohit .th-sr { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.tohit .th-k { font-size: 10.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+.tohit .th-v { font-size: 32px; font-weight: 700; line-height: 1.05; color: var(--accent); font-variant-numeric: tabular-nums; }
+.tohit .th-v.th-sm { font-size: 17px; color: var(--text); }
+.tohit .th-strip { display: grid; grid-template-columns: repeat(16, minmax(0, 1fr)); gap: 2px; }
+.tohit .th-cell { border-radius: 3px; text-align: center; font-size: 11px; padding: 4px 0; font-variant-numeric: tabular-nums; border: 1px solid transparent; }
+/* Critical cells are filled (a tint of the card, so the digit keeps the page's own text colour on it),
+   a plain hit is outlined in the accent, a miss is muted: not colour alone. */
+.tohit .th-CS { background: color-mix(in srgb, var(--success) 40%, var(--bg-card)); color: var(--text); font-weight: 700; border-color: var(--success); }
+.tohit .th-S { background: transparent; color: var(--text); border: 2px solid var(--accent); padding: 3px 0; }
+.tohit .th-F { background: transparent; color: var(--text-muted); border-color: var(--border); }
+.tohit .th-CF { background: color-mix(in srgb, var(--danger) 40%, var(--bg-card)); color: var(--text); font-weight: 700; border-color: var(--danger); }
+.tohit table.th-lines { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.tohit .th-lines tbody tr, .tohit .th-lines tbody tr:nth-child(even) { background: none; }
+.tohit .th-lines td { padding: 3px 6px; border-bottom: 1px solid var(--border); background: none; overflow-wrap: anywhere; }
+.tohit .th-lines .th-n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+.tohit .th-lines .th-gh td { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); padding-top: 8px; border-bottom: 0; }
+.tohit .th-lines .th-included td { font-size: 11.5px; color: var(--text); }
+.tohit .th-lines .th-total td { border-top: 2px solid var(--accent); border-bottom: 0; font-weight: 700; color: var(--text); }
+.tohit .th-notes { display: grid; gap: 4px; font-size: 12px; color: var(--text); line-height: 1.45; }
+.tohit .th-notes:empty { display: none; }
+.tohit .th-actions button {
+  font: inherit; font-size: 12px; background: transparent; color: var(--text);
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; cursor: pointer;
+}
+.tohit .th-actions button:hover { color: var(--accent); border-color: var(--accent); }
+
+@media (max-width: 780px) {
+  /* One column, the answer first. The roll and the hit chance stay at the top of the screen
+     (under the sticky site header, 3.5rem) while the groups below are changed. */
+  .tohit .th-body { display: flex; flex-direction: column; gap: 10px; }
+  .tohit .th-out, .tohit .th-big { display: contents; }
+  .tohit .th-ctrls { order: 1; margin-top: 6px; }
+  .tohit .th-stick {
+    position: sticky; top: 3.5rem; z-index: 4; background: var(--bg-card); padding: 6px 0;
+    border-bottom: 1px solid var(--border); align-items: baseline; flex-wrap: nowrap;
+  }
+  .tohit .th-stick .th-v { font-size: 26px; }
+  .tohit .th-stick .th-v.th-sm { font-size: 17px; }
+  /* Tap targets: at least 40px. */
+  .tohit select, .tohit input[type="number"], .tohit .th-actions button, .tohit .th-chip { min-height: 40px; }
+  .tohit .th-c { min-height: 40px; }
+  .tohit .th-c input { width: 20px; height: 20px; }
+  .tohit details.th-grp > summary { min-height: 40px; align-items: center; }
+}
+@media (max-width: 440px) {
+  .tohit .th-gfields { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 360px) {
+  .tohit .th-strip { grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 3px; }
+  .tohit .th-cell { font-size: 12px; padding: 6px 0; }
+  .tohit .th-S { padding: 5px 0; }
+}
+
 /* === Combat action chains === */
 .chain-group { margin-bottom: 8px; }
 .chain-group h3 {
@@ -4335,6 +4445,8 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
   }
   .blk h2, .wide h2 { border-bottom: 1px solid #ccc; }
   .status { border: 1px solid #ccc !important; background: #fff !important; box-shadow: none !important; }
+  /* The to-hit calculator is for the table, not the printed sheet */
+  .tohit { display: none !important; }
   /* Force rules-ref open in print regardless of open attribute */
   details.rules-ref > summary { display: none; }
   details.rules-ref > .rules-ref-body { display: flex !important; }

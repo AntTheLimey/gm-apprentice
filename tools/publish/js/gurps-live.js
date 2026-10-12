@@ -28,7 +28,7 @@
     const weapons = {};
     for (const k of Object.keys(data.weapons || {})) {
       const w = data.weapons[k];
-      weapons[k] = { toHit: pair(w.toHit, level), parry: pair(w.parry, level), block: pair(w.block, level) };
+      weapons[k] = { key: w.key, table: w.table, nth: w.nth, toHit: pair(w.toHit, level), parry: pair(w.parry, level), block: pair(w.block, level) };
     }
     // Encumbrance-adjusted (pre-condition) Move/Dodge from the answer key.
     const encMove = lv.move, encDodge = lv.dodge;
@@ -152,6 +152,29 @@
     }
     function setText(id, val) { var n = document.getElementById(id); if (n) n.textContent = val; }
 
+    // The weapon tables are printed in the Sheet tab and again in the Combat tab. An entry owns the
+    // nth row of its key in its own table (Melee Attacks or Ranged Attacks), in both tabs; found by
+    // the block's heading, as the to-hit calculator does. An entry with no table (older data) owns
+    // every row of its name.
+    function weaponCells(w, name, cls) {
+      var key = w.key != null ? w.key : name;
+      if (!w.table) return Array.prototype.slice.call(document.querySelectorAll('[data-weapon-key="' + cssq(key) + '"] ' + cls));
+      var title = w.table === 'ranged' ? 'Ranged Attacks' : 'Melee Attacks';
+      var out = [];
+      document.querySelectorAll('#tab-sheet .wide, #tab-combat .wide').forEach(function (block) {
+        var head = block.querySelector('h2');
+        if (!head || head.textContent.trim() !== title) return;
+        var seen = 0;
+        block.querySelectorAll('[data-weapon-key]').forEach(function (tr) {
+          if (tr.getAttribute('data-weapon-key') !== key) return;
+          if (seen++ !== (w.nth || 0)) return;
+          var cell = tr.querySelector(cls);
+          if (cell) out.push(cell);
+        });
+      });
+      return out;
+    }
+
     function recalc(doPersist) {
       var checked = currentChecked();
       var vit = currentVitals();
@@ -174,10 +197,8 @@
       });
       Object.keys(r.weapons).forEach(function (name) {
         var w = r.weapons[name];
-        var th = document.querySelector('[data-weapon-key="' + cssq(name) + '"] .wp-tohit');
-        var pa = document.querySelector('[data-weapon-key="' + cssq(name) + '"] .wp-parry');
-        if (th && w.toHit) th.textContent = w.toHit.cur;
-        if (pa && w.parry) pa.textContent = w.parry.cur;
+        if (w.toHit) weaponCells(w, name, '.wp-tohit').forEach(function (el) { el.textContent = w.toHit.cur; });
+        if (w.parry) weaponCells(w, name, '.wp-parry').forEach(function (el) { el.textContent = w.parry.cur; });
       });
       if (panel && vit) renderPanel(api.vitalsView(r, vit));
       if (doPersist && vit) persist(checked, { hp: vit.hp.cur, fp: vit.fp.cur });
