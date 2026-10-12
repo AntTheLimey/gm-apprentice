@@ -1511,9 +1511,13 @@ function isGmOnlyEdge(rel) {
 }
 
 // How a yes/no flag in frontmatter is read, for `gm_only` and `withheld` alike (above).
+// A word that reads as the number 1 (`1.0`, `01`, `+1`) is a yes too: the Python scripts see
+// the raw line, where YAML would have made it the number 1. test/fixtures/gm-only-vectors.json.
 function flagIsYes(v) {
   if (v === true || v === 1) return true;
-  return typeof v === 'string' && ['true', 'yes', 'on', '1'].includes(v.trim().toLowerCase());
+  if (typeof v !== 'string') return false;
+  const t = v.trim().toLowerCase();
+  return t === 'true' || t === 'yes' || t === 'on' || /^\+?0*1(?:\.0*)?$/.test(t);
 }
 
 // `withheld: true` on a note: its own name is a secret (#291). Read as `gm_only` is read.
@@ -1522,10 +1526,14 @@ function isWithheld(frontmatter) {
   return flagIsYes(frontmatter && frontmatter.withheld);
 }
 
-// What an unlabelled link to a withheld page prints in place of the page's name. One
-// constant, so a sentence like "She met someone at the quay" is worded in one place. It
-// must not hold the word for the flag, and not a name a vault could use.
-const WITHHELD_PLACEHOLDER = 'someone';
+// What an unlabelled link to a withheld page prints in place of the page's name, by the
+// kind of note it is: "She met someone at the quay", "Part of something". One table, so the
+// words are chosen in one place. They must not hold the word for the flag.
+const WITHHELD_PLACEHOLDERS = { npc: 'someone', pc: 'someone', location: 'somewhere', other: 'something' };
+function withheldPlaceholder(type) {
+  const t = String(type == null ? '' : type).trim().toLowerCase();
+  return Object.prototype.hasOwnProperty.call(WITHHELD_PLACEHOLDERS, t) && t !== 'other' ? WITHHELD_PLACEHOLDERS[t] : WITHHELD_PLACEHOLDERS.other;
+}
 
 // One page's frontmatter as a reader may see it. Everything derived from
 // frontmatter — Connections, backlinks, the search index, sheet
@@ -1643,15 +1651,21 @@ function gmAliasRewriter(pages, published) {
   }
   // Withheld notes (#291): every name an unlabelled link may reach one by, minus any name a
   // published page answers to (that name is on the site already, and the audit tells it).
-  const withheldKeys = new Set();
+  // Every name that reaches one: file name, title, aliases and gm_aliases. key -> the words a
+  // link with no label prints. A withheld page that publishes has no secret name to keep.
+  const withheldKeys = new Map();
   for (const page of pages) {
     const fm = page.frontmatter || {};
-    if (!isWithheld(fm)) continue;
+    if (!isWithheld(fm) || (published && published.includes(page))) continue;
+    const word = withheldPlaceholder(fm.type);
     for (const name of [page.title, page.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
-      ...(Array.isArray(fm.aliases) ? fm.aliases : [])]) {
-      if (typeof name === 'string' && name.trim()) withheldKeys.add(gmAliasKey(name));
+      ...(Array.isArray(fm.aliases) ? fm.aliases : []), ...gmAliasList(fm)]) {
+      if (typeof name === 'string' && name.trim() && !withheldKeys.has(gmAliasKey(name))) withheldKeys.set(gmAliasKey(name), word);
     }
   }
+  // The one question every path asks: does this name reach a withheld note? The words to
+  // print in its place, or null.
+  const placeholderFor = (name) => withheldKeys.get(gmAliasKey(String(name).split('/').pop())) || null;
   if (withheldKeys.size > 0) {
     for (const page of published || pages) {
       const fm = page.frontmatter || {};
@@ -1675,15 +1689,15 @@ function gmAliasRewriter(pages, published) {
       // A folder path names the note by its last segment (`[[NPCs/Elias Crowe]]`).
       const owner = owners.get(gmAliasKey(target.split('/').pop()));
       const labelIsSecret = !!label && secretKeys.has(gmAliasKey(w.display));
-      // An unlabelled link to a withheld page prints the placeholder, not the page's name.
+      const hidden = placeholderFor(target);
       // A link with a label of its own prints that label, as it does for any page.
-      if (!owner && !labelIsSecret) {
-        if (w.display || !withheldKeys.has(gmAliasKey(target.split('/').pop()))) return match;
-        return `${bang}[[${w.raw}${bar}${WITHHELD_PLACEHOLDER}]]`;
-      }
+      if (!owner && !labelIsSecret && (!hidden || w.display)) return match;
       // A secret label is never shown, whether or not it names the same page
       // as the target — treat it exactly as an absent label from here on.
       const effectiveLabel = labelIsSecret ? '' : label;
+      // An unlabelled link to a withheld page (by any of its names) prints the placeholder,
+      // not the page's name.
+      if (hidden && !effectiveLabel) return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${hidden}]]`;
       // In prose, an unlabelled link shows the page's display title rather
       // than its filename. Frontmatter values keep a bare target, because
       // several renderers strip the brackets and look the rest up as-is.
@@ -1709,10 +1723,11 @@ function gmAliasRewriter(pages, published) {
   function nameIn(v) {
     if (typeof v === 'string') {
       const owner = owners.get(gmAliasKey(v.split('/').pop()));
-      if (owner) return owner.title;
       // A bare name that is a withheld note's: the page prints the placeholder, as for a link.
+      const hidden = placeholderFor(v);
+      if (owner) return hidden ? `[[${owner.title}|${hidden}]]` : owner.title;
       const bare = v.trim();
-      if (bare && !bare.includes('[[') && withheldKeys.has(gmAliasKey(bare.split('/').pop()))) return `[[${bare}|${WITHHELD_PLACEHOLDER}]]`;
+      if (bare && !bare.includes('[[') && hidden) return `[[${bare}|${hidden}]]`;
       return links(v, false);
     }
     if (Array.isArray(v)) return v.map(nameIn);
@@ -1748,4 +1763,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDER, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDERS, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

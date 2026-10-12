@@ -883,6 +883,7 @@ function buildSite(options) {
   copyThemeFonts();
   publishConfig._overridesCss = copyOverridesCSS();
 
+  const campaignImageSource = publishConfig.theme.campaign_image;
   let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
   if (!dry && publishConfig.theme.campaign_image) {
@@ -1521,14 +1522,46 @@ function buildSite(options) {
       const page = byHref.get(doc.href);
       const text = strings(doc.subtitle).join(' ');
       if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index');
+      // Every other string of the entry the search shows (its title, its type).
+      const rest = strings(Object.entries(doc).filter(([k]) => k !== 'href' && k !== 'subtitle').map(([, v]) => v)).join('\n');
+      if (page && rest) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(rest)}</p></main>`, null, 'the search index', 'withheld');
+    }
+    // And every field of every record the index is built from, whichever fields it holds: its
+    // aliases are words no page prints. Withheld names only, as the page text is read for the rest.
+    for (const { page, record } of searchData.records) {
+      const text = strings(Object.entries(record).filter(([k]) => k !== 'id').map(([, v]) => v)).join('\n');
+      if (text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index', 'withheld');
     }
   }
 
   // The files copied to the site are named after the vault's files: a withheld name in one of
-  // them is in the address of the file.
+  // them is in the address of the file. Attachments, then the other files a site copies from
+  // the vault: the campaign image, a section banner and a font.
   for (const [name, entry] of Object.entries(imageMap)) {
     if (publishConfig.mode === 'player' && !usedImages.has(name)) continue;
     audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: entry.sourcePath })), `images/${entry.relPath}`);
+  }
+  {
+    const vaultRoot = path.resolve(config.vaultPath);
+    const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
+    const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
+    if (campaignImageSource && !/^https?:\/\//.test(campaignImageSource) && there(campaignImageSource)) {
+      audit.readFileName(rel(campaignImageSource), `images/${path.basename(campaignImageSource)}`);
+    }
+    for (const dir of Object.keys(DIR_LABELS)) {
+      const entry = resolveBanner(dir, { vaultPath: config.vaultPath, folderMap: config.folderMap, banners: publishConfig.banners });
+      if (!entry) continue;
+      const slug = String(dir).replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'section';
+      for (const file of [entry.image, entry.link]) {
+        if (file && there(file) && !(file === entry.image && isSvg(file) && !entry.link)) {
+          audit.readFileName(rel(file), `images/banners/${slug}/${path.basename(file)}`);
+        }
+      }
+    }
+    const fonts = (publishConfig.theme.fonts && Array.isArray(publishConfig.theme.fonts.files)) ? publishConfig.theme.fonts.files : [];
+    for (const f of fonts) {
+      if (f && f.path && there(f.path)) audit.readFileName(rel(f.path), `fonts/${fontOutputPath(f.path)}`);
+    }
   }
 
   // Written, and read by the note-faults audit for a secret name. In memory nothing is

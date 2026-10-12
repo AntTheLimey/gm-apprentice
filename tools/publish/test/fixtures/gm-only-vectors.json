@@ -1,5 +1,5 @@
 {
- "_about": "isGmOnlyEdge (processor.js) and vaultlib.gm_only_hides: whether a relationship's `gm_only` value hides the edge. The YAML reader gives `yes` and `on` as strings, so the word is read in any capitals, trimmed, and 1 counts as yes. Reading more as yes only hides more. Both sides must give `hides` for every `value`.",
+ "_about": "isGmOnlyEdge (processor.js) and vaultlib.gm_only_hides: whether a relationship's `gm_only` value hides the edge. The YAML reader gives `yes` and `on` as strings, so the word is read in any capitals, trimmed, and 1 counts as yes. Reading more as yes only hides more. Both sides must give `hides` for every `value`. A number-like word that reads as 1 (1.0, 01, +1) counts as yes, since the Python side sees the raw line. The same table is asserted for `withheld` (isWithheld / vaultlib.is_withheld).",
  "cases": [
   { "value": true, "hides": true },
   { "value": "true", "hides": true },
@@ -22,6 +22,17 @@
   { "value": 2, "hides": false },
   { "value": null, "hides": false },
   { "value": ["true"], "hides": false },
-  { "value": "truthy", "hides": false }
+  { "value": "truthy", "hides": false },
+  { "value": "1.0", "hides": true },
+  { "value": " 1.00 ", "hides": true },
+  { "value": "01", "hides": true },
+  { "value": "+1", "hides": true },
+  { "value": "1e0", "hides": false },
+  { "value": "10", "hides": false },
+  { "value": "1.5", "hides": false },
+  { "value": "0.1", "hides": false },
+  { "value": "١", "hides": false },
+  { "value": "tru", "hides": false },
+  { "value": 1.0, "hides": true }
  ]
 }

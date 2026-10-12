@@ -674,11 +674,16 @@ describe('publishMode (shared vectors; vaultlib.publish_mode must agree)', () =>
 });
 
 describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', () => {
-  const { isWithheld, gmAliasRewriter, WITHHELD_PLACEHOLDER, publishedFrontmatter: published } = require('../../lib/processor');
+  const { isWithheld, gmAliasRewriter, withheldPlaceholder, publishedFrontmatter: published } = require('../../lib/processor');
   const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'gm-only-vectors.json'), 'utf8'));
   for (const v of VECTORS.cases) {
     it(`withheld ${JSON.stringify(v.value)} ${v.hides ? 'is' : 'is not'} withheld`, () => assert.strictEqual(isWithheld({ withheld: v.value }), v.hides));
   }
+  it('the placeholder is chosen by the kind of note, in one table', () => {
+    const { withheldPlaceholder: word } = require('../../lib/processor');
+    assert.deepStrictEqual(['npc', 'PC', 'location', 'item', 'creature', 'organization', 'clue', '', undefined, 'constructor', 'other'].map(word),
+      ['someone', 'someone', 'somewhere', 'something', 'something', 'something', 'something', 'something', 'something', 'something', 'something']);
+  });
   it('absent frontmatter, or none, is not withheld', () => {
     assert.strictEqual(isWithheld({}), false);
     assert.strictEqual(isWithheld(null), false);
@@ -692,17 +697,17 @@ describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', ()
       { title: 'Mara', displayTitle: 'Mara', frontmatter: { type: 'npc' } }];
     const rw = gmAliasRewriter(pages, [pages[1]]);
     assert.strictEqual(rw.markdown('[[Lord_Zorn]] [[lord zorn#Past]] [[NPCs/Duke Zorn]] [[Lord_Zorn|the stranger]] [[Mara]]'),
-      `[[Lord_Zorn|${WITHHELD_PLACEHOLDER}]] [[lord zorn#Past|${WITHHELD_PLACEHOLDER}]] [[NPCs/Duke Zorn|${WITHHELD_PLACEHOLDER}]] [[Lord_Zorn|the stranger]] [[Mara]]`);
-    assert.strictEqual(rw.markdown('| [[Lord_Zorn]] |'), `| [[Lord_Zorn|${WITHHELD_PLACEHOLDER}]] |`);
+      `[[Lord_Zorn|${withheldPlaceholder('npc')}]] [[lord zorn#Past|${withheldPlaceholder('npc')}]] [[NPCs/Duke Zorn|${withheldPlaceholder('npc')}]] [[Lord_Zorn|the stranger]] [[Mara]]`);
+    assert.strictEqual(rw.markdown('| [[Lord_Zorn]] |'), `| [[Lord_Zorn|${withheldPlaceholder('npc')}]] |`);
   });
   it('the rewriter labels a bare name in a field that holds a page name, not in an ordinary field', () => {
-    const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { withheld: true } }];
+    const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { type: 'npc', withheld: true } }];
     const rw = gmAliasRewriter(pages, []);
     const fm = rw.frontmatter({ location: 'Lord Zorn', occupation: 'Lord Zorn', relationships: [{ target: 'Lord Zorn', type: 'fears' }, { target: '[[Lord Zorn]]', type: 'knows' }], title: 'Lord Zorn' });
-    assert.strictEqual(fm.location, `[[Lord Zorn|${WITHHELD_PLACEHOLDER}]]`);
+    assert.strictEqual(fm.location, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
     assert.strictEqual(fm.occupation, 'Lord Zorn');
-    assert.strictEqual(fm.relationships[0].target, `[[Lord Zorn|${WITHHELD_PLACEHOLDER}]]`);
-    assert.strictEqual(fm.relationships[1].target, `[[Lord Zorn|${WITHHELD_PLACEHOLDER}]]`);
+    assert.strictEqual(fm.relationships[0].target, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
+    assert.strictEqual(fm.relationships[1].target, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
   });
   it('a vault with no withheld note and no gm_aliases has no rewriter', () => {
     assert.strictEqual(gmAliasRewriter([{ title: 'A', frontmatter: { type: 'npc', withheld: false } }], []), null);

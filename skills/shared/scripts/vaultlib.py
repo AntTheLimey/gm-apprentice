@@ -1849,7 +1849,7 @@ def effective_exclude_sections(vault: Path,
 # Publish gating
 # --------------------------------------------------------------------------
 
-GM_ONLY_YES_WORDS = ("true", "yes", "on", "1")
+GM_ONLY_YES_WORDS = ("true", "yes", "on")
 
 
 def gm_only_hides(value: Any) -> bool:
@@ -1865,7 +1865,12 @@ def gm_only_hides(value: Any) -> bool:
         return True
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return value == 1
-    return isinstance(value, str) and value.strip().lower() in GM_ONLY_YES_WORDS
+    if not isinstance(value, str):
+        return False
+    word = value.strip().lower()
+    # A word that reads as the number 1 (1.0, 01, +1) is a yes, as in JS.
+    return word in GM_ONLY_YES_WORDS or re.fullmatch(
+        r"\+?0*1(?:\.0*)?", word, re.ASCII) is not None
 
 
 def is_withheld(frontmatter: dict[str, Any] | None) -> bool:
