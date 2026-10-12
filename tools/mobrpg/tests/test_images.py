@@ -553,3 +553,18 @@ def test_a_plain_download_failure_is_not_called_a_comparison(tmp_path, monkeypat
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 1
     err = capsys.readouterr().err
     assert "could not download" in err and "could not compare" not in err
+
+
+def test_a_note_that_cannot_be_read_is_reported_and_the_run_goes_on(tmp_path, monkeypatch, capsys):
+    _note(tmp_path)
+    _wire_pull(monkeypatch, b"x")
+    paths = images._node_paths
+
+    def gone(vault_dir):
+        found = paths(vault_dir)
+        for rel in found.values():      # the note goes after the vault was listed
+            os.remove(os.path.join(vault_dir, rel))
+        return found
+    monkeypatch.setattr(images, "_node_paths", gone)
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 1
+    assert "could not read the note" in capsys.readouterr().err

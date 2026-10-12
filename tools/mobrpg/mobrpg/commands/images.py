@@ -408,7 +408,13 @@ def run(argv: list[str]) -> int:
         folder = FOLDER[ent["kind"]]
         attach_root = os.path.realpath(os.path.join(vault_dir, "_attachments"))
         full = os.path.join(vault_dir, vp) if vp else None
-        text = open(full, encoding="utf-8").read() if full else ""
+        try:
+            text = open(full, encoding="utf-8").read() if full else ""
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"  could not read the note for {ent['name']} ({e}); skipped",
+                  file=sys.stderr)
+            failed += 1
+            continue
         for i, img in enumerate(ent["images"]):
             ext = _safe_ext(os.path.splitext(img["url"].split("?")[0])[1])
             stem = f"{base}{'' if i == 0 else f' {i + 1}'}"
