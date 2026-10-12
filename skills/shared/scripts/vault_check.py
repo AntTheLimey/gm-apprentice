@@ -270,6 +270,9 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
     return emit_once
 
 
+PUBLISH_MANIFEST_REL = "_meta/publish-manifest.md"
+
+
 def check_frontmatter(vault: Path, folder: str | None,
                       explain: ExplainAll | None = None) -> list[str]:
     """Schema rules, read by vaultlib's line reader, then the one thing
@@ -311,6 +314,10 @@ def check_frontmatter(vault: Path, folder: str | None,
         if rel in unparsed:
             # Schema rows would come from the line reader's guess at YAML
             # the build rejects; they mean nothing until it parses.
+            continue
+        if rel == PUBLISH_MANIFEST_REL:
+            # Written by the publish tool with no `type`, and regenerated
+            # on every build: the GM cannot fix a row about it (#333).
             continue
         fm = extract_frontmatter(text)
         if fm is None:

@@ -952,6 +952,21 @@ class FrontmatterUnparseableTests(unittest.TestCase):
             "---\ntype: npc\ncanon_status: DRAFT\n---\n", encoding="utf-8")
         self.assertEqual(vc.check_frontmatter(vault, "Clean"), [])
 
+    def test_the_generated_publish_manifest_needs_no_type(self):
+        # #333: the publish tool writes this note with no `type` key, and
+        # the GM cannot keep one there. Any other _meta note still needs it.
+        vault, _calls = self._vault()
+        manifest = ("---\ngenerated: 2026-10-11T01:12:09.961Z\n"
+                    "vault: \"Canticle\"\nmode: player\n---\n\n"
+                    "## Publishing (0 files)\n")
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            manifest, encoding="utf-8")
+        (vault / "_meta" / "other.md").write_text(
+            manifest, encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, None), "_meta/")
+        self.assertIn("ERROR\t_meta/other.md\tmissing 'type' field", rows)
+        self.assertFalse(rows_for(rows, "publish-manifest"), rows)
+
     def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
         # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
         # exclude_dirs, so the build's closing line names it.
