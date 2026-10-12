@@ -36,6 +36,7 @@ class El {
   set className(v) { this.attrs.class = v; }
   get className() { return this.attrs.class || ''; }
   get classList() { const self = this; return { add: (c) => { if (!self.classNames().includes(c)) self.attrs.class = (self.className + ' ' + c).trim(); }, remove: (c) => { self.attrs.class = self.classNames().filter((x) => x !== c).join(' '); }, toggle: (c, on) => { const has = self.classNames().includes(c); if (on === undefined ? !has : on) this.add(c); else this.remove(c); }, contains: (c) => self.classNames().includes(c) }; }
+  get parentNode() { return this.parent; }
   get id() { return this.attrs.id || ''; }
   set id(v) { this.attrs.id = v; }
   get textContent() { return this._text + this.children.map((c) => c.textContent).join(''); }
@@ -94,10 +95,19 @@ function load(data, opts = {}) {
   blob.textContent = opts.noData ? '' : JSON.stringify(data);
   const tab = body.appendChild(new El('div')); tab.id = 'tab-combat';
   const rows = {};
-  for (const [key, level] of Object.entries(opts.cells || {})) {
-    const tr = tab.appendChild(new El('tr')); tr.setAttribute('data-weapon-key', key);
+  // cells: { Name: '15' } puts a melee row in the Melee Attacks table; [[type, name, level], ...] puts rows in the
+  // table of their type, in order (two rows may share a name).
+  const list = Array.isArray(opts.cells) ? opts.cells : Object.entries(opts.cells || {}).map(([k, v]) => ['melee', k, v]);
+  const tables = {};
+  for (const [type, key, level] of list) {
+    if (!tables[type]) {
+      const wide = tab.appendChild(new El('div')); wide.className = 'wide cat-table';
+      const hd = wide.appendChild(new El('h2')); hd.textContent = type === 'ranged' ? 'Ranged Attacks' : 'Melee Attacks';
+      tables[type] = wide.appendChild(new El('table'));
+    }
+    const tr = tables[type].appendChild(new El('tr')); tr.setAttribute('data-weapon-key', key);
     const td = tr.appendChild(new El('td')); const sp = td.appendChild(new El('span')); sp.className = 'wp-tohit'; sp.textContent = level;
-    rows[key] = sp;
+    (rows[key] = rows[key] || []).push(sp);
   }
   const store = new Map(Object.entries(opts.store || {}));
   const localStorage = opts.lsThrows ? {
@@ -113,7 +123,9 @@ function load(data, opts = {}) {
     querySelectorAll: (s) => body.querySelectorAll(s),
     addEventListener() {},
   };
-  const win = { localStorage };
+  const timers = [];
+  const win = { localStorage, setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout: (id) => { if (timers[id - 1]) timers[id - 1].fn = null; } };
+  const flushTimers = () => { for (const t of timers.splice(0)) if (t.fn) t.fn(); };
   const ctx = { document: doc, window: win, MutationObserver, JSON, Math, Number, String, Object, Array, Boolean, parseInt, parseFloat, isFinite, Set, Map, console };
   vm.runInNewContext(SOURCE, ctx);
   const $ = (sel) => body.querySelector(sel);
@@ -121,7 +133,7 @@ function load(data, opts = {}) {
   const set = (sel, v) => { const el = $(sel); assert.ok(el, sel); if (el.attrs.type === 'checkbox') el.checked = v; else el.value = String(v); fire(el, 'input'); fire(el, 'change'); return el; };
   const names = () => body.querySelectorAll('.th-gname').map((n) => n.textContent);
   const saved = () => { const raw = store.get('tohit-calc:' + data.pc); return raw ? JSON.parse(raw) : null; };
-  return { body, box, $, all: (s) => body.querySelectorAll(s), fire, set, names, store, saved, rows, observers, blob, tab };
+  return { flushTimers, body, box, $, all: (s) => body.querySelectorAll(s), fire, set, names, store, saved, rows, observers, blob, tab };
 }
 
 describe('what it draws', () => {
@@ -413,7 +425,7 @@ describe('the live level', () => {
     const d = dataBlock();
     const p = load(d, { cells: { Hatchet: '12' } });
     assert.strictEqual(p.$('#th-roll').textContent, '12');
-    p.rows.Hatchet.textContent = '10';
+    p.rows.Hatchet[0].textContent = '10';
     assert.ok(p.observers.length > 0, 'it watches the cell');
     for (const o of p.observers) o.fn([]);
     assert.strictEqual(p.$('#th-roll').textContent, '10');
@@ -426,5 +438,120 @@ describe('the live level', () => {
   it('ignores a cell that is not a number', () => {
     const p = load(dataBlock(), { cells: { Hatchet: 'n/a' } });
     assert.strictEqual(p.$('#th-roll').textContent, '14');
+  });
+});
+
+describe('weapons with the same name', () => {
+  const twin = () => {
+    const d = dataBlock();
+    d.weapons.push(
+      { id: 'w3', key: 'Twin Blade', type: 'melee', nth: 0, name: 'Twin Blade', skill: 'Knife', level: 17, base: 17, damage: '1d cut', aids: [], bonuses: [], beam: false, range: '' },
+      { id: 'w4', key: 'Twin Blade', type: 'melee', nth: 1, name: 'Twin Blade', skill: 'Karate', level: 15, base: 15, damage: '1d cr', aids: [], bonuses: [], beam: false, range: '' },
+    );
+    d.weapons.forEach((w, i) => { if (!w.id) w.id = 'w' + i; });
+    return d;
+  };
+  it('both can be picked and each shows its own numbers', () => {
+    const p = load(twin());
+    const opts = p.$('#th-weapon').all().filter((o) => o.tag === 'option');
+    assert.strictEqual(new Set(opts.map((o) => o.attrs.value)).size, opts.length, 'option values are unique');
+    p.set('#th-weapon', 'w3');
+    assert.strictEqual(p.$('#th-weapon').value, 'w3');
+    assert.strictEqual(p.$('#th-roll').textContent, '17');
+    assert.match(p.$('#th-wline').textContent, /1d cut/);
+    p.set('#th-weapon', 'w4');
+    assert.strictEqual(p.$('#th-weapon').value, 'w4');
+    assert.strictEqual(p.$('#th-roll').textContent, '15');
+    assert.match(p.$('#th-wline').textContent, /1d cr/);
+    assert.match(p.$('#th-lines').textContent, /Karate/);
+    assert.strictEqual(p.saved().state.weapon, 'w4');
+  });
+  it('a saved state with the name as the weapon picks the first of that name', () => {
+    const p = load(twin(), { store: { 'tohit-calc:six': JSON.stringify({ state: { weapon: 'Twin Blade' } }) } });
+    assert.strictEqual(p.$('#th-weapon').value, 'w3');
+  });
+  it('reads each twin\'s level from its own row of its own table', () => {
+    const p = load(twin(), { cells: [['melee', 'Twin Blade', '12'], ['melee', 'Twin Blade', '9'], ['ranged', 'Twin Blade', '20']] });
+    p.set('#th-weapon', 'w3');
+    assert.strictEqual(p.$('#th-roll').textContent, '12');
+    p.set('#th-weapon', 'w4');
+    assert.strictEqual(p.$('#th-roll').textContent, '9');
+    p.rows['Twin Blade'][1].textContent = '8';
+    for (const o of p.observers) o.fn([]);
+    assert.strictEqual(p.$('#th-roll').textContent, '8');
+  });
+  it('a ranged weapon takes the Ranged Attacks row, not a melee row of the same name', () => {
+    const d = twin();
+    d.weapons.push({ id: 'w5', key: 'Twin Blade', type: 'ranged', nth: 0, name: 'Twin Blade', skill: 'Guns (Pistol)', level: 16, base: 16, acc: 2, rof: 1, rcl: 1, bulk: 1, range: '10/20', damage: '1d pi', aids: [], bonuses: [], beam: false });
+    const p = load(d, { cells: [['melee', 'Twin Blade', '12'], ['melee', 'Twin Blade', '9'], ['ranged', 'Twin Blade', '20']] });
+    p.set('#th-weapon', 'w5');
+    assert.strictEqual(p.$('#th-roll').textContent, '20');
+  });
+});
+
+describe('the answer, said and drawn', () => {
+  it('says the answer in one polite sentence, after a pause, once for a burst of changes', () => {
+    const p = load(dataBlock());
+    const live = p.$('#th-live');
+    assert.strictEqual(live.attrs['aria-live'], 'polite');
+    assert.match(live.textContent, /^Roll 14 or less on 3d6\. 90\.7 percent to hit\.$/);
+    p.set('#th-other', 1); p.set('#th-other', 12); p.set('#th-other', -2);
+    assert.match(live.textContent, /^Roll 14 or less/, 'not yet');
+    p.flushTimers();
+    assert.strictEqual(live.textContent, 'Roll 12 or less on 3d6. ' + (T.odds(12).hit * 100).toFixed(1) + ' percent to hit.');
+    p.set('#th-other', -30);
+    p.flushTimers();
+    assert.match(live.textContent, /no roll/i);
+  });
+  it('draws the strip as one image, with the ranges in words and a title on each cell', () => {
+    const p = load(dataBlock());
+    const strip = p.$('#th-strip');
+    assert.strictEqual(strip.attrs.role, 'img');
+    assert.strictEqual(strip.attrs['aria-label'], 'Critical hit on 3 to 4, hit up to 14, miss from 15, critical miss on 17 to 18');
+    const cells = p.all('.th-cell');
+    assert.strictEqual(cells.length, 16);
+    assert.strictEqual(cells[0].attrs.title, 'Roll 3: critical hit');
+    assert.strictEqual(cells[9].attrs.title, 'Roll 12: hit');
+    assert.strictEqual(cells[12].attrs.title, 'Roll 15: miss');
+    assert.strictEqual(cells[15].attrs.title, 'Roll 18: critical miss');
+  });
+  it('keeps colour off the subtotals: the sign says it', () => {
+    const p = load(dataBlock());
+    p.set('#th-weapon', 'Blaster pistol'); p.set('#th-aim', 3);
+    const sums = p.all('.th-gsum');
+    assert.ok(sums.length > 0);
+    assert.ok(sums.every((x) => !/th-(pos|neg|zero)/.test(x.className)));
+    assert.match(sums[0].textContent, /^\+\d/);
+  });
+  it('a greyed control says why, and gives the reason as a title', () => {
+    const p = load(dataBlock());
+    p.set('#th-telegraphic', true);
+    const hint = p.all('.th-hint').find((x) => !x.hidden);
+    assert.ok(hint);
+    assert.strictEqual(hint.textContent, 'Not with a Telegraphic Attack');
+    assert.strictEqual(p.$('#th-deceptive').title, 'Not with a Telegraphic Attack');
+    p.set('#th-telegraphic', false);
+    assert.ok(p.all('.th-hint').every((x) => x.hidden));
+    assert.strictEqual(p.$('#th-deceptive').title, '');
+    p.set('#th-deceptive', -2);
+    assert.strictEqual(p.$('#th-telegraphic').title, 'Not with a Deceptive Attack');
+  });
+});
+
+describe('where it is remembered', () => {
+  it('under the campaign, so two sites with one character name keep apart', () => {
+    const p = load(dataBlock({ campaign: 'canticle' }));
+    p.set('#th-foe', 12);
+    assert.ok(p.store.has('tohit-calc:canticle:six'));
+    assert.ok(!p.store.has('tohit-calc:six'));
+    const other = load(dataBlock({ campaign: 'dead-end' }), { store: { 'tohit-calc:canticle:six': p.store.get('tohit-calc:canticle:six') } });
+    assert.strictEqual(other.$('#th-foe').value, '', 'another campaign does not see it');
+  });
+  it('reads the key from before campaigns were in it, once, and saves it under the new one', () => {
+    const d = dataBlock({ campaign: 'canticle' });
+    const p = load(d, { store: { 'tohit-calc:six': JSON.stringify({ state: { foe: '13' } }) } });
+    assert.strictEqual(p.$('#th-foe').value, '13');
+    assert.ok(p.store.has('tohit-calc:canticle:six'));
+    assert.strictEqual(JSON.parse(p.store.get('tohit-calc:canticle:six')).state.foe, '13');
   });
 });

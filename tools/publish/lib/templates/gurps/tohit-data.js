@@ -302,14 +302,16 @@ function buildTohitData(model, meta) {
   const nextId = idMaker();
   const items = (m.equipment && m.equipment.items) || [];
   const weapons = [];
-  const addWeapon = (row, type) => {
+  // `nth`: this row's place among the rows of the same name in its own table (the page reads that
+  // row's live to-hit cell); `id` is unique, `key` is the name and may repeat.
+  const addWeapon = (row, type, nth) => {
     const key = str(row && row.weapon);
     const read = key && readWeaponSkill(row.skill);
     if (!read) return;
     const hit = match(read.skill);
     const notes = readRowNotes(row.notes);
     const w = {
-      key, type,
+      id: 'w' + weapons.length, key, type, nth,
       name: key.replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\s+/g, ' ').trim() || key,
       skill: hit ? hit.name : read.skill, skillAs: read.skill, level: read.level,
       base: hit ? hit.level : null,
@@ -331,8 +333,15 @@ function buildTohitData(model, meta) {
     }
     weapons.push(w);
   };
-  for (const r of m.melee || []) addWeapon(r, 'melee');
-  for (const r of m.ranged || []) addWeapon(r, 'ranged');
+  for (const [rows, type] of [[m.melee || [], 'melee'], [m.ranged || [], 'ranged']]) {
+    const seen = new Map();
+    for (const r of rows) {
+      const k = str(r && r.weapon);
+      const nth = seen.get(k) || 0;
+      seen.set(k, nth + 1);
+      addWeapon(r, type, nth);
+    }
+  }
   if (!weapons.length) return null;
 
   const stems = new Set(weapons.map(w => weaponStem(w.key)));
@@ -357,6 +366,7 @@ function buildTohitData(model, meta) {
   const ff = match('Free Fall');
   return {
     pc: meta && meta.pcSlug,
+    campaign: str(meta && meta.campaignId),
     weapons,
     aids,
     techniques: readTechniques(m.techniques || [], match, new Set(locations.map(l => l[0]))),

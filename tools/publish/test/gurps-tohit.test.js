@@ -838,3 +838,32 @@ describe('int() rounds toward zero', () => {
   });
 });
 
+
+describe('weapons with the same name', () => {
+  const twin = () => {
+    const d = mk();
+    d.weapons = [
+      Object.assign({}, d.weapons[0], { id: 'w0', key: 'Twin Blade', name: 'Twin Blade', skill: 'Knife', level: 17, base: 17, nth: 0 }),
+      Object.assign({}, d.weapons[0], { id: 'w1', key: 'Twin Blade', name: 'Twin Blade', skill: 'Karate', level: 15, base: 15, nth: 1 }),
+      Object.assign({}, d.weapons[1], { id: 'w2', nth: 0 }),
+    ];
+    return d;
+  };
+  it('effective finds a weapon by id, so the second twin has its own numbers', () => {
+    const a = T.effective(twin(), { weapon: 'w0' });
+    const b = T.effective(twin(), { weapon: 'w1' });
+    assert.strictEqual(a.roll, 17); assert.match(a.lines[0].label, /Knife/);
+    assert.strictEqual(b.roll, 15); assert.match(b.lines[0].label, /Karate/);
+  });
+  it('a key from a saved state before ids existed finds the first weapon of that name', () => {
+    assert.strictEqual(T.effective(twin(), { weapon: 'Twin Blade' }).roll, 17);
+    assert.strictEqual(T.cleanState(twin(), { weapon: 'Twin Blade' }).weapon, 'w0');
+    assert.strictEqual(T.cleanState(twin(), { weapon: 'w1' }).weapon, 'w1');
+    assert.strictEqual(T.cleanState(twin(), { weapon: 'w9' }).weapon, 'w0');
+    assert.strictEqual(T.defaultState(twin()).weapon, 'w0');
+  });
+  it('a block with no ids still works by key', () => {
+    assert.strictEqual(T.defaultState(mk()).weapon, 'Knife');
+    assert.strictEqual(T.cleanState(mk(), { weapon: 'Blaster pistol' }).weapon, 'Blaster pistol');
+  });
+});

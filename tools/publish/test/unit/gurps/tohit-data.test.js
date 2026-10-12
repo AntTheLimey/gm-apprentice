@@ -572,3 +572,18 @@ describe('round three: acc means "needs Aim"', () => {
     assert.deepStrictEqual(t.dual, { Knife: 3 });
   });
 });
+
+describe('weapon ids and campaign', () => {
+  it('gives every weapon a unique id in block order and an nth among same-named rows of its table', () => {
+    const d = buildTohitData(model({
+      melee: [meleeRow({ weapon: 'Twin Blade', skill: 'Knife-14' }), meleeRow({ weapon: 'Twin Blade', skill: 'Axe/Mace-17' }), meleeRow({ weapon: 'Bad', skill: 'no level here' }), meleeRow({ weapon: 'Twin Blade', skill: 'Knife-12' })],
+      ranged: [rangedRow({ weapon: 'Twin Blade' }), rangedRow({ weapon: 'Blaster pistol' })],
+    }), META);
+    assert.deepStrictEqual(d.weapons.map((w) => w.id), ['w0', 'w1', 'w2', 'w3', 'w4']);
+    assert.deepStrictEqual(d.weapons.map((w) => w.nth), [0, 1, 2, 0, 0], 'a skipped row still takes its place in the table');
+    assert.strictEqual(d.weapons[2].level, 12);
+  });
+  it('carries the campaign id for the page\'s storage key', () => {
+    assert.strictEqual(buildTohitData(model({ ranged: [rangedRow()] }), { pcSlug: 'six', campaignId: 'canticle' }).campaign, 'canticle');
+  });
+});

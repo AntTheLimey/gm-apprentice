@@ -150,9 +150,15 @@
     return { targeted: mine(t.targeted), other: mine(t.other) };
   }
 
-  function pickWeapon(data, key) {
+  // A weapon is named by its `id` (unique); a block or a saved state from before ids existed names
+  // it by `key`, which finds the first weapon of that name.
+  const wid = (w) => String(w.id !== undefined && w.id !== null ? w.id : w.key);
+  function findWeapon(list, ref) {
+    return list.find((w) => w && wid(w) === ref) || list.find((w) => w && w.key === ref) || null;
+  }
+  function pickWeapon(data, ref) {
     const list = data && Array.isArray(data.weapons) ? data.weapons : [];
-    return list.find((w) => w && w.key === key) || list[0] || null;
+    return findWeapon(list, ref) || list[0] || null;
   }
 
   function effective(data, state) {
@@ -455,7 +461,7 @@
     if (data && Array.isArray(data.aids)) data.aids.forEach(note);
     const locs = data && Array.isArray(data.locations) ? data.locations : [];
     const s = {
-      weapon: list.length ? String(list[0].key) : '', technique: '', aim: 0, scope: 0, sm: 0, vis: 0, shock: 0, evaluate: 0,
+      weapon: list.length ? wid(list[0]) : '', technique: '', aim: 0, scope: 0, sm: 0, vis: 0, shock: 0, evaluate: 0,
       deceptive: 0, posture: 0, cover: 0, man: 'attack', loc: locs.some((l) => Array.isArray(l) && l[0] === 'torso') ? 'torso' : '',
       aids, aidBonus: {},
     };
@@ -470,9 +476,9 @@
     const s = defaultState(data);
     if (!isObj(raw) || Array.isArray(raw)) return s;
     const list = data && Array.isArray(data.weapons) ? data.weapons.filter(isObj) : [];
-    const w = list.find((x) => x.key === raw.weapon);
-    if (w) s.weapon = String(w.key);
-    const mine = techniquesFor(data, list.find((x) => x.key === s.weapon));
+    const w = typeof raw.weapon === 'string' ? findWeapon(list, raw.weapon) : null;
+    if (w) s.weapon = wid(w);
+    const mine = techniquesFor(data, findWeapon(list, s.weapon));
     if (typeof raw.technique === 'string' && mine.other.some((t) => t.name === raw.technique)) s.technique = raw.technique;
     for (const k of Object.keys(RANGE_OF)) {
       const n = typeof raw[k] === 'number' && Number.isInteger(raw[k]) ? raw[k] : null;
@@ -498,7 +504,7 @@
     return s;
   }
 
-  const api = { effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, GROUPS };
+  const api = { effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, weaponId: wid, GROUPS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__gurpsTohit = api;
   if (typeof document === 'undefined') return;
@@ -510,6 +516,27 @@
   const TITLES = { aiming: 'Aiming', setup: 'Setup', attack: 'Attack', target: 'Target', env: 'Environment', you: 'You', foe: "Foe's defence" };
   const OPEN_BY_DEFAULT = ['aiming', 'setup', 'attack'];
   const FROM_TAG = { row: 'weapon', gear: 'gear', trait: 'trait' };
+  const weaponId = wid;
+  const SAY_DELAY = 600;
+  const WHY_OFF = { telegraphic: 'Not with a Deceptive Attack', deceptive: 'Not with a Telegraphic Attack' };
+  const OUTCOME_WORDS = { CS: 'critical hit', S: 'hit', F: 'miss', CF: 'critical miss' };
+  const pctWord = (x) => (x * 100).toFixed(x > 0.9995 || x < 0.0005 ? 0 : 1);
+  // "Critical hit on 3 to 4, hit up to 11, miss from 12, critical miss on 17 to 18"
+  function stripWords(kinds) {
+    const runs = [];
+    kinds.forEach((k, i) => {
+      const r = i + 3;
+      const last = runs[runs.length - 1];
+      if (last && last.k === k) last.to = r; else runs.push({ k, from: r, to: r });
+    });
+    return runs.map((x) => {
+      const word = OUTCOME_WORDS[x.k];
+      const span = x.from === x.to ? x.from : x.from + ' to ' + x.to;
+      if (x.k === 'S') return word + ' up to ' + x.to;
+      if (x.k === 'F') return word + ' from ' + x.from;
+      return word + ' on ' + span;
+    }).join(', ').replace(/^./, (c) => c.toUpperCase());
+  }
   const pct = (x) => (x * 100).toFixed(x > 0.9995 || x < 0.0005 ? 0 : 1) + '%';
 
   function mount() {
@@ -523,10 +550,15 @@
     if (!data.weapons.length) return;
 
     // ----- what is remembered: in this browser only, and never trusted -----
-    const KEY = 'tohit-calc:' + String(data.pc);
+    // Per campaign, so two sites on one origin with a character of the same name keep apart. A
+    // setup saved under the key from before campaigns were in it is read once, then saved under the new one.
+    const OLD_KEY = 'tohit-calc:' + String(data.pc);
+    const KEY = typeof data.campaign === 'string' && data.campaign ? 'tohit-calc:' + data.campaign + ':' + String(data.pc) : OLD_KEY;
+    let fromOldKey = false;
     function readSaved() {
       try {
-        const raw = root.localStorage.getItem(KEY);
+        let raw = root.localStorage.getItem(KEY);
+        if (raw === null || raw === undefined) { raw = root.localStorage.getItem(OLD_KEY); fromOldKey = KEY !== OLD_KEY && !!raw; }
         const got = raw ? JSON.parse(raw) : null;
         return isObj(got) ? got : null;
       } catch (e) { return null; }
@@ -560,22 +592,36 @@
     const freeFall = num(data.freeFall) === null ? null : Math.floor(num(data.freeFall));
     const refs = {};
 
-    const curWeapon = () => data.weapons.find((w) => w.key === state.weapon) || data.weapons[0];
+    const curWeapon = () => pickWeapon(data, state.weapon);
 
     // The Combat tab's own to-hit cell holds the live level (the encumbrance script changes it).
-    function liveLevel(key) {
-      const rows = document.querySelectorAll('#tab-combat [data-weapon-key]');
+    // The weapon's row is the nth row of its name in its own table (Melee Attacks or Ranged Attacks).
+    function tableRows(type) {
+      const title = type === 'ranged' ? 'Ranged Attacks' : 'Melee Attacks';
+      const tables = document.querySelectorAll('#tab-combat .wide');
+      for (let i = 0; i < tables.length; i++) {
+        const head = tables[i].querySelector('h2');
+        if (head && head.textContent.trim() === title) return tables[i].querySelectorAll('[data-weapon-key]');
+      }
+      return [];
+    }
+    function liveCell(w) {
+      const rows = tableRows(w.type);
+      let seen = 0;
       for (let i = 0; i < rows.length; i++) {
-        if (rows[i].getAttribute('data-weapon-key') !== key) continue;
-        const cell = rows[i].querySelector('.wp-tohit');
-        const m = cell ? /^\s*(-?\d+)\s*$/.exec(cell.textContent) : null;
-        return m ? parseInt(m[1], 10) : null;
+        if (rows[i].getAttribute('data-weapon-key') !== w.key) continue;
+        if (seen++ === (w.nth || 0)) return rows[i].querySelector('.wp-tohit');
       }
       return null;
     }
+    function liveLevel(w) {
+      const cell = liveCell(w);
+      const m = cell ? /^\s*(-?\d+)\s*$/.exec(cell.textContent) : null;
+      return m ? parseInt(m[1], 10) : null;
+    }
     function view() {
       return Object.assign({}, data, {
-        weapons: data.weapons.map((w) => { const l = liveLevel(w.key); return l === null ? w : Object.assign({}, w, { level: l }); }),
+        weapons: data.weapons.map((w) => { const l = liveLevel(w); return l === null ? w : Object.assign({}, w, { level: l }); }),
       });
     }
 
@@ -722,7 +768,7 @@
       const mine = data.weapons.filter((w) => w.type === kind);
       if (!mine.length) continue;
       const g = h('optgroup', { label });
-      for (const w of mine) { const o = h('option', { value: w.key }); weaponOpts.push([o, w]); g.appendChild(o); }
+      for (const w of mine) { const o = h('option', { value: weaponId(w) }); weaponOpts.push([o, w]); g.appendChild(o); }
       weaponSel.appendChild(g);
     }
     const wline = h('p', { class: 'th-wline', id: 'th-wline' });
@@ -733,7 +779,16 @@
     const hitEl = h('div', { class: 'th-v th-sm', id: 'th-hit' });
     const critEl = h('div', { class: 'th-v th-sm', id: 'th-crit' });
     const fumbleEl = h('div', { class: 'th-v th-sm', id: 'th-fumble' });
-    const stripEl = h('div', { class: 'th-strip', id: 'th-strip', 'aria-label': 'Result of each roll from 3 to 18' });
+    const stripEl = h('div', { class: 'th-strip', id: 'th-strip', role: 'img', 'aria-label': 'Result of each roll from 3 to 18' });
+    // One sentence, read out politely and not on every keystroke.
+    const liveEl = h('div', { class: 'th-sr', id: 'th-live', 'aria-live': 'polite', 'aria-atomic': 'true' });
+    let sayTimer = null;
+    function say(text, now) {
+      const set = () => { liveEl.textContent = text; sayTimer = null; };
+      if (typeof root.clearTimeout === 'function' && sayTimer !== null) root.clearTimeout(sayTimer);
+      if (now || typeof root.setTimeout !== 'function') set();
+      else sayTimer = root.setTimeout(set, SAY_DELAY);
+    }
     const cells = [];
     for (let r = 3; r <= 18; r++) { const c = h('div', { class: 'th-cell', text: r }); cells.push(c); stripEl.appendChild(c); }
     const linesEl = h('tbody', { id: 'th-lines' });
@@ -748,7 +803,11 @@
         h('label', { class: 'th-lbl', for: 'th-weapon', text: 'Weapon' }), weaponSel, wline, techBox, suggEl,
       ]), groupsEl]),
       h('div', { class: 'th-out' }, [
-        h('div', { class: 'th-big' }, [big('Roll', rollEl), big('Hit', hitEl), big('Critical', critEl), big('Fumble', fumbleEl)]),
+        h('div', { class: 'th-big' }, [
+          h('div', { class: 'th-stick' }, [big('Roll', rollEl), big('Hit', hitEl)]),
+          h('div', { class: 'th-sub' }, [big('Critical', critEl), big('Fumble', fumbleEl)]),
+        ]),
+        liveEl,
         stripEl,
         h('table', { class: 'th-lines' }, [linesEl]),
         notesEl,
@@ -801,38 +860,53 @@
         d.open = id in open ? open[id] === true : OPEN_BY_DEFAULT.indexOf(id) >= 0;
         d.addEventListener('toggle', () => { open[id] = d.open; write(); });
         const what = h('span', { class: 'th-gwhat' });
-        const sum = h('span', { class: 'th-gsum th-zero', text: '0' });
+        const sum = h('span', { class: 'th-gsum', text: '0' });
         sums[id] = { what, sum };
         d.appendChild(h('summary', {}, [h('span', { class: 'th-gname', text: TITLES[id] }), what, sum]));
         d.appendChild(h('div', { class: 'th-gfields' }, groupFields(id, w)));
         groupsEl.appendChild(d);
       }
     }
+    // A greyed control says why, beside it.
+    const hints = {};
     function rebuild() {
       for (const k of Object.keys(refs)) delete refs[k];
+      for (const k of Object.keys(hints)) delete hints[k];
       drawWeapon();
       drawGroups();
+      for (const k of Object.keys(WHY_OFF)) {
+        if (!refs[k] || !refs[k].parentNode) continue;
+        hints[k] = h('span', { class: 'th-hint' });
+        hints[k].hidden = true;
+        refs[k].parentNode.appendChild(hints[k]);
+      }
     }
 
     // ----- the answer -----
     const row = (cls, label, value, vcls) => h('tr', { class: cls }, [h('td', { text: label }), h('td', { class: 'th-n' + (vcls ? ' ' + vcls : ''), text: value })]);
-    function calc() {
+    function calc(initial) {
       const v = view();
       const w = curWeapon();
       const res = effective(v, state);
       modeEl.textContent = res.type === 'ranged' ? 'Ranged' : 'Melee';
       for (const [o, x] of weaponOpts) {
-        const lv = v.weapons.find((y) => y.key === x.key);
+        const lv = v.weapons[data.weapons.indexOf(x)];
         o.textContent = (x.name || x.key) + ' (' + int(lv && lv.level, -99, 99) + ')';
       }
-      weaponSel.value = w.key;
+      weaponSel.value = weaponId(w);
       wline.textContent = res.type === 'ranged'
         ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + int(w.rof, 1, 9999, 1), 'Rcl ' + int(w.rcl, 1, 99, 1), 'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
         : String(w.damage || '');
 
       const c = conflicts(state);
-      if (refs.telegraphic) refs.telegraphic.disabled = c.telegraphic;
-      if (refs.deceptive) refs.deceptive.disabled = c.deceptive;
+      for (const k of Object.keys(WHY_OFF)) {
+        const el = refs[k];
+        if (!el) continue;
+        el.disabled = c[k];
+        el.title = c[k] ? WHY_OFF[k] : '';
+        if (el.parentNode) el.parentNode.title = c[k] ? WHY_OFF[k] : '';
+        if (hints[k]) { hints[k].hidden = !c[k]; hints[k].textContent = c[k] ? WHY_OFF[k] : ''; }
+      }
       const chips = suggEl.querySelectorAll('.th-chip');
       for (let i = 0; i < chips.length; i++) chips[i].setAttribute('aria-pressed', String(chips[i].getAttribute('data-loc') === state.loc));
 
@@ -841,10 +915,15 @@
       hitEl.textContent = o.none ? 'no roll' : pct(o.hit);
       critEl.textContent = o.none ? '—' : pct(o.crit);
       fumbleEl.textContent = o.none ? '—' : pct(o.fumble);
+      const kinds = [];
+      for (let r = 3; r <= 18; r++) kinds.push(o.none ? 'F' : outcome(r, res.roll, res.critSkill));
       cells.forEach((cell, i) => {
-        const r = i + 3;
-        cell.className = 'th-cell th-' + (o.none ? 'F' : outcome(r, res.roll, res.critSkill));
+        cell.className = 'th-cell th-' + kinds[i];
+        cell.setAttribute('title', 'Roll ' + (i + 3) + ': ' + (o.none ? 'no roll' : OUTCOME_WORDS[kinds[i]]));
       });
+      stripEl.setAttribute('aria-label', o.none ? 'No roll: the number is below 3' : stripWords(kinds));
+      const sentence = o.none ? 'Roll below 3: no roll to make.' : 'Roll ' + res.roll + ' or less on 3d6. ' + pctWord(o.hit) + ' percent to hit.';
+      say(sentence, initial === true);
 
       clear(linesEl);
       const first = res.lines[0];
@@ -857,11 +936,11 @@
         if (s) {
           if (id === 'foe') {
             s.sum.textContent = res.foe ? String(res.foe.defence) : '—';
-            s.sum.className = 'th-gsum th-zero';
+            s.sum.className = 'th-gsum';
           } else {
             const total = mine.reduce((a, l) => a + l.value, 0);
             s.sum.textContent = total ? sgn(total) : '0';
-            s.sum.className = 'th-gsum ' + (total > 0 ? 'th-pos' : total < 0 ? 'th-neg' : 'th-zero');
+            s.sum.className = 'th-gsum';
           }
           s.what.textContent = mine.map((l) => l.label.split(',')[0].split(' (')[0]).join(' · ');
         }
@@ -895,12 +974,12 @@
     });
 
     rebuild();
-    calc();
+    calc(true);
+    if (fromOldKey) write();
     if (typeof MutationObserver === 'function') {
-      const cellsOnTab = document.querySelectorAll('#tab-combat [data-weapon-key]');
       const obs = new MutationObserver(() => calc());
-      for (let i = 0; i < cellsOnTab.length; i++) {
-        const cell = cellsOnTab[i].querySelector('.wp-tohit');
+      for (const w of data.weapons) {
+        const cell = liveCell(w);
         if (cell) obs.observe(cell, { childList: true, characterData: true, subtree: true });
       }
     }
