@@ -1244,13 +1244,40 @@ class GmLeakCommandTests(unittest.TestCase):
                    "For the Keeper:", "keeper-only", "Keeper/GM",
                    "GM/Keeper", "Notes for the Keeper", "Keeper",
                    "For Keepers only", "Keeper_Notes", "Notes: Keeper only",
-                   "Secrets — Keeper")
+                   "Secrets — Keeper",
+                   # a content word before Keeper does not make it a job
+                   # when more follows (#316)
+                   "Additional Keeper Notes", "Private Keeper Notes",
+                   "NPC Keeper Notes", "Session Keeper Notes",
+                   "Hidden Keeper Agenda", "Background Keeper Info",
+                   "Scene Keeper Guidance", "More Keeper Notes",
+                   "See Keeper Notes", "Only Keeper", "My Keeper Notes",
+                   "At Keeper's discretion", "Under Keeper control",
+                   "In Keeper hands", "Per Keeper", "Quick Keeper Reference",
+                   "Private Keeper's notes", "Private Keeper only",
+                   "Park Keeper-only", "Notes Keeper", "Background Keeper",
+                   "Summary Keeper", "Players vs Keeper")
         for title in clean:
             with self.subTest(clean=title):
                 self.assertFalse(vc._keeper_text(title, []))
         for title in flagged:
             with self.subTest(flagged=title):
                 self.assertTrue(vc._keeper_text(title, []))
+
+    def test_a_content_word_and_more_after_keeper_still_warns_in_a_note(self):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "## Additional Keeper Notes\n\ntext\n\n"
+            "## Hidden Keeper Agenda\n\ntext\n\n"
+            "**Private Keeper note:** he lies.\n\n"
+            "> [!warning] Private Keeper note\n\n"
+            "> [!info] Extra Keeper information\n\n"
+            "## The Park Keeper\n\ntext\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(sorted(int(r.split("\t")[1].split(":")[1])
+                                for r in rows_for(rows, "Bob.md:")),
+                         [7, 11, 15, 17, 19], rows)
 
     def test_a_callout_type_and_title_are_read_apart(self):
         # "note" before "Keeper only" must not make it a job.

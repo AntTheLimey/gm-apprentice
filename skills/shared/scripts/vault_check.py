@@ -2333,8 +2333,23 @@ KEEPER_WORD_RE = re.compile(r"(?<![^\W_])keepers?(?![^\W_])")
 BEFORE_WORD_RE = re.compile(r"(\S+)\s+$")
 PLAIN_WORD_RE = re.compile(r"\W*[^\W\d_][\w'’-]*")
 # A word before "Keeper" that leaves it meaning the GM ("For the Keeper").
-FUNCTION_WORDS = frozenset(("the", "a", "an", "for", "to", "of", "by", "from",
-                            "with", "and", "or", "your"))
+FUNCTION_WORDS = frozenset((
+    "the", "a", "an", "for", "to", "of", "by", "from", "with", "and", "or",
+    "your", "my", "our", "at", "under", "in", "on", "per", "see", "only",
+    "any", "all", "no", "this", "that", "vs", "versus"))
+# Before "Keeper", these are GM material, not an occupation.
+GM_BEFORE = frozenset((
+    "notes", "note", "background", "summary", "info", "information",
+    "agenda", "guidance", "reference", "secrets", "brief", "truth"))
+# After "Keeper", these end the phrase: "Lighthouse Keeper for hire".
+FOLLOW_WORDS = frozenset(("the", "a", "an", "for", "to", "of", "by", "from",
+                          "with", "and", "or", "at", "in", "on"))
+END_PUNCTUATION = ".,;!?)]}\"”—–*"
+# "Park Keeper's lodge" is a job; "Private Keeper's notes" is not.
+GM_AFTER_POSSESSIVE = frozenset((
+    "notes", "note", "only", "eyes", "info", "information", "agenda",
+    "guidance", "advice", "tips", "secrets", "discretion", "control",
+    "hands", "reference", "background", "section"))
 
 # Types the publish pipeline never builds a page for. Nothing in them can
 # leak however it is written, and flagging their (correctly) Keeper-facing
@@ -2389,16 +2404,34 @@ def _fence_rows(rel: str, problems: list[str],
     return rows
 
 
+def _phrase_ends(after: str) -> bool:
+    """Does the phrase end right after "Keeper"? The text after it is
+    empty or starts with closing punctuation or a function word, or a
+    possessive that is not followed by a GM word."""
+    if after[:2] in ("'s", "’s"):
+        nxt = re.match(r"\W*([^\W_]+)", after[2:])
+        return nxt is None or nxt.group(1) not in GM_AFTER_POSSESSIVE
+    after = after.lstrip()
+    if not after or after[0] in END_PUNCTUATION:
+        return True
+    word = re.match(r"[^\W_]+", after)
+    return word is not None and word.group(0) in FOLLOW_WORDS
+
+
 def _keeper_word(text: str) -> bool:
-    """Does `text` say Keeper, the GM? "Lighthouse Keeper" is a job: the
-    word before it is a content word. Nothing before it, punctuation, or a
-    function word ("For the Keeper") leaves it the GM."""
+    """Does `text` say Keeper, the GM? "Lighthouse Keeper" is a job: a
+    content word comes right before it and the phrase ends after it. A
+    missed GM heading publishes unwarned, so every other shape flags:
+    nothing before it, punctuation or a function word before it ("For the
+    Keeper"), or more after it ("Private Keeper Notes")."""
     low = text.casefold()
     for m in KEEPER_WORD_RE.finditer(low):
         before = BEFORE_WORD_RE.search(low[:m.start()])
-        if before and PLAIN_WORD_RE.fullmatch(before.group(1)):
-            if before.group(1).strip("(*_[\"“‘'") not in FUNCTION_WORDS:
-                continue
+        if (before and PLAIN_WORD_RE.fullmatch(before.group(1))
+                and before.group(1).strip("(*_[\"“‘'") not in FUNCTION_WORDS
+                and before.group(1).strip("(*_[\"“‘'") not in GM_BEFORE
+                and _phrase_ends(low[m.end():])):
+            continue
         return True
     return False
 
