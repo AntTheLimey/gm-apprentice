@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.49"
+current_version: "1.10.50"
 ---
 
 # Vault Migration Record
@@ -56,3 +56,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.47 | `publish.exclude_sections` and `publish.exclude_fields`: a vault with a site and no list of its own gets the built-in list written into `_meta/vault-config.md`, so the GM can see it; what publishes does not change. A vault that has its own list is not changed. `migrate-config` does the same for a site file that held no list. The site's publish tool is repinned to 1.19.0 by the every-pass repin | `exclude-lists` |
 | 1.10.48 | `withheld: true` on a note makes its own name a secret the site build looks for. No vault change: a note without the flag is not withheld, and nothing is added to one. New vaults' NPC, creature, organization, location and item templates carry the flag; an existing vault's untouched templates are updated by every-pass `templates` | — |
 | 1.10.49 | No vault change. A `coc-7e` vault whose templates look like Regency Cthulhu is told once, and the setting is left for the GM to change. An update with a move-or-leave choice unanswered does not stamp the vault | `regency-looks` |
+| 1.10.50 | No vault change. A GURPS site gains the to-hit calculator on each character's Combat tab at its next build (`publish.tohit_calculator: off` turns it off). An untouched GURPS character template gains the wider weapon tables (Notes; ST and Rcl for ranged) by the every-pass `templates` step; an edited one is the GM's choice, as always. The site's publish tool is repinned to 1.21.0 by the every-pass repin | — |

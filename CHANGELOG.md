@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.50] — 2026-10-12
+
+### Added
+
+- A to-hit calculator on every GURPS character's Combat tab (#318).
+  The player picks a weapon and sets the situation in named groups
+  (Aiming, Setup, Attack, Target, Environment, You, Foe's defence) that
+  change with the weapon, and reads the number to roll on 3d6, the
+  odds, and a list of everything that went into the number. It never
+  rolls dice. `publish.tohit_calculator: off` turns it off; off, every
+  page is as it was.
+- The calculator fills in what the character's note says: the weapons
+  and their numbers, sighting aids named in a weapon's row, the gear
+  list or the advantages, Targeted Attack and Dual-Weapon Attack
+  techniques (a targeted attack for the picked weapon is one tap),
+  other techniques that default from the weapon's skill, Free Fall,
+  Ambidexterity, Off-Hand Weapon Training, Trained by a Master, Weapon
+  Master, Telescopic Vision and Night Vision. An aid the note names
+  without a number gets a box for the player to type it.
+- The GURPS character template's weapon tables gain a Notes column
+  (and ST and Rcl for ranged weapons), with a short standard way to
+  write a weapon's bonuses there: `Scope +2 Acc; Laser sight +1`,
+  `Weapon Bond +1`. The GURPS sheet guidance lists the forms. Sheets
+  written before keep working.
+
+### Changed
+
+- A technique's level on a GURPS sheet is written without any one
+  weapon's own bonus, as a skill's is; the weapon's row carries the
+  bonus. The guidance says so.
+- Publish tool 1.21.0.
+
 ## [1.10.49] — 2026-10-12
 
 ### Changed
