@@ -61,11 +61,27 @@ const printed = (text) => {
 // kept and the address dropped through the next `)`, as it always was, so no address is ever
 // printed; past LINK_DEPTH a label is reduced that way too.
 // Past that depth every `](address)` goes, through the next `)`, and the brackets stay.
+// Where an address that could not be read ends: its balancing `)`, or the first `)` when
+// its brackets never balance.
+function addressEnd(text, start) {
+  let nested = 0;
+  let firstClose = -1;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '\\') { i++; continue; }
+    if (text[i] === '(') nested++;
+    else if (text[i] === ')') {
+      if (!nested) return i;
+      nested--;
+      if (firstClose === -1) firstClose = i;
+    }
+  }
+  return firstClose;
+}
 function dropAddresses(text) {
   let out = '';
   let at = 0;
   for (let i = text.indexOf(']('); i !== -1; i = text.indexOf('](', at)) {
-    const end = text.indexOf(')', i + 2);
+    const end = addressEnd(text, i + 2);
     if (end === -1) break;
     out += text.slice(at, i);
     at = end + 1;
@@ -98,7 +114,7 @@ function markdownLinkLabels(text, depth = 0) {
       const title = end > dest.pos ? parseLinkTitle(text, end, text.length) : { ok: false };
       if (title.ok) end = blank(title.pos);
     }
-    if (end === -1 || text[end] !== ')') end = text.indexOf(')', close + 2);
+    if (end === -1 || text[end] !== ')') end = addressEnd(text, close + 2);
     if (end === -1) continue;
     const label = text.slice(i + 1, close);
     out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));

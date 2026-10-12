@@ -357,6 +357,10 @@ test('a markdown link the strict reading refuses still prints its label, never i
   assert.deepStrictEqual(lineOf('[x](a "t" extra) r'), ['x r']);
   const deep = '['.repeat(40) + 'x' + '](Secret Lair.md)'.repeat(40);
   assert.ok(!lineOf(deep)[0].includes('Secret'));
+  assert.deepStrictEqual(lineOf('see [x](a b(c)d) rest'), ['see x rest']);
+  assert.deepStrictEqual(lineOf('see [x](a b(c d) rest'), ['see x rest']);
+  const deepBrackets = '['.repeat(40) + 'x' + '](a b(c)tail)'.repeat(40);
+  assert.ok(!lineOf(deepBrackets)[0].includes('tail'));
 });
 
 test('generated descriptions never print a link address', () => {
