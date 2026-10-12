@@ -9,7 +9,8 @@ been given (the migration's own `templates_for`) and records a hash of each
 text, keyed by system ("generic" for none), then by vault filename.
 migrate.py upgrades an untouched `_Templates/` file whose text is in its own
 system's list as Will do instead of asking. Run this whenever a template under
-skills/shared/templates/ changes; a test fails until you do.
+skills/shared/templates/ changes; a test fails until you do. The history only
+grows: a hash once recorded is never dropped.
 """
 
 from __future__ import annotations
@@ -85,18 +86,27 @@ def build(tags: list[str] | None = None) -> History:
             for system in sorted(hashes)}
 
 
+def merge(old: History, new: History) -> History:
+    """The history is append-only: every hash in `old` stays, whatever `new`
+    holds, and the hashes of `new` are added. A hash is recorded from the
+    working tree as well as from the tags, so one can be recorded for a
+    draft of a template that no tag ever held; it is harmless (a vault never
+    holds that text) and dropping it would make the script refuse to run."""
+    out: History = {}
+    for system in sorted(set(old) | set(new)):
+        names = set(old.get(system, {})) | set(new.get(system, {}))
+        out[system] = {
+            name: sorted(set(old.get(system, {}).get(name, []))
+                         | set(new.get(system, {}).get(name, [])))
+            for name in sorted(names)}
+    return out
+
+
 def refusal(old: History, new: History, tags: list[str]) -> str | None:
-    """Why the new history must not replace the old, or None: a checkout
-    without the release tags would silently drop released hashes."""
+    """Why the history must not be written, or None: a checkout without the
+    release tags would record only the working tree's text."""
     if not tags:
         return "no release tags found (shallow clone?): run `git fetch --tags`"
-    dropped = sum(1 for system, names in old.items()
-                  for name, hashes in names.items()
-                  for h in hashes
-                  if h not in new.get(system, {}).get(name, []))
-    if dropped:
-        return (f"{dropped} hash(es) already in the history would be "
-                f"dropped; fetch all release tags and run again")
     return None
 
 
@@ -113,7 +123,7 @@ def main() -> int:
     if problem:
         print(f"template_history.py: {problem}", file=sys.stderr)
         return 1
-    HISTORY.write_text(json.dumps(new, indent=1) + "\n", encoding="utf-8")
+    HISTORY.write_text(json.dumps(merge(old, new), indent=1) + "\n", encoding="utf-8")
     print(f"wrote {HISTORY.relative_to(ROOT)}")
     return 0
 

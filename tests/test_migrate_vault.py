@@ -334,17 +334,28 @@ class TemplateTests(unittest.TestCase):
                     f"{name} ({system}) is not in template-history.json; "
                     f"regenerate it: python3 scripts/template_history.py")
 
-    def test_the_history_script_will_not_drop_released_hashes(self):
-        old = {"generic": {"a.md": ["h1", "h2"]}}
-        self.assertIsNone(th.refusal(
-            old, {"generic": {"a.md": ["h1", "h2", "h3"]}}, ["v1"]))
-        self.assertIn("would be dropped", th.refusal(
-            old, {"generic": {"a.md": ["h1"]}}, ["v1"]))
-        self.assertIn("would be dropped", th.refusal(
-            old, {"gurps-4e": {"a.md": ["h1", "h2"]}}, ["v1"]))
-        self.assertIn("would be dropped", th.refusal(old, {}, ["v1"]))
-        self.assertIn("no release tags", th.refusal(
-            {}, {"generic": {"a.md": ["h1"]}}, []))
+    def test_the_history_only_grows(self):
+        # A hash once recorded is kept: one from a working tree that no tag
+        # holds (a draft of a template, recorded when the script ran) is not
+        # fatal and is not dropped, and a new hash is added.
+        old = {"generic": {"a.md": ["h1", "h2"]}, "gurps-4e": {"b.md": ["g1"]}}
+        new = {"generic": {"a.md": ["h1", "h3"]}}
+        self.assertEqual(th.merge(old, new), {
+            "generic": {"a.md": ["h1", "h2", "h3"]},
+            "gurps-4e": {"b.md": ["g1"]}})
+        self.assertEqual(th.merge({}, new), new)
+        # Merging again changes nothing: the file is something the script
+        # can regenerate.
+        self.assertEqual(th.merge(th.merge(old, new), new), th.merge(old, new))
+        self.assertIsNone(th.refusal(old, new, ["v1"]))
+        self.assertIn("no release tags", th.refusal(old, new, []))
+
+    def test_the_checked_in_history_is_what_the_script_would_write(self):
+        history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))
+        tags = th.release_tags()
+        if not tags:
+            self.skipTest("no release tags in this checkout")
+        self.assertEqual(th.merge(history, th.build(tags)), history)
 
     def test_an_unreadable_template_is_a_failed_step(self):
         vault = make_vault(self)
