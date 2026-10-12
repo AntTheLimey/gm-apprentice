@@ -1661,3 +1661,84 @@ def test_an_edge_to_a_held_look_alike_uses_its_live_id(tmp_path, monkeypatch, ca
     assert "link the exact note name" not in out
     rels = [i for i in batch["suggestions"] if i.get("operation") == "AddRelation"]
     assert any("vane-id" in (r["payload"]["targetRef"], r["payload"]["sourceRef"]) for r in rels)
+
+
+# ---- final fix pass ----
+
+def _ashworth_run(tmp_path, monkeypatch, capsys, live_name="Lord Ashworth"):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Characters/NPCs", "Lord Ashworth", "lord-id")
+    (root / "Characters/NPCs/Lady Ashworth.md").write_text(
+        '---\ntype: npc\noccupation: "Lady"\ngender: Female\n---\nLady.\n', encoding="utf-8")
+    (root / "Characters/NPCs/Betty.md").write_text(
+        '---\ntype: npc\noccupation: "Maid"\ngender: Female\nrelationships:\n'
+        '  - target: "[[Lady Ashworth]]"\n    type: knows\n---\nBetty.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "lord-id", "name": live_name}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    return capsys.readouterr().out, json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+
+
+def test_a_look_alike_of_the_same_kind_is_not_the_linked_element(tmp_path, monkeypatch, capsys):
+    out, batch = _ashworth_run(tmp_path, monkeypatch, capsys)
+    ends = [r["payload"][k] for r in batch["suggestions"] if r.get("operation") == "AddRelation"
+            for k in ("sourceRef", "targetRef")]
+    assert "lord-id" not in ends                       # nothing goes to Lord Ashworth
+    held = [l for l in out.splitlines() if "Lady Ashworth" in l and "[held]" in l]
+    assert held and "only once" in held[0] and "Lord Ashworth" in held[0]
+    assert any("Betty" in l and "Lady Ashworth" in l for l in out.splitlines() if "[note]" in l)
+
+
+def test_a_look_alike_pair_linked_to_each_other_keeps_each_ones_kind(tmp_path):
+    ent = {"path": str(tmp_path / "Characters/NPCs/The_Woodland_Ghost.md"), "name": "The Woodland Ghost",
+           "relationships": [{"target": "Woodland Ghost", "predicate": "member_of", "desc": ""}]}
+    kinds = {("=", "The Woodland Ghost"): "Person", ("=", "Woodland Ghost"): "Organization"}
+    items, skipped = suggest.relationship_items(
+        ent, _map(), "e1", {}, set(), str(tmp_path), "w", "e1", kind_by_key=kinds,
+        id_by_file={"The Woodland Ghost": "a-id", "Woodland Ghost": "b-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert '"eventType": "Membership"' in json.dumps(items), skipped
+
+
+def test_a_name_that_is_a_new_note_exactly_beats_a_linked_note_in_other_case():
+    tid, ref, amb = suggest._resolve_edge("the vane", suggest._key("the vane"), {}, {"The Vane": "vane-id"},
+                                          {}, {"the vane": "e2"}, set())
+    assert (tid, ref, amb) == (None, "e2", False)
+    # no exact match anywhere: the other-case linked note still answers
+    tid, ref, amb = suggest._resolve_edge("THE VANE", suggest._key("the vane"), {}, {"The Vane": "vane-id"},
+                                          {}, {}, set())
+    assert tid == "vane-id"
+
+
+def test_two_spellings_of_one_note_keep_the_event_ref_they_had(tmp_path):
+    ent = {"path": str(tmp_path / "Characters/NPCs/Bob.md"), "name": "Bob",
+           "relationships": [{"target": "Lord Brannoch", "predicate": "knows", "desc": ""},
+                             {"target": "brannoch", "predicate": "knows", "desc": ""}]}
+    items, _ = suggest.relationship_items(
+        ent, _map(), "e1", {suggest._key("Lord Brannoch"): "b-id"}, set(), str(tmp_path), "w", "e1",
+        id_by_file={"Lord Brannoch": "b-id"})
+    refs = _event_refs(items)
+    assert len(refs) == 2 and refs[0] == refs[1] and "~" not in refs[1]
+
+
+def test_underscore_twins_are_named_not_dropped(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Locations", "Black Gate", "gate-id")
+    (root / "Locations/Black_Gate.md").write_text("---\ntype: location\n---\nAnother.\n", encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: _empty_live())
+    suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")])
+    out = capsys.readouterr().out
+    assert any("Black" in l and "underscore" in l for l in out.splitlines()), out
