@@ -340,6 +340,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const systemSpellsHtml = fromSystem('systemSpellsHtml');
   const systemVitalsHtml = fromSystem('systemVitalsHtml');
   const systemLiveData = fromSystem('systemLiveData');
+  const systemTohitData = fromSystem('systemTohitData');
   const systemStatusPanelHtml = fromSystem('systemStatusPanelHtml');
   const systemRecordHtml = fromSystem('systemRecordHtml');
   const systemStatusBarHtml = fromSystem('systemStatusBarHtml');
@@ -358,6 +359,9 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   const liveData = liveOn ? systemLiveData : null;
   const statusPanel = liveOn ? systemStatusPanelHtml : null;
   const statusBar = liveOn ? systemStatusBarHtml : null;
+  // The to-hit calculator does not depend on live stats. Its container and data block ride inside
+  // the Combat tab's HTML (see buildCombat), so it needs a Combat tab to be on the page.
+  const tohitOn = !!systemTohitData && !!systemCombatHtml;
 
   // Combat-only consumed titles: only suppress when combat HTML is present.
   const GURPS_COMBAT_TITLES = new Set(['combat action chains', 'multi-action combat skill chains', 'combat summary']);
@@ -552,6 +556,7 @@ ${tabScript(pageTabs(systemSpellsHtml, sheetsOff))}`;
       ...clientScripts(page.outputPath),
       ...(showInbox ? [rootPath(page.outputPath) + 'js/change-request.js'] : []),
       ...(liveOn ? liveScriptHrefs(rootPath(page.outputPath), publishConfig.system) : []),
+      ...(tohitOn ? [rootPath(page.outputPath) + 'js/gurps-tohit.js'] : []),
     ],
   });
 }

@@ -688,3 +688,85 @@ describe('constants pinned (the review\'s surviving mutations)', () => {
     assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', dual: true }), 17);
   });
 });
+
+describe('the page\'s starting and saved state', () => {
+  const AIDS = [
+    { id: 'row-laser', name: 'Laser sight', bonus: 1, acc: false, fixed: false, from: 'row', on: true },
+    { id: 'row-prog', name: 'Targeting program', bonus: null, acc: false, fixed: false, from: 'row', on: true },
+  ];
+  const WIDE = [
+    { id: 'gear-hud', name: 'HUD link', bonus: 1, acc: true, fixed: false, from: 'gear', on: true },
+    { id: 'gear-spare', name: 'Reflex sight', bonus: 2, acc: true, fixed: false, from: 'gear', on: false },
+  ];
+  const data = () => { const d = scoped(AIDS); d.aids = WIDE; return d; };
+
+  it('starts neutral on the first weapon, every aid ticked as its `on` says', () => {
+    const s = T.defaultState(data());
+    assert.strictEqual(s.weapon, 'Knife');
+    assert.deepStrictEqual(s.aids, { 'row-laser': true, 'row-prog': true, 'gear-hud': true, 'gear-spare': false });
+    assert.strictEqual(rolls(data(), s), 14, 'the knife: the sheet number');
+    assert.strictEqual(rolls(data(), Object.assign({}, s, { weapon: 'Blaster pistol' })), 18, 'the sheet number and the ticked laser sight, which needs no Aim');
+    const bare = T.defaultState(scoped([]));
+    assert.strictEqual(rolls(scoped([]), Object.assign({}, bare, { weapon: 'Blaster pistol' })), 17);
+  });
+  it('reads anything that is not an object as the defaults, never throwing', () => {
+    const want = T.defaultState(data());
+    for (const bad of [null, undefined, 'x', 5, [], true, () => 1]) assert.deepStrictEqual(T.cleanState(data(), bad), want);
+  });
+  it('keeps what is valid', () => {
+    const raw = { weapon: 'Blaster pistol', aim: 3, braced: true, aids: { 'row-laser': false }, aidBonus: { 'row-prog': '2' },
+      yards: '70', man: 'popup', cover: 'light', behind: 2, loc: 'skull', sm: -2, vis: -4, deceptive: -4, foe: '12' };
+    const s = T.cleanState(data(), raw);
+    assert.strictEqual(s.weapon, 'Blaster pistol');
+    assert.strictEqual(s.aim, 3);
+    assert.strictEqual(s.braced, true);
+    assert.strictEqual(s.aids['row-laser'], false);
+    assert.strictEqual(s.aids['gear-hud'], true);
+    assert.deepStrictEqual(s.aidBonus, { 'row-prog': 2 });
+    assert.strictEqual(s.yards, '70');
+    assert.strictEqual(s.man, 'popup');
+    assert.strictEqual(s.cover, 'light');
+    assert.strictEqual(s.behind, '2');
+    assert.strictEqual(s.loc, 'skull');
+    assert.strictEqual(s.sm, -2);
+    assert.strictEqual(s.vis, -4);
+    assert.strictEqual(s.deceptive, -4);
+    assert.strictEqual(s.foe, '12');
+  });
+  it('a weapon key that no longer exists falls back to the first weapon', () => {
+    assert.strictEqual(T.cleanState(data(), { weapon: 'Gone gun', aim: 2 }).weapon, 'Knife');
+    assert.strictEqual(T.cleanState(data(), { weapon: 'Gone gun', aim: 2 }).aim, 2);
+  });
+  it('an aid id that is gone is dropped; a bad tick or bonus is the default', () => {
+    const s = T.cleanState(data(), { aids: { 'old-scope': true, 'row-laser': 'yes', 'gear-spare': true }, aidBonus: { 'old-scope': 3, 'row-prog': 'lots' } });
+    assert.ok(!('old-scope' in s.aids));
+    assert.strictEqual(s.aids['row-laser'], true, 'default');
+    assert.strictEqual(s.aids['gear-spare'], true);
+    assert.deepStrictEqual(s.aidBonus, {});
+  });
+  it('a technique must belong to the weapon', () => {
+    const d = data();
+    d.techniques.other = [{ skill: 'Knife', name: 'Knife trick', level: 16 }];
+    assert.strictEqual(T.cleanState(d, { weapon: 'Knife', technique: 'Knife trick' }).technique, 'Knife trick');
+    assert.strictEqual(T.cleanState(d, { weapon: 'Blaster pistol', technique: 'Knife trick' }).technique, '');
+    assert.strictEqual(T.cleanState(d, { weapon: 'Knife', technique: 'Gone trick' }).technique, '');
+  });
+  it('values outside what a control offers are the defaults', () => {
+    const s = T.cleanState(data(), { aim: 9, man: 'dance', cover: 'moat', loc: 'tail', sm: 99, vis: 4, deceptive: -3, posture: -1, shock: 2, evaluate: 7, braced: 1, yards: {}, foe: [] });
+    const d = T.defaultState(data());
+    for (const k of ['aim', 'man', 'cover', 'loc', 'sm', 'vis', 'deceptive', 'posture', 'shock', 'evaluate', 'braced', 'yards', 'foe']) assert.deepStrictEqual(s[k], d[k], k);
+  });
+  it('whatever it is given, the result is a state that sums to an integer', () => {
+    const junk = [null, undefined, 'a', -1, 1e9, NaN, {}, [], true, '<b>', { a: 1 }, '12', 0];
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    const keys = Object.keys(T.defaultState(data())).concat(['zzz']);
+    for (let i = 0; i < 300; i++) {
+      const raw = {};
+      for (const k of keys) if (rnd() < 0.6) raw[k] = junk[Math.floor(rnd() * junk.length)];
+      const s = T.cleanState(data(), raw);
+      const r = T.effective(data(), s);
+      assert.ok(Number.isInteger(r.roll), JSON.stringify(raw));
+    }
+  });
+});

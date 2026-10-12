@@ -374,4 +374,9 @@ function tohitDataScript(data) {
   return `<script type="application/json" id="gurps-tohit-data">${json}</script>`;
 }
 
-module.exports = { buildTohitData, tohitDataScript };
+// The empty container the page script draws into, then its data block.
+function tohitMarkup(data) {
+  return `<div class="wide cat-table tohit" id="tohit-calc"></div>\n${tohitDataScript(data)}`;
+}
+
+module.exports = { buildTohitData, tohitDataScript, tohitMarkup };

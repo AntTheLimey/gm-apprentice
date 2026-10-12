@@ -52,7 +52,9 @@ function buildSheet(model, rowNotes) {
   return `<div class="gurps-sheet">${identity}<div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
 }
 
-function buildCombat(model, sections) {
+// `tohitHtml` (the to-hit calculator's container and data block, or '') goes after the last weapon,
+// chain and combat section and before the rules reference.
+function buildCombat(model, sections, tohitHtml) {
   const parts = [
     renderDefenses(model),
     renderMelee(model),
@@ -69,7 +71,7 @@ function buildCombat(model, sections) {
   }
 
   if (parts.length === 0) return null;
-  return `<div class="gurps-combat">${parts.join('\n')}${renderReference()}</div>`;
+  return `<div class="gurps-combat">${parts.join('\n')}${tohitHtml ? '\n' + tohitHtml : ''}${renderReference()}</div>`;
 }
 
 function buildEquipment(model) {

@@ -418,9 +418,477 @@
   }
   const offHand = (list, skill) => list.indexOf(skill) >= 0;
 
-  const api = { effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, GROUPS };
+  // ---------- the page's state: its start, and what is trusted when read back ----------
+
+  // The values each choice box offers; a saved value outside them is not trusted.
+  const MANEUVERS = ['attack', 'aod', 'move', 'popup', 'aodbl', 'aos', 'committed'];
+  const ONE_OF = {
+    deceptive: [0, -2, -4, -6, -8], posture: [0, -2, -4], cover: [0, 'partial', 'light'],
+  };
+  const RANGE_OF = { aim: [0, 6], scope: [0, 6], sm: [-6, 10], vis: [-10, 0], shock: [-4, 0], evaluate: [0, 3] };
+  const FLAGS = ['braced', 'dual', 'offhand', 'targetLow', 'footing', 'zerog', 'rapid', 'telegraphic'];
+  const BOXES = ['sr', 'shots', 'yards', 'speed', 'behind', 'feint', 'other', 'foe'];
+
+  // Every control at its neutral value; every aid ticked as the data block's `on` says.
+  function defaultState(data) {
+    const list = data && Array.isArray(data.weapons) ? data.weapons.filter(isObj) : [];
+    const aids = {};
+    const note = (a) => { if (isObj(a) && typeof a.id === 'string') aids[a.id] = a.on === true; };
+    for (const w of list) if (Array.isArray(w.aids)) w.aids.forEach(note);
+    if (data && Array.isArray(data.aids)) data.aids.forEach(note);
+    const locs = data && Array.isArray(data.locations) ? data.locations : [];
+    const s = {
+      weapon: list.length ? String(list[0].key) : '', technique: '', aim: 0, scope: 0, sm: 0, vis: 0, shock: 0, evaluate: 0,
+      deceptive: 0, posture: 0, cover: 0, man: 'attack', loc: locs.some((l) => Array.isArray(l) && l[0] === 'torso') ? 'torso' : '',
+      aids, aidBonus: {},
+    };
+    for (const k of FLAGS) s[k] = false;
+    for (const k of BOXES) s[k] = '';
+    return s;
+  }
+
+  // A saved state, or anything at all, turned into a state the page can use: each field is
+  // kept only if it is one a control could have written, else it is the default.
+  function cleanState(data, raw) {
+    const s = defaultState(data);
+    if (!isObj(raw) || Array.isArray(raw)) return s;
+    const list = data && Array.isArray(data.weapons) ? data.weapons.filter(isObj) : [];
+    const w = list.find((x) => x.key === raw.weapon);
+    if (w) s.weapon = String(w.key);
+    const mine = techniquesFor(data, list.find((x) => x.key === s.weapon));
+    if (typeof raw.technique === 'string' && mine.other.some((t) => t.name === raw.technique)) s.technique = raw.technique;
+    for (const k of Object.keys(RANGE_OF)) {
+      const n = typeof raw[k] === 'number' && Number.isInteger(raw[k]) ? raw[k] : null;
+      if (n !== null && n >= RANGE_OF[k][0] && n <= RANGE_OF[k][1]) s[k] = n;
+    }
+    for (const k of Object.keys(ONE_OF)) if (ONE_OF[k].indexOf(raw[k]) >= 0) s[k] = raw[k];
+    if (MANEUVERS.indexOf(raw.man) >= 0) s.man = raw.man;
+    const locs = data && Array.isArray(data.locations) ? data.locations : [];
+    if (locs.some((l) => Array.isArray(l) && l[0] === raw.loc)) s.loc = raw.loc;
+    for (const k of FLAGS) if (typeof raw[k] === 'boolean') s[k] = raw[k];
+    for (const k of BOXES) {
+      const v = raw[k];
+      if (typeof v === 'number' && Number.isFinite(v)) s[k] = String(v);
+      else if (typeof v === 'string' && num(v) !== null) s[k] = v.trim();
+    }
+    if (isObj(raw.aids)) for (const id of Object.keys(s.aids)) if (typeof raw.aids[id] === 'boolean') s.aids[id] = raw.aids[id];
+    if (isObj(raw.aidBonus)) {
+      for (const id of Object.keys(s.aids)) {
+        const n = Object.prototype.hasOwnProperty.call(raw.aidBonus, id) ? num(raw.aidBonus[id], 0, 30) : null;
+        if (n !== null) s.aidBonus[id] = n;
+      }
+    }
+    return s;
+  }
+
+  const api = { effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, defaultState, cleanState, GROUPS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__gurpsTohit = api;
   if (typeof document === 'undefined') return;
-  // The DOM half follows (Task 4).
+
+  // ---------- the page ----------
+  // Every string that came from the data block or from effective() is set as text
+  // (textContent, or a value on a control), never parsed as markup.
+
+  const TITLES = { aiming: 'Aiming', setup: 'Setup', attack: 'Attack', target: 'Target', env: 'Environment', you: 'You', foe: "Foe's defence" };
+  const OPEN_BY_DEFAULT = ['aiming', 'setup', 'attack'];
+  const FROM_TAG = { row: 'weapon', gear: 'gear', trait: 'trait' };
+  const pct = (x) => (x * 100).toFixed(x > 0.9995 || x < 0.0005 ? 0 : 1) + '%';
+
+  function mount() {
+    const box = document.getElementById('tohit-calc');
+    const blob = document.getElementById('gurps-tohit-data');
+    if (!box || !blob) return;
+    let data = null;
+    try { data = JSON.parse(blob.textContent); } catch (e) { return; }
+    if (!isObj(data) || !Array.isArray(data.weapons)) return;
+    data.weapons = data.weapons.filter((w) => isObj(w) && typeof w.key === 'string');
+    if (!data.weapons.length) return;
+
+    // ----- what is remembered: in this browser only, and never trusted -----
+    const KEY = 'tohit-calc:' + String(data.pc);
+    function readSaved() {
+      try {
+        const raw = root.localStorage.getItem(KEY);
+        const got = raw ? JSON.parse(raw) : null;
+        return isObj(got) ? got : null;
+      } catch (e) { return null; }
+    }
+    const saved = readSaved();
+    let state = cleanState(data, saved && saved.state);
+    let open = {};
+    if (saved && isObj(saved.open)) for (const g of Object.keys(TITLES)) if (typeof saved.open[g] === 'boolean') open[g] = saved.open[g];
+    function write() {
+      try { root.localStorage.setItem(KEY, JSON.stringify({ v: 1, state, open })); } catch (e) { /* storage is off: nothing is remembered */ }
+    }
+
+    // ----- small helpers -----
+    function h(tag, attrs, kids) {
+      const e = document.createElement(tag);
+      if (attrs) {
+        for (const k of Object.keys(attrs)) {
+          const v = attrs[k];
+          if (v === false || v === null || v === undefined) continue;
+          if (k === 'text') e.textContent = String(v);
+          else e.setAttribute(k, v === true ? '' : String(v));
+        }
+      }
+      if (kids) for (const c of kids) if (c) e.appendChild(c);
+      return e;
+    }
+    const clear = (e) => { e.textContent = ''; };
+    const boxVal = (v) => (v === undefined || v === null || v === '' ? '' : String(v));
+    const seq = (a, b) => { const out = []; const d = a <= b ? 1 : -1; for (let i = a; d > 0 ? i <= b : i >= b; i += d) out.push(i); return out; };
+    const traits = isObj(data.traits) ? data.traits : {};
+    const freeFall = num(data.freeFall) === null ? null : Math.floor(num(data.freeFall));
+    const refs = {};
+
+    const curWeapon = () => data.weapons.find((w) => w.key === state.weapon) || data.weapons[0];
+
+    // The Combat tab's own to-hit cell holds the live level (the encumbrance script changes it).
+    function liveLevel(key) {
+      const rows = document.querySelectorAll('#tab-combat [data-weapon-key]');
+      for (let i = 0; i < rows.length; i++) {
+        if (rows[i].getAttribute('data-weapon-key') !== key) continue;
+        const cell = rows[i].querySelector('.wp-tohit');
+        const m = cell ? /^\s*(-?\d+)\s*$/.exec(cell.textContent) : null;
+        return m ? parseInt(m[1], 10) : null;
+      }
+      return null;
+    }
+    function view() {
+      return Object.assign({}, data, {
+        weapons: data.weapons.map((w) => { const l = liveLevel(w.key); return l === null ? w : Object.assign({}, w, { level: l }); }),
+      });
+    }
+
+    function changed() { calc(); write(); }
+    function bind(el, fn) {
+      const go = () => { fn(); changed(); };
+      el.addEventListener('input', go);
+      el.addEventListener('change', go);
+    }
+
+    // ----- controls -----
+    function wrap(key, label, control, cls) {
+      return h('div', { class: 'th-f' + (cls ? ' ' + cls : '') }, [h('label', { class: 'th-lbl', for: 'th-' + key, text: label }), control]);
+    }
+    function pick(key, label, options, o) {
+      const parse = (o && o.parse) || String;
+      const sel = h('select', { id: 'th-' + key });
+      const vals = options.map((x) => String(x[0]));
+      for (const x of options) sel.appendChild(h('option', { value: String(x[0]), text: x[1] }));
+      const cur = String(state[key]);
+      sel.value = vals.indexOf(cur) >= 0 ? cur : vals[0];
+      bind(sel, () => { state[key] = parse(sel.value); });
+      refs[key] = sel;
+      return wrap(key, label, sel, o && o.cls);
+    }
+    const numeric = (v) => Number(v);
+    function boxInput(key, min, max, ph, o) {
+      const attrs = { type: 'number', id: 'th-' + key, min, max, placeholder: ph || '' };
+      if (!(o && o.signed)) attrs.inputmode = 'numeric';
+      const inp = h('input', attrs);
+      inp.value = boxVal(state[key]);
+      bind(inp, () => { state[key] = inp.value; });
+      refs[key] = inp;
+      return inp;
+    }
+    const numBox = (key, label, min, max, ph, o) => wrap(key, label, boxInput(key, min, max, ph, o), o && o.cls);
+    function tick(key, label, tag) {
+      const inp = h('input', { type: 'checkbox', id: 'th-' + key });
+      inp.checked = state[key] === true;
+      bind(inp, () => { state[key] = inp.checked; });
+      refs[key] = inp;
+      return h('label', { class: 'th-c' }, [inp, h('span', { text: label }), tag ? h('span', { class: 'th-from', text: tag }) : null]);
+    }
+    const checks = (kids) => h('div', { class: 'th-checks' }, kids.filter(Boolean));
+
+    function aidControl(a, n) {
+      const tag = FROM_TAG[a.from] || 'sheet';
+      if (a.bonus === null || a.bonus === undefined) {
+        const inp = h('input', { type: 'number', inputmode: 'numeric', id: 'th-aid-' + n, 'data-aid': a.id, min: 0, max: 30, placeholder: '?' });
+        inp.value = boxVal(state.aidBonus[a.id]);
+        bind(inp, () => {
+          state.aidBonus[a.id] = inp.value;
+          if (inp.value.trim() !== '' && Number(inp.value) > 0) state.aids[a.id] = true;
+        });
+        return h('div', { class: 'th-f th-aidnum' }, [
+          h('label', { class: 'th-lbl', for: 'th-aid-' + n }, [h('span', { text: a.name + ' bonus ' }), h('span', { class: 'th-from', text: tag })]), inp,
+        ]);
+      }
+      const inp = h('input', { type: 'checkbox', id: 'th-aid-' + n, 'data-aid': a.id });
+      inp.checked = state.aids[a.id] === true;
+      bind(inp, () => { state.aids[a.id] = inp.checked; });
+      return h('label', { class: 'th-c' }, [
+        inp, h('span', { text: a.name + ' ' + (a.acc ? 'Acc ' : '') + '+' + int(a.bonus, 0, 30) + (a.fixed === true ? ' (fixed)' : '') }), h('span', { class: 'th-from', text: tag }),
+      ]);
+    }
+
+    const SM = seq(10, -6).map((i) => [i, 'SM ' + sgn(i) + (i === 0 ? ' (human)' : '')]);
+    const VIS = [[0, 'Clear']].concat(seq(-1, -9).map((i) => [i, 'Dark, fog, smoke, rain ' + sgn(i)]), [[-10, 'Total darkness −10 (max 9)']]);
+    const SHOCK = seq(0, -4).map((i) => [i, i ? sgn(i) : 'None']);
+    const locOptions = () => (Array.isArray(data.locations) ? data.locations : []).filter((l) => Array.isArray(l)).map((l) => [l[0], l[1] + (num(l[2]) ? ' ' + sgn(num(l[2])) : '')]);
+    const bandOptions = () => [['', 'band…']].concat((Array.isArray(data.bands) ? data.bands : []).map((b) => [b, 'to ' + b + ' yd (' + sgn(rangePenalty(b)) + ')']));
+
+    function yardsField() {
+      const yards = boxInput('yards', 0, 100000, '0');
+      const band = h('select', { id: 'th-band', 'aria-label': 'Range band' });
+      for (const x of bandOptions()) band.appendChild(h('option', { value: String(x[0]), text: x[1] }));
+      band.value = '';
+      band.addEventListener('change', () => {
+        if (band.value === '') return;
+        state.yards = band.value; refs.yards.value = band.value; band.value = '';
+        changed();
+      });
+      return h('div', { class: 'th-f' }, [
+        h('label', { class: 'th-lbl', for: 'th-yards', text: 'Range (yards)' }),
+        h('div', { class: 'th-pair' }, [yards, band]),
+      ]);
+    }
+
+    function groupFields(id, w) {
+      const ranged = w.type === 'ranged';
+      const zerog = freeFall === null ? null : tick('zerog', 'Zero gravity (Free Fall ' + freeFall + ')');
+      switch (id) {
+        case 'aiming': {
+          const aids = aidsFor(data, w);
+          return [
+            pick('aim', 'Turns aimed', seq(0, 6).map((i) => [i, i === 0 ? 'None (no Acc)' : i + (i === 1 ? ' turn' : ' turns') + (i === 1 ? ': Acc' : i === 2 ? ': Acc +1' : ': Acc +2')]), { parse: numeric }),
+            pick('scope', 'Another scope', seq(0, 6).map((i) => [i, i ? '+' + i : 'None']), { parse: numeric }),
+            checks([tick('braced', 'Braced +1')].concat(aids.filter((a) => a.bonus !== null && a.bonus !== undefined).map((a) => aidControl(a, aids.indexOf(a))))),
+          ].concat(
+            aids.filter((a) => a.bonus === null || a.bonus === undefined).map((a) => aidControl(a, aids.indexOf(a))),
+            [numBox('sr', 'Moving vehicle: its SR', 1, 99, 'not moving')]
+          );
+        }
+        case 'setup':
+          return [
+            pick('evaluate', 'Evaluate first', [[0, 'No'], [1, '1 turn +1'], [2, '2 turns +2'], [3, '3 turns +3']], { parse: numeric }),
+            numBox('feint', 'Feint: won by', 0, 30, '0'),
+          ];
+        case 'attack':
+          return ranged ? [
+            pick('man', 'Maneuver', [['attack', 'Attack'], ['aod', 'All-Out Attack (Determined) +1'], ['move', 'Move and Attack (−2 or Bulk, no Aim)'], ['popup', 'Pop-up attack −2, no Aim']], { cls: 'th-wide' }),
+            numBox('shots', 'Shots fired', 1, 999, '1'),
+            checks([tick('dual', 'Two weapons at once −4'), tick('offhand', 'Off hand −4')]),
+          ] : [
+            pick('man', 'Maneuver', [['attack', 'Attack'], ['aod', 'All-Out Attack (Determined) +4'], ['aodbl', 'All-Out Attack (Double): two attacks'], ['aos', 'All-Out Attack (Strong): +2 damage'], ['committed', 'Committed Attack (Determined) +2'], ['move', 'Move and Attack −4 (max 9)']], { cls: 'th-wide' }),
+            pick('deceptive', 'Deceptive Attack', [[0, 'None']].concat([2, 4, 6, 8].map((i) => [-i, '−' + i + ' (foe defends at −' + i / 2 + ')'])), { parse: numeric }),
+            checks([
+              tick('rapid', 'Rapid Strike ' + (traits.halfRapid === true ? '−3' : '−6')), tick('dual', 'Two weapons at once −4'),
+              tick('telegraphic', 'Telegraphic +4'), tick('offhand', 'Off hand −4'),
+            ]),
+          ];
+        case 'target':
+          return (ranged ? [yardsField(), numBox('speed', 'Crossing speed (yd/s)', 0, 100000, '0')] : [])
+            .concat([pick('sm', 'Target size (SM)', SM, { parse: numeric }), pick('loc', 'Hit location', locOptions())]);
+        case 'env':
+          return (ranged ? [
+            pick('cover', 'Cover', [[0, 'In the open'], ['partial', 'Target partly exposed −2'], ['light', 'Light cover or concealment −2']], { parse: (v) => (v === '0' ? 0 : v) }),
+            numBox('behind', 'Figures in the way (−4 each)', 0, 20, '0'),
+          ] : []).concat([pick('vis', 'Light and visibility', VIS, { parse: numeric }),
+            checks((ranged ? [tick('targetLow', 'Target crouching, sitting or prone −2')] : []).concat([tick('footing', 'Bad footing −2'), zerog]))]);
+        case 'you':
+          return (ranged ? [] : [pick('posture', 'Your posture', [[0, 'Standing'], [-2, 'Crouching, kneeling, sitting −2'], [-4, 'Crawling or lying −4']], { parse: numeric })])
+            .concat([pick('shock', 'Shock from last turn', SHOCK, { parse: numeric }), numBox('other', 'Anything else (+/−)', -30, 30, '0', { signed: true })]);
+        default:
+          return [numBox('foe', 'Active defence (optional)', 3, 40, '')];
+      }
+    }
+
+    // ----- the frame -----
+    const modeEl = h('span', { class: 'th-mode', id: 'th-mode' });
+    const weaponSel = h('select', { id: 'th-weapon' });
+    const weaponOpts = [];
+    for (const [kind, label] of [['melee', 'Melee'], ['ranged', 'Ranged']]) {
+      const mine = data.weapons.filter((w) => w.type === kind);
+      if (!mine.length) continue;
+      const g = h('optgroup', { label });
+      for (const w of mine) { const o = h('option', { value: w.key }); weaponOpts.push([o, w]); g.appendChild(o); }
+      weaponSel.appendChild(g);
+    }
+    const wline = h('p', { class: 'th-wline', id: 'th-wline' });
+    const techBox = h('div', { class: 'th-techbox', id: 'th-techbox' });
+    const suggEl = h('div', { class: 'th-sugg', id: 'th-sugg' });
+    const groupsEl = h('div', { class: 'th-groups', id: 'th-groups' });
+    const rollEl = h('div', { class: 'th-v', id: 'th-roll' });
+    const hitEl = h('div', { class: 'th-v th-sm', id: 'th-hit' });
+    const critEl = h('div', { class: 'th-v th-sm', id: 'th-crit' });
+    const fumbleEl = h('div', { class: 'th-v th-sm', id: 'th-fumble' });
+    const stripEl = h('div', { class: 'th-strip', id: 'th-strip', 'aria-label': 'Result of each roll from 3 to 18' });
+    const cells = [];
+    for (let r = 3; r <= 18; r++) { const c = h('div', { class: 'th-cell', text: r }); cells.push(c); stripEl.appendChild(c); }
+    const linesEl = h('tbody', { id: 'th-lines' });
+    const notesEl = h('div', { class: 'th-notes', id: 'th-notes' });
+    const resetBtn = h('button', { type: 'button', id: 'th-reset', text: 'Reset' });
+    const big = (k, v) => h('div', {}, [h('div', { class: 'th-k', text: k }), v]);
+
+    clear(box);
+    box.appendChild(h('h2', {}, [h('span', { text: 'To-hit calculator' }), modeEl]));
+    box.appendChild(h('div', { class: 'th-body' }, [
+      h('div', { class: 'th-ctrls' }, [h('div', { class: 'th-weapon' }, [
+        h('label', { class: 'th-lbl', for: 'th-weapon', text: 'Weapon' }), weaponSel, wline, techBox, suggEl,
+      ]), groupsEl]),
+      h('div', { class: 'th-out' }, [
+        h('div', { class: 'th-big' }, [big('Roll', rollEl), big('Hit', hitEl), big('Critical', critEl), big('Fumble', fumbleEl)]),
+        stripEl,
+        h('table', { class: 'th-lines' }, [linesEl]),
+        notesEl,
+        h('div', { class: 'th-actions' }, [resetBtn]),
+      ]),
+    ]));
+
+    const sums = {};
+    function drawWeapon() {
+      const w = curWeapon();
+      clear(techBox); clear(suggEl);
+      const mine = techniquesFor(data, w);
+      if (mine.other.length) {
+        const sel = h('select', { id: 'th-tech' });
+        sel.appendChild(h('option', { value: '', text: 'No technique' }));
+        for (const t of mine.other) sel.appendChild(h('option', { value: t.name, text: t.name + ' (' + int(t.level, -99, 99) + ')' }));
+        sel.value = state.technique;
+        bind(sel, () => { state.technique = sel.value; });
+        refs.technique = sel;
+        techBox.appendChild(h('div', { class: 'th-f' }, [h('label', { class: 'th-lbl', for: 'th-tech', text: 'Use a technique instead' }), sel]));
+      }
+      const locs = Array.isArray(data.locations) ? data.locations : [];
+      const chips = [];
+      for (const t of mine.targeted) {
+        const loc = locs.find((l) => Array.isArray(l) && l[0] === t.loc);
+        const net = num(t.net);
+        if (!loc || net === null) continue;
+        const chip = h('button', { type: 'button', class: 'th-chip', 'data-loc': loc[0], 'aria-pressed': 'false', text: loc[1] + ' ' + (net ? sgn(net) : 'no penalty') + ' (plain ' + sgn(num(loc[2]) || 0) + ')' });
+        chip.addEventListener('click', () => {
+          state.loc = state.loc === loc[0] ? 'torso' : loc[0];
+          if (refs.loc) refs.loc.value = state.loc;
+          open.target = true;
+          const d = groupsEl.querySelector('[data-g="target"]');
+          if (d) d.open = true;
+          changed();
+        });
+        chips.push(chip);
+      }
+      if (chips.length) {
+        suggEl.appendChild(h('span', { text: 'Your targeted attacks: ' }));
+        chips.forEach((c) => suggEl.appendChild(c));
+      }
+    }
+    function drawGroups() {
+      const w = curWeapon();
+      clear(groupsEl);
+      for (const id of GROUPS[w.type === 'ranged' ? 'ranged' : 'melee']) {
+        if (id === 'weapon') continue;
+        const d = h('details', { class: 'th-grp', 'data-g': id });
+        d.open = id in open ? open[id] === true : OPEN_BY_DEFAULT.indexOf(id) >= 0;
+        d.addEventListener('toggle', () => { open[id] = d.open; write(); });
+        const what = h('span', { class: 'th-gwhat' });
+        const sum = h('span', { class: 'th-gsum th-zero', text: '0' });
+        sums[id] = { what, sum };
+        d.appendChild(h('summary', {}, [h('span', { class: 'th-gname', text: TITLES[id] }), what, sum]));
+        d.appendChild(h('div', { class: 'th-gfields' }, groupFields(id, w)));
+        groupsEl.appendChild(d);
+      }
+    }
+    function rebuild() {
+      for (const k of Object.keys(refs)) delete refs[k];
+      drawWeapon();
+      drawGroups();
+    }
+
+    // ----- the answer -----
+    const row = (cls, label, value, vcls) => h('tr', { class: cls }, [h('td', { text: label }), h('td', { class: 'th-n' + (vcls ? ' ' + vcls : ''), text: value })]);
+    function calc() {
+      const v = view();
+      const w = curWeapon();
+      const res = effective(v, state);
+      modeEl.textContent = res.type === 'ranged' ? 'Ranged' : 'Melee';
+      for (const [o, x] of weaponOpts) {
+        const lv = v.weapons.find((y) => y.key === x.key);
+        o.textContent = (x.name || x.key) + ' (' + int(lv && lv.level, -99, 99) + ')';
+      }
+      weaponSel.value = w.key;
+      wline.textContent = res.type === 'ranged'
+        ? ['Acc ' + int(w.acc, 0, 99), 'RoF ' + int(w.rof, 1, 9999, 1), 'Rcl ' + int(w.rcl, 1, 99, 1), 'Bulk −' + Math.abs(int(w.bulk, -99, 99)), String(w.range || '')].filter(Boolean).join(' · ')
+        : String(w.damage || '');
+
+      const c = conflicts(state);
+      if (refs.telegraphic) refs.telegraphic.disabled = c.telegraphic;
+      if (refs.deceptive) refs.deceptive.disabled = c.deceptive;
+      const chips = suggEl.querySelectorAll('.th-chip');
+      for (let i = 0; i < chips.length; i++) chips[i].setAttribute('aria-pressed', String(chips[i].getAttribute('data-loc') === state.loc));
+
+      rollEl.textContent = String(res.roll);
+      const o = odds(res.roll);
+      hitEl.textContent = o.none ? 'no roll' : pct(o.hit);
+      critEl.textContent = o.none ? '—' : pct(o.crit);
+      fumbleEl.textContent = o.none ? '—' : pct(o.fumble);
+      cells.forEach((cell, i) => {
+        const r = i + 3;
+        cell.className = 'th-cell th-' + (o.none ? 'F' : outcome(r, res.roll));
+      });
+
+      clear(linesEl);
+      const first = res.lines[0];
+      if (first) linesEl.appendChild(row('th-first', first.label, String(first.value)));
+      if (res.included) linesEl.appendChild(row('th-included', 'Includes +' + res.included.amount + ' over ' + res.included.over, ''));
+      for (const id of GROUPS[res.type]) {
+        if (id === 'weapon') continue;
+        const mine = res.lines.slice(1).filter((l) => l.group === id);
+        const s = sums[id];
+        if (s) {
+          if (id === 'foe') {
+            s.sum.textContent = res.foe ? String(res.foe.defence) : '—';
+            s.sum.className = 'th-gsum th-zero';
+          } else {
+            const total = mine.reduce((a, l) => a + l.value, 0);
+            s.sum.textContent = total ? sgn(total) : '0';
+            s.sum.className = 'th-gsum ' + (total > 0 ? 'th-pos' : total < 0 ? 'th-neg' : 'th-zero');
+          }
+          s.what.textContent = mine.map((l) => l.label.split(',')[0].split(' (')[0]).join(' · ');
+        }
+        if (!mine.length) continue;
+        linesEl.appendChild(h('tr', { class: 'th-gh' }, [h('td', { colspan: 2, text: TITLES[id] })]));
+        for (const l of mine) linesEl.appendChild(row('', l.label, sgn(l.value)));
+      }
+      if (res.cap) linesEl.appendChild(row('th-cap', 'Capped by ' + res.cap.why, 'max ' + res.cap.value));
+      linesEl.appendChild(row('th-total', 'Roll this or less on 3d6', String(res.roll)));
+
+      clear(notesEl);
+      for (const n of res.notes) notesEl.appendChild(h('div', { class: 'th-note', text: n }));
+      if (res.foe) {
+        notesEl.appendChild(h('div', { class: 'th-note th-foe', text: 'Against a defence of ' + res.foe.defence + ' (' + pct(res.foe.defends) + ' to defend), this attack lands ' + pct(res.foe.lands) + " of the time. A critical hit can't be defended." }));
+      }
+    }
+
+    weaponSel.addEventListener('change', () => {
+      state.weapon = weaponSel.value;
+      state.technique = '';
+      rebuild();
+      changed();
+    });
+    resetBtn.addEventListener('click', () => {
+      const keep = state.weapon;
+      state = defaultState(data);
+      state.weapon = keep;
+      open = {};
+      rebuild();
+      changed();
+    });
+
+    rebuild();
+    calc();
+    if (typeof MutationObserver === 'function') {
+      const cellsOnTab = document.querySelectorAll('#tab-combat [data-weapon-key]');
+      const obs = new MutationObserver(() => calc());
+      for (let i = 0; i < cellsOnTab.length; i++) {
+        const cell = cellsOnTab[i].querySelector('.wp-tohit');
+        if (cell) obs.observe(cell, { childList: true, characterData: true, subtree: true });
+      }
+    }
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mount);
+  else mount();
 })(typeof window !== 'undefined' ? window : globalThis);
