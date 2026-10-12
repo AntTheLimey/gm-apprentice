@@ -796,8 +796,8 @@ class RealToolTests(unittest.TestCase):
             '---\nname: "Letter"\ntype: document\ncanon_status: AUTHORITATIVE\n'
             "---\n\n## The Text\n\nDear sir.\n\n## Context\n\nThe forger is "
             "Vane.\n", encoding="utf-8")
-        give_site(vault, lambda p: self.addCleanup(
-            shutil.rmtree, p, ignore_errors=True))
+        # Apply moves the site's settings into the vault: a site of its own.
+        give_site(vault, lambda p: None, private=True)
         map_folder(vault, "Documents", "documents")
         code, plan, err = self.run_real(vault, "plan")
         self.assertEqual(code, 0, err)
@@ -819,8 +819,8 @@ class RealToolTests(unittest.TestCase):
 
     def test_a_multi_line_footer_moves_and_the_vault_still_stamps(self):
         vault = make_vault(self, "1.10.12")
-        give_site(vault, lambda p: self.addCleanup(
-            shutil.rmtree, p, ignore_errors=True))
+        # Apply moves the site's settings into the vault: a site of its own.
+        give_site(vault, lambda p: None, private=True)
         text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
         site = Path(re.search(r"^\s*site_dir:\s*(.+)$", text, re.M)
                     .group(1).strip().strip("\"'"))
