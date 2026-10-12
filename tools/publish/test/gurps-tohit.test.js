@@ -1,0 +1,475 @@
+/**
+ * The to-hit calculator's pure half: the sum, its caps, the odds. Data blocks are
+ * built by hand in the shape lib/templates/gurps/tohit-data.js produces (melee
+ * weapons first, no acc/rof/rcl/bulk on melee rows). Names are invented.
+ */
+const { describe, it } = require('node:test');
+const assert = require('node:assert');
+const path = require('path');
+const fs = require('fs');
+const matter = require('gray-matter');
+const { extractSections } = require('../lib/processor');
+const { parseGurps } = require('../lib/templates/gurps/parse');
+const { buildTohitData } = require('../lib/templates/gurps/tohit-data');
+const T = require('../js/gurps-tohit');
+
+const LOCATIONS = [
+  ['torso', 'Torso', 0], ['vitals', 'Vitals', -3], ['limb', 'Arm or leg', -2], ['extremity', 'Hand or foot', -4],
+  ['groin', 'Groin', -3], ['face', 'Face', -5], ['neck', 'Neck', -5], ['skull', 'Skull', -7], ['eye', 'Eye', -9],
+];
+
+function mk(over = {}) {
+  const data = {
+    pc: 'six',
+    weapons: [
+      { key: 'Knife', type: 'melee', name: 'Knife', skill: 'Knife', level: 14, base: 14, range: '', damage: 'sw cut', beam: false, aids: [], bonuses: [] },
+      {
+        key: 'Blaster pistol', type: 'ranged', name: 'Blaster pistol', skill: 'Beam Weapons (Pistol)', level: 17, base: 17,
+        acc: 6, rof: 10, rcl: 1, bulk: 2, range: '150/450', damage: '3d burn', beam: true, aids: [], bonuses: [],
+      },
+    ],
+    aids: [],
+    techniques: { targeted: [], dual: {}, other: [] },
+    traits: { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 },
+    freeFall: null,
+    locations: LOCATIONS,
+    bands: [2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100, 150, 200, 300, 500, 700],
+  };
+  return Object.assign(data, over);
+}
+const withWeapon = (data, key, patch) => {
+  data.weapons = data.weapons.map((w) => (w.key === key ? Object.assign({}, w, patch) : w));
+  return data;
+};
+const SCOPE3 = { id: 'scope', name: 'Scope', bonus: 3, acc: true, fixed: false, from: 'row' };
+const RANGED = { weapon: 'Blaster pistol' };
+const ISSUE = { weapon: 'Blaster pistol', aim: 3, braced: true, aids: { scope: true }, man: 'aod', yards: 100, shots: 10, sm: 3, vis: -2 };
+const line = (r, group) => r.lines.find((l) => l.group === group);
+const total = (r, group) => r.lines.filter((l) => l.group === group).reduce((a, l) => a + l.value, 0);
+const rolls = (data, state) => T.effective(data, state).roll;
+
+function scoped(aids, extra = {}) {
+  return mk({ weapons: mk().weapons.map((w) => (w.type === 'ranged' ? Object.assign({}, w, { aids }, extra) : w)) });
+}
+
+describe('the issue\'s case and its two variants', () => {
+  const data = scoped([SCOPE3]);
+  it('makes 23, the aiming line 12', () => {
+    const r = T.effective(data, ISSUE);
+    assert.strictEqual(r.roll, 23);
+    assert.strictEqual(line(r, 'aiming').value, 12);
+  });
+  it('makes 15 from a vehicle of SR 4, and says why', () => {
+    const r = T.effective(data, Object.assign({}, ISSUE, { sr: 4 }));
+    assert.strictEqual(r.roll, 15);
+    assert.match(line(r, 'aiming').label, /capped at the vehicle's SR/);
+  });
+  it('makes 19 with hit location hand or foot', () => {
+    assert.strictEqual(rolls(data, Object.assign({}, ISSUE, { loc: 'extremity' })), 19);
+  });
+});
+
+describe('aiming', () => {
+  it('has no aiming line at aim 0', () => {
+    assert.strictEqual(line(T.effective(mk(), RANGED), 'aiming'), undefined);
+  });
+  it('a variable scope adds 1 a turn aimed, with a note', () => {
+    const r = T.effective(scoped([SCOPE3]), { weapon: 'Blaster pistol', aim: 1, aids: { scope: true } });
+    assert.match(line(r, 'aiming').label, /sighting aids \+1/);
+    assert.strictEqual(line(r, 'aiming').value, 7);
+    assert.ok(r.notes.some((n) => /needs 3 turns/.test(n)));
+  });
+  it('a fixed scope gives nothing until aimed long enough, then all of it', () => {
+    const fixed = { id: 'fs', name: 'Scope', bonus: 4, acc: true, fixed: true, from: 'row' };
+    const data = scoped([fixed]);
+    const a = T.effective(data, { weapon: 'Blaster pistol', aim: 3, aids: { fs: true } });
+    assert.strictEqual(line(a, 'aiming').value, 8);
+    assert.ok(a.notes.some((n) => /only after 4 turns/.test(n)));
+    const b = T.effective(data, { weapon: 'Blaster pistol', aim: 4, aids: { fs: true } });
+    assert.strictEqual(line(b, 'aiming').value, 12);
+    assert.match(line(b, 'aiming').label, /\+2 extra aim/);
+  });
+  it('two Acc aids together add no more than base Acc, and the whole stays within twice Acc', () => {
+    const hud = { id: 'hud', name: 'HUD link', bonus: 1, acc: true, fixed: false, from: 'row' };
+    const data = scoped([hud, SCOPE3], { acc: 2 });
+    const r = T.effective(data, { weapon: 'Blaster pistol', aim: 3, aids: { hud: true, scope: true } });
+    assert.match(line(r, 'aiming').label, /sighting aids \+2/);
+    assert.ok(line(r, 'aiming').value <= 4);
+  });
+  it('only the best scope counts: Telescopic Vision does not stack with a scope', () => {
+    const data = scoped([SCOPE3]);
+    data.traits.telescopic = 2;
+    const r = T.effective(data, { weapon: 'Blaster pistol', aim: 3, aids: { scope: true } });
+    assert.strictEqual(line(r, 'aiming').value, 6 + 2 + 3);
+  });
+  it('Telescopic Vision gives a point a turn up to its level', () => {
+    const data = mk();
+    data.traits.telescopic = 2;
+    assert.strictEqual(line(T.effective(data, { weapon: 'Blaster pistol', aim: 1 }), 'aiming').value, 7);
+    assert.strictEqual(line(T.effective(data, { weapon: 'Blaster pistol', aim: 5 }), 'aiming').value, 10);
+  });
+  it('a flat (non-Acc) aid is a plain line, outside the aim caps', () => {
+    const laser = { id: 'laser', name: 'Laser sight', bonus: 1, acc: false, fixed: false, from: 'row' };
+    const r = T.effective(scoped([laser]), { weapon: 'Blaster pistol', aids: { laser: true } });
+    assert.strictEqual(total(r, 'aiming'), 1);
+  });
+  it('an aid with no number takes the typed bonus, and none until typed', () => {
+    const sg = { id: 'sg', name: 'Smartgun', bonus: null, acc: false, fixed: false, from: 'gear' };
+    const data = mk({ aids: [sg] });
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', aids: { sg: true } }), 17);
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', aids: { sg: true }, aidBonus: { sg: 2 } }), 19);
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', aidBonus: { sg: 2 } }), 17);
+  });
+  it('a character-wide aid is offered on a ranged weapon, never a melee one', () => {
+    const tp = { id: 'tp', name: 'Targeting program', bonus: 2, acc: false, fixed: false, from: 'gear' };
+    const data = mk({ aids: [tp] });
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', aids: { tp: true } }), 19);
+    assert.strictEqual(rolls(data, { weapon: 'Knife', aids: { tp: true } }), 14);
+  });
+});
+
+describe('ranged attack', () => {
+  it('Move and Attack: no aim, a note, the worse of -2 and Bulk', () => {
+    const data = mk();
+    const r = T.effective(data, { weapon: 'Blaster pistol', aim: 2, man: 'move' });
+    assert.strictEqual(line(r, 'aiming'), undefined);
+    assert.ok(r.notes.some((n) => /no Aim bonus/.test(n)));
+    assert.strictEqual(r.roll, 15);
+    withWeapon(data, 'Blaster pistol', { bulk: 5 });
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', man: 'move' }), 12);
+  });
+  it('pop-up attack: -2 and no aim', () => {
+    const r = T.effective(mk(), { weapon: 'Blaster pistol', aim: 3, man: 'popup' });
+    assert.strictEqual(r.roll, 15);
+    assert.strictEqual(line(r, 'aiming'), undefined);
+  });
+  it('rapid fire by shots', () => {
+    const data = withWeapon(mk(), 'Blaster pistol', { rof: 200 });
+    const got = [1, 5, 9, 13, 17, 25, 50, 100].map((s) => rolls(data, { weapon: 'Blaster pistol', shots: s }) - 17);
+    assert.deepStrictEqual(got, [0, 1, 2, 3, 4, 5, 6, 7]);
+  });
+  it('shots above RoF give a note', () => {
+    const r = T.effective(mk(), { weapon: 'Blaster pistol', shots: 12 });
+    assert.ok(r.notes.some((n) => /RoF is 10/.test(n)));
+  });
+  it('range penalty', () => {
+    assert.deepStrictEqual([0, 2, 3, 100, 101].map(T.rangePenalty), [0, 0, -1, -10, -11]);
+    assert.strictEqual(T.rangePenalty(2000), -18);
+    assert.strictEqual(T.rangePenalty(20000), -24);
+    assert.strictEqual(rolls(mk(), { weapon: 'Blaster pistol', yards: 70, speed: 30 }), 7);
+  });
+  it('cover is a penalty', () => {
+    assert.strictEqual(rolls(mk(), { weapon: 'Blaster pistol', cover: -4 }), 13);
+  });
+});
+
+describe('melee attack', () => {
+  it('maneuvers', () => {
+    const data = mk();
+    assert.strictEqual(rolls(data, { weapon: 'Knife', man: 'aod' }), 18);
+    assert.strictEqual(rolls(data, { weapon: 'Knife', man: 'committed' }), 16);
+  });
+  it('Move and Attack is -4 and capped at 9', () => {
+    const data = withWeapon(mk(), 'Knife', { level: 18, base: 18 });
+    const r = T.effective(data, { weapon: 'Knife', man: 'move' });
+    assert.strictEqual(r.roll, 9);
+    assert.strictEqual(r.cap.value, 9);
+    assert.strictEqual(rolls(withWeapon(mk(), 'Knife', { level: 12, base: 12 }), { weapon: 'Knife', man: 'move' }), 8);
+  });
+  it('All-Out (Double) and (Strong) change no number and add a note', () => {
+    for (const man of ['aodbl', 'aos']) {
+      const r = T.effective(mk(), { weapon: 'Knife', man });
+      assert.strictEqual(r.roll, 14);
+      assert.strictEqual(r.notes.length, 1);
+    }
+  });
+  it('Rapid Strike, Telegraphic, Deceptive, Evaluate', () => {
+    const data = mk();
+    assert.strictEqual(rolls(data, { weapon: 'Knife', rapid: true }), 8);
+    data.traits.halfRapid = true;
+    assert.strictEqual(rolls(data, { weapon: 'Knife', rapid: true }), 11);
+    assert.strictEqual(rolls(data, { weapon: 'Knife', telegraphic: true }), 18);
+    assert.strictEqual(rolls(data, { weapon: 'Knife', deceptive: -4 }), 10);
+    assert.strictEqual(rolls(data, { weapon: 'Knife', evaluate: 2 }), 16);
+  });
+  it('posture applies to melee only', () => {
+    assert.strictEqual(rolls(mk(), { weapon: 'Knife', posture: -2 }), 12);
+    assert.strictEqual(rolls(mk(), { weapon: 'Blaster pistol', posture: -2 }), 17);
+  });
+  it('a ranged-only maneuver is the neutral Attack on a melee weapon', () => {
+    assert.strictEqual(rolls(mk(), { weapon: 'Knife', man: 'popup' }), 14);
+    assert.strictEqual(rolls(mk(), { weapon: 'Blaster pistol', man: 'aodbl' }), 17);
+  });
+  it('the foe\'s defence moves with feint, deceptive, telegraphic and two weapons', () => {
+    const r = T.effective(mk(), { weapon: 'Knife', foe: 10, feint: 3, deceptive: -4, telegraphic: true });
+    assert.strictEqual(r.foe.defence, 7);
+    assert.ok(r.foe.lands > 0 && r.foe.lands < 1);
+    const d = T.effective(mk(), { weapon: 'Knife', foe: 10, dual: true });
+    assert.strictEqual(d.foe.defence, 9);
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife' }).foe, null);
+  });
+  it('the foe\'s chance to defend uses the confirmed success table', () => {
+    const r = T.effective(mk(), { weapon: 'Knife', foe: 10 });
+    assert.ok(Math.abs(r.foe.defends - 0.5) < 1e-9);
+  });
+});
+
+describe('two weapons and the off hand', () => {
+  it('two weapons is -4, less what the technique buys off, and a note', () => {
+    const data = mk();
+    const plain = T.effective(data, { weapon: 'Blaster pistol', dual: true });
+    assert.strictEqual(plain.roll, 13);
+    assert.ok(plain.notes.some((n) => /defends at −1/.test(n)));
+    data.techniques.dual['Beam Weapons (Pistol)'] = 3;
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', dual: true }), 16);
+  });
+  it('off hand is -4, nil with Ambidexterity or Off-Hand Weapon Training for the skill', () => {
+    const data = mk();
+    assert.strictEqual(rolls(data, { weapon: 'Knife', offhand: true }), 10);
+    data.traits.offHand = ['Knife'];
+    assert.strictEqual(rolls(data, { weapon: 'Knife', offhand: true }), 14);
+    data.traits.offHand = [];
+    data.traits.ambidextrous = true;
+    assert.strictEqual(rolls(data, { weapon: 'Knife', offhand: true }), 14);
+  });
+});
+
+describe('techniques', () => {
+  const targeted = { skill: 'Beam Weapons (Pistol)', loc: 'skull', net: -5, name: 'Targeted Attack (Beam Weapons (Pistol)/Skull)' };
+  it('a Targeted Attack replaces the plain location penalty', () => {
+    const data = mk();
+    data.techniques.targeted = [targeted];
+    const r = T.effective(data, { weapon: 'Blaster pistol', loc: 'skull' });
+    assert.strictEqual(r.roll, 12);
+    assert.match(line(r, 'target').label, /Targeted Attack/);
+    assert.strictEqual(rolls(mk(), { weapon: 'Blaster pistol', loc: 'skull' }), 10);
+  });
+  it('a Targeted Attack for another skill does not apply', () => {
+    const data = mk();
+    data.techniques.targeted = [Object.assign({}, targeted, { skill: 'Knife' })];
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', loc: 'skull' }), 10);
+  });
+  it('a picked technique for the weapon\'s skill replaces the level', () => {
+    const data = mk();
+    data.techniques.other = [{ skill: 'Knife', name: 'Knife throwing', level: 15 }];
+    const r = T.effective(data, { weapon: 'Knife', technique: 'Knife throwing' });
+    assert.strictEqual(r.lines[0].value, 15);
+    assert.strictEqual(r.roll, 15);
+  });
+  it('a technique for some other skill is ignored', () => {
+    const data = mk();
+    data.techniques.other = [{ skill: 'Karate', name: 'Kicking', level: 15 }];
+    assert.strictEqual(rolls(data, { weapon: 'Knife', technique: 'Kicking' }), 14);
+  });
+  it('techniquesFor filters both lists by the weapon\'s skill', () => {
+    const data = mk();
+    data.techniques.targeted = [targeted, Object.assign({}, targeted, { skill: 'Knife', loc: 'neck' })];
+    data.techniques.other = [{ skill: 'Knife', name: 'a', level: 1 }, { skill: 'Karate', name: 'b', level: 1 }];
+    const mine = T.techniquesFor(data, data.weapons[0]);
+    assert.deepStrictEqual(mine.targeted.map((t) => t.loc), ['neck']);
+    assert.deepStrictEqual(mine.other.map((t) => t.name), ['a']);
+    assert.deepStrictEqual(T.techniquesFor(null, null), { targeted: [], other: [] });
+  });
+});
+
+describe('caps', () => {
+  it('zero gravity caps at Free Fall', () => {
+    const data = mk({ freeFall: 12 });
+    const r = T.effective(data, { weapon: 'Knife', zerog: true, man: 'aod', evaluate: 3, other: 5 });
+    assert.strictEqual(r.roll, 12);
+    assert.match(r.cap.why, /Free Fall/);
+  });
+  it('a beam weapon with Rcl under 2 is exempt, with a note', () => {
+    const data = mk({ freeFall: 8 });
+    const r = T.effective(data, { weapon: 'Blaster pistol', zerog: true });
+    assert.strictEqual(r.cap, null);
+    assert.strictEqual(r.roll, 17);
+    assert.ok(r.notes.length >= 1);
+    withWeapon(data, 'Blaster pistol', { rcl: 2 });
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', zerog: true }), 8);
+  });
+  it('no Free Fall on the sheet: no cap, a note', () => {
+    const r = T.effective(mk(), { weapon: 'Knife', zerog: true });
+    assert.strictEqual(r.cap, null);
+    assert.ok(r.notes.some((n) => /no Free Fall/.test(n)));
+  });
+  it('total darkness is -10 and caps at 9', () => {
+    const r = T.effective(withWeapon(mk(), 'Knife', { level: 20, base: 20 }), { weapon: 'Knife', vis: -10 });
+    assert.strictEqual(line(r, 'env').value, -10);
+    assert.strictEqual(r.roll, 9);
+    assert.strictEqual(r.cap.value, 9);
+  });
+  it('Night Vision offsets partial darkness, never total darkness', () => {
+    const data = mk();
+    data.traits.nightVision = 5;
+    assert.strictEqual(rolls(data, { weapon: 'Knife', vis: -6 }), 13);
+    assert.strictEqual(rolls(data, { weapon: 'Knife', vis: -3 }), 14);
+    assert.strictEqual(line(T.effective(data, { weapon: 'Knife', vis: -10 }), 'env').value, -10);
+  });
+  it('the lowest cap below the roll is the one reported', () => {
+    const data = mk({ freeFall: 12 });
+    const r = T.effective(withWeapon(data, 'Knife', { level: 25, base: 25 }), { weapon: 'Knife', zerog: true, man: 'move' });
+    assert.strictEqual(r.roll, 9);
+    assert.strictEqual(r.cap.why, 'Move and Attack');
+  });
+});
+
+describe('what the level already includes', () => {
+  const bond = [{ name: 'Weapon Bond', bonus: 1 }];
+  it('a level over the Skills-table level is already counted', () => {
+    const data = withWeapon(mk(), 'Knife', { level: 15, base: 14, bonuses: bond });
+    const r = T.effective(data, { weapon: 'Knife' });
+    assert.deepStrictEqual(r.included, { amount: 1, over: 'Knife 14' });
+    assert.strictEqual(r.lines.some((l) => /Weapon Bond/.test(l.label)), false);
+    assert.strictEqual(r.roll, 15);
+  });
+  it('a level equal to the skill gets the bonus as a line', () => {
+    const data = withWeapon(mk(), 'Knife', { bonuses: bond });
+    const r = T.effective(data, { weapon: 'Knife' });
+    assert.strictEqual(r.included, null);
+    assert.strictEqual(line(r, 'you').label, 'Weapon Bond +1');
+    assert.strictEqual(r.roll, 15);
+  });
+});
+
+describe('numbers out of range or empty (review focus 3)', () => {
+  it('blank or odd fields read as the neutral value', () => {
+    const data = scoped([SCOPE3]);
+    const odd = { yards: '', shots: 0, sr: 0, feint: -2, other: 'x', speed: 'fast', sm: null, cover: '', shock: NaN, aim: 'many' };
+    for (const key of ['Blaster pistol', 'Knife']) {
+      const a = T.effective(data, Object.assign({ weapon: key }, odd));
+      const b = T.effective(data, { weapon: key });
+      assert.ok(Number.isInteger(a.roll));
+      assert.strictEqual(a.roll, b.roll);
+    }
+  });
+  it('a missing weapon key means the first weapon, of whatever type', () => {
+    const r = T.effective(mk(), {});
+    assert.strictEqual(r.type, 'melee');
+    assert.strictEqual(T.effective(mk(), { weapon: 'nope' }).roll, 14);
+  });
+  it('an unknown location or maneuver is neutral', () => {
+    assert.strictEqual(rolls(mk(), { weapon: 'Knife', loc: 'tail', man: 'cartwheel' }), 14);
+  });
+  it('a melee row without acc, rof, rcl or bulk is fine', () => {
+    const r = T.effective(mk(), { weapon: 'Knife', shots: 20, aim: 3 });
+    assert.strictEqual(r.roll, 14);
+  });
+});
+
+describe('rolls far below 3 or far above 16 (review focus 4)', () => {
+  it('below 3 there is no roll', () => {
+    const r = T.effective(mk(), { weapon: 'Knife', other: -12 });
+    assert.strictEqual(r.roll, 2);
+    assert.ok(r.notes.some((n) => /no roll/.test(n)));
+    assert.strictEqual(T.odds(r.roll).hit, 0);
+    assert.strictEqual(T.odds(2).none, true);
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife', other: -12, foe: 10 }).foe, null);
+  });
+  it('at 30 only 17 and 18 miss', () => {
+    assert.ok(Math.abs(T.odds(30).hit - (1 - 4 / 216)) < 1e-12);
+    assert.strictEqual(T.outcome(17, 30), 'F');
+    assert.strictEqual(T.outcome(18, 30), 'CF');
+    assert.strictEqual(T.outcome(3, 30), 'CS');
+    assert.ok(Math.abs(T.odds(30).fumble - 1 / 216) < 1e-12);
+  });
+  it('odds', () => {
+    assert.strictEqual(T.odds(10).hit, 0.5);
+    assert.ok(Math.abs(T.odds(16).crit - 20 / 216) < 1e-12);
+    assert.strictEqual(T.outcome(5, 14), 'S');
+    assert.strictEqual(T.outcome(5, 15), 'CS');
+    assert.strictEqual(T.outcome(17, 15), 'CF');
+    assert.strictEqual(T.outcome(17, 16), 'F');
+    assert.strictEqual(T.outcome(14, 4), 'CF');
+  });
+});
+
+describe('groups', () => {
+  it('every line is in a group of the weapon\'s kind', () => {
+    const data = scoped([SCOPE3]);
+    const full = { aim: 3, braced: true, aids: { scope: true }, man: 'aod', yards: 50, shots: 5, sm: 1, vis: -3, loc: 'skull', cover: -2,
+      footing: true, shock: -1, other: 1, dual: true, offhand: true, evaluate: 2, posture: -2, rapid: true, deceptive: -2, telegraphic: true };
+    for (const key of ['Blaster pistol', 'Knife']) {
+      const r = T.effective(data, Object.assign({ weapon: key }, full));
+      for (const l of r.lines) assert.ok(T.GROUPS[r.type].includes(l.group), `${key}: ${l.group}`);
+    }
+  });
+});
+
+describe('purity', () => {
+  it('never mutates data or state', () => {
+    const data = scoped([SCOPE3]);
+    data.techniques.targeted = [{ skill: 'Beam Weapons (Pistol)', loc: 'skull', net: -5, name: 'x' }];
+    const state = Object.assign({}, ISSUE, { loc: 'skull', zerog: true, aids: { scope: true }, aidBonus: { a: 1 } });
+    const d0 = JSON.stringify(data);
+    const s0 = JSON.stringify(state);
+    T.effective(data, state);
+    assert.strictEqual(JSON.stringify(data), d0);
+    assert.strictEqual(JSON.stringify(state), s0);
+  });
+  it('an empty or missing data block gives a number, not a throw', () => {
+    assert.strictEqual(T.effective(null, {}).roll, 0);
+    assert.strictEqual(T.effective({ weapons: [] }, null).roll, 0);
+  });
+});
+
+describe('fuzz: a few hundred random states', () => {
+  let seed = 20261012;
+  const rnd = () => { seed = (seed * 1664525 + 1013904223) % 4294967296; return seed / 4294967296; };
+  const pick = (a) => a[Math.floor(rnd() * a.length)];
+  const junk = () => pick([undefined, null, '', 'x', NaN, Infinity, -Infinity, -1, 0, 1, 2, 3, 7, 10, 99, 1e9, -1e9, '5', '-3', true, false, {}, [], 2.5]);
+  const MANS = ['attack', 'aod', 'aodbl', 'aos', 'committed', 'move', 'popup', 'zzz', 3, null];
+  it('the roll is an integer and every line is finite', () => {
+    const data = scoped([SCOPE3, { id: 'hud', name: 'HUD link', bonus: 1, acc: true, fixed: false, from: 'row' },
+      { id: 'sg', name: 'Smartgun', bonus: null, acc: false, fixed: false, from: 'gear' }], {});
+    data.freeFall = 12;
+    data.traits.telescopic = 2;
+    data.traits.nightVision = 3;
+    data.techniques.targeted = [{ skill: 'Knife', loc: 'neck', net: -2, name: 't' }, { skill: 'Beam Weapons (Pistol)', loc: 'skull', net: -5, name: 'u' }];
+    data.techniques.other = [{ skill: 'Knife', name: 'Knife throwing', level: 12 }];
+    data.techniques.dual = { Knife: 2 };
+    const before = JSON.stringify(data);
+    for (let i = 0; i < 400; i++) {
+      const st = {};
+      for (const k of ['aim', 'sr', 'shots', 'yards', 'speed', 'sm', 'cover', 'vis', 'evaluate', 'feint', 'deceptive', 'posture',
+        'shock', 'other', 'foe', 'scope', 'braced', 'dual', 'offhand', 'footing', 'zerog', 'rapid', 'telegraphic']) {
+        if (rnd() < 0.6) st[k] = junk();
+      }
+      st.weapon = pick(['Knife', 'Blaster pistol', 'nope', undefined, 5]);
+      st.man = pick(MANS);
+      st.loc = pick(['skull', 'neck', 'torso', 'eye', 'tail', 5, undefined]);
+      st.technique = pick(['', 'Knife throwing', 'nope', undefined]);
+      st.aids = pick([{ scope: true, hud: true, sg: true }, { scope: 'yes' }, null, 4, {}]);
+      st.aidBonus = pick([{ sg: junk() }, null, 'x', {}]);
+      const r = T.effective(data, st);
+      assert.ok(Number.isInteger(r.roll), JSON.stringify(st));
+      assert.ok(r.lines.length >= 1);
+      for (const l of r.lines) assert.ok(Number.isFinite(l.value), `${JSON.stringify(st)} ${l.label}`);
+      assert.ok(T.GROUPS[r.type]);
+      if (r.foe) for (const v of Object.values(r.foe)) assert.ok(Number.isFinite(v));
+    }
+    assert.strictEqual(JSON.stringify(data), before);
+  });
+});
+
+describe('the Ronnie fixture through effective', () => {
+  const raw = fs.readFileSync(path.join(__dirname, 'fixtures/gurps/gurps-ronnie.md'), 'utf8');
+  const { data: fm, content } = matter(raw);
+  const block = buildTohitData(parseGurps(fm, extractSections(content)), { pcSlug: 'ronnie-vint' });
+  it('every weapon gives an integer roll in its default state', () => {
+    assert.ok(block);
+    for (const w of block.weapons) {
+      const r = T.effective(block, { weapon: w.key });
+      assert.ok(Number.isInteger(r.roll), w.key);
+      assert.strictEqual(r.type, w.type);
+      for (const l of r.lines) assert.ok(Number.isFinite(l.value), `${w.key}: ${l.label}`);
+    }
+  });
+  it('a full state still gives integers', () => {
+    for (const w of block.weapons) {
+      const r = T.effective(block, { weapon: w.key, aim: 3, braced: true, man: 'aod', yards: 40, shots: 3, loc: 'limb', zerog: true,
+        dual: true, offhand: true, aids: Object.fromEntries(w.aids.concat(block.aids).map((a) => [a.id, true])) });
+      assert.ok(Number.isInteger(r.roll), w.key);
+    }
+  });
+});
