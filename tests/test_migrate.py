@@ -318,6 +318,41 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertTrue(out.rstrip().endswith(f"stamped {PLUGIN}"))
 
+    def value_choice_checks(self, log, release="1.10.30"):
+        """A Will-do and a release-gated value choice (`wants`), whose
+        answer is a word, so leaving it alone is `leave`, never silence."""
+        def find(v):
+            return [Item("tone-words", CHOICE, ["tidy or leave"],
+                         lambda x: log.append(f"tone-words={x}") or ["done"],
+                         wants="tidy or leave", holds_stamp=True)]
+        return [will("files", "1.10.20", 3, log),
+                Check("tone-words", release, 3, "tone words", find,
+                      choices=("tone-words=",))]
+
+    def test_an_unanswered_value_choice_holds_the_stamp_but_not_the_rest(self):
+        # #339: apply with no --choose for a value choice stamped the vault,
+        # and the release gate then never offered the choice again.
+        vault = make_vault(self)
+        log = []
+        checks = self.value_choice_checks(log)
+        code, out, _ = call([str(vault), "apply"], checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, ["files"])
+        self.assertEqual(stamp_of(vault), "1.10.12")
+        self.assertIn("files\tdid files", out)
+        self.assertTrue(out.rstrip().endswith(
+            "not answered: tone-words=<tidy or leave>\nnot stamped"), out)
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("## Your choice\n# count: 1\ntone-words=<tidy or "
+                      "leave>\ttidy or leave", plan)
+        self.assertIn("gm_apprentice_version 1.10.12 -> " + PLUGIN, plan)
+        code, out, _ = call([str(vault), "apply", "--choose",
+                             "tone-words=leave"], checks)
+        self.assertEqual(code, 0)
+        self.assertEqual(log, ["files", "tone-words=leave"])
+        self.assertEqual(stamp_of(vault), PLUGIN)
+        self.assertTrue(out.rstrip().endswith(f"stamped {PLUGIN}"), out)
+
     def test_waited_choice_already_named_is_taken_and_stamped(self):
         vault = make_vault(self)
         log = []
@@ -742,6 +777,11 @@ class RealToolTests(unittest.TestCase):
         self.assertIn("gm-leak\tDocuments/Letter.md: re-nest 'Context'", plan)
         code, did, err = self.run_real(vault, "apply")
         self.assertEqual(code, 0, err + did)
+        self.assertEqual(stamp_of(vault), "1.10.12")   # default-mode unanswered
+        self.assertIn("not answered: default-mode=<dark, light or leave>", did)
+        code, did, err = self.run_real(vault, "apply", "--choose",
+                                       "default-mode=leave")
+        self.assertEqual(code, 0, err + did)
         self.assertEqual(stamp_of(vault), PLUGIN)
         text = (vault / "Documents" / "Letter.md").read_text(encoding="utf-8")
         self.assertLess(text.index("## GM Notes"), text.index("Context"))
@@ -761,7 +801,8 @@ class RealToolTests(unittest.TestCase):
         config["footer"] = footer
         (site / "vault.config.json").write_text(json.dumps(config),
                                                 encoding="utf-8")
-        code, did, err = self.run_real(vault, "apply")
+        code, did, err = self.run_real(vault, "apply", "--choose",
+                                       "default-mode=leave")
         self.assertEqual(code, 0, err + did)
         self.assertIn("publish.footer", did)
         self.assertEqual(stamp_of(vault), PLUGIN)

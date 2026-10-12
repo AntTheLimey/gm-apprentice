@@ -15,6 +15,9 @@ hold the stamp, for the next `plan`, which lists that choice.
 
 `apply` runs Will do, then the chosen choices, stamps
 `gm_apprentice_version`, and prints what it did and Needs a person again.
+A choice that can be answered "leave it" (`--choose id=leave`) and was not
+chosen is printed as "not answered" and holds the stamp, so the next `plan`
+lists it again; everything else in the plan still runs.
 A step that fails stops the run; the vault is stamped at the last release
 whose steps all completed, so the next run starts at the failed step.
 
@@ -209,6 +212,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     failed: int | None = None
     error = ""
     repinned = waited = False
+    unanswered: list[str] = []   # value choices the GM was not asked
     for n, check in enumerate(todo):
         after_repin = check.asks_site and repinned   # plan did not list it
         try:
@@ -222,6 +226,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                          [v for i, v in chosen if i == item.id])
                 if after_repin and item.group == CHOICE and not picks:
                     waited = True   # a choice the GM has not seen
+                if item.holds_stamp and not picks:
+                    # Silence is not an answer (`leave` is), and past the
+                    # stamp the release gate would never offer it again.
+                    unanswered.append(f"{item.id}=<{item.wants}>")
                 for value in picks:
                     if item.wants and not value:
                         raise StepFailed(
@@ -246,7 +254,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             done = [c.release for c in todo
                     if c.release and parse_version(c.release) < first]
             target = max([vault_v, *done], key=parse_version)
-    stamped = parse_version(target) > parse_version(vault_v) and not waited
+    stamped = (parse_version(target) > parse_version(vault_v)
+               and not waited and not unanswered)
     if stamped:
         try:
             _stamp(vault, target)
@@ -259,6 +268,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"not offered: {choice}")
     if person or shown:
         emit(TITLES[PERSON], person, shown)
+    for label in unanswered:
+        print(f"not answered: {label}")
     if waited:
         print(WAITED_LINE)
     if failed is not None:
@@ -266,7 +277,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"stamped {target}; the rest is offered again next time"
               if stamped else "not stamped")
         return 1
-    if waited:
+    if waited or unanswered:
         print("not stamped")
     else:
         print(f"stamped {plugin_v}" if stamped else f"already at {plugin_v}")

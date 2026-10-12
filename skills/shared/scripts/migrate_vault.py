@@ -680,7 +680,7 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
             "wrapup-sections", CHOICE,
             ["move: put these under GM Notes, hidden from players; "
              "leave: keep them where they are", *moves],
-            apply, wants="move or leave"))
+            apply, wants="move or leave", holds_stamp=True))
     if person:
         items.append(Item("wrapup-sections-review", PERSON, person))
     return items
@@ -817,7 +817,7 @@ def find_tone_words(vault: Path) -> list[Item]:
 
     return [Item("tone-words", CHOICE,
                  [head, *(f"{w} -> {to} ({n})" for _, w, to, n in near)],
-                 apply, wants="tidy or leave")]
+                 apply, wants="tidy or leave", holds_stamp=True)]
 
 
 # --- the tone list in _meta ---------------------------------------------------

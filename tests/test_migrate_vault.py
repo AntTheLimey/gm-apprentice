@@ -805,6 +805,7 @@ class WrapupSectionsTests(WrapupFixture):
         self.assertIn("wrapup-sections", by_id(mv.find_wrapup_sections(vault)))
         item = by_id(mv.find_wrapup_sections(vault))["wrapup-sections"]
         self.assertIn("leave: keep them where they are", " ".join(item.lines))
+        self.assertTrue(item.holds_stamp)   # #339: silence is not "leave"
 
     def test_any_other_value_is_a_failed_step(self):
         with self.assertRaises(StepFailed):
@@ -1140,6 +1141,7 @@ class ToneWordsTests(unittest.TestCase):
         self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
         self.put("NPCs/B.md", self.NOTE.format(tone="central"))
         (item,) = mv.find_tone_words(self.vault)
+        self.assertTrue(item.holds_stamp)   # #339: silence is not "leave"
         self.assertEqual(item.id, "tone-words")
         self.assertEqual(item.group, CHOICE)
         self.assertEqual(item.wants, "tidy or leave")

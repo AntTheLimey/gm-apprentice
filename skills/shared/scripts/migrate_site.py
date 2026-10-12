@@ -570,14 +570,17 @@ def find_default_mode(vault: Path) -> list[Item]:
         return []
 
     def apply(value: str | None) -> list[str]:
-        if value not in ("dark", "light"):
-            raise StepFailed("default-mode takes dark or light")
+        if value not in ("dark", "light", "leave"):
+            raise StepFailed("default-mode takes dark, light or leave")
+        if value == "leave":
+            return ["left the default palette to the reader's device"]
         _set_setting(vault, "theme.default_mode", value)
         return [f"wrote publish.theme.default_mode: {value}"]
 
     return [Item("default-mode", CHOICE,
                  ["start every reader on one palette (unset follows the "
-                  "reader's device, as before)"], apply, wants="dark or light")]
+                  "reader's device, as before; leave: keep that)"],
+                 apply, wants="dark, light or leave", holds_stamp=True)]
 
 
 def find_fonts(vault: Path) -> list[Item]:

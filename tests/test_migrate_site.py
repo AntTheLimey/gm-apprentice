@@ -910,9 +910,13 @@ class ThemeChoiceTests(unittest.TestCase):
         with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
             (item,) = ms.find_default_mode(vault)
             self.assertEqual((item.id, item.wants),
-                             ("default-mode", "dark or light"))
+                             ("default-mode", "dark, light or leave"))
+            self.assertTrue(item.holds_stamp)
             self.assertEqual(item.apply("dark"),
                              ["wrote publish.theme.default_mode: dark"])
+            self.assertEqual(item.apply("leave"),
+                             ["left the default palette to the reader's "
+                              "device"])
             with self.assertRaises(StepFailed):
                 item.apply("purple")
         self.assertEqual(calls[1], ["vault-setting", "--set",
