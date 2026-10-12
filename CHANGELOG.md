@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.46] — 2026-10-11
+
+### Added
+
+- `tones.py VAULT shown` lists the hostile ties the site shows, read as
+  the site reads them: a tone written `Cold` or with spaces round it
+  counts, a tie the site hides does not.
+- campaign-qa's Tone Words check says how many hostile ties the site
+  shows and walks them on a yes, so one that gives something away can
+  be hidden or reworded.
+- Updating a vault with a site and a relationship tone says once that
+  the site now shows the tone.
+
+### Changed
+
+- The vault scripts read `gm_only` on a relationship as the site does:
+  `yes`, `on`, `1` and a quoted true in capitals or with spaces hide
+  it, as `true` always did.
+- The vault scripts read `publish:` as the site does: `None`, `False`
+  and a list holding a no withhold the note; `Stub` in capitals, with
+  spaces or in a list makes a stub.
+
+---
+
 ## [1.10.45] — 2026-10-11
 
 ### Added

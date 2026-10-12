@@ -4,6 +4,7 @@ tidy them.
 
     tones.py VAULT
     tones.py VAULT uses [WORD ...]
+    tones.py VAULT shown
     tones.py VAULT fix [--near [--except WORD ...]] [--set OLD=NEW ...]
                        [--write]
 
@@ -32,6 +33,17 @@ strays (NEAR or ASK) that compare equal to each, in the order given. A
 last `#` line counts the uses and the words. A WORD no stray compares
 equal to is refused.
 
+`shown` lists the hostile ties the site shows, and writes nothing: one
+tab-separated row per relationship whose tone is in the negative family,
+that is not `gm_only`, on a note the site publishes (the site's own
+publish tool is asked which notes publish):
+
+    note:line, the tone word, the target as written, and the description
+    on one line (cut at 300 characters, as `uses` cuts)
+
+A last `#` line counts the ties and the notes. If the publish tool cannot
+be asked, or the vault has no site, it prints one line why and exits 1.
+
 `fix` rewrites strays. `--near` takes every NEAR row; `--except WORD`
 (repeatable, with --near only) leaves that row's word as written.
 `--set OLD=NEW` (repeatable) rewrites the stray OLD to the listed word
@@ -49,6 +61,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import unicodedata
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass, field
@@ -62,7 +75,8 @@ from schema_rules import (
     tone_key,
     tone_proposal,
 )
-from vaultlib import is_unchecked_source, vault_files
+from vaultlib import (_frontmatter_lines, extract_frontmatter,
+                      is_unchecked_source, read_publish_list, vault_files)
 
 
 class TonesError(Exception):
@@ -94,6 +108,15 @@ def survey(vault: Path) -> list[Use]:
             uses.append(Use(rel, lineno, raw, edge.target if edge else "",
                             edge.description if edge else ""))
     return uses
+
+
+def published_notes(vault: Path) -> set[str] | None:
+    """The notes the vault's site publishes (NFC, vault-relative,
+    forward-slash paths), asked of the site's own publish tool. None when it
+    cannot be asked."""
+    import vault_check
+    return vault_check.pages_published(
+        vault_check.ask_publish_tool(vault, ["explain", "--all"]))
 
 
 def report_lines(uses: list[Use]) -> list[str]:
@@ -153,6 +176,71 @@ def use_lines(uses: list[Use], words: Iterable[str]) -> list[str]:
            f"{_one_line(u.description, DESCRIPTION_CAP)}" for w in wanted
            for u in sorted(where[w], key=lambda u: (u.rel, u.lineno))]
     return out + [f"# {len(out)} use(s) of {len(wanted)} word(s)"]
+
+
+def site_family(raw: str) -> str | None:
+    """The family the site shows a tone as. The same rule as `toneFamily`
+    in tools/publish/lib/ontology.js: trimmed and lower-cased, then looked
+    up in the list (`tone_family` itself is exact, to find strays)."""
+    return tone_families().get(tone_key(raw))
+
+
+def _hides_relationships(fields: object) -> bool:
+    """Does this exclude list strip `relationships` on the site? Only a YAML
+    list does, and it matches an item exactly (processor.js filterFields and
+    publishedFrontmatter): a string, `Relationships` or `relationships ` is
+    ignored there, so the ties stay listed."""
+    return isinstance(fields, list) and "relationships" in fields
+
+
+def _campaign_hides_relationships(vault: Path) -> bool:
+    """The vault file's `publish.exclude_fields` strips `relationships`, and
+    no `publish.overrides` entry mentions it (a per-note `include` would
+    re-admit it for that note; which notes is not worked out, so none is
+    skipped)."""
+    cfg = read_publish_list(vault, "exclude_fields")
+    if not _hides_relationships(cfg.value):
+        return False
+    try:
+        text = (vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8-sig")
+    except (OSError, UnicodeDecodeError):
+        return False
+    lines = _frontmatter_lines(text) or []
+    start, end = cfg.span or (0, 0)
+    outside = lines[:start] + lines[end:]
+    return not (any(re.match(r"\s*[\"']?overrides[\"']?\s*:", ln)
+                    for ln in outside)
+                and any("relationships" in ln for ln in outside))
+
+
+def shown_lines(vault: Path, published: set[str]) -> list[str]:
+    """One row per hostile tie a published note shows, then a count."""
+    rows: list[str] = []
+    notes: set[str] = set()
+    # The vault's own exclude_fields; a list only the site file holds is not
+    # known here, and its notes are listed (the safe side).
+    if _campaign_hides_relationships(vault):
+        published = set()
+    for rel, text in vault_files(vault):
+        if (is_unchecked_source(rel)
+                or unicodedata.normalize("NFC", rel) not in published):
+            continue
+        fm = extract_frontmatter(text) or {}
+        if _hides_relationships(fm.get("publish_exclude_fields")):
+            continue
+        for edge in iter_relationship_edges(text):
+            if edge.gm_only or site_family(edge.tone) != "negative":
+                continue
+            line = edge.tone_lines[0] if edge.tone_lines else 0
+            rows.append("\t".join([
+                f"{rel}:{line}", edge.tone, _one_line(edge.target),
+                _one_line(edge.description, DESCRIPTION_CAP)]))
+            notes.add(rel)
+    n, m = len(rows), len(notes)
+    rows.append(f"# {n} hostile tie{'' if n == 1 else 's'} shown on "
+                f"{m} note{'' if m == 1 else 's'}")
+    return rows
 
 
 # A tone line the fix may rewrite: the word is the whole value, bare or
@@ -301,7 +389,7 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="List a vault's stray tone words, and tidy them.")
     ap.add_argument("vault", type=Path)
-    ap.add_argument("command", nargs="?", choices=["fix", "uses"])
+    ap.add_argument("command", nargs="?", choices=["fix", "uses", "shown"])
     ap.add_argument("words", nargs="*", metavar="WORD")
     ap.add_argument("--near", action="store_true")
     ap.add_argument("--except", dest="excepts", action="append",
@@ -317,6 +405,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.command != "fix" and (args.near or args.excepts or args.sets
                                  or args.write):
         usage = "--near, --except, --set and --write go with fix"
+    elif args.command == "shown" and args.words:
+        usage = "only uses takes words"
     elif args.command == "fix" and args.words:
         usage = "only uses takes words; fix takes --set OLD=NEW"
     elif args.excepts and not args.near:
@@ -338,6 +428,14 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         if args.command == "uses":
             print("\n".join(use_lines(survey(args.vault), args.words)))
+            return 0
+        if args.command == "shown":
+            published = published_notes(args.vault)
+            if published is None:
+                print("tones.py: the site's publish tool could not be asked "
+                      "which notes publish", file=sys.stderr)
+                return 1
+            print("\n".join(shown_lines(args.vault, published)))
             return 0
         p = plan_fix(args.vault, args.near, sets, args.excepts or ())
         if args.write:

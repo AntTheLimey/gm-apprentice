@@ -729,6 +729,196 @@ class UsesTests(VaultCase):
         self.assertEqual({rel: self.get(rel) for rel in before}, before)
 
 
+class ShownTests(VaultCase):
+    def run_shown(self, files, published, eol=""):
+        for rel, text in files.items():
+            self.put(rel, text, newline=eol)
+        out, err = io.StringIO(), io.StringIO()
+        with mock.patch.object(tones, "published_notes",
+                               return_value=published), \
+                contextlib.redirect_stdout(out), \
+                contextlib.redirect_stderr(err):
+            code = tones.main([str(self.vault), "shown"])
+        return code, out.getvalue().splitlines(), err.getvalue()
+
+    NOTE = ("---\ntype: npc\nrelationships:\n"
+            "  - target: \"[[Hallam]]\"\n    type: rival_of\n"
+            "    tone: hostile\n    description: Wants his chair.\n"
+            "  - target: \"[[Mara]]\"\n    type: knows\n    tone: warm\n"
+            "  - target: \"[[Cult]]\"\n    type: serves\n"
+            "    tone: fearful\n    gm_only: true\n"
+            "  - target: \"[[Tom]]\"\n    type: knows\n    tone: Cold\n"
+            "---\nBody.\n")
+
+    def test_lists_negative_tones_that_are_not_gm_only(self):
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
+                                       {"NPCs/Emma.md"})
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[0].split("\t"), [
+            "NPCs/Emma.md:6", "hostile", "[[Hallam]]", "Wants his chair."])
+        # `Cold` is a stray, but the site reads it as cold: hostile.
+        self.assertEqual(rows[1].split("\t")[:3],
+                         ["NPCs/Emma.md:17", "Cold", "[[Tom]]"])
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+        self.assertFalse(any("Cult" in r or "Mara" in r for r in rows))
+
+    def test_a_tie_marked_gm_only_in_any_spelling_of_yes_is_not_shown(self):
+        for written in ("yes", "on", "1", "Yes", '"true"', '" True "'):
+            with self.subTest(written=written):
+                note = ("---\ntype: npc\nrelationships:\n"
+                        '  - target: "[[A]]"\n    type: rival_of\n'
+                        f"    tone: hostile\n    gm_only: {written}\n---\nB\n")
+                _, rows, _ = self.run_shown({"NPCs/E.md": note}, {"NPCs/E.md"})
+                self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_tones_are_read_the_way_the_site_reads_them(self):
+        # The rule toneFamily (tools/publish/lib/ontology.js) applies: trim,
+        # lower-case, look up. A change to either side must change both.
+        for written in ("HOSTILE", '" hostile"', '"hostile "', "Cold"):
+            with self.subTest(written=written):
+                note = ("---\ntype: npc\nrelationships:\n"
+                        '  - target: "[[A]]"\n    type: knows\n'
+                        f"    tone: {written}\n---\nB\n")
+                _, rows, _ = self.run_shown({"NPCs/E.md": note}, {"NPCs/E.md"})
+                self.assertEqual(rows[-1], "# 1 hostile tie shown on 1 note")
+                self.assertEqual(rows[0].split("\t")[1],
+                                 written.strip('"'))
+        self.assertEqual(tones.site_family(" Hostile "), "negative")
+        self.assertIsNone(tones.site_family("grim"))
+
+    def test_a_note_that_hides_its_relationships_lists_nothing(self):
+        for hide in ("publish_exclude_fields: [relationships]\n",
+                     "publish_exclude_fields:\n  - relationships\n"):
+            with self.subTest(hide=hide):
+                note = self.NOTE.replace("type: npc\n", "type: npc\n" + hide)
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": note},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_only_a_real_list_hides_a_notes_relationships(self):
+        # The site reads publish_exclude_fields only as a list, and matches
+        # an item exactly (processor.js publishedFrontmatter).
+        for hide in ("publish_exclude_fields: relationships\n",
+                     'publish_exclude_fields: "relationships"\n',
+                     "publish_exclude_fields: relationships, secrets\n",
+                     "publish_exclude_fields: [Relationships]\n",
+                     'publish_exclude_fields: ["relationships "]\n',
+                     "publish_exclude_fields:\n  - Relationships\n"):
+            with self.subTest(hide=hide):
+                note = self.NOTE.replace("type: npc\n", "type: npc\n" + hide)
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": note},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    CAMPAIGN = ("---\npublish:\n  exclude_fields:\n    - secrets\n"
+                "    - relationships\n%s---\n")
+
+    def test_a_campaign_that_excludes_relationships_lists_nothing(self):
+        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                     "_meta/vault-config.md":
+                                     self.CAMPAIGN % ""}, {"NPCs/Emma.md"})
+        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_campaign_exclude_only_counts_as_a_list_spelled_exactly(self):
+        for cfg in ("---\npublish:\n  exclude_fields: relationships\n---\n",
+                    "---\npublish:\n  exclude_fields: [Relationships]\n---\n"):
+            with self.subTest(cfg=cfg):
+                _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                             "_meta/vault-config.md": cfg},
+                                            {"NPCs/Emma.md"})
+                self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    def test_an_override_naming_relationships_lifts_the_campaign_skip(self):
+        cfg = self.CAMPAIGN % ("  overrides:\n    fields:\n"
+                               '      "NPCs/Emma.md":\n'
+                               "        include: [relationships]\n")
+        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                     "_meta/vault-config.md": cfg},
+                                    {"NPCs/Emma.md"})
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    def test_an_override_for_another_field_keeps_the_campaign_skip(self):
+        cfg = self.CAMPAIGN % ("  overrides:\n    fields:\n"
+                               '      "NPCs/Emma.md":\n'
+                               "        include: [secrets]\n")
+        _, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE,
+                                     "_meta/vault-config.md": cfg},
+                                    {"NPCs/Emma.md"})
+        self.assertEqual(rows, ["# 0 hostile ties shown on 0 notes"])
+
+    def test_a_note_the_site_does_not_publish_is_left_out(self):
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE}, set())
+        self.assertEqual((code, rows),
+                         (0, ["# 0 hostile ties shown on 0 notes"]))
+
+    def test_refuses_when_the_site_cannot_be_asked(self):
+        code, rows, err = self.run_shown({"NPCs/Emma.md": self.NOTE}, None)
+        self.assertEqual((code, rows), (1, []))
+        self.assertIn("publish", err)
+
+    def test_crlf_notes_give_the_same_line_numbers(self):
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
+                                       {"NPCs/Emma.md"}, eol="\r\n")
+        self.assertEqual((code, rows[0].split("\t")[:3]), (
+            0, ["NPCs/Emma.md:6", "hostile", "[[Hallam]]"]))
+
+    def test_an_accented_note_name_matches_the_nfc_published_path(self):
+        import unicodedata
+        nfd = unicodedata.normalize("NFD", "NPCs/Zo\u00eb.md")
+        nfc = unicodedata.normalize("NFC", nfd)
+        code, rows, _ = self.run_shown({nfd: self.NOTE}, {nfc})
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[-1], "# 2 hostile ties shown on 1 note")
+
+    def test_a_note_that_is_not_utf8_does_not_crash(self):
+        (self.vault / "NPCs").mkdir()
+        (self.vault / "NPCs/Bad.md").write_bytes(
+            self.NOTE.encode("utf-8") + b"\xff\xfe")
+        code, rows, _ = self.run_shown({"NPCs/Emma.md": self.NOTE},
+                                       {"NPCs/Emma.md", "NPCs/Bad.md"})
+        self.assertEqual(code, 0)
+        self.assertEqual(rows[-1], "# 4 hostile ties shown on 2 notes")
+
+    def test_a_map_form_relationships_block_has_no_tones_so_lists_nothing(self):
+        code, rows, _ = self.run_shown(
+            {"NPCs/Map.md": "---\ntype: npc\nrelationships:\n"
+             "  Hallam: hostile\n  tone: hostile\n---\nBody\n"},
+            {"NPCs/Map.md"})
+        self.assertEqual((code, rows), (0, ["# 0 hostile ties shown on 0 notes"]))
+
+
+class EdgeToneTests(unittest.TestCase):
+    def edges(self, *lines):
+        body = "".join(f"    {x}\n" for x in lines)
+        return list(sr.iter_relationship_edges(
+            '---\ntype: npc\nrelationships:\n  - target: "[[A]]"\n'
+            + body + "---\n"))
+
+    def test_gm_only_is_read_like_the_site_reads_it(self):
+        # The site hides an edge for true, the words true/yes/on and 1 in any
+        # capitals and padding, quoted or not (processor.js isGmOnlyEdge);
+        # reading more as a yes only hides more.
+        for line, want in (("gm_only: true", True), ("gm_only: True", True),
+                           ("gm_only: TRUE", True), ('gm_only: "true"', True),
+                           ("gm_only: 'true'", True), ('gm_only: "True"', True),
+                           ('gm_only: " true "', True), ("gm_only: yes", True),
+                           ("gm_only: Yes # why", True), ('gm_only: "YES"', True),
+                           ("gm_only: on", True), ("gm_only: 1", True),
+                           ('gm_only: "1"', True), ("gm_only: 1.0", True),
+                           ("gm_only: false", False), ("gm_only: no", False),
+                           ("gm_only: off", False), ("gm_only: 0", False),
+                           ("gm_only: 2", False), ("gm_only:", False),
+                           ("type: knows", False)):
+            with self.subTest(line=line):
+                self.assertEqual(self.edges(line)[0].gm_only, want)
+
+    def test_tone_is_unquoted_and_loses_a_trailing_comment(self):
+        self.assertEqual(
+            self.edges('tone: "hostile"  # s3')[0].tone, "hostile")
+        self.assertEqual(self.edges("tone: cold # s3")[0].tone, "cold")
+        self.assertEqual(self.edges("type: knows")[0].tone, "")
+
+
 import vault_check as vc  # noqa: E402
 
 

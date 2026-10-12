@@ -85,6 +85,46 @@ the note and give the line the word this run was giving that tone
 (your `--set` for it, else its `NEAR` row's listed word), never a word
 of your own, and say so.
 
+## Hostile ties the site shows
+
+The site shows each relationship's tone as warm, hostile or neutral. A
+hostile tie can give something away (who fears whom, who resents whom).
+
+`tones.py shown` lists every relationship with a negative tone that is
+not `gm_only`, on a note the site publishes: note and line, the tone as
+written, the target, the description. It reads a tone the way the site
+does, so `Cold` and `HOSTILE` count. Exit 1 means the site's tool could
+not be asked.
+
+Every time this check runs, run `tones.py shown` and add its count to
+the report as one Info line: "N hostile ties show on the site". Say
+nothing when the vault has no site or the tool could not be asked. With
+N above 0, offer the walk in one short sentence beside that line. Walk
+the ties only when the GM asks what the site shows of who is against
+whom, or says yes to that offer; never without a yes. If the GM
+declines, do not offer it again in the same session.
+
+Put the rows to the GM three to five at a time as a table (who, toward
+whom, tone, the line). For each the GM says one of:
+
+- **leave**: players may see it.
+- **re-tone**: the GM names a listed word; write it on that
+  relationship's `tone` line yourself.
+- **hide**: add `gm_only: true` to that relationship yourself. The
+  relationship then leaves the site whole, from both pages.
+
+A batch answer ("leave all of these", "hide the two about Hallam") is
+fine. Record nothing for a `leave`: the list is short enough to show
+again. Do not rebuild or deploy the site; say the changes show at the
+next build.
+
+The list errs on the side of showing more. The site colours an item by
+the first relationship it has to a target, so a later hostile tie to the
+same target may be listed that the site does not colour. A campaign that
+hides `relationships` only in the site's own config file, not in
+`vault-config.md`, still has its ties listed, and so does one whose
+`overrides` mention `relationships`.
+
 ## What this check never does
 
 - It never changes `strength` or a relationship's kind, and never a
@@ -92,3 +132,4 @@ of your own, and say so.
 - It never reads notes under `_QA`, `_archive`, `_Templates` or
   `_inbox`.
 - It never invents a tone word. The list changes only in the plugin.
+- It never marks a relationship `gm_only` without a yes.

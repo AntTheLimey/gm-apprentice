@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.45"
+current_version: "1.10.46"
 ---
 
 # Vault Migration Record
@@ -52,3 +52,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.43 | `links.py unlink --in` fix: no vault change | — |
 | 1.10.44 | A relationship's tone is one of 27 listed words: tones a rule can place (cordial to friendly) are rewritten on a yes, and campaign-qa brings the rest to the GM as one table of proposals; a tone list in `_meta/entity-types.md` or `_meta/relationship-types.md` becomes the 27 words | `tone-words`, `tone-list` |
 | 1.10.45 | Connections: no vault change. A site that sets nothing gains the tabbed Connections section at its next build and loses the right-hand sidebar. The site's publish tool is repinned to 1.18.0 by the every-pass repin | — |
+| 1.10.46 | No vault change. A vault with a site and a relationship tone is told once that the site now shows the tone as warm, hostile or neutral, and that campaign-qa lists the hostile ties | `tone-shown` |
