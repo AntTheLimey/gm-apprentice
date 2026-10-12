@@ -97,13 +97,33 @@ def test_every_kind_html_is_an_error_not_zero_entities(
     assert "every kind" in capsys.readouterr().err
 
 
-def test_generated_images_html_is_a_clean_error(
+def test_generated_images_html_means_none_and_leaves_the_exit_code_alone(
         tmp_path, monkeypatch, capsys, unblock_client_network):
     _note(tmp_path)
     _fake_site(monkeypatch, html_for=("/world/w1/generated/images",))
     monkeypatch.setattr(images, "_download", lambda url: b"bytes")
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 0
+    cap = capsys.readouterr()
+    assert "generated images" in cap.err
+    assert "dry-run" in cap.out
+
+
+def test_generated_images_http_error_is_a_clean_error(
+        tmp_path, monkeypatch, capsys, unblock_client_network):
+    _note(tmp_path)
+    _fake_site(monkeypatch, fail_for=("/world/w1/generated/images",))
+    monkeypatch.setattr(images, "_download", lambda url: b"bytes")
     assert images.run(["w1", "--vault", str(tmp_path)]) == 1
     assert "generated/images" in capsys.readouterr().err
+
+
+def test_a_list_endpoint_http_error_is_one_clean_line_and_stops_the_scan(
+        tmp_path, monkeypatch, capsys, unblock_client_network):
+    _note(tmp_path)
+    _fake_site(monkeypatch, fail_for=("/world/w1/race",))
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 1
+    err = capsys.readouterr().err
+    assert "ERROR" in err and "race" in err and "Traceback" not in err
 
 
 def test_a_detail_failure_is_reported_counted_and_the_scan_goes_on(

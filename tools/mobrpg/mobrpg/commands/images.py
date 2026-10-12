@@ -379,7 +379,11 @@ def run(argv: list[str]) -> int:
 
     id_to_path = _node_paths(vault_dir)
 
-    found, skipped, failed = _scan(args.world, token)
+    try:
+        found, skipped, failed = _scan(args.world, token)
+    except client.ApiError as e:
+        print(f"ERROR: could not list the world ({e.url}): HTTP {e.status}", file=sys.stderr)
+        return 1
     if len(skipped) == len(KINDS):
         print("ERROR: every kind's list endpoint answered with something other than "
               "JSON (a login page or the wrong host?); nothing was scanned",
@@ -475,6 +479,11 @@ def run(argv: list[str]) -> int:
 
     try:
         gen = client._request("GET", f"/world/{args.world}/generated/images", token=token) or {}
+    except client.NotJsonError:
+        # a world with none can answer with the HTML shell, as `race` does
+        print("  no generated images listed (the endpoint did not answer with JSON)",
+              file=sys.stderr)
+        gen = {}
     except client.ApiError as e:
         print(f"ERROR: could not list the world's generated images "
               f"({e.url}): {e.body or 'HTTP ' + str(e.status)}", file=sys.stderr)
