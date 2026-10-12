@@ -35,11 +35,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - mobRPG `suggest` tells "The Woodland Ghost" from "Woodland Ghost":
   a note is matched by its exact name first, a new note is no longer
   skipped because a similar-named one is linked, and a name two notes
-  share is reported, not guessed. A relationship is never sent to a
-  note that only resembles the one it names: where a note is held back
-  because a live element has almost its name (Lord and Lady Ashworth),
-  the line says why and what to do, and the relationships to it are
-  reported. Two notes whose names differ only by underscore are named
+  share is reported, not guessed. A new note whose name only resembles
+  a live element that another note already owns (Lady Ashworth beside
+  Lord Ashworth) is created as its own element, with a line in the
+  report, and relationships to it go to it. One that resembles a live
+  element no note owns is held back, with a line saying why and what to
+  do. Two notes whose names differ only by underscore are named
   in the report. `pull-canon --baseline` and links in pushed text match
   the same way (#262).
 - Writing a list over an empty setting in the vault file keeps a

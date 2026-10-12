@@ -1365,7 +1365,7 @@ def run(argv: list[str]) -> int:
     # Anything that already exists live but has no node must not be re-filed:
     # its create is skipped as already claimed and the edges that hang off it
     # fail the whole batch (#179). Hold it and point at `adopt`, which links it.
-    preexisting, ambiguous_live, look_alikes = [], [], []
+    preexisting, ambiguous_live, look_alikes, owned_look_alikes = [], [], [], []
     held_names: dict = {}
     if net_new:
         try:
@@ -1377,6 +1377,10 @@ def run(argv: list[str]) -> int:
         # folded key alone is a look-alike: the note is held, and neither its name nor its edges
         # take that element's id.
         look_alikes = [(e, l) for e, l in preexisting if not _same_element(e, l.get("name"))]
+        # A look-alike whose live element another vault note already owns is a different
+        # thing (Lord and Lady Ashworth): it stays net-new and is created, with a report line.
+        owned_look_alikes = [(e, l) for e, l in look_alikes if l["id"] in owner_by_id]
+        look_alikes = [(e, l) for e, l in look_alikes if l["id"] not in owner_by_id]
         preexisting = [(e, l) for e, l in preexisting if _same_element(e, l.get("name"))]
         held_names = {_stem(e["name"]): l.get("name") or "?" for e, l in look_alikes}
         held_paths = ({e["path"] for e, _ in preexisting} | {e["path"] for e, _ in ambiguous_live}
@@ -1467,10 +1471,14 @@ def run(argv: list[str]) -> int:
         print(f"  [held] {len(submitted_ents)} entit(y/ies) already ruled on upstream "
               f"(pending/dismissed suggestion, or deleted element) — not re-filed: "
               + ", ".join(sorted(e["name"] for e in submitted_ents)))
+    for e, l in owned_look_alikes:
+        print(f"  [note] {e['name']} is created as a new element: a live element with almost the "
+              f"same name ({l.get('name')}) is already linked by {owner_by_id[l['id']]}, so it is "
+              f"taken for a different one. If they are the same, drop the new note and alias it there.")
     if look_alikes:
         print("  [held] not created, because a live element has almost the same name: "
               + "; ".join(f"{e['name']} (live: {l.get('name')}"
-                          + (f", linked by {owner_by_id[l['id']]}" if l["id"] in owner_by_id else "") + ")"
+                          + ")"
                           for e, l in look_alikes)
               + " — the names match only once articles and titles (Lord, Lady, The) are "
                 "ignored, so it is not taken for the same element. If it is the same one, run "

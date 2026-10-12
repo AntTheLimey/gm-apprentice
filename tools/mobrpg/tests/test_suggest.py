@@ -1686,14 +1686,69 @@ def _ashworth_run(tmp_path, monkeypatch, capsys, live_name="Lord Ashworth"):
     return capsys.readouterr().out, json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
 
 
-def test_a_look_alike_of_the_same_kind_is_not_the_linked_element(tmp_path, monkeypatch, capsys):
-    out, batch = _ashworth_run(tmp_path, monkeypatch, capsys)
-    ends = [r["payload"][k] for r in batch["suggestions"] if r.get("operation") == "AddRelation"
+def _refs_of(batch):
+    return [r["payload"][k] for r in batch["suggestions"] if r.get("operation") == "AddRelation"
             for k in ("sourceRef", "targetRef")]
-    assert "lord-id" not in ends                       # nothing goes to Lord Ashworth
-    held = [l for l in out.splitlines() if "Lady Ashworth" in l and "[held]" in l]
-    assert held and "only once" in held[0] and "Lord Ashworth" in held[0]
-    assert any("Betty" in l and "Lady Ashworth" in l for l in out.splitlines() if "[note]" in l)
+
+
+def _created(batch):
+    return [i["payload"]["name"] for i in batch["suggestions"]
+            if i.get("operation") == "CreateElement" and i["payload"].get("name")]
+
+
+def test_a_new_lady_is_created_beside_a_linked_and_live_lord(tmp_path, monkeypatch, capsys):
+    out, batch = _ashworth_run(tmp_path, monkeypatch, capsys)
+    assert "Lady Ashworth" in _created(batch)
+    ends = _refs_of(batch)
+    assert "lord-id" not in ends                       # her edge goes to her own ref
+    assert any(e.startswith("suggestion:e") for e in ends)
+    assert any("Lady Ashworth" in l and "almost the same name" in l and "Lord Ashworth" in l
+               for l in out.splitlines() if "[note]" in l)
+    assert "[held]" not in out or "Lady Ashworth" not in out.split("[held]")[1]
+
+
+def test_a_new_note_matching_an_unowned_live_element_by_fold_only_is_held(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    (root / "Characters/NPCs").mkdir(parents=True)
+    (root / "Characters/NPCs/Lady Ashworth.md").write_text(
+        '---\ntype: npc\noccupation: "Lady"\ngender: Female\n---\nLady.\n', encoding="utf-8")
+    (root / "Characters/NPCs/Betty.md").write_text(
+        '---\ntype: npc\noccupation: "Maid"\ngender: Female\nrelationships:\n'
+        '  - target: "[[Lady Ashworth]]"\n    type: knows\n---\nBetty.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "x-id", "name": "Ashworth"}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    out = capsys.readouterr().out
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    assert "Lady Ashworth" not in _created(batch) and "x-id" not in _refs_of(batch)
+    held = [l for l in out.splitlines() if "[held]" in l and "Lady Ashworth" in l]
+    assert held and "only once" in held[0] and "adopt" in held[0]
+    assert any("Betty" in l and "held" in l for l in out.splitlines() if "[note]" in l)
+
+
+def test_a_new_creature_is_created_beside_a_linked_and_live_inn(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Locations", "The Woodland Ghost", "inn-id")
+    (root / "Creatures").mkdir()
+    (root / "Creatures/Woodland Ghost.md").write_text("---\ntype: creature\n---\nA ghost.\n", encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "inn-id", "name": "The Woodland Ghost"}], "page": {"totalPages": 1}}))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    assert "Woodland Ghost" in _created(batch)
 
 
 def test_a_look_alike_pair_linked_to_each_other_keeps_each_ones_kind(tmp_path):
