@@ -11,7 +11,8 @@ is wrong). While the site's publish tool is out of date the steps that ask
 it are listed under a fourth heading. An `apply` that repins the site
 runs them right after: their Will do is done and their Needs a person
 printed. Only if one offers a Your choice the GM was never shown does it
-hold the stamp, for the next `plan`, which lists that choice.
+hold the stamp, for the next `plan`, which lists that choice. The stamp row
+names the choices it waits for (see `apply`).
 
 `apply` runs Will do, then the chosen choices, stamps
 `gm_apprentice_version`, and prints what it did and Needs a person again.
@@ -131,6 +132,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     vault_v, plugin_v = refused
     groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
     waiting: list[Row] = []
+    holding: list[str] = []   # choices apply will not stamp without
     repin_waits = False
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
@@ -145,6 +147,8 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
             continue
         for item in items:
             groups[item.group].extend(_rows(item))
+            if item.holds_stamp:
+                holding.append(item.id)
         if check.name == REPIN and any(i.group == WILL for i in items):
             repin_waits = True
     behind = parse_version(vault_v) < parse_version(plugin_v)
@@ -153,8 +157,12 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         print("up to date")
         return 0
     if behind:
+        until = (f" (only once {', '.join(holding)} "
+                 f"{'is' if len(holding) == 1 else 'are'} answered)"
+                 if holding else "")
         groups[WILL].append(
-            ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> {plugin_v}"))
+            ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> "
+                      f"{plugin_v}{until}"))
     for group in (WILL, CHOICE, PERSON):
         if groups[group]:
             emit(TITLES[group], groups[group])

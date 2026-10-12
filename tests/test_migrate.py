@@ -345,7 +345,8 @@ class ApplyTests(unittest.TestCase):
         _, plan, _ = call([str(vault), "plan"], checks)
         self.assertIn("## Your choice\n# count: 1\ntone-words=<tidy or "
                       "leave>\ttidy or leave", plan)
-        self.assertIn("gm_apprentice_version 1.10.12 -> " + PLUGIN, plan)
+        self.assertIn("stamp\tgm_apprentice_version 1.10.12 -> " + PLUGIN
+                      + " (only once tone-words is answered)", plan)
         code, out, _ = call([str(vault), "apply", "--choose",
                              "tone-words=leave"], checks)
         self.assertEqual(code, 0)
