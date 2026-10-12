@@ -7,7 +7,7 @@ const os = require('os');
 const { build } = require('../../lib/build');
 
 // `publishLines` are extra keys under `publish:` in the vault config, e.g. ['sheet_skin: ledger'].
-function buildPc(system, body, publishLines = []) {
+function buildPc(system, body, publishLines = [], buildOptions = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), `gm-publish-${system}-`));
   const vault = path.join(root, 'vault');
   fs.mkdirSync(path.join(vault, 'Characters', 'PCs'), { recursive: true });
@@ -22,7 +22,7 @@ function buildPc(system, body, publishLines = []) {
     siteTitle: 'Test', system, excludeDirs: ['_meta', '_Templates'], excludeSections: ['GM Notes'],
     folderMap: { 'Characters/PCs': 'characters/pcs' },
   }));
-  build({ configPath });
+  build({ configPath, ...buildOptions });
   const out = path.join(root, 'docs');
   return { root, out, html: fs.readFileSync(path.join(out, 'characters', 'pcs', 'test-hero.html'), 'utf-8') };
 }

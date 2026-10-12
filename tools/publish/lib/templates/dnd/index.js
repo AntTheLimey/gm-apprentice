@@ -1,7 +1,7 @@
 const { parseDnd } = require('./parse');
 const { buildSheet, buildCombat, buildSpells, buildEquipment, buildVitals } = require('./layout');
 const { buildDndLiveData, boardOf } = require('./live-data');
-const { consumedTitleMatcher } = require('../sheet-parse');
+const { consumedTitleMatcher, splitWidened, withRowNotes } = require('../sheet-parse');
 
 // `## ` sections the sheet takes over from the accordion list. Each is on the
 // page in full once the sheet renders (sheet-parse.js). Background is read for
@@ -9,7 +9,10 @@ const { consumedTitleMatcher } = require('../sheet-parse');
 const CONSUMED_TITLES = ['stat sheet', 'skills', 'spellcasting', 'proficiencies', 'class features', 'species traits', 'feats', 'equipment', 'companions'];
 const isDndConsumedTitle = consumedTitleMatcher(CONSUMED_TITLES);
 
-function renderDnDSheet(frontmatter, sections, meta) {
+function renderDnDSheet(frontmatter, allSections, meta) {
+  // Cells in columns the build added by widening are never read: the sheet's numbers come out as
+  // they did when such a cell was dropped, and the cells are listed on the sheet (#283).
+  const { sections, notes } = splitWidened(allSections, isDndConsumedTitle);
   const model = parseDnd(frontmatter, sections);
   // What the page can keep live, worked out from the note. It rides the party board
   // with live off too; the marks are drawn tappable only when live is on.
@@ -26,7 +29,7 @@ function renderDnDSheet(frontmatter, sections, meta) {
       model.liveHp = liveData.hpMax !== null;
     }
   }
-  const sheetHtml = buildSheet(model);
+  const sheetHtml = withRowNotes(buildSheet(model), notes);
   // Combat, spells and equipment ride the sheet: with no sheet their sections
   // stay where the page puts them today.
   if (!sheetHtml) return { sheetHtml: null, warnings: model.warnings };

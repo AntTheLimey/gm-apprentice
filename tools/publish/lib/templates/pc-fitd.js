@@ -1,7 +1,7 @@
 const { escapeHtml } = require('../processor');
 const {
   ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, filled, yesNo, hasContent, statItem, subsections, consumeTable,
-  stripTemplatePlaceholders, boldField, readAttributes, tiles, sectionReader, consumedTitleMatcher,
+  stripTemplatePlaceholders, boldField, readAttributes, tiles, sectionReader, consumedTitleMatcher, splitWidened, withRowNotes,
 } = require('./sheet-parse');
 
 // `## ` sections the sheet takes over from the accordion list; each is on the
@@ -152,7 +152,12 @@ function renderStatSheet(section, found) {
 
 // The body sections follow skills/shared/templates/pc-fitd.md
 // (docs/file-format-standards.md §11).
-function renderFitDSheet(frontmatter, sections) {
+function renderFitDSheet(frontmatter, allSections) {
+  const { sections, notes } = splitWidened(allSections, isFitDConsumedTitle);
+  return withRowNotes(renderFitDSheetFrom(frontmatter, sections), notes);
+}
+
+function renderFitDSheetFrom(frontmatter, sections) {
   const reader = sectionReader(sections);
   const found = {};
   const parts = [];

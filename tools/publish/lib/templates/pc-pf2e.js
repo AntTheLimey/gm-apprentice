@@ -1,4 +1,4 @@
-const { cellText, hasContent, consumedTitleMatcher } = require('./sheet-parse');
+const { cellText, hasContent, consumedTitleMatcher, splitWidened, withRowNotes } = require('./sheet-parse');
 const { renderD20Sheet, CONSUMED_TITLES } = require('./d20-sheet');
 
 // `## ` sections the sheet takes over from the accordion list; each is on the
@@ -64,8 +64,9 @@ const PF2E = {
   ],
 };
 
-function renderPF2eSheet(frontmatter, sections) {
-  return renderD20Sheet(frontmatter, sections, PF2E);
+function renderPF2eSheet(frontmatter, allSections) {
+  const { sections, notes } = splitWidened(allSections, isPF2eConsumedTitle);
+  return withRowNotes(renderD20Sheet(frontmatter, sections, PF2E), notes);
 }
 
 module.exports = { renderPF2eSheet, isPF2eConsumedTitle };

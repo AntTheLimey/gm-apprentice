@@ -128,10 +128,11 @@ function extractSubsectionHtml(sectionHtml, subsectionTitle) {
 // Returns [{ section, row, text }] for the sections named in `only`: those the sheet reads
 // by position and so would not show. A section it shows whole already carries the cell.
 function overflowNotes(sections, only) {
-  const keys = only.map(normalizeTitle);
+  const keys = typeof only === 'function' ? null : only.map(normalizeTitle);
+  const wanted = (title) => (keys ? keys.includes(normalizeTitle(title)) : only(title));
   const out = [];
   for (const sec of sections || []) {
-    if (!sec || !sec.html || !keys.includes(normalizeTitle(sec.title))) continue;
+    if (!sec || !sec.html || !wanted(sec.title)) continue;
     const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
     let m;
     while ((m = tableRegex.exec(sec.html)) !== null) {
@@ -148,4 +149,32 @@ function overflowNotes(sections, only) {
   return out;
 }
 
-module.exports = { overflowNotes, decodeEntities, parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };
+// A section's HTML with the columns the build added by widening taken out again: the table the
+// sheet reads is the one the GM's header describes, as it was before #283. The cells are not lost:
+// splitWidened lists them. Untouched when no table in the fragment was widened.
+function stripWidened(html) {
+  const source = String(html || '');
+  if (!/data-widened/.test(source)) return source;
+  return source.replace(/<table[^>]*>[\s\S]*?<\/table>/gi, (table) => {
+    if (!/data-widened/.test(table)) return table;
+    const head = table.match(/<thead[^>]*>[\s\S]*?<\/thead>/i);
+    if (!head) return table;
+    const heads = [...head[0].matchAll(/<th(\s[^>]*)?>/gi)];
+    const known = heads.length - heads.filter(h => /data-widened/.test(h[1] || '')).length;
+    return table.replace(/<tr[^>]*>[\s\S]*?<\/tr>/gi, (row) => {
+      let at = 0;
+      return row.replace(/<(t[dh])([^>]*)>[\s\S]*?<\/\1>\n?/gi, (cell) => (at++ < known ? cell : ''));
+    });
+  });
+}
+
+// For the sheets that read a section's tables whole (D&D, PF2e, FitD): the sections `isConsumed`
+// names, with widened columns removed so every value and tracker comes out as it did when such a
+// cell was dropped, and the notes (overflowNotes) to list on the sheet instead.
+function splitWidened(sections, isConsumed) {
+  const notes = overflowNotes(sections, isConsumed);
+  const read = (sections || []).map(s => (s && s.html && isConsumed(s.title) && /data-widened/.test(s.html) ? { ...s, html: stripWidened(s.html) } : s));
+  return { sections: read, notes };
+}
+
+module.exports = { stripWidened, splitWidened, overflowNotes, decodeEntities, parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };

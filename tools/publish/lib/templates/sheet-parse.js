@@ -7,7 +7,7 @@
 // a repeated section, an unknown `### ` subsection — is passed through as
 // written, never dropped.
 const { escapeHtml } = require('../processor');
-const { decodeEntities, normalizeTitle, aboveSubheadings } = require('./gurps/tables');
+const { decodeEntities, normalizeTitle, aboveSubheadings, splitWidened } = require('./gurps/tables');
 
 const ATTRIBUTE_COLUMNS = [/^(attribute|stat|field|name)$/i, /^value$/i];
 
@@ -190,6 +190,20 @@ function sectionReader(sections) {
   };
 }
 
+// The cells a row holds beyond its header (overflowNotes), listed on a sheet that does not read them.
+function rowNotesHtml(notes) {
+  if (!notes || notes.length === 0) return '';
+  return `<div class="sheet-row-notes"><h3>Notes on rows</h3>` +
+    notes.map(n => `<p class="empty-note">${escapeHtml(n.section)}${n.row ? `: ${escapeHtml(n.row)}` : ''} — ${escapeHtml(n.text)}</p>`).join('') + `</div>`;
+}
+
+// A sheet's markup with the notes inside its outer element, last.
+function withRowNotes(sheetHtml, notes) {
+  const block = rowNotesHtml(notes);
+  if (!sheetHtml || !block || !sheetHtml.endsWith('</div>')) return sheetHtml;
+  return sheetHtml.slice(0, -'</div>'.length) + block + '</div>';
+}
+
 function consumedTitleMatcher(titles) {
   const keys = titles.map(normalizeTitle);
   return title => keys.includes(normalizeTitle(title));
@@ -209,5 +223,5 @@ module.exports = {
   hasSheetStructure,
   ATTRIBUTE_COLUMNS, aboveSubheadings, cellText, yesNo, isPlaceholder, filled, hasContent, statItem,
   subsections, consumeTable, stripTemplatePlaceholders, boldField, readAttributes, tiles, readSlots,
-  sectionReader, consumedTitleMatcher,
+  sectionReader, consumedTitleMatcher, rowNotesHtml, withRowNotes, splitWidened,
 };

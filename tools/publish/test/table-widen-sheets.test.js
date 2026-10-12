@@ -82,3 +82,48 @@ test('an extra cell on a CoC row is escaped, plain text', () => {
   const { html } = quiet(() => buildPc('coc-7e', lines.join('\n')));
   assert.ok(html.includes('&lt;b&gt;ZZ&lt;/b&gt;'));
 });
+
+// D&D, PF2e and FitD read their sections' tables for values, trackers and live numbers. A cell in a
+// column the build added by widening is never part of what they read: every row, one at a time given
+// an extra cell, comes out exactly as the same row without it (the sheet, its live-data island and the
+// party board included), and the cell is on the page once, in "Notes on rows".
+const islands = (h) => (h.match(/<script[^>]*type="application\/json"[^>]*>[\s\S]*?<\/script>/g) || []).join('\n');
+const NOTES_D20 = /<div class="sheet-row-notes">[\s\S]*?<\/div>/;
+const CONSUMED = { 'dnd-5e-2024': require('../lib/templates/dnd/index').isDndConsumedTitle, pf2e: require('../lib/templates/pc-pf2e').isPF2eConsumedTitle, fitd: require('../lib/templates/pc-fitd').isFitDConsumedTitle };
+for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
+  const consumed = CONSUMED[system];
+  const lines = templateBody(SYSTEMS[system]).split('\n');
+  // Every body row of every table, with its blank cells filled so each reader has a value to keep.
+  const rows = [];
+  let n = 0;
+  for (let i = 0; i < lines.length - 2; i++) {
+    if (!(/^\|/.test(lines[i]) && /^\|[-| :]+\|$/.test(lines[i + 1]))) continue;
+    n++;
+    for (let r = i + 2; r < lines.length && /^\|/.test(lines[r]); r++) {
+      lines[r] = lines[r].split('|').map((c, j, all) => (j >= 2 && j < all.length - 1 && c.trim() === '' ? ` ${n}${r % 7 + 1} ` : c)).join('|');
+      rows.push(r);
+    }
+  }
+  const live = system === 'dnd-5e-2024';
+  // The build stamps each island with a hash of the page; that is the one thing allowed to differ.
+  const build = (body) => quiet(() => buildPc(system, body, live ? ['live_stats: true'] : [], live ? { assumeKv: true } : {})).html.replace(/"buildVersion":"[^"]*"/g, '');
+  test(`${system}: an extra cell on any table row leaves the sheet's own numbers and trackers as they were`, () => {
+    assert.ok(rows.length >= 20);
+    const base = build(lines.join('\n'));
+    const differ = [];
+    for (const r of rows) {
+      const wide = lines.slice();
+      wide[r] = wide[r].replace(/\|\s*$/, '| ZZROWNOTE |');
+      const html = build(wide.join('\n'));
+      const once = html.split('ZZROWNOTE').length - 1 === 1;
+      const block = NOTES_D20.exec(html);
+      const noted = !!block && block[0].includes('ZZROWNOTE');
+      // A section the sheet takes over is read without the cell and lists it; any other section is
+      // shown whole, the cell in its table, and the sheet's data is the same either way.
+      const section = lines.slice(0, r).reverse().find(l => /^## /.test(l)).slice(3);
+      const ok = once && noted === consumed(section) && (noted ? html.replace(NOTES_D20, '') === base : islands(html) === islands(base));
+      if (!ok) differ.push(lines[r].slice(0, 40));
+    }
+    assert.deepStrictEqual(differ, []);
+  });
+}
