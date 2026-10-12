@@ -25,8 +25,9 @@
   const MOVE_MELEE = -4;
   const MOVE_MELEE_CAP = 9;
   const POPUP = -2;                   // pop-up attack, and no Aim (B390)
-  // Rapid fire by shots (B373); 100 and more carries on in HT172 (+7 at 100, +8 at 200, +9 at
-  // 400, +10 at 800); B373's own table ends at 99 shots.
+  // Rapid fire by shots (B373); from 100 shots the extended table in HT172 (High-Tech) carries on:
+  // +7 at 100, +8 at 200, +9 at 400, +10 at 800, one more for each doubling. B373's own table
+  // ends at 99 shots.
   const ROF_STEPS = [[800, 10], [400, 9], [200, 8], [100, 7], [50, 6], [25, 5], [17, 4], [13, 3], [9, 2], [5, 1]];
   const RAPID_STRIKE = -6;            // each attack (B370)
   const RAPID_STRIKE_HALF = -3;       // with Trained by a Master (B93) or Weapon Master (MA48)
@@ -56,9 +57,9 @@
   const SKILL_PREFIXES = ['Guns', 'Gunner', 'Beam Weapons'];
   const ALWAYS_ON = ['Laser sight'];
   const EVALUATE_MAX = 3;             // +1 a turn, at most +3 (B364)
-  const DUAL = -4;                    // Dual-Weapon Attack, each attack; the foe defends at -1 (B417)
+  const DUAL = -4;                    // Dual-Weapon Attack, each attack; the foe defends at -1 (B417, MA83)
   const DUAL_FOE = -1;
-  const DUAL_BOUGHT_MAX = 4;          // the technique buys off at most the -4 (B230)
+  const DUAL_BOUGHT_MAX = 4;          // the technique buys off at most the -4 (MA83, B230)
   const OFF_HAND = -4;                // none with Ambidexterity (B39) or Off-Hand Weapon Training (B232); B417, B547
   const BAD_FOOTING = -2;             // -2 or worse at the GM's option (B547)
   const SHOCK_MAX = 4;                // shock is at most -4 (B419)

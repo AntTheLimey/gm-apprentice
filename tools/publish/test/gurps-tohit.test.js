@@ -724,7 +724,7 @@ describe('Telegraphic Attack, Deceptive Attack and Evaluate (MA113, B369)', () =
   });
 });
 
-describe('rapid fire past 100 shots (SS159) and the Rcl note (B373)', () => {
+describe('rapid fire past 100 shots (HT172) and the Rcl note (B373)', () => {
   const data = withWeapon(mk(), 'Blaster pistol', { rof: 2000 });
   it('the table carries on', () => {
     const got = [99, 100, 199, 200, 399, 400, 799, 800, 999].map((s) => rolls(data, { weapon: 'Blaster pistol', shots: s }) - 17);
