@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [1.10.47] — 2026-10-12
+## [1.10.47] — 2026-10-11
 
 ### Added
 
@@ -15,9 +15,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields (`publish.exclude_sections`, `publish.exclude_fields`) into the
   vault file, so a GM can see them and add an entry without losing the
   built-in ones (#294).
-- CoC and GURPS character sheets end in a "Notes on rows" block when a
-  table row has more cells than the sheet has columns for, so the extra
-  text is on the page.
+- Character sheets for all five systems end in a "Notes on rows" block
+  when a table row has more cells than the sheet has columns for, so the
+  extra text is on the page. The sheet's own numbers and trackers are
+  the same as they were without the extra cell.
 
 ### Changed
 
@@ -33,10 +34,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the build names the table and its first such row (#283).
 - mobRPG `suggest` tells "The Woodland Ghost" from "Woodland Ghost":
   a note is matched by its exact name first, a new note is no longer
-  skipped because a similar-named one is linked, a relationship goes to
-  the note it names, and a name two notes share is reported, not
-  guessed. `pull-canon --baseline` and links in pushed text match the
-  same way (#262).
+  skipped because a similar-named one is linked, and a name two notes
+  share is reported, not guessed. A relationship is never sent to a
+  note that only resembles the one it names: where a note is held back
+  because a live element has almost its name (Lord and Lady Ashworth),
+  the line says why and what to do, and the relationships to it are
+  reported. Two notes whose names differ only by underscore are named
+  in the report. `pull-canon --baseline` and links in pushed text match
+  the same way (#262).
 - Writing a list over an empty setting in the vault file keeps a
   comment that sat on it.
 
