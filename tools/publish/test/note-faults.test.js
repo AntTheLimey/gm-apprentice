@@ -643,6 +643,11 @@ describe('the audit and what a vault writes itself', () => {
     assert.strictEqual((await faults(files, {}, 'ALIAS_IN_PROSE')).length, 1);
   });
 
+  it('finds a secret name the page prints with a zero-width character written as an entity', async () => {
+    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'Everyone feared the old smug&#8203;gler.') });
+    assert.strictEqual((await faults(files, {}, 'ALIAS_IN_PROSE')).length, 1);
+  });
+
   it('finds a secret name written with a zero-width character, printed without one', async () => {
     const files = { 'Characters/Vesper_Hale.md': npc('V', 'x', 'gm_aliases: ["Old Smug​gler"]\n'),
       'Characters/Mara_Quill.md': npc('M', 'Everyone feared the old smuggler.') };

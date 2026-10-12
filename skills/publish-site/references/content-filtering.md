@@ -79,8 +79,10 @@ to the cult leader whose existence gives the game away.
 A page's Connections holds only what some published page shows. A
 note that does not publish is not listed, an edge marked `gm_only`
 is gone at both ends, a note that excludes `relationships` lists
-none (the other notes' edges to it still show there), and a link
-with a label prints the label, never the name behind it.
+none (the other notes' edges to it still show there). A link with
+a label prints the label, never the name behind it, when its target
+has no published page; a target that has one is listed under that
+page's own title, so a label does not disguise a published note.
 
 **The tone is shown.** Each relationship appears as warm (a positive
 tone), hostile (negative) or neutral, never as the word itself. A

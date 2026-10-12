@@ -165,6 +165,19 @@ test("a session page's NPCs are in its Connections, under Appearing", () => {
   assert.match(site().read('sessions', 'session-1.html'), /<h4>Appearing<\/h4>\s*<ul>\s*<li><a href="[^"]*emma\.html">Emma<\/a>/);
 });
 
+test('two sessions with one file name each list only their own NPCs', () => {
+  const s = buildVault(Object.assign({}, FILES, {
+    'Sessions/Ch1/Session_01.md': note('type: session\nsession_number: 1', '[[Emma]] spoke.'),
+    'Sessions/Ch2/Session_01.md': note('type: session\nsession_number: 1', '[[Lord_Vane]] spoke.'),
+  }));
+  sites.push(s);
+  const ch1 = s.read('sessions', 'ch1', 'session-01.html');
+  const ch2 = s.read('sessions', 'ch2', 'session-01.html');
+  assert.match(ch1, /<h4>Appearing<\/h4>[^]*emma\.html/);
+  assert.ok(!/<h4>Appearing<\/h4>\s*<ul>(?:(?!<\/ul>)[^])*lord-vane\.html/.test(ch1), 'Ch1 lists an NPC only Ch2 links');
+  assert.ok(!/<h4>Appearing<\/h4>\s*<ul>(?:(?!<\/ul>)[^])*emma\.html/.test(ch2), 'Ch2 lists an NPC only Ch1 links');
+});
+
 test('World Rules sit in the page, not beside it', () => {
   const html = site().read('world', 'magic.html');
   assert.match(html, /<section class="world-rules"><h2>World Rules<\/h2><ul><li>Magic costs blood\.<\/li><\/ul><\/section>/);

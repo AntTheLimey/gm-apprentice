@@ -777,7 +777,7 @@ function buildSite(options) {
       // A hub whose body is withheld (#276) takes its NPCs and events from the
       // Wrap-Up — who actually appeared — since its own links were prep, not play.
       const source = hubWrapUps.get(page) || page;
-      const appearedIn = (p) => backlinksOf(backlinks, p).some(b => b.title === source.title);
+      const appearedIn = (p) => backlinksOf(backlinks, p).some(b => b.outputPath === source.outputPath);
       for (const p of pages) if (p.frontmatter.type === 'npc' && appearedIn(p)) extras.push({ group: 'Appearing', page: p });
       for (const p of pages) if (p.frontmatter.type === 'event' && appearedIn(p)) extras.push({ group: 'Events', page: p });
     }

@@ -20,8 +20,9 @@ The generated site has one page per entity in your vault:
   members by pulling `member_of` relationships from across the vault.
 - **Creatures** — Compact stat block pages for quick encounter reference.
 - **Items** — Item pages with damage, weight, cost, and current holder.
-- **Connections** — Every page ends in a Connections section: what the
-  page's subject is tied to, in tabs by kind (people, places,
+- **Connections** — A page whose subject has ties ends in a Connections
+  section (unless `publish.connections` is `off`): what the subject is
+  tied to, in tabs by kind (people, places,
   organisations and so on), in both directions, with the GM's line for
   each tie, how many sessions the two share, and whether the tie is
   warm, hostile or neutral (never the tone word). Pages that only
