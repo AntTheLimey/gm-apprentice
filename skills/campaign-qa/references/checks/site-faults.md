@@ -34,7 +34,8 @@ changes the next time it is published.
   the migration brings the site's tool up to date, then run this
   again. Otherwise put one line in the report's recommendations:
   Site Faults was not run, and will be after the next plugin update.
-- `ERROR` rows (not `NAMED_NO_PAGE`, which is a finding; see below):
+- `ERROR` rows that are not a finding (`NAMED_NO_PAGE` and
+  `WITHHELD_PUBLISHED` are findings, walked below):
   the site's tool could not be asked, or its audit stopped. Nothing
   was checked. Treat a tool that is missing or not
   installed as the older tool above; report any other row as it reads.
@@ -116,13 +117,18 @@ the withheld note, how often it is printed and the sentence. Offer, as
 for `ALIAS_IN_PROSE`: **reword** it to what the players know; or in
 body text **link** the note, which prints a neutral word for the
 kind of note in its place.
-For an attachment, rename the file and the embeds that name it. Where
-the name is an ordinary word and not the secret ("Zorn" is also a
-town), that is a no: record `stays hidden:` on the withheld note, as
-for `NAMED_NO_PAGE` below.
+For an attachment, rename the file and the embeds that name it.
 
-`stays hidden:` on a withheld note settles every one of its names at
-once, so ask once and say so.
+A name in plain text has no "leave it" answer, and `stays hidden:`
+does not settle this row: the GM rewords the sentence, links the note
+(the neutral word prints), or takes `withheld: true` off. Where the name
+is an ordinary word and not the secret ("Zorn" is also a town), that
+last one is the answer.
+
+A row that says "in the address of a link" is a Markdown-style link
+(`[x](Lord_Zorn.md)`): turn it into a `[[wiki-link]]` or plain words.
+A row that says "link previews" or "search index" names a text the site
+builds from the note's own fields: reword the field.
 
 ## WITHHELD_PUBLISHED
 
@@ -194,8 +200,9 @@ handle it as "A link in frontmatter" below, whatever kind the note is.
 An `ERROR` row, `withheld entity`, is a note marked `withheld: true`:
 it must stay off the site, so there is no page to give it. The links
 print a neutral word. Offer the `unlink` command in the row's fix with
-`--as` wording the GM agrees, or "stays hidden" if the placeholder
-will do. Skip steps 1 to 4 below.
+`--as` wording the GM agrees. If the neutral word will do, that is a
+"stays hidden" for this row only: it settles the link report and
+nothing else. Skip steps 1 to 4 below.
 
 Work most-named first, in batches of 3 to 5 notes, one question per
 batch. The GM can answer for the batch or note by note, and can stop

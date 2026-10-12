@@ -15,9 +15,9 @@ explain "<vault-relative path>"` prints the exact chain the build walked
 and its verdict. The failure modes below name which finding code each
 one is and give the deeper why.
 
-Six of its codes are faults in the notes, not in the build:
-`NAMED_NO_PAGE`, `COMMENT_STRAY`, `FENCE_UNCLOSED`, `ALIAS_IN_PROSE`,
-`WITHHELD_IN_PROSE` and `WITHHELD_NAME_PUBLIC`. The build prints one closing warning for each, ending "campaign-qa's
+Some of its codes are faults in the notes, not in the build (the
+Site Faults check, `campaign-qa/references/checks/site-faults.md`,
+lists every one). The build prints one closing warning for each, ending "campaign-qa's
 Site Faults check fixes these". Hand those to campaign-qa
 (`campaign-qa/references/checks/site-faults.md`); do not fix them here.
 

@@ -239,14 +239,23 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertIn("as \"someone\"", rows[0])
         self.assertFalse(any("audit stopped" in r for r in rows), rows)
 
-    def test_a_settled_withheld_name_is_counted_and_not_listed(self):
+    def test_a_withheld_name_in_text_cannot_be_settled(self):
         vault, _site = make(self, {
             MARA: npc("Lord Zorn rides at dawn."),
             ZORN: npc("The duke.", "withheld: true\n")},
             excluded=[f"{ZORN} — stays hidden: Zorn is also a town"])
         rows = vc.check_site_faults(vault)
-        self.assertEqual(findings(rows)[:0], [])
-        self.assertEqual([r for r in rows if "WITHHELD" in r], [])
+        listed = [r for r in findings(rows) if "WITHHELD_IN_PROSE" in r]
+        self.assertEqual(len(listed), 1, rows)
+        self.assertFalse(any("settled" in r for r in rows), rows)
+
+    def test_stays_hidden_settles_the_link_report_of_a_withheld_note(self):
+        vault, _site = make(self, {
+            MARA: npc("She met [[Lord_Zorn]]."),
+            ZORN: npc("The duke.", "withheld: true\n")},
+            excluded=[f"{ZORN} — stays hidden: the neutral word will do"])
+        rows = vc.check_site_faults(vault)
+        self.assertEqual(findings(rows), [])
         self.assertEqual(rows[-1], "INFO\t(vault)\t1 note is settled as "
                                    "\"stays hidden\" and not raised")
 
