@@ -29,6 +29,11 @@ describe('publish.tohit_calculator', () => {
       assert.deepStrictEqual(valueOf(`  tohit_calculator: ${line}\n`), { value: 'off', said: [] }, line);
     }
   });
+  it('reads the quoted strings "true" and "false" as on and off, saying nothing', () => {
+    assert.deepStrictEqual(valueOf('  tohit_calculator: "true"\n'), { value: 'on', said: [] });
+    assert.deepStrictEqual(valueOf('  tohit_calculator: "false"\n'), { value: 'off', said: [] });
+    assert.deepStrictEqual(valueOf('  tohit_calculator: " False "\n'), { value: 'off', said: [] });
+  });
   it('trims and ignores case', () => {
     assert.deepStrictEqual(valueOf('  tohit_calculator: " OFF "\n'), { value: 'off', said: [] });
   });

@@ -136,8 +136,8 @@ function tohitCalculatorFrom(raw, warn = console.warn) {
   if (raw === undefined || raw === true) return 'on';
   if (raw === false) return 'off';
   const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
-  if (value === 'on' || value === 'yes') return 'on';
-  if (value === 'off' || value === 'no') return 'off';
+  if (value === 'on' || value === 'yes' || value === 'true') return 'on';
+  if (value === 'off' || value === 'no' || value === 'false') return 'off';
   warn(`config: publish.tohit_calculator ${JSON.stringify(raw)} is not on, off, yes, no, true or false; using on`);
   return 'on';
 }

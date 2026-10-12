@@ -560,14 +560,17 @@ optional and an older sheet without ST, Rcl or Notes still builds.
   number (`Weapon Bond +1; Balanced +1`). On a ranged row a sighting aid
   is written the same way, with `Acc` after the number when it counts
   only while aiming (`Scope +2 Acc; Laser sight +1`). A scope and a HUD
-  link are always aiming bonuses.
+  link always need Aim; a laser sight, reflex sight, targeting program
+  and silhouette program apply with or without Aim whatever the note
+  says; a smartgun waits for Aim when marked `Acc`. A row's own bonuses
+  are included in its Skill cell's level and are not added again.
 - **Skill cell:** the skill and the weapon's level, `Skill-N`, `Skill N`,
   `Skill (N)` or `... = N`, with the row's own bonuses already in the
   level. A trailing prose bracket is ignored.
 - **Character-wide aids:** an Equipment item or Advantage whose name
   starts with the aid name and a signed number (`Laser sight +1`), or a
   `;`-separated piece of its notes in that form. A bare mention in prose
-  is not an aid. Mark a spare `backup`, `superseded` or `spare`.
+  is not an aid. Mark a spare `backup`, `superseded` or `spare` and it starts unticked.
 - **Techniques:** a technique's level is written without any one
   weapon's bonus, as the Skills table writes a skill.
 

@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- A to-hit calculator on every GURPS character's Combat tab (#318).
+- A to-hit calculator on the Combat tab of every GURPS character with a
+  weapon the sheet gives a level for (#318).
   The player picks a weapon and sets the situation in named groups
   (Aiming, Setup, Attack, Target, Environment, You, Foe's defence) that
   change with the weapon, and reads the number to roll on 3d6, the
@@ -37,7 +38,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A technique's level on a GURPS sheet is written without any one
   weapon's own bonus, as a skill's is; the weapon's row carries the
   bonus. The guidance says so.
+- A weapon's Notes bonuses are part of its Skill cell's level, and the
+  calculator does not add them again.
 - Publish tool 1.21.0.
+
+### Fixed
+
+- On a site with live stats, the Combat tab's to-hit numbers follow
+  encumbrance as the Sheet tab's do.
 
 ## [1.10.49] — 2026-10-12
 

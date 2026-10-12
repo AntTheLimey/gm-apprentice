@@ -175,13 +175,16 @@ The published sheet adds up a weapon's to-hit bonuses from what is
 written on it. Write them in these forms (the examples are invented).
 
 - **Weapon row, Notes:** the weapon's own bonuses, one per `;`, a name
-  and a signed number: `Weapon Bond +1; Balanced +1`.
+  and a signed number: `Weapon Bond +1; Balanced +1`. They are already in
+  the Skill cell's level, so the calculator names them and does not add
+  them again. A damage, parry or Bulk figure is not a to-hit bonus.
 - **Ranged row, Notes:** sighting aids the same way. `Acc` after the
   number marks an aiming bonus, one that counts only when aiming:
   `Scope +2 Acc; HUD link +1 Acc; Laser sight +1`. A scope and a HUD
-  link are always aiming bonuses; a laser sight, reflex sight, smartgun,
-  targeting program or silhouette program counts with or without Aim
-  unless marked `Acc`. `Fixed scope +4 Acc` for a fixed-power scope.
+  link always need Aim. A laser sight, reflex sight, targeting program
+  and silhouette program apply with or without Aim whatever the note
+  says; a smartgun waits for Aim when marked `Acc`. `Fixed scope +4 Acc`
+  for a fixed-power scope.
 - **Acc cell:** a scope can go here as `6+2` (Acc 6, scope +2).
 - **Skill cell:** the skill and the weapon's level, `Broadsword-14`,
   `Broadsword 14`, `Broadsword (14)` or `Broadsword = 14`; the level
@@ -191,7 +194,8 @@ written on it. Write them in these forms (the examples are invented).
   starts with the aid name and a signed number (`Laser sight +1`), or a
   `;`-separated piece of the item's Notes in that form (`Targeting
   program +2`). A mention in a sentence is not an aid. Write `backup`,
-  `superseded` or `spare` in the Notes of one you do not use.
+  `superseded` or `spare` in the Notes of one you do not use and it
+  starts unticked; of several programs only the best starts ticked.
 - **Traits:** `Telescopic Vision 2`, `Night Vision 3`; with no number,
   level 1.
 - **Techniques:** `Targeted Attack (Broadsword Swing/Neck)` and

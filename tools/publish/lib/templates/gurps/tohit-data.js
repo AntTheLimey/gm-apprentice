@@ -3,7 +3,7 @@
 // Names and numbers only. The hit-location penalties and the Speed/Range yard
 // values come from the reference rows already shipped (B552, B550); the
 // Dual-Weapon Attack figure is the technique's default of skill-4, capped at
-// the skill (MA83). Aid names are looked for; the bonus is whatever the note says.
+// the skill (MA83, B230). Aid names are looked for; the bonus is whatever the note says.
 
 const { HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
 
@@ -21,7 +21,7 @@ const ALWAYS_ACC = new Set(['Scope', 'HUD link']);
 // A signed number: `+2`, `−1`, or a hyphen that starts a word (so "sw-2" is not one).
 const SIGNED_RE = /(?:([+−])|(?:^|[\s(])(-))\s*(\d+)/;
 
-// Dual-Weapon Attack: default skill-4, so up to 4 points can be bought off (MA83).
+// Dual-Weapon Attack: default skill-4, so up to 4 points can be bought off (MA83, B230).
 const DUAL_PENALTY = 4;
 
 // [key, label, the reference-table row label whose penalty it carries]. The
@@ -60,6 +60,13 @@ function buildLocations() {
 }
 function buildBands() {
   return SIZE_SPEED_RANGE_ROWS.map(r => firstInt(r[2], NaN)).filter(Number.isFinite);
+}
+
+// The number the sheet wraps in .wp-tohit: the TRAILING number of the Skill cell, exactly
+// as blocks/melee.js and blocks/ranged.js match it (a test keeps the two in step).
+function shownLevel(cell) {
+  const m = /^(.*?)(\d+)(\s*)$/.exec(str(cell));
+  return m ? parseInt(m[2], 10) : null;
 }
 
 // "Beam Weapons (Pistol)-17", "Guns (Rifle) 17", "Knife (12)", "Wrestling-15 +4 = 19",
@@ -150,7 +157,21 @@ function aidFromPiece(name, piece, bonus) {
     fixed: /\bfixed\b/i.test(piece),
   };
 }
-const makeAid = (name, bonus, acc, fixed) => ({ name, bonus, acc: ALWAYS_ACC.has(name) || acc, fixed });
+// The shooting skills a note can say a bonus is to; the head word only.
+const SKILL_HEADS = { guns: 'Guns', gunner: 'Gunner', 'beam weapons': 'Beam Weapons' };
+function skillsIn(text) {
+  const out = [];
+  for (const m of str(text).matchAll(/\b(beam weapons|gunner|guns)\b/gi)) {
+    const head = SKILL_HEADS[m[1].toLowerCase()];
+    if (!out.includes(head)) out.push(head);
+  }
+  return out;
+}
+const makeAid = (name, bonus, acc, fixed, skills) => {
+  const a = { name, bonus, acc: ALWAYS_ACC.has(name) || acc, fixed };
+  if (skills && skills.length) a.skills = skills;
+  return a;
+};
 
 // Ids are a slug of where the aid was found and its name; a clash gets -2, -3.
 function idMaker() {
@@ -163,6 +184,11 @@ function idMaker() {
   };
 }
 
+// A row's own bonus is a name, a signed number, and at most "to hit" or "skill" after it.
+// A piece that names damage, parry and the like is not a to-hit bonus.
+const BONUS_PIECE = /^\s*([^+\u2212\d]*?)\s*[:=(]*\s*([+\u2212]|(?<=^|[\s:(])-)\s*(\d+)\s*\)?\s*(?:to\s+hit|to\s+skill|skill)?\s*$/i;
+const NOT_TOHIT = /\b(?:damage|dmg|parry|block|dr|st|bulk|acc|range|reach)\b/i;
+
 // A weapon's own row (its Notes, or the Equipment row named like it): the loose
 // reading, every aid name in every piece.
 function readRowNotes(notes) {
@@ -170,10 +196,9 @@ function readRowNotes(notes) {
   for (const piece of splitPieces(notes)) {
     const hit = aidMatchIn(piece);
     if (hit) { aids.push(aidFromPiece(hit.name, piece, bonusAfter(piece, hit))); continue; }
-    const bonus = signedIn(piece);
-    if (bonus === null) continue;
-    const label = piece.slice(0, SIGNED_RE.exec(piece).index).replace(/[\s:=(]+$/, '').trim();
-    if (label) bonuses.push({ name: label, bonus });
+    const b = BONUS_PIECE.exec(piece);
+    if (!b || !b[1].trim() || NOT_TOHIT.test(b[1])) continue;
+    bonuses.push({ name: b[1].replace(/[\s:=(]+$/, '').trim(), bonus: (b[2] === '+' ? 1 : -1) * parseInt(b[3], 10) });
   }
   return { aids, bonuses };
 }
@@ -211,12 +236,12 @@ function charWideAids(name, notes) {
     const m = re.exec(str(name));
     if (!m || !NAME_REST.test(str(name).slice(m[0].length))) continue;
     let bonus = signedIn(str(name).slice(m[0].length));
-    let acc = false;
+    let acc = false; let skills = skillsIn(str(name).slice(m[0].length));
     if (bonus === null) {
       const b = BONUS_PHRASE.exec(text);
-      if (b) { bonus = signedIn(b[1]); acc = /\bacc\b/i.test(b[0]); }
+      if (b) { bonus = signedIn(b[1]); acc = /\bacc\b/i.test(b[0]); skills = skillsIn(b[0]); }
     } else acc = /\bacc\b/i.test(str(name));
-    out.push({ aid: makeAid(aid, bonus, acc, /\bfixed\b/i.test(str(name))), off: OFF_RE.test(text) });
+    out.push({ aid: makeAid(aid, bonus, acc, /\bfixed\b/i.test(str(name)), skills), off: OFF_RE.test(text) });
     break;
   }
   for (const piece of text.split(';')) {
@@ -226,7 +251,7 @@ function charWideAids(name, notes) {
       const rest = piece.slice(m[0].length);
       const num = /^\s*[:=(]?\s*([+\u2212])\s*(\d+)/.exec(rest);
       if (num && !out.some(o => o.aid.name === aid)) {
-        out.push({ aid: makeAid(aid, signedIn(num[1] + num[2]), /\bacc\b/i.test(rest), /\bfixed\b/i.test(piece)), off: OFF_RE.test(piece) || OFF_RE.test(text) });
+        out.push({ aid: makeAid(aid, signedIn(num[1] + num[2]), /\bacc\b/i.test(rest), /\bfixed\b/i.test(piece), skillsIn(rest)), off: OFF_RE.test(piece) || OFF_RE.test(text) });
       }
       break;
     }
@@ -314,6 +339,7 @@ function buildTohitData(model, meta) {
       id: 'w' + weapons.length, key, type, nth,
       name: key.replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\s+/g, ' ').trim() || key,
       skill: hit ? hit.name : read.skill, skillAs: read.skill, level: read.level,
+      shown: shownLevel(row.skill),
       base: hit ? hit.level : null,
       range: str(row.range), damage: str(row.damage),
       beam: /^beam weapons/i.test(read.skill),
@@ -328,7 +354,10 @@ function buildTohitData(model, meta) {
         acc: acc.acc, rof: firstInt(row.rof, 1) || 1, rcl: firstInt(row.rcl, 1) || 1,
         bulk: firstInt(row.bulk, 0),
       });
-      w.aids = [...acc.aids, ...notes.aids, ...own.flatMap(o => o.aids)]
+      // The same aid written twice (Acc `5+2` and Notes `Scope +2 Acc`): the later one stays,
+      // since the Notes can say `fixed`.
+      const all = [...acc.aids, ...notes.aids, ...own.flatMap(o => o.aids)];
+      w.aids = all.filter((a, i) => !all.slice(i + 1).some(b => b.name === a.name))
         .map(a => ({ id: nextId('row', key, a.name), ...a, from: 'row', on: true }));
     }
     weapons.push(w);
@@ -354,12 +383,18 @@ function buildTohitData(model, meta) {
   for (const a of advantages) {
     for (const g of charWideAids(a && a.name, '')) wide.push({ ...g, id: nextId('trait', a.name, g.aid.name), from: 'trait' });
   }
-  // Flat aids add, but a spare does not: of the flat ones only the best starts on.
-  const flat = wide.filter(g => !g.aid.acc && g.aid.bonus !== null && !g.off);
-  const best = flat.reduce((b, g) => (b === null || g.aid.bonus > b.aid.bonus ? g : b), null);
+  // Of the same KIND of aid only the best starts on: the programs are one kind, an aid of
+  // the same name is another. A spare starts off. Everything else starts on.
+  const kind = (g) => (/ program$/.test(g.aid.name) ? 'program' : g.aid.name);
+  const best = new Map();
+  for (const g of wide) {
+    if (g.off || g.aid.bonus === null) continue;
+    const top = best.get(kind(g));
+    if (!top || g.aid.bonus > top.aid.bonus) best.set(kind(g), g);
+  }
   const aids = wide.map(g => ({
     id: g.id, ...g.aid, from: g.from,
-    on: !g.off && (g.aid.acc || g.aid.bonus === null || g === best),
+    on: !g.off && (g.aid.bonus === null || best.get(kind(g)) === g),
   }));
 
   const locations = buildLocations();

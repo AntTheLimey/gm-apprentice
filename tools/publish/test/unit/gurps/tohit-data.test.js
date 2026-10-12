@@ -587,3 +587,82 @@ describe('weapon ids and campaign', () => {
     assert.strictEqual(buildTohitData(model({ ranged: [rangedRow()] }), { pcSlug: 'six', campaignId: 'canticle' }).campaign, 'canticle');
   });
 });
+
+describe('round four: bonuses only name a to-hit bonus', () => {
+  const b = (notes) => one({ notes }).bonuses;
+  it('keeps a name and a signed number, with an optional "to hit" or "skill"', () => {
+    assert.deepStrictEqual(b('Weapon Bond +1; Balanced +1; Fine +1 to hit; Quality +2 skill; Good +1 to skill'),
+      [{ name: 'Weapon Bond', bonus: 1 }, { name: 'Balanced', bonus: 1 }, { name: 'Fine', bonus: 1 },
+        { name: 'Quality', bonus: 2 }, { name: 'Good', bonus: 1 }]);
+  });
+  for (const note of ['Fine +1 damage', 'Fine (+1 dmg)', 'Very Fine: +2 dmg', 'Unbalanced -1 parry', 'Parry -1U', 'Bulk -4',
+    'DR +2', 'Block -1', 'Reach +1', 'ST +1', 'Acc +1', 'Range +10']) {
+    it(`"${note}" is not a to-hit bonus`, () => assert.deepStrictEqual(b(note), []));
+  }
+  it('the same holds on a melee row', () => {
+    const d = buildTohitData(model({ melee: [meleeRow({ notes: 'Fine +1 damage; Balanced +1' })] }), META);
+    assert.deepStrictEqual(d.weapons[0].bonuses, [{ name: 'Balanced', bonus: 1 }]);
+  });
+});
+
+describe('round four: shown is what the sheet wraps in .wp-tohit', () => {
+  const { renderMelee } = require('../../../lib/templates/gurps/blocks/melee');
+  const { renderRanged } = require('../../../lib/templates/gurps/blocks/ranged');
+  const cells = ['Karate-15, Kick-13', 'Axe/Mace-17 +1', 'Guns (Rifle) 17', 'Wrestling-15 +4 = 19', 'Brawling', 'Knife (12)', '10', 'DX-12 (default)'];
+  const wrapped = (html) => { const m = /<span class="wp-tohit">(\d+)<\/span>/.exec(html); return m ? Number(m[1]) : null; };
+  for (const cell of cells) {
+    it(`"${cell}": shown equals the sheet's wrapped number (or null)`, () => {
+      const sheet = wrapped(renderRanged({ ranged: [rangedRow({ skill: cell })] }));
+      assert.strictEqual(wrapped(renderMelee({ melee: [meleeRow({ skill: cell })] })), sheet);
+      const d = buildTohitData(model({ ranged: [rangedRow({ skill: cell })] }), META);
+      if (d) assert.strictEqual(d.weapons[0].shown, sheet);
+    });
+  }
+  it('Karate-15, Kick-13 has level 15 and shown 13', () => {
+    const w = one({ skill: 'Karate-15, Kick-13' });
+    assert.strictEqual(w.level, 15); assert.strictEqual(w.shown, 13);
+  });
+  it('shown is null when the cell has no trailing number', () => {
+    assert.strictEqual(one({ skill: 'Guns (Rifle) 17 (DX+2)' }).shown, null);
+  });
+});
+
+describe('round four: aids', () => {
+  const wide = (items) => buildTohitData(model({ ranged: [rangedRow()], items }), META).aids;
+  it('skills names the skill a bonus is to', () => {
+    const a = wide([
+      { name: 'Targeting Program', notes: '+2 Guns skill' },
+      { name: 'Silhouette program', notes: '+2 to Beam Weapons' },
+      { name: 'Smartgun', notes: '+1 Gunner' },
+      { name: 'Scope', notes: '+1 Acc' },
+    ]);
+    assert.deepStrictEqual(a.map(x => x.skills), [['Guns'], ['Beam Weapons'], ['Gunner'], undefined]);
+  });
+  it('a laser sight and a targeting program both start on', () => {
+    const a = wide([{ name: 'Laser sight', notes: '+1 to hit' }, { name: 'Suit', notes: 'Targeting program +2' }]);
+    assert.deepStrictEqual(a.map(x => [x.name, x.on]), [['Laser sight', true], ['Targeting program', true]]);
+  });
+  it('of the programs only the best starts on; backup still starts off', () => {
+    const a = wide([{ name: 'Silhouette program', notes: '+3 Guns skill' }, { name: 'Targeting Program', notes: '+2 Guns skill' },
+      { name: 'Laser sight' }]);
+    assert.deepStrictEqual(a.map(x => [x.name, x.on]), [['Silhouette program', true], ['Targeting program', false], ['Laser sight', true]]);
+  });
+  it('two aids of the same name: only the best', () => {
+    const a = wide([{ name: 'Scope, 4x', notes: '+1 Acc' }, { name: 'Scope, 8x', notes: '+3 Acc' }]);
+    assert.deepStrictEqual(a.map(x => x.on), [false, true]);
+  });
+  it('Acc cell 5+2 with Notes "Scope +2 Acc" leaves one Scope, the Notes one', () => {
+    const w = one({ acc: '5+2', notes: 'Fixed scope +2 Acc' });
+    assert.strictEqual(w.aids.length, 1);
+    assert.strictEqual(w.aids[0].fixed, true);
+  });
+});
+
+describe('round four: the Ronnie fixture still reads', () => {
+  it('has shown on every weapon', () => {
+    const raw = fs.readFileSync(path.join(__dirname, '../../fixtures/gurps/gurps-ronnie.md'), 'utf8');
+    const { data: fm, content } = matter(raw);
+    const d = buildTohitData(parseGurps(fm, extractSections(content)), { pcSlug: 'r' });
+    for (const w of d.weapons) assert.ok(w.shown === null || Number.isInteger(w.shown), w.key);
+  });
+});
