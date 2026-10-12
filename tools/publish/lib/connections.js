@@ -56,8 +56,22 @@ const printed = (text) => {
 // `text` with each markdown link `[label](address "title")` turned into its label. The
 // address is read as the build reads it, so one holding `)` ends where the link does. Text
 // that is not a link is left as written, and a `[` that opens `[[` never starts a link. Each
-// bracket is paired once, so the work is linear; a link nested deeper than LINK_DEPTH keeps
-// its label as written.
+// bracket is paired once, so the work is linear.
+// Where that reading refuses a link (a space in the address, a stray quote) the label is still
+// kept and the address dropped through the next `)`, as it always was, so no address is ever
+// printed; past LINK_DEPTH a label is reduced that way too.
+// Past that depth every `](address)` goes, through the next `)`, and the brackets stay.
+function dropAddresses(text) {
+  let out = '';
+  let at = 0;
+  for (let i = text.indexOf(']('); i !== -1; i = text.indexOf('](', at)) {
+    const end = text.indexOf(')', i + 2);
+    if (end === -1) break;
+    out += text.slice(at, i);
+    at = end + 1;
+  }
+  return out + text.slice(at);
+}
 const LINK_DEPTH = 16;
 function markdownLinkLabels(text, depth = 0) {
   const closeOf = new Map();
@@ -69,19 +83,25 @@ function markdownLinkLabels(text, depth = 0) {
   }
   if (!closeOf.size) return text;
   const blank = (n) => { while (/\s/.test(text[n] || '')) n++; return n; };
+  // The `[` of a `[[`..`]]` pair, outer or inner: a wiki-link, never a markdown link.
+  const wikiBracket = (i) => (text[i + 1] === '[' && closeOf.get(i + 1) === closeOf.get(i) - 1)
+    || (text[i - 1] === '[' && closeOf.get(i - 1) === closeOf.get(i) + 1);
   let out = '';
   let at = 0;
   for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', Math.max(at, i + 1))) {
     const close = closeOf.get(i);
-    if (close === undefined || text[close + 1] !== '(' || text[i + 1] === '[' || (i > 0 && text[i - 1] === '[')) continue;
+    if (close === undefined || text[close + 1] !== '(' || wikiBracket(i)) continue;
     const dest = parseLinkDestination(text, blank(close + 2), text.length);
-    if (!dest.ok) continue;
-    let end = blank(dest.pos);
-    const title = end > dest.pos ? parseLinkTitle(text, end, text.length) : { ok: false };
-    if (title.ok) end = blank(title.pos);
-    if (text[end] !== ')') continue;
+    let end = -1;
+    if (dest.ok) {
+      end = blank(dest.pos);
+      const title = end > dest.pos ? parseLinkTitle(text, end, text.length) : { ok: false };
+      if (title.ok) end = blank(title.pos);
+    }
+    if (end === -1 || text[end] !== ')') end = text.indexOf(')', close + 2);
+    if (end === -1) continue;
     const label = text.slice(i + 1, close);
-    out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : label);
+    out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));
     at = end + 1;
   }
   return out + text.slice(at);

@@ -348,3 +348,24 @@ test('no description can overflow the stack or take long to read', () => {
     assert.ok(Date.now() - start < 2500, `${text.slice(0, 8)}… took ${Date.now() - start} ms`);
   }
 });
+
+test('a markdown link the strict reading refuses still prints its label, never its address', () => {
+  assert.deepStrictEqual(lineOf('see [the plan](Secret Lair.md) rest'), ['see the plan rest']);
+  assert.deepStrictEqual(lineOf('see [the map](Maps/The Hidden Vault.png) rest'), ['see the map rest']);
+  assert.deepStrictEqual(lineOf('[[A]] [x](y z) [[B_C]]'), ['A x B C']);
+  assert.deepStrictEqual(lineOf('see [x]() rest'), ['see x rest']);
+  assert.deepStrictEqual(lineOf('[x](a "t" extra) r'), ['x r']);
+  const deep = '['.repeat(40) + 'x' + '](Secret Lair.md)'.repeat(40);
+  assert.ok(!lineOf(deep)[0].includes('Secret'));
+});
+
+test('generated descriptions never print a link address', () => {
+  const parts = ['[[Old_Tom]]', '[[A|b_c]]', '[the plan]', '[x]', '(Secret Lair.md)', '(a(b).md)', '(y z)', '("t")', '(a "t" extra)', '()', ' ', 'word_', 'text', '"'];
+  let seed = 7;
+  const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648);
+  for (let n = 0; n < 400; n++) {
+    let text = '';
+    for (let k = 0; k < 3 + next() % 8; k++) text += parts[next() % parts.length];
+    for (const line of lineOf(text)) assert.ok(!line.includes(']('), `"${text}" printed "${line}"`);
+  }
+});
