@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.47] — 2026-10-12
+
+### Added
+
+- Setting up a site writes the lists of hidden headings and hidden
+  fields (`publish.exclude_sections`, `publish.exclude_fields`) into the
+  vault file, so a GM can see them and add an entry without losing the
+  built-in ones (#294).
+- CoC and GURPS character sheets end in a "Notes on rows" block when a
+  table row has more cells than the sheet has columns for, so the extra
+  text is on the page.
+
+### Changed
+
+- Updating a vault that has a site and no list of its own writes the
+  built-in lists in. What publishes does not change. A vault with its
+  own list is left as it is.
+- Publish tool 1.19.0.
+
+### Fixed
+
+- A table row with more cells than its header no longer loses the extra
+  cells on the published page: the table gains an empty header column
+  and the build names the table and its first such row (#283).
+- mobRPG `suggest` tells "The Woodland Ghost" from "Woodland Ghost":
+  a note is matched by its exact name first, a new note is no longer
+  skipped because a similar-named one is linked, a relationship goes to
+  the note it names, and a name two notes share is reported, not
+  guessed. `pull-canon --baseline` and links in pushed text match the
+  same way (#262).
+- Writing a list over an empty setting in the vault file keeps a
+  comment that sat on it.
+
+---
+
+## [1.10.46] — 2026-10-11
+
+### Added
+
+- `tones.py VAULT shown` lists the hostile ties the site shows, read as
+  the site reads them: a tone written `Cold` or with spaces round it
+  counts, a tie the site hides does not.
+- campaign-qa's Tone Words check says how many hostile ties the site
+  shows and walks them on a yes, so one that gives something away can
+  be hidden or reworded.
+- Updating a vault with a site and a relationship tone says once that
+  the site now shows the tone.
+
+### Changed
+
+- The vault scripts read `gm_only` on a relationship as the site does:
+  `yes`, `on`, `1` and a quoted true in capitals or with spaces hide
+  it, as `true` always did.
+- The vault scripts read `publish:` as the site does: `None`, `False`
+  and a list holding a no withhold the note; `Stub` in capitals, with
+  spaces or in a list makes a stub.
+
+---
+
 ## [1.10.45] — 2026-10-11
 
 ### Added
