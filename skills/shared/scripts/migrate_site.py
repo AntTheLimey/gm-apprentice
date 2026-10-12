@@ -606,6 +606,12 @@ def find_exclude_lists(vault: Path) -> list[Item]:
         ("exclude_fields", facts.get("excludeFieldsOwn"),
          facts.get("defaultExcludeFields")))
         if own is False and isinstance(default, list) and default]
+    # config-to-vault writes the same lists when it runs on this pass: the
+    # plan shows each write once, there. (If it cannot plan, this step goes on.)
+    planned = describe_config_to_vault(vault)
+    lists = [(key, own, default) for key, own, default in lists
+             if not any(line.endswith(f"-> publish.{key}")
+                        for line in (planned.lines if planned.applies else []))]
     if not lists:
         return []
 

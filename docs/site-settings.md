@@ -131,9 +131,10 @@ These decide which notes, and which parts of a note, reach the site.
 site writes the full `publish.exclude_sections` and `publish.exclude_fields`
 lists into your file, so you can see them, and an existing site is given
 them the next time you update the apprentice. Add your own heading to that
-list and keep the rest. If you delete a list, or you set one to hide one
-more heading and leave out `GM Notes`, your GM notes are published. Repeat
-every built-in entry you still want. The same holds for
+list and keep the rest. A list you delete falls back to the built-in one.
+But a list that is empty (`[]`), or that leaves out `GM Notes`, hides
+only what it names, so your GM notes are published. Repeat every
+built-in entry you still want. The same holds for
 `publish.exclude_dirs`.
 
 **`full` mode still hides your notes to yourself.** The excluded

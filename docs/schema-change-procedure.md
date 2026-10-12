@@ -130,6 +130,13 @@ the GM what the new entry is for and adds it to their list on a yes,
 and it never adds it unasked. The step that proposes an entry is not
 built yet; it waits for the first release that adds a default.
 
+Change the other copies of the list in the same commit:
+`DEFAULT_EXCLUDE_SECTIONS` in `skills/shared/scripts/vaultlib.py` (a
+test fails when it differs from the tool's list) and the lists repeated
+in `docs/site-settings.md`, `skills/shared/entity-schema.md` and the publish-site
+references `configuration.md`, `content-filtering.md` and
+`change-request-loop.md`.
+
 ## Field design guidelines
 
 - **Prefer optional fields** — new fields should default to

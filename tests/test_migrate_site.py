@@ -928,9 +928,24 @@ class ExcludeListTests(unittest.TestCase):
             (item,) = ms.find_exclude_lists(vault)
             self.assertEqual((item.id, item.group), ("exclude-lists", WILL))
             item.apply(None)
-        self.assertEqual(calls[1:], [
+        self.assertEqual([c for c in calls if "--set" in c], [
             ["vault-setting", "--set", 'exclude_sections=["GM Notes", "DM Notes"]'],
             ["vault-setting", "--set", 'exclude_fields=["secrets", "gm_notes"]']])
+
+    def test_a_list_config_to_vault_writes_this_pass_is_not_offered_twice(self):
+        both = ms.StepPlan(True, [
+            "move the built-in list -> publish.exclude_sections",
+            "move the built-in list -> publish.exclude_fields"])
+        one = ms.StepPlan(True, ["move the built-in list -> publish.exclude_fields"])
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool",
+                               self.ask(self.facts(False, False), calls)):
+            with mock.patch.object(ms, "describe_config_to_vault", return_value=both):
+                self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
+            with mock.patch.object(ms, "describe_config_to_vault", return_value=one):
+                (item,) = ms.find_exclude_lists(make_vault(self))
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("publish.exclude_sections", item.lines[0])
 
     def test_only_the_missing_list_is_written(self):
         calls = []
@@ -987,6 +1002,16 @@ class VaultSettingEndToEndTests(unittest.TestCase):
         self.assertIs(after.data["defaultModeSet"], True)
 
 
+    def test_the_python_copy_of_the_default_sections_is_the_tools_list(self):
+        import vaultlib
+        vault, _config = self.vault_with("  mode: player\n")
+        asked = vc.ask_publish_tool(vault, ["vault-setting"])
+        self.assertIsNone(asked.why)
+        self.assertEqual(list(vaultlib.DEFAULT_EXCLUDE_SECTIONS),
+                         asked.data["defaultExcludeSections"],
+                         "vaultlib.DEFAULT_EXCLUDE_SECTIONS differs from "
+                         "PUBLISH_DEFAULTS.exclude_sections in the publish tool")
+
     def vault_with(self, publish_lines):
         vault = tmp(self, "vs-excl-vault-")
         (vault / "_meta").mkdir()
@@ -999,8 +1024,11 @@ class VaultSettingEndToEndTests(unittest.TestCase):
     def test_the_exclude_lists_are_written_once_and_a_second_run_changes_nothing(self):
         vault, config = self.vault_with(
             "  # who reads\n  mode: player  # keep\n  site_title: X\n")
-        (item,) = ms.find_exclude_lists(vault)
-        item.apply(None)
+        # config-to-vault would write these on a real pass; this proves the step alone.
+        with mock.patch.object(ms, "describe_config_to_vault",
+                               return_value=ms.StepPlan(False, [])):
+            (item,) = ms.find_exclude_lists(vault)
+            item.apply(None)
         text = config.read_text(encoding="utf-8")
         self.assertIn("  # who reads\n  mode: player  # keep\n  site_title: X\n", text)
         self.assertTrue(text.endswith("---\nBody\n"))

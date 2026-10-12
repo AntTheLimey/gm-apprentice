@@ -142,6 +142,21 @@ function dumpAt(key, value, indent, step = 2) {
   return body.split('\n').map((l) => (l === '' ? l : pad + l));
 }
 
+// Replace the span of a key with new lines. A key that held nothing (`exclude_sections:`, maybe
+// with a comment after it and comment lines under it) had no value to lose, so its comments are
+// the GM's text and stay, written above the new entry.
+function replaceSpan(lines, hit, added) {
+  const rest = lines.slice(hit.from + 1, hit.to);
+  const empty = /^\s*[^\s#][^:]*:[ \t]*(#.*)?$/.exec(lines[hit.from]);
+  if (!empty || !rest.every((l) => isBlank(l) || isComment(l))) {
+    lines.splice(hit.from, hit.to - hit.from, ...added);
+    return;
+  }
+  const pad = ' '.repeat(indentOf(lines[hit.from]));
+  const kept = [...(empty[1] ? [pad + empty[1]] : []), ...rest];
+  lines.splice(hit.from, hit.to - hit.from, ...kept, ...added);
+}
+
 function applyOne(fm, change) {
   const lines = fm.lines.slice();
   let block = locateBlock(lines);
@@ -157,7 +172,7 @@ function applyOne(fm, change) {
     return { lines };
   }
   const added = dumpAt(change.set, change.value, block.indent);
-  if (hit) lines.splice(hit.from, hit.to - hit.from, ...added);
+  if (hit) replaceSpan(lines, hit, added);
   else lines.splice(block.end, 0, ...added);
   return { lines };
 }
@@ -185,7 +200,7 @@ function setLeaf(lines, from, end, indent, keys, value, data, step) {
     return {};
   }
   if (!rest.length) {
-    lines.splice(hit.from, hit.to - hit.from, ...dumpAt(head, value, indent, step));
+    replaceSpan(lines, hit, dumpAt(head, value, indent, step));
     return {};
   }
   if (!/:[ \t]*(#.*)?$/.test(lines[hit.from])) {

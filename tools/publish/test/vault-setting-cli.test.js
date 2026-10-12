@@ -332,3 +332,16 @@ test('a list still in the site file counts as the vault\'s own', () => {
   fs.writeFileSync(s.configPath, JSON.stringify({ vaultPath: './vault', excludeSections: ['X'] }));
   assert.equal(run(s, []).data.excludeSectionsOwn, true);
 });
+
+test('a comment on an empty exclude_sections key, or under it, is kept when the list is written', () => {
+  const s = scratch('  mode: player\n  exclude_sections:  # none yet\n    # headings to hide\n  site_title: X\n');
+  assert.equal(run(s, ['exclude_sections=["GM Notes"]']).rc, 0);
+  const text = config(s);
+  assert.match(text, /# none yet/);
+  assert.match(text, /# headings to hide/);
+  assert.match(text, /site_title: X/);
+  assert.deepEqual(require('../lib/frontmatter').parseNote(text).data.publish.exclude_sections, ['GM Notes']);
+  const before = text;
+  assert.equal(run(s, []).data.excludeSectionsOwn, true);
+  assert.equal(config(s), before);
+});
