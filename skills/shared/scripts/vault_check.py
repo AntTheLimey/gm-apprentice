@@ -121,7 +121,9 @@ a dry run, `FIXED` when `--fix` applies them; `wrapup` also prints
 `site-faults` lists the faults in the notes that change what the site
 shows: a note with no page that a published page names, a stray `%%`, a
 code fence never closed above a hidden marker, a `gm_aliases` name in a
-page's text. The list is the site's publish tool's (`doctor --site
+page's text, and for a note marked `withheld: true`: its names in the
+site's text, a link to it, the note itself being published, a name a
+published page also answers to, and a flag value that cannot be read. The list is the site's publish tool's (`doctor --site
 --json`); nothing about it is worked out here. A note the GM has settled
 ("stays hidden:" beside its Excluded entry) is counted in a closing INFO
 row and not listed. A row names the first three pages that name a note;
@@ -1721,8 +1723,9 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
 
 # The faults in a NOTE that change what the site shows, as the publish
 # tool's `doctor --site --json` names them.
-NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "WITHHELD_IN_PROSE",
-                    "WITHHELD_NAME_PUBLIC", "FENCE_UNCLOSED",
+NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "WITHHELD_PUBLISHED",
+                    "WITHHELD_IN_PROSE", "WITHHELD_NAME_PUBLIC",
+                    "WITHHELD_FLAG_UNREADABLE", "FENCE_UNCLOSED",
                     "COMMENT_STRAY", "NAMED_NO_PAGE")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
@@ -1767,8 +1770,9 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                f"{_one_line(f.get('text'))}")
     elif code == "FENCE_UNCLOSED":
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
-    elif code == "WITHHELD_NAME_PUBLIC":
-        msg = (f"WITHHELD_NAME_PUBLIC: {_one_line(f.get('detail'))} — "
+    elif code in ("WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
+                  "WITHHELD_FLAG_UNREADABLE"):
+        msg = (f"{code}: {_one_line(f.get('detail'))} — "
                f"{_one_line(f.get('fix'))}")
     elif code == "WITHHELD_IN_PROSE":
         msg = (f"WITHHELD_IN_PROSE: \"{_one_line(f.get('name'))}\" (a "
@@ -1794,7 +1798,9 @@ def check_site_faults(vault: Path, files: list[str] | None = None
     """The faults in the vault's notes that change what its site shows, as
     the site's own publish tool lists them (`doctor --site --json`): a note
     with no page named on a published page, a stray `%%`, an unclosed code
-    fence over a hidden marker, a secret name printed in a page's text.
+    fence over a hidden marker, a secret name printed in a page's text, and
+    the faults of a withheld note (its name printed, a link to it, the note
+    published, a shared name, an unreadable `withheld:` value).
 
     Every rule is the tool's. This asks, and prints its findings as rows;
     a finding the GM settled ("stays hidden:" in the manifest) is counted,
