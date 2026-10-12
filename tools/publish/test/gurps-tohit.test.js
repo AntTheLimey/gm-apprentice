@@ -770,3 +770,71 @@ describe('the page\'s starting and saved state', () => {
     }
   });
 });
+
+// ---------- round three ----------
+describe('skill-bonus aids need no Aim and sit outside the Acc caps (HT156, HT157)', () => {
+  const aid = (name, acc, bonus = 2) => ({ id: 'x', name, bonus, acc, fixed: false, from: 'row' });
+  it('a targeting or silhouette program applies at aim 0 even when flagged Acc', () => {
+    for (const name of ['Targeting program', 'Silhouette program']) {
+      for (const acc of [true, false]) {
+        assert.strictEqual(rolls(gunsData({ aids: [aid(name, acc)] }), { weapon: 'Blaster pistol', aids: { x: true } }), 14, `${name} ${acc}`);
+      }
+    }
+  });
+  it('a reflex sight is a skill bonus: +1 at aim 0 however flagged, outside the caps when aiming', () => {
+    for (const acc of [true, false]) {
+      assert.strictEqual(rolls(gunsData({ aids: [aid('Reflex sight', acc, 1)] }), { weapon: 'Blaster pistol', aids: { x: true } }), 13);
+    }
+    const r = T.effective(gunsData({ aids: [aid('Reflex sight', false, 1)] }), { weapon: 'Blaster pistol', aim: 3, braced: true, aids: { x: true } });
+    assert.strictEqual(r.roll, 12 + 6 + 1);
+  });
+  it('an unknown aid flagged Acc still needs Aim', () => {
+    assert.strictEqual(rolls(gunsData({ aids: [aid('Gizmo', true)] }), { weapon: 'Blaster pistol', aids: { x: true } }), 12);
+  });
+});
+
+describe('Telegraphic does not improve the critical chance (MA113)', () => {
+  it('critSkill is the roll without the +4, else the roll', () => {
+    const t = T.effective(mk(), { weapon: 'Knife', telegraphic: true });
+    assert.strictEqual(t.roll, 18);
+    assert.strictEqual(t.critSkill, 14);
+    const n = T.effective(mk(), { weapon: 'Knife' });
+    assert.strictEqual(n.critSkill, n.roll);
+    assert.strictEqual(T.effective(null, {}).critSkill, 0);
+  });
+  it('the +4 is not counted even when Evaluate was set (it is replaced)', () => {
+    assert.strictEqual(T.effective(mk(), { weapon: 'Knife', telegraphic: true, evaluate: 3 }).critSkill, 14);
+  });
+  it('outcome takes the skill that sets the critical-success range; failures use the roll', () => {
+    assert.strictEqual(T.outcome(5, 18, 14), 'S');
+    assert.strictEqual(T.outcome(5, 18, 15), 'CS');
+    assert.strictEqual(T.outcome(6, 18, 15), 'S');
+    assert.strictEqual(T.outcome(6, 18, 16), 'CS');
+    assert.strictEqual(T.outcome(4, 18, 3), 'CS');
+    assert.strictEqual(T.outcome(5, 18), 'CS');
+    assert.strictEqual(T.outcome(17, 18, 14), 'F');
+    assert.strictEqual(T.outcome(17, 15, 15), 'CF');
+  });
+  it('odds(roll, critSkill) reports the right critical chance', () => {
+    assert.ok(Math.abs(T.odds(18, 14).crit - 4 / 216) < 1e-12);
+    assert.ok(Math.abs(T.odds(18).crit - 20 / 216) < 1e-12);
+    assert.ok(Math.abs(T.odds(18, 14).hit - T.odds(18).hit) < 1e-12);
+    assert.strictEqual(T.odds(2, 14).none, true);
+    assert.ok(Math.abs(T.odds(18, 'x').crit - 20 / 216) < 1e-12);
+  });
+  it('the foe\'s chance to be hit uses it too', () => {
+    const t = T.effective(mk(), { weapon: 'Knife', telegraphic: true, foe: 10 });
+    const d = T.odds(18, 14);
+    assert.ok(Math.abs(t.foe.lands - (d.crit + (d.hit - d.crit) * (1 - t.foe.defends))) < 1e-9);
+  });
+});
+
+describe('int() rounds toward zero', () => {
+  it('a negative fraction loses its fraction', () => {
+    assert.strictEqual(rolls(mk(), { weapon: 'Knife', other: -2.7 }), 12);
+    assert.strictEqual(rolls(mk(), { weapon: 'Knife', other: 2.7 }), 16);
+    const data = withWeapon(mk({ freeFall: 12.7 }), 'Knife', { level: 17.6, base: 17.6 });
+    assert.strictEqual(rolls(data, { weapon: 'Knife', zerog: true }), 12);
+  });
+});
+

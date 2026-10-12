@@ -185,6 +185,22 @@ describe('what it draws', () => {
     p.set('#th-man', 'aodbl');
     assert.match(p.$('#th-notes').textContent, /All-Out Attack \(Double\)/);
   });
+  it('Telegraphic Attack shows the critical chance of the skill without the +4, and the strip agrees', () => {
+    const p = load(dataBlock());
+    p.set('#th-weapon', 'Hatchet');
+    p.set('#th-telegraphic', true);
+    assert.strictEqual(p.$('#th-roll').textContent, '18');
+    assert.strictEqual(p.$('#th-crit').textContent, '1.9%');
+    const cells = p.all('.th-cell');
+    assert.match(cells[5 - 3].className, /th-S\b/);
+    assert.match(cells[6 - 3].className, /th-S\b/);
+    assert.match(cells[4 - 3].className, /th-CS\b/);
+    p.set('#th-telegraphic', false);
+    p.set('#th-other', 4);
+    assert.strictEqual(p.$('#th-roll').textContent, '18');
+    assert.match(p.all('.th-cell')[5 - 3].className, /th-CS\b/);
+    assert.strictEqual(p.$('#th-crit').textContent, '9.3%');
+  });
   it('says no roll below 3', () => {
     const p = load(dataBlock());
     p.set('#th-other', -30);

@@ -49,7 +49,10 @@
   // (B364, B372, HT155). A laser sight gives +1 with or without Aim (B412, HT156). A targeting
   // or silhouette program is a bonus to the shooting skill, not an Acc bonus (HT157), as is any
   // aid not named here: those are flat and outside the aim caps.
-  const SIGHT_NAMES = ['Laser sight', 'Reflex sight', 'Scope', 'HUD link', 'Smartgun'];
+  const SIGHT_NAMES = ['Laser sight', 'Scope', 'HUD link', 'Smartgun'];
+  // A reflex sight is +1 to the shooting skill, not to Acc, and needs no Aim (HT156); the programs
+  // likewise (HT157). These apply with or without Aim whatever the sheet flagged, outside the caps.
+  const SKILL_AIDS = ['Reflex sight', 'Targeting program', 'Silhouette program'];
   const ALWAYS_ON = ['Laser sight'];
   const EVALUATE_MAX = 3;             // +1 a turn, at most +3 (B364)
   const DUAL = -4;                    // Dual-Weapon Attack, each attack; the foe defends at -1 (B417)
@@ -91,7 +94,7 @@
   }
   function int(v, min, max, neutral) {
     const n = num(v, min, max);
-    return n === null ? (neutral || 0) : Math.floor(n);
+    return n === null ? (neutral || 0) : Math.trunc(n);
   }
   const sgn = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
   const isObj = (o) => o !== null && typeof o === 'object';
@@ -115,23 +118,27 @@
     return 0;
   }
 
-  function outcome(roll, skill) {
-    if (roll <= 4 || (roll === 5 && skill >= 15) || (roll === 6 && skill >= 16)) return 'CS';
+  // `crit` is the skill that sets the critical-success range; it is the skill itself unless a
+  // Telegraphic Attack's +4 is in it: that +4 does not raise the chance of a critical hit
+  // (MA113). Critical failures follow the full skill: MA113 says nothing of them.
+  function outcome(roll, skill, crit) {
+    const c = num(crit) === null ? skill : crit;
+    if (roll <= 4 || (roll === 5 && c >= 15) || (roll === 6 && c >= 16)) return 'CS';
     if (roll === 18 || (roll === 17 && skill <= 15) || roll >= skill + 10) return 'CF';
     if (roll === 17) return 'F';
     return roll <= skill ? 'S' : 'F';
   }
 
-  function dist(skill) {
+  function dist(skill, crit) {
     const o = { CS: 0, S: 0, F: 0, CF: 0 };
-    for (let r = 3; r <= 18; r++) o[outcome(r, skill)] += COUNTS[r] / 216;
+    for (let r = 3; r <= 18; r++) o[outcome(r, skill, crit)] += COUNTS[r] / 216;
     return o;
   }
 
-  function odds(skill) {
+  function odds(skill, crit) {
     const s = num(skill);
     if (s === null || s < 3) return { hit: 0, crit: 0, fumble: 0, none: true };
-    const d = dist(s);
+    const d = dist(s, num(crit) === null ? undefined : crit);
     return { hit: d.CS + d.S, crit: d.CS, fumble: d.CF, none: false };
   }
 
@@ -151,7 +158,7 @@
   function effective(data, state) {
     const st = isObj(state) ? state : {};
     const w = pickWeapon(data, st.weapon);
-    if (!w) return { type: 'melee', roll: 0, lines: [], cap: null, included: null, notes: [], foe: null };
+    if (!w) return { type: 'melee', roll: 0, critSkill: 0, lines: [], cap: null, included: null, notes: [], foe: null };
 
     const ranged = w.type === 'ranged';
     const type = ranged ? 'ranged' : 'melee';
@@ -161,6 +168,7 @@
     const caps = [];
     let foeAdj = 0;
     let deceptive = 0;
+    let telegraphicOn = false;
     const add = (group, label, value) => { if (value) lines.push({ group, label, value }); };
 
     const acc = ranged ? int(w.acc, 0, 99) : 0;
@@ -170,7 +178,7 @@
     const skill = typeof w.skill === 'string' ? w.skill : '';
     const level = int(w.level, -99, 99);
     const baseN = num(w.base);
-    const base = baseN === null ? null : Math.floor(baseN);
+    const base = baseN === null ? null : Math.trunc(baseN);
     const mine = techniquesFor(data, w);
 
     // The first line: the weapon's own level, or a technique's in its place.
@@ -188,7 +196,7 @@
     // Free Fall replaces the base skill when it is lower; modifiers apply on top (B197, B344).
     // A beam weapon below Rcl 2 is exempt (B350).
     if (st.zerog === true) {
-      const ff = num(data.freeFall) === null ? null : Math.floor(num(data.freeFall));
+      const ff = num(data.freeFall) === null ? null : Math.trunc(num(data.freeFall));
       if (ranged && w.beam === true && rcl < FREE_FALL_BEAM_RCL) {
         notes.push('Zero gravity does not limit a beam weapon with Rcl under 2.');
       } else if (ff === null) {
@@ -260,7 +268,7 @@
       const aimed = aim > 0 && !noAim;
       for (const a of aids) {
         if (!ticked(st, a.id)) continue;
-        if (isSight(a)) { if (aimed || !alwaysOn(a)) continue; } else if (a.acc === true && !aimed) continue;
+        if (isSight(a)) { if (aimed || !alwaysOn(a)) continue; } else if (a.acc === true && !aimed && SKILL_AIDS.indexOf(a.name) < 0) continue;
         add('aiming', a.name, aidValue(st, a));
       }
       if (man === 'aod') add('attack', 'All-Out Attack (Determined)', AOA_RANGED);
@@ -289,7 +297,7 @@
       if (man === 'aodbl') notes.push('All-Out Attack (Double): two attacks at this number. The off hand takes its usual penalty.');
       if (man === 'aos') notes.push('All-Out Attack (Strong): no change to the roll. +2 damage, or +1 a die if better.');
       if (st.rapid === true) add('attack', 'Rapid Strike, each attack', traits.halfRapid === true ? RAPID_STRIKE_HALF : RAPID_STRIKE);
-      if (telegraphic) { add('attack', 'Telegraphic Attack', TELEGRAPHIC); foeAdj += TELEGRAPHIC_FOE; }
+      if (telegraphic) { add('attack', 'Telegraphic Attack', TELEGRAPHIC); foeAdj += TELEGRAPHIC_FOE; telegraphicOn = true; }
       deceptive = int(st.deceptive, -8, 0);
       if (deceptive && telegraphic) {
         notes.push('Telegraphic Attack and Deceptive Attack cannot be combined: Deceptive Attack is ignored.');
@@ -374,6 +382,15 @@
     // says nothing stops the attempt, so this follows the plan and is reported as a difference.
     if (roll < 3) notes.push('Below 3 there is no roll to make.');
 
+    // The skill that sets the critical-success range: the roll without Telegraphic's +4 (MA113).
+    let critSkill = roll;
+    if (telegraphicOn) {
+      const keep = lines.filter((l) => l.label !== 'Telegraphic Attack');
+      let r = keep.reduce((a, l) => a + l.value, 0);
+      for (const k of caps) if (k.value < r) r = k.value;
+      critSkill = Math.min(roll, r);
+    }
+
     let foe = null;
     const foeIn = int(st.foe, 0, 40);
     if (foeIn > 0 && roll >= 3) {
@@ -383,10 +400,10 @@
         const o = outcome(r, defence);
         if (o === 'CS' || o === 'S') defends += COUNTS[r] / 216;
       }
-      const d = dist(roll);
+      const d = dist(roll, critSkill);
       foe = { defence, defends, lands: d.CS + d.S * (1 - defends) };
     }
-    return { type, roll, lines, cap, included, notes, foe };
+    return { type, roll, critSkill, lines, cap, included, notes, foe };
   }
 
   // Aids offered on a weapon: its own row's, then the character-wide ones (ranged only). One
@@ -820,13 +837,13 @@
       for (let i = 0; i < chips.length; i++) chips[i].setAttribute('aria-pressed', String(chips[i].getAttribute('data-loc') === state.loc));
 
       rollEl.textContent = String(res.roll);
-      const o = odds(res.roll);
+      const o = odds(res.roll, res.critSkill);
       hitEl.textContent = o.none ? 'no roll' : pct(o.hit);
       critEl.textContent = o.none ? '—' : pct(o.crit);
       fumbleEl.textContent = o.none ? '—' : pct(o.fumble);
       cells.forEach((cell, i) => {
         const r = i + 3;
-        cell.className = 'th-cell th-' + (o.none ? 'F' : outcome(r, res.roll));
+        cell.className = 'th-cell th-' + (o.none ? 'F' : outcome(r, res.roll, res.critSkill));
       });
 
       clear(linesEl);
