@@ -25,7 +25,7 @@
   const MOVE_MELEE = -4;
   const MOVE_MELEE_CAP = 9;
   const POPUP = -2;                   // pop-up attack, and no Aim (B390)
-  // Rapid fire by shots (B373); 100 and more carries on in SS159 (+7 at 100, +8 at 200, +9 at
+  // Rapid fire by shots (B373); 100 and more carries on in HT172 (+7 at 100, +8 at 200, +9 at
   // 400, +10 at 800); B373's own table ends at 99 shots.
   const ROF_STEPS = [[800, 10], [400, 9], [200, 8], [100, 7], [50, 6], [25, 5], [17, 4], [13, 3], [9, 2], [5, 1]];
   const RAPID_STRIKE = -6;            // each attack (B370)
