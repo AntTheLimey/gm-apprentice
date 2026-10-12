@@ -22,13 +22,14 @@ const SETTABLE = {
   'dndbeyond_sync': (v) => v === 'build' || v === 'manual',
   'link_previews': (v) => v === 'on' || v === 'desktop' || v === 'off',
   'connections': (v) => v === 'tree' || v === 'web' || v === 'cards' || v === 'off',
-  // The two lists a vault can own. Written whole, as a list of headings or field names.
+  // The two lists a vault can own. Written whole, as a list of headings or field names. An
+  // empty list is allowed: the vault then owns a list that hides nothing of the built-ins.
   'exclude_sections': (v) => isNameList(v),
   'exclude_fields': (v) => isNameList(v),
 };
 
 function isNameList(v) {
-  return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string' && x.trim() !== '');
+  return Array.isArray(v) && v.every((x) => typeof x === 'string' && x.trim() !== '');
 }
 
 function siteConfigPath(options) {
@@ -109,7 +110,13 @@ function write(options) {
   // the publish block, comments included, stays as the GM wrote it. Throws Error(reason) on a
   // refusal, with the file untouched.
   setPublishLeaves(vaultPath, leaves);
-  return { written };
+  const result = { written };
+  // An empty list makes the site hide less, so say so plainly.
+  const empties = leaves.filter((l) => Array.isArray(l.value) && l.value.length === 0).map((l) => l.path.join('.'));
+  if (empties.length) {
+    result.notes = empties.map((k) => `${k} is empty: nothing from the built-in list is hidden. Add the headings or fields you want hidden, or remove the key to use the built-in list again.`);
+  }
+  return result;
 }
 
 function runVaultSetting(options, deps) {

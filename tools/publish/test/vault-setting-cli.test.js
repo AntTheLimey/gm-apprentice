@@ -327,6 +327,27 @@ test('refuses a list that is not a list of headings', () => {
   assert.equal(config(s), before);
 });
 
+test('an explicit empty list is written, and the output says it hides nothing from the built-in list', () => {
+  const s = scratch('  mode: player\n');
+  for (const key of ['exclude_sections', 'exclude_fields']) {
+    const rc = run(s, [`${key}=[]`]);
+    assert.equal(rc.rc, 0, rc.err.join('\n'));
+    assert.deepEqual(rc.data.written, [key]);
+    assert.equal(rc.data.notes.length, 1);
+    assert.match(rc.data.notes[0], new RegExp(`^${key} is empty: nothing from the built-in list is hidden`));
+    assert.deepEqual(require('../lib/frontmatter').parseNote(config(s)).data.publish[key], []);
+  }
+  assert.equal(run(s, []).data.excludeSectionsOwn, true);
+  // A non-empty list carries no such note.
+  assert.equal(run(s, ['exclude_sections=["GM Notes"]']).data.notes, undefined);
+  // Blank names and non-strings are still refused.
+  const before = config(s);
+  assert.equal(run(s, ['exclude_sections=[" "]']).rc, 1);
+  assert.equal(run(s, ['exclude_fields=[""]']).rc, 1);
+  assert.equal(run(s, ['exclude_fields=[null]']).rc, 1);
+  assert.equal(config(s), before);
+});
+
 test('a list still in the site file counts as the vault\'s own', () => {
   const s = scratch('  mode: player\n');
   fs.writeFileSync(s.configPath, JSON.stringify({ vaultPath: './vault', excludeSections: ['X'] }));
