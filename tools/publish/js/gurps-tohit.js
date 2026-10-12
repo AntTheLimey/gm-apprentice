@@ -25,13 +25,32 @@
   const MOVE_MELEE = -4;
   const MOVE_MELEE_CAP = 9;
   const POPUP = -2;                   // pop-up attack, and no Aim (B390)
-  // Rapid fire by shots (B373); 100 and more is +7 (SS159, B373's table ends at 99 shots).
-  const ROF_STEPS = [[100, 7], [50, 6], [25, 5], [17, 4], [13, 3], [9, 2], [5, 1]];
+  // Rapid fire by shots (B373); 100 and more carries on in SS159 (+7 at 100, +8 at 200, +9 at
+  // 400, +10 at 800); B373's own table ends at 99 shots.
+  const ROF_STEPS = [[800, 10], [400, 9], [200, 8], [100, 7], [50, 6], [25, 5], [17, 4], [13, 3], [9, 2], [5, 1]];
   const RAPID_STRIKE = -6;            // each attack (B370)
   const RAPID_STRIKE_HALF = -3;       // with Trained by a Master (B93) or Weapon Master (MA48)
   const DECEPTIVE_STEP = 2;           // each -2 to hit is -1 to the foe's defence (B369, B548)
   const TELEGRAPHIC = 4;              // +4 to hit; the foe defends at +2 (MA113)
   const TELEGRAPHIC_FOE = 2;
+  // Telegraphic does not stack with Evaluate and cannot be combined with Deceptive Attack (MA113).
+  // Deceptive Attack may not take the final effective skill below 10 (B369).
+  const DECEPTIVE_FLOOR = 10;
+  // Free Fall: the lower of Free Fall and the skill is the base, then modifiers apply (B197, B344).
+  // Cover (B407, B548): target only partly exposed -2; light cover or concealment -2; -4 for each
+  // figure the shot passes. Target crouching, kneeling, sitting, crawling or lying: -2, but only
+  // against the torso, groin or a leg (B548, B551).
+  const COVER = { partial: -2, light: -2 };
+  const BEHIND = -4;
+  const BEHIND_MAX = 20;
+  const TARGET_LOW = -2;
+  const TARGET_LOW_LOCS = ['torso', 'groin', 'limb'];
+  // Targeting systems count under the base-Acc sight cap and the twice-Acc cap when aiming
+  // (B364, B372, HT155). A laser sight gives +1 with or without Aim (B412, HT156). A targeting
+  // or silhouette program is a bonus to the shooting skill, not an Acc bonus (HT157), as is any
+  // aid not named here: those are flat and outside the aim caps.
+  const SIGHT_NAMES = ['Laser sight', 'Reflex sight', 'Scope', 'HUD link', 'Smartgun'];
+  const ALWAYS_ON = ['Laser sight'];
   const EVALUATE_MAX = 3;             // +1 a turn, at most +3 (B364)
   const DUAL = -4;                    // Dual-Weapon Attack, each attack; the foe defends at -1 (B417)
   const DUAL_FOE = -1;
@@ -72,7 +91,7 @@
   }
   function int(v, min, max, neutral) {
     const n = num(v, min, max);
-    return n === null ? (neutral || 0) : Math.trunc(n);
+    return n === null ? (neutral || 0) : Math.floor(n);
   }
   const sgn = (n) => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
   const isObj = (o) => o !== null && typeof o === 'object';
@@ -141,6 +160,7 @@
     const notes = [];
     const caps = [];
     let foeAdj = 0;
+    let deceptive = 0;
     const add = (group, label, value) => { if (value) lines.push({ group, label, value }); };
 
     const acc = ranged ? int(w.acc, 0, 99) : 0;
@@ -149,7 +169,8 @@
     const bulk = ranged ? Math.abs(int(w.bulk, -99, 99)) : 0;
     const skill = typeof w.skill === 'string' ? w.skill : '';
     const level = int(w.level, -99, 99);
-    const base = w.base === null || w.base === undefined ? null : num(w.base);
+    const baseN = num(w.base);
+    const base = baseN === null ? null : Math.floor(baseN);
     const mine = techniquesFor(data, w);
 
     // The first line: the weapon's own level, or a technique's in its place.
@@ -164,6 +185,23 @@
     } else if (base !== null && level > base) {
       included = { amount: level - base, over: `${skill} ${base}`.trim() };
     }
+    // Free Fall replaces the base skill when it is lower; modifiers apply on top (B197, B344).
+    // A beam weapon below Rcl 2 is exempt (B350).
+    if (st.zerog === true) {
+      const ff = num(data.freeFall) === null ? null : Math.floor(num(data.freeFall));
+      if (ranged && w.beam === true && rcl < FREE_FALL_BEAM_RCL) {
+        notes.push('Zero gravity does not limit a beam weapon with Rcl under 2.');
+      } else if (ff === null) {
+        notes.push('The sheet has no Free Fall skill, so there is no zero-gravity limit to apply.');
+      } else {
+        const bonus = included ? included.amount : 0;
+        const rolled = start - bonus;
+        if (ff < rolled) {
+          start = ff + bonus;
+          startLabel = `Free Fall ${ff} in place of ${startLabel} ${rolled}` + (bonus ? ` (+${bonus} included)` : '');
+        }
+      }
+    }
     lines.push({ group: 'weapon', label: startLabel, value: start });
 
     const man = typeof st.man === 'string' ? st.man : 'attack';
@@ -171,8 +209,10 @@
 
     if (ranged) {
       const noAim = man === 'move' || man === 'popup';
+      const aids = aidsFor(data, w);
+      const isSight = (a) => SIGHT_NAMES.indexOf(a.name) >= 0;
+      const alwaysOn = (a) => ALWAYS_ON.indexOf(a.name) >= 0 || a.acc !== true;
       if (aim > 0 && !noAim) {
-        const aids = aimAids(data, w);
         let flat = 0;
         const flatNames = [];
         let scope = 0;
@@ -189,7 +229,7 @@
           if (v > scope) { scope = v; scopeName = name; }
         };
         for (const a of aids) {
-          if (!a.acc || !ticked(st, a.id)) continue;
+          if (!isSight(a) || !ticked(st, a.id)) continue;
           const b = aidValue(st, a);
           if (!b) continue;
           if (a.name === 'Scope') tryScope('Scope', b, a.fixed === true);
@@ -215,9 +255,12 @@
       } else if (aim > 0) {
         notes.push('Move and Attack and pop-up attacks get no Aim bonus.');
       }
-      // Flat aids: not aiming bonuses, not under the aim caps.
-      for (const a of aimAids(data, w)) {
-        if (a.acc || !ticked(st, a.id)) continue;
+      // Flat aids: programs and unknown aids always; a sight that needs no Aim when it is not
+      // counted in the aiming line above.
+      const aimed = aim > 0 && !noAim;
+      for (const a of aids) {
+        if (!ticked(st, a.id)) continue;
+        if (isSight(a)) { if (aimed || !alwaysOn(a)) continue; } else if (a.acc === true && !aimed) continue;
         add('aiming', a.name, aidValue(st, a));
       }
       if (man === 'aod') add('attack', 'All-Out Attack (Determined)', AOA_RANGED);
@@ -230,9 +273,14 @@
       add('attack', `Rapid fire, ${shots} shots`, rofBonus(shots));
       if (shots > rof) notes.push(`This weapon's RoF is ${rof}.`);
       if (shots > 1) notes.push(`Every ${rcl > 1 ? rcl + ' points' : 'point'} the roll is made by lands one more hit, up to ${shots}.`);
-      add('env', 'Cover', -Math.abs(int(st.cover, -30, 30)));
+      const cover = typeof st.cover === 'string' ? COVER[st.cover] : undefined;
+      if (cover) add('env', st.cover === 'light' ? 'Light cover or concealment' : 'Target only partly exposed', cover);
+      add('env', 'Shot passes other figures', BEHIND * int(st.behind, 0, BEHIND_MAX));
     } else {
-      add('setup', 'Evaluate', int(st.evaluate, 0, EVALUATE_MAX));
+      const telegraphic = st.telegraphic === true;
+      const evaluate = int(st.evaluate, 0, EVALUATE_MAX);
+      if (evaluate && telegraphic) notes.push('Telegraphic Attack does not stack with Evaluate: the +4 stands in its place.');
+      else add('setup', 'Evaluate', evaluate);
       const feint = int(st.feint, 0, 30);
       if (feint) { foeAdj -= feint; notes.push(`Feint won by ${feint}: the foe defends at −${feint}.`); }
       if (man === 'aod') add('attack', 'All-Out Attack (Determined)', AOA_MELEE);
@@ -241,17 +289,19 @@
       if (man === 'aodbl') notes.push('All-Out Attack (Double): two attacks at this number. The off hand takes its usual penalty.');
       if (man === 'aos') notes.push('All-Out Attack (Strong): no change to the roll. +2 damage, or +1 a die if better.');
       if (st.rapid === true) add('attack', 'Rapid Strike, each attack', traits.halfRapid === true ? RAPID_STRIKE_HALF : RAPID_STRIKE);
-      if (st.telegraphic === true) { add('attack', 'Telegraphic Attack', TELEGRAPHIC); foeAdj += TELEGRAPHIC_FOE; }
-      const dec = int(st.deceptive, -8, 0);
-      if (dec) {
-        const steps = Math.round(-dec / DECEPTIVE_STEP);
-        add('attack', 'Deceptive Attack', -steps * DECEPTIVE_STEP);
-        foeAdj -= steps;
+      if (telegraphic) { add('attack', 'Telegraphic Attack', TELEGRAPHIC); foeAdj += TELEGRAPHIC_FOE; }
+      deceptive = int(st.deceptive, -8, 0);
+      if (deceptive && telegraphic) {
+        notes.push('Telegraphic Attack and Deceptive Attack cannot be combined: Deceptive Attack is ignored.');
+        deceptive = 0;
       }
       const posture = int(st.posture, -POSTURE_MAX, 0);
       add('you', 'Your posture', posture);
     }
 
+    if (st.dual === true && man === 'aodbl' && !ranged) {
+      notes.push('All-Out Attack (Double) with two weapons: one of the two attacks is traded for the Dual-Weapon Attack, giving three attacks.');
+    }
     if (st.dual === true) {
       const dualMap = isObj(data.techniques) && isObj(data.techniques.dual) ? data.techniques.dual : {};
       const bought = int(dualMap[skill], 0, DUAL_BOUGHT_MAX);
@@ -274,6 +324,10 @@
       if (ta) add('target', `${loc[1]} (Targeted Attack, plain ${sgn(loc[2])})`, int(ta.net, -99, 99));
       else add('target', loc[1], int(loc[2], -99, 99));
     }
+    if (ranged && st.targetLow === true && (!loc || TARGET_LOW_LOCS.indexOf(loc[0]) >= 0)) {
+      add('target', 'Target crouching, kneeling, sitting or lying', TARGET_LOW);
+      if (loc && loc[0] === 'limb') notes.push('A low target is harder to hit in the legs only; take it off for an arm.');
+    }
     add('target', 'Target size', int(st.sm, -30, 30));
 
     let vis = int(st.vis, TOTAL_DARKNESS, 0);
@@ -285,28 +339,39 @@
     }
     add('env', 'Light and visibility', vis);
     if (st.footing === true) add('env', 'Bad footing', BAD_FOOTING);
-    if (st.zerog === true) {
-      const ff = num(data.freeFall);
-      if (ranged && w.beam === true && rcl < FREE_FALL_BEAM_RCL) {
-        notes.push('Zero gravity does not cap a beam weapon with Rcl under 2.');
-      } else if (ff === null) {
-        notes.push('The sheet has no Free Fall skill, so there is no zero-gravity cap to apply.');
-      } else {
-        caps.push({ value: ff, why: `Free Fall ${ff}` });
-      }
-    }
     add('you', 'Shock', -Math.abs(int(st.shock, -SHOCK_MAX, SHOCK_MAX)));
 
     // The weapon's own bonuses, unless the level already includes them.
     if (!included && Array.isArray(w.bonuses)) {
-      for (const b of w.bonuses) if (b && num(b.bonus)) add('you', `${b.name} ${sgn(b.bonus)}`, int(b.bonus, -99, 99));
+      for (const b of w.bonuses) {
+        const v = b ? int(b.bonus, -99, 99) : 0;
+        if (v) add('you', `${b.name} ${sgn(v)}`, v);
+      }
     }
     add('you', 'Anything else', int(st.other, -30, 30));
 
-    let roll = lines.reduce((a, l) => a + l.value, 0);
-    let cap = null;
-    for (const c of caps) if (c.value < roll && (!cap || c.value < cap.value)) cap = c;
-    if (cap) roll = cap.value;
+    // The lowest cap that is below the roll is the one that bites.
+    const settle = () => {
+      let r = lines.reduce((a, l) => a + l.value, 0);
+      let c = null;
+      for (const k of caps) if (k.value < r && (!c || k.value < c.value)) c = k;
+      return { roll: c ? c.value : r, cap: c };
+    };
+    let { roll, cap } = settle();
+    // Deceptive Attack: only as many -2 steps as keep the final skill at 10 or more (B369).
+    if (deceptive) {
+      const want = Math.round(-deceptive / DECEPTIVE_STEP);
+      const room = Math.max(0, Math.floor((roll - DECEPTIVE_FLOOR) / DECEPTIVE_STEP));
+      const steps = Math.min(want, room);
+      if (steps < want) notes.push('Deceptive Attack cannot take the final skill below 10' + (steps ? `: only \u2212${steps * DECEPTIVE_STEP} applied.` : ': it is not applied.'));
+      if (steps) {
+        add('attack', 'Deceptive Attack', -steps * DECEPTIVE_STEP);
+        foeAdj -= steps;
+        ({ roll, cap } = settle());
+      }
+    }
+    // Below 3 the page says "no roll", though B369 has a 3 or 4 always hit; the rules server
+    // says nothing stops the attempt, so this follows the plan and is reported as a difference.
     if (roll < 3) notes.push('Below 3 there is no roll to make.');
 
     let foe = null;
@@ -324,17 +389,27 @@
     return { type, roll, lines, cap, included, notes, foe };
   }
 
-  // Aids offered on a weapon: its own row's, then the character-wide ones (ranged only).
-  function aimAids(data, w) {
-    if (w.type !== 'ranged') return [];
+  // Aids offered on a weapon: its own row's, then the character-wide ones (ranged only). One
+  // physical aid found in both places (same name) is the row's. Shared with the page.
+  function aidsFor(data, w) {
+    if (!w || w.type !== 'ranged') return [];
     const own = Array.isArray(w.aids) ? w.aids : [];
     const wide = data && Array.isArray(data.aids) ? data.aids : [];
-    const seen = new Set();
+    const ids = new Set();
+    const names = new Set();
     return own.concat(wide).filter((a) => {
-      if (!a || seen.has(a.id)) return false;
-      seen.add(a.id);
+      if (!a || ids.has(a.id) || names.has(a.name)) return false;
+      ids.add(a.id);
+      names.add(a.name);
       return true;
     });
+  }
+
+  // Which controls cannot be used together (MA113): the page disables the one marked true.
+  function conflicts(state) {
+    const st = isObj(state) ? state : {};
+    const telegraphic = st.telegraphic === true;
+    return { telegraphic: !telegraphic && int(st.deceptive, -8, 0) < 0, deceptive: telegraphic };
   }
   const ticked = (st, id) => isObj(st.aids) && st.aids[id] === true;
   function aidValue(st, a) {
@@ -343,7 +418,7 @@
   }
   const offHand = (list, skill) => list.indexOf(skill) >= 0;
 
-  const api = { effective, outcome, odds, rangePenalty, techniquesFor, GROUPS };
+  const api = { effective, outcome, odds, rangePenalty, techniquesFor, aidsFor, conflicts, GROUPS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.__gurpsTohit = api;
   if (typeof document === 'undefined') return;
