@@ -176,3 +176,36 @@ def test_mid_pagination_failure_is_not_reported_as_a_short_list(monkeypatch):
     monkeypatch.setattr(client, "_request", fake)
     with pytest.raises(client.ApiError):
         rel_baseline._get_relations("w1", "person", "e1", "tok")
+
+
+def test_match_node_resolves_the_exact_note_before_the_folded_key():
+    # #262: "The Woodland Ghost" (inn) and "Woodland Ghost" (creature) share a key.
+    node = {"element_id": "corwin",
+            "relationships": [{"predicate": "part_of", "target": "[[The Woodland Ghost]]"}]}
+    structural = {("corwin", "Link", "inn-id"): "rel-1"}
+    eids, _ = rb.match_node(node, {}, structural, {}, _map(),
+                            id_by_file={"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"})
+    assert eids == {"part_of|[[The Woodland Ghost]]": "rel-1"}
+
+
+def test_match_node_resolves_another_case_like_suggest_does():
+    # `suggest` finds [[the woodland ghost]] by another case even when the folded key is shared;
+    # the baseline pass must reach the same note, or the edge is never reconciled.
+    node = {"element_id": "corwin",
+            "relationships": [{"predicate": "part_of", "target": "[[the woodland ghost]]"}]}
+    structural = {("corwin", "Link", "inn-id"): "rel-1"}
+    eids, reviews = rb.match_node(
+        node, {}, structural, {}, _map(),
+        id_by_file={"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"},
+        ambiguous={"woodlandghost"})
+    assert eids == {"part_of|[[the woodland ghost]]": "rel-1"}
+    assert reviews == []
+
+
+def test_match_node_gives_a_name_with_no_folded_key_no_folded_match():
+    # A name with no Latin letters folds to "": it must not take whatever is stored under "".
+    node = {"element_id": "corwin",
+            "relationships": [{"predicate": "part_of", "target": "[[龍]]"}]}
+    eids, reviews = rb.match_node(node, {"": "wrong-id"}, {("corwin", "Link", "wrong-id"): "r"}, {}, _map(),
+                                  id_by_file={"Vane": "v"})
+    assert eids == {} and reviews == []

@@ -21,19 +21,17 @@ function renderMetaSpans(fm) {
 // The frontmatter field an identity label is read from (pc-identity.js), where it has one.
 const IDENTITY_SOURCE_FIELD = { Occupation: 'occupation', Age: 'age', Points: 'point_total' };
 
-const EQUIPMENT_SECTION_TITLES = new Set(['equipment', 'gear', 'inventory', 'weapons', 'armour', 'armor', 'items', 'possessions', 'melee weapons', 'ranged weapons', 'encumbrance']);
 
 // Sections the structured GURPS renderer consumes into the sheet/combat tabs.
 // When a GURPS system sheet is present these are dropped from the accordion
 // list so they don't duplicate the structured blocks. Prose/extra sections
 // (Background, Notes, GM Notes, suit mods, etc.) still render as accordions.
-const GURPS_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'advantages & perks', 'disadvantages & quirks', 'techniques', 'spells', 'languages', 'cultural familiarities', 'combat action chains', 'active defenses', 'dr by hit location', 'points summary', 'reaction modifiers', 'current status', 'multi-action combat skill chains', 'combat summary']);
+const { GURPS_CONSUMED_TITLES, COC_CONSUMED_TITLES, EQUIPMENT_SECTION_TITLES } = require('./consumed-titles');
 
 // Titles the structured CoC sheet/record consume. 'connections' and 'cover
 // identity' are deliberately NOT here: the structured renderer doesn't place
 // them, so consuming them would silently drop the sections. Left un-consumed,
 // they fall through to the Record tab's leftover-accordion guard (no content loss).
-const COC_CONSUMED_TITLES = new Set(['stat sheet', 'skills', 'combat', 'background', 'injuries & scars', 'phobias & manias', 'encounters with strange entities', 'arcane tomes & spells', 'fellow investigators', 'current status', 'equipment']);
 
 function isGurpsSystem(publishConfig) {
   return ['gurps-4e', 'gurps'].includes(String((publishConfig || {}).system || '').toLowerCase());

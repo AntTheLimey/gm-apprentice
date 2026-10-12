@@ -8,7 +8,7 @@ const { planMigration, applyMigration, runMigrateConfig } = require('../lib/migr
 const { MOVED_KEYS, DEPLOY_KEYS } = require('../lib/config-keys');
 const { parseNote } = require('../lib/frontmatter');
 const { build } = require('../lib/build');
-const { loadPublishConfig } = require('../lib/config');
+const { loadPublishConfig, PUBLISH_DEFAULTS } = require('../lib/config');
 
 const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'with-gurps-pc');
@@ -94,7 +94,7 @@ describe('migrate-config', () => {
     const notes = j.lines.filter((l) => /^(left in |skipped |note |backup)/.test(l));
     assert.deepStrictEqual(j.noteLines, notes);
     assert.ok(j.lines.filter((l) => !j.noteLines.includes(l)).every((l) => /^(move|merge|switch|conflict) /.test(l)));
-    const none = JSON.parse(cli(['--json', '--config', makeSite().configPath]).stdout);
+    const none = JSON.parse(cli(['--json', '--config', makeSite({ vaultFile: '---\ntype: meta\npublish:\n  exclude_sections: [G]\n  exclude_fields: [f]\n---\n' }).configPath]).stdout);
     assert.deepStrictEqual(none.noteLines, []);
   });
 
@@ -244,19 +244,19 @@ describe('migrate-config', () => {
     const { result } = migrate(s);
     const data = parseNote(read(s.vaultFile)).data;
     assert.strictEqual(data.type, 'meta');
-    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'] });
+    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'], exclude_sections: PUBLISH_DEFAULTS.exclude_sections, exclude_fields: PUBLISH_DEFAULTS.exclude_fields });
     assert.deepStrictEqual(result.backups, [`${s.configPath}.pre-migrate`]);
   });
 
   it('14: comments and unrelated keys in the vault file survive byte for byte', () => {
     const s = makeSite({
       site: { siteTitle: 'Old', footer: 'F' },
-      vaultFile: '---\n# keep me\ntype: meta   # trailing\npublish:\n  # about mode\n  mode: player\n  site_title: New\n---\n\nBody text\n',
+      vaultFile: '---\n# keep me\ntype: meta   # trailing\npublish:\n  # about mode\n  mode: player\n  site_title: New\n  exclude_sections: [G]\n  exclude_fields: [f]\n---\n\nBody text\n',
     });
     migrate(s);
     assert.strictEqual(
       read(s.vaultFile),
-      '---\n# keep me\ntype: meta   # trailing\npublish:\n  # about mode\n  mode: player\n  site_title: New\n  footer: F\n---\n\nBody text\n',
+      '---\n# keep me\ntype: meta   # trailing\npublish:\n  # about mode\n  mode: player\n  site_title: New\n  exclude_sections: [G]\n  exclude_fields: [f]\n  footer: F\n---\n\nBody text\n',
     );
   });
 
@@ -267,10 +267,28 @@ describe('migrate-config', () => {
     assert.deepStrictEqual(plan.siteRemove, []);
     assert.deepStrictEqual(plan.vaultRemove, ['backend']);
     assert.deepStrictEqual(plan.vaultSet, { live_stats: true, inbox: false });
-    const r = cli(['--vault', s.vault], s.root.replace(/\/[^/]*$/, ''));
+    // Run from a directory with no vault.config.json in it (the CLI reads ./vault.config.json by
+    // default). path.dirname, not a "/"-splitting regex, so Windows paths work too.
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-migrate-nosite-'));
+    roots.push(empty);
+    assert.ok(!fs.existsSync(path.join(empty, 'vault.config.json')));
+    const r = cli(['--vault', s.vault], empty);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.deepStrictEqual(publishOf(s.vaultFile), { mode: 'player', live_stats: true, inbox: false });
     assert.ok(fs.existsSync(`${s.vaultFile}.pre-migrate`));
+  });
+
+  it('15b: no site file at all: no exclude lists are planned or written, on any platform', () => {
+    const s = makeSite({ vaultFile: '---\ntype: meta\n---\n' });
+    const plan = planMigration({ vaultPath: s.vault });
+    assert.ok(!('exclude_sections' in plan.vaultSet) && !('exclude_fields' in plan.vaultSet), JSON.stringify(plan.vaultSet));
+    assert.deepStrictEqual(plan.moves, []);
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-migrate-nosite-'));
+    roots.push(empty);
+    const r = cli(['--vault', s.vault], empty);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual((publishOf(s.vaultFile) || {}).exclude_sections, undefined);
+    assert.strictEqual((publishOf(s.vaultFile) || {}).exclude_fields, undefined);
   });
 
   // Builds a fixture site twice, before and after migrating it; returns both docs trees.
@@ -465,7 +483,7 @@ describe('migrate-config', () => {
   });
 
   it('human output is one line per move, merge, switch and conflict', () => {
-    const s = makeSite({ site: { siteTitle: 'Old', footer: 'F', excludeDirs: ['A'], backend: { inbox: true } }, vaultFile: '---\npublish:\n  site_title: New\n  exclude_dirs: [B]\n---\n' });
+    const s = makeSite({ site: { siteTitle: 'Old', footer: 'F', excludeDirs: ['A'], backend: { inbox: true } }, vaultFile: '---\npublish:\n  site_title: New\n  exclude_dirs: [B]\n  exclude_sections: [G]\n  exclude_fields: [f]\n---\n' });
     const lines = [];
     const rc = runMigrateConfig({ configPath: s.configPath, dryRun: true }, { out: (l) => lines.push(l) });
     assert.strictEqual(rc, 0);
@@ -502,7 +520,7 @@ describe('migrate-config', () => {
   });
 
   it('a theme block that gets a tagline keeps every other line byte for byte', () => {
-    const vaultFile = '---\ntype: meta\npublish:\n  mode: player   # who reads\n  theme:\n    # palette tried 2026-09: too red\n    genre: noir   # the one I like\n    accent: #c0a060\n  footer: F\n---\n\nBody.\n';
+    const vaultFile = '---\ntype: meta\npublish:\n  mode: player   # who reads\n  theme:\n    # palette tried 2026-09: too red\n    genre: noir   # the one I like\n    accent: #c0a060\n  footer: F\n  exclude_sections: [G]\n  exclude_fields: [f]\n---\n\nBody.\n';
     const s = makeSite({ site: { landingTagline: 'Hi' }, vaultFile });
     const lines = [];
     runMigrateConfig({ configPath: s.configPath, dryRun: true }, { out: (l) => lines.push(l) });
@@ -658,7 +676,7 @@ describe('migrate-config', () => {
   });
 
   it('a failed site write with no vault write names only the site file and its backup', () => {
-    const s = makeSite({ site: { siteTitle: 'T' }, vaultFile: '---\npublish:\n  site_title: T\n---\n' });
+    const s = makeSite({ site: { siteTitle: 'T' }, vaultFile: '---\npublish:\n  site_title: T\n  exclude_sections: [G]\n  exclude_fields: [f]\n---\n' });
     const plan = planMigration({ configPath: s.configPath });
     assert.deepStrictEqual(plan.vaultSet, {});
     assert.throws(
@@ -714,5 +732,30 @@ describe('migrate-config', () => {
     assert.ok(human.some((l) => l.startsWith('backup ')), human.join('\n'));
     assert.ok(human.some((l) => l.startsWith('backup kept from an earlier run: ')), human.join('\n'));
     assert.deepStrictEqual(json.map((l) => l.replace(j.root, 'ROOT')), human.map((l) => l.replace(h.root, 'ROOT')));
+  });
+});
+
+describe('migrate-config writes the built-in exclude lists (#294)', () => {
+  it('a site file with no excludeSections or excludeFields gets the defaults written into the vault', () => {
+    const s = makeSite({ site: { siteTitle: 'T' }, vaultFile: '---\ntype: meta\npublish:\n  mode: player\n---\n' });
+    const { plan } = migrate(s);
+    assert.ok(plan.applicable);
+    const pub = publishOf(s.vaultFile);
+    assert.deepStrictEqual(pub.exclude_sections, PUBLISH_DEFAULTS.exclude_sections);
+    assert.deepStrictEqual(pub.exclude_fields, PUBLISH_DEFAULTS.exclude_fields);
+    assert.strictEqual(pub.exclude_dirs, undefined);
+    assert.ok(read(s.vaultFile).includes('mode: player'));
+  });
+  it('a list the vault already has is left alone, and so is one the site file holds', () => {
+    const s = makeSite({ site: { excludeFields: ['x'] }, vaultFile: '---\ntype: meta\npublish:\n  exclude_sections: [Rumours]\n---\n' });
+    migrate(s);
+    const pub = publishOf(s.vaultFile);
+    assert.deepStrictEqual(pub.exclude_sections, ['Rumours']);
+    assert.deepStrictEqual(pub.exclude_fields, ['x']);
+  });
+  it('a second run plans nothing', () => {
+    const s = makeSite({ site: { siteTitle: 'T' } });
+    migrate(s);
+    assert.strictEqual(planMigration({ configPath: s.configPath }).applicable, false);
   });
 });

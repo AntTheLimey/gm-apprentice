@@ -549,8 +549,15 @@ def _theme_facts(vault: Path) -> dict[str, Any] | None:
 
 
 def _set_setting(vault: Path, key: str, value: object) -> None:
-    answer = ask_publish_tool(
-        vault, ["vault-setting", "--set", f"{key}={json.dumps(value)}"])
+    _set_settings(vault, [(key, value)])
+
+
+def _set_settings(vault: Path, pairs: list[tuple[str, object]]) -> None:
+    """Every pair in one call: the tool writes them in one edit, all or none."""
+    args = ["vault-setting"]
+    for key, value in pairs:
+        args += ["--set", f"{key}={json.dumps(value)}"]
+    answer = ask_publish_tool(vault, args)
     if answer.why is not None:
         raise StepFailed(answer.why)
 
@@ -612,6 +619,41 @@ def find_tone_shown(vault: Path) -> list[Item]:
         "lists the hostile ties the site shows"])]
 
 
+def find_exclude_lists(vault: Path) -> list[Item]:
+    """1.10.47: the lists of headings and fields the site hides are written
+    into the vault file, where the GM can see them. A vault with no list of
+    its own only ever had the tool's built-in one, so writing that same list
+    changes nothing about what publishes. A list the vault owns is left."""
+    facts = _theme_facts(vault)
+    if not facts:
+        return []
+    lists = [(key, own, default) for key, own, default in (
+        ("exclude_sections", facts.get("excludeSectionsOwn"),
+         facts.get("defaultExcludeSections")),
+        ("exclude_fields", facts.get("excludeFieldsOwn"),
+         facts.get("defaultExcludeFields")))
+        if own is False and isinstance(default, list) and default]
+    # config-to-vault writes the same lists when it runs on this pass: the
+    # plan shows each write once, there. (If it cannot plan, this step goes on.)
+    planned = describe_config_to_vault(vault)
+    lists = [(key, own, default) for key, own, default in lists
+             if not any(line.endswith(f"-> publish.{key}")
+                        for line in (planned.lines if planned.applies else []))]
+    if not lists:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        _set_settings(vault, [(key, default) for key, _own, default in lists])
+        return [f"wrote publish.{key}: {len(default)} entries"
+                for key, _own, default in lists]
+
+    return [Item("exclude-lists", WILL,
+                 [f"write the built-in publish.{key} ({', '.join(default)}) "
+                  f"into _meta/vault-config.md so you can see and edit it; "
+                  f"what publishes does not change"
+                  for key, _own, default in lists], apply)]
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check("config-to-vault", None, 2,
@@ -635,6 +677,8 @@ SITE_CHECKS: list[Check] = [
           find_sheet_source, asks_site=True, choices=("sheet-source:=",)),
     Check("unparseable-notes", "1.10.23", 4,
           "notes the build cannot parse", find_unparseable, asks_site=True),
+    Check("exclude-lists", "1.10.47", 2, "the built-in exclude lists, written "
+          "into the vault file", find_exclude_lists, asks_site=True),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True),
 ]

@@ -249,7 +249,7 @@ def test_node_index_resolves_targets_from_mobrpg_nodes(tmp_path):
     assert idx[suggest._key("Eris System")] == "eris-id"
     assert idx[suggest._key("Eris II")] == "eris2-id"
     # a node relationship already carrying an event_id is treated as already-linked
-    assert (suggest._key("Eris II"), "part_of", suggest._key("Eris System")) in linked
+    assert suggest._edge_linked(linked, set(), "Eris II", "part_of", "[[Eris System]]")[0]
 
 
 def test_relationship_items_structural_predicate_is_a_direct_relation(tmp_path):
@@ -599,10 +599,10 @@ def test_node_index_flags_pending_and_dismissed_as_submitted(tmp_path):
     write("New Loc", None, "")
     idx, linked, submitted = suggest.node_index(str(tmp_path))
     assert suggest._key("Accepted Loc") in idx          # linked by element_id
-    assert suggest._key("Pending Loc") in submitted      # already filed, awaiting review
-    assert suggest._key("Dismissed Loc") in submitted    # already filed, rejected
-    assert suggest._key("New Loc") not in submitted
-    assert suggest._key("Accepted Loc") not in submitted
+    assert suggest._exact("Pending Loc") in submitted      # already filed, awaiting review
+    assert suggest._exact("Dismissed Loc") in submitted    # already filed, rejected
+    assert suggest._exact("New Loc") not in submitted
+    assert suggest._exact("Accepted Loc") not in submitted
 
 
 def test_node_index_holds_elements_deleted_upstream(tmp_path):
@@ -621,7 +621,7 @@ def test_node_index_holds_elements_deleted_upstream(tmp_path):
 
     idx, _linked, submitted = suggest.node_index(str(tmp_path))
     assert suggest._key("Gone Item") not in idx          # no live element to link to
-    assert suggest._key("Gone Item") in submitted        # ...but still not re-filed
+    assert suggest._exact("Gone Item") in submitted      # ...but still not re-filed
 
 
 def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):
@@ -1246,3 +1246,594 @@ def test_heritages_never_shadow_push_notes_or_hide_new_entities(tmp_path):
     assert suggest.link_index(str(tmp_path))[suggest._key("Drageby")] == "P"
     idx, _linked, _submitted = suggest.node_index(str(tmp_path))
     assert suggest._key("Hill Folk") not in idx
+
+
+# ---- #262: "The X" and "X" are two notes, not one folded key ----
+
+def _linked_note(root, folder, stem, eid):
+    from mobrpg import node
+    (root / folder).mkdir(parents=True, exist_ok=True)
+    nd = {"world_id": "", "external_ref": f"w:{folder}/{stem}", "element_id": eid,
+          "element_kind": "LandFeature", "review_state": "accepted",
+          "relationships": [], "languages": []}
+    (root / folder / f"{stem}.md").write_text(
+        "---\ntype: location\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+
+def test_node_files_maps_exact_stems_and_flags_a_shared_key(tmp_path):
+    _linked_note(tmp_path, "Locations", "The Woodland Ghost", "inn-id")
+    _linked_note(tmp_path, "Locations", "Woodland Ghost", "creature-id")
+    _linked_note(tmp_path, "Locations", "Lord Vane", "vane-id")
+    by_file, ambiguous = suggest.node_files(str(tmp_path))
+    assert by_file["The Woodland Ghost"] == "inn-id"
+    assert by_file["Woodland Ghost"] == "creature-id"
+    assert ambiguous == {suggest._key("Woodland Ghost")}
+    # node_index must not let the last note win the shared key
+    idx, _, _ = suggest.node_index(str(tmp_path))
+    assert suggest._key("Woodland Ghost") not in idx
+    assert idx[suggest._key("Lord Vane")] == "vane-id"
+
+
+def test_partition_creates_a_note_whose_name_only_folds_to_a_linked_one():
+    ents = [{"name": "Woodland Ghost"}, {"name": "The Woodland Ghost"}]
+    by_key = {suggest._key("The Woodland Ghost"): "inn-id"}
+    by_file = {"The Woodland Ghost": "inn-id"}
+    net_new, linked, _ = suggest.partition_entities(ents, by_key, id_by_file=by_file)
+    assert [e["name"] for e in net_new] == ["Woodland Ghost"]
+    assert [e["name"] for e in linked] == ["The Woodland Ghost"]
+
+
+def test_partition_matches_exact_stem_nfc_and_underscores():
+    import unicodedata
+    stem = unicodedata.normalize("NFD", "Róbert Vane")
+    ents = [{"name": "Róbert Vane"}, {"name": "Marsh Hag"}]
+    by_file = {stem: "r-id", "Marsh_Hag": "m-id"}
+    _, linked, _ = suggest.partition_entities(ents, {}, id_by_file=by_file)
+    assert len(linked) == 2
+
+
+def _edge_ent(tmp_path, target):
+    return {"path": str(tmp_path / "Characters/NPCs/Imogen_Bellamy.md"), "name": "Imogen Bellamy",
+            "relationships": [{"target": target, "predicate": "knows", "desc": ""}]}
+
+
+def test_edge_resolves_to_the_exact_file_not_the_folded_key(tmp_path):
+    by_file = {"The Woodland Ghost": "inn-id", "Woodland Ghost": "creature-id"}
+    ambiguous = {suggest._key("Woodland Ghost")}
+    for target, want in (("[[The Woodland Ghost]]", "inn-id"), ("[[Woodland Ghost|the ghost]]", "creature-id")):
+        items, skipped = suggest.relationship_items(
+            _edge_ent(tmp_path, target), _map(), "e1", {}, set(), str(tmp_path), "w", "e1",
+            id_by_file=by_file, ambiguous=ambiguous)
+        assert want in json.dumps(items), (target, items, skipped)
+
+
+def test_edge_by_folded_key_still_resolves_when_unambiguous(tmp_path):
+    items, skipped = suggest.relationship_items(
+        _edge_ent(tmp_path, "[[Vane]]"), _map(), "e1", {suggest._key("Lord Vane"): "vane-id"},
+        set(), str(tmp_path), "w", "e1", id_by_file={"Lord Vane": "vane-id"}, ambiguous=set())
+    assert "vane-id" in json.dumps(items)
+
+
+def test_edge_by_ambiguous_folded_key_is_reported_not_guessed(tmp_path):
+    by_file = {"The Woodland Ghost": "inn-id", "Woodland Ghost": "creature-id"}
+    items, skipped = suggest.relationship_items(
+        _edge_ent(tmp_path, "[[Lady Woodland Ghost]]"), _map(), "e1", {}, set(), str(tmp_path), "w", "e1",
+        id_by_file=by_file, ambiguous={suggest._key("Woodland Ghost")})
+    assert "inn-id" not in json.dumps(items) and "creature-id" not in json.dumps(items)
+    assert any("ambiguous" in s for s in skipped)
+
+
+def test_held_count_uses_exact_stem(tmp_path):
+    ent = _edge_ent(tmp_path, "[[The Woodland Ghost]]")
+    n = suggest.held_relationship_count(
+        [ent], {}, {}, set(), id_by_file={"The Woodland Ghost": "inn-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert n == 1
+    n = suggest.held_relationship_count(
+        [_edge_ent(tmp_path, "[[Lady Woodland Ghost]]")], {}, {}, set(),
+        id_by_file={}, ambiguous={suggest._key("Woodland Ghost")})
+    assert n == 0
+
+
+def test_run_creates_the_creature_beside_a_linked_inn_and_reports_ambiguity(tmp_path, monkeypatch, capsys):
+    _linked_note(tmp_path, "Locations", "The Woodland Ghost", "inn-id")
+    (tmp_path / "Creatures").mkdir()
+    (tmp_path / "Creatures/Woodland Ghost.md").write_text(
+        "---\ntype: creature\n---\nA ghost.\n", encoding="utf-8")
+    (tmp_path / "_meta").mkdir()
+    import shutil
+    # reuse an existing vault's map via the helper the other run tests use
+    d = _two_npc_vault(tmp_path / "x")
+    shutil.copy(d / "_meta/mobrpg-map.json", tmp_path / "_meta/mobrpg-map.json")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: _empty_live())
+    assert suggest.run(["w1", "--vault", str(tmp_path), "--out", str(tmp_path / "out")]) == 0
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    created = [it["payload"]["name"] for it in batch["suggestions"]
+               if it.get("operation") == "CreateElement" and it.get("externalRef")]
+    assert "Woodland Ghost" in created
+
+
+# ---- #262 round 2: the "already linked" edge, "pending", and kinds go by exact name too ----
+
+def _pending_note(root, folder, stem, state="pending"):
+    from mobrpg import node
+    (root / folder).mkdir(parents=True, exist_ok=True)
+    nd = {"world_id": "", "external_ref": f"w:{folder}/{stem}", "element_id": None,
+          "element_kind": "LandFeature", "review_state": state,
+          "relationships": [], "languages": []}
+    (root / folder / f"{stem}.md").write_text(
+        "---\ntype: location\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+
+def test_a_pending_look_alike_does_not_hold_back_the_other_note(tmp_path):
+    _pending_note(tmp_path, "Locations", "Woodland Ghost")
+    _, _, submitted = suggest.node_index(str(tmp_path))
+    ents = [{"name": "The Woodland Ghost"}, {"name": "Woodland Ghost"}]
+    net_new, _, held = suggest.partition_entities(ents, {}, submitted)
+    assert [e["name"] for e in net_new] == ["The Woodland Ghost"]
+    assert [e["name"] for e in held] == ["Woodland Ghost"]
+
+
+def test_an_old_folded_only_pending_key_still_holds_back(tmp_path):
+    ents = [{"name": "Pending Loc"}, {"name": "New Loc"}]
+    net_new, _, held = suggest.partition_entities(ents, {}, {suggest._key("Pending Loc")})
+    assert [e["name"] for e in held] == ["Pending Loc"]
+
+
+def test_an_old_folded_pending_key_two_notes_share_holds_back_neither_and_says_so():
+    ents = [{"name": "The Woodland Ghost"}, {"name": "Woodland Ghost"}]
+    notes = []
+    net_new, _, held = suggest.partition_entities(
+        ents, {}, {suggest._key("Woodland Ghost")}, ambiguous={suggest._key("Woodland Ghost")},
+        notes=notes)
+    assert len(net_new) == 2 and held == []
+    assert notes and "ambiguous" in notes[0]
+
+
+def test_an_edge_already_linked_on_one_look_alike_is_not_linked_on_the_other(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Locations").mkdir()
+    nd = {"world_id": "", "external_ref": "w:Locations/Woodland Ghost", "element_id": "cr-id",
+          "element_kind": "LandFeature", "review_state": "accepted", "languages": [],
+          "relationships": [{"predicate": "knows", "target": "[[Mist]]", "event_id": "ev1",
+                             "review_state": "accepted"}]}
+    (tmp_path / "Locations/Woodland Ghost.md").write_text(
+        "---\ntype: location\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    _, linked, _ = suggest.node_index(str(tmp_path))
+    assert suggest._edge_linked(linked, set(), "Woodland Ghost", "knows", "[[Mist]]")[0]
+    assert not suggest._edge_linked(linked, set(), "The Woodland Ghost", "knows", "[[Mist]]")[0]
+    # the target may be spelt differently (folded) and still match the same subject
+    assert suggest._edge_linked(linked, set(), "Woodland Ghost", "knows", "[[The Mist]]")[0]
+
+
+def test_an_old_folded_only_triple_still_matches_unless_its_key_is_shared():
+    k = suggest._key
+    old = {(k("Woodland Ghost"), "knows", k("Mist"))}
+    assert suggest._edge_linked(old, set(), "Woodland Ghost", "knows", "[[Mist]]") == (True, None)
+    hit, note = suggest._edge_linked(old, {k("Woodland Ghost")}, "Woodland Ghost", "knows", "[[Mist]]")
+    assert hit is False and "ambiguous" in note
+
+
+def test_relationship_items_proposes_the_edge_and_reports_an_ambiguous_old_record(tmp_path):
+    k = suggest._key
+    old = {(k("Woodland Ghost"), "knows", k("Mist"))}
+    ent = {"path": "x", "name": "Woodland Ghost",
+           "relationships": [{"target": "Mist", "predicate": "knows", "desc": ""}]}
+    items, skipped = suggest.relationship_items(
+        ent, _map(), "e1", {k("Mist"): "mist-id"}, old, str(tmp_path), "w", "e1",
+        ambiguous={k("Woodland Ghost")})
+    assert "mist-id" in json.dumps(items)
+    assert any("ambiguous" in s for s in skipped)
+
+
+def test_node_kind_index_exact_name_first_and_a_shared_key_has_no_kind(tmp_path):
+    from mobrpg import node
+    for folder, stem, kind in (("Locations", "The Woodland Ghost", "LandFeature"),
+                               ("Creatures", "Woodland Ghost", "Creature"),
+                               ("Locations", "Lord Vane", "Person")):
+        (tmp_path / folder).mkdir(exist_ok=True)
+        nd = {"world_id": "", "external_ref": f"w:{stem}", "element_id": stem, "element_kind": kind,
+              "review_state": "accepted", "relationships": [], "languages": []}
+        (tmp_path / folder / f"{stem}.md").write_text(
+            "---\ntype: x\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    kinds = suggest.node_kind_index(str(tmp_path))
+    assert suggest.kind_of(kinds, "The Woodland Ghost") == "LandFeature"
+    assert suggest.kind_of(kinds, "[[Woodland Ghost]]") == "Creature"
+    assert suggest.kind_of(kinds, "Lady Woodland Ghost") is None     # shared key: no kind
+    assert suggest.kind_of(kinds, "Vane") == "Person"                # unshared fold still works
+
+
+# ---- #262 round 3 ----
+
+def test_edge_to_a_net_new_look_alike_does_not_resolve_to_the_linked_note(tmp_path):
+    # inn linked, creature net-new, both share a key
+    by_file = {"The Woodland Ghost": "inn-id"}
+    ref_by_file = {"Woodland Ghost": "e2"}
+    amb = {suggest._key("Woodland Ghost")}
+    idx = {}                      # node_index leaves a shared key out
+    for target, want, not_want in (("[[Woodland Ghost]]", "suggestion:e2", "inn-id"),
+                                   ("[[The Woodland Ghost]]", "inn-id", "suggestion:e2")):
+        items, skipped = suggest.relationship_items(
+            _edge_ent(tmp_path, target), _map(), "e1", idx, set(), str(tmp_path), "w", "e1",
+            ref_by_key={}, id_by_file=by_file, ambiguous=amb, ref_by_file=ref_by_file)
+        blob = json.dumps(items)
+        assert want in blob and not_want not in blob, (target, items)
+
+
+def test_edge_is_matched_ignoring_case_when_one_note_has_that_name(tmp_path):
+    items, _ = suggest.relationship_items(
+        _edge_ent(tmp_path, "[[the woodland ghost]]"), _map(), "e1", {}, set(), str(tmp_path),
+        "w", "e1", id_by_file={"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert "inn-id" in json.dumps(items)
+
+
+def test_a_shared_key_counts_unlinked_notes_too(tmp_path):
+    _linked_note(tmp_path, "Locations", "The Woodland Ghost", "inn-id")
+    (tmp_path / "Creatures").mkdir()
+    (tmp_path / "Creatures/Woodland Ghost.md").write_text("---\ntype: creature\n---\nx\n", encoding="utf-8")
+    by_file, ambiguous = suggest.node_files(str(tmp_path))
+    assert by_file == {"The Woodland Ghost": "inn-id"}
+    assert ambiguous == {suggest._key("Woodland Ghost")}
+    idx, _, _ = suggest.node_index(str(tmp_path))
+    assert suggest._key("Woodland Ghost") not in idx
+    # prose links on push: [[Woodland Ghost]] must not become the inn
+    from mobrpg import links
+    out = links.rewrite_md_for_push("See [[Woodland Ghost]] and [[The Woodland Ghost]].",
+                                    suggest.link_index(str(tmp_path)), "w1",
+                                    id_by_file=by_file)
+    assert "inn-id" in out and out.count("inn-id") == 1
+
+
+def test_held_count_resolves_a_net_new_look_alike_by_exact_name(tmp_path):
+    ent = _edge_ent(tmp_path, "[[Woodland Ghost]]")
+    n = suggest.held_relationship_count(
+        [ent], {}, {}, set(), id_by_file={"The Woodland Ghost": "inn-id"},
+        ambiguous={suggest._key("Woodland Ghost")}, ref_by_file={"Woodland Ghost": "e2"})
+    assert n == 1
+
+
+def test_match_node_does_not_stamp_a_look_alike_with_the_linked_notes_edge():
+    node = {"element_id": "bob",
+            "relationships": [{"predicate": "part_of", "target": "[[Woodland Ghost]]"}]}
+    structural = {("bob", "Link", "inn-id"): "rel-1"}
+    from mobrpg.commands import rel_baseline as rb
+    eids, reviews = rb.match_node(
+        node, {}, structural, {}, _map(), id_by_file={"The Woodland Ghost": "inn-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert eids == {}
+    assert reviews and "ambiguous" in reviews[0]
+
+
+def _knows_two(tmp_path):
+    return {"path": str(tmp_path / "Characters/NPCs/Bob.md"), "name": "Bob",
+            "relationships": [{"target": "The Woodland Ghost", "predicate": "knows", "desc": ""},
+                              {"target": "Woodland Ghost", "predicate": "knows", "desc": ""}]}
+
+
+def _event_refs(items):
+    return [i["externalRef"] for i in items if i.get("externalRef", "").startswith("w:rel/")]
+
+
+def test_two_look_alike_targets_on_one_note_get_distinct_event_refs(tmp_path):
+    by_file = {"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"}
+    amb = {suggest._key("Woodland Ghost")}
+    items, _ = suggest.relationship_items(
+        _knows_two(tmp_path), _map(), "e1", {}, set(), str(tmp_path), "w", "e1",
+        id_by_file=by_file, ambiguous=amb)
+    refs = _event_refs(items)
+    assert len(refs) == 2 and len(set(refs)) == 2
+    # the first-listed target keeps the folded ref every earlier push used
+    assert refs[0].endswith("/knows/woodlandghost")
+
+
+def test_a_single_target_keeps_its_old_event_ref(tmp_path):
+    ent = _knows_two(tmp_path)
+    ent["relationships"] = ent["relationships"][1:]
+    items, _ = suggest.relationship_items(
+        ent, _map(), "e1", {suggest._key("Woodland Ghost"): "cr-id"}, set(), str(tmp_path), "w", "e1")
+    assert _event_refs(items)[0].endswith("/knows/woodlandghost")
+
+
+def test_a_note_named_like_a_linked_notes_alias_is_still_held(tmp_path):
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    from mobrpg import node
+    nd = {"world_id": "", "external_ref": "w:Characters/NPCs/Vane", "element_id": "vane-id",
+          "element_kind": "Person", "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / "Characters/NPCs/Vane.md").write_text(
+        "---\ntype: npc\naliases: [Count Vane]\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    aliases = suggest.linked_aliases(str(tmp_path))
+    by_file, _ = suggest.node_files(str(tmp_path))
+    notes = []
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": "Count Vane"}, {"name": "Brand New"}], {}, set(), by_file,
+        notes=notes, alias_owner=aliases)
+    assert [e["name"] for e in net_new] == ["Brand New"]
+    assert [e["name"] for e in linked] == ["Count Vane"]
+    assert notes and "alias" in notes[0] and "Vane" in notes[0]
+
+
+def test_run_look_alikes_end_to_end(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Locations", "The Woodland Ghost", "inn-id")
+    _linked_note(root, "Locations", "Old Oak", "oak1-id")
+    _linked_note(root, "Locations", "The Old Oak", "oak2-id")
+    (root / "Creatures").mkdir()
+    (root / "Creatures/Woodland Ghost.md").write_text(
+        "---\ntype: creature\n---\nA ghost.\n", encoding="utf-8")
+    (root / "Characters/NPCs").mkdir(parents=True)
+    (root / "Characters/NPCs/Bob.md").write_text(
+        '---\ntype: npc\noccupation: "Escort"\ngender: Male\nrelationships:\n'
+        '  - target: "[[The Woodland Ghost]]"\n    type: knows\n'
+        '  - target: "[[Woodland Ghost]]"\n    type: knows\n'
+        '  - target: "[[Lady Old Oak]]"\n    type: knows\n---\nBob.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: _empty_live())
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    out = capsys.readouterr().out
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    sugg = batch["suggestions"]
+    created = {it["payload"]["name"]: it.get("externalRef") for it in sugg
+               if it.get("operation") == "CreateElement" and it["payload"].get("name")}
+    assert "Woodland Ghost" in created and "Bob" in created
+    targets = [it["payload"]["targetRef"] for it in sugg if it.get("operation") == "AddRelation"]
+    sources = [it["payload"]["sourceRef"] for it in sugg if it.get("operation") == "AddRelation"]
+    ends = targets + sources
+    assert "inn-id" in ends
+    assert any(e.startswith("suggestion:") for e in ends)
+    assert "oak1-id" not in ends and "oak2-id" not in ends          # ambiguous: neither
+    assert any("ambiguous" in l and "Lady Old Oak" in l for l in out.splitlines() if "[note]" in l)
+    refs = [it["externalRef"] for it in sugg if "/rel/" in it.get("externalRef", "") or ":rel/" in it.get("externalRef", "")]
+    assert len(refs) == len(set(refs)) == 2
+
+
+# ---- #262 round 4 ----
+
+def _alias_vault(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    nd = {"world_id": "", "external_ref": "w:Characters/NPCs/Vane", "element_id": "vane-id",
+          "element_kind": "Person", "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / "Characters/NPCs/Vane.md").write_text(
+        "---\ntype: npc\naliases: [Count Vane]\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    return suggest.node_files(str(tmp_path)), suggest.linked_aliases(str(tmp_path))
+
+
+@pytest.mark.parametrize("stub", ["Count Vane", "count vane", "The Count Vane", "Count_Vane"])
+def test_a_note_matching_a_linked_notes_alias_is_held(tmp_path, stub):
+    # Same width as before #262: alias exact, other case, or folded key. The one
+    # thing a fold must NOT hold is a note whose key is another NOTE's name key
+    # (the inn and the creature) — that is in `ambiguous` and stays net-new.
+    (by_file, amb), aliases = _alias_vault(tmp_path)
+    notes = []
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": stub}], {}, set(), by_file, amb, notes, aliases)
+    assert net_new == [] and [e["name"] for e in linked] == [stub]
+    assert notes and "alias" in notes[0]
+
+
+def test_the_inn_and_creature_pair_is_still_created_beside_aliases(tmp_path):
+    (by_file, _), aliases = _alias_vault(tmp_path)
+    by_file["The Woodland Ghost"] = "inn-id"
+    amb = {suggest._key("Woodland Ghost")}
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": "Woodland Ghost"}], {}, set(), by_file, amb, [], aliases)
+    assert [e["name"] for e in net_new] == ["Woodland Ghost"]
+
+
+def _live_vane_run(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Characters/NPCs", "Vane", "vane-id")
+    (root / "Characters/NPCs/Lord Vane.md").write_text(
+        '---\ntype: npc\noccupation: "Lord"\ngender: Male\n---\nLord.\n', encoding="utf-8")
+    (root / "Characters/NPCs/Bob.md").write_text(
+        '---\ntype: npc\noccupation: "Escort"\ngender: Male\nrelationships:\n'
+        '  - target: "[[Lord Vane]]"\n    type: knows\n---\nBob.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "vane-id", "name": "Lord Vane"}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    return capsys.readouterr().out, json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+
+
+def test_run_names_the_note_that_already_links_a_held_look_alike(tmp_path, monkeypatch, capsys):
+    out, _ = _live_vane_run(tmp_path, monkeypatch, capsys)
+    held = [l for l in out.splitlines() if "already linked by another note" in l]
+    assert held and "Lord Vane (linked by Vane)" in held[0] and "alias" in held[0]
+    assert "adopt" not in held[0].split("—")[0]
+
+
+def test_an_edge_to_a_held_look_alike_uses_its_live_id(tmp_path, monkeypatch, capsys):
+    out, batch = _live_vane_run(tmp_path, monkeypatch, capsys)
+    assert "link the exact note name" not in out
+    rels = [i for i in batch["suggestions"] if i.get("operation") == "AddRelation"]
+    assert any("vane-id" in (r["payload"]["targetRef"], r["payload"]["sourceRef"]) for r in rels)
+
+
+# ---- final fix pass ----
+
+def _ashworth_run(tmp_path, monkeypatch, capsys, live_name="Lord Ashworth"):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Characters/NPCs", "Lord Ashworth", "lord-id")
+    (root / "Characters/NPCs/Lady Ashworth.md").write_text(
+        '---\ntype: npc\noccupation: "Lady"\ngender: Female\n---\nLady.\n', encoding="utf-8")
+    (root / "Characters/NPCs/Betty.md").write_text(
+        '---\ntype: npc\noccupation: "Maid"\ngender: Female\nrelationships:\n'
+        '  - target: "[[Lady Ashworth]]"\n    type: knows\n---\nBetty.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "lord-id", "name": live_name}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    return capsys.readouterr().out, json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+
+
+def _refs_of(batch):
+    return [r["payload"][k] for r in batch["suggestions"] if r.get("operation") == "AddRelation"
+            for k in ("sourceRef", "targetRef")]
+
+
+def _created(batch):
+    return [i["payload"]["name"] for i in batch["suggestions"]
+            if i.get("operation") == "CreateElement" and i["payload"].get("name")]
+
+
+def test_a_new_lady_is_created_beside_a_linked_and_live_lord(tmp_path, monkeypatch, capsys):
+    out, batch = _ashworth_run(tmp_path, monkeypatch, capsys)
+    assert "Lady Ashworth" in _created(batch)
+    ends = _refs_of(batch)
+    assert "lord-id" not in ends                       # her edge goes to her own ref
+    assert any(e.startswith("suggestion:e") for e in ends)
+    assert any("Lady Ashworth" in l and "almost the same name" in l and "Lord Ashworth" in l
+               for l in out.splitlines() if "[note]" in l)
+    assert "[held]" not in out or "Lady Ashworth" not in out.split("[held]")[1]
+
+
+def test_a_new_note_matching_an_unowned_live_element_by_fold_only_is_held(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    (root / "Characters/NPCs").mkdir(parents=True)
+    (root / "Characters/NPCs/Lady Ashworth.md").write_text(
+        '---\ntype: npc\noccupation: "Lady"\ngender: Female\n---\nLady.\n', encoding="utf-8")
+    (root / "Characters/NPCs/Betty.md").write_text(
+        '---\ntype: npc\noccupation: "Maid"\ngender: Female\nrelationships:\n'
+        '  - target: "[[Lady Ashworth]]"\n    type: knows\n---\nBetty.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "x-id", "name": "Ashworth"}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    out = capsys.readouterr().out
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    assert "Lady Ashworth" not in _created(batch) and "x-id" not in _refs_of(batch)
+    held = [l for l in out.splitlines() if "[held]" in l and "Lady Ashworth" in l]
+    assert held and "only once" in held[0] and "adopt" in held[0]
+    assert any("Betty" in l and "held" in l for l in out.splitlines() if "[note]" in l)
+
+
+def test_a_new_creature_is_created_beside_a_linked_and_live_inn(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Locations", "The Woodland Ghost", "inn-id")
+    (root / "Creatures").mkdir()
+    (root / "Creatures/Woodland Ghost.md").write_text("---\ntype: creature\n---\nA ghost.\n", encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "inn-id", "name": "The Woodland Ghost"}], "page": {"totalPages": 1}}))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    assert "Woodland Ghost" in _created(batch)
+
+
+def test_a_look_alike_pair_linked_to_each_other_keeps_each_ones_kind(tmp_path):
+    ent = {"path": str(tmp_path / "Characters/NPCs/The_Woodland_Ghost.md"), "name": "The Woodland Ghost",
+           "relationships": [{"target": "Woodland Ghost", "predicate": "member_of", "desc": ""}]}
+    kinds = {("=", "The Woodland Ghost"): "Person", ("=", "Woodland Ghost"): "Organization"}
+    items, skipped = suggest.relationship_items(
+        ent, _map(), "e1", {}, set(), str(tmp_path), "w", "e1", kind_by_key=kinds,
+        id_by_file={"The Woodland Ghost": "a-id", "Woodland Ghost": "b-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert '"eventType": "Membership"' in json.dumps(items), skipped
+
+
+def test_a_name_that_is_a_new_note_exactly_beats_a_linked_note_in_other_case():
+    tid, ref, amb = suggest._resolve_edge("the vane", suggest._key("the vane"), {}, {"The Vane": "vane-id"},
+                                          {}, {"the vane": "e2"}, set())
+    assert (tid, ref, amb) == (None, "e2", False)
+    # no exact match anywhere: the other-case linked note still answers
+    tid, ref, amb = suggest._resolve_edge("THE VANE", suggest._key("the vane"), {}, {"The Vane": "vane-id"},
+                                          {}, {}, set())
+    assert tid == "vane-id"
+
+
+def test_two_spellings_of_one_note_keep_the_event_ref_they_had(tmp_path):
+    ent = {"path": str(tmp_path / "Characters/NPCs/Bob.md"), "name": "Bob",
+           "relationships": [{"target": "Lord Brannoch", "predicate": "knows", "desc": ""},
+                             {"target": "brannoch", "predicate": "knows", "desc": ""}]}
+    items, _ = suggest.relationship_items(
+        ent, _map(), "e1", {suggest._key("Lord Brannoch"): "b-id"}, set(), str(tmp_path), "w", "e1",
+        id_by_file={"Lord Brannoch": "b-id"})
+    refs = _event_refs(items)
+    assert len(refs) == 2 and refs[0] == refs[1] and "~" not in refs[1]
+
+
+def test_underscore_twins_are_named_not_dropped(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Locations", "Black Gate", "gate-id")
+    (root / "Locations/Black_Gate.md").write_text("---\ntype: location\n---\nAnother.\n", encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: _empty_live())
+    suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")])
+    out = capsys.readouterr().out
+    assert any("Black" in l and "underscore" in l for l in out.splitlines()), out
+
+
+# A name with no Latin letters or digits, or only stop words, folds to "": never a folded match.
+def _one_alias_vault(tmp_path, name, alias):
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    from mobrpg import node
+    nd = {"world_id": "", "external_ref": f"w:Characters/NPCs/{name}", "element_id": "vane-id",
+          "element_kind": "Person", "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / f"Characters/NPCs/{name}.md").write_text(
+        f"---\ntype: npc\naliases: [{alias}]\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    return str(tmp_path)
+
+
+@pytest.mark.parametrize("new_name,alias", [("龍", "伯爵"), ("The Lord", "Lady"), ("伯爵", "龍")])
+def test_a_new_note_with_no_folded_key_is_not_filed_as_an_aliases_owner(tmp_path, new_name, alias):
+    v = _one_alias_vault(tmp_path, "Vane", alias)
+    aliases = suggest.linked_aliases(v)
+    by_file, ambiguous = suggest.node_files(v)
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": new_name}], {}, set(), by_file, ambiguous, alias_owner=aliases)
+    assert [e["name"] for e in net_new] == [new_name] and linked == []
+    # and the same without the file table, where the folded key decides
+    idx, _l, _s = suggest.node_index(v)
+    assert "" not in idx
+    net_new, linked, _ = suggest.partition_entities([{"name": new_name}], idx, set(), alias_owner=aliases)
+    assert [e["name"] for e in net_new] == [new_name] and linked == []
+
+
+def test_an_empty_folded_key_resolves_no_edge_target():
+    assert suggest._resolve_edge("[[龍]]", "", {"": "wrong-id"}, {"Vane": "v"}, {"": "e1"}, {}, set()) == (None, None, False)
+    assert suggest._resolve_edge("[[The Lord]]", "", {"": "wrong-id"}, None, {"": "e1"}, None, set()) == (None, None, False)
+    assert suggest._alias_owner_of("龍", {}, {"": "Vane"}, set()) is None
+    assert suggest.kind_of({"": "Person"}, "龍") is None
+
+
+def test_notes_and_aliases_with_no_folded_key_are_not_stored_under_the_empty_key(tmp_path):
+    v = _one_alias_vault(tmp_path, "龍", "伯爵")
+    idx, linked, _ = suggest.node_index(v)
+    assert "" not in idx and "" not in suggest.link_index(v) and "" not in suggest.node_kind_index(v)
+    assert not any(t[-1] == "" for t in linked)

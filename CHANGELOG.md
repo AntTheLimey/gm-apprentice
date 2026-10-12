@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.47] — 2026-10-11
+
+### Added
+
+- Setting up a site writes the lists of hidden headings and hidden
+  fields (`publish.exclude_sections`, `publish.exclude_fields`) into the
+  vault file, so a GM can see them and add an entry without losing the
+  built-in ones (#294).
+- Character sheets for all five systems carry a "Notes on rows" block
+  when a table row has more cells than the sheet has columns for, so the
+  extra text is on the page. The sheet's own numbers and trackers are
+  the same as they were without the extra cell.
+
+### Changed
+
+- Updating a vault that has a site and no list of its own writes the
+  built-in lists in. What publishes does not change. A vault with its
+  own list is left as it is.
+- Publish tool 1.19.0.
+
+### Fixed
+
+- A table row with more cells than its header no longer loses the extra
+  cells on the published page: the table gains an empty header column
+  and the build names the table and its first such row (#283).
+- mobRPG `suggest` tells "The Woodland Ghost" from "Woodland Ghost":
+  a note is matched by its exact name first, a new note is no longer
+  skipped because a similar-named one is linked, and a name two notes
+  share is reported, not guessed. A new note whose name only resembles
+  a live element that another note already owns (Lady Ashworth beside
+  Lord Ashworth) is created as its own element, with a line in the
+  report, and relationships to it go to it. One that resembles a live
+  element no note owns is held back, with a line saying why and what to
+  do. Two notes whose names differ only by underscore are named
+  in the report. `pull-canon --baseline` and links in pushed text match
+  the same way, and a name with no Latin letters or digits (or only
+  words like "The" and "Lord") is never matched by its shortened form
+  (#262).
+- `vault-setting --set exclude_sections=[]` (and `exclude_fields=[]`)
+  is accepted, and says that nothing from the built-in list is hidden.
+- Writing a list over an empty setting in the vault file keeps a
+  comment that sat on it.
+
+---
+
 ## [1.10.46] — 2026-10-11
 
 ### Added

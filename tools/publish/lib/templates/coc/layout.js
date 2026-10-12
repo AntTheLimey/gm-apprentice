@@ -227,7 +227,14 @@ function buildWeapons(weapons) {
   return `<h2 class="section">Weapons <span class="rule"></span></h2><table class="weap">${head}${rows}</table>`;
 }
 
-function buildSheet(model) {
+// Cells a row holds past the columns the sheet reads, listed so nothing written is dropped.
+function buildRowNotes(notes) {
+  if (!notes || notes.length === 0) return '';
+  return `<h2 class="section">Notes on rows <span class="rule"></span></h2>` +
+    notes.map(n => `<p class="empty-note">${escapeHtml(n.section)}${n.row ? `: ${escapeHtml(n.row)}` : ''} — ${escapeHtml(n.text)}</p>`).join('');
+}
+
+function buildSheet(model, rowNotes) {
   const m = model || {};
   return `<div class="coc-charsheet">` +
     buildIdentity(m.identity) +
@@ -235,6 +242,7 @@ function buildSheet(model) {
       `<div>${buildChars(m.chars)}${buildCombatBox(m.combat)}</div>` +
       `<div>${buildPortraitRow(m.backstory)}${buildSkills(m.skills)}${buildWeapons(m.weapons)}</div>` +
     `</div>` +
+    buildRowNotes(rowNotes) +
     `</div>`;
 }
 
@@ -304,4 +312,4 @@ function buildEquipment(model, sections) {
     `<h2 class="section">Wealth <span class="rule"></span></h2>${wealth}`;
 }
 
-module.exports = { buildStatusBar, buildSheet, buildRecord, buildEquipment, pad2 };
+module.exports = { RECORD_SECTIONS, buildStatusBar, buildSheet, buildRecord, buildEquipment, pad2 };

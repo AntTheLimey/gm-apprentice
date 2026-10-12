@@ -1,6 +1,9 @@
 const { parseCoC } = require('./parse');
 const { buildStatusBar, buildSheet, buildRecord, buildEquipment } = require('./layout');
 const { buildCoCLiveData } = require('./live-data');
+const { overflowNotes } = require('../gurps/tables');
+const { COC_CONSUMED_TITLES } = require('../consumed-titles');
+const { RECORD_SECTIONS } = require('./layout');
 
 function renderCoCSheet(frontmatter, sections, meta) {
   const system = (meta && meta.system) || (frontmatter && frontmatter.system) || 'coc-7e';
@@ -20,7 +23,7 @@ function renderCoCSheet(frontmatter, sections, meta) {
     // The folio always renders, so an empty one is flagged for the build's
     // "published with no character sheet" line (#273).
     sheetless: warnings.length > 0,
-    sheetHtml: buildSheet(model),
+    sheetHtml: buildSheet(model, overflowNotes(sections, [...COC_CONSUMED_TITLES].filter(t => !RECORD_SECTIONS.some(r => r.toLowerCase() === t)))),
     recordHtml: buildRecord(model, sections || []),
     equipmentHtml: buildEquipment(model, sections || []),
     statusBarHtml,

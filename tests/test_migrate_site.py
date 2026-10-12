@@ -961,6 +961,86 @@ class ThemeChoiceTests(unittest.TestCase):
              "fonts-self-host"])
 
 
+class ExcludeListTests(unittest.TestCase):
+    """1.10.47 (#294): a vault with a site and no list of its own is given
+    the built-in lists; a list it owns is never touched."""
+    SECTIONS = ["GM Notes", "DM Notes"]
+    FIELDS = ["secrets", "gm_notes"]
+
+    def facts(self, sections_own, fields_own):
+        return {"excludeSectionsOwn": sections_own, "excludeFieldsOwn": fields_own,
+                "defaultExcludeSections": self.SECTIONS,
+                "defaultExcludeFields": self.FIELDS}
+
+    def ask(self, facts, calls):
+        def fake(vault, args, vault_only=False):
+            calls.append(args)
+            if "--set" in args:
+                return vc.ToolAnswer(data={"written": [args[2].split("=")[0]]})
+            return vc.ToolAnswer(data=facts)
+        return fake
+
+    def test_a_vault_with_no_lists_gets_both_built_in_lists(self):
+        vault = make_vault(self)
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool",
+                               self.ask(self.facts(False, False), calls)):
+            (item,) = ms.find_exclude_lists(vault)
+            self.assertEqual((item.id, item.group), ("exclude-lists", WILL))
+            item.apply(None)
+        # One call, so the tool writes both in one edit: all or none.
+        self.assertEqual([c for c in calls if "--set" in c], [
+            ["vault-setting", "--set", 'exclude_sections=["GM Notes", "DM Notes"]',
+             "--set", 'exclude_fields=["secrets", "gm_notes"]']])
+
+    def test_a_list_config_to_vault_writes_this_pass_is_not_offered_twice(self):
+        both = ms.StepPlan(True, [
+            "move the built-in list -> publish.exclude_sections",
+            "move the built-in list -> publish.exclude_fields"])
+        one = ms.StepPlan(True, ["move the built-in list -> publish.exclude_fields"])
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool",
+                               self.ask(self.facts(False, False), calls)):
+            with mock.patch.object(ms, "describe_config_to_vault", return_value=both):
+                self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
+            with mock.patch.object(ms, "describe_config_to_vault", return_value=one):
+                (item,) = ms.find_exclude_lists(make_vault(self))
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("publish.exclude_sections", item.lines[0])
+
+    def test_only_the_missing_list_is_written(self):
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool",
+                               self.ask(self.facts(True, False), calls)):
+            (item,) = ms.find_exclude_lists(make_vault(self))
+            item.apply(None)
+        self.assertEqual([c[2].split("=")[0] for c in calls if "--set" in c],
+                         ["exclude_fields"])
+
+    def test_a_vault_with_its_own_lists_is_left_alone(self):
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool",
+                               self.ask(self.facts(True, True), calls)):
+            self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
+        self.assertFalse([c for c in calls if "--set" in c])
+
+    def test_no_site_offers_nothing(self):
+        calls = []
+        with mock.patch.object(ms, "ask_publish_tool",
+                               self.ask(self.facts(False, False), calls)):
+            self.assertEqual(ms.find_exclude_lists(make_vault(self, site=False)), [])
+        self.assertEqual(calls, [])
+
+    def test_the_check_is_gated_at_1_10_47_in_the_config_band(self):
+        (check,) = [c for c in ms.SITE_CHECKS if c.name == "exclude-lists"]
+        self.assertEqual((check.release, check.band, check.asks_site),
+                         ("1.10.47", 2, True))
+
+    def test_the_migrations_table_has_its_row(self):
+        text = (Path(ms.__file__).parent.parent / "migrations.md").read_text(encoding="utf-8")
+        self.assertRegex(text, r"(?m)^\| 1\.10\.47 \|.*`exclude-lists`")
+
+
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
                      or (shutil.which("node") and (
                          vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
@@ -981,6 +1061,49 @@ class VaultSettingEndToEndTests(unittest.TestCase):
         self.assertEqual(done.data, {"written": ["theme.default_mode"]})
         after = vc.ask_publish_tool(vault, ["vault-setting"])
         self.assertIs(after.data["defaultModeSet"], True)
+
+
+    def test_the_python_copy_of_the_default_sections_is_the_tools_list(self):
+        import vaultlib
+        vault, _config = self.vault_with("  mode: player\n")
+        asked = vc.ask_publish_tool(vault, ["vault-setting"])
+        self.assertIsNone(asked.why)
+        self.assertEqual(list(vaultlib.DEFAULT_EXCLUDE_SECTIONS),
+                         asked.data["defaultExcludeSections"],
+                         "vaultlib.DEFAULT_EXCLUDE_SECTIONS differs from "
+                         "PUBLISH_DEFAULTS.exclude_sections in the publish tool")
+
+    def vault_with(self, publish_lines):
+        vault = tmp(self, "vs-excl-vault-")
+        (vault / "_meta").mkdir()
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\npublish:\n" + publish_lines + "---\nBody\n",
+            encoding="utf-8")
+        site_fixture.give_site(vault, lambda p: None)
+        return vault, vault / "_meta" / "vault-config.md"
+
+    def test_the_exclude_lists_are_written_once_and_a_second_run_changes_nothing(self):
+        vault, config = self.vault_with(
+            "  # who reads\n  mode: player  # keep\n  site_title: X\n")
+        # config-to-vault would write these on a real pass; this proves the step alone.
+        with mock.patch.object(ms, "describe_config_to_vault",
+                               return_value=ms.StepPlan(False, [])):
+            (item,) = ms.find_exclude_lists(vault)
+            item.apply(None)
+        text = config.read_text(encoding="utf-8")
+        self.assertIn("  # who reads\n  mode: player  # keep\n  site_title: X\n", text)
+        self.assertTrue(text.endswith("---\nBody\n"))
+        self.assertIn("GM Notes", text)
+        self.assertIn("secrets", text)
+        self.assertEqual(ms.find_exclude_lists(vault), [])
+        self.assertEqual(config.read_text(encoding="utf-8"), text)
+
+    def test_a_vault_with_its_own_lists_is_not_changed(self):
+        vault, config = self.vault_with(
+            "  exclude_sections: [Rumours]\n  exclude_fields: [mine]\n")
+        before = config.read_text(encoding="utf-8")
+        self.assertEqual(ms.find_exclude_lists(vault), [])
+        self.assertEqual(config.read_text(encoding="utf-8"), before)
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")
@@ -1019,7 +1142,7 @@ class MigrateEndToEndTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
         self.assertIn("# count: 0", proc.stdout)
 
-    def vault_at(self, version, site_file):
+    def vault_at(self, version, site_file, lists=False):
         vault = tmp(self, "mig-e2e-vault-")
         (vault / "_meta").mkdir()
         site_dir = ""
@@ -1031,7 +1154,9 @@ class MigrateEndToEndTests(unittest.TestCase):
             site_dir = f"  site_dir: {site}\n"
         (vault / "_meta" / "vault-config.md").write_text(
             f'---\ntype: meta\ngm_apprentice_version: "{version}"\n'
-            f"publish:\n  mode: player\n{site_dir}---\n", encoding="utf-8")
+            f"publish:\n  mode: player\n{site_dir}"
+            + ("  exclude_sections: [GM Notes]\n  exclude_fields: [secrets]\n"
+               if lists else "") + "---\n", encoding="utf-8")
         return vault
 
     def test_settings_left_after_1_10_24_are_still_moved(self):
@@ -1053,8 +1178,18 @@ class MigrateEndToEndTests(unittest.TestCase):
 
     def test_deployment_keys_only_or_no_site_offers_no_move(self):
         for site_file in ({"outputDir": "./docs"}, None):
-            vault = self.vault_at("1.10.25", site_file)
+            vault = self.vault_at("1.10.25", site_file, lists=True)
             self.assertEqual(ms.find_config_to_vault(vault), [], site_file)
+
+    def test_a_site_file_with_no_list_moves_the_built_in_lists_in(self):
+        vault = self.vault_at("1.10.25", {"outputDir": "./docs"})
+        with mock.patch.object(ms, "plugin_tool", Pin(ok=True)):
+            (item,) = ms.find_config_to_vault(vault)
+            item.apply(None)
+        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+        self.assertIn("exclude_sections:", text)
+        self.assertIn("exclude_fields:", text)
+        self.assertEqual(ms.find_config_to_vault(vault), [])
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")

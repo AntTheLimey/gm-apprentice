@@ -70,8 +70,106 @@ function calloutPlugin(md) {
   });
 }
 
+// --- tables wider than their header --------------------------------------------------------
+// GFM (markdown-it) drops a body cell that sits past the header's last column, silently. A GM
+// who tacks a note onto one row of a template table would lose it from the page. So the
+// renderer's own table rule is wrapped: it decides what is a table (fences, containers, where
+// a table ends), and when it has made one, the cells it dropped are read back from the same
+// lines, split the way it splits them, and given blank header cells and body cells of their
+// own. A row with fewer cells is padded as before; a table that fits is untouched. Trailing
+// blank cells are not "over-wide" (nothing is lost). Each widened table is recorded in
+// `env.widenedTables` for the build to warn about. This runs on the text the page publishes,
+// after the hidden material is gone, so it can bring none back.
+
+// markdown-it's own cell splitter (rules_block/table): only a backslash escapes a pipe.
+function escapedSplit(str) {
+  const result = [];
+  let current = '';
+  let lastPos = 0;
+  let escaped = false;
+  for (let pos = 0; pos < str.length; pos++) {
+    const ch = str.charCodeAt(pos);
+    if (ch === 0x7c) {
+      if (!escaped) { result.push(current + str.substring(lastPos, pos)); current = ''; lastPos = pos + 1; }
+      else { current += str.substring(lastPos, pos - 1); lastPos = pos; }
+    }
+    escaped = ch === 0x5c;
+  }
+  result.push(current + str.substring(lastPos));
+  return result;
+}
+
+function rowCells(state, line) {
+  const text = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]).trim();
+  const cells = escapedSplit(text);
+  if (cells.length && cells[0] === '') cells.shift();
+  if (cells.length && cells[cells.length - 1] === '') cells.pop();
+  return cells.map((c) => c.trim());
+}
+
+function widenTable(state, from) {
+  const tokens = state.tokens;
+  const rows = [];   // { open, close, line } for every tr, header first
+  for (let k = from; k < tokens.length; k++) {
+    if (tokens[k].type === 'tr_open') rows.push({ open: k, line: tokens[k].map[0] });
+    else if (tokens[k].type === 'tr_close') rows[rows.length - 1].close = k;
+  }
+  if (rows.length < 2) return;
+  const headerCount = tokens.slice(rows[0].open, rows[0].close).filter((t) => t.type === 'th_open').length;
+  let width = headerCount;
+  const over = [];
+  for (const row of rows.slice(1)) {
+    const cells = rowCells(state, row.line);
+    let n = cells.length;
+    while (n > headerCount && cells[n - 1] === '') n--;
+    row.cells = cells;
+    if (n > headerCount) over.push({ first: cells[0], cells: n });
+    if (n > width) width = n;
+  }
+  if (width === headerCount) return;
+  const cell = (kind, tag, content, like) => {
+    const open = new state.Token(`${kind}_open`, tag, 1);
+    const inline = new state.Token('inline', '', 0);
+    const close = new state.Token(`${kind}_close`, tag, -1);
+    open.level = like.level; inline.level = like.level + 1; close.level = like.level;
+    inline.content = content; inline.children = [];
+    // The sheets read a table by its own columns; this one marks the header cells added here.
+    if (kind === 'th') open.attrSet('data-widened', '1');
+    return [open, inline, close];
+  };
+  for (const row of rows.slice().reverse()) {
+    const isHead = row === rows[0];
+    const have = headerCount;
+    const like = tokens.slice(row.open, row.close).filter((t) => t.type === (isHead ? 'th_open' : 'td_open')).pop();
+    const extra = [];
+    for (let c = have; c < width; c++) {
+      extra.push(...cell(isHead ? 'th' : 'td', isHead ? 'th' : 'td', isHead ? '' : (row.cells[c] || ''), like));
+    }
+    tokens.splice(row.close, 0, ...extra);
+  }
+  const env = state.env;
+  if (env && typeof env === 'object') {
+    (env.widenedTables = env.widenedTables || []).push({ header: headerCount, cells: width, rows: over.length, first: over[0] ? over[0].first : '' });
+  }
+}
+
+function tableWidenPlugin(md) {
+  // markdown-it has no public lookup of a rule by name. Its public chain `getRules('paragraph')`
+  // lists the rule functions, and the table rule is the one named `table`; `ruler.at` replaces
+  // it. The rule's chains (`alt`) are restated here; test/table-widen.test.js fails if an
+  // upgrade moves the rule.
+  const original = md.block.ruler.getRules('paragraph').find((fn) => fn.name === 'table');
+  if (!original) throw new Error('markdown-it: the table block rule was not found; update lib/markdown.js');
+  md.block.ruler.at('table', function table(state, startLine, endLine, silent) {
+    const before = state.tokens.length;
+    const ok = original(state, startLine, endLine, silent);
+    if (ok && !silent) widenTable(state, before);
+    return ok;
+  }, { alt: ['paragraph', 'reference'] });
+}
+
 function createRenderer() {
-  return new MarkdownIt({ html: false, typographer: true }).use(calloutPlugin);
+  return new MarkdownIt({ html: false, typographer: true }).use(calloutPlugin).use(tableWidenPlugin);
 }
 
 module.exports = { createRenderer, calloutPlugin };

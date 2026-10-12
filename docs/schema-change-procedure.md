@@ -117,6 +117,26 @@ A migration is code, not prose: `migrate.py` runs it, and
   same version in the same commit — CI fails when they differ
 - [ ] Add a CHANGELOG entry describing the schema change
 
+## Adding to a built-in default list
+
+`PUBLISH_DEFAULTS.exclude_sections` and `exclude_fields` are the lists
+a site starts with. Setup and the `exclude-lists` migration (1.10.47)
+write them into the vault's `_meta/vault-config.md`, and from then on
+the list belongs to the GM: the build uses it in place of the built-in
+one. So a heading or field added to a default reaches a new vault and
+one with no list, and never a vault that owns a list, unless a
+migration step proposes it. Such a release ships that step: it tells
+the GM what the new entry is for and adds it to their list on a yes,
+and it never adds it unasked. The step that proposes an entry is not
+built yet; it waits for the first release that adds a default.
+
+Change the other copies of the list in the same commit:
+`DEFAULT_EXCLUDE_SECTIONS` in `skills/shared/scripts/vaultlib.py` (a
+test fails when it differs from the tool's list) and the lists repeated
+in `docs/site-settings.md`, `skills/shared/entity-schema.md` and the publish-site
+references `configuration.md`, `content-filtering.md` and
+`change-request-loop.md`.
+
 ## Field design guidelines
 
 - **Prefer optional fields** — new fields should default to

@@ -429,6 +429,7 @@ def run_baseline(world, vault, token, *, execute) -> int:
         print(f"ERROR reading map {map_path}: {e}", file=sys.stderr)
         return 2
     id_by_key, _, _ = suggest.node_index(vault)
+    id_by_file, ambiguous = suggest.node_files(vault)
     # What each endpoint IS upstream, so an affiliation the person/group grid
     # regrades is looked up under the type it was actually pushed as.
     kind_by_key = suggest.node_kind_index(vault)
@@ -445,7 +446,8 @@ def run_baseline(world, vault, token, *, execute) -> int:
     for path, txt, nd in notes:
         eids, revs = rel_baseline.match_node(
             nd, id_by_key, structural, reified, mp,
-            subject_kind=nd.get("element_kind"), kind_by_key=kind_by_key)
+            subject_kind=nd.get("element_kind"), kind_by_key=kind_by_key,
+            id_by_file=id_by_file, ambiguous=ambiguous)
         reviews += [f"{os.path.relpath(path, vault)}: {r}" for r in revs]
         if not eids:
             continue

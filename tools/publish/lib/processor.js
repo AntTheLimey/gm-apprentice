@@ -1424,7 +1424,15 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
     portraitBasename: portraitBasename(page.frontmatter),
   });
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
-  const html = md.render(markdown);
+  // The renderer widens a table whose row has more cells than its header (nothing is lost);
+  // say so, once per table, so the GM can give the extra column a header.
+  const env = {};
+  const html = md.render(markdown, env);
+  for (const t of env.widenedTables || []) {
+    const first = String(t.first || '').replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1').trim();
+    const named = first ? ` (first: "${first.length > 40 ? first.slice(0, 39) + '…' : first}")` : '';
+    warnings.push(`a table has ${t.rows} ${t.rows === 1 ? 'row' : 'rows'} with more cells than its ${t.header}-column header${named}; the table was widened to ${t.cells} columns so no cell is lost. Add header cells for the extra columns.`);
+  }
   return { html, warnings };
 }
 

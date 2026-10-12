@@ -13,7 +13,7 @@ const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy, isText,
 const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
 const { asBool } = require('./switches');
-const { normalizeExcludeDir, stricterCallouts, MERGED_MAPS } = require('./config');
+const { normalizeExcludeDir, stricterCallouts, MERGED_MAPS, PUBLISH_DEFAULTS } = require('./config');
 const { parseNote } = require('./frontmatter');
 
 // Shown in messages, so always forward-slashed; path.join accepts it on every platform.
@@ -175,6 +175,17 @@ function planMigration({ configPath, vaultPath } = {}) {
       if (!isDeepStrictEqual(fromVault, fromSite)) {
         plan.conflicts.push({ key: entry.json, kept: fromVault, discarded: fromSite });
       }
+    }
+
+    // A site file with no list of its own moves nothing, and would leave the vault with an
+    // invisible built-in list (#294): write the built-in one, so the GM can see it. A list the
+    // vault already has, or one the site file holds, is never touched here.
+    for (const entry of MOVED_KEYS) {
+      if (entry.publish !== 'exclude_sections' && entry.publish !== 'exclude_fields') continue;
+      if (site[entry.json] !== undefined || (publish[entry.publish] !== undefined && publish[entry.publish] !== null)) continue;
+      const value = [...PUBLISH_DEFAULTS[entry.publish]];
+      plan.vaultSet[entry.publish] = value;
+      plan.moves.push({ from: 'the built-in list', to: `publish.${entry.publish}`, value });
     }
 
     if (site.landingTagline !== undefined) {

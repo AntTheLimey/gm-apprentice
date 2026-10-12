@@ -27,6 +27,7 @@ import re
 from mobrpg import client
 from mobrpg.commands import map_cmd
 from mobrpg.commands import pull
+from mobrpg.commands import suggest
 from mobrpg.commands.suggest import _key, _mapped_type
 
 # Structural WorldElementRelation types (entity↔entity), as opposed to reified
@@ -92,7 +93,7 @@ def _target_name(raw: str) -> str:
 
 
 def match_node(node, id_by_key, structural_idx, reified_idx, mp,
-               subject_kind=None, kind_by_key=None) -> tuple[dict, list]:
+               subject_kind=None, kind_by_key=None, id_by_file=None, ambiguous=None) -> tuple[dict, list]:
     """Match one node's relationships against the upstream indexes.
 
     Returns (event_ids, reviews). `event_ids` is keyed the way pull-canon's node
@@ -113,8 +114,15 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp,
             continue
         pred = r.get("predicate")
         name = _target_name(r.get("target"))
-        tgt = id_by_key.get(_key(name))
+        # exact note name first (#262); the folded key drops "The"/"Lord", and
+        # suggest.node_index leaves out a key two linked notes share
+        # One resolver for both commands, so they resolve the same link the same way.
+        tgt, _ref, amb = suggest._resolve_edge(name, _key(name), id_by_key, id_by_file,
+                                               None, None, ambiguous)
         if not tgt:
+            if amb and (id_by_key or id_by_file):
+                reviews.append(f"{pred} -> {r.get('target')}: ambiguous (two notes share that "
+                               f"name once articles and titles are ignored); link the exact note name")
             continue
         # Resolve through the SAME entry point `suggest` emits with. An
         # affiliation the grid regrades (`serves` an Organization is Membership,
@@ -122,7 +130,7 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp,
         # up under the flat mapping finds nothing and the edge is re-proposed on
         # every run instead of reconciling.
         et, _aff = map_cmd.resolve_event_type(
-            mp, pred, subject_kind, (kind_by_key or {}).get(_key(name)))
+            mp, pred, subject_kind, suggest.kind_of(kind_by_key or {}, name))
         key = f"{pred}|{r.get('target')}"
         if et in STRUCTURAL:
             hits = [structural_idx[(src, et, tgt)]] if (src, et, tgt) in structural_idx else []
@@ -166,10 +174,9 @@ def stamp_baseline(node, event_ids, mp=None, kind_by_key=None,
             r2["event_id"] = event_ids[key]
             r2["review_state"] = "accepted"
             if mp is not None:
-                tgt = _key(_target_name(r.get("target")))
                 et, _aff = map_cmd.resolve_event_type(
                     mp, r.get("predicate"), subject_kind,
-                    (kind_by_key or {}).get(tgt))
+                    suggest.kind_of(kind_by_key or {}, _target_name(r.get("target"))))
                 r2["event_type"] = et
         rels.append(r2)
     out["relationships"] = rels

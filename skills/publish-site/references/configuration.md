@@ -10,7 +10,11 @@ Everything about what the site publishes is set in one place: the
 YAML frontmatter under `publish:`. A setting left out uses its
 built-in default. Setting an exclude list replaces the built-in list
 rather than adding to it, so repeat the default entries you still
-want.
+want. Site setup writes the built-in `exclude_sections` and
+`exclude_fields` lists into the file, and the 1.10.47 migration
+(`exclude-lists`) and `migrate-config` do the same for a vault with no
+list of its own, so the lists are visible and a new entry is added to
+them. A vault with no list still builds with the built-in one.
 
 ```yaml
 publish:
