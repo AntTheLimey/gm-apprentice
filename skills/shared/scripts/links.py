@@ -446,7 +446,7 @@ def _withheld_names(vault: Path, names: list[str]) -> set[str]:
             fm = extract_frontmatter((vault / rel).read_text(encoding="utf-8"))
         except (OSError, UnicodeError):
             continue
-        if not is_withheld(fm):
+        if fm is None or not is_withheld(fm):
             continue
         own = [_stem(rel), str(fm.get("title") or "")] + link_aliases(fm)
         if isinstance(fm.get("aliases"), str):
