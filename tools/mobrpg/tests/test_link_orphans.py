@@ -484,3 +484,27 @@ def test_systems_flag_is_compared_without_case_when_naming_what_was_left_out(
     link_orphans.run([str(_extract(tmp_path)), "--vault", str(vault),
                       "--out", str(tmp_path / "out"), "--systems", "corwin"])
     assert "NOTE" not in capsys.readouterr().out
+
+
+def test_note_prints_a_typed_systems_real_name(tmp_path, capsys):
+    vault = _vault(tmp_path)
+    _mk(vault, "Locations", "Helios", 'location_type: "star system"\n')
+    link_orphans.run([str(_extract(tmp_path)), "--vault", str(vault),
+                      "--out", str(tmp_path / "out"), "--systems", "Corwin"])
+    out = capsys.readouterr().out
+    assert "also has Helios which" in out
+    assert "Helios System" not in out
+
+
+def test_explicit_systems_are_tried_longest_first(tmp_path):
+    vault = tmp_path / "vault"
+    for n in ("Corwin System", "Corwin Prime System", "Corwin Prime Gate"):
+        _mk(vault, "Locations", n)
+    extract = tmp_path / "x.json"
+    extract.write_text(json.dumps({"entities": [
+        {"id": "g", "name": "Corwin Prime Gate", "kind": "landfeature", "relationships": []}]}),
+        encoding="utf-8")
+    link_orphans.run([str(extract), "--vault", str(vault), "--out", str(tmp_path / "o"),
+                      "--systems", "Corwin,Corwin Prime", "--execute"])
+    text = (vault / "Locations" / "Corwin Prime Gate.md").read_text(encoding="utf-8")
+    assert "[[Corwin Prime System]]" in text

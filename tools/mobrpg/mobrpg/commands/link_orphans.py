@@ -91,6 +91,13 @@ def vault_location_names(vault: str) -> set:
             for p in glob.glob(os.path.join(vault, "Locations", "*.md"))}
 
 
+def _system_note(sys_: str, locations: set) -> str:
+    """The real name of a system's note: "<Sys> System" in any case, else the
+    bare name (a `location_type: star system` note)."""
+    lower = {n.lower(): n for n in locations}
+    return lower.get(f"{sys_} system".lower()) or lower.get(sys_.lower()) or f"{sys_} System"
+
+
 def derive_parent(name: str, exists: set, systems: list[str],
                   locations: set | None = None) -> str | None:
     """`locations` (default: `exists`) is where a parent may come from: a
@@ -101,7 +108,6 @@ def derive_parent(name: str, exists: set, systems: list[str],
         # The system's own note: "<Sys> System" in any case, else a note named
         # for the system itself (a `location_type: star system` note).
         sysname = lower.get(f"{sys_} system".lower()) or lower.get(sys_.lower())
-        sysname_ok = sysname is not None
         # --systems is operator input interpolated into patterns below. A name
         # carrying a regex metacharacter ("St. John", "Alpha (Prime)") would
         # otherwise match the wrong things, or raise re.error outright.
@@ -112,7 +118,7 @@ def derive_parent(name: str, exists: set, systems: list[str],
             return None
         # the star: the bare system name, when a distinct "<Sys> System" note exists
         if name.lower() == sys_.lower():
-            return sysname if sysname_ok else None
+            return sysname
         # moon: "<Sys> <ROMAN> <LETTER>"
         m = re.fullmatch(rf"{esc}\s+({ROMAN})\s+([A-Z])", name)
         if m:
@@ -232,7 +238,10 @@ def run(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     vault = os.path.expanduser(args.vault)
-    systems = [s.strip() for s in args.systems.split(",") if s.strip()]
+    # longest first, like the vault-derived list, so "Corwin Prime Gate" is tried
+    # against "Corwin Prime" before "Corwin"
+    systems = sorted((s.strip() for s in args.systems.split(",") if s.strip()),
+                     key=lambda n: (-len(n), n))
 
     extract = json.load(open(args.extract, encoding="utf-8"))
     id_of = {e["name"]: e["id"] for e in extract["entities"]}
@@ -257,8 +266,8 @@ def run(argv: list[str]) -> int:
             p = derive_parent(name, exists, systems, locations)
             if p:
                 target, rtype, why = p, "part_of", "structural containment"
-            elif left_out and derive_parent(name, exists, left_out, locations):
-                would_match.append((kind, name, derive_parent(name, exists, left_out, locations)))
+            elif left_out and (q := derive_parent(name, exists, left_out, locations)):
+                would_match.append((kind, name, q))
                 continue          # reported in its own section, not as "still orphan"
         elif kind == "item":
             mk = derive_maker(e.get("body_md", ""), exists)
@@ -364,7 +373,7 @@ def run(argv: list[str]) -> int:
     print(f"linked {len(linked)}, still orphan {len(still)}"
           + (f", {len(would_match)} match a system not in --systems" if would_match else ""))
     if given and left_out:
-        print(f"NOTE: the vault also has {', '.join(x + ' System' for x in left_out)} "
+        print(f"NOTE: the vault also has {', '.join(_system_note(x, locations) for x in left_out)} "
               f"which --systems leaves out; {len(would_match)} orphan(s) match a "
               f"naming rule for them (see the report). Drop --systems to use them all.")
     elif not systems:
