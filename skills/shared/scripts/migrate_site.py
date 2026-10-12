@@ -502,6 +502,8 @@ def find_sheet_source(vault: Path) -> list[Item]:
         seen.add(rel)
 
         def apply(value: str | None, rel: str = rel) -> list[str]:
+            if value == "leave":
+                return [f"left sheet_source as it is in {rel}"]
             scalar = yaml_scalar(value or "")
             edit_frontmatter(
                 vault / rel,
@@ -510,7 +512,9 @@ def find_sheet_source(vault: Path) -> list[Item]:
 
         items.append(Item(f"sheet-source:{rel}", CHOICE,
                           [f"{message}; if the sheet is kept elsewhere, say "
-                           f"where"], apply, wants="where the sheet is kept"))
+                           f"where; leave: keep it as it is"], apply,
+                          wants="where the sheet is kept, or leave",
+                          holds_stamp=True))
     return items
 
 

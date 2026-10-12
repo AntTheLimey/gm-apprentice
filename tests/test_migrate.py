@@ -354,6 +354,34 @@ class ApplyTests(unittest.TestCase):
         self.assertEqual(stamp_of(vault), PLUGIN)
         self.assertTrue(out.rstrip().endswith(f"stamped {PLUGIN}"), out)
 
+    def two_holders(self, log):
+        def find_for(name):
+            return lambda v: [Item(name, CHOICE, ["a or b"],
+                                   lambda x: ["done"], wants="a or b",
+                                   holds_stamp=True)]
+        return [Check("one", "1.10.30", 3, "one", find_for("one"),
+                      choices=("one=",)),
+                Check("two", "1.10.31", 3, "two", find_for("two"),
+                      choices=("two=",))]
+
+    def test_the_stamp_row_names_every_choice_it_waits_for(self):
+        vault = make_vault(self)
+        _, plan, _ = call([str(vault), "plan"], self.two_holders([]))
+        self.assertIn("-> " + PLUGIN + " (only once one, two are answered)",
+                      plan)
+
+    def test_the_stamp_row_says_so_when_a_choice_waits_for_the_repin(self):
+        # The check behind the repin is not looked at yet, so its choices
+        # are not known; its value choices are, from the check.
+        vault = make_vault(self)
+        log = []
+        waiting = Check("later", "1.10.30", 4, "later", lambda v: [],
+                        asks_site=True, choices=("later=",))
+        checks = [will(migrate.REPIN, None, 1, log), waiting]
+        _, plan, _ = call([str(vault), "plan"], checks)
+        self.assertIn("-> " + PLUGIN + " (only once later (after the site's "
+                      "tool is updated) is answered)", plan)
+
     def test_waited_choice_already_named_is_taken_and_stamped(self):
         vault = make_vault(self)
         log = []

@@ -860,7 +860,19 @@ def find_tone_words(vault: Path) -> list[Item]:
     report = tones.report_lines(tones.survey(vault))
     near = [r.split("\t") for r in report if r.startswith("NEAR\t")]
     if not near:
-        return []
+        # Nothing for the script to tidy; the words that remain are for
+        # campaign-qa, and update time is when the GM is told (once: the
+        # release gate).
+        asked = sum(1 for r in report if r.startswith("ASK\t"))
+        if not asked:
+            return []
+        return [Item("tone-words-ask", PERSON, [
+            f"relationship tones\t{asked} tone word"
+            f"{'' if asked == 1 else 's'} "
+            f"{'is' if asked == 1 else 'are'} not on the standard list and "
+            f"have no rule to tidy "
+            f"{'it' if asked == 1 else 'them'}; campaign-qa's Tone Words "
+            f"check asks which word to use for each"])]
     n_near = sum(int(r[3]) for r in near)
     n_ask = sum(int(r.split("\t")[2]) for r in report
                 if r.startswith("ASK\t"))

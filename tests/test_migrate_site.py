@@ -841,7 +841,12 @@ class SheetSourceTests(unittest.TestCase):
         self.assertEqual([i.id for i in items],
                          ["sheet-source:PCs/Ada.md", "sheet-source:PCs/Bea.md"])
         item = items[0]
-        self.assertEqual(item.wants, "where the sheet is kept")
+        self.assertEqual(item.wants, "where the sheet is kept, or leave")
+        self.assertTrue(item.holds_stamp)   # #339: silence is not "leave"
+        before = pc.read_text(encoding="utf-8")
+        self.assertEqual(item.apply("leave"),
+                         ["left sheet_source as it is in PCs/Ada.md"])
+        self.assertEqual(pc.read_text(encoding="utf-8"), before)
         item.apply("paper, with the player")
         self.assertIn('sheet_source: "paper, with the player"\n',
                       pc.read_text(encoding="utf-8"))

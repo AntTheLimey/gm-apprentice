@@ -137,6 +137,10 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
             waiting.append((check.name, f"{check.name}\t{check.title}"))
+            if any(c.endswith("=") for c in check.choices):
+                # not looked at yet; a value choice is one that holds
+                holding.append(f"{check.name} (after the site's tool is "
+                               f"updated)")
             continue
         try:
             items = check.find(vault)

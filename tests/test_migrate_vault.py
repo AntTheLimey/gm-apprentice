@@ -1271,9 +1271,17 @@ class ToneWordsTests(unittest.TestCase):
         self.put("NPCs/A.md", self.NOTE.format(tone="warm"))
         self.assertEqual(mv.find_tone_words(self.vault), [])
 
-    def test_only_ask_words_means_no_choice(self):
+    def test_only_ask_words_means_no_choice_but_a_notice(self):
+        # #339: nothing for the script to tidy, but the GM is told once.
         self.put("NPCs/A.md", self.NOTE.format(tone="central"))
-        self.assertEqual(mv.find_tone_words(self.vault), [])
+        self.put("NPCs/B.md", self.NOTE.format(tone="central"))
+        self.put("NPCs/C.md", self.NOTE.format(tone="odd"))
+        (item,) = mv.find_tone_words(self.vault)
+        self.assertEqual((item.id, item.group), ("tone-words-ask", PERSON))
+        self.assertEqual(item.lines, [
+            "relationship tones\t2 tone words are not on the standard list "
+            "and have no rule to tidy them; campaign-qa's Tone Words check "
+            "asks which word to use for each"])
 
     def test_tidy_rewrites_the_near_words_only(self):
         self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
