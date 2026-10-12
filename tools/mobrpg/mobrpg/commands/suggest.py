@@ -855,6 +855,18 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
     return items, skipped
 
 
+def _alias_owner_of(name, alias_owner, alias_by_key, ambiguous):
+    """The linked note whose public alias `name` is: exact, then case-insensitive,
+    then by folded key (unless that key is shared by two notes)."""
+    if not alias_owner:
+        return None
+    hit = _by_name_ci(alias_owner, _stem(name))
+    if hit is not None:
+        return alias_owner[hit]
+    k = _key(name)
+    return None if k in (ambiguous or ()) else alias_by_key.get(k)
+
+
 def partition_entities(entities, ent_id_by_key,
                        submitted_keys=None, id_by_file=None, ambiguous=None, notes=None,
                        alias_owner=None) -> tuple[list[dict], list[dict], list[dict]]:
@@ -876,19 +888,25 @@ def partition_entities(entities, ent_id_by_key,
     follows holds it for `adopt`. Without `id_by_file` the folded key decides."""
     submitted_keys = submitted_keys or set()
     files = {_stem(k) for k in (id_by_file or {})}
+    alias_by_key = {_key(a): o for a, o in (alias_owner or {}).items()}
     net_new, linked, submitted = [], [], []
     for ent in entities:
         k = _key(ent["name"])
         if (_stem(ent["name"]) in files) if id_by_file is not None else (k in ent_id_by_key):
             linked.append(ent)
-        elif _stem(ent["name"]) in (alias_owner or {}):
+        elif _alias_owner_of(ent["name"], alias_owner, alias_by_key, ambiguous):
             # Named like a linked note's alias: the same element, which the live-world
-            # check cannot see (it matches live names, not our aliases).
+            # check cannot see (it matches live names, not our aliases). Held as
+            # widely as before #262: exact, other case, or the folded key ("The
+            # Count Vane"). The one thing a fold must not hold is a note whose key is
+            # another NOTE's name key (the inn and the creature): that key is in
+            # `ambiguous`, and such a note stays net-new.
+            owner = _alias_owner_of(ent["name"], alias_owner, alias_by_key, ambiguous)
             linked.append(ent)
             if notes is not None:
-                notes.append(f"{ent['name']}: already linked as an alias of "
-                             f"{alias_owner[_stem(ent['name'])]}; not re-created — rename the "
-                             f"note or drop the alias if it is a different element")
+                notes.append(f"{ent['name']}: already linked as an alias of {owner}; "
+                             f"not re-created — rename the note or drop the alias if it "
+                             f"is a different element")
         elif _exact(ent["name"]) in submitted_keys:
             submitted.append(ent)
         elif k in submitted_keys:               # an older folded-only record
@@ -1281,6 +1299,7 @@ def run(argv: list[str]) -> int:
     ent_id_by_key, linked, submitted_keys = node_index(args.vault)
     id_by_file, ambiguous = node_files(args.vault)
     alias_owner = linked_aliases(args.vault)
+    owner_by_id = {eid: stem for stem, eid in id_by_file.items()}   # linked notes only
 
     # An already-upstream entity must NOT be re-filed as a brand-new CreateElement
     # (that filed 140 of Space's 169 Tranche-A entities as bogus creates). Only
@@ -1311,6 +1330,7 @@ def run(argv: list[str]) -> int:
         # to it (the issue's preferred outcome) instead of being dropped as
         # "not a world element".
         for ent, live in preexisting:
+            id_by_file.setdefault(_stem(ent["name"]), live["id"])   # exact name wins over a shared key
             ent_id_by_key.setdefault(_key(ent["name"]), live["id"])
             for al in ent.get("aliases", []):
                 ent_id_by_key.setdefault(_key(al), live["id"])
@@ -1390,7 +1410,6 @@ def run(argv: list[str]) -> int:
         print(f"  [held] {len(submitted_ents)} entit(y/ies) already ruled on upstream "
               f"(pending/dismissed suggestion, or deleted element) — not re-filed: "
               + ", ".join(sorted(e["name"] for e in submitted_ents)))
-    owner_by_id = {eid: stem for stem, eid in id_by_file.items()}
     already = [(e, owner_by_id[live["id"]]) for e, live in preexisting if live["id"] in owner_by_id]
     if already:
         print("  [held] already linked by another note, not a new element: "

@@ -1592,3 +1592,72 @@ def test_run_look_alikes_end_to_end(tmp_path, monkeypatch, capsys):
     assert any("ambiguous" in l and "Lady Old Oak" in l for l in out.splitlines() if "[note]" in l)
     refs = [it["externalRef"] for it in sugg if "/rel/" in it.get("externalRef", "") or ":rel/" in it.get("externalRef", "")]
     assert len(refs) == len(set(refs)) == 2
+
+
+# ---- #262 round 4 ----
+
+def _alias_vault(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    nd = {"world_id": "", "external_ref": "w:Characters/NPCs/Vane", "element_id": "vane-id",
+          "element_kind": "Person", "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / "Characters/NPCs/Vane.md").write_text(
+        "---\ntype: npc\naliases: [Count Vane]\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    return suggest.node_files(str(tmp_path)), suggest.linked_aliases(str(tmp_path))
+
+
+@pytest.mark.parametrize("stub", ["Count Vane", "count vane", "The Count Vane", "Count_Vane"])
+def test_a_note_matching_a_linked_notes_alias_is_held(tmp_path, stub):
+    # Same width as before #262: alias exact, other case, or folded key. The one
+    # thing a fold must NOT hold is a note whose key is another NOTE's name key
+    # (the inn and the creature) — that is in `ambiguous` and stays net-new.
+    (by_file, amb), aliases = _alias_vault(tmp_path)
+    notes = []
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": stub}], {}, set(), by_file, amb, notes, aliases)
+    assert net_new == [] and [e["name"] for e in linked] == [stub]
+    assert notes and "alias" in notes[0]
+
+
+def test_the_inn_and_creature_pair_is_still_created_beside_aliases(tmp_path):
+    (by_file, _), aliases = _alias_vault(tmp_path)
+    by_file["The Woodland Ghost"] = "inn-id"
+    amb = {suggest._key("Woodland Ghost")}
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": "Woodland Ghost"}], {}, set(), by_file, amb, [], aliases)
+    assert [e["name"] for e in net_new] == ["Woodland Ghost"]
+
+
+def _live_vane_run(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Characters/NPCs", "Vane", "vane-id")
+    (root / "Characters/NPCs/Lord Vane.md").write_text(
+        '---\ntype: npc\noccupation: "Lord"\ngender: Male\n---\nLord.\n', encoding="utf-8")
+    (root / "Characters/NPCs/Bob.md").write_text(
+        '---\ntype: npc\noccupation: "Escort"\ngender: Male\nrelationships:\n'
+        '  - target: "[[Lord Vane]]"\n    type: knows\n---\nBob.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: (
+        {"content": [{"id": "vane-id", "name": "Lord Vane"}], "page": {"totalPages": 1}}
+        if p.endswith("/person") else _empty_live()))
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    return capsys.readouterr().out, json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+
+
+def test_run_names_the_note_that_already_links_a_held_look_alike(tmp_path, monkeypatch, capsys):
+    out, _ = _live_vane_run(tmp_path, monkeypatch, capsys)
+    held = [l for l in out.splitlines() if "already linked by another note" in l]
+    assert held and "Lord Vane (linked by Vane)" in held[0] and "alias" in held[0]
+    assert "adopt" not in held[0].split("—")[0]
+
+
+def test_an_edge_to_a_held_look_alike_uses_its_live_id(tmp_path, monkeypatch, capsys):
+    out, batch = _live_vane_run(tmp_path, monkeypatch, capsys)
+    assert "link the exact note name" not in out
+    rels = [i for i in batch["suggestions"] if i.get("operation") == "AddRelation"]
+    assert any("vane-id" in (r["payload"]["targetRef"], r["payload"]["sourceRef"]) for r in rels)
