@@ -187,7 +187,7 @@ function readAccCell(cell) {
   const p = /\(\s*\+\s*(\d+)\s*([^)]*)\)/.exec(s);
   if (p) {
     const hit = aidMatchIn(p[2]);
-    if (hit) aids.push({ name: hit.name, bonus: parseInt(p[1], 10), acc: true, fixed: /\bfixed\b/i.test(p[2]) });
+    if (hit) aids.push({ name: hit.name, bonus: parseInt(p[1], 10), acc: ALWAYS_ACC.has(hit.name) || /^\s*acc\b/i.test(p[2]), fixed: /\bfixed\b/i.test(p[2]) });
   }
   return { acc, aids };
 }
@@ -255,7 +255,8 @@ function readTraits(advantages, match) {
       }
     }
     if (/\bweapon master\b|\btrained by a master\b/i.test(n)) t.halfRapid = true;
-    t.telescopic = Math.max(t.telescopic, levelOf(n, /telescopic vision\b(.*)/i));
+    // "No Targeting" means it gives nothing to an attack roll.
+    if (!/no targeting/i.test(n)) t.telescopic = Math.max(t.telescopic, levelOf(n, /telescopic vision\b(.*)/i));
     t.nightVision = Math.max(t.nightVision, levelOf(n, /night vision\b(.*)/i));
   }
   return t;
@@ -263,8 +264,12 @@ function readTraits(advantages, match) {
 
 function readTechniques(techniques, match, locKeys) {
   const out = { targeted: [], dual: {}, other: [] };
+  const seen = new Set();
   for (const t of techniques) {
     const name = str(t && t.name);
+    // Read twice (main table, then an "at a glance" table): the first row wins.
+    if (seen.has(norm(name))) continue;
+    seen.add(norm(name));
     const level = firstInt(t && t.level, NaN);
     if (!Number.isFinite(level)) continue;
     const defSkill = (/^\s*(.+?)\s*[-\u2212\u2013+]\s*\d+/.exec(str(t.def)) || [, ''])[1].trim();

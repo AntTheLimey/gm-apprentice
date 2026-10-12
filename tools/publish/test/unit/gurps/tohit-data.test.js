@@ -530,3 +530,45 @@ describe('round two: trait levels and the script', () => {
     assert.strictEqual(JSON.parse(html.replace(/^<script[^>]*>/, '').replace(/<\/script>$/, '')).weapons[0].key, 'A\u2028B\u2029C');
   });
 });
+
+describe('round three: acc means "needs Aim"', () => {
+  it('a laser or reflex sight is not an Acc aid, in the Acc cell or in Notes, unless "Acc" follows its number', () => {
+    assert.strictEqual(one({ acc: '4 (+1 laser sight)' }).aids[0].acc, false);
+    assert.strictEqual(one({ acc: '4 (+1 reflex sight)' }).aids[0].acc, false);
+    assert.strictEqual(one({ notes: 'Reflex sight +1' }).aids[0].acc, false);
+    assert.strictEqual(one({ notes: 'Laser sight +1 Acc' }).aids[0].acc, true);
+    assert.strictEqual(one({ acc: '4 (+1 Acc laser sight)' }).aids[0].acc, true);
+  });
+  it('a scope and a HUD link stay Acc aids everywhere', () => {
+    assert.strictEqual(one({ acc: '4 (+1 scope)' }).aids[0].acc, true);
+    assert.strictEqual(one({ acc: '4 (+1 HUD)' }).aids[0].acc, true);
+    assert.strictEqual(one({ notes: 'Scope +2' }).aids[0].acc, true);
+  });
+  it('targeting program, silhouette program and smartgun are flat unless marked Acc', () => {
+    const w = (notes) => one({ notes }).aids.map(a => a.acc);
+    assert.deepStrictEqual(w('Targeting program +2; Silhouette program +1; Smartgun +1'), [false, false, false]);
+    assert.deepStrictEqual(w('Smartgun +1 Acc'), [true]);
+    const g = buildTohitData(model({ ranged: [rangedRow()], items: [{ name: 'Laser sight', notes: '+1' }, { name: 'Suit', notes: 'Smartgun +1' }] }), META).aids;
+    assert.deepStrictEqual(g.map(a => [a.name, a.acc]), [['Laser sight', false], ['Smartgun', false]]);
+  });
+  it('Telescopic Vision with a No Targeting limitation is level 0', () => {
+    const t = (n) => buildTohitData(model({ ranged: [rangedRow()], advantages: [n] }), META).traits.telescopic;
+    assert.strictEqual(t('Telescopic Vision 2 (No Targeting)'), 0);
+    assert.strictEqual(t('Telescopic Vision (No Targeting, Level 2)'), 0);
+    assert.strictEqual(t('Telescopic Vision 2'), 2);
+  });
+  it('a technique read twice keeps the first (main-table) row, one entry', () => {
+    const techniques = [
+      { name: 'Targeted Attack (Knife Thrust/Neck)', def: 'Knife-4', level: '12' },
+      { name: 'Targeted Attack (Knife Thrust/Neck)', def: 'Knife-4', level: '9' },
+      { name: 'Kicking', def: 'Karate-2', level: '15' },
+      { name: 'kicking', def: 'Karate-2', level: '11' },
+      { name: 'Dual-Weapon Attack (Knife)', def: '', level: '13' },
+      { name: 'Dual-Weapon Attack (Knife)', def: '', level: '9' },
+    ];
+    const t = buildTohitData(model({ ranged: [rangedRow()], techniques }), META).techniques;
+    assert.deepStrictEqual(t.targeted.map(x => x.net), [-2]);
+    assert.deepStrictEqual(t.other.map(x => x.level), [15]);
+    assert.deepStrictEqual(t.dual, { Knife: 3 });
+  });
+});
