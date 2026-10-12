@@ -2316,8 +2316,11 @@ def check_sessions(vault: Path) -> list[str]:
 
 # graph-health.md, "Un-fenced GM-only content". Matched as substrings of a
 # casefolded title, so "Tactics" hits "tactic" and "Secrets" hits "secret".
-KEEPER_WORDS = ("keeper", "gm only", "gm-only", "dm only", "secret",
+# "Keeper" is the exception (KEEPER_WORD_RE): as a substring it also hits
+# Innkeeper, Housekeeper, Shopkeeper and the like (#316).
+KEEPER_WORDS = ("gm only", "gm-only", "dm only", "secret",
                 "tactic", "confidential", "spoiler")
+KEEPER_WORD_RE = re.compile(r"\bkeeper\b")
 
 # Types the publish pipeline never builds a page for. Nothing in them can
 # leak however it is written, and flagging their (correctly) Keeper-facing
@@ -2375,7 +2378,8 @@ def _fence_rows(rel: str, problems: list[str],
 def _keeper_text(text: str, excludes: list[str]) -> bool:
     """Does this title or label read as Keeper-facing?"""
     low = text.casefold()
-    return (any(word in low for word in KEEPER_WORDS)
+    return (KEEPER_WORD_RE.search(low) is not None
+            or any(word in low for word in KEEPER_WORDS)
             or any(s.casefold() in low for s in excludes))
 
 
@@ -2621,7 +2625,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             if callout:
                 ctype, title = callout.group(1), callout.group(2).strip()
                 low = f"{ctype} {title}".casefold()
-                if GM_WORD_RE.search(low) or "keeper" in low:
+                if GM_WORD_RE.search(low) or KEEPER_WORD_RE.search(low):
                     label = f"[!{ctype}] {title}".strip()
                     rows.append(f"INFO\t{rel}:{state.lineno}\tcallout {label} "
                                 f"reads Keeper-facing — confirm it should "

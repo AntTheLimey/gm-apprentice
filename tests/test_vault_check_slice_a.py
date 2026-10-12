@@ -1201,6 +1201,23 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "bold label 'Secret'"), rows)
         self.assertTrue(rows_for(rows, "callout [!note] GM only"), rows)
 
+    def test_an_occupation_ending_in_keeper_is_not_keeper_facing(self):
+        # #316: "keeper" matched as a substring, so Innkeeper, Housekeeper
+        # and the like were flagged, in headings, bold labels and callouts.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob — The Innkeeper\n\n"
+            "## Frau Margarethe (Housekeeper)\n\ntext\n\n"
+            "**Shopkeeper:** sells lamps.\n\n"
+            "> [!note] Gatekeeper's lodge\n\n"
+            "## Keeper Notes\n\ntext\n\n"
+            "> [!note] Keeper only: he lies.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(len(rows_for(rows, "Bob.md")), 2, rows)
+        self.assertTrue(rows_for(rows, "Keeper-facing heading 'Keeper Notes'"),
+                        rows)
+        self.assertTrue(rows_for(rows, "callout [!note] Keeper only"), rows)
+
     def test_a_config_exclude_entry_silences_its_own_section(self):
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:6"), self.rows)
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:10"), self.rows)
@@ -1365,7 +1382,7 @@ class GmLeakFixTests(unittest.TestCase):
     def test_keyword_warnings_are_reported_but_never_moved(self):
         text = ("---\ntype: location\n---\n\n# The Lighthouse Keeper\n\n"
                 "A tall tower.\n\n## Secret Passage\n\nBehind the stove.\n\n"
-                "## Innkeeper\n\nMarta.\n\n## Shopkeeper\n\nOtto.\n\n"
+                "## Keeper Notes\n\nMarta.\n\n## Keeper Advice\n\nOtto.\n\n"
                 "## Tactics\n\nHold the stairs.\n")
         vault = self.vault_with(text, "Lighthouse.md")
         rows = vc.check_gm_leak(vault, None, fix=True)
