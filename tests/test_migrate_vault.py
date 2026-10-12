@@ -1322,6 +1322,14 @@ class ToneWordsTests(unittest.TestCase):
             "and have no rule to tidy them; campaign-qa's Tone Words check "
             "asks which word to use for each"])
 
+    def test_one_ask_word_reads_in_the_singular(self):
+        self.put("NPCs/A.md", self.NOTE.format(tone="central"))
+        (item,) = mv.find_tone_words(self.vault)
+        self.assertEqual(item.lines, [
+            "relationship tones\t1 tone word is not on the standard list "
+            "and has no rule to tidy it; campaign-qa's Tone Words check "
+            "asks which word to use for each"])
+
     def test_tidy_rewrites_the_near_words_only(self):
         self.put("NPCs/A.md", self.NOTE.format(tone="dread"))
         self.put("NPCs/B.md", self.NOTE.format(tone="central"))

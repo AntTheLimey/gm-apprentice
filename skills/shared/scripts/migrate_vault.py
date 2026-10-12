@@ -892,7 +892,7 @@ def find_tone_words(vault: Path) -> list[Item]:
             f"relationship tones\t{asked} tone word"
             f"{'' if asked == 1 else 's'} "
             f"{'is' if asked == 1 else 'are'} not on the standard list and "
-            f"have no rule to tidy "
+            f"{'has' if asked == 1 else 'have'} no rule to tidy "
             f"{'it' if asked == 1 else 'them'}; campaign-qa's Tone Words "
             f"check asks which word to use for each"])]
     n_near = sum(int(r[3]) for r in near)
