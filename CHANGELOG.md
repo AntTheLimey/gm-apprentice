@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   fields (`publish.exclude_sections`, `publish.exclude_fields`) into the
   vault file, so a GM can see them and add an entry without losing the
   built-in ones (#294).
-- Character sheets for all five systems end in a "Notes on rows" block
+- Character sheets for all five systems carry a "Notes on rows" block
   when a table row has more cells than the sheet has columns for, so the
   extra text is on the page. The sheet's own numbers and trackers are
   the same as they were without the extra cell.
