@@ -42,7 +42,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   element no note owns is held back, with a line saying why and what to
   do. Two notes whose names differ only by underscore are named
   in the report. `pull-canon --baseline` and links in pushed text match
-  the same way (#262).
+  the same way, and a name with no Latin letters or digits (or only
+  words like "The" and "Lord") is never matched by its shortened form
+  (#262).
+- `vault-setting --set exclude_sections=[]` (and `exclude_fields=[]`)
+  is accepted, and says that nothing from the built-in list is hidden.
 - Writing a list over an empty setting in the vault file keeps a
   comment that sat on it.
 
