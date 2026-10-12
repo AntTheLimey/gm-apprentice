@@ -29,18 +29,27 @@ function decodeEntities(text) {
   );
 }
 
-function parseTableRows(html) {
+// Rows of cells, as plain text. A table the build widened (a row had more cells than its
+// header, #283) carries blank header cells marked `data-widened`; the readers address columns
+// by position and by count, so each row is cut back to the columns the GM's header names
+// and the cells beyond are left to overflowNotes. `keepExtra` returns every cell.
+function parseTableRows(html, { keepExtra = false } = {}) {
   const rows = [];
   const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
   let rowMatch;
+  let known = Infinity;
   while ((rowMatch = rowRegex.exec(html)) !== null) {
     const cells = [];
-    const cellRegex = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi;
+    let widened = 0;
+    let heads = 0;
+    const cellRegex = /<(t[dh])([^>]*)>([\s\S]*?)<\/t[dh]>/gi;
     let cellMatch;
     while ((cellMatch = cellRegex.exec(rowMatch[1])) !== null) {
-      cells.push(decodeEntities(cellMatch[1].replace(/<[^>]+>/g, '')).trim());
+      if (cellMatch[1].toLowerCase() === 'th') { heads++; if (/data-widened/.test(cellMatch[2])) widened++; }
+      cells.push(decodeEntities(cellMatch[3].replace(/<[^>]+>/g, '')).trim());
     }
-    if (cells.length > 0) rows.push(cells);
+    if (heads > 0) known = heads - widened;
+    if (cells.length > 0) rows.push(keepExtra ? cells : cells.slice(0, known));
   }
   return rows;
 }
@@ -116,22 +125,21 @@ function extractSubsectionHtml(sectionHtml, subsectionTitle) {
 // Cells a row holds beyond the columns its table's header names (the build widens a table
 // with blank header cells when a row is over-wide, #283). The sheets read columns by position,
 // so such a cell reaches no tile or row; they list it instead, so nothing the GM wrote is lost.
-// Returns [{ section, row, text }]; `skip` names sections the sheet shows whole elsewhere.
-function overflowNotes(sections, skip = []) {
-  const skipKeys = skip.map(normalizeTitle);
+// Returns [{ section, row, text }] for the sections named in `only`: those the sheet reads
+// by position and so would not show. A section it shows whole already carries the cell.
+function overflowNotes(sections, only) {
+  const keys = only.map(normalizeTitle);
   const out = [];
   for (const sec of sections || []) {
-    if (!sec || !sec.html || skipKeys.includes(normalizeTitle(sec.title))) continue;
+    if (!sec || !sec.html || !keys.includes(normalizeTitle(sec.title))) continue;
     const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
     let m;
     while ((m = tableRegex.exec(sec.html)) !== null) {
       const head = m[1].match(/<thead[^>]*>[\s\S]*?<\/thead>/i);
       if (!head) continue;
-      const header = parseTableRows(head[0])[0] || [];
-      let known = header.length;
-      while (known > 0 && !header[known - 1]) known--;
+      const known = parseTableRows(head[0], { keepExtra: true })[0].length - (head[0].match(/data-widened/g) || []).length;
       const body = m[1].replace(head[0], '');
-      for (const row of parseTableRows(body)) {
+      for (const row of parseTableRows(body, { keepExtra: true })) {
         const extra = row.slice(known).filter(Boolean);
         if (extra.length) out.push({ section: sec.title, row: row[0] || '', text: extra.join(' · ') });
       }

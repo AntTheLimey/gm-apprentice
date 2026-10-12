@@ -149,3 +149,17 @@ test('extractSections renders widened tables', () => {
   const [s] = extractSections('## Skills\n| a | b |\n|---|---|\n| 1 | 2 | 3 |\n');
   assert.ok(s.html.includes('3'));
 });
+
+test('the table rule is found and replaced through the public ruler API only', () => {
+  // markdown-it offers no public way to read a rule by name, so the plugin finds the `table` function
+  // in the public chain `getRules('paragraph')` and replaces it with `ruler.at`. If an upgrade
+  // changes that chain, this test and the plugin's own check fail loudly.
+  const plain = new (require('markdown-it'))();
+  assert.ok(plain.block.ruler.getRules('paragraph').some(f => f.name === 'table'));
+  assert.ok(plain.block.ruler.getRules('reference').some(f => f.name === 'table'));
+  assert.ok(md.block.ruler.getRules('paragraph').some(f => f.name === 'table'));
+  assert.strictEqual(md.block.ruler.getRules('paragraph').filter(f => f.name === 'table').length, 1);
+  const src = fs_read('../lib/markdown.js');
+  assert.ok(!src.includes('__rules__'));
+});
+function fs_read(rel) { return require('fs').readFileSync(require('path').join(__dirname, rel), 'utf8'); }

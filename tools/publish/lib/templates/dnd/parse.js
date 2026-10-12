@@ -353,7 +353,7 @@ function readEquipment(model, section) {
       const body = (sub.html.match(/<tbody[^>]*>([\s\S]*?)<\/tbody>/i) || [])[1] || '';
       const rows = [...body.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
       const cells = rows.length === 1 ? [...rows[0][1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/gi)].map(m => cellText(m[1])) : [];
-      if (head.length && cells.length === head.length && cells.every(c => /^[\d,]*$/.test(c))) {
+      if (head.length && head.every(Boolean) && cells.length === head.length && cells.every(c => /^[\d,]*$/.test(c))) {
         model.coins = head.map((d, i) => [d, cells[i] || '0']);
         left = sub.html.replace(/<table[^>]*>[\s\S]*?<\/table>/i, '');
       }

@@ -133,6 +133,8 @@ function widenTable(state, from) {
     const close = new state.Token(`${kind}_close`, tag, -1);
     open.level = like.level; inline.level = like.level + 1; close.level = like.level;
     inline.content = content; inline.children = [];
+    // The sheets read a table by its own columns; this one marks the header cells added here.
+    if (kind === 'th') open.attrSet('data-widened', '1');
     return [open, inline, close];
   };
   for (const row of rows.slice().reverse()) {
@@ -152,14 +154,18 @@ function widenTable(state, from) {
 }
 
 function tableWidenPlugin(md) {
-  const rule = md.block.ruler.__rules__.find((r) => r.name === 'table');
-  const original = { fn: rule.fn, alt: rule.alt };
+  // markdown-it has no public lookup of a rule by name. Its public chain `getRules('paragraph')`
+  // lists the rule functions, and the table rule is the one named `table`; `ruler.at` replaces
+  // it. The rule's chains (`alt`) are restated here; test/table-widen.test.js fails if an
+  // upgrade moves the rule.
+  const original = md.block.ruler.getRules('paragraph').find((fn) => fn.name === 'table');
+  if (!original) throw new Error('markdown-it: the table block rule was not found; update lib/markdown.js');
   md.block.ruler.at('table', function table(state, startLine, endLine, silent) {
     const before = state.tokens.length;
-    const ok = original.fn(state, startLine, endLine, silent);
+    const ok = original(state, startLine, endLine, silent);
     if (ok && !silent) widenTable(state, before);
     return ok;
-  }, { alt: original.alt });
+  }, { alt: ['paragraph', 'reference'] });
 }
 
 function createRenderer() {
