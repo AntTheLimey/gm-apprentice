@@ -1522,12 +1522,6 @@ function buildSite(options) {
       const text = strings(doc.subtitle).join(' ');
       if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index');
     }
-    // What the index takes from a page besides its title (its aliases and its whole body) is
-    // read for the names of withheld notes: the index holds each word, possessives included.
-    const { indexedTextOf } = require('./search-index');
-    for (const page of pages.filter((p) => !getsNoPage(p))) {
-      audit.read(vaultRelPathOf(page), `<main><p>${escapeText(indexedTextOf(page))}</p></main>`, null, 'the search index', 'withheld');
-    }
   }
 
   // The files copied to the site are named after the vault's files: a withheld name in one of

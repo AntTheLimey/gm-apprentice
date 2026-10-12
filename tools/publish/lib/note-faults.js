@@ -465,10 +465,8 @@ function startNoteAudit(input) {
 
   // A page as it was built, looked through for secret names. `rel` is the note it is built
   // from; for a page that is not one note's own, `out` is its path on the site instead.
-  // `only: 'withheld'` looks for withheld names alone (a text the search index holds that no
-  // page prints, which has never been read for gm_aliases names).
-  function read(rel, html, out = null, where = 'the page', only = null) {
-    if (!probe || (only && !aliasRes.some((a) => a.kind === only)) || !mayHold(html)) return;
+  function read(rel, html, out = null, where = 'the page') {
+    if (!probe || !mayHold(html)) return;
     // The page's own text first; a name found only in its <head> or in a tag's words (the
     // tab title, a description, an image's alt) is on the site too.
     // What a link to another page prints is that page's public name, not this page's words:
@@ -484,7 +482,6 @@ function startNoteAudit(input) {
     let boxes = null;
     let rest = null;
     for (const a of aliasRes) {
-      if (only && a.kind !== only) continue;
       a.re.lastIndex = 0;
       let text = body;
       let matches = [...bodyOwn.matchAll(a.re)];
