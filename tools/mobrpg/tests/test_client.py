@@ -8,8 +8,9 @@ from mobrpg import client
 class _FakeResp:
     """Minimal context-manager stand-in for a urllib response object."""
 
-    def __init__(self, raw: bytes):
+    def __init__(self, raw: bytes, ctype: str = "application/json"):
         self._raw = raw
+        self._ctype = ctype
 
     def __enter__(self):
         return self
@@ -19,6 +20,10 @@ class _FakeResp:
 
     def read(self):
         return self._raw
+
+    @property
+    def headers(self):
+        return {"Content-Type": self._ctype}
 
 
 def test_request_sends_authorization_bearer_header(monkeypatch, unblock_client_network):
@@ -111,3 +116,15 @@ def test_get_access_token_requires_auth(monkeypatch, unblock_client_network):
 def test_get_access_token_bearer(monkeypatch, unblock_client_network):
     monkeypatch.setenv("MOBRPG_TOKEN", "tok-123")
     assert client.get_access_token() == "tok-123"
+
+
+def test_request_html_200_maps_to_apierror_naming_url_and_type(monkeypatch, unblock_client_network):
+    # #307: a list endpoint can answer 200 with the site's HTML shell.
+    monkeypatch.setattr(client.urllib.request, "urlopen",
+                        lambda req, timeout=None: _FakeResp(b"<!doctype html><html></html>",
+                                                            "text/html; charset=utf-8"))
+    with pytest.raises(client.ApiError) as ei:
+        client._request("GET", "/world/w1/race", query={"page": 0})
+    assert ei.value.status == 200
+    assert "/world/w1/race" in ei.value.url
+    assert "text/html" in ei.value.body

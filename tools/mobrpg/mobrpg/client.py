@@ -109,12 +109,21 @@ def _request(method: str, path: str, *, token: str | None = None,
     try:
         with urllib.request.urlopen(req, timeout=30) as resp:
             raw = resp.read().decode()
+            ctype = (getattr(resp, "headers", None) or {}).get("Content-Type", "")
     except urllib.error.HTTPError as e:
         raise ApiError(e.code, e.read().decode(errors="replace"), _redact_url(url)) from None
     except urllib.error.URLError as e:
         raise ApiError(0, str(e.reason), _redact_url(url)) from None
 
-    return json.loads(raw) if raw.strip() else None
+    if not raw.strip():
+        return None
+    try:
+        return json.loads(raw)
+    except ValueError:
+        # A 200 that is not JSON (e.g. the site's HTML shell for a kind the
+        # world has none of) is an API fault, not a crash.
+        raise ApiError(200, f"response is not JSON (content type {ctype or 'unknown'})",
+                       _redact_url(url)) from None
 
 
 def login(email: str, password: str) -> dict:

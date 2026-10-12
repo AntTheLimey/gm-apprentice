@@ -129,8 +129,14 @@ def _scan(world: str, token: str) -> list[dict]:
     for kind in KINDS:
         page = 0
         while True:
-            r = client._request("GET", f"/world/{world}/{kind}", token=token,
-                                 query={"page": page, "size": 50})
+            try:
+                r = client._request("GET", f"/world/{world}/{kind}", token=token,
+                                     query={"page": page, "size": 50})
+            except client.ApiError as e:
+                if e.status != 200:      # a real HTTP failure still stops the scan
+                    raise
+                print(f"  SKIPPED kind {kind} ({e.body}): {e.url}", file=sys.stderr)
+                break
             if not isinstance(r, dict):
                 break
             for e in r.get("content", []):

@@ -42,6 +42,23 @@ def test_execute_downloads_and_fills_portrait(tmp_path, monkeypatch):
     assert 'portrait: "_attachments/characters/vela.png"' in note.read_text(encoding="utf-8")
 
 
+def test_scan_skips_a_kind_whose_list_endpoint_is_not_json(tmp_path, monkeypatch, capsys):
+    # #307: `race` answered 200 text/html for a world with no races.
+    _note(tmp_path)
+    pages = _pages()
+
+    def req(m, p, **k):
+        if p == "/world/w1/race":
+            raise client.ApiError(200, "not JSON (content type text/html)", p)
+        return pages.get((m, p), {})
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", req)
+    monkeypatch.setattr(images, "_download", lambda url: b"bytes")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert list((tmp_path / "_attachments").rglob("*.png"))   # person still scanned
+    assert "race" in capsys.readouterr().err
+
+
 def test_dry_run_downloads_and_writes_nothing(tmp_path, monkeypatch, capsys):
     note = _note(tmp_path)
     before = note.read_text(encoding="utf-8")
