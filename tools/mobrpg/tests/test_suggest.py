@@ -1443,3 +1443,152 @@ def test_node_kind_index_exact_name_first_and_a_shared_key_has_no_kind(tmp_path)
     assert suggest.kind_of(kinds, "[[Woodland Ghost]]") == "Creature"
     assert suggest.kind_of(kinds, "Lady Woodland Ghost") is None     # shared key: no kind
     assert suggest.kind_of(kinds, "Vane") == "Person"                # unshared fold still works
+
+
+# ---- #262 round 3 ----
+
+def test_edge_to_a_net_new_look_alike_does_not_resolve_to_the_linked_note(tmp_path):
+    # inn linked, creature net-new, both share a key
+    by_file = {"The Woodland Ghost": "inn-id"}
+    ref_by_file = {"Woodland Ghost": "e2"}
+    amb = {suggest._key("Woodland Ghost")}
+    idx = {}                      # node_index leaves a shared key out
+    for target, want, not_want in (("[[Woodland Ghost]]", "suggestion:e2", "inn-id"),
+                                   ("[[The Woodland Ghost]]", "inn-id", "suggestion:e2")):
+        items, skipped = suggest.relationship_items(
+            _edge_ent(tmp_path, target), _map(), "e1", idx, set(), str(tmp_path), "w", "e1",
+            ref_by_key={}, id_by_file=by_file, ambiguous=amb, ref_by_file=ref_by_file)
+        blob = json.dumps(items)
+        assert want in blob and not_want not in blob, (target, items)
+
+
+def test_edge_is_matched_ignoring_case_when_one_note_has_that_name(tmp_path):
+    items, _ = suggest.relationship_items(
+        _edge_ent(tmp_path, "[[the woodland ghost]]"), _map(), "e1", {}, set(), str(tmp_path),
+        "w", "e1", id_by_file={"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert "inn-id" in json.dumps(items)
+
+
+def test_a_shared_key_counts_unlinked_notes_too(tmp_path):
+    _linked_note(tmp_path, "Locations", "The Woodland Ghost", "inn-id")
+    (tmp_path / "Creatures").mkdir()
+    (tmp_path / "Creatures/Woodland Ghost.md").write_text("---\ntype: creature\n---\nx\n", encoding="utf-8")
+    by_file, ambiguous = suggest.node_files(str(tmp_path))
+    assert by_file == {"The Woodland Ghost": "inn-id"}
+    assert ambiguous == {suggest._key("Woodland Ghost")}
+    idx, _, _ = suggest.node_index(str(tmp_path))
+    assert suggest._key("Woodland Ghost") not in idx
+    # prose links on push: [[Woodland Ghost]] must not become the inn
+    from mobrpg import links
+    out = links.rewrite_md_for_push("See [[Woodland Ghost]] and [[The Woodland Ghost]].",
+                                    suggest.link_index(str(tmp_path)), "w1",
+                                    id_by_file=by_file)
+    assert "inn-id" in out and out.count("inn-id") == 1
+
+
+def test_held_count_resolves_a_net_new_look_alike_by_exact_name(tmp_path):
+    ent = _edge_ent(tmp_path, "[[Woodland Ghost]]")
+    n = suggest.held_relationship_count(
+        [ent], {}, {}, set(), id_by_file={"The Woodland Ghost": "inn-id"},
+        ambiguous={suggest._key("Woodland Ghost")}, ref_by_file={"Woodland Ghost": "e2"})
+    assert n == 1
+
+
+def test_match_node_does_not_stamp_a_look_alike_with_the_linked_notes_edge():
+    node = {"element_id": "bob",
+            "relationships": [{"predicate": "part_of", "target": "[[Woodland Ghost]]"}]}
+    structural = {("bob", "Link", "inn-id"): "rel-1"}
+    from mobrpg.commands import rel_baseline as rb
+    eids, reviews = rb.match_node(
+        node, {}, structural, {}, _map(), id_by_file={"The Woodland Ghost": "inn-id"},
+        ambiguous={suggest._key("Woodland Ghost")})
+    assert eids == {}
+    assert reviews and "ambiguous" in reviews[0]
+
+
+def _knows_two(tmp_path):
+    return {"path": str(tmp_path / "Characters/NPCs/Bob.md"), "name": "Bob",
+            "relationships": [{"target": "The Woodland Ghost", "predicate": "knows", "desc": ""},
+                              {"target": "Woodland Ghost", "predicate": "knows", "desc": ""}]}
+
+
+def _event_refs(items):
+    return [i["externalRef"] for i in items if i.get("externalRef", "").startswith("w:rel/")]
+
+
+def test_two_look_alike_targets_on_one_note_get_distinct_event_refs(tmp_path):
+    by_file = {"The Woodland Ghost": "inn-id", "Woodland Ghost": "cr-id"}
+    amb = {suggest._key("Woodland Ghost")}
+    items, _ = suggest.relationship_items(
+        _knows_two(tmp_path), _map(), "e1", {}, set(), str(tmp_path), "w", "e1",
+        id_by_file=by_file, ambiguous=amb)
+    refs = _event_refs(items)
+    assert len(refs) == 2 and len(set(refs)) == 2
+    # the first-listed target keeps the folded ref every earlier push used
+    assert refs[0].endswith("/knows/woodlandghost")
+
+
+def test_a_single_target_keeps_its_old_event_ref(tmp_path):
+    ent = _knows_two(tmp_path)
+    ent["relationships"] = ent["relationships"][1:]
+    items, _ = suggest.relationship_items(
+        ent, _map(), "e1", {suggest._key("Woodland Ghost"): "cr-id"}, set(), str(tmp_path), "w", "e1")
+    assert _event_refs(items)[0].endswith("/knows/woodlandghost")
+
+
+def test_a_note_named_like_a_linked_notes_alias_is_still_held(tmp_path):
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    from mobrpg import node
+    nd = {"world_id": "", "external_ref": "w:Characters/NPCs/Vane", "element_id": "vane-id",
+          "element_kind": "Person", "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / "Characters/NPCs/Vane.md").write_text(
+        "---\ntype: npc\naliases: [Count Vane]\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    aliases = suggest.linked_aliases(str(tmp_path))
+    by_file, _ = suggest.node_files(str(tmp_path))
+    notes = []
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": "Count Vane"}, {"name": "Brand New"}], {}, set(), by_file,
+        notes=notes, alias_owner=aliases)
+    assert [e["name"] for e in net_new] == ["Brand New"]
+    assert [e["name"] for e in linked] == ["Count Vane"]
+    assert notes and "alias" in notes[0] and "Vane" in notes[0]
+
+
+def test_run_look_alikes_end_to_end(tmp_path, monkeypatch, capsys):
+    import shutil
+    d = _two_npc_vault(tmp_path / "base")
+    root = tmp_path / "v"
+    (root / "_meta").mkdir(parents=True)
+    shutil.copy(d / "_meta/mobrpg-map.json", root / "_meta/mobrpg-map.json")
+    _linked_note(root, "Locations", "The Woodland Ghost", "inn-id")
+    _linked_note(root, "Locations", "Old Oak", "oak1-id")
+    _linked_note(root, "Locations", "The Old Oak", "oak2-id")
+    (root / "Creatures").mkdir()
+    (root / "Creatures/Woodland Ghost.md").write_text(
+        "---\ntype: creature\n---\nA ghost.\n", encoding="utf-8")
+    (root / "Characters/NPCs").mkdir(parents=True)
+    (root / "Characters/NPCs/Bob.md").write_text(
+        '---\ntype: npc\noccupation: "Escort"\ngender: Male\nrelationships:\n'
+        '  - target: "[[The Woodland Ghost]]"\n    type: knows\n'
+        '  - target: "[[Woodland Ghost]]"\n    type: knows\n'
+        '  - target: "[[Lady Old Oak]]"\n    type: knows\n---\nBob.\n', encoding="utf-8")
+    monkeypatch.setattr(suggest, "discover_race_id", lambda w, t: "race-h")
+    monkeypatch.setattr(client, "get_access_token", lambda: "tok")
+    monkeypatch.setattr(client, "_request", lambda m, p, **k: _empty_live())
+    assert suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")]) == 0
+    out = capsys.readouterr().out
+    batch = json.load(open(tmp_path / "out" / "suggest-batch-1.json"))
+    sugg = batch["suggestions"]
+    created = {it["payload"]["name"]: it.get("externalRef") for it in sugg
+               if it.get("operation") == "CreateElement" and it["payload"].get("name")}
+    assert "Woodland Ghost" in created and "Bob" in created
+    targets = [it["payload"]["targetRef"] for it in sugg if it.get("operation") == "AddRelation"]
+    sources = [it["payload"]["sourceRef"] for it in sugg if it.get("operation") == "AddRelation"]
+    ends = targets + sources
+    assert "inn-id" in ends
+    assert any(e.startswith("suggestion:") for e in ends)
+    assert "oak1-id" not in ends and "oak2-id" not in ends          # ambiguous: neither
+    assert any("ambiguous" in l and "Lady Old Oak" in l for l in out.splitlines() if "[note]" in l)
+    refs = [it["externalRef"] for it in sugg if "/rel/" in it.get("externalRef", "") or ":rel/" in it.get("externalRef", "")]
+    assert len(refs) == len(set(refs)) == 2

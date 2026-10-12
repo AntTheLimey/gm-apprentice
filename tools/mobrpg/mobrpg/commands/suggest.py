@@ -572,35 +572,67 @@ def _target_stem(target: str) -> str:
 
 
 def node_files(vault) -> tuple[dict, set]:
-    """({note file stem (NFC): element_id}, ambiguous keys) for every linked note.
+    """({linked note file stem (NFC): element_id}, ambiguous keys).
 
     The stem is what a `[[wikilink]]` names, so it is matched before the folded
     `_key` (#262). `_key` drops articles and honorifics, so "The Woodland Ghost"
-    and "Woodland Ghost" — a place and a creature — share a key. A key two linked
-    notes share is ambiguous: the folded fallback must resolve neither."""
+    and "Woodland Ghost" — a place and a creature — share a key. A key two notes
+    share is ambiguous, whether or not both are linked: the folded fallback must
+    resolve neither, or a link to the unlinked one lands on the linked one."""
     by_file: dict = {}
-    notes_by_key: dict = {}
+    stems_by_key: dict = {}
     vault = os.path.expanduser(vault)
     for folder in map_cmd.FOLDERS:
         for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
-            nd = node.read_node(open(p, encoding="utf-8").read())
-            if not nd or not nd.get("element_id"):
-                continue
             stem = _stem(os.path.splitext(os.path.basename(p))[0])
-            by_file[stem] = nd["element_id"]
-            notes_by_key.setdefault(_key(stem), set()).add(stem)
-    return by_file, {k for k, stems in notes_by_key.items() if len(stems) > 1}
+            stems_by_key.setdefault(_key(stem), set()).add(stem)
+            nd = node.read_node(open(p, encoding="utf-8").read())
+            if nd and nd.get("element_id"):
+                by_file[stem] = nd["element_id"]
+    return by_file, {k for k, stems in stems_by_key.items() if len(stems) > 1}
 
 
-def _resolve_target(tgt_raw, tgt_key, by_key, by_file, ambiguous):
-    """(value, is_ambiguous): exact file stem first, then the folded key, which
-    resolves nothing when two linked notes share it."""
-    hit = (by_file or {}).get(_target_stem(tgt_raw))
-    if hit:
-        return hit, False
+def linked_aliases(vault) -> dict:
+    """{alias (NFC): file stem of the linked note that lists it}."""
+    out: dict = {}
+    vault = os.path.expanduser(vault)
+    for folder in map_cmd.FOLDERS:
+        for p in sorted(glob.glob(os.path.join(vault, folder, "*.md"))):
+            fm, _ = _read(p)
+            nd = node.read_node(open(p, encoding="utf-8").read())
+            if nd and nd.get("element_id"):
+                for al in _aliases(fm):
+                    out.setdefault(_stem(al), _stem(os.path.splitext(os.path.basename(p))[0]))
+    return out
+
+
+def _by_name_ci(table, stem):
+    """`table[stem]`, or the one entry whose name differs only in case (Obsidian
+    resolves links case-insensitively); None when absent or when several match."""
+    if not table:
+        return None
+    if stem in table:
+        return stem
+    hits = [k for k in table if k.casefold() == stem.casefold()]
+    return hits[0] if len(hits) == 1 else None
+
+
+def _resolve_edge(tgt_raw, tgt_key, by_key, by_file, ref_by_key, ref_by_file, ambiguous):
+    """(element id, in-batch ref, ambiguous?) for an edge target. The exact note
+    name decides first — a linked note, then a net-new one; only a name that
+    matches no note falls back to the folded key, which resolves nothing when two
+    notes share it (#262)."""
+    stem = _target_stem(tgt_raw)
+    hit = _by_name_ci(by_file, stem)
+    if hit is not None:
+        return by_file[hit], None, False
+    hit = _by_name_ci(ref_by_file, stem)
+    if hit is not None:
+        return None, ref_by_file[hit], False
     if tgt_key in (ambiguous or ()):
-        return None, True
-    return (by_key or {}).get(tgt_key), False
+        return None, None, True
+    tid = (by_key or {}).get(tgt_key)
+    return tid, (None if tid else (ref_by_key or {}).get(tgt_key)), False
 
 
 def link_index(vault) -> dict:
@@ -699,20 +731,20 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
     items, skipped = [], []
     subj_key = _key(entity["name"])
     n = 0
+    first_stem: dict = {}            # (predicate, folded target) -> first-listed target name
     for rel in entity.get("relationships", []):
         pred, tgt_raw = rel["predicate"], rel["target"]
         tgt_key = _key(tgt_raw)
+        first = first_stem.setdefault((pred, tgt_key), _target_stem(tgt_raw))
         is_linked, old_note = _edge_linked(linked_triples, ambiguous, entity["name"], pred, tgt_raw)
         if is_linked:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (already linked)")
             continue
         if old_note:
             skipped.append(old_note)
-        tgt_id, amb = _resolve_target(tgt_raw, tgt_key, ent_id_by_key, id_by_file, ambiguous)
-        tgt_ref = None
-        if not tgt_id and not amb:
-            tgt_ref, amb = _resolve_target(tgt_raw, tgt_key, ref_by_key, ref_by_file, ambiguous)
-        if amb and not tgt_id and not tgt_ref:
+        tgt_id, tgt_ref, amb = _resolve_edge(tgt_raw, tgt_key, ent_id_by_key, id_by_file,
+                                             ref_by_key, ref_by_file, ambiguous)
+        if amb:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (ambiguous: "
                            f"two notes share that name once articles and titles are ignored; "
                            f"link the exact note name)")
@@ -790,6 +822,10 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         # an event can't make it re-file as net-new.
         ext = f"{namespace}:rel/" + external_ref(entity["path"], vault, namespace).split(":", 1)[1] \
               + f"/{pred}/{tgt_key}"
+        if first != _target_stem(tgt_raw):
+            # A second target on this note and predicate whose name folds to the
+            # same key: the folded ref would claim the first one's event (#262).
+            ext += "~" + re.sub(r"[^a-z0-9]", "", _target_stem(tgt_raw).lower())
         if aff:
             # mobRPG's own naming: the person always leads, and the title word
             # and preposition come from formatEventName. A real title is the
@@ -820,7 +856,8 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
 
 
 def partition_entities(entities, ent_id_by_key,
-                       submitted_keys=None, id_by_file=None, ambiguous=None, notes=None) -> tuple[list[dict], list[dict], list[dict]]:
+                       submitted_keys=None, id_by_file=None, ambiguous=None, notes=None,
+                       alias_owner=None) -> tuple[list[dict], list[dict], list[dict]]:
     """Split entities into (net_new, linked, submitted).
 
     An entity whose name (or an alias, via the caller's key index) already
@@ -844,6 +881,14 @@ def partition_entities(entities, ent_id_by_key,
         k = _key(ent["name"])
         if (_stem(ent["name"]) in files) if id_by_file is not None else (k in ent_id_by_key):
             linked.append(ent)
+        elif _stem(ent["name"]) in (alias_owner or {}):
+            # Named like a linked note's alias: the same element, which the live-world
+            # check cannot see (it matches live names, not our aliases).
+            linked.append(ent)
+            if notes is not None:
+                notes.append(f"{ent['name']}: already linked as an alias of "
+                             f"{alias_owner[_stem(ent['name'])]}; not re-created — rename the "
+                             f"note or drop the alias if it is a different element")
         elif _exact(ent["name"]) in submitted_keys:
             submitted.append(ent)
         elif k in submitted_keys:               # an older folded-only record
@@ -861,7 +906,7 @@ def partition_entities(entities, ent_id_by_key,
 
 
 def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples,
-                            id_by_file=None, ambiguous=None, ref_by_file=None) -> int:
+                            id_by_file=None, ambiguous=None, ref_by_file=None, notes=None) -> int:
     """How many relationships hang off already-linked entities and *would* be
     genuine new edges (target resolves, not already linked) — i.e. the deltas the
     baseline pass will carry. Reported so a skipped-linked push never silently
@@ -874,10 +919,14 @@ def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples,
             if _edge_linked(linked_triples, ambiguous, ent["name"], rel["predicate"],
                             rel["target"])[0]:
                 continue
-            hit = (_resolve_target(rel["target"], tgt_key, ent_id_by_key, id_by_file, ambiguous)[0]
-                   or _resolve_target(rel["target"], tgt_key, ref_by_key, ref_by_file, ambiguous)[0])
-            if hit:
+            tid, tref, amb = _resolve_edge(rel["target"], tgt_key, ent_id_by_key, id_by_file,
+                                           ref_by_key, ref_by_file, ambiguous)
+            if tid or tref:
                 held += 1
+            elif amb and notes is not None:
+                notes.append(f"{ent['name']} --{rel['predicate']}--> {rel['target']}: ambiguous "
+                             f"(two notes share that name once articles and titles are ignored); "
+                             f"link the exact note name")
     return held
 
 
@@ -1231,6 +1280,7 @@ def run(argv: list[str]) -> int:
     # rather than trusting any sidecar crosswalk.
     ent_id_by_key, linked, submitted_keys = node_index(args.vault)
     id_by_file, ambiguous = node_files(args.vault)
+    alias_owner = linked_aliases(args.vault)
 
     # An already-upstream entity must NOT be re-filed as a brand-new CreateElement
     # (that filed 140 of Space's 169 Tranche-A entities as bogus creates). Only
@@ -1240,7 +1290,8 @@ def run(argv: list[str]) -> int:
     # held — re-filing would duplicate the card the reviewer already has.
     partition_notes: list[str] = []
     net_new, linked_ents, submitted_ents = partition_entities(
-        entities, ent_id_by_key, submitted_keys, id_by_file, ambiguous, partition_notes)
+        entities, ent_id_by_key, submitted_keys, id_by_file, ambiguous, partition_notes,
+        alias_owner)
     for note in partition_notes:
         print(f"  [ambiguous] {note}")
 
@@ -1320,8 +1371,11 @@ def run(argv: list[str]) -> int:
         print(f"  [dedup] collapsed {collapsed} duplicate classifier-type create(s) "
               f"into shared types")
     if linked_ents:
+        held_notes: list[str] = []
         held = held_relationship_count(linked_ents, ent_id_by_key, ref_by_key, linked,
-                                       id_by_file, ambiguous, ref_by_file)
+                                       id_by_file, ambiguous, ref_by_file, held_notes)
+        for note in held_notes:
+            print(f"  [ambiguous] {note}")
         # Be precise about what "held" means: this run emits NO edges for linked
         # entities. `pull-canon --baseline` reconciles the ones that already exist
         # upstream (stamping event_ids); the remainder are genuinely-new edges on
@@ -1336,6 +1390,13 @@ def run(argv: list[str]) -> int:
         print(f"  [held] {len(submitted_ents)} entit(y/ies) already ruled on upstream "
               f"(pending/dismissed suggestion, or deleted element) — not re-filed: "
               + ", ".join(sorted(e["name"] for e in submitted_ents)))
+    owner_by_id = {eid: stem for stem, eid in id_by_file.items()}
+    already = [(e, owner_by_id[live["id"]]) for e, live in preexisting if live["id"] in owner_by_id]
+    if already:
+        print("  [held] already linked by another note, not a new element: "
+              + "; ".join(f"{e['name']} (linked by {o})" for e, o in already)
+              + " — rename the note or add it as an alias there; `adopt` would only skip it")
+        preexisting = [(e, l) for e, l in preexisting if l["id"] not in owner_by_id]
     if preexisting or ambiguous_live:
         parts = []
         if preexisting:

@@ -93,7 +93,7 @@ def _target_name(raw: str) -> str:
 
 
 def match_node(node, id_by_key, structural_idx, reified_idx, mp,
-               subject_kind=None, kind_by_key=None, id_by_file=None) -> tuple[dict, list]:
+               subject_kind=None, kind_by_key=None, id_by_file=None, ambiguous=None) -> tuple[dict, list]:
     """Match one node's relationships against the upstream indexes.
 
     Returns (event_ids, reviews). `event_ids` is keyed the way pull-canon's node
@@ -118,6 +118,9 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp,
         # suggest.node_index leaves out a key two linked notes share
         tgt = (id_by_file or {}).get(suggest._target_stem(name)) or id_by_key.get(_key(name))
         if not tgt:
+            if _key(name) in (ambiguous or ()) and (id_by_key or id_by_file):
+                reviews.append(f"{pred} -> {r.get('target')}: ambiguous (two notes share that "
+                               f"name once articles and titles are ignored); link the exact note name")
             continue
         # Resolve through the SAME entry point `suggest` emits with. An
         # affiliation the grid regrades (`serves` an Organization is Membership,
