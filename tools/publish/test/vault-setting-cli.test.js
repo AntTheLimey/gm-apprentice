@@ -27,7 +27,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { excludeSectionsOwn: false, excludeFieldsOwn: false, defaultExcludeSections: PUBLISH_DEFAULTS.exclude_sections, defaultExcludeFields: PUBLISH_DEFAULTS.exclude_fields, defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null, connections: null });
+  assert.deepEqual(data, { excludeSectionsOwn: false, excludeFieldsOwn: false, defaultExcludeSections: PUBLISH_DEFAULTS.exclude_sections, defaultExcludeFields: PUBLISH_DEFAULTS.exclude_fields, defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null, tohitCalculator: null, connections: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -365,5 +365,17 @@ test('a comment on an empty exclude_sections key, or under it, is kept when the 
   assert.deepEqual(require('../lib/frontmatter').parseNote(text).data.publish.exclude_sections, ['GM Notes']);
   const before = text;
   assert.equal(run(s, []).data.excludeSectionsOwn, true);
+  assert.equal(config(s), before);
+});
+
+test('sets tohit_calculator to on or off, reports it back, and refuses anything else', () => {
+  const s = scratch('  mode: player\n');
+  assert.equal(run(s, []).data.tohitCalculator, null);
+  assert.deepEqual(run(s, ['tohit_calculator="off"']).data, { written: ['tohit_calculator'] });
+  assert.equal(run(s, []).data.tohitCalculator, 'off');
+  const before = config(s);
+  const { rc, err } = run(s, ['tohit_calculator="maybe"']);
+  assert.equal(rc, 1);
+  assert.deepEqual(err, ['Error: "maybe" is not a value tohit_calculator takes']);
   assert.equal(config(s), before);
 });

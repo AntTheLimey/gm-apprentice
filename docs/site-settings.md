@@ -216,6 +216,7 @@ moon button is not shown and `publish.theme.default_mode` does nothing.
 | `publish.sheet_skin` | The look of every character sheet | `plain`, `parchment`, `case-file`, `console`, `ledger` | `plain` |
 | `publish.sheet_frame` | The ornament round each portrait | `ring`, `laurel`, `thorns`, `gilt`, `steel`, `corners`, `hex`, `cracked`, `none` | The skin's own frame |
 | `publish.sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
+| `publish.tohit_calculator` | The to-hit calculator on a GURPS character's Combat tab | `on` or `off`; `yes` and `true` read as `on`, `no` and `false` as `off` | `on` |
 | `publish.dndbeyond_sync` | When D&D characters that carry a D&D Beyond link are brought up to date | `build` (before each site update) or `manual` (only when you ask) | `manual` |
 
 One character can have its own look: put `sheet_skin` or `sheet_frame`
