@@ -183,3 +183,16 @@ test('World Rules sit in the page, not beside it', () => {
   assert.match(html, /<section class="world-rules"><h2>World Rules<\/h2><ul><li>Magic costs blood\.<\/li><\/ul><\/section>/);
   assert.ok(!html.includes('<aside'));
 });
+
+test('a description keeps its underscores and prints a link by its label, in the list and the island (#336)', () => {
+  const s = buildVault({
+    'NPCs/Ivy.md': note('type: npc\nrelationships:\n  - target: "[[Bo_Pike]]"\n    type: knows\n    description: "_Close_ to snake_case, see https://example.com/a_b and [site](https://example.com/a_(b)) then [[Old_Tom]] and [[Old_Tom|the_smith]]"', 'Ivy.'),
+    'NPCs/Bo_Pike.md': note('type: npc', 'Bo.'),
+    'NPCs/Old_Tom.md': note('type: npc', 'Tom.'),
+  });
+  sites.push(s);
+  const html = s.read('npcs', 'ivy.html');
+  const want = '_Close_ to snake_case, see https://example.com/a_b and site then Old Tom and the_smith';
+  assert.ok(html.includes(`<span class="cx-line">${want}</span>`), 'the plain list');
+  assert.deepStrictEqual(islandOfHtml(html).t[0].g[0].d[0].l, [want], 'the island');
+});

@@ -300,3 +300,34 @@ test('a target with words beside a labelled link: no page gives label and words,
   const found = buildConnections(ctx([a, vesper])).for(a);
   assert.deepStrictEqual(group(found, 'people', 'Knows').items.map((i) => [i.title, i.outputPath]), [['Vesper Hale', 'p/vesper_hale.html']]);
 });
+
+// A description is prose: only a link's name is read as words (`Old_Tom` -> `Old Tom`), never
+// the underscores around it (#336).
+const lineOf = (description) => {
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: 'serves', description }] });
+  return group(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people', 'Serves').items[0].lines;
+};
+
+test('an underscore in a description stays: a plain word, _emphasis_, snake_case, a bare address', () => {
+  assert.deepStrictEqual(lineOf('a _plain_ word'), ['a _plain_ word']);
+  assert.deepStrictEqual(lineOf('uses snake_case names'), ['uses snake_case names']);
+  assert.deepStrictEqual(lineOf('see https://example.com/a_b_c now'), ['see https://example.com/a_b_c now']);
+});
+
+test('a markdown link in a description prints its label, whatever its address holds', () => {
+  assert.deepStrictEqual(lineOf('see [label](https://example.com/a_(b)) rest'), ['see label rest']);
+  assert.deepStrictEqual(lineOf('see [link](a(b).md) rest'), ['see link rest']);
+  assert.deepStrictEqual(lineOf('see [label](url_with_underscores) rest'), ['see label rest']);
+  assert.deepStrictEqual(lineOf('see [snake_label](a_b "a title") rest'), ['see snake_label rest']);
+  assert.deepStrictEqual(lineOf('see [a [nested] label](a_b) rest'), ['see a [nested] label rest']);
+  assert.deepStrictEqual(lineOf('not a link [label] (a b) rest'), ['not a link [label] (a b) rest']);
+});
+
+test('a wiki-link in a description still reads its name as words, and a label as the label', () => {
+  assert.deepStrictEqual(lineOf('Sister of [[Some_Note]] and [[Some_Note|the_label]].'), ['Sister of Some Note and the_label.']);
+  assert.deepStrictEqual(lineOf('mixed_up [[Some_Note]] in_between [[Other_One#A_head]]'), ['mixed_up Some Note in_between Other One#A head']);
+});
+
+test('HTML special characters in a description are left for the page to escape', () => {
+  assert.deepStrictEqual(lineOf('a <b>&"_x_"'), ['a <b>&"_x_"']);
+});
