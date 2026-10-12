@@ -13,13 +13,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - A note can be marked `withheld: true` when its own name is a secret.
   The site build then looks for that note's file name, title and
-  aliases in everything it publishes (page text, listings, the search
-  index, link previews, copied file names) and reports each place
-  (#291). A link to a withheld note with no words of its own prints a
+  aliases in what it publishes (page text, link labels, listings, the
+  search index, link previews, copied file names) and reports each
+  place (#291). The five templates that carry `gm_aliases` gain a
+  `withheld: false` line. A link to a withheld note with no words of its own prints a
   neutral word in the name's place: "someone" for a character,
   "somewhere" for a place, "something" for anything else.
-- campaign-qa's Site Faults check walks the new findings, and
-  "stays hidden:" beside the note's manifest entry settles them.
+- campaign-qa's Site Faults check walks the new findings. "stays
+  hidden:" beside the note's manifest entry settles a link to it, as
+  before; a withheld name printed in plain text has no such answer: the
+  sentence is changed or the flag removed.
 - `links.py unlink --in` keeps a link with no words to a withheld note
   until `--as` gives the words to write, so unlinking never writes the
   secret name into a page.
@@ -35,7 +38,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   not withheld, with a warning naming the note.
 - A secret name is found when the note's file name and the page's text
   spell an accented letter in different Unicode forms. This applies to
-  `gm_aliases` names too, so a site may report one it missed before.
+  `gm_aliases` names too, and so does reading a link's label, so a site
+  may report a secret alias it missed before.
+- `gm_only` and `withheld` read a quoted `"1.0"`, `"01"` or `"+1"` as
+  yes, in the site build and the vault scripts alike.
 - `vault_check site-faults` reports a note fault of error severity as
   a row and goes on, where any error used to stop the audit.
 - mobRPG `link-orphans` takes its star systems from the vault's own
@@ -53,7 +59,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   web page: that kind is skipped and named, `pull` and the other
   commands treat it as empty as before, and a run where every kind was
   skipped ends with an error (#307). One entity that fails is reported
-  and counted, and the run goes on.
+  and counted, the run goes on, and it ends with an error code.
 - mobRPG `images --execute` no longer saves a "(mobRPG)" copy beside a
   portrait that is already the same picture, wherever in the vault the
   portrait is kept. A picture that differs is saved beside it with a
