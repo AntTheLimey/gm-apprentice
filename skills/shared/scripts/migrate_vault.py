@@ -4,6 +4,7 @@ alone: templates, the schema mirror, and the small per-release fixes."""
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import posixpath
@@ -148,6 +149,38 @@ def _same(a: str, b: str) -> bool:
     return normalise(a) == normalise(b)
 
 
+REGENCY_LINE_NOTE_RE = re.compile(r"[ \t]*<!--.*?-->")
+
+
+def _regency_variant(system: str | None, name: str, current: str) -> bool:
+    """Is `current` the Regency Cthulhu form of a stat block the vault's
+    plain `coc-7e` system builds without the Reputation line? That is the
+    block `npc-stats/coc-7e.md` holds, with or without the setup comment on
+    its Reputation line. Dropping the line would take away what the
+    campaign's setting has (#311), so it is never offered as an overwrite."""
+    if system != "coc-7e":
+        return False
+    regency = templates_for("coc-7e-regency").get(name)
+    if regency is None:
+        return False
+    lines = [REGENCY_LINE_NOTE_RE.sub("", line) if "**Reputation**" in line
+             else line for line in current.split("\n")]
+    return _same("\n".join(lines), regency)
+
+
+def _differs(current: str, expected: str, shown: int = 4) -> str:
+    """The lines of `current` that are not in `expected` ("- ") and the
+    other way ("+ "), on one row: a count, then the first few."""
+    changes = [line[:2] + line[2:].strip()[:90]
+               for line in difflib.ndiff(normalise(current).split("\n"),
+                                         normalise(expected).split("\n"))
+               if line[:2] in ("- ", "+ ") and line[2:].strip()]
+    more = len(changes) - shown
+    return (f"{len(changes)} line{'' if len(changes) == 1 else 's'} differ "
+            f"(- yours, + the plugin's): " + " | ".join(changes[:shown])
+            + (f" | and {more} more" if more > 0 else ""))
+
+
 GENERIC = "generic"   # the history's key for a vault with no known system
 
 
@@ -169,7 +202,8 @@ def _released_hashes(system: str | None) -> dict[str, list[str]]:
 def find_templates(vault: Path) -> list[Item]:
     folder = vault / "_Templates"
     items: list[Item] = []
-    released = _released_hashes(vault_system(vault))
+    system = vault_system(vault)
+    released = _released_hashes(system)
     for name, text in expected_templates(vault).items():
         path = folder / name
 
@@ -188,7 +222,7 @@ def find_templates(vault: Path) -> list[Item]:
         except (OSError, UnicodeDecodeError) as e:
             raise StepFailed(f"_Templates/{name} cannot be read "
                              f"({e.__class__.__name__})") from e
-        if _same(current, text):
+        if _same(current, text) or _regency_variant(system, name, current):
             continue
         if text_hash(current) in released.get(name, []):
             items.append(Item(
@@ -199,7 +233,8 @@ def find_templates(vault: Path) -> list[Item]:
             items.append(Item(
                 f"template:{name}", CHOICE,
                 [f"overwrite _Templates/{name} with the plugin's version; "
-                 f"local changes are lost"], apply))
+                 f"local changes are lost; {_differs(current, text)}"],
+                apply))
     return items
 
 

@@ -250,6 +250,64 @@ class TemplateTests(unittest.TestCase):
             item.apply(None)
         self.assertEqual(mv.find_templates(vault), [])
 
+    def npc_vault(self, text):
+        """A coc-7e vault whose NPC template is `text`; the other
+        templates are as the plugin writes them."""
+        vault = make_vault(self)
+        (vault / "_Templates").mkdir()
+        for name, body in mv.expected_templates(vault).items():
+            (vault / "_Templates" / name).write_text(body, encoding="utf-8")
+        (vault / "_Templates" / "_Template_NPC.md").write_text(
+            text, encoding="utf-8")
+        return vault
+
+    def test_a_regency_stat_line_is_not_offered_for_overwrite(self):
+        # #311: a Regency vault stamped plain coc-7e kept the Reputation
+        # line, and the overwrite choice would have dropped it.
+        plain = mv.expected_templates(make_vault(self))["_Template_NPC.md"]
+        regency = mv.expected_templates(
+            make_vault(self, "coc-7e-regency"))["_Template_NPC.md"]
+        raw = regency.replace(
+            "**Reputation** {n}",
+            "**Reputation** {n}  <!-- Regency Cthulhu only: vault setup "
+            "drops this line otherwise -->")
+        self.assertNotEqual(plain, regency)
+        self.assertNotEqual(regency, raw)
+        for label, text in (("without the comment", regency),
+                            ("with the setup comment", raw)):
+            with self.subTest(label):
+                self.assertEqual(
+                    mv.find_templates(self.npc_vault(text)), [])
+
+    def test_a_regency_template_still_gets_a_missing_reputation_line(self):
+        vault = make_vault(self, "coc-7e-regency")
+        plain = mv.expected_templates(make_vault(self))["_Template_NPC.md"]
+        (vault / "_Templates").mkdir()
+        (vault / "_Templates" / "_Template_NPC.md").write_text(
+            plain, encoding="utf-8")
+        item = by_id(mv.find_templates(vault))["template:_Template_NPC.md"]
+        self.assertEqual(item.group, CHOICE)
+        self.assertIn("+ **Reputation** {n}", item.lines[0])
+
+    def test_the_choice_row_names_what_differs(self):
+        # #311: "local changes are lost" gave the GM nothing to decide on.
+        vault = make_vault(self)
+        expected = mv.expected_templates(vault)["_Template_NPC.md"]
+        text = expected.replace("**Armour** {none}", "**Armour** {leather}")
+        self.assertNotEqual(text, expected)
+        text += "\n## My Section\n"
+        item = by_id(mv.find_templates(self.npc_vault(text))
+                     )["template:_Template_NPC.md"]
+        row = item.lines[0]
+        self.assertIn("local changes are lost", row)
+        self.assertIn("3 lines differ", row)
+        self.assertIn("- **Damage Bonus** {+0} · **Build** {0} · **Move** "
+                      "{8} · **Armour** {leather}", row)
+        self.assertIn("+ **Damage Bonus** {+0} · **Build** {0} · **Move** "
+                      "{8} · **Armour** {none}", row)
+        self.assertIn("- ## My Section", row)
+        self.assertNotIn("\n", row)
+
     def older(self, history):
         """A vault whose Document template is an old text; HISTORY points at
         a file holding `history(old_text)`."""
