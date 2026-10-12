@@ -116,9 +116,11 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp,
         name = _target_name(r.get("target"))
         # exact note name first (#262); the folded key drops "The"/"Lord", and
         # suggest.node_index leaves out a key two linked notes share
-        tgt = (id_by_file or {}).get(suggest._target_stem(name)) or id_by_key.get(_key(name))
+        # One resolver for both commands, so they resolve the same link the same way.
+        tgt, _ref, amb = suggest._resolve_edge(name, _key(name), id_by_key, id_by_file,
+                                               None, None, ambiguous)
         if not tgt:
-            if _key(name) in (ambiguous or ()) and (id_by_key or id_by_file):
+            if amb and (id_by_key or id_by_file):
                 reviews.append(f"{pred} -> {r.get('target')}: ambiguous (two notes share that "
                                f"name once articles and titles are ignored); link the exact note name")
             continue

@@ -1797,3 +1797,43 @@ def test_underscore_twins_are_named_not_dropped(tmp_path, monkeypatch, capsys):
     suggest.run(["w1", "--vault", str(root), "--out", str(tmp_path / "out")])
     out = capsys.readouterr().out
     assert any("Black" in l and "underscore" in l for l in out.splitlines()), out
+
+
+# A name with no Latin letters or digits, or only stop words, folds to "": never a folded match.
+def _one_alias_vault(tmp_path, name, alias):
+    (tmp_path / "Characters/NPCs").mkdir(parents=True)
+    from mobrpg import node
+    nd = {"world_id": "", "external_ref": f"w:Characters/NPCs/{name}", "element_id": "vane-id",
+          "element_kind": "Person", "review_state": "accepted", "relationships": [], "languages": []}
+    (tmp_path / f"Characters/NPCs/{name}.md").write_text(
+        f"---\ntype: npc\naliases: [{alias}]\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    return str(tmp_path)
+
+
+@pytest.mark.parametrize("new_name,alias", [("龍", "伯爵"), ("The Lord", "Lady"), ("伯爵", "龍")])
+def test_a_new_note_with_no_folded_key_is_not_filed_as_an_aliases_owner(tmp_path, new_name, alias):
+    v = _one_alias_vault(tmp_path, "Vane", alias)
+    aliases = suggest.linked_aliases(v)
+    by_file, ambiguous = suggest.node_files(v)
+    net_new, linked, _ = suggest.partition_entities(
+        [{"name": new_name}], {}, set(), by_file, ambiguous, alias_owner=aliases)
+    assert [e["name"] for e in net_new] == [new_name] and linked == []
+    # and the same without the file table, where the folded key decides
+    idx, _l, _s = suggest.node_index(v)
+    assert "" not in idx
+    net_new, linked, _ = suggest.partition_entities([{"name": new_name}], idx, set(), alias_owner=aliases)
+    assert [e["name"] for e in net_new] == [new_name] and linked == []
+
+
+def test_an_empty_folded_key_resolves_no_edge_target():
+    assert suggest._resolve_edge("[[龍]]", "", {"": "wrong-id"}, {"Vane": "v"}, {"": "e1"}, {}, set()) == (None, None, False)
+    assert suggest._resolve_edge("[[The Lord]]", "", {"": "wrong-id"}, None, {"": "e1"}, None, set()) == (None, None, False)
+    assert suggest._alias_owner_of("龍", {}, {"": "Vane"}, set()) is None
+    assert suggest.kind_of({"": "Person"}, "龍") is None
+
+
+def test_notes_and_aliases_with_no_folded_key_are_not_stored_under_the_empty_key(tmp_path):
+    v = _one_alias_vault(tmp_path, "龍", "伯爵")
+    idx, linked, _ = suggest.node_index(v)
+    assert "" not in idx and "" not in suggest.link_index(v) and "" not in suggest.node_kind_index(v)
+    assert not any(t[-1] == "" for t in linked)
