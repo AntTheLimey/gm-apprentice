@@ -96,17 +96,18 @@ def derive_parent(name: str, exists: set, systems: list[str]) -> str | None:
         # --systems is operator input interpolated into patterns below. A name
         # carrying a regex metacharacter ("St. John", "Alpha (Prime)") would
         # otherwise match the wrong things, or raise re.error outright.
-        esc = re.escape(sys_)
-        if name == sysname:
+        # The system's name is matched in any case; the rest of each pattern
+        # (numerals, letters, "Gate", "Belt") stays as written.
+        esc = f"(?i:{re.escape(sys_)})"
+        if sysname and name.lower() == sysname.lower():
             return None
         # the star: the bare system name, when a distinct "<Sys> System" note exists
-        if name == sys_:
+        if name.lower() == sys_.lower():
             return sysname if sysname_ok else None
         # moon: "<Sys> <ROMAN> <LETTER>"
         m = re.fullmatch(rf"{esc}\s+({ROMAN})\s+([A-Z])", name)
         if m:
-            parent = f"{sys_} {m.group(1)}"
-            return parent if parent in exists else sysname
+            return lower.get(f"{sys_} {m.group(1)}".lower()) or sysname
         # planet: "<Sys> <ROMAN>"
         if re.fullmatch(rf"{esc}\s+{ROMAN}", name):
             return sysname
@@ -247,6 +248,7 @@ def run(argv: list[str]) -> int:
                 target, rtype, why = p, "part_of", "structural containment"
             elif left_out and derive_parent(name, exists, left_out):
                 would_match.append((kind, name, derive_parent(name, exists, left_out)))
+                continue          # reported in its own section, not as "still orphan"
         elif kind == "item":
             mk = derive_maker(e.get("body_md", ""), exists)
             if mk:
@@ -295,6 +297,8 @@ def run(argv: list[str]) -> int:
     os.makedirs(outdir, exist_ok=True)
 
     head = f"# Orphan auto-linking report — {len(linked)} linked, {len(still)} still orphan"
+    if would_match:
+        head += f", {len(would_match)} match a system not in --systems"
     if unwritable:
         head += f", {len(unwritable)} could not be written"
     rep = [head + "\n"]
@@ -331,23 +335,23 @@ def run(argv: list[str]) -> int:
         rep.append("| entity | would be part_of |\n|---|---|")
         for _k, n, t in sorted(would_match, key=lambda w: w[1]):
             rep.append(f"| {n} | {t} |")
-    matched = {n for _k, n, _t in would_match}
     rep.append("\n## Still orphan (need manual judgement)\n")
     for k, n in sorted(still):
-        if n not in matched:
-            rep.append(f"- [{k}] {n}")
+        rep.append(f"- [{k}] {n}")
     with open(os.path.join(outdir, "orphan-linking-report.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(rep) + "\n")
 
     with open(os.path.join(outdir, "orphan-linking.json"), "w", encoding="utf-8") as fh:
         json.dump({"linked": linked, "still_orphan": still,
+                   "not_in_systems": would_match,
                    "unwritable": [{"entity": n, "kind": k, "type": t, "target": tgt}
                                   for k, n, tgt, t in unwritable]},
                   fh, indent=2, ensure_ascii=False)
 
     if not args.execute and linked:
         print("dry-run — pass --execute to write the vault edits above")
-    print(f"linked {len(linked)}, still orphan {len(still)}")
+    print(f"linked {len(linked)}, still orphan {len(still)}"
+          + (f", {len(would_match)} match a system not in --systems" if would_match else ""))
     if given and left_out:
         print(f"NOTE: the vault also has {', '.join(x + ' System' for x in left_out)} "
               f"which --systems leaves out; {len(would_match)} orphan(s) match a "

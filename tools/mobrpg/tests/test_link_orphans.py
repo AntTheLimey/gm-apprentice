@@ -430,3 +430,35 @@ def test_lowercase_system_suffix_counts(tmp_path):
     vault = tmp_path / "v"
     _mk(vault, "Locations", "Eris system")
     assert link_orphans.vault_systems(str(vault)) == ["Eris"]
+
+
+def test_stdout_and_report_count_each_orphan_once(tmp_path, capsys):
+    vault = _vault(tmp_path)
+    (vault / "Locations" / "Eris System.md").write_text(NOTE.format(name="Eris System"), encoding="utf-8")
+    (vault / "Locations" / "Eris II.md").write_text(NOTE.format(name="Eris II"), encoding="utf-8")
+    extract = tmp_path / "x.json"
+    extract.write_text(json.dumps({"entities": [
+        {"id": "a", "name": "Corwin I", "kind": "landfeature", "relationships": []},
+        {"id": "b", "name": "Eris II", "kind": "landfeature", "relationships": []},
+        {"id": "c", "name": "Random Hermit", "kind": "landfeature", "relationships": []}]}),
+        encoding="utf-8")
+    out = tmp_path / "out"
+    link_orphans.run([str(extract), "--vault", str(vault), "--out", str(out),
+                      "--systems", "Corwin"])
+    text = capsys.readouterr().out
+    assert "linked 1, still orphan 1, 1 match a system not in --systems" in text
+    report = (out / "orphan-linking-report.md").read_text(encoding="utf-8")
+    assert report.startswith("# Orphan auto-linking report \u2014 1 linked, 1 still orphan")
+    data = json.loads((out / "orphan-linking.json").read_text(encoding="utf-8"))
+    assert [n for _k, n in data["still_orphan"]] == ["Random Hermit"]
+    assert [n for _k, n, _t in data["not_in_systems"]] == ["Eris II"]
+
+
+def test_system_names_match_case_insensitively_in_every_rule():
+    exists = {"Corwin System", "Corwin I"}
+    d = link_orphans.derive_parent
+    assert d("CORWIN I A", exists, ["Corwin"]) == "Corwin I"       # moon parent, any case
+    assert d("corwin II", exists, ["Corwin"]) == "Corwin System"
+    assert d("corwin Gate", exists, ["Corwin"]) == "Corwin System"
+    assert d("corwin Belt", exists, ["Corwin"]) == "Corwin System"
+    assert d("corwin", exists, ["Corwin"]) == "Corwin System"
