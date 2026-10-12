@@ -392,3 +392,41 @@ def test_gate_rule_needs_a_whole_system_name(tmp_path):
     exists = {"Corwin System"}
     assert link_orphans.derive_parent("Corwin Gate", exists, ["Corwin"]) == "Corwin System"
     assert link_orphans.derive_parent("Corwinton Gate", exists, ["Corwin"]) is None
+
+
+def _mk(vault, folder, name, extra=""):
+    d = vault / folder
+    d.mkdir(parents=True, exist_ok=True)
+    (d / f"{name}.md").write_text(
+        f"---\ntype: location\nname: {name}\n{extra}relationships: []\n---\n# {name}\n",
+        encoding="utf-8")
+
+
+def test_the_star_links_to_its_system():
+    exists = {"Corwin System", "Corwin"}
+    assert link_orphans.derive_parent("Corwin", exists, ["Corwin"]) == "Corwin System"
+    assert link_orphans.derive_parent("Corwin System", exists, ["Corwin"]) is None
+
+
+def test_belt_rule_is_anchored():
+    exists = {"Corwin System"}
+    assert link_orphans.derive_parent("Corwin Belt", exists, ["Corwin"]) == "Corwin System"
+    assert link_orphans.derive_parent("Corwinian Belt", exists, ["Corwin"]) == "Corwin System"
+    assert link_orphans.derive_parent("Corwin Belt Station", exists, ["Corwin"]) is None
+    assert link_orphans.derive_parent("Old Corwin Belt", exists, ["Corwin"]) is None
+
+
+def test_systems_come_only_from_location_notes_and_either_source(tmp_path):
+    vault = tmp_path / "v"
+    _mk(vault, "Locations", "Corwin System")
+    _mk(vault, "Locations", "Tau Ceti", 'location_type: "Star System"\n')
+    _mk(vault, "Items & Artifacts", "Defense System")
+    got = link_orphans.vault_systems(str(vault))
+    assert "Tau Ceti" in got and "Corwin" in got
+    assert "Defense" not in got
+
+
+def test_lowercase_system_suffix_counts(tmp_path):
+    vault = tmp_path / "v"
+    _mk(vault, "Locations", "Eris system")
+    assert link_orphans.vault_systems(str(vault)) == ["Eris"]

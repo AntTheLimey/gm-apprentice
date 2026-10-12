@@ -51,13 +51,27 @@ def vault_entity_names(vault: str) -> set:
     return out
 
 
-def vault_systems(exists: set) -> list[str]:
-    """Star system names the vault holds: every note called "<X> System".
-    Longest first, so "Corwin Prime" is tried before "Corwin"."""
-    suffix = " System"
-    return sorted((n[:-len(suffix)] for n in exists
-                   if n.endswith(suffix) and len(n) > len(suffix)),
-                  key=lambda n: (-len(n), n))
+_SYSTEM_SUFFIX = re.compile(r"^(.+?)\s+system$", re.I)
+_STAR_SYSTEM = re.compile(r'^location_type:\s*["\']?\s*star system\s*["\']?\s*$', re.I | re.M)
+
+
+def vault_systems(vault: str) -> list[str]:
+    """Star system names the vault holds, from its Locations notes: a note called
+    "<X> System" (any case), or a note whose `location_type` is "star system"
+    whatever its name. Longest first, so "Corwin Prime" is tried before
+    "Corwin". Other folders are ignored (an item "Defense System" is no star)."""
+    found = set()
+    for path in glob.glob(os.path.join(vault, "Locations", "*.md")):
+        stem = os.path.splitext(os.path.basename(path))[0]
+        m = _SYSTEM_SUFFIX.match(stem)
+        if m:
+            found.add(m.group(1))
+            continue
+        with open(path, encoding="utf-8") as fh:
+            fm = re.match(r"^---\r?\n(.*?)\r?\n---", fh.read(), flags=re.S)
+        if fm and _STAR_SYSTEM.search(fm.group(1)):
+            found.add(stem)
+    return sorted(found, key=lambda n: (-len(n), n))
 
 
 def vault_has_rels(vault: str) -> set:
@@ -73,31 +87,38 @@ def vault_has_rels(vault: str) -> set:
 
 
 def derive_parent(name: str, exists: set, systems: list[str]) -> str | None:
+    lower = {n.lower(): n for n in exists}
     for sys_ in systems:
-        sysname = f"{sys_} System"
+        # The system's own note: "<Sys> System" in any case, else a note named
+        # for the system itself (a `location_type: star system` note).
+        sysname = lower.get(f"{sys_} system".lower()) or lower.get(sys_.lower())
+        sysname_ok = sysname is not None
         # --systems is operator input interpolated into patterns below. A name
         # carrying a regex metacharacter ("St. John", "Alpha (Prime)") would
         # otherwise match the wrong things, or raise re.error outright.
         esc = re.escape(sys_)
-        if name == sysname or name == sys_:
+        if name == sysname:
             return None
+        # the star: the bare system name, when a distinct "<Sys> System" note exists
+        if name == sys_:
+            return sysname if sysname_ok else None
         # moon: "<Sys> <ROMAN> <LETTER>"
         m = re.fullmatch(rf"{esc}\s+({ROMAN})\s+([A-Z])", name)
         if m:
             parent = f"{sys_} {m.group(1)}"
-            return parent if parent in exists else (sysname if sysname in exists else None)
+            return parent if parent in exists else sysname
         # planet: "<Sys> <ROMAN>"
         if re.fullmatch(rf"{esc}\s+{ROMAN}", name):
-            return sysname if sysname in exists else None
+            return sysname
         # body: "<Sys> <LETTER>"
         if re.fullmatch(rf"{esc}\s+[A-Z]", name):
-            return sysname if sysname in exists else None
-        # gate: contains "Gate" and the system token
+            return sysname
+        # gate: contains "Gate" and starts with the whole system name
         if "Gate" in name and re.match(rf"{esc}(?!\w)", name):
-            return sysname if sysname in exists else None
-        # belt: "<Sys>ian Belt" or "<Sys> Belt"
-        if re.search(rf"{esc}(ian)?\s+Belt", name):
-            return sysname if sysname in exists else None
+            return sysname
+        # belt: "<Sys>ian Belt" or "<Sys> Belt", the whole name
+        if re.fullmatch(rf"{esc}(?:ian)?\s+Belt", name):
+            return sysname
     return None
 
 
@@ -206,7 +227,7 @@ def run(argv: list[str]) -> int:
     extract = json.load(open(args.extract, encoding="utf-8"))
     id_of = {e["name"]: e["id"] for e in extract["entities"]}
     exists = vault_entity_names(vault)
-    in_vault = vault_systems(exists)
+    in_vault = vault_systems(vault)
     given = bool(systems)
     if not given:
         systems = in_vault
