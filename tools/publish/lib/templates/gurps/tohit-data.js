@@ -62,18 +62,55 @@ function buildBands() {
   return SIZE_SPEED_RANGE_ROWS.map(r => firstInt(r[2], NaN)).filter(Number.isFinite);
 }
 
-// "Beam Weapons (Pistol)-17", "Guns (Rifle) 17", "Wrestling-15 +4 = 19",
-// "DX-12 (default)", "10". Returns null when no level can be read.
+// "Beam Weapons (Pistol)-17", "Guns (Rifle) 17", "Knife (12)", "Wrestling-15 +4 = 19",
+// "DX-12 (default)", "10". The level is the `= N` if there is one, else the number
+// that directly follows the skill name (after `-`, a space, or inside a trailing
+// `(N)`); parentheticals of prose after it are ignored. Returns null with no level.
+// `/TL<n>` is dropped from the name: it never decides which skill this is.
 function readWeaponSkill(cell) {
-  let s = str(cell).replace(/[*◇◆†‡]/g, '').trim();
-  s = s.replace(/\(\s*[+−-]\s*\d[^)]*\)\s*$/, '').trim();
+  const s = str(cell).replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\/TL\d+/gi, '').trim();
+  const m = /^(.*?)(?:\s*[-\u2212\u2013]\s*(\d+)|\s*\(\s*(\d+)\s*\)|\s*(\d+))/.exec(s);
+  if (!m) return null;
   const eq = /=\s*(\d+)/.exec(s);
-  const all = s.match(/\d+/g);
-  if (!eq && !all) return null;
-  const level = parseInt(eq ? eq[1] : all[all.length - 1], 10);
+  const level = parseInt(eq ? eq[1] : (m[2] || m[3] || m[4]), 10);
   if (!(level >= 1 && level <= 99)) return null;
-  const name = (/^(.*?)\s*[-−–]?\s*\d/.exec(s) || [, ''])[1].replace(/[-−–\s]+$/, '').trim();
-  return { skill: name, level };
+  return { skill: m[1].replace(/[\s=:\-\u2212\u2013]+$/, '').trim(), level };
+}
+
+// Skills-table lookup: exact, then ignoring /TL<n>, then a bracket written as
+// initials (Guns (LMG) = Guns (Light Machine Gun), SMG = Submachine Gun).
+function makeSkillMatcher(skills) {
+  const entries = [];
+  for (const s of skills) {
+    const lv = /^\s*(\d+)/.exec(str(s && s.level));
+    if (lv && str(s.name).trim()) entries.push({ name: str(s.name).trim(), level: parseInt(lv[1], 10) });
+  }
+  const bare = (n) => norm(n.replace(/\/TL\d+/gi, ''));
+  const split = (n) => { const m = /^([^(]*?)\s*\((.*)\)\s*$/.exec(bare(n)); return m ? [m[1], m[2]] : [bare(n), null]; };
+  const abbrOf = (abbr, words) => {
+    const a = abbr.replace(/[^a-z]/g, ''); const letters = words.join('').replace(/[^a-z]/g, '');
+    if (a.length < 2 || a[0] !== letters[0]) return false;
+    let at = 0;
+    for (const ch of a) { at = letters.indexOf(ch, at); if (at < 0) return false; at++; }
+    const firsts = words.map(w => w[0]).join('');
+    let k = 0;
+    for (const ch of a) if (ch === firsts[k]) k++;
+    return k === firsts.length;
+  };
+  return (name) => {
+    const n = str(name).trim();
+    if (!n) return null;
+    const exact = entries.find(e => norm(e.name) === norm(n));
+    if (exact) return exact;
+    const noTl = entries.find(e => bare(e.name) === bare(n));
+    if (noTl) return noTl;
+    const [head, br] = split(n);
+    if (br === null) return null;
+    return entries.find(e => {
+      const [h, b] = split(e.name);
+      return b !== null && h === head && b.split(/[^a-z]+/).filter(Boolean).length > 1 && abbrOf(br, b.split(/[^a-z]+/).filter(Boolean));
+    }) || null;
+  };
 }
 
 function splitPieces(text) {
@@ -93,9 +130,18 @@ function signedIn(text) {
   const n = parseInt(m[3], 10);
   return (m[1] || m[2]) === '+' ? n : -n;
 }
-function aidNameIn(text) {
-  for (const [name, re] of AID_NAMES) if (re.test(str(text))) return name;
+// The first aid name in the text: { name, start, end } or null.
+function aidMatchIn(text) {
+  const t = str(text);
+  for (const [name, re] of AID_NAMES) {
+    const m = re.exec(t);
+    if (m) return { name, start: m.index, end: m.index + m[0].length };
+  }
   return null;
+}
+// The signed number nearest AFTER the aid's name in the same piece, or null.
+function bonusAfter(piece, hit) {
+  return signedIn(str(piece).slice(hit.end));
 }
 function aidFromPiece(name, piece, bonus) {
   return {
@@ -104,6 +150,7 @@ function aidFromPiece(name, piece, bonus) {
     fixed: /\bfixed\b/i.test(piece),
   };
 }
+const makeAid = (name, bonus, acc, fixed) => ({ name, bonus, acc: ALWAYS_ACC.has(name) || acc, fixed });
 
 // Ids are a slug of where the aid was found and its name; a clash gets -2, -3.
 function idMaker() {
@@ -116,12 +163,14 @@ function idMaker() {
   };
 }
 
+// A weapon's own row (its Notes, or the Equipment row named like it): the loose
+// reading, every aid name in every piece.
 function readRowNotes(notes) {
   const aids = []; const bonuses = [];
   for (const piece of splitPieces(notes)) {
+    const hit = aidMatchIn(piece);
+    if (hit) { aids.push(aidFromPiece(hit.name, piece, bonusAfter(piece, hit))); continue; }
     const bonus = signedIn(piece);
-    const name = aidNameIn(piece);
-    if (name) { aids.push(aidFromPiece(name, piece, bonus)); continue; }
     if (bonus === null) continue;
     const label = piece.slice(0, SIGNED_RE.exec(piece).index).replace(/[\s:=(]+$/, '').trim();
     if (label) bonuses.push({ name: label, bonus });
@@ -137,82 +186,106 @@ function readAccCell(cell) {
   if (m) aids.push({ name: 'Scope', bonus: parseInt(m[1], 10), acc: true, fixed: false });
   const p = /\(\s*\+\s*(\d+)\s*([^)]*)\)/.exec(s);
   if (p) {
-    const name = aidNameIn(p[2]);
-    if (name) aids.push({ name, bonus: parseInt(p[1], 10), acc: true, fixed: /\bfixed\b/i.test(p[2]) });
+    const hit = aidMatchIn(p[2]);
+    if (hit) aids.push({ name: hit.name, bonus: parseInt(p[1], 10), acc: true, fixed: /\bfixed\b/i.test(p[2]) });
   }
   return { acc, aids };
 }
 
-function readGear(items) {
+// What an item or weapon name is compared on: lower case, the text before the
+// first " — " or " (", markers dropped.
+const weaponStem = (n) => norm(str(n).split(/\s+\u2014\s+|\s+\(/)[0].replace(/[*\u25c7\u25c6\u2020\u2021]/g, ''));
+
+// Character-wide aids, from an Equipment row or an Advantage. Only two shapes
+// count: the NAME starts with an aid name, or a `;`-separated piece of the notes
+// starts with one and is followed by a signed number. Prose mentions do not.
+const AID_START = AID_NAMES.map(([name, re]) => [name, new RegExp('^\\s*(?:' + re.source + ')', 'i')]);
+const NAME_REST = /^(?:\s+(?:link|system|software|program))?(?:\s*$|\s*[(,:\[]|\s*[+\u2212\u2013-]\s*\d|\s+\d)/i;
+const BONUS_PHRASE = /([+\u2212]\s*\d+)\s+(?:\w+\s+){0,3}?(?:acc\b|skill\b|to hit|guns\b|gunner\b|beam weapons)/i;
+const OFF_RE = /\b(?:backup|superseded|spare)\b/i;
+
+function charWideAids(name, notes) {
   const out = [];
-  for (const item of items) {
-    const found = new Map();
-    const pieces = splitPieces(item && item.notes);
-    for (const piece of pieces) {
-      const name = aidNameIn(piece);
-      if (name && !found.has(name)) found.set(name, { piece, bonus: signedIn(piece) });
-    }
-    const nameAid = aidNameIn(item && item.name);
-    if (nameAid && !found.has(nameAid)) {
-      let bonus = signedIn(item.name);
-      let piece = str(item.name);
-      if (bonus === null) {
-        const plain = pieces.find(p => !aidNameIn(p) && signedIn(p) !== null);
-        if (plain) { bonus = signedIn(plain); piece = plain; }
+  const text = str(notes);
+  for (const [aid, re] of AID_START) {
+    const m = re.exec(str(name));
+    if (!m || !NAME_REST.test(str(name).slice(m[0].length))) continue;
+    let bonus = signedIn(str(name).slice(m[0].length));
+    let acc = false;
+    if (bonus === null) {
+      const b = BONUS_PHRASE.exec(text);
+      if (b) { bonus = signedIn(b[1]); acc = /\bacc\b/i.test(b[0]); }
+    } else acc = /\bacc\b/i.test(str(name));
+    out.push({ aid: makeAid(aid, bonus, acc, /\bfixed\b/i.test(str(name))), off: OFF_RE.test(text) });
+    break;
+  }
+  for (const piece of text.split(';')) {
+    for (const [aid, re] of AID_START) {
+      const m = re.exec(piece);
+      if (!m) continue;
+      const rest = piece.slice(m[0].length);
+      const num = /^\s*[:=(]?\s*([+\u2212])\s*(\d+)/.exec(rest);
+      if (num && !out.some(o => o.aid.name === aid)) {
+        out.push({ aid: makeAid(aid, signedIn(num[1] + num[2]), /\bacc\b/i.test(rest), /\bfixed\b/i.test(piece)), off: OFF_RE.test(piece) || OFF_RE.test(text) });
       }
-      found.set(nameAid, { piece, bonus });
-    }
-    for (const [name, { piece, bonus }] of found) {
-      out.push({ item: str(item.name), aid: aidFromPiece(name, piece, bonus), from: 'gear' });
+      break;
     }
   }
   return out;
 }
 
+// A trait's level: the number after its name ("2", "(2)", "(Level 2)", "2 [10]");
+// the trait with no number is level 1. 0 when the trait is not there.
 function levelOf(name, re) {
-  const m = re.exec(str(name));
-  return m ? parseInt(m[1], 10) : 0;
+  const m = re.exec(str(name).replace(/\[[^\]]*\]/g, ''));
+  if (!m) return 0;
+  const n = /(\d+)/.exec(m[1]);
+  return n ? parseInt(n[1], 10) : 1;
 }
-function readTraits(advantages) {
+function readTraits(advantages, match) {
   const t = { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 };
   for (const a of advantages) {
     const n = str(a && a.name);
     if (/\bambidext/i.test(n)) t.ambidextrous = true;
     const oh = /^\s*off-?\s*hand weapon training\s*\((.+)\)/i.exec(n);
-    if (oh) for (const s of oh[1].split(',')) if (s.trim()) t.offHand.push(s.trim());
+    if (oh) {
+      for (const s of oh[1].split(',')) {
+        const skill = s.trim();
+        if (skill) t.offHand.push((match(skill) || { name: skill }).name);
+      }
+    }
     if (/\bweapon master\b|\btrained by a master\b/i.test(n)) t.halfRapid = true;
-    t.telescopic = Math.max(t.telescopic, levelOf(n, /telescopic vision\s*\(?\s*(\d+)/i));
-    t.nightVision = Math.max(t.nightVision, levelOf(n, /night vision\s*\(?\s*(\d+)/i));
+    t.telescopic = Math.max(t.telescopic, levelOf(n, /telescopic vision\b(.*)/i));
+    t.nightVision = Math.max(t.nightVision, levelOf(n, /night vision\b(.*)/i));
   }
   return t;
 }
 
-function readTechniques(techniques, skillLevel, locKeys) {
+function readTechniques(techniques, match, locKeys) {
   const out = { targeted: [], dual: {}, other: [] };
   for (const t of techniques) {
     const name = str(t && t.name);
     const level = firstInt(t && t.level, NaN);
     if (!Number.isFinite(level)) continue;
-    const defSkill = (/^\s*(.+?)\s*[-−–+]\s*\d+/.exec(str(t.def)) || [, ''])[1].trim();
+    const defSkill = (/^\s*(.+?)\s*[-\u2212\u2013+]\s*\d+/.exec(str(t.def)) || [, ''])[1].trim();
     const targeted = /^targeted attack\s*\((.*)\)\s*$/i.exec(name);
     const dual = /^dual-weapon attack\s*\((.*)\)\s*$/i.exec(name);
     if (targeted) {
       const inner = targeted[1]; const cut = inner.lastIndexOf('/');
       if (cut < 0) continue;
-      const word = inner.slice(cut + 1).trim().toLowerCase();
+      const word = (/(\S+)\s*$/.exec(inner.slice(cut + 1)) || [, ''])[1].toLowerCase();
       const loc = locKeys.has(word) ? word : LOCATION_WORDS[word];
       if (!loc) continue;
       const bracket = inner.slice(0, cut).replace(/\s+(?:swing|thrust)$/i, '').trim();
-      const skill = [defSkill, bracket].find(s => s && skillLevel.has(norm(s)));
-      if (!skill) continue;
-      out.targeted.push({ skill, loc, net: level - skillLevel.get(norm(skill)), name });
+      const hit = match(defSkill) || match(bracket);
+      if (!hit) continue;
+      out.targeted.push({ skill: hit.name, loc, net: level - hit.level, name });
     } else if (dual) {
-      const skill = dual[1].trim();
-      if (!skillLevel.has(norm(skill))) continue;
-      const bought = level - (skillLevel.get(norm(skill)) - DUAL_PENALTY);
-      out.dual[skill] = Math.max(0, Math.min(DUAL_PENALTY, bought));
+      const hit = match(dual[1]);
+      if (!hit) continue;
+      out.dual[hit.name] = Math.max(0, Math.min(DUAL_PENALTY, level - (hit.level - DUAL_PENALTY)));
     } else if (defSkill) {
-      out.other.push({ skill: defSkill, name, level });
+      out.other.push({ skill: (match(defSkill) || { name: defSkill }).name, name, level });
     }
   }
   return out;
@@ -220,34 +293,36 @@ function readTechniques(techniques, skillLevel, locKeys) {
 
 function buildTohitData(model, meta) {
   const m = model || {};
-  const skillLevel = new Map();
-  for (const s of m.skills || []) {
-    const lv = /^\s*(\d+)/.exec(str(s && s.level));
-    if (lv && !skillLevel.has(norm(s.name))) skillLevel.set(norm(s.name), parseInt(lv[1], 10));
-  }
+  const match = makeSkillMatcher(m.skills || []);
   const nextId = idMaker();
+  const items = (m.equipment && m.equipment.items) || [];
   const weapons = [];
   const addWeapon = (row, type) => {
     const key = str(row && row.weapon);
     const read = key && readWeaponSkill(row.skill);
     if (!read) return;
+    const hit = match(read.skill);
     const notes = readRowNotes(row.notes);
     const w = {
       key, type,
-      name: key.replace(/[*◇◆†‡]/g, '').replace(/\s+/g, ' ').trim() || key,
-      skill: read.skill, level: read.level,
-      base: read.skill && skillLevel.has(norm(read.skill)) ? skillLevel.get(norm(read.skill)) : null,
+      name: key.replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\s+/g, ' ').trim() || key,
+      skill: hit ? hit.name : read.skill, skillAs: read.skill, level: read.level,
+      base: hit ? hit.level : null,
       range: str(row.range), damage: str(row.damage),
       beam: /^beam weapons/i.test(read.skill),
       aids: [], bonuses: notes.bonuses,
     };
     if (type === 'ranged') {
       const acc = readAccCell(row.acc);
+      // An Equipment row named like this weapon is part of this weapon's own row.
+      const stem = weaponStem(key);
+      const own = items.filter(i => i && weaponStem(i.name) === stem).map(i => readRowNotes(i.notes));
       Object.assign(w, {
         acc: acc.acc, rof: firstInt(row.rof, 1) || 1, rcl: firstInt(row.rcl, 1) || 1,
         bulk: firstInt(row.bulk, 0),
       });
-      w.aids = [...acc.aids, ...notes.aids].map(a => ({ id: nextId('row', key, a.name), ...a, from: 'row' }));
+      w.aids = [...acc.aids, ...notes.aids, ...own.flatMap(o => o.aids)]
+        .map(a => ({ id: nextId('row', key, a.name), ...a, from: 'row', on: true }));
     }
     weapons.push(w);
   };
@@ -255,33 +330,42 @@ function buildTohitData(model, meta) {
   for (const r of m.ranged || []) addWeapon(r, 'ranged');
   if (!weapons.length) return null;
 
+  const stems = new Set(weapons.map(w => weaponStem(w.key)));
   const advantages = (m.traits && m.traits.advantages) || [];
-  const aids = [];
-  for (const g of readGear((m.equipment && m.equipment.items) || [])) {
-    aids.push({ id: nextId('gear', g.item, g.aid.name), ...g.aid, from: 'gear' });
+  const wide = [];
+  for (const item of items) {
+    if (!item || stems.has(weaponStem(item.name))) continue;
+    for (const g of charWideAids(item.name, item.notes)) wide.push({ ...g, id: nextId('gear', item.name, g.aid.name), from: 'gear' });
   }
   for (const a of advantages) {
-    const name = aidNameIn(a && a.name);
-    if (name) aids.push({ id: nextId('trait', a.name, name), ...aidFromPiece(name, str(a.name), signedIn(a.name)), from: 'trait' });
+    for (const g of charWideAids(a && a.name, '')) wide.push({ ...g, id: nextId('trait', a.name, g.aid.name), from: 'trait' });
   }
+  // Flat aids add, but a spare does not: of the flat ones only the best starts on.
+  const flat = wide.filter(g => !g.aid.acc && g.aid.bonus !== null && !g.off);
+  const best = flat.reduce((b, g) => (b === null || g.aid.bonus > b.aid.bonus ? g : b), null);
+  const aids = wide.map(g => ({
+    id: g.id, ...g.aid, from: g.from,
+    on: !g.off && (g.aid.acc || g.aid.bonus === null || g === best),
+  }));
 
   const locations = buildLocations();
-  const ff = skillLevel.get('free fall');
+  const ff = match('Free Fall');
   return {
     pc: meta && meta.pcSlug,
     weapons,
     aids,
-    techniques: readTechniques(m.techniques || [], skillLevel, new Set(locations.map(l => l[0]))),
-    traits: readTraits(advantages),
-    freeFall: ff === undefined ? null : ff,
+    techniques: readTechniques(m.techniques || [], match, new Set(locations.map(l => l[0]))),
+    traits: readTraits(advantages, match),
+    freeFall: ff ? ff.level : null,
     locations,
     bands: buildBands(),
   };
 }
 
-// '<' is written as < so a note can never close the tag.
+// '<' is written as \u003c so a note can never close the tag; the two line
+// separators are written out too, for older parsers.
 function tohitDataScript(data) {
-  const json = JSON.stringify(data).replace(/</g, '\\u003c');
+  const json = JSON.stringify(data).replace(/</g, '\\u003c').replace(/\u2028/g, '\\u2028').replace(/\u2029/g, '\\u2029');
   return `<script type="application/json" id="gurps-tohit-data">${json}</script>`;
 }
 
