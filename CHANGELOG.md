@@ -94,6 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - In a tree row whose kind and sessions wrap under the name, they sit
   against the name, not at the row's right edge.
 - The ontology export refuses a tone family the site does not show.
+- Two sessions with the same file name in different chapters each list
+  their own NPCs and events, not the other's.
 
 ---
 
