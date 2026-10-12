@@ -596,6 +596,14 @@ describe('weapons with the same name', () => {
     for (const o of p.observers) o.fn([]);
     assert.strictEqual(p.$('#th-roll').textContent, '8');
   });
+  it('when the live script lowers both, each moves by its own row\'s difference', () => {
+    // Sheet prints 17 and 15; encumbrance lowers them by 2 and 1.
+    const p = load(twin(), { sheetTab: true, cells: [['melee', 'Twin Blade', '15'], ['melee', 'Twin Blade', '14']] });
+    p.set('#th-weapon', 'w3');
+    assert.strictEqual(p.$('#th-roll').textContent, '15');
+    p.set('#th-weapon', 'w4');
+    assert.strictEqual(p.$('#th-roll').textContent, '14');
+  });
   it('a ranged weapon takes the Ranged Attacks row, not a melee row of the same name', () => {
     const d = twin();
     d.weapons.push({ id: 'w5', key: 'Twin Blade', type: 'ranged', nth: 0, name: 'Twin Blade', skill: 'Guns (Pistol)', level: 16, base: 16, acc: 2, rof: 1, rcl: 1, bulk: 1, range: '10/20', damage: '1d pi', aids: [], bonuses: [], beam: false });

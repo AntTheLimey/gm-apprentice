@@ -76,9 +76,20 @@ function buildWeapons(model, skillsByName, authoredLevel) {
   // Melee + ranged both feed the live to-hit map so their `.wp-tohit` cells
   // (keyed by data-weapon-key) update in step with encumbrance. Ranged rows
   // carry no parry, so parry stays null for them.
-  const rows = [...(model.melee || []), ...(model.ranged || [])];
-  for (const w of rows) {
+  // Each attack gets its own entry: `key` is its data-weapon-key, `table` and `nth` place it (the
+  // nth row of that key in the Melee or Ranged Attacks table). The first row of a name is stored
+  // under the plain name, as before; a later row of the same name is stored as `<name>#<table>#<nth>`
+  // so two modes of one weapon (or one name in both tables) no longer overwrite each other.
+  const rows = [
+    ...(model.melee || []).map(w => ({ w, table: 'melee' })),
+    ...(model.ranged || []).map(w => ({ w, table: 'ranged' })),
+  ];
+  const seen = new Map();
+  for (const { w, table } of rows) {
     if (!w.weapon) continue;
+    const place = table + '\u0000' + w.weapon;
+    const nth = seen.get(place) || 0;
+    seen.set(place, nth + 1);
     const authoredToHit = weaponToHit(w.skill);
     const series = weaponSeries(w, skillsByName, model, authoredLevel);
     const toHit = [0, 1, 2, 3, 4].map(L => {
@@ -93,7 +104,9 @@ function buildWeapons(model, skillsByName, authoredLevel) {
         return authoredParry;
       });
     }
-    out[w.weapon] = { toHit, parry, block: null };
+    let slot = w.weapon;
+    if (Object.prototype.hasOwnProperty.call(out, slot)) slot = `${w.weapon}#${table}#${nth}`;
+    out[slot] = { key: w.weapon, table, nth, toHit, parry, block: null };
   }
   return out;
 }
