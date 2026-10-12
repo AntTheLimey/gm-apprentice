@@ -4,12 +4,13 @@
 // the one place outside `init` and `migrate-config` that writes them. migrate.py asks
 // this rather than read the theme or decide which fonts come from Google itself.
 //
-//   vault-setting --json                      -> { defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame, dndbeyondSync, linkPreviews, connections }
+//   vault-setting --json                      -> { excludeSectionsOwn, excludeFieldsOwn, defaultExcludeSections, defaultExcludeFields, defaultModeSet, fontSource, googleFonts, sheetSkin, sheetFrame, dndbeyondSync, linkPreviews, connections }
 //   vault-setting --set <key>=<json> --json   -> { written: [keys] }
 const fs = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { SKINS, FRAME_IDS } = require('./skins');
+const { PUBLISH_DEFAULTS } = require('./config');
 
 // A value is taken only as the exact id, so the line written is always a clean one. (The
 // build is more forgiving of a hand-typed value: it trims and lower-cases before matching.)
@@ -21,7 +22,14 @@ const SETTABLE = {
   'dndbeyond_sync': (v) => v === 'build' || v === 'manual',
   'link_previews': (v) => v === 'on' || v === 'desktop' || v === 'off',
   'connections': (v) => v === 'tree' || v === 'web' || v === 'cards' || v === 'off',
+  // The two lists a vault can own. Written whole, as a list of headings or field names.
+  'exclude_sections': (v) => isNameList(v),
+  'exclude_fields': (v) => isNameList(v),
 };
+
+function isNameList(v) {
+  return Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string' && x.trim() !== '');
+}
 
 function siteConfigPath(options) {
   return path.resolve(options.configPath || './vault.config.json');
@@ -59,7 +67,14 @@ function read(options) {
   const theme = rawPublish(vaultPath).theme;
   const asked = theme && typeof theme === 'object' ? theme : {};
   const askedFonts = asked.fonts && typeof asked.fonts === 'object' ? asked.fonts : {};
+  const raw = rawPublish(vaultPath);
   return {
+    // Whether the vault file holds a list of its own (an empty key is none: the build then
+    // falls back to the built-in list), or the site file still holds one that migrate-config has yet to move, and the built-in lists a migration may write.
+    excludeSectionsOwn: Array.isArray(raw.exclude_sections) || Array.isArray(siteConfig.excludeSections),
+    excludeFieldsOwn: Array.isArray(raw.exclude_fields) || Array.isArray(siteConfig.excludeFields),
+    defaultExcludeSections: [...PUBLISH_DEFAULTS.exclude_sections],
+    defaultExcludeFields: [...PUBLISH_DEFAULTS.exclude_fields],
     defaultModeSet: asked.default_mode !== undefined && asked.default_mode !== null,
     fontSource: askedFonts.source || null,
     googleFonts: names.filter((v, i, a) => a.indexOf(v) === i),

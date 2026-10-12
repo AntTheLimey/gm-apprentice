@@ -592,6 +592,36 @@ def find_fonts(vault: Path) -> list[Item]:
                   f"address; the look does not change"], apply)]
 
 
+def find_exclude_lists(vault: Path) -> list[Item]:
+    """1.10.47: the lists of headings and fields the site hides are written
+    into the vault file, where the GM can see them. A vault with no list of
+    its own only ever had the tool's built-in one, so writing that same list
+    changes nothing about what publishes. A list the vault owns is left."""
+    facts = _theme_facts(vault)
+    if not facts:
+        return []
+    lists = [(key, own, default) for key, own, default in (
+        ("exclude_sections", facts.get("excludeSectionsOwn"),
+         facts.get("defaultExcludeSections")),
+        ("exclude_fields", facts.get("excludeFieldsOwn"),
+         facts.get("defaultExcludeFields")))
+        if own is False and isinstance(default, list) and default]
+    if not lists:
+        return []
+
+    def apply(_value: str | None) -> list[str]:
+        for key, _own, default in lists:
+            _set_setting(vault, key, default)
+        return [f"wrote publish.{key}: {len(default)} entries"
+                for key, _own, default in lists]
+
+    return [Item("exclude-lists", WILL,
+                 [f"write the built-in publish.{key} ({', '.join(default)}) "
+                  f"into _meta/vault-config.md so you can see and edit it; "
+                  f"what publishes does not change"
+                  for key, _own, default in lists], apply)]
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check("config-to-vault", None, 2,
@@ -613,6 +643,8 @@ SITE_CHECKS: list[Check] = [
           find_sheet_source, asks_site=True, choices=("sheet-source:=",)),
     Check("unparseable-notes", "1.10.23", 4,
           "notes the build cannot parse", find_unparseable, asks_site=True),
+    Check("exclude-lists", "1.10.47", 2, "the built-in exclude lists, written "
+          "into the vault file", find_exclude_lists, asks_site=True),
     Check("gm-leak", None, 4, "sections the site withholds are nested under "
           "GM Notes", find_gm_leak, asks_site=True),
 ]

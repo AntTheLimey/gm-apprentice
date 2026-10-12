@@ -127,10 +127,13 @@ These decide which notes, and which parts of a note, reach the site.
 | `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | `true` or `false` | `false`: drafts publish with a "Draft" badge |
 | `publish.overrides.fields` | Lets one note show a field that `exclude_fields` hides everywhere else | The note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
 
-**Careful: setting an exclude list replaces the built-in list.** If you
-set `publish.exclude_sections` to hide one more heading and leave out
-`GM Notes`, your GM notes are published. Repeat every built-in entry you
-still want. The same holds for `publish.exclude_fields` and
+**Careful: a list in your file replaces the built-in list.** Setting up a
+site writes the full `publish.exclude_sections` and `publish.exclude_fields`
+lists into your file, so you can see them, and an existing site is given
+them the next time you update the apprentice. Add your own heading to that
+list and keep the rest. If you delete a list, or you set one to hide one
+more heading and leave out `GM Notes`, your GM notes are published. Repeat
+every built-in entry you still want. The same holds for
 `publish.exclude_dirs`.
 
 **`full` mode still hides your notes to yourself.** The excluded

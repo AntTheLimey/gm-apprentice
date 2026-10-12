@@ -5,6 +5,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
 const { init } = require('../../lib/init');
+const { PUBLISH_DEFAULTS } = require('../../lib/config');
 
 async function makeTmpDir() {
   return fs.mkdtemp(path.join(os.tmpdir(), 'gm-publish-init-'));
@@ -266,7 +267,7 @@ describe('init', () => {
         assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(),
           ['host', 'outputDir', 'siteUrl', 'vaultPath']);
         assert.deepStrictEqual(result.vaultSettings.written,
-          ['site', 'site_dir', 'site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_callouts']);
+          ['site', 'site_dir', 'site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_sections', 'exclude_fields', 'exclude_callouts']);
         const pub = publishOf(vault);
         assert.strictEqual(pub.site, true);
         // The vault can find its site again: an absolute path, forward slashes.
@@ -276,6 +277,9 @@ describe('init', () => {
         assert.strictEqual(pub.attachments_dir, '_attachments');
         assert.deepStrictEqual(pub.exclude_dirs, ['_meta', '_Templates', '_resources']);
         assert.strictEqual(pub.exclude_callouts, true);
+        // The built-in lists are written out so the GM sees them (#294): the same lists the build falls back to.
+        assert.deepStrictEqual(pub.exclude_sections, PUBLISH_DEFAULTS.exclude_sections);
+        assert.deepStrictEqual(pub.exclude_fields, PUBLISH_DEFAULTS.exclude_fields);
         for (const k of Object.keys(real)) console[k] = (...a) => lines.push(a.join(' '));
         const configPath = path.join(site, 'vault.config.json');
         build({ configPath });

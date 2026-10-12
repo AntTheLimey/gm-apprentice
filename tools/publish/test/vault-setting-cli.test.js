@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { runVaultSetting } = require('../lib/vault-setting-cli.js');
+const { PUBLISH_DEFAULTS } = require('../lib/config.js');
 
 function scratch(publish) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'vs-'));
@@ -26,7 +27,7 @@ test('reports a Google font and an unset default mode', () => {
   const s = scratch('  mode: player\n  theme:\n    fonts:\n      heading: Cinzel\n      body: system-ui\n');
   const { rc, data } = run(s, []);
   assert.equal(rc, 0);
-  assert.deepEqual(data, { defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null, connections: null });
+  assert.deepEqual(data, { excludeSectionsOwn: false, excludeFieldsOwn: false, defaultExcludeSections: PUBLISH_DEFAULTS.exclude_sections, defaultExcludeFields: PUBLISH_DEFAULTS.exclude_fields, defaultModeSet: false, fontSource: null, googleFonts: ['Cinzel'], sheetSkin: null, sheetFrame: null, dndbeyondSync: null, linkPreviews: null, connections: null });
 });
 
 test('self-hosted or local fonts report no Google fonts', () => {
@@ -287,4 +288,47 @@ test('refuses a connections value that is not tree, web, cards or off, and write
 test('reads a connections line already in the vault file', () => {
   const s = scratch('  mode: player\n  connections: cards\n');
   assert.equal(run(s, []).data.connections, 'cards');
+});
+
+// #294: the built-in exclude lists, shown to a migration, and written only where the vault has none.
+test('reports the built-in exclude lists and whether the vault has its own', () => {
+  const none = scratch('  mode: player\n');
+  const { data } = run(none, []);
+  assert.equal(data.excludeSectionsOwn, false);
+  assert.equal(data.excludeFieldsOwn, false);
+  assert.deepEqual(data.defaultExcludeSections, PUBLISH_DEFAULTS.exclude_sections);
+  assert.deepEqual(data.defaultExcludeFields, PUBLISH_DEFAULTS.exclude_fields);
+  const own = scratch('  exclude_sections: [Rumours]\n');
+  assert.equal(run(own, []).data.excludeSectionsOwn, true);
+  assert.equal(run(own, []).data.excludeFieldsOwn, false);
+});
+
+test('an empty exclude_sections key is no list: the build falls back to the default', () => {
+  const s = scratch('  exclude_sections:\n');
+  assert.equal(run(s, []).data.excludeSectionsOwn, false);
+});
+
+test('writes a list into the vault file, keeping comments and the other keys', () => {
+  const s = scratch('  # my notes\n  mode: player\n  site_title: "X"  # title\n');
+  const rc = run(s, ['exclude_sections=["GM Notes","Rumours"]']);
+  assert.equal(rc.rc, 0);
+  assert.deepEqual(rc.data, { written: ['exclude_sections'] });
+  const text = config(s);
+  assert.match(text, /# my notes\n  mode: player\n  site_title: "X"  # title\n/);
+  assert.deepEqual(require('../lib/frontmatter').parseNote(text).data.publish.exclude_sections, ['GM Notes', 'Rumours']);
+  assert.equal(run(s, []).data.excludeSectionsOwn, true);
+});
+
+test('refuses a list that is not a list of headings', () => {
+  const s = scratch('  mode: player\n');
+  const before = config(s);
+  assert.equal(run(s, ['exclude_fields="secrets"']).rc, 1);
+  assert.equal(run(s, ['exclude_sections=[1]']).rc, 1);
+  assert.equal(config(s), before);
+});
+
+test('a list still in the site file counts as the vault\'s own', () => {
+  const s = scratch('  mode: player\n');
+  fs.writeFileSync(s.configPath, JSON.stringify({ vaultPath: './vault', excludeSections: ['X'] }));
+  assert.equal(run(s, []).data.excludeSectionsOwn, true);
 });
