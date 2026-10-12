@@ -828,10 +828,25 @@ class PublishModeTests(unittest.TestCase):
     def test_stub(self):
         self.assertEqual(vl.publish_mode({"publish": "stub"}), "stub")
 
+    def test_it_agrees_with_the_publish_tools_vectors(self):
+        path = (Path(__file__).resolve().parent.parent / "tools" / "publish"
+                / "test" / "fixtures" / "publish-mode-vectors.json")
+        for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+            with self.subTest(frontmatter=case["frontmatter"]):
+                self.assertEqual(vl.publish_mode(case["frontmatter"]),
+                                 case["mode"])
+
+    def test_gm_only_hides_agrees_with_the_publish_tools_vectors(self):
+        path = (Path(__file__).resolve().parent.parent / "tools" / "publish"
+                / "test" / "fixtures" / "gm-only-vectors.json")
+        for case in json.loads(path.read_text(encoding="utf-8"))["cases"]:
+            with self.subTest(value=case["value"]):
+                self.assertEqual(vl.gm_only_hides(case["value"]), case["hides"])
+
     def test_anything_unrecognised_still_publishes(self):
         # A typo must not silently unpublish a page, and must not silently
         # convince a leak check that a page is safe.
-        for raw in ("true", True, "yes", "publish", "", [], "NONE", "False"):
+        for raw in ("true", True, "yes", "publish", "", []):
             with self.subTest(raw=raw):
                 self.assertEqual(vl.publish_mode({"publish": raw}), "all")
 
