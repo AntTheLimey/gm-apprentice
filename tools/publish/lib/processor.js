@@ -1584,6 +1584,12 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
+// A frontmatter value that is a list of names, or one name written alone: the names, trimmed.
+function nameList(v) {
+  if (typeof v === 'string') return v.trim() ? [v.trim()] : [];
+  return Array.isArray(v) ? v.filter((x) => typeof x === 'string' && x.trim()).map((x) => x.trim()) : [];
+}
+
 function gmAliasList(frontmatter) {
   const raw = frontmatter && frontmatter.gm_aliases;
   // Hand-edited or older frontmatter may write a single secret as a bare
@@ -1622,7 +1628,7 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // A GM alias that is also a published page's title or public alias is
 // skipped: that name belongs to the other page, and its links stay as they
 // are. `published` is the pages the site publishes (default: all of `pages`).
-function gmAliasRewriter(pages, published) {
+function gmAliasRewriter(pages, published, rawNotes) {
   const owners = new Map();
   // Every declared secret key, independent of the owner-collision cleanup
   // below. A link's LABEL (not just its target) can carry a secret verbatim
@@ -1654,12 +1660,16 @@ function gmAliasRewriter(pages, published) {
   // Every name that reaches one: file name, title, aliases and gm_aliases. key -> the words a
   // link with no label prints. A withheld page that publishes has no secret name to keep.
   const withheldKeys = new Map();
+  // The note as written: a scanned page's frontmatter has had a value of the wrong shape (one
+  // alias written alone) taken out, and a secret name must not go with it.
+  const written = new Map((rawNotes || []).map((n) => [n.sourcePath, n.frontmatter || {}]));
   for (const page of pages) {
     const fm = page.frontmatter || {};
     if (!isWithheld(fm) || (published && published.includes(page))) continue;
     const word = withheldPlaceholder(fm.type);
+    const raw = written.get(page.sourcePath) || fm;
     for (const name of [page.title, page.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
-      ...(Array.isArray(fm.aliases) ? fm.aliases : []), ...gmAliasList(fm)]) {
+      ...nameList(fm.aliases), ...nameList(raw.aliases), ...gmAliasList(fm)]) {
       if (typeof name === 'string' && name.trim() && !withheldKeys.has(gmAliasKey(name))) withheldKeys.set(gmAliasKey(name), word);
     }
   }
@@ -1763,4 +1773,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDERS, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDERS, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

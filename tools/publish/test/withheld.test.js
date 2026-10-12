@@ -183,19 +183,38 @@ describe('WITHHELD_IN_PROSE: a withheld note\'s name printed as plain text', () 
     assert.deepStrictEqual(await found(files, { excluded: ['Characters/Zorn_Elder.md'] }), []);
   });
 
-  it('is settled the way NAMED_NO_PAGE is: a "stays hidden:" reason on the withheld note\'s Excluded entry', async () => {
+  it('cannot be settled: "stays hidden:" on the withheld note\'s Excluded entry leaves the name findings open', async () => {
     const files = {
       'Characters/Lord_Zorn.md': zornNote(),
       'Characters/Mara_Quill.md': mara('Lord Zorn rides at dawn.'),
     };
-    const open = await found(files, { excluded: ZORN_EXCLUDED });
-    assert.strictEqual(open[0].settled, false);
     const { configPath } = site(files, { excluded: ['Characters/Lord_Zorn.md — stays hidden: Zorn is also a town'] });
     const { json } = await doctor(configPath, { json: true });
     const hit = json.findings.find((f) => f.code === 'WITHHELD_IN_PROSE');
+    assert.ok(hit);
+    assert.ok(!hit.settled, 'a name in plain text has no "leave it" answer');
+    assert.strictEqual(json.counts.settled, 0);
+    assert.match((await doctor(configPath)).text, /WITHHELD_IN_PROSE/);
+  });
+
+  it('a collision notice cannot be settled either', async () => {
+    const files = {
+      'Characters/Zorn_Elder.md': zornNote('withheld: true\naliases: [Mara Quill]\n'),
+      'Characters/Mara_Quill.md': mara('Mara Quill walks.'),
+    };
+    const { configPath } = site(files, { excluded: ['Characters/Zorn_Elder.md — stays hidden: ok'] });
+    const { json } = await doctor(configPath, { json: true });
+    const hit = json.findings.find((f) => f.code === 'WITHHELD_NAME_PUBLIC');
+    assert.ok(hit && !hit.settled);
+  });
+
+  it('"stays hidden:" still settles the link report for a withheld target', async () => {
+    const files = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('Met [[Lord_Zorn]].') };
+    const { configPath } = site(files, { excluded: ['Characters/Lord_Zorn.md — stays hidden: the placeholder will do'] });
+    const { json, rc } = await doctor(configPath, { json: true });
+    const hit = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
     assert.strictEqual(hit.settled, true);
-    assert.strictEqual(json.counts.settled, 1);
-    assert.ok(!(await doctor(configPath)).text.includes('WITHHELD_IN_PROSE'));
+    assert.strictEqual(rc, 0);
   });
 
   it('is a report: the build still builds, warns in one line, and doctor exits 0', async () => {
@@ -349,12 +368,12 @@ describe('NAMED_NO_PAGE and a withheld target (#292)', () => {
 });
 
 // ---------------------------------------------------------------------------------------
-// Round two
+// Links, kinds, fields, publishing, flags, Unicode and copied files
 // ---------------------------------------------------------------------------------------
 const outputText = (docs) => walk(docs).map((f) => [path.relative(docs, f), /\.(html|json|js|css|txt|xml|svg)$/.test(f) ? fs.readFileSync(f, 'utf8') : '']);
 const namesIn = (docs) => outputText(docs).filter(([rel, text]) => /zorn|hollow[ _-]duke/i.test(rel) || /zorn|hollow[ _-]duke/i.test(text)).map(([rel]) => rel);
 
-describe('every way a link reaches a withheld note prints the placeholder (leak 1)', () => {
+describe('every way a link reaches a withheld note prints the placeholder', () => {
   const zorn = zornNote('withheld: true\ntitle: Duke Zorn the Hollow\naliases: [The Hollow Duke]\ngm_aliases: [Hollow Duke]\n');
   const forms = [
     '[[Lord_Zorn]]', '[[lord zorn]]', '[[LORD_ZORN]]', '[[Duke Zorn the Hollow]]', '[[The Hollow Duke]]', '[[the_hollow_duke]]',
@@ -392,7 +411,7 @@ describe('every way a link reaches a withheld note prints the placeholder (leak 
   });
 });
 
-describe('the placeholder fits the kind of note (item 7)', () => {
+describe('the placeholder fits the kind of note', () => {
   const cases = [['npc', 'Characters', 'someone'], ['pc', 'Characters', 'someone'], ['location', 'Locations', 'somewhere'],
     ['item', 'Items', 'something'], ['creature', 'Creatures', 'something'], ['organization', 'Orgs', 'something'], ['clue', 'Clues', 'something']];
   for (const [type, dir, word] of cases) {
@@ -415,7 +434,7 @@ describe('the placeholder fits the kind of note (item 7)', () => {
   });
 });
 
-describe('the name planted in any frontmatter field is reported or absent from every output file (leak 2)', () => {
+describe('the name planted in any frontmatter field is reported or absent from every output file', () => {
   const fields = ['occupation', 'gender', 'nationality', 'status', 'location', 'first_appearance', 'source', 'source_document', 'campaign',
     'description', 'notes', 'summary', 'tags', 'aliases', 'title', 'display_meta', 'portrait', 'relationships_description', 'relationship_type', 'custom_field'];
   for (const field of fields) {
@@ -437,7 +456,7 @@ describe('the name planted in any frontmatter field is reported or absent from e
   }
 });
 
-describe('a withheld note that publishes (must-fix 3)', () => {
+describe('a withheld note that publishes', () => {
   const scenes = [
     ['listed under Publishing', {}, ''],
     ['full mode, no publish: false', { mode: 'full', publish: [] }, ''],
@@ -478,7 +497,7 @@ describe('a withheld note that publishes (must-fix 3)', () => {
   });
 });
 
-describe('a flag value the build cannot read (must-fix 5)', () => {
+describe('a flag value the build cannot read', () => {
   for (const value of ['tru', '[true]', '"maybe"', 'yes please', '2']) {
     it(`withheld: ${value} is told once, read as not withheld`, async () => {
       const files = { 'Characters/Lord_Zorn.md': zornNote(`withheld: ${value}\n`), 'Characters/Mara_Quill.md': mara('Met [[Lord_Zorn]]. Lord Zorn.') };
@@ -511,7 +530,7 @@ describe('a flag value the build cannot read (must-fix 5)', () => {
   });
 });
 
-describe('the closing line for a withheld target (item 6)', () => {
+describe('the closing line for a withheld target', () => {
   it('says a neutral word prints, not "plain words", and sorts the withheld notes apart', () => {
     const lines = summaryLines([
       { code: 'NAMED_NO_PAGE', severity: 'error', path: 'Characters/Lord_Zorn.md', pageCount: 5, withheld: true, printed: ['someone'] },
@@ -525,7 +544,7 @@ describe('the closing line for a withheld target (item 6)', () => {
   });
 });
 
-describe('a name in another Unicode form (item 9)', () => {
+describe('a name in another Unicode form', () => {
   const nfd = (t) => t.normalize('NFD');
   it('finds a file name in NFD against a body in NFC, and the reverse', async () => {
     const name = 'Séraphine_Voss';
@@ -540,22 +559,25 @@ describe('a name in another Unicode form (item 9)', () => {
   });
 });
 
-describe('tests that kill two surviving mutations (item 10)', () => {
+describe('the name matcher\'s word boundaries', () => {
   it('a name that ends a longer word is not a hit (the leading boundary)', async () => {
     const files = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('The Mylord Zorn and the 3Lord Zorn arrive.') };
     assert.deepStrictEqual(await found(files, { excluded: ZORN_EXCLUDED }), []);
   });
-  it('a "stays hidden:" reason beside a Publishing entry does not settle a withheld note\'s findings', async () => {
-    const files = { 'Characters/Lord_Zorn.md': zornNote('withheld: true\npublish: false\n'), 'Characters/Mara_Quill.md': mara('Lord Zorn rides.') };
+});
+
+describe('a "stays hidden:" reason beside a Publishing entry', () => {
+  it('does not settle the link report of a withheld note', async () => {
+    const files = { 'Characters/Lord_Zorn.md': zornNote('withheld: true\npublish: false\n'), 'Characters/Mara_Quill.md': mara('Met [[Lord_Zorn]].') };
     const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Lord_Zorn.md — stays hidden: x'] });
     const { json } = await doctor(configPath, { json: true });
-    const hit = json.findings.find((f) => f.code === 'WITHHELD_IN_PROSE');
+    const hit = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
     assert.strictEqual(hit.reason, 'stays hidden: x');
     assert.strictEqual(hit.settled, false);
   });
 });
 
-describe('every file the build copies is read for a withheld name (item 12)', () => {
+describe('every file the build copies is read for a withheld name', () => {
   it('a campaign image, a section banner and a vault font', async () => {
     const extra = [
       '  theme:',
@@ -577,5 +599,106 @@ describe('every file the build copies is read for a withheld name (item 12)', ()
     const { json } = await doctor(configPath, { json: true });
     const paths = json.findings.filter((f) => f.code === 'WITHHELD_IN_PROSE' && f.path.startsWith('_attachments/')).map((f) => f.path).sort();
     assert.deepStrictEqual(paths, ['_attachments/Lord Zorn Banner.png', '_attachments/Lord Zorn Crest.png', '_attachments/Lord Zorn Serif.woff2']);
+  });
+});
+
+describe('a withheld name in the label of a link to a published page', () => {
+  const base = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('Plain.') };
+  const noSearch = '  search: false\n';
+
+  for (const [name, options] of [['search on', {}], ['search off', { extra: noSearch }]]) {
+    it(`in the body is reported on the page that holds it (${name})`, async () => {
+      const files = Object.assign({}, base, { 'Characters/Dax.md': mara("Intro.\n\nDax met [[Mara_Quill|Lord Zorn's friend]] and [[Mara_Quill|Lord Zorn]].") });
+      const hits = await found(files, Object.assign({ excluded: ZORN_EXCLUDED }, options));
+      assert.deepStrictEqual(hits.map((f) => f.path), ['Characters/Dax.md']);
+      assert.match(hits[0].detail, /printed on the page/);
+      assert.ok(!/search index/.test(hits[0].detail));
+    });
+  }
+
+  const fields = [
+    ['organization', 'Orgs/Cult.md', 'leadership'], ['organization', 'Orgs/Cult.md', 'territory'], ['npc', 'Characters/Dax.md', 'location'],
+    ['event', 'Events/Raid.md', 'location'], ['world_domain', 'World/Law.md', 'summary'],
+  ];
+  for (const [type, rel, field] of fields) {
+    for (const [name, options] of [['search on', {}], ['search off', { extra: noSearch }]]) {
+      it(`in ${type} ${field} is reported on that note (${name})`, async () => {
+        const files = Object.assign({}, base, { [rel]: `---\ntype: ${type}\n${field}: "[[Mara_Quill|Lord Zorn's man]]"\n---\n\nPlain words.\n` });
+        const hits = await found(files, Object.assign({ excluded: ZORN_EXCLUDED }, options));
+        assert.ok(hits.some((f) => f.path === rel), `${field}: ${JSON.stringify(hits.map((f) => f.path))}`);
+        assert.ok(hits.every((f) => !/search index/.test(f.detail) || f.path !== rel), 'names the page, not the index');
+      });
+    }
+  }
+
+  it('a link whose words are a public name stays unread: a page whose name holds the secret name', async () => {
+    const files = Object.assign({}, base, {
+      'Characters/Lord_Zorn_Jr.md': mara('The heir.'),
+      'Characters/Dax.md': mara('Intro.\n\nDax met [[Lord_Zorn_Jr]] and [[Lord_Zorn_Jr|Lord Zorn Jr]].'),
+    });
+    // The heir's own title holds the name, and the search index holds it from Dax's text; what
+    // Dax's page prints is only that title, so the page itself is not a hit.
+    const hits = await found(files, { excluded: ZORN_EXCLUDED });
+    assert.deepStrictEqual(hits.filter((f) => f.path === 'Characters/Dax.md' && /printed on the page/.test(f.detail)), []);
+  });
+
+  it('a gm_aliases name in a label is an ALIAS_IN_PROSE finding too', async () => {
+    const files = { 'Characters/Vesper_Hale.md': npc('x', 'gm_aliases: ["Old Smuggler"]\n'), 'Characters/Mara_Quill.md': mara('Plain.'),
+      'Characters/Dax.md': mara('Intro.\n\nDax met [[Mara_Quill|the Old Smuggler\'s friend]].') };
+    const hits = await found(files, {}, 'ALIAS_IN_PROSE');
+    assert.deepStrictEqual(hits.map((f) => f.path), ['Characters/Dax.md']);
+  });
+});
+
+describe('an address on a page', () => {
+  it('a Markdown link to the withheld note\'s file is reported', async () => {
+    const files = {
+      'Characters/Lord_Zorn.md': zornNote(),
+      'Characters/Mara_Quill.md': mara('Intro.\n\nSee [the stranger](Lord_Zorn.md), [him](Characters/Lord_Zorn.md) and [x](Lord%20Zorn.md).'),
+    };
+    const hits = await found(files, { excluded: ZORN_EXCLUDED });
+    assert.deepStrictEqual(hits.map((f) => f.path), ['Characters/Mara_Quill.md']);
+    assert.match(hits[0].detail, /address of a link/);
+  });
+  it('the site\'s own addresses (pages, images, scripts) are not read', async () => {
+    const files = {
+      'Characters/Lord_Zorn.md': zornNote(),
+      'Characters/Lord_Zorn_Jr.md': mara('The heir.'),
+      'Characters/Mara_Quill.md': mara('Intro.\n\nMet [[Lord_Zorn_Jr]]. [out](https://example.com/Lord_Zorn)'),
+    };
+    const hits = await found(files, { excluded: ZORN_EXCLUDED });
+    assert.deepStrictEqual(hits.filter((f) => f.path === 'Characters/Mara_Quill.md' && /printed on the page|address/.test(f.detail)), []);
+  });
+});
+
+describe('the link previews file', () => {
+  it('is read in its own right: a name only a card holds is reported', async () => {
+    const previews = require('../lib/previews');
+    const real = previews.buildPreviews;
+    previews.buildPreviews = (pages, ctx) => {
+      const cards = real(pages, ctx);
+      for (const [key, card] of Object.entries(cards)) if (/mara-quill/.test(key)) card.t = `${card.t} (Lord Zorn's)`;
+      return cards;
+    };
+    try {
+      const files = { 'Characters/Lord_Zorn.md': zornNote(), 'Characters/Mara_Quill.md': mara('Plain words.') };
+      const hits = await found(files, { excluded: ZORN_EXCLUDED });
+      assert.deepStrictEqual(hits.map((f) => f.path), ['Characters/Mara_Quill.md']);
+      assert.match(hits[0].detail, /link previews/);
+    } finally { previews.buildPreviews = real; }
+  });
+});
+
+describe('a withheld note\'s aliases written as one value', () => {
+  it('a scalar aliases: is searched, and its links print the placeholder', async () => {
+    const files = {
+      'Characters/Lord_Zorn.md': zornNote('withheld: true\naliases: Old Nick\n'),
+      'Characters/Mara_Quill.md': mara('Intro.\n\nOld Nick laughs. Met [[Old Nick]].'),
+    };
+    const hits = await found(files, { excluded: ZORN_EXCLUDED });
+    assert.deepStrictEqual(hits.map((f) => f.name), ['Old Nick']);
+    const { configPath, docs } = site(files, { excluded: ZORN_EXCLUDED });
+    buildQuiet(configPath);
+    assert.ok(fs.readFileSync(path.join(docs, 'characters', 'mara-quill.html'), 'utf8').includes('Met someone.'));
   });
 });
