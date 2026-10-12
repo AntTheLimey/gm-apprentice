@@ -347,8 +347,8 @@ class TemplateTests(unittest.TestCase):
         # Merging again changes nothing: the file is something the script
         # can regenerate.
         self.assertEqual(th.merge(th.merge(old, new), new), th.merge(old, new))
-        self.assertIsNone(th.refusal(old, new, ["v1"]))
-        self.assertIn("no release tags", th.refusal(old, new, []))
+        self.assertIsNone(th.refusal(["v1"]))
+        self.assertIn("no release tags", th.refusal([]))
 
     def test_the_checked_in_history_is_what_the_script_would_write(self):
         history = json.loads(mv.HISTORY.read_text(encoding="utf-8"))

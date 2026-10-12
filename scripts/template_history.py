@@ -102,7 +102,7 @@ def merge(old: History, new: History) -> History:
     return out
 
 
-def refusal(old: History, new: History, tags: list[str]) -> str | None:
+def refusal(tags: list[str]) -> str | None:
     """Why the history must not be written, or None: a checkout without the
     release tags would record only the working tree's text."""
     if not tags:
@@ -119,7 +119,7 @@ def main() -> int:
         old = {}
     if not all(isinstance(v, dict) for v in old.values()):
         old = {}   # the earlier flat shape: nothing to compare per system
-    problem = refusal(old, new, tags)
+    problem = refusal(tags)
     if problem:
         print(f"template_history.py: {problem}", file=sys.stderr)
         return 1
