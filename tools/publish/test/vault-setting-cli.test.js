@@ -337,7 +337,8 @@ test('a comment on an empty exclude_sections key, or under it, is kept when the 
   const s = scratch('  mode: player\n  exclude_sections:  # none yet\n    # headings to hide\n  site_title: X\n');
   assert.equal(run(s, ['exclude_sections=["GM Notes"]']).rc, 0);
   const text = config(s);
-  assert.match(text, /# none yet/);
+  // The comment stays on the key's own line, where the GM wrote it.
+  assert.match(text, /^  exclude_sections:\s+# none yet$/m);
   assert.match(text, /# headings to hide/);
   assert.match(text, /site_title: X/);
   assert.deepEqual(require('../lib/frontmatter').parseNote(text).data.publish.exclude_sections, ['GM Notes']);

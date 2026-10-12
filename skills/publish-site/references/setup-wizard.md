@@ -429,7 +429,9 @@ at-table inbox or live status bar later (Phase G).
 `_meta/vault-config.md`, under `publish:`, for each key that file does
 not already set: `site_title`, `folder_map` (the standard vault
 folders), `attachments_dir`, `exclude_dirs` (`_meta`, `_Templates`,
-`_resources`) and `exclude_callouts: true`, plus `site_title` and
+`_resources`), `exclude_sections` and `exclude_fields` (the headings and
+frontmatter fields the site never publishes, written out so you can see
+and edit them) and `exclude_callouts: true`, plus `site_title` and
 `theme.tagline` from `--title` and `--tagline`. A key already there is
 left alone. If `init` prints `Campaign settings were not written: …`,
 the vault file could not be edited safely: fix what the message
@@ -543,12 +545,14 @@ publish:
     Heritages: heritages
   attachments_dir: _attachments
   exclude_dirs: ["_meta", "_Templates", "_resources"]
+  exclude_sections: ["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]
+  exclude_fields: ["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]
   exclude_callouts: true
 ```
 
 If `site_title` reads `My Campaign`, `init` ran without `--title`: set
 it to the Step 6 answer. Leave `folder_map`,
-`exclude_dirs` and `attachments_dir` as written unless the vault uses
+`exclude_dirs`, `exclude_sections`, `exclude_fields` and `attachments_dir` as written unless the vault uses
 non-standard folder names. Leave `live_stats` and `inbox` unset: unset
 means off, which keeps the live status bar and the at-table inbox off
 until the GM opts in (Phase G). Leave `character_sheets` unset too

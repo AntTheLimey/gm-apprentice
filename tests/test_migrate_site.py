@@ -988,9 +988,10 @@ class ExcludeListTests(unittest.TestCase):
             (item,) = ms.find_exclude_lists(vault)
             self.assertEqual((item.id, item.group), ("exclude-lists", WILL))
             item.apply(None)
+        # One call, so the tool writes both in one edit: all or none.
         self.assertEqual([c for c in calls if "--set" in c], [
-            ["vault-setting", "--set", 'exclude_sections=["GM Notes", "DM Notes"]'],
-            ["vault-setting", "--set", 'exclude_fields=["secrets", "gm_notes"]']])
+            ["vault-setting", "--set", 'exclude_sections=["GM Notes", "DM Notes"]',
+             "--set", 'exclude_fields=["secrets", "gm_notes"]']])
 
     def test_a_list_config_to_vault_writes_this_pass_is_not_offered_twice(self):
         both = ms.StepPlan(True, [

@@ -144,7 +144,7 @@ function dumpAt(key, value, indent, step = 2) {
 
 // Replace the span of a key with new lines. A key that held nothing (`exclude_sections:`, maybe
 // with a comment after it and comment lines under it) had no value to lose, so its comments are
-// the GM's text and stay, written above the new entry.
+// the GM's text and stay: the one after the key on the key's line, the others under the entry.
 function replaceSpan(lines, hit, added) {
   const rest = lines.slice(hit.from + 1, hit.to);
   const empty = /^\s*[^\s#][^:]*:[ \t]*(#.*)?$/.exec(lines[hit.from]);
@@ -152,9 +152,8 @@ function replaceSpan(lines, hit, added) {
     lines.splice(hit.from, hit.to - hit.from, ...added);
     return;
   }
-  const pad = ' '.repeat(indentOf(lines[hit.from]));
-  const kept = [...(empty[1] ? [pad + empty[1]] : []), ...rest];
-  lines.splice(hit.from, hit.to - hit.from, ...kept, ...added);
+  const first = empty[1] ? [`${added[0]}  ${empty[1]}`, ...added.slice(1)] : added;
+  lines.splice(hit.from, hit.to - hit.from, ...first, ...rest);
 }
 
 function applyOne(fm, change) {

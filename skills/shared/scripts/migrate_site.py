@@ -549,8 +549,15 @@ def _theme_facts(vault: Path) -> dict[str, Any] | None:
 
 
 def _set_setting(vault: Path, key: str, value: object) -> None:
-    answer = ask_publish_tool(
-        vault, ["vault-setting", "--set", f"{key}={json.dumps(value)}"])
+    _set_settings(vault, [(key, value)])
+
+
+def _set_settings(vault: Path, pairs: list[tuple[str, object]]) -> None:
+    """Every pair in one call: the tool writes them in one edit, all or none."""
+    args = ["vault-setting"]
+    for key, value in pairs:
+        args += ["--set", f"{key}={json.dumps(value)}"]
+    answer = ask_publish_tool(vault, args)
     if answer.why is not None:
         raise StepFailed(answer.why)
 
@@ -636,8 +643,7 @@ def find_exclude_lists(vault: Path) -> list[Item]:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        for key, _own, default in lists:
-            _set_setting(vault, key, default)
+        _set_settings(vault, [(key, default) for key, _own, default in lists])
         return [f"wrote publish.{key}: {len(default)} entries"
                 for key, _own, default in lists]
 
