@@ -63,12 +63,13 @@ import re
 import sys
 import unicodedata
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from migrate_core import StepFailed, write_all_or_none
 from schema_rules import (
+    RelationshipEdge,
     iter_relationship_edges,
     iter_relationship_tones,
     tone_families,
@@ -214,14 +215,14 @@ def _campaign_hides_relationships(vault: Path) -> bool:
                 and any("relationships" in ln for ln in outside))
 
 
-def shown_lines(vault: Path, published: set[str]) -> list[str]:
-    """One row per hostile tie a published note shows, then a count."""
-    rows: list[str] = []
-    notes: set[str] = set()
+def shown_edges(vault: Path, published: set[str]
+                ) -> Iterator[tuple[str, RelationshipEdge]]:
+    """`(note, edge)` for every relationship a published note shows on the
+    site with a tone the site draws (a listed word)."""
     # The vault's own exclude_fields; a list only the site file holds is not
     # known here, and its notes are listed (the safe side).
     if _campaign_hides_relationships(vault):
-        published = set()
+        return
     for rel, text in vault_files(vault):
         if (is_unchecked_source(rel)
                 or unicodedata.normalize("NFC", rel) not in published):
@@ -230,13 +231,32 @@ def shown_lines(vault: Path, published: set[str]) -> list[str]:
         if _hides_relationships(fm.get("publish_exclude_fields")):
             continue
         for edge in iter_relationship_edges(text):
-            if edge.gm_only or site_family(edge.tone) != "negative":
-                continue
-            line = edge.tone_lines[0] if edge.tone_lines else 0
-            rows.append("\t".join([
-                f"{rel}:{line}", edge.tone, _one_line(edge.target),
-                _one_line(edge.description, DESCRIPTION_CAP)]))
-            notes.add(rel)
+            if not edge.gm_only and site_family(edge.tone):
+                yield rel, edge
+
+
+def site_shows_a_tone(vault: Path) -> bool:
+    """Does the vault's site show any relationship's tone? True when the
+    site's tool cannot be asked which notes publish and the vault has a
+    tone at all (better told once too often than not told)."""
+    published = published_notes(vault)
+    if published is None:
+        return bool(survey(vault))
+    return next(shown_edges(vault, published), None) is not None
+
+
+def shown_lines(vault: Path, published: set[str]) -> list[str]:
+    """One row per hostile tie a published note shows, then a count."""
+    rows: list[str] = []
+    notes: set[str] = set()
+    for rel, edge in shown_edges(vault, published):
+        if site_family(edge.tone) != "negative":
+            continue
+        line = edge.tone_lines[0] if edge.tone_lines else 0
+        rows.append("\t".join([
+            f"{rel}:{line}", edge.tone, _one_line(edge.target),
+            _one_line(edge.description, DESCRIPTION_CAP)]))
+        notes.add(rel)
     n, m = len(rows), len(notes)
     rows.append(f"# {n} hostile tie{'' if n == 1 else 's'} shown on "
                 f"{m} note{'' if m == 1 else 's'}")

@@ -762,6 +762,15 @@ class ToneShownNoticeTests(unittest.TestCase):
         (vault / "NPCs" / "B.md").write_text(note, encoding="utf-8")
         return vault
 
+    def setUp(self):
+        import tones
+        from unittest import mock
+        # Which notes publish is the site tool's answer; here, the one note.
+        patch = mock.patch.object(tones, "published_notes",
+                                  return_value={"NPCs/B.md"})
+        patch.start()
+        self.addCleanup(patch.stop)
+
     def test_a_site_vault_with_a_tone_is_told_once_what_the_site_now_shows(self):
         (item,) = ms.find_tone_shown(self.vault_with())
         self.assertEqual(item.id, "tone-shown")
@@ -775,6 +784,24 @@ class ToneShownNoticeTests(unittest.TestCase):
         self.assertEqual(ms.find_tone_shown(self.vault_with(site=False)), [])
         quiet = self.NOTE.replace("    tone: hostile\n", "")
         self.assertEqual(ms.find_tone_shown(self.vault_with(note=quiet)), [])
+
+    def test_nothing_to_say_when_the_site_shows_no_tone(self):
+        import tones
+        from unittest import mock
+        shown = {"NPCs/B.md"}
+        with mock.patch.object(tones, "published_notes", return_value=shown):
+            self.assertEqual(len(ms.find_tone_shown(self.vault_with())), 1)
+            hidden = self.NOTE.replace("    tone: hostile\n",
+                                       "    tone: hostile\n    gm_only: true\n")
+            self.assertEqual(ms.find_tone_shown(self.vault_with(note=hidden)), [])
+            excluded = self.NOTE.replace(
+                "relationships:", "publish_exclude_fields: [relationships]\nrelationships:")
+            self.assertEqual(ms.find_tone_shown(self.vault_with(note=excluded)), [])
+        with mock.patch.object(tones, "published_notes", return_value=set()):
+            self.assertEqual(ms.find_tone_shown(self.vault_with()), [])
+        # The site's tool cannot be asked: told, the safe side.
+        with mock.patch.object(tones, "published_notes", return_value=None):
+            self.assertEqual(len(ms.find_tone_shown(self.vault_with())), 1)
 
     def test_it_is_offered_once_by_the_release_that_shows_tone(self):
         check = {c.name: c for c in ms.SITE_CHECKS}["tone-shown"]

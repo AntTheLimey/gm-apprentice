@@ -596,11 +596,13 @@ def find_tone_shown(vault: Path) -> list[Item]:
     """1.10.45: the site shows a relationship's tone, as warm, hostile or
     neutral (never the word). A notice, said once: a check with a release
     is not offered again once the vault is stamped past it. Only a vault
-    with a site and at least one tone has anything to be told."""
+    with a site that shows at least one tone has anything to be told: a
+    tone on a note that does not publish, on a `gm_only` relationship or on
+    a note that excludes `relationships` is not shown."""
     import tones    # it imports migrate_core, as this module does
 
     site, _has_config = configured_site(vault)
-    if site is None or not tones.survey(vault):
+    if site is None or not tones.site_shows_a_tone(vault):
         return []
     return [Item("tone-shown", PERSON, [
         "relationship tones (site)\tthe site now shows each relationship's "
