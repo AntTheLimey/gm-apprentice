@@ -1,3 +1,4 @@
+import io
 import os
 
 import pytest
@@ -42,21 +43,78 @@ def test_execute_downloads_and_fills_portrait(tmp_path, monkeypatch):
     assert 'portrait: "_attachments/characters/vela.png"' in note.read_text(encoding="utf-8")
 
 
-def test_scan_skips_a_kind_whose_list_endpoint_is_not_json(tmp_path, monkeypatch, capsys):
-    # #307: `race` answered 200 text/html for a world with no races.
-    _note(tmp_path)
+class _Resp:
+    def __init__(self, body, ctype):
+        self._b, self.headers = body, {"Content-Type": ctype}
+
+    def read(self):
+        return self._b
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        return False
+
+
+def _fake_site(monkeypatch, html_for=(), fail_for=()):
+    """Fake the transport (not client._request): JSON from `_pages()`, an HTML
+    shell for the paths in html_for, a 500 for the paths in fail_for."""
+    import json
+    import urllib.error
     pages = _pages()
 
-    def req(m, p, **k):
-        if p == "/world/w1/race":
-            raise client.ApiError(200, "not JSON (content type text/html)", p)
-        return pages.get((m, p), {})
+    def urlopen(req, timeout=None):
+        path = req.full_url.split("/api", 1)[1].split("?")[0]
+        if path in fail_for:
+            raise urllib.error.HTTPError(req.full_url, 500, "boom", {}, io.BytesIO(b"boom"))
+        if any(path == h or (h == "*" and True) for h in html_for):
+            return _Resp(b"<!doctype html><html></html>", "text/html")
+        return _Resp(json.dumps(pages.get((req.get_method(), path), {})).encode(),
+                     "application/json")
+    monkeypatch.setattr(client.urllib.request, "urlopen", urlopen)
     monkeypatch.setattr(client, "get_access_token", lambda: "tok")
-    monkeypatch.setattr(client, "_request", req)
+
+
+def test_scan_skips_a_kind_whose_list_endpoint_is_not_json(
+        tmp_path, monkeypatch, capsys, unblock_client_network):
+    # #307: `race` answered 200 text/html for a world with no races.
+    _note(tmp_path)
+    _fake_site(monkeypatch, html_for=("/world/w1/race",))
     monkeypatch.setattr(images, "_download", lambda url: b"bytes")
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
     assert list((tmp_path / "_attachments").rglob("*.png"))   # person still scanned
-    assert "race" in capsys.readouterr().err
+    cap = capsys.readouterr()
+    assert "race" in cap.err
+    assert "1 kind skipped" in cap.out
+
+
+def test_every_kind_html_is_an_error_not_zero_entities(
+        tmp_path, monkeypatch, capsys, unblock_client_network):
+    _note(tmp_path)
+    _fake_site(monkeypatch, html_for=("*",))
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 1
+    assert "every kind" in capsys.readouterr().err
+
+
+def test_generated_images_html_is_a_clean_error(
+        tmp_path, monkeypatch, capsys, unblock_client_network):
+    _note(tmp_path)
+    _fake_site(monkeypatch, html_for=("/world/w1/generated/images",))
+    monkeypatch.setattr(images, "_download", lambda url: b"bytes")
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 1
+    assert "generated/images" in capsys.readouterr().err
+
+
+def test_a_detail_failure_is_reported_counted_and_the_scan_goes_on(
+        tmp_path, monkeypatch, capsys, unblock_client_network):
+    _note(tmp_path)
+    _fake_site(monkeypatch, fail_for=("/world/w1/person/e-1",))
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 1
+    cap = capsys.readouterr()
+    assert "e-1" in cap.err
+    assert "failed: 1" in cap.out
+    assert "race" not in cap.err          # later kinds were still scanned
 
 
 def test_dry_run_downloads_and_writes_nothing(tmp_path, monkeypatch, capsys):
@@ -160,6 +218,67 @@ def test_identical_existing_attachment_is_wired_not_copied(tmp_path, monkeypatch
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
     assert sorted(f.name for f in att.iterdir()) == ["vela.png"]
     assert 'portrait: "_attachments/characters/vela.png"' in note.read_text(encoding="utf-8")
+
+
+def test_identical_portrait_outside_attachments_is_not_duplicated(tmp_path, monkeypatch):
+    _note(tmp_path, portrait='portrait: "Art/vela.png"')
+    (tmp_path / "Art").mkdir()
+    (tmp_path / "Art" / "vela.png").write_bytes(b"same")
+    _wire_pull(monkeypatch, b"same")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert not (tmp_path / "_attachments").exists()
+
+
+def test_differing_portrait_with_free_plain_name_says_so_and_second_run_agrees(
+        tmp_path, monkeypatch, capsys):
+    _note(tmp_path, portrait='portrait: "_attachments/characters/Other.png"')
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "Other.png").write_bytes(b"old")
+    _wire_pull(monkeypatch, b"new")
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    first = capsys.readouterr().out
+    before = {f.name: f.read_bytes() for f in att.iterdir()}
+    assert "differs from the current portrait" in first
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    second = capsys.readouterr().out
+    assert "differs from the current portrait" in second
+    assert "unchanged: 0" in second
+    assert {f.name: f.read_bytes() for f in att.iterdir()} == before
+
+
+def test_dry_run_with_identical_image_writes_nothing_and_a_second_execute_is_idempotent(
+        tmp_path, monkeypatch):
+    note = _note(tmp_path, portrait='portrait: "_attachments/characters/vela.png"')
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "vela.png").write_bytes(b"old")
+    _wire_pull(monkeypatch, b"new")
+    text = note.read_text(encoding="utf-8")
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 0
+    assert sorted(f.name for f in att.iterdir()) == ["vela.png"]
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    snap = {f.name: f.read_bytes() for f in att.iterdir()}
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
+    assert {f.name: f.read_bytes() for f in att.iterdir()} == snap
+    assert note.read_text(encoding="utf-8") == text
+
+
+def test_download_failure_during_comparison_is_reported_and_the_run_goes_on(
+        tmp_path, monkeypatch, capsys):
+    _note(tmp_path, portrait='portrait: "_attachments/characters/vela.png"')
+    att = tmp_path / "_attachments" / "characters"
+    att.mkdir(parents=True)
+    (att / "vela.png").write_bytes(b"old")
+    _wire_pull(monkeypatch, b"x")
+
+    def boom(url):
+        raise OSError("timed out")
+    monkeypatch.setattr(images, "_download", boom)
+    assert images.run(["w1", "--vault", str(tmp_path)]) == 1
+    cap = capsys.readouterr()
+    assert "could not compare" in cap.err
+    assert "failed: 1" in cap.out
 
 
 def test_download_refuses_non_https_schemes():

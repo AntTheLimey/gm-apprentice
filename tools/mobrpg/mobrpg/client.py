@@ -76,6 +76,12 @@ class ApiError(Exception):
         super().__init__(f"HTTP {status} on {url}\n{body}")
 
 
+class NotJsonError(ApiError, ValueError):
+    """A 200 whose body is not JSON (e.g. the site's HTML shell). It is a
+    ValueError as well so callers that read ValueError as "this kind holds no
+    elements" (the old JSONDecodeError) keep working."""
+
+
 # Query parameters that carry secrets — masked in any error surfaced to the user
 # so a token passed in a URL (e.g. app-token refresh) never lands in stderr/logs.
 _SENSITIVE_QUERY = {"refreshtoken", "token", "accesstoken", "password"}
@@ -122,7 +128,7 @@ def _request(method: str, path: str, *, token: str | None = None,
     except ValueError:
         # A 200 that is not JSON (e.g. the site's HTML shell for a kind the
         # world has none of) is an API fault, not a crash.
-        raise ApiError(200, f"response is not JSON (content type {ctype or 'unknown'})",
+        raise NotJsonError(200, f"response is not JSON (content type {ctype or 'unknown'})",
                        _redact_url(url)) from None
 
 

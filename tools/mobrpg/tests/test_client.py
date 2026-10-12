@@ -125,6 +125,8 @@ def test_request_html_200_maps_to_apierror_naming_url_and_type(monkeypatch, unbl
                                                             "text/html; charset=utf-8"))
     with pytest.raises(client.ApiError) as ei:
         client._request("GET", "/world/w1/race", query={"page": 0})
+    assert isinstance(ei.value, ValueError)      # callers treat ValueError as "no rows of this kind"
+    assert isinstance(ei.value, client.NotJsonError)
     assert ei.value.status == 200
     assert "/world/w1/race" in ei.value.url
     assert "text/html" in ei.value.body
