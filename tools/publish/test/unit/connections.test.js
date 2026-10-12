@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { buildConnections, isEmpty } = require('../../lib/connections');
+const { buildConnections, isEmpty, markdownLinkLabels } = require('../../lib/connections');
 const { buildLinkMap } = require('../../lib/scanner');
 const { buildBacklinks } = require('../../lib/backlinks');
 
@@ -330,4 +330,21 @@ test('a wiki-link in a description still reads its name as words, and a label as
 
 test('HTML special characters in a description are left for the page to escape', () => {
   assert.deepStrictEqual(lineOf('a <b>&"_x_"'), ['a <b>&"_x_"']);
+});
+
+test('a parenthesis after a wiki-link is not a markdown address', () => {
+  assert.deepStrictEqual(lineOf('[[Public_Pat]](dead) and more'), ['Public Pat(dead) and more']);
+  assert.deepStrictEqual(lineOf('[[Public_Pat|the_pat]](dead) and more'), ['the_pat(dead) and more']);
+  assert.deepStrictEqual(lineOf('[[Secret_Note]](x)'), ['Secret Note(x)']);
+  assert.deepStrictEqual(lineOf('[[Old_Tom]] knows [site](https://example.com/a_(b)) well'), ['Old Tom knows site well']);
+});
+
+test('no description can overflow the stack or take long to read', () => {
+  const nested = '['.repeat(8000) + 'x' + '](y)'.repeat(8000);
+  assert.doesNotThrow(() => lineOf(nested));
+  for (const text of ['['.repeat(50000), '[a'.repeat(25000) + '](', '[a](('.repeat(10000)]) {
+    const start = Date.now();
+    markdownLinkLabels(text);
+    assert.ok(Date.now() - start < 2500, `${text.slice(0, 8)}… took ${Date.now() - start} ms`);
+  }
 });

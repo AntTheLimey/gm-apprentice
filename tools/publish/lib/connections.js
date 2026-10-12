@@ -55,32 +55,34 @@ const printed = (text) => {
 
 // `text` with each markdown link `[label](address "title")` turned into its label. The
 // address is read as the build reads it, so one holding `)` ends where the link does. Text
-// that is not a link is left as written.
-function markdownLinkLabels(text) {
+// that is not a link is left as written, and a `[` that opens `[[` never starts a link. Each
+// bracket is paired once, so the work is linear; a link nested deeper than LINK_DEPTH keeps
+// its label as written.
+const LINK_DEPTH = 16;
+function markdownLinkLabels(text, depth = 0) {
+  const closeOf = new Map();
+  const open = [];
+  for (let j = 0; j < text.length; j++) {
+    if (text[j] === '\\') j++;
+    else if (text[j] === '[') open.push(j);
+    else if (text[j] === ']' && open.length) closeOf.set(open.pop(), j);
+  }
+  if (!closeOf.size) return text;
+  const blank = (n) => { while (/\s/.test(text[n] || '')) n++; return n; };
   let out = '';
   let at = 0;
-  let i = text.indexOf('[');
-  while (i !== -1) {
-    const from = i;
-    i = text.indexOf('[', i + 1);
-    let depth = 0;
-    let close = -1;
-    for (let j = from; j < text.length && close === -1; j++) {
-      if (text[j] === '\\') j++;
-      else if (text[j] === '[') depth++;
-      else if (text[j] === ']' && --depth === 0) close = j;
-    }
-    if (close === -1 || text[close + 1] !== '(') continue;
-    const blank = (n) => { while (/\s/.test(text[n] || '')) n++; return n; };
+  for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', Math.max(at, i + 1))) {
+    const close = closeOf.get(i);
+    if (close === undefined || text[close + 1] !== '(' || text[i + 1] === '[' || (i > 0 && text[i - 1] === '[')) continue;
     const dest = parseLinkDestination(text, blank(close + 2), text.length);
     if (!dest.ok) continue;
     let end = blank(dest.pos);
     const title = end > dest.pos ? parseLinkTitle(text, end, text.length) : { ok: false };
     if (title.ok) end = blank(title.pos);
     if (text[end] !== ')') continue;
-    out += text.slice(at, from) + markdownLinkLabels(text.slice(from + 1, close));
+    const label = text.slice(i + 1, close);
+    out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : label);
     at = end + 1;
-    i = text.indexOf('[', at);
   }
   return out + text.slice(at);
 }
@@ -266,4 +268,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS };
+module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels };
