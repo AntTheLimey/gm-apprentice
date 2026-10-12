@@ -1719,10 +1719,11 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
                  f"(publish.site is not on), so nothing publishes{todo}"]
 
 
-# The four faults in a NOTE that change what the site shows, as the publish
+# The faults in a NOTE that change what the site shows, as the publish
 # tool's `doctor --site --json` names them.
-NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "FENCE_UNCLOSED", "COMMENT_STRAY",
-                    "NAMED_NO_PAGE")
+NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "WITHHELD_IN_PROSE",
+                    "WITHHELD_NAME_PUBLIC", "FENCE_UNCLOSED",
+                    "COMMENT_STRAY", "NAMED_NO_PAGE")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
 
@@ -1739,6 +1740,8 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
     if code == "NAMED_NO_PAGE":
         kind = f.get("kind")
         what = (f"{kind} ({f.get('type')})" if kind else "no type")
+        if f.get("withheld"):
+            what = f"withheld {what}"
         pages = [_one_line(p) for p in f.get("pages") or []]
         shown = pages if whole else pages[:SITE_FAULT_PAGES]
         more = len(pages) - len(shown)
@@ -1764,6 +1767,17 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                f"{_one_line(f.get('text'))}")
     elif code == "FENCE_UNCLOSED":
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
+    elif code == "WITHHELD_NAME_PUBLIC":
+        msg = (f"WITHHELD_NAME_PUBLIC: {_one_line(f.get('detail'))} — "
+               f"{_one_line(f.get('fix'))}")
+    elif code == "WITHHELD_IN_PROSE":
+        msg = (f"WITHHELD_IN_PROSE: \"{_one_line(f.get('name'))}\" (a "
+               f"withheld note: {_one_line(f.get('owner'))}), printed "
+               f"{f.get('count')} time{'' if f.get('count') == 1 else 's'} | "
+               f"{_one_line(f.get('context'))}")
+        outs = [_one_line(p) for p in f.get("listings") or []]
+        if outs:
+            msg += " | printed on the index or listing page: " + ", ".join(outs)
     else:
         msg = (f"ALIAS_IN_PROSE: \"{_one_line(f.get('alias'))}\" (a secret "
                f"name of {_one_line(f.get('owner'))}), printed "
@@ -1837,7 +1851,8 @@ def check_site_faults(vault: Path, files: list[str] | None = None
     rows = [f"ERROR\t{_one_line(f.get('path')) or '(vault)'}\t"
             f"{f.get('code')}: {_one_line(f.get('detail'))} — "
             f"{_one_line(f.get('fix'))}"
-            for f in findings if f.get("severity") == "error"]
+            for f in findings if f.get("severity") == "error"
+            and f.get("code") not in NOTE_FAULT_CODES]
     if rows:
         return rows + ["ERROR\t(vault)\tsite-faults: the site audit stopped "
                        "at the error above — nothing else checked"]
