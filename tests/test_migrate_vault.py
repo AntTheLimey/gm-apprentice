@@ -351,6 +351,13 @@ class TemplateTests(unittest.TestCase):
         self.assertEqual((vault / "_Templates" / "_Template_NPC.md"
                           ).read_text(encoding="utf-8"), self.regency_build())
 
+    def test_a_note_with_regency_in_its_name_is_not_a_regency_pc_template(self):
+        vault = self.npc_vault(mv.expected_templates(
+            make_vault(self))["_Template_NPC.md"])
+        (vault / "_Templates" / "_Template_Regency_Notes.md").write_text(
+            "x", encoding="utf-8")
+        self.assertEqual(mv.find_regency_looks(vault), [])
+
     def test_a_vault_that_looks_regency_but_is_coc_7e_is_told_so(self):
         for label, setup in (
                 ("npc template", lambda v: (v / "_Templates" /

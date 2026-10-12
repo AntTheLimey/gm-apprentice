@@ -173,10 +173,17 @@ def _regency_build(system: str | None, name: str, current: str) -> str | None:
     return templates_for("coc-7e-regency").get(name)
 
 
+# A PC template named for Regency, as the plugin ships it (`pc-coc-7e-regency.md`)
+# or as a vault holds it (`_Template_PC_CoC_7e_Regency.md`); not any note that
+# has "regency" in its name.
+REGENCY_PC_NAME_RE = re.compile(r"(?i)(?:^|[_-])pc[_-].*regency.*\.md$")
+
+
 def _regency_pc_template(vault: Path) -> bool:
     folder = vault / "_Templates"
     try:
-        return any("regency" in f.name.lower() for f in folder.iterdir())
+        return any(f.is_file() and REGENCY_PC_NAME_RE.search(f.name)
+                   for f in folder.iterdir())
     except OSError:
         return False
 
