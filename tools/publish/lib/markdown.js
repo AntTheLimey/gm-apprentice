@@ -1,5 +1,4 @@
 const MarkdownIt = require('markdown-it');
-const { splitTableRow } = require('./wikilink');
 
 // Obsidian callout: `> [!type] Optional Title` on the first line of a blockquote,
 // with the rest of the quote as the body. The type may carry a fold marker (`+`/`-`),
@@ -73,88 +72,98 @@ function calloutPlugin(md) {
 
 // --- tables wider than their header --------------------------------------------------------
 // GFM (markdown-it) drops a body cell that sits past the header's last column, silently. A GM
-// who tacks a note onto one row of a template table would lose it from the page. So before the
-// blocks are parsed, a table whose widest body row is wider than its header gets blank header
-// and delimiter cells to match, and every cell renders. A row with fewer cells is unchanged
-// (the renderer pads it), as is any table that already fits. Code (fenced or indented) is left
-// alone; a table in a blockquote, callout or list item is widened in place. Runs on the text
-// the page publishes, after the hidden material is gone, so it can bring none back.
-const LINE_RE = /^((?:[ \t]*>)*)([ \t]*)([\s\S]*)$/;
-const LIST_MARK_RE = /^(?:[-*+]|\d{1,9}[.)])[ \t]+/;
-const FENCE_RE = /^(`{3,}|~{3,})/;
-const DELIM_RE = /^\|?[ \t]*:?-+:?[ \t]*(?:\|[ \t]*:?-+:?[ \t]*)*\|?$/;
+// who tacks a note onto one row of a template table would lose it from the page. So the
+// renderer's own table rule is wrapped: it decides what is a table (fences, containers, where
+// a table ends), and when it has made one, the cells it dropped are read back from the same
+// lines, split the way it splits them, and given blank header cells and body cells of their
+// own. A row with fewer cells is padded as before; a table that fits is untouched. Trailing
+// blank cells are not "over-wide" (nothing is lost). Each widened table is recorded in
+// `env.widenedTables` for the build to warn about. This runs on the text the page publishes,
+// after the hidden material is gone, so it can bring none back.
 
-// The cells of one row, trimmed. A pipe is a cell break unless escaped, inside a
-// `[[link|alias]]` (splitTableRow) or inside a code span (masked here).
-function rowCells(rest) {
-  const masked = rest.trim().replace(/(`+)[^\n]*?\1/g, (m) => m.replace(/\|/g, '\u0000'));
-  const segs = splitTableRow(masked);
-  if (masked.startsWith('|')) segs.shift();
-  if (segs.length > 0 && segs[segs.length - 1] === '' && /(^|[^\\])\|$/.test(masked)) segs.pop();
-  return segs.map((c) => c.replace(/\u0000/g, '|').trim());
+// markdown-it's own cell splitter (rules_block/table): only a backslash escapes a pipe.
+function escapedSplit(str) {
+  const result = [];
+  let current = '';
+  let lastPos = 0;
+  let escaped = false;
+  for (let pos = 0; pos < str.length; pos++) {
+    const ch = str.charCodeAt(pos);
+    if (ch === 0x7c) {
+      if (!escaped) { result.push(current + str.substring(lastPos, pos)); current = ''; lastPos = pos + 1; }
+      else { current += str.substring(lastPos, pos - 1); lastPos = pos; }
+    }
+    escaped = ch === 0x5c;
+  }
+  result.push(current + str.substring(lastPos));
+  return result;
 }
 
-function widenTables(text) {
-  const lines = String(text).split('\n');
-  const widened = [];
-  let fence = null;
-  let inList = false;
-  const parse = (line) => {
-    const [, quote, indent, rest] = LINE_RE.exec(line);
-    const marker = LIST_MARK_RE.exec(rest);
-    return { quote, indent: indent.length, rest, marker, body: marker ? rest.slice(marker[0].length) : rest };
-  };
-  for (let i = 0; i < lines.length; i++) {
-    const p = parse(lines[i]);
-    if (p.rest.trim() === '') continue;
-    if (fence) {
-      const close = FENCE_RE.exec(p.rest.trim());
-      if (close && close[1][0] === fence[0] && close[1].length >= fence.length && p.rest.trim() === close[1]) fence = null;
-      continue;
-    }
-    if (p.indent === 0 && !p.marker) inList = false;
-    if (p.indent === 0 && p.marker) inList = true;
-    const open = FENCE_RE.exec(p.body.trim());
-    if (open && (p.indent < 4 || inList)) { fence = open[1]; continue; }
-    if (p.indent >= 4 && !inList) continue;
-    if (!p.body.includes('|') || i + 1 >= lines.length) continue;
-    const d = parse(lines[i + 1]);
-    if (d.quote.replace(/\s/g, '') !== p.quote.replace(/\s/g, '')) continue;
-    const dtext = d.rest.trim();
-    if (!DELIM_RE.test(dtext)) continue;
-    const head = rowCells(p.body);
-    if (head.length === 0 || rowCells(d.rest).length !== head.length) continue;
-    let end = i + 2;
-    const over = [];
-    let max = head.length;
-    for (; end < lines.length; end++) {
-      const r = parse(lines[end]);
-      if (r.rest.trim() === '' || r.quote.replace(/\s/g, '') !== p.quote.replace(/\s/g, '') || !r.rest.includes('|')) break;
-      const n = rowCells(r.rest).length;
-      if (n > head.length) over.push({ row: rowCells(r.rest)[0], cells: n, header: head.length });
-      if (n > max) max = n;
-    }
-    if (max > head.length) {
-      const extra = max - head.length;
-      const grow = (line, cell) => {
-        const t = line.replace(/[ \t]+$/, '');
-        return (/(^|[^\\])\|$/.test(t) ? t : t + ' |') + cell.repeat(extra);
-      };
-      lines[i] = grow(lines[i], ' |');
-      lines[i + 1] = grow(lines[i + 1], ' --- |');
-      widened.push(...over);
-    }
-    i = end - 1;
+function rowCells(state, line) {
+  const text = state.src.slice(state.bMarks[line] + state.tShift[line], state.eMarks[line]).trim();
+  const cells = escapedSplit(text);
+  if (cells.length && cells[0] === '') cells.shift();
+  if (cells.length && cells[cells.length - 1] === '') cells.pop();
+  return cells.map((c) => c.trim());
+}
+
+function widenTable(state, from) {
+  const tokens = state.tokens;
+  const rows = [];   // { open, close, line } for every tr, header first
+  for (let k = from; k < tokens.length; k++) {
+    if (tokens[k].type === 'tr_open') rows.push({ open: k, line: tokens[k].map[0] });
+    else if (tokens[k].type === 'tr_close') rows[rows.length - 1].close = k;
   }
-  return { text: lines.join('\n'), widened };
+  if (rows.length < 2) return;
+  const headerCount = tokens.slice(rows[0].open, rows[0].close).filter((t) => t.type === 'th_open').length;
+  let width = headerCount;
+  const over = [];
+  for (const row of rows.slice(1)) {
+    const cells = rowCells(state, row.line);
+    let n = cells.length;
+    while (n > headerCount && cells[n - 1] === '') n--;
+    row.cells = cells;
+    if (n > headerCount) over.push({ first: cells[0], cells: n });
+    if (n > width) width = n;
+  }
+  if (width === headerCount) return;
+  const cell = (kind, tag, content, like) => {
+    const open = new state.Token(`${kind}_open`, tag, 1);
+    const inline = new state.Token('inline', '', 0);
+    const close = new state.Token(`${kind}_close`, tag, -1);
+    open.level = like.level; inline.level = like.level + 1; close.level = like.level;
+    inline.content = content; inline.children = [];
+    return [open, inline, close];
+  };
+  for (const row of rows.slice().reverse()) {
+    const isHead = row === rows[0];
+    const have = isHead ? headerCount : headerCount;
+    const like = tokens.slice(row.open, row.close).filter((t) => t.type === (isHead ? 'th_open' : 'td_open')).pop();
+    const extra = [];
+    for (let c = have; c < width; c++) {
+      extra.push(...cell(isHead ? 'th' : 'td', isHead ? 'th' : 'td', isHead ? '' : (row.cells[c] || ''), like));
+    }
+    tokens.splice(row.close, 0, ...extra);
+  }
+  const env = state.env;
+  if (env && typeof env === 'object') {
+    (env.widenedTables = env.widenedTables || []).push({ header: headerCount, cells: width, rows: over.length, first: over[0] ? over[0].first : '' });
+  }
 }
 
 function tableWidenPlugin(md) {
-  md.core.ruler.before('block', 'widen_tables', (state) => { state.src = widenTables(state.src).text; });
+  const rule = md.block.ruler.__rules__.find((r) => r.name === 'table');
+  const original = { fn: rule.fn, alt: rule.alt };
+  md.block.ruler.at('table', function table(state, startLine, endLine, silent) {
+    const before = state.tokens.length;
+    const ok = original.fn(state, startLine, endLine, silent);
+    if (ok && !silent) widenTable(state, before);
+    return ok;
+  }, { alt: original.alt });
 }
 
 function createRenderer() {
   return new MarkdownIt({ html: false, typographer: true }).use(calloutPlugin).use(tableWidenPlugin);
 }
 
-module.exports = { createRenderer, calloutPlugin, widenTables };
+module.exports = { createRenderer, calloutPlugin };

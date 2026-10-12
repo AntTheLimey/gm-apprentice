@@ -2,12 +2,14 @@ const { parseGurps } = require('./parse');
 const { buildSheet, buildCombat, buildEquipment } = require('./layout');
 const { buildLiveData } = require('./live-data');
 const { renderStatusPanel } = require('./blocks/status-panel');
+const { overflowNotes } = require('./tables');
+const { RICH_COMBAT_TITLES } = require('./layout');
 
 function renderGURPSSheet(frontmatter, sections, meta) {
   const model = parseGurps(frontmatter, sections);
   const liveData = meta ? buildLiveData(model, meta) : null;
   return {
-    sheetHtml: buildSheet(model),
+    sheetHtml: buildSheet(model, overflowNotes(sections, RICH_COMBAT_TITLES)),
     combatHtml: buildCombat(model, sections || []),
     equipmentHtml: buildEquipment(model),
     // Structural warnings (sections found but unread, hidden sub-tables, an

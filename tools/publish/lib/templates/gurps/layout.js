@@ -22,7 +22,14 @@ const { findSectionByTitle } = require('./tables');
 
 const RICH_COMBAT_TITLES = ['multi-action combat skill chains', 'combat summary'];
 
-function buildSheet(model) {
+// Cells a row holds past the columns the sheet reads, listed so nothing written is dropped.
+function renderRowNotes(notes) {
+  if (!notes || notes.length === 0) return null;
+  const lines = notes.map(n => `<div class="subline">${escapeHtml(n.section)}${n.row ? `: ${escapeHtml(n.row)}` : ''} — ${escapeHtml(n.text)}</div>`);
+  return `<section class="blk cat-skill"><h2>Notes on rows</h2>${lines.join('')}</section>`;
+}
+
+function buildSheet(model, rowNotes) {
   const flow = [
     renderAttributes(model), renderLiftingFeats(model), renderSlamTable(model),
     renderSenses(model), renderDefenses(model), renderEncumbrance(model),
@@ -33,6 +40,7 @@ function buildSheet(model) {
     renderTraitList(model, 'disadvantages', 'trait', 'Disadvantages'),
     renderTraitList(model, 'quirks', 'trait', 'Quirks'),
     renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
+    renderRowNotes(rowNotes),
   ].filter(Boolean);
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
   // Full-width and above the flow: the physical description leads the sheet rather
@@ -66,4 +74,4 @@ function buildEquipment(model) {
   return renderEquipment(model);
 }
 
-module.exports = { buildSheet, buildCombat, buildEquipment };
+module.exports = { RICH_COMBAT_TITLES, buildSheet, buildCombat, buildEquipment };

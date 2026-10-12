@@ -113,4 +113,31 @@ function extractSubsectionHtml(sectionHtml, subsectionTitle) {
   return match ? match[1] : '';
 }
 
-module.exports = { decodeEntities, parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };
+// Cells a row holds beyond the columns its table's header names (the build widens a table
+// with blank header cells when a row is over-wide, #283). The sheets read columns by position,
+// so such a cell reaches no tile or row; they list it instead, so nothing the GM wrote is lost.
+// Returns [{ section, row, text }]; `skip` names sections the sheet shows whole elsewhere.
+function overflowNotes(sections, skip = []) {
+  const skipKeys = skip.map(normalizeTitle);
+  const out = [];
+  for (const sec of sections || []) {
+    if (!sec || !sec.html || skipKeys.includes(normalizeTitle(sec.title))) continue;
+    const tableRegex = /<table[^>]*>([\s\S]*?)<\/table>/gi;
+    let m;
+    while ((m = tableRegex.exec(sec.html)) !== null) {
+      const head = m[1].match(/<thead[^>]*>[\s\S]*?<\/thead>/i);
+      if (!head) continue;
+      const header = parseTableRows(head[0])[0] || [];
+      let known = header.length;
+      while (known > 0 && !header[known - 1]) known--;
+      const body = m[1].replace(head[0], '');
+      for (const row of parseTableRows(body)) {
+        const extra = row.slice(known).filter(Boolean);
+        if (extra.length) out.push({ section: sec.title, row: row[0] || '', text: extra.join(' · ') });
+      }
+    }
+  }
+  return out;
+}
+
+module.exports = { overflowNotes, decodeEntities, parseTableRows, parseTables, countTables, normalizeTitle, findSectionByTitle, extractSubsectionHtml, topLevelHtml, aboveSubheadings };
