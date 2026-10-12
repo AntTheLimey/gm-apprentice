@@ -342,6 +342,31 @@ class UnlinkTests(unittest.TestCase):
         self.assertEqual(read(vault, "Plans/Plan.md"),
                          "Run [[Dinner_Scene]] first.\n")
 
+    def test_a_link_to_a_withheld_note_is_not_turned_into_its_name(self):
+        # Unlinking would write the secret name into the page: the link is kept
+        # and listed until the GM gives the words with --as.
+        vault = make_vault(self, {
+            "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: true\n---\n\nThe duke.\n",
+            "People/Host.md": "Met [[Lord_Zorn]] and [[Lord_Zorn|the stranger]].\n"})
+        p = links.plan_unlink(vault, ["Lord_Zorn"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "Met [[Lord_Zorn]] and the stranger.\n")
+        shown = "\n".join(links.rows(p))
+        self.assertIn("KEPT\tPeople/Host.md:1\t[[Lord_Zorn]]\tthe note is marked "
+                      "withheld", shown)
+        q = links.plan_unlink(vault, ["Lord_Zorn"], ["People/Host.md"],
+                              "a stranger")
+        self.assertEqual(q.texts["People/Host.md"],
+                         "Met a stranger and the stranger.\n")
+        self.assertEqual(q.kept, [])
+
+    def test_a_note_that_is_not_withheld_is_unlinked_as_before(self):
+        vault = make_vault(self, {
+            "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: false\n---\n\nx\n",
+            "People/Host.md": "Met [[Lord_Zorn]].\n"})
+        p = links.plan_unlink(vault, ["Lord_Zorn"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"], "Met Lord_Zorn.\n")
+
     def test_as_gives_the_words_for_a_link_with_none_of_its_own(self):
         vault = make_vault(self, {
             "Plans/Dinner_Scene.md": "The scene.\n",
