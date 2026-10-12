@@ -267,10 +267,28 @@ describe('migrate-config', () => {
     assert.deepStrictEqual(plan.siteRemove, []);
     assert.deepStrictEqual(plan.vaultRemove, ['backend']);
     assert.deepStrictEqual(plan.vaultSet, { live_stats: true, inbox: false });
-    const r = cli(['--vault', s.vault], s.root.replace(/\/[^/]*$/, ''));
+    // Run from a directory with no vault.config.json in it (the CLI reads ./vault.config.json by
+    // default). path.dirname, not a "/"-splitting regex, so Windows paths work too.
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-migrate-nosite-'));
+    roots.push(empty);
+    assert.ok(!fs.existsSync(path.join(empty, 'vault.config.json')));
+    const r = cli(['--vault', s.vault], empty);
     assert.strictEqual(r.status, 0, r.stderr);
     assert.deepStrictEqual(publishOf(s.vaultFile), { mode: 'player', live_stats: true, inbox: false });
     assert.ok(fs.existsSync(`${s.vaultFile}.pre-migrate`));
+  });
+
+  it('15b: no site file at all: no exclude lists are planned or written, on any platform', () => {
+    const s = makeSite({ vaultFile: '---\ntype: meta\n---\n' });
+    const plan = planMigration({ vaultPath: s.vault });
+    assert.ok(!('exclude_sections' in plan.vaultSet) && !('exclude_fields' in plan.vaultSet), JSON.stringify(plan.vaultSet));
+    assert.deepStrictEqual(plan.moves, []);
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-migrate-nosite-'));
+    roots.push(empty);
+    const r = cli(['--vault', s.vault], empty);
+    assert.strictEqual(r.status, 0, r.stderr);
+    assert.strictEqual((publishOf(s.vaultFile) || {}).exclude_sections, undefined);
+    assert.strictEqual((publishOf(s.vaultFile) || {}).exclude_fields, undefined);
   });
 
   // Builds a fixture site twice, before and after migrating it; returns both docs trees.
