@@ -446,6 +446,22 @@
     };
     own.forEach((a) => take(a, false));
     wide.forEach((a) => take(a, true));
+    // A row written above the skill by more than its named bonuses already has a character-wide
+    // skill bonus in it: that aid starts unticked and says so. The surplus covers one aid, the
+    // biggest that fits. Nothing can be inferred when the skills-table level is unknown.
+    const baseN = num(w.base);
+    const levelN = num(w.level);
+    if (baseN !== null && levelN !== null) {
+      const named = (Array.isArray(w.bonuses) ? w.bonuses : []).reduce((t, b) => t + (b ? (num(b.bonus) || 0) : 0), 0);
+      const surplus = Math.trunc(levelN) - Math.trunc(baseN) - named;
+      let best = -1;
+      out.forEach((a, i) => {
+        const b = num(a.bonus);
+        if (a.tick === a.id || !a.on || SKILL_AIDS.indexOf(a.name) < 0 || b === null || b <= 0 || b > surplus) return;
+        if (best < 0 || b > num(out[best].bonus)) best = i;
+      });
+      if (best >= 0) out[best] = Object.assign({}, out[best], { on: false, inLevel: true });
+    }
     return out;
   }
 
@@ -711,7 +727,7 @@
       bind(inp, () => { state.aids[a.tick] = inp.checked; });
       return h('label', { class: 'th-c' }, [
         inp, h('span', { text: a.name + ' ' + (a.acc ? 'Acc ' : '') + '+' + int(a.bonus, 0, 30) + (a.fixed === true ? ' (fixed)' : '') }), h('span', { class: 'th-from', text: tag }),
-      ]);
+      ].concat(a.inLevel === true ? [h('span', { class: 'th-from', text: "already in the sheet's number" })] : []));
     }
 
     const SM = seq(10, -6).map((i) => [i, 'SM ' + sgn(i) + (i === 0 ? ' (human)' : '')]);

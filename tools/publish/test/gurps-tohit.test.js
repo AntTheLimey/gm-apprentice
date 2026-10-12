@@ -984,3 +984,55 @@ describe('weapons with the same name', () => {
     assert.strictEqual(T.cleanState(mk(), { weapon: 'Blaster pistol' }).weapon, 'Blaster pistol');
   });
 });
+
+describe('a character-wide skill bonus already in the row\'s level', () => {
+  const prog = (extra = {}) => Object.assign({ id: 'tp', name: 'Targeting program', bonus: 2, acc: false, fixed: false, from: 'gear', on: true }, extra);
+  const gun = (patch, aids) => gunsData(patch, { aids: aids || [prog()] });
+  const first = (data) => T.aidsFor(data, data.weapons[1]);
+  const plain = (data) => rolls(data, Object.assign(T.defaultState(data), { weapon: 'Blaster pistol' }));
+  it('level 19 over a skill of 17 starts the program unticked, flagged, and the roll is 19', () => {
+    const data = gun({ level: 19, base: 17 });
+    assert.deepStrictEqual([first(data)[0].on, first(data)[0].inLevel], [false, true]);
+    assert.strictEqual(plain(data), 19);
+  });
+  it('level 17 over 17 leaves it ticked: 19', () => {
+    const data = gun({ level: 17, base: 17 });
+    assert.strictEqual(first(data)[0].on, true);
+    assert.ok(!first(data)[0].inLevel);
+    assert.strictEqual(plain(data), 19);
+  });
+  it('a row bonus takes its share of the difference first', () => {
+    const bond = [{ name: 'Weapon Bond', bonus: 1 }];
+    const a = gun({ level: 18, base: 17, bonuses: bond });
+    assert.strictEqual(first(a)[0].on, true);
+    assert.strictEqual(plain(a), 20);
+    const b = gun({ level: 20, base: 17, bonuses: bond });
+    assert.deepStrictEqual([first(b)[0].on, first(b)[0].inLevel], [false, true]);
+    assert.strictEqual(plain(b), 20);
+  });
+  it('with the skills-table level unknown nothing is inferred', () => {
+    const data = gun({ level: 19, base: null });
+    assert.strictEqual(first(data)[0].on, true);
+    assert.ok(!first(data)[0].inLevel);
+  });
+  it('a sight is never treated this way', () => {
+    for (const name of ['HUD link', 'Scope', 'Laser sight']) {
+      const data = gun({ level: 19, base: 17 }, [prog({ id: 'x', name, acc: false })]);
+      assert.strictEqual(first(data)[0].on, true, name);
+      assert.ok(!first(data)[0].inLevel, name);
+    }
+  });
+  it('the surplus covers one aid, the biggest that fits', () => {
+    const data = gun({ level: 20, base: 17 }, [prog({ id: 'sp', name: 'Silhouette program', bonus: 1 }), prog()]);
+    const got = Object.fromEntries(first(data).map((a) => [a.id, [a.on, !!a.inLevel]]));
+    assert.deepStrictEqual(got, { sp: [true, false], tp: [false, true] });
+  });
+  it('the player can still tick it', () => {
+    const data = gun({ level: 19, base: 17 });
+    const s = T.defaultState(data);
+    s.weapon = 'Blaster pistol';
+    s.aids[first(data)[0].tick] = true;
+    assert.strictEqual(rolls(data, s), 21);
+  });
+});
+

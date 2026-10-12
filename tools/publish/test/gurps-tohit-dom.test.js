@@ -508,6 +508,23 @@ describe('aids and buttons that follow the weapon', () => {
     p.set('#th-weapon', 'w2');
     assert.strictEqual(p.$('[data-aid="prog"]').checked, true, 'the pistol is back to ticked');
   });
+  it('an aid already in the sheet\'s number starts unticked with a hint, and Reset keeps it so', () => {
+    const d = withProgram();
+    d.weapons[2] = Object.assign({}, d.weapons[2], { level: 19, base: 17, shown: 19 });
+    const p = load(d);
+    p.set('#th-weapon', 'w2');
+    const box = p.$('[data-aid="prog"]');
+    assert.strictEqual(box.checked, false);
+    assert.match(box.parent.textContent, /already in the sheet's number/);
+    assert.strictEqual(p.$('#th-roll').textContent, '19');
+    p.set('[data-aid="prog"]', true);
+    assert.strictEqual(p.$('#th-roll').textContent, '21');
+    p.fire(p.$('#th-reset'), 'click');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, false);
+    assert.match(p.$('[data-aid="prog"]').parent.textContent, /already in the sheet's number/);
+    p.set('#th-weapon', 'wg');
+    assert.doesNotMatch(p.$('[data-aid="prog"]').parent.textContent, /already in the sheet's number/);
+  });
   it('the technique picker says defaults are in it too', () => {
     const p = load(dataBlock());
     assert.match(p.$('#th-tech').parent.textContent, /Use a technique or default instead/);
