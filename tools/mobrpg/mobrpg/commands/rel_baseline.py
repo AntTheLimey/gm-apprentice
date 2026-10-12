@@ -125,7 +125,7 @@ def match_node(node, id_by_key, structural_idx, reified_idx, mp,
         # up under the flat mapping finds nothing and the edge is re-proposed on
         # every run instead of reconciling.
         et, _aff = map_cmd.resolve_event_type(
-            mp, pred, subject_kind, (kind_by_key or {}).get(_key(name)))
+            mp, pred, subject_kind, suggest.kind_of(kind_by_key or {}, name))
         key = f"{pred}|{r.get('target')}"
         if et in STRUCTURAL:
             hits = [structural_idx[(src, et, tgt)]] if (src, et, tgt) in structural_idx else []
@@ -169,10 +169,9 @@ def stamp_baseline(node, event_ids, mp=None, kind_by_key=None,
             r2["event_id"] = event_ids[key]
             r2["review_state"] = "accepted"
             if mp is not None:
-                tgt = _key(_target_name(r.get("target")))
                 et, _aff = map_cmd.resolve_event_type(
                     mp, r.get("predicate"), subject_kind,
-                    (kind_by_key or {}).get(tgt))
+                    suggest.kind_of(kind_by_key or {}, _target_name(r.get("target"))))
                 r2["event_type"] = et
         rels.append(r2)
     out["relationships"] = rels

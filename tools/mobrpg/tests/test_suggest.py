@@ -249,7 +249,7 @@ def test_node_index_resolves_targets_from_mobrpg_nodes(tmp_path):
     assert idx[suggest._key("Eris System")] == "eris-id"
     assert idx[suggest._key("Eris II")] == "eris2-id"
     # a node relationship already carrying an event_id is treated as already-linked
-    assert (suggest._key("Eris II"), "part_of", suggest._key("Eris System")) in linked
+    assert suggest._edge_linked(linked, set(), "Eris II", "part_of", "[[Eris System]]")[0]
 
 
 def test_relationship_items_structural_predicate_is_a_direct_relation(tmp_path):
@@ -599,10 +599,10 @@ def test_node_index_flags_pending_and_dismissed_as_submitted(tmp_path):
     write("New Loc", None, "")
     idx, linked, submitted = suggest.node_index(str(tmp_path))
     assert suggest._key("Accepted Loc") in idx          # linked by element_id
-    assert suggest._key("Pending Loc") in submitted      # already filed, awaiting review
-    assert suggest._key("Dismissed Loc") in submitted    # already filed, rejected
-    assert suggest._key("New Loc") not in submitted
-    assert suggest._key("Accepted Loc") not in submitted
+    assert suggest._exact("Pending Loc") in submitted      # already filed, awaiting review
+    assert suggest._exact("Dismissed Loc") in submitted    # already filed, rejected
+    assert suggest._exact("New Loc") not in submitted
+    assert suggest._exact("Accepted Loc") not in submitted
 
 
 def test_node_index_holds_elements_deleted_upstream(tmp_path):
@@ -621,7 +621,7 @@ def test_node_index_holds_elements_deleted_upstream(tmp_path):
 
     idx, _linked, submitted = suggest.node_index(str(tmp_path))
     assert suggest._key("Gone Item") not in idx          # no live element to link to
-    assert suggest._key("Gone Item") in submitted        # ...but still not re-filed
+    assert suggest._exact("Gone Item") in submitted      # ...but still not re-filed
 
 
 def test_run_skips_already_linked_creates(tmp_path, monkeypatch, capsys):
@@ -1353,3 +1353,93 @@ def test_run_creates_the_creature_beside_a_linked_inn_and_reports_ambiguity(tmp_
     created = [it["payload"]["name"] for it in batch["suggestions"]
                if it.get("operation") == "CreateElement" and it.get("externalRef")]
     assert "Woodland Ghost" in created
+
+
+# ---- #262 round 2: the "already linked" edge, "pending", and kinds go by exact name too ----
+
+def _pending_note(root, folder, stem, state="pending"):
+    from mobrpg import node
+    (root / folder).mkdir(parents=True, exist_ok=True)
+    nd = {"world_id": "", "external_ref": f"w:{folder}/{stem}", "element_id": None,
+          "element_kind": "LandFeature", "review_state": state,
+          "relationships": [], "languages": []}
+    (root / folder / f"{stem}.md").write_text(
+        "---\ntype: location\n" + node.emit_node(nd) + "---\nBody\n", encoding="utf-8")
+
+
+def test_a_pending_look_alike_does_not_hold_back_the_other_note(tmp_path):
+    _pending_note(tmp_path, "Locations", "Woodland Ghost")
+    _, _, submitted = suggest.node_index(str(tmp_path))
+    ents = [{"name": "The Woodland Ghost"}, {"name": "Woodland Ghost"}]
+    net_new, _, held = suggest.partition_entities(ents, {}, submitted)
+    assert [e["name"] for e in net_new] == ["The Woodland Ghost"]
+    assert [e["name"] for e in held] == ["Woodland Ghost"]
+
+
+def test_an_old_folded_only_pending_key_still_holds_back(tmp_path):
+    ents = [{"name": "Pending Loc"}, {"name": "New Loc"}]
+    net_new, _, held = suggest.partition_entities(ents, {}, {suggest._key("Pending Loc")})
+    assert [e["name"] for e in held] == ["Pending Loc"]
+
+
+def test_an_old_folded_pending_key_two_notes_share_holds_back_neither_and_says_so():
+    ents = [{"name": "The Woodland Ghost"}, {"name": "Woodland Ghost"}]
+    notes = []
+    net_new, _, held = suggest.partition_entities(
+        ents, {}, {suggest._key("Woodland Ghost")}, ambiguous={suggest._key("Woodland Ghost")},
+        notes=notes)
+    assert len(net_new) == 2 and held == []
+    assert notes and "ambiguous" in notes[0]
+
+
+def test_an_edge_already_linked_on_one_look_alike_is_not_linked_on_the_other(tmp_path):
+    from mobrpg import node
+    (tmp_path / "Locations").mkdir()
+    nd = {"world_id": "", "external_ref": "w:Locations/Woodland Ghost", "element_id": "cr-id",
+          "element_kind": "LandFeature", "review_state": "accepted", "languages": [],
+          "relationships": [{"predicate": "knows", "target": "[[Mist]]", "event_id": "ev1",
+                             "review_state": "accepted"}]}
+    (tmp_path / "Locations/Woodland Ghost.md").write_text(
+        "---\ntype: location\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    _, linked, _ = suggest.node_index(str(tmp_path))
+    assert suggest._edge_linked(linked, set(), "Woodland Ghost", "knows", "[[Mist]]")[0]
+    assert not suggest._edge_linked(linked, set(), "The Woodland Ghost", "knows", "[[Mist]]")[0]
+    # the target may be spelt differently (folded) and still match the same subject
+    assert suggest._edge_linked(linked, set(), "Woodland Ghost", "knows", "[[The Mist]]")[0]
+
+
+def test_an_old_folded_only_triple_still_matches_unless_its_key_is_shared():
+    k = suggest._key
+    old = {(k("Woodland Ghost"), "knows", k("Mist"))}
+    assert suggest._edge_linked(old, set(), "Woodland Ghost", "knows", "[[Mist]]") == (True, None)
+    hit, note = suggest._edge_linked(old, {k("Woodland Ghost")}, "Woodland Ghost", "knows", "[[Mist]]")
+    assert hit is False and "ambiguous" in note
+
+
+def test_relationship_items_proposes_the_edge_and_reports_an_ambiguous_old_record(tmp_path):
+    k = suggest._key
+    old = {(k("Woodland Ghost"), "knows", k("Mist"))}
+    ent = {"path": "x", "name": "Woodland Ghost",
+           "relationships": [{"target": "Mist", "predicate": "knows", "desc": ""}]}
+    items, skipped = suggest.relationship_items(
+        ent, _map(), "e1", {k("Mist"): "mist-id"}, old, str(tmp_path), "w", "e1",
+        ambiguous={k("Woodland Ghost")})
+    assert "mist-id" in json.dumps(items)
+    assert any("ambiguous" in s for s in skipped)
+
+
+def test_node_kind_index_exact_name_first_and_a_shared_key_has_no_kind(tmp_path):
+    from mobrpg import node
+    for folder, stem, kind in (("Locations", "The Woodland Ghost", "LandFeature"),
+                               ("Creatures", "Woodland Ghost", "Creature"),
+                               ("Locations", "Lord Vane", "Person")):
+        (tmp_path / folder).mkdir(exist_ok=True)
+        nd = {"world_id": "", "external_ref": f"w:{stem}", "element_id": stem, "element_kind": kind,
+              "review_state": "accepted", "relationships": [], "languages": []}
+        (tmp_path / folder / f"{stem}.md").write_text(
+            "---\ntype: x\n" + node.emit_node(nd) + "---\nB\n", encoding="utf-8")
+    kinds = suggest.node_kind_index(str(tmp_path))
+    assert suggest.kind_of(kinds, "The Woodland Ghost") == "LandFeature"
+    assert suggest.kind_of(kinds, "[[Woodland Ghost]]") == "Creature"
+    assert suggest.kind_of(kinds, "Lady Woodland Ghost") is None     # shared key: no kind
+    assert suggest.kind_of(kinds, "Vane") == "Person"                # unshared fold still works

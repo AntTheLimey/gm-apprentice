@@ -499,9 +499,10 @@ def node_index(vault) -> tuple[dict, set, set]:
             nd = node.read_node(txt)
             if not nd:
                 continue
-            subj = _key(_display_name(p))
+            name = _display_name(p)
+            subj = _key(name)
             if nd.get("review_state") in ("pending", "dismissed", "deleted"):
-                submitted.add(subj)
+                submitted.add(_exact(name))          # exact name; see partition_entities
             if not nd.get("element_id"):
                 continue
             eid = nd["element_id"]
@@ -512,7 +513,10 @@ def node_index(vault) -> tuple[dict, set, set]:
             for r in nd.get("relationships", []):
                 if r.get("event_id"):
                     tgt = re.sub(r"^\[\[|\]\]$", "", (r.get("target") or "")).split("|")[0]
-                    linked.add((subj, r.get("predicate"), _key(tgt)))
+                    # Exact subject, so a look-alike note does not inherit the edge (#262);
+                    # the target also under its folded key, which may be spelt differently.
+                    linked.add(("=", _stem(name), r.get("predicate"), _target_stem(tgt)))
+                    linked.add(("~", _stem(name), r.get("predicate"), _key(tgt)))
     _, ambiguous = node_files(vault)
     for k in ambiguous:
         idx.pop(k, None)                             # two linked notes fold here: resolve neither (#262)
@@ -525,6 +529,41 @@ def node_index(vault) -> tuple[dict, set, set]:
 def _stem(name: str) -> str:
     """A note's file stem as a wikilink spells it: NFC, underscores as spaces."""
     return unicodedata.normalize("NFC", name or "").replace("_", " ").strip()
+
+
+def _exact(name: str) -> tuple:
+    """The exact-name record of a note in `submitted` / `kind_by_key`."""
+    return ("=", _target_stem(name))
+
+
+def _edge_linked(linked, ambiguous, subj_name, pred, tgt_raw) -> tuple[bool, str | None]:
+    """(already linked?, note). Exact subject name first. An older folded-only
+    record (subj_key, pred, tgt_key) still matches as before, unless a key it
+    rests on is shared by two notes: then it is not trusted and the note says so."""
+    ss, ts = _target_stem(subj_name), _target_stem(tgt_raw)
+    sk, tk = _key(subj_name), _key(tgt_raw)
+    amb = ambiguous or ()
+    if ("=", ss, pred, ts) in linked:
+        return True, None
+    if ("~", ss, pred, tk) in linked and tk not in amb:
+        return True, None
+    if (sk, pred, tk) in linked:
+        if sk in amb or tk in amb:
+            return False, (f"{subj_name} --{pred}--> {tgt_raw}: an older 'already linked' record "
+                           f"is ambiguous (two notes share that name once articles and titles "
+                           f"are ignored), so the edge is proposed anyway")
+        return True, None
+    return False, None
+
+
+def kind_of(kind_by_key, name, ambiguous=None):
+    """The element kind of the note `name` names: exact name first, then the folded
+    key, which gives no kind when two notes share it."""
+    hit = kind_by_key.get(_exact(name))
+    if hit:
+        return hit
+    k = _key(name)
+    return None if k in (ambiguous or ()) else kind_by_key.get(k)
 
 
 def _target_stem(target: str) -> str:
@@ -603,6 +642,7 @@ def node_kind_index(vault) -> dict:
     resolve too, and a real entity name always wins over an alias — same rule as
     node_index, so the two indexes agree on what a target name refers to."""
     idx: dict = {}
+    notes_by_key: dict = {}
     aliases: list[tuple[str, str]] = []
     vault = os.path.expanduser(vault)
     for folder in map_cmd.FOLDERS:
@@ -611,12 +651,19 @@ def node_kind_index(vault) -> dict:
             nd = node.read_node(txt)
             if not nd or not nd.get("element_kind"):
                 continue
-            idx[_key(_display_name(p))] = nd["element_kind"]
+            name = _display_name(p)
+            idx[_exact(name)] = nd["element_kind"]
+            notes_by_key.setdefault(_key(name), {})[_stem(name)] = nd["element_kind"]
             fm, _ = _read(p)
             for al in _aliases(fm):
                 aliases.append((_key(al), nd["element_kind"]))
+    shared = {k for k, d in notes_by_key.items() if len(d) > 1}   # no kind by folded key (#262)
+    for k, d in notes_by_key.items():
+        if k not in shared:
+            idx[k] = next(iter(d.values()))
     for k, kind in aliases:
-        idx.setdefault(k, kind)
+        if k not in shared:
+            idx.setdefault(k, kind)
     return idx
 
 
@@ -655,9 +702,12 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
     for rel in entity.get("relationships", []):
         pred, tgt_raw = rel["predicate"], rel["target"]
         tgt_key = _key(tgt_raw)
-        if (subj_key, pred, tgt_key) in linked_triples:
+        is_linked, old_note = _edge_linked(linked_triples, ambiguous, entity["name"], pred, tgt_raw)
+        if is_linked:
             skipped.append(f"{entity['name']} --{pred}--> {tgt_raw} (already linked)")
             continue
+        if old_note:
+            skipped.append(old_note)
         tgt_id, amb = _resolve_target(tgt_raw, tgt_key, ent_id_by_key, id_by_file, ambiguous)
         tgt_ref = None
         if not tgt_id and not amb:
@@ -675,7 +725,16 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
         xdeps = [] if tgt_id else [tgt_ref]
         tgt_disp = re.sub(r"^\[\[|\]\]$", "", tgt_raw).split("|")[0].replace("_", " ")
         overridden = map_cmd.is_map_override(mp, pred)
-        et, aff = _resolve(mp, pred, subj_key, tgt_key, kind_by_key)
+        kinds = kind_by_key
+        if kind_by_key:                      # exact name first, then the folded key (#262)
+            kinds = {subj_key: kind_of(kind_by_key, entity["name"], ambiguous),
+                     tgt_key: kind_of(kind_by_key, tgt_raw, ambiguous)}
+            for nm, kk in ((entity["name"], subj_key), (tgt_raw, tgt_key)):
+                if kk in (ambiguous or ()) and kind_by_key.get(_exact(nm)) is None:
+                    skipped.append(f"{entity['name']} --{pred}--> {tgt_disp}: kind of "
+                                   f"{_target_stem(nm)} unknown (two notes share that name once "
+                                   f"articles and titles are ignored)")
+        et, aff = _resolve(mp, pred, subj_key, tgt_key, kinds)
         if aff and et != _mapped_type(mp, pred):
             # The grid disagreed with the predicate map. Usually that IS the fix
             # (`serves` an Organization is Membership, not Employ), but it also
@@ -683,7 +742,7 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
             # Employ because Station 45 is authored as a location, and mobRPG
             # offers no "member of a Political". Say which, so the GM can decide
             # whether the target is the wrong entity rather than the wrong type.
-            gk = kind_by_key.get(tgt_key if aff[1] else subj_key)
+            gk = kinds.get(tgt_key if aff[1] else subj_key)
             offered = "/".join(map_cmd.event_types_for_kind(gk))
             article = "an" if gk and gk[0] in "AEIOU" else "a"
             skipped.append(
@@ -700,8 +759,8 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
             # a surprising one here often means the vault edge is wrong — an Item
             # that `owns` an Organization is a reversed edge, and a person who
             # `serves` another person usually serves that person's venue.
-            sk = kind_by_key.get(subj_key) or "?"
-            tk = kind_by_key.get(tgt_key) or "?"
+            sk = kinds.get(subj_key) or "?"
+            tk = kinds.get(tgt_key) or "?"
             skipped.append(
                 f"{entity['name']} --{pred}--> {tgt_disp}: {_mapped_type(mp, pred)}"
                 f" -> Generic ({sk}->{tk} is not a person/group pair, so mobRPG's "
@@ -761,7 +820,7 @@ def relationship_items(entity, mp, entity_ref, ent_id_by_key, linked_triples,
 
 
 def partition_entities(entities, ent_id_by_key,
-                       submitted_keys=None, id_by_file=None) -> tuple[list[dict], list[dict], list[dict]]:
+                       submitted_keys=None, id_by_file=None, ambiguous=None, notes=None) -> tuple[list[dict], list[dict], list[dict]]:
     """Split entities into (net_new, linked, submitted).
 
     An entity whose name (or an alias, via the caller's key index) already
@@ -785,8 +844,17 @@ def partition_entities(entities, ent_id_by_key,
         k = _key(ent["name"])
         if (_stem(ent["name"]) in files) if id_by_file is not None else (k in ent_id_by_key):
             linked.append(ent)
-        elif k in submitted_keys:
+        elif _exact(ent["name"]) in submitted_keys:
             submitted.append(ent)
+        elif k in submitted_keys:               # an older folded-only record
+            if k in (ambiguous or ()):
+                if notes is not None:
+                    notes.append(f"{ent['name']}: an older 'pending' record is ambiguous (two notes "
+                                 f"share that name once articles and titles are ignored), so the "
+                                 f"note is not held back")
+                net_new.append(ent)
+            else:
+                submitted.append(ent)
         else:
             net_new.append(ent)
     return net_new, linked, submitted
@@ -803,7 +871,8 @@ def held_relationship_count(linked, ent_id_by_key, ref_by_key, linked_triples,
         subj = _key(ent["name"])
         for rel in ent.get("relationships", []):
             tgt_key = _key(rel["target"])
-            if (subj, rel["predicate"], tgt_key) in linked_triples:
+            if _edge_linked(linked_triples, ambiguous, ent["name"], rel["predicate"],
+                            rel["target"])[0]:
                 continue
             hit = (_resolve_target(rel["target"], tgt_key, ent_id_by_key, id_by_file, ambiguous)[0]
                    or _resolve_target(rel["target"], tgt_key, ref_by_key, ref_by_file, ambiguous)[0])
@@ -1169,8 +1238,11 @@ def run(argv: list[str]) -> int:
     # the baseline pass's job, so they're held (and reported), never silently lost.
     # Entities with a pending/dismissed suggestion already in the queue are also
     # held — re-filing would duplicate the card the reviewer already has.
+    partition_notes: list[str] = []
     net_new, linked_ents, submitted_ents = partition_entities(
-        entities, ent_id_by_key, submitted_keys, id_by_file)
+        entities, ent_id_by_key, submitted_keys, id_by_file, ambiguous, partition_notes)
+    for note in partition_notes:
+        print(f"  [ambiguous] {note}")
 
     # Anything that already exists live but has no node must not be re-filed:
     # its create is skipped as already claimed and the edges that hang off it
@@ -1215,6 +1287,7 @@ def run(argv: list[str]) -> int:
         proposed = element_spec(ent, mp)[1].get("type")
         if not proposed:
             continue
+        kind_by_key.setdefault(_exact(ent["name"]), proposed)
         kind_by_key.setdefault(_key(ent["name"]), proposed)
         for al in ent.get("aliases", []):
             kind_by_key.setdefault(_key(al), proposed)
