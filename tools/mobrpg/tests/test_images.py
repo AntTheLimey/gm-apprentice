@@ -249,7 +249,7 @@ def test_identical_portrait_outside_attachments_is_not_duplicated(tmp_path, monk
     assert not (tmp_path / "_attachments").exists()
 
 
-def test_differing_portrait_with_free_plain_name_says_so_and_second_run_agrees(
+def test_differing_portrait_is_called_out_once_then_the_saved_copy_is_unchanged(
         tmp_path, monkeypatch, capsys):
     _note(tmp_path, portrait='portrait: "_attachments/characters/Other.png"')
     att = tmp_path / "_attachments" / "characters"
@@ -262,8 +262,9 @@ def test_differing_portrait_with_free_plain_name_says_so_and_second_run_agrees(
     assert "differs from the current portrait" in first
     assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 0
     second = capsys.readouterr().out
-    assert "differs from the current portrait" in second
-    assert "unchanged: 0" in second
+    # the upstream image is already saved in the vault: nothing alarming, nothing written
+    assert "saved beside it" not in second
+    assert "unchanged: 1" in second and "occupied: 0" in second
     assert {f.name: f.read_bytes() for f in att.iterdir()} == before
 
 
@@ -540,3 +541,15 @@ def test_pull_covers_creatures_and_heritages():
     from mobrpg.commands import images as _i
     for k in ("creature", "culture", "race"):
         assert k in _i.KINDS and k in _i.FOLDER
+
+
+def test_a_plain_download_failure_is_not_called_a_comparison(tmp_path, monkeypatch, capsys):
+    _note(tmp_path)                     # empty portrait, nothing on disk: no comparison needed
+    _wire_pull(monkeypatch, b"x")
+
+    def boom(url):
+        raise OSError("timed out")
+    monkeypatch.setattr(images, "_download", boom)
+    assert images.run(["w1", "--vault", str(tmp_path), "--execute"]) == 1
+    err = capsys.readouterr().err
+    assert "could not download" in err and "could not compare" not in err

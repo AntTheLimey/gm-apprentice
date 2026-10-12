@@ -419,12 +419,14 @@ def run(argv: list[str]) -> int:
                 re.search(r'^portrait:\s*"[^"]+"\s*$', text, flags=re.M))
             data = match = None
             differs = False
+            comparing = False
             # Something of this note's may already hold the image: compare the
             # upstream bytes with the file in the way, its earlier " (mobRPG)"
             # copy and the current portrait (anywhere in the vault; this only
             # reads) before writing a second copy.
             try:
                 if os.path.exists(dest) or has_portrait:
+                    comparing = True
                     data = _download(img["url"])
                     portrait = _portrait_files(vault_dir, text, index) if has_portrait else []
                     readable = lambda h: os.path.isfile(h) and _within(vault_root, h)  # noqa: E731
@@ -439,8 +441,9 @@ def run(argv: list[str]) -> int:
                 elif args.execute:
                     data = _download(img["url"])
             except (ValueError, OSError) as e:
-                print(f"  could not compare {ent['name']} with the upstream image ({e}); "
-                      "skipped", file=sys.stderr)
+                what = ("could not compare {} with the upstream image" if comparing
+                        else "could not download the image for {}")
+                print(f"  {what.format(ent['name'])} ({e}); skipped", file=sys.stderr)
                 failed += 1
                 continue
             if not _within(attach_root, dest) and not (match and _within(vault_root, dest)):
@@ -467,7 +470,9 @@ def run(argv: list[str]) -> int:
                     open(full, "w", encoding="utf-8").write(text)
                 wired += 1
             elif has_portrait:
-                if differs:
+                if differs and not match:
+                    # only a copy this run is about to write is news; one already
+                    # in the vault that equals upstream is settled
                     occupied += 1
                     print(f"  portrait already set, upstream image differs from the "
                           f"current portrait, saved beside it: {ent['name']} -> {rel}")
