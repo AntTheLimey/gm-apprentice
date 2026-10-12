@@ -552,8 +552,11 @@ publish:
 
 If `site_title` reads `My Campaign`, `init` ran without `--title`: set
 it to the Step 6 answer. Leave `folder_map`,
-`exclude_dirs`, `exclude_sections`, `exclude_fields` and `attachments_dir` as written unless the vault uses
-non-standard folder names. Leave `live_stats` and `inbox` unset: unset
+`exclude_dirs` and `attachments_dir` as written unless the vault uses
+non-standard folder names. Ask whether the vault has GM-only headings or
+frontmatter fields of its own; add each to `exclude_sections` /
+`exclude_fields` and keep every built-in entry, because a list in the file
+replaces the built-in one. Leave `live_stats` and `inbox` unset: unset
 means off, which keeps the live status bar and the at-table inbox off
 until the GM opts in (Phase G). Leave `character_sheets` unset too
 (sheets publish) unless the GM asks to keep sheets off the site — see
