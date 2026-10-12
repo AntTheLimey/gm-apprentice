@@ -462,3 +462,25 @@ def test_system_names_match_case_insensitively_in_every_rule():
     assert d("corwin Gate", exists, ["Corwin"]) == "Corwin System"
     assert d("corwin Belt", exists, ["Corwin"]) == "Corwin System"
     assert d("corwin", exists, ["Corwin"]) == "Corwin System"
+
+
+def test_a_non_location_note_named_like_the_system_is_not_its_parent(tmp_path):
+    vault = tmp_path / "vault"
+    _mk(vault, "Locations", "Corwin I")
+    _mk(vault, "Characters/NPCs", "Corwin")
+    extract = tmp_path / "x.json"
+    extract.write_text(json.dumps({"entities": [
+        {"id": "a", "name": "Corwin I", "kind": "landfeature", "relationships": []}]}),
+        encoding="utf-8")
+    out = tmp_path / "out"
+    link_orphans.run([str(extract), "--vault", str(vault), "--out", str(out),
+                      "--systems", "Corwin", "--execute"])
+    assert "[[Corwin]]" not in (vault / "Locations" / "Corwin I.md").read_text(encoding="utf-8")
+
+
+def test_systems_flag_is_compared_without_case_when_naming_what_was_left_out(
+        tmp_path, capsys):
+    vault = _vault(tmp_path)
+    link_orphans.run([str(_extract(tmp_path)), "--vault", str(vault),
+                      "--out", str(tmp_path / "out"), "--systems", "corwin"])
+    assert "NOTE" not in capsys.readouterr().out

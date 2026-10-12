@@ -86,8 +86,17 @@ def vault_has_rels(vault: str) -> set:
     return out
 
 
-def derive_parent(name: str, exists: set, systems: list[str]) -> str | None:
-    lower = {n.lower(): n for n in exists}
+def vault_location_names(vault: str) -> set:
+    return {os.path.splitext(os.path.basename(p))[0]
+            for p in glob.glob(os.path.join(vault, "Locations", "*.md"))}
+
+
+def derive_parent(name: str, exists: set, systems: list[str],
+                  locations: set | None = None) -> str | None:
+    """`locations` (default: `exists`) is where a parent may come from: a
+    system, planet or moon is a location note, never an NPC or item that
+    happens to share the name."""
+    lower = {n.lower(): n for n in (exists if locations is None else locations)}
     for sys_ in systems:
         # The system's own note: "<Sys> System" in any case, else a note named
         # for the system itself (a `location_type: star system` note).
@@ -228,11 +237,13 @@ def run(argv: list[str]) -> int:
     extract = json.load(open(args.extract, encoding="utf-8"))
     id_of = {e["name"]: e["id"] for e in extract["entities"]}
     exists = vault_entity_names(vault)
+    locations = vault_location_names(vault)
     in_vault = vault_systems(vault)
     given = bool(systems)
     if not given:
         systems = in_vault
-    left_out = [x for x in in_vault if x not in systems]
+    given_lower = {x.lower() for x in systems}
+    left_out = [x for x in in_vault if x.lower() not in given_lower]
     already_linked = vault_has_rels(vault)   # judge orphan status from the vault
 
     linked, still, unwritable = [], [], []
@@ -243,11 +254,11 @@ def run(argv: list[str]) -> int:
             continue  # not an orphan (per live vault state)
         target = rtype = why = None
         if kind in ("landfeature", "political"):
-            p = derive_parent(name, exists, systems)
+            p = derive_parent(name, exists, systems, locations)
             if p:
                 target, rtype, why = p, "part_of", "structural containment"
-            elif left_out and derive_parent(name, exists, left_out):
-                would_match.append((kind, name, derive_parent(name, exists, left_out)))
+            elif left_out and derive_parent(name, exists, left_out, locations):
+                would_match.append((kind, name, derive_parent(name, exists, left_out, locations)))
                 continue          # reported in its own section, not as "still orphan"
         elif kind == "item":
             mk = derive_maker(e.get("body_md", ""), exists)
