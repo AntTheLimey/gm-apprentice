@@ -591,7 +591,7 @@ function startNoteAudit(input) {
     const fixLine = (alias, owner, file) => {
       if (file) return `rename the file, and the embeds that name it, so that its name does not hold "${alias}"`;
       if (withheld) {
-        return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints a neutral word (${Object.values(WITHHELD_PLACEHOLDERS).filter((w, i, a) => a.indexOf(w) === i).join(', ')}) in place of a withheld note's name; where it is an ordinary word and not the name, record that with manifest apply --exclude "${owner}=stays hidden: <why>"`;
+        return `reword it to a name the players know, in the text or in the frontmatter field or title that holds it; or, in the text, link the note ([[${alias}]]): a link with no label of its own prints a neutral word (${Object.values(WITHHELD_PLACEHOLDERS).filter((w, i, a) => a.indexOf(w) === i).join(', ')}) in place of a withheld note's name; where it is an ordinary word and not the name, the finding stays until the note is no longer marked withheld`;
       }
       return `reword it to the public name, in the text or in the frontmatter field or title that holds it; or, in the text, link the name ([[${alias}]]): the build prints the page's public title for a linked GM alias`;
     };

@@ -194,6 +194,7 @@ describe('WITHHELD_IN_PROSE: a withheld note\'s name printed as plain text', () 
     assert.ok(hit);
     assert.ok(!hit.settled, 'a name in plain text has no "leave it" answer');
     assert.strictEqual(json.counts.settled, 0);
+    assert.doesNotMatch(hit.fix, /stays hidden/, 'the fix does not offer an answer that settles nothing');
     assert.match((await doctor(configPath)).text, /WITHHELD_IN_PROSE/);
   });
 
