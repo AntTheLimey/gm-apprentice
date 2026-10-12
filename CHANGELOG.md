@@ -7,6 +7,65 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.48] — 2026-10-12
+
+### Added
+
+- A note can be marked `withheld: true` when its own name is a secret.
+  The site build then looks for that note's file name, title and
+  aliases in everything it publishes (page text, listings, the search
+  index, link previews, copied file names) and reports each place
+  (#291). A link to a withheld note with no words of its own prints a
+  neutral word in the name's place: "someone" for a character,
+  "somewhere" for a place, "something" for anything else.
+- campaign-qa's Site Faults check walks the new findings, and
+  "stays hidden:" beside the note's manifest entry settles them.
+- `links.py unlink --in` keeps a link with no words to a withheld note
+  until `--as` gives the words to write, so unlinking never writes the
+  secret name into a page.
+
+### Changed
+
+- The site report lists the pages that link to a note with no page
+  (up to three, then a count), and counts it as an error when that note
+  is withheld (#292). The build still never refuses to publish.
+- A withheld note that is itself set to publish still publishes, and is
+  reported as an error that names both ways out.
+- A `withheld` value the build cannot read (`tru`, `maybe`) is read as
+  not withheld, with a warning naming the note.
+- A secret name is found when the note's file name and the page's text
+  spell an accented letter in different Unicode forms. This applies to
+  `gm_aliases` names too, so a site may report one it missed before.
+- `vault_check site-faults` reports a note fault of error severity as
+  a row and goes on, where any error used to stop the audit.
+- mobRPG `link-orphans` takes its star systems from the vault's own
+  location notes (a name ending "System", or `location_type: star
+  system`), so it links without `--systems`; `--systems` still
+  overrides, and the summary says when it leaves a system out.
+- mobRPG `images` on a dry run downloads a picture when a file of the
+  same name is already there, to compare the two. It still writes
+  nothing.
+- Publish tool 1.20.0.
+
+### Fixed
+
+- mobRPG `images` no longer crashes when a kind's list comes back as a
+  web page: that kind is skipped and named, `pull` and the other
+  commands treat it as empty as before, and a run where every kind was
+  skipped ends with an error (#307). One entity that fails is reported
+  and counted, and the run goes on.
+- mobRPG `images --execute` no longer saves a "(mobRPG)" copy beside a
+  portrait that is already the same picture, wherever in the vault the
+  portrait is kept. A picture that differs is saved beside it with a
+  line saying so (#308).
+- mobRPG `link-orphans` links the star to its system, no longer reads
+  "Corwinton Gate" or "Corwin Belt Station" as part of the Corwin
+  system, and never takes a character or item for a parent place
+  (#309).
+- `scripts/template_history.py` runs again: a template text recorded
+  between releases is kept in the history, where it used to stop every
+  later run.
+
 ## [1.10.47] — 2026-10-11
 
 ### Added
