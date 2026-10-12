@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { buildLinkMap, scanAttachments } = require('../../lib/scanner');
-const { resolveWikiLinks, renderRelationships, renderMetaValue, resolveImageEmbeds } = require('../../lib/processor');
+const { resolveWikiLinks, renderMetaValue, resolveImageEmbeds } = require('../../lib/processor');
 const { portraitImg } = require('../../lib/templates/base');
 const { pairHubs } = require('../../lib/session-hub');
 
@@ -71,12 +71,6 @@ describe('linkMap lookups across unicode normal forms (#139)', () => {
     const map = buildLinkMap([pageNamed(NFD)]);
     const out = resolveWikiLinks(`Met [[${NFC}]] at the docks.`, map, 'sessions/session-01.html');
     assert.strictEqual(out, `Met [${NFC}](../${OUT}) at the docks.`);
-  });
-
-  it('links a relationship target typed in the other normal form', () => {
-    const map = buildLinkMap([pageNamed(NFD)]);
-    const html = renderRelationships({ relationships: [{ target: NFC, type: 'ally' }] }, map, 'characters/pcs/rook.html');
-    assert.ok(html.includes(`href="../npcs/alena-gonzalez.html"`), html);
   });
 
   it('links a frontmatter wikilink typed in the other normal form', () => {
@@ -186,11 +180,14 @@ describe('imageMap lookups across unicode normal forms (#139)', () => {
 describe('derived title tables across unicode normal forms (#139)', () => {
   // Same defect class as linkMap, found auditing every table keyed by author-typed text:
   // buildBacklinks keys off the words inside a `[[wikilink]]` but is read back with the
-  // scanned page title, and the relationship graph resolves wikilink targets against page
-  // titles. A mismatch drops the "Mentioned in" sidebar entry, or draws the entity twice —
-  // once as a resolved node, once as a dangling one.
+  // scanned page title, and Connections resolves wikilink targets against page
+  // titles. A mismatch drops the Mentions entry, or draws the entity twice —
+  // once as a resolved item, once as a dangling one.
   const { buildBacklinks } = require('../../lib/backlinks');
-  const { buildRelationshipGraph } = require('../../lib/relationship-graph');
+  const { buildConnections } = require('../../lib/connections');
+  const { buildLinkMap } = require('../../lib/scanner');
+  const connectionsOf = (pages, page) => buildConnections({ pages, linkMap: buildLinkMap(pages), backlinks: buildBacklinks(pages, buildLinkMap(pages)) }).for(page);
+  const itemsOf = (model) => model.tabs.flatMap((t) => t.groups).flatMap((g) => g.items);
 
   it('backlinks a mention typed in the other normal form', () => {
     const bl = buildBacklinks([
@@ -201,27 +198,27 @@ describe('derived title tables across unicode normal forms (#139)', () => {
     assert.strictEqual(bl[NFC][0].outputPath, 'sessions/session-1.html');
   });
 
-  it('resolves a graph relationship target typed in the other normal form', () => {
+  it('resolves a Connections relationship target typed in the other normal form', () => {
     const pages = [
       { title: 'Rook', displayTitle: 'Rook', outputPath: 'characters/pcs/rook.html', frontmatter: { type: 'pc', relationships: [{ target: `[[${NFD}]]`, type: 'ally' }] } },
       { title: NFC, displayTitle: NFC, outputPath: OUT, frontmatter: { type: 'npc' } },
     ];
-    const graph = buildRelationshipGraph('Rook', pages, {});
-    const node = graph.nodes.find(n => n.type === 'npc');
-    assert.ok(node, `no npc node in ${JSON.stringify(graph.nodes)}`);
-    assert.strictEqual(node.outputPath, OUT);
+    const items = itemsOf(connectionsOf(pages, pages[0]));
+    const item = items.find(i => i.kind === 'NPC');
+    assert.ok(item, `no npc item in ${JSON.stringify(items)}`);
+    assert.strictEqual(item.outputPath, OUT);
   });
 
-  it('draws the mutual relationship as one resolved pair, not a dangling twin', () => {
+  it('lists the mutual relationship as one resolved item, not a dangling twin', () => {
     const pages = [
       { title: 'Rook', displayTitle: 'Rook', outputPath: 'characters/pcs/rook.html', frontmatter: { type: 'pc', relationships: [{ target: `[[${NFD}]]`, type: 'ally' }] } },
       { title: NFC, displayTitle: NFC, outputPath: OUT, frontmatter: { type: 'npc', relationships: [{ target: '[[Rook]]', type: 'ally' }] } },
     ];
-    const graph = buildRelationshipGraph('Rook', pages, {});
-    assert.strictEqual(graph.nodes.length, 2, JSON.stringify(graph.nodes.map(n => n.id)));
-    // Every node must resolve to a page: a node with a null outputPath is the dangling
-    // twin the mismatch produces — drawn in the graph but linking nowhere.
-    assert.ok(graph.nodes.every(n => n.outputPath), JSON.stringify(graph.nodes));
+    const items = itemsOf(connectionsOf(pages, pages[0]));
+    assert.strictEqual(items.length, 1, JSON.stringify(items.map(i => i.title)));
+    // The item must resolve to a page: one with a null outputPath is the dangling
+    // twin the mismatch produces — listed in Connections but linking nowhere.
+    assert.ok(items.every(i => i.outputPath), JSON.stringify(items));
   });
 });
 

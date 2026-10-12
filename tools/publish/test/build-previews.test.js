@@ -286,12 +286,20 @@ for (const hostile of ['constructor', 'toString', '__proto__', 'hasOwnProperty',
   });
 }
 
-test('a note of a hostile type draws as a plain circle in the relationship graph', () => {
-  const { buildRelationshipGraph } = require('../lib/relationship-graph');
+test('a note of a hostile type is an item of Other in Connections, labelled as any other', () => {
+  const { buildConnections } = require('../lib/connections');
+  const { buildLinkMap } = require('../lib/scanner');
+  const { buildBacklinks } = require('../lib/backlinks');
   for (const hostile of ['constructor', 'toString', '__proto__']) {
-    const page = (title, type) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type, relationships: [{ target: 'B', type: 'ally' }] } });
-    const graph = buildRelationshipGraph('A', [page('A', hostile), page('B', 'npc')], []);
-    assert.strictEqual(graph.nodes.find((n) => n.id === 'A').shape, 'circle', hostile);
+    const page = (title, type) => ({ title, displayTitle: title, outputPath: `${title}.html`, frontmatter: { type, relationships: [{ target: 'B', type: 'ally' }] }, markdown: '', publishedMarkdown: '' });
+    const pages = [page('A', hostile), page('B', 'npc')];
+    const linkMap = buildLinkMap(pages);
+    const index = buildConnections({ pages, linkMap, backlinks: buildBacklinks(pages, linkMap) });
+    // Seen from B, A is the other end: its kind must not be read off Object.prototype.
+    const item = index.for(pages[1]).tabs.flatMap((t) => t.groups).flatMap((g) => g.items).find((i) => i.title === 'A');
+    assert.ok(item, hostile);
+    assert.strictEqual(item.outputPath, 'A.html', hostile);
+    assert.ok(!/native code|\[object Object\]/.test(JSON.stringify(item)), `${hostile}: the kind is a prototype member`);
   }
 });
 

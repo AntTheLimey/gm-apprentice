@@ -11,17 +11,17 @@ const cfg = { siteTitle: 'S', footer: '' };
 
 describe('pcTemplate combat tab', () => {
   it('renders a Combat tab when systemCombatHtml is present', () => {
-    const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined,
+    const html = pcTemplate(page, { html: '' }, [], noop, cfg, {}, undefined,
       { systemCombatHtml: '<div id="probe-combat">x</div>' });
     assert.ok(html.includes("data-tab=\"combat\""));
     assert.ok(html.includes('probe-combat'));
   });
   it('omits the Combat tab when no combat HTML', () => {
-    const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, {});
+    const html = pcTemplate(page, { html: '' }, [], noop, cfg, {}, undefined, {});
     assert.ok(!html.includes("data-tab=\"combat\""));
   });
   it('uses systemEquipmentHtml for the equipment tab when present', () => {
-    const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined,
+    const html = pcTemplate(page, { html: '' }, [], noop, cfg, {}, undefined,
       { systemEquipmentHtml: '<div id="probe-equip">e</div>' });
     assert.ok(html.includes('probe-equip'));
   });
@@ -36,7 +36,7 @@ describe('pcTemplate GURPS consumed-titles graceful degradation', () => {
     // systemSheetHtml is null — renderer returned nothing. Skills must NOT be suppressed.
     const html = pcTemplate(
       page,
-      { html: '', relationships: '' },
+      { html: '' },
       [skillsSection],
       noop,
       cfg,
@@ -51,7 +51,7 @@ describe('pcTemplate GURPS consumed-titles graceful degradation', () => {
     // systemSheetHtml is present — Skills is consumed, so accordion should be suppressed.
     const html = pcTemplate(
       page,
-      { html: '', relationships: '' },
+      { html: '' },
       [skillsSection],
       noop,
       cfg,
@@ -66,7 +66,7 @@ describe('pcTemplate GURPS consumed-titles graceful degradation', () => {
     // systemCombatHtml is null — combat chains must stay in accordions.
     const html = pcTemplate(
       page,
-      { html: '', relationships: '' },
+      { html: '' },
       [combatSection],
       noop,
       cfg,
@@ -80,7 +80,7 @@ describe('pcTemplate GURPS consumed-titles graceful degradation', () => {
   it('GURPS PC with real combatHtml suppresses Combat Action Chains accordion', () => {
     const html = pcTemplate(
       page,
-      { html: '', relationships: '' },
+      { html: '' },
       [combatSection],
       noop,
       cfg,
@@ -97,7 +97,7 @@ describe('pcTemplate pull quote', () => {
   const sheet = { systemSheetHtml: '<div>sheet</div>' };
   const quoted = (frontmatter, context, body = '## Stat Sheet\n\n| STR | 50 |\n|---|---|\n') => pcTemplate(
     { frontmatter: { type: 'pc', ...frontmatter }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero', markdown: body, content: body },
-    { html: '', relationships: '' }, [], noop, cfg, {}, undefined, context);
+    { html: '' }, [], noop, cfg, {}, undefined, context);
   const quote = html => (html.match(/<div class="pull-quote">([\s\S]*?)<\/div>/) || [])[1];
   const prose = '\n## Background\n\nA sailor out of Brest. He owes the Guild.\n';
 

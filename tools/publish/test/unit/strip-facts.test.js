@@ -1,7 +1,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { strippedLines, playerSafeMarkdown } = require('../../lib/processor');
-const { gluedBefore, valueStrays, commentFields } = require('../../lib/frontmatter');
+const { gluedBefore, valueStrays, commentFields, cutValueComments } = require('../../lib/frontmatter');
 
 const facts = (text) => strippedLines(text, false);
 // The facts that show on a page: what playerSafeMarkdown hands back (noteFacts).
@@ -107,4 +107,10 @@ describe('an HTML comment or a hidden block never closed in a frontmatter value'
   it('one in backticks is literal', () => {
     assert.deepStrictEqual(valueStrays('write `<!--` to open one'), []);
   });
+});
+
+it('an unclosed <!-- in a frontmatter value cuts the rest of it and is reported, as in a body', () => {
+  assert.strictEqual(cutValueComments('Keeper <!-- remember to add the rest'), 'Keeper');
+  assert.deepStrictEqual(valueStrays('Keeper <!-- remember'), [{ kind: 'UNCLOSED', mark: '<!--' }]);
+  assert.strictEqual(cutValueComments('Keeper `<!--` still here'), 'Keeper `<!--` still here');
 });

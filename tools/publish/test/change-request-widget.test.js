@@ -9,7 +9,7 @@ const cfg = { siteTitle: 'S', footer: '' };
 const inboxOn = { publishConfig: { live: { inbox: true } } };
 
 test('PC page prepends the change-request widget when inbox is enabled', () => {
-  const html = pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, inboxOn);
+  const html = pcTemplate(page, { html: '' }, [], noop, cfg, {}, undefined, inboxOn);
   assert.ok(html.includes('id="cr-root"'), 'widget root present');
   assert.ok(html.includes('data-character="Six"'), 'character tagged');
   assert.ok(html.includes('js/change-request.js'), 'widget script included');
@@ -20,7 +20,7 @@ test('PC page prepends the change-request widget when inbox is enabled', () => {
 
 test('widget falls back to displayTitle when frontmatter.name is absent', () => {
   const p2 = { frontmatter: { type: 'pc' }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
-  const html = pcTemplate(p2, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, inboxOn);
+  const html = pcTemplate(p2, { html: '' }, [], noop, cfg, {}, undefined, inboxOn);
   assert.ok(html.includes('data-character="Hero"'));
 });
 
@@ -33,7 +33,7 @@ test('data-character is emitted NFC-normalized even when the name is decomposed'
   const nfd = 'Gonza\u0301lez'; // n, a, combining acute
   const nfc = 'Gonz\u00e1lez';   // precomposed a-acute
   const p = { frontmatter: { type: 'pc', name: nfd }, displayTitle: nfd, outputPath: 'pcs/gonzalez.html', title: nfd };
-  const html = pcTemplate(p, { html: '', relationships: '' }, [], noop, cfg, {}, undefined, inboxOn);
+  const html = pcTemplate(p, { html: '' }, [], noop, cfg, {}, undefined, inboxOn);
   assert.ok(html.includes(`data-character="${nfc}"`), 'attribute carries the composed form');
   assert.ok(!html.includes(`data-character="${nfd}"`), 'attribute does not carry the decomposed form');
 });

@@ -157,7 +157,7 @@ describe('pcTemplate with a FitD sheet', () => {
   const page = { frontmatter: { type: 'pc', player_name: 'X' }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
   const sections = sectionsOf(cutterBody());
   const accordionTitles = html => [...html.matchAll(/<button class="accordion-header"[^>]*>([^<]*)</g)].map(m => m[1]);
-  const build = (system, sheet) => pcTemplate(page, { html: '', relationships: '' }, sections, () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
+  const build = (system, sheet) => pcTemplate(page, { html: '' }, sections, () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
     { publishConfig: { system }, systemSheetHtml: sheet });
 
   it('drops the consumed sections and keeps the rest, for every alias', () => {

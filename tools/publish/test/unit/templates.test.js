@@ -194,7 +194,7 @@ describe('location parent breadcrumb relative href (B-batch2)', () => {
       outputPath: 'locations/british-museum.html',
       frontmatter: { type: 'location', parent_location: '[[London]]' },
     };
-    const processed = { html: '<p>x</p>', relationships: '' };
+    const processed = { html: '<p>x</p>' };
     const context = { pages: [], linkMap: { London: 'locations/london.html' }, publishConfig: {} };
     const html = locationTemplate(page, processed, mockNavFor, mockConfig, {}, context);
     assert.ok(html.includes('href="london.html"'), 'parent crumb should be relative to locations/');
@@ -207,7 +207,7 @@ describe('location parent breadcrumb relative href (B-batch2)', () => {
       outputPath: 'locations/reading-room.html',
       frontmatter: { type: 'location', parent_location: '[[British_Museum|the Museum]]' },
     };
-    const processed = { html: '<p>x</p>', relationships: '' };
+    const processed = { html: '<p>x</p>' };
     const context = { pages: [], linkMap: { British_Museum: 'locations/british-museum.html' }, publishConfig: {} };
     const html = locationTemplate(page, processed, mockNavFor, mockConfig, {}, context);
     assert.ok(html.includes('href="british-museum.html"'), 'aliased parent ref still resolves');
@@ -226,7 +226,7 @@ describe('item template holder/origin humanization (B-batch2)', () => {
       title: 'Cursed_Locket', displayTitle: 'Cursed Locket', outputPath: 'items/cursed-locket.html',
       frontmatter: { type: 'item', current_holder: '[[Lord_Edric_Fenwick]]' },
     };
-    const processed = { html: '<p>x</p>', relationships: '' };
+    const processed = { html: '<p>x</p>' };
     const linkMap = { 'Lord_Edric_Fenwick': 'characters/npcs/lord-edric-fenwick.html' };
     const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
     assert.ok(html.includes('>Lord Edric Fenwick</a>'), 'holder display humanized');
@@ -239,7 +239,7 @@ describe('item template holder/origin humanization (B-batch2)', () => {
       title: 'Locket', displayTitle: 'Locket', outputPath: 'items/locket.html',
       frontmatter: { type: 'item', current_holder: '[[Lord_Edric_Fenwick|Lord Edric]]' },
     };
-    const processed = { html: '<p>x</p>', relationships: '' };
+    const processed = { html: '<p>x</p>' };
     const linkMap = { 'Lord_Edric_Fenwick': 'characters/npcs/lord-edric-fenwick.html' };
     const html = itemTemplate(page, processed, mockNavFor, mockConfig, {}, linkMap, {});
     assert.ok(html.includes('>Lord Edric</a>'), 'explicit alias used as label');
@@ -269,7 +269,7 @@ describe('PC template display_meta', () => {
         display_meta: ['point_total', 'age', 'TL'],
       },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
     assert.ok(html.includes('Point Total'), 'Should render point_total label as title case');
     assert.ok(html.includes('200'), 'Should render point_total value');
@@ -293,7 +293,7 @@ describe('PC template display_meta', () => {
         nationality: 'British',
       },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
     assert.ok(html.includes('Occupation'), 'Should show occupation label');
     assert.ok(html.includes('Detective'), 'Should show occupation value');
@@ -316,7 +316,7 @@ describe('PC template display_meta', () => {
         occupation: 'Spy',
       },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
     assert.ok(html.includes('Occupation'), 'Should show occupation');
     assert.ok(html.includes('Spy'), 'Should show occupation value');
@@ -330,7 +330,7 @@ describe('PC template display_meta', () => {
       outputPath: 'characters/pcs/captain-hero.html',
       frontmatter: { type: 'pc', player_name: 'Dan', status: 'active' },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
     assert.ok(html.includes('<h1>Captain Hero</h1>'), 'Should use displayTitle in h1');
   });
@@ -350,7 +350,7 @@ describe('displayTitle usage', () => {
       outputPath: 'characters/npcs/captain-james.html',
       frontmatter: { type: 'npc' },
     };
-    const processed = { html: '<p>Content</p>', relationships: '' };
+    const processed = { html: '<p>Content</p>' };
     const html = npcTemplate(page, processed, mockNavFor, mockConfig, {});
     assert.ok(html.includes('<h1>Captain James'), 'Should use displayTitle in h1');
     assert.ok(!html.includes('<h1>Captain_James'), 'Should not use raw title in h1');
@@ -366,7 +366,7 @@ describe('displayTitle usage', () => {
       outputPath: 'characters/npcs/corvin-hollis.html',
       frontmatter: { type: 'npc', portrait: '_attachments/characters/corvin-hollis.png' },
     };
-    const processed = { html: '<p>Content</p>', relationships: '' };
+    const processed = { html: '<p>Content</p>' };
     const imageMap = { 'corvin-hollis.png': true };
     const html = npcTemplate(page, processed, mockNavFor, mockConfig, imageMap);
     assert.ok(html.includes('class="hero-cinematic"'), 'Should use hero-cinematic, not hero-banner, when a portrait exists');
@@ -381,35 +381,18 @@ describe('displayTitle usage', () => {
       outputPath: 'locations/old-fortress.html',
       frontmatter: { type: 'document' },
     };
-    const processed = { html: '<p>Content</p>', relationships: '' };
+    const processed = { html: '<p>Content</p>' };
     const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {});
     assert.ok(html.includes('Old Fortress'), 'Should use displayTitle');
     assert.ok(!html.includes('Old_Fortress'), 'Should not use raw title');
   });
 
-  it('flags a sparse sidebar (≤1 section) for single-column layout (B2)', () => {
-    const page = {
-      title: 'Spot', displayTitle: 'Spot', outputPath: 'locations/spot.html',
-      frontmatter: { type: 'location' },
-    };
-    const processed = { html: '<p>x</p>', relationships: '' };
-    const context = {
-      publishConfig: { _backlinks: { Spot: [
-        { title: 'S1', displayTitle: 'Session 1', outputPath: 'sessions/s1.html', type: 'session' },
-      ] } },
-      linkMap: {}, pages: [],
-    };
-    const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {}, context);
-    assert.ok(html.includes('content-with-sidebar'), 'should render the sidebar layout');
-    assert.ok(html.includes('content-sidebar-sparse'), 'a one-section sidebar should be flagged sparse');
-  });
-
-  it('does not flag a rich sidebar (≥2 sections)', () => {
+  it('has no sidebar, whatever mentions or relationships the page has; the body is still there', () => {
     const page = {
       title: 'Spot', displayTitle: 'Spot', outputPath: 'locations/spot.html',
       frontmatter: { type: 'location', relationships: { ally: ['[[Bob]]'] } },
     };
-    const processed = { html: '<p>x</p>', relationships: '' };
+    const processed = { html: '<p>x</p>' };
     const context = {
       publishConfig: { _backlinks: { Spot: [
         { title: 'S1', displayTitle: 'Session 1', outputPath: 'sessions/s1.html', type: 'session' },
@@ -417,15 +400,15 @@ describe('displayTitle usage', () => {
       linkMap: { Bob: 'characters/npcs/bob.html' }, pages: [],
     };
     const html = wikiTemplate(page, processed, mockNavFor, mockConfig, {}, context);
-    assert.ok(html.includes('content-with-sidebar'), 'should render the sidebar layout');
-    assert.ok(!html.includes('content-sidebar-sparse'), 'two sections should not be flagged sparse');
+    for (const old of ['content-with-sidebar', 'content-sidebar-sparse', 'context-sidebar', 'Mentioned In']) assert.ok(!html.includes(old), old);
+    assert.ok(html.includes('<p>x</p>'), 'the body is in the page');
   });
 });
 
 describe('session prev/next links follow story order (#276)', () => {
   const { wikiTemplate } = require('../../lib/templates/wiki');
   const cfg = { siteTitle: 'Test', attachmentsDir: '_attachments' };
-  const processed = { html: '<p>x</p>', relationships: '' };
+  const processed = { html: '<p>x</p>' };
   const chapter = (name, order) => ({
     title: name, displayTitle: name, outputPath: `chapters/${name}.html`,
     sourcePath: `/v/${name}/${name}.md`, frontmatter: { type: 'chapter', sort_order: order },
@@ -540,7 +523,7 @@ describe('PC template tabbed layout', () => {
       outputPath: 'characters/pcs/hero.html',
       frontmatter: { type: 'pc', player_name: 'Alice', status: 'active' },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const sections = [{ id: 'stat-sheet', title: 'Stat Sheet', html: '<p>Stats</p>' }];
     const storyHtml = '<h3>Session 1 — The Start</h3><p>Adventure begins.</p>';
     const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {}, storyHtml);
@@ -563,7 +546,7 @@ describe('PC template tabbed layout', () => {
       outputPath: 'characters/pcs/solo.html',
       frontmatter: { type: 'pc', player_name: 'Bob', status: 'active' },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const sections = [{ id: 'stat-sheet', title: 'Stat Sheet', html: '<p>Stats</p>' }];
     const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {});
     assert.ok(html.includes('tab-bar'), 'Should have tab bar');
@@ -579,7 +562,7 @@ describe('PC template tabbed layout', () => {
       outputPath: 'characters/pcs/hero.html',
       frontmatter: { type: 'pc', player_name: 'Alice', status: 'active' },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const storyHtml = '<p>Story content</p>';
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, storyHtml);
     assert.ok(html.includes('location.hash'), 'Should have hash routing');
@@ -596,7 +579,7 @@ describe('PC template tabbed layout', () => {
       outputPath: 'characters/pcs/hero.html',
       frontmatter: { type: 'pc', player_name: 'Alice', status: 'active' },
     };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const storyHtml = '<h3>Session 1 — The Start</h3><p>Adventure begins.</p>';
     const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, storyHtml);
     assert.ok(html.includes('story-prose'), 'Should have prose flow container');
@@ -604,7 +587,7 @@ describe('PC template tabbed layout', () => {
 
   it('Story tab links to the dedicated story page when one exists', () => {
     const page = { title: 'Hero', displayTitle: 'Hero', outputPath: 'characters/pcs/hero.html', frontmatter: { type: 'pc', player_name: 'A', status: 'active' } };
-    const processed = { html: '', relationships: '' };
+    const processed = { html: '' };
     const sections = [];
     const html = pcTemplate(page, processed, sections, mockNavFor, mockConfig, {}, '<p>inline</p>', { storyHref: 'story/characters/hero.html' });
     assert.match(html, /href="\.\.\/\.\.\/story\/characters\/hero\.html"/);
@@ -662,14 +645,14 @@ describe('location sub-location card excerpts (shared helper)', () => {
     publishConfig: { exclude_sections: ['GM Notes'], _backlinks: {} } };
 
   it('renders a clean prose excerpt without markdown markers', () => {
-    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' },
+    const html = locationTemplate(parent, { html: '<p>x</p>' },
       mockNavFor, mockConfig, {}, ctx);
     assert.ok(html.includes('Cargo moves at all hours here.'));
     assert.ok(!html.includes('## Overview'), 'no raw heading in excerpt');
   });
 
   it('sparse child with only GM-Notes prose leaks nothing', () => {
-    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' },
+    const html = locationTemplate(parent, { html: '<p>x</p>' },
       mockNavFor, mockConfig, {}, ctx);
     assert.ok(!html.includes('launders'), 'GM-only content must not surface');
   });

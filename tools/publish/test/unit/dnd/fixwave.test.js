@@ -137,7 +137,7 @@ describe('a count above ten is labelled for assistive tech', () => {
 describe('equipment the sheet does not draw still reaches the Equipment tab', () => {
   const page = { frontmatter: { type: 'pc', player_name: 'X', equipment: ['Brass lantern'] }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
   const sec = (title, html) => ({ title, id: title.toLowerCase(), html });
-  const build = (system, sections, ctx = {}) => pcTemplate(page, { html: '', relationships: '' }, sections, () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
+  const build = (system, sections, ctx = {}) => pcTemplate(page, { html: '' }, sections, () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
     { publishConfig: { system }, systemSheetHtml: '<div>sheet</div>', ...ctx });
   const tab = html => html.split('id="tab-equipment"')[1].split('id="tab-story"')[0];
   const sections = [sec('Equipment', '<p>consumed</p>'), sec('Inventory', '<p>rope-and-lantern</p>'), sec('Weapons', '<p>a-long-knife</p>')];
@@ -167,7 +167,7 @@ describe('Pathfinder and Forged in the Dark keep their inline tab list', () => {
   const page = { frontmatter: { type: 'pc', player_name: 'X' }, displayTitle: 'Hero', outputPath: 'pcs/hero.html', title: 'Hero' };
   for (const system of ['pf2e', 'fitd']) {
     it(system, () => {
-      const html = pcTemplate(page, { html: '', relationships: '' }, [], () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
+      const html = pcTemplate(page, { html: '' }, [], () => '', { siteTitle: 'S', footer: '' }, {}, undefined,
         { publishConfig: { system }, systemSheetHtml: '<div>sheet</div>' });
       assert.deepEqual([...html.matchAll(/<button class="pc-tab[^>]*data-tab="([^"]+)"/g)].map(m => m[1]), ['sheet', 'equipment', 'story', 'journey']);
     });

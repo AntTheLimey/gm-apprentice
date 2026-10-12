@@ -22,15 +22,15 @@ function buildVault(files) {
 
 const CONFIG = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
 
-test('a page only mentioned in a session keeps its connections graph and its mentioned-in sidebar', () => {
+test('a page only mentioned in a session keeps its Connections section, with the session under Mentions', () => {
   const { read, root } = buildVault({
     '_meta/vault-config.md': CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n',
     'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Hallam]].\n',
   });
   const html = read('characters', 'npcs', 'hallam.html');
-  assert.match(html, /class="relationship-graph"/);
-  assert.match(html, /mentioned_in|Mentioned In/i);
+  assert.match(html, /class="cx"/);
+  assert.match(html, /<h3>Mentions<\/h3>/);
   assert.match(html, /sessions\/s1\.html|s1\.html/);
   fs.rmSync(root, { recursive: true, force: true });
 });
@@ -41,7 +41,7 @@ test('a mention through an alias counts for the page the alias reaches', () => {
     'Characters/NPCs/Hallam.md': '---\ntype: npc\naliases: ["The Warden"]\n---\n# Hallam\n',
     'Sessions/S1.md': '---\ntype: session\n---\nWe met [[The Warden]].\n',
   });
-  assert.match(read('characters', 'npcs', 'hallam.html'), /Mentioned In/i);
+  assert.match(read('characters', 'npcs', 'hallam.html'), /<h3>Mentions<\/h3>/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -55,7 +55,7 @@ test('heading, block and .md links resolve to the page, and count as mentions', 
   const links = html.match(/href="[^"]*lord-vane\.html"/g) || [];
   assert.strictEqual(links.length >= 4, true, html.match(/<p>.*<\/p>/s)[0]);
   assert.doesNotMatch(html, /Lord_Vane#Past|Lord Vane#Past|Lord_Vane\^b1/);
-  assert.match(read('characters', 'npcs', 'lord-vane.html'), /Mentioned In/i);
+  assert.match(read('characters', 'npcs', 'lord-vane.html'), /<h3>Mentions<\/h3>/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -65,17 +65,25 @@ test('a page that links to its own heading does not list itself as a mention', (
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n\nSee [[Hallam#Past]].\n\n## Past\n\nx\n',
   });
   const html = read('characters', 'npcs', 'hallam.html');
-  assert.doesNotMatch(html, /Mentioned In/i);
+  assert.doesNotMatch(html, /<h3>Mentions<\/h3>/);
   assert.doesNotMatch(html, /x1="300" y1="200" x2="300" y2="200"/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('a link to its own name with .md still counts as the plain self-link does', () => {
+test('a link to its own name with .md resolves as the plain self-link does', () => {
+  const { buildBacklinks } = require('../lib/backlinks');
+  const hallam = (body) => ({ title: 'Hallam', displayTitle: 'Hallam', outputPath: 'characters/npcs/hallam.html', frontmatter: { type: 'npc' }, markdown: body, publishedMarkdown: body });
+  const linkMap = { Hallam: 'characters/npcs/hallam.html' };
+  const plain = buildBacklinks([hallam('See [[Hallam]].')], linkMap);
+  const withMd = buildBacklinks([hallam('See [[Hallam.md]].')], linkMap);
+  assert.deepStrictEqual(Object.keys(withMd), Object.keys(plain));
+  assert.deepStrictEqual(Object.keys(withMd), ['characters/npcs/hallam.html']);
+  // The page itself never lists itself in Connections, whichever way it links to itself.
   const { read, root } = buildVault({
     '_meta/vault-config.md': CONFIG,
     'Characters/NPCs/Hallam.md': '---\ntype: npc\n---\n# Hallam\n\nSee [[Hallam.md]].\n',
   });
-  assert.match(read('characters', 'npcs', 'hallam.html'), /Mentioned In/i);
+  assert.doesNotMatch(read('characters', 'npcs', 'hallam.html'), /<h3>Mentions<\/h3>/);
   fs.rmSync(root, { recursive: true, force: true });
 });
 

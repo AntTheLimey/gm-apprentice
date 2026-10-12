@@ -1,0 +1,185 @@
+{
+ "_about": "publishMode (processor.js) and vaultlib.publish_mode: the mode a note's `publish:` value gives. A value that says no, in any capitals or inside a list, wins over every other: the hiding reading. Both sides must give `mode` for every `frontmatter`.",
+ "cases": [
+  {
+   "frontmatter": {},
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": false
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": "false"
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": "none"
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": "None"
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": "NONE"
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": "False"
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": " none "
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     "false"
+    ]
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     false
+    ]
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     [
+      false
+     ]
+    ]
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     "none",
+     "stub"
+    ]
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     "stub",
+     "none"
+    ]
+   },
+   "mode": "none"
+  },
+  {
+   "frontmatter": {
+    "publish": "stub"
+   },
+   "mode": "stub"
+  },
+  {
+   "frontmatter": {
+    "publish": " Stub "
+   },
+   "mode": "stub"
+  },
+  {
+   "frontmatter": {
+    "publish": "STUB"
+   },
+   "mode": "stub"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     "stub"
+    ]
+   },
+   "mode": "stub"
+  },
+  {
+   "frontmatter": {
+    "publish": true
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": "true"
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": "yes"
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": "no"
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": ""
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": []
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": null
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": "null"
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     "draft"
+    ]
+   },
+   "mode": "all"
+  },
+  {
+   "frontmatter": {
+    "publish": [
+     "true"
+    ]
+   },
+   "mode": "all"
+  }
+ ]
+}

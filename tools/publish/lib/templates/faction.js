@@ -1,7 +1,5 @@
-const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativePath, encodeHref, refMetaValue } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText } = require('./base');
-const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, portraitImg, headerValueText, connectionsSection } = require('./base');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 const { canonicalNfc } = require('../unicode');
 const { linkText } = require('../wikilink');
@@ -9,7 +7,6 @@ const { linkText } = require('../wikilink');
 function factionTemplate(page, processedContent, navFor, config, imageMap, linkMap, allPages, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
-  const backlinks = backlinksOf(publishConfig._backlinks, page);
   const portrait = portraitImg(fm, page.outputPath, imageMap || {});
 
   // Metadata badges
@@ -66,27 +63,16 @@ function factionTemplate(page, processedContent, navFor, config, imageMap, linkM
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
 
-  const sidebar = renderContextSidebar({
-    backlinks,
-    relationships: normalizeRelationships(fm.relationships, linkMap),
-    currentOutputPath: page.outputPath,
-  });
+  const graphHtml = connectionsSection(page, publishConfig);
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
-
-  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
-  const contentHtml = sidebar
-    ? `<div class="content-with-sidebar"><div class="main">${mainContent}</div>${sidebar}</div>`
-    : mainContent;
-
+  const mainContent = `${headerCard}\n${badgeHtml}\n${leadershipHtml}\n${territoryHtml}\n${goals}\n${membersHtml}\n${processedContent.html}\n${graphHtml}`;
   return baseShell({
     title: page.displayTitle,
     siteTitle: config.siteTitle,
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: contentHtml,
+    content: mainContent,
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,

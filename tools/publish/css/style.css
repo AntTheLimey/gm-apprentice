@@ -342,65 +342,6 @@ img {
   padding: 1.5rem 1rem 3rem;
 }
 
-/* Content with sidebar layout */
-.content-with-sidebar {
-  max-width: 70rem;
-  margin: 0 auto;
-  padding: 1.5rem 1rem 3rem;
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2rem;
-}
-@media (min-width: 1024px) {
-  .content-with-sidebar {
-    grid-template-columns: 1fr 18rem;
-  }
-  /* Sparse sidebar (≤1 section): don't reserve the 18rem column and squeeze the article
-     into a narrow strip with an empty right gutter. Use one comfortably-wide centred
-     column; the lone sidebar box flows beneath the prose. */
-  .content-with-sidebar.content-sidebar-sparse {
-    grid-template-columns: minmax(0, 1fr);
-    max-width: 60rem;
-  }
-}
-
-/* ===== CONTEXT SIDEBAR ===== */
-.context-sidebar {
-  font-size: 0.875rem;
-}
-.context-sidebar h3 {
-  font-size: 0.8rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--accent);
-  margin: 1.25rem 0 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px solid var(--border);
-}
-.context-sidebar h3:first-child {
-  margin-top: 0;
-}
-.context-sidebar ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.context-sidebar li {
-  padding: 0.3rem 0;
-  margin: 0;
-}
-.context-sidebar li a {
-  color: var(--text);
-}
-.context-sidebar li a:hover {
-  color: var(--accent);
-}
-.context-sidebar .sidebar-badge {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  margin-left: 0.35rem;
-}
-
 /* ===== TYPOGRAPHY ===== */
 .page-title {
   font-size: 1.75rem;
@@ -1752,64 +1693,6 @@ tr:nth-child(even) {
   color: var(--accent);
 }
 
-/* Relationship web (visual cards) */
-.relationship-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
-  gap: 0.75rem;
-  margin: 1rem 0;
-}
-.rel-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 0.5rem;
-  padding: 0.75rem;
-  text-decoration: none;
-  color: var(--text);
-  transition: border-color 0.15s;
-  display: block;
-}
-.rel-card:hover {
-  border-color: var(--accent);
-  text-decoration: none;
-}
-.rel-card .rel-type {
-  font-size: 0.7rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--accent);
-  margin-bottom: 0.25rem;
-}
-.rel-card .rel-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-}
-
-/* Relationship list (legacy) */
-.relationship-list {
-  list-style: none;
-  margin: 0 0 1rem;
-  padding: 0;
-}
-.relationship-list li {
-  padding: 0.4rem 0;
-  border-bottom: 1px solid var(--border);
-  font-size: 0.9rem;
-}
-.relationship-list li:last-child {
-  border-bottom: none;
-}
-.relationship-list .rel-label {
-  color: var(--accent);
-  font-weight: 600;
-  margin-right: 0.3rem;
-}
-.relationship-list .rel-label::after {
-  content: ":";
-  color: var(--text-muted);
-  font-weight: 400;
-}
-
 /* ===== SEARCH OVERLAY ===== */
 .search-overlay {
   display: none;
@@ -1974,21 +1857,21 @@ tr:nth-child(even) {
   opacity: 1;
 }
 
-/* ===== SVG RELATIONSHIP GRAPH ===== */
-.relationship-graph {
+/* ===== CAMPAIGN ROUTE MAP ===== */
+.route-map {
   margin: 2rem 0;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
 }
-.relationship-graph svg {
+.route-map svg {
   width: 100%;
   min-width: 20rem;
   height: auto;
 }
-.relationship-graph svg a text {
+.route-map svg a text {
   fill: var(--text);
 }
-.relationship-graph svg a:hover text {
+.route-map svg a:hover text {
   fill: var(--accent);
 }
 
@@ -4211,8 +4094,212 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
   .pf2e-attributes { grid-template-columns: repeat(3, 1fr); }
 }
 
+/* Connections */
+/* Colour. Without the page script everything here is the plain text colour. The script
+   (js/connections.js, inks) reads the palette's muted, accent, success and danger colours,
+   moves each toward the text colour only as far as it must to be read on what it is drawn on
+   (4.5 to 1 for words, 3 to 1 for marks and lines), and hands the results over as --cxi-* for
+   the page and --cxc-* for a card and the strip, which a sheet skin gives inks of their own.
+   A tone is a shape as well: filled round (warm), hollow diamond (hostile), hollow round (neutral). */
+.cx {
+  --cx-muted: var(--cxi-muted, var(--text));
+  --cx-accent: var(--cxi-accent, var(--text));
+  --cx-warm-ink: var(--cxi-warm-ink, var(--text));
+  --cx-hostile-ink: var(--cxi-hostile-ink, var(--text));
+  --cx-warm: var(--cxi-warm, var(--text));
+  --cx-hostile: var(--cxi-hostile, var(--text));
+  --cx-trunk: var(--cxi-trunk, var(--text));
+  --cx-ground: var(--cxi-ground, var(--bg));
+  --cx-hover: var(--cxi-hover, transparent);
+  --cx-neutral: var(--cx-muted);
+}
+.cx-card, .cx-strip {
+  --cx-muted: var(--cxc-muted, var(--text));
+  --cx-accent: var(--cxc-accent, var(--text));
+  --cx-warm-ink: var(--cxc-warm-ink, var(--text));
+  --cx-hostile-ink: var(--cxc-hostile-ink, var(--text));
+  --cx-warm: var(--cxc-warm, var(--text));
+  --cx-hostile: var(--cxc-hostile, var(--text));
+  --cx-neutral: var(--cx-muted);
+}
+.cx { margin-top: 2.5rem; min-width: 0; max-width: 100%; }
+.cx #cx-heading { margin: 0 0 0.75rem; color: var(--cx-accent); }
+.cx-app { position: relative; min-width: 0; }
+.cx-panel { min-width: 0; }
+.cx-panel[hidden] { display: none; }
+
+/* the lists, for a reader without the script, the search index and a printer */
+.cx.cx-live .cx-plain { display: none; }
+.cx-plain :is(h3, h4, h5, h6) { font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cx-muted); font-weight: 600; margin: 1rem 0 0.4rem; }
+.cx-plain :is(h3, h4, h5, h6):has(+ :is(h3, h4, h5, h6)) { font-size: 1.05rem; letter-spacing: 0; text-transform: none; color: var(--text); font-family: var(--font-heading); margin: 1.4rem 0 0; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+.cx-plain a { color: var(--cx-accent); text-decoration: underline; text-underline-offset: 2px; }
+.cx-plain ul { list-style: none; margin: 0 0 0.5rem; padding: 0; }
+.cx-plain li, .cx-mentions li, .cx-mlist li { overflow-wrap: anywhere; }
+.cx-plain li { margin: 0 0 0.5rem; }
+.cx-line, .cx-sess { display: block; min-width: 0; overflow-wrap: anywhere; color: var(--cx-muted); }
+.cx-plain .cx-line { font-size: 0.92rem; }
+.cx-sess { font-size: 0.85rem; font-variant-numeric: tabular-nums; }
+.cx-from { color: var(--cx-muted); }
+.cx-kind { display: inline-block; font-size: 0.7rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--cx-muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 5px; margin-left: 6px; font-weight: 600; line-height: 1.5; vertical-align: baseline; }
+.cx-tone { font-weight: 600; }
+.cx-tone.cx-warm { color: var(--cx-warm-ink); }
+.cx-tone.cx-hostile { color: var(--cx-hostile-ink); }
+.cx-tone.cx-neutral { color: var(--cx-neutral); }
+.cx-mentions, .cx-mlist { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 0.5rem; padding: 0; list-style: none; }
+.cx-plain .cx-mentions li, .cx-mlist li { margin: 0; }
+.cx-mlist a { color: var(--cx-accent); text-decoration: none; }
+.cx-mlist a:hover { text-decoration: underline; }
+.cx-probe, .cx-strip.cx-probe { display: none; }
+
+/* the mark: shape first (filled round warm, hollow diamond hostile, hollow round neutral), colour second */
+span.cx-mark { display: inline-block; flex: none; width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--cx-neutral); background: transparent; }
+span.cx-mark.cx-warm { background: var(--cx-warm); border-color: var(--cx-warm); }
+span.cx-mark.cx-hostile { width: 9px; height: 9px; margin: 1px; border-radius: 0; border-color: var(--cx-hostile); transform: rotate(45deg); }
+span.cx-mark.cx-neutral { border-color: var(--cx-neutral); }
+.cx-key { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 0.85rem; color: var(--cx-muted); margin: 0.9rem 0 0; }
+.cx-key-item { display: inline-flex; align-items: center; gap: 7px; }
+
+/* tabs: one row that scrolls sideways inside its own box; an edge with more tabs beyond it fades */
+.cx-tabs { position: relative; display: flex; gap: 4px; overflow-x: auto; max-width: 100%; border-bottom: 1px solid var(--border); margin-bottom: 1rem; scrollbar-width: thin; }
+.cx-tabs.cx-more-end { -webkit-mask-image: linear-gradient(to left, transparent, currentColor 3rem); mask-image: linear-gradient(to left, transparent, currentColor 3rem); }
+.cx-tabs.cx-more-start { -webkit-mask-image: linear-gradient(to right, transparent, currentColor 3rem); mask-image: linear-gradient(to right, transparent, currentColor 3rem); }
+.cx-tabs.cx-more-start.cx-more-end { -webkit-mask-image: linear-gradient(to right, transparent, currentColor 3rem, currentColor calc(100% - 3rem), transparent); mask-image: linear-gradient(to right, transparent, currentColor 3rem, currentColor calc(100% - 3rem), transparent); }
+.cx-tab { flex: none; font: 600 0.9rem/1.5 var(--font-body); color: var(--cx-muted); background: none; border: 0; border-bottom: 2px solid transparent; padding: 0.6rem 0.65rem; min-height: 44px; cursor: pointer; white-space: nowrap; }
+.cx-tab[aria-selected="true"] { color: var(--text); border-bottom-color: var(--cx-accent); }
+.cx-tab:hover { color: var(--text); }
+.cx-n { font-weight: 400; color: var(--cx-muted); margin-left: 4px; font-variant-numeric: tabular-nums; }
+/* the ring is drawn inside the tab and the row: the tab row clips what is outside it, and a row fills its column */
+.cx-tab:focus-visible, .cx-row:focus-visible { outline: 2px solid var(--cx-accent); outline-offset: -2px; border-radius: 3px; }
+.cx-open:focus-visible, .cx-card a:focus-visible, .cx-mlist a:focus-visible { outline: 2px solid var(--cx-accent); outline-offset: 2px; }
+.cx-tab, .cx-row, .cx-open, .cx-card a, .cx-mlist a { scroll-margin-top: 4.5rem; }
+
+/* the tree: rows in the page's flow; the script draws the lines behind them from where they landed */
+.cx-tree-wrap { position: relative; padding-bottom: 0.25rem; }
+svg.cx-lines { position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none; overflow: visible; }
+.cx-subject, .cx-tree { position: relative; z-index: 1; }
+.cx-subject { margin: 0 0 1rem; padding-left: 28px; font: 600 1.2rem/1.2 var(--font-heading); color: var(--text); overflow-wrap: anywhere; }
+.cx-tree, .cx-leaves { list-style: none; margin: 0; padding: 0; }
+.cx-branch { margin: 0 0 14px; }
+.cx-branch:last-child { margin-bottom: 0; }
+.cx-group { margin: 0; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--cx-muted); font-weight: 600; line-height: 1.3; overflow-wrap: anywhere; }
+.cx-item { margin: 0; }
+a.cx-row, span.cx-row { display: flex; align-items: flex-start; gap: 10px; padding: 4px 8px; min-height: 30px; color: var(--text); text-decoration: none; border-radius: 3px; cursor: pointer; }
+span.cx-row.cx-text { cursor: default; }
+a.cx-row:hover, .cx-row.cx-sel { text-decoration: none; background: var(--cx-hover); }
+.cx-row .cx-mark { margin-top: 5px; }
+.cx-row .cx-mark.cx-hostile { margin: 6px 1px 0; }
+.cx-name { min-width: 0; overflow-wrap: anywhere; font-size: 0.95rem; line-height: 1.45; }
+a.cx-row .cx-name { color: var(--text); }
+.cx-row.cx-sel .cx-name { color: var(--cx-accent); text-decoration: underline; text-underline-offset: 3px; }
+.cx-row.cx-sel .cx-mark { outline: 2px solid var(--cx-accent); outline-offset: 2px; }
+/* a name with no page is not a link, and is not underlined like one */
+.cx-row.cx-text.cx-sel .cx-name, svg.cx-web .cx-node.cx-text.cx-sel text, svg.cx-web .cx-node.cx-text:focus-visible text { text-decoration: none; }
+.cx-meta { display: none; margin-left: auto; padding-left: 12px; flex: none; white-space: nowrap; font-size: 0.78rem; line-height: 1.7; color: var(--cx-muted); text-align: right; font-variant-numeric: tabular-nums; }
+.cx-roomy .cx-meta { display: block; }
+/* In a column that is only just roomy the meta may not fit beside a long name, and the name would
+   be broken inside a word to make room: the meta goes under the name instead. */
+.cx-roomy a.cx-row, .cx-roomy span.cx-row { flex-wrap: wrap; }
+.cx-roomy .cx-row .cx-name { flex: 1 1 8rem; }
+.cx-row.cx-stacked .cx-meta { margin-left: 0; padding-left: 0; text-align: left; }
+/* wide: the subject, then the groups' headings, then the names, in three columns. The gaps between
+   the columns are where the curves run, so no curve meets a word. A heading is set in the top half of
+   its cell; the line to the group's dot runs level through the middle of the cell, under the heading. */
+.cx-wide.cx-tree-wrap { display: grid; grid-template-columns: fit-content(26%) minmax(0, 1fr); column-gap: clamp(48px, 9%, 96px); align-items: center; }
+.cx-wide .cx-subject { margin: 0; padding: 0; text-align: right; font-size: 1.3rem; }
+.cx-wide .cx-tree { display: grid; grid-template-columns: fit-content(30%) minmax(0, 1fr); column-gap: 56px; row-gap: 14px; }
+.cx-wide .cx-branch { display: grid; grid-column: 1 / -1; grid-template-columns: 30% minmax(0, 1fr); column-gap: 56px; align-items: center; margin: 0; }
+@supports (grid-template-columns: subgrid) {
+  .cx-wide .cx-branch { grid-template-columns: subgrid; }
+}
+.cx-wide .cx-group { display: grid; grid-template-rows: 1fr 1fr; row-gap: 10px; text-align: right; }
+.cx-wide .cx-group::after { content: ""; }
+/* narrow: an indented tree */
+.cx-narrow .cx-group { margin: 0 0 2px 34px; padding: 6px 0; }
+.cx-narrow .cx-leaves { margin-left: 42px; }
+path.cx-edge, line.cx-edge { fill: none; stroke: var(--cx-neutral); stroke-width: 1.4; }
+.cx-edge.cx-warm { stroke: var(--cx-warm); }
+.cx-edge.cx-hostile { stroke: var(--cx-hostile); stroke-dasharray: 5 3; }
+.cx-edge.cx-trunk { stroke: var(--cx-trunk); }
+circle.cx-dot { fill: var(--cx-ground); stroke: var(--cx-neutral); stroke-width: 2; }
+circle.cx-branch-dot { stroke: var(--cx-trunk); }
+circle.cx-root-dot { fill: var(--cx-accent); stroke: var(--cx-accent); }
+
+/* the web: drawn at its own size, one unit to a pixel, and shrunk only when the column is narrower */
+svg.cx-web { display: block; max-width: 100%; height: auto; margin-inline: auto; }
+svg.cx-ruler { position: absolute; left: 0; top: 0; width: 0; height: 0; visibility: hidden; pointer-events: none; }
+svg.cx-web text, svg.cx-ruler text { font-family: var(--font-body); fill: var(--text); }
+:is(svg.cx-web, svg.cx-ruler) text.cx-name { font-size: 13px; }
+:is(svg.cx-web, svg.cx-ruler) text.cx-band { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; fill: var(--cx-muted); font-weight: 600; }
+:is(svg.cx-web, svg.cx-ruler) text.cx-root { font-family: var(--font-heading); font-size: 15px; font-weight: 700; fill: var(--cx-ground); }
+/* on a narrow screen the drawing is shrunk to the column: heavier lines there */
+svg.cx-web.cx-small .cx-edge { stroke-width: 2; }
+svg.cx-web.cx-small .cx-mark { stroke-width: 2.6; }
+.cx-node { cursor: pointer; outline: none; }
+.cx-node.cx-text { cursor: default; }
+.cx-hit { fill: transparent; stroke: none; }
+.cx-ring { fill: none; stroke: none; stroke-width: 2; }
+svg.cx-web .cx-mark { fill: var(--cx-ground); stroke: var(--cx-neutral); stroke-width: 2; }
+svg.cx-web .cx-mark.cx-warm { fill: var(--cx-warm); stroke: var(--cx-warm); }
+svg.cx-web .cx-mark.cx-hostile { stroke: var(--cx-hostile); }
+svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: var(--cx-accent); text-decoration: underline; }
+.cx-node.cx-sel .cx-mark { stroke-width: 3.5; }
+/* keyboard focus: a ring round the mark as well as the underlined name */
+.cx-node:focus-visible .cx-ring { stroke: var(--cx-accent); }
+
+/* the line under a tree or a web. It keeps to the bottom of the window while its drawing is taller than
+   the window, so the line for a name chosen near the top can be read without scrolling to the end. */
+.cx-strip { position: sticky; bottom: 0; z-index: 2; max-height: 50vh; overflow-y: auto; margin-top: 14px; padding: 12px 14px; background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; align-items: center; }
+.cx-strip:empty { display: none; }
+.cx-strip p { margin: 0; }
+.cx-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--bg); border: 1px solid var(--border); display: grid; place-items: center; font: 600 1rem var(--font-heading); color: var(--cx-muted); grid-row: span 2; object-fit: cover; }
+/* .content img (above) would square the portrait and add its margin */
+.cx img.cx-avatar { display: block; border-radius: 50%; margin: 0; max-width: none; width: 44px; height: 44px; }
+.cx .cx-card img.cx-avatar { width: 38px; height: 38px; }
+.cx-strip-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.cx-strip-rel { color: var(--cx-muted); font-size: 0.9rem; min-width: 0; overflow-wrap: anywhere; }
+.cx-strip .cx-line, .cx-strip .cx-sess, .cx-strip .cx-open { grid-column: 1 / -1; }
+.cx-strip .cx-line { color: var(--text); margin-top: 6px; }
+.cx-strip .cx-line + .cx-line { margin-top: 0; }
+.cx-open { color: var(--cx-accent); justify-self: start; font-size: 0.9rem; font-weight: 600; padding: 4px 0; text-decoration: underline; text-underline-offset: 2px; }
+
+/* cards */
+.cx-cards { min-width: 0; }
+.cx-cards .cx-group, .cx-mentions-wrap .cx-group { margin: 1.25rem 0 0.5rem; }
+.cx-cards .cx-group:first-child, .cx-mentions-wrap .cx-group:first-child { margin-top: 0; }
+.cx-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.cx-card { background: var(--bg-card); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 10px 12px; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; align-items: center; align-content: start; min-width: 0; }
+.cx-card p { margin: 0; }
+.cx-card .cx-avatar { width: 38px; height: 38px; font-size: 0.9rem; }
+.cx-card-name { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.cx-card-name .cx-name { font-size: 1rem; }
+.cx-card-name a.cx-name { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+.cx-card-name a.cx-name:hover { color: var(--cx-accent); }
+.cx-card-tone { display: flex; align-items: center; gap: 7px; font-size: 0.85rem; }
+.cx-card .cx-line, .cx-card .cx-sess { grid-column: 1 / -1; font-size: 0.9rem; }
+.cx-card .cx-line { margin-top: 4px; }
+
+@media (pointer: coarse) {
+  a.cx-row, span.cx-row { min-height: 44px; padding-top: 11px; padding-bottom: 11px; }
+}
+/* on a phone the site's back-to-top button sits over the window's bottom right corner */
+@media (max-width: 640px) {
+  .cx-strip { padding-right: 4rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .cx-tab, a.cx-row { transition: color 0.15s, background-color 0.15s; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cx, .cx * { transition: none; animation: none; }
+}
+/* end Connections */
+
 /* ===== PRINT ===== */
 @media print {
+  /* Connections: the lists, not the tabs; in the paper's own text colour, not the screen's inks */
+  .cx .cx-app { display: none; }
+  .cx.cx-live .cx-plain { display: block; }
+  .cx { --cx-muted: var(--text); --cx-accent: var(--text); --cx-warm-ink: var(--text); --cx-hostile-ink: var(--text); }
+
   .top-nav,
   .mobile-nav-overlay,
   .nav-search-btn,
@@ -4236,7 +4323,6 @@ button.dnd5e-chip { font: inherit; color: var(--text); cursor: pointer; text-ali
     color: #000;
     background: #fff;
   }
-  .content-with-sidebar { grid-template-columns: 1fr; }
   .story-prose { break-before: page; }
 
   /* GURPS sheet print rules */
@@ -4459,3 +4545,8 @@ td.gl-pc a { display: flex; align-items: center; gap: 10px; text-decoration: non
   .gl-party-table tbody tr { border-bottom: 1px solid var(--border); }
   .gl-party-table tbody tr:last-child { border-bottom: 0; }
 }
+
+/* World Rules, in the page under the title */
+.world-rules { margin: 1.5rem 0; padding: 1rem 1.25rem; background: var(--bg-card); border: 1px solid var(--border); border-radius: 4px; }
+.world-rules h2 { margin-top: 0; font-size: 1.1rem; }
+.world-rules ul { margin: 0; padding-left: 1.2rem; }

@@ -163,3 +163,16 @@ describe('ignoringMark: the audit\'s mark is taken out of a title only while it 
     assert.ok(headingKeys('GM\u2060\u200c\u2060Notes').includes('gm notes'));
   });
 });
+
+describe('a document page withholds a Clues section, by its word', () => {
+  const { playerSafeMarkdown } = require('../../lib/processor');
+  const shows = (h) => playerSafeMarkdown('# T\n\n## ' + h + '\nSECRET\n\n## Other\nok', { frontmatter: { type: 'document' }, excludeSections: [] }).text.includes('SECRET');
+  it('hides Clues and Clues followed by words, and shows a different word', () => {
+    assert.strictEqual(shows('Clues if any'), false);
+    assert.strictEqual(shows('Cluestick'), true);
+  });
+  it('with an invisible character in it, hides a word that merely starts with Clues (the hiding side, kept)', () => {
+    assert.strictEqual(shows('Cl​ues if'), false);
+    assert.strictEqual(shows('Clu​esti​ck'), false);
+  });
+});

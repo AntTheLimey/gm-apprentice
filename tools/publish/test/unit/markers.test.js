@@ -66,3 +66,23 @@ describe('a block marked in capitals is in no built file', () => {
     } finally { v.cleanup(); }
   });
 });
+
+describe('a marker with a line break inside its comment is read in a body', () => {
+  const { playerSafeMarkdown } = require('../../lib/processor');
+  const body = (md) => playerSafeMarkdown(md).text;
+  it('hides what a gm-only block wraps', () => {
+    for (const open of ['<!--\ngm-only\n-->', '<!-- gm-only\n-->', '<!--\n  gm-only -->']) {
+      const out = body(`a\n${open}\nSECRET\n<!--\n/gm-only\n-->\nz`);
+      assert.ok(!out.includes('SECRET'), JSON.stringify(open));
+      assert.ok(out.includes('a') && out.includes('z'));
+    }
+  });
+  it('hides what a spoiler block wraps, and keeps the text after the comment', () => {
+    const out = body('a\n<!--\nspoiler\n--> SECRET\n<!-- /spoiler --> shown\nz');
+    assert.ok(!out.includes('SECRET'));
+    assert.ok(out.includes('shown') && out.includes('z'));
+  });
+  it('is not read inside a code fence', () => {
+    assert.ok(body('```\n<!--\ngm-only\n-->\nSHOWN\n```').includes('SHOWN'));
+  });
+});

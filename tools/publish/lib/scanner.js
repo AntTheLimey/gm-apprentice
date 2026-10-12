@@ -245,7 +245,9 @@ function linkKeys(page) {
 }
 
 function buildLinkMap(pages) {
-  const map = {};
+  // No prototype: a note called `constructor` or `__proto__` is a name like any other, and a
+  // link to a name with no note finds nothing (not an inherited function).
+  const map = Object.create(null);
 
   // Pass 1: add all canonical titles (non-superseded first so they claim their own names)
   for (const page of pages) {
@@ -292,7 +294,7 @@ function buildLinkMap(pages) {
 function scanAttachments(config) {
   const { vaultPath, attachmentsDir, excludeDirs } = config;
   const attachmentsPath = path.join(vaultPath, attachmentsDir || '_attachments');
-  const map = {};
+  const map = Object.create(null);
 
   // Wrapped on this path too: the returned type must not depend on whether _attachments/ exists.
   if (!fs.existsSync(attachmentsPath)) return nfcLookupTable(map);

@@ -3,7 +3,7 @@ const { canonicalNfc } = require('./unicode');
 const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
 const { bareSectionTitle } = require('./pc-prose');
-const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
+const { wikilinkRe, parseWikilink, labelsForLinksFully } = require('./wikilink');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
 const md = createRenderer();
 
@@ -26,9 +26,9 @@ function valueText(value) {
 
 // Every piece of a note's text a template prints goes through here, so this is also where
 // a labelled link left in it (a field printed whole) is reduced to its label: the target of
-// `[[Vesper_Hale|the stranger]]` is never printed (wikilink.js labelsForLinks).
+// `[[Vesper_Hale|the stranger]]` is never printed (wikilink.js labelsForLinksFully, which also unpicks a link nested in a label).
 function escapeHtml(str) {
-  return labelsForLinks(str instanceof Date ? dateText(str) : String(str || ''))
+  return labelsForLinksFully(str instanceof Date ? dateText(str) : String(str || ''))
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -640,7 +640,12 @@ function markedBlocks(markdown, markerName) {
   // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
   // closer shown inside a fenced example would end the block early. Callers that
   // pass raw gray-matter content (build.js's published view) keep CRLF.
-  const lines = String(markdown).replace(/\r\n?/g, '\n').split('\n');
+  // A marker split over lines ("<!--\ngm-only\n-->") is one marker on its first line; the
+  // line breaks it held follow it, so every line after it stays on its own line number.
+  const lines = String(markdown).replace(/\r\n?/g, '\n')
+    .replace(markerPattern(markerName), (whole) => (whole.includes('\n')
+      ? whole.replace(/\n/g, ' ') + whole.replace(/[^\n]/g, '') : whole))
+    .split('\n');
   const result = [];
   const warnings = [];
   const stack = [];
@@ -1072,30 +1077,6 @@ function leadingH1Withheld(markdown, excludeSections, frontmatter) {
   return walkExcludeList(lines.slice(0, end + 1), excludeSections, frontmatter, {}).withheldBy[first] !== null;
 }
 
-function renderRelationships(frontmatter, linkMap, currentOutputPath) {
-  const rels = frontmatter.relationships;
-  if (!rels || !Array.isArray(rels)) return '';
-  const valid = rels.filter(r => r.target && r.type);
-  if (valid.length === 0) return '';
-
-  const currentDir = currentOutputPath.substring(0, currentOutputPath.lastIndexOf('/'));
-  const items = valid.map(r => {
-    const { target: targetName, label } = parseWikiRef(r.target);
-    const targetPath = linkMap[targetName];
-    const escapedName = escapeHtml(label);
-    const link = targetPath
-      ? `<a href="${encodeHref(relativePath(currentDir, targetPath))}" class="entity-link">${escapedName}</a>`
-      : escapedName;
-    const typeRaw = String(r.type).replace(/_/g, ' ');
-    const typeCapitalized = typeRaw.charAt(0).toUpperCase() + typeRaw.slice(1);
-    const type = escapeHtml(typeCapitalized);
-    const desc = r.description ? ` &mdash; ${escapeHtml(r.description)}` : '';
-    return `<li><strong class="rel-label">${type}</strong> ${link}${desc}</li>`;
-  });
-
-  return `<h2>Relationships</h2>\n<ul class="relationship-list">\n${items.join('\n')}\n</ul>`;
-}
-
 const IMAGE_EXT_REGEX = /\.(jpe?g|png|webp|gif|svg)$/i;
 
 // Percent-encode each path segment of an output-path-derived href/src. A destination
@@ -1206,7 +1187,7 @@ function referenceParts(text) {
 
 // What a reference value names: { target, label } for a whole reference (target is the
 // link-map name), { target: '', label } for running text (nothing to link to), null when empty.
-// The one definition the page headers, the location sidebar and the preview cards share.
+// The one definition the page headers, the location breadcrumb and the preview cards share.
 function referenceOf(raw) {
   const text = valueText(raw).trim();
   if (!text) return null;
@@ -1444,8 +1425,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   });
   markdown = resolveWikiLinks(markdown, linkMap, page.outputPath);
   const html = md.render(markdown);
-  const relationships = renderRelationships(page.frontmatter, linkMap, page.outputPath);
-  return { html, relationships, warnings };
+  return { html, warnings };
 }
 
 // Extract ## sections for accordion rendering (used by PC/NPC templates). The
@@ -1495,25 +1475,37 @@ function filterFields(frontmatter, excludeFields = [], overrides = {}) {
 // How much of a file to publish, from its own `publish:` frontmatter key.
 // 'all' (default), 'stub' (page shell, body suppressed), 'none' (no page).
 // Absent/true/anything unrecognized means 'all' — a typo must not silently
-// unpublish a page, and must not silently publish one either, so only the two
-// explicit opt-outs are honoured.
+// unpublish a page. A value that says no is read in any capitals and trimmed
+// (`False`, `None`), and a list is read item by item: any item that says no
+// wins over the rest, as does `stub` over `all`. Reading more of these as a
+// no only ever shows less. skills/shared/scripts/vaultlib.py `publish_mode`
+// is this function; test/fixtures/publish-mode-vectors.json pins both.
 function publishMode(frontmatter) {
   const raw = frontmatter && frontmatter.publish;
-  if (raw === false || raw === 'false' || raw === 'none') return 'none';
-  if (raw === 'stub') return 'stub';
+  const items = (Array.isArray(raw) ? raw.flat(Infinity) : [raw])
+    .map((v) => (typeof v === 'string' ? v.trim().toLowerCase() : v));
+  if (items.some((v) => v === false || v === 'false' || v === 'none')) return 'none';
+  if (items.includes('stub')) return 'stub';
   return 'all';
 }
 
 // The GM-only marker on a single relationship edge. Frontmatter carries no
 // body prose, so `<!-- gm-only -->` has no meaning here — an edge whose very
 // existence is the secret (a "loyal escort" who `serves` the cult leader)
-// needs its own flag.
+// needs its own flag. The YAML reader gives `yes` and `on` as strings and a
+// GM may quote or pad any of them, so the flag hides the edge for true, the
+// number 1, and the words true, yes, on and 1, trimmed and in any capitals.
+// Reading more of these as a yes only ever shows less.
+// skills/shared/scripts/vaultlib.py `gm_only_hides` is this function;
+// test/fixtures/gm-only-vectors.json pins both.
 function isGmOnlyEdge(rel) {
-  return !!(rel && (rel.gm_only === true || rel.gm_only === 'true'));
+  const v = rel && rel.gm_only;
+  if (v === true || v === 1) return true;
+  return typeof v === 'string' && ['true', 'yes', 'on', '1'].includes(v.trim().toLowerCase());
 }
 
 // One page's frontmatter as a reader may see it. Everything derived from
-// frontmatter — the relationship graph, backlinks, the search index, sheet
+// frontmatter — Connections, backlinks, the search index, sheet
 // meta rows — must be built from THIS, never from the raw frontmatter.
 //
 // Three layers, in order:
@@ -1704,4 +1696,4 @@ function gmAliasRewriter(pages, published) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, renderRelationships, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

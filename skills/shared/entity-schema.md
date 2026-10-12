@@ -192,7 +192,7 @@ relationships:
     bidirectional: false
     description: "Serves as lieutenant"
     gm_only: false        # optional; true hides the edge from a published
-                          # site (page, relationship graph, search index)
+                          # site (page, Connections, search index)
 ```
 
 Every relationship on a non-PC entity also appears in the body,

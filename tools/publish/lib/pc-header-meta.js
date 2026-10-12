@@ -21,10 +21,16 @@ function headerMetaFields(fm) {
 // [label, text] for each header badge that has a value, in order. The text is what the
 // reader sees: a wikilink as its label, a Date as the date written, a bare note name as
 // words (a field that names a note, see NOTE_NAME_FIELDS).
+// A field the page knows names a note, or a value of a field it does not know that is written
+// as a note's name is: capitals, underscores, no spaces (`Old_Tom`). A lower-case one
+// (`field_agent`) is free text and keeps its underscores.
+const BARE_NOTE_NAME = /^\p{Lu}[^\s\[\]|]*_[^\s\[\]|]*$/u;
+const namesNote = (field, raw) => NOTE_NAME_FIELDS.has(field) || (typeof raw === 'string' && BARE_NOTE_NAME.test(raw.trim()));
+
 function headerMeta(fm) {
   return headerMetaFields(fm)
     .filter(field => fm[field] != null && fm[field] !== '')
-    .map(field => [formatLabel(field), (NOTE_NAME_FIELDS.has(field) ? plainRefValue(fm[field]) : plainMetaValue(fm[field])).trim()]);
+    .map(field => [formatLabel(field), (namesNote(field, fm[field]) ? plainRefValue(fm[field]) : plainMetaValue(fm[field])).trim()]);
 }
 
 // The epithet a PC page opens with: key_traits when the PC has any, otherwise the first

@@ -1,6 +1,7 @@
-const { describe, it } = require('node:test');
+const { describe, it, after } = require('node:test');
 const assert = require('node:assert');
 const { heritageTemplate } = require('../../lib/templates/heritage');
+const { configureConnections } = require('../../lib/templates/base');
 const { worldDomainTemplate } = require('../../lib/templates/world-domain');
 
 const stubNav = () => '<nav></nav>';
@@ -13,7 +14,7 @@ describe('heritageTemplate', () => {
     outputPath: 'heritages/elves.html',
     frontmatter: { type: 'heritage' },
   };
-  const baseContent = { html: '<p>Graceful folk.</p>', relationships: '' };
+  const baseContent = { html: '<p>Graceful folk.</p>' };
 
   it('renders stat card with lifespan range', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, lifespan_range: [100, 750] } };
@@ -50,17 +51,22 @@ describe('heritageTemplate', () => {
     assert.ok(!html.includes('heritage-stats'), 'should not render stat card when no stats');
   });
 
-  it('renders relationship graph when provided', () => {
-    const context = { publishConfig: { _entityGraphs: { 'Elves': '<svg>graph</svg>' }, _backlinks: {} } };
-    const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
-    assert.ok(html.includes('Connections'), 'should render graph heading');
-    assert.ok(html.includes('<svg>graph</svg>'), 'should include graph SVG');
+  it('renders the Connections section when the build has one', () => {
+    const model = { subject: { title: 'Elves', outputPath: 'elves.html' }, mentions: [{ label: 'NPCs', items: [{ title: 'Legolas', outputPath: 'legolas.html', kind: 'NPC' }] }], tabs: [] };
+    configureConnections('tree');
+    try {
+      const context = { publishConfig: { _connections: { for: () => model }, _backlinks: {} } };
+      const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
+      assert.ok(html.includes('class="cx"'), 'should render the section');
+      assert.ok(html.includes('Legolas'), 'should list what the model holds');
+    } finally { configureConnections('off'); }
   });
 
-  it('renders context sidebar with backlinks', () => {
+  it('has no sidebar layout even when other pages mention it; the body is still there', () => {
     const context = { publishConfig: { _backlinks: { 'Elves': [{ title: 'Legolas', outputPath: 'characters/npcs/legolas.html' }] } } };
     const html = heritageTemplate(basePage, baseContent, stubNav, baseConfig, {}, context);
-    assert.ok(html.includes('content-with-sidebar'), 'should use sidebar layout');
+    assert.ok(!html.includes('content-with-sidebar') && !html.includes('context-sidebar'), 'no sidebar layout');
+    assert.ok(html.includes(baseContent.html), 'the body is in the page');
   });
 });
 
@@ -73,18 +79,19 @@ describe('worldDomainTemplate', () => {
   };
   const baseContent = { html: '<p>Mountains and rivers.</p>' };
 
-  it('renders rules sidebar when rules present', () => {
+  it('renders World Rules in the page when rules are present', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, rules: [{ rule: 'No flying mounts' }, { rule: 'Rivers flow south' }] } };
     const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
-    assert.ok(html.includes('World Rules'), 'should have rules sidebar heading');
+    assert.ok(html.includes('World Rules'), 'should have the World Rules heading');
     assert.ok(html.includes('No flying mounts'), 'should render first rule');
     assert.ok(html.includes('Rivers flow south'), 'should render second rule');
+    assert.ok(html.includes('<section class="world-rules">') && !html.includes('<aside') && !html.includes('content-with-sidebar'), 'in the page, not beside it');
   });
 
-  it('suppresses rules sidebar when publish_rules is false', () => {
+  it('suppresses World Rules when publish_rules is false', () => {
     const page = { ...basePage, frontmatter: { ...basePage.frontmatter, publish_rules: false, rules: [{ rule: 'Hidden rule' }] } };
     const html = worldDomainTemplate(page, baseContent, stubNav, baseConfig, {}, {});
-    assert.ok(!html.includes('World Rules'), 'should not render rules sidebar');
+    assert.ok(!html.includes('World Rules'), 'should not render World Rules');
     assert.ok(!html.includes('Hidden rule'), 'should not render rule content');
   });
 
@@ -99,7 +106,7 @@ describe('worldDomainTemplate', () => {
     const html = worldDomainTemplate(basePage, baseContent, stubNav, baseConfig, {}, {});
     assert.ok(html.includes('Geography'), 'should render title');
     assert.ok(html.includes('Mountains and rivers'), 'should render body content');
-    assert.ok(!html.includes('world-rules-sidebar'), 'should not render rules sidebar');
+    assert.ok(!html.includes('world-rules'), 'should not render World Rules');
   });
 
   it('falls back to rule id when rule field is absent', () => {

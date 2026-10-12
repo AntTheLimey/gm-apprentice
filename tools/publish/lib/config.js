@@ -129,6 +129,21 @@ function linkPreviewsFrom(raw, warn = console.warn) {
   return 'on';
 }
 
+// `connections` picks how a page's Connections section is drawn: `tree`, `web`, `cards`,
+// or `off` for no section. YAML reads a bare `off` or `no` as false and `on` or `yes` as
+// true, so those count: false is off, true is tree. Left out is tree; anything else is
+// tree, and said.
+function connectionsFrom(raw, warn = console.warn) {
+  if (raw === undefined || raw === true) return 'tree';
+  if (raw === false) return 'off';
+  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
+  if (value === 'tree' || value === 'web' || value === 'cards' || value === 'off') return value;
+  if (value === 'on' || value === 'yes') return 'tree';
+  if (value === 'no') return 'off';
+  warn(`config: publish.connections ${JSON.stringify(raw)} is not tree, web, cards or off; using tree`);
+  return 'tree';
+}
+
 function defaultModeFrom(raw, warn = console.warn) {
   const mode = normalizeDefaultMode(raw);
   if (raw != null && String(raw).trim().toLowerCase() !== mode) {
@@ -426,6 +441,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const merged = {
     mode: publishModeFrom(publish.mode, warn),
     link_previews: linkPreviewsFrom(publish.link_previews, warn),
+    connections: connectionsFrom(publish.connections, warn),
     site_title: picked.site_title ?? null,
     footer: picked.footer ?? null,
     search: searchFrom(picked.search, publish.search !== undefined ? 'publish.search' : 'vault.config.json searchEnabled', warn),
@@ -564,4 +580,4 @@ function siteOffFor(configPath) {
   }
 }
 
-module.exports = { siteOffFor, MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };
+module.exports = { connectionsFrom, siteOffFor, MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };

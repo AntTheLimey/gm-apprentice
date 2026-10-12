@@ -10,6 +10,7 @@ const { headerMeta, pcEpithetText } = require('./pc-header-meta');
 const { shownInGameDate } = require('./templates/session');
 const { kindLabel } = require('./kind-label');
 const { canonicalNfc } = require('./unicode');
+const { labelsForLinks } = require('./wikilink');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 
 const VALUE_LIMIT = 120;
@@ -52,7 +53,7 @@ function rowsFor(page, ctx) {
   const fm = page.frontmatter || {};
   if (fm.type === 'pc') {
     // The CoC folio prints the player (its identity plate) but none of the header badges.
-    return [['Player', valueText(fm.player_name)], ...(ctx && ctx.cocFolio ? [] : headerMeta(fm))];
+    return [['Player', labelsForLinks(valueText(fm.player_name))], ...(ctx && ctx.cocFolio ? [] : headerMeta(fm))];
   }
   if (!own(FACT_FIELDS, fm.type)) return [];
   return FACT_FIELDS[fm.type].map(([label, fields, how]) => {

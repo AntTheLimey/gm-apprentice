@@ -7,6 +7,98 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.45] — 2026-10-11
+
+### Added
+
+- **Connections.** Every entity, session and chapter page that has any
+  ties ends in a Connections section: what the page's subject is tied to, in tabs by kind (People, Places,
+  Organisations, Things, Events, Papers, Creatures, Sessions, Other).
+  Both ends of a relationship show it, the other end worded by the
+  inverse. Each name carries its kind, whether the tie is warm, hostile
+  or neutral, the GM's line for it and how many sessions the two share.
+  Pages that only mention the subject sit in a last Mentions tab.
+- `publish.connections` draws it as `tree` (the default, a branching
+  list that reads on a phone), `web` (the subject in the middle, names
+  around it) or `cards`; `off` leaves the section out. Set it with
+  `vault-setting --set connections='"web"'`.
+
+### Changed
+
+- **A relationship's tone is now shown on the site**, as warm, hostile
+  or neutral, never as the word. A relationship whose tone gives
+  something away wants `gm_only: true` or another tone.
+- The right-hand sidebar, the Relationships list in the body, the NPC
+  Connections cards and the ring graph are gone; their content is in the
+  tabs. A page's Connections shows one step, not neighbours of
+  neighbours. World Rules on a world page sit in the page.
+- `publish:` values that now withhold a note which used to publish:
+  `"None"`, `"NONE"` and `"False"` written as strings, a value with
+  spaces round it, and any list holding a no.
+- `publish:` values that now make a stub which used to publish the note
+  whole: `"Stub"`, `" stub "` and `["stub"]`.
+- A relationship marked `gm_only` with `yes`, `on`, `1` or a quoted
+  true in capitals or with spaces (`"True"`, `" true "`) is now hidden
+  on the site, as `true` always was.
+- A labelled link to a note that has a published page shows that page's
+  own title in Connections, not the label; a label stands in only where
+  there is no page.
+- A note with `publish: stub` keeps its relationships on its own page,
+  and now they also show on the other page's Connections, with the tone.
+- Under 560px a web falls back to the tree when its names would be too
+  small to read.
+- The detail card for a chosen name keeps to the bottom of the window.
+- Publish tool 1.18.0.
+
+### Fixed
+
+- A relationship's inverse name (`served_by`, `has_member`, a kinship
+  name) is worded from the other end as the page words it, not left raw.
+- A relationship target with words beside one link (`[[Name|label]]
+  (briefly)`) finds that link's page.
+- Aliases, nested type fields and a PC's `player_name` show a labelled
+  link as its label in search and previews.
+- A `gm-only` or spoiler marker split over lines is read in a note's
+  body; before, the text it should hide was published.
+- `vault_check` reads a legacy entity name and a link whose target is
+  only spaces as the site does.
+- An embed with a pipe (`![[map.png|300]]`) prints nothing of its
+  target, and a labelled link whose label holds a `]` or another link
+  prints its label and no target, in text and as a relationship target.
+- The audit for secret names finds one around zero-width characters or
+  held only by the search index, and ignores a mark the vault wrote
+  itself.
+- `publish: None`, `False` and `[false]` withhold a note.
+- A note named `constructor.md`, or a link to `constructor`, no longer
+  stops the build.
+- A custom `display_meta` field holding a bare note name prints it as
+  words.
+- A section on a sheet skin's gradient paper reads that paper as its
+  ground, so a web's centre name and hollow marks show in the dark
+  scheme.
+- A tree row too narrow for its kind and sessions beside the name puts
+  them under it, so no name breaks inside a word.
+- A long word with no break in a description (a pasted web address)
+  wraps inside its card, strip and list, and no longer makes the page
+  scroll sideways on a phone.
+- A relationship kind typed with capitals, spaces or a hyphen
+  (`Member_Of`, `member of`) is worded as the kind it is.
+- Names that differ by a number sort in number order (Bystander 2
+  before Bystander 10).
+- A description's unlabelled link prints as its name, and a markdown
+  link as its text, with no brackets or file name.
+- Alt+Left, Ctrl+Left and Cmd+Left on a focused tab go to the browser,
+  not to the next tab.
+- Opening a tab that was hidden no longer raises a resize error in the
+  browser.
+- In a tree row whose kind and sessions wrap under the name, they sit
+  against the name, not at the row's right edge.
+- The ontology export refuses a tone family the site does not show.
+- Two sessions with the same file name in different chapters each list
+  their own NPCs and events, not the other's.
+
+---
+
 ## [1.10.44] — 2026-10-10
 
 ### Added

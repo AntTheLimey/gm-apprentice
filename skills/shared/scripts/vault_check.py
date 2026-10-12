@@ -151,7 +151,7 @@ from collections import Counter
 import sys
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
-from html.entities import html5 as _HTML5
+from html import unescape as _html_unescape
 import unicodedata
 from pathlib import Path
 from typing import Any, Callable, Iterable
@@ -2023,9 +2023,10 @@ _HK_INVISIBLE = _hk_class(_HK_INVISIBLE_RANGES)
 
 def _hk_decode_entities(text: str) -> str:
     """The character references heading-key.js `decodeReferences` reads:
-    numeric ones, and every named one the Markdown renderer decodes (the
-    HTML5 list, which `html.entities.html5` is too). A name not known as
-    typed is tried in small letters."""
+    numeric ones, and every named one the Markdown renderer decodes, as
+    the HTML5 rules decode it (`html.unescape` does the same, including a
+    legacy name with no `;` of its own: `&nbsp2;` is a space and `2;`).
+    A name not known as typed is tried in small letters."""
     def one(m: re.Match) -> str:
         body = m.group(1)
         if body[0] == "#":
@@ -2037,8 +2038,13 @@ def _hk_decode_entities(text: str) -> str:
             if 0 < cp <= 0x10FFFF and not 0xD800 <= cp <= 0xDFFF:
                 return chr(cp)
             return m.group(0)
-        return (_HTML5.get(body + ";") or _HTML5.get(body.lower() + ";")
-                or m.group(0))
+        whole = m.group(0)
+        exact = _html_unescape(whole)
+        if exact != whole:
+            return exact
+        lower = whole.lower()
+        folded = _html_unescape(lower)
+        return folded if folded != lower else whole
     return re.sub(r"&(#\d+|#x[0-9a-f]+|[a-z][a-z0-9]*);", one, text,
                   flags=re.I)
 
@@ -2067,7 +2073,8 @@ def _bare_section_title(title: str) -> str:
             raw = raw[:-1]
         frag = re.search(r"[#^]", raw)
         name = raw if frag is None else raw[:frag.start()]
-        return re.sub(r"(?i)\.md$", "", name).strip() or raw.strip()
+        # As the tool: a name that is only spaces is still a name (`[[ ^x]]`).
+        return (re.sub(r"(?i)\.md$", "", name) or raw).strip()
     s = _HK_WIKILINK.sub(label, text)
     s = re.sub(r"<[^>]*>", "", s)
     s = re.sub(r"!?\[([^\]]*)\]\([^)]*\)", r"\1", s)

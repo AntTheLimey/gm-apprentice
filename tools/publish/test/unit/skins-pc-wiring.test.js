@@ -10,7 +10,7 @@ const mkPage = (fm = {}) => ({
 });
 const imageMap = { 'jane.png': { relPath: 'jane.png' } };
 const render = (page, context = {}, map = {}) =>
-  pcTemplate(page, { html: '', relationships: '' }, [], noop, cfg, map, undefined, context);
+  pcTemplate(page, { html: '' }, [], noop, cfg, map, undefined, context);
 const withLook = (publish, extra = {}) => ({ publishConfig: { sheetLook: siteLook(publish), ...extra } });
 
 describe('pcTemplate: look wiring', () => {

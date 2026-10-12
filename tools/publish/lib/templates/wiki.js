@@ -1,17 +1,12 @@
-const { backlinksOf } = require('../backlinks');
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
-const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg } = require('./base');
-const { renderContextSidebar, normalizeRelationships } = require('./context-sidebar');
+const { baseShell, cssPath, rootPath, clientScripts, canonStatusBadge, metadataBadgesFor, portraitImg, connectionsSection } = require('./base');
 const { orderedSessions } = require('../story-spine');
 const { generateBreadcrumbs, renderBreadcrumbs } = require('../breadcrumbs');
 
 function wikiTemplate(page, processedContent, navFor, config, imageMap, context) {
   const fm = page.frontmatter;
   const publishConfig = (context || {}).publishConfig || {};
-  const linkMap = (context || {}).linkMap || {};
   const pages = (context || {}).pages || [];
-  const backlinks = backlinksOf(publishConfig._backlinks, page);
-  const extraSidebar = (context || {}).extraSidebar || {};
   const partyBoardHtml = (context || {}).partyBoardHtml || null;
   const partyDataScript = (context || {}).partyDataScript || null;
   const partyClientScripts = (context || {}).partyClientScripts || [];
@@ -20,52 +15,6 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
 
   const crumbs = generateBreadcrumbs(page.outputPath, {});
   const breadcrumbsHtml = renderBreadcrumbs(crumbs);
-
-  // Build extra sidebar sections for session/chapter pages
-  const extraSections = [];
-
-  if (extraSidebar.mentionedNPCs && extraSidebar.mentionedNPCs.length > 0) {
-    const npcItems = extraSidebar.mentionedNPCs.map(n => {
-      const href = encodeHref(relativeHref(page.outputPath, n.outputPath));
-      return `<li><a href="${href}">${escapeHtml(n.displayTitle)}</a></li>`;
-    });
-    extraSections.push(`<h3>NPCs Appearing</h3>\n<ul>${npcItems.join('\n')}</ul>`);
-  }
-
-  if (extraSidebar.events && extraSidebar.events.length > 0) {
-    const eventItems = extraSidebar.events.map(e => {
-      const href = encodeHref(relativeHref(page.outputPath, e.outputPath));
-      return `<li><a href="${href}">${escapeHtml(e.displayTitle)}</a></li>`;
-    });
-    extraSections.push(`<h3>Events</h3>\n<ul>${eventItems.join('\n')}</ul>`);
-  }
-
-  if (extraSidebar.constituentSessions && extraSidebar.constituentSessions.length > 0) {
-    const sessionItems = extraSidebar.constituentSessions.map(s => {
-      const href = encodeHref(relativeHref(page.outputPath, s.outputPath));
-      return `<li><a href="${href}">${escapeHtml(s.displayTitle)}</a></li>`;
-    });
-    extraSections.push(`<h3>Sessions</h3>\n<ul>${sessionItems.join('\n')}</ul>`);
-  }
-
-  // Standard sidebar + extra sections
-  const WRAP_UP_TYPES = new Set(['session-wrap-up', 'session_wrap', 'session-wrapup']);
-  const isWrapUp = WRAP_UP_TYPES.has(fm.type);
-
-  let sidebar = renderContextSidebar({
-    backlinks: isWrapUp ? [] : backlinks,
-    relationships: normalizeRelationships(fm.relationships, linkMap),
-    currentOutputPath: page.outputPath,
-  });
-
-  // Append extra sections to sidebar
-  if (extraSections.length > 0) {
-    if (sidebar) {
-      sidebar = sidebar.replace('</aside>', extraSections.join('\n') + '\n</aside>');
-    } else {
-      sidebar = `<aside class="context-sidebar">\n${extraSections.join('\n')}\n</aside>`;
-    }
-  }
 
   // Prev/next navigation for sessions and chapters
   let storyNav = '';
@@ -89,20 +38,10 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     storyNav = `<div class="story-nav">${prevLink}${nextLink}</div>`;
   }
 
-  const graphSvg = ((publishConfig || {})._entityGraphs || {})[page.title];
-  const graphHtml = graphSvg ? `<div class="relationship-graph"><h2>Connections</h2>${graphSvg}</div>` : '';
+  const graphHtml = connectionsSection(page, publishConfig);
 
-  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${processedContent.relationships}\n${graphHtml}`;
+  const bodyHtml = `<h1 class="page-title">${escapeHtml(page.displayTitle)}${canonStatusBadge(fm)}</h1>\n${portrait}\n${badges}\n${processedContent.html}\n${graphHtml}`;
   const mainContent = storyNav ? `${storyNav}\n${bodyHtml}\n${storyNav}` : bodyHtml;
-
-  // A sparse sidebar (≤1 section) shouldn't reserve the full 18rem column and squeeze the
-  // article into a narrow left strip with an empty right gutter. Flag it so the CSS can
-  // collapse to a single, comfortably-wide column (B2). Each sidebar section is an <h3>.
-  const sidebarSections = sidebar ? (sidebar.match(/<h3[\s>]/g) || []).length : 0;
-  const sparseClass = sidebar && sidebarSections <= 1 ? ' content-sidebar-sparse' : '';
-  const contentHtml = sidebar
-    ? `<div class="content-with-sidebar${sparseClass}"><div class="main">${mainContent}</div>${sidebar}</div>`
-    : mainContent;
 
   return baseShell({
     title: page.displayTitle,
@@ -110,7 +49,7 @@ function wikiTemplate(page, processedContent, navFor, config, imageMap, context)
     cssHref: cssPath(page.outputPath),
     navHtml: navFor(page.outputPath, config),
     rootHref: rootPath(page.outputPath),
-    content: (partyBoardHtml ? partyBoardHtml + '\n' : '') + contentHtml + (partyDataScript ? '\n' + partyDataScript : ''),
+    content: (partyBoardHtml ? partyBoardHtml + '\n' : '') + mainContent + (partyDataScript ? '\n' + partyDataScript : ''),
     footer: config.footer,
     genrePreset: publishConfig._genrePreset,
     overridesCss: publishConfig._overridesCss,

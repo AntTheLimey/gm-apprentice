@@ -634,3 +634,46 @@ describe('summaryLines', () => {
     assert.deepStrictEqual(summaryLines([]), []);
   });
 });
+
+describe('the audit and what a vault writes itself', () => {
+  const owner = { 'Characters/Vesper_Hale.md': npc('V', 'x', 'gm_aliases: ["Old Smuggler"]\n') };
+
+  it('finds a secret name the page prints with a zero-width character inside its longest word', async () => {
+    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'Everyone feared the old smug​gler.') });
+    assert.strictEqual((await faults(files, {}, 'ALIAS_IN_PROSE')).length, 1);
+  });
+
+  it('finds a secret name the page prints with a zero-width character written as an entity', async () => {
+    const files = Object.assign({}, owner, { 'Characters/Mara_Quill.md': npc('M', 'Everyone feared the old smug&#8203;gler.') });
+    assert.strictEqual((await faults(files, {}, 'ALIAS_IN_PROSE')).length, 1);
+  });
+
+  it('finds a secret name written with a zero-width character, printed without one', async () => {
+    const files = { 'Characters/Vesper_Hale.md': npc('V', 'x', 'gm_aliases: ["Old Smug​gler"]\n'),
+      'Characters/Mara_Quill.md': npc('M', 'Everyone feared the old smuggler.') };
+    assert.strictEqual((await faults(files, {}, 'ALIAS_IN_PROSE')).length, 1);
+  });
+
+  it('finds a secret name that only the search index prints, from a field the page does not', async () => {
+    const files = Object.assign({}, owner, {
+      'Locations/Quay.md': '---\ntype: location\noccupation: The Old Smuggler\n---\n\nA quay.\n',
+    });
+    const found = await faults(files, {}, 'ALIAS_IN_PROSE');
+    assert.deepStrictEqual(found.map((f) => f.path), ['Locations/Quay.md']);
+    assert.match(found[0].detail, /search/);
+  });
+
+  it('a run of invisible marks the vault wrote itself is not a name the page prints', async () => {
+    const ZWNJ = '‌';
+    const ZWJ = '‍';
+    const runs = [1, 2, 3, 4, 5, 6].map((n) => `⁠${n.toString(2).replace(/0/g, ZWNJ).replace(/1/g, ZWJ)}⁠`).join(' ');
+    const files = {
+      'Characters/Mara_Quill.md': npc('M', 'Hidden.\n\n## GM Notes\n\nShe met [[Quiet_One]].'),
+      'Characters/Quiet_One.md': npc('Q', 'Secret.'),
+      'Characters/Tom_Rook.md': npc('T', `He met [[Quiet_Two]]. ${runs}`),
+      'Characters/Quiet_Two.md': npc('Q2', 'Secret.'),
+    };
+    const found = await faults(files, { excluded: ['Characters/Quiet_One.md', 'Characters/Quiet_Two.md'] }, 'NAMED_NO_PAGE');
+    assert.deepStrictEqual(found.map((f) => f.path), ['Characters/Quiet_Two.md']);
+  });
+});

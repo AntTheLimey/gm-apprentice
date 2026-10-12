@@ -67,3 +67,20 @@ describe('buildSearchIndex', () => {
     assert.ok(results.length > 0);
   });
 });
+
+describe('a labelled link never reaches the search index with its target', () => {
+  const lunr = require('lunr');
+  const secret = (fm) => buildSearchIndex([{ title: 'A', displayTitle: 'A', outputPath: 'a.html', frontmatter: { type: 'npc', ...fm }, markdown: 'x' }]);
+  it('in aliases, as a word to find or in the stored index', () => {
+    const r = secret({ aliases: ['[[Vesper_Hale|the stranger]]'] });
+    assert.ok(!JSON.stringify(r).toLowerCase().includes('vesper'));
+    assert.ok(!JSON.stringify(r).toLowerCase().includes('hale'));
+    assert.ok(lunr.Index.load(r.index).search('stranger').length === 1);
+  });
+  it('under a sub-key of occupation, faction_type or event_type', () => {
+    for (const field of ['occupation', 'faction_type', 'event_type']) {
+      const r = secret({ [field]: { main: '[[Vesper_Hale|the stranger]]', other: ['[[Quill_Smith|smith]]'] } });
+      assert.ok(!/vesper|quill/i.test(JSON.stringify(r)), field);
+    }
+  });
+});

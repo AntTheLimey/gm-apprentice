@@ -252,7 +252,7 @@ describe('templates read the escaped link', () => {
       frontmatter: { type: 'location', parent_location: '[[Sector_7G\\|Sector]]' },
       markdown: '## Overview\n\nCargo moves at all hours here.\n' };
     const ctx = { pages: [parent, child], linkMap: {}, publishConfig: { exclude_sections: [], _backlinks: {} } };
-    const html = locationTemplate(parent, { html: '<p>x</p>', relationships: '' }, () => '',
+    const html = locationTemplate(parent, { html: '<p>x</p>' }, () => '',
       { siteTitle: 'T', attachmentsDir: '_attachments' }, {}, ctx);
     assert.ok(html.includes('Docking Ring'), 'child listed under its parent');
   });
@@ -266,7 +266,7 @@ describe('fix round 2: old semantics kept', () => {
       frontmatter: { type: 'location', parent_location: '[[_Hub]]' },
       markdown: '## Overview\n\nCargo moves at all hours here.\n' };
     const ctx = { pages: [hub, child], linkMap: {}, publishConfig: { exclude_sections: [], _backlinks: {} } };
-    const html = locationTemplate(hub, { html: '<p>x</p>', relationships: '' }, () => '',
+    const html = locationTemplate(hub, { html: '<p>x</p>' }, () => '',
       { siteTitle: 'T', attachmentsDir: '_attachments' }, {}, ctx);
     assert.ok(html.includes('Dock'), 'child listed under _Hub');
   });
@@ -301,6 +301,25 @@ describe('linkText: a frontmatter value that names a note, read for a page that 
     assert.strictEqual(linkText('[[Old_Tam]] and [[Vesper_Hale|snake_case]]', { humanize: true }).words, 'Old Tam and snake_case');
     assert.strictEqual(linkText('Old_Tam', { humanize: true }).key, 'Old_Tam');
   });
+  it('a label holding a lone ] prints the label, and the target is still the key', () => {
+    assert.deepStrictEqual(linkText('[[Ghost_Agent|agent [X] of the cult]]', { humanize: true }), { words: 'agent [X] of the cult', key: 'Ghost_Agent', labelled: true });
+    assert.deepStrictEqual(linkText('[[Ghost_Agent|agent [deceased]]]'), { words: 'agent [deceased]', key: 'Ghost_Agent', labelled: true });
+    const running = linkText('Seen with [[Ghost_Agent|a man [X] in grey]] and [[Old_Tam]]', { humanize: true });
+    assert.strictEqual(running.words, 'Seen with a man [X] in grey and Old Tam');
+    assert.ok(!running.words.includes('Ghost'));
+  });
+  it('a link nested in a label prints the innermost label and no target', () => {
+    const one = linkText('[[ZZA|[[ZZB|[[ZZC|the veiled one]]]]]]');
+    assert.deepStrictEqual(one, { words: 'the veiled one', key: 'ZZA', labelled: true });
+    const two = linkText('[[ZZA|[[ZZB|two deep]]]]', { humanize: true });
+    assert.strictEqual(two.words, 'two deep');
+    assert.strictEqual(linkText('see [[ZZA|[[ZZB|c_d]]]] now', { humanize: true }).words, 'see c_d now');
+  });
+  it('two links side by side are not one labelled link', () => {
+    const got = linkText('[[A|x]] and [[B|y]]');
+    assert.strictEqual(got.labelled, false);
+    assert.strictEqual(got.words, 'x and y');
+  });
   it('labelsForLinks turns only labelled links into their labels', () => {
     assert.strictEqual(labelsForLinks('Heir of [[Old_Tam|the old man]] and [[Bo_Pike]]'), 'Heir of the old man and [[Bo_Pike]]');
     assert.strictEqual(labelsForLinks('a | b and [[Bo_Pike]]'), 'a | b and [[Bo_Pike]]');
@@ -318,5 +337,49 @@ describe('a labelled superseded_by names the note that took over', () => {
       page('New', { type: 'npc' }),
     ]);
     assert.strictEqual(map.Old, 'new.html');
+  });
+});
+
+describe('labelsForLinksFully', () => {
+  const { labelsForLinksFully } = require('../../lib/wikilink');
+  it('reduces a link nested in a label to the innermost label', () => {
+    assert.strictEqual(labelsForLinksFully('[[A|[[B|c]]]]'), 'c');
+    assert.strictEqual(labelsForLinksFully('x [[A|[[B|[[C|d]]]]]] [[E]]'), 'x d [[E]]');
+  });
+  it('reduces nesting of any depth, leaving no target', () => {
+    const deep = (n) => '[[T|'.repeat(n) + 'x' + ']]'.repeat(n);
+    assert.strictEqual(labelsForLinksFully(deep(12)), 'x');
+    assert.strictEqual(labelsForLinksFully(`a ${deep(40)} b`), 'a x b');
+  });
+  it('leaves plain text and unlabelled links alone', () => {
+    assert.strictEqual(labelsForLinksFully('Heir of [[Bo_Pike]]'), 'Heir of [[Bo_Pike]]');
+    assert.strictEqual(labelsForLinksFully(null), '');
+  });
+});
+
+describe('labelsForLinks: embeds and a ] inside a link', () => {
+  const { labelsForLinks } = require('../../lib/wikilink');
+  const { escapeHtml } = require('../../lib/processor');
+  it('an embed with a size prints nothing, not "!300"', () => {
+    assert.strictEqual(escapeHtml('![[map.png|300]]'), '');
+    assert.strictEqual(labelsForLinks('a ![[map.png|300]] b'), 'a  b');
+    assert.strictEqual(labelsForLinks('![[map.png]]'), '![[map.png]]');
+  });
+  it('a ] inside the label or the target still prints only the label', () => {
+    assert.strictEqual(labelsForLinks('[[Vesper_Hale|a]b]]'), 'a]b');
+    assert.strictEqual(labelsForLinks('[[Vesper]Hale|the stranger]]'), 'the stranger');
+    assert.strictEqual(labelsForLinks('x [[Vesper]Hale|the]stranger]] y [[Bo_Pike]]'), 'x the]stranger y [[Bo_Pike]]');
+    assert.strictEqual(escapeHtml('[[Vesper_Hale|a]b]]'), 'a]b');
+  });
+  it('an unlabelled link, or two links side by side, are left as written', () => {
+    assert.strictEqual(labelsForLinks('[[A]] | [[B]]'), '[[A]] | [[B]]');
+    assert.strictEqual(labelsForLinks('[[A]] and [[B|c]]'), '[[A]] and c');
+  });
+});
+
+describe('a labelled link inside backticks in a value (kept as it is: the hiding side)', () => {
+  const { labelsForLinks } = require('../../lib/wikilink');
+  it('prints the label, not the link as typed, so the target is not shown', () => {
+    assert.strictEqual(labelsForLinks('`[[Vesper_Hale|the stranger]]`'), '`the stranger`');
   });
 });

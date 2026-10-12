@@ -280,11 +280,12 @@ gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <
 
 With no --set, reports what the vault file says: whether theme.default_mode is
 set, the font source, the fonts the site would load from Google, and the
-sheet_skin and sheet_frame lines, dndbeyond_sync and link_previews (null when a
-line is not there). With --set, writes one of: theme.default_mode ("dark",
+sheet_skin and sheet_frame lines, dndbeyond_sync, link_previews and connections (null
+when a line is not there). With --set, writes one of: theme.default_mode ("dark",
 "light", "system"), theme.fonts.source ("self-host"), sheet_skin (a skin id),
 sheet_frame (a frame id, or "none"), dndbeyond_sync ("build", "manual") or
-link_previews ("on", "desktop", "off"). Used by migrate.py, and to set a
+link_previews ("on", "desktop", "off") or connections
+("tree", "web", "cards", "off"). Used by migrate.py, and to set a
 campaign's sheet look.
 
   --set <key>=<json>  The setting and its value as JSON; repeatable
@@ -375,7 +376,7 @@ To find them the site is built in memory, every page rendered and nothing
 written, so the names are read off the pages as built and the list is the
 build's own. That is every page: a note's own, a PC's story, the section
 indexes, the timeline, the story and the landing page, and the names on a
-page's connections graph. A name an index or listing page prints is counted
+page's Connections section. A name an index or listing page prints is counted
 against the note it is taken from, and the finding names the page
 ("listings"). When a page cannot be rendered the list is not complete, and the
 audit says so with an error (NOTE_FAULTS_UNCHECKED). The build prints one line

@@ -39,6 +39,7 @@ function clientScripts(outputPath) {
   const root = rootPath(outputPath);
   const scripts = [root + 'js/nav.js', root + 'js/lightbox.js', root + 'js/search.js'];
   if (linkPreviews !== 'off') scripts.push(root + 'js/previews.js');
+  if (connectionsMode !== 'off') scripts.push(root + 'js/connections.js');
   return scripts;
 }
 
@@ -47,6 +48,19 @@ function clientScripts(outputPath) {
 // colorModeHead is: build() is synchronous.
 let linkPreviews = 'off';
 function configureLinkPreviews(mode) { linkPreviews = mode === 'on' || mode === 'desktop' ? mode : 'off'; }
+// How Connections is drawn for this build ('tree', 'web', 'cards' or 'off'), set once by
+// configureConnections before any page renders, as the link-previews mode is.
+let connectionsMode = 'off';
+function configureConnections(mode) { connectionsMode = ['tree', 'web', 'cards'].includes(mode) ? mode : 'off'; }
+
+// A page's Connections section, or '' when the site has none or the page has nothing to show.
+function connectionsSection(page, publishConfig, heading = 'h2') {
+  const index = (publishConfig || {})._connections;
+  if (connectionsMode === 'off' || !index) return '';
+  const { renderConnections } = require('./connections');
+  return renderConnections(index.for(page), { mode: connectionsMode, currentOutputPath: page.outputPath, heading });
+}
+
 function linkPreviewsOn() { return linkPreviews !== 'off'; }
 // Marks a listing container (a card grid, a list of rows) whose links get no preview card; empty when
 // previews are off so an off build stays byte-identical.
@@ -233,6 +247,8 @@ module.exports = {
   rootPath,
   clientScripts,
   configureLinkPreviews,
+  configureConnections,
+  connectionsSection,
   linkPreviewsOn,
   noPreviewAttr,
   previewsAttr,

@@ -96,7 +96,7 @@ test('A2: an item holder is shown whole in its real shapes, never cut at a slash
   } finally { v.cleanup(); }
 });
 
-test('B3: the "Mentioned in" list names a page type as the preview card does', () => {
+test('B3: the Mentions list files a page under its tab heading, never under a raw type name', () => {
   const v = site({
     'Characters/Hallam.md': '---\ntype: npc\n---\nBody.\n',
     'Wrapups/Night One.md': '---\ntype: session_wrap\n---\nHallam was there: [[Hallam]].\n',
@@ -105,11 +105,10 @@ test('B3: the "Mentioned in" list names a page type as the preview card does', (
   });
   try {
     const html = v.read('characters', 'hallam.html');
-    assert.ok(!html.includes('sidebar-badge">session_wrap') && !html.includes('sidebar-badge">plot_thread'), 'raw type name');
-    const { kindLabel } = require('../lib/kind-label');
-    for (const type of ['session_wrap', 'plot_thread', 'npc']) assert.ok(html.includes(`sidebar-badge">${kindLabel(type)}<`), type);
-    assert.match(html, /sidebar-badge">Plot thread</);
-    assert.match(html, /sidebar-badge">NPC</);
+    assert.ok(!html.includes('plot_thread') && !html.includes('session_wrap'), 'raw type name');
+    assert.match(html, /<h4>Other<\/h4>\s*<ul class="cx-mentions">\s*<li><a href="[^"]*dark-thread\.html">Dark Thread<\/a>/);
+    assert.match(html, /<h4>Sessions<\/h4>\s*<ul class="cx-mentions">\s*<li><a href="[^"]*night-one\.html">Night One<\/a>/);
+    assert.match(html, /<h4>People<\/h4>\s*<ul class="cx-mentions">\s*<li><a href="mara\.html">Mara<\/a>/);
   } finally { v.cleanup(); }
 });
 
@@ -159,7 +158,7 @@ test('B-I2: an event header value is one inline run inside its flex item, whatev
   } finally { v.cleanup(); }
 });
 
-test('B-M1: a location prints its parent whole in the sidebar, and its card says no more than the page', () => {
+test('B-M1: a location prints its parent whole under Part of in Connections, and its card says no more than the page', () => {
   const { cardProblems } = require('./helpers/card-subset');
   const v = buildVault({
     'Locations/Quay.md': '---\ntype: location\nparent_location: "Met [[Xylo]] at / the docks (twice)"\n---\nBody.\n',
@@ -170,7 +169,7 @@ test('B-M1: a location prints its parent whole in the sidebar, and its card says
     const cards = JSON.parse(v.read('previews.json'));
     for (const [file, want] of [['quay', 'Met Xylo at / the docks (twice)'], ['quay-two', 'LABEL shown at night']]) {
       const html = v.read('locations', `${file}.html`);
-      assert.ok(pageText(html).includes(`Parent ${want}`), `${file}: ${pageText(html).slice(0, 300)}`);
+      assert.ok(pageText(html).includes(`Part of ${want}`), `${file}: ${pageText(html).slice(0, 300)}`);
       assert.deepStrictEqual(cardProblems(cards[`locations/${file}.html`], pageText(html)).problems, []);
     }
   } finally { v.cleanup(); }
@@ -211,5 +210,17 @@ test('C1b: a bare note name in a PC display_meta badge prints as words; free tex
     const card = cards['characters/ada-quill.html'];
     assert.ok(card.f.some(([, value]) => value === 'Old Town'), JSON.stringify(card));
     assert.deepStrictEqual(cardProblems(card, text).problems, []);
+  } finally { v.cleanup(); }
+});
+
+test('C1c: a custom display_meta field holding a bare note name prints it as words', () => {
+  const v = buildVault({
+    'Characters/Ada Quill.md': '---\ntype: pc\nplayer_name: Pat\ndisplay_meta: [patron, rival, code]\npatron: Old_Tom\nrival: "[[Vesper_Hale|the stranger]]"\ncode: red_fox\n---\n## Background\n\nBody.\n',
+  }, {});
+  try {
+    const text = pageText(v.read('characters', 'ada-quill.html'));
+    for (const want of ['Patron Old Tom', 'Rival the stranger', 'Code red_fox']) assert.ok(text.includes(want), `${want}: ${text.slice(0, 400)}`);
+    const card = JSON.parse(v.read('previews.json'))['characters/ada-quill.html'];
+    assert.ok(card.f.some(([, value]) => value === 'Old Tom'), JSON.stringify(card));
   } finally { v.cleanup(); }
 });
