@@ -237,6 +237,14 @@ Transformation: reproduced as an optional collapsible
 reference appendix with citation, displayed only when the
 user expands the details element.
 
+**`tools/publish/js/gurps-tohit.js`**
+Source: *GURPS Basic Set 4th Edition* and *GURPS Martial Arts*
+(Steve Jackson Games).
+License: SJG Online Policy
+(https://www.sjgames.com/general/online_policy.html).
+Transformation: modifier names and numbers used in a sum, each
+with its page reference in a code comment. Names and numbers only.
+
 ## D&D Beyond
 
 D&D Beyond is a service of Wizards of the Coast LLC. This project is

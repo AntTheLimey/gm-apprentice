@@ -541,6 +541,38 @@ shown as written.
 
 ---
 
+## 12. GURPS PC sheet — the weapon tables the to-hit calculator reads
+
+The shipped template (`skills/shared/templates/pc-gurps-4e.md`) carries
+two weapon tables. The calculator on the Combat tab reads them with the
+Skills, Techniques, Equipment and Advantages tables; its tests build a PC
+from the real template.
+
+| Section | Header |
+|---------|--------|
+| `## Melee Weapons` | `Weapon \| Skill \| Damage \| Reach \| Parry \| Notes` |
+| `## Ranged Weapons` | `Weapon \| Skill \| Damage \| Acc \| Range \| RoF \| Shots \| ST \| Bulk \| Rcl \| Notes` |
+
+Columns are read by header name, so every column but Weapon and Skill is
+optional and an older sheet without ST, Rcl or Notes still builds.
+
+- **Notes:** a weapon's own bonuses, one per `;`, each a name and a signed
+  number (`Weapon Bond +1; Balanced +1`). On a ranged row a sighting aid
+  is written the same way, with `Acc` after the number when it counts
+  only while aiming (`Scope +2 Acc; Laser sight +1`). A scope and a HUD
+  link are always aiming bonuses.
+- **Skill cell:** the skill and the weapon's level, `Skill-N`, `Skill N`,
+  `Skill (N)` or `... = N`, with the row's own bonuses already in the
+  level. A trailing prose bracket is ignored.
+- **Character-wide aids:** an Equipment item or Advantage whose name
+  starts with the aid name and a signed number (`Laser sight +1`), or a
+  `;`-separated piece of its notes in that form. A bare mention in prose
+  is not an aid. Mark a spare `backup`, `superseded` or `spare`.
+- **Techniques:** a technique's level is written without any one
+  weapon's bonus, as the Skills table writes a skill.
+
+---
+
 ## Quick Checklist
 
 - [ ] Licensed content: system `NOTICE.md` and `ATTRIBUTION.md` updated; no per-file notice
