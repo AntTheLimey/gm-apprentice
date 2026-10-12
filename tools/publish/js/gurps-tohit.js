@@ -53,6 +53,7 @@
   // A reflex sight is +1 to the shooting skill, not to Acc, and needs no Aim (HT156); the programs
   // likewise (HT157). These apply with or without Aim whatever the sheet flagged, outside the caps.
   const SKILL_AIDS = ['Reflex sight', 'Targeting program', 'Silhouette program'];
+  const SKILL_PREFIXES = ['Guns', 'Gunner', 'Beam Weapons'];
   const ALWAYS_ON = ['Laser sight'];
   const EVALUATE_MAX = 3;             // +1 a turn, at most +3 (B364)
   const DUAL = -4;                    // Dual-Weapon Attack, each attack; the foe defends at -1 (B417)
@@ -161,7 +162,9 @@
     return findWeapon(list, ref) || list[0] || null;
   }
 
-  function effective(data, state) {
+  // opts.delta: the page's live to-hit number less the one the sheet printed (encumbrance changes
+  // it); one line in `you`. Everything else works from the authored level in the data block.
+  function effective(data, state, opts) {
     const st = isObj(state) ? state : {};
     const w = pickWeapon(data, st.weapon);
     if (!w) return { type: 'melee', roll: 0, critSkill: 0, lines: [], cap: null, included: null, notes: [], foe: null };
@@ -190,15 +193,22 @@
     // The first line: the weapon's own level, or a technique's in its place.
     const tech = typeof st.technique === 'string' && st.technique
       ? mine.other.find((t) => t.name === st.technique) : null;
+    // The Skill cell's level includes the row's own bonuses (the documented standard), so they
+    // are never added here; when the level is above the skills-table level, `included` says so.
+    // A picked technique carries that difference, since the technique is worked from the skill.
     let start = level;
-    let startLabel = skill || w.name || 'Sheet to-hit';
+    let startName = skill || w.name || 'Sheet to-hit';
     let included = null;
-    if (tech) {
-      start = int(tech.level, -99, 99);
-      startLabel = tech.name;
-    } else if (base !== null && level > base) {
-      included = { amount: level - base, over: `${skill} ${base}`.trim() };
+    const gap = base !== null && level > base ? level - base : 0;
+    if (gap) {
+      const names = (Array.isArray(w.bonuses) ? w.bonuses : []).map((b) => (b && typeof b.name === 'string' ? b.name : '')).filter(Boolean);
+      included = { amount: gap, over: `${skill} ${base}`.trim(), names };
     }
+    if (tech) {
+      start = int(tech.level, -99, 99) + gap;
+      startName = tech.name;
+    }
+    let startLabel = startName + (tech && gap ? ` (+${gap} included)` : '');
     // Free Fall replaces the base skill when it is lower; modifiers apply on top (B197, B344).
     // A beam weapon below Rcl 2 is exempt (B350).
     if (st.zerog === true) {
@@ -212,7 +222,7 @@
         const rolled = start - bonus;
         if (ff < rolled) {
           start = ff + bonus;
-          startLabel = `Free Fall ${ff} in place of ${startLabel} ${rolled}` + (bonus ? ` (+${bonus} included)` : '');
+          startLabel = `Free Fall ${ff} in place of ${startName} ${rolled}` + (bonus ? ` (+${bonus} included)` : '');
         }
       }
     }
@@ -243,7 +253,7 @@
           if (v > scope) { scope = v; scopeName = name; }
         };
         for (const a of aids) {
-          if (!isSight(a) || !ticked(st, a.id)) continue;
+          if (!isSight(a) || !ticked(st, a)) continue;
           const b = aidValue(st, a);
           if (!b) continue;
           if (a.name === 'Scope') tryScope('Scope', b, a.fixed === true);
@@ -273,8 +283,8 @@
       // counted in the aiming line above.
       const aimed = aim > 0 && !noAim;
       for (const a of aids) {
-        if (!ticked(st, a.id)) continue;
-        if (isSight(a)) { if (aimed || !alwaysOn(a)) continue; } else if (a.acc === true && !aimed && SKILL_AIDS.indexOf(a.name) < 0) continue;
+        if (!ticked(st, a)) continue;
+        if (isSight(a)) { if (aimed || !alwaysOn(a)) continue; } else if (a.acc === true && !aimed && SKILL_AIDS.indexOf(a.name) < 0) continue; // an unknown aid marked Acc needs Aim
         add('aiming', a.name, aidValue(st, a));
       }
       if (man === 'aod') add('attack', 'All-Out Attack (Determined)', AOA_RANGED);
@@ -302,7 +312,8 @@
       if (man === 'move') { add('attack', 'Move and Attack', MOVE_MELEE); caps.push({ value: MOVE_MELEE_CAP, why: 'Move and Attack' }); }
       if (man === 'aodbl') notes.push('All-Out Attack (Double): two attacks at this number. The off hand takes its usual penalty.');
       if (man === 'aos') notes.push('All-Out Attack (Strong): no change to the roll. +2 damage, or +1 a die if better.');
-      if (st.rapid === true) add('attack', 'Rapid Strike, each attack', traits.halfRapid === true ? RAPID_STRIKE_HALF : RAPID_STRIKE);
+      if (st.rapid === true && man === 'move') notes.push('Rapid Strike is not allowed with Move and Attack: it is ignored.');
+      else if (st.rapid === true) add('attack', 'Rapid Strike, each attack', traits.halfRapid === true ? RAPID_STRIKE_HALF : RAPID_STRIKE);
       if (telegraphic) { add('attack', 'Telegraphic Attack', TELEGRAPHIC); foeAdj += TELEGRAPHIC_FOE; telegraphicOn = true; }
       deceptive = int(st.deceptive, -8, 0);
       if (deceptive && telegraphic) {
@@ -355,14 +366,9 @@
     if (st.footing === true) add('env', 'Bad footing', BAD_FOOTING);
     add('you', 'Shock', -Math.abs(int(st.shock, -SHOCK_MAX, SHOCK_MAX)));
 
-    // The weapon's own bonuses, unless the level already includes them.
-    if (!included && Array.isArray(w.bonuses)) {
-      for (const b of w.bonuses) {
-        const v = b ? int(b.bonus, -99, 99) : 0;
-        if (v) add('you', `${b.name} ${sgn(v)}`, v);
-      }
-    }
     add('you', 'Anything else', int(st.other, -30, 30));
+    const delta = isObj(opts) ? int(opts.delta, -99, 99) : 0;
+    if (delta) add('you', delta < 0 ? 'Encumbrance' : "Sheet's live number", delta);
 
     // The lowest cap that is below the roll is the one that bites.
     const settle = () => {
@@ -413,28 +419,45 @@
   }
 
   // Aids offered on a weapon: its own row's, then the character-wide ones (ranged only). One
-  // physical aid found in both places (same name) is the row's. Shared with the page.
+  // physical aid found in both places (same name) is the row's. Each comes back with `on`, its
+  // start for THIS weapon, and `tick`, the key its tick is kept under in state.aids: a
+  // character-wide aid has a tick per weapon, so changing it on one weapon leaves the others.
+  // A character-wide skill bonus (program, reflex sight) starts ticked only where the shooting
+  // skill is one it helps: the aid's own `skills` prefixes, else Guns, Gunner, Beam Weapons.
   function aidsFor(data, w) {
     if (!w || w.type !== 'ranged') return [];
     const own = Array.isArray(w.aids) ? w.aids : [];
     const wide = data && Array.isArray(data.aids) ? data.aids : [];
     const ids = new Set();
     const names = new Set();
-    return own.concat(wide).filter((a) => {
-      if (!a || ids.has(a.id) || names.has(a.name)) return false;
+    const out = [];
+    const take = (a, isWide) => {
+      if (!a || ids.has(a.id) || names.has(a.name)) return;
       ids.add(a.id);
       names.add(a.name);
-      return true;
-    });
+      let on = a.on === true;
+      if (isWide && on && SKILL_AIDS.indexOf(a.name) >= 0) {
+        const prefixes = Array.isArray(a.skills) && a.skills.length ? a.skills : SKILL_PREFIXES;
+        const sk = typeof w.skill === 'string' ? w.skill : '';
+        on = prefixes.some((p) => typeof p === 'string' && sk.indexOf(p) === 0);
+      }
+      out.push(Object.assign({}, a, { on, tick: isWide ? `${a.id}@${wid(w)}` : a.id }));
+    };
+    own.forEach((a) => take(a, false));
+    wide.forEach((a) => take(a, true));
+    return out;
   }
 
   // Which controls cannot be used together (MA113): the page disables the one marked true.
   function conflicts(state) {
     const st = isObj(state) ? state : {};
     const telegraphic = st.telegraphic === true;
-    return { telegraphic: !telegraphic && int(st.deceptive, -8, 0) < 0, deceptive: telegraphic };
+    return { telegraphic: !telegraphic && int(st.deceptive, -8, 0) < 0, deceptive: telegraphic, rapid: st.man === 'move' };
   }
-  const ticked = (st, id) => isObj(st.aids) && st.aids[id] === true;
+  const ticked = (st, a) => {
+    if (!isObj(st.aids)) return false;
+    return (a.tick !== undefined && a.tick in st.aids) ? st.aids[a.tick] === true : st.aids[a.id] === true;
+  };
   function aidValue(st, a) {
     if (a.bonus !== null && a.bonus !== undefined) return int(a.bonus, 0, 30);
     return isObj(st.aidBonus) ? int(st.aidBonus[a.id], 0, 30) : 0;
@@ -456,9 +479,7 @@
   function defaultState(data) {
     const list = data && Array.isArray(data.weapons) ? data.weapons.filter(isObj) : [];
     const aids = {};
-    const note = (a) => { if (isObj(a) && typeof a.id === 'string') aids[a.id] = a.on === true; };
-    for (const w of list) if (Array.isArray(w.aids)) w.aids.forEach(note);
-    if (data && Array.isArray(data.aids)) data.aids.forEach(note);
+    for (const w of list) for (const a of aidsFor(data, w)) if (typeof a.tick === 'string') aids[a.tick] = a.on === true;
     const locs = data && Array.isArray(data.locations) ? data.locations : [];
     const s = {
       weapon: list.length ? wid(list[0]) : '', technique: '', aim: 0, scope: 0, sm: 0, vis: 0, shock: 0, evaluate: 0,
@@ -496,7 +517,9 @@
     }
     if (isObj(raw.aids)) for (const id of Object.keys(s.aids)) if (typeof raw.aids[id] === 'boolean') s.aids[id] = raw.aids[id];
     if (isObj(raw.aidBonus)) {
-      for (const id of Object.keys(s.aids)) {
+      const ids = new Set();
+      for (const w of list) for (const a of aidsFor(data, w)) ids.add(a.id);
+      for (const id of ids) {
         const n = Object.prototype.hasOwnProperty.call(raw.aidBonus, id) ? num(raw.aidBonus[id], 0, 30) : null;
         if (n !== null) s.aidBonus[id] = n;
       }
@@ -518,7 +541,7 @@
   const FROM_TAG = { row: 'weapon', gear: 'gear', trait: 'trait' };
   const weaponId = wid;
   const SAY_DELAY = 600;
-  const WHY_OFF = { telegraphic: 'Not with a Deceptive Attack', deceptive: 'Not with a Telegraphic Attack' };
+  const WHY_OFF = { telegraphic: 'Not with a Deceptive Attack', deceptive: 'Not with a Telegraphic Attack', rapid: 'Not with Move and Attack' };
   const OUTCOME_WORDS = { CS: 'critical hit', S: 'hit', F: 'miss', CF: 'critical miss' };
   const pctWord = (x) => (x * 100).toFixed(x > 0.9995 || x < 0.0005 ? 0 : 1);
   // "Critical hit on 3 to 4, hit up to 11, miss from 12, critical miss on 17 to 18"
@@ -619,10 +642,12 @@
       const m = cell ? /^\s*(-?\d+)\s*$/.exec(cell.textContent) : null;
       return m ? parseInt(m[1], 10) : null;
     }
-    function view() {
-      return Object.assign({}, data, {
-        weapons: data.weapons.map((w) => { const l = liveLevel(w); return l === null ? w : Object.assign({}, w, { level: l }); }),
-      });
+    // The sum is worked from the authored level in the data block; the live cell only gives a
+    // difference from the number the sheet printed (encumbrance lowers it), added once.
+    function liveDelta(w) {
+      const live = liveLevel(w);
+      const shown = num(w.shown);
+      return live === null || shown === null ? 0 : live - Math.trunc(shown);
     }
 
     function changed() { calc(); write(); }
@@ -674,15 +699,15 @@
         inp.value = boxVal(state.aidBonus[a.id]);
         bind(inp, () => {
           state.aidBonus[a.id] = inp.value;
-          if (inp.value.trim() !== '' && Number(inp.value) > 0) state.aids[a.id] = true;
+          if (inp.value.trim() !== '' && Number(inp.value) > 0) state.aids[a.tick] = true;
         });
         return h('div', { class: 'th-f th-aidnum' }, [
           h('label', { class: 'th-lbl', for: 'th-aid-' + n }, [h('span', { text: a.name + ' bonus ' }), h('span', { class: 'th-from', text: tag })]), inp,
         ]);
       }
       const inp = h('input', { type: 'checkbox', id: 'th-aid-' + n, 'data-aid': a.id });
-      inp.checked = state.aids[a.id] === true;
-      bind(inp, () => { state.aids[a.id] = inp.checked; });
+      inp.checked = state.aids[a.tick] === true;
+      bind(inp, () => { state.aids[a.tick] = inp.checked; });
       return h('label', { class: 'th-c' }, [
         inp, h('span', { text: a.name + ' ' + (a.acc ? 'Acc ' : '') + '+' + int(a.bonus, 0, 30) + (a.fixed === true ? ' (fixed)' : '') }), h('span', { class: 'th-from', text: tag }),
       ]);
@@ -827,7 +852,7 @@
         sel.value = state.technique;
         bind(sel, () => { state.technique = sel.value; });
         refs.technique = sel;
-        techBox.appendChild(h('div', { class: 'th-f' }, [h('label', { class: 'th-lbl', for: 'th-tech', text: 'Use a technique instead' }), sel]));
+        techBox.appendChild(h('div', { class: 'th-f' }, [h('label', { class: 'th-lbl', for: 'th-tech', text: 'Use a technique or default instead' }), sel]));
       }
       const locs = Array.isArray(data.locations) ? data.locations : [];
       const chips = [];
@@ -885,13 +910,11 @@
     // ----- the answer -----
     const row = (cls, label, value, vcls) => h('tr', { class: cls }, [h('td', { text: label }), h('td', { class: 'th-n' + (vcls ? ' ' + vcls : ''), text: value })]);
     function calc(initial) {
-      const v = view();
       const w = curWeapon();
-      const res = effective(v, state);
+      const res = effective(data, state, { delta: liveDelta(w) });
       modeEl.textContent = res.type === 'ranged' ? 'Ranged' : 'Melee';
       for (const [o, x] of weaponOpts) {
-        const lv = v.weapons[data.weapons.indexOf(x)];
-        o.textContent = (x.name || x.key) + ' (' + int(lv && lv.level, -99, 99) + ')';
+        o.textContent = (x.name || x.key) + ' (' + (int(x.level, -99, 99) + liveDelta(x)) + ')';
       }
       weaponSel.value = weaponId(w);
       wline.textContent = res.type === 'ranged'

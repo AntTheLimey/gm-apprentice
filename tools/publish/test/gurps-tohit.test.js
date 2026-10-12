@@ -306,21 +306,140 @@ describe('caps', () => {
   });
 });
 
-describe('what the level already includes', () => {
+describe('a row\'s own bonuses are never added: the Skill cell includes them', () => {
   const bond = [{ name: 'Weapon Bond', bonus: 1 }];
-  it('a level over the Skills-table level is already counted', () => {
+  it('a level over the Skills-table level is explained, not added', () => {
     const data = withWeapon(mk(), 'Knife', { level: 15, base: 14, bonuses: bond });
     const r = T.effective(data, { weapon: 'Knife' });
-    assert.deepStrictEqual(r.included, { amount: 1, over: 'Knife 14' });
+    assert.deepStrictEqual(r.included, { amount: 1, over: 'Knife 14', names: ['Weapon Bond'] });
     assert.strictEqual(r.lines.some((l) => /Weapon Bond/.test(l.label)), false);
     assert.strictEqual(r.roll, 15);
   });
-  it('a level equal to the skill gets the bonus as a line', () => {
-    const data = withWeapon(mk(), 'Knife', { bonuses: bond });
-    const r = T.effective(data, { weapon: 'Knife' });
+  it('the names may be empty', () => {
+    const r = T.effective(withWeapon(mk(), 'Knife', { level: 15, base: 14 }), { weapon: 'Knife' });
+    assert.deepStrictEqual(r.included.names, []);
+  });
+  it('a level equal to the skill with a bonus in the row is still the level', () => {
+    const r = T.effective(withWeapon(mk(), 'Knife', { bonuses: bond }), { weapon: 'Knife' });
     assert.strictEqual(r.included, null);
-    assert.strictEqual(line(r, 'you').label, 'Weapon Bond +1');
+    assert.strictEqual(r.roll, 14);
+    assert.strictEqual(r.lines.length, 1);
+  });
+  it('base null with a bonus in the row: the roll is the level (Rapier 15)', () => {
+    const data = withWeapon(mk(), 'Knife', { skill: 'Rapier', level: 15, base: null, bonuses: bond });
+    const r = T.effective(data, { weapon: 'Knife' });
     assert.strictEqual(r.roll, 15);
+    assert.strictEqual(r.included, null);
+  });
+  it('a string bonus in the row changes nothing and shows no NaN', () => {
+    const data = withWeapon(mk(), 'Knife', { level: 15, base: 14, bonuses: [{ name: 'Balanced', bonus: '\u22123' }] });
+    const r = T.effective(data, { weapon: 'Knife' });
+    assert.strictEqual(r.roll, 15);
+    assert.ok(r.lines.every((l) => !/NaN/.test(l.label)));
+  });
+});
+
+describe('opts.delta: the live number\'s difference from the one on the sheet', () => {
+  const rapier = () => withWeapon(mk(), 'Knife', { skill: 'Rapier', level: 15, base: 14, bonuses: [{ name: 'Weapon Bond', bonus: 1 }] });
+  it('a lowered live number is one Encumbrance line; the bonus is not added twice', () => {
+    const r = T.effective(rapier(), { weapon: 'Knife' }, { delta: -1 });
+    assert.strictEqual(r.roll, 14);
+    const you = r.lines.filter((l) => l.group === 'you');
+    assert.deepStrictEqual(you.map((l) => [l.label, l.value]), [['Encumbrance', -1]]);
+    assert.strictEqual(r.included.amount, 1);
+  });
+  it('a raised one is the sheet\'s live number', () => {
+    const r = T.effective(mk(), { weapon: 'Knife' }, { delta: 2 });
+    assert.strictEqual(r.roll, 16);
+    assert.strictEqual(line(r, 'you').label, "Sheet's live number");
+  });
+  it('no delta, zero, or a non-number changes nothing', () => {
+    for (const o of [undefined, null, {}, { delta: 0 }, { delta: 'x' }, { delta: NaN }, 5]) {
+      assert.strictEqual(T.effective(mk(), { weapon: 'Knife' }, o).roll, 14, String(JSON.stringify(o)));
+    }
+  });
+  it('Free Fall, techniques and included work from the authored level', () => {
+    const data = mk({ freeFall: 12 });
+    withWeapon(data, 'Knife', { level: 18, base: 17 });
+    const r = T.effective(data, { weapon: 'Knife', zerog: true }, { delta: -2 });
+    assert.strictEqual(r.roll, 13 - 2);
+    assert.strictEqual(r.included.amount, 1);
+  });
+});
+
+describe('a picked technique carries what the level adds over the skill', () => {
+  const axe = (base) => {
+    const data = withWeapon(mk(), 'Knife', { skill: 'Axe/Mace', level: 18, base });
+    data.techniques.other = [{ skill: 'Axe/Mace', name: 'Feint', level: 19 }];
+    return data;
+  };
+  it('Axe/Mace 17, row 18, technique 19 is 20, and the line says so', () => {
+    const r = T.effective(axe(17), { weapon: 'Knife', technique: 'Feint' });
+    assert.strictEqual(r.roll, 20);
+    assert.match(r.lines[0].label, /Feint.*\+1 included/);
+    assert.strictEqual(r.included.amount, 1);
+  });
+  it('with base unknown nothing is carried', () => {
+    const r = T.effective(axe(null), { weapon: 'Knife', technique: 'Feint' });
+    assert.strictEqual(r.roll, 19);
+    assert.strictEqual(r.included, null);
+  });
+});
+
+describe('aids on the right weapons', () => {
+  const tp = (extra = {}) => Object.assign({ id: 'tp', name: 'Targeting program', bonus: 2, acc: false, fixed: false, from: 'gear', on: true }, extra);
+  const twoGuns = (aid) => {
+    const data = mk({ aids: [aid] });
+    const gun = data.weapons[1];
+    data.weapons.push(Object.assign({}, gun, { key: 'Grenade', skill: 'Throwing' }));
+    data.weapons.push(Object.assign({}, gun, { key: 'Rifle', skill: 'Guns (Rifle)' }));
+    return data;
+  };
+  it('a character-wide skill-bonus aid starts ticked on Guns, Gunner and Beam Weapons only', () => {
+    const data = twoGuns(tp());
+    const on = (key) => T.aidsFor(data, data.weapons.find((w) => w.key === key))[0].on;
+    assert.strictEqual(on('Blaster pistol'), true);
+    assert.strictEqual(on('Rifle'), true);
+    assert.strictEqual(on('Grenade'), false);
+    data.weapons[3].skill = 'Gunner (Machine Gun)';
+    assert.strictEqual(on('Rifle'), true);
+  });
+  it('the aid\'s own skills list replaces the default prefixes', () => {
+    const data = twoGuns(tp({ skills: ['Throwing'] }));
+    const on = (key) => T.aidsFor(data, data.weapons.find((w) => w.key === key))[0].on;
+    assert.strictEqual(on('Grenade'), true);
+    assert.strictEqual(on('Rifle'), false);
+  });
+  it('another kind of character-wide aid keeps its own start, and a row aid is not changed', () => {
+    const data = twoGuns({ id: 'ls', name: 'Laser sight', bonus: 1, acc: false, fixed: false, from: 'gear', on: true });
+    assert.strictEqual(T.aidsFor(data, data.weapons[2])[0].on, true);
+    withWeapon(data, 'Grenade', { aids: [tp({ id: 'rowtp', from: 'row', on: true })] });
+    assert.strictEqual(T.aidsFor(data, data.weapons[2]).find((a) => a.id === 'rowtp').on, true);
+  });
+  it('a tick is per weapon: a character-wide aid has its own tick key on each weapon', () => {
+    const data = twoGuns(tp());
+    const keys = data.weapons.slice(1).map((w) => T.aidsFor(data, w)[0].tick);
+    assert.strictEqual(new Set(keys).size, 3);
+    const w0 = data.weapons[1];
+    assert.strictEqual(rolls(data, { weapon: 'Blaster pistol', aids: { [T.aidsFor(data, w0)[0].tick]: true } }), 19);
+    assert.strictEqual(rolls(data, { weapon: 'Rifle', aids: { [T.aidsFor(data, w0)[0].tick]: true } }), 17);
+  });
+  it('defaultState ticks each weapon\'s aids by its own start', () => {
+    const data = twoGuns(tp());
+    const s = T.defaultState(data);
+    const key = (k) => T.aidsFor(data, data.weapons.find((w) => w.key === k))[0].tick;
+    assert.strictEqual(s.aids[key('Blaster pistol')], true);
+    assert.strictEqual(s.aids[key('Grenade')], false);
+  });
+});
+
+describe('Rapid Strike with Move and Attack (MA107)', () => {
+  it('is ignored with a note, and conflicts says so', () => {
+    const r = T.effective(mk(), { weapon: 'Knife', man: 'move', rapid: true });
+    assert.strictEqual(r.roll, 10 - 1);
+    assert.ok(r.notes.some((n) => /Rapid Strike/.test(n) && /Move and Attack/.test(n)));
+    assert.strictEqual(T.conflicts({ man: 'move' }).rapid, true);
+    assert.strictEqual(T.conflicts({ man: 'attack' }).rapid, false);
   });
 });
 
@@ -564,12 +683,10 @@ describe('sighting aids and programs (B364, B372, B412, HT156, HT157)', () => {
     assert.deepStrictEqual(T.aidsFor(data, data.weapons[0]), []);
   });
   it('an aid bonus that is a string reads as its number, and no label says NaN', () => {
-    const data = withWeapon(mk(), 'Knife', { bonuses: [{ name: 'Balanced', bonus: '\u22123' }] });
-    const r = T.effective(data, { weapon: 'Knife' });
-    assert.strictEqual(r.roll, 11);
+    const sg = { id: 'sg', name: 'Smartgun', bonus: '+2', acc: false, fixed: false, from: 'gear' };
+    const r = T.effective(mk({ aids: [sg] }), { weapon: 'Blaster pistol', aids: { sg: true } });
+    assert.strictEqual(r.roll, 19);
     assert.ok(r.lines.every((l) => !/NaN/.test(l.label)));
-    const plus = withWeapon(mk(), 'Knife', { bonuses: [{ name: 'Balanced', bonus: '+2' }] });
-    assert.strictEqual(rolls(plus, { weapon: 'Knife' }), 16);
   });
 });
 
@@ -586,11 +703,11 @@ describe('Telegraphic Attack, Deceptive Attack and Evaluate (MA113, B369)', () =
     assert.strictEqual(r.foe.defence, 12);
   });
   it('conflicts tells the page which control to disable', () => {
-    assert.deepStrictEqual(T.conflicts({}), { telegraphic: false, deceptive: false });
-    assert.deepStrictEqual(T.conflicts({ telegraphic: true }), { telegraphic: false, deceptive: true });
-    assert.deepStrictEqual(T.conflicts({ deceptive: -2 }), { telegraphic: true, deceptive: false });
-    assert.deepStrictEqual(T.conflicts({ telegraphic: true, deceptive: -4 }), { telegraphic: false, deceptive: true });
-    assert.deepStrictEqual(T.conflicts(null), { telegraphic: false, deceptive: false });
+    assert.deepStrictEqual(T.conflicts({}), { telegraphic: false, deceptive: false, rapid: false });
+    assert.deepStrictEqual(T.conflicts({ telegraphic: true }), { telegraphic: false, deceptive: true, rapid: false });
+    assert.deepStrictEqual(T.conflicts({ deceptive: -2 }), { telegraphic: true, deceptive: false, rapid: false });
+    assert.deepStrictEqual(T.conflicts({ telegraphic: true, deceptive: -4 }), { telegraphic: false, deceptive: true, rapid: false });
+    assert.deepStrictEqual(T.conflicts(null), { telegraphic: false, deceptive: false, rapid: false });
   });
   it('Deceptive never takes the roll below 10, with a note, and the foe follows the steps used', () => {
     const k = (level) => withWeapon(mk(), 'Knife', { level, base: level });
@@ -703,7 +820,7 @@ describe('the page\'s starting and saved state', () => {
   it('starts neutral on the first weapon, every aid ticked as its `on` says', () => {
     const s = T.defaultState(data());
     assert.strictEqual(s.weapon, 'Knife');
-    assert.deepStrictEqual(s.aids, { 'row-laser': true, 'row-prog': true, 'gear-hud': true, 'gear-spare': false });
+    assert.deepStrictEqual(s.aids, { 'row-laser': true, 'row-prog': true, 'gear-hud@Blaster pistol': true, 'gear-spare@Blaster pistol': false });
     assert.strictEqual(rolls(data(), s), 14, 'the knife: the sheet number');
     assert.strictEqual(rolls(data(), Object.assign({}, s, { weapon: 'Blaster pistol' })), 18, 'the sheet number and the ticked laser sight, which needs no Aim');
     const bare = T.defaultState(scoped([]));
@@ -721,7 +838,7 @@ describe('the page\'s starting and saved state', () => {
     assert.strictEqual(s.aim, 3);
     assert.strictEqual(s.braced, true);
     assert.strictEqual(s.aids['row-laser'], false);
-    assert.strictEqual(s.aids['gear-hud'], true);
+    assert.strictEqual(s.aids['gear-hud@Blaster pistol'], true);
     assert.deepStrictEqual(s.aidBonus, { 'row-prog': 2 });
     assert.strictEqual(s.yards, '70');
     assert.strictEqual(s.man, 'popup');
@@ -738,10 +855,10 @@ describe('the page\'s starting and saved state', () => {
     assert.strictEqual(T.cleanState(data(), { weapon: 'Gone gun', aim: 2 }).aim, 2);
   });
   it('an aid id that is gone is dropped; a bad tick or bonus is the default', () => {
-    const s = T.cleanState(data(), { aids: { 'old-scope': true, 'row-laser': 'yes', 'gear-spare': true }, aidBonus: { 'old-scope': 3, 'row-prog': 'lots' } });
+    const s = T.cleanState(data(), { aids: { 'old-scope': true, 'row-laser': 'yes', 'gear-spare@Blaster pistol': true }, aidBonus: { 'old-scope': 3, 'row-prog': 'lots' } });
     assert.ok(!('old-scope' in s.aids));
     assert.strictEqual(s.aids['row-laser'], true, 'default');
-    assert.strictEqual(s.aids['gear-spare'], true);
+    assert.strictEqual(s.aids['gear-spare@Blaster pistol'], true);
     assert.deepStrictEqual(s.aidBonus, {});
   });
   it('a technique must belong to the weapon', () => {

@@ -91,23 +91,32 @@ function dataBlock(over = {}) {
 function load(data, opts = {}) {
   const body = new El('body');
   const box = body.appendChild(new El('div')); box.id = 'tohit-calc';
+  // The sheet prints the number it shows in each row; the page takes only the live cell's difference from it.
+  if (!opts.noShown && data && Array.isArray(data.weapons)) for (const w of data.weapons) if (w.shown === undefined) w.shown = w.level;
   const blob = body.appendChild(new El('script')); blob.id = 'gurps-tohit-data';
   blob.textContent = opts.noData ? '' : JSON.stringify(data);
+  // A built page prints the weapon tables twice: in the Sheet tab and in the Combat tab.
+  const sheet = opts.sheetTab ? body.appendChild(new El('div')) : null;
+  if (sheet) sheet.id = 'tab-sheet';
   const tab = body.appendChild(new El('div')); tab.id = 'tab-combat';
   const rows = {};
+  const sheetRows = {};
   // cells: { Name: '15' } puts a melee row in the Melee Attacks table; [[type, name, level], ...] puts rows in the
   // table of their type, in order (two rows may share a name).
   const list = Array.isArray(opts.cells) ? opts.cells : Object.entries(opts.cells || {}).map(([k, v]) => ['melee', k, v]);
-  const tables = {};
-  for (const [type, key, level] of list) {
-    if (!tables[type]) {
-      const wide = tab.appendChild(new El('div')); wide.className = 'wide cat-table';
-      const hd = wide.appendChild(new El('h2')); hd.textContent = type === 'ranged' ? 'Ranged Attacks' : 'Melee Attacks';
-      tables[type] = wide.appendChild(new El('table'));
+  for (const [host, into] of [[sheet, sheetRows], [tab, rows]]) {
+    if (!host) continue;
+    const tables = {};
+    for (const [type, key, level] of list) {
+      if (!tables[type]) {
+        const wide = host.appendChild(new El('div')); wide.className = 'wide cat-table';
+        const hd = wide.appendChild(new El('h2')); hd.textContent = type === 'ranged' ? 'Ranged Attacks' : 'Melee Attacks';
+        tables[type] = wide.appendChild(new El('table'));
+      }
+      const tr = tables[type].appendChild(new El('tr')); tr.setAttribute('data-weapon-key', key);
+      const td = tr.appendChild(new El('td')); const sp = td.appendChild(new El('span')); sp.className = 'wp-tohit'; sp.textContent = level;
+      (into[key] = into[key] || []).push(sp);
     }
-    const tr = tables[type].appendChild(new El('tr')); tr.setAttribute('data-weapon-key', key);
-    const td = tr.appendChild(new El('td')); const sp = td.appendChild(new El('span')); sp.className = 'wp-tohit'; sp.textContent = level;
-    (rows[key] = rows[key] || []).push(sp);
   }
   const store = new Map(Object.entries(opts.store || {}));
   const localStorage = opts.lsThrows ? {
@@ -133,7 +142,7 @@ function load(data, opts = {}) {
   const set = (sel, v) => { const el = $(sel); assert.ok(el, sel); if (el.attrs.type === 'checkbox') el.checked = v; else el.value = String(v); fire(el, 'input'); fire(el, 'change'); return el; };
   const names = () => body.querySelectorAll('.th-gname').map((n) => n.textContent);
   const saved = () => { const raw = store.get('tohit-calc:' + data.pc); return raw ? JSON.parse(raw) : null; };
-  return { flushTimers, body, box, $, all: (s) => body.querySelectorAll(s), fire, set, names, store, saved, rows, observers, blob, tab };
+  return { flushTimers, body, box, $, all: (s) => body.querySelectorAll(s), fire, set, names, store, saved, rows, sheetRows, observers, blob, tab };
 }
 
 describe('what it draws', () => {
@@ -438,6 +447,96 @@ describe('the live level', () => {
   it('ignores a cell that is not a number', () => {
     const p = load(dataBlock(), { cells: { Hatchet: 'n/a' } });
     assert.strictEqual(p.$('#th-roll').textContent, '14');
+  });
+});
+
+describe('the live level, with the weapon tables in both tabs', () => {
+  it('a lowered live number moves the roll by the difference, once', () => {
+    const p = load(dataBlock(), { sheetTab: true, cells: { Hatchet: '12' } });
+    assert.strictEqual(p.$('#th-roll').textContent, '12');
+    const enc = p.all('#th-lines tr').filter((r) => /Encumbrance/.test(r.textContent));
+    assert.strictEqual(enc.length, 1);
+    assert.match(enc[0].textContent, /−2/);
+    assert.match(p.$('#th-weapon').children[0].children[0].textContent, /Hatchet \(12\)/);
+  });
+  it('the Combat tab is the one read, even with a different number in the Sheet tab', () => {
+    const p = load(dataBlock(), { sheetTab: true, cells: { Hatchet: '12' } });
+    p.sheetRows.Hatchet[0].textContent = '9';
+    for (const o of p.observers) o.fn([]);
+    assert.strictEqual(p.$('#th-roll').textContent, '12');
+  });
+  it('a data block with no printed number takes no difference', () => {
+    const p = load(dataBlock(), { noShown: true, cells: { Hatchet: '12' } });
+    assert.strictEqual(p.$('#th-roll').textContent, '14');
+  });
+  it('the authored level drives the sum: a bonus in the level is not counted again', () => {
+    const d = dataBlock();
+    d.weapons[0] = Object.assign({}, d.weapons[0], { level: 15, base: 14, shown: 15, bonuses: [{ name: 'Weapon Bond', bonus: 1 }] });
+    const p = load(d, { cells: { Hatchet: '14' } });
+    assert.strictEqual(p.$('#th-roll').textContent, '14');
+    assert.strictEqual(p.all('#th-lines tr').filter((r) => /Encumbrance/.test(r.textContent)).length, 1);
+  });
+});
+
+describe('aids and buttons that follow the weapon', () => {
+  const withProgram = () => {
+    const d = dataBlock({ aids: [{ id: 'prog', name: 'Targeting program', bonus: 2, acc: false, fixed: false, from: 'gear', on: true }] });
+    d.weapons.push(Object.assign({}, d.weapons[2], { id: 'wg', key: 'Grenade', name: 'Grenade', skill: 'Throwing', aids: [], level: 12, base: 12 }));
+    d.weapons.forEach((w, i) => { if (!w.id) w.id = 'w' + i; });
+    d.weapons[2].aids = [];
+    return d;
+  };
+  it('a character-wide skill bonus starts ticked on a gun and unticked on a grenade', () => {
+    const p = load(withProgram());
+    p.set('#th-weapon', 'w2');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, true);
+    p.set('#th-weapon', 'wg');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, false);
+  });
+  it('a tick changed on one weapon does not flip the other, and Reset puts each back', () => {
+    const p = load(withProgram());
+    p.set('#th-weapon', 'w2');
+    p.set('[data-aid="prog"]', false);
+    p.set('#th-weapon', 'wg');
+    p.set('[data-aid="prog"]', true);
+    p.set('#th-weapon', 'w2');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, false);
+    p.set('#th-weapon', 'wg');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, true);
+    p.fire(p.$('#th-reset'), 'click');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, false, 'the grenade is back to unticked');
+    p.set('#th-weapon', 'w2');
+    assert.strictEqual(p.$('[data-aid="prog"]').checked, true, 'the pistol is back to ticked');
+  });
+  it('the technique picker says defaults are in it too', () => {
+    const p = load(dataBlock());
+    assert.match(p.$('#th-tech').parent.textContent, /Use a technique or default instead/);
+  });
+  it('Rapid Strike is greyed out, with the reason, under Move and Attack', () => {
+    const p = load(dataBlock());
+    assert.strictEqual(p.$('#th-rapid').disabled, false);
+    p.set('#th-man', 'move');
+    assert.strictEqual(p.$('#th-rapid').disabled, true);
+    assert.match(p.$('#th-rapid').title, /Move and Attack/);
+  });
+  it('the pressed state of the targeted-attack buttons follows the weapon', () => {
+    const d = dataBlock();
+    d.weapons.push(Object.assign({}, d.weapons[2], { id: 'wr', key: 'Rifle', name: 'Rifle', skill: 'Guns (Rifle)', aids: [] }));
+    d.weapons.push(Object.assign({}, d.weapons[2], { id: 'wb', key: 'Beam rifle', name: 'Beam rifle', skill: 'Beam Weapons (Rifle)', aids: [] }));
+    d.weapons.forEach((w, i) => { if (!w.id) w.id = 'w' + i; });
+    d.techniques.targeted.push({ skill: 'Beam Weapons (Rifle)', loc: 'eye', net: -6, name: 'Targeted Attack (Beam Weapons (Rifle)/Eye)' });
+    const p = load(d);
+    p.set('#th-weapon', 'w2');
+    p.fire(p.$('.th-chip[data-loc="skull"]'), 'click');
+    assert.strictEqual(p.$('.th-chip[data-loc="skull"]').attrs['aria-pressed'], 'true');
+    p.set('#th-weapon', 'wr');
+    assert.strictEqual(p.$('.th-chip'), null);
+    assert.strictEqual(p.$('#th-loc').value, 'skull', 'a plain location now');
+    p.set('#th-weapon', 'wb');
+    assert.strictEqual(p.all('.th-chip').length, 1);
+    assert.strictEqual(p.$('.th-chip[data-loc="eye"]').attrs['aria-pressed'], 'false');
+    p.set('#th-weapon', 'w2');
+    assert.strictEqual(p.$('.th-chip[data-loc="skull"]').attrs['aria-pressed'], 'true');
   });
 });
 

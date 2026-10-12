@@ -174,10 +174,9 @@
       });
       Object.keys(r.weapons).forEach(function (name) {
         var w = r.weapons[name];
-        var th = document.querySelector('[data-weapon-key="' + cssq(name) + '"] .wp-tohit');
-        var pa = document.querySelector('[data-weapon-key="' + cssq(name) + '"] .wp-parry');
-        if (th && w.toHit) th.textContent = w.toHit.cur;
-        if (pa && w.parry) pa.textContent = w.parry.cur;
+        // The weapon tables are printed in the Sheet tab and again in the Combat tab: write both.
+        if (w.toHit) document.querySelectorAll('[data-weapon-key="' + cssq(name) + '"] .wp-tohit').forEach(function (el) { el.textContent = w.toHit.cur; });
+        if (w.parry) document.querySelectorAll('[data-weapon-key="' + cssq(name) + '"] .wp-parry').forEach(function (el) { el.textContent = w.parry.cur; });
       });
       if (panel && vit) renderPanel(api.vitalsView(r, vit));
       if (doPersist && vit) persist(checked, { hp: vit.hp.cur, fp: vit.fp.cur });
