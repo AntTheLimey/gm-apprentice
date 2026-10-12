@@ -72,8 +72,10 @@ def test_execute_adds_frontmatter_edge_and_still_no_sh(tmp_path):
     assert not glob.glob(os.path.join(out, "*.sh"))
 
 
-def test_systems_flag_defaults_empty_so_nothing_derives(tmp_path):
+def test_no_system_note_and_no_flag_means_nothing_derives(tmp_path):
+    # no hardcoded system list: without a "<X> System" note or --systems, no rule runs
     vault = _vault(tmp_path)
+    (vault / "Locations" / "Corwin System.md").unlink()
     extract = _extract(tmp_path)
     out = tmp_path / "out"
 
@@ -335,3 +337,58 @@ def test_body_text_is_never_touched_by_parent_location_fill(tmp_path):
     txt = (locs / "Corwin I.md").read_text(encoding="utf-8")
     assert 'parent_location: "[[Corwin System]]"' in txt.split("---")[1]  # fm inserted
     assert txt.rstrip().endswith("parent_location:")                      # body decoy intact
+
+
+# --- #309: the system list defaults to the vault's own "<X> System" notes ---
+
+def test_no_systems_flag_derives_them_from_the_vault(tmp_path, capsys):
+    vault = _vault(tmp_path)
+    out = tmp_path / "out"
+    rc = link_orphans.run([str(_extract(tmp_path)), "--vault", str(vault),
+                           "--out", str(out), "--execute"])
+    assert rc == 0
+    text = (vault / "Locations" / "Corwin I.md").read_text(encoding="utf-8")
+    assert 'target: "[[Corwin System]]"' in text
+    assert "linked 1, still orphan 1" in capsys.readouterr().out
+
+
+def test_no_systems_anywhere_says_the_naming_rules_did_not_run(tmp_path, capsys):
+    vault = tmp_path / "vault"
+    (vault / "Locations").mkdir(parents=True)
+    (vault / "Locations" / "Corwin I.md").write_text(NOTE.format(name="Corwin I"), encoding="utf-8")
+    extract = tmp_path / "x.json"
+    extract.write_text(json.dumps({"entities": [
+        {"id": "p", "name": "Corwin I", "kind": "landfeature", "relationships": []}]}),
+        encoding="utf-8")
+    out = tmp_path / "out"
+    link_orphans.run([str(extract), "--vault", str(vault), "--out", str(out)])
+    assert "structural naming rules did not run" in capsys.readouterr().out
+    assert "did not run" in (out / "orphan-linking-report.md").read_text(encoding="utf-8")
+
+
+def test_systems_flag_overrides_and_names_the_vault_systems_it_left_out(tmp_path, capsys):
+    vault = _vault(tmp_path)
+    (vault / "Locations" / "Eris System.md").write_text(NOTE.format(name="Eris System"), encoding="utf-8")
+    (vault / "Locations" / "Eris II.md").write_text(NOTE.format(name="Eris II"), encoding="utf-8")
+    extract = tmp_path / "x.json"
+    extract.write_text(json.dumps({"entities": [
+        {"id": "a", "name": "Corwin I", "kind": "landfeature", "relationships": []},
+        {"id": "b", "name": "Eris II", "kind": "landfeature", "relationships": []},
+        {"id": "c", "name": "Random Hermit", "kind": "landfeature", "relationships": []}]}),
+        encoding="utf-8")
+    out = tmp_path / "out"
+    link_orphans.run([str(extract), "--vault", str(vault), "--out", str(out),
+                      "--systems", "Corwin"])
+    captured = capsys.readouterr()
+    assert "Eris" in captured.out and "--systems" in captured.out
+    report = (out / "orphan-linking-report.md").read_text(encoding="utf-8")
+    head, _, rest = report.partition("## Matches a naming rule for a system not in --systems")
+    assert "Eris II" in rest.split("## Still orphan")[0]
+    assert "Eris II" not in rest.split("## Still orphan")[1]
+    assert "Random Hermit" in rest.split("## Still orphan")[1]
+
+
+def test_gate_rule_needs_a_whole_system_name(tmp_path):
+    exists = {"Corwin System"}
+    assert link_orphans.derive_parent("Corwin Gate", exists, ["Corwin"]) == "Corwin System"
+    assert link_orphans.derive_parent("Corwinton Gate", exists, ["Corwin"]) is None

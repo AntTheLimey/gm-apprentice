@@ -183,8 +183,11 @@ vault whose entities already exist upstream but carry no node is linked with
                                   Auto-link obvious orphan entities after an
                                   import, using conservative structural naming
                                   rules (e.g. "<System> <ROMAN>" -> part_of the
-                                  system; --systems is the comma-separated list
-                                  of star system names the rules apply to).
+                                  system; the rules run for every "<X> System"
+                                  note in the vault, and --systems, a
+                                  comma-separated list of star system names,
+                                  overrides that). The site groups locations
+                                  on parent_location, which this fills.
                                   Only links to targets that already exist in
                                   the vault. Writes a report; vault edits
                                   (relationships: frontmatter) gated by

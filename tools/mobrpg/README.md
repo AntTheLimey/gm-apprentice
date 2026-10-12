@@ -137,7 +137,9 @@ Run `mobrpg <command> --help` for a command's own options.
 - `link-orphans <extract.json> --vault <path> --out <outdir>` — auto-link obvious
   orphan relationships after an import. Writes the derived `part_of`/`created`
   edge into `relationships:` and fills an empty `parent_location:` scalar to
-  match; no other frontmatter fields are populated.
+  match; no other frontmatter fields are populated. The structural naming
+  rules run for every `<X> System` note in the vault; `--systems A,B` overrides
+  that list, and the summary names any vault system it leaves out.
 - `images <world> --vault <path>` — pull entity images into the vault.
 - `images <world> --vault <path> --push [--only <text>] [--execute]` — upload
   each linked note's `portrait:` and image embeds to its element. An image
