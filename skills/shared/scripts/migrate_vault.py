@@ -4,6 +4,7 @@ alone: templates, the schema mirror, and the small per-release fixes."""
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 import posixpath
@@ -148,6 +149,72 @@ def _same(a: str, b: str) -> bool:
     return normalise(a) == normalise(b)
 
 
+REGENCY_LINE_NOTE_RE = re.compile(r"[ \t]*<!--.*?-->")
+COC_FAMILY = ("coc-7e", "coc-7e-regency")
+# The template's own Reputation line, as the Regency build writes it.
+REPUTATION_LINE_RE = re.compile(r"^\*\*Reputation\*\* \{", re.M)
+
+
+def _without_setup_comment(text: str) -> str:
+    """The text with the setup comment gone from its Reputation line, the
+    form `npc-stats/coc-7e.md` holds before vault setup processes it."""
+    return "\n".join(
+        REGENCY_LINE_NOTE_RE.sub("", line) if "**Reputation**" in line
+        else line for line in text.split("\n"))
+
+
+def _regency_build(system: str | None, name: str, current: str) -> str | None:
+    """The Regency Cthulhu build of a CoC stat-block template, when
+    `current` is one: its Reputation stat line (processed or not) is the
+    mark. The vault's stamped system does not decide it: a Regency campaign
+    stamped plain `coc-7e` must not lose the line to an overwrite (#311)."""
+    if system not in COC_FAMILY or not REPUTATION_LINE_RE.search(current):
+        return None
+    return templates_for("coc-7e-regency").get(name)
+
+
+# A PC template named for Regency, as the plugin ships it (`pc-coc-7e-regency.md`)
+# or as a vault holds it (`_Template_PC_CoC_7e_Regency.md`); not any note that
+# has "regency" in its name.
+REGENCY_PC_NAME_RE = re.compile(r"(?i)(?:^|[_-])pc[_-].*regency.*\.md$")
+
+
+def _regency_pc_template(vault: Path) -> bool:
+    folder = vault / "_Templates"
+    try:
+        return any(f.is_file() and REGENCY_PC_NAME_RE.search(f.name)
+                   for f in folder.iterdir())
+    except OSError:
+        return False
+
+
+def _differs(current: str, expected: str, shown: int = 4) -> str:
+    """What differs, on one row: how many lines, then the first few as
+    "- yours | + the plugin's". A line edited in place counts once."""
+    mine = [x for x in normalise(current).split("\n") if x.strip()]
+    theirs = [x for x in normalise(expected).split("\n") if x.strip()]
+    changes: list[str] = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(
+            None, mine, theirs, autojunk=False).get_opcodes():
+        if op == "equal":
+            continue
+        for k in range(max(i2 - i1, j2 - j1)):
+            a = mine[i1 + k].strip()[:90] if i1 + k < i2 else None
+            b = theirs[j1 + k].strip()[:90] if j1 + k < j2 else None
+            if a is not None and b is not None and a.split() == b.split():
+                changes.append(f"spacing differs: {b}")
+            else:
+                changes.append(" | ".join(
+                    [f"- {a}"] * (a is not None) + [f"+ {b}"] * (b is not None)))
+    if not changes:
+        return "only blank lines differ"
+    more = len(changes) - shown
+    return (f"{len(changes)} line{'' if len(changes) == 1 else 's'} "
+            f"{'differs' if len(changes) == 1 else 'differ'} "
+            f"(- yours, + the plugin's): " + "; ".join(changes[:shown])
+            + (f"; and {more} more" if more > 0 else ""))
+
+
 GENERIC = "generic"   # the history's key for a vault with no known system
 
 
@@ -169,9 +236,22 @@ def _released_hashes(system: str | None) -> dict[str, list[str]]:
 def find_templates(vault: Path) -> list[Item]:
     folder = vault / "_Templates"
     items: list[Item] = []
-    released = _released_hashes(vault_system(vault))
+    system = vault_system(vault)
+    released = _released_hashes(system)
+    regency_pc = _regency_pc_template(vault)
     for name, text in expected_templates(vault).items():
         path = folder / name
+        if path.is_file():
+            try:
+                current = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                raise StepFailed(f"_Templates/{name} cannot be read "
+                                 f"({e.__class__.__name__})") from e
+            regency = _regency_build(system, name, current)
+            if regency is not None:
+                text = regency
+        elif regency_pc and system == "coc-7e" and name.startswith("pc-"):
+            continue   # the Regency PC template is the one in use
 
         def apply(_value: str | None, path: Path = path,
                   text: str = text, name: str = name) -> list[str]:
@@ -183,12 +263,9 @@ def find_templates(vault: Path) -> list[Item]:
                               [f"copy the missing template _Templates/{name}"],
                               apply))
             continue
-        try:
-            current = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            raise StepFailed(f"_Templates/{name} cannot be read "
-                             f"({e.__class__.__name__})") from e
-        if _same(current, text):
+        shown = (_without_setup_comment(current)
+                 if _regency_build(system, name, current) else current)
+        if _same(shown, text):
             continue
         if text_hash(current) in released.get(name, []):
             items.append(Item(
@@ -199,7 +276,8 @@ def find_templates(vault: Path) -> list[Item]:
             items.append(Item(
                 f"template:{name}", CHOICE,
                 [f"overwrite _Templates/{name} with the plugin's version; "
-                 f"local changes are lost"], apply))
+                 f"local changes are lost; {_differs(shown, text)}"],
+                apply))
     return items
 
 
@@ -211,6 +289,31 @@ def _read(path: Path) -> str:
     except (OSError, UnicodeDecodeError) as e:
         raise StepFailed(f"{path.parent.name}/{path.name} cannot be read "
                          f"({e.__class__.__name__})") from e
+
+
+def find_regency_looks(vault: Path) -> list[Item]:
+    """1.10.49: a vault stamped plain `coc-7e` whose templates look like
+    Regency Cthulhu: a stat block with the Reputation line, or a template
+    with "regency" in its name. A notice, said once (the release gate): it
+    changes nothing, because only the GM knows which setting is right."""
+    if vault_system(vault) != "coc-7e":
+        return []
+    folder = vault / "_Templates"
+    looks = _regency_pc_template(vault)
+    for name in ("_Template_NPC.md", "_Template_Creature.md"):
+        try:
+            looks = looks or bool(REPUTATION_LINE_RE.search(
+                (folder / name).read_text(encoding="utf-8")))
+        except (OSError, UnicodeDecodeError):
+            continue
+    if not looks:
+        return []
+    return [Item("regency-looks", PERSON, [
+        "_meta/vault-config.md\tthe templates look like Regency Cthulhu, "
+        "but publish.system is coc-7e; if this is a Regency Cthulhu "
+        "campaign, set publish.system to coc-7e-regency in "
+        "_meta/vault-config.md (the site builds differently). Nothing else "
+        "changes, and this is said once"])]
 
 
 def find_pc_template_field(vault: Path) -> list[Item]:
@@ -680,7 +783,7 @@ def find_wrapup_sections(vault: Path) -> list[Item]:
             "wrapup-sections", CHOICE,
             ["move: put these under GM Notes, hidden from players; "
              "leave: keep them where they are", *moves],
-            apply, wants="move or leave"))
+            apply, wants="move or leave", holds_stamp=True))
     if person:
         items.append(Item("wrapup-sections-review", PERSON, person))
     return items
@@ -786,7 +889,19 @@ def find_tone_words(vault: Path) -> list[Item]:
     report = tones.report_lines(tones.survey(vault))
     near = [r.split("\t") for r in report if r.startswith("NEAR\t")]
     if not near:
-        return []
+        # Nothing for the script to tidy; the words that remain are for
+        # campaign-qa, and update time is when the GM is told (once: the
+        # release gate).
+        asked = sum(1 for r in report if r.startswith("ASK\t"))
+        if not asked:
+            return []
+        return [Item("tone-words-ask", PERSON, [
+            f"relationship tones\t{asked} tone word"
+            f"{'' if asked == 1 else 's'} "
+            f"{'is' if asked == 1 else 'are'} not on the standard list and "
+            f"{'has' if asked == 1 else 'have'} no rule to tidy "
+            f"{'it' if asked == 1 else 'them'}; campaign-qa's Tone Words "
+            f"check asks which word to use for each"])]
     n_near = sum(int(r[3]) for r in near)
     n_ask = sum(int(r.split("\t")[2]) for r in report
                 if r.startswith("ASK\t"))
@@ -817,7 +932,7 @@ def find_tone_words(vault: Path) -> list[Item]:
 
     return [Item("tone-words", CHOICE,
                  [head, *(f"{w} -> {to} ({n})" for _, w, to, n in near)],
-                 apply, wants="tidy or leave")]
+                 apply, wants="tidy or leave", holds_stamp=True)]
 
 
 # --- the tone list in _meta ---------------------------------------------------
@@ -990,6 +1105,8 @@ VAULT_CHECKS: list[Check] = [
     Check("skeleton", None, 3, "the vault skeleton", find_skeleton),
     Check("templates", None, 3, "templates", find_templates,
           choices=("template:",)),
+    Check("regency-looks", "1.10.49", 3, "a Regency look to the templates",
+          find_regency_looks),
     Check("pc-template-sheet-source", "1.10.22", 3,
           "sheet_source in PC templates", find_pc_template_field),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,

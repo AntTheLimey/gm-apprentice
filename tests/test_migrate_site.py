@@ -841,7 +841,12 @@ class SheetSourceTests(unittest.TestCase):
         self.assertEqual([i.id for i in items],
                          ["sheet-source:PCs/Ada.md", "sheet-source:PCs/Bea.md"])
         item = items[0]
-        self.assertEqual(item.wants, "where the sheet is kept")
+        self.assertEqual(item.wants, "where the sheet is kept, or leave")
+        self.assertTrue(item.holds_stamp)   # #339: silence is not "leave"
+        before = pc.read_text(encoding="utf-8")
+        self.assertEqual(item.apply("leave"),
+                         ["left sheet_source as it is in PCs/Ada.md"])
+        self.assertEqual(pc.read_text(encoding="utf-8"), before)
         item.apply("paper, with the player")
         self.assertIn('sheet_source: "paper, with the player"\n',
                       pc.read_text(encoding="utf-8"))
@@ -910,9 +915,13 @@ class ThemeChoiceTests(unittest.TestCase):
         with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
             (item,) = ms.find_default_mode(vault)
             self.assertEqual((item.id, item.wants),
-                             ("default-mode", "dark or light"))
+                             ("default-mode", "dark, light or leave"))
+            self.assertTrue(item.holds_stamp)
             self.assertEqual(item.apply("dark"),
                              ["wrote publish.theme.default_mode: dark"])
+            self.assertEqual(item.apply("leave"),
+                             ["left the default palette to the reader's "
+                              "device"])
             with self.assertRaises(StepFailed):
                 item.apply("purple")
         self.assertEqual(calls[1], ["vault-setting", "--set",

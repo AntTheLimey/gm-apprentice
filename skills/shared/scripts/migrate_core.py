@@ -34,6 +34,9 @@ class Item:
     lines: list[str]        # PERSON: finished rows; else one line per change
     apply: Callable[[str | None], list[str]] | None = None
     wants: str | None = None  # a CHOICE that needs `--choose id=value`
+    # A wants-CHOICE whose answers include "leave it": until it is answered
+    # `apply` does not stamp, or its release gate would hide it for good.
+    holds_stamp: bool = False
 
 
 @dataclass(frozen=True)

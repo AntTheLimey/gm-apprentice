@@ -502,6 +502,8 @@ def find_sheet_source(vault: Path) -> list[Item]:
         seen.add(rel)
 
         def apply(value: str | None, rel: str = rel) -> list[str]:
+            if value == "leave":
+                return [f"left sheet_source as it is in {rel}"]
             scalar = yaml_scalar(value or "")
             edit_frontmatter(
                 vault / rel,
@@ -510,7 +512,9 @@ def find_sheet_source(vault: Path) -> list[Item]:
 
         items.append(Item(f"sheet-source:{rel}", CHOICE,
                           [f"{message}; if the sheet is kept elsewhere, say "
-                           f"where"], apply, wants="where the sheet is kept"))
+                           f"where; leave: keep it as it is"], apply,
+                          wants="where the sheet is kept, or leave",
+                          holds_stamp=True))
     return items
 
 
@@ -570,14 +574,17 @@ def find_default_mode(vault: Path) -> list[Item]:
         return []
 
     def apply(value: str | None) -> list[str]:
-        if value not in ("dark", "light"):
-            raise StepFailed("default-mode takes dark or light")
+        if value not in ("dark", "light", "leave"):
+            raise StepFailed("default-mode takes dark, light or leave")
+        if value == "leave":
+            return ["left the default palette to the reader's device"]
         _set_setting(vault, "theme.default_mode", value)
         return [f"wrote publish.theme.default_mode: {value}"]
 
     return [Item("default-mode", CHOICE,
                  ["start every reader on one palette (unset follows the "
-                  "reader's device, as before)"], apply, wants="dark or light")]
+                  "reader's device, as before; leave: keep that)"],
+                 apply, wants="dark, light or leave", holds_stamp=True)]
 
 
 def find_fonts(vault: Path) -> list[Item]:

@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { buildConnections, isEmpty } = require('../../lib/connections');
+const { buildConnections, isEmpty, markdownLinkLabels } = require('../../lib/connections');
 const { buildLinkMap } = require('../../lib/scanner');
 const { buildBacklinks } = require('../../lib/backlinks');
 
@@ -299,4 +299,77 @@ test('a target with words beside a labelled link: no page gives label and words,
   const vesper = page('Vesper_Hale', 'npc');
   const found = buildConnections(ctx([a, vesper])).for(a);
   assert.deepStrictEqual(group(found, 'people', 'Knows').items.map((i) => [i.title, i.outputPath]), [['Vesper Hale', 'p/vesper_hale.html']]);
+});
+
+// A description is prose: only a link's name is read as words (`Old_Tom` -> `Old Tom`), never
+// the underscores around it (#336).
+const lineOf = (description) => {
+  const emma = page('Emma', 'npc', { relationships: [{ target: 'Hallam', type: 'serves', description }] });
+  return group(buildConnections(ctx([emma, page('Hallam', 'npc')])).for(emma), 'people', 'Serves').items[0].lines;
+};
+
+test('an underscore in a description stays: a plain word, _emphasis_, snake_case, a bare address', () => {
+  assert.deepStrictEqual(lineOf('a _plain_ word'), ['a _plain_ word']);
+  assert.deepStrictEqual(lineOf('uses snake_case names'), ['uses snake_case names']);
+  assert.deepStrictEqual(lineOf('see https://example.com/a_b_c now'), ['see https://example.com/a_b_c now']);
+});
+
+test('a markdown link in a description prints its label, whatever its address holds', () => {
+  assert.deepStrictEqual(lineOf('see [label](https://example.com/a_(b)) rest'), ['see label rest']);
+  assert.deepStrictEqual(lineOf('see [link](a(b).md) rest'), ['see link rest']);
+  assert.deepStrictEqual(lineOf('see [label](url_with_underscores) rest'), ['see label rest']);
+  assert.deepStrictEqual(lineOf('see [snake_label](a_b "a title") rest'), ['see snake_label rest']);
+  assert.deepStrictEqual(lineOf('see [a [nested] label](a_b) rest'), ['see a [nested] label rest']);
+  assert.deepStrictEqual(lineOf('not a link [label] (a b) rest'), ['not a link [label] (a b) rest']);
+});
+
+test('a wiki-link in a description still reads its name as words, and a label as the label', () => {
+  assert.deepStrictEqual(lineOf('Sister of [[Some_Note]] and [[Some_Note|the_label]].'), ['Sister of Some Note and the_label.']);
+  assert.deepStrictEqual(lineOf('mixed_up [[Some_Note]] in_between [[Other_One#A_head]]'), ['mixed_up Some Note in_between Other One#A head']);
+});
+
+test('HTML special characters in a description are left for the page to escape', () => {
+  assert.deepStrictEqual(lineOf('a <b>&"_x_"'), ['a <b>&"_x_"']);
+});
+
+test('a parenthesis after a wiki-link is not a markdown address', () => {
+  assert.deepStrictEqual(lineOf('[[Public_Pat]](dead) and more'), ['Public Pat(dead) and more']);
+  assert.deepStrictEqual(lineOf('[[Public_Pat|the_pat]](dead) and more'), ['the_pat(dead) and more']);
+  assert.deepStrictEqual(lineOf('[[Secret_Note]](x)'), ['Secret Note(x)']);
+  assert.deepStrictEqual(lineOf('[[Old_Tom]] knows [site](https://example.com/a_(b)) well'), ['Old Tom knows site well']);
+});
+
+test('no description can overflow the stack or take long to read', () => {
+  const nested = '['.repeat(8000) + 'x' + '](y)'.repeat(8000);
+  assert.doesNotThrow(() => lineOf(nested));
+  for (const text of ['['.repeat(50000), '[a'.repeat(25000) + '](', '[a](('.repeat(10000)]) {
+    const start = Date.now();
+    markdownLinkLabels(text);
+    assert.ok(Date.now() - start < 2500, `${text.slice(0, 8)}… took ${Date.now() - start} ms`);
+  }
+});
+
+test('a markdown link the strict reading refuses still prints its label, never its address', () => {
+  assert.deepStrictEqual(lineOf('see [the plan](Secret Lair.md) rest'), ['see the plan rest']);
+  assert.deepStrictEqual(lineOf('see [the map](Maps/The Hidden Vault.png) rest'), ['see the map rest']);
+  assert.deepStrictEqual(lineOf('[[A]] [x](y z) [[B_C]]'), ['A x B C']);
+  assert.deepStrictEqual(lineOf('see [x]() rest'), ['see x rest']);
+  assert.deepStrictEqual(lineOf('[x](a "t" extra) r'), ['x r']);
+  const deep = '['.repeat(40) + 'x' + '](Secret Lair.md)'.repeat(40);
+  assert.ok(!lineOf(deep)[0].includes('Secret'));
+  assert.deepStrictEqual(lineOf('see [x](a b(c)d) rest'), ['see x rest']);
+  assert.deepStrictEqual(lineOf('see [x](a b(c d) rest'), ['see x rest']);
+  const deepBrackets = '['.repeat(40) + 'x' + '](a b(c)tail)'.repeat(40);
+  assert.ok(!lineOf(deepBrackets)[0].includes('tail'));
+});
+
+test('generated descriptions never print a link address', () => {
+  const parts = ['[[Old_Tom]]', '[[A|b_c]]', '[the plan]', '[x]', '(Secret Lair.md)', '(a(b).md)', '(y z)', '("t")', '(a "t" extra)', '()', ' ', 'word_', 'text', '"'];
+  let seed = 7;
+  const next = () => (seed = (seed * 1103515245 + 12345) % 2147483648);
+  for (let n = 0; n < 400; n++) {
+    let text = '';
+    for (let k = 0; k < 3 + next() % 8; k++) text += parts[next() % parts.length];
+    for (const line of lineOf(text)) assert.ok(!line.includes(']('), `"${text}" printed "${line}"`);
+  }
 });

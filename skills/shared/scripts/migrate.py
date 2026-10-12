@@ -11,10 +11,14 @@ is wrong). While the site's publish tool is out of date the steps that ask
 it are listed under a fourth heading. An `apply` that repins the site
 runs them right after: their Will do is done and their Needs a person
 printed. Only if one offers a Your choice the GM was never shown does it
-hold the stamp, for the next `plan`, which lists that choice.
+hold the stamp, for the next `plan`, which lists that choice. The stamp row
+names the choices it waits for (see `apply`).
 
 `apply` runs Will do, then the chosen choices, stamps
 `gm_apprentice_version`, and prints what it did and Needs a person again.
+A choice that can be answered "leave it" (`--choose id=leave`) and was not
+chosen is printed as "not answered" and holds the stamp, so the next `plan`
+lists it again; everything else in the plan still runs.
 A step that fails stops the run; the vault is stamped at the last release
 whose steps all completed, so the next run starts at the failed step.
 
@@ -128,10 +132,15 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     vault_v, plugin_v = refused
     groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
     waiting: list[Row] = []
+    holding: list[str] = []   # choices apply will not stamp without
     repin_waits = False
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
             waiting.append((check.name, f"{check.name}\t{check.title}"))
+            if any(c.endswith("=") for c in check.choices):
+                # not looked at yet; a value choice is one that holds
+                holding.append(f"{check.name} (after the site's tool is "
+                               f"updated)")
             continue
         try:
             items = check.find(vault)
@@ -142,6 +151,8 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
             continue
         for item in items:
             groups[item.group].extend(_rows(item))
+            if item.holds_stamp:
+                holding.append(item.id)
         if check.name == REPIN and any(i.group == WILL for i in items):
             repin_waits = True
     behind = parse_version(vault_v) < parse_version(plugin_v)
@@ -150,8 +161,12 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         print("up to date")
         return 0
     if behind:
+        until = (f" (only once {', '.join(holding)} "
+                 f"{'is' if len(holding) == 1 else 'are'} answered)"
+                 if holding else "")
         groups[WILL].append(
-            ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> {plugin_v}"))
+            ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> "
+                      f"{plugin_v}{until}"))
     for group in (WILL, CHOICE, PERSON):
         if groups[group]:
             emit(TITLES[group], groups[group])
@@ -209,6 +224,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     failed: int | None = None
     error = ""
     repinned = waited = False
+    unanswered: list[str] = []   # value choices the GM was not asked
     for n, check in enumerate(todo):
         after_repin = check.asks_site and repinned   # plan did not list it
         try:
@@ -222,6 +238,10 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                          [v for i, v in chosen if i == item.id])
                 if after_repin and item.group == CHOICE and not picks:
                     waited = True   # a choice the GM has not seen
+                if item.holds_stamp and not picks:
+                    # Silence is not an answer (`leave` is), and past the
+                    # stamp the release gate would never offer it again.
+                    unanswered.append(f"{item.id}=<{item.wants}>")
                 for value in picks:
                     if item.wants and not value:
                         raise StepFailed(
@@ -246,7 +266,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             done = [c.release for c in todo
                     if c.release and parse_version(c.release) < first]
             target = max([vault_v, *done], key=parse_version)
-    stamped = parse_version(target) > parse_version(vault_v) and not waited
+    stamped = (parse_version(target) > parse_version(vault_v)
+               and not waited and not unanswered)
     if stamped:
         try:
             _stamp(vault, target)
@@ -259,6 +280,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"not offered: {choice}")
     if person or shown:
         emit(TITLES[PERSON], person, shown)
+    for label in unanswered:
+        print(f"not answered: {label}")
     if waited:
         print(WAITED_LINE)
     if failed is not None:
@@ -266,7 +289,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"stamped {target}; the rest is offered again next time"
               if stamped else "not stamped")
         return 1
-    if waited:
+    if waited or unanswered:
         print("not stamped")
     else:
         print(f"stamped {plugin_v}" if stamped else f"already at {plugin_v}")

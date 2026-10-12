@@ -12,6 +12,9 @@ const { orderedSessions } = require('./story-spine');
 const { WRAP_UP_TYPES } = require('./session-hub');
 const { portraitBasename } = require('./processor');
 const { toneFamily, groupLabel } = require('./ontology');
+const { createRenderer } = require('./markdown');
+// The build's own reading of a link's address and title (balanced parentheses, `<..>`, a quoted title).
+const { parseLinkDestination, parseLinkTitle } = createRenderer().helpers;
 
 const TABS = [
   ['people', 'People'], ['places', 'Places'], ['orgs', 'Organisations'], ['things', 'Things'],
@@ -40,13 +43,92 @@ function tabOf(page) {
 // Text the GM typed (a type, a description) is reduced as the page prints it, a labelled
 // link to its label (wikilink.js labelsForLinks), so no reader of the model sees a target
 // the GM kept off the site.
-// An unlabelled link prints as its name (underscores read as spaces), a markdown link as its
-// text and an embed not at all, so no bracket and no file name reaches the page.
+// A type or a name: an unlabelled link prints as its name (underscores read as spaces), a
+// markdown link as its text and an embed not at all, so no bracket and no file name reaches
+// the page. A description goes through printedProse below.
 const printed = (text) => {
   const reduced = labelsForLinksFully(text)
     .replace(/!\[\[[^\]]*\]\]/g, '')
     .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1');
   return linkText(reduced, { humanize: true }).words.replace(/\s+/g, ' ').trim();
+};
+
+// `text` with each markdown link `[label](address "title")` turned into its label. The
+// address is read as the build reads it, so one holding `)` ends where the link does. Text
+// that is not a link is left as written, and a `[` that opens `[[` never starts a link. Each
+// bracket is paired once, so the work is linear.
+// Where that reading refuses a link (a space in the address, a stray quote) the label is still
+// kept and the address dropped through the next `)`, as it always was, so no address is ever
+// printed; past LINK_DEPTH a label is reduced that way too.
+// Past that depth every `](address)` goes, through the next `)`, and the brackets stay.
+// Where an address that could not be read ends: its balancing `)`, or the first `)` when
+// its brackets never balance.
+function addressEnd(text, start) {
+  let nested = 0;
+  let firstClose = -1;
+  for (let i = start; i < text.length; i++) {
+    if (text[i] === '\\') { i++; continue; }
+    if (text[i] === '(') nested++;
+    else if (text[i] === ')') {
+      if (!nested) return i;
+      nested--;
+      if (firstClose === -1) firstClose = i;
+    }
+  }
+  return firstClose;
+}
+function dropAddresses(text) {
+  let out = '';
+  let at = 0;
+  for (let i = text.indexOf(']('); i !== -1; i = text.indexOf('](', at)) {
+    const end = addressEnd(text, i + 2);
+    if (end === -1) break;
+    out += text.slice(at, i);
+    at = end + 1;
+  }
+  return out + text.slice(at);
+}
+const LINK_DEPTH = 16;
+function markdownLinkLabels(text, depth = 0) {
+  const closeOf = new Map();
+  const open = [];
+  for (let j = 0; j < text.length; j++) {
+    if (text[j] === '\\') j++;
+    else if (text[j] === '[') open.push(j);
+    else if (text[j] === ']' && open.length) closeOf.set(open.pop(), j);
+  }
+  if (!closeOf.size) return text;
+  const blank = (n) => { while (/\s/.test(text[n] || '')) n++; return n; };
+  // The `[` of a `[[`..`]]` pair, outer or inner: a wiki-link, never a markdown link.
+  const wikiBracket = (i) => (text[i + 1] === '[' && closeOf.get(i + 1) === closeOf.get(i) - 1)
+    || (text[i - 1] === '[' && closeOf.get(i - 1) === closeOf.get(i) + 1);
+  let out = '';
+  let at = 0;
+  for (let i = text.indexOf('['); i !== -1; i = text.indexOf('[', Math.max(at, i + 1))) {
+    const close = closeOf.get(i);
+    if (close === undefined || text[close + 1] !== '(' || wikiBracket(i)) continue;
+    const dest = parseLinkDestination(text, blank(close + 2), text.length);
+    let end = -1;
+    if (dest.ok) {
+      end = blank(dest.pos);
+      const title = end > dest.pos ? parseLinkTitle(text, end, text.length) : { ok: false };
+      if (title.ok) end = blank(title.pos);
+    }
+    if (end === -1 || text[end] !== ')') end = addressEnd(text, close + 2);
+    if (end === -1) continue;
+    const label = text.slice(i + 1, close);
+    out += text.slice(at, i) + (depth < LINK_DEPTH ? markdownLinkLabels(label, depth + 1) : dropAddresses(label));
+    at = end + 1;
+  }
+  return out + text.slice(at);
+}
+
+// A description is prose: the same reduction, but only a link's name is read as words. An
+// underscore anywhere else (`snake_case`, `_emphasis_`, a pasted address) is the GM's own.
+const printedProse = (text) => {
+  const reduced = markdownLinkLabels(labelsForLinksFully(text).replace(/!\[\[[^\]]*\]\]/g, ''))
+    .replace(wikilinkRe('g'), (link) => link.replace(/_/g, ' '));
+  return linkText(reduced).words.replace(/\s+/g, ' ').trim();
 };
 function edgesOf(frontmatter) {
   const raw = frontmatter && frontmatter.relationships;
@@ -57,7 +139,7 @@ function edgesOf(frontmatter) {
       target,
       type: typeof type === 'string' ? printed(type) : '',
       tone,
-      line: typeof description === 'string' ? printed(description) : '',
+      line: typeof description === 'string' ? printedProse(description) : '',
     });
   };
   if (Array.isArray(raw)) {
@@ -222,4 +304,4 @@ function isEmpty(model) {
   return !model || (model.tabs.length === 0 && model.mentions.length === 0);
 }
 
-module.exports = { buildConnections, isEmpty, TABS };
+module.exports = { buildConnections, isEmpty, TABS, markdownLinkLabels };

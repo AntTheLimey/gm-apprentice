@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.49] — 2026-10-12
+
+### Changed
+
+- Updating a vault with a choice that needs a value unanswered (wrap-up
+  sections, tone words, default colour mode, a character's sheet
+  source) applies everything else, names the choice, and does not stamp
+  the vault, so the choice is offered again next time (#339). The plan
+  says the stamp waits for it. Each of these choices takes `leave` as
+  an answer. A yes/no choice left unanswered is still a no.
+- A vault whose off-list tone words all need a person to pick is told
+  so once at update time, with a pointer to campaign-qa's Tone Words
+  check.
+- The row that offers to overwrite a template says how many lines
+  differ and shows the first four (#311).
+- A Call of Cthulhu vault whose templates look like Regency Cthulhu
+  while `publish.system` is `coc-7e` is told so once, under "Needs a
+  person". The setting is the GM's to change. One that holds a Regency
+  character template is no longer told to copy the plain one.
+- Publish tool 1.20.1.
+
+### Fixed
+
+- Updating a vault no longer offers to overwrite a Regency Cthulhu NPC
+  template with the plain one, which would have dropped its Reputation
+  line. A stale Regency template is offered the Regency one, and the
+  setup comment on the Reputation line is not counted as a difference
+  (#311).
+- The leak check reads "keeper" as a whole word, and as a job when a
+  plain word comes before it and the phrase ends there: "Innkeeper",
+  "Housekeeper" and "Lighthouse Keeper" pass; "Keeper Notes", "Private
+  Keeper Notes", "For the Keeper" and "Keepers only" are still raised
+  (#316).
+- `vault_check frontmatter` no longer reports the publish manifest,
+  which the tool writes itself, as missing its `type` (#333).
+- Connections: a relationship's description keeps its underscores
+  (`snake_case`, a pasted address), and a markdown link prints as its
+  label even when its address holds `)` (#336). `_emphasis_` prints
+  with its underscores; a description is plain text.
+
 ## [1.10.48] — 2026-10-12
 
 ### Added

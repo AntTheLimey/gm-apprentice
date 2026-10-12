@@ -952,6 +952,21 @@ class FrontmatterUnparseableTests(unittest.TestCase):
             "---\ntype: npc\ncanon_status: DRAFT\n---\n", encoding="utf-8")
         self.assertEqual(vc.check_frontmatter(vault, "Clean"), [])
 
+    def test_the_generated_publish_manifest_needs_no_type(self):
+        # #333: the publish tool writes this note with no `type` key, and
+        # the GM cannot keep one there. Any other _meta note still needs it.
+        vault, _calls = self._vault()
+        manifest = ("---\ngenerated: 2026-10-11T01:12:09.961Z\n"
+                    "vault: \"Canticle\"\nmode: player\n---\n\n"
+                    "## Publishing (0 files)\n")
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            manifest, encoding="utf-8")
+        (vault / "_meta" / "other.md").write_text(
+            manifest, encoding="utf-8")
+        rows = rows_for(vc.check_frontmatter(vault, None), "_meta/")
+        self.assertIn("ERROR\t_meta/other.md\tmissing 'type' field", rows)
+        self.assertFalse(rows_for(rows, "publish-manifest"), rows)
+
     def test_a_file_the_build_walks_and_this_script_skips_is_still_named(self):
         # `_inbox` is in vaultlib's SKIP_DIRS and not in the tool's
         # exclude_dirs, so the build's closing line names it.
@@ -1201,6 +1216,81 @@ class GmLeakCommandTests(unittest.TestCase):
         self.assertTrue(rows_for(rows, "bold label 'Secret'"), rows)
         self.assertTrue(rows_for(rows, "callout [!note] GM only"), rows)
 
+    def test_an_occupation_ending_in_keeper_is_not_keeper_facing(self):
+        # #316: "keeper" matched as a substring, so Innkeeper, Housekeeper
+        # and the like were flagged, in headings, bold labels and callouts.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob — The Innkeeper\n\n"
+            "## Frau Margarethe (Housekeeper)\n\ntext\n\n"
+            "**Shopkeeper:** sells lamps.\n\n"
+            "> [!note] Gatekeeper's lodge\n\n"
+            "## Keeper Notes\n\ntext\n\n"
+            "> [!note] Keeper only: he lies.\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(len(rows_for(rows, "Bob.md")), 2, rows)
+        self.assertTrue(rows_for(rows, "Keeper-facing heading 'Keeper Notes'"),
+                        rows)
+        self.assertTrue(rows_for(rows, "callout [!note] Keeper only"), rows)
+
+    def test_keeper_is_the_gm_unless_a_word_before_it_makes_it_a_job(self):
+        # #316: "Lighthouse Keeper" is an occupation; "Keeper" alone, or
+        # after a function word, is the GM. The plural and "Keeper_Notes"
+        # still count.
+        clean = ("Lighthouse Keeper", "Park Keeper", "(Lighthouse Keeper)",
+                 "The Lighthouse Keeper", "the Park Keeper's lodge",
+                 "Frau X (Lighthouse Keeper)", "Innkeeper")
+        flagged = ("Keeper Notes", "Keeper's Notes", "KEEPER ONLY",
+                   "For the Keeper:", "keeper-only", "Keeper/GM",
+                   "GM/Keeper", "Notes for the Keeper", "Keeper",
+                   "For Keepers only", "Keeper_Notes", "Notes: Keeper only",
+                   "Secrets — Keeper",
+                   # a content word before Keeper does not make it a job
+                   # when more follows (#316)
+                   "Additional Keeper Notes", "Private Keeper Notes",
+                   "NPC Keeper Notes", "Session Keeper Notes",
+                   "Hidden Keeper Agenda", "Background Keeper Info",
+                   "Scene Keeper Guidance", "More Keeper Notes",
+                   "See Keeper Notes", "Only Keeper", "My Keeper Notes",
+                   "At Keeper's discretion", "Under Keeper control",
+                   "In Keeper hands", "Per Keeper", "Quick Keeper Reference",
+                   "Private Keeper's notes", "Private Keeper only",
+                   "Park Keeper-only", "Notes Keeper", "Background Keeper",
+                   "Summary Keeper", "Players vs Keeper")
+        for title in clean:
+            with self.subTest(clean=title):
+                self.assertFalse(vc._keeper_text(title, []))
+        for title in flagged:
+            with self.subTest(flagged=title):
+                self.assertTrue(vc._keeper_text(title, []))
+
+    def test_a_content_word_and_more_after_keeper_still_warns_in_a_note(self):
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "## Additional Keeper Notes\n\ntext\n\n"
+            "## Hidden Keeper Agenda\n\ntext\n\n"
+            "**Private Keeper note:** he lies.\n\n"
+            "> [!warning] Private Keeper note\n\n"
+            "> [!info] Extra Keeper information\n\n"
+            "## The Park Keeper\n\ntext\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(sorted(int(r.split("\t")[1].split(":")[1])
+                                for r in rows_for(rows, "Bob.md:")),
+                         [7, 11, 15, 17, 19], rows)
+
+    def test_a_callout_type_and_title_are_read_apart(self):
+        # "note" before "Keeper only" must not make it a job.
+        vault = make_vault(self)
+        (vault / "Bob.md").write_text(
+            "---\ntype: npc\n---\n\n# Bob\n\n"
+            "> [!note] Keeper only: he lies.\n\n"
+            "> [!note] The Lighthouse Keeper's lodge\n\n"
+            "> [!keeper_notes] Lamp\n", encoding="utf-8")
+        rows = vc.check_gm_leak(vault, None)
+        self.assertEqual(sorted(r.split("\t")[1] for r in rows_for(
+            rows, "Bob.md")), ["Bob.md:11", "Bob.md:7"], rows)
+
     def test_a_config_exclude_entry_silences_its_own_section(self):
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:6"), self.rows)
         self.assertFalse(rows_for(self.rows, f"{CONFIG}:10"), self.rows)
@@ -1365,11 +1455,12 @@ class GmLeakFixTests(unittest.TestCase):
     def test_keyword_warnings_are_reported_but_never_moved(self):
         text = ("---\ntype: location\n---\n\n# The Lighthouse Keeper\n\n"
                 "A tall tower.\n\n## Secret Passage\n\nBehind the stove.\n\n"
-                "## Innkeeper\n\nMarta.\n\n## Shopkeeper\n\nOtto.\n\n"
+                "## Keeper Notes\n\nMarta.\n\n## Keeper Advice\n\nOtto.\n\n"
                 "## Tactics\n\nHold the stairs.\n")
         vault = self.vault_with(text, "Lighthouse.md")
         rows = vc.check_gm_leak(vault, None, fix=True)
-        self.assertEqual(len(leak_heading_rows(rows, "Lighthouse.md")), 5,
+        # "The Lighthouse Keeper" is a job and does not flag (#316).
+        self.assertEqual(len(leak_heading_rows(rows, "Lighthouse.md")), 4,
                          rows)
         self.assertFalse(rows_for(rows, "FIXED"), rows)
         self.assertEqual(read(vault, "Lighthouse.md"), text)

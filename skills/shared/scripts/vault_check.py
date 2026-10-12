@@ -270,6 +270,9 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
     return emit_once
 
 
+PUBLISH_MANIFEST_REL = "_meta/publish-manifest.md"
+
+
 def check_frontmatter(vault: Path, folder: str | None,
                       explain: ExplainAll | None = None) -> list[str]:
     """Schema rules, read by vaultlib's line reader, then the one thing
@@ -311,6 +314,10 @@ def check_frontmatter(vault: Path, folder: str | None,
         if rel in unparsed:
             # Schema rows would come from the line reader's guess at YAML
             # the build rejects; they mean nothing until it parses.
+            continue
+        if rel == PUBLISH_MANIFEST_REL:
+            # Written by the publish tool with no `type`, and regenerated
+            # on every build: the GM cannot fix a row about it (#333).
             continue
         fm = extract_frontmatter(text)
         if fm is None:
@@ -2316,8 +2323,33 @@ def check_sessions(vault: Path) -> list[str]:
 
 # graph-health.md, "Un-fenced GM-only content". Matched as substrings of a
 # casefolded title, so "Tactics" hits "tactic" and "Secrets" hits "secret".
-KEEPER_WORDS = ("keeper", "gm only", "gm-only", "dm only", "secret",
+# "Keeper" is the exception (`_keeper_word`): a whole word, and a job when
+# another word comes right before it (#316).
+KEEPER_WORDS = ("gm only", "gm-only", "dm only", "secret",
                 "tactic", "confidential", "spoiler")
+# Keeper or Keepers, not inside a longer word; "_" and "-" end it.
+KEEPER_WORD_RE = re.compile(r"(?<![^\W_])keepers?(?![^\W_])")
+# The whitespace-separated token just before it.
+BEFORE_WORD_RE = re.compile(r"(\S+)\s+$")
+PLAIN_WORD_RE = re.compile(r"\W*[^\W\d_][\w'’-]*")
+# A word before "Keeper" that leaves it meaning the GM ("For the Keeper").
+FUNCTION_WORDS = frozenset((
+    "the", "a", "an", "for", "to", "of", "by", "from", "with", "and", "or",
+    "your", "my", "our", "at", "under", "in", "on", "per", "see", "only",
+    "any", "all", "no", "this", "that", "vs", "versus"))
+# Before "Keeper", these are GM material, not an occupation.
+GM_BEFORE = frozenset((
+    "notes", "note", "background", "summary", "info", "information",
+    "agenda", "guidance", "reference", "secrets", "brief", "truth"))
+# After "Keeper", these end the phrase: "Lighthouse Keeper for hire".
+FOLLOW_WORDS = frozenset(("the", "a", "an", "for", "to", "of", "by", "from",
+                          "with", "and", "or", "at", "in", "on"))
+END_PUNCTUATION = ".,;!?)]}\"”—–*"
+# "Park Keeper's lodge" is a job; "Private Keeper's notes" is not.
+GM_AFTER_POSSESSIVE = frozenset((
+    "notes", "note", "only", "eyes", "info", "information", "agenda",
+    "guidance", "advice", "tips", "secrets", "discretion", "control",
+    "hands", "reference", "background", "section"))
 
 # Types the publish pipeline never builds a page for. Nothing in them can
 # leak however it is written, and flagging their (correctly) Keeper-facing
@@ -2372,10 +2404,43 @@ def _fence_rows(rel: str, problems: list[str],
     return rows
 
 
+def _phrase_ends(after: str) -> bool:
+    """Does the phrase end right after "Keeper"? The text after it is
+    empty or starts with closing punctuation or a function word, or a
+    possessive that is not followed by a GM word."""
+    if after[:2] in ("'s", "’s"):
+        nxt = re.match(r"\W*([^\W_]+)", after[2:])
+        return nxt is None or nxt.group(1) not in GM_AFTER_POSSESSIVE
+    after = after.lstrip()
+    if not after or after[0] in END_PUNCTUATION:
+        return True
+    word = re.match(r"[^\W_]+", after)
+    return word is not None and word.group(0) in FOLLOW_WORDS
+
+
+def _keeper_word(text: str) -> bool:
+    """Does `text` say Keeper, the GM? "Lighthouse Keeper" is a job: a
+    content word comes right before it and the phrase ends after it. A
+    missed GM heading publishes unwarned, so every other shape flags:
+    nothing before it, punctuation or a function word before it ("For the
+    Keeper"), or more after it ("Private Keeper Notes")."""
+    low = text.casefold()
+    for m in KEEPER_WORD_RE.finditer(low):
+        before = BEFORE_WORD_RE.search(low[:m.start()])
+        if (before and PLAIN_WORD_RE.fullmatch(before.group(1))
+                and before.group(1).strip("(*_[\"“‘'") not in FUNCTION_WORDS
+                and before.group(1).strip("(*_[\"“‘'") not in GM_BEFORE
+                and _phrase_ends(low[m.end():])):
+            continue
+        return True
+    return False
+
+
 def _keeper_text(text: str, excludes: list[str]) -> bool:
     """Does this title or label read as Keeper-facing?"""
     low = text.casefold()
-    return (any(word in low for word in KEEPER_WORDS)
+    return (_keeper_word(low)
+            or any(word in low for word in KEEPER_WORDS)
             or any(s.casefold() in low for s in excludes))
 
 
@@ -2621,7 +2686,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             if callout:
                 ctype, title = callout.group(1), callout.group(2).strip()
                 low = f"{ctype} {title}".casefold()
-                if GM_WORD_RE.search(low) or "keeper" in low:
+                if GM_WORD_RE.search(low) or _keeper_word(ctype) or _keeper_word(title):
                     label = f"[!{ctype}] {title}".strip()
                     rows.append(f"INFO\t{rel}:{state.lineno}\tcallout {label} "
                                 f"reads Keeper-facing — confirm it should "
