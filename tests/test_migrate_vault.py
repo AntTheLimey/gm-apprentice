@@ -276,8 +276,11 @@ class TemplateTests(unittest.TestCase):
         for label, text in (("without the comment", regency),
                             ("with the setup comment", raw)):
             with self.subTest(label):
+                # No overwrite and no stray copy; only the note that it
+                # looks Regency.
                 self.assertEqual(
-                    mv.find_templates(self.npc_vault(text)), [])
+                    [i.id for i in mv.find_templates(self.npc_vault(text))],
+                    ["regency-looks"])
 
     def test_a_regency_template_still_gets_a_missing_reputation_line(self):
         vault = make_vault(self, "coc-7e-regency")
@@ -300,13 +303,90 @@ class TemplateTests(unittest.TestCase):
                      )["template:_Template_NPC.md"]
         row = item.lines[0]
         self.assertIn("local changes are lost", row)
-        self.assertIn("3 lines differ", row)
+        self.assertIn("2 lines differ", row)
         self.assertIn("- **Damage Bonus** {+0} · **Build** {0} · **Move** "
                       "{8} · **Armour** {leather}", row)
         self.assertIn("+ **Damage Bonus** {+0} · **Build** {0} · **Move** "
                       "{8} · **Armour** {none}", row)
         self.assertIn("- ## My Section", row)
         self.assertNotIn("\n", row)
+
+    def row_for(self, text):
+        return by_id(mv.find_templates(self.npc_vault(text))
+                     )["template:_Template_NPC.md"].lines[0]
+
+    def test_the_count_is_changed_lines_as_a_person_counts_them(self):
+        expected = mv.expected_templates(make_vault(self))["_Template_NPC.md"]
+        one = expected.replace("**Armour** {none}", "**Armour** {leather}")
+        self.assertIn("1 line differs (", self.row_for(one))
+        self.assertIn("1 line differs (", self.row_for(expected + "\nExtra\n"))
+        lines = expected.split("\n")
+        for i in range(5):   # five edited lines
+            lines[10 + i] = lines[10 + i] + " EDIT"
+        row = self.row_for("\n".join(lines))
+        self.assertIn("5 lines differ (", row)
+        self.assertTrue(row.endswith("and 1 more"), row)
+
+    def regency_build(self, comment=False):
+        text = mv.expected_templates(
+            make_vault(self, "coc-7e-regency"))["_Template_NPC.md"]
+        if comment:
+            text = text.replace(
+                "**Reputation** {n}", "**Reputation** {n}  <!-- Regency "
+                "Cthulhu only: vault setup drops this line otherwise -->")
+        return text
+
+    def test_a_stale_regency_template_is_overwritten_with_the_regency_build(self):
+        # #311: the Reputation line marks it; it is never the line that goes.
+        stale = self.regency_build(comment=True).replace(
+            "**Armour** {none}", "**Armour** {leather}")
+        self.assertNotEqual(stale, self.regency_build(comment=True))
+        vault = self.npc_vault(stale)
+        item = by_id(mv.find_templates(vault))["template:_Template_NPC.md"]
+        self.assertEqual(item.group, CHOICE)
+        self.assertIn("1 line differs", item.lines[0])
+        self.assertNotIn("Reputation", item.lines[0])
+        item.apply(None)
+        self.assertEqual((vault / "_Templates" / "_Template_NPC.md"
+                          ).read_text(encoding="utf-8"), self.regency_build())
+
+    def test_a_vault_that_looks_regency_but_is_coc_7e_is_told_so(self):
+        for label, setup in (
+                ("npc template", lambda v: (v / "_Templates" /
+                 "_Template_NPC.md").write_text(self.regency_build(True),
+                                                encoding="utf-8")),
+                ("regency pc template", lambda v: (v / "_Templates" /
+                 "_Template_PC_CoC_7e_Regency.md").write_text(
+                     "x", encoding="utf-8"))):
+            with self.subTest(label):
+                vault = self.npc_vault(mv.expected_templates(
+                    make_vault(self))["_Template_NPC.md"])
+                setup(vault)
+                items = by_id(mv.find_templates(vault))
+                row = items["regency-looks"]
+                self.assertEqual(row.group, PERSON)
+                self.assertEqual(row.lines, [
+                    "_meta/vault-config.md\tthe templates look like Regency "
+                    "Cthulhu, but publish.system is coc-7e; if this is a "
+                    "Regency Cthulhu campaign, set publish.system to "
+                    "coc-7e-regency in _meta/vault-config.md (the site "
+                    "builds differently), otherwise nothing to do"])
+
+    def test_a_plain_coc_vault_is_not_told_it_looks_regency(self):
+        vault = self.npc_vault(mv.expected_templates(
+            make_vault(self))["_Template_NPC.md"])
+        self.assertNotIn("regency-looks", by_id(mv.find_templates(vault)))
+
+    def test_a_regency_pc_template_means_no_plain_pc_template_is_copied(self):
+        vault = self.npc_vault(mv.expected_templates(
+            make_vault(self))["_Template_NPC.md"])
+        (vault / "_Templates" / "pc-coc-7e.md").unlink()
+        self.assertIn("template:pc-coc-7e.md",
+                      by_id(mv.find_templates(vault)))
+        (vault / "_Templates" / "_Template_PC_CoC_7e_Regency.md").write_text(
+            "x", encoding="utf-8")
+        self.assertNotIn("template:pc-coc-7e.md",
+                         by_id(mv.find_templates(vault)))
 
     def older(self, history):
         """A vault whose Document template is an old text; HISTORY points at

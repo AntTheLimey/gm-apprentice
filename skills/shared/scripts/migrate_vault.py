@@ -150,35 +150,57 @@ def _same(a: str, b: str) -> bool:
 
 
 REGENCY_LINE_NOTE_RE = re.compile(r"[ \t]*<!--.*?-->")
+COC_FAMILY = ("coc-7e", "coc-7e-regency")
 
 
-def _regency_variant(system: str | None, name: str, current: str) -> bool:
-    """Is `current` the Regency Cthulhu form of a stat block the vault's
-    plain `coc-7e` system builds without the Reputation line? That is the
-    block `npc-stats/coc-7e.md` holds, with or without the setup comment on
-    its Reputation line. Dropping the line would take away what the
-    campaign's setting has (#311), so it is never offered as an overwrite."""
-    if system != "coc-7e":
+def _without_setup_comment(text: str) -> str:
+    """The text with the setup comment gone from its Reputation line, the
+    form `npc-stats/coc-7e.md` holds before vault setup processes it."""
+    return "\n".join(
+        REGENCY_LINE_NOTE_RE.sub("", line) if "**Reputation**" in line
+        else line for line in text.split("\n"))
+
+
+def _regency_build(system: str | None, name: str, current: str) -> str | None:
+    """The Regency Cthulhu build of a CoC stat-block template, when
+    `current` is one: its Reputation stat line (processed or not) is the
+    mark. The vault's stamped system does not decide it: a Regency campaign
+    stamped plain `coc-7e` must not lose the line to an overwrite (#311)."""
+    if system not in COC_FAMILY or "**Reputation**" not in current:
+        return None
+    return templates_for("coc-7e-regency").get(name)
+
+
+def _regency_pc_template(vault: Path) -> bool:
+    folder = vault / "_Templates"
+    try:
+        return any("regency" in f.name.lower() for f in folder.iterdir())
+    except OSError:
         return False
-    regency = templates_for("coc-7e-regency").get(name)
-    if regency is None:
-        return False
-    lines = [REGENCY_LINE_NOTE_RE.sub("", line) if "**Reputation**" in line
-             else line for line in current.split("\n")]
-    return _same("\n".join(lines), regency)
 
 
 def _differs(current: str, expected: str, shown: int = 4) -> str:
-    """The lines of `current` that are not in `expected` ("- ") and the
-    other way ("+ "), on one row: a count, then the first few."""
-    changes = [line[:2] + line[2:].strip()[:90]
-               for line in difflib.ndiff(normalise(current).split("\n"),
-                                         normalise(expected).split("\n"))
-               if line[:2] in ("- ", "+ ") and line[2:].strip()]
+    """What differs, on one row: how many lines, then the first few as
+    "- yours | + the plugin's". A line edited in place counts once."""
+    mine = [x for x in normalise(current).split("\n") if x.strip()]
+    theirs = [x for x in normalise(expected).split("\n") if x.strip()]
+    changes: list[str] = []
+    for op, i1, i2, j1, j2 in difflib.SequenceMatcher(
+            None, mine, theirs, autojunk=False).get_opcodes():
+        if op == "equal":
+            continue
+        for k in range(max(i2 - i1, j2 - j1)):
+            parts = []
+            if i1 + k < i2:
+                parts.append("- " + mine[i1 + k].strip()[:90])
+            if j1 + k < j2:
+                parts.append("+ " + theirs[j1 + k].strip()[:90])
+            changes.append(" | ".join(parts))
     more = len(changes) - shown
-    return (f"{len(changes)} line{'' if len(changes) == 1 else 's'} differ "
-            f"(- yours, + the plugin's): " + " | ".join(changes[:shown])
-            + (f" | and {more} more" if more > 0 else ""))
+    return (f"{len(changes)} line{'' if len(changes) == 1 else 's'} "
+            f"{'differs' if len(changes) == 1 else 'differ'} "
+            f"(- yours, + the plugin's): " + "; ".join(changes[:shown])
+            + (f"; and {more} more" if more > 0 else ""))
 
 
 GENERIC = "generic"   # the history's key for a vault with no known system
@@ -204,8 +226,22 @@ def find_templates(vault: Path) -> list[Item]:
     items: list[Item] = []
     system = vault_system(vault)
     released = _released_hashes(system)
+    held: list[str] = []   # stat-block templates carrying the Reputation line
+    regency_pc = _regency_pc_template(vault)
     for name, text in expected_templates(vault).items():
         path = folder / name
+        if path.is_file():
+            try:
+                current = path.read_text(encoding="utf-8")
+            except (OSError, UnicodeDecodeError) as e:
+                raise StepFailed(f"_Templates/{name} cannot be read "
+                                 f"({e.__class__.__name__})") from e
+            regency = _regency_build(system, name, current)
+            if regency is not None and regency != text:
+                held.append(name)
+                text = regency
+        elif regency_pc and system == "coc-7e" and name.startswith("pc-"):
+            continue   # the Regency PC template is the one in use
 
         def apply(_value: str | None, path: Path = path,
                   text: str = text, name: str = name) -> list[str]:
@@ -217,12 +253,8 @@ def find_templates(vault: Path) -> list[Item]:
                               [f"copy the missing template _Templates/{name}"],
                               apply))
             continue
-        try:
-            current = path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError) as e:
-            raise StepFailed(f"_Templates/{name} cannot be read "
-                             f"({e.__class__.__name__})") from e
-        if _same(current, text) or _regency_variant(system, name, current):
+        shown = _without_setup_comment(current) if name in held else current
+        if _same(shown, text):
             continue
         if text_hash(current) in released.get(name, []):
             items.append(Item(
@@ -233,8 +265,15 @@ def find_templates(vault: Path) -> list[Item]:
             items.append(Item(
                 f"template:{name}", CHOICE,
                 [f"overwrite _Templates/{name} with the plugin's version; "
-                 f"local changes are lost; {_differs(current, text)}"],
+                 f"local changes are lost; {_differs(shown, text)}"],
                 apply))
+    if system == "coc-7e" and (held or regency_pc):
+        items.append(Item("regency-looks", PERSON, [
+            "_meta/vault-config.md\tthe templates look like Regency "
+            "Cthulhu, but publish.system is coc-7e; if this is a Regency "
+            "Cthulhu campaign, set publish.system to coc-7e-regency in "
+            "_meta/vault-config.md (the site builds differently), "
+            "otherwise nothing to do"]))
     return items
 
 
