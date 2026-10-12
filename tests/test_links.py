@@ -360,6 +360,31 @@ class UnlinkTests(unittest.TestCase):
                          "Met a stranger and the stranger.\n")
         self.assertEqual(q.kept, [])
 
+    def test_the_guard_is_decided_per_name(self):
+        vault = make_vault(self, {
+            "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: true\n---\n\nx\n",
+            "People/Old_Gil.md": "---\ntype: npc\n---\n\ny\n",
+            "People/Host.md": "Met [[Lord_Zorn]] and [[Old_Gil]].\n"})
+        p = links.plan_unlink(vault, ["Lord_Zorn", "Old_Gil"], ["People/Host.md"])
+        self.assertEqual(p.texts["People/Host.md"],
+                         "Met [[Lord_Zorn]] and Old_Gil.\n")
+
+    def test_a_name_that_is_an_alias_of_a_withheld_note_is_guarded_too(self):
+        vault = make_vault(self, {
+            "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: true\n"
+                                   "aliases: [Zorn the Pale]\n"
+                                   "gm_aliases: [The Hollow Duke]\n---\n\nx\n",
+            "People/Host.md": "Met [[Zorn the Pale]] and [[The Hollow Duke]] "
+                              "and [[Zorn the Pale|him]].\n"})
+        for name in ("Zorn the Pale", "The Hollow Duke"):
+            with self.subTest(name=name):
+                p = links.plan_unlink(vault, [name], ["People/Host.md"])
+                self.assertNotIn(f"Met {name}", p.texts.get("People/Host.md", ""))
+                self.assertIn(f"[[{name}]]\tthe note is marked withheld",
+                              "\n".join(links.rows(p)))
+        q = links.plan_unlink(vault, ["Zorn the Pale"], ["People/Host.md"], "a stranger")
+        self.assertIn("Met a stranger and", q.texts["People/Host.md"])
+
     def test_a_note_that_is_not_withheld_is_unlinked_as_before(self):
         vault = make_vault(self, {
             "People/Lord_Zorn.md": "---\ntype: npc\nwithheld: false\n---\n\nx\n",
