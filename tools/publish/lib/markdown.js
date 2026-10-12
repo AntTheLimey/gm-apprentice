@@ -139,7 +139,7 @@ function widenTable(state, from) {
   };
   for (const row of rows.slice().reverse()) {
     const isHead = row === rows[0];
-    const have = isHead ? headerCount : headerCount;
+    const have = headerCount;
     const like = tokens.slice(row.open, row.close).filter((t) => t.type === (isHead ? 'th_open' : 'td_open')).pop();
     const extra = [];
     for (let c = have; c < width; c++) {

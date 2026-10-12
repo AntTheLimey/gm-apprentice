@@ -127,3 +127,14 @@ for (const system of ['dnd-5e-2024', 'pf2e', 'fitd']) {
     assert.deepStrictEqual(differ, []);
   });
 }
+
+// A sheet does not come into being because of notes: a GURPS PC with nothing the sheet can read keeps
+// its sections as accordions, the extra cell in the section's own table.
+test('a GURPS note with no readable sheet and one over-wide row builds no sheet of notes', () => {
+  const body = '## Languages\n\n- Common (Native)\n- ZZLANG Elvish\n\n## Equipment\n\n| Item | Weight |\n|---|---|\n| Rope | 2 | ZZGEAR |\n';
+  const { html } = quiet(() => buildPc('gurps-4e', body));
+  assert.ok(!html.includes('class="gurps-sheet"'));
+  assert.ok(/class="accordion-header"[^>]*>Languages</.test(html), 'Languages left the page as an accordion');
+  assert.ok(html.includes('ZZLANG'));
+  assert.strictEqual(html.split('ZZGEAR').length - 1, 1);
+});

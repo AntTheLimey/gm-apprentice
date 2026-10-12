@@ -40,13 +40,15 @@ function buildSheet(model, rowNotes) {
     renderTraitList(model, 'disadvantages', 'trait', 'Disadvantages'),
     renderTraitList(model, 'quirks', 'trait', 'Quirks'),
     renderSkills(model), renderTechniques(model), renderSpells(model), renderPoints(model),
-    renderRowNotes(rowNotes),
   ].filter(Boolean);
   const wideBlocks = [renderMelee(model), renderRanged(model), renderGrimoire(model)].filter(Boolean);
   // Full-width and above the flow: the physical description leads the sheet rather
   // than getting buried mid-column.
   const identity = renderIdentity(model) || '';
+  // Notes alone are not a sheet: with nothing else to show the page keeps its sections as they are.
   if (flow.length === 0 && wideBlocks.length === 0 && !identity) return null;
+  const notes = renderRowNotes(rowNotes);
+  if (notes) flow.push(notes);
   return `<div class="gurps-sheet">${identity}<div class="flow">${flow.join('\n')}</div>${wideBlocks.join('\n')}</div>`;
 }
 
@@ -74,4 +76,4 @@ function buildEquipment(model) {
   return renderEquipment(model);
 }
 
-module.exports = { RICH_COMBAT_TITLES, buildSheet, buildCombat, buildEquipment };
+module.exports = { RICH_COMBAT_TITLES, renderRowNotes, buildSheet, buildCombat, buildEquipment };
