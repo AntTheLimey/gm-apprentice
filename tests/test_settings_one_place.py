@@ -86,3 +86,55 @@ def test_no_page_names_the_old_settings_file_or_an_old_setting_name():
     hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
             for found in _old_layout_mentions(p.name, p.read_text(encoding="utf-8"))]
     assert hits == []
+
+
+# An old key written bare (`exclude_sections`, with no `publish.` before it). The names come
+# from the tool's list. Only the ones that could not be anything else are looked for: the key
+# has an underscore, and the setting's new name does not end the same way (`live_stats` is
+# still the last part of `player_site.features.live_stats`, so it cannot be told apart).
+# A PC note's own `sheet_skin` and `sheet_frame` fields are real and keep their names.
+NOTE_FIELDS = {"sheet_skin", "sheet_frame"}
+# The set-up note's own keys, which the publish set-up guide reads back.
+SETUP_NOTE_KEYS = {"setup-wizard.md": {"site_dir", "site_title"}}
+
+
+def _bare_old_keys():
+    import vaultlib
+    keys = set()
+    for row in vaultlib._run_settings(["list"])["names"]:
+        for old in re.findall(r"\bpublish\.([a-z_.]+)", row.get("was") or ""):
+            first, last = old.split(".")[0], old.split(".")[-1]
+            if "_" in first and last != row["name"].split(".")[-1]:
+                keys.add(first)
+            elif old == "overrides.fields":
+                keys.add(old)
+    return keys - NOTE_FIELDS
+
+
+def _bare_old_key_mentions(name, text, keys):
+    text = GENERATED.sub("", text.replace("\r\n", "\n"))
+    if name == OLD_LAYOUT_SECTION[0]:
+        text = OLD_LAYOUT_SECTION[1].sub("", text)
+    allowed = SETUP_NOTE_KEYS.get(name, set())
+    # `<site_dir>` is a placeholder for a path; `publish_exclude_fields` is a note's own field.
+    return sorted(k for k in keys - allowed
+                  if re.search(rf"(?<![\w.<]){re.escape(k)}(?!\w)", text))
+
+
+def test_the_bare_old_keys_come_from_the_tool():
+    keys = _bare_old_keys()
+    assert {"exclude_sections", "exclude_fields", "exclude_dirs", "exclude_callouts", "exclude_drafts",
+            "site_dir", "site_title", "attachments_dir", "pc_prose_sections", "character_sheets",
+            "sheet_crest", "four_oh_four", "overrides.fields"} <= keys
+    assert not keys & {"mode", "search", "footer", "system", "inbox", "theme", "landing", "images",
+                       "banners", "locations", "live_stats", "sheet_skin", "sheet_frame"}
+    text = "Add it to `exclude_sections`, not `publish_exclude_fields`; build in <site_dir>."
+    assert _bare_old_key_mentions("any.md", text, keys) == ["exclude_sections"]
+
+
+def test_no_page_names_an_old_key_bare():
+    keys = _bare_old_keys()
+    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"] if p.name not in RECORDS]
+    hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
+            for found in _bare_old_key_mentions(p.name, p.read_text(encoding="utf-8"), keys)]
+    assert hits == []
