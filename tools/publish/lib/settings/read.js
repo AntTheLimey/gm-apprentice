@@ -104,6 +104,37 @@ function oldNameIn(parent, key) {
   return found.length ? found[0].e : null;
 }
 
+// The settings an unknown block holds, found for the Settings check to fix one by one: for the old `publish:` block
+// by the names the list remembers (`was`), for any other stray map (a misplaced group) by the longest end of the
+// path that names exactly one setting (`features.hide.drafts` is `hide.drafts`, which is player_site.hide.drafts).
+// Returns [{ written: 'publish.exclude_sections', entry, value }]. Anything that names no setting is left out; the
+// block's own fault still says the block is wrong.
+const SETTING_LEAVES = LIST.filter((e) => !e.container && !hasChildren(e.name));
+const OLD_VAULT_NAMES = new Map(SETTING_LEAVES.flatMap((e) => (e.was || []).filter((w) => w.in === 'vault' && w.read !== false).map((w) => [w.name, e])));
+function strayLeaves(block, prefix, byOldName) {
+  const found = [];
+  const walkStray = (map, path) => {
+    for (const [k, value] of Object.entries(map)) {
+      const here = [...path, String(k)];
+      const written = `${prefix}.${here.join('.')}`;
+      let entry = null;
+      if (byOldName) {
+        entry = OLD_VAULT_NAMES.get(written) || null;
+      } else {
+        for (let i = 0; i < here.length && !entry; i++) {
+          const tail = here.slice(i).join('.');
+          const hits = SETTING_LEAVES.filter((e) => e.name === tail || e.name.endsWith(`.${tail}`));
+          if (hits.length === 1) entry = hits[0];
+        }
+      }
+      if (entry) found.push({ written, entry, value });
+      else if (isMap(value)) walkStray(value, here);
+    }
+  };
+  walkStray(block, []);
+  return found;
+}
+
 const GM_SITE_NOTE = 'the GM site is not built yet; nothing under gm_site is read';
 
 // The new file as written, as plain data. {} for an empty file; throws for one that is not valid YAML.
@@ -227,6 +258,8 @@ function readNew({ vaultPath, siteConfig }) {
     }
     if (key === legacy.OLD_BLOCK) {
       faults.push(makeFault({ name: key, setting: null, kind: 'unknown-name', level: 'stop', value, hint: `this file uses the new names; ${key} is the old block` }));
+      // Each setting in it that has a place in the new file, so the Settings check can move it there.
+      if (isMap(value)) for (const s of strayLeaves(value, key, true)) faults.push(makeFault({ name: s.written, setting: s.entry.name, kind: 'old-name', level: 'stop', value: s.value, use: s.entry.name }));
       continue;
     }
     // A setting the old file kept at its top level (beside `publish:`), written there in the new file.
@@ -237,6 +270,8 @@ function readNew({ vaultPath, siteConfig }) {
     }
     const near = nearest(key, TOP);
     faults.push(makeFault({ name: key, setting: null, kind: 'unknown-name', level: 'stop', value, suggest: near }));
+    // A group out of place: each setting in it that has one right place.
+    if (isMap(value)) for (const s of strayLeaves(value, key, false)) faults.push(makeFault({ name: s.written, setting: s.entry.name, kind: 'unknown-name', level: 'stop', value: s.value, suggest: s.entry.name }));
   }
 
   return { values, origins, faults, layout: 'new', file };

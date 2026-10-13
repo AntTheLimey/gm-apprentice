@@ -577,10 +577,7 @@ def test_publish_overrides_exclude_is_listed_with_the_only_override(
     assert not any(line.startswith("fix:") for line in out.splitlines())
 
 
-class NewFileFixTests(unittest.TestCase):
-    """A mis-named key in the NEW file is fixed in place by the settings
-    command's carry, with the same certain/proposed rule as on the old file."""
-
+class NewFileBase(unittest.TestCase):
     def vault(self, yaml_text):
         root = Path(tempfile.mkdtemp(prefix="vc-newfix-"))
         self.addCleanup(shutil.rmtree, root, ignore_errors=True)
@@ -592,6 +589,11 @@ class NewFileFixTests(unittest.TestCase):
     def rows(self, vault):
         vc.forget_settings(None)
         return vc.plan_settings(vault)[0]
+
+
+class NewFileFixTests(NewFileBase):
+    """A mis-named key in the NEW file is fixed in place by the settings
+    command's carry, with the same certain/proposed rule as on the old file."""
 
     def test_a_stray_hiding_key_is_a_certain_fix_that_adds_to_the_right_list(self):
         vault = self.vault("version: 1\nplayer_site:\n  exclude_sections: [Rumours]\n")
@@ -651,3 +653,76 @@ class NewFileFixTests(unittest.TestCase):
     def test_an_empty_new_file_is_copied_under_its_own_name(self):
         vault = self.vault("")
         self.assertEqual(vc.plan_settings(vault)[0], [])
+
+
+class StrayBlockTests(NewFileBase):
+    """A stray BLOCK in the new file (the old `publish:` block, or a group out
+    of place) is fixed one setting at a time, and a stray hiding key beside a
+    list that is already set adds to it."""
+
+    def fix_all(self, vault):
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        vc.forget_settings(None)
+
+    def test_the_old_publish_block_is_moved_child_by_child_and_removed(self):
+        vault = self.vault(
+            "version: 1\npublish:\n  exclude_sections: [Rumours]\n"
+            "  site_title: Hollow\n  mystery_key: 3\n")
+        rows = self.rows(vault)
+        by = {r.fault["name"]: r for r in rows}
+        self.assertEqual(by["publish.exclude_sections"].kind, "certain")
+        self.assertEqual(by["publish.site_title"].kind, "proposed")
+        self.assertEqual(by["publish"].kind, "none")     # the block itself: no fix
+        self.fix_all(vault)
+        got = vc.settings(vault)
+        self.assertIn("Rumours", got.get("player_site.hide.sections"))
+        self.assertIn("GM Notes", got.get("player_site.hide.sections"))
+        self.assertIn("site_title", (vault / "_meta" / "vault-config.yaml").read_text())  # proposed: waits
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, False, ["publish.site_title"], False)
+        vc.forget_settings(None)
+        self.assertEqual(vc.settings(vault).get("player_site.title"), "Hollow")
+        text = (vault / "_meta" / "vault-config.yaml").read_text()
+        self.assertIn("mystery_key", text)               # maps to nothing: the block stays, listed
+        self.assertTrue(any(r.fault["name"] == "publish" for r in self.rows(vault)))
+
+    def test_a_block_whose_every_child_moves_is_gone(self):
+        vault = self.vault("version: 1\npublish:\n  exclude_sections: [Rumours]\n"
+                           "  exclude_fields: [secret_x]\n")
+        self.fix_all(vault)
+        self.assertNotIn("publish", (vault / "_meta" / "vault-config.yaml").read_text())
+        self.assertEqual(self.rows(vault), [])
+
+    def test_a_misplaced_group_goes_to_its_right_place(self):
+        vault = self.vault("version: 1\nfeatures:\n  hide:\n    drafts: true\n")
+        (row,) = [r for r in self.rows(vault) if r.fault["name"] == "features.hide.drafts"]
+        self.assertEqual(row.ops[0], {"op": "carry", "from": "features.hide.drafts",
+                                       "to": "player_site.hide.drafts"})
+
+    def test_a_stray_hiding_list_is_added_to_a_list_already_set(self):
+        vault = self.vault("version: 1\nplayer_site:\n  hide:\n"
+                           "    sections: [Existing]\n    sectoins: [Mine]\n")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "certain")
+        self.fix_all(vault)
+        got = vc.settings(vault).get("player_site.hide.sections")
+        self.assertEqual(sorted(got), ["Existing", "Mine"])
+        self.assertEqual(self.rows(vault), [])
+
+    def test_an_old_named_list_beside_the_right_one_is_added_too(self):
+        vault = self.vault("version: 1\nplayer_site:\n  exclude_sections: [Mine]\n"
+                           "  hide:\n    sections: [Existing]\n")
+        self.fix_all(vault)
+        self.assertEqual(sorted(vc.settings(vault).get("player_site.hide.sections")),
+                         ["Existing", "Mine"])
+
+    def test_two_different_plain_values_stay_a_question_that_says_which_wins(self):
+        vault = self.vault("version: 1\nplayer_site:\n  title: Right\n  site_title: Stray\n")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "proposed")
+        self.assertIn("this value wins", row.fix)
+        self.assertIn("Right", row.fix)
+        same = self.vault("version: 1\nplayer_site:\n  title: Same\n  site_title: Same\n")
+        (row2,) = self.rows(same)
+        self.assertEqual(row2.kind, "certain")

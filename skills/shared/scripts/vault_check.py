@@ -5137,6 +5137,32 @@ def _leftover_row(fault: dict[str, Any], vault: Path) -> SettingsRow:
     return row
 
 
+def _both_set(row: SettingsRow, name: str, value: Any, target: str,
+              there: bool, held: Any, info: dict[str, Any]) -> None:
+    """A stray key whose right setting is already set, in the new file. A
+    list's entries are added to the right list and the stray removed (the
+    carry does that: it only hides more, so the classification stands). The
+    same value on both is a plain removal (certain). Anything else is a
+    question for the GM, and the row says which value wins."""
+    if not there:
+        row.kind, row.ops, row.fix, row.done = "none", [], None, None
+        row.note = (f"{target} is being set by another fix and {name} holds "
+                    f"{_short(value)}; run the check again after it.")
+        return
+    is_list = info.get("kind") in ("list", "switchOrList")
+    if is_list and isinstance(value, list) and isinstance(held, list):
+        row.fix = (f"add the entries of {name} to {target}, which is already "
+                   f"set, and remove {name}")
+        return
+    if value == held:
+        row.kind = "certain"
+        row.fix = f"remove {name}; {target} already says the same"
+        return
+    row.kind = "proposed"
+    row.fix = (f"{target} is already {_short(held)}; moving {name} here makes "
+               f"it {_short(value)} (this value wins) and removes {name}")
+
+
 def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
               scratch: Path, text: str) -> SettingsRow:
     row = SettingsRow(fault)
@@ -5164,7 +5190,7 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
         if not target:
             return row
         there, held = _written_at(raw, target)
-        if there or target in claimed:
+        if (there or target in claimed) and old_file:
             shown = _short(held) if there else "a value from another fix"
             row.note = (f"{target} is already set ({shown}) and {name} holds "
                         f"{_short(value)}; keep one, then remove the other.")
@@ -5182,6 +5208,8 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
             # One all-or-nothing change: the value (a list's entries added to
             # the list), then the stray key removed.
             moved.ops = [{"op": "carry", "from": name, "to": target}]
+        if not old_file and (there or target in claimed):
+            _both_set(moved, name, value, target, there, held, info)
         row = moved
     else:
         return row

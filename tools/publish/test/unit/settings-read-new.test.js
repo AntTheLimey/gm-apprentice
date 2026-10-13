@@ -83,7 +83,19 @@ test('publish at the top level says this is the old block, and stops', () => {
   const f = fault(r, 'publish');
   assert.equal(f.level, 'stop');
   assert.equal(f.message, 'this file uses the new names; publish is the old block');
-  assert.equal(stops(r.faults).length, 1);
+  assert.equal(stops(r.faults).length, 2, 'the block, and the one setting in it that has a place in the new file');
+  const child = fault(r, 'publish.mode');
+  assert.equal(child.kind, 'old-name');
+  assert.equal(child.use, 'player_site.hide.mode');
+  assert.equal(stops(read('publish:\n  nonsense_key: 1\n').faults).length, 1, 'a key that maps to nothing has only the block\'s fault');
+});
+
+test('a group out of place names the one right place of each setting in it', () => {
+  const r = read('features:\n  hide:\n    drafts: true\n  nothing_like_it: 1\n');
+  const child = fault(r, 'features.hide.drafts');
+  assert.equal(child.kind, 'unknown-name');
+  assert.equal(child.suggest, 'player_site.hide.drafts');
+  assert.equal(r.faults.filter((f) => f.name.startsWith('features.')).length, 1);
 });
 
 test('the four known top-level names are quiet', () => {
