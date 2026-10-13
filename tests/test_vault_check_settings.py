@@ -726,3 +726,66 @@ class StrayBlockTests(NewFileBase):
         same = self.vault("version: 1\nplayer_site:\n  title: Same\n  site_title: Same\n")
         (row2,) = self.rows(same)
         self.assertEqual(row2.kind, "certain")
+
+
+class SiteFileKeyTests(NewFileBase):
+    """A vault already on the new file whose site folder's vault.config.json
+    still holds settings the vault decides differently: the Settings check
+    lists each and fixes them all, the tool doing the work across both files."""
+
+    def moved_vault_with_site_keys(self, **keys):
+        import json
+        import site_fixture
+        from layouts import move_to_new_layout
+        root = Path(tempfile.mkdtemp(prefix="vc-sitekeys-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "V"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\npublish:\n  site_title: Mine\n  exclude_sections: [A]\n---\n",
+            encoding="utf-8")
+        site_fixture.give_site(vault, lambda p: None, private=True)
+        site = site_fixture.point_site_at(vault)
+        move_to_new_layout(vault)
+        site_file = site / "vault.config.json"
+        config = json.loads(site_file.read_text())
+        site_file.write_text(json.dumps({**config, **keys}, indent=4) + "\n")
+        vc.forget_settings(None)
+        return vault, site_file
+
+    def test_each_key_is_a_certain_fix_and_fix_clears_them_all(self):
+        import json
+        vault, site_file = self.moved_vault_with_site_keys(
+            siteTitle="Theirs", excludeSections=["Z"], excludeCallouts=["spoiler"])
+        rows = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(sorted(r.fault["name"] for r in rows),
+                         ["excludeCallouts", "excludeSections", "siteTitle"])
+        self.assertTrue(all(r.kind == "certain" for r in rows))
+        by = {r.fault["name"]: r for r in rows}
+        self.assertIn("already the value in use", by["siteTitle"].fix)
+        self.assertIn("add its entries", by["excludeSections"].fix)
+        self.assertNotIn("run the vault update", " ".join(str(r.fix) + str(r.note) for r in rows))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            vc.check_settings(vault, True, [], False)
+        vc.forget_settings(None)
+        got = vc.settings(vault)
+        self.assertEqual(got.get("player_site.title"), "Mine")
+        self.assertIn("Z", got.get("player_site.hide.sections"))
+        self.assertEqual(got.get("player_site.hide.callouts"), ["spoiler"])
+        text = site_file.read_text()
+        self.assertIn("vaultPath", json.loads(text))
+        self.assertNotIn("siteTitle", text)
+        self.assertNotIn("excludeSections", text)
+        self.assertIn('\n    "vaultPath"', text)     # its indentation kept
+        self.assertEqual(self.rows(vault), [])
+
+    def test_the_update_points_at_the_settings_check_and_does_not_hold_the_stamp(self):
+        import migrate_site as ms
+        from migrate_core import PERSON
+        vault, _ = self.moved_vault_with_site_keys(siteTitle="Theirs")
+        items = ms.find_settings_move(vault)
+        (item,) = [i for i in items if i.group == PERSON]
+        self.assertFalse(item.holds_stamp)
+        self.assertIn("Settings check", item.lines[0])
+        self.assertNotIn("run the vault update", item.lines[0])

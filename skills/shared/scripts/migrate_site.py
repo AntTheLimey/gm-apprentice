@@ -165,13 +165,24 @@ def find_settings_move(vault: Path) -> list[Item]:
         return [Item(MOVE, PERSON,
                      [f"settings\tthe settings cannot move to the new file "
                       f"yet: {b}" for b in blockers]
-                     + ["settings\trun campaign-qa's Settings check, which "
-                        "lists what to fix; the vault is not up to date "
-                        "until it has moved"],
+                     + ["settings\tfix what each line names, then run the "
+                        "update again; for a line that names a setting, "
+                        "campaign-qa's Settings check fixes it or asks. The "
+                        "vault is not up to date until it has moved"],
                      holds_stamp=True)]
+    items: list[Item] = []
+    differs = plan.get("siteDiffers")
+    if differs:
+        # Already moved, but the site folder's file still says things the
+        # vault says differently: the Settings check fixes them. A notice, so
+        # it does not hold the stamp.
+        items.append(Item(MOVE + "-site-file", PERSON, [
+            "vault.config.json\tstill holds settings this vault's file "
+            f"decides ({', '.join(str(x) for x in differs)}); run "
+            "campaign-qa's Settings check, which takes them out safely"]))
     files = plan.get("files") or {}
     if not (files.get("write") or files.get("remove")):
-        return []
+        return items
 
     def apply(_value: str | None) -> list[str]:
         done = _ask_move(vault, base)
@@ -184,7 +195,7 @@ def find_settings_move(vault: Path) -> list[Item]:
                              "new settings file")
         return [str(x) for x in done["lines"]]
 
-    return [Item(MOVE, WILL, [str(x) for x in plan["lines"]], apply)]
+    return [*items, Item(MOVE, WILL, [str(x) for x in plan["lines"]], apply)]
 
 
 def find_publish_site(vault: Path) -> list[Item]:

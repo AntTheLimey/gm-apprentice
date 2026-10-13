@@ -201,6 +201,7 @@ class MoveEndToEndTests(unittest.TestCase):
         before = hashes(vault)
         code, plan, _ = update(vault, "plan")
         self.assertIn("the settings cannot move to the new file yet", plan)
+        self.assertIn("fix what each line names, then run the update again", plan)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(vault_layout(vault), "legacy")
         self.assertEqual(read_stamp(vault), "1.10.12")
@@ -212,6 +213,17 @@ class MoveEndToEndTests(unittest.TestCase):
                           and not k.startswith("_")},
                          {k: v for k, v in before.items()
                           if not k.startswith("_")})
+        self.assertIn("(not until settings-move is settled)", plan)
+
+    def test_a_blocker_that_names_no_setting_is_relayed_as_written(self):
+        vault = make_vault(self)
+        site = with_site(self, vault, installed="1.24.0")
+        # Another vault's site folder: nothing to do with any setting.
+        site_fixture.point_site_at(vault, site, vaultPath=str(vault.parent / "Other"))
+        (vault.parent / "Other").mkdir()
+        code, plan, _ = update(vault, "plan")
+        self.assertIn("that site folder belongs to another vault", plan)
+        self.assertIn("fix what each line names, then run the update again", plan)
         self.assertIn("(not until settings-move is settled)", plan)
 
     def test_a_vault_with_no_settings_file_is_not_this_checks_to_move(self):

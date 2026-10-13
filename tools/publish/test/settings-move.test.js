@@ -922,3 +922,66 @@ test('an old tool installed in a site folder whose package.json does not name it
   installTool(current.site, '1.23.0');
   assert.equal(cliMove({ vault: current.vault }).rc, 0);
 });
+
+// ---- A moved vault whose site file holds settings the vault resolves differently ----
+
+test('--fold-site-file adds a site hiding list to the vault\'s, keeps the stricter callout rule, drops the rest, in one change', () => {
+  const s = scratch(old('  site_dir: ../Site\n  site_title: Mine\n  exclude_sections: [A]\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  const siteJson = { vaultPath: '../Vault', outputDir: './docs' };
+  fs.writeFileSync(file, JSON.stringify(siteJson, null, 4) + '\n');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  const extra = { ...siteJson, siteTitle: 'Theirs', excludeSections: ['Z'], excludeCallouts: ['spoiler'] };
+  fs.writeFileSync(file, JSON.stringify(extra, null, 4) + '\n');
+  const before = hashes(s.root);
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.siteDiffers.sort(), ['player_site.hide.callouts', 'player_site.hide.sections', 'player_site.title']);
+  assert.deepEqual(hashes(s.root), before, 'a check writes nothing');
+  assert.deepEqual(hashes(s.root), before);
+  const plain = cliMove({ vault: s.vault });
+  assert.match(plain.data.lines.join('\n'), /left as it is/);
+  assert.deepEqual(hashes(s.root), before, 'without the flag the site file is left');
+  const done = cliMove({ vault: s.vault }, { foldSiteFile: true });
+  assert.equal(done.rc, 0, done.err.join('\n'));
+  const got = readSettings({ vaultPath: s.vault }).values.player_site;
+  assert.deepEqual(got.hide.sections, ['A', 'Z'], 'the vault\'s own list, plus the site file\'s entry');
+  assert.deepEqual(got.hide.callouts, ['spoiler']);
+  assert.equal(got.title, 'Mine', 'the vault\'s plain value is the one in use');
+  const after = fs.readFileSync(file, 'utf8');
+  assert.equal(after, JSON.stringify(siteJson, null, 4) + '\n', 'the site file keeps its indentation');
+  assert.equal(cliMove({ vault: s.vault }).data.siteDiffers, undefined);
+});
+
+test('the vault already hiding every callout keeps that; a failing site write puts the vault\'s file back', () => {
+  const s = scratch(old('  site_dir: ../Site\n  exclude_callouts: true\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault' }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault', excludeCallouts: ['x'], excludeSections: ['Z'] }));
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  const vaultBefore = fs.readFileSync(at(s.vault, NEW_FILE), 'utf8');
+  let n = 0;
+  const rename = (a, b) => { n += 1; if (n === 2) throw new Error('disk said no'); fs.renameSync(a, b); };
+  assert.throws(() => applyMove(plan, { rename }), /nothing was changed/);
+  assert.equal(fs.readFileSync(at(s.vault, NEW_FILE), 'utf8'), vaultBefore);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).excludeSections[0], 'Z');
+  assert.equal(applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null })).moved, false);
+  assert.equal(readSettings({ vaultPath: s.vault }).values.player_site.hide.callouts, true);
+});
+
+test('a vault with no list of its own keeps the built-in ones when a site hiding list is folded in', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault' }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault', excludeSections: ['Z'] }));
+  assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true }).rc, 0);
+  const got = readSettings({ vaultPath: s.vault }).values.player_site.hide.sections;
+  assert.ok(got.includes('Z') && got.includes('GM Notes'));
+});

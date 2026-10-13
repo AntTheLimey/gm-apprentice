@@ -1451,6 +1451,20 @@ def settings_tidy(vault: Path, *, discard_old_file: bool = False) -> list[str]:
     return [str(x) for x in answer.get("lines", [])]
 
 
+def settings_fold_site_file(vault: Path) -> list[str]:
+    """On a vault already on the new file, take the settings its site
+    folder's vault.config.json still holds out of that file, in one change
+    across both files: a hiding list's entries are added to the vault's list,
+    the stricter callout rule is kept, any other value is the vault's own
+    already. The lines the tool reports."""
+    _check_vault(vault)
+    forget_settings(vault)
+    answer = _run_settings(["move", *_target_args(vault), "--fold-site-file"],
+                           refusable=True)
+    forget_settings(vault)
+    return [str(x) for x in answer.get("lines", [])]
+
+
 def settings_add(vault: Path, name: str, entries: list[str]) -> list[str]:
     """Add entries to the list setting `name`, keeping what it holds now
     (the built-in list included); the entries that were new. Refusals raise

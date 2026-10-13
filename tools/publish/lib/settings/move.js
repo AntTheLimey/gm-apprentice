@@ -20,7 +20,7 @@ const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_R
 const read = require('./read');
 const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE, hasLegacy } = require('./legacy');
 const { readState, stateText } = require('./state');
-const { splitFront, writeAtomic } = require('./write');
+const { splitFront, writeAtomic, planChanges } = require('./write');
 const { parseNote } = require('../frontmatter');
 
 const { Scalar, Pair, YAMLMap, isScalar, isMap: isYMap, isNode } = YAML;
@@ -250,14 +250,14 @@ function planMove(options, deps = {}) {
   }
 }
 
-function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false, siteToolUpdated = false }, deps = {}) {
+function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false, siteToolUpdated = false, foldSiteFile = false }, deps = {}) {
   const vault = path.resolve(vaultPath);
   let isDir = false;
   try { isDir = fs.statSync(vault).isDirectory(); } catch { /* said below */ }
   if (!isDir) throw new Error(`${vault} is not a folder.`);
   const plan = (extra) => ({ ok: true, lines: [], blockers: [], files: { write: [], remove: [] }, ...extra });
   const layout = layoutOf(vault);
-  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld });
+  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld, foldSiteFile });
   // No settings file at all: there is still something to move when the site folder's file holds settings
   // (an old layout with an empty old file). Otherwise there is nothing.
   let noOld = false;
@@ -635,12 +635,41 @@ function siteDiffers(vault, site) {
   return differs;
 }
 
-function mendNew(vault, siteConfigPath, plan, { discardOld = false } = {}) {
+// What the site folder's file says, as changes to the vault's new file: a hiding list's entries added to the vault's
+// list, the stricter of two callout rules kept, and nothing for a setting the vault's value already decides.
+function foldInto(vault, site) {
+  const now = read.readSettings({ vaultPath: vault, siteConfig: {} }).values;
+  const changes = [];
+  const said = [];
+  for (const e of REGISTRY) {
+    for (const w of (e.was || []).filter((x) => x.in === 'site' && x.read !== false)) {
+      const segs = w.name.split('.');
+      const value = getPath(site, segs);
+      if (value === undefined) continue;
+      const have = getPath(now, e.name.split('.'));
+      const entries = Array.isArray(value) ? value.map((x) => String(x).trim()).filter((x) => x !== '') : [];
+      if (e.type === 'list' && e.guards && entries.length) {
+        changes.push({ op: 'add', name: e.name, entries });
+        said.push(`Its ${w.name} entries were added to ${e.name}.`);
+      } else if (e.type === 'switchOrList') {
+        if (have === true) continue;                                 // the vault already hides every one
+        if (value === true) { changes.push({ op: 'set', name: e.name, value: true }); said.push(`${e.name} is now on (the stricter of the two).`); }
+        else if (entries.length && Array.isArray(have) && have.length) { changes.push({ op: 'add', name: e.name, entries }); said.push(`Its ${w.name} entries were added to ${e.name}.`); }
+        else if (entries.length) { changes.push({ op: 'set', name: e.name, value: entries }); said.push(`Its ${w.name} entries were put in ${e.name}.`); }
+      }
+    }
+  }
+  if (!said.length) said.push('The vault\'s own values are the ones in use, so nothing was carried.');
+  return { changes, said };
+}
+
+function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile = false } = {}) {
   const lines = [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`];
   const mend = { cleanup: leftovers(vault, siteConfigPath), removeOld: null, siteFile: null, siteText: null, siteOut: null, removedKeys: [] };
   const remove = [...mend.cleanup];
   const write = [];
   let leftover = null;
+  let siteDiffersNow = [];
   if (mend.cleanup.length) lines.push(`${mend.cleanup.length === 1 ? 'A hidden file' : 'Hidden files'} left by an earlier move will be removed: ${mend.cleanup.map((f) => path.basename(f)).join(', ')}.`);
 
   const oldPath = at(vault, OLD_FILE);
@@ -671,18 +700,32 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false } = {}) {
       const { siteOut, removedKeys } = stripSiteKeys(siteText);
       if (siteOut !== null) {
         const differs = siteDiffers(vault, site);
-        if (differs.length) {
-          lines.push(`${siteFile} still holds settings the new file has differently (${differs.join(', ')}); it was left as it is.`);
+        siteDiffersNow = differs;
+        if (differs.length && !foldSiteFile) {
+          lines.push(`${siteFile} still holds settings the new file has differently (${differs.join(', ')}); it was left as it is. The vault's own values are the ones in use.`);
         } else {
           Object.assign(mend, { siteFile, siteText, siteOut, removedKeys });
           write.push(siteFile);
-          lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. The new file already holds them; the rest of that file is as it was.`);
+          if (differs.length) {
+            // Fold what the site file says into the vault's file first: a hiding list's entries are added (built-ins
+            // kept), the stricter of two callout rules is kept, anything else is the vault's value already.
+            const folded = foldInto(vault, site);
+            if (folded.changes.length) {
+              const planned = planChanges(vault, folded.changes);
+              Object.assign(mend, { vaultFile: planned.file, vaultBefore: planned.before, vaultAfter: planned.after });
+              write.push(planned.file);
+            }
+            lines.push(`Will take the settings out of ${siteFile}: ${removedKeys.join(', ')}. ${folded.said.join(' ')} The rest of that file is as it was.`);
+          } else {
+            lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. The new file already holds them; the rest of that file is as it was.`);
+          }
         }
       }
     }
   }
   const done = plan({ lines, files: { write, remove } });
   if (leftover) done.leftover = leftover;
+  if (siteDiffersNow.length) done.siteDiffers = siteDiffersNow;
   if (write.length || remove.length) Object.defineProperty(done, INTERNAL, { value: { mend }, enumerable: false });
   return done;
 }
@@ -693,8 +736,18 @@ function applyMend(plan, mend, deps = {}) {
     throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
   }
   const lines = [plan.lines[0]];
+  if (mend.vaultAfter !== undefined && !same(mend.vaultFile, mend.vaultBefore)) {
+    throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
+  }
+  if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultAfter, { rename: deps.rename });
   if (mend.siteOut !== null) {
-    writeAtomic(mend.siteFile, mend.siteOut, { rename: deps.rename });
+    try {
+      writeAtomic(mend.siteFile, mend.siteOut, { rename: deps.rename });
+    } catch (e) {
+      // One change across two files: the vault's file goes back as it was.
+      if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultBefore);
+      throw new Error(`the settings were not taken out of the site folder's file (${firstLine(e.message)}); nothing was changed`);
+    }
     lines.push(`Removed the settings from ${mend.siteFile}: ${mend.removedKeys.join(', ')}. The rest of that file is as it was.`);
   }
   if (mend.removeOld) {
