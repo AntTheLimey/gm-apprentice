@@ -65,4 +65,8 @@ function keepProblem(list) {
   return bad === undefined ? null : 'each entry must be a plain folder name: not empty, with no slash and no ".."';
 }
 
-module.exports = { normalizeExcludeDir, normalizeExcludeDirs, outputProblem, keepProblem };
+// The value a checked folder setting is used as: the text the check judged, trimmed (a name judged trimmed must be
+// used trimmed, or " maps " would never match the folder `maps` and it would be deleted).
+const tidyChecked = (check, value) => (check === 'output' ? value.trim() : value.map((x) => x.trim()));
+
+module.exports = { normalizeExcludeDir, normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked };

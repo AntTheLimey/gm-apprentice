@@ -25,6 +25,19 @@ const stopsUnknown = (parent) => STRICT_PARENTS.has(parent) || parent === HIDE_G
 // The first publish tool version that reads the new settings file; an older one reads a moved vault as having no settings.
 const FIRST_TOOL_READING_NEW_FILE = '1.23.0';
 
+// The first publish tool version that runs the build steps a vault's settings hold (`player_site.before_build`, `.after_build`).
+const STEPS_FROM = '1.24.0';
+
+// The version of the publish tool installed in a site folder (whatever its package.json says), or null when none is
+// installed or its package.json cannot be read. The one reader of it. `readFile` is for a caller that has its own.
+function siteToolVersion(siteDir, readFile = (f) => fs.readFileSync(f, 'utf8')) {
+  try {
+    return JSON.parse(readFile(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'))).version || null;
+  } catch {
+    return null;
+  }
+}
+
 const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
 // 'new' whenever the new file exists (the old file, if it is still there, is not read), 'legacy'
@@ -46,4 +59,4 @@ const layoutOrNone = (vaultPath) => (typeof vaultPath === 'string' && vaultPath 
 const fileLabel = (vaultPath) => fileLabelFor(layoutOrNone(vaultPath));
 const nameIn = (vaultPath, name) => nameInFor(layoutOrNone(vaultPath), name);
 
-module.exports = { FIRST_TOOL_READING_NEW_FILE, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };

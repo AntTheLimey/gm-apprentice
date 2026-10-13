@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const { nameIn, fileLabel } = require('./settings');
+const { siteToolVersion } = require('./settings/layout');
 
 const DEP = 'gm-apprentice-publish';
 
@@ -104,13 +105,7 @@ async function runUpdatePinTag(opts, d) {
   const before = dependencies[DEP] ? String(dependencies[DEP]) : null;
   const tarName = `${DEP}-${desired}.tgz`;
   const newSpec = `file:vendor/${tarName}`;
-  const installedOf = () => {
-    try {
-      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
-    } catch {
-      return null;
-    }
-  };
+  const installedOf = () => siteToolVersion(siteDir, readFile);
   const installedBefore = installedOf();
   const pinnedBefore = before && /-(\d+\.\d+\.\d+)\.tgz$/.exec(before.replace(/\\/g, '/'));
   const pinnedVersion = pinnedBefore ? pinnedBefore[1] : null;
@@ -276,13 +271,7 @@ async function runUpdatePin(options, deps) {
   const dependencies = sitePkg.dependencies || {};
   const spec = dependencies[DEP];
   pinSpec = spec ? String(spec) : null;
-  const readInstalled = () => {
-    try {
-      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
-    } catch {
-      return null;
-    }
-  };
+  const readInstalled = () => siteToolVersion(siteDir, readFile);
   if (!spec) {
     if (!asJson) out(`${sitePkgPath} has no ${DEP} dependency — nothing to repoint.`);
     return report({

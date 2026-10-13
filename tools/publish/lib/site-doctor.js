@@ -15,6 +15,7 @@ const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
 const { formatFault, entry: settingEntry, fileLabel, nameIn, layoutOf, siteFolderKeys } = require('./settings');
+const { packageScripts, twiceWarning } = require('./settings/steps');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -276,6 +277,11 @@ async function runSiteDoctor(options, deps) {
       findings.push(finding('SETTINGS_FAULT', 'info', 'vault.config.json', `${key} is still in vault.config.json; it moves to ${name} at the next update`,
         'nothing to do: the vault update moves it'));
     }
+  }
+  // A step still in the site's package.json runs under `npm run build` as well as, now, from the vault's settings.
+  if (layoutOf(vaultPath) === 'new') {
+    const twice = twiceWarning(packageScripts(siteRoot));
+    if (twice) findings.push(finding('BUILD_STEPS_TWICE', 'warning', path.join(siteRoot, 'package.json'), twice, 'nothing to do: the vault update moves it'));
   }
   // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
   // site and whether that tool can read the new file (move.js: siteToolHold).

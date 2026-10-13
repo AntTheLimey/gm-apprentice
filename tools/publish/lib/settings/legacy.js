@@ -415,7 +415,40 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, cor
   return { values, origins, faults, legacy, file };
 }
 
+// ---- A vault on the old layout keeps running its package.json steps at deploy (dated with this file) -----------------
+// The tool runs a vault's own build steps only when the vault is on the new layout or holds steps; until a site is
+// updated its steps stay in package.json and `deploy` runs them here, as it always did.
+// A site's own post-build work (image optimisation, CSS folds, extra pages) lives in its
+// package.json `prebuild`/`postbuild` scripts, which npm runs around `npm run build`.
+// deploy builds in-process with the plugin's renderer, so npm never sees a build and
+// those steps were silently dropped from what shipped (#248). They run here instead,
+// around the in-process build. Ten minutes: optimising a large image set is slow.
+const HOOK_TIMEOUT_MS = 10 * 60 * 1000;
+
+// { hooks, warning }. No package.json means no hooks. One that won't parse is said out
+// loud: npm would run its hooks, so silently skipping them is #248 all over again. A
+// byte-order mark (Notepad, PowerShell's Out-File) is stripped first, as npm does.
+function buildHooks(siteRoot, readFile) {
+  const pkgPath = path.join(siteRoot, 'package.json');
+  let text;
+  try {
+    text = readFile(pkgPath);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { hooks: [], warning: null };
+    // It exists but can't be read (EACCES, …): its build steps may matter, so stop.
+    return { hooks: [], warning: null, error: `Could not read ${pkgPath} (${err.code || err.message}) — its prebuild/postbuild scripts can't be checked, so nothing was deployed.` };
+  }
+  let scripts;
+  try {
+    scripts = JSON.parse(String(text).replace(/^\uFEFF/, '')).scripts || {};
+  } catch (err) {
+    return { hooks: [], warning: `${pkgPath} is not valid JSON (${err.message}) — its prebuild/postbuild scripts, if any, were not run.` };
+  }
+  return { hooks: ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim()), warning: null };
+}
+
 module.exports = {
+  HOOK_TIMEOUT_MS, buildHooks,
   readLegacy, OLD_BLOCK, VERSION_KEY, FILE_KEYS, NOT_SETTINGS, SETUP_NOTE, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, usable, stricterCallouts,
   mergedMaps,
 };

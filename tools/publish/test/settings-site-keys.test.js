@@ -100,6 +100,13 @@ for (const layout of ['legacy', 'new']) {
       assert.deepEqual(r.values.player_site.keep, [], 'nothing kept, and the build stops');
     }
   });
+
+  test(`${layout}: output and keep are used trimmed, as they are checked`, () => {
+    const r = read(site(layout, { outputDir: ' public ', preserveDirs: [' maps ', 'keep'] }));
+    assert.equal(r.values.player_site.output, 'public');
+    assert.deepEqual(r.values.player_site.keep, ['maps', 'keep']);
+    assert.deepEqual(r.faults.filter((f) => f.level === 'stop'), []);
+  });
 }
 
 test('old layout: each key is read from the site file as today, with origin site-file and no fault', () => {

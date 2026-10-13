@@ -14,7 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const { failureDetail } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
-const { loadVaultConfig, siteConfigFor, outputFolderOf } = require('./config');
+const { loadVaultConfig, siteConfigFor, outputFolderOf, loadPublishConfig } = require('./config');
+const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
+const { layoutOf } = require('./settings/layout');
 const { nameIn } = require('./settings');
 
 const VERIFY_ATTEMPTS = 3;
@@ -69,35 +71,6 @@ function defaultFetchStatus(url, depth = 0) {
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// A site's own post-build work (image optimisation, CSS folds, extra pages) lives in its
-// package.json `prebuild`/`postbuild` scripts, which npm runs around `npm run build`.
-// deploy builds in-process with the plugin's renderer, so npm never sees a build and
-// those steps were silently dropped from what shipped (#248). They run here instead,
-// around the in-process build. Ten minutes: optimising a large image set is slow.
-const HOOK_TIMEOUT_MS = 10 * 60 * 1000;
-
-// { hooks, warning }. No package.json means no hooks. One that won't parse is said out
-// loud: npm would run its hooks, so silently skipping them is #248 all over again. A
-// byte-order mark (Notepad, PowerShell's Out-File) is stripped first, as npm does.
-function buildHooks(siteRoot, readFile) {
-  const pkgPath = path.join(siteRoot, 'package.json');
-  let text;
-  try {
-    text = readFile(pkgPath);
-  } catch (err) {
-    if (err && err.code === 'ENOENT') return { hooks: [], warning: null };
-    // It exists but can't be read (EACCES, …): its build steps may matter, so stop.
-    return { hooks: [], warning: null, error: `Could not read ${pkgPath} (${err.code || err.message}) — its prebuild/postbuild scripts can't be checked, so nothing was deployed.` };
-  }
-  let scripts;
-  try {
-    scripts = JSON.parse(String(text).replace(/^\uFEFF/, '')).scripts || {};
-  } catch (err) {
-    return { hooks: [], warning: `${pkgPath} is not valid JSON (${err.message}) — its prebuild/postbuild scripts, if any, were not run.` };
-  }
-  return { hooks: ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim()), warning: null };
-}
-
 async function runDeploy(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -112,7 +85,7 @@ async function runDeploy(options, deps) {
   const build = d.build || (async (o) => {
     require('./sync-functions').syncSiteFunctionsOrWarn(o.configPath);
     await require('./fonts').prefetchForConfig(o.configPath);
-    return require('./build').build(o);
+    return require('./build').build({ ...o, runSteps: true });
   });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
   const sleep = d.sleep || defaultSleep;
@@ -141,7 +114,17 @@ async function runDeploy(options, deps) {
     ? ['pages', 'deploy']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
-  const hookInfo = opts.noBuild ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
+  // A vault on the new layout, or one that holds steps, has the tool run them inside the build; the site's package.json
+  // steps are only run here for a vault still on the old layout (the path dated with legacy.js).
+  let vaultSteps = { before: [], after: [] };
+  let steps = false;
+  try {
+    if (vaultPath) {
+      vaultSteps = loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps;
+      steps = layoutOf(vaultPath) === 'new' || vaultSteps.before.length > 0 || vaultSteps.after.length > 0;
+    }
+  } catch { /* a vault that cannot be read is reported by the build */ }
+  const hookInfo = opts.noBuild || steps ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
   const hooks = hookInfo.hooks;
   const platform = d.platform || process.platform;
 
@@ -150,7 +133,7 @@ async function runDeploy(options, deps) {
 
   if (opts.dryRun) {
     if (hooks.includes('prebuild')) commands.push('npm run prebuild');
-    if (!opts.noBuild) commands.push(`gm-publish build --config ${configPath}`);
+    if (!opts.noBuild) commands.push(...vaultSteps.before, `gm-publish build --config ${configPath}`, ...vaultSteps.after);
     if (hooks.includes('postbuild')) commands.push('npm run postbuild');
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);

@@ -171,6 +171,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     enumerable: false,
   });
 
+  // The vault's build steps, for the commands that run them. Not listed, like `site`.
+  Object.defineProperty(merged, 'steps', { value: { before: p.before_build, after: p.after_build }, enumerable: false });
+
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
 }

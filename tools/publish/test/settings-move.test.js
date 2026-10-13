@@ -1118,3 +1118,155 @@ test('a folder setting that would stop the build blocks the move and writes noth
   assert.equal(r.rc, 1);
   assert.deepEqual(hashes(s.root), before);
 });
+
+// ---- The site's build steps: package.json's prebuild and postbuild become the vault's before_build and after_build ----
+
+const sitePackage = (s) => path.join(path.dirname(s.config), 'package.json');
+const readPackage = (s) => JSON.parse(fs.readFileSync(sitePackage(s), 'utf8'));
+const writePackage = (s, scripts, extra = {}) => fs.writeFileSync(sitePackage(s), JSON.stringify({ name: 'site', private: true, scripts, ...extra, dependencies: { 'gm-apprentice-publish': '^1.24.0' } }, null, 2) + '\n');
+const stepsOf = (s) => {
+  const pc = loadPublishConfig(s.vault, siteJson(s), quiet, { siteDir: path.dirname(s.config) });
+  return pc.steps;
+};
+const DEAD_END = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map((x) => `node scripts/${x}.mjs`);
+const STEP_LAYOUTS = {
+  legacy: () => scratch(old('  mode: player\n'), { site: { vaultPath: './Vault' } }),
+  new: () => { const s = scratch(null, { site: { vaultPath: './Vault' } }); writeNewConfig(s.vault, { version: 1 }); return s; },
+};
+
+for (const [layout, make] of Object.entries(STEP_LAYOUTS)) {
+  test(`${layout} layout: a postbuild of seven commands joined by && becomes seven entries of after_build, and package.json keeps all else`, () => {
+    const s = make();
+    writePackage(s, { start: 'node serve.js', postbuild: DEAD_END.join(' && '), build: 'gm-publish build' });
+    const check = cliMove({ vault: s.vault, config: s.config }, { check: true });
+    assert.equal(check.rc, 0, check.err.join('\n'));
+    assert.deepEqual(readPackage(s).scripts.postbuild, DEAD_END.join(' && '), '--check writes nothing');
+    const r = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(r.rc, 0, r.err.join('\n'));
+    assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.after_build, DEAD_END);
+    assert.deepEqual(stepsOf(s), { before: [], after: DEAD_END });
+    const pkg = readPackage(s);
+    assert.deepEqual(Object.keys(pkg), ['name', 'private', 'scripts', 'dependencies'], 'key order as it was');
+    assert.deepEqual(pkg.scripts, { start: 'node serve.js', build: 'gm-publish build' });
+    assert.deepEqual(pkg.dependencies, { 'gm-apprentice-publish': '^1.24.0' });
+    assert.ok(r.data.lines.includes('The site\'s 7 postbuild steps moved to `player_site.after_build`; the tool now runs them.'), r.data.lines.join('\n'));
+    assert.deepEqual(r.data.carried.find((c) => c.to === 'player_site.after_build'), { from: 'package.json postbuild', to: 'player_site.after_build', value: DEAD_END });
+    const again = hashes(s.root);
+    const second = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(second.rc, 0, second.err.join('\n'));
+    assert.deepEqual(hashes(s.root), again, 'a second run changes nothing');
+    assert.equal(fs.readFileSync(sitePackage(s), 'utf8').endsWith('}\n'), true);
+  });
+}
+
+test('a script is split on && only when it holds nothing a shell would read differently', () => {
+  const cases = [
+    ['node a.js && echo "x && y"', ['node a.js && echo "x && y"']],
+    ["node a.js && echo 'x'", ["node a.js && echo 'x'"]],
+    ['node a.js && node b.js | tee log', ['node a.js && node b.js | tee log']],
+    ['node a.js; node b.js', ['node a.js; node b.js']],
+    ['node a.js && (cd x && node b.js)', ['node a.js && (cd x && node b.js)']],
+    ['node a.js & node b.js', ['node a.js & node b.js']],
+    ['node a.js > out.txt && node b.js', ['node a.js > out.txt && node b.js']],
+    ['node a.js && `echo b`', ['node a.js && `echo b`']],
+    ['node a.js && \\\n node b.js', ['node a.js && \\\n node b.js']],
+    ['node a.js &&  node b.js&&node c.js', ['node a.js', 'node b.js', 'node c.js']],
+    ['node a.js && && node b.js', ['node a.js && && node b.js']],
+    ['node only.js', ['node only.js']],
+  ];
+  for (const [script, want] of cases) {
+    const s = STEP_LAYOUTS.new();
+    writePackage(s, { prebuild: script });
+    const r = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(r.rc, 0, r.err.join('\n'));
+    assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.before_build, want, JSON.stringify(script));
+    assert.equal(readPackage(s).scripts.prebuild, undefined);
+  }
+});
+
+test('a site whose installed tool is older than 1.24.0 keeps its steps in package.json, and the rest of the move goes ahead', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', outputDir: 'gazetteer' } });
+  writePackage(s, { postbuild: 'node a.js && node b.js' });
+  installTool(path.dirname(s.config), '1.23.1');
+  const before = fs.readFileSync(sitePackage(s), 'utf8');
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.equal(fs.readFileSync(sitePackage(s), 'utf8'), before, 'package.json is untouched');
+  assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.after_build, []);
+  assert.equal(vaultValues(s).output, 'gazetteer', 'the rest of the move happened');
+  assert.deepEqual(r.data.stepsHeld.held, 'steps');
+  const line = 'The site\'s build steps stay in its package.json until its publish tool is 1.24.0 or later.';
+  assert.ok(r.data.lines.includes(line), r.data.lines.join('\n'));
+  assert.equal(r.data.carried.some((c) => c.to === 'player_site.after_build'), false);
+  // The same site with the tool at 1.24.0 moves them.
+  const t = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault' } });
+  writePackage(t, { postbuild: 'node a.js && node b.js' });
+  installTool(path.dirname(t.config), '1.24.0');
+  assert.equal(cliMove({ vault: t.vault, config: t.config }).rc, 0);
+  assert.deepEqual(readSettings({ vaultPath: t.vault }).values.player_site.after_build, ['node a.js', 'node b.js']);
+});
+
+test('steps in both the vault\'s settings and package.json: nothing is carried; an equal script is removed, a different one is left and said', () => {
+  const same = STEP_LAYOUTS.new();
+  writeNewConfig(same.vault, { version: 1, player_site: { after_build: ['node a.js', 'node b.js'] } });
+  writePackage(same, { postbuild: 'node a.js && node b.js', start: 'x' });
+  const r = cliMove({ vault: same.vault, config: same.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.deepEqual(readPackage(same).scripts, { start: 'x' });
+  assert.deepEqual(readSettings({ vaultPath: same.vault }).values.player_site.after_build, ['node a.js', 'node b.js']);
+  assert.equal(r.data.carried.some((c) => c.to === 'player_site.after_build'), false);
+
+  const differ = STEP_LAYOUTS.new();
+  writeNewConfig(differ.vault, { version: 1, player_site: { after_build: ['node mine.js'] } });
+  writePackage(differ, { postbuild: 'node theirs.js' });
+  const before = fs.readFileSync(sitePackage(differ), 'utf8');
+  const d = cliMove({ vault: differ.vault, config: differ.config });
+  assert.equal(d.rc, 0, d.err.join('\n'));
+  assert.equal(fs.readFileSync(sitePackage(differ), 'utf8'), before, 'a different script is left');
+  assert.deepEqual(readSettings({ vaultPath: differ.vault }).values.player_site.after_build, ['node mine.js']);
+  assert.ok(d.data.lines.some((l) => /postbuild[^\n]*differs[^\n]*player_site\.after_build/.test(l) && /vault's[^\n]*(runs|run)/.test(l)), d.data.lines.join('\n'));
+});
+
+test('a moved vault whose site folder holds only steps or only folder keys is still found to have something to move', () => {
+  // The vault's file is the new one; the site file holds only vaultPath and package.json holds a step.
+  const onlyPackage = STEP_LAYOUTS.new();
+  writePackage(onlyPackage, { prebuild: 'node pre.js' });
+  const plan = planMove({ vaultPath: onlyPackage.vault, siteConfigPath: onlyPackage.config });
+  assert.ok(plan.files.write.length > 0, 'there is something to write');
+  const onlyPackageMove = cliMove({ vault: onlyPackage.vault, config: onlyPackage.config });
+  assert.equal(onlyPackageMove.rc, 0);
+  assert.ok(onlyPackageMove.data.lines.some((l) => l.includes('prebuild step moved to `player_site.before_build`')), onlyPackageMove.data.lines.join('\n'));
+  assert.ok(!onlyPackageMove.data.lines.some((l) => /settings from [^\n]*: \./.test(l)), 'no empty list of removed keys');
+  assert.deepEqual(stepsOf(onlyPackage), { before: ['node pre.js'], after: [] });
+  assert.equal(readPackage(onlyPackage).scripts.prebuild, undefined);
+  // Only folder keys left in the site file.
+  const onlyKeys = scratch(null, { site: { vaultPath: './Vault', outputDir: 'gazetteer' } });
+  writeNewConfig(onlyKeys.vault, { version: 1 });
+  assert.equal(cliMove({ vault: onlyKeys.vault, config: onlyKeys.config }).rc, 0);
+  assert.equal(vaultValues(onlyKeys).output, 'gazetteer');
+  assert.deepEqual(siteJson(onlyKeys), { vaultPath: './Vault' });
+  // No settings file at all.
+  const none = scratch(null, { site: { vaultPath: './Vault' } });
+  writePackage(none, { postbuild: 'node post.js' });
+  const noneMove = cliMove({ vault: none.vault, config: none.config });
+  assert.equal(noneMove.rc, 0, noneMove.err.join('\n'));
+  assert.deepEqual(readSettings({ vaultPath: none.vault }).values.player_site.after_build, ['node post.js']);
+  const noneKeys = scratch(null, { site: { vaultPath: './Vault', preserveDirs: ['maps'] } });
+  assert.equal(cliMove({ vault: noneKeys.vault, config: noneKeys.config }).rc, 0);
+  assert.deepEqual(vaultValues(noneKeys).keep, ['maps']);
+  // Nothing at all: nothing to move.
+  const empty = scratch(null, { site: { vaultPath: './Vault' } });
+  assert.match(cliMove({ vault: empty.vault, config: empty.config }).data.lines.join('\n'), /nothing to move/);
+});
+
+test('a package.json that is not valid JSON, or holds empty scripts, is left alone and does not stop the move', () => {
+  const s = STEP_LAYOUTS.legacy();
+  fs.writeFileSync(sitePackage(s), '{ not json');
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.equal(fs.readFileSync(sitePackage(s), 'utf8'), '{ not json');
+  const t = STEP_LAYOUTS.legacy();
+  writePackage(t, { prebuild: '   ', postbuild: '' });
+  assert.equal(cliMove({ vault: t.vault, config: t.config }).rc, 0);
+  assert.deepEqual(readPackage(t).scripts, { prebuild: '   ', postbuild: '' });
+});

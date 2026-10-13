@@ -16,7 +16,7 @@
 // onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
 // value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
 // 'heading', 'folder', 'callout' or 'name'; absent means exact text), siteFallback (also a key of the site
-// folder's vault.config.json that is read while the vault sets none), check ('output' or 'keep': a rule on the value
+// folder's vault.config.json that is read while the vault sets none), stepsFrom (the site's package.json script a build-steps list was; the move carries it), check ('output' or 'keep': a rule on the value
 // beyond its type, folders.js) and stopOnFault (an unreadable value stops the build, as a hiding setting does).
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
@@ -127,6 +127,16 @@ const REGISTRY = [
     name: 'player_site.keep', was: [{ name: 'preserveDirs', in: 'site' }], type: 'list', of: 'folder names', check: 'keep', stopOnFault: true, default: [], legacyKind: 'list', siteFallback: true, group: 'site',
     does: 'Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build',
     left_out: 'None: a rebuild empties the output folder',
+  },
+  {
+    name: 'player_site.before_build', type: 'list', of: 'commands', default: [], stepsFrom: 'prebuild', group: 'site',
+    does: 'Commands the publish tool runs, in order, in the site folder, before it builds. A command that fails stops the build and nothing is published',
+    left_out: 'None',
+  },
+  {
+    name: 'player_site.after_build', type: 'list', of: 'commands', default: [], stepsFrom: 'postbuild', group: 'site',
+    does: 'Commands the publish tool runs, in order, in the site folder, after every page is written (image tidying, extra pages). A command that fails stops the build and nothing is published',
+    left_out: 'None',
   },
 
   // What gets published

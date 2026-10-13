@@ -16,7 +16,7 @@ const { REGISTRY, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { isLeaf } = require('./describe');
 const { formatFault } = require('./faults');
-const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_READING_NEW_FILE, layoutOf, at } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, layoutOf, at } = require('./layout');
 const read = require('./read');
 const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE, hasLegacy } = require('./legacy');
 const { readState, stateText } = require('./state');
@@ -220,6 +220,90 @@ function expectCarried(before, values) {
   }
 }
 
+// ---- The site's build steps ----------------------------------------------------------------
+
+const STEP_ENTRIES = REGISTRY.filter((e) => e.stepsFrom);
+const HELD_STEPS_LINE = `The site's build steps stay in its package.json until its publish tool is ${STEPS_FROM} or later.`;
+
+// A package.json script as a list of commands: one entry per `&&` only when the text holds nothing a shell reads
+// differently (a quote, a pipe, a `;`, a bracket, a redirect, a line end, a lone `&`); otherwise it is one entry, whole.
+function splitScript(text) {
+  const whole = [text.trim()];
+  if (/["'`|;()<>\n\r]/.test(text) || text.replace(/&&/g, '').includes('&')) return whole;
+  const parts = text.split('&&').map((x) => x.trim());
+  return parts.some((x) => x === '') ? whole : parts;
+}
+
+// The site folder's package.json: { file, text, data } or null (none, or not an object of JSON).
+function readSitePackage(siteDir) {
+  const file = path.join(siteDir, 'package.json');
+  try {
+    const text = fs.readFileSync(file, 'utf8');
+    const data = JSON.parse(text.replace(/^﻿/, ''));
+    return isMap(data) ? { file, text, data } : null;
+  } catch {
+    return null;
+  }
+}
+
+// The package.json scripts of a site folder that were build steps (`prebuild`, `postbuild`) and hold text.
+function stepScriptsIn(siteDir) {
+  const pkg = readSitePackage(siteDir);
+  const scripts = pkg && isMap(pkg.data.scripts) ? pkg.data.scripts : {};
+  return STEP_ENTRIES.filter((e) => typeof scripts[e.stepsFrom] === 'string' && scripts[e.stepsFrom].trim() !== '');
+}
+
+// null when the site's tool can run the steps (so they may leave package.json), else { held: 'steps', spec, line }.
+// A site with no tool installed or pinned is built by the plugin's own; a tool the plugin manages is repinned by the
+// update first (`updated`).
+function stepsHold(pin, { updated = false } = {}) {
+  if (!pin || (!pin.spec && !pin.installedBefore)) return null;
+  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
+  if (installed && atLeast(installed, versionIn(STEPS_FROM))) return null;
+  if (pin.ours && updated) return null;
+  return { held: 'steps', spec: pin.installedBefore || pin.spec, line: HELD_STEPS_LINE };
+}
+
+// Plans what the site folder's package.json `prebuild` and `postbuild` do against the vault's `before_build` and
+// `after_build`. `held(name)` says { set, value } for a setting of the vault. Returns { carried, dropped, lines, values,
+// changes, removed (the script names to take out), pkg ({ file, text, out } or null), stepsHeld (or null) }.
+function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pinCheck } = {}) {
+  const out = { carried: [], dropped: [], lines: [], values: {}, changes: [], removed: [], pkg: null, stepsHeld: null };
+  const pkg = readSitePackage(siteDir);
+  const scripts = pkg && isMap(pkg.data.scripts) ? pkg.data.scripts : {};
+  const present = stepScriptsIn(siteDir);
+  if (!present.length) return out;
+  out.stepsHeld = siteToolHold(siteDir, { updated: siteToolUpdated, pinCheck: ask, steps: true });
+  if (out.stepsHeld) {
+    out.lines.push(HELD_STEPS_LINE);
+    return out;
+  }
+  for (const e of present) {
+    const script = e.stepsFrom;
+    const commands = splitScript(scripts[script]);
+    const mine = held(e.name);
+    const has = mine.set && Array.isArray(mine.value) && mine.value.length > 0;
+    if (!has) {
+      out.carried.push({ from: `package.json ${script}`, to: e.name, value: commands });
+      out.values[e.name] = commands;
+      out.changes.push({ op: 'set', name: e.name, value: commands });
+      out.removed.push(script);
+      out.lines.push(`The site's ${commands.length} ${script} step${commands.length === 1 ? '' : 's'} moved to \`${e.name}\`; the tool now runs ${commands.length === 1 ? 'it' : 'them'}.`);
+    } else if (isDeepStrictEqual(commands, mine.value)) {
+      out.removed.push(script);
+      out.lines.push(`The site's ${script} in package.json holds the same steps as \`${e.name}\`, so it was removed from package.json; the tool runs the vault's.`);
+    } else {
+      out.lines.push(`The site's ${script} in package.json differs from \`${e.name}\` in the vault's settings, so it was left. The tool runs the vault's steps, and \`npm run build\` also runs the package.json one.`);
+    }
+  }
+  if (out.removed.length) {
+    const data = { ...pkg.data, scripts: { ...scripts } };
+    for (const script of out.removed) delete data.scripts[script];
+    out.pkg = { file: pkg.file, text: pkg.text, out: JSON.stringify(data, null, 2) + '\n' };
+  }
+  return out;
+}
+
 // ---- The site's tool ------------------------------------------------------------------------
 
 // What `update-pin --check --json` says of the site folder: { ok, ours, spec, installedBefore }, or null when it says
@@ -265,26 +349,18 @@ function holdFrom(pin, { updated = false, siteDir = '' } = {}) {
   return { held: 'site-tool-old', spec: shown, line: `This vault stays on the old settings file for now: its site's publish tool (${shown}) is older than the plugin's and cannot read the new file. Update it first (gm-apprentice-publish update-pin --site "${siteDir}"), then move the vault.` };
 }
 
-// The version the tool INSTALLED in a site folder says it is, whatever the folder's package.json says; null if none.
-function installedIn(siteDir) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'), 'utf8')).version || null;
-  } catch {
-    return null;
-  }
-}
-
 // One site folder: the pin's answer, with the installed tool's own version read directly (an old tool installed in a
 // folder whose package.json does not name it still builds that site). A folder with no tool installed and no pin at
-// all has nothing that could build it, so it holds nothing.
-function siteToolHold(siteDir, { updated = false, pinCheck: ask = pinCheck } = {}) {
+// all has nothing that could build it, so it holds nothing. With `steps`, the question is whether that tool runs the
+// vault's build steps (STEPS_FROM) rather than whether it reads the new file.
+function siteToolHold(siteDir, { updated = false, pinCheck: ask = pinCheck, steps = false } = {}) {
   const pin = { ...(ask(siteDir) || {}) };
-  const installed = installedIn(siteDir);
+  const installed = siteToolVersion(siteDir);
   if (installed) {
     pin.installedBefore = installed;
     if (!pin.spec) pin.ours = false;
   }
-  return holdFrom(pin, { updated, siteDir });
+  return steps ? stepsHold(pin, { updated }) : holdFrom(pin, { updated, siteDir });
 }
 
 // Every site folder involved: the one the vault's settings name (when it holds a vault.config.json) and the one the
@@ -349,14 +425,16 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
   if (!isDir) throw new Error(`${vault} is not a folder.`);
   const plan = (extra) => ({ ok: true, lines: [], blockers: [], files: { write: [], remove: [] }, ...extra });
   const layout = layoutOf(vault);
-  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld, foldSiteFile });
+  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld, foldSiteFile, siteToolUpdated }, deps);
   // No settings file at all: there is still something to move when the site folder's file holds settings
   // (an old layout with an empty old file). Otherwise there is nothing.
   let noOld = false;
   if (layout === 'none') {
     let siteNow = null;
     try { siteNow = siteConfigPath ? JSON.parse(fs.readFileSync(path.resolve(siteConfigPath), 'utf8')) : null; } catch { /* said by the plan below */ }
-    if (!hasLegacy(siteNow)) return plan({ lines: ['This vault has no settings file; nothing to move.'] });
+    // The site file may hold only keys the move carries (the folder keys), or package.json only steps.
+    const somethingToCarry = siteNow !== null && (stripSiteKeys(JSON.stringify(siteNow)).siteOut !== null || stepScriptsIn(path.dirname(path.resolve(siteConfigPath))).length > 0);
+    if (!hasLegacy(siteNow) && !somethingToCarry) return plan({ lines: ['This vault has no settings file; nothing to move.'] });
     noOld = true;
   }
 
@@ -478,6 +556,14 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     })
     : { carried: [], dropped: [], lines: [], values: {}, changes: [] };
   for (const [name, value] of Object.entries(carry.values)) if (!Object.prototype.hasOwnProperty.call(planned, name)) planned[name] = value;
+  // The site's build steps, from its package.json (the same folder as the site file).
+  const stepsPlan = siteFile
+    ? planSteps(path.dirname(siteFile), (name) => {
+      const origin = old.origins[name];
+      return { set: origin !== undefined && origin !== 'default', value: getPath(old.values, name.split('.')) };
+    }, { siteToolUpdated, pinCheck: deps.pinCheck })
+    : null;
+  if (stepsPlan) for (const [name, value] of Object.entries(stepsPlan.values)) planned[name] = value;
 
   if (blockers.length) return blocked();
   if (planned['vault.campaign'] === undefined) {
@@ -620,7 +706,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
   let removedKeys = [];
   if (siteFile) {
     ({ siteAfter, siteOut, removedKeys } = stripSiteKeys(siteText));
-    lines.push(...carry.lines);
+    lines.push(...carry.lines, ...stepsPlan.lines);
     const unknown = siteOut !== null ? unknownKeysLine(siteAfter, siteFile) : null;
     if (unknown) lines.push(unknown);
   }
@@ -630,6 +716,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     vault, siteFile, noOld, notesPresent, oldText, siteText, stateBefore: fs.existsSync(at(vault, STATE_FILE)) ? fs.readFileSync(at(vault, STATE_FILE), 'utf8') : null,
     configText, notesText, stateOut, siteOut, siteAfter, removedKeys, old, oldPc, planned, stateAfter, data, claimed, notesBody,
     extraKeys: new Set(extra.map(keyText)), carried: lines, carry,
+    pkg: stepsPlan ? stepsPlan.pkg : null, removedScripts: stepsPlan ? stepsPlan.removed : [],
   };
   try {
     verify(m, deps);
@@ -642,12 +729,13 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     ok: true,
     lines: [...describeFiles(m, false), ...lines],
     blockers: [],
-    carried: carry.carried,
+    carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])],
     dropped: carry.dropped,
     files: {
-      write: [at(vault, NEW_FILE), ...(notesText && !notesPresent ? [at(vault, NOTES_FILE)] : []), ...(stateOut ? [at(vault, STATE_FILE)] : []), ...(siteOut ? [siteFile] : [])],
+      write: [at(vault, NEW_FILE), ...(notesText && !notesPresent ? [at(vault, NOTES_FILE)] : []), ...(stateOut ? [at(vault, STATE_FILE)] : []), ...(siteOut ? [siteFile] : []), ...(stepsPlan && stepsPlan.pkg ? [stepsPlan.pkg.file] : [])],
       remove: noOld ? [] : [at(vault, OLD_FILE)],
     },
+    ...(stepsPlan && stepsPlan.stepsHeld ? { stepsHeld: stepsPlan.stepsHeld } : {}),
   };
   Object.defineProperty(result, INTERNAL, { value: { ...m, lines }, enumerable: false });
   return result;
@@ -786,12 +874,13 @@ function foldInto(vault, site) {
   return { changes, said };
 }
 
-function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile = false } = {}) {
+function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile = false, siteToolUpdated = false } = {}, deps = {}) {
   const lines = [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`];
   const mend = { cleanup: leftovers(vault, siteConfigPath), removeOld: null, siteFile: null, siteText: null, siteOut: null, removedKeys: [], carryLines: [] };
   const remove = [...mend.cleanup];
   const write = [];
   let carry = { carried: [], dropped: [] };
+  let stepsPlan = null;
   let leftover = null;
   let siteDiffersNow = [];
   if (mend.cleanup.length) lines.push(`${mend.cleanup.length === 1 ? 'A hidden file' : 'Hidden files'} left by an earlier move will be removed: ${mend.cleanup.map((f) => path.basename(f)).join(', ')}.`);
@@ -822,15 +911,17 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
     const mine = isMap(site) && typeof site.vaultPath === 'string' && real(path.resolve(path.dirname(siteFile), site.vaultPath)) === real(vault);
     if (mine) {
       const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
-      carry = planCarry(site, (name) => ({ set: now.origins[name] !== undefined && now.origins[name] !== 'default', value: getPath(now.values, name.split('.')) }));
+      const heldNow = (name) => ({ set: now.origins[name] !== undefined && now.origins[name] !== 'default', value: getPath(now.values, name.split('.')) });
+      carry = planCarry(site, heldNow);
+      stepsPlan = planSteps(path.dirname(siteFile), heldNow, { siteToolUpdated, pinCheck: deps.pinCheck });
       const all = stripSiteKeys(siteText);
-      if (all.siteOut !== null) {
+      if (all.siteOut !== null || stepsPlan.lines.length > 0) {
         const differs = siteDiffers(vault, site);
         siteDiffersNow = differs;
         const hold = differs.length && !foldSiteFile;
         // Held back, only the carried keys come out; the rest of what the site file holds is left for the GM to look at.
         const { siteAfter, siteOut, removedKeys } = hold ? stripSiteKeys(siteText, { carriedOnly: true }) : all;
-        const changes = [...carry.changes];
+        const changes = [...carry.changes, ...stepsPlan.changes];
         let said = null;
         if (differs.length && !hold) {
           // Fold what the site file says into the vault's file first: a hiding list's entries are added (built-ins
@@ -852,16 +943,23 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
           if (unknown) lines.push(unknown);
           mend.carryLines = [...carry.lines, ...(unknown ? [unknown] : [])];
         }
+        if (stepsPlan.pkg) {
+          mend.pkg = stepsPlan.pkg;
+          mend.removedScripts = stepsPlan.removed;
+          write.push(stepsPlan.pkg.file);
+        }
+        lines.push(...stepsPlan.lines);
+        mend.stepsLines = stepsPlan.lines;
         if (hold) {
           lines.push(`${siteFile} still holds settings the new file has differently (${differs.join(', ')}); ${siteOut !== null ? 'they were left in it' : 'it was left as it is'}. The vault's own values are the ones in use.`);
-        } else if (said) {
+        } else if (said && siteOut !== null) {
           lines.push(`Will take the settings out of ${siteFile}: ${removedKeys.join(', ')}. ${said.join(' ')} The rest of that file is as it was.`);
-        } else {
+        } else if (siteOut !== null) {
           lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. ${carry.carried.length ? '' : 'The new file already holds them; '}The rest of that file is as it was.`);
         }
-        if (siteOut !== null) {
+        if (siteOut !== null || stepsPlan.pkg || stepsPlan.changes.length) {
           try {
-            verifyMend(vault, site, { ...mend, carry });
+            verifyMend(vault, site, { ...mend, siteAfter: mend.siteAfter || site, carry: { ...carry, carried: [...carry.carried, ...stepsPlan.carried] } });
           } catch (e) {
             return { ok: false, lines: [], blockers: [firstLine(e.message)], files: { write: [], remove: [] } };
           }
@@ -869,7 +967,8 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
       }
     }
   }
-  const done = plan({ lines, files: { write, remove }, carried: carry.carried, dropped: carry.dropped });
+  const done = plan({ lines, files: { write, remove }, carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])], dropped: carry.dropped });
+  if (stepsPlan && stepsPlan.stepsHeld) done.stepsHeld = stepsPlan.stepsHeld;
   if (leftover) done.leftover = leftover;
   if (siteDiffersNow.length) done.siteDiffers = siteDiffersNow;
   if (write.length || remove.length) Object.defineProperty(done, INTERNAL, { value: { mend }, enumerable: false });
@@ -893,6 +992,7 @@ function verifyMend(vault, site, mend) {
     const before = loadPublishConfig(vault, site, () => {});
     const after = loadPublishConfig(dir, mend.siteAfter, () => {});
     if (!isDeepStrictEqual(before.site, after.site)) throw new Error('the site folder\'s own settings would not come out the same after the move');
+    if (mend.pkg) verifyPackage(mend.pkg, mend.removedScripts);
   } finally {
     fs.rmSync(scratch, { recursive: true, force: true });
   }
@@ -900,7 +1000,7 @@ function verifyMend(vault, site, mend) {
 
 function applyMend(plan, mend, deps = {}) {
   const same = (file, text) => fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text;
-  if ((mend.siteFile && !same(mend.siteFile, mend.siteText)) || (mend.removeOld && !same(mend.removeOld.file, mend.removeOld.text))) {
+  if ((mend.siteFile && !same(mend.siteFile, mend.siteText)) || (mend.pkg && !same(mend.pkg.file, mend.pkg.text)) || (mend.removeOld && !same(mend.removeOld.file, mend.removeOld.text))) {
     throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
   }
   const lines = [plan.lines[0]];
@@ -908,16 +1008,24 @@ function applyMend(plan, mend, deps = {}) {
     throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
   }
   if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultAfter, { rename: deps.rename });
-  if (mend.siteOut !== null) {
+  // One change across up to three files: when a later write fails, the earlier ones go back as they were.
+  const undo = [];
+  if (mend.vaultAfter !== undefined) undo.push(() => writeAtomic(mend.vaultFile, mend.vaultBefore));
+  const put = (file, text, back, what) => {
     try {
-      writeAtomic(mend.siteFile, mend.siteOut, { rename: deps.rename });
+      writeAtomic(file, text, { rename: deps.rename });
     } catch (e) {
-      // One change across two files: the vault's file goes back as it was.
-      if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultBefore);
-      throw new Error(`the settings were not taken out of the site folder's file (${firstLine(e.message)}); nothing was changed`);
+      for (const step of undo.reverse()) step();
+      throw new Error(`${what} (${firstLine(e.message)}); nothing was changed`);
     }
+    undo.push(() => writeAtomic(file, back));
+  };
+  if (mend.siteOut !== null) {
+    put(mend.siteFile, mend.siteOut, mend.siteText, 'the settings were not taken out of the site folder\'s file');
     lines.push(`Removed the settings from ${mend.siteFile}: ${mend.removedKeys.join(', ')}. The rest of that file is as it was.`, ...mend.carryLines);
   }
+  if (mend.pkg) put(mend.pkg.file, mend.pkg.out, mend.pkg.text, 'the build steps were not taken out of the site folder\'s package.json');
+  lines.push(...(mend.stepsLines || []));
   if (mend.removeOld) {
     (deps.remove || ((x) => fs.rmSync(x, { force: true })))(mend.removeOld.file);
     lines.push(`Removed ${OLD_FILE}, left over from before the update.`);
@@ -931,6 +1039,17 @@ function parseNoteSafe(text) {
 }
 
 // ---- Verifying ----------------------------------------------------------------------------
+
+// The package.json as it will be written holds none of the scripts that moved, and everything else as it was.
+function verifyPackage(pkg, removed) {
+  if (pkg.out === null) return;
+  const before = JSON.parse(pkg.text.replace(/^\uFEFF/, ''));
+  const after = JSON.parse(pkg.out);
+  for (const script of removed) if (after.scripts && Object.prototype.hasOwnProperty.call(after.scripts, script)) throw new Error(`${script} would still be in the site's package.json`);
+  const rest = { ...before, scripts: { ...before.scripts } };
+  for (const script of removed) delete rest.scripts[script];
+  if (!isDeepStrictEqual(after, rest) || !isDeepStrictEqual(Object.keys(after), Object.keys(before))) throw new Error('the site\'s package.json would not read back the same apart from the steps');
+}
 
 // Writes the new files into a scratch vault (same folder name), reads them through the real reader and
 // compares with what the old files resolved to. Throws a line naming the first difference.
@@ -973,6 +1092,9 @@ function verify(m, deps = {}) {
       if (!isDeepStrictEqual(before[key], after[key])) throw new Error(`${key} in the site's settings would not come out the same after the move`);
     }
     if (m.siteOut !== null && !isDeepStrictEqual(JSON.parse(m.siteOut), m.siteAfter)) throw new Error('the site folder\'s file would not read back the same');
+    const wantSteps = (name) => (Object.prototype.hasOwnProperty.call(m.planned, name) ? m.planned[name] : getPath(m.old.values, name.split('.')));
+    if (!isDeepStrictEqual(pc.steps, { before: wantSteps('player_site.before_build'), after: wantSteps('player_site.after_build') })) throw new Error('the build steps would not come out the same after the move');
+    if (m.pkg) verifyPackage(m.pkg, m.removedScripts);
     if (m.notesText !== null) {
       let note;
       try { note = parseNote(m.notesText); } catch (e) { throw new Error(`${NOTES_FILE} would not read back (${firstLine(e.message)})`); }
@@ -1007,7 +1129,7 @@ function applyMove(plan, deps = {}) {
 
   // Nothing may have changed since the plan was made.
   const same = (file, text) => (text === null ? !fs.existsSync(file) : fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text);
-  if (!same(at(m.vault, OLD_FILE), m.noOld ? null : m.oldText) || (m.siteFile && !same(m.siteFile, m.siteText)) || !same(at(m.vault, STATE_FILE), m.stateBefore)) {
+  if (!same(at(m.vault, OLD_FILE), m.noOld ? null : m.oldText) || (m.siteFile && !same(m.siteFile, m.siteText)) || (m.pkg && !same(m.pkg.file, m.pkg.text)) || !same(at(m.vault, STATE_FILE), m.stateBefore)) {
     throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
   }
   if (fs.existsSync(at(m.vault, NEW_FILE)) || (fs.existsSync(at(m.vault, NOTES_FILE)) !== m.notesPresent)) {
@@ -1028,6 +1150,7 @@ function applyMove(plan, deps = {}) {
   if (m.stateOut !== null) targets.push({ file: at(m.vault, STATE_FILE), text: m.stateOut });
   targets.push({ file: at(m.vault, NEW_FILE), text: m.configText });
   if (m.siteOut !== null) targets.push({ file: m.siteFile, text: m.siteOut });
+  if (m.pkg) targets.push({ file: m.pkg.file, text: m.pkg.out });
   for (const t of targets) { t.tmp = sibling(t.file, '.new'); t.bak = sibling(t.file, '.old'); t.existed = fs.existsSync(t.file); }
   const oldFile = at(m.vault, OLD_FILE);
   const oldBak = sibling(oldFile, '.old');

@@ -13,6 +13,7 @@ const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
+const { runSteps, packageScripts, twiceWarning } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
 const { linkText } = require('./wikilink');
@@ -107,6 +108,14 @@ function buildSite(options) {
   // A setting named in a message is named as this vault's file writes it.
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
+  // The vault's build steps run only for the `build` and `deploy` commands (`options.runSteps`): never in a dry build,
+  // the preview, or any command that only reads. Before anything is read from the vault, in the site folder.
+  const runningSteps = options.runSteps === true && !dry && !options.outputDirOverride;
+  if (runningSteps) {
+    const twice = twiceWarning(publishConfig.layout === 'new' ? packageScripts(configDir) : {});
+    if (twice) printWarning(twice);
+    if (publishConfig.steps.before.length) runSteps(publishConfig.steps.before, { cwd: configDir, label: 'before_build' });
+  }
 
   if (config.host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
     console.warn(
@@ -1715,6 +1724,8 @@ function buildSite(options) {
   if (auditGaps > 0) {
     console.warn(`  WARNING: the note-faults check could not read ${auditGaps} page${auditGaps === 1 ? '' : 's'} a second time; a note named there with no page may be missing from its list.`);
   }
+  // Every file is written: the after steps run, then the check of the notes and "Done!".
+  if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build' });
   const noteFaults = audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);

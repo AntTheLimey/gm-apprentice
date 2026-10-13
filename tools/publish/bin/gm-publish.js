@@ -625,7 +625,7 @@ if (command === 'build') {
       // theme.fonts.source: self-host fills the vault's font cache first (network); the
       // build itself only reads the cache (#270).
       await require('../lib/fonts').prefetchForConfig(configPath);
-      build({ configPath });
+      build({ configPath, runSteps: true });
     } catch (err) {
       console.error(`Build failed: ${err.message}`);
       exitAfterFlush(1);

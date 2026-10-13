@@ -13,7 +13,7 @@ const { TYPES, isMap, getPath, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
-const { normalizeExcludeDirs, outputProblem, keepProblem } = require('./folders');
+const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked } = require('./folders');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
@@ -45,6 +45,7 @@ function settle(c, e, { written, setting }, first, defaultOf) {
   let r = TYPES[e.type].read(first.raw, e);
   const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : null;
   if (problem) r = { ok: false, problem };
+  else if (r.ok && e.check) r = { ok: true, value: tidyChecked(e.check, r.value) };
   // A list of folders is tidied here for both layouts (the scanner compares exact vault-relative paths).
   if (r.ok && e.same === 'folder' && Array.isArray(r.value)) {
     r.value = normalizeExcludeDirs(r.value, c.vaultPath, (message) => faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message })), written);
