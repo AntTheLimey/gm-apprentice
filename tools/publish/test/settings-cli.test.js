@@ -821,3 +821,22 @@ test('set --create makes no settings file while the site file still holds settin
   assert.equal(run(bare, 'set', ['player_site.title=T'], { create: true, config: bare.config }).rc, 0);
   assert.equal(fs.existsSync(path.join(bare.vault, '_meta', 'vault-config.yaml')), true);
 });
+
+// ---- The old file is checked with the reader the build uses (I4) -------------------------------
+
+test('old file: entries the build would read as a number or a date are written quoted, so they are hidden as typed', () => {
+  const s = scratch(wrap('  exclude_sections: [Spoilers]\n'));
+  assert.equal(run(s, 'add', ['publish.exclude_sections', '12:30', '2024-10-13']).rc, 0);
+  assert.match(text(s), /exclude_sections: \[Spoilers, "12:30", "2024-10-13"\]/);
+  const { data } = run(s, 'get', ['player_site.hide.sections']);
+  assert.deepEqual(data.byNewName.values['player_site.hide.sections'], ['Spoilers', '12:30', '2024-10-13']);
+  assert.deepEqual(data.faults, []);
+  assert.equal(run(s, 'set', ['player_site.title=12:30']).rc, 0);
+  assert.equal(run(s, 'get', ['player_site.title']).data.byNewName.values['player_site.title'], '12:30');
+});
+
+test('new file: the same entries are written as typed and read back the same', () => {
+  const n = newScratch('version: 1\n');
+  assert.equal(run(n, 'add', ['player_site.hide.sections', '12:30', '2024-10-13']).rc, 0);
+  assert.deepEqual(run(n, 'get', ['player_site.hide.sections']).data.byNewName.values['player_site.hide.sections'].slice(-2), ['12:30', '2024-10-13']);
+});

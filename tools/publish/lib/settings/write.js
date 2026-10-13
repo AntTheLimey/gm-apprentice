@@ -18,6 +18,7 @@ const { isLeaf } = require('./describe');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
 const { LAYOUT_VERSION, NEWER_VERSION } = require('./read');
 const { OLD_BLOCK, hasLegacy } = require('./legacy');
+const { parseNote } = require('../frontmatter');
 
 const { Scalar, isScalar, isMap: isYMap, isSeq: isYSeq, isCollection } = YAML;
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
@@ -111,8 +112,10 @@ function dropLines(text, a, b, eol) {
 const toStringOptions = (ctx) => ({ indent: ctx.step, indentSeq: ctx.indentSeq, lineWidth: 0, blockQuote: false, flowCollectionPadding: false, minContentWidth: 0 });
 // A string with a line break is always written double-quoted on one line: the library would otherwise
 // spread it over lines, which a one-line (flow) group cannot hold.
-function documentOf(value) {
-  const doc = new YAML.Document(value, { aliasDuplicateObjects: false });
+// On the old file (`ctx.v11`) the text is made under YAML 1.1's rules, which quote a text that the build's reader
+// (js-yaml, 1.1) would take for a number or a date ("12:30", "2024-10-13"), so both readers agree.
+function documentOf(value, ctx = {}) {
+  const doc = new YAML.Document(value, { aliasDuplicateObjects: false, ...(ctx.v11 ? { version: '1.1' } : {}) });
   YAML.visit(doc, { Scalar(_, node) { if (typeof node.value === 'string' && /[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE'; } });
   return doc;
 }
@@ -123,16 +126,16 @@ function inline(value, old, ctx, flow = false) {
   if (isScalar(old) && typeof value === 'string' && (old.type === 'QUOTE_DOUBLE' || old.type === 'QUOTE_SINGLE')) {
     const s = new Scalar(value);
     s.type = old.type;
-    return documentOf(s).toString(toStringOptions(ctx)).trimEnd();
+    return documentOf(s, ctx).toString(toStringOptions(ctx)).trimEnd();
   }
-  const doc = documentOf(value);
+  const doc = documentOf(value, ctx);
   if (flow && doc.contents && doc.contents.items) doc.contents.flow = true;
   return doc.toString(toStringOptions(ctx)).trimEnd();
 }
 
 // The lines for `key: value` as the library writes them, indented by `pad` spaces.
 function entryLines(key, value, ctx, pad) {
-  const out = documentOf({ [key]: value }).toString(toStringOptions(ctx)).replace(/\n$/, '').split('\n');
+  const out = documentOf({ [key]: value }, ctx).toString(toStringOptions(ctx)).replace(/\n$/, '').split('\n');
   return out.map((l) => (l === '' ? l : ' '.repeat(pad) + l));
 }
 
@@ -359,7 +362,7 @@ function renameKey(text, doc, keys, to, ctx) {
   const k = pair.key;
   const s = new Scalar(to);
   if (isScalar(k) && (k.type === 'QUOTE_DOUBLE' || k.type === 'QUOTE_SINGLE')) s.type = k.type;
-  return [{ from: k.range[0], to: k.range[1], text: documentOf(s).toString(toStringOptions(ctx)).trimEnd() }];
+  return [{ from: k.range[0], to: k.range[1], text: documentOf(s, ctx).toString(toStringOptions(ctx)).trimEnd() }];
 }
 
 // Renames one entry of the list at `keys` in place (text only changes at the entry).
@@ -494,7 +497,7 @@ function prepare(changes, layout, { allowState = false } = {}) {
 // One step on one text. Returns { text, expected (the data it should parse to), wrote, removed, notes }.
 function runStep(text, step, label, eol, keepBlock) {
   const doc = parseText(text, label);
-  const ctx = { ...styleOf(doc, text), eol, keepBlock };
+  const ctx = { ...styleOf(doc, text), eol, keepBlock, v11: !!keepBlock };
   const before = doc.toJS() || {};
   const wrote = [];
   const removed = [];
@@ -586,6 +589,12 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
       out = runStep(text, step, doc.label, doc.eol, layout === 'legacy' ? OLD_BLOCK : null);
       const after = parseText(out.text, doc.label).toJS() || {};
       if (!isDeepStrictEqual(after, out.expected)) throw new Error('did not read back as intended');
+      // The old file is read by the build with another YAML reader (js-yaml, YAML 1.1): the changed setting must
+      // come out of that reader as it was meant too.
+      if (layout === 'legacy' && step.kind !== 'del' && out.text !== before) {
+        const built = parseNote(doc.join(out.text)).data || {};
+        if (!isDeepStrictEqual(getJ(built, step.keys), getJ(out.expected, step.keys))) throw new Error('the build would read it differently');
+      }
     } catch (e) {
       if (e.plain) throw e;
       const err = notMade(step.shown || step.setting, doc.rel, before, step.keys);
@@ -645,7 +654,7 @@ function renameInSettings(vaultPath, renames, { text } = {}) {
     if (!e) throw new Error(`${r.name} is not a setting.`);
     const keys = (layout === 'legacy' ? legacyNameOf(e) : e.name).split('.');
     const doc = parseText(edit, opened.label);
-    const ctx = { ...styleOf(doc, edit), eol: opened.eol };
+    const ctx = { ...styleOf(doc, edit), eol: opened.eol, v11: layout === 'legacy' };
     const before = doc.toJS() || {};
     const held = getJ(before, keys);
     let edits;
