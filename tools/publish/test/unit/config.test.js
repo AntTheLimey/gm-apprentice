@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { loadPublishConfig } = require('../../lib/config');
-const { entry } = require('../../lib/settings');
-const defaultOf = (name) => entry(`publish.${name}`).default;
+const { resolve } = require('../../lib/settings');
+// The built-in default of a setting, asked by the name the old vault file gave it.
+const defaultOf = (name) => resolve(`publish.${name}`).entry.default;
 
 describe('the built-in defaults', () => {
   it('has player mode by default', () => {

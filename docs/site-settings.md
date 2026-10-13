@@ -79,13 +79,13 @@ fixed, so nothing extra is ever shown by a guess. These are:
 
 <!-- settings:hiding-list -->
 
-- `publish.mode`
-- `publish.exclude_dirs`
-- `publish.exclude_sections`
-- `publish.exclude_fields`
-- `publish.exclude_callouts`
-- `publish.exclude_drafts`
-- `publish.overrides.fields`
+- `player_site.hide.mode`
+- `player_site.hide.folders`
+- `player_site.hide.sections`
+- `player_site.hide.fields`
+- `player_site.hide.callouts`
+- `player_site.hide.drafts`
+- `player_site.hide.field_exceptions`
 
 <!-- /settings:hiding-list -->
 
@@ -107,6 +107,17 @@ and `publish.inbox`, where an empty line counts as off. A switch that
 holds something that is not one of the words is reported by name, and
 what follows is as described under "Check the spelling" above.
 
+## The vault
+
+<!-- settings:vault -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `vault.kept_by` | Who keeps this vault: `gm` for the game master, `player` for a player keeping notes on a campaign they are in | `gm` or `player` | `gm` |
+| `vault.campaign` | The campaign's name | The campaign's name | The vault folder's name |
+
+<!-- /settings:vault -->
+
 ## The site itself
 
 Where a table says "A switch", see "On and off" above.
@@ -115,16 +126,16 @@ Where a table says "A switch", see "On and off" above.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.site` | Whether this vault has a site | A switch | On when a site folder is set (`publish.site_dir`), otherwise off |
-| `publish.site_dir` | The folder on this computer that holds the site | A folder path | Setting up a site writes it |
-| `publish.site_title` | The name in the menu bar and the browser tab | Text | No title; setting up a site writes one |
-| `publish.footer` | A line at the foot of every page | Text | No footer |
-| `publish.search` | The search box | A switch | On |
-| `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page | `on`, `desktop` or `off` | `on` |
-| `publish.connections` | How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off` | `tree`, `web`, `cards` or `off` | `tree` |
-| `publish.four_oh_four.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
-| `publish.system` | The game system, which decides how a character sheet is drawn | `coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark); the short names `coc`, `regency-cthulhu`, `gurps`, `dnd-5e`, `dnd`, `blades`, `pathfinder-2e` and `pathfinder` work too | A plain character page with no system's sheet |
-| `setting_year` | An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. Write it at the left edge of the file, beside `publish:`, not under it | A year | Nothing shown |
+| `player_site.publish`<br>was `publish.site` | Whether this vault has a site | A switch | On when a site folder is set (`player_site.folder`), otherwise off |
+| `player_site.folder`<br>was `publish.site_dir` | The folder on this computer that holds the site | A folder path | Setting up a site writes it |
+| `player_site.title`<br>was `publish.site_title`, `siteTitle` | The name in the menu bar and the browser tab | Text | No title; setting up a site writes one |
+| `player_site.footer`<br>was `publish.footer`, `footer` | A line at the foot of every page | Text | No footer |
+| `player_site.features.search`<br>was `publish.search`, `searchEnabled` | The search box | A switch | On |
+| `player_site.features.link_previews`<br>was `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page | `on`, `desktop` or `off` | `on` |
+| `player_site.features.connections`<br>was `publish.connections` | How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off` | `tree`, `web`, `cards` or `off` | `tree` |
+| `player_site.not_found`<br>was `publish.four_oh_four.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
+| `vault.system`<br>was `publish.system`, `system` | The game system, which decides how a character sheet is drawn | `coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark); the short names `coc`, `regency-cthulhu`, `gurps`, `dnd-5e`, `dnd`, `blades`, `pathfinder-2e` and `pathfinder` work too | A plain character page with no system's sheet |
+| `vault.setting_year`<br>was `setting_year` | An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. Write it at the left edge of the file, beside `publish:`, not under it | A year | Nothing shown |
 
 <!-- /settings:site -->
 
@@ -143,15 +154,15 @@ These decide which notes, and which parts of a note, reach the site.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.mode` | `player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own | `player` or `full` | `player` |
-| `publish.folder_map` | Which vault folders are published, and the web address each gets | A vault folder and its address, one pair to a line | Nothing is mapped; setting up a site writes the standard map |
-| `publish.attachments_dir` | The vault folder that holds pictures | A folder name | `_attachments` |
-| `publish.exclude_dirs` | Vault folders never published | A list of folders | `_meta`, `_Templates` |
-| `publish.exclude_sections` | Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link) | A list of headings | `GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile` |
-| `publish.exclude_fields` | Fields in the block at the top of a note (between its `---` lines) that are never shown | A list of field names | `secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability` |
-| `publish.exclude_callouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
-| `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
-| `publish.overrides.fields` | Lets one note show a field that `exclude_fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
+| `player_site.hide.mode`<br>was `publish.mode` | `player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own | `player` or `full` | `player` |
+| `player_site.folder_map`<br>was `publish.folder_map`, `folderMap` | Which vault folders are published, and the web address each gets | A vault folder and its address, one pair to a line | Nothing is mapped; setting up a site writes the standard map |
+| `vault.attachments`<br>was `publish.attachments_dir`, `attachmentsDir` | The vault folder that holds pictures | A folder name | `_attachments` |
+| `player_site.hide.folders`<br>was `publish.exclude_dirs`, `excludeDirs` | Vault folders never published | A list of folders | `_meta`, `_Templates` |
+| `player_site.hide.sections`<br>was `publish.exclude_sections`, `excludeSections` | Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link) | A list of headings | `GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile` |
+| `player_site.hide.fields`<br>was `publish.exclude_fields`, `excludeFields` | Fields in the block at the top of a note (between its `---` lines) that are never shown | A list of field names | `secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability` |
+| `player_site.hide.callouts`<br>was `publish.exclude_callouts`, `excludeCallouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
+| `player_site.hide.drafts`<br>was `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
+| `player_site.hide.field_exceptions`<br>was `publish.overrides.fields` | Lets one note show a field that `player_site.hide.fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
 
 <!-- /settings:published -->
 
@@ -195,19 +206,19 @@ is skipped, and the build says so.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.theme.genre` | A ready-made look: colours, lettering and section names. A genre the tool does not know is reported, and the site keeps the plain dark look | `horror`, `fantasy`, `noir`, `military` or `scifi` | No preset |
-| `publish.theme.palette.primary` | The main colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#1a2f3a` |
-| `publish.theme.palette.accent` | The accent colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#3d8a7a` |
-| `publish.theme.palette.background` | The page background colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#e8f0f3` |
-| `publish.theme.palette.text` | The text colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#1a1a1a` |
-| `publish.theme.fonts.heading` | The lettering for headings | A typeface's name | The preset's lettering, or the reader's own system font |
-| `publish.theme.fonts.body` | The lettering for body text | A typeface's name | The preset's lettering, or the reader's own system font |
-| `publish.theme.fonts.source` | Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used | `google`, `self-host` or `local` | `google`: what a vault that never set a source gets |
-| `publish.theme.fonts.files` | Your own font files, each listed with its `family` (the typeface's name) and `path` (the file's place in the vault); used when the source is `local` | A list of font files, each with a `family`, a `path`, and optionally a `weight` and `style` | No files |
-| `publish.theme.campaign_image` | The large picture at the top of the landing page | A picture's path in the vault | No picture |
-| `publish.theme.default_mode` | Whether a reader starts in light or dark | `system`, `dark` or `light` | `system`: follows the reader's device |
-| `publish.theme.tagline` | One sentence under the title on the landing page | Text | No tagline |
-| `publish.section_titles` | Your own headings for the lists of locations, factions, items, creatures and documents | `locations`, `factions`, `items`, `creatures`, `documents`, each a title | Plain titles, or the genre's own |
+| `player_site.theme.genre`<br>was `publish.theme.genre` | A ready-made look: colours, lettering and section names. A genre the tool does not know is reported, and the site keeps the plain dark look | `horror`, `fantasy`, `noir`, `military` or `scifi` | No preset |
+| `player_site.theme.palette.primary`<br>was `publish.theme.palette.primary` | The main colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#1a2f3a` |
+| `player_site.theme.palette.accent`<br>was `publish.theme.palette.accent` | The accent colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#3d8a7a` |
+| `player_site.theme.palette.background`<br>was `publish.theme.palette.background` | The page background colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#e8f0f3` |
+| `player_site.theme.palette.text`<br>was `publish.theme.palette.text` | The text colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one | A colour | No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#1a1a1a` |
+| `player_site.theme.fonts.heading`<br>was `publish.theme.fonts.heading` | The lettering for headings | A typeface's name | The preset's lettering, or the reader's own system font |
+| `player_site.theme.fonts.body`<br>was `publish.theme.fonts.body` | The lettering for body text | A typeface's name | The preset's lettering, or the reader's own system font |
+| `player_site.theme.fonts.source`<br>was `publish.theme.fonts.source` | Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used | `google`, `self-host` or `local` | `google`: what a vault that never set a source gets |
+| `player_site.theme.fonts.files`<br>was `publish.theme.fonts.files` | Your own font files, each listed with its `family` (the typeface's name) and `path` (the file's place in the vault); used when the source is `local` | A list of font files, each with a `family`, a `path`, and optionally a `weight` and `style` | No files |
+| `player_site.theme.campaign_image`<br>was `publish.theme.campaign_image` | The large picture at the top of the landing page | A picture's path in the vault | No picture |
+| `player_site.theme.default_mode`<br>was `publish.theme.default_mode` | Whether a reader starts in light or dark | `system`, `dark` or `light` | `system`: follows the reader's device |
+| `player_site.theme.tagline`<br>was `publish.theme.tagline`, `landingTagline` | One sentence under the title on the landing page | Text | No tagline |
+| `player_site.lists.section_titles`<br>was `publish.section_titles` | Your own headings for the lists of locations, factions, items, creatures and documents | `locations`, `factions`, `items`, `creatures`, `documents`, each a title | Plain titles, or the genre's own |
 
 <!-- /settings:theme -->
 
@@ -242,13 +253,13 @@ With `local`, each font file is listed under `publish.theme.fonts.files`.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.character_sheets` | Whether a character's page carries its sheet | A switch | On |
-| `publish.pc_prose_sections` | With sheets off, extra sections of a character's note that are still published | A list of headings | Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects |
-| `publish.sheet_skin` | The look of every character sheet | `plain`, `parchment`, `case-file`, `console` or `ledger` | `plain` |
-| `publish.sheet_frame` | The ornament round each portrait | `none`, `ring`, `laurel`, `thorns`, `gilt`, `steel`, `corners`, `hex` or `cracked` | The skin's own frame |
-| `publish.sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
-| `publish.tohit_calculator` | The to-hit calculator on a GURPS character's Combat tab | `on` or `off` | `on` |
-| `publish.dndbeyond_sync` | When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask | `build` or `manual` | `manual` |
+| `player_site.sheets.show`<br>was `publish.character_sheets` | Whether a character's page carries its sheet | A switch | On |
+| `player_site.sheets.prose_sections`<br>was `publish.pc_prose_sections` | With sheets off, extra sections of a character's note that are still published | A list of headings | Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects |
+| `player_site.sheets.skin`<br>was `publish.sheet_skin` | The look of every character sheet | `plain`, `parchment`, `case-file`, `console` or `ledger` | `plain` |
+| `player_site.sheets.frame`<br>was `publish.sheet_frame` | The ornament round each portrait | `none`, `ring`, `laurel`, `thorns`, `gilt`, `steel`, `corners`, `hex` or `cracked` | The skin's own frame |
+| `player_site.sheets.crest`<br>was `publish.sheet_crest`, `sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
+| `player_site.features.tohit_calculator`<br>was `publish.tohit_calculator` | The to-hit calculator on a GURPS character's Combat tab | `on` or `off` | `on` |
+| `vault.dndbeyond_sync`<br>was `publish.dndbeyond_sync` | When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask | `build` or `manual` | `manual` |
 
 <!-- /settings:sheets -->
 
@@ -272,8 +283,8 @@ The apprentice does the setting up and writes the switch for you.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.live_stats` | Players change hit points, spent resources and conditions on their own sheet during a session, and the party board follows. For Call of Cthulhu, GURPS and D&D; it does nothing for Pathfinder or Forged in the Dark | A switch | Off |
-| `publish.inbox` | A box on each character page for sending the GM a request or a question | A switch | Off |
+| `player_site.features.live_stats`<br>was `publish.live_stats`, `publish.backend.statusBar`, `backend.statusBar` | Players change hit points, spent resources and conditions on their own sheet during a session, and the party board follows. For Call of Cthulhu, GURPS and D&D; it does nothing for Pathfinder or Forged in the Dark | A switch | Off |
+| `player_site.features.inbox`<br>was `publish.inbox`, `publish.backend.inbox`, `backend.inbox` | A box on each character page for sending the GM a request or a question | A switch | Off |
 
 <!-- /settings:live -->
 
@@ -283,14 +294,14 @@ The apprentice does the setting up and writes the switch for you.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.landing.max_npcs` | How many people appear under "NPCs in Play"; `0` shows none | A whole number, 0 or more | `6` |
-| `publish.landing.max_locations` | How many places appear under "Latest Locations"; `0` shows none | A whole number, 0 or more | `4` |
-| `publish.landing.max_events` | How many events appear under "Latest Events"; `0` shows none | A whole number, 0 or more | `4` |
-| `publish.landing.recency_window` | How many recent sessions decide who and what is "in play"; `0` counts none | A whole number, 0 or more | `3` |
-| `publish.landing.featured_npcs` | People pinned to the front of their row, in your order | A list of note names | Nobody pinned |
-| `publish.landing.featured_locations` | The same, for places | A list of note names | Nothing pinned |
-| `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
-| `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
+| `player_site.landing.max_npcs`<br>was `publish.landing.max_npcs` | How many people appear under "NPCs in Play"; `0` shows none | A whole number, 0 or more | `6` |
+| `player_site.landing.max_locations`<br>was `publish.landing.max_locations` | How many places appear under "Latest Locations"; `0` shows none | A whole number, 0 or more | `4` |
+| `player_site.landing.max_events`<br>was `publish.landing.max_events` | How many events appear under "Latest Events"; `0` shows none | A whole number, 0 or more | `4` |
+| `player_site.landing.recency_window`<br>was `publish.landing.recency_window` | How many recent sessions decide who and what is "in play"; `0` counts none | A whole number, 0 or more | `3` |
+| `player_site.landing.featured_npcs`<br>was `publish.landing.featured_npcs` | People pinned to the front of their row, in your order | A list of note names | Nobody pinned |
+| `player_site.landing.featured_locations`<br>was `publish.landing.featured_locations` | The same, for places | A list of note names | Nothing pinned |
+| `player_site.landing.quick_links`<br>was `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
+| `player_site.landing.explore_descriptions`<br>was `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
 
 <!-- /settings:landing -->
 
@@ -312,13 +323,13 @@ publish:
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `publish.images.optimize` | Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size | A switch | Off: pictures are copied as they are |
-| `publish.images.format` | The format pictures are converted to. Only `webp` is available; any other is reported, and pictures are left as they are | `webp` | `webp` |
-| `publish.images.max_width` | The widest a shrunk picture may be, in pixels; `0` for no limit | A whole number, 0 or more | `1600` |
-| `publish.images.quality` | The quality of shrunk pictures: 0 is the smallest file, 100 the best picture, and anything above 100 counts as 100 | A number, 0 or more | `82` |
-| `publish.banners` | A picture or map at the top of a section's list | A section's web address, with a picture's path, or with `image`, `link` and `alt` | A picture named `_banner` in the section's vault folder is used if there is one |
-| `publish.locations.group_by` | Splits the list of locations into one block, under its own heading, for each place of a kind, such as each star system | A kind of location, or `false` | Off, except the `scifi` genre, which groups by `system` |
-| `publish.locations.ungrouped_label` | The heading for places that fall in no block | Text | A standard heading |
+| `player_site.images.optimize`<br>was `publish.images.optimize` | Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size | A switch | Off: pictures are copied as they are |
+| `player_site.images.format`<br>was `publish.images.format` | The format pictures are converted to. Only `webp` is available; any other is reported, and pictures are left as they are | `webp` | `webp` |
+| `player_site.images.max_width`<br>was `publish.images.max_width`, `publish.images.maxWidth` | The widest a shrunk picture may be, in pixels; `0` for no limit | A whole number, 0 or more | `1600` |
+| `player_site.images.quality`<br>was `publish.images.quality` | The quality of shrunk pictures: 0 is the smallest file, 100 the best picture, and anything above 100 counts as 100 | A number, 0 or more | `82` |
+| `player_site.lists.banners`<br>was `publish.banners`, `banners` | A picture or map at the top of a section's list | A section's web address, with a picture's path, or with `image`, `link` and `alt` | A picture named `_banner` in the section's vault folder is used if there is one |
+| `player_site.lists.locations.group_by`<br>was `publish.locations.group_by` | Splits the list of locations into one block, under its own heading, for each place of a kind, such as each star system | A kind of location, or `false` | Off, except the `scifi` genre, which groups by `system` |
+| `player_site.lists.locations.ungrouped_label`<br>was `publish.locations.ungrouped_label` | The heading for places that fall in no block | Text | A standard heading |
 
 <!-- /settings:lists -->
 

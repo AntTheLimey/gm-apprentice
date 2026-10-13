@@ -32,11 +32,17 @@ function valuesCell(entry) {
   return upFirst(row(entry).takes);
 }
 
+// The names a setting had before, beneath its name (a site-file key is named as the key).
+function wasNote(e) {
+  const old = (e.was || []).map((w) => `\`${w.name}\``);
+  return old.length ? `<br>was ${old.join(', ')}` : '';
+}
+
 function table(groupId) {
   const rows = REGISTRY.filter((e) => e.group === groupId && isLeaf(e, REGISTRY));
   const lines = ['| Setting | What it does | Values | Left out |', '|---------|--------------|--------|----------|'];
   for (const e of rows) {
-    lines.push(`| \`${e.name}\` | ${cell(e.does)} | ${cell(valuesCell(e))} | ${cell(leftOutCell(e))} |`);
+    lines.push(`| \`${e.name}\`${wasNote(e)} | ${cell(e.does)} | ${cell(valuesCell(e))} | ${cell(leftOutCell(e))} |`);
   }
   return lines.join('\n');
 }

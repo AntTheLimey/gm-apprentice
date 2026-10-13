@@ -164,7 +164,7 @@ function decidePage(page, options) {
     };
   }
 
-  const mode = publishConfig.mode || entry('publish.mode').default;
+  const mode = publishConfig.mode || entry('player_site.hide.mode').default;
   const index = manifest ? indexOf(manifest) : null;
   const listedForPublish = !!(index && index.publishing.has(rel));
 

@@ -10,7 +10,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, normalizeExcludeDir, mergedMaps } = require('./settings/site-file');
-const { entry: settingEntry } = require('./settings');
+const { resolve: resolveSetting } = require('./settings');
 const { readSwitch } = require('./settings/types');
 const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
@@ -183,7 +183,7 @@ function planMigration({ configPath, vaultPath } = {}) {
     for (const entry of movedKeys()) {
       if (entry.publish !== 'exclude_sections' && entry.publish !== 'exclude_fields') continue;
       if (site[entry.json] !== undefined || (publish[entry.publish] !== undefined && publish[entry.publish] !== null)) continue;
-      const value = [...settingEntry(`publish.${entry.publish}`).default];
+      const value = [...resolveSetting(`publish.${entry.publish}`).entry.default];
       plan.vaultSet[entry.publish] = value;
       plan.moves.push({ from: 'the built-in list', to: `publish.${entry.publish}`, value });
     }

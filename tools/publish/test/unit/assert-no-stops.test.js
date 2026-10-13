@@ -4,7 +4,7 @@ const { assertNoStops } = require('../../lib/config');
 const { makeFault, formatFault } = require('../../lib/settings');
 const { entry } = require('../../lib/settings');
 
-const stop = makeFault({ name: 'publish.mode', kind: 'not-allowed', level: 'stop', value: 'players', entry: entry('publish.mode') });
+const stop = makeFault({ name: 'publish.mode', kind: 'not-allowed', level: 'stop', value: 'players', entry: entry('player_site.hide.mode') });
 const warn = makeFault({ name: 'publish.zebra', kind: 'unknown-name', level: 'warn', value: 1, suggest: null });
 
 describe('assertNoStops', () => {
@@ -18,7 +18,7 @@ describe('assertNoStops', () => {
     });
   });
   it('names every stop, one line each', () => {
-    const second = makeFault({ name: 'publish.exclude_drafts', kind: 'not-allowed', level: 'stop', value: 'maybe', entry: entry('publish.exclude_drafts') });
+    const second = makeFault({ name: 'publish.exclude_drafts', kind: 'not-allowed', level: 'stop', value: 'maybe', entry: entry('player_site.hide.drafts') });
     assert.throws(() => assertNoStops({ faults: [stop, second] }, 'deploy'), (err) => err.message.split('\n').length === 4);
   });
   it('returns quietly for warnings only and for no faults', () => {

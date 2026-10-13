@@ -5,7 +5,7 @@ const { TYPES } = require('./types');
 // A setting the GM can read and write by name: not a parent that only holds others, not a
 // retired name, not the tool's own bookkeeping, not a name its children's names stand in for.
 function isLeaf(entry, all) {
-  if (entry.container || entry.retired || entry.state) return false;
+  if (entry.container || entry.retired || entry.state || entry.legacyOnly) return false;
   return !all.some((e) => e.name.startsWith(`${entry.name}.`));
 }
 
@@ -31,7 +31,8 @@ function row(entry) {
     takes: TYPES[entry.type].takes(entry),
     default: defaultOf(entry),
     guards: !!entry.guards,
-    oldNames: (entry.oldNames || []).map((o) => o.name),
+    // The names it had before, in the old vault file first; a site-file key is named as the key.
+    oldNames: (entry.was || []).map((o) => o.name),
   };
 }
 

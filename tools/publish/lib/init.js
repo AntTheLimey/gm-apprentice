@@ -44,8 +44,8 @@ function defaultCampaignSettings(siteTitle, tagline, siteDir) {
     // The built-in lists, written out so the GM sees them and edits them knowingly: a list in
     // the vault replaces the built-in one, so an entry added to an invisible default would drop
     // the rest. One source: the lists the build falls back to when the vault has none.
-    exclude_sections: [...entry('publish.exclude_sections').default],
-    exclude_fields: [...entry('publish.exclude_fields').default],
+    exclude_sections: [...entry('player_site.hide.sections').default],
+    exclude_fields: [...entry('player_site.hide.fields').default],
     exclude_callouts: true,
     ...(tagline ? { theme: { tagline } } : {}),
   };

@@ -1,24 +1,31 @@
 'use strict';
 // readSettings: walks a vault's settings file (and the site's vault.config.json, where it
-// still holds settings) against the declared list. It returns values, where each came from,
-// and the faults. It prints nothing and throws only for a file that is not valid YAML.
+// still holds settings) against the declared list. It returns values and origins under the
+// list's names, and the faults, each with `name` (as written in the file) and `setting` (the
+// list's name, or null). It prints nothing and throws only for a file that is not valid YAML.
+// The file is walked in the old layout's names (the list's `was`) until the new file exists.
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseNote } = require('../frontmatter');
-const { REGISTRY } = require('./registry');
+const { REGISTRY, entry: settingEntry, legacyNameOf } = require('./registry');
 const { TYPES, isMap } = require('./types');
 const { nearest, makeFault } = require('./faults');
-const { mergeWithSiteFile, movedKeys } = require('./site-file');
+const { LEGACY, OLD_BLOCK: PUBLISH, underBlock, sansBlock, mergeWithSiteFile, movedKeys } = require('./site-file');
 
-const PUBLISH = 'publish';
 const PARENT = Symbol('parent');
-// A key written with nothing after it is "not set", except on these, where it is unreadable.
-const EMPTY_IS_FAULT = new Set(['publish.site', 'publish.character_sheets', 'publish.live_stats', 'publish.inbox']);
+// A key written with nothing after it is "not set", except on the switches that must never fail on,
+// where it is unreadable.
+const EMPTY_IS_FAULT = new Set(LEGACY.filter((e) => e.type === 'switch' && e.onFault === false).map((e) => e.name));
+const SITE_SWITCH = legacyNameOf(settingEntry('player_site.publish'));
+const SITE_FOLDER = legacyNameOf(settingEntry('player_site.folder'));
+// The old container of the field exceptions (it holds nothing but `fields`) and the name that replaced it.
+const OVERRIDES = new Set(REGISTRY.filter((e) => e.legacyOnly && e.guards).map((e) => e.name));
+const OVERRIDE_FIELDS = legacyNameOf(settingEntry('player_site.hide.field_exceptions'));
 // A name directly under `publish` that says it hides something must never be ignored quietly.
 const HIDING_PREFIXES = ['exclude', 'hid'];
 // The last part of each hiding setting's name (exclude_sections, mode, fields, ...): a key called
 // exactly that, anywhere under `publish`, is a hiding setting in the wrong place.
-const GUARD_LASTS = new Set(REGISTRY.filter((e) => e.guards).map((e) => e.name.split('.').pop()));
+const GUARD_LASTS = new Set(LEGACY.filter((e) => e.guards).map((e) => e.name.split('.').pop()));
 // `mode` is left out: it is also an everyday word (a colour mode under `theme`), and stopping on it would be a false alarm.
 const guardLast = (key) => GUARD_LASTS.has(key) && key !== 'mode';
 const saysHiding = (key) => guardLast(key) || HIDING_PREFIXES.some((p) => key.toLowerCase().startsWith(p));
@@ -26,12 +33,28 @@ const saysHiding = (key) => guardLast(key) || HIDING_PREFIXES.some((p) => key.to
 const saysHidingBeside = (key) => guardLast(key) || key.startsWith('exclude_');
 const MAP_ENTRY = { type: 'map', shape: 'settings, one to a line' };
 
-const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
-const hasChildren = (name) => REGISTRY.some((e) => e.name.startsWith(`${name}.`));
+// The old layout's view of the list, plus the entries that exist only in the old file.
+const OLD_LIST = [...LEGACY, ...REGISTRY.filter((e) => e.legacyOnly)];
+const BY_NAME = new Map(OLD_LIST.map((e) => [e.name, e]));
+const hasChildren = (name) => OLD_LIST.some((e) => e.name.startsWith(`${name}.`));
+
+// The list's name for a key the list does not know, found under `parent` in the old file (such keys
+// are kept in the values as written). The parent is placed through its own entry, or through a
+// setting under it whose new name ends the same way as its old one; null when neither places it.
+function settingPathOf(parent, key) {
+  const own = BY_NAME.get(parent);
+  if (own && own.setting) return `${own.setting}.${key}`;
+  for (const e of LEGACY) {
+    if (!e.name.startsWith(`${parent}.`)) continue;
+    const tail = e.name.slice(parent.length + 1);
+    if (e.setting.endsWith(`.${tail}`)) return `${e.setting.slice(0, -(tail.length + 1))}.${key}`;
+  }
+  return null;
+}
 
 // Every name the list knows, with the parent paths between them (theme, theme.fonts, ...).
 const KNOWN = new Map(BY_NAME);
-for (const e of REGISTRY) {
+for (const e of OLD_LIST) {
   const segs = e.name.split('.');
   for (let i = 2; i < segs.length; i++) {
     const p = segs.slice(0, i).join('.');
@@ -39,7 +62,7 @@ for (const e of REGISTRY) {
   }
 }
 // Old names written under `publish:` in the vault file, each with the setting that replaced it.
-const OLD_PATHS = new Map(REGISTRY.flatMap((e) => (e.oldNames || []).filter((o) => o.name.startsWith('publish.')).map((o) => [o.name, e.name])));
+const OLD_PATHS = new Map(LEGACY.flatMap((e) => (e.oldNames || []).filter((o) => underBlock(o.name)).map((o) => [o.name, e.name])));
 
 function childSegs(parent) {
   const out = [];
@@ -87,40 +110,42 @@ function readSettings({ vaultPath, siteConfig = {} }) {
       throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
     }
     data = data || {};
-    file.inline = /^publish:[ \t]*\{/m.test(text);
+    file.inline = new RegExp(`^${PUBLISH}:[ \\t]*\\{`, 'm').test(text);
   }
-  const publish = isMap(data.publish) ? data.publish : {};
-  file.hasPublish = isMap(data.publish);
-  if (data.publish && !isMap(data.publish)) {
-    faults.push(makeFault({ name: PUBLISH, kind: 'not-allowed', level: 'warn', value: data.publish, entry: MAP_ENTRY }));
+  const publish = isMap(data[PUBLISH]) ? data[PUBLISH] : {};
+  file.hasPublish = isMap(data[PUBLISH]);
+  if (data[PUBLISH] && !isMap(data[PUBLISH])) {
+    faults.push(makeFault({ name: PUBLISH, setting: null, kind: 'not-allowed', level: 'warn', value: data[PUBLISH], entry: MAP_ENTRY }));
   }
 
   // exclude_callouts is merged "stricter wins" between the two files, so each side is turned
   // into on, off or a list first: a vault `no` must not count as text that hides.
-  const calloutsEntry = BY_NAME.get('publish.exclude_callouts');
+  const calloutsEntry = LEGACY.find((e) => e.jsonMerge === 'stricter');
+  const calloutsKey = sansBlock(calloutsEntry.name);
   const asRead = (v) => { const r = TYPES[calloutsEntry.type].read(v, calloutsEntry); return r.ok ? r.value : v; };
   const mergeVault = { ...publish };
-  if (mergeVault.exclude_callouts != null) mergeVault.exclude_callouts = asRead(mergeVault.exclude_callouts);
+  if (mergeVault[calloutsKey] != null) mergeVault[calloutsKey] = asRead(mergeVault[calloutsKey]);
   const mergeSite = { ...site };
-  if (mergeSite.excludeCallouts != null) mergeSite.excludeCallouts = asRead(mergeSite.excludeCallouts);
+  if (mergeSite[calloutsEntry.json] != null) mergeSite[calloutsEntry.json] = asRead(mergeSite[calloutsEntry.json]);
 
   const merge = mergeWithSiteFile(mergeVault, mergeSite, vaultPath);
   const { picked, legacy, from } = merge;
   const movedNames = new Set(movedKeys().map((e) => e.publish));
+  const DIRS_ENTRY = LEGACY.find((e) => e.same === 'folder');
   for (const text of merge.dropped) {
-    faults.push(makeFault({ name: 'publish.exclude_dirs', kind: 'dropped', level: 'warn', value: null, message: text }));
+    faults.push(makeFault({ name: DIRS_ENTRY.name, setting: DIRS_ENTRY.setting, kind: 'dropped', level: 'warn', value: null, message: text }));
   }
 
   // Where a name's value is written: the merged moved key, else the vault file.
   function rawAt(name) {
-    if (name === 'setting_year') return data.setting_year;
+    if (!underBlock(name)) return data[name];
     const segs = name.split('.').slice(1);
     if (movedNames.has(segs[0])) return segs.length === 1 ? picked[segs[0]] : getPath(picked[segs[0]], segs.slice(1));
     return getPath(publish, segs);
   }
   function originAt(name) {
     const segs = name.split('.').slice(1);
-    if (!movedNames.has(segs[0])) return 'file';
+    if (!underBlock(name) || !movedNames.has(segs[0])) return 'file';
     if (segs.length === 1) return from[segs[0]] || 'file';
     return getPath(publish, segs) !== undefined ? 'file' : 'site-file';
   }
@@ -128,11 +153,11 @@ function readSettings({ vaultPath, siteConfig = {} }) {
   const values = {};
   const origins = {};
   const defaultOf = (e) => {
-    if (e.name === 'publish.site') return typeof publish.site_dir === 'string' && publish.site_dir.trim() !== '';
+    if (e.name === SITE_SWITCH) { const dir = getPath(publish, sansBlock(SITE_FOLDER).split('.')); return typeof dir === 'string' && dir.trim() !== ''; }
     return e.default === undefined ? null : clone(e.default);
   };
   const fallbackOf = (e) => (e.onFault !== undefined ? e.onFault : defaultOf(e));
-  const notAllowed = (e, raw) => makeFault({ name: e.name, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: raw, entry: e });
+  const notAllowed = (e, raw) => makeFault({ name: e.name, setting: e.setting, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: raw, entry: e });
 
   function readEntry(e) {
     const sources = [{ raw: rawAt(e.name), origin: originAt(e.name) }];
@@ -145,40 +170,46 @@ function readSettings({ vaultPath, siteConfig = {} }) {
     const set = sources.filter(isSet);
     // An old name is always reported; its value is read only unless the registry says `read: false`.
     for (const s of [...set, ...reportOnly.filter(isSet)]) {
-      if (s.old) faults.push(makeFault({ name: s.old.name, kind: 'old-name', level: 'warn', value: s.raw, use: e.name }));
+      if (s.old) faults.push(makeFault({ name: s.old.name, setting: e.setting, kind: 'old-name', level: 'warn', value: s.raw, use: e.name }));
     }
     if (set.length === 0) {
-      setIn(values, e.name, defaultOf(e));
-      origins[e.name] = 'default';
+      setIn(values, e.setting, defaultOf(e));
+      origins[e.setting] = 'default';
       return;
     }
     const first = set[0];
     const r = TYPES[e.type].read(first.raw, e);
     if (r.ok) {
-      setIn(values, e.name, r.value);
-      origins[e.name] = first.origin;
+      setIn(values, e.setting, r.value);
+      origins[e.setting] = first.origin;
       if (e.keys && isMap(r.value)) {
         for (const k of Object.keys(r.value).filter((k) => !e.keys.includes(k))) {
           const near = nearest(k, e.keys);
-          faults.push(makeFault({ name: `${e.name}.${k}`, kind: 'unknown-name', level: 'warn', value: r.value[k], suggest: near ? `${e.name}.${near}` : null }));
+          faults.push(makeFault({ name: `${e.name}.${k}`, setting: null, kind: 'unknown-name', level: 'warn', value: r.value[k], suggest: near ? `${e.name}.${near}` : null }));
         }
       }
     } else {
       const kept = e.keepOnFault ? (typeof first.raw === 'string' && first.raw.trim() !== '' ? first.raw : defaultOf(e)) : undefined;
-      setIn(values, e.name, kept !== undefined ? kept : fallbackOf(e));
-      origins[e.name] = 'fault';
+      setIn(values, e.setting, kept !== undefined ? kept : fallbackOf(e));
+      origins[e.setting] = 'fault';
       faults.push(notAllowed(e, first.raw));
     }
     // The merge can hide a vault value the type cannot read behind the site file's list.
     if (r.ok && (e.jsonMerge === 'union' || e.jsonMerge === 'stricter')) {
-      const vr = getPath(mergeVault, e.name.split('.').slice(1));
+      const vr = getPath(mergeVault, sansBlock(e.name).split('.'));
       if (vr != null && !TYPES[e.type].read(vr, e).ok) faults.push(notAllowed(e, vr));
     }
   }
 
-  for (const e of REGISTRY) {
+  for (const e of LEGACY) {
     if (e.container || hasChildren(e.name)) continue;
     readEntry(e);
+  }
+  // A setting the old file never had reads as its default.
+  for (const e of REGISTRY) {
+    if (e.legacyOnly || legacyNameOf(e) || e.container) continue;
+    setIn(values, e.name, e.default === undefined ? null : clone(e.default));
+    origins[e.name] = 'default';
   }
 
   // Walk what the file holds against the list: parents that are not maps, names not in the
@@ -202,10 +233,11 @@ function readSettings({ vaultPath, siteConfig = {} }) {
     if (parent === PUBLISH && key.toLowerCase().startsWith('hid')) suggest = null;
     if (wrongDepth) {
       suggest = BY_NAME.has(`${PUBLISH}.${key}`) ? `${PUBLISH}.${key}` : null;
-      if (parent === 'publish.overrides') hint = `${full} is not a setting. The only override is publish.overrides.fields.`;
+      if (OVERRIDES.has(parent)) hint = `${full} is not a setting. The only override is ${OVERRIDE_FIELDS}.`;
     }
-    faults.push(makeFault({ name: full, kind: 'unknown-name', level, value, suggest, ...(hint ? { hint } : {}) }));
-    if (parent !== PUBLISH && parent !== 'publish.overrides') setIn(values, full, clone(value));
+    faults.push(makeFault({ name: full, setting: null, kind: 'unknown-name', level, value, suggest, ...(hint ? { hint } : {}) }));
+    const placed = parent !== PUBLISH && !OVERRIDES.has(parent) ? settingPathOf(parent, key) : null;
+    if (placed) setIn(values, placed, clone(value));
   }
   function walk(parent, map) {
     for (const [rawKey, value] of Object.entries(map)) {
@@ -215,7 +247,7 @@ function readSettings({ vaultPath, siteConfig = {} }) {
       const known = KNOWN.get(full);
       if (!known) { unknown(parent, key, value); continue; }
       if (known !== PARENT && known.retired) {
-        faults.push(makeFault({ name: full, kind: 'retired', level: 'warn', value }));
+        faults.push(makeFault({ name: full, setting: null, kind: 'retired', level: 'warn', value }));
         continue;
       }
       if (known !== PARENT && !known.container && !hasChildren(full)) continue;
@@ -223,7 +255,7 @@ function readSettings({ vaultPath, siteConfig = {} }) {
       if (child == null) continue;
       if (!isMap(child)) {
         const e = known === PARENT ? MAP_ENTRY : known;
-        faults.push(makeFault({ name: full, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: child, entry: e }));
+        faults.push(makeFault({ name: full, setting: known !== PARENT && known.setting ? known.setting : null, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: child, entry: e }));
         continue;
       }
       walk(full, child);
@@ -239,7 +271,7 @@ function readSettings({ vaultPath, siteConfig = {} }) {
     const key = String(rawKey);
     if (key === PUBLISH || !saysHidingBeside(key)) continue;
     const suggest = BY_NAME.has(`${PUBLISH}.${key}`) ? `${PUBLISH}.${key}` : null;
-    faults.push(makeFault({ name: key, kind: 'misplaced', level: 'stop', value, suggest }));
+    faults.push(makeFault({ name: key, setting: null, kind: 'misplaced', level: 'stop', value, suggest }));
   }
 
   return { values, origins, faults, legacy, file };

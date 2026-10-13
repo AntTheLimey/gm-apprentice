@@ -3,23 +3,39 @@
 // Dies when the moved keys leave the site file (1b).
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { REGISTRY } = require('./registry');
+const { REGISTRY, entry: settingEntry, legacyNameOf, siteKeyOf } = require('./registry');
 const { isMap } = require('./types');
 
+// The list as the old layout knew it: each setting the old vault file held, named as that file
+// names it (`name`), with the new name beside (`setting`), the site-file key it was also written
+// under (`json`, `jsonKind`, `jsonMerge`) and its other old names (`oldNames`). The legacy reader
+// walks this; it is derived from each entry's `was`, never a second list.
+const LEGACY = REGISTRY.filter((e) => legacyNameOf(e)).map((e) => {
+  const first = legacyNameOf(e);
+  const json = siteKeyOf(e);
+  const oldNames = (e.was || []).filter((w) => !(w.in === 'vault' && w.name === first) && !(w.in === 'site' && w.name === json));
+  return { ...e, name: first, setting: e.name, json: json || undefined, jsonKind: e.legacyKind, jsonMerge: e.legacyMerge, oldNames };
+});
+
+// The block the old vault file keeps its settings under, taken from the names themselves.
+const OLD_BLOCK = legacyNameOf(settingEntry('player_site.title')).split('.')[0];
+const underBlock = (name) => name.startsWith(`${OLD_BLOCK}.`);
+const sansBlock = (name) => name.slice(OLD_BLOCK.length + 1);
+
 // The old vault.config.json keys that now live under `publish:`, in the registry's order.
-const movedKeys = () => REGISTRY.filter((e) => e.json).map((e) => ({ json: e.json, publish: e.name.slice('publish.'.length), kind: e.jsonKind }));
+const movedKeys = () => LEGACY.filter((e) => e.json).map((e) => ({ json: e.json, publish: sansBlock(e.name), kind: e.jsonKind }));
 
 // The six keys that stay in vault.config.json.
 const DEPLOY_KEYS = ['vaultPath', 'outputDir', 'host', 'siteUrl', 'cloudflarePagesProject', 'preserveDirs'];
 
 // Old switch names in the site file, from the registry: { statusBar: 'live_stats', inbox: 'inbox' }.
-const OLD_SWITCHES = Object.fromEntries(REGISTRY.flatMap((e) => (e.oldNames || [])
+const OLD_SWITCHES = Object.fromEntries(LEGACY.flatMap((e) => (e.oldNames || [])
   .filter((o) => o.in === 'site' && o.name.startsWith('backend.'))
-  .map((o) => [o.name.slice('backend.'.length), e.name.slice('publish.'.length)])));
+  .map((o) => [o.name.slice('backend.'.length), sansBlock(e.name)])));
 
 // The first part of each old name written in the site file (`backend`, `landingTagline`).
 // Sorted, so a warning that names several always names them in the same order.
-const SITE_OLD_ROOTS = new Set(REGISTRY.flatMap((e) => (e.oldNames || []).filter((o) => o.in === 'site').map((o) => o.name.split('.')[0])).sort());
+const SITE_OLD_ROOTS = new Set(LEGACY.flatMap((e) => (e.oldNames || []).filter((o) => o.in === 'site').map((o) => o.name.split('.')[0])).sort());
 
 // True while the site file still holds anything the migration would move.
 function hasLegacy(site) {
@@ -44,7 +60,7 @@ function normalizeExcludeDir(entry, vaultPath, say = () => {}) {
     const resolved = path.resolve(raw);
     const vaultRoot = path.resolve(vaultPath);
     if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
-      say(`publish.exclude_dirs entry "${entry}" is outside the vault, so it is ignored.`);
+      say(`${legacyNameOf(settingEntry('player_site.hide.folders'))} entry "${entry}" is outside the vault, so it is ignored.`);
       return null;
     }
     raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
@@ -86,7 +102,7 @@ function stricterCallouts(fromVault, fromSite) {
 
 // The settings that merge per sub-key across the two files: with both set, a sub-key only
 // the site file has still applies, and the vault file wins a sub-key both set.
-const mergedMaps = () => new Set(REGISTRY.filter((e) => e.jsonMerge === 'perKey').map((e) => e.name.slice('publish.'.length)));
+const mergedMaps = () => new Set(LEGACY.filter((e) => e.jsonMerge === 'perKey').map((e) => sansBlock(e.name)));
 
 // Vault file value when set, else the site file's, recording which was used. A moved key is
 // "set" when it is not undefined: an explicit false or null is a value, not silence.
@@ -95,12 +111,13 @@ const mergedMaps = () => new Set(REGISTRY.filter((e) => e.jsonMerge === 'perKey'
 // applied until the migration moves it, and the record names them as `stillApplied`.
 // `notes` collects what the old code printed; `from` records which file the value came from.
 function pick(publish, json, entry, legacy, normalize, keyOf, notes, from) {
-  const fromVault = entry.publish === 'exclude_callouts' && publish[entry.publish] === null ? undefined : publish[entry.publish];
+  const stricter = entry.merge === 'stricter';
+  const fromVault = stricter && publish[entry.publish] === null ? undefined : publish[entry.publish];
   const fromSite = json[entry.json];
   const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
   if (vaultMalformed) {
     const what = fromVault === null ? 'empty' : `${typeof fromVault}`;
-    notes.push(`publish.${entry.publish} must be a list, but is ${what}. Using the built-in default instead of the vault file's value.`);
+    notes.push(`${OLD_BLOCK}.${entry.publish} must be a list, but is ${what}. Using the built-in default instead of the vault file's value.`);
   }
   let value = fromVault !== undefined ? fromVault : fromSite;
   from[entry.publish] = fromVault !== undefined ? 'file' : (fromSite !== undefined ? 'site-file' : undefined);
@@ -131,7 +148,7 @@ function pick(publish, json, entry, legacy, normalize, keyOf, notes, from) {
         value = { ...base, ...Object.fromEntries(extra.map((k) => [k, fromSite[k]])) };
       }
     }
-    if (entry.publish === 'exclude_callouts' && fromVault !== undefined) {
+    if (stricter && fromVault !== undefined) {
       value = stricterCallouts(fromVault, fromSite);
       if (!isDeepStrictEqual(value, fromVault)) {
         const had = new Set((Array.isArray(fromVault) ? fromVault : []).map((t) => String(t).toLowerCase()));
@@ -154,9 +171,10 @@ function mergeWithSiteFile(publish, siteConfig, vaultPath) {
   const from = {};
   const messages = [];
   const dropped = [];
-  for (const entry of movedKeys()) {
-    const dirs = entry.publish === 'exclude_dirs';
-    const builtIn = REGISTRY.find((e) => e.name === `publish.${entry.publish}`).default;
+  for (const e of LEGACY.filter((x) => x.json)) {
+    const entry = { json: e.json, publish: sansBlock(e.name), kind: e.jsonKind, merge: e.jsonMerge, same: e.same };
+    const dirs = entry.same === 'folder';
+    const builtIn = LEGACY.find((e) => sansBlock(e.name) === entry.publish).default;
     picked[entry.publish] = pick(
       publish, json, { ...entry, builtIn }, legacy,
       dirs ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath, (m) => dropped.push(m)) : v) : (x) => x,
@@ -168,6 +186,6 @@ function mergeWithSiteFile(publish, siteConfig, vaultPath) {
 }
 
 module.exports = {
-  movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, isText, usable, stricterCallouts,
+  LEGACY, OLD_BLOCK, underBlock, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, isText, usable, stricterCallouts,
   normalizeExcludeDir, normalizeExcludeDirs, mergeWithSiteFile, mergedMaps,
 };

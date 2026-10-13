@@ -3,15 +3,19 @@
 // setting is called, what it takes, what it is when left out, and the sentences the
 // settings page uses. Nothing here may require this file back (no cycle).
 //
-// Entry fields: name, type (a key of TYPES), values / aliases / integer / min / max / of /
-// shape (what the type needs), default, fallback (the word used when an unset setting is still needed; read as unset), guards (the hiding side), onFault, open, json /
-// jsonKind / jsonMerge (the old name in vault.config.json), oldNames (each { name, in: 'site' for
-// the site file, read: false when the old name is reported but its value is not read }), retired, state,
-// container (a parent that holds only other settings), keepOnFault (an unreadable value is
-// kept as written), keys (the only keys a map may hold), settable, group, does, left_out,
-// same (how the build decides two entries of a list are one: 'heading', 'folder', 'callout'
-// or 'name'; absent means exact text).
-// The entries that carry `json` stay in the order of the old moved-key table.
+// Entry fields: name (the new name), type (a key of TYPES), values / aliases / integer / min / max /
+// of / shape (what the type needs), default, fallback (the word used when an unset setting is still
+// needed; read as unset), guards (the hiding side), onFault, open, was (the names this setting had
+// in the old layout, in order of precedence: each { name, in: 'vault' for _meta/vault-config.md or
+// 'site' for the site's vault.config.json, read: false when the old name is reported but its value
+// is not read }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
+// map: the setting is also a key of the site file, named by its 'site' was), legacyMerge (how the
+// two old files combine: union, stricter or perKey), legacyOnly (exists only in the old file; its
+// name stays the old one), retired, state, container (a parent that holds only other settings),
+// keepOnFault (an unreadable value is kept as written), keys (the only keys a map may hold),
+// settable, group, does, left_out, same (how the build decides two entries of a list are one:
+// 'heading', 'folder', 'callout' or 'name'; absent means exact text).
+// The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
 const { SKINS, FRAME_IDS } = require('../skins');
 const { RENDERER_IDS } = require('../templates/pc-registry');
@@ -22,6 +26,7 @@ const { VALID_PRESETS, GENRE_ALIASES } = require('../theme');
 const SKIN_FALLBACK = 'plain';
 
 const GROUPS = [
+  { id: 'vault', title: 'The vault' },
   { id: 'site', title: 'The site itself' },
   { id: 'published', title: 'What gets published' },
   { id: 'theme', title: 'Theme' },
@@ -34,194 +39,205 @@ const GROUPS = [
 const ON_OFF = { true: 'on', yes: 'on', false: 'off', no: 'off' };
 
 const REGISTRY = [
-  // The site itself
+  // The vault itself
   {
-    name: 'publish.site', type: 'switch', onFault: false, group: 'site',
-    does: 'Whether this vault has a site',
-    left_out: 'On when a site folder is set (`publish.site_dir`), otherwise off',
+    name: 'vault.kept_by', type: 'choice', values: ['gm', 'player'], default: 'gm', group: 'vault',
+    does: 'Who keeps this vault: `gm` for the game master, `player` for a player keeping notes on a campaign they are in',
+    left_out: '`gm`',
   },
   {
-    name: 'publish.site_dir', type: 'text', group: 'site',
+    name: 'vault.campaign', type: 'text', group: 'vault',
+    shape: "the campaign's name",
+    does: "The campaign's name",
+    left_out: "The vault folder's name",
+  },
+
+  // The site itself
+  {
+    name: 'player_site.publish', was: [{ name: 'publish.site', in: 'vault' }], type: 'switch', onFault: false, group: 'site',
+    does: 'Whether this vault has a site',
+    left_out: 'On when a site folder is set (`player_site.folder`), otherwise off',
+  },
+  {
+    name: 'player_site.folder', was: [{ name: 'publish.site_dir', in: 'vault' }], type: 'text', group: 'site',
     shape: 'a folder path',
     does: 'The folder on this computer that holds the site',
     left_out: 'Setting up a site writes it',
   },
   {
-    name: 'publish.site_title', type: 'text', json: 'siteTitle', jsonKind: 'scalar', group: 'site',
+    name: 'player_site.title', was: [{ name: 'publish.site_title', in: 'vault' }, { name: 'siteTitle', in: 'site' }], type: 'text', legacyKind: 'scalar', group: 'site',
     does: 'The name in the menu bar and the browser tab',
     left_out: 'No title; setting up a site writes one',
   },
   {
-    name: 'publish.footer', type: 'text', json: 'footer', jsonKind: 'scalar', group: 'site',
+    name: 'player_site.footer', was: [{ name: 'publish.footer', in: 'vault' }, { name: 'footer', in: 'site' }], type: 'text', legacyKind: 'scalar', group: 'site',
     does: 'A line at the foot of every page',
     left_out: 'No footer',
   },
   {
-    name: 'publish.search', type: 'switch', default: true, json: 'searchEnabled', jsonKind: 'scalar', group: 'site',
+    name: 'player_site.features.search', was: [{ name: 'publish.search', in: 'vault' }, { name: 'searchEnabled', in: 'site' }], type: 'switch', default: true, legacyKind: 'scalar', group: 'site',
     does: 'The search box',
     left_out: 'On',
   },
   {
-    name: 'publish.link_previews', type: 'choice', values: ['on', 'desktop', 'off'], aliases: ON_OFF, default: 'on', group: 'site',
+    name: 'player_site.features.link_previews', was: [{ name: 'publish.link_previews', in: 'vault' }], type: 'choice', values: ['on', 'desktop', 'off'], aliases: ON_OFF, default: 'on', group: 'site',
     does: 'The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page',
     left_out: '`on`',
   },
   {
-    name: 'publish.connections', type: 'choice', values: ['tree', 'web', 'cards', 'off'],
+    name: 'player_site.features.connections', was: [{ name: 'publish.connections', in: 'vault' }], type: 'choice', values: ['tree', 'web', 'cards', 'off'],
     aliases: { true: 'tree', on: 'tree', yes: 'tree', false: 'off', no: 'off' }, default: 'tree', group: 'site',
     does: "How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off`",
     left_out: '`tree`',
   },
   {
-    name: 'publish.four_oh_four.message', type: 'text', default: 'This page is not available.', group: 'site',
+    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }], type: 'text', default: 'This page is not available.', group: 'site',
     does: 'The words a reader sees after following a link to a page that is not there',
     left_out: '"This page is not available."',
   },
 
   // What gets published
   {
-    name: 'publish.mode', type: 'choice', values: ['player', 'full'], default: 'player', guards: true, onFault: 'player', group: 'published',
+    name: 'player_site.hide.mode', was: [{ name: 'publish.mode', in: 'vault' }], type: 'choice', values: ['player', 'full'], default: 'player', guards: true, onFault: 'player', group: 'published',
     does: '`player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own',
     left_out: '`player`',
   },
   {
-    name: 'publish.folder_map', type: 'map', open: true, default: {}, json: 'folderMap', jsonKind: 'map', group: 'published',
+    name: 'player_site.folder_map', was: [{ name: 'publish.folder_map', in: 'vault' }, { name: 'folderMap', in: 'site' }], type: 'map', open: true, default: {}, legacyKind: 'map', group: 'published',
     shape: 'a vault folder and its address, one pair to a line',
     does: 'Which vault folders are published, and the web address each gets',
     left_out: 'Nothing is mapped; setting up a site writes the standard map',
   },
   {
-    name: 'publish.attachments_dir', type: 'text', default: '_attachments', json: 'attachmentsDir', jsonKind: 'scalar', group: 'published',
+    name: 'vault.attachments', was: [{ name: 'publish.attachments_dir', in: 'vault' }, { name: 'attachmentsDir', in: 'site' }], type: 'text', default: '_attachments', legacyKind: 'scalar', group: 'published',
     shape: 'a folder name',
     does: 'The vault folder that holds pictures',
     left_out: '`_attachments`',
   },
   {
-    name: 'publish.system', type: 'choice', values: RENDERER_IDS, keepOnFault: true, json: 'system', jsonKind: 'scalar', group: 'site',
+    name: 'vault.system', was: [{ name: 'publish.system', in: 'vault' }, { name: 'system', in: 'site' }], type: 'choice', values: RENDERER_IDS, keepOnFault: true, legacyKind: 'scalar', group: 'site',
     shape: '`coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark); the short names `coc`, `regency-cthulhu`, `gurps`, `dnd-5e`, `dnd`, `blades`, `pathfinder-2e` and `pathfinder` work too',
     does: 'The game system, which decides how a character sheet is drawn',
     left_out: "A plain character page with no system's sheet",
   },
   {
-    name: 'setting_year', type: 'text', group: 'site',
+    name: 'vault.setting_year', was: [{ name: 'setting_year', in: 'vault' }], type: 'text', group: 'site',
     shape: 'a year',
     does: 'An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. Write it at the left edge of the file, beside `publish:`, not under it',
     left_out: 'Nothing shown',
   },
   {
-    name: 'publish.exclude_dirs', type: 'list', same: 'folder', of: 'folders', default: ['_meta', '_Templates'], guards: true,
-    json: 'excludeDirs', jsonKind: 'list', jsonMerge: 'union', group: 'published',
+    name: 'player_site.hide.folders', was: [{ name: 'publish.exclude_dirs', in: 'vault' }, { name: 'excludeDirs', in: 'site' }], type: 'list', same: 'folder', of: 'folders', default: ['_meta', '_Templates'], guards: true,
+ legacyKind: 'list', legacyMerge: 'union', group: 'published',
     does: 'Vault folders never published',
     left_out: '`_meta`, `_Templates`',
   },
   {
-    name: 'publish.exclude_sections', type: 'list', same: 'heading', of: 'headings',
+    name: 'player_site.hide.sections', was: [{ name: 'publish.exclude_sections', in: 'vault' }, { name: 'excludeSections', in: 'site' }], type: 'list', same: 'heading', of: 'headings',
     default: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
-    guards: true, json: 'excludeSections', jsonKind: 'list', jsonMerge: 'union', group: 'published',
+    guards: true, legacyKind: 'list', legacyMerge: 'union', group: 'published',
     does: 'Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link)',
     left_out: '`GM Notes`, `DM Notes`, `Player Notes`, `Source References`, `Reconciliation Context`, `Handoff to Reconcile`',
   },
   {
-    name: 'publish.exclude_fields', type: 'list', of: 'field names',
+    name: 'player_site.hide.fields', was: [{ name: 'publish.exclude_fields', in: 'vault' }, { name: 'excludeFields', in: 'site' }], type: 'list', of: 'field names',
     default: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability'],
-    guards: true, json: 'excludeFields', jsonKind: 'list', jsonMerge: 'union', group: 'published',
+    guards: true, legacyKind: 'list', legacyMerge: 'union', group: 'published',
     does: 'Fields in the block at the top of a note (between its `---` lines) that are never shown',
     left_out: '`secrets`, `current_plan`, `plan_progress`, `gm_notes`, `prep_notes`, `reliability`',
   },
   {
-    name: 'publish.exclude_callouts', type: 'switchOrList', same: 'callout', of: 'callout types', default: false, onFault: true, guards: true,
-    json: 'excludeCallouts', jsonKind: 'scalar', jsonMerge: 'stricter', group: 'published',
+    name: 'player_site.hide.callouts', was: [{ name: 'publish.exclude_callouts', in: 'vault' }, { name: 'excludeCallouts', in: 'site' }], type: 'switchOrList', same: 'callout', of: 'callout types', default: false, onFault: true, guards: true,
+ legacyKind: 'scalar', legacyMerge: 'stricter', group: 'published',
     does: 'Whether Obsidian callouts (`> [!note]`) are left out',
     left_out: 'Off; a site set up by the apprentice starts with it on',
   },
   {
-    name: 'publish.exclude_drafts', type: 'switch', default: false, onFault: true, guards: true, group: 'published',
+    name: 'player_site.hide.drafts', was: [{ name: 'publish.exclude_drafts', in: 'vault' }], type: 'switch', default: false, onFault: true, guards: true, group: 'published',
     does: 'Whether a note with `canon_status: DRAFT` at its top is left off the site',
     left_out: 'Off: drafts publish with a "Draft" badge',
   },
   {
-    name: 'publish.overrides', type: 'map', guards: true, group: 'published',
-    does: 'Exceptions to what is hidden. Only `fields` is read; any other key under it has no effect',
-    left_out: 'No exceptions',
+    name: 'publish.overrides', legacyOnly: true, type: 'map', guards: true,
   },
   {
-    name: 'publish.overrides.fields', type: 'map', open: true, default: {}, guards: true, group: 'published',
+    name: 'player_site.hide.field_exceptions', was: [{ name: 'publish.overrides.fields', in: 'vault' }], type: 'map', open: true, default: {}, guards: true, group: 'published',
     shape: "a note's path from the top of the vault, in quotes, then `include:` and the field names",
-    does: 'Lets one note show a field that `exclude_fields` hides everywhere else',
+    does: 'Lets one note show a field that `player_site.hide.fields` hides everywhere else',
     left_out: 'No exceptions',
   },
 
   // Theme
   {
-    name: 'publish.theme.genre', type: 'choice', values: [...VALID_PRESETS], aliases: GENRE_ALIASES, group: 'theme',
+    name: 'player_site.theme.genre', was: [{ name: 'publish.theme.genre', in: 'vault' }], type: 'choice', values: [...VALID_PRESETS], aliases: GENRE_ALIASES, group: 'theme',
     does: 'A ready-made look: colours, lettering and section names. A genre the tool does not know is reported, and the site keeps the plain dark look',
     left_out: 'No preset',
   },
   {
-    name: 'publish.theme.palette.primary', type: 'text', default: '#1a2f3a', group: 'theme',
+    name: 'player_site.theme.palette.primary', was: [{ name: 'publish.theme.palette.primary', in: 'vault' }], type: 'text', default: '#1a2f3a', group: 'theme',
     shape: 'a colour',
     does: "The main colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
     left_out: "No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#1a2f3a`",
   },
   {
-    name: 'publish.theme.palette.accent', type: 'text', default: '#3d8a7a', group: 'theme',
+    name: 'player_site.theme.palette.accent', was: [{ name: 'publish.theme.palette.accent', in: 'vault' }], type: 'text', default: '#3d8a7a', group: 'theme',
     shape: 'a colour',
     does: "The accent colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
     left_out: "No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#3d8a7a`",
   },
   {
-    name: 'publish.theme.palette.background', type: 'text', default: '#e8f0f3', group: 'theme',
+    name: 'player_site.theme.palette.background', was: [{ name: 'publish.theme.palette.background', in: 'vault' }], type: 'text', default: '#e8f0f3', group: 'theme',
     shape: 'a colour',
     does: "The page background colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
     left_out: "No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#e8f0f3`",
   },
   {
-    name: 'publish.theme.palette.text', type: 'text', default: '#1a1a1a', group: 'theme',
+    name: 'player_site.theme.palette.text', was: [{ name: 'publish.theme.palette.text', in: 'vault' }], type: 'text', default: '#1a1a1a', group: 'theme',
     shape: 'a colour',
     does: "The text colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
     left_out: "No palette: the genre's colours, or the built-in ones. With a palette, a colour left out is the built-in `#1a1a1a`",
   },
   {
-    name: 'publish.theme.fonts.heading', type: 'text', default: 'system-ui', group: 'theme',
+    name: 'player_site.theme.fonts.heading', was: [{ name: 'publish.theme.fonts.heading', in: 'vault' }], type: 'text', default: 'system-ui', group: 'theme',
     shape: "a typeface's name",
     does: 'The lettering for headings',
     left_out: "The preset's lettering, or the reader's own system font",
   },
   {
-    name: 'publish.theme.fonts.body', type: 'text', default: 'system-ui', group: 'theme',
+    name: 'player_site.theme.fonts.body', was: [{ name: 'publish.theme.fonts.body', in: 'vault' }], type: 'text', default: 'system-ui', group: 'theme',
     shape: "a typeface's name",
     does: 'The lettering for body text',
     left_out: "The preset's lettering, or the reader's own system font",
   },
   {
-    name: 'publish.theme.fonts.source', type: 'choice', values: ['google', 'self-host', 'local'], default: 'google', group: 'theme',
+    name: 'player_site.theme.fonts.source', was: [{ name: 'publish.theme.fonts.source', in: 'vault' }], type: 'choice', values: ['google', 'self-host', 'local'], default: 'google', group: 'theme',
     does: 'Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader\'s browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader\'s browser never contacts Google. A source the tool does not know is reported, and `google` is used',
     left_out: '`google`: what a vault that never set a source gets',
   },
   {
-    name: 'publish.theme.fonts.files', type: 'any', default: [], group: 'theme',
+    name: 'player_site.theme.fonts.files', was: [{ name: 'publish.theme.fonts.files', in: 'vault' }], type: 'any', default: [], group: 'theme',
     shape: 'a list of font files, each with a `family`, a `path`, and optionally a `weight` and `style`',
     does: 'Your own font files, each listed with its `family` (the typeface\'s name) and `path` (the file\'s place in the vault); used when the source is `local`',
     left_out: 'No files',
   },
   {
-    name: 'publish.theme.campaign_image', type: 'text', group: 'theme',
+    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }], type: 'text', group: 'theme',
     shape: "a picture's path in the vault",
     does: 'The large picture at the top of the landing page',
     left_out: 'No picture',
   },
   {
-    name: 'publish.theme.default_mode', type: 'choice', values: ['system', 'dark', 'light'], default: 'system', group: 'theme',
+    name: 'player_site.theme.default_mode', was: [{ name: 'publish.theme.default_mode', in: 'vault' }], type: 'choice', values: ['system', 'dark', 'light'], default: 'system', group: 'theme',
     does: 'Whether a reader starts in light or dark',
     left_out: "`system`: follows the reader's device",
   },
   {
-    name: 'publish.theme.tagline', type: 'text', oldNames: [{ name: 'landingTagline', in: 'site', read: false }], group: 'theme',
+    name: 'player_site.theme.tagline', was: [{ name: 'publish.theme.tagline', in: 'vault' }, { name: 'landingTagline', in: 'site', read: false }], type: 'text', group: 'theme',
     does: 'One sentence under the title on the landing page',
     left_out: 'No tagline',
   },
   {
-    name: 'publish.section_titles', type: 'map', default: {}, keys: ['locations', 'factions', 'items', 'creatures', 'documents'], group: 'theme',
+    name: 'player_site.lists.section_titles', was: [{ name: 'publish.section_titles', in: 'vault' }], type: 'map', default: {}, keys: ['locations', 'factions', 'items', 'creatures', 'documents'], group: 'theme',
     shape: '`locations`, `factions`, `items`, `creatures`, `documents`, each a title',
     does: 'Your own headings for the lists of locations, factions, items, creatures and documents',
     left_out: "Plain titles, or the genre's own",
@@ -229,152 +245,150 @@ const REGISTRY = [
 
   // Character sheets
   {
-    name: 'publish.character_sheets', type: 'switch', default: true, onFault: false, group: 'sheets',
+    name: 'player_site.sheets.show', was: [{ name: 'publish.character_sheets', in: 'vault' }], type: 'switch', default: true, onFault: false, group: 'sheets',
     does: "Whether a character's page carries its sheet",
     left_out: 'On',
   },
   {
-    name: 'publish.pc_prose_sections', type: 'list', same: 'heading', of: 'headings', default: [], group: 'sheets',
+    name: 'player_site.sheets.prose_sections', was: [{ name: 'publish.pc_prose_sections', in: 'vault' }], type: 'list', same: 'heading', of: 'headings', default: [], group: 'sheets',
     does: "With sheets off, extra sections of a character's note that are still published",
     left_out: 'Only the built-in ones: Background, Current Status, Notes, Relationships, Appearances, Fellow Investigators, Encounters with Strange Entities, Friends & Rivals and Long-Term Projects',
   },
   {
-    name: 'publish.sheet_skin', type: 'choice', values: Object.keys(SKINS), fallback: SKIN_FALLBACK, group: 'sheets',
+    name: 'player_site.sheets.skin', was: [{ name: 'publish.sheet_skin', in: 'vault' }], type: 'choice', values: Object.keys(SKINS), fallback: SKIN_FALLBACK, group: 'sheets',
     does: 'The look of every character sheet',
     left_out: `\`${SKIN_FALLBACK}\``,
   },
   {
-    name: 'publish.sheet_frame', type: 'choice', values: ['none', ...FRAME_IDS], group: 'sheets',
+    name: 'player_site.sheets.frame', was: [{ name: 'publish.sheet_frame', in: 'vault' }], type: 'choice', values: ['none', ...FRAME_IDS], group: 'sheets',
     does: 'The ornament round each portrait',
     left_out: "The skin's own frame",
   },
   {
-    name: 'publish.sheet_crest', type: 'text', json: 'sheet_crest', jsonKind: 'scalar', group: 'sheets',
+    name: 'player_site.sheets.crest', was: [{ name: 'publish.sheet_crest', in: 'vault' }, { name: 'sheet_crest', in: 'site' }], type: 'text', legacyKind: 'scalar', group: 'sheets',
     shape: "a picture's path in the vault",
     does: 'A crest or wax seal at the head of a Call of Cthulhu sheet',
     left_out: 'No crest',
   },
   {
-    name: 'publish.tohit_calculator', type: 'choice', values: ['on', 'off'], aliases: ON_OFF, default: 'on', group: 'sheets',
+    name: 'player_site.features.tohit_calculator', was: [{ name: 'publish.tohit_calculator', in: 'vault' }], type: 'choice', values: ['on', 'off'], aliases: ON_OFF, default: 'on', group: 'sheets',
     does: "The to-hit calculator on a GURPS character's Combat tab",
     left_out: '`on`',
   },
   {
-    name: 'publish.dndbeyond_sync', type: 'choice', values: ['build', 'manual'], default: 'manual', group: 'sheets',
+    name: 'vault.dndbeyond_sync', was: [{ name: 'publish.dndbeyond_sync', in: 'vault' }], type: 'choice', values: ['build', 'manual'], default: 'manual', group: 'sheets',
     does: 'When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask',
     left_out: '`manual`',
   },
 
   // Live play
   {
-    name: 'publish.live_stats', type: 'switch', default: false, onFault: false, group: 'live',
-    oldNames: [{ name: 'publish.backend.statusBar', in: 'vault' }, { name: 'backend.statusBar', in: 'site' }],
+    name: 'player_site.features.live_stats', was: [{ name: 'publish.live_stats', in: 'vault' }, { name: 'publish.backend.statusBar', in: 'vault' }, { name: 'backend.statusBar', in: 'site' }], type: 'switch', default: false, onFault: false, group: 'live',
     does: 'Players change hit points, spent resources and conditions on their own sheet during a session, and the party board follows. For Call of Cthulhu, GURPS and D&D; it does nothing for Pathfinder or Forged in the Dark',
     left_out: 'Off',
   },
   {
-    name: 'publish.inbox', type: 'switch', default: false, onFault: false, group: 'live',
-    oldNames: [{ name: 'publish.backend.inbox', in: 'vault' }, { name: 'backend.inbox', in: 'site' }],
+    name: 'player_site.features.inbox', was: [{ name: 'publish.inbox', in: 'vault' }, { name: 'publish.backend.inbox', in: 'vault' }, { name: 'backend.inbox', in: 'site' }], type: 'switch', default: false, onFault: false, group: 'live',
     does: 'A box on each character page for sending the GM a request or a question',
     left_out: 'Off',
   },
 
   // The landing page (the whole `landing` map is one old-file key, merged key by key)
-  { name: 'publish.landing', type: 'map', container: true, json: 'landing', jsonKind: 'map', jsonMerge: 'perKey' },
+  { name: 'player_site.landing', was: [{ name: 'publish.landing', in: 'vault' }, { name: 'landing', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
-    name: 'publish.landing.max_npcs', type: 'number', integer: true, min: 0, default: 6, group: 'landing',
+    name: 'player_site.landing.max_npcs', was: [{ name: 'publish.landing.max_npcs', in: 'vault' }], type: 'number', integer: true, min: 0, default: 6, group: 'landing',
     does: 'How many people appear under "NPCs in Play"; `0` shows none',
     left_out: '`6`',
   },
   {
-    name: 'publish.landing.max_locations', type: 'number', integer: true, min: 0, default: 4, group: 'landing',
+    name: 'player_site.landing.max_locations', was: [{ name: 'publish.landing.max_locations', in: 'vault' }], type: 'number', integer: true, min: 0, default: 4, group: 'landing',
     does: 'How many places appear under "Latest Locations"; `0` shows none',
     left_out: '`4`',
   },
   {
-    name: 'publish.landing.max_events', type: 'number', integer: true, min: 0, default: 4, group: 'landing',
+    name: 'player_site.landing.max_events', was: [{ name: 'publish.landing.max_events', in: 'vault' }], type: 'number', integer: true, min: 0, default: 4, group: 'landing',
     does: 'How many events appear under "Latest Events"; `0` shows none',
     left_out: '`4`',
   },
   {
-    name: 'publish.landing.recency_window', type: 'number', integer: true, min: 0, default: 3, group: 'landing',
+    name: 'player_site.landing.recency_window', was: [{ name: 'publish.landing.recency_window', in: 'vault' }], type: 'number', integer: true, min: 0, default: 3, group: 'landing',
     does: 'How many recent sessions decide who and what is "in play"; `0` counts none',
     left_out: '`3`',
   },
   {
-    name: 'publish.landing.featured_npcs', type: 'list', same: 'name', of: 'note names', default: [], group: 'landing',
+    name: 'player_site.landing.featured_npcs', was: [{ name: 'publish.landing.featured_npcs', in: 'vault' }], type: 'list', same: 'name', of: 'note names', default: [], group: 'landing',
     does: 'People pinned to the front of their row, in your order',
     left_out: 'Nobody pinned',
   },
   {
-    name: 'publish.landing.featured_locations', type: 'list', same: 'name', of: 'note names', default: [], group: 'landing',
+    name: 'player_site.landing.featured_locations', was: [{ name: 'publish.landing.featured_locations', in: 'vault' }], type: 'list', same: 'name', of: 'note names', default: [], group: 'landing',
     does: 'The same, for places',
     left_out: 'Nothing pinned',
   },
   {
-    name: 'publish.landing.quick_links', type: 'list', same: 'name', of: 'note names', default: [], group: 'landing',
+    name: 'player_site.landing.quick_links', was: [{ name: 'publish.landing.quick_links', in: 'vault' }], type: 'list', same: 'name', of: 'note names', default: [], group: 'landing',
     does: 'A short row of links on the page',
     left_out: 'No row',
   },
   {
-    name: 'publish.landing.explore_descriptions', type: 'map', open: true, group: 'landing',
+    name: 'player_site.landing.explore_descriptions', was: [{ name: 'publish.landing.explore_descriptions', in: 'vault' }], type: 'map', open: true, group: 'landing',
     shape: '`characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence',
     does: 'Your own line under each card in the "Explore the World" row',
     left_out: "The genre's lines, or plain ones",
   },
 
   // Lists and pictures
-  { name: 'publish.images', type: 'map', container: true, json: 'images', jsonKind: 'map', jsonMerge: 'perKey' },
+  { name: 'player_site.images', was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
-    name: 'publish.images.optimize', type: 'switch', default: false, group: 'lists',
+    name: 'player_site.images.optimize', was: [{ name: 'publish.images.optimize', in: 'vault' }], type: 'switch', default: false, group: 'lists',
     does: 'Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size',
     left_out: 'Off: pictures are copied as they are',
   },
   {
-    name: 'publish.images.format', type: 'choice', values: ['webp'], default: 'webp', keepOnFault: true, group: 'lists',
+    name: 'player_site.images.format', was: [{ name: 'publish.images.format', in: 'vault' }], type: 'choice', values: ['webp'], default: 'webp', keepOnFault: true, group: 'lists',
     does: 'The format pictures are converted to. Only `webp` is available; any other is reported, and pictures are left as they are',
     left_out: '`webp`',
   },
   {
-    name: 'publish.images.max_width', type: 'number', integer: true, min: 0, default: 1600,
-    oldNames: [{ name: 'publish.images.maxWidth', in: 'vault' }], group: 'lists',
+    name: 'player_site.images.max_width', was: [{ name: 'publish.images.max_width', in: 'vault' }, { name: 'publish.images.maxWidth', in: 'vault' }], type: 'number', integer: true, min: 0, default: 1600,
+ group: 'lists',
     does: 'The widest a shrunk picture may be, in pixels; `0` for no limit',
     left_out: '`1600`',
   },
   {
-    name: 'publish.images.quality', type: 'number', min: 0, default: 82, group: 'lists',
+    name: 'player_site.images.quality', was: [{ name: 'publish.images.quality', in: 'vault' }], type: 'number', min: 0, default: 82, group: 'lists',
     does: 'The quality of shrunk pictures: 0 is the smallest file, 100 the best picture, and anything above 100 counts as 100',
     left_out: '`82`',
   },
   {
-    name: 'publish.banners', type: 'map', open: true, default: {}, json: 'banners', jsonKind: 'map', jsonMerge: 'perKey', group: 'lists',
+    name: 'player_site.lists.banners', was: [{ name: 'publish.banners', in: 'vault' }, { name: 'banners', in: 'site' }], type: 'map', open: true, default: {}, legacyKind: 'map', legacyMerge: 'perKey', group: 'lists',
     shape: "a section's web address, with a picture's path, or with `image`, `link` and `alt`",
     does: "A picture or map at the top of a section's list",
     left_out: "A picture named `_banner` in the section's vault folder is used if there is one",
   },
-  { name: 'publish.locations', type: 'map', container: true, json: 'locations', jsonKind: 'map', jsonMerge: 'perKey' },
+  { name: 'player_site.lists.locations', was: [{ name: 'publish.locations', in: 'vault' }, { name: 'locations', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
-    name: 'publish.locations.group_by', type: 'any', group: 'lists',
+    name: 'player_site.lists.locations.group_by', was: [{ name: 'publish.locations.group_by', in: 'vault' }], type: 'any', group: 'lists',
     shape: 'a kind of location, or `false`',
     does: 'Splits the list of locations into one block, under its own heading, for each place of a kind, such as each star system',
     left_out: 'Off, except the `scifi` genre, which groups by `system`',
   },
   {
-    name: 'publish.locations.ungrouped_label', type: 'text', group: 'lists',
+    name: 'player_site.lists.locations.ungrouped_label', was: [{ name: 'publish.locations.ungrouped_label', in: 'vault' }], type: 'text', group: 'lists',
     does: 'The heading for places that fall in no block',
     left_out: 'A standard heading',
   },
 
   // Read by nothing: listed so a vault that still has them is told, not left guessing
-  { name: 'publish.four_oh_four.style', type: 'any', retired: true },
-  { name: 'publish.total_sessions', type: 'any', retired: true },
-  { name: 'publish.wrap_up', type: 'any', retired: true },
+  { name: 'publish.four_oh_four.style', legacyOnly: true, type: 'any', retired: true },
+  { name: 'publish.total_sessions', legacyOnly: true, type: 'any', retired: true },
+  { name: 'publish.wrap_up', legacyOnly: true, type: 'any', retired: true },
 
   // The old container of the two live-play switches; its children are old names above
-  { name: 'publish.backend', type: 'map', container: true },
+  { name: 'publish.backend', legacyOnly: true, type: 'map', container: true },
 
   // Tool bookkeeping
-  { name: 'publish.setup_progress', type: 'any', state: true, settable: false },
+  { name: 'publish.setup_progress', legacyOnly: true, type: 'any', state: true, settable: false },
 ];
 
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
@@ -382,4 +396,19 @@ const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 const entry = (name) => BY_NAME.get(name);
 const names = () => REGISTRY.map((e) => e.name);
 
-module.exports = { REGISTRY, entry, names, GROUPS };
+// Where the old file (_meta/vault-config.md) holds a setting: its first 'vault' old name, or its own
+// name for an entry that exists only there. null for a setting the old file never had.
+const legacyNameOf = (e) => (e.legacyOnly ? e.name : ((e.was || []).find((w) => w.in === 'vault') || {}).name || null);
+
+// The key of the site's vault.config.json that holds a setting, or null.
+const siteKeyOf = (e) => (e.legacyKind ? ((e.was || []).find((w) => w.in === 'site') || {}).name || null : null);
+
+// A setting by its new name or by a name the old vault file gave it; { entry, old } where `old` says which.
+const BY_OLD_NAME = new Map(REGISTRY.flatMap((e) => (e.was || []).filter((w) => w.in === 'vault').map((w) => [w.name, e])));
+function resolve(name) {
+  if (BY_NAME.has(name)) return { entry: BY_NAME.get(name), old: false };
+  if (BY_OLD_NAME.has(name)) return { entry: BY_OLD_NAME.get(name), old: true };
+  return null;
+}
+
+module.exports = { REGISTRY, entry, names, GROUPS, legacyNameOf, siteKeyOf, resolve };

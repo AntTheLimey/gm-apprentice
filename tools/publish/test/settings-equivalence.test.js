@@ -134,7 +134,7 @@ const strip = (o, skip, isGolden = false, trailingColon = false) => {
     delete pc.faults; delete pc.origins;
     if (pc.switches) delete pc.switches.notes;
     if (pc.sheetLook) delete pc.sheetLook.notes;
-    if (isGolden && pc.landing && typeof pc.landing === 'object' && pc.landing.max_events === undefined) pc.landing.max_events = entry('publish.landing.max_events').default;
+    if (isGolden && pc.landing && typeof pc.landing === 'object' && pc.landing.max_events === undefined) pc.landing.max_events = entry('player_site.landing.max_events').default;
     if (pc.four_oh_four && typeof pc.four_oh_four === 'object') delete pc.four_oh_four.style;
     // A field may be dotted (`theme.genre`) so the rest of its group is still compared.
     for (const f of skip) {

@@ -246,7 +246,7 @@ describe('migrate-config', () => {
     const { result } = migrate(s);
     const data = parseNote(read(s.vaultFile)).data;
     assert.strictEqual(data.type, 'meta');
-    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'], exclude_sections: entry('publish.exclude_sections').default, exclude_fields: entry('publish.exclude_fields').default });
+    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'], exclude_sections: entry('player_site.hide.sections').default, exclude_fields: entry('player_site.hide.fields').default });
     assert.deepStrictEqual(result.backups, [`${s.configPath}.pre-migrate`]);
   });
 
@@ -743,8 +743,8 @@ describe('migrate-config writes the built-in exclude lists (#294)', () => {
     const { plan } = migrate(s);
     assert.ok(plan.applicable);
     const pub = publishOf(s.vaultFile);
-    assert.deepStrictEqual(pub.exclude_sections, entry('publish.exclude_sections').default);
-    assert.deepStrictEqual(pub.exclude_fields, entry('publish.exclude_fields').default);
+    assert.deepStrictEqual(pub.exclude_sections, entry('player_site.hide.sections').default);
+    assert.deepStrictEqual(pub.exclude_fields, entry('player_site.hide.fields').default);
     assert.strictEqual(pub.exclude_dirs, undefined);
     assert.ok(read(s.vaultFile).includes('mode: player'));
   });

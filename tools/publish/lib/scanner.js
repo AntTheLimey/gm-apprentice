@@ -294,7 +294,7 @@ function buildLinkMap(pages) {
 
 function scanAttachments(config) {
   const { vaultPath, attachmentsDir, excludeDirs } = config;
-  const attachmentsPath = path.join(vaultPath, attachmentsDir || entry('publish.attachments_dir').default);
+  const attachmentsPath = path.join(vaultPath, attachmentsDir || entry('vault.attachments').default);
   const map = Object.create(null);
 
   // Wrapped on this path too: the returned type must not depend on whether _attachments/ exists.

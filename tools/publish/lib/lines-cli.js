@@ -49,7 +49,7 @@ const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { readSettings } = require('./settings');
+const { readSettings, entry: settingEntry, legacyNameOf } = require('./settings');
 const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -75,12 +75,12 @@ function site(vault) {
   // `publish.site` is the switch, decided where the build decides it. Off: there is no
   // site, whatever site_dir says. Unset, in a vault written before the switch, a site_dir
   // says on. An unreadable value is off, as for the other switches.
-  const on = values.publish.site;
-  const raw = values.publish.site_dir;
-  const origin = origins['publish.site_dir'];
+  const on = values.player_site.publish;
+  const raw = values.player_site.folder;
+  const origin = origins['player_site.folder'];
   const blank = origin === 'default' || (typeof raw === 'string' && raw.trim() === '');
   if (!on || blank) return { publishes: true, site: on, siteDir: null };
-  if (origin === 'fault' || typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
+  if (origin === 'fault' || typeof raw !== 'string') throw new Error(`${legacyNameOf(settingEntry('player_site.folder'))} in _meta/vault-config.md is not a path`);
   return { publishes: true, site: true, siteDir: siteDirPath(vault, raw) };
 }
 

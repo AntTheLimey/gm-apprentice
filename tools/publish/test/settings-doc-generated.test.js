@@ -38,8 +38,9 @@ test('the page names every setting the tool reads', () => {
 });
 
 test('the page names no setting the tool does not read', () => {
-  const known = new Set(REGISTRY.filter((e) => !e.retired && !e.state).map((e) => e.name));
-  const named = new Set([...DOC.matchAll(/`(publish\.[a-z][a-z_0-9.]*)`/g)].map((m) => m[1]));
+  // The page's words still use the names the settings had before; each is the list's own `was`.
+  const known = new Set(REGISTRY.filter((e) => !e.retired && !e.state).flatMap((e) => [e.name, ...(e.was || []).map((w) => w.name)]));
+  const named = new Set([...DOC.matchAll(/`((?:publish|vault|player_site)\.[a-z][a-z_0-9.]*)`/g)].map((m) => m[1]).filter((n) => !n.startsWith('vault.config.json')));
   const stale = [...named].filter((n) => !known.has(n));
   assert.deepEqual(stale, [], `docs/site-settings.md names ${stale[0]}, which the tool does not read`);
 });
@@ -57,7 +58,7 @@ test('the page names the six site-file settings', () => {
 test('the page lists, in one generated region, every setting that stops the build', () => {
   const region = DOC.match(/<!-- settings:hiding-list -->([\s\S]*?)<!-- \/settings:hiding-list -->/);
   assert.ok(region, 'the hiding-list region is missing');
-  const listed = [...region[1].matchAll(/`(publish\.[a-z_.]+)`/g)].map((m) => m[1]);
+  const listed = [...region[1].matchAll(/`(player_site\.[a-z_.]+)`/g)].map((m) => m[1]);
   const guards = REGISTRY.filter((e) => e.guards && isLeaf(e, REGISTRY)).map((e) => e.name);
   assert.deepEqual(listed, guards);
   assert.ok(guards.length >= 6);
@@ -65,6 +66,6 @@ test('the page lists, in one generated region, every setting that stops the buil
 
 test('the built-in character-page sections named for pc_prose_sections are the ones the tool keeps', () => {
   const { PC_PROSE_SECTIONS } = require('../lib/pc-prose');
-  const text = REGISTRY.find((e) => e.name === 'publish.pc_prose_sections').left_out;
+  const text = REGISTRY.find((e) => e.name === 'player_site.sheets.prose_sections').left_out;
   for (const heading of PC_PROSE_SECTIONS) assert.ok(text.includes(heading), `${heading} is not named`);
 });

@@ -393,7 +393,7 @@ async function runSiteDoctor(options, deps) {
     if (portrait && !(portrait in attachments)) {
       findings.push(finding(
         'PORTRAIT_MISSING', 'warning', rel,
-        `portrait: ${portrait} is not in ${config.attachmentsDir || settingEntry('publish.attachments_dir').default}/`,
+        `portrait: ${portrait} is not in ${config.attachmentsDir || settingEntry('vault.attachments').default}/`,
         `put ${portrait} in _attachments/ or fix the portrait: value`,
       ));
     }

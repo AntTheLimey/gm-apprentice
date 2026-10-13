@@ -39,15 +39,15 @@ test('an unknown name with no near neighbour warns and suggests nothing', () => 
 test('a value a hiding setting cannot take stops, and the safe value is used', () => {
   const r = read('  mode: players\n');
   assert.equal(fault(r, 'publish.mode').level, 'stop');
-  assert.equal(r.values.publish.mode, 'player');
-  assert.equal(r.origins['publish.mode'], 'fault');
+  assert.equal(r.values.player_site.hide.mode, 'player');
+  assert.equal(r.origins['player_site.hide.mode'], 'fault');
   assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode is "players"; it takes player or full.');
 });
 
 test('a hiding list that is not a list stops and the built-in list is used', () => {
   const r = read('  exclude_sections: GM Notes\n');
   assert.equal(fault(r, 'publish.exclude_sections').level, 'stop');
-  assert.deepEqual(r.values.publish.exclude_sections.slice(0, 2), ['GM Notes', 'DM Notes']);
+  assert.deepEqual(r.values.player_site.hide.sections.slice(0, 2), ['GM Notes', 'DM Notes']);
 });
 
 // 'gothic' is an accepted name for the horror look, so a name the list does not know stands in.
@@ -55,14 +55,14 @@ test('a bad look value warns and the default is used', () => {
   const r = read('  theme:\n    genre: nonesuch\n  landing:\n    max_npcs: lots\n');
   assert.equal(fault(r, 'publish.theme.genre').level, 'warn');
   assert.equal(fault(r, 'publish.landing.max_npcs').level, 'warn');
-  assert.equal(r.values.publish.landing.max_npcs, 6);
+  assert.equal(r.values.player_site.landing.max_npcs, 6);
 });
 
 test('a switch that cannot be read is off, never on', () => {
   const r = read('  site: maybe\n  site_dir: ../site\n  live_stats:\n');
-  assert.equal(r.values.publish.site, false);
-  assert.equal(r.values.publish.live_stats, false);
-  assert.equal(r.origins['publish.site'], 'fault');
+  assert.equal(r.values.player_site.publish, false);
+  assert.equal(r.values.player_site.features.live_stats, false);
+  assert.equal(r.origins['player_site.publish'], 'fault');
 });
 
 test('keys under an open map are never unknown', () => {
@@ -72,8 +72,8 @@ test('keys under an open map are never unknown', () => {
 
 test('an old name is read, and said', () => {
   const r = read('  backend:\n    statusBar: true\n');
-  assert.equal(r.values.publish.live_stats, true);
-  assert.equal(r.origins['publish.live_stats'], 'old-name');
+  assert.equal(r.values.player_site.features.live_stats, true);
+  assert.equal(r.origins['player_site.features.live_stats'], 'old-name');
   assert.equal(formatFault(fault(r, 'publish.backend.statusBar')), 'publish.backend.statusBar is an old name; use publish.live_stats.');
 });
 
@@ -94,7 +94,7 @@ test('no file, and a file with no publish block, give every default and say so',
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-'));
   const r = readSettings({ vaultPath: dir });
   assert.deepEqual(r.file, { exists: false, hasPublish: false, inline: false });
-  assert.equal(r.values.publish.connections, 'tree');
+  assert.equal(r.values.player_site.features.connections, 'tree');
   assert.deepEqual(r.faults, []);
 });
 

@@ -1,7 +1,10 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
-const { readSettings, formatFault, makeFault, stops, entry, movedKeys } = require('./settings');
+const { readSettings, formatFault, makeFault, stops, entry, movedKeys, legacyNameOf } = require('./settings');
+
+// The name a setting has in this vault's file (the old layout's, until the new file is read).
+const writtenAs = (name) => legacyNameOf(entry(name)) || name;
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -15,7 +18,7 @@ function canonicalizeOverrideFieldKeys(fields) {
   for (const [key, value] of Object.entries(fields || {})) {
     const problem = overrideEntryProblem(value);
     if (problem) {
-      problems.push(`publish.overrides.fields["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
+      problems.push(`${writtenAs('player_site.hide.field_exceptions')}["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
       continue;
     }
     out[canonicalPath(key)] = value;
@@ -87,73 +90,75 @@ function setOnly(map, prefix, origins) {
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
   const { values, origins, faults, legacy } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
-  const p = values.publish;
+  const v = values.vault;
+  const p = values.player_site;
   const named = (n) => origins[n] !== 'default';
 
-  const live = p.live_stats && p.character_sheets;
-  if (p.live_stats && !p.character_sheets) {
-    faults.push(makeFault({ name: 'publish.live_stats', kind: 'dropped', level: 'warn', message: 'publish.live_stats is on but character_sheets is off; live stats are not published' }));
+  const live = p.features.live_stats && p.sheets.show;
+  if (p.features.live_stats && !p.sheets.show) {
+    const liveName = writtenAs('player_site.features.live_stats');
+    faults.push(makeFault({ name: liveName, setting: 'player_site.features.live_stats', kind: 'dropped', level: 'warn', message: `${liveName} is on but character_sheets is off; live stats are not published` }));
   }
-  const switchNames = ['site', 'character_sheets', 'live_stats', 'inbox'];
-  const unset = switchNames.filter((n) => origins[`publish.${n}`] === 'default');
+  const switchNames = { site: 'player_site.publish', character_sheets: 'player_site.sheets.show', live_stats: 'player_site.features.live_stats', inbox: 'player_site.features.inbox' };
+  const unset = Object.keys(switchNames).filter((n) => origins[switchNames[n]] === 'default');
   const switches = {
-    site: p.site,
-    characterSheets: p.character_sheets,
+    site: p.publish,
+    characterSheets: p.sheets.show,
     liveStats: live,
-    inbox: p.inbox,
+    inbox: p.features.inbox,
     unset,
     explicitOff: {
-      liveStats: !live && (!unset.includes('live_stats') || !p.character_sheets),
-      inbox: !p.inbox && !unset.includes('inbox'),
-      site: !p.site && !unset.includes('site'),
+      liveStats: !live && (!unset.includes('live_stats') || !p.sheets.show),
+      inbox: !p.features.inbox && !unset.includes('inbox'),
+      site: !p.publish && !unset.includes('site'),
     },
   };
 
-  const overrides = canonicalizeOverrideFieldKeys(p.overrides.fields);
+  const overrides = canonicalizeOverrideFieldKeys(p.hide.field_exceptions);
   for (const message of overrides.problems) {
-    faults.push(makeFault({ name: 'publish.overrides.fields', kind: 'dropped', level: 'stop', message }));
+    faults.push(makeFault({ name: writtenAs('player_site.hide.field_exceptions'), setting: 'player_site.hide.field_exceptions', kind: 'dropped', level: 'stop', message }));
   }
 
   // A genre counts as written even when it was refused (an unknown one reads as null): the page
   // then takes the plain fallback palette, as it always has.
-  const genreWritten = named('publish.theme.genre');
-  const paletteWritten = Object.keys(origins).some((n) => n.startsWith('publish.theme.palette.') && named(n));
-  const theme = setOnly(p.theme, 'publish.theme', origins);
+  const genreWritten = named('player_site.theme.genre');
+  const paletteWritten = Object.keys(origins).some((n) => n.startsWith('player_site.theme.palette.') && named(n));
+  const theme = setOnly(p.theme, 'player_site.theme', origins);
   const merged = {
-    mode: p.mode,
-    link_previews: p.link_previews,
-    tohit_calculator: p.tohit_calculator,
-    connections: p.connections,
-    site_title: p.site_title,
+    mode: p.hide.mode,
+    link_previews: p.features.link_previews,
+    tohit_calculator: p.features.tohit_calculator,
+    connections: p.features.connections,
+    site_title: p.title,
     footer: p.footer,
-    search: p.search,
+    search: p.features.search,
     folder_map: p.folder_map,
-    attachments_dir: p.attachments_dir,
-    pc_prose_sections: p.pc_prose_sections,
-    system: p.system,
-    sheet_crest: p.sheet_crest,
-    exclude_drafts: p.exclude_drafts,
-    exclude_callouts: p.exclude_callouts,
-    exclude_sections: p.exclude_sections,
-    exclude_fields: p.exclude_fields,
-    exclude_dirs: p.exclude_dirs,
+    attachments_dir: v.attachments,
+    pc_prose_sections: p.sheets.prose_sections,
+    system: v.system,
+    sheet_crest: p.sheets.crest,
+    exclude_drafts: p.hide.drafts,
+    exclude_callouts: p.hide.callouts,
+    exclude_sections: p.hide.sections,
+    exclude_fields: p.hide.fields,
+    exclude_dirs: p.hide.folders,
     legacy,
-    landing: setOnly(p.landing, 'publish.landing', origins),
+    landing: setOnly(p.landing, 'player_site.landing', origins),
     theme: {
       ...theme,
       genre: p.theme.genre,
       palette: genreWritten && !paletteWritten ? null : p.theme.palette,
       campaign_image: p.theme.campaign_image,
     },
-    four_oh_four: { message: p.four_oh_four.message },
+    four_oh_four: { message: p.not_found },
     images: p.images,
-    banners: p.banners,
-    locations: setOnly(p.locations, 'publish.locations', origins),
+    banners: p.lists.banners,
+    locations: setOnly(p.lists.locations, 'player_site.lists.locations', origins),
     overrides: { fields: overrides.fields },
-    section_titles: p.section_titles,
+    section_titles: p.lists.section_titles,
     switches,
-    sheetLook: { skin: p.sheet_skin, frame: p.sheet_frame },
-    setting_year: values.setting_year,
+    sheetLook: { skin: p.sheets.skin, frame: p.sheets.frame },
+    setting_year: v.setting_year,
     faults,
     origins,
   };
@@ -187,7 +192,7 @@ function assertNoStopsFor(configPath, what) {
 
 // What `build` and `deploy` say instead of running when the GM has turned the site off.
 // Only an explicit off stops them: a site folder whose vault never set the switch builds.
-const SITE_OFF = 'the site is off for this vault (publish.site in _meta/vault-config.md); nothing was built. Set publish.site: true to publish again.';
+const SITE_OFF = `the site is off for this vault (${writtenAs('player_site.publish')} in _meta/vault-config.md); nothing was built. Set ${writtenAs('player_site.publish')}: true to publish again.`;
 function siteOff(switches) {
   return switches && switches.explicitOff && switches.explicitOff.site ? SITE_OFF : null;
 }

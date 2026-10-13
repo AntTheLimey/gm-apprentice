@@ -278,8 +278,8 @@ describe('init', () => {
         assert.deepStrictEqual(pub.exclude_dirs, ['_meta', '_Templates', '_resources']);
         assert.strictEqual(pub.exclude_callouts, true);
         // The built-in lists are written out so the GM sees them (#294): the same lists the build falls back to.
-        assert.deepStrictEqual(pub.exclude_sections, entry('publish.exclude_sections').default);
-        assert.deepStrictEqual(pub.exclude_fields, entry('publish.exclude_fields').default);
+        assert.deepStrictEqual(pub.exclude_sections, entry('player_site.hide.sections').default);
+        assert.deepStrictEqual(pub.exclude_fields, entry('player_site.hide.fields').default);
         for (const k of Object.keys(real)) console[k] = (...a) => lines.push(a.join(' '));
         const configPath = path.join(site, 'vault.config.json');
         build({ configPath });
