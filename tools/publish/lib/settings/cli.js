@@ -529,8 +529,22 @@ function fillOf(pairs) {
 }
 
 function move(options) {
-  const { vaultPath } = target(options);
+  // The vault is --vault, or the one the site folder's file names. A site file that cannot say is a blocker, not a crash.
   const siteConfigPath = options.config ? path.resolve(options.config) : (options.vault ? null : path.resolve('./vault.config.json'));
+  const stopped = (blockers) => ({ result: { ok: false, moved: false, lines: [], blockers, files: { write: [], remove: [] } }, lines: ['Nothing was changed. The move is blocked:', ...blockers.map((b) => `  ${b}`)], rc: 1 });
+  let vaultPath;
+  if (options.vault) {
+    vaultPath = path.resolve(options.vault);
+  } else {
+    let site;
+    try {
+      site = JSON.parse(fs.readFileSync(siteConfigPath, 'utf8'));
+    } catch (e) {
+      return stopped([e.code === 'ENOENT' ? `${siteConfigPath} does not exist.` : `${siteConfigPath} could not be read as JSON: ${firstLine(e)}`]);
+    }
+    if (!isMap(site) || typeof site.vaultPath !== 'string' || site.vaultPath.trim() === '') return stopped([`${siteConfigPath} has no "vaultPath"`]);
+    vaultPath = path.resolve(path.dirname(siteConfigPath), site.vaultPath);
+  }
   const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill) });
   const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files });
   if (!plan.ok) {

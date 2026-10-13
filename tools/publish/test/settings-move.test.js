@@ -438,3 +438,118 @@ test('the built site of with-landing-config is identical before and after the mo
     assert.equal(norm(b.files[f], b.root), norm(a.files[f], a.root), f);
   }
 });
+
+// ---- Review fixes, round 1 ----
+
+test('a CRLF old file moves exactly, with a quoted or a flow-list last line, and the notes keep the body\'s CRLF', () => {
+  const body = '\r\n## Naming\r\n\r\nMy own words.\r\n';
+  for (const last of ['gm_apprentice_version: "1.10.50"', 'tags: [a, b]']) {
+    const s = scratch(`---\r\ntype: meta\r\npublish:\r\n  mode: player\r\n${last}\r\n---\r\n${body}`);
+    moveAndCompare(s);
+    const notes = fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8');
+    assert.ok(notes.endsWith(body), last);
+  }
+  const t = scratch('---\r\ntype: meta\r\npublish:\r\n  exclude_sections: [A, B]\r\n---\r\n');
+  moveAndCompare(t);
+});
+
+test('an old file with no frontmatter, or an empty one, moves with its whole body in the notes', () => {
+  for (const text of ['# Just text\n\nSome prose.\n', '---\n---\n# Just text\n']) {
+    const s = scratch(text);
+    const { before } = moveAndCompare(s);
+    assert.equal(before.mode !== undefined, true);
+    assert.equal(fs.readFileSync(at(s.vault, NEW_FILE), 'utf8'), 'version: 1\n');
+    const notes = matter(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), {});
+    assert.deepEqual(notes.data, { type: 'meta' });
+    assert.ok(notes.content.includes('# Just text'));
+  }
+});
+
+test('a site file that belongs to another vault, or names none, is refused and nothing is written', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Elsewhere', siteTitle: 'Theirs' } });
+  fs.mkdirSync(path.join(s.root, 'Elsewhere'));
+  const before = hashes(s.root);
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+  assert.equal(plan.ok, false);
+  assert.match(plan.blockers[0], /that site folder belongs to another vault: .*Elsewhere/);
+  assert.deepEqual(hashes(s.root), before);
+  const none = scratch(old('  mode: player\n'), { site: { siteTitle: 'x' } });
+  const p2 = planMove({ vaultPath: none.vault, siteConfigPath: none.config });
+  assert.equal(p2.ok, false);
+  assert.match(p2.blockers[0], /no "vaultPath"/);
+  const same = scratch(old('  mode: player\n'), { site: { vaultPath: '../' + path.basename(s.root) + '/Elsewhere' } });
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: same.config }).ok, false);
+});
+
+test('a site file that does not exist is a blocker, and an unreadable one prints the blocked shape with --json', () => {
+  const s = scratch(old('  mode: player\n'));
+  const missing = path.join(s.root, 'nope.json');
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: missing });
+  assert.equal(plan.ok, false);
+  assert.match(plan.blockers[0], /does not exist/);
+  const bad = scratch(old('  mode: player\n'), { site: '{ not json' });
+  const withVault = cliMove({ vault: bad.vault, config: bad.config });
+  assert.equal(withVault.rc, 1);
+  assert.equal(withVault.data.ok, false);
+  assert.match(withVault.data.blockers[0], /could not be read as JSON/);
+  const byConfig = cliMove({ config: bad.config });
+  assert.equal(byConfig.rc, 1);
+  assert.equal(byConfig.data.ok, false);
+  assert.deepEqual(Object.keys(byConfig.data).sort(), ['blockers', 'files', 'lines', 'moved', 'ok']);
+  assert.equal(cliMove({ vault: s.vault, config: missing }).data.ok, false);
+});
+
+test('a vault path that is not a folder is one plain error line and exit 1', () => {
+  const s = scratch(old('  mode: player\n'));
+  const r = cliMove({ vault: path.join(s.root, 'not-there') });
+  assert.equal(r.rc, 1);
+  assert.equal(r.err.length, 1);
+  assert.match(r.err[0], /^Error: .* is not a folder\.$/);
+  assert.equal(cliMove({ vault: at(s.vault, OLD_FILE) }).rc, 1);
+});
+
+test('the site file keeps its indent and trailing newline when it loses its settings', () => {
+  const cases = [['\t', true], [4, false], [2, true], [undefined, false]];
+  for (const [indent, newline] of cases) {
+    const raw = JSON.stringify({ vaultPath: './Vault', siteTitle: 'T', outputDir: './docs' }, null, indent) + (newline ? '\n' : '');
+    const s = scratch(old('  mode: player\n'), { site: raw });
+    const { plan } = moveAndCompare(s);
+    const expected = JSON.stringify({ vaultPath: './Vault', outputDir: './docs' }, null, indent) + (newline ? '\n' : '');
+    assert.equal(fs.readFileSync(s.config, 'utf8'), expected, String(indent));
+    assert.ok(plan.lines.some((l) => l.includes('The rest of that file is as it was.')));
+  }
+  const crlf = JSON.stringify({ vaultPath: './Vault', siteTitle: 'T' }, null, 2).replace(/\n/g, '\r\n') + '\r\n';
+  const s = scratch(old('  mode: player\n'), { site: crlf });
+  moveAndCompare(s);
+  assert.equal(fs.readFileSync(s.config, 'utf8'), '{\r\n  "vaultPath": "./Vault"\r\n}\r\n');
+});
+
+test('a campaign named after the vault folder is said, with how to change it; a carried or filled name is not', () => {
+  const s = scratch(old('  mode: player\n'));
+  const plan = planMove({ vaultPath: s.vault });
+  assert.ok(plan.lines.some((l) => l.includes('named after the vault folder ("Vault")') && l.includes('settings set vault.campaign=')), plan.lines.join('\n'));
+  const t = scratch(old('  mode: player\n'));
+  assert.ok(!planMove({ vaultPath: t.vault, fill: { 'vault.campaign': 'X' } }).lines.some((l) => l.includes('named after the vault folder')));
+});
+
+test('a state file that already holds the version or the set-up note keeps it, and a line says which won', () => {
+  const s = scratch(`---\ntype: meta\ngm_apprentice_version: "1.0.0"\npublish:\n  setup_progress:\n    step: 9\n---\n`,
+    { files: { [STATE_FILE]: '{"gm_apprentice_version": "2.0.0", "setup": {"step": 1}}\n' } });
+  const { plan } = moveAndCompare(s);
+  assert.deepEqual(readState(s.vault), { gm_apprentice_version: '2.0.0', setup: { step: 1 } });
+  assert.ok(plan.lines.some((l) => l.includes('already says gm_apprentice_version "2.0.0", which was kept; the old file\'s "1.0.0" was dropped')));
+  assert.ok(plan.lines.some((l) => l.includes('already holds a set-up note, which was kept')));
+  const same = scratch('---\ntype: meta\ngm_apprentice_version: "2.0.0"\npublish:\n  mode: player\n---\n', { files: { [STATE_FILE]: '{"gm_apprentice_version": "2.0.0"}\n' } });
+  assert.ok(!planMove({ vaultPath: same.vault }).lines.some((l) => l.includes('already says')));
+});
+
+test('an alias used before its anchor is the ordinary not-valid-YAML blocker', () => {
+  for (const body of ['x: *a\npublish:\n  mode: player\ny: &a 1\n', 'publish:\n  exclude_sections: *a\n  exclude_fields: &a [x]\n']) {
+    const s = scratch(`---\ntype: meta\n${body}---\n`);
+    const before = hashes(s.root);
+    const plan = planMove({ vaultPath: s.vault });
+    assert.equal(plan.ok, false);
+    assert.match(plan.blockers[0], /^_meta\/vault-config\.md frontmatter is not valid YAML: /);
+    assert.deepEqual(hashes(s.root), before);
+  }
+});

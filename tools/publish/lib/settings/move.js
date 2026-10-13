@@ -79,15 +79,46 @@ function commentLines(doc) {
 // Splits the old file into its frontmatter text and body, through the same library the writer uses.
 function split(whole) {
   const m = matter(whole, { engines: { yaml: () => ({}) } });
-  return m.content === whole ? { front: null, body: whole } : { front: m.matter, body: m.content };
+  // The frontmatter is parsed with plain line ends (a CRLF file leaves a lone \r on its last line); the body stays as it is.
+  return m.content === whole ? { front: null, body: whole } : { front: m.matter.replace(/\r\n?/g, '\n'), body: m.content };
+}
+
+// The site file's JSON written back in the style it had: its indent, its line ends, and whether it ended in a line end.
+function jsonLike(value, text) {
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lines = text.trimEnd().split(/\r?\n/);
+  let indent = 2;
+  if (lines.length < 2) indent = undefined;
+  else {
+    const second = lines[1];
+    const lead = second.slice(0, second.length - second.trimStart().length);
+    indent = lead.startsWith('\t') ? '\t' : (lead.length || 2);
+  }
+  const out = JSON.stringify(value, null, indent);
+  return (eol === '\n' ? out : out.replace(/\n/g, eol)) + (/\n$/.test(text) ? eol : '');
 }
 
 // ---- Planning -----------------------------------------------------------------------------
 
 const INTERNAL = Symbol('move');
 
-function planMove({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
+// A library error about the old file's YAML (an alias used before its anchor, say) is the ordinary blocker.
+function planMove(options, deps = {}) {
+  try {
+    return planMoveNow(options, deps);
+  } catch (e) {
+    if (/alias/i.test(String(e.message)) || String(e.name).startsWith('YAML')) {
+      return { ok: false, lines: [], blockers: [`${OLD_FILE} frontmatter is not valid YAML: ${firstLine(e.message)}`], files: { write: [], remove: [] } };
+    }
+    throw e;
+  }
+}
+
+function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
   const vault = path.resolve(vaultPath);
+  let isDir = false;
+  try { isDir = fs.statSync(vault).isDirectory(); } catch { /* said below */ }
+  if (!isDir) throw new Error(`${vault} is not a folder.`);
   const plan = (extra) => ({ ok: true, lines: [], blockers: [], files: { write: [], remove: [] }, ...extra });
   const layout = layoutOf(vault);
   if (layout === 'new') return plan({ lines: [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`] });
@@ -104,18 +135,33 @@ function planMove({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
   let state;
   try { state = readState(vault); } catch (e) { blockers.push(firstLine(e.message)); state = {}; }
 
-  // The site folder's file, when there is one.
+  // The site folder's file, when there is one. It must belong to this vault.
   let site = {};
   let siteText = null;
-  const siteFile = siteConfigPath && fs.existsSync(path.resolve(siteConfigPath)) ? path.resolve(siteConfigPath) : null;
-  if (siteFile) {
-    siteText = fs.readFileSync(siteFile, 'utf8');
-    try {
-      site = JSON.parse(siteText);
-      if (!isMap(site)) throw new Error('it must hold an object');
-    } catch (e) {
-      blockers.push(`${siteFile} could not be read as JSON: ${firstLine(e.message)}`);
-      site = {};
+  let siteFile = null;
+  if (siteConfigPath) {
+    const wanted = path.resolve(siteConfigPath);
+    if (!fs.existsSync(wanted)) {
+      blockers.push(`${wanted} does not exist.`);
+    } else {
+      siteFile = wanted;
+      siteText = fs.readFileSync(siteFile, 'utf8');
+      try {
+        site = JSON.parse(siteText);
+        if (!isMap(site)) throw new Error('it must hold an object');
+      } catch (e) {
+        blockers.push(`${siteFile} could not be read as JSON: ${firstLine(e.message)}`);
+        site = {};
+      }
+      if (isMap(site)) {
+        if (typeof site.vaultPath !== 'string' || site.vaultPath.trim() === '') {
+          blockers.push(`${siteFile} has no "vaultPath", so it cannot be told which vault it belongs to.`);
+        } else {
+          const theirs = path.resolve(path.dirname(siteFile), site.vaultPath);
+          const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+          if (real(theirs) !== real(vault)) blockers.push(`that site folder belongs to another vault: ${theirs}`);
+        }
+      }
     }
   }
 
@@ -180,6 +226,9 @@ function planMove({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
   }
 
   if (blockers.length) return blocked();
+  if (planned['vault.campaign'] === undefined) {
+    lines.push(`The campaign is named after the vault folder ("${path.basename(vault)}"). To change it: settings set vault.campaign="..."`);
+  }
 
   // The values to write: every setting not left at its default, in the list's order.
   const toWrite = [];
@@ -237,7 +286,7 @@ function planMove({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
     notesDoc = new YAML.Document();
     notesDoc.contents = new YAMLMap();
     const typeKey = new Scalar('type');
-    const oldType = doc.contents && doc.contents.items.find((p) => keyText(p) === 'type');
+    const oldType = doc && doc.contents && doc.contents.items.find((p) => keyText(p) === 'type');
     if (oldType && oldType.key.commentBefore) typeKey.commentBefore = oldType.key.commentBefore;
     notesDoc.contents.items.push(new Pair(typeKey, new Scalar('meta')));
     for (const p of extra) notesDoc.contents.items.push(new Pair(p.key.clone(), isNode(p.value) ? p.value.clone() : p.value));
@@ -259,6 +308,12 @@ function planMove({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
   const note = getPath(data, [OLD_BLOCK, 'setup_progress']);
   if (isMap(note) && state.setup === undefined) patch.setup = note;
   else if (note != null && !isMap(note)) lines.push(`${OLD_BLOCK}.setup_progress is not a note the set-up guide wrote, so it was not carried over.`);
+  if (data.gm_apprentice_version != null && state.gm_apprentice_version !== undefined && !isDeepStrictEqual(state.gm_apprentice_version, data.gm_apprentice_version)) {
+    lines.push(`${STATE_FILE} already says gm_apprentice_version ${JSON.stringify(state.gm_apprentice_version)}, which was kept; the old file's ${JSON.stringify(data.gm_apprentice_version)} was dropped.`);
+  }
+  if (isMap(note) && state.setup !== undefined && !isDeepStrictEqual(state.setup, note)) {
+    lines.push(`${STATE_FILE} already holds a set-up note, which was kept; the old file's ${OLD_BLOCK}.setup_progress was dropped.`);
+  }
   const stateAfter = { ...state, ...patch };
   const stateOut = Object.keys(patch).length ? stateText(stateAfter) : null;
 
@@ -302,7 +357,7 @@ function planMove({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
         }
       }
     }
-    if (removedKeys.length) siteOut = `${JSON.stringify(siteAfter, null, 2)}\n`;
+    if (removedKeys.length) siteOut = jsonLike(siteAfter, siteText);
   }
 
   const m = {
@@ -376,6 +431,7 @@ function verify(m, deps = {}) {
     for (const key of new Set([...Object.keys(before), ...Object.keys(after)])) {
       if (!isDeepStrictEqual(before[key], after[key])) throw new Error(`${key} in the site's settings would not come out the same after the move`);
     }
+    if (m.siteOut !== null && !isDeepStrictEqual(JSON.parse(m.siteOut), m.siteAfter)) throw new Error('the site folder\'s file would not read back the same');
     if (m.notesText !== null) {
       let note;
       try { note = parseNote(m.notesText); } catch (e) { throw new Error(`${NOTES_FILE} would not read back (${firstLine(e.message)})`); }
