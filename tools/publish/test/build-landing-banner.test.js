@@ -15,7 +15,7 @@ const place = '---\ntype: location\n---\n\nA place.\n';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
 // A small vault on the new settings file, built; `banner` is player_site.landing.banner.
-function site(banner, { files = {}, binary = {}, hide = null } = {}) {
+function site(banner, { files = {}, binary = {}, hide = null, dirs = [] } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'landing-banner-'));
   const vault = path.join(root, 'vault');
   const all = {
@@ -33,6 +33,7 @@ function site(banner, { files = {}, binary = {}, hide = null } = {}) {
     fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
     fs.writeFileSync(path.join(vault, rel), data);
   }
+  for (const rel of dirs) fs.mkdirSync(path.join(vault, rel), { recursive: true });
   writeNewConfig(vault, {
     version: 1,
     player_site: {
@@ -114,6 +115,20 @@ test('rule 2: a picture missing from the vault or outside it is a warning, and t
   const out = site({ image: '../outside.png', title: 'Hello' });
   assert.doesNotMatch(bannerOf(out.read('index.html')), /<img/);
   assert.ok(out.warnings.some((w) => /outside/.test(w)), out.warnings.join('\n'));
+});
+
+test('fix round 1: an image naming a folder is a warning and the banner shows without a picture, not a crash', () => {
+  const s = site({ image: 'Art', title: 'Hello' }, { dirs: ['Art'] });
+  const b = bannerOf(s.read('index.html'));
+  assert.match(b, /Hello/);
+  assert.doesNotMatch(b, /<img/);
+  assert.ok(s.warnings.some((w) => /Art/.test(w) && /not a file/.test(w)), s.warnings.join('\n'));
+});
+
+test('fix round 1: a section banner file that is a folder is a warning, not a crash', () => {
+  const s = site(undefined, { dirs: ['Locations/_banner.png'] });
+  assert.ok(s.exists('locations', 'index.html'));
+  assert.ok(s.warnings.some((w) => /_banner\.png/.test(w) && /not a file/.test(w)), s.warnings.join('\n'));
 });
 
 test('rule 2: a web address picture is used as written', () => {

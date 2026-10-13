@@ -1100,7 +1100,10 @@ a.landing-banner:focus-visible {
 }
 @media (min-width: 700px) {
   .landing-banner { flex-direction: row; text-align: left; }
-  .landing-banner-img { max-width: 40%; }
+  /* The picture takes a fixed share whatever its own size; the words take the rest and may shrink. */
+  .landing-banner-img { flex: 0 0 40%; width: 40%; max-width: 40%; min-width: 0; max-height: 16rem; object-fit: cover; }
+  .landing-banner-img:only-child { flex: 0 1 auto; width: auto; max-width: 100%; }
+  .landing-banner-body { flex: 1 1 0; min-width: 0; }
 }
 .landing-hero h1 {
   font-size: 2rem;

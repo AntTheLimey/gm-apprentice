@@ -1432,6 +1432,10 @@ function buildSite(options) {
       console.warn(`  WARNING: ${label} "${vaultRelPath}" not found in the vault — skipping`);
       return null;
     }
+    if (!fs.statSync(full).isFile()) {
+      console.warn(`  WARNING: ${label} "${vaultRelPath}" is not a file — skipping`);
+      return null;
+    }
     return full;
   }
 
