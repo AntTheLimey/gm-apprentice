@@ -251,4 +251,10 @@ function readSettings({ vaultPath, siteConfig = {} }) {
   return { ...legacy.readLegacy({ vaultPath, siteConfig: site }, core), layout };
 }
 
-module.exports = { readSettings, parseNewFile, LAYOUT_VERSION, NEWER_VERSION };
+// The settings as the OLD layout reads them, whatever files the vault has: for the move, which compares the old
+// files with the new one. `skipOldFile` reads the site folder's file alone.
+function readOldLayout({ vaultPath, siteConfig = {}, skipOldFile = false }) {
+  return { ...legacy.readLegacy({ vaultPath, siteConfig: siteConfig || {}, skipOldFile }, core), layout: 'legacy' };
+}
+
+module.exports = { readSettings, readOldLayout, parseNewFile, LAYOUT_VERSION, NEWER_VERSION };

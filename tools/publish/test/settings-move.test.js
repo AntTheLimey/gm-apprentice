@@ -656,3 +656,127 @@ test('the notes file keeps the old file\'s line ending in its frontmatter', () =
   assert.equal(notes.replace(/\r\n/g, ''), notes.replace(/\r\n/g, '').replace(/\n/g, ''), 'no bare line feed: every line ends in CRLF');
   assert.ok(notes.startsWith('---\r\ntype: meta\r\ndescription: Mine\r\n---\r\nBody'));
 });
+
+// ---- A stopped move is mended by running it again (R6) ----
+
+const KILL = path.join(__dirname, 'helpers', 'kill-move.js');
+const hiddenLeft = (dir) => {
+  const found = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.move\.(old|new)$/.test(e.name)) found.push(f);
+    }
+  }(dir));
+  return found;
+};
+const killable = () => scratch(`---\ntype: meta\ngm_apprentice_version: "1.10.1"\ncampaign: Hollow\npublish:\n  mode: player\n  site_title: Hollow Site\n  exclude_sections: [A, B]\n---\nMy own notes.\n`, {
+  site: { vaultPath: './Vault', siteTitle: 'T', excludeSections: ['Z'], folderMap: { People: 'people' } },
+  files: { [STATE_FILE]: '{"other": 1}\n' },
+});
+
+test('a move killed at any point in its commit is finished by running it again', () => {
+  const s0 = killable();
+  const original = strip(loadPublishConfig(s0.vault, JSON.parse(fs.readFileSync(s0.config, 'utf8')), quiet));
+  const expectedSite = { vaultPath: './Vault' };
+  let total = 0;
+  for (let n = 1; n < 40; n += 1) {
+    for (const when of ['before', 'after']) {
+      const s = killable();
+      const run = require('node:child_process').spawnSync(process.execPath, [KILL, s.vault, s.config, String(n), when], { encoding: 'utf8' });
+      if (run.status === 0) { total = Number(run.stdout.trim()); break; }
+      assert.equal(run.status, 9, `kill ${when} op ${n}: ${run.stderr}`);
+      const again = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+      assert.equal(again.ok, true, `kill ${when} op ${n}: ${again.blockers.join(' | ')}`);
+      applyMove(again);
+      const label = `killed ${when} operation ${n}`;
+      assert.equal(layoutOf(s.vault), 'new', label);
+      assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false, label);
+      assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), expectedSite, label);
+      assert.deepEqual(strip(loadPublishConfig(s.vault, expectedSite, quiet)), original, label);
+      assert.deepEqual(hiddenLeft(s.root), [], label);
+      assert.equal(matter(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), {}).content, 'My own notes.\n', label);
+      assert.equal(readState(s.vault).other, 1, label);
+      assert.equal(readState(s.vault).gm_apprentice_version, '1.10.1', label);
+      // And a third run finds nothing.
+      const third = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+      assert.deepEqual(third.files, { write: [], remove: [] }, label);
+    }
+    if (total) break;
+  }
+  assert.ok(total >= 5, `the move made ${total} renames and removals`);
+});
+
+test('the notes file a stopped move wrote is accepted when it is what this move would write; another is a blocker', () => {
+  const s = killable();
+  const first = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+  fs.writeFileSync(at(s.vault, NOTES_FILE), fs.readFileSync(at(s.vault, OLD_FILE), 'utf8').includes('My own notes') ? '---\ntype: meta\n---\nMy own notes.\n' : '');
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: s.config }).ok, true);
+  fs.writeFileSync(at(s.vault, NOTES_FILE), 'something else\n');
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: s.config }).ok, false);
+  assert.equal(first.ok, true);
+});
+
+test('a moved vault whose site file still holds settings the new file has: the second run strips them; settings it has differently stay', () => {
+  const s = scratch(old('  mode: player\n  site_title: Mine\n'), { site: { vaultPath: './Vault', siteTitle: 'Mine', folderMap: { A: 'a' } } });
+  const sibling = JSON.parse(fs.readFileSync(s.config, 'utf8'));
+  assert.equal(cliMove({ vault: s.vault, config: s.config }).rc, 0);
+  fs.writeFileSync(s.config, JSON.stringify(sibling));
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0);
+  assert.match(r.data.lines.join('\n'), /Removed the settings from/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), { vaultPath: './Vault' });
+  fs.writeFileSync(s.config, JSON.stringify({ vaultPath: './Vault', siteTitle: 'Different' }));
+  const kept = cliMove({ vault: s.vault, config: s.config });
+  assert.match(kept.data.lines.join('\n'), /left it as it is|left as it is/);
+  assert.equal(JSON.parse(fs.readFileSync(s.config, 'utf8')).siteTitle, 'Different');
+});
+
+test('--vault alone on a moved vault finds the site folder the new file names', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const site = path.join(s.root, 'Site');
+  fs.mkdirSync(site);
+  const siteFile = path.join(site, 'vault.config.json');
+  fs.writeFileSync(siteFile, JSON.stringify({ vaultPath: '../Vault', siteTitle: 'Four' }));
+  const keep = fs.readFileSync(siteFile, 'utf8');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(siteFile, keep);
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(siteFile, 'utf8')), { vaultPath: '../Vault' });
+});
+
+test('an old file left beside the new one: removed when it holds nothing more, kept and listed otherwise, removed on request', () => {
+  const s = scratch(old('  mode: player\n  site_title: Mine\n'));
+  const text = fs.readFileSync(at(s.vault, OLD_FILE), 'utf8');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(at(s.vault, OLD_FILE), text);
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.leftover, { redundant: true, keys: [] });
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false);
+  fs.writeFileSync(at(s.vault, OLD_FILE), old('  mode: player\n  site_title: Mine\n  search: false\n'));
+  const kept = cliMove({ vault: s.vault });
+  assert.equal(kept.data.leftover.redundant, false);
+  assert.deepEqual(kept.data.leftover.keys, ['player_site.features.search']);
+  assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), true);
+  assert.equal(cliMove({ vault: s.vault }, { discardOld: true }).rc, 0);
+  assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false);
+});
+
+test('no settings file but settings in the site file: the move makes the new file from them, with no old file to remove', () => {
+  const s = scratch(null, { site: { vaultPath: './Vault', siteTitle: 'Only Here', excludeSections: ['Z'], folderMap: { A: 'a' } } });
+  const before = strip(loadPublishConfig(s.vault, JSON.parse(fs.readFileSync(s.config, 'utf8')), quiet));
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: s.config, fill: { 'vault.system': 'coc-7e' } });
+  assert.equal(plan.ok, true, plan.blockers.join(' | '));
+  assert.deepEqual(plan.files.remove, []);
+  assert.equal(applyMove(plan).moved, true);
+  assert.equal(layoutOf(s.vault), 'new');
+  const siteAfter = JSON.parse(fs.readFileSync(s.config, 'utf8'));
+  assert.deepEqual(siteAfter, { vaultPath: './Vault' });
+  const after = strip(loadPublishConfig(s.vault, siteAfter, quiet));
+  assert.deepEqual({ ...after, system: before.system }, before);
+  assert.equal(after.system, 'coc-7e');
+  assert.equal(fs.existsSync(at(s.vault, NOTES_FILE)), false);
+  assert.equal(planMove({ vaultPath: scratch(null).vault }).files.write.length, 0);
+});

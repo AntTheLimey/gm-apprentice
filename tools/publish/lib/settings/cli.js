@@ -211,9 +211,11 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
   settings raw [<name>]            The file as written, or the value at one name
-  settings move [--check] [--fill name=value ...]
+  settings move [--check] [--fill name=value ...] [--discard-old-file]
                                    Take a vault from the old settings file to the new one, all or nothing
-                                   (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none)
+                                   (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none;
+                                   on a vault already moved it tidies up after a stopped move, and --discard-old-file removes a left-over
+                                   old file that holds more than the new one)
                                    Do not run it by hand yet: the next release runs it for you, and teaches the
                                    plugin's own scripts to read the new file at the same time
   settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
@@ -527,10 +529,10 @@ function fillOf(pairs) {
   return out;
 }
 
-// The site folder an old-layout vault names (player_site.folder), and its vault.config.json: { dir, file, exists }.
-// null when the vault is not on the old layout, names no folder, or its settings cannot be read (the plan says so).
+// The site folder a vault names (player_site.folder), and its vault.config.json: { dir, file, exists }.
+// null when the vault has no settings file, names no folder, or its settings cannot be read (the plan says so).
 function siteFileNamedBy(vaultPath) {
-  if (layoutOf(vaultPath) !== 'legacy') return null;
+  if (layoutOf(vaultPath) === 'none') return null;
   let raw;
   try {
     raw = getPath(readSettings({ vaultPath, siteConfig: {} }).values, ['player_site', 'folder']);
@@ -563,16 +565,17 @@ function move(options) {
   // With only --vault, the site folder is the one the vault's own settings name; the move must see its file.
   if (!siteConfigPath) {
     const named = siteFileNamedBy(vaultPath);
-    if (named && !named.exists) return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
-    if (named) siteConfigPath = named.file;
+    // A vault already moved may have lost its site folder; there is then nothing in it to mend.
+    if (named && !named.exists && layoutOf(vaultPath) === 'legacy') return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
+    if (named && named.exists) siteConfigPath = named.file;
   }
-  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill) });
-  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files });
+  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.leftover ? { leftover: plan.leftover } : {}) });
   if (!plan.ok) {
     return { result: base(false, plan.lines), lines: ['Nothing was changed. The move is blocked:', ...plan.blockers.map((b) => `  ${b}`)], rc: 1 };
   }
   if (options.check) {
-    const lines = plan.files.remove.length ? ['Nothing was changed (check only). This is what the move will do:', ...plan.lines] : plan.lines;
+    const lines = plan.files.remove.length || plan.files.write.length ? ['Nothing was changed (check only). This is what the move will do:', ...plan.lines] : plan.lines;
     return { result: base(false, plan.lines), lines };
   }
   const done = applyMove(plan);

@@ -231,14 +231,14 @@ function childSegs(parent) {
 
 // Reads the old file and the site's vault.config.json. `core` is read.js's shared pieces.
 // Returns { values, origins, faults, legacy, file } like readSettings (without `layout`).
-function readLegacy({ vaultPath, siteConfig }, core) {
+function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
   const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY } = core;
   const site = siteConfig || {};
   const faults = [];
   const fault = makeFault;
   const file = { path: at(vaultPath, OLD_FILE), exists: false, hasSiteBlock: false, inline: false, leftover: false };
   let data = {};
-  if (fs.existsSync(file.path)) {
+  if (!skipOldFile && fs.existsSync(file.path)) {
     file.exists = true;
     const text = fs.readFileSync(file.path, 'utf-8');
     try {
