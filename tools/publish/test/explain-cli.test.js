@@ -59,6 +59,14 @@ function siteForFixtureStory() {
   return configPath;
 }
 
+// Runs fn with console.warn captured, so a test that uses faulty settings on purpose prints nothing.
+async function quietly(fn) {
+  const saved = console.warn;
+  const warnings = [];
+  console.warn = (...a) => warnings.push(a.join(' '));
+  try { return { result: await fn(), warnings }; } finally { console.warn = saved; }
+}
+
 function capture() {
   const out = [];
   return { out, deps: { out: (line) => out.push(String(line)) }, text: () => out.join('\n') };
@@ -517,9 +525,12 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     }
     return { vault, configPath };
   }
+  let lastWarnings = [];
   async function explainAll(configPath) {
     const c = capture();
-    assert.strictEqual(await runExplainAll({ configPath }, c.deps), 0);
+    const { result, warnings } = await quietly(() => runExplainAll({ configPath }, c.deps));
+    lastWarnings = warnings;
+    assert.strictEqual(result, 0);
     return JSON.parse(c.out.join(''));
   }
 
@@ -530,6 +541,7 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     const off = vaultWith('  character_sheets: false\n  live_stats: true\n');
     assert.deepStrictEqual((await explainAll(off.configPath)).switches,
       { characterSheets: false, liveStats: false, inbox: false });
+    assert.deepStrictEqual(lastWarnings, ['publish.live_stats is on but character_sheets is off; live stats are not published']);
     const on = vaultWith('  live_stats: true\n  inbox: true\n');
     assert.deepStrictEqual((await explainAll(on.configPath)).switches,
       { characterSheets: true, liveStats: true, inbox: true });
@@ -598,8 +610,8 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
 describe('explain --all (#276)', () => {
   function all(configPath, extra) {
     const c = capture();
-    return runExplainAll(Object.assign({ configPath }, extra || {}), c.deps)
-      .then((rc) => ({ rc, json: JSON.parse(c.out.join('')) }));
+    return quietly(() => runExplainAll(Object.assign({ configPath }, extra || {}), c.deps))
+      .then(({ result: rc, warnings }) => ({ rc, json: JSON.parse(c.out.join('')), warnings }));
   }
   const byPath = (json) => new Map(json.pages.map((p) => [p.path, p]));
 
@@ -643,12 +655,14 @@ describe('explain --all (#276)', () => {
   });
 
   describe('retiredSheetFields follow the campaign system', () => {
+    let lastRetiredWarnings = [];
     async function retiredFor(system, fm) {
       const vault = makeVault();
       write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${system ? `  system: ${system}\n` : ''}---\n`);
       write(vault, 'Sessions/Pc.md', `---\ntype: pc\noccupation: Sailor\n${fm}---\n\nA sailor.\n`);
       write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
-      const { rc, json } = await all(siteFor(vault));
+      const { rc, json, warnings } = await all(siteFor(vault));
+      lastRetiredWarnings.push(...warnings);
       assert.strictEqual(rc, 0);
       const pages = byPath(json);
       assert.strictEqual(pages.get('Sessions/Npc.md').retiredSheetFields, null);
@@ -665,10 +679,12 @@ describe('explain --all (#276)', () => {
     });
 
     it('does not report a GURPS-only name on a CoC, D&D or generic PC', async () => {
+      lastRetiredWarnings = [];
       for (const system of ['coc-7e', 'dnd-5e-2024', 'fitd', 'generic', '']) {
         const got = await retiredFor(system, 'skills: [x]\nidentity: x\nlanguages: [x]\npoints: [x]\n');
         assert.deepStrictEqual(got, [], system);
       }
+      assert.match(lastRetiredWarnings.join('\n'), /publish\.system is "generic"; it takes /, 'a system the tool does not know is said, not silent');
     });
 
     it('reports each system its own names, a shared name for every system that read it', async () => {

@@ -1,7 +1,7 @@
 // tools/publish/test/unit/skins-look.test.js
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { SKINS, FRAME_IDS, resolveLook, siteLook, isDressed, clipValue } = require('../../lib/skins');
+const { SKINS, FRAME_IDS, resolveLook, isDressed, clipValue } = require('../../lib/skins');
 
 describe('skins: resolveLook', () => {
   const none = { skin: null, frame: null, notes: [] };
@@ -50,20 +50,6 @@ describe('skins: resolveLook', () => {
     for (const empty of [null, '', '   ']) {
       assert.deepStrictEqual(resolveLook({ sheet_skin: empty, sheet_frame: empty }, none), { skin: 'plain', frame: 'none', notes: [] });
     }
-  });
-});
-
-describe('skins: siteLook', () => {
-  it('reads the two publish keys', () => {
-    assert.deepStrictEqual(siteLook({ sheet_skin: 'Console', sheet_frame: 'ring' }), { skin: 'console', frame: 'ring', notes: [] });
-  });
-  it('drops an unknown value with a note', () => {
-    const r = siteLook({ sheet_skin: 'vellum' });
-    assert.strictEqual(r.skin, null);
-    assert.deepStrictEqual(r.notes.map(n => n.key), ['sheet_skin']);
-  });
-  it('is empty for no publish block', () => {
-    assert.deepStrictEqual(siteLook(undefined), { skin: null, frame: null, notes: [] });
   });
 });
 

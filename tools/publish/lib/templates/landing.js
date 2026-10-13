@@ -70,9 +70,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   const tagline = theme.tagline ? `<p class="hero-tagline">${escapeHtml(theme.tagline)}</p>` : '';
   const sessionCount = (overviewFm.sessions_played != null)
     ? overviewFm.sessions_played
-    : (publishConfig && publishConfig.total_sessions != null)
-      ? publishConfig.total_sessions
-      : pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
+    : pages.filter(p => p.frontmatter.type === 'session' && (p.frontmatter.status === 'played' || p.frontmatter.status === 'reviewed')).length;
   const heroDateParts = [];
   if (inGameLabel) heroDateParts.push(`<span><span class="date-label">In-Game</span> ${escapeHtml(String(inGameLabel))}</span>`);
   heroDateParts.push(`<span><span class="date-label">Sessions</span> ${sessionCount}</span>`);
@@ -196,7 +194,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   }
 
   // --- Zone 7: Latest Events ---
-  const recentEvents = getRecentEvents(pages, landingConfig.max_events || 4);
+  const recentEvents = getRecentEvents(pages, landingConfig.max_events);
   let eventZone = '';
   if (recentEvents.length > 0) {
     const eventCards = recentEvents.map(page => {

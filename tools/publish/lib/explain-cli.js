@@ -14,6 +14,7 @@ const path = require('path');
 const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
+const { assertNoStops } = require('./config');
 const { canonicalPath } = require('./manifest');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
 const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
@@ -71,6 +72,7 @@ async function runExplain(options, deps) {
   }
 
   const survey = surveyVault(opts, d);
+  assertNoStops(survey.publishConfig, 'explain');
   const { config, vaultPath, publishConfig, manifest, files, verdicts, pagesByRel, report } = survey;
 
   // Existence is checked on disk, not against the walked list: a file under
@@ -351,6 +353,7 @@ async function runExplainAll(options, deps) {
   const d = deps || {};
   const out = d.out || console.log;
   const survey = surveyVault(opts, d);
+  assertNoStops(survey.publishConfig, 'explain');
   const pairs = pairsWith(survey, publishedPagesOf(survey));
   const parseErrors = new Map(survey.report.malformed.map((m) => [canonicalPath(m.rel), m.message]));
   const pages = survey.files.map((rel) => {

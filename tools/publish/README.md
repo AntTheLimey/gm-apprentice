@@ -163,6 +163,7 @@ GitHub Pages from the `docs/` folder in your repo settings.
 ```text
 gm-apprentice-publish init [dir]          Scaffold a new site
 gm-apprentice-publish build [options]     Build the site from vault
+gm-apprentice-publish settings <cmd>      Read, set, describe and check any site setting
 gm-apprentice-publish --version           Print version
 gm-apprentice-publish --help              Print help
 ```
@@ -210,6 +211,29 @@ A request that cannot be answered gets `{"error":…}` and the process
 carries on. That includes a malformed one: `text` must be a string, and
 `excludeSections` (and `include`, where it applies) must be present and
 a list of strings.
+
+### `settings <cmd>`
+
+Reads, writes, describes and checks the settings in the vault's
+`_meta/vault-config.md`. Every setting is declared once, in
+`lib/settings/registry.js`; the command works from that list.
+
+```text
+settings get [<name> ...]          What each setting is now, and where that came from
+settings describe <name>           What one setting does, what it takes, its default
+settings list                      Every setting that can be set
+settings check                     The faults in the file; exits 1 when one stops the build
+settings set <name>=<value> ...    Write settings, all or none
+settings unset <name> ...          Remove settings from the file
+settings add <name> <entry> ...    Add entries to a list setting
+settings remove <name> <entry> ... Take entries out of a list setting
+settings raw [<name>]              The file as written
+```
+
+`settings --help` prints the options and `settings list` the names; the
+generated page `docs/site-settings.md` holds the full tables. A fault on
+a setting that hides material stops `build`, `deploy` and the other
+publishing commands until it is fixed.
 
 ---
 

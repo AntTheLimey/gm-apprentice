@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { statements } = require('../color-mode');
+const { TYPES } = require('../settings/types');
 
 // Sheet skins and frames: the one place a PC page's look is decided.
 // A skin is CSS settings (css/skins/<id>.css); a frame is an inline SVG (frames.js).
@@ -19,34 +20,30 @@ const FRAME_IDS = ['ring', 'laurel', 'thorns', 'gilt', 'steel', 'corners', 'hex'
 const clipValue = (v) => (typeof v === 'string' && v.length > 60 ? v.slice(0, 60) + '…' : v);
 
 const unset = (v) => v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
-const idOf = (v) => (typeof v === 'string' ? v.trim().toLowerCase() : null);
 
-// One setting: its id, or null when unset or unknown (unknown adds a note).
-function pick(raw, key, known, notes) {
+// A PC's own skin or frame: its id, or null when unset or unknown (unknown adds a note).
+// The campaign's own choice is read by the settings list; this file may not require it.
+const SKIN_ENTRY = { values: Object.keys(SKINS) };
+const FRAME_ENTRY = { values: ['none', ...FRAME_IDS] };
+function pick(raw, key, entry, notes) {
   if (unset(raw)) return null;
-  const id = idOf(raw);
-  if (id && known(id)) return id;
-  const isSkin = key === 'sheet_skin';
-  const valid = isSkin ? Object.keys(SKINS) : ['none', ...FRAME_IDS];
-  notes.push({ key, value: raw, problem: `is not a known ${isSkin ? 'skin' : 'frame'} (use ${valid.join(', ')})` });
+  const read = TYPES.choice.read(raw, entry);
+  if (read.ok) return read.value;
+  notes.push({ key, value: raw, problem: `is not a known ${key === 'sheet_skin' ? 'skin' : 'frame'} (use ${entry.values.join(', ')})` });
   return null;
 }
-const knownSkin = (id) => Object.prototype.hasOwnProperty.call(SKINS, id);
-const knownFrame = (id) => id === 'none' || FRAME_IDS.includes(id);
 
-function siteLook(publish) {
-  const p = publish && typeof publish === 'object' ? publish : {};
-  const notes = [];
-  return { skin: pick(p.sheet_skin, 'sheet_skin', knownSkin, notes), frame: pick(p.sheet_frame, 'sheet_frame', knownFrame, notes), notes };
-}
+// The skin used when nothing names one: the list's `fallback` for sheet_skin. Asked at call time,
+// because the list requires this file.
+const fallbackSkin = () => require('../settings/registry').entry('publish.sheet_skin').fallback;
 
 // The PC's value, else the campaign's, else the default. Skin and frame resolve apart.
 function resolveLook(fm, site) {
   const f = fm && typeof fm === 'object' ? fm : {};
   const s = site || { skin: null, frame: null };
   const notes = [];
-  const skin = pick(f.sheet_skin, 'sheet_skin', knownSkin, notes) || s.skin || 'plain';
-  const frame = pick(f.sheet_frame, 'sheet_frame', knownFrame, notes) || s.frame || SKINS[skin].ownFrame;
+  const skin = pick(f.sheet_skin, 'sheet_skin', SKIN_ENTRY, notes) || s.skin || fallbackSkin();
+  const frame = pick(f.sheet_frame, 'sheet_frame', FRAME_ENTRY, notes) || s.frame || SKINS[skin].ownFrame;
   return { skin, frame, notes };
 }
 
@@ -103,7 +100,7 @@ function fontFamiliesFor(ids) {
 // uses (scanAllNotes does not parse frontmatter), so a PC the build never sees is not
 // counted. It is a superset of what the build dresses: it ignores the manifest and draft
 // filters, because fetching one face too many is harmless and missing one is not.
-// `scanConfig` is what scanConfigFor returns; `site` is siteLook's answer (the resolved
+// `scanConfig` is what scanConfigFor returns; `site` is { skin, frame } (the resolved
 // config carries it as publishConfig.sheetLook).
 function skinsInVault(scanConfig, site) {
   const { scanVaultReport } = require('../scanner');
@@ -116,4 +113,4 @@ function skinsInVault(scanConfig, site) {
   return [...ids];
 }
 
-module.exports = { clipValue, SKINS, FRAME_IDS, siteLook, resolveLook, isDressed, skinsCss, fontFamiliesFor, skinsInVault };
+module.exports = { clipValue, SKINS, FRAME_IDS, resolveLook, isDressed, skinsCss, fontFamiliesFor, skinsInVault };

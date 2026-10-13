@@ -224,7 +224,7 @@ describe('build integration: sheet skins and frames', () => {
     const pc = bad.warnings.filter((w) => /Tamsin_Reed/.test(w));
     assert.strictEqual(campaign.length, 1);
     assert.strictEqual(pc.length, 1);
-    assert.match(campaign[0], /; ignored$/);
+    assert.match(campaign[0], /; it takes plain, parchment, case-file, console or ledger\.$/);
     assert.match(pc[0], /; ignored$/);
     assert.match(pc[0], /\(use none, ring,/);
     assert.ok(campaign[0].length < 260, campaign[0].length + ' characters');

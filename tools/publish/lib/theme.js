@@ -25,12 +25,6 @@ const GENERIC_FAMILIES = new Set([
   'ui-serif', 'ui-sans-serif', 'ui-monospace', 'ui-rounded',
 ]);
 
-function resolveGenrePreset(genre) {
-  if (!genre) return null;
-  const key = String(genre).toLowerCase().trim();
-  return GENRE_ALIASES[key] || null;
-}
-
 function cssFontValue(font, fallback) {
   if (GENERIC_FAMILIES.has(font)) return `${font}, ${fallback}`;
   return `'${font}', ${fallback}`;
@@ -107,7 +101,7 @@ function fontsPreamble(fonts, selfHostCss) {
   // rules (selfHostCss, possibly empty). Never falls through to the Google import.
   if (fonts.source === 'self-host') return selfHostCss || '';
   if (fonts.source === 'local') return localFontFaceCSS(fonts.files);
-  return googleFontsImport(fonts);
+  return googleFontsImport(fonts); // 'google'; the reader refuses any other source
 }
 
 function parseHex(hex) {
@@ -150,7 +144,7 @@ function generateThemeCSS(config, opts = {}) {
   // When a genre preset is active and no custom palette was provided,
   // preset CSS owns colors AND fonts; only explicitly-chosen (non-generic)
   // fonts override the preset.
-  if (!palette && config.genre && resolveGenrePreset(config.genre)) {
+  if (!palette && config.genre) {
     const fontVars = [];
     if (fonts.heading && !GENERIC_FAMILIES.has(fonts.heading)) fontVars.push(`  --font-heading: ${cssFontValue(fonts.heading, 'serif')};`);
     if (fonts.body && !GENERIC_FAMILIES.has(fonts.body)) fontVars.push(`  --font-body: ${cssFontValue(fonts.body, 'sans-serif')};`);
@@ -214,4 +208,4 @@ function generateThemeCSS(config, opts = {}) {
   return `${fontsImport}:root {\n${vars.join('\n')}\n}\n`;
 }
 
-module.exports = { generateThemeCSS, googleFontNames, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };
+module.exports = { generateThemeCSS, googleFontNames, GENRE_ALIASES, VALID_PRESETS, FONT_FORMATS, fontOutputPath };

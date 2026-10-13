@@ -9,11 +9,11 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { MOVED_KEYS, DEPLOY_KEYS, OLD_SWITCHES, hasLegacy: siteHasLegacy, isText, usable } = require('./config-keys');
+const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, normalizeExcludeDir, mergedMaps } = require('./settings/site-file');
+const { entry: settingEntry } = require('./settings');
+const { readSwitch } = require('./settings/types');
 const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
-const { asBool } = require('./switches');
-const { normalizeExcludeDir, stricterCallouts, MERGED_MAPS, PUBLISH_DEFAULTS } = require('./config');
 const { parseNote } = require('./frontmatter');
 
 // Shown in messages, so always forward-slashed; path.join accepts it on every platform.
@@ -84,7 +84,7 @@ function planMigration({ configPath, vaultPath } = {}) {
   };
 
   if (site) {
-    for (const entry of MOVED_KEYS) {
+    for (const entry of movedKeys()) {
       if (site[entry.json] === undefined) continue;
       const fromSite = site[entry.json];
       // An empty `exclude_callouts:` says nothing, as in the reader: the site's value moves.
@@ -127,7 +127,7 @@ function planMigration({ configPath, vaultPath } = {}) {
         }
         if (Array.isArray(fromSite)) {
           const keyOf = entry.publish === 'exclude_dirs'
-            ? (s) => (normalizeExcludeDir(s, vault, false) ?? String(s)).toLowerCase()
+            ? (s) => (normalizeExcludeDir(s, vault) ?? String(s)).toLowerCase()
             : (s) => String(s).toLowerCase();
           const have = new Set(fromVault.map(keyOf));
           const added = [];
@@ -145,7 +145,7 @@ function planMigration({ configPath, vaultPath } = {}) {
           continue;
         }
       }
-      if (MERGED_MAPS.has(entry.publish) && isMap(fromSite)) {
+      if (mergedMaps().has(entry.publish) && isMap(fromSite)) {
         // Sub-keys only the site file has move into the vault map; one both set keeps the
         // vault's value and the discarded one is reported.
         const base = isMap(fromVault) ? fromVault : {};
@@ -180,10 +180,10 @@ function planMigration({ configPath, vaultPath } = {}) {
     // A site file with no list of its own moves nothing, and would leave the vault with an
     // invisible built-in list (#294): write the built-in one, so the GM can see it. A list the
     // vault already has, or one the site file holds, is never touched here.
-    for (const entry of MOVED_KEYS) {
+    for (const entry of movedKeys()) {
       if (entry.publish !== 'exclude_sections' && entry.publish !== 'exclude_fields') continue;
       if (site[entry.json] !== undefined || (publish[entry.publish] !== undefined && publish[entry.publish] !== null)) continue;
-      const value = [...PUBLISH_DEFAULTS[entry.publish]];
+      const value = [...settingEntry(`publish.${entry.publish}`).default];
       plan.vaultSet[entry.publish] = value;
       plan.moves.push({ from: 'the built-in list', to: `publish.${entry.publish}`, value });
     }
@@ -227,10 +227,10 @@ function planMigration({ configPath, vaultPath } = {}) {
       .filter(([, v]) => v !== undefined);
     let kept;
     if (publish[newName] !== undefined) {
-      kept = asBool(publish[newName]);
+      kept = readSwitch(publish[newName]);
     } else if (sources.length) {
       const [from, raw] = sources[0];
-      const b = asBool(raw);
+      const b = readSwitch(raw);
       if (b === null) plan.notes.push(`${from} is not true or false (${JSON.stringify(raw)}); written as false`);
       kept = b === null ? false : b;
       plan.vaultSet[newName] = kept;
@@ -242,12 +242,12 @@ function planMigration({ configPath, vaultPath } = {}) {
     }
     // Any other old flag that disagrees with the one kept is dropped, and said so.
     for (const [, raw] of sources) {
-      if (!isDeepStrictEqual(asBool(raw), kept)) plan.conflicts.push({ key: `backend.${oldName}`, kept, discarded: raw });
+      if (!isDeepStrictEqual(readSwitch(raw), kept)) plan.conflicts.push({ key: `backend.${oldName}`, kept, discarded: raw });
     }
   }
   // Site-file keys no part of the tool reads: named, never removed.
   if (site) {
-    const known = new Set([...DEPLOY_KEYS, ...MOVED_KEYS.map((e) => e.json), 'backend', 'landingTagline']);
+    const known = new Set([...DEPLOY_KEYS, ...movedKeys().map((e) => e.json), ...SITE_OLD_ROOTS]);
     plan.leftover = Object.keys(site).filter((k) => !known.has(k));
   }
   if (publish.backend !== undefined) plan.vaultRemove.push('backend');

@@ -12,7 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
-const { resolveConfig, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
+const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
@@ -156,7 +156,7 @@ function surveyVault(options, deps) {
     : deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = deps.publishConfig
     ? { config: rawConfig, publishConfig: deps.publishConfig }
-    : resolveConfig(rawConfig, vaultPath);
+    : resolveConfig(rawConfig, vaultPath, console.warn, { quietStops: true });
   const manifest = loadManifest(vaultPath);
 
   // scanConfigFor: same unioned, normalized exclude_dirs build.js uses, so this command
@@ -587,6 +587,7 @@ async function runManifest(options, deps) {
   // Answers about one vault from its files alone: no site config, no survey.
   if (opts.verb === 'rename') return require('./rename-refs').runRename(opts, d);
   const survey = surveyVault(opts, d);
+  assertNoStops(survey.publishConfig, 'manifest');
   if (opts.verb === 'diff') return runDiff(opts, d, survey);
   if (opts.verb === 'apply') return runApply(opts, d, survey);
   if (opts.verb === 'publish-played') return runPublishPlayed(opts, d, survey);

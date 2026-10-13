@@ -1,37 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { generateThemeCSS, resolveGenrePreset, GENRE_ALIASES, VALID_PRESETS } = require('../../lib/theme');
+const { generateThemeCSS, GENRE_ALIASES, VALID_PRESETS } = require('../../lib/theme');
 
-describe('resolveGenrePreset', () => {
-  it('returns preset filename for exact genre match', () => {
-    assert.strictEqual(resolveGenrePreset('horror'), 'horror');
-    assert.strictEqual(resolveGenrePreset('fantasy'), 'fantasy');
-    assert.strictEqual(resolveGenrePreset('noir'), 'noir');
-    assert.strictEqual(resolveGenrePreset('military'), 'military');
-  });
-
-  it('resolves genre aliases', () => {
-    assert.strictEqual(resolveGenrePreset('gothic'), 'horror');
-    assert.strictEqual(resolveGenrePreset('cthulhu'), 'horror');
-    assert.strictEqual(resolveGenrePreset('adventure'), 'fantasy');
-    assert.strictEqual(resolveGenrePreset('industrial'), 'noir');
-    assert.strictEqual(resolveGenrePreset('heist'), 'noir');
-    assert.strictEqual(resolveGenrePreset('tactical'), 'military');
-    assert.strictEqual(resolveGenrePreset('modern'), 'military');
-  });
-
-  it('returns null for unknown genre', () => {
-    assert.strictEqual(resolveGenrePreset('steampunk'), null);
-    assert.strictEqual(resolveGenrePreset(null), null);
-    assert.strictEqual(resolveGenrePreset(undefined), null);
-  });
-
-  it('resolves scifi aliases', () => {
-    for (const alias of ['scifi', 'sci-fi', 'science-fiction', 'space', 'space-opera', 'space-noir']) {
-      assert.strictEqual(resolveGenrePreset(alias), 'scifi', alias);
-    }
-  });
-
+describe('genre presets', () => {
   it('scifi is a valid preset with a css file', () => {
     const fs = require('fs');
     const path = require('path');

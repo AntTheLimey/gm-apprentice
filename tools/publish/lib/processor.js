@@ -1,5 +1,6 @@
 const { createRenderer } = require('./markdown');
 const { canonicalNfc } = require('./unicode');
+const { SWITCH_WORDS } = require('./settings/types');
 const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
 const { bareSectionTitle } = require('./pc-prose');
@@ -1517,7 +1518,7 @@ function flagIsYes(v) {
   if (v === true || v === 1) return true;
   if (typeof v !== 'string') return false;
   const t = v.trim().toLowerCase();
-  return t === 'true' || t === 'yes' || t === 'on' || /^\+?0*1(?:\.0*)?$/.test(t);
+  return SWITCH_WORDS.get(t) === true || /^\+?0*1(?:\.0*)?$/.test(t);
 }
 
 // `withheld: true` on a note: its own name is a secret (#291). Read as `gm_only` is read.

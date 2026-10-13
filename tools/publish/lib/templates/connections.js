@@ -7,9 +7,10 @@
 // space included), so what it returns is already safe inside a quoted attribute.
 const { escapeHtml, relativeHref, encodeHref } = require('../processor');
 const { labelsForLinksFully } = require('../wikilink');
+const { entry } = require('../settings/registry');
 
 const TONE_CODE = { warm: 'w', hostile: 'h', neutral: 'n' };
-const MODES = new Set(['tree', 'web', 'cards']);
+const MODES = new Set(entry('publish.connections').values.filter((m) => m !== 'off'));
 const HEADINGS = new Set(['h2', 'h3', 'h4', 'h5']);
 // The island holds what the list shows: text reduced as escapeHtml reduces it (a labelled
 // link to its label), then only the tones and mentions that are printed at all.

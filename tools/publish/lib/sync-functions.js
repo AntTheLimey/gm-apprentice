@@ -157,7 +157,7 @@ function isPlainFileInside(siteRoot, file) {
  * stays. Anything else found there is kept and named in a warning.
  *
  * @param {string} siteRoot
- * @param {object} switches - resolveSwitches() output (reads `explicitOff` and `characterSheets`).
+ * @param {object} switches - loadPublishConfig().switches (reads `explicitOff` and `characterSheets`).
  * @param {object} [options] - `sourceDir` (tests), `log`, `warn`.
  * @returns {{ removed: string[], kept: string[] }}
  */

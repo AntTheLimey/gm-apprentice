@@ -38,13 +38,18 @@
 //                            to be set up). Read with the build's own YAML parser, so
 //                            vault_check does not read that file a second way.
 //
+//   {"op":"google-fonts","vault":…,"config":…}
+//       -> {"families":[…]}  the families the site would load from Google for the vault
+//                            (`config`, the site's vault.config.json, is optional); none
+//                            when the fonts are hosted. The same list `vault-setting`
+//                            prints as `googleFonts`.
+//
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { parseNote } = require('./frontmatter');
-const { resolveSwitches } = require('./switches');
+const { readSettings } = require('./settings');
 const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -57,29 +62,25 @@ function list(request, key) {
   return value;
 }
 
-// What `_meta/vault-config.md` says about publishing. A file that is not there says
-// nothing publishes; one that cannot be parsed is an error, not a "no".
+// What `_meta/vault-config.md` says about publishing, from one read through the settings
+// package. A file that is not there says nothing publishes; one that cannot be parsed is
+// an error (the reader throws it), not a "no".
 function site(vault) {
   if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
-  const file = path.join(vault, '_meta', 'vault-config.md');
-  if (!fs.existsSync(file)) return { publishes: false, site: false, siteDir: null };
-  let data;
-  try {
-    ({ data } = parseNote(fs.readFileSync(file, 'utf-8')));
-  } catch (err) {
-    throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(err.message).split('\n')[0].trim()}`);
+  const { values, origins, faults, file } = readSettings({ vaultPath: vault, siteConfig: {} });
+  if (!file.exists || !file.hasPublish) {
+    if (faults.some((f) => f.name === 'publish')) throw new Error('publish: in _meta/vault-config.md is not a block of settings');
+    return { publishes: false, site: false, siteDir: null };
   }
-  const publish = data && data.publish;
-  if (publish === undefined || publish === null) return { publishes: false, site: false, siteDir: null };
-  if (typeof publish !== 'object' || Array.isArray(publish)) throw new Error('publish: in _meta/vault-config.md is not a block of settings');
-  const raw = publish.site_dir;
-  const blank = raw === undefined || raw === null || (typeof raw === 'string' && raw.trim() === '');
-  // `publish.site` is the switch, decided where the build decides it (resolveSwitches).
-  // Off: there is no site, whatever site_dir says. Unset, in a vault written before the
-  // switch, a site_dir says on. An unreadable value is off, as for the other switches.
-  const on = resolveSwitches(publish, {}).site;
+  // `publish.site` is the switch, decided where the build decides it. Off: there is no
+  // site, whatever site_dir says. Unset, in a vault written before the switch, a site_dir
+  // says on. An unreadable value is off, as for the other switches.
+  const on = values.publish.site;
+  const raw = values.publish.site_dir;
+  const origin = origins['publish.site_dir'];
+  const blank = origin === 'default' || (typeof raw === 'string' && raw.trim() === '');
   if (!on || blank) return { publishes: true, site: on, siteDir: null };
-  if (typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
+  if (origin === 'fault' || typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
   return { publishes: true, site: true, siteDir: siteDirPath(vault, raw) };
 }
 
@@ -91,9 +92,19 @@ function siteDirPath(vault, raw) {
   return path.resolve(vault, expanded);
 }
 
+function googleFonts(vault, config) {
+  if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
+  if (config !== undefined && config !== null && (typeof config !== 'string' || config === '')) throw new Error('config must be a path');
+  const { loadVaultConfig } = require('./config');
+  const file = config ? path.resolve(config) : null;
+  const siteConfig = file && fs.existsSync(file) ? loadVaultConfig(file) : {};
+  return { families: require('./fonts').googleFontsFor(path.resolve(vault), siteConfig) };
+}
+
 function answer(request) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('a request is a JSON object');
   if (request.op === 'site') return site(request.vault);
+  if (request.op === 'google-fonts') return googleFonts(request.vault, request.config);
   if (typeof request.text !== 'string') throw new Error('text must be a string');
   const { text } = request;
   switch (request.op) {

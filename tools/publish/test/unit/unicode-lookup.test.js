@@ -244,7 +244,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
       frontmatter: { type: 'session', status: 'played', play_date: '2026-01-02', session_number: 1 },
       markdown: `The party met [[${NFD}]] at the docks.`,
     };
-    const scored = scoreByRecency([npcPage()], [session], [], { type: 'npc' });
+    const scored = scoreByRecency([npcPage()], [session], [], { window: 3, max: 6, type: 'npc' });
     assert.strictEqual(scored.length, 1, 'accented NPC never scores, so it never reaches the landing page');
   });
 
@@ -257,7 +257,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
       },
       markdown: 'No wiki-links in the body.',
     };
-    assert.strictEqual(scoreByRecency([npcPage()], [session], [], { type: 'npc' }).length, 1);
+    assert.strictEqual(scoreByRecency([npcPage()], [session], [], { window: 3, max: 6, type: 'npc' }).length, 1);
   });
 
   it('counts wrap-up mentions when the wrap-up session ref differs in normal form', () => {
@@ -271,7 +271,7 @@ describe('Map/Set title boundaries across unicode normal forms (#139)', () => {
       frontmatter: { type: 'session_wrap', session: `[[${SESSION_NFD}]]` },
       markdown: `The recap names [[${NFC}]] throughout.`,
     };
-    const scored = scoreByRecency([npcPage()], [session], [], { type: 'npc', wrapUpFor: pairHubs([session, wrapUp], [session, wrapUp], { allNotes: [] }) });
+    const scored = scoreByRecency([npcPage()], [session], [], { window: 3, max: 6, type: 'npc', wrapUpFor: pairHubs([session, wrapUp], [session, wrapUp], { allNotes: [] }) });
     assert.strictEqual(scored.length, 1, 'wrap-up never pairs with its session, so its mentions are lost');
   });
 

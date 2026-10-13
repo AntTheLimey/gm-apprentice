@@ -3,7 +3,7 @@ const path = require('path');
 const { runCommand, WRANGLER_TIMEOUT_MS, failureDetail } = require('./run-command');
 const { readNamespaceId } = require('./inbox-wrangler');
 const { editPublishBlock, setPublishKeys } = require('./vault-config-edit');
-const { OLD_SWITCHES } = require('./config-keys');
+const { OLD_SWITCHES } = require('./settings/site-file');
 
 const KV_PLACEHOLDER = 'PUT-YOUR-KV-NAMESPACE-ID-HERE';
 const KV_PERMISSION_FIX =

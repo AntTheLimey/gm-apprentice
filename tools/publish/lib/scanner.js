@@ -5,6 +5,7 @@ const { shapeFrontmatter } = require('./frontmatter-shape');
 const { getCanonStatus } = require('./templates/base');
 const { canonicalNfc, nfcLookupTable } = require('./unicode');
 const { linkText, labelsForLinks } = require('./wikilink');
+const { entry } = require('./settings');
 
 function slugify(name) {
   const slug = name
@@ -293,7 +294,7 @@ function buildLinkMap(pages) {
 
 function scanAttachments(config) {
   const { vaultPath, attachmentsDir, excludeDirs } = config;
-  const attachmentsPath = path.join(vaultPath, attachmentsDir || '_attachments');
+  const attachmentsPath = path.join(vaultPath, attachmentsDir || entry('publish.attachments_dir').default);
   const map = Object.create(null);
 
   // Wrapped on this path too: the returned type must not depend on whether _attachments/ exists.

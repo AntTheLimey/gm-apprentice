@@ -52,7 +52,7 @@ describe('editPublishBlock', () => {
   it('keeps a comment line directly above the next key when replacing', () => {
     const before = '---\npublish:\n  inbox: false   # off for now\n  # which mode\n  mode: player\n---\n';
     const { text } = editPublishBlock(before, { set: { inbox: true } });
-    assert.strictEqual(text, '---\npublish:\n  inbox: true\n  # which mode\n  mode: player\n---\n');
+    assert.strictEqual(text, '---\npublish:\n  inbox: true   # off for now\n  # which mode\n  mode: player\n---\n');
   });
   it('keeps a comment line directly above the next key when removing', () => {
     const before = '---\npublish:\n  backend:\n    inbox: true\n  # which mode\n  mode: player\n---\n';
@@ -239,5 +239,89 @@ describe('fillUnset', () => {
     assert.deepStrictEqual(fillUnset({ genre: 'noir', tagline: '' }, { tagline: 'Hi', genre: 'x' }), { genre: 'noir', tagline: 'Hi' });
     assert.deepStrictEqual(fillUnset({}, { tagline: 'Hi' }), { tagline: 'Hi' });
     assert.strictEqual(fillUnset({ tagline: 'Mine' }, { tagline: 'Hi' }), null);
+  });
+});
+
+describe('removals', () => {
+  const edit = (before, removals) => editPublishBlock(before, { removals });
+  it('removes one top-level key and touches no other byte', () => {
+    const before = '---\npublish:\n  # who reads\n  mode: player   # players\n  connections: web\n  inbox: true\n---\nbody\n';
+    assert.strictEqual(edit(before, [['connections']]).text, '---\npublish:\n  # who reads\n  mode: player   # players\n  inbox: true\n---\nbody\n');
+  });
+  it('removes a nested leaf and keeps its neighbours', () => {
+    const before = '---\npublish:\n  theme:\n    genre: horror   # mood\n    tagline: Hi\n  mode: player\n---\n';
+    assert.strictEqual(edit(before, [['theme', 'tagline']]).text, '---\npublish:\n  theme:\n    genre: horror   # mood\n  mode: player\n---\n');
+  });
+  it('removes a map it leaves empty, at every level', () => {
+    const before = '---\npublish:\n  theme:\n    fonts:\n      source: self-host\n  mode: player\n---\n';
+    assert.strictEqual(edit(before, [['theme', 'fonts', 'source']]).text, '---\npublish:\n  mode: player\n---\n');
+  });
+  it('rewrites a map written on one line, and removes it when it empties', () => {
+    const before = '---\npublish:\n  theme: {genre: horror, tagline: Hi}\n  mode: player\n---\n';
+    const out = edit(before, [['theme', 'tagline']]).text;
+    assert.deepStrictEqual(require('../../lib/frontmatter').parseNote(out).data.publish, { theme: { genre: 'horror' }, mode: 'player' });
+    assert.strictEqual(edit('---\npublish:\n  theme: {tagline: Hi}\n  mode: player\n---\n', [['theme', 'tagline']]).text, '---\npublish:\n  mode: player\n---\n');
+  });
+  it('leaves the text alone when the key is not there, or sits under something that is not a map', () => {
+    const before = '---\npublish:\n  theme: dark\n  mode: player\n---\n';
+    assert.strictEqual(edit(before, [['connections'], ['theme', 'genre']]).text, before);
+    assert.strictEqual(edit('---\ntype: meta\n---\n', [['connections']]).text, '---\ntype: meta\n---\n');
+  });
+  it('removes several at once', () => {
+    const before = '---\npublish:\n  a: 1\n  b: 2\n  c: 3\n---\n';
+    assert.strictEqual(edit(before, [['a'], ['c']]).text, '---\npublish:\n  b: 2\n---\n');
+  });
+  it('removePublishLeaves writes the file, or changes nothing when the key is absent', () => {
+    const { removePublishLeaves } = require('../../lib/vault-config-edit');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-vce-rm-'));
+    try {
+      fs.mkdirSync(path.join(dir, '_meta'));
+      const file = path.join(dir, '_meta', 'vault-config.md');
+      fs.writeFileSync(file, '---\npublish:\n  mode: player\n  inbox: true\n---\n');
+      assert.deepStrictEqual(removePublishLeaves(dir, [['inbox']]), { changed: true });
+      assert.strictEqual(fs.readFileSync(file, 'utf8'), '---\npublish:\n  mode: player\n---\n');
+      assert.deepStrictEqual(removePublishLeaves(dir, [['inbox']]), { changed: false });
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('a comment after a replaced scalar', () => {
+  const { parseNote } = require('../../lib/frontmatter');
+  const doc = (line) => `---\npublish:\n  mode: player\n${line}\n---\n`;
+  const set = (line, key, value) => editPublishBlock(doc(line), { set: { [key]: value } });
+  it('stays, with its spacing', () => {
+    assert.strictEqual(set('  connections: tree  # keep it', 'connections', 'web').text, doc('  connections: web  # keep it'));
+    assert.strictEqual(set('  connections: tree\t# tab', 'connections', 'web').text, doc('  connections: web\t# tab'));
+  });
+  it('stays through a leaf edit, in a nested map', () => {
+    const before = '---\npublish:\n  theme:\n    genre: horror   # mood\n---\n';
+    const { text } = editPublishBlock(before, { leaves: [{ path: ['theme', 'genre'], value: 'noir' }] });
+    assert.strictEqual(text, '---\npublish:\n  theme:\n    genre: noir   # mood\n---\n');
+  });
+  it('is told from a # inside quotes or inside a word', () => {
+    assert.strictEqual(set('  colour: "#aa3311"  # accent', 'colour', '#000000').text, doc("  colour: '#000000'  # accent"));
+    assert.strictEqual(set("  colour: '#aa''3'  # accent", 'colour', 'x').text, doc('  colour: x  # accent'));
+    assert.strictEqual(set('  tag: a#b', 'tag', 'c').text, doc('  tag: c'));
+    assert.strictEqual(set('  colour: "#aa3311"', 'colour', 'x').text, doc('  colour: x'));
+  });
+  it('keeps what YAML itself reads as a comment: title: Room #4 holds "Room"', () => {
+    assert.strictEqual(parseNote(doc('  title: Room #4')).data.publish.title, 'Room');
+    assert.strictEqual(set('  title: Room #4', 'title', 'Hall').text, doc('  title: Hall #4'));
+  });
+  it('goes on the key line when a scalar becomes a list or a map', () => {
+    const list = set('  connections: tree  # keep it', 'connections', ['a', 'b']).text;
+    assert.strictEqual(list, doc('  connections:  # keep it\n    - a\n    - b'));
+    assert.deepStrictEqual(parseNote(list).data.publish.connections, ['a', 'b']);
+    const map = set('  connections: tree  # keep it', 'connections', { a: 1 }).text;
+    assert.deepStrictEqual(parseNote(map).data.publish.connections, { a: 1 });
+    assert.match(map, /# keep it/);
+  });
+  it('is carried over a flow list that is replaced, onto the key line', () => {
+    assert.strictEqual(set('  x: [a, "b # c"]  # note', 'x', ['z']).text, doc('  x:  # note\n    - z'));
+  });
+  it('goes with its line on removal', () => {
+    assert.strictEqual(editPublishBlock(doc('  connections: tree  # keep it'), { removals: [['connections']] }).text, '---\npublish:\n  mode: player\n---\n');
   });
 });

@@ -142,6 +142,9 @@ async function runDeploy(options, deps) {
   const hooks = hookInfo.hooks;
   const platform = d.platform || process.platform;
 
+  // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).
+  (d.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'deploy');
+
   if (opts.dryRun) {
     if (hooks.includes('prebuild')) commands.push('npm run prebuild');
     if (!opts.noBuild) commands.push(`gm-publish build --config ${configPath}`);

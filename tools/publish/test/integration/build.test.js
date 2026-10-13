@@ -1439,12 +1439,6 @@ describe('build integration', () => {
       const themeCss = fs.readFileSync(path.join(outputDir, 'docs', 'css', 'theme.css'), 'utf-8');
       assert.ok(themeCss.includes('#ff6600'));
     });
-
-    it('genre alias resolves correctly', () => {
-      const { resolveGenrePreset } = require('../../lib/theme');
-      assert.strictEqual(resolveGenrePreset('cthulhu'), 'horror');
-      assert.strictEqual(resolveGenrePreset('gothic'), 'horror');
-    });
   });
 
   describe('redesign-full fixture', () => {

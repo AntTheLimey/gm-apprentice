@@ -1,5 +1,6 @@
 const { relativePath, escapeHtml, encodeImageUrl, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('../processor');
 const { typeLabelText } = require('../kind-label');
+const { entry } = require('../settings/registry');
 
 const DIR_LABELS = {
   'campaign': 'Campaign',
@@ -47,11 +48,11 @@ function clientScripts(outputPath) {
 // configureLinkPreviews before any page renders. Module state for the reason
 // colorModeHead is: build() is synchronous.
 let linkPreviews = 'off';
-function configureLinkPreviews(mode) { linkPreviews = mode === 'on' || mode === 'desktop' ? mode : 'off'; }
+function configureLinkPreviews(mode) { linkPreviews = entry('publish.link_previews').values.includes(mode) ? mode : 'off'; }
 // How Connections is drawn for this build ('tree', 'web', 'cards' or 'off'), set once by
 // configureConnections before any page renders, as the link-previews mode is.
 let connectionsMode = 'off';
-function configureConnections(mode) { connectionsMode = ['tree', 'web', 'cards'].includes(mode) ? mode : 'off'; }
+function configureConnections(mode) { connectionsMode = entry('publish.connections').values.includes(mode) ? mode : 'off'; }
 
 // A page's Connections section, or '' when the site has none or the page has nothing to show.
 function connectionsSection(page, publishConfig, heading = 'h2') {

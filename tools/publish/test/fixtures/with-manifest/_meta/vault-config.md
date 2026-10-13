@@ -9,12 +9,9 @@ publish:
     - _meta
     - _Templates
   four_oh_four:
-    style: in-world
     message: "The stars are not yet right for this knowledge..."
   theme:
     genre: "horror"
   overrides:
-    exclude: []
-    include: []
     fields: {}
 ---
