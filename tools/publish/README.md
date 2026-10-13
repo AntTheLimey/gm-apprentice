@@ -320,17 +320,12 @@ each setting as that file writes it (`publish.site`, not
 `player_site.publish`). The `settings` command can still change an old
 file, at the old names.
 
-Do not run `settings move` by hand yet. The next release runs it for you,
-and teaches the plugin's own scripts to read the new file at the same time;
-a vault moved before then would stop the current scripts from finding its
-version stamp.
-
 `settings move` takes a vault to the new file. It checks that every
 setting would resolve to what it resolved to before, then writes
 `_meta/vault-config.yaml`, moves bookkeeping into
 `_meta/vault-state.json` and your own notes into `_meta/vault-notes.md`,
 and removes the old file. It does all of it or none of it; `--check` shows
-what it would do. When the next release's update runs it, a site pinned
+what it would do. The plugin's update runs it for you. A site pinned
 to this tool by something else than `update-pin` is not the update's to
 change, so its vault stays on the old file until you move it. If both
 files exist the new one is read, and the old one is reported as left over.

@@ -21,13 +21,13 @@ The generated site has one page per entity in your vault:
 - **Creatures** — Compact stat block pages for quick encounter reference.
 - **Items** — Item pages with damage, weight, cost, and current holder.
 - **Connections** — A page whose subject has ties ends in a Connections
-  section (unless `publish.connections` is `off`): what the subject is
+  section (unless `player_site.features.connections` is `off`): what the subject is
   tied to, in tabs by kind (people, places,
   organisations and so on), in both directions, with the GM's line for
   each tie, how many sessions the two share, and whether the tie is
   warm, hostile or neutral (never the tone word). Pages that only
   mention the subject sit in a last Mentions tab. It is drawn as a
-  tree, a web or cards (`publish.connections`; see
+  tree, a web or cards (`player_site.features.connections`; see
   [site-settings.md](site-settings.md)). It shows only what a published
   page shows: a `gm_only` relationship is gone at both ends.
 - **Events, clues, documents, and more** — A smart fallback template
@@ -78,7 +78,7 @@ publish turns it into a shareable website.
 
 If pages are missing from your site, the most common cause is that
 the vault files lack a `type` field or live in a folder that is not
-mapped in `publish.folder_map` in the vault's `_meta/vault-config.md`.
+mapped in the `player_site.folder_map` setting.
 campaign-organizer can help you fix frontmatter; the publish-site skill
 can help you update the folder map.
 

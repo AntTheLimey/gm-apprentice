@@ -89,6 +89,23 @@ the schema, and the tool warns about it.
 The schema describes the file as the GM writes it. It does not describe
 resolved values. For those, ask the tool (below).
 
+## Finding the command
+
+The command ships inside the gm-apprentice plugin, not on the npm
+registry. On a machine with the plugin installed it is in the plugin
+cache, one folder for each installed version:
+
+```text
+TOOL="<plugin-cache>/gm-apprentice/<version>/tools/publish/bin/gm-publish.js"
+node "$TOOL" settings --help
+```
+
+`<plugin-cache>` is `~/.claude/plugins/cache/gm-apprentice` on macOS and
+Linux. Use the newest version there. Wherever this page writes
+`gm-apprentice-publish`, run `node "$TOOL"`. Inside a site folder set up
+by the plugin, `npx gm-apprentice-publish` runs the copy that site is
+pinned to.
+
 ## Reading and writing
 
 Read the file with a YAML library. Do not read it with a pattern or line by
@@ -131,7 +148,7 @@ The output is one JSON object:
   file's value could not be read and the value shown is the fallback.
 - `written` holds, under the same names, the name the vault's own file
   writes the setting under: the same name on the new layout, the old
-  file's name (`publish.site_title`) on the old one. A message to the GM
+  file's own name for it on the old one. A message to the GM
   names a setting this way.
 - `faults` is a list of problems found in the file. Each has `name`,
   `level` (`stop` or `warn`), `kind` and `message`, and may have `setting`,
@@ -152,7 +169,7 @@ A vault is on one of three layouts. The tool decides by which file exists:
 
 - `_meta/vault-config.yaml` exists: the new layout. The old file, if it is
   still there, is not read and is reported as left over.
-- Only `_meta/vault-config.md` exists: the old layout.
+- Only the old file exists (see the next section): the old layout.
 - Neither exists: the vault has no settings yet.
 
 Do not infer the layout from file contents.
@@ -167,14 +184,18 @@ the new file. The old file's reader stays for two releases after that one,
 then goes.
 
 `gm-apprentice-publish settings move` takes a vault from the old file to the
-new one. Do not run it by hand yet: the next release runs it, and teaches the
-plugin's own scripts to read the new file at the same time. It changes nothing unless the new file resolves to exactly what the
+new one, and the plugin's update runs it for each vault. It changes nothing unless the new file resolves to exactly what the
 old one did. When it cannot promise that, it says why and leaves the vault
 alone. The old file's prose and any keys that are not settings move to
 `_meta/vault-notes.md`.
 
-A vault whose site is pinned by another tool stays on the old file until
-that tool is version 1.23.0 or later.
+The update does not move a vault whose site has its publish tool pinned
+by something other than the plugin: an older tool would read the moved
+vault as having no settings. It leaves the vault on the old file and
+says so on every pass. Once that tool is version 1.23.0 or later, which
+reads the new file, move the vault yourself with `settings move --vault
+<vault> --config <site>/vault.config.json` (`--check` first shows what
+it would do).
 
 ## The state file
 
