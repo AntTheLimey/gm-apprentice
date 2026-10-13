@@ -22,8 +22,8 @@ from vault_check import (PUBLISH_PACKAGE, ExplainAll, ToolAnswer,
                          site_pin, vault_settings)
 from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, settings,
-                      settings_default, settings_raw, settings_set,
-                      site_switch_written, written_in_vault_file, yaml_scalar)
+                      settings_default, settings_file, settings_raw, settings_set,
+                      site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
@@ -32,7 +32,7 @@ NEEDS_PUBLISH = "1.12.0"
 NO_LINES = "migrate-config does not report its lines"
 INLINE_PUBLISH = (
     "the publish: block in _meta/vault-config.md is written on one line "
-    "({…}); write it as a block so its settings can be read")
+    "({…}); write it as a block so its settings can be read")  # old file only
 # What the tool's note lines start with, for a tool that does not name them
 # (`noteLines`); backups are never changes either.
 NOTE_PREFIXES = ("left in ", "skipped ", "note ")
@@ -221,13 +221,14 @@ def find_site_repin(vault: Path) -> list[Item]:
     if site is None:
         if site_switch_written(settings(vault)) is True:
             raise StepFailed(
-                "publish.site is on but publish.site_dir names no folder; "
-                "set site_dir to the site folder, or set site: false")
+                "player_site.publish is on but player_site.folder names no folder; "
+                "set player_site.folder to the site folder, or set "
+                "player_site.publish: false")
         return []
     if not has_config:
         raise StepFailed(
-            f"publish.site_dir is set to {site} but no vault.config.json is "
-            f"there; correct the path, or set site: false")
+            f"player_site.folder is set to {site} but no vault.config.json is "
+            f"there; correct the path, or set player_site.publish: false")
     data = _pin_check(site)
     if data["ok"]:
         return []
@@ -235,7 +236,7 @@ def find_site_repin(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         code, text, err = plugin_tool(["update-pin", "--site", str(site)])
-        # It may have written publish.site into the vault file.
+        # It may have written player_site.publish into the vault file.
         forget_settings(vault)
         lines = [line for line in text.splitlines() if line.strip()]
         if code != 0:
@@ -243,8 +244,8 @@ def find_site_repin(vault: Path) -> list[Item]:
             raise StepFailed("; ".join(tail))
         if not _pin_check(site)["ok"]:
             raise StepFailed(
-                "update-pin finished but the site (publish.site_dir in "
-                "_meta/vault-config.md) is still out of date; run "
+                "update-pin finished but the site (player_site.folder in "
+                f"{settings_file(vault)}) is still out of date; run "
                 "update-pin --site <that folder> by hand to see why")
         return lines
 
@@ -273,26 +274,29 @@ def find_config_to_vault(vault: Path) -> list[Item]:
 
 
 def find_publish_site(vault: Path) -> list[Item]:
-    """`publish.site` says whether the vault has a site. Written where it
+    """`player_site.publish` says whether the vault has a site. Written where it
     is missing: true with a site_dir, else false. A vault file with no
     `publish:` block has no site and gets nothing."""
     own = settings(vault)
     if own.inline or site_switch_written(own) is not None:
         return []
-    # `has_publish` is false for a `publish:` line with nothing under it,
+    # `has_site_block` is false for a `publish:` line with nothing under it,
     # which this still writes into; only a vault with no such line gets nothing.
-    if "publish" not in settings_raw(vault):
+    # The block that holds the site's settings, as the file names it.
+    block = "player_site" if vault_layout(vault) == "new" else "publish"
+    if block not in settings_raw(vault):
         return []
-    has_dir = bool(own.get("publish.site_dir"))
+    has_dir = bool(own.get("player_site.folder"))
     value = "true" if has_dir else "false"
-    row = (f"write publish.site: {value} in _meta/vault-config.md" if has_dir
-           else "write publish.site: false in _meta/vault-config.md (no site "
+    where = settings_file(vault)
+    row = (f"write player_site.publish: {value} in {where}" if has_dir
+           else f"write player_site.publish: false in {where} (no site "
                 "folder is named; if this vault has a site, set "
-                "publish.site_dir to its folder instead)")
+                "player_site.folder to its folder instead)")
 
     def apply(_value: str | None) -> list[str]:
-        settings_set(vault, [("publish.site", has_dir)])
-        return [f"wrote publish.site: {value}"]
+        settings_set(vault, [("player_site.publish", has_dir)])
+        return [f"wrote player_site.publish: {value}"]
 
     return [Item("publish-site", WILL, [row], apply)]
 
@@ -564,7 +568,7 @@ def find_default_mode(vault: Path) -> list[Item]:
     palette can start every reader there."""
     if (not _with_site(vault)
             or written_in_vault_file(vault_settings(vault),
-                                     "publish.theme.default_mode")):
+                                     "player_site.theme.default_mode")):
         return []
 
     def apply(value: str | None) -> list[str]:
@@ -572,8 +576,8 @@ def find_default_mode(vault: Path) -> list[Item]:
             raise StepFailed("default-mode takes dark, light or leave")
         if value == "leave":
             return ["left the default palette to the reader's device"]
-        _set_settings(vault, [("publish.theme.default_mode", value)])
-        return [f"wrote publish.theme.default_mode: {value}"]
+        _set_settings(vault, [("player_site.theme.default_mode", value)])
+        return [f"wrote player_site.theme.default_mode: {value}"]
 
     return [Item("default-mode", CHOICE,
                  ["start every reader on one palette (unset follows the "
@@ -600,8 +604,8 @@ def find_fonts(vault: Path) -> list[Item]:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        _set_settings(vault, [("publish.theme.fonts.source", "self-host")])
-        return ["wrote publish.theme.fonts.source: self-host; the next build "
+        _set_settings(vault, [("player_site.theme.fonts.source", "self-host")])
+        return ["wrote player_site.theme.fonts.source: self-host; the next build "
                 "downloads the fonts once and serves them from the site"]
 
     return [Item("fonts-self-host", CHOICE,
@@ -630,6 +634,11 @@ def find_tone_shown(vault: Path) -> list[Item]:
         "lists the hostile ties the site shows"])]
 
 
+# The two lists, and the key `migrate-config` reports each under.
+EXCLUDE_LISTS = {"player_site.hide.sections": "exclude_sections",
+                 "player_site.hide.fields": "exclude_fields"}
+
+
 def find_exclude_lists(vault: Path) -> list[Item]:
     """1.10.47: the lists of headings and fields the site hides are written
     into the vault file, where the GM can see them. A vault with no list of
@@ -640,31 +649,30 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     now = vault_settings(vault)
     # A list is the vault's own when the vault file holds it, or the site file
     # still does; one the tool could not read is not (the built-in list stands).
-    lists = [(key, default) for key, default in (
-        (key, settings_default(f"publish.{key}"))
-        for key in ("exclude_sections", "exclude_fields"))
-        if now.origins[f"publish.{key}"] not in ("file", "site-file")
+    lists = [(name, default) for name, default in (
+        (name, settings_default(name)) for name in EXCLUDE_LISTS)
+        if now.origins[name] not in ("file", "site-file")
         and isinstance(default, list) and default]
     # config-to-vault writes the same lists when it runs on this pass: the
     # plan shows each write once, there. (If it cannot plan, this step goes on.)
+    # `migrate-config` names them as the old file did; Task 10 deletes it.
     planned = describe_config_to_vault(vault)
-    lists = [(key, default) for key, default in lists
-             if not any(line.endswith(f"-> publish.{key}")
+    lists = [(name, default) for name, default in lists
+             if not any(line.endswith(f"-> publish.{EXCLUDE_LISTS[name]}")
                         for line in (planned.lines if planned.applies else []))]
     if not lists:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        _set_settings(vault, [(f"publish.{key}", default)
-                              for key, default in lists])
-        return [f"wrote publish.{key}: {len(default)} entries"
-                for key, default in lists]
+        _set_settings(vault, [(name, default) for name, default in lists])
+        return [f"wrote {name}: {len(default)} entries"
+                for name, default in lists]
 
     return [Item("exclude-lists", WILL,
-                 [f"write the built-in publish.{key} ({', '.join(default)}) "
-                  f"into _meta/vault-config.md so you can see and edit it; "
+                 [f"write the built-in {name} ({', '.join(default)}) "
+                  f"into {settings_file(vault)} so you can see and edit it; "
                   f"what publishes does not change"
-                  for key, default in lists], apply)]
+                  for name, default in lists], apply)]
 
 
 SITE_CHECKS: list[Check] = [
@@ -672,7 +680,7 @@ SITE_CHECKS: list[Check] = [
     Check("config-to-vault", None, 2,
           "campaign settings move into the vault file", find_config_to_vault,
           asks_site=True),
-    Check("publish-site", None, 2, "the publish.site switch",
+    Check("publish-site", None, 2, "the player_site.publish switch",
           find_publish_site),
     Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,
           asks_site=True, choices=("default-mode=",)),

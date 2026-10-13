@@ -70,7 +70,7 @@ def test_a_clean_vault_has_no_faults(tmp_path, monkeypatch, capsys):
 def test_a_misspelt_hiding_list_is_moved_and_keeps_the_built_in_headings(
         tmp_path, monkeypatch, capsys):
     vault = make_vault(tmp_path, "  exclude_sectoins: [GM Notes, Secrets]\n")
-    built_in = vaultlib.settings_default("publish.exclude_sections")
+    built_in = vaultlib.settings_default("player_site.hide.sections")
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     assert code == 0
     first, fix = out.splitlines()[:2]
@@ -83,7 +83,7 @@ def test_a_misspelt_hiding_list_is_moved_and_keeps_the_built_in_headings(
     assert code == 0
     assert out.splitlines()[0].startswith("fixed: moved publish.exclude_sectoins")
     assert out.strip().endswith("Settings: no faults")
-    got = vaultlib.settings(vault).get("publish.exclude_sections")
+    got = vaultlib.settings(vault).get("player_site.hide.sections")
     assert got == built_in + ["Secrets"]
     assert "exclude_sectoins" not in text(vault)
 
@@ -108,7 +108,7 @@ def test_an_old_container_child_is_moved_to_its_new_name(
     code, out, _ = settings_check(monkeypatch, capsys, vault, "--fix")
     assert "fixed: moved publish.backend.statusBar to publish.live_stats" in out
     s = vaultlib.settings(vault)
-    assert s.get("publish.live_stats") is True
+    assert s.get("player_site.features.live_stats") is True
     assert s.faults == []
     assert "backend" not in text(vault)
 
@@ -194,7 +194,7 @@ def test_a_misspelt_switch_that_hides_more_is_moved(
         tmp_path, monkeypatch, capsys):
     vault = make_vault(tmp_path, "  exclude_draft: true\n")
     settings_check(monkeypatch, capsys, vault, "--fix")
-    assert vaultlib.settings(vault).get("publish.exclude_drafts") is True
+    assert vaultlib.settings(vault).get("player_site.hide.drafts") is True
     assert fault_names(vault) == []
 
 
@@ -272,19 +272,19 @@ def test_after_fix_only_uncertain_faults_remain_and_nothing_is_shown_more(
         "  exclude_sectoins: [Secrets]\n  exclude_feilds: [Cost]\n"
         "  exclude_callouts: [secret]\n  total_sessions: 3\n"
         "  link_preview: sideways\n  mode: nonsense\n")
-    names = ("publish.exclude_sections", "publish.exclude_fields",
-             "publish.exclude_callouts", "publish.exclude_drafts")
+    names = ("player_site.hide.sections", "player_site.hide.fields",
+             "player_site.hide.callouts", "player_site.hide.drafts")
     before = {n: vaultlib.settings(vault).get(n) for n in names}
     settings_check(monkeypatch, capsys, vault, "--fix")
     vaultlib.forget_settings(vault)
     s = vaultlib.settings(vault)
     assert sorted(f["name"] for f in s.faults) == [
         "publish.link_preview", "publish.mode"]
-    for n in ("publish.exclude_sections", "publish.exclude_fields"):
+    for n in ("player_site.hide.sections", "player_site.hide.fields"):
         assert set(before[n]) <= set(s.get(n))
-    assert "Cost" in s.get("publish.exclude_fields")
-    assert "Secrets" in s.get("publish.exclude_sections")
-    assert s.get("publish.exclude_callouts") == ["secret"]
+    assert "Cost" in s.get("player_site.hide.fields")
+    assert "Secrets" in s.get("player_site.hide.sections")
+    assert s.get("player_site.hide.callouts") == ["secret"]
 
 
 def test_two_misspellings_of_one_name_both_land(
@@ -292,7 +292,7 @@ def test_two_misspellings_of_one_name_both_land(
     vault = make_vault(
         tmp_path, "  exclude_sectoins: [Secrets]\n  exclude_sectons: [Plans]\n")
     settings_check(monkeypatch, capsys, vault, "--fix")
-    got = vaultlib.settings(vault).get("publish.exclude_sections")
+    got = vaultlib.settings(vault).get("player_site.hide.sections")
     assert "Secrets" in got and "Plans" in got
     assert fault_names(vault) == []
 
@@ -303,7 +303,7 @@ def test_a_removal_that_fails_after_the_write_says_so_and_stops(
     vault hiding at least what it did before."""
     vault = make_vault(
         tmp_path, "  exclude_sectoins: [Secrets]\n  total_sessions: 3\n")
-    before_hidden = vaultlib.settings(vault).get("publish.exclude_sections")
+    before_hidden = vaultlib.settings(vault).get("player_site.hide.sections")
 
     real = vc.settings_unset
 
@@ -323,8 +323,8 @@ def test_a_removal_that_fails_after_the_write_says_so_and_stops(
     monkeypatch.undo()
     vaultlib.forget_settings(vault)
     s = vaultlib.settings(vault)
-    assert set(before_hidden) <= set(s.get("publish.exclude_sections"))
-    assert "Secrets" in s.get("publish.exclude_sections")
+    assert set(before_hidden) <= set(s.get("player_site.hide.sections"))
+    assert "Secrets" in s.get("player_site.hide.sections")
     assert "total_sessions" in text(vault)  # nothing further was changed
 
 
@@ -424,7 +424,7 @@ def test_apply_takes_several_names_and_refuses_a_name_with_no_fix(
     assert out.count("fixed:") == 2
     assert fault_names(vault) == ["publish.link_preview"]
     s = vaultlib.settings(vault)
-    assert s.get("publish.inbox") is True and s.get("publish.live_stats") is True
+    assert s.get("player_site.features.inbox") is True and s.get("player_site.features.live_stats") is True
 
 
 def test_apply_with_a_certain_fix_works_too(tmp_path, monkeypatch, capsys):
@@ -461,12 +461,12 @@ def test_fix_alone_switches_nothing_on_and_no_allow_list_grows(
     # The only differences: the hiding list grew, and the old name's value
     # (statusBar) is read the same as before.
     changed = {n for n in names if before[n] != after[n]}
-    assert changed == {"publish.exclude_sections"}
-    assert set(before["publish.exclude_sections"]) <= set(
-        after["publish.exclude_sections"])
-    assert after["publish.inbox"] is False
-    assert after["publish.pc_prose_sections"] == before[
-        "publish.pc_prose_sections"]
+    assert changed == {"player_site.hide.sections"}
+    assert set(before["player_site.hide.sections"]) <= set(
+        after["player_site.hide.sections"])
+    assert after["player_site.features.inbox"] is False
+    assert after["player_site.sheets.prose_sections"] == before[
+        "player_site.sheets.prose_sections"]
 
 
 @pytest.mark.parametrize("old,value,target", [
@@ -529,7 +529,7 @@ def test_a_hiding_list_one_level_too_deep_is_moved_and_never_hides_less(
     vault = make_vault(
         tmp_path, "  theme:\n    exclude_sections: [Plans]\n"
         "  landing:\n    exclude_drafts: true\n")
-    built_in = vaultlib.settings_default("publish.exclude_sections")
+    built_in = vaultlib.settings_default("player_site.hide.sections")
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     assert code == 0
     assert "STOP\t" in out and "publish.theme.exclude_sections" in out
@@ -539,8 +539,8 @@ def test_a_hiding_list_one_level_too_deep_is_moved_and_never_hides_less(
     assert "fixed: moved publish.landing.exclude_drafts" in out
     assert out.strip().endswith("Settings: no faults")
     got = vaultlib.settings(vault)
-    assert got.get("publish.exclude_sections") == built_in + ["Plans"]
-    assert got.get("publish.exclude_drafts") is True
+    assert got.get("player_site.hide.sections") == built_in + ["Plans"]
+    assert got.get("player_site.hide.drafts") is True
     assert "Plans" in text(vault)
     assert text(vault).count("exclude_sections") == 1
 

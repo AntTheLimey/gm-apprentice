@@ -71,6 +71,7 @@ from vaultlib import (
     settings,
     site_without_tool,
     sub_wikilinks,
+    vault_layout,
     vault_site,
 )
 
@@ -532,7 +533,7 @@ def _has_site(vault: Path) -> bool:
     """Whether the vault has a site, asked of the publish tool. A vault
     with no vault file has none, and nothing is asked. When the tool cannot
     be asked, the file's own switch is read instead."""
-    if not (vault / "_meta" / "vault-config.md").is_file():
+    if vault_layout(vault) == "none":
         return False
     try:
         return vault_site(vault)[1]

@@ -177,21 +177,35 @@ class SystemTests(unittest.TestCase):
                                 ("regency-cthulhu", "coc-7e-regency")):
             self.assertEqual(mv.vault_system(make_vault(self, written)), wanted)
 
-    def test_campaign_overview_answers_when_the_config_does_not(self):
+    def test_only_the_settings_answer_for_a_vault_in_use(self):
         vault = make_vault(self, None)
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
             encoding="utf-8")
-        self.assertEqual(mv.vault_system(vault), "gurps-4e")
-        self.assertIsNone(mv.vault_system(make_vault(self, None)))
+        self.assertIsNone(mv.vault_system(vault))
 
-    def test_the_adventure_brief_answers_under_either_spelling(self):
+    def test_a_move_guesses_from_the_campaign_overview_when_the_config_has_none(self):
+        vault = make_vault(self, None)
+        (vault / "Overview.md").write_text(
+            "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
+            encoding="utf-8")
+        self.assertEqual(mv.guess_system_for_move(vault), "gurps-4e")
+        self.assertIsNone(mv.guess_system_for_move(make_vault(self, None)))
+
+    def test_a_move_guesses_from_the_adventure_brief_under_either_spelling(self):
         for kind in ("adventure-brief", "adventure_brief"):
             vault = make_vault(self, None)
             (vault / "Brief.md").write_text(
                 f"---\ntype: {kind}\nsystem: gurps\n---\n",
                 encoding="utf-8")
-            self.assertEqual(mv.vault_system(vault), "gurps-4e", kind)
+            self.assertEqual(mv.guess_system_for_move(vault), "gurps-4e", kind)
+
+    def test_the_settings_beat_a_guess(self):
+        vault = make_vault(self, "dnd-5e")
+        (vault / "Overview.md").write_text(
+            "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
+            encoding="utf-8")
+        self.assertEqual(mv.guess_system_for_move(vault), "dnd-5e-2024")
 
 
 class TemplateTests(unittest.TestCase):
@@ -374,8 +388,8 @@ class TemplateTests(unittest.TestCase):
                 self.assertEqual(row.group, PERSON)
                 self.assertEqual(row.lines, [
                     "_meta/vault-config.md\tthe templates look like Regency "
-                    "Cthulhu, but publish.system is coc-7e; if this is a "
-                    "Regency Cthulhu campaign, set publish.system to "
+                    "Cthulhu, but vault.system is coc-7e; if this is a "
+                    "Regency Cthulhu campaign, set vault.system to "
                     "coc-7e-regency in _meta/vault-config.md (the site "
                     "builds differently). Nothing else changes, and this "
                     "is said once"])
@@ -493,10 +507,7 @@ class TemplateTests(unittest.TestCase):
     def test_another_systems_template_is_not_upgraded_as_untouched(self):
         # A free-text game_system the aliases do not know reads as generic;
         # a GURPS stat block there is the GM's, not an old generic text.
-        vault = make_vault(self, None)
-        (vault / "Overview.md").write_text(
-            "---\ntype: campaign_overview\n"
-            "game_system: GURPS 4th Edition\n---\n", encoding="utf-8")
+        vault = make_vault(self, "GURPS 4th Edition")
         self.assertEqual(mv.vault_system(vault), "gurps 4th edition")
         (vault / "_Templates").mkdir()
         gurps = mv.templates_for("gurps-4e")

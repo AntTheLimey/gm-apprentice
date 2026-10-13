@@ -196,16 +196,16 @@ def _hides_relationships(fields: object) -> bool:
 
 
 def _campaign_hides_relationships(vault: Path) -> bool:
-    """The vault file's `publish.exclude_fields` strips `relationships`, and
-    no `publish.overrides` entry mentions it (a per-note `include` would
+    """The vault file's `player_site.hide.fields` strips `relationships`, and
+    no `player_site.hide.field_exceptions` entry mentions it (a per-note `include` would
     re-admit it for that note; which notes is not worked out, so none is
     skipped)."""
     s = settings(vault)
-    if s.origins["publish.exclude_fields"] != "file":
+    if s.origins["player_site.hide.fields"] != "file":
         return False
-    if not _hides_relationships(s.get("publish.exclude_fields")):
+    if not _hides_relationships(s.get("player_site.hide.fields")):
         return False
-    return "relationships" not in json.dumps(s.get("publish.overrides.fields"))
+    return "relationships" not in json.dumps(s.get("player_site.hide.field_exceptions"))
 
 
 def shown_edges(vault: Path, published: set[str]

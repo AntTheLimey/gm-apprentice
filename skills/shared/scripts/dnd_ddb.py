@@ -72,7 +72,7 @@ from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES
 from dnd_sheet import to_weight  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
-                      is_unchecked_source, settings, vault_files)
+                      is_unchecked_source, settings, settings_file, vault_files, vault_layout)
 
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
@@ -1370,9 +1370,9 @@ def save_seen(path: Path, char_id: str, seen: Seen) -> None:
 
 
 def find_vault(path: Path) -> Path | None:
-    """The first folder above the note that holds `_meta/vault-config.md`, None when there is none."""
+    """The first folder above the note that holds a settings file (either layout), None when there is none."""
     for folder in path.resolve().parents:
-        if (folder / "_meta" / "vault-config.md").is_file():
+        if vault_layout(folder) != "none":
             return folder
     return None
 
@@ -1487,20 +1487,20 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
         print(f"dnd_ddb: {vault.as_posix()} is not a folder", file=sys.stderr)
         return 2
     if on_build:
-        config = vault / "_meta" / "vault-config.md"
+        config = vault / settings_file(vault)
         if config.exists():
             try:
                 config.read_text(encoding="utf-8-sig")
             except (OSError, UnicodeDecodeError):
-                print("dnd_ddb: _meta/vault-config.md could not be read; nothing was synced")
+                print(f"dnd_ddb: {settings_file(vault)} could not be read; nothing was synced")
                 return 0
         now = settings(vault)
-        if now.origins["publish.dndbeyond_sync"] == "fault":
+        if now.origins["vault.dndbeyond_sync"] == "fault":
             said = next((f["message"] for f in now.faults
-                         if f["name"] == "publish.dndbeyond_sync"), "")
+                         if f.get("setting") == "vault.dndbeyond_sync"), "")
             print(PLAIN.sub(" ", f"dnd_ddb: {said.rstrip('.')}; nothing was synced"))
             return 0
-        if now.get("publish.dndbeyond_sync") != "build":
+        if now.get("vault.dndbeyond_sync") != "build":
             return 0
     system = vault_system(vault)
     if system != SYSTEM and on_build:
@@ -1554,7 +1554,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--write", action="store_true")
     ap.add_argument("--party", metavar="VAULT", help="every PC note in a vault that has a D&D Beyond link")
     ap.add_argument("--on-build", action="store_true",
-                    help="with --party: run only when publish.dndbeyond_sync is build")
+                    help="with --party: run only when vault.dndbeyond_sync is build")
     args = ap.parse_args(argv)
     if bool(args.sheet) == bool(args.party):
         ap.error("give one sheet, or --party VAULT")

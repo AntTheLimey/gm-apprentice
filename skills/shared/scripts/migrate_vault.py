@@ -19,7 +19,8 @@ from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
 from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
                       frontmatter_span, parse_version, plugin_version,
-                      settings, settings_raw, settings_unset, vault_files,
+                      read_stamp, settings, settings_file, settings_raw,
+                      settings_unset, vault_files, vault_layout,
                       wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
@@ -62,9 +63,17 @@ def _system_id(raw: object) -> str | None:
 
 
 def vault_system(vault: Path) -> str | None:
-    """`publish.system`, else the Campaign Overview's `game_system`, else
-    the adventure brief's `system`; aliases mapped to the file ids."""
-    found = _system_id(settings(vault).get("publish.system"))
+    """`vault.system` from the vault's settings, aliases mapped to the file
+    ids; None when the vault records none."""
+    return _system_id(settings(vault).get("vault.system"))
+
+
+def guess_system_for_move(vault: Path) -> str | None:
+    """The system of a vault being moved to the new settings file, which
+    must record one: `vault.system`, else the Campaign Overview's
+    `game_system`, else the adventure brief's `system`. Used only by the
+    move step; every other caller asks `vault_system`."""
+    found = vault_system(vault)
     if found:
         return found
     # The brief's type is written `adventure-brief`; older notes used `_`.
@@ -309,11 +318,11 @@ def find_regency_looks(vault: Path) -> list[Item]:
     if not looks:
         return []
     return [Item("regency-looks", PERSON, [
-        "_meta/vault-config.md\tthe templates look like Regency Cthulhu, "
-        "but publish.system is coc-7e; if this is a Regency Cthulhu "
-        "campaign, set publish.system to coc-7e-regency in "
-        "_meta/vault-config.md (the site builds differently). Nothing else "
-        "changes, and this is said once"])]
+        f"{settings_file(vault)}\tthe templates look like Regency Cthulhu, "
+        f"but vault.system is coc-7e; if this is a Regency Cthulhu "
+        f"campaign, set vault.system to coc-7e-regency in "
+        f"{settings_file(vault)} (the site builds differently). Nothing else "
+        f"changes, and this is said once"])]
 
 
 def find_pc_template_field(vault: Path) -> list[Item]:
@@ -597,12 +606,15 @@ def find_heritage_notes(vault: Path) -> list[Item]:
 
 def read_wrap_up_player_sections(vault: Path) -> list[str]:
     """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
-    extra H2 titles the vault declares player-facing on a Wrap-Up.
+    extra H2 titles the vault declares player-facing on a Wrap-Up. A name
+    that exists only in the old file; a vault on the new file has none.
 
     Read as the publish tool has it in the file. Absent, empty, null or not
     a list of plain entries all read as no extra sections — the Keeper-facing
     default.
     """
+    if vault_layout(vault) != "legacy":
+        return []
     block = settings_raw(vault, "publish.wrap_up")
     listed = block.get("player_sections") if isinstance(block, dict) else None
     if not isinstance(listed, list) or not all(
@@ -712,11 +724,12 @@ def find_wrapup_sections_key(vault: Path) -> list[Item]:
     It goes once the vault is stamped 1.10.28 or later, so the migration
     that stamps 1.10.28 could still read it. Offered only when removing it
     would change the file."""
+    if vault_layout(vault) != "legacy":    # the key exists only in the old file
+        return []
     config = vault / CONFIG
     text = _read(config).removeprefix("\ufeff")
-    stamp = (extract_frontmatter(text) or {}).get("gm_apprentice_version")
-    if (not stamp or isinstance(stamp, list)
-            or parse_version(str(stamp)) < parse_version("1.10.28")):
+    stamp = read_stamp(vault)
+    if not stamp or parse_version(stamp) < parse_version("1.10.28"):
         return []
     if frontmatter_span(text.splitlines(keepends=True))[1]:
         return []

@@ -86,7 +86,7 @@ function setOnly(map, prefix, origins) {
 // `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
-  const { values, origins, faults, legacy, layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
+  const { values, origins, faults, legacy = [], layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
   const v = values.vault;
   const p = values.player_site;
   const named = (n) => origins[n] !== 'default';

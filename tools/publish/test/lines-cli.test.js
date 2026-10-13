@@ -155,6 +155,17 @@ describe('lines: site', () => {
     if (process.platform === 'win32') assert.strictEqual(siteDirPath('C:\\v', '~\\site'), path.join(os.homedir(), 'site'));
     assert.strictEqual(siteDirPath('/v', '  ~/site '), path.join(os.homedir(), 'site'));
   });
+  it('on the new file, a stray top-level publish names player_site, not "publish:"', () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'lines-site-'));
+    try {
+      fs.mkdirSync(path.join(vault, '_meta'));
+      const file = path.join(vault, '_meta', 'vault-config.yaml');
+      fs.writeFileSync(file, 'version: 1\npublish:\n  site: true\n');
+      assert.throws(() => answer({ op: 'site', vault }), (e) => /vault-config\.yaml is not a setting; the site's settings go under player_site/.test(e.message) && !/publish:/.test(e.message));
+      fs.writeFileSync(file, 'version: 1\nplayer_site:\n  publish: true\n  folder: ../site\n');
+      assert.deepStrictEqual(answer({ op: 'site', vault }), { publishes: true, site: true, siteDir: path.resolve(vault, '../site') });
+    } finally { fs.rmSync(vault, { recursive: true, force: true }); }
+  });
   it('a file that cannot be parsed, or a block that is not one, is an error, not a "no"', () => {
     assert.throws(() => ask('---\npublish:\n  a: 1\npublish:\n  b: 2\n---\n'), /not valid YAML/);
     assert.throws(() => ask('---\npublish: yes please\n---\n'), /not a block of settings/);

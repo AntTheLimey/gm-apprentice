@@ -33,11 +33,12 @@ import sys
 from pathlib import Path
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          check_editable, edit_frontmatter)
+                          check_editable)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
-from vaultlib import (SettingsUnavailable, extract_frontmatter, parse_version,
-                      plugin_version, set_key)
+from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
+                      StateUnreadable, parse_version, plugin_version,
+                      read_stamp, vault_layout, write_stamp)
 
 FLOOR = "1.10.12"
 LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
@@ -58,12 +59,9 @@ def gate(vault: Path) -> tuple[str, str] | str:
     if not (vault / "_meta").is_dir():
         return f"{vault} has no _meta/ folder: first-time setup, not a migration"
     try:
-        fm = extract_frontmatter((vault / "_meta" / "vault-config.md").read_text(
-            encoding="utf-8-sig", errors="replace")) or {}
-    except OSError:
-        fm = {}
-    current = fm.get("gm_apprentice_version")
-    shown = str(current) if current and not isinstance(current, list) else None
+        shown = read_stamp(vault)
+    except StateUnreadable as e:
+        return str(e)
     if shown is None or parse_version(shown) < parse_version(FLOOR):
         return (f"this vault is at {shown or 'no recorded version'}, below "
                 f"{FLOOR}, the oldest this script migrates from; migrate it "
@@ -177,10 +175,23 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
 
 
 def _stamp(vault: Path, version: str) -> None:
-    edit_frontmatter(
-        vault / "_meta" / "vault-config.md",
-        lambda fm, eol: set_key(fm, "gm_apprentice_version",
-                                f'"{version}"', eol))
+    try:
+        write_stamp(vault, version)
+    except (StateUnreadable, OSError) as e:
+        raise StepFailed(str(e) if isinstance(e, StateUnreadable) else
+                         f"the version stamp cannot be written "
+                         f"({e.__class__.__name__})") from e
+
+
+def _check_stampable(vault: Path) -> None:
+    """Raise StepFailed unless the stamp could be written."""
+    if vault_layout(vault) == "new":
+        try:
+            read_stamp(vault)
+        except StateUnreadable as e:
+            raise StepFailed(str(e)) from e
+    else:
+        check_editable(vault / LEGACY_SETTINGS_FILE)
 
 
 def _choice_problem(choice: str, value: str | None,
@@ -214,7 +225,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             return 2
     if parse_version(vault_v) < parse_version(plugin_v):
         try:   # a stamp is due, written last; find out now that it can be
-            check_editable(vault / "_meta" / "vault-config.md")
+            _check_stampable(vault)
         except StepFailed as e:
             print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
             return 1

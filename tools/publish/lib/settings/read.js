@@ -119,9 +119,9 @@ function parseNewFile(vaultPath) {
 
 function readNew({ vaultPath, siteConfig }) {
   const faults = [];
-  const file = { path: at(vaultPath, NEW_FILE), exists: true, hasPublish: false, inline: false, leftover: fs.existsSync(at(vaultPath, OLD_FILE)) };
+  const file = { path: at(vaultPath, NEW_FILE), exists: true, hasSiteBlock: false, leftover: fs.existsSync(at(vaultPath, OLD_FILE)) };
   const tree = parseNewFile(vaultPath);
-  file.hasPublish = isMap(tree.player_site);
+  file.hasSiteBlock = isMap(tree.player_site);
   const values = {};
   const origins = {};
   const fault = makeFault;
@@ -239,7 +239,7 @@ function readNew({ vaultPath, siteConfig }) {
     faults.push(makeFault({ name: key, setting: null, kind: 'unknown-name', level: 'stop', value, suggest: near }));
   }
 
-  return { values, origins, faults, legacy: [], layout: 'new', file };
+  return { values, origins, faults, layout: 'new', file };
 }
 
 // ---- The entry point ----------------------------------------------------------------------

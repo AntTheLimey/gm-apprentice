@@ -122,8 +122,6 @@ The file alone does not say it: a setting left out has a default, and a
 value that cannot be read falls back to a safe one. The output is the stable
 way to read the result.
 
-<!-- settings-json-shape: update in Part B if cli.js differs -->
-
 The output is one JSON object:
 
 - `values` holds every setting by its full name (`player_site.hide.mode`),
@@ -134,7 +132,11 @@ The output is one JSON object:
 - `faults` is a list of problems found in the file. Each has `name`,
   `level` (`stop` or `warn`), `kind` and `message`, and may have `setting`,
   `suggest` and `use`. A `stop` fault means a player build refuses to run.
-- `file` says which settings file was read.
+- `file` says which settings file was read: `path`, `exists`, `hasSiteBlock`
+  (whether it holds the site's block of settings, `player_site:`) and
+  `leftover` (whether an old file sits beside the new one). On the old
+  layout it also has `inline`, true when its `publish:` block is written on
+  one line.
 
 Pass one or more names to limit the output to those settings.
 `settings check` prints only the faults and exits 1 when one stops the

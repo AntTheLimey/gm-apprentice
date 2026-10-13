@@ -559,6 +559,9 @@ def party(*args):
 def make_vault(tmp_path, system="dnd-5e-2024"):
     vault = tmp_path / "vault"
     (vault / "Characters" / "PCs").mkdir(parents=True)
+    (vault / "_meta").mkdir()
+    (vault / "_meta" / "vault-config.md").write_text(
+        f"---\ntype: meta\npublish:\n  system: {system}\n---\n", encoding="utf-8")
     (vault / "Campaign Overview.md").write_text(
         f"---\ntype: campaign_overview\ngame_system: {system}\n---\n\n# Campaign\n", encoding="utf-8")
     return vault

@@ -20,7 +20,7 @@ def _fresh_cache():
 
 def built_in():
     """The built-in list, from the tool, never restated here."""
-    return vaultlib.settings_default("publish.exclude_sections")
+    return vaultlib.settings_default("player_site.hide.sections")
 
 
 def make_vault(tmp_path: Path, frontmatter: str | None) -> Path:
@@ -51,30 +51,30 @@ def count_runs(monkeypatch):
 def test_defaults_are_not_written(tmp_path):
     vault = make_vault(tmp_path, "publish: {}")
     s = vaultlib.settings(vault)
-    assert s.get("publish.connections") == "tree"
-    assert not s.written("publish.connections")
-    assert s.file_exists and s.has_publish
+    assert s.get("player_site.features.connections") == "tree"
+    assert not s.written("player_site.features.connections")
+    assert s.has_site_block
 
 
 def test_written_value(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: web")
     s = vaultlib.settings(vault)
-    assert s.get("publish.connections") == "web"
-    assert s.written("publish.connections")
-    assert s.origins["publish.connections"] == "file"
+    assert s.get("player_site.features.connections") == "web"
+    assert s.written("player_site.features.connections")
+    assert s.origins["player_site.features.connections"] == "file"
 
 
 def test_exclude_sections_own_and_built_in(tmp_path):
     own = make_vault(tmp_path / "a", "publish:\n  exclude_sections: [Spoilers]")
     plain = make_vault(tmp_path / "b", "publish: {}")
-    assert vaultlib.settings(own).get("publish.exclude_sections") == ["Spoilers"]
-    assert vaultlib.settings(plain).get("publish.exclude_sections") == built_in()
+    assert vaultlib.settings(own).get("player_site.hide.sections") == ["Spoilers"]
+    assert vaultlib.settings(plain).get("player_site.hide.sections") == built_in()
 
 
 def test_no_file_at_all(tmp_path):
     s = vaultlib.settings(make_vault(tmp_path, None))
-    assert not s.file_exists and not s.has_publish
-    assert s.get("publish.connections") == "tree"
+    assert not s.has_site_block
+    assert s.get("player_site.features.connections") == "tree"
 
 
 def test_fault_is_listed_not_raised(tmp_path):
@@ -82,7 +82,7 @@ def test_fault_is_listed_not_raised(tmp_path):
     s = vaultlib.settings(vault)
     assert [f["name"] for f in s.faults] == ["publish.connections"]
     assert {"name", "level", "kind", "message"} <= set(s.faults[0])
-    assert s.origins["publish.connections"] == "fault"
+    assert s.origins["player_site.features.connections"] == "fault"
 
 
 def test_unknown_name_fault_keeps_suggestion(tmp_path):
@@ -98,24 +98,24 @@ def test_site_config_old_keys_take_part(tmp_path):
                       encoding="utf-8")
     s = vaultlib.settings(vault, site_config=config)
     # The site file's list adds to the built-in one when the vault file sets none.
-    assert s.get("publish.exclude_sections") == built_in() + ["Mine"]
-    assert s.origins["publish.exclude_sections"] == "site-file"
-    assert vaultlib.settings(vault).get("publish.exclude_sections") == built_in()
+    assert s.get("player_site.hide.sections") == built_in() + ["Mine"]
+    assert s.origins["player_site.hide.sections"] == "site-file"
+    assert vaultlib.settings(vault).get("player_site.hide.sections") == built_in()
 
 
 def test_set_then_settings_sees_it(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  site: true")
-    assert vaultlib.settings(vault).get("publish.connections") == "tree"
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "tree"
     assert vaultlib.settings_set(vault, [("publish.connections", "web")]) == [
         "publish.connections"]
-    assert vaultlib.settings(vault).get("publish.connections") == "web"
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
 
 
 def test_set_passes_lists_as_json(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  site: true")
     vaultlib.settings_set(
         vault, [("publish.exclude_sections", ['Odd "one"', "Plain"])])
-    assert vaultlib.settings(vault).get("publish.exclude_sections") == [
+    assert vaultlib.settings(vault).get("player_site.hide.sections") == [
         'Odd "one"', "Plain"]
 
 
@@ -133,11 +133,11 @@ def test_refused_set_carries_reason_and_leaves_file(tmp_path):
 
 def test_unset(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: web")
-    assert vaultlib.settings(vault).written("publish.connections")
+    assert vaultlib.settings(vault).written("player_site.features.connections")
     assert vaultlib.settings_unset(
         vault, ["publish.connections", "publish.link_previews"]) == [
         "publish.connections"]
-    assert not vaultlib.settings(vault).written("publish.connections")
+    assert not vaultlib.settings(vault).written("player_site.features.connections")
 
 
 def test_refused_unset(tmp_path):
@@ -218,41 +218,41 @@ def test_cache_is_keyed_by_vault_and_site_config(tmp_path, monkeypatch):
     a = make_vault(tmp_path / "a", "publish: {}")
     b = make_vault(tmp_path / "b", "publish:\n  connections: web")
     calls = count_runs(monkeypatch)
-    assert vaultlib.settings(a).get("publish.connections") == "tree"
-    assert vaultlib.settings(b).get("publish.connections") == "web"
+    assert vaultlib.settings(a).get("player_site.features.connections") == "tree"
+    assert vaultlib.settings(b).get("player_site.features.connections") == "web"
     assert len(calls) == 2
 
 
 def test_mutating_a_result_does_not_reach_the_next_caller(tmp_path):
     vault = make_vault(tmp_path, "publish: {}")
     first = vaultlib.settings(vault)
-    first.get("publish.exclude_sections").append("Corrupt")
-    first.values["publish.exclude_sections"].append("Corrupt")
+    first.get("player_site.hide.sections").append("Corrupt")
+    first.values["player_site.hide.sections"].append("Corrupt")
     first.faults.append({"name": "x"})
-    first.origins["publish.connections"] = "file"
+    first.origins["player_site.features.connections"] = "file"
     second = vaultlib.settings(vault)
-    assert second.get("publish.exclude_sections") == built_in()
+    assert second.get("player_site.hide.sections") == built_in()
     assert second.faults == []
-    assert second.origins["publish.connections"] == "default"
+    assert second.origins["player_site.features.connections"] == "default"
 
 
 def test_settings_default(tmp_path):
     assert "GM Notes" in built_in()
-    assert vaultlib.settings_default("publish.connections") == "tree"
-    vaultlib.settings_default("publish.exclude_sections").append("Corrupt")
-    assert vaultlib.settings_default("publish.exclude_sections") == built_in()
+    assert vaultlib.settings_default("player_site.features.connections") == "tree"
+    vaultlib.settings_default("player_site.hide.sections").append("Corrupt")
+    assert vaultlib.settings_default("player_site.hide.sections") == built_in()
     with pytest.raises(KeyError):
         vaultlib.settings_default("publish.nonsense")
 
 
 def test_hand_edit_is_not_seen_until_forgotten(tmp_path):
     vault = make_vault(tmp_path, "publish:\n  connections: web")
-    assert vaultlib.settings(vault).get("publish.connections") == "web"
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     (vault / "_meta" / "vault-config.md").write_text(
         "---\npublish:\n  connections: tree\n---\n", encoding="utf-8")
-    assert vaultlib.settings(vault).get("publish.connections") == "web"
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     vaultlib.forget_settings(vault)
-    assert vaultlib.settings(vault).get("publish.connections") == "tree"
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "tree"
 
 
 def stub_run(stderr: bytes, code: int = 1):

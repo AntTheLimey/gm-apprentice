@@ -23,7 +23,7 @@ from vaultlib import extract_frontmatter, settings_default  # noqa: E402
 
 # The folder a vault keeps its attachments in until it names another: the tool's
 # default, never restated here.
-ATTACHMENTS = settings_default("publish.attachments_dir")
+ATTACHMENTS = settings_default("vault.attachments")
 
 SHARED = SCRIPTS.parent
 

@@ -59,7 +59,7 @@ Levels: ERROR (schema violation), WARNING (needs GM attention),
 INFO (context the auditing skill should triage, not a defect).
 
 `gm-leak` skips a note the publish tool says it does not publish (under
-`publish.exclude_dirs`, no `type:`, a draft), and otherwise by
+`player_site.hide.folders`, no `type:`, a draft), and otherwise by
 frontmatter: a `type:` of
 `session-plan`, `session-play-notes`, `plan`, or `meta` is never
 published and always skipped, even under `_meta/`; `publish: none`
@@ -201,7 +201,13 @@ from vaultlib import (  # noqa: F401
     use_publish_tool,
     Settings,
     SettingsUnavailable,
+    StateUnreadable,
+    LEGACY_SETTINGS_FILE,
     forget_settings,
+    read_stamp,
+    settings_file,
+    stamp_file,
+    vault_layout,
     settings,
     settings_add,
     settings_describe,
@@ -850,18 +856,14 @@ def check_version(vault: Path) -> tuple[list[str], int]:
     if not (vault / "_meta").is_dir():
         return (["SETUP\t(vault)\tno _meta/ — first-time setup, "
                  "not migration"], 0)
-    rel = "_meta/vault-config.md"
-    fm: dict = {}
+    rel = stamp_file(vault)
     try:
-        fm = extract_frontmatter((vault / "_meta" / "vault-config.md")
-                                 .read_text(encoding="utf-8",
-                                            errors="replace")) or {}
-    except OSError:
-        # A `_meta/` with no readable config is the same situation as a
-        # config with no version field: the vault never recorded one.
-        fm = {}
-    current = fm.get("gm_apprentice_version")
-    if not current or isinstance(current, list):
+        current = read_stamp(vault)
+    except StateUnreadable as e:
+        return ([f"ERROR\t(vault)\t{e}"], 1)
+    # A `_meta/` with no readable settings file is the same situation as one
+    # with no version recorded: the vault never recorded one.
+    if not current:
         return ([f"MISMATCH\t{rel}\tgm_apprentice_version absent — "
                  f"{MIGRATION_HINT}"], 1)
     vault_v, plugin_v = parse_version(str(current)), parse_version(plugin)
@@ -1064,13 +1066,13 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     sections = read_manifest_sections(vault)
     if sections is None:
         return []
-    # As the build reads it (the settings list's `publish.mode`): only
+    # As the build reads it (the settings list's `player_site.hide.mode`): only
     # `full`, in any case, is full; anything else is player mode and the
     # list applies.
     # Only the vault file's own `mode` counts here; a site file's old one does not.
     own = settings(vault)
-    if (written_in_vault_file(own, "publish.mode")
-            and own.get("publish.mode") == "full"):
+    if (written_in_vault_file(own, "player_site.hide.mode")
+            and own.get("player_site.hide.mode") == "full"):
         return []
 
     def unlisted(rel: str) -> str | None:
@@ -1248,7 +1250,7 @@ WITHHOLDS_HUB_BODIES_SINCE = (1, 11, 40)
 
 
 def _site_of(own: Settings, vault: Path) -> tuple[Path | None, bool]:
-    site_dir = own.get("publish.site_dir")
+    site_dir = own.get("player_site.folder")
     if not site_dir or site_switch_written(own) is False:
         return None, False
     site = Path(site_dir).expanduser()
@@ -1258,9 +1260,9 @@ def _site_of(own: Settings, vault: Path) -> tuple[Path | None, bool]:
 
 
 def configured_site(vault: Path) -> tuple[Path | None, bool]:
-    """(the site folder `publish.site_dir` names, whether a
+    """(the site folder `player_site.folder` names, whether a
     vault.config.json is in it). (None, False) when `site_dir` is unset or
-    the site is off (`publish.site`). A relative `site_dir` is relative to
+    the site is off (`player_site.publish`). A relative `site_dir` is relative to
     the vault."""
     return _site_of(settings(vault), vault)
 
@@ -1277,7 +1279,7 @@ def vault_settings(vault: Path) -> Settings:
     return own
 
 
-NO_SITE_DIR = "publish.site_dir is not set in _meta/vault-config.md"
+NO_SITE_DIR = "player_site.folder is not set"
 
 
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
@@ -1287,11 +1289,11 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     so there is nothing to ask about."""
     site, has_config = configured_site(vault)
     if site is None:
-        if not settings(vault).has_publish:
+        if not settings(vault).has_site_block:
             return None, None
         return None, NO_SITE_DIR
     if not has_config:
-        return None, f"no vault.config.json in publish.site_dir ({site})"
+        return None, f"no vault.config.json in player_site.folder ({site})"
     return site / "vault.config.json", None
 
 
@@ -1602,7 +1604,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     """(the tool to ask what publishes, why none is asked, what to do
     about it, whether the vault has a site).
 
-    `publish.site` is the switch, read by the plugin's publish tool
+    `player_site.publish` is the switch, read by the plugin's publish tool
     (`vault_site`), which has the build's YAML parser. Off, there is no
     site: nothing is asked and nothing is checked for one, whatever
     `site_dir` says. Unset, in a vault from before the switch, a `site_dir`
@@ -1624,7 +1626,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
         # will not parse: the switch is read here instead (`site_without_tool`).
         why = str(e)
         if why.startswith("the publish tool refused"):
-            fix = f"fix {VAULT_CONFIG}"
+            fix = f"fix {settings_file(vault)}"
         elif why.endswith("is not understood"):
             # The plugin's own tool answered in a shape this script does not
             # know: the two are from different releases.
@@ -1633,8 +1635,8 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
             fix = node_fix
         has_site = site_without_tool(settings(vault))
         if has_site:
-            fix += (f"; if this vault has no site, set publish.site: false "
-                    f"in {VAULT_CONFIG}")
+            fix += (f"; if this vault has no site, set player_site.publish: false "
+                    f"in {settings_file(vault)}")
         elif fix == node_fix:
             # The site is off and only node is missing: there is nothing a
             # GM with no site has to hear about node.
@@ -1643,16 +1645,16 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     if not on:
         return None, SITE_IS_OFF, None, False
     if site is None:
-        return None, "publish.site is on but publish.site_dir names no site", (
-            "set the site up with publish-site, or set publish.site: false"
+        return None, "player_site.publish is on but player_site.folder names no site", (
+            "set the site up with publish-site, or set player_site.publish: false"
             ), True
     if publishes and settings(vault).inline:
-        return None, (f"publish: in {VAULT_CONFIG} is written in a way that "
+        return None, (f"publish: in {settings_file(vault)} is written in a way that "
                       f"is not understood here (on one line)"), (
             "write it as a block at the margin, one key per line"), True
     if not (site / "vault.config.json").is_file():
-        return None, (f"no vault.config.json in publish.site_dir "
-                      f"({site.as_posix()})"), "fix publish.site_dir", True
+        return None, (f"no vault.config.json in player_site.folder "
+                      f"({site.as_posix()})"), "fix player_site.folder", True
     fix = f"run update-pin --site {site.as_posix()}, then run this again"
     installed = site / "node_modules" / PUBLISH_PACKAGE
     script = installed / "bin" / "gm-publish.js"
@@ -1682,7 +1684,7 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     return PUBLISH_TOOL, None, node_fix, True
 
 
-SITE_IS_OFF = "publish.site is not on"
+SITE_IS_OFF = "player_site.publish is not on"
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -1717,7 +1719,7 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
     the tool chosen here (`_lines_tool`).
 
     What a section hides is the tool's decision and there is no copy of it
-    here. For a vault with a site (`publish.site` on), no answer means the
+    here. For a vault with a site (`player_site.publish` on), no answer means the
     check stops and nothing is written: (why, [an ERROR]), because a guess
     could leak. For a vault with no site there is nothing to leak, nothing
     is asked and nothing has to be installed: (why, [an INFO]), and the
@@ -1737,14 +1739,14 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
         # gm-leak is only about the site, so it says why it has no rows. A
         # check with work of its own (pc-body, wrapup) just gets on with it.
         return why, [f"INFO\t(vault)\t{check} has no site to check: "
-                     f"{SITE_IS_OFF} in {VAULT_CONFIG}, so nothing publishes"
+                     f"{SITE_IS_OFF} in {settings_file(vault)}, so nothing publishes"
                      ] if check == "gm-leak" else []
     # The tool could not be asked. A vault file it refused is still to be
     # fixed; a missing node is nothing a GM with no site has to act on.
-    todo = f"; {fix}" if fix == f"fix {VAULT_CONFIG}" else ""
+    todo = f"; {fix}" if fix == f"fix {settings_file(vault)}" else ""
     return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
                  f"hide on a site ({why}). This vault has no site "
-                 f"(publish.site is not on), so nothing publishes{todo}"]
+                 f"(player_site.publish is not on), so nothing publishes{todo}"]
 
 
 # The faults in a NOTE that change what the site shows, as the publish
@@ -1838,7 +1840,7 @@ def check_site_faults(vault: Path, files: list[str] | None = None
     if not has_site:
         if why == SITE_IS_OFF:
             return [f"INFO\t(vault)\tsite-faults has no site to check: "
-                    f"{SITE_IS_OFF} in {VAULT_CONFIG}"]
+                    f"{SITE_IS_OFF} in {settings_file(vault)}"]
         # The switch reads off, but the publish tool could not be asked (a
         # vault file it will not parse): say that, and what to fix.
         todo = f"; {fix}" if fix else ""
@@ -2487,7 +2489,7 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
                                   {e.casefold() for e in excludes} else [title])
         return [f"WARNING\t{rel}:{state.lineno}\tGM-only heading '{title}' "
                 f"publishes — nest it under ## GM Notes; to move every one at "
-                f"once, set publish.exclude_sections to "
+                f"once, set player_site.hide.sections to "
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
                 f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     if _keeper_text(title, excludes):
@@ -2573,7 +2575,7 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
     # site file's old one, else the built-in.
     explain = explain or ExplainAll(vault)
     tool = explain() if notes else None
-    excludes = vault_settings(vault).get("publish.exclude_sections") if notes else []
+    excludes = vault_settings(vault).get("player_site.hide.sections") if notes else []
     match = {s.casefold() for s in excludes}
     writes: list[tuple[str, str, list[str]]] = []
     rows: list[str] = []
@@ -2996,7 +2998,7 @@ def _pc_body(vault: Path, folder: str | None = None,
                 rows.extend(gate)
                 excludes, no_tool = [], True
         if excludes is None:
-            excludes = vault_settings(vault).get("publish.exclude_sections")
+            excludes = vault_settings(vault).get("player_site.hide.sections")
         states, problems = scan_body(text, excludes)
         kept = None if no_tool else _published_linenos(states, fm)
         if kept is not None and not kept:
@@ -4521,7 +4523,6 @@ def _write_text(vault: Path, rel: str, text: str) -> None:
 
 
 COLLAPSED_EXCLUDES = ["GM Notes"]
-VAULT_CONFIG = "_meta/vault-config.md"
 
 
 def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
@@ -4542,12 +4543,12 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
     against the new config before anything is written; one refusal, or
     an `exclude_sections` the tool cannot read, writes nothing.
     """
-    name = "publish.exclude_sections"
+    name = "player_site.hide.sections"
     own = settings(vault)
     if own.origins[name] == "fault":
-        why = next((f["message"] for f in own.faults if f["name"] == name),
+        why = next((f["message"] for f in own.faults if f.get("setting") == name),
                    f"{name} not understood")
-        return [f"ERROR\t{VAULT_CONFIG}\t{why} — nothing written; rewrite "
+        return [f"ERROR\t{settings_file(vault)}\t{why} — nothing written; rewrite "
                 f"it as a plain list first"]
     listed = written_in_vault_file(own, name)
     # The vault file's own list when it has one; else the build's, which may
@@ -4557,7 +4558,7 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
     collapse = listed and [s.casefold() for s in before] != [GM_NOTES]
     after = list(COLLAPSED_EXCLUDES) if listed else before
     match = {s.casefold() for s in before} | {GM_NOTES}
-    dirs = [d.strip("/") for d in vault_settings(vault).get("publish.exclude_dirs")]
+    dirs = list(vault_settings(vault).get("player_site.hide.folders"))
 
     rows: list[str] = []
     refused = 0
@@ -4580,10 +4581,10 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
 
     if collapse and own.inline:
         refused += 1
-        rows.append(f"ERROR\t{VAULT_CONFIG}\texclude_sections cannot be "
+        rows.append(f"ERROR\t{settings_file(vault)}\texclude_sections cannot be "
                     f"collapsed: publish: is written on one line")
     if refused:
-        rows.append(f"ERROR\t{VAULT_CONFIG}\tmigration blocked by {refused} "
+        rows.append(f"ERROR\t{settings_file(vault)}\tmigration blocked by {refused} "
                     f"refusal(s) above — nothing written, exclude_sections "
                     f"left as it is")
         return rows
@@ -4604,11 +4605,11 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
         except SettingsUnavailable as e:
             if not e.refused:
                 raise
-            rows.append(f"ERROR\t{VAULT_CONFIG}\texclude_sections cannot be "
+            rows.append(f"ERROR\t{settings_file(vault)}\texclude_sections cannot be "
                         f"collapsed: {e} — the headings are already moved; "
                         f"the list is left as it is")
             return rows
-        rows.append(f"{mode}\t{VAULT_CONFIG}\tcollapsed exclude_sections "
+        rows.append(f"{mode}\t{settings_file(vault)}\tcollapsed exclude_sections "
                     f"from {old} to [\"GM Notes\"]")
     return rows
 
@@ -4703,7 +4704,7 @@ def check_wrapup(vault: Path, file: str | None, fix: bool,
     # The build's exclude list (read only when there is a wrap-up to check).
     excludes: list[str] = []
     if any(entity_type(fm) in WRAP_TYPES for _r, _t, fm in entries):
-        excludes = vault_settings(vault).get("publish.exclude_sections")
+        excludes = vault_settings(vault).get("player_site.hide.sections")
     rows: list[str] = []
     matched = False
     gated = no_tool = False
@@ -4990,10 +4991,12 @@ def _short(value: Any) -> str:
     return text if len(text) <= 60 else text[:59] + "…"
 
 
-def _in_publish(publish: Any, name: str) -> tuple[bool, Any]:
-    """(whether `publish.<...>` is written in the file, its value)."""
-    cur = publish
-    for seg in name.split(".")[1:]:
+def _written_at(raw: Any, name: str) -> tuple[bool, Any]:
+    """(whether the dotted `name` is written in the settings file, its
+    value). `raw` is the file as written: the whole new file, or the old
+    file's frontmatter."""
+    cur = raw
+    for seg in name.split("."):
         if not isinstance(cur, dict) or seg not in cur:
             return False, None
         cur = cur[seg]
@@ -5087,7 +5090,7 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
     return row
 
 
-def _plan_fix(fault: dict[str, Any], publish: Any, claimed: set[str],
+def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
               scratch: Path, text: str) -> SettingsRow:
     row = SettingsRow(fault)
     name, kind = str(fault["name"]), fault["kind"]
@@ -5097,8 +5100,11 @@ def _plan_fix(fault: dict[str, Any], publish: Any, claimed: set[str],
         row.note = ("the settings command cannot move a key from beside "
                     "publish:; move it under publish: by hand.")
         return row
-    present, value = _in_publish(publish, name)
-    if not name.startswith("publish.") or not present:
+    present, value = _written_at(raw, name)
+    # On the old file only a key under `publish:` is fixed here; the new
+    # file's keys all are settings or mistakes.
+    old_file = vault_layout(scratch) == "legacy"
+    if (old_file and not name.startswith("publish.")) or not present:
         return row
     if kind == "retired":
         row.kind = "certain"
@@ -5108,9 +5114,18 @@ def _plan_fix(fault: dict[str, Any], publish: Any, claimed: set[str],
     elif kind in ("unknown-name", "old-name"):
         target = fault.get("suggest") if kind == "unknown-name" \
             else fault.get("use")
+        if not old_file:
+            # The settings command takes a mistyped or old-spelled key out of
+            # the old file only; the new file's is the GM's to edit.
+            row.note = (f"the settings command cannot take {name} out of "
+                        f"{settings_file(scratch)}; "
+                        + (f"rename it to {target} there"
+                           if target else "remove it there")
+                        + " by hand.")
+            return row
         if not target:
             return row
-        there, held = _in_publish(publish, target)
+        there, held = _written_at(raw, target)
         if there or target in claimed:
             shown = _short(held) if there else "a value from another fix"
             row.note = (f"{target} is already set ({shown}) and {name} holds "
@@ -5131,7 +5146,7 @@ def _plan_fix(fault: dict[str, Any], publish: Any, claimed: set[str],
     # Try it on a copy of the file first: a value the setting will not take
     # is no fix at all. Only certain fixes stay on the copy, so a later
     # certain fix is tried the way `--fix` will meet it.
-    target_file = scratch / VAULT_CONFIG
+    target_file = scratch / settings_file(scratch)
     kept = target_file.read_bytes()
     before = settings(scratch).values if kind == "old-name" else None
     ok = False
@@ -5180,27 +5195,30 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
                               "kind": "invalid-yaml",
                               "message": reason})], False)
     rows: list[SettingsRow] = []
+    file_name = settings_file(vault)
     if own.inline:
         rows = [SettingsRow(f) for f in own.faults]
         rows.append(SettingsRow({
             "name": "publish", "level": "warn", "kind": "inline",
-            "message": f"publish: in {VAULT_CONFIG} is written on one line, "
+            "message": f"publish: in {file_name} is written on one line, "
                        "which the settings command cannot edit; write it "
                        "with one setting to a line."}))
     else:
         raw = settings_raw(vault)
-        publish = raw.get("publish") if isinstance(raw, dict) else None
-        source = vault / VAULT_CONFIG
+        source = vault / file_name
         text = source.read_text(encoding="utf-8") if source.is_file() else ""
         with tempfile.TemporaryDirectory(prefix="vc-settings-") as tmp:
             scratch = Path(tmp)
             (scratch / "_meta").mkdir()
-            (scratch / VAULT_CONFIG).write_text(
+            # Whichever file the vault is on, so the tool reads the copy the
+            # way it reads the real one.
+            copy_name = file_name if text else LEGACY_SETTINGS_FILE
+            (scratch / copy_name).write_text(
                 text or "---\ntype: meta\n---\n", encoding="utf-8")
             claimed: set[str] = set()
             try:
                 for f in own.faults:
-                    rows.append(_plan_fix(f, publish, claimed, scratch, text))
+                    rows.append(_plan_fix(f, raw, claimed, scratch, text))
             finally:
                 forget_settings(scratch)
     # Faults the site folder's own vault.config.json adds.
@@ -5236,9 +5254,9 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
     return out
 
 
-def _row_lines(r: SettingsRow) -> list[str]:
+def _row_lines(r: SettingsRow, file_name: str) -> list[str]:
     word = "STOP" if r.fault["level"] == "stop" else "WARN"
-    where = "vault.config.json" if r.site else VAULT_CONFIG
+    where = "vault.config.json" if r.site else file_name
     lines = [f"{word}\t{where}\t{r.fault['message']}"]
     if r.fix:
         lines.append(f"{'proposed' if r.kind == 'proposed' else 'fix'}: "
@@ -5280,7 +5298,7 @@ def check_settings(vault: Path, fix: bool, apply_names: list[str],
     applied: list[SettingsRow] = []
     skipped = ""
     if (fix or apply_names) and inline:
-        skipped = (f"Nothing was written: publish: in {VAULT_CONFIG} is "
+        skipped = (f"Nothing was written: publish: in {settings_file(vault)} is "
                    "written on one line, which the settings command cannot "
                    "edit. Write it with one setting to a line first.")
     elif fix or apply_names:
@@ -5325,7 +5343,7 @@ def check_settings(vault: Path, fix: bool, apply_names: list[str],
     if not rows:
         print("Settings: no faults")
     for r in rows:
-        for line in _row_lines(r):
+        for line in _row_lines(r, settings_file(vault)):
             print(line)
     return 0
 
@@ -5340,7 +5358,7 @@ def settings_fault_rows(vault: Path) -> list[str]:
     warns = len(faults) - stops
     counts = ", ".join(c for c in (f"{stops} stop" if stops else "",
                                    f"{warns} warn" if warns else "") if c)
-    return [f"{'ERROR' if stops else 'WARNING'}\t{VAULT_CONFIG}\t"
+    return [f"{'ERROR' if stops else 'WARNING'}\t{settings_file(vault)}\t"
             f"{len(faults)} settings fault{'s' if len(faults) != 1 else ''} "
             f"({counts}) — run vault_check.py \"{vault}\" settings"]
 
@@ -5496,7 +5514,7 @@ def main() -> int:
             # wrapup works without the tool; say the settings were not
             # checked rather than say nothing.
             why = str(e).removeprefix(SETTINGS_UNREAD)
-            faults = [f"INFO\t{VAULT_CONFIG}\tthe settings could not be "
+            faults = [f"INFO\t{settings_file(args.vault)}\tthe settings could not be "
                       f"checked ({why})"]
         if faults:
             emit("settings", faults)

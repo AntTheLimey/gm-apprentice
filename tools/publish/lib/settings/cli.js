@@ -29,8 +29,9 @@ const { planMove, applyMove } = require('./move');
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
-// Removed in Part B: the name the old vault file gave a setting, which the commands still take for
-// one release. An old name is answered as the setting it became, with a line naming the new one.
+// The name the old vault file gave a setting. The commands take it for as long as legacy.js reads the
+// old file (two releases after 1.10.54). An old name is answered as the setting it became, with a line
+// naming the new one.
 const oldOf = (e) => legacyNameOf(e);
 const oldNamesOf = (e) => (e.legacyOnly ? [e.name] : (e.was || []).filter((w) => w.in === 'vault').map((w) => w.name));
 const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) => inScope(n, scope));
@@ -102,20 +103,14 @@ function get(options, names) {
   const read = readSettings({ vaultPath, siteConfig });
   const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves;
   const now = {};
-  // Removed in Part B: the old shape main's vault scripts read, keyed by the old file's names.
-  const settings = {};
-  for (const e of shown) {
-    const one = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
-    now[e.name] = one;
-    if (oldOf(e)) settings[oldOf(e)] = one;
-  }
+  for (const e of shown) now[e.name] = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
   const asked = (f) => !names.length || names.some((name) => inScope(f.name, name) || inScope(f.use || '', name) || inScope(f.suggest || '', name) || inScope(f.setting || '', name));
   const faults = sortedFaults(read.faults.filter(asked));
   const result = {
     file: read.file,
-    settings,
+    values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])),
+    origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])),
     faults: faults.map(faultJson),
-    byNewName: { values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])), origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])) },
   };
   const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));
@@ -190,10 +185,8 @@ function list() {
     const r = row(e);
     return { name: r.name, takes: r.takes, default: r.default, was: wasLine(e) };
   });
-  // Removed in Part B: the same rows under the old file's names, which the vault scripts still ask by.
-  const olds = LEAVES().filter(oldOf).map((e) => { const r = row(e); return { name: oldOf(e), takes: r.takes, default: r.default, now: e.name }; });
   return {
-    result: { names: [...names, ...olds] },
+    result: { names },
     lines: names.flatMap((n) => [`${n.name}: ${n.takes} (default ${plainValue(n.default)})`, ...(n.was ? [`  ${n.was}`] : [])]),
   };
 }

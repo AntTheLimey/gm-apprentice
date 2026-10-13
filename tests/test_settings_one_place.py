@@ -22,7 +22,7 @@ def test_no_script_restates_the_built_in_hidden_sections():
 # The generated parts of a page sit between these markers; the rest is hand-written.
 GENERATED = re.compile(r"<!-- settings:(\S+) -->.*?<!-- /settings:\1 -->", re.S)
 ROOT = Path(__file__).resolve().parents[1]
-HIDING_LISTS = ("publish.exclude_dirs", "publish.exclude_sections", "publish.exclude_fields")
+HIDING_LISTS = ("player_site.hide.folders", "player_site.hide.sections", "player_site.hide.fields")
 
 
 def _hand_written_pages():

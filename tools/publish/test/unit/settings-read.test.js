@@ -131,7 +131,7 @@ test('an inline publish map is noticed', () => {
   fs.mkdirSync(path.join(dir, '_meta'));
   fs.writeFileSync(path.join(dir, '_meta', 'vault-config.md'), '---\npublish: {mode: full}\n---\n');
   const r = readSettings({ vaultPath: dir });
-  assert.ok(r.file.exists && r.file.hasPublish && r.file.inline && !r.file.leftover);
+  assert.ok(r.file.exists && r.file.hasSiteBlock && r.file.inline && !r.file.leftover);
   assert.equal(r.values.player_site.hide.mode, 'full');
 });
 

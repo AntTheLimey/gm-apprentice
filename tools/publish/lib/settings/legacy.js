@@ -236,7 +236,7 @@ function readLegacy({ vaultPath, siteConfig }, core) {
   const site = siteConfig || {};
   const faults = [];
   const fault = makeFault;
-  const file = { path: at(vaultPath, OLD_FILE), exists: false, hasPublish: false, inline: false, leftover: false };
+  const file = { path: at(vaultPath, OLD_FILE), exists: false, hasSiteBlock: false, inline: false, leftover: false };
   let data = {};
   if (fs.existsSync(file.path)) {
     file.exists = true;
@@ -251,7 +251,7 @@ function readLegacy({ vaultPath, siteConfig }, core) {
     file.inline = new RegExp(`^${PUBLISH}:[ \\t]*\\{`, 'm').test(text);
   }
   const publish = isMap(data[PUBLISH]) ? data[PUBLISH] : {};
-  file.hasPublish = isMap(data[PUBLISH]);
+  file.hasSiteBlock = isMap(data[PUBLISH]);
   if (data[PUBLISH] && !isMap(data[PUBLISH])) {
     faults.push(fault({ name: PUBLISH, setting: null, kind: 'not-allowed', level: 'warn', value: data[PUBLISH], entry: MAP_ENTRY }));
   }

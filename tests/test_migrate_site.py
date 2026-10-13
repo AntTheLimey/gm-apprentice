@@ -207,7 +207,7 @@ class RepinTests(unittest.TestCase):
         vault = make_vault(self, site=False, extra="  site: true\n")
         with self.assertRaises(StepFailed) as caught:
             self.find(vault, Pin())
-        self.assertIn("publish.site is on but publish.site_dir names no "
+        self.assertIn("player_site.publish is on but player_site.folder names no "
                       "folder", str(caught.exception))
 
     def test_a_site_dir_with_no_site_file_stops(self):
@@ -512,7 +512,7 @@ class PublishSiteTests(unittest.TestCase):
         vault = make_vault(self)
         (item,) = ms.find_publish_site(vault)
         self.assertEqual((item.id, item.group), ("publish-site", WILL))
-        self.assertEqual(item.apply(None), ["wrote publish.site: true"])
+        self.assertEqual(item.apply(None), ["wrote player_site.publish: true"])
         self.assertIn("\n  site: true\n", self.text(vault))
         self.assertEqual(ms.find_publish_site(vault), [])
 
@@ -520,7 +520,7 @@ class PublishSiteTests(unittest.TestCase):
         vault = make_vault(self, site=False)
         (item,) = ms.find_publish_site(vault)
         self.assertIn("no site folder is named; if this vault has a site, "
-                      "set publish.site_dir to its folder instead",
+                      "set player_site.folder to its folder instead",
                       item.lines[0])
         item.apply(None)
         self.assertIn("\n  site: false\n", self.text(vault))
@@ -528,7 +528,7 @@ class PublishSiteTests(unittest.TestCase):
     def test_a_site_dir_row_has_no_caveat(self):
         (item,) = ms.find_publish_site(make_vault(self))
         self.assertEqual(
-            item.lines, ["write publish.site: true in _meta/vault-config.md"])
+            item.lines, ["write player_site.publish: true in _meta/vault-config.md"])
 
     def test_a_switch_already_written_is_left(self):
         vault = make_vault(self, extra="  site: false\n")
@@ -541,13 +541,13 @@ class PublishSiteTests(unittest.TestCase):
         self.assertEqual(self.text(vault), before)
 
     def test_a_publish_line_with_nothing_under_it_still_gets_the_switch(self):
-        # `settings().has_publish` is false for it; the line is there, and
+        # `settings().has_site_block` is false for it; the line is there, and
         # the switch is written under it, as it always was.
         vault = make_vault(self, publish=False)
         (vault / "_meta" / "vault-config.md").write_text(
             '---\ngm_apprentice_version: "1.10.12"\npublish:\n---\n',
             encoding="utf-8")
-        self.assertFalse(vc.settings(vault).has_publish)
+        self.assertFalse(vc.settings(vault).has_site_block)
         (item,) = ms.find_publish_site(vault)
         item.apply(None)
         self.assertIn("publish:\n  site: false\n", self.text(vault))
@@ -677,7 +677,7 @@ class LeakTests(unittest.TestCase):
         self.assertIn("cannot ask", str(caught.exception))
 
     def test_no_site_is_nothing(self):
-        rows = ["INFO\t(vault)\tgm-leak has no site to check: publish.site is not on"]
+        rows = ["INFO\t(vault)\tgm-leak has no site to check: player_site.publish is not on"]
         with mock.patch.object(ms, "check_gm_leak", return_value=rows):
             self.assertEqual(ms.find_gm_leak(make_vault(self, site=False)), [])
 
@@ -980,8 +980,8 @@ class ThemeChoiceTests(unittest.TestCase):
                          ("default-mode", "dark, light or leave"))
         self.assertTrue(item.holds_stamp)
         self.assertEqual(item.apply("dark"),
-                         ["wrote publish.theme.default_mode: dark"])
-        self.assertEqual(self.written(vault).get("publish.theme.default_mode"),
+                         ["wrote player_site.theme.default_mode: dark"])
+        self.assertEqual(self.written(vault).get("player_site.theme.default_mode"),
                          "dark")
         self.assertEqual(item.apply("leave"),
                          ["left the default palette to the reader's "
@@ -1015,7 +1015,7 @@ class ThemeChoiceTests(unittest.TestCase):
         self.assertEqual(item.id, "fonts-self-host")
         self.assertIn("Cinzel, Lora", item.lines[0])
         item.apply(None)
-        self.assertEqual(self.written(vault).get("publish.theme.fonts.source"),
+        self.assertEqual(self.written(vault).get("player_site.theme.fonts.source"),
                          "self-host")
         self.assertEqual(ms.find_fonts(vault), [])
 
@@ -1068,10 +1068,9 @@ class ExcludeListTests(unittest.TestCase):
         self.assertEqual((item.id, item.group), ("exclude-lists", WILL))
         item.apply(None)
         s = vc.settings(vault)
-        for name in ("exclude_sections", "exclude_fields"):
-            self.assertEqual(s.origins[f"publish.{name}"], "file")
-            self.assertEqual(s.get(f"publish.{name}"),
-                             ms.settings_default(f"publish.{name}"))
+        for name in ("player_site.hide.sections", "player_site.hide.fields"):
+            self.assertEqual(s.origins[name], "file")
+            self.assertEqual(s.get(name), ms.settings_default(name))
         # Written once: asking again offers nothing.
         self.assertEqual(ms.find_exclude_lists(vault), [])
 
@@ -1085,7 +1084,7 @@ class ExcludeListTests(unittest.TestCase):
             item.apply(None)
         self.assertEqual(len(writes), 1)
         self.assertEqual([n for n, _ in writes[0]],
-                         ["publish.exclude_sections", "publish.exclude_fields"])
+                         ["player_site.hide.sections", "player_site.hide.fields"])
 
     def test_a_list_config_to_vault_writes_this_pass_is_not_offered_twice(self):
         both = ms.StepPlan(True, [
@@ -1097,16 +1096,16 @@ class ExcludeListTests(unittest.TestCase):
         with mock.patch.object(ms, "describe_config_to_vault", return_value=one):
             (item,) = ms.find_exclude_lists(make_vault(self))
         self.assertEqual(len(item.lines), 1)
-        self.assertIn("publish.exclude_sections", item.lines[0])
+        self.assertIn("player_site.hide.sections", item.lines[0])
 
     def test_only_the_missing_list_is_written(self):
         vault = make_vault(self, extra="  exclude_sections: [Mine]\n")
         (item,) = ms.find_exclude_lists(vault)
         item.apply(None)
         s = vc.settings(vault)
-        self.assertEqual(s.get("publish.exclude_sections"), ["Mine"])
-        self.assertEqual(s.get("publish.exclude_fields"),
-                         ms.settings_default("publish.exclude_fields"))
+        self.assertEqual(s.get("player_site.hide.sections"), ["Mine"])
+        self.assertEqual(s.get("player_site.hide.fields"),
+                         ms.settings_default("player_site.hide.fields"))
 
     def test_a_vault_with_its_own_lists_is_left_alone(self):
         vault = make_vault(self, extra="  exclude_sections: [Mine]\n"
@@ -1121,14 +1120,14 @@ class ExcludeListTests(unittest.TestCase):
             json.dumps({"excludeSections": ["Old"]}), encoding="utf-8")
         (item,) = ms.find_exclude_lists(vault)
         self.assertEqual(len(item.lines), 1)
-        self.assertIn("publish.exclude_fields", item.lines[0])
+        self.assertIn("player_site.hide.fields", item.lines[0])
 
     def test_a_list_the_tool_could_not_read_is_replaced(self):
         vault = make_vault(self, extra="  exclude_sections: Mine\n"
                                        "  exclude_fields: [mine]\n")
         (item,) = ms.find_exclude_lists(vault)
         self.assertEqual(len(item.lines), 1)
-        self.assertIn("publish.exclude_sections", item.lines[0])
+        self.assertIn("player_site.hide.sections", item.lines[0])
 
     def test_no_site_offers_nothing(self):
         self.assertEqual(ms.find_exclude_lists(make_vault(self, site=False)), [])
@@ -1156,13 +1155,13 @@ class VaultSettingEndToEndTests(unittest.TestCase):
             encoding="utf-8")
         site_fixture.give_site(vault, lambda p: None)
         self.assertFalse(vc.written_in_vault_file(
-            vc.settings(vault), "publish.theme.default_mode"))
-        done = vc.settings_set(vault, [("publish.theme.default_mode", "dark")])
-        self.assertEqual(done, ["publish.theme.default_mode"])
+            vc.settings(vault), "player_site.theme.default_mode"))
+        done = vc.settings_set(vault, [("player_site.theme.default_mode", "dark")])
+        self.assertEqual(done, ["player_site.theme.default_mode"])
         after = vc.settings(vault)
         self.assertTrue(vc.written_in_vault_file(
-            after, "publish.theme.default_mode"))
-        self.assertEqual(after.get("publish.theme.default_mode"), "dark")
+            after, "player_site.theme.default_mode"))
+        self.assertEqual(after.get("player_site.theme.default_mode"), "dark")
 
     def vault_with(self, publish_lines):
         vault = tmp(self, "vs-excl-vault-")

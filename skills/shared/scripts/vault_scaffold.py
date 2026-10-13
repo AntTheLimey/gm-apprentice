@@ -34,9 +34,10 @@ import index_build
 import migrate_vault as mv
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
-from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
-                      forget_settings, parse_version, plugin_version,
-                      settings, settings_default, vault_files)
+from vaultlib import (SettingsUnavailable, StateUnreadable, entity_type,
+                      extract_frontmatter, forget_settings, parse_version,
+                      plugin_version, read_stamp, settings, settings_default,
+                      stamp_file, vault_files, vault_layout)
 
 SHARED = Path(__file__).resolve().parent.parent
 SEEDS = SHARED / "scaffold"
@@ -218,14 +219,14 @@ def _types_in(vault: Path) -> tuple[set[str], bool]:
 def _attachments(vault: Path) -> str | None:
     """The vault's attachments folder, or None when the vault names one
     outside itself: this script creates nothing out there."""
-    if (vault / CONFIG).is_file():
-        named = settings(vault).get("publish.attachments_dir")
+    if vault_layout(vault) != "none":
+        named = settings(vault).get("vault.attachments")
     else:
-        named = settings_default("publish.attachments_dir")
+        named = settings_default("vault.attachments")
     # A blank or non-text value is not a folder: an empty name would put the
     # folders at the disk's root.
     if not isinstance(named, str) or not named.strip():
-        named = settings_default("publish.attachments_dir")
+        named = settings_default("vault.attachments")
     named = named.strip().replace("\\", "/")
     if (named.startswith("/") or re.match(r"[A-Za-z]:", named)
             or ".." in named.split("/")):
@@ -292,7 +293,10 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     # The index is rendered when it is written, after the files above exist.
     file("_meta/index.md",
          lambda: index_build.render(vault, today=day, previous=None))
-    file(CONFIG, lambda: config_text(system, campaign, version))
+    # Not when the vault is on either settings file: a moved vault must not
+    # get the old one back beside the new.
+    file(CONFIG, lambda: config_text(system, campaign, version),
+         present=vault_layout(vault) != "none")
     return out
 
 
@@ -374,7 +378,13 @@ def resolve_system(vault: Path, given: str | None,
     if no_system:
         return None
     ids = ", ".join(SYSTEMS)
-    recorded = mv.vault_system(vault) if vault.is_dir() else None
+    # A vault with no settings file yet (a midwife's, say) can only say its
+    # system in its notes; one that has settings says it there.
+    recorded = None
+    if vault.is_dir():
+        recorded = (mv.guess_system_for_move(vault)
+                    if vault_layout(vault) == "none"
+                    else mv.vault_system(vault))
     if given is not None:
         found = mv._system_id(given)
         if found not in SYSTEMS:
@@ -386,7 +396,7 @@ def resolve_system(vault: Path, given: str | None,
         return found
     if recorded in SYSTEMS:
         return recorded
-    if not (vault / CONFIG).is_file():
+    if vault_layout(vault) == "none":
         if recorded is None:
             raise ScaffoldError(
                 f"the game system is not recorded: ask the GM once, then "
@@ -400,19 +410,19 @@ def resolve_system(vault: Path, given: str | None,
 
 
 def _refuse_unusable_version(vault: Path, plugin: str) -> None:
-    """A vault whose config file carries no version, or a later one than
-    the plugin's, is refused. A vault with no config file is a new one."""
-    try:
-        fm = extract_frontmatter((vault / CONFIG).read_text(
-            encoding="utf-8-sig", errors="replace")) or {}
-    except OSError:
+    """A vault whose settings carry no version, or a later one than the
+    plugin's, is refused. A vault with no settings file is a new one."""
+    if vault_layout(vault) == "none":
         return
-    current = fm.get("gm_apprentice_version")
-    if (not current or isinstance(current, list)
-            or not parse_version(str(current))):
+    try:
+        current = read_stamp(vault)
+    except StateUnreadable as e:
+        raise ScaffoldError(str(e)) from e
+    if not current or not parse_version(current):
         raise ScaffoldError(
-            f"{CONFIG} has no gm_apprentice_version, so this script cannot "
-            f"tell what set the vault up; it never rewrites that file")
+            f"{stamp_file(vault)} has no gm_apprentice_version, so this "
+            f"script cannot tell what set the vault up; it never rewrites "
+            f"that file")
     if parse_version(str(current)) > parse_version(plugin):
         raise ScaffoldError(f"vault {current} is ahead of plugin {plugin}: "
                             f"update the plugin before touching this vault")
