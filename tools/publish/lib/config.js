@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
+const { canonicalNfc } = require('./unicode');
 const { readSettings, formatFault, makeFault, stops, entry, movedKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
@@ -173,6 +174,22 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
 
   // The vault's build steps, for the commands that run them. Not listed, like `site`.
   Object.defineProperty(merged, 'steps', { value: { before: p.before_build, after: p.after_build }, enumerable: false });
+
+  // The GM's extra menu entries. A second entry with the same label under the same group is left out, with a
+  // warning. Not listed, like `steps`: a site that sets none builds as it did.
+  const menuName = nameIn(vaultPath, 'player_site.menu_extra');
+  const menuSeen = new Set();
+  const menuExtra = [];
+  for (const item of p.menu_extra) {
+    const key = `${canonicalNfc(item.label.trim())}\n${(item.group || '').trim().toLowerCase()}`;
+    if (menuSeen.has(key)) {
+      faults.push(makeFault({ name: menuName, setting: 'player_site.menu_extra', kind: 'dropped', level: 'warn', message: `${menuName} lists "${item.label}" twice${item.group ? ` under ${item.group}` : ''}; the second is left out` }));
+      continue;
+    }
+    menuSeen.add(key);
+    menuExtra.push({ label: item.label.trim(), link: item.link.trim(), ...(item.group ? { group: item.group.trim() } : {}) });
+  }
+  Object.defineProperty(merged, 'menu_extra', { value: menuExtra, enumerable: false });
 
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;

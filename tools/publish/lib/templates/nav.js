@@ -44,7 +44,7 @@ function generateNavGroups(pages, options = {}) {
   if (options.timelineHref) overrides.events = options.timelineHref;
   if (pcRoster) overrides['characters/pcs'] = pcRoster.outputPath;
 
-  return NAV_GROUPS
+  const built = NAV_GROUPS
     .map(group => {
       const links = group.dirs
         .filter(dir => {
@@ -57,10 +57,33 @@ function generateNavGroups(pages, options = {}) {
           label: group.labels[dir] || DIR_LABELS[dir] || dir,
           href: overrides[dir] || (dir + '/index.html'),
         }));
-      if (links.length === 0) return null;
       return { name: group.name, links };
-    })
-    .filter(Boolean);
+    });
+
+  // The GM's own entries (`player_site.menu_extra`, already resolved by the build) join their group after
+  // its own links. A group of the menu with no page of its own is shown when an entry names it; a name that is
+  // none of the four makes a group after them. An entry with no group is not a group's: renderTopNav stands it alone.
+  const groups = built.slice();
+  for (const item of (options.extra || []).filter(x => x.group)) {
+    const key = item.group.trim().toLowerCase();
+    const at = NAV_GROUPS.findIndex(g => g.name.toLowerCase() === key);
+    let target = at >= 0 ? groups[at] : groups.slice(NAV_GROUPS.length).find(g => g.name.toLowerCase() === key);
+    if (!target) {
+      target = { name: at >= 0 ? NAV_GROUPS[at].name : item.group.trim(), links: [] };
+      if (at >= 0) groups[at] = target; else groups.push(target);
+    }
+    target.links.push({ label: item.label, href: item.href, external: !!item.external });
+  }
+  return groups.filter(g => g && g.links.length > 0);
+}
+
+// One link of the menu: a note's or section's page is made relative to the page that shows it; an outside
+// address is left as written and does not hand the new tab to the page that opened it.
+function navLink(link, currentDir, before, cls = '') {
+  const label = escapeHtml(link.label);
+  const attr = cls ? ` class="${cls}"` : '';
+  if (link.external) return `${before}<a${attr} href="${escapeHtml(link.href)}" rel="noopener">${label}</a>`;
+  return `${before}<a${attr} href="${encodeHref(relativePath(currentDir, link.href))}">${label}</a>`;
 }
 
 function renderTopNav(pages, currentOutputPath, config, options = {}) {
@@ -77,10 +100,7 @@ function renderTopNav(pages, currentOutputPath, config, options = {}) {
     const links = options.hasStory && group.name === 'Story'
       ? [{ label: 'Story so far', href: 'story.html' }, ...group.links]
       : group.links;
-    const linksHtml = links.map(link => {
-      const href = encodeHref(relativePath(currentDir, link.href));
-      return `        <a href="${href}">${escapeHtml(link.label)}</a>`;
-    }).join('\n');
+    const linksHtml = links.map(link => navLink(link, currentDir, '        ')).join('\n');
 
     return `      <div class="nav-group">
         <button class="nav-group-toggle">${escapeHtml(group.name)}</button>
@@ -94,17 +114,15 @@ ${linksHtml}
     ? `      <div class="nav-group"><a class="nav-group-toggle" href="${storyHref}">Story</a></div>`
     : '';
 
-  const groupsHtml = standaloneStory
-    ? [standaloneDesktop, desktopGroupsHtml].filter(Boolean).join('\n')
-    : desktopGroupsHtml;
+  // The GM's entries that name no group stand alone after the groups, the way the Story link does.
+  const alone = (options.extra || []).filter(x => !x.group);
+  const aloneDesktop = alone.map(link => `${navLink(link, currentDir, '      <div class="nav-group">', 'nav-group-toggle')}</div>`);
+  const groupsHtml = [standaloneStory ? standaloneDesktop : '', desktopGroupsHtml, ...aloneDesktop].filter(Boolean).join('\n');
 
   const rootHref = encodeHref(relativePath(currentDir, 'index.html')) || './index.html';
 
   const mobileGroupsHtml = groups.map(group => {
-    const links = group.links.map(link => {
-      const href = encodeHref(relativePath(currentDir, link.href));
-      return `    <li><a href="${href}">${escapeHtml(link.label)}</a></li>`;
-    }).join('\n');
+    const links = group.links.map(link => `${navLink(link, currentDir, '    <li>')}</li>`).join('\n');
     // When a Story section exists, the Story heading links to the landing (desktop reaches
     // it from the menu's first entry; a mobile heading opens nothing, so it can be the link).
     const heading = options.hasStory && group.name === 'Story'
@@ -119,9 +137,10 @@ ${linksHtml}
     ? `  <ul>\n    <li><a href="${storyHref}">Story</a></li>\n  </ul>`
     : '';
 
-  const mobileLinksHtml = standaloneStory
-    ? [standaloneMobile, mobileGroupsHtml].filter(Boolean).join('\n')
-    : mobileGroupsHtml;
+  const aloneMobile = alone.length
+    ? `  <ul>\n${alone.map(link => `${navLink(link, currentDir, '    <li>')}</li>`).join('\n')}\n  </ul>`
+    : '';
+  const mobileLinksHtml = [standaloneStory ? standaloneMobile : '', mobileGroupsHtml, aloneMobile].filter(Boolean).join('\n');
 
   return `<header class="top-nav">
   <a href="${rootHref}" class="nav-brand">${escapeHtml(config.siteTitle)}</a>

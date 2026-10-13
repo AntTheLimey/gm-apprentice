@@ -99,7 +99,8 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   site      the site folder's own settings (url, host, output, cloudflare_project, keep), for code that has only the publishConfig (not enumerable)
 // `setting_year` is a setting, written beside `publish:`; it is checked below as a top-level name.
 //   steps     the vault's build steps, { before, after } (not enumerable; only `build` and `deploy` run them)
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps'];
+//   menu_extra  the GM's extra menu entries with a repeat left out (not enumerable; build.js reads each link)
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)

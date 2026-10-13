@@ -16,7 +16,7 @@ const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, twiceWarning } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
-const { linkText } = require('./wikilink');
+const { linkText, parseWikilink } = require('./wikilink');
 const { nameIn, fileLabel } = require('./settings');
 const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -77,6 +77,26 @@ function quietly(fn) {
   const saved = { log: console.log, warn: console.warn, error: console.error };
   console.log = console.warn = console.error = () => {};
   try { return fn(); } finally { Object.assign(console, saved); }
+}
+
+// Reads a link the GM wrote in a setting (a menu entry's `link`, a banner's `link`), in this order:
+//   text starting http:// or https://     an address outside the site, as written
+//   the name of a note that has a page     that page (names are matched as the link map matches them)
+//   the name of a note with no page        dropped: { kind: 'none' }; the caller warns, and prints nothing
+//   anything else                          an address on the site, as written
+// `unpublished` (optional) is the set of names, lower-cased, of the notes the site makes no page for.
+// Returns { kind: 'outside' | 'page' | 'site' | 'none', href }.
+function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], unpublished = new Set() } = {}) {
+  const text = String(link == null ? '' : link).trim();
+  if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
+  const wiki = /^\[\[([\s\S]+)\]\]$/.exec(text);
+  const name = canonicalNfc(wiki ? parseWikilink(wiki[1]).name.trim() : text);
+  if (name) {
+    const found = linkMap[name] || (pages.find(p => canonicalNfc(p.title) === name) || {}).outputPath;
+    if (found) return { kind: 'page', href: found };
+    if (unpublished.has(name.toLowerCase())) return { kind: 'none', href: null };
+  }
+  return { kind: 'site', href: text.replace(/^\.\//, '') };
 }
 
 // Build the site. With `options.inMemory` every page is rendered exactly as it would be
@@ -546,6 +566,10 @@ function buildSite(options) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
+  // Texts the GM wrote in settings that a public page prints but that are no note's body (a menu label).
+  // Each is { where, text }; the note audit reads every one, once, as it reads a page.
+  const gmTexts = [];
+
   // A GM alias must never reach the site (#212): rewrite every one to the
   // title of the note that owns it, in every scanned page's body and
   // frontmatter, before anything renders or derives from them. Owners come
@@ -939,7 +963,26 @@ function buildSite(options) {
 
   write404();
 
-  const navFor = generateNav(pages, { hasStory, timelineHref });
+  // The GM's extra menu entries (player_site.menu_extra), each link read by resolveSiteLink. An entry that
+  // names a note with no page is left out, with a warning, and prints nothing. The labels of the rest are
+  // texts the note audit reads.
+  const unpublished = new Set();
+  for (const note of allNotes) {
+    for (const name of [path.posix.basename(String(note.vaultPath).replace(/\\/g, '/')), note.displayTitle]) {
+      if (name) unpublished.add(canonicalNfc(name).toLowerCase());
+    }
+  }
+  const menuExtra = [];
+  for (const item of publishConfig.menu_extra || []) {
+    const read = resolveSiteLink(item.link, { linkMap, pages, unpublished });
+    if (read.kind === 'none') {
+      console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", a note the site makes no page of — it is left out of the menu`);
+      continue;
+    }
+    menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
+    gmTexts.push({ where: 'the menu', text: item.label });
+  }
+  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra });
 
   // Render each page
   const usedImages = new Set();
@@ -1183,6 +1226,10 @@ function buildSite(options) {
       return !(row && Array.isArray(source.relationships) && isGmOnlyEdge(source.relationships[Number(row[1])]));
     },
   });
+  // The GM's own texts that are no page's body, read for a secret name as a listing page is (it is on every page).
+  for (const { where, text } of gmTexts) {
+    audit.read(null, `<main><p>${escapeHtml(text)}</p></main>`, 'index.html', where);
+  }
   const shown = { page: null, story: null };
   const markedOf = new Map();   // page -> its links to no-page notes, marked (null when it has none)
   const toRender = new Map();   // the pages that may print one of those names: rendered a second time
@@ -1744,7 +1791,7 @@ function buildSite(options) {
   return { noteFaults, shown: null, faults: publishConfig.faults };
 }
 
-module.exports = { build };
+module.exports = { build, resolveSiteLink };
 
 // Allow running directly: node lib/build.js
 // Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.

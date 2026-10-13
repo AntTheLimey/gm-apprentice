@@ -328,6 +328,28 @@ function changeList(text, doc, keys, verb, entries, same, base, ctx) {
     return found;
   })();
   const node = pair && pair.value;
+  // A list of maps (a listOfMaps setting): its items are maps, compared with `same` as whole entries.
+  if (pair && node && isYSeq(node) && node.items.length && node.items.every(isYMap)) {
+    const held = node.items.map((i) => i.toJS(doc));
+    if (verb === 'add') {
+      const fresh = entries.filter((x, i) => !held.some((h) => same(h, x)) && entries.findIndex((y) => same(y, x)) === i);
+      if (!fresh.length) return null;
+      const list = [...held, ...fresh];
+      if (node.flow) {
+        const last = node.items[node.items.length - 1];
+        return { edits: [{ from: last.range[1], to: last.range[1], text: fresh.map((x) => `, ${inline(x, null, ctx, true)}`).join('') }], list };
+      }
+      const col = columnOf(text, dashOffset(node, 0));
+      const lines = fresh.flatMap((x) => documentOf([x], ctx).toString(toStringOptions(ctx)).replace(/\n$/, '').split('\n').map((l) => ' '.repeat(col) + l));
+      return { edits: [addLines(text, endOf(node, text), lines, eol)], list };
+    }
+    const gone = node.items.filter((i, at) => entries.some((x) => same(held[at], x)));
+    if (!gone.length) return null;
+    const list = held.filter((h, at) => !gone.includes(node.items[at]));
+    if (!list.length) return { edits: replaceValue(text, pair, [], ctx), list: [] };
+    if (node.flow) return { edits: [{ from: node.range[0], to: endOf(node, text), text: inline(list, node, ctx, true) }], list };
+    return { edits: gone.map((i) => dropLines(text, i.range[0], endOf(i, text), eol)), list };
+  }
   if (pair && node && isYSeq(node) && node.items.length) {
     const held = node.items.map((i) => (isScalar(i) ? String(i.value) : null));
     if (verb === 'add') {
@@ -510,6 +532,15 @@ function prepare(changes, layout, { allowState = false } = {}) {
       // Given an older spelling, only that spelling goes; given the setting's name, every spelling the old file holds goes.
       steps.push({ ...base, kind: 'del', ...(change.spelling ? { keys: change.spelling.split('.'), older: [] } : {}) });
     } else if (change.op === 'add' || change.op === 'remove') {
+      if (e.type === 'listOfMaps') {
+        const entries = change.entries || [];
+        if (!entries.length) { refusals.push(`${name} needs at least one entry.`); continue; }
+        // To add, a whole entry that reads; to remove, the field the entries are told apart by (`same`).
+        const ok = change.op === 'add' ? TYPES.listOfMaps.read(entries, e).ok : entries.every((x) => x && typeof x[e.same] === 'string' && x[e.same].trim() !== '');
+        if (!ok) { refusals.push(change.op === 'add' ? `${name} takes ${TYPES.listOfMaps.takes(e)}.` : `${name} entries are named by their ${e.same}.`); continue; }
+        steps.push({ ...base, kind: 'list', verb: change.op, entries, same: change.same || ((a, b) => a[e.same] === b[e.same]), base: change.base, entry: e });
+        continue;
+      }
       if (!(e.type === 'list' || e.type === 'switchOrList')) { refusals.push(`${name} is not a list, so entries cannot be ${change.op === 'add' ? 'added to' : 'removed from'} it.`); continue; }
       const entries = (change.entries || []).map((x) => (typeof x === 'string' ? x : String(x)));
       if (!entries.length) { refusals.push(`${name} needs at least one entry.`); continue; }

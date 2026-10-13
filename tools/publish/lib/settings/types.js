@@ -69,6 +69,33 @@ const TYPES = {
     },
     takes: (entry) => `on, off, or a list of ${entry.of || 'names'}`,
   },
+  // A list whose every item is a small map: the entry's `fields` names the keys (`required: true` for one that
+  // must be there and not blank). Every value is plain text or a number, read as text; a blank optional one is left out.
+  listOfMaps: {
+    read(raw, entry) {
+      if (!Array.isArray(raw)) return bad;
+      const fields = entry.fields || {};
+      const items = [];
+      for (const item of raw) {
+        if (!isMap(item)) return bad;
+        const out = {};
+        for (const [k, v] of Object.entries(item)) {
+          if (!Object.prototype.hasOwnProperty.call(fields, k)) return bad;
+          if (typeof v !== 'string' && typeof v !== 'number') return bad;
+          if (String(v).trim() !== '') out[k] = String(v);
+        }
+        for (const [k, f] of Object.entries(fields)) if (f.required && out[k] === undefined) return bad;
+        items.push(out);
+      }
+      return ok(items);
+    },
+    takes(entry) {
+      const names = Object.keys(entry.fields || {});
+      const need = names.filter((k) => entry.fields[k].required).map((k) => `\`${k}\``);
+      const may = names.filter((k) => !entry.fields[k].required).map((k) => `\`${k}\``);
+      return `a list of entries, each with ${need.join(', ')}${may.length ? `, and optionally ${may.join(', ')}` : ''}`;
+    },
+  },
   map: {
     read: (raw) => (isMap(raw) ? ok(raw) : bad),
     takes: (entry) => entry.shape || 'a map',

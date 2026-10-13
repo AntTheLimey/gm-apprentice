@@ -15,7 +15,8 @@
 // keepOnFault (an unreadable value is kept as written), keys (the only keys a map may hold),
 // onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
 // value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
-// 'heading', 'folder', 'callout' or 'name'; absent means exact text), siteFallback (also a key of the site
+// 'heading', 'folder', 'callout' or 'name'; for a `listOfMaps`, the field two entries are told apart by; absent means exact text),
+// fields (a `listOfMaps` entry's keys: { key: { required?: true } }, each text), siteFallback (also a key of the site
 // folder's vault.config.json that is read while the vault sets none), stepsFrom (the site's package.json script a build-steps list was; the move carries it), check ('output' or 'keep': a rule on the value
 // beyond its type, folders.js) and stopOnFault (an unreadable value stops the build, as a hiding setting does).
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
@@ -137,6 +138,11 @@ const REGISTRY = [
     name: 'player_site.after_build', type: 'list', of: 'commands', default: [], stepsFrom: 'postbuild', group: 'site',
     does: 'Commands the publish tool runs, in order, in the site folder, after every page is written (image tidying, extra pages). A command that fails stops the build and nothing is published',
     left_out: 'None',
+  },
+  {
+    name: 'player_site.menu_extra', type: 'listOfMaps', fields: { label: { required: true }, link: { required: true }, group: {} }, same: 'label', default: [], group: 'site',
+    does: "Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning",
+    left_out: 'No extra entries',
   },
 
   // What gets published

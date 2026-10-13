@@ -1,0 +1,220 @@
+'use strict';
+// player_site.menu_extra: extra entries in the site's menu, read link by link (resolveSiteLink), shown in the
+// desktop menu and the phone menu, and read by the note audit like any text the site prints.
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const { build, resolveSiteLink } = require('../lib/build');
+const { generateNav } = require('../lib/templates/nav');
+const { writeNewConfig } = require('./helpers/settings-files');
+
+const npc = (extra = '') => `---\ntype: npc\n${extra}---\n\nA person.\n`;
+const place = '---\ntype: location\n---\n\nA place.\n';
+
+// A small vault on the new settings file, built; `menu` is the menu_extra setting. Returns readers and what was
+// printed as warnings and found by the note audit.
+function site(menu, { files = {}, settings = {} } = {}) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'menu-extra-'));
+  const vault = path.join(root, 'vault');
+  const all = {
+    'Characters/Mara_Quill.md': npc(),
+    'Locations/Harbour.md': place,
+    'Hidden/Lord_Zorn.md': npc('publish: false\nwithheld: true\n'),
+    'Hidden/Old_Tam.md': npc('publish: false\n'),
+    ...files,
+  };
+  for (const [rel, text] of Object.entries(all)) {
+    fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+    fs.writeFileSync(path.join(vault, rel), text);
+  }
+  writeNewConfig(vault, {
+    version: 1,
+    player_site: {
+      hide: { mode: 'full' },
+      folder_map: { Characters: 'characters', Locations: 'locations', Hidden: 'hidden' },
+      ...(menu === undefined ? {} : { menu_extra: menu }),
+      ...settings,
+    },
+  });
+  const configPath = path.join(root, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: './vault' }));
+  const warnings = [];
+  let findings = null;
+  const saved = { log: console.log, warn: console.warn, error: console.error };
+  console.log = () => {};
+  console.warn = (...a) => { warnings.push(a.join(' ')); };
+  console.error = () => {};
+  try { build({ configPath, onNoteFaults: (f) => { findings = f; } }); } finally { Object.assign(console, saved); }
+  const docs = path.join(root, 'docs');
+  return {
+    root,
+    warnings,
+    findings,
+    read: (...p) => fs.readFileSync(path.join(docs, ...p), 'utf8').replace(/\r\n/g, '\n'),
+    exists: (...p) => fs.existsSync(path.join(docs, ...p)),
+  };
+}
+
+// The desktop menu and the phone menu of a built page.
+function menus(html) {
+  const desktop = html.slice(html.indexOf('<nav class="nav-groups">'), html.indexOf('</nav>'));
+  const phone = html.slice(html.indexOf('<div id="mobile-nav"'), html.indexOf('</div>\n', html.indexOf('<div id="mobile-nav"')) + 6);
+  return { desktop, phone };
+}
+
+// ---- resolveSiteLink ----
+
+const pages = [{ title: 'Harbour', outputPath: 'locations/harbour.html' }];
+const linkMap = Object.assign(Object.create(null), { Harbour: 'locations/harbour.html' });
+const unpublished = new Set(['old tam']);
+
+test('a link starting http:// or https:// is an outside address, as written', () => {
+  assert.deepEqual(resolveSiteLink('https://example.com/a?b=c', { linkMap, pages }), { kind: 'outside', href: 'https://example.com/a?b=c' });
+  assert.equal(resolveSiteLink('HTTP://example.com', { linkMap, pages }).kind, 'outside');
+});
+
+test('a link naming a note with a page is that page, whether plain or in [[ ]]', () => {
+  assert.deepEqual(resolveSiteLink('Harbour', { linkMap, pages }), { kind: 'page', href: 'locations/harbour.html' });
+  assert.deepEqual(resolveSiteLink('[[Harbour|the docks]]', { linkMap, pages }), { kind: 'page', href: 'locations/harbour.html' });
+});
+
+test('a link naming a note with no page is dropped', () => {
+  assert.deepEqual(resolveSiteLink('Old Tam', { linkMap, pages, unpublished }), { kind: 'none', href: null });
+  assert.deepEqual(resolveSiteLink('old tam', { linkMap, pages, unpublished }), { kind: 'none', href: null });
+  assert.equal(resolveSiteLink('[[Old Tam]]', { linkMap, pages, unpublished }).kind, 'none');
+});
+
+test('anything else is an address on the site, as written', () => {
+  assert.deepEqual(resolveSiteLink('gazetteer/index.html', { linkMap, pages, unpublished }), { kind: 'site', href: 'gazetteer/index.html' });
+  assert.deepEqual(resolveSiteLink('./map.html', { linkMap, pages }), { kind: 'site', href: 'map.html' });
+});
+
+test('a link called constructor is not an inherited function', () => {
+  assert.equal(resolveSiteLink('constructor', { linkMap, pages }).kind, 'site');
+});
+
+// ---- The menu ----
+
+test('rule 1: the three kinds of link in a built menu, made relative per page', () => {
+  const s = site([
+    { label: 'Docks', link: 'Harbour' },
+    { label: 'Atlas', link: 'https://example.com/atlas' },
+    { label: 'Gazetteer', link: 'gazetteer/index.html' },
+  ]);
+  const root = menus(s.read('index.html')).desktop;
+  assert.match(root, /<a class="nav-group-toggle" href="locations\/harbour\.html">Docks<\/a>/);
+  assert.match(root, /<a class="nav-group-toggle" href="https:\/\/example\.com\/atlas" rel="noopener">Atlas<\/a>/);
+  assert.match(root, /<a class="nav-group-toggle" href="gazetteer\/index\.html">Gazetteer<\/a>/);
+  const deep = menus(s.read('characters', 'mara-quill.html')).desktop;
+  assert.match(deep, /href="\.\.\/locations\/harbour\.html">Docks</);
+  assert.match(deep, /href="\.\.\/gazetteer\/index\.html">Gazetteer</);
+  assert.match(deep, /href="https:\/\/example\.com\/atlas" rel="noopener"/);
+});
+
+test('rule 1: an entry linking a note with no page is left out, with a warning naming the label', () => {
+  const s = site([{ label: 'Tam', link: 'Old Tam' }, { label: 'Map', link: 'map.html' }]);
+  const html = s.read('index.html');
+  assert.doesNotMatch(menus(html).desktop, />Tam</);
+  assert.doesNotMatch(html, /Old[ _]Tam/);
+  assert.match(menus(html).desktop, />Map</);
+  assert.ok(s.warnings.some((w) => w.includes('"Tam"') && /menu_extra/.test(w)), s.warnings.join('\n'));
+});
+
+test('rule 2: a group naming an existing menu group goes after its own links, in any case', () => {
+  const s = site([{ label: 'Gazetteer', link: 'gazetteer/index.html', group: 'world' }]);
+  const { desktop } = menus(s.read('index.html'));
+  const world = desktop.slice(desktop.indexOf('>World<'));
+  assert.ok(world.indexOf('>Locations<') < world.indexOf('>Gazetteer<'), world);
+  assert.equal((desktop.match(/>World</g) || []).length, 1);
+});
+
+test('rule 2: a new group name makes a group after the four, with its entries in order', () => {
+  const s = site([
+    { label: 'Atlas', link: 'atlas.html', group: 'Maps' },
+    { label: 'Charts', link: 'charts.html', group: 'maps' },
+  ]);
+  const { desktop } = menus(s.read('index.html'));
+  assert.ok(desktop.indexOf('>Characters<') < desktop.indexOf('>Maps<'));
+  assert.equal((desktop.match(/>Maps</g) || []).length, 1);
+  assert.ok(desktop.indexOf('>Atlas<') < desktop.indexOf('>Charts<'));
+});
+
+test('rule 2: an entry whose menu group has no other page still shows', () => {
+  const s = site([{ label: 'Rules', link: 'rules.html', group: 'Reference' }]);
+  const { desktop, phone } = menus(s.read('index.html'));
+  assert.match(desktop, />Reference</);
+  assert.match(desktop, />Rules</);
+  assert.match(phone, /<h3>Reference<\/h3>/);
+});
+
+test('rule 3: the desktop menu and the phone menu both carry every extra entry', () => {
+  const s = site([
+    { label: 'Docks', link: 'Harbour', group: 'World' },
+    { label: 'Atlas', link: 'https://example.com/atlas' },
+    { label: 'Charts', link: 'charts.html', group: 'Maps' },
+    { label: 'Loose', link: 'loose.html' },
+  ]);
+  for (const html of [s.read('index.html'), s.read('characters', 'mara-quill.html')]) {
+    const { desktop, phone } = menus(html);
+    for (const label of ['Docks', 'Atlas', 'Charts', 'Loose']) {
+      assert.match(desktop, new RegExp(`>${label}<`), `desktop ${label}`);
+      assert.match(phone, new RegExp(`>${label}<`), `phone ${label}`);
+    }
+  }
+  assert.match(menus(s.read('index.html')).phone, /<li><a href="https:\/\/example\.com\/atlas" rel="noopener">Atlas<\/a><\/li>/);
+});
+
+test('rule 4: a label is escaped', () => {
+  const s = site([{ label: 'A <b>&</b> "B"', link: 'x.html' }]);
+  const html = s.read('index.html');
+  assert.match(html, /A &lt;b&gt;&amp;&lt;\/b&gt; &quot;B&quot;|A &lt;b&gt;&amp;&lt;\/b&gt; "B"/);
+  assert.doesNotMatch(menus(html).desktop, /<b>/);
+});
+
+test('rule 4: a label naming a withheld note is a finding (the menu is on every page, so each page reports it)', () => {
+  const s = site([{ label: 'Lord Zorn', link: 'gazetteer/index.html' }]);
+  const hits = s.findings.filter((f) => f.code === 'WITHHELD_IN_PROSE');
+  assert.ok(hits.length > 0, JSON.stringify(s.findings.map((f) => [f.code, f.path])));
+  assert.ok(hits.every((f) => f.name === 'Lord Zorn'));
+  assert.ok(hits.some((f) => f.path === 'index.html'));
+});
+
+test('rule 4: a label that names nothing secret is no finding', () => {
+  const s = site([{ label: 'Gazetteer', link: 'gazetteer/index.html' }]);
+  assert.deepEqual(s.findings.filter((f) => f.code === 'WITHHELD_IN_PROSE'), []);
+});
+
+test('rule 5: a second entry with the same label and group is a warning and is left out', () => {
+  const s = site([
+    { label: 'Map', link: 'one.html', group: 'World' },
+    { label: 'Map', link: 'two.html', group: 'world' },
+    { label: 'Map', link: 'three.html' },
+  ]);
+  const html = menus(s.read('index.html')).desktop;
+  assert.match(html, /one\.html/);
+  assert.doesNotMatch(html, /two\.html/);
+  assert.match(html, /three\.html/);
+  assert.ok(s.warnings.some((w) => /menu_extra/.test(w) && /twice/.test(w)), s.warnings.join('\n'));
+});
+
+test('rule 5: an entry with a blank label is a warning and shows nothing', () => {
+  const s = site([{ label: '  ', link: 'one.html' }]);
+  assert.doesNotMatch(menus(s.read('index.html')).desktop, /one\.html/);
+  assert.ok(s.warnings.some((w) => /menu_extra/.test(w)), s.warnings.join('\n'));
+});
+
+test('rule 6: no extra entries builds every page as it was, with or without the setting', () => {
+  const bare = site(undefined);
+  const empty = site([]);
+  for (const rel of [['index.html'], ['characters', 'mara-quill.html'], ['locations', 'harbour.html']]) {
+    assert.equal(bare.read(...rel), empty.read(...rel), rel.join('/'));
+  }
+});
+
+test('rule 6: the menu with no extra entries is the same text as with extra undefined', () => {
+  const nav = (options) => generateNav([{ outputDir: 'world', outputPath: 'world/a.html', title: 'A', frontmatter: {} }], options)('index.html', { siteTitle: 'T' });
+  assert.equal(nav({ extra: [] }), nav({}));
+  assert.equal(nav({ extra: undefined }), nav({}));
+});

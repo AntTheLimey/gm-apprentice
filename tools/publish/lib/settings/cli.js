@@ -17,7 +17,7 @@ const path = require('node:path');
 const { parseNote } = require('../frontmatter');
 const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
-const { isMap, getPath, firstLine } = require('./types');
+const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
 const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, nameInFor, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
@@ -355,7 +355,64 @@ function sameRule(e, vaultPath) {
     const { canonicalNfc } = require('../unicode');
     return (a, b) => canonicalNfc(a) === canonicalNfc(b);
   }
+  // A list of entries that are maps: two are one when the field named here is the same.
+  if (e.type === 'listOfMaps') {
+    const { canonicalNfc } = require('../unicode');
+    return (a, b) => canonicalNfc(String(a[e.same]).trim()) === canonicalNfc(String(b[e.same]).trim());
+  }
   return (a, b) => a === b;
+}
+
+// add and remove on a list of maps. `add` takes the words of one entry, `key=value` each; `remove` takes the
+// `same` field (the label) of each entry to take out.
+function changeMaps(options, verb, name, e, words) {
+  const { vaultPath, siteConfig } = target(options);
+  const shownAs = layoutOf(vaultPath) === 'legacy' ? name : e.name;
+  const isSame = sameRule(e, vaultPath);
+  let entries;
+  if (verb === 'add') {
+    const entry = {};
+    for (const word of words) {
+      const { name: key, given, hasValue } = splitPair(word);
+      if (!hasValue || !key) return { errors: [`${word} is not key=value; ${name} takes ${TYPES.listOfMaps.takes(e)}.`] };
+      if (!Object.prototype.hasOwnProperty.call(e.fields, key)) return { errors: [`${key} is not a part of an entry of ${name}; it takes ${TYPES.listOfMaps.takes(e)}.`] };
+      entry[key] = given.trim();
+    }
+    const read = TYPES.listOfMaps.read([entry], e);
+    if (!read.ok) return { errors: [`${name} takes ${TYPES.listOfMaps.takes(e)}; every one of those but the last must have a value.`] };
+    entries = read.value;
+  } else {
+    if (words.some((w) => w.trim() === '')) return { errors: [`${name} has a blank entry; remove it.`] };
+    entries = words.map((w) => ({ [e.same]: w.trim() }));
+  }
+  const read = readSettings({ vaultPath, siteConfig });
+  if (read.origins[e.name] === 'fault') return { errors: [`${name} in the file cannot be read; fix it with settings set first.`] };
+  const current = getPath(read.values, e.name.split('.')) || [];
+  const unique = entries.filter((x, i) => entries.findIndex((y) => isSame(x, y)) === i);
+  const result = { written: [], notes: [] };
+  let list = null;
+  if (verb === 'add') {
+    result.added = unique.filter((x) => !current.some((c) => isSame(c, x)));
+    result.already = unique.filter((x) => current.some((c) => isSame(c, x)));
+    if (result.added.length) list = [...current, ...result.added];
+  } else {
+    result.removed = current.filter((c) => unique.some((x) => isSame(c, x)));
+    result.absent = unique.filter((x) => !current.some((c) => isSame(c, x)));
+    if (result.removed.length) list = current.filter((c) => !result.removed.includes(c));
+  }
+  result.list = list || current;
+  if (list) {
+    const done = write(options, [{ op: verb, name: e.name, label: name, entries: verb === 'add' ? result.added : result.removed, same: isSame, base: current }]);
+    if (done.errors) return done;
+    result.written = [shownAs];
+  }
+  const labels = (xs) => xs.map((x) => JSON.stringify(x[e.same])).join(', ');
+  const done = verb === 'add' ? result.added : result.removed;
+  const other = verb === 'add' ? result.already : result.absent;
+  const lines = [];
+  if (done.length) lines.push(`${verb === 'add' ? 'Added' : 'Removed'} ${labels(done)} ${verb === 'add' ? 'to' : 'from'} ${shownAs}.`);
+  if (other.length) lines.push(`${labels(other)} ${other.length > 1 ? 'were' : 'was'} ${verb === 'add' ? 'already in' : 'not in'} ${shownAs}.`);
+  return { result, lines, notices: noticesFor([name]) };
 }
 
 // add and remove: the setting's current resolved list, changed, written whole through the same
@@ -366,6 +423,7 @@ function changeList(options, verb, args) {
   const why = refusal(name);
   if (why) return { errors: [why] };
   const e = resolve(name).entry;
+  if (e.type === 'listOfMaps') return changeMaps(options, verb, name, e, items);
   const { vaultPath, siteConfig } = target(options);
   // The lines name the setting as the vault's file writes it.
   const shownAs = layoutOf(vaultPath) === 'legacy' ? name : e.name;
