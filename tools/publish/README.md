@@ -332,6 +332,14 @@ so the move leaves the vault on the old file and says so in one line.
 The vault moves once that tool is 1.23.0 or later. `--discard-old-file`
 removes a left-over old file that holds more than the new one;
 `--site-tool-updated` is for a caller that has just repinned the site.
+`--fold-site-file` is for a vault that has already moved while its site
+folder's `vault.config.json` still holds settings that differ from the
+vault's. Without it the command only reports them and changes nothing.
+With it, those settings come out of the site file and what they say goes
+into the vault: a hiding list's entries are added to the vault's list
+(the built-in entries stay), the stricter of two callout rules is kept,
+and for any other setting the vault's own value stays. The two files
+change together or not at all.
 If both
 files exist the new one is read, and the old one is reported as left over.
 

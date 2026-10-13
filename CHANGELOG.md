@@ -7,6 +7,77 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.54] — 2026-10-13
+
+The next update moves your vault's settings to the new file,
+`_meta/vault-config.yaml`. What the site publishes does not change: the
+copies of two real campaigns used to test this built the same site, file
+for file, before and after the move.
+
+### Added
+
+- The update moves your settings out of the old file,
+  `_meta/vault-config.md`, to `_meta/vault-config.yaml`, under the new
+  names (`player_site.hide.sections` and so on). The version stamp and
+  the publish set-up guide's note to itself go to
+  `_meta/vault-state.json`. Your own notes in the old file (the text
+  below the settings, and any top-level keys that are not settings, such
+  as `total_sessions` and your change log) go unchanged to
+  `_meta/vault-notes.md`, and the old file is removed. A setting the tool
+  no longer uses is left behind, and the update says which.
+- The move is all or nothing. If anything in the old file cannot be moved
+  exactly, nothing is written, the update says why in one line, and the
+  vault is not stamped as updated. If the update is stopped part-way,
+  run it again.
+- A site whose publish tool is older than 1.23.0 and is not one the
+  update looks after (you pinned it to a version number or an address,
+  say) keeps its vault on the old file. The update says so in one line,
+  still brings the rest of the vault up to date, and moves the vault the
+  first time it runs after that tool is updated. Settings that your site
+  folder's `vault.config.json` still holds are taken into the vault's
+  file in the same step.
+- A new vault starts with the new files (`_meta/vault-config.yaml` and
+  `_meta/vault-state.json`) and no old one.
+- `doctor --site` says when a vault is still on the old settings file and
+  what will move it.
+- The Settings check fixes more on its own yes. A misspelt or old-named
+  key in the new file has its entries moved to the setting it meant, and
+  a hiding list is added to rather than replaced. A stray top-level
+  `publish:` block is folded in the same way. A hiding list still in the
+  site folder's `vault.config.json` is added to the vault's list and
+  taken out of the site file. A left-over `_meta/vault-config.md` beside
+  the new file is removed when it holds nothing the new file lacks, and
+  proposed to you when it does.
+
+### Changed
+
+- The vault scripts read the new file. The version check still needs no
+  Node, on either file.
+- A campaign you have not named reads as the vault folder's name, on the
+  old file and the new one. The update says so when it moves a vault
+  that names none, and gives the command to name it.
+- `settings move` is safe to run by hand: it refuses, and changes
+  nothing, when the site's tool cannot read the new file, and a hand run
+  writes the same settings files the update does.
+- A new `settings move --fold-site-file` takes the settings a site
+  folder's `vault.config.json` still holds into a vault that has already
+  moved. It is described in the tool's README.
+- The publish set-up guide keeps each answer as a setting, or in the
+  set-up note, as you give it, so an interrupted run loses nothing, and
+  never edits a file in `_meta/` by hand.
+- The publish tool is 1.23.1. An older plugin pointed at a moved vault
+  stops and writes nothing: its version check reports the stamp as absent
+  and its update refuses, with advice that is the wrong advice (it names
+  an old plugin version). Update the plugin.
+
+### Removed
+
+- The `migrate-config` command and the hand-made writer for the old
+  settings file. The update moves a vault, including one whose settings
+  were still in the site folder, and `settings` writes the file.
+
+---
+
 ## [1.10.53] — 2026-10-13
 
 Nothing in an existing vault changes with this release. The publish tool

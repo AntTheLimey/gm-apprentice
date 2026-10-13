@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.53"
+current_version: "1.10.54"
 ---
 
 # Vault Migration Record
@@ -60,3 +60,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.51 | No vault change. The site's publish tool reads every setting through one declared list and says so when a setting is misspelt or cannot be read: a fault on a setting that hides material stops the build until it is fixed. Two settings nothing used, `total_sessions` and `publish.four_oh_four.style`, are reported as no longer used. The site's publish tool is repinned to 1.22.0 by the every-pass repin | — |
 | 1.10.52 | No vault change. The vault scripts ask the publish tool for settings and need Node to read them. campaign-qa gains a Settings check | — |
 | 1.10.53 | No vault change. The site's publish tool can read and write a new settings file (`_meta/vault-config.yaml`) and can move a vault to it, but nothing moves a vault yet. A hiding list left in a site folder's file now adds to the built-in list instead of replacing it. The site's publish tool is repinned to 1.23.0 by the every-pass repin | — |
+| 1.10.54 | The settings move to `_meta/vault-config.yaml` under the new names (`player_site.hide.sections` and so on); the version stamp and the publish set-up note move to `_meta/vault-state.json`; the GM's own notes in the old file (the text below the settings and any top-level keys that are not settings) move unchanged to `_meta/vault-notes.md`; the old file is removed. All or nothing. A vault whose site's publish tool is older than 1.23.0 stays on the old file until that tool is updated. The site's publish tool is repinned to 1.23.1 by the every-pass repin. What the site publishes does not change | `settings-move` |
