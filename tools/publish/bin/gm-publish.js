@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { NEW_FILE, OLD_FILE } = require('../lib/settings/layout');
 
 // Exit once stdout and stderr have drained. On a pipe (macOS; Linux too for
 // large writes) Node writes asynchronously, and a bare process.exit() right after
@@ -39,7 +40,7 @@ Usage:
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
-  gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
+  gm-apprentice-publish migrate-config       Move settings out of vault.config.json (used by the update)
   gm-apprentice-publish settings <cmd>       Read, set, describe and check any site setting
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
@@ -72,18 +73,19 @@ and .nojekyll. Refuses to overwrite — if any of those files already
 exists, nothing is written.
 
 The campaign settings (site title, folder map, attachments folder,
-excluded folders, callout rule) go under publish: in the vault's
-_meta/vault-config.md, for each key the file does not already set. The
-vault is ./vault beside the site unless --vault names it. If the vault
-folder is not there yet, or its config file cannot be edited safely, the
-site is still scaffolded and the settings to add are printed.
+hidden folders, callout rule) go in the vault's ${NEW_FILE}
+(${OLD_FILE} for a vault not yet updated), for each setting the
+file does not already set. The vault is ./vault beside the site unless
+--vault names it. If the vault folder is not there yet, or its settings
+file cannot be edited safely, the site is still scaffolded and the
+settings to add are printed.
 Follow with "build" to generate the site.
 
   --vault <dir>      The vault, read relative to where you run this. Recorded as
                      vaultPath (relative to the site if inside it, else absolute)
                      and given the settings
-  --title <text>     The site title (publish.site_title), instead of "My Campaign"
-  --tagline <text>   The landing-page tagline (publish.theme.tagline); other
+  --title <text>     The site title (player_site.title), instead of "My Campaign"
+  --tagline <text>   The landing-page tagline (player_site.theme.tagline); other
                      theme keys are kept
                      Both are written only where the vault file leaves the key unset.
   --help, -h         Show this help
@@ -174,7 +176,7 @@ excluded versus missing is the GM's call.
                      "companions": [{"from","to"}], "detaches": "<why>",
                      "owners": {<spelling>: <vault path or null>}}
                      and writes nothing. files: the manifest entries and the
-                     vault-config settings that name the note (an overrides
+                     settings that name the note (an overrides
                      path, a landing featured/quick-link name). pin: present
                      for a PC page, with the key its live state is stored
                      under now; the caller writes it as live_key before the
@@ -278,11 +280,12 @@ withholds because its Wrap-Up publishes.
   'migrate-config': `
 gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
 
-Moves the campaign settings in the site's vault.config.json (title, folder map,
-exclude lists, images, ...) into publish: in the vault's _meta/vault-config.md,
-renames publish.backend.statusBar / inbox to publish.live_stats / inbox, and
-leaves only the deployment keys in the site file, plus any key the tool does not
-read (named in the output, never removed). The vault file wins when both set a
+Used by the update, which moves a vault's settings to the new file for you; you
+do not need to run it. On a vault still on the old file (${OLD_FILE}), it
+moves the campaign settings in the site's vault.config.json (title, folder map,
+exclude lists, images, ...) into publish: there, renames publish.backend.statusBar /
+inbox to publish.live_stats / inbox, and leaves only the deployment keys in the
+site file, plus any key the tool does not read (named in the output, never removed). The vault file wins when both set a
 key (the difference is reported); exclude lists are merged. Both files are
 backed up as <file>.pre-migrate first (an existing backup is never replaced).
 Nothing is written if the vault file cannot be edited safely. Running it again
@@ -399,8 +402,8 @@ report lists 20 rows per note-fault code; --json has them all.
 gm-apprentice-publish setup-status-bar [--config <path>]
 
 Enables live stats: creates the KV namespace, records its id in
-wrangler.toml, sets publish.live_stats: true in the vault's
-_meta/vault-config.md (refusing first if that file cannot be edited),
+wrangler.toml, turns on player_site.features.live_stats in the vault's
+settings file (refusing first if that file cannot be edited),
 then rebuilds and deploys the site. Requires wrangler auth ("doctor"
 checks it).
 
@@ -411,8 +414,8 @@ checks it).
 gm-apprentice-publish setup-inbox [--config <path>]
 
 Enables the change-request inbox: creates the KV namespace, records its id
-in wrangler.toml, sets publish.inbox: true in the vault's
-_meta/vault-config.md (refusing first if that file cannot be edited),
+in wrangler.toml, turns on player_site.features.inbox in the vault's
+settings file (refusing first if that file cannot be edited),
 then rebuilds and deploys the site. Requires wrangler auth ("doctor"
 checks it).
 
@@ -554,7 +557,7 @@ if (wantsHelp) {
 
 if (command === 'init') {
   const rest = args.slice(1);
-  // --title / --tagline seed publish.site_title / publish.theme.tagline in the vault file.
+  // --title / --tagline seed player_site.title / player_site.theme.tagline in the vault file.
   const textOption = (flag) => {
     const i = rest.indexOf(flag);
     if (i === -1) return undefined;
@@ -615,7 +618,7 @@ if (command === 'build') {
   warnIfVersionDrift();
   assertRuntimeDeps();
 
-  // A site the GM turned off (publish.site) is not built, and its functions are left alone.
+  // A site the GM turned off (player_site.publish) is not built, and its functions are left alone.
   const off = require('../lib/config').siteOffFor(configPath);
   if (off) {
     console.error(`Build failed: ${off}`);

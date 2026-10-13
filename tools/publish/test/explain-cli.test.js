@@ -436,7 +436,7 @@ describe('explain', () => {
     const c = capture();
     const rc = await runExplain({ configPath, target: 'Drafts/Idea.md' }, c.deps);
     assert.strictEqual(rc, 0);
-    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in publish\.exclude_dirs \(DIR_CONFIG_EXCLUDED\)/);
+    assert.match(c.text(), /VERDICT: does not publish — in Drafts\/ — listed in player_site\.hide\.folders \(DIR_CONFIG_EXCLUDED\)/);
 
     const j = capture();
     await runExplain({ configPath, target: 'Drafts/Idea.md', json: true }, j.deps);
@@ -541,7 +541,7 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     const off = vaultWith('  character_sheets: false\n  live_stats: true\n');
     assert.deepStrictEqual((await explainAll(off.configPath)).switches,
       { characterSheets: false, liveStats: false, inbox: false });
-    assert.deepStrictEqual(lastWarnings, ['publish.live_stats is on but character_sheets is off; live stats are not published']);
+    assert.deepStrictEqual(lastWarnings, ['publish.live_stats is on but publish.character_sheets is off; live stats are not published']);
     const on = vaultWith('  live_stats: true\n  inbox: true\n');
     assert.deepStrictEqual((await explainAll(on.configPath)).switches,
       { characterSheets: true, liveStats: true, inbox: true });

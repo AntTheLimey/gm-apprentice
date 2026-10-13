@@ -77,4 +77,8 @@ const TYPES = {
   any: { read: (raw) => ok(raw), takes: (entry) => entry.shape || 'see the settings page' },
 };
 
-module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap };
+// A key written with nothing after it is "not set", except on a switch that must never fail on one
+// (`onFault: false`), where it is unreadable. Read by the reader and by the schema.
+const emptyIsFault = (e) => e.type === 'switch' && e.onFault === false;
+
+module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap, emptyIsFault };

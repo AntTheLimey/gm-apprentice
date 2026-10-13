@@ -24,6 +24,7 @@ const { parseNote } = require('./frontmatter');
 const { markersIn } = require('./markers');
 const YAML = require('yaml');
 const { nearestNames, readerView } = require('./site-doctor');
+const { nameIn } = require('./settings');
 
 // The switches as the build resolves them, without the config notes.
 function switchesOf(publishConfig) {
@@ -111,7 +112,7 @@ async function runExplain(options, deps) {
   // vault's config chose to exclude it".
   const verdict = verdicts.get(target)
     || (configExcluded && !alwaysExcluded
-      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in publish.exclude_dirs`, outputPath: null }
+      ? { bucket: 'exclude', code: 'DIR_CONFIG_EXCLUDED', reason: `in ${configExcluded}/ — listed in ${nameIn(vaultPath, 'player_site.hide.folders')}`, outputPath: null }
       : decidePage(page || { rel: target, frontmatter: null }, {
         rel: target,
         publishConfig,
@@ -229,9 +230,9 @@ async function runExplain(options, deps) {
   out('');
   out('  exists: yes');
   out(`  directory: ${dir || '(vault root)'} — ${
-    configExcluded ? `listed in publish.exclude_dirs (${configExcluded})`
+    configExcluded ? `listed in ${nameIn(vaultPath, 'player_site.hide.folders')} (${configExcluded})`
       : mappedTo ? `mapped to ${mappedTo}`
-        : dir ? 'not in publish.folder_map' : 'the vault root'}`);
+        : dir ? `not in ${nameIn(vaultPath, 'player_site.folder_map')}` : 'the vault root'}`);
   if (frontmatterError) out(`  frontmatter: could not be parsed — ${frontmatterError}`);
   out(`  type: ${(frontmatter && frontmatter.type) || '(none)'}`);
   out(`  publish mode: ${frontmatter ? publishMode(frontmatter) : '(no frontmatter)'}`);

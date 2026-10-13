@@ -72,7 +72,7 @@ describe('live stats and the inbox follow the switches', () => {
   it('character_sheets off forces live stats off, with one line saying so', () => {
     const { html, lines } = buildSite({ publish: '  character_sheets: false\n  live_stats: true\n', wrangler: true, functions: true });
     assert.ok(!html.includes('gurps-live.js'));
-    const said = lines.filter((l) => l.includes('publish.live_stats is on but character_sheets is off; live stats are not published'));
+    const said = lines.filter((l) => l.includes('publish.live_stats is on but publish.character_sheets is off; live stats are not published'));
     assert.strictEqual(said.length, 1, lines.join('\n'));
   });
 });

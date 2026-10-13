@@ -3,7 +3,7 @@ const fsSync = require('fs');
 const path = require('path');
 const { applyChanges, settingsText } = require('./settings/write');
 const { siteDirPath } = require('./lines-cli');
-const { entry } = require('./settings');
+const { entry, nameIn, fileLabel } = require('./settings');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -231,15 +231,15 @@ async function init(targetDir = '.', options = {}) {
   const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
-    log(`  wrote ${vaultSettings.written.join(', ')} to the settings file in ${vaultDir}${which}`);
+    log(`  wrote ${vaultSettings.written.map((n) => nameIn(vaultDir, n)).join(', ')} to ${fileLabel(vaultDir)} in ${vaultDir}${which}`);
   }
   if (vaultSettings.skipped) {
-    const keys = Object.keys(vaultSettings.missing).join(', ');
-    const where = vaultSettings.missing[FOLDER] ? ` (${FOLDER}: ${vaultSettings.missing[FOLDER]})` : '';
-    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these to the vault's settings: ${keys}${where}.`);
+    const keys = Object.keys(vaultSettings.missing).map((n) => nameIn(vaultDir, n)).join(', ');
+    const where = vaultSettings.missing[FOLDER] ? ` (${nameIn(vaultDir, FOLDER)}: ${vaultSettings.missing[FOLDER]})` : '';
+    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these to ${fileLabel(vaultDir)}: ${keys}${where}.`);
   }
   if (vaultSettings.otherSite) {
-    console.warn(`The vault already names a different site (${FOLDER}: ${vaultSettings.otherSite}); it was left as it is. Change it by hand if this is now the campaign's site.`);
+    console.warn(`The vault already names a different site (${nameIn(vaultDir, FOLDER)}: ${vaultSettings.otherSite}); it was left as it is. Change it by hand if this is now the campaign's site.`);
   }
 
   return { success: true, files: created, vaultSettings };

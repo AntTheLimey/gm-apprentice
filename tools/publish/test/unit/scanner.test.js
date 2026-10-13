@@ -268,7 +268,7 @@ describe('scanVault unmapped-directory warning', () => {
       },
     };
     const warns = captureWarns(() => scanVault(config));
-    const locWarns = warns.filter(w => w.includes('Locations') && w.includes('publish.folder_map'));
+    const locWarns = warns.filter(w => w.includes('Locations') && w.includes('player_site.folder_map'));
     assert.strictEqual(locWarns.length, 1);
   });
 
@@ -284,7 +284,7 @@ describe('scanVault unmapped-directory warning', () => {
       },
     };
     const warns = captureWarns(() => scanVault(config));
-    assert.strictEqual(warns.filter(w => w.includes('publish.folder_map')).length, 0);
+    assert.strictEqual(warns.filter(w => w.includes('player_site.folder_map')).length, 0);
   });
 });
 
@@ -393,7 +393,7 @@ describe('scanVault untyped-file warning', () => {
       assert.strictEqual(untypedWarns.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
       assert.ok(untypedWarns[0].includes('Characters/NPCs/Scratchpad.md'), untypedWarns[0]);
       assert.ok(untypedWarns[0].includes('skipped 1 file(s)'), untypedWarns[0]);
-      assert.ok(untypedWarns[0].includes('publish.exclude_dirs'), untypedWarns[0]);
+      assert.ok(untypedWarns[0].includes('player_site.hide.folders'), untypedWarns[0]);
       assert.strictEqual(pages.length, 1);
       assert.strictEqual(pages[0].title, 'Gatekeeper');
     } finally {
@@ -560,7 +560,7 @@ describe('scanAttachments excludeDirs (#210)', () => {
       console.warn = orig;
       fs.rmSync(vaultPath, { recursive: true, force: true });
     }
-    assert.ok(warns.some((w) => w.includes('publish.exclude_dirs') && w.includes('_attachments')), warns.join(' | '));
+    assert.ok(warns.some((w) => w.includes('player_site.hide.folders') && w.includes('_attachments')), warns.join(' | '));
   });
 });
 
@@ -703,7 +703,7 @@ describe('scanVaultReport', () => {
       const pages = scanVault(config(vault));
       assert.strictEqual(pages.length, 1);
       assert.strictEqual(warns.filter(w => w.includes('no `type:`')).length, 1);
-      assert.strictEqual(warns.filter(w => w.includes('not in publish.folder_map')).length, 1);
+      assert.strictEqual(warns.filter(w => w.includes('not in player_site.folder_map')).length, 1);
       assert.ok(warns.find(w => w.includes('Session Notes')), warns.join(' | '));
     } finally {
       console.warn = orig;
@@ -781,5 +781,34 @@ describe('loadPublishConfig on a vault-config.md that is not valid YAML', () => 
       return true;
     });
     fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+// The scanner names a setting, and the file, as the vault's own file writes them.
+describe('scanner messages name the vault\'s own settings file', () => {
+  const TYPED = '---\ntype: npc\n---\n\nBody.\n';
+  const UNTYPED = '---\nname: Nobody\n---\n\nBody.\n';
+  function warnsFor(file, text) {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'scanner-layout-'));
+    const put = (rel, body) => { fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true }); fs.writeFileSync(path.join(vault, rel), body); };
+    put('Places/Inn.md', TYPED);
+    put('Characters/NPCs/Scratch.md', UNTYPED);
+    if (file) put(file, text);
+    const warns = [];
+    const orig = console.warn;
+    console.warn = (...a) => warns.push(a.join(' '));
+    try { scanVault({ vaultPath: vault, excludeDirs: [], folderMap: { 'Characters/NPCs': 'npcs' } }); } finally { console.warn = orig; fs.rmSync(vault, { recursive: true, force: true }); }
+    return warns.join('\n');
+  }
+  it('on the old file: publish.folder_map and _meta/vault-config.md', () => {
+    const said = warnsFor('_meta/vault-config.md', '---\npublish:\n  site: true\n---\n');
+    assert.match(said, /not in publish\.folder_map; typed pages inside will not publish\. Add it to publish\.folder_map in _meta\/vault-config\.md to publish, or to publish\.exclude_dirs to silence/);
+    assert.match(said, /their folder in publish\.exclude_dirs \(_meta\/vault-config\.md\) to silence this/);
+  });
+  it('on the new file: player_site.folder_map and _meta/vault-config.yaml', () => {
+    const said = warnsFor('_meta/vault-config.yaml', 'version: 1\nplayer_site:\n  publish: true\n');
+    assert.match(said, /not in player_site\.folder_map; typed pages inside will not publish\. Add it to player_site\.folder_map in _meta\/vault-config\.yaml to publish, or to player_site\.hide\.folders to silence/);
+    assert.match(said, /their folder in player_site\.hide\.folders \(_meta\/vault-config\.yaml\) to silence this/);
+    assert.doesNotMatch(said, /publish\.exclude_dirs|vault-config\.md/);
   });
 });

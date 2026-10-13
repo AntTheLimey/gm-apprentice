@@ -1,6 +1,6 @@
 'use strict';
 // What the settings command says about one setting, built from its entry in the list.
-const { TYPES, SWITCH_WORDS } = require('./types');
+const { TYPES, SWITCH_WORDS, emptyIsFault } = require('./types');
 const { REGISTRY } = require('./registry');
 
 // A setting the GM can read and write by name: not a parent that only holds others, not a
@@ -42,21 +42,22 @@ function row(entry) {
 // it (not resolved values), as far as the reader accepts it.
 
 const SCHEMA_ID = 'https://github.com/AntTheLimey/gm-apprentice/blob/main/tools/publish/schema/vault-config.schema.json';
-const caseless = (word) => [...word].map((c) => `[${c}${c.toUpperCase()}]`).join('');
+const caseless = (word) => [...word].map((c) => (c.toLowerCase() === c.toUpperCase() ? c.replace(/[\\^$.*+?()[\]{}|/-]/g, '\\$&') : `[${c}${c.toUpperCase()}]`)).join('');
 const stringOrNumber = { type: ['string', 'number', 'boolean'] };
 
 // The reader trims a word and lowercases it, so the pattern allows spaces round it and any casing.
 const switchSchema = () => ({ anyOf: [{ type: 'boolean' }, { type: 'string', pattern: `^\\s*(?:${[...SWITCH_WORDS.keys()].map(caseless).join('|')})\\s*$` }] });
 
 // The schema of one value, from the type's own definition. A choice lists the canonical words and
-// the aliases, in lower case (the reader also accepts other casings and spaces round a word), and
-// the booleans when the word `true` or `false` is one of them.
+// the aliases in any casing with spaces round them (as the reader accepts), and the booleans when
+// the word `true` or `false` is one of them.
 const SCHEMAS = {
   switch: () => switchSchema(),
   choice(e) {
     const words = [...e.values, ...Object.keys(e.aliases || {})];
     const bools = ['true', 'false'].filter((w) => words.includes(w)).map((w) => w === 'true');
-    return { enum: [...new Set(words), ...bools] };
+    const word = { type: 'string', pattern: `^\\s*(?:${[...new Set(words)].map(caseless).join('|')})\\s*$` };
+    return bools.length ? { anyOf: [word, ...bools.map((b) => ({ const: b }))] } : word;
   },
   number(e) {
     const limits = {};
@@ -76,15 +77,10 @@ const SCHEMAS = {
   any: () => ({}),
 };
 
-// The reader treats a key written with nothing after it as "not set", except on a switch that must
-// never fail on one (read.js `emptyIsFault`), where it is unreadable.
-const emptyIsFault = (e) => e.type === 'switch' && e.onFault === false;
-
 function valueSchema(e) {
   const s = SCHEMAS[e.type](e);
   if (!emptyIsFault(e) && e.type !== 'any') {
     if (s.anyOf) s.anyOf.push({ type: 'null' });
-    else if (s.enum) s.enum.push(null);
     else s.type = [].concat(s.type, 'null');
   }
   const out = {};

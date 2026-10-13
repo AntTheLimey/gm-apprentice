@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
 const { REGISTRY } = require('./registry');
-const { TYPES, isMap } = require('./types');
+const { TYPES, isMap, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
 const legacy = require('./legacy');
@@ -39,10 +39,6 @@ function setIn(obj, name, value) {
   }
   cur[segs[segs.length - 1]] = value;
 }
-
-// A key written with nothing after it is "not set", except on the switches that must never fail on,
-// where it is unreadable.
-const emptyIsFault = (e) => e.type === 'switch' && e.onFault === false;
 
 // Reads one chosen raw value `first` ({ raw, origin }) of entry `e` and records it under `setting`
 // (the list's name): the value, its origin, and a fault named `written` when it cannot be read.

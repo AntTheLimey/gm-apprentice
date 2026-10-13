@@ -240,7 +240,7 @@ test('flush says why when live stats are off only because the switch is unset an
       return r.lines.join('\n');
     };
     assert.match(await say({ characterSheets: true, liveStats: false, unset: ['live_stats'] }),
-      /live stats are deployed on this site but publish\.live_stats is not set, so they are off\. Set publish\.live_stats to true to keep them/);
+      /live stats are deployed on this site but player_site\.features\.live_stats is not set, so they are off\. Set player_site\.features\.live_stats to true to keep them/);
     // set to false: the bare line; sheets off: the sheets line; nothing deployed is covered above
     assert.match(await say({ characterSheets: true, liveStats: false, unset: [] }), /live stats are off for this campaign/);
     assert.match(await say({ characterSheets: false, liveStats: false, unset: ['live_stats'] }), /character sheets are off/);

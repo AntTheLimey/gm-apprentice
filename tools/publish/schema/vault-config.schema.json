@@ -19,11 +19,11 @@
         "kept_by": {
           "description": "Who keeps this vault: `gm` for the game master, `player` for a player keeping notes on a campaign they are in",
           "default": "gm",
-          "enum": [
-            "gm",
-            "player",
-            null
-          ]
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\s*(?:[gG][mM]|[pP][lL][aA][yY][eE][rR])\\s*$"
         },
         "campaign": {
           "description": "The campaign's name",
@@ -44,23 +44,11 @@
         },
         "system": {
           "description": "The game system, which decides how a character sheet is drawn",
-          "enum": [
-            "coc-7e",
-            "coc",
-            "regency-cthulhu",
-            "coc-7e-regency",
-            "gurps-4e",
-            "gurps",
-            "dnd-5e",
-            "dnd-5e-2024",
-            "dnd",
-            "fitd",
-            "blades",
-            "pf2e",
-            "pathfinder-2e",
-            "pathfinder",
-            null
-          ]
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\s*(?:[cC][oO][cC]\\-7[eE]|[cC][oO][cC]|[rR][eE][gG][eE][nN][cC][yY]\\-[cC][tT][hH][uU][lL][hH][uU]|[cC][oO][cC]\\-7[eE]\\-[rR][eE][gG][eE][nN][cC][yY]|[gG][uU][rR][pP][sS]\\-4[eE]|[gG][uU][rR][pP][sS]|[dD][nN][dD]\\-5[eE]|[dD][nN][dD]\\-5[eE]\\-2024|[dD][nN][dD]|[fF][iI][tT][dD]|[bB][lL][aA][dD][eE][sS]|[pP][fF]2[eE]|[pP][aA][tT][hH][fF][iI][nN][dD][eE][rR]\\-2[eE]|[pP][aA][tT][hH][fF][iI][nN][dD][eE][rR])\\s*$"
         },
         "setting_year": {
           "description": "An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. Write it at the left edge of the file, beside `publish:`, not under it",
@@ -73,11 +61,11 @@
         "dndbeyond_sync": {
           "description": "When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask",
           "default": "manual",
-          "enum": [
-            "build",
-            "manual",
-            null
-          ]
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\s*(?:[bB][uU][iI][lL][dD]|[mM][aA][nN][uU][aA][lL])\\s*$"
         }
       },
       "additionalProperties": false
@@ -149,50 +137,58 @@
             "link_previews": {
               "description": "The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page",
               "default": "on",
-              "enum": [
-                "on",
-                "desktop",
-                "off",
-                "true",
-                "yes",
-                "false",
-                "no",
-                true,
-                false,
-                null
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[oO][nN]|[dD][eE][sS][kK][tT][oO][pP]|[oO][fF][fF]|[tT][rR][uU][eE]|[yY][eE][sS]|[fF][aA][lL][sS][eE]|[nN][oO])\\s*$"
+                },
+                {
+                  "const": true
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "connections": {
               "description": "How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off`",
               "default": "tree",
-              "enum": [
-                "tree",
-                "web",
-                "cards",
-                "off",
-                "true",
-                "on",
-                "yes",
-                "false",
-                "no",
-                true,
-                false,
-                null
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][eE][eE]|[wW][eE][bB]|[cC][aA][rR][dD][sS]|[oO][fF][fF]|[tT][rR][uU][eE]|[oO][nN]|[yY][eE][sS]|[fF][aA][lL][sS][eE]|[nN][oO])\\s*$"
+                },
+                {
+                  "const": true
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "tohit_calculator": {
               "description": "The to-hit calculator on a GURPS character's Combat tab",
               "default": "on",
-              "enum": [
-                "on",
-                "off",
-                "true",
-                "yes",
-                "false",
-                "no",
-                true,
-                false,
-                null
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[oO][nN]|[oO][fF][fF]|[tT][rR][uU][eE]|[yY][eE][sS]|[fF][aA][lL][sS][eE]|[nN][oO])\\s*$"
+                },
+                {
+                  "const": true
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "null"
+                }
               ]
             },
             "live_stats": {
@@ -241,11 +237,11 @@
             "mode": {
               "description": "`player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own",
               "default": "player",
-              "enum": [
-                "player",
-                "full",
-                null
-              ]
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[pP][lL][aA][yY][eE][rR]|[fF][uU][lL][lL])\\s*$"
             },
             "folders": {
               "description": "Vault folders never published",
@@ -378,26 +374,11 @@
           "properties": {
             "genre": {
               "description": "A ready-made look: colours, lettering and section names. A genre the tool does not know is reported, and the site keeps the plain dark look",
-              "enum": [
-                "horror",
-                "fantasy",
-                "noir",
-                "military",
-                "scifi",
-                "gothic",
-                "cthulhu",
-                "adventure",
-                "industrial",
-                "heist",
-                "tactical",
-                "modern",
-                "sci-fi",
-                "science-fiction",
-                "space",
-                "space-opera",
-                "space-noir",
-                null
-              ]
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[hH][oO][rR][rR][oO][rR]|[fF][aA][nN][tT][aA][sS][yY]|[nN][oO][iI][rR]|[mM][iI][lL][iI][tT][aA][rR][yY]|[sS][cC][iI][fF][iI]|[gG][oO][tT][hH][iI][cC]|[cC][tT][hH][uU][lL][hH][uU]|[aA][dD][vV][eE][nN][tT][uU][rR][eE]|[iI][nN][dD][uU][sS][tT][rR][iI][aA][lL]|[hH][eE][iI][sS][tT]|[tT][aA][cC][tT][iI][cC][aA][lL]|[mM][oO][dD][eE][rR][nN]|[sS][cC][iI]\\-[fF][iI]|[sS][cC][iI][eE][nN][cC][eE]\\-[fF][iI][cC][tT][iI][oO][nN]|[sS][pP][aA][cC][eE]|[sS][pP][aA][cC][eE]\\-[oO][pP][eE][rR][aA]|[sS][pP][aA][cC][eE]\\-[nN][oO][iI][rR])\\s*$"
             },
             "palette": {
               "type": [
@@ -470,12 +451,11 @@
                 "source": {
                   "description": "Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used",
                   "default": "google",
-                  "enum": [
-                    "google",
-                    "self-host",
-                    "local",
-                    null
-                  ]
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\s*(?:[gG][oO][oO][gG][lL][eE]|[sS][eE][lL][fF]\\-[hH][oO][sS][tT]|[lL][oO][cC][aA][lL])\\s*$"
                 },
                 "files": {
                   "description": "Your own font files, each listed with its `family` (the typeface's name) and `path` (the file's place in the vault); used when the source is `local`",
@@ -494,12 +474,11 @@
             "default_mode": {
               "description": "Whether a reader starts in light or dark",
               "default": "system",
-              "enum": [
-                "system",
-                "dark",
-                "light",
-                null
-              ]
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[sS][yY][sS][tT][eE][mM]|[dD][aA][rR][kK]|[lL][iI][gG][hH][tT])\\s*$"
             },
             "tagline": {
               "description": "One sentence under the title on the landing page",
@@ -597,29 +576,19 @@
             },
             "skin": {
               "description": "The look of every character sheet",
-              "enum": [
-                "plain",
-                "parchment",
-                "case-file",
-                "console",
-                "ledger",
-                null
-              ]
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[pP][lL][aA][iI][nN]|[pP][aA][rR][cC][hH][mM][eE][nN][tT]|[cC][aA][sS][eE]\\-[fF][iI][lL][eE]|[cC][oO][nN][sS][oO][lL][eE]|[lL][eE][dD][gG][eE][rR])\\s*$"
             },
             "frame": {
               "description": "The ornament round each portrait",
-              "enum": [
-                "none",
-                "ring",
-                "laurel",
-                "thorns",
-                "gilt",
-                "steel",
-                "corners",
-                "hex",
-                "cracked",
-                null
-              ]
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[nN][oO][nN][eE]|[rR][iI][nN][gG]|[lL][aA][uU][rR][eE][lL]|[tT][hH][oO][rR][nN][sS]|[gG][iI][lL][tT]|[sS][tT][eE][eE][lL]|[cC][oO][rR][nN][eE][rR][sS]|[hH][eE][xX]|[cC][rR][aA][cC][kK][eE][dD])\\s*$"
             },
             "crest": {
               "description": "A crest or wax seal at the head of a Call of Cthulhu sheet",
@@ -784,10 +753,11 @@
             "format": {
               "description": "The format pictures are converted to. Only `webp` is available; any other is reported, and pictures are left as they are",
               "default": "webp",
-              "enum": [
-                "webp",
-                null
-              ]
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[wW][eE][bB][pP])\\s*$"
             },
             "max_width": {
               "description": "The widest a shrunk picture may be, in pixels; `0` for no limit",

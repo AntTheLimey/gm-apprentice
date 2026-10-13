@@ -77,6 +77,9 @@ test('the schema takes what it should and refuses what it should', () => {
   assert.deepEqual(ok({ player_site: { folder_map: { Sessions: 'sessions' }, theme: { genre: 'horror', unknown_but_warned: 1 } } }), []);
   assert.deepEqual(ok({ player_site: { hide: { sections: null } } }), []);
   assert.notDeepEqual(ok({ player_site: { hide: { secions: ['x'] } } }), []);
+  // The reader forgives case and spaces round a word; the schema does too.
+  assert.deepEqual(ok({ player_site: { theme: { default_mode: 'Dark' }, features: { search: ' Yes ' } } }), []);
+  assert.notDeepEqual(ok({ player_site: { theme: { default_mode: 'darkish' } } }), []);
   assert.notDeepEqual(ok({ publish: {} }), []);
   assert.notDeepEqual(ok({ version: 2 }), []);
   assert.notDeepEqual(ok({ vault: { kept_by: 'nobody' } }), []);
@@ -165,5 +168,19 @@ test('the first YAML example on the format page validates and reads without a fa
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(at(vault, NEW_FILE), block[1]);
   assert.deepEqual(readSettings({ vaultPath: vault }).faults.map((f) => `${f.level} ${f.name}`), []);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a file that writes a choice as Tree and a switch as Yes validates and reads as the reader does', () => {
+  const text = 'version: 1\nplayer_site:\n  features:\n    connections: " Tree "\n    search: Yes\n  hide:\n    mode: Full\n';
+  assert.deepEqual(check(schema(), parse(text)), []);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-'));
+  const vault = path.join(root, 'Vault');
+  fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+  fs.writeFileSync(at(vault, NEW_FILE), text);
+  const read = readSettings({ vaultPath: vault });
+  assert.deepEqual(read.faults.map((f) => `${f.level} ${f.name}`), []);
+  assert.equal(read.values.player_site.features.connections, 'tree');
+  assert.equal(read.values.player_site.features.search, true);
   fs.rmSync(root, { recursive: true, force: true });
 });

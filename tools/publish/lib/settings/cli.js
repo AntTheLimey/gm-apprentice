@@ -232,7 +232,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   --json           Print JSON
   --help, -h       Show this help
 
-A setting's old name (publish.search and so on) still works for now; the command says what it is called now.
+A setting's old name (publish.search and so on) still works for now, with a line saying what it is called now.
 
 The settings:
 ${names.join('\n')}
