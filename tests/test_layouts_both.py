@@ -248,3 +248,53 @@ def test_a_misspelt_key_is_fixed_on_both_files(
     if layout == "new":
         text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
         assert "sectoins" not in text
+
+
+# ---- messages name a setting as THIS vault's file writes it -----------------
+
+def test_a_message_names_the_setting_as_the_vaults_file_writes_it(tmp_path, layout):
+    import migrate_site as ms
+    want = "publish.site" if layout == "legacy" else "player_site.publish"
+    if layout == "legacy":
+        vault = make_vault(tmp_path, "  site_dir: " + str(tmp_path) + "\n")
+        (item,) = ms.find_publish_site(vault)
+        assert item.lines == [f"write {want}: true in _meta/vault-config.md"]
+    else:
+        vault = on_layout(make_vault(tmp_path), "new")
+    vaultlib.forget_settings(None)
+    assert vaultlib.setting_name(vault, "player_site.publish") == want
+
+
+def site_vault(tmp_path, layout, publish):
+    import site_fixture
+    vault = make_vault(tmp_path, publish)
+    site_fixture.give_site(vault, lambda p: None, private=True)
+    site_fixture.point_site_at(vault)
+    (vault / "Bob.md").write_text("---\ntype: npc\n---\n\n## Body\n\nx\n",
+                                  encoding="utf-8")
+    return on_layout(vault, layout)
+
+
+def test_the_collapse_message_names_the_list_as_the_vault_writes_it(
+        tmp_path, layout):
+    from unittest import mock
+    vault = site_vault(tmp_path, layout, "  exclude_sections: [GM Notes, Extra]\n")
+    refusal = vaultlib.SettingsUnavailable("not today", refused=True)
+    with mock.patch.object(vc, "settings_set", side_effect=refusal):
+        rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
+    want = "publish.exclude_sections" if layout == "legacy" else "player_site.hide.sections"
+    assert any(f"{want} cannot be collapsed" in r for r in rows), rows
+    if layout == "new":
+        assert not any("publish.exclude_sections" in r for r in rows), rows
+
+
+def test_a_stop_fault_is_not_reported_as_a_vault_with_no_site(tmp_path):
+    vault = site_vault(tmp_path, "new", "")
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        "version: 1\npublish:\n  site: true\n", encoding="utf-8")
+    vaultlib.forget_settings(None)
+    rows = vc.check_gm_leak(vault, None, fix=False)
+    text = "\n".join(rows)
+    assert "no site to check" not in text and "has no site" not in text, rows
+    assert "the settings could not be read cleanly" in text
+    assert "Settings check" in text

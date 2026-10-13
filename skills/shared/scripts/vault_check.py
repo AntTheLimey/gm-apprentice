@@ -212,6 +212,7 @@ from vaultlib import (  # noqa: F401
     settings_add,
     settings_carry,
     settings_move_plan,
+    setting_name,
     settings_tidy,
     settings_describe,
     settings_raw,
@@ -1282,7 +1283,8 @@ def vault_settings(vault: Path) -> Settings:
     return own
 
 
-NO_SITE_DIR = "player_site.folder is not set"
+def no_site_dir(vault: Path) -> str:
+    return f"{setting_name(vault, 'player_site.folder')} is not set"
 
 
 def _site_config(vault: Path) -> tuple[Path | None, str | None]:
@@ -1294,9 +1296,10 @@ def _site_config(vault: Path) -> tuple[Path | None, str | None]:
     if site is None:
         if not settings(vault).has_site_block:
             return None, None
-        return None, NO_SITE_DIR
+        return None, no_site_dir(vault)
     if not has_config:
-        return None, f"no vault.config.json in player_site.folder ({site})"
+        return None, (f"no vault.config.json in "
+                      f"{setting_name(vault, 'player_site.folder')} ({site})")
     return site / "vault.config.json", None
 
 
@@ -1482,32 +1485,19 @@ class ExplainAll:
         return self._answer
 
 
-def ask_publish_tool(vault: Path, args: list[str],
-                     vault_only: bool = False) -> ToolAnswer:
+def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
     """Run the site's publish tool with `args` plus `--json`, `--config`
     and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
-    reason means the vault publishes nothing. `vault_only` is for a
-    command that has work to do without a site (migrate-config's backend
-    rename): a vault with a `publish:` block but no usable site is then
-    asked through the plugin's own tool with `--vault` alone, run from an
-    empty directory so no stray vault.config.json is picked up."""
+    reason means the vault publishes nothing."""
     config, why = _site_config(vault)
-    site_args = ["--config", str(config)] if config is not None else []
-    no_site = config is None
     if config is None:
-        if not (vault_only and why):
-            # A site that is off is not a tool that could not be asked:
-            # there is nothing to say. One that is on with no folder is.
-            quiet = (why == NO_SITE_DIR
-                     and site_switch_written(settings(vault)) is not True)
-            return ToolAnswer(why=None if quiet else why)
-        label = "the plugin's publish tool (the vault has no site)"
-        if not PUBLISH_TOOL.is_file():
-            return ToolAnswer(
-                why=f"the publish tool is not at {PUBLISH_TOOL}", used=label)
-        tool: Path | None = PUBLISH_TOOL
-    else:
-        tool, label, why = _publish_tool_for(config.parent)
+        # A site that is off is not a tool that could not be asked: there is
+        # nothing to say. One that is on with no folder is.
+        quiet = (why == no_site_dir(vault)
+                 and site_switch_written(settings(vault)) is not True)
+        return ToolAnswer(why=None if quiet else why)
+    site_args = ["--config", str(config)]
+    tool, label, why = _publish_tool_for(config.parent)
     used = label if tool == PUBLISH_TOOL else None
     if tool is None:
         return ToolAnswer(why=why, used=label)
@@ -1515,30 +1505,18 @@ def ask_publish_tool(vault: Path, args: list[str],
     if not node:
         return ToolAnswer(why="node is not on PATH", used=label)
     name = " ".join(args[:2])
-    empty: str | None = None
-    if no_site:
-        try:
-            empty = tempfile.mkdtemp(prefix="vc-nosite-")
-        except OSError as e:
-            return ToolAnswer(
-                why=f"no temporary directory to run in ({e.__class__.__name__})",
-                used=label)
     try:
         proc = subprocess.run(
             [node, str(tool), *args, "--json", *site_args,
              "--vault", str(vault.resolve())],
             capture_output=True, text=True, encoding="utf-8",
-            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False,
-            cwd=empty)
+            errors="replace", timeout=PUBLISH_TOOL_TIMEOUT, check=False)
     except subprocess.TimeoutExpired:
         return ToolAnswer(why=f"{name} timed out after {PUBLISH_TOOL_TIMEOUT}s",
                           used=label)
     except OSError as e:
         return ToolAnswer(why=f"node could not run ({e.__class__.__name__})",
                           used=label)
-    finally:
-        if empty is not None:
-            shutil.rmtree(empty, ignore_errors=True)
     if proc.returncode != 0:
         detail = [ln.strip() for ln in (proc.stderr or "").splitlines()
                   if ln.strip()]
@@ -1638,26 +1616,38 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
             fix = node_fix
         has_site = site_without_tool(settings(vault))
         if has_site:
-            fix += (f"; if this vault has no site, set player_site.publish: false "
+            fix += (f"; if this vault has no site, set "
+                    f"{setting_name(vault, 'player_site.publish')}: false "
                     f"in {settings_file(vault)}")
         elif fix == node_fix:
             # The site is off and only node is missing: there is nothing a
             # GM with no site has to hear about node.
-            return None, SITE_IS_OFF, None, False
+            return None, site_is_off(vault), None, False
         return None, why, fix, has_site
     if not on:
-        return None, SITE_IS_OFF, None, False
+        if _stop_fault(vault):
+            # A stop fault can be what turned the switch off (a stray `publish:`
+            # block in the new file): the vault may have a site, so say the
+            # settings are the trouble, not that there is none.
+            return None, SETTINGS_UNCLEAR, (
+                "run the Settings check (vault_check.py <vault> settings) and "
+                "fix what it lists"), True
+        return None, site_is_off(vault), None, False
     if site is None:
-        return None, "player_site.publish is on but player_site.folder names no site", (
-            "set the site up with publish-site, or set player_site.publish: false"
+        on_name = setting_name(vault, "player_site.publish")
+        return None, (f"{on_name} is on but "
+                      f"{setting_name(vault, 'player_site.folder')} names no "
+                      f"site"), (
+            f"set the site up with publish-site, or set {on_name}: false"
             ), True
     if publishes and settings(vault).inline:
         return None, (f"publish: in {settings_file(vault)} is written in a way that "
                       f"is not understood here (on one line)"), (
             "write it as a block at the margin, one key per line"), True
     if not (site / "vault.config.json").is_file():
-        return None, (f"no vault.config.json in player_site.folder "
-                      f"({site.as_posix()})"), "fix player_site.folder", True
+        folder_name = setting_name(vault, "player_site.folder")
+        return None, (f"no vault.config.json in {folder_name} "
+                      f"({site.as_posix()})"), f"fix {folder_name}", True
     fix = f"run update-pin --site {site.as_posix()}, then run this again"
     installed = site / "node_modules" / PUBLISH_PACKAGE
     script = installed / "bin" / "gm-publish.js"
@@ -1687,7 +1677,19 @@ def _lines_tool(vault: Path) -> tuple[Path | None, str | None, str | None,
     return PUBLISH_TOOL, None, node_fix, True
 
 
-SITE_IS_OFF = "player_site.publish is not on"
+SETTINGS_UNCLEAR = "the settings could not be read cleanly"
+
+
+def _stop_fault(vault: Path) -> bool:
+    """Whether the vault's settings have a fault that stops a player build."""
+    try:
+        return any(f.get("level") == "stop" for f in settings(vault).faults)
+    except SettingsUnavailable:
+        return False
+
+
+def site_is_off(vault: Path) -> str:
+    return f"{setting_name(vault, 'player_site.publish')} is not on"
 
 
 def _resolved_from(site: Path) -> Path | None:
@@ -1738,18 +1740,26 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
         return why, [f"ERROR\t(vault)\t{check} could not ask the publish "
                      f"tool what publishes ({why}) — nothing checked, "
                      f"nothing written; {fix}"]
-    if why == SITE_IS_OFF:
+    if _stop_fault(vault):
+        # The settings are the trouble, and a vault whose settings cannot be
+        # read may well have a site: not "this vault has no site".
+        return SETTINGS_UNCLEAR, [
+            f"ERROR\t(vault)\t{check} could not tell whether this vault has "
+            f"a site: {SETTINGS_UNCLEAR} ({why}) — nothing checked, nothing "
+            f"written; run the Settings check (vault_check.py <vault> "
+            f"settings) and fix what it lists"]
+    if why == site_is_off(vault):
         # gm-leak is only about the site, so it says why it has no rows. A
         # check with work of its own (pc-body, wrapup) just gets on with it.
         return why, [f"INFO\t(vault)\t{check} has no site to check: "
-                     f"{SITE_IS_OFF} in {settings_file(vault)}, so nothing publishes"
+                     f"{site_is_off(vault)} in {settings_file(vault)}, so nothing publishes"
                      ] if check == "gm-leak" else []
     # The tool could not be asked. A vault file it refused is still to be
     # fixed; a missing node is nothing a GM with no site has to act on.
     todo = f"; {fix}" if fix == f"fix {settings_file(vault)}" else ""
     return why, [f"INFO\t(vault)\t{check} did not ask what a section would "
                  f"hide on a site ({why}). This vault has no site "
-                 f"(player_site.publish is not on), so nothing publishes{todo}"]
+                 f"({site_is_off(vault)}), so nothing publishes{todo}"]
 
 
 # The faults in a NOTE that change what the site shows, as the publish
@@ -1841,9 +1851,9 @@ def check_site_faults(vault: Path, files: list[str] | None = None
     with every page that names each."""
     tool, why, fix, has_site = _lines_tool(vault)
     if not has_site:
-        if why == SITE_IS_OFF:
+        if why == site_is_off(vault):
             return [f"INFO\t(vault)\tsite-faults has no site to check: "
-                    f"{SITE_IS_OFF} in {settings_file(vault)}"]
+                    f"{site_is_off(vault)} in {settings_file(vault)}"]
         # The switch reads off, but the publish tool could not be asked (a
         # vault file it will not parse): say that, and what to fix.
         todo = f"; {fix}" if fix else ""
@@ -2453,7 +2463,8 @@ def _keeper_text(text: str, excludes: list[str]) -> bool:
             or any(s.casefold() in low for s in excludes))
 
 
-def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
+def _heading_leak(rel: str, state: LineState, excludes: list[str],
+                  list_name: str) -> list[str]:
     """Rows for one published heading line."""
     if state.heading is None:
         return []
@@ -2492,7 +2503,7 @@ def _heading_leak(rel: str, state: LineState, excludes: list[str]) -> list[str]:
                                   {e.casefold() for e in excludes} else [title])
         return [f"WARNING\t{rel}:{state.lineno}\tGM-only heading '{title}' "
                 f"publishes — nest it under ## GM Notes; to move every one at "
-                f"once, set player_site.hide.sections to "
+                f"once, set {list_name} to "
                 f"{json.dumps(paste, ensure_ascii=False)} and run "
                 f"`vault_check.py <vault> gm-leak --renest-excludes --fix`"]
     if _keeper_text(title, excludes):
@@ -2654,7 +2665,8 @@ def _gm_leak(vault: Path, folder: str | None, fix: bool = False,
             if state.in_code or not state.published:
                 continue
             if state.heading is not None:
-                found = _heading_leak(rel, state, excludes)
+                found = _heading_leak(rel, state, excludes, setting_name(
+                    vault, "player_site.hide.sections"))
                 title = state.heading[1].strip()
                 if (not found and state.heading[0] == 2
                         and title.casefold() in own_strips):
@@ -4547,10 +4559,11 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
     an `exclude_sections` the tool cannot read, writes nothing.
     """
     name = "player_site.hide.sections"
+    shown_name = setting_name(vault, name)
     own = settings(vault)
     if own.origins[name] == "fault":
         why = next((f["message"] for f in own.faults if f.get("setting") == name),
-                   f"{name} not understood")
+                   f"{shown_name} not understood")
         return [f"ERROR\t{settings_file(vault)}\t{why} — nothing written; rewrite "
                 f"it as a plain list first"]
     listed = written_in_vault_file(own, name)
@@ -4584,11 +4597,11 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
 
     if collapse and own.inline:
         refused += 1
-        rows.append(f"ERROR\t{settings_file(vault)}\texclude_sections cannot be "
+        rows.append(f"ERROR\t{settings_file(vault)}\t{shown_name} cannot be "
                     f"collapsed: publish: is written on one line")
     if refused:
         rows.append(f"ERROR\t{settings_file(vault)}\tmigration blocked by {refused} "
-                    f"refusal(s) above — nothing written, exclude_sections "
+                    f"refusal(s) above — nothing written, {shown_name} "
                     f"left as it is")
         return rows
 
@@ -4608,11 +4621,11 @@ def renest_excludes_migration(vault: Path, fix: bool) -> list[str]:
         except SettingsUnavailable as e:
             if not e.refused:
                 raise
-            rows.append(f"ERROR\t{settings_file(vault)}\texclude_sections cannot be "
+            rows.append(f"ERROR\t{settings_file(vault)}\t{shown_name} cannot be "
                         f"collapsed: {e} — the headings are already moved; "
                         f"the list is left as it is")
             return rows
-        rows.append(f"{mode}\t{settings_file(vault)}\tcollapsed exclude_sections "
+        rows.append(f"{mode}\t{settings_file(vault)}\tcollapsed {shown_name} "
                     f"from {old} to [\"GM Notes\"]")
     return rows
 

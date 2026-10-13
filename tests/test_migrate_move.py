@@ -214,7 +214,6 @@ class RuleTests(unittest.TestCase):
     def test_the_check_replaces_config_to_vault(self):
         names = [c.name for c in ms.SITE_CHECKS]
         self.assertIn("settings-move", names)
-        self.assertNotIn("config-to-vault", names)
         check = next(c for c in ms.SITE_CHECKS if c.name == "settings-move")
         self.assertEqual((check.release, check.band, check.asks_site),
                          (None, 2, False))

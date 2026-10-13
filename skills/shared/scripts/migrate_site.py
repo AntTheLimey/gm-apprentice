@@ -20,7 +20,7 @@ from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_
                          check_pc_body, check_sessions, configured_site,
                          vault_settings)
 from vaultlib import (LEGACY_SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
-                      forget_settings, google_fonts, set_key, settings,
+                      forget_settings, google_fonts, set_key, setting_name, settings,
                       settings_default, settings_file, settings_raw, settings_set,
                       site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
 
@@ -58,17 +58,18 @@ def find_site_repin(vault: Path) -> list[Item]:
     if settings(vault).inline:
         raise StepFailed(INLINE_PUBLISH)
     site, has_config = configured_site(vault)
+    switch = setting_name(vault, "player_site.publish")
+    folder = setting_name(vault, "player_site.folder")
     if site is None:
         if site_switch_written(settings(vault)) is True:
             raise StepFailed(
-                "player_site.publish is on but player_site.folder names no folder; "
-                "set player_site.folder to the site folder, or set "
-                "player_site.publish: false")
+                f"{switch} is on but {folder} names no folder; "
+                f"set {folder} to the site folder, or set {switch}: false")
         return []
     if not has_config:
         raise StepFailed(
-            f"player_site.folder is set to {site} but no vault.config.json is "
-            f"there; correct the path, or set player_site.publish: false")
+            f"{folder} is set to {site} but no vault.config.json is "
+            f"there; correct the path, or set {switch}: false")
     data = _pin_check(site)
     if data["ok"]:
         return []
@@ -76,7 +77,7 @@ def find_site_repin(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         code, text, err = plugin_tool(["update-pin", "--site", str(site)])
-        # It may have written player_site.publish into the vault file.
+        # It may have written the site switch into the vault file.
         forget_settings(vault)
         lines = [line for line in text.splitlines() if line.strip()]
         if code != 0:
@@ -84,7 +85,7 @@ def find_site_repin(vault: Path) -> list[Item]:
             raise StepFailed("; ".join(tail))
         if not _pin_check(site)["ok"]:
             raise StepFailed(
-                "update-pin finished but the site (player_site.folder in "
+                f"update-pin finished but the site ({folder} in "
                 f"{settings_file(vault)}) is still out of date; run "
                 "update-pin --site <that folder> by hand to see why")
         return lines
@@ -208,14 +209,16 @@ def find_publish_site(vault: Path) -> list[Item]:
     has_dir = bool(own.get("player_site.folder"))
     value = "true" if has_dir else "false"
     where = settings_file(vault)
-    row = (f"write player_site.publish: {value} in {where}" if has_dir
-           else f"write player_site.publish: false in {where} (no site "
-                "folder is named; if this vault has a site, set "
-                "player_site.folder to its folder instead)")
+    switch = setting_name(vault, "player_site.publish")
+    folder = setting_name(vault, "player_site.folder")
+    row = (f"write {switch}: {value} in {where}" if has_dir
+           else f"write {switch}: false in {where} (no site "
+                f"folder is named; if this vault has a site, set "
+                f"{folder} to its folder instead)")
 
     def apply(_value: str | None) -> list[str]:
         settings_set(vault, [("player_site.publish", has_dir)])
-        return [f"wrote player_site.publish: {value}"]
+        return [f"wrote {switch}: {value}"]
 
     return [Item("publish-site", WILL, [row], apply)]
 
@@ -496,7 +499,8 @@ def find_default_mode(vault: Path) -> list[Item]:
         if value == "leave":
             return ["left the default palette to the reader's device"]
         _set_settings(vault, [("player_site.theme.default_mode", value)])
-        return [f"wrote player_site.theme.default_mode: {value}"]
+        return [f"wrote {setting_name(vault, 'player_site.theme.default_mode')}: "
+                f"{value}"]
 
     return [Item("default-mode", CHOICE,
                  ["start every reader on one palette (unset follows the "
@@ -524,7 +528,8 @@ def find_fonts(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         _set_settings(vault, [("player_site.theme.fonts.source", "self-host")])
-        return ["wrote player_site.theme.fonts.source: self-host; the next build "
+        return [f"wrote {setting_name(vault, 'player_site.theme.fonts.source')}: "
+                "self-host; the next build "
                 "downloads the fonts once and serves them from the site"]
 
     return [Item("fonts-self-host", CHOICE,
@@ -576,11 +581,12 @@ def find_exclude_lists(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         _set_settings(vault, [(name, default) for name, default in lists])
-        return [f"wrote {name}: {len(default)} entries"
+        return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
                 for name, default in lists]
 
     return [Item("exclude-lists", WILL,
-                 [f"write the built-in {name} ({', '.join(default)}) "
+                 [f"write the built-in {setting_name(vault, name)} "
+                  f"({', '.join(default)}) "
                   f"into {settings_file(vault)} so you can see and edit it; "
                   f"what publishes does not change"
                   for name, default in lists], apply)]
@@ -590,7 +596,7 @@ SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check(MOVE, None, 2, "the settings move to the new settings file",
           find_settings_move),
-    Check("publish-site", None, 2, "the player_site.publish switch",
+    Check("publish-site", None, 2, "the site switch",
           find_publish_site),
     Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,
           asks_site=True, choices=("default-mode=",)),

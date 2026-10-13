@@ -148,7 +148,7 @@ class RepinTests(unittest.TestCase):
         vault = make_vault(self, site=False, extra="  site: true\n")
         with self.assertRaises(StepFailed) as caught:
             self.find(vault, Pin())
-        self.assertIn("player_site.publish is on but player_site.folder names no "
+        self.assertIn("publish.site is on but publish.site_dir names no "
                       "folder", str(caught.exception))
 
     def test_a_site_dir_with_no_site_file_stops(self):
@@ -201,7 +201,7 @@ class PublishSiteTests(unittest.TestCase):
         vault = make_vault(self)
         (item,) = ms.find_publish_site(vault)
         self.assertEqual((item.id, item.group), ("publish-site", WILL))
-        self.assertEqual(item.apply(None), ["wrote player_site.publish: true"])
+        self.assertEqual(item.apply(None), ["wrote publish.site: true"])
         self.assertIn("\n  site: true\n", self.text(vault))
         self.assertEqual(ms.find_publish_site(vault), [])
 
@@ -209,7 +209,7 @@ class PublishSiteTests(unittest.TestCase):
         vault = make_vault(self, site=False)
         (item,) = ms.find_publish_site(vault)
         self.assertIn("no site folder is named; if this vault has a site, "
-                      "set player_site.folder to its folder instead",
+                      "set publish.site_dir to its folder instead",
                       item.lines[0])
         item.apply(None)
         self.assertIn("\n  site: false\n", self.text(vault))
@@ -217,7 +217,7 @@ class PublishSiteTests(unittest.TestCase):
     def test_a_site_dir_row_has_no_caveat(self):
         (item,) = ms.find_publish_site(make_vault(self))
         self.assertEqual(
-            item.lines, ["write player_site.publish: true in _meta/vault-config.md"])
+            item.lines, ["write publish.site: true in _meta/vault-config.md"])
 
     def test_a_switch_already_written_is_left(self):
         vault = make_vault(self, extra="  site: false\n")
@@ -387,7 +387,7 @@ class PlayedTests(unittest.TestCase):
         asked = []
         state = {"left": True}
 
-        def ask(v, args, vault_only=False):
+        def ask(v, args):
             asked.append(args)
             if "--dry-run" in args:
                 if not state["left"]:
@@ -669,7 +669,7 @@ class ThemeChoiceTests(unittest.TestCase):
                          ("default-mode", "dark, light or leave"))
         self.assertTrue(item.holds_stamp)
         self.assertEqual(item.apply("dark"),
-                         ["wrote player_site.theme.default_mode: dark"])
+                         ["wrote publish.theme.default_mode: dark"])
         self.assertEqual(self.written(vault).get("player_site.theme.default_mode"),
                          "dark")
         self.assertEqual(item.apply("leave"),
@@ -790,14 +790,14 @@ class ExcludeListTests(unittest.TestCase):
             json.dumps({"excludeSections": ["Old"]}), encoding="utf-8")
         (item,) = ms.find_exclude_lists(vault)
         self.assertEqual(len(item.lines), 1)
-        self.assertIn("player_site.hide.fields", item.lines[0])
+        self.assertIn("publish.exclude_fields", item.lines[0])
 
     def test_a_list_the_tool_could_not_read_is_replaced(self):
         vault = make_vault(self, extra="  exclude_sections: Mine\n"
                                        "  exclude_fields: [mine]\n")
         (item,) = ms.find_exclude_lists(vault)
         self.assertEqual(len(item.lines), 1)
-        self.assertIn("player_site.hide.sections", item.lines[0])
+        self.assertIn("publish.exclude_sections", item.lines[0])
 
     def test_no_site_offers_nothing(self):
         self.assertEqual(ms.find_exclude_lists(make_vault(self, site=False)), [])

@@ -129,6 +129,10 @@ The output is one JSON object:
 - `origins` holds, under the same names, where each value came from:
   `default`, `file`, `site-file`, `old-name` or `fault`. `fault` means the
   file's value could not be read and the value shown is the fallback.
+- `written` holds, under the same names, the name the vault's own file
+  writes the setting under: the same name on the new layout, the old
+  file's name (`publish.site_title`) on the old one. A message to the GM
+  names a setting this way.
 - `faults` is a list of problems found in the file. Each has `name`,
   `level` (`stop` or `warn`), `kind` and `message`, and may have `setting`,
   `suggest` and `use`. A `stop` fault means a player build refuses to run.

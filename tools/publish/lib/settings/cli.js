@@ -19,7 +19,7 @@ const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
 const { isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
-const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, at: fileAt } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, nameInFor, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
 const { row, isLeaf } = require('./describe');
 const { OLD_BLOCK, SETUP_NOTE } = require('./legacy');
@@ -111,6 +111,7 @@ function get(options, names) {
     file: read.file,
     values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])),
     origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])),
+    written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
     faults: faults.map(faultJson),
   };
   const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);

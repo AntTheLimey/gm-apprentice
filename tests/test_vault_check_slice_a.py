@@ -254,7 +254,7 @@ def config_of(vault):
     return re.sub(r"(?m)^[ \t]+site(_dir)?: .*\n", "", text)
 
 
-SITE_OFF_ROW = ("INFO\t(vault)\tgm-leak has no site to check: player_site.publish "
+SITE_OFF_ROW = ("INFO\t(vault)\tgm-leak has no site to check: publish.site "
                 "is not on in _meta/vault-config.md, so nothing publishes")
 
 
@@ -1213,7 +1213,7 @@ class GmLeakCommandTests(unittest.TestCase):
                     lineno=3, line=f"## {raw}", in_code=False, gm_depth=0,
                     spoiler_depth=0, excluded_by=None, heading=(2, raw),
                     marker=None)
-                rows = vc._heading_leak("Bob.md", state, ["GM Notes"])
+                rows = vc._heading_leak("Bob.md", state, ["GM Notes"], "publish.exclude_sections")
                 self.assertEqual(len(rows), 1, rows)
                 self.assertTrue(rows[0].startswith(
                     "ERROR\tBob.md:3\tdecorated heading"), rows)
@@ -1697,7 +1697,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         with mock.patch.object(vc, "settings_set", side_effect=refusal):
             rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "ERROR\t_meta/vault-config.md\t"
-                                       "exclude_sections cannot be collapsed: "
+                                       "publish.exclude_sections cannot be collapsed: "
                                        "not today"), rows)
         self.assertFalse(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
         self.assertEqual(config_of(vault), self.OLD_CONFIG)
@@ -2247,9 +2247,9 @@ class NoPublishToolTests(unittest.TestCase):
                     file.write_text(file.read_text(encoding="utf-8").replace(
                         "publish:\n", "publish:\n" + blank), encoding="utf-8")
                 self.assert_stopped(
-                    vault, "player_site.publish is on but player_site.folder names no "
+                    vault, "publish.site is on but publish.site_dir names no "
                            "site) — nothing checked, nothing written; set the "
-                           "site up with publish-site, or set player_site.publish: "
+                           "site up with publish-site, or set publish.site: "
                            "false")
 
     def test_the_site_on_is_checked_through_its_tool(self):
@@ -2291,7 +2291,7 @@ class NoPublishToolTests(unittest.TestCase):
                     vault, "the publish tool exited without answering) — "
                            "nothing checked, nothing written; it needs Node "
                            "22+ on PATH; if this vault has no site, set "
-                           "player_site.publish: false in _meta/vault-config.md")
+                           "publish.site: false in _meta/vault-config.md")
 
     def test_without_the_lines_tool_a_site_dir_is_a_site(self):
         # The settings read the file with the build's YAML parser: any
@@ -4425,7 +4425,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         self.assertTrue(rows[0].startswith("ERROR\t(vault)\tgm-leak could "
                                            "not ask the publish tool"), rows)
         self.assertIn("no vault.config.json", rows[0])
-        self.assertIn("fix player_site.folder", rows[0])
+        self.assertIn("fix publish.site_dir", rows[0])
 
     def test_vault_that_never_publishes_does_not_ask(self):
         # No publish: block, so no site: nothing is asked and nothing checked.

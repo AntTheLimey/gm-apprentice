@@ -35,7 +35,7 @@ import sys
 import threading
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
@@ -1202,6 +1202,13 @@ class Settings:
     has_site_block: bool
     # Old file only: its `publish:` block is written on one line.
     inline: bool
+    # Each setting's name as THIS vault's file writes it (the tool's answer):
+    # the same name on the new file, the old file's name on the old one.
+    names: dict[str, str] = field(default_factory=dict)
+
+    def named(self, name: str) -> str:
+        """`name` as the vault's own file writes it, for a message."""
+        return self.names.get(name, name)
 
     def get(self, name: str) -> Any:
         """The value of `name`; a KeyError for a name that is no setting."""
@@ -1325,6 +1332,7 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
                 "origins": dict(answer["origins"]),
                 "faults": list(answer["faults"]),
                 "file": dict(answer["file"]),
+                "names": dict(answer.get("written") or {}),
             }
         except (KeyError, TypeError, AttributeError, ValueError) as e:
             raise SettingsUnavailable(
@@ -1334,7 +1342,17 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
     return Settings(
         values=read["values"], origins=read["origins"], faults=read["faults"],
         has_site_block=bool(read["file"].get("hasSiteBlock")),
-        inline=bool(read["file"].get("inline")))
+        inline=bool(read["file"].get("inline")), names=read["names"])
+
+
+def setting_name(vault: Path, name: str) -> str:
+    """`name` as the vault's own file writes it, for a message to the GM.
+    The tool says (never a table here); when it cannot be asked the new name
+    stands."""
+    try:
+        return settings(vault).named(name)
+    except SettingsUnavailable:
+        return name
 
 
 # The vault file's own words, as against a value that came from the site

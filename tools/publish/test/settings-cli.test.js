@@ -842,3 +842,14 @@ test('new file: the same entries are written as typed and read back the same', (
   assert.equal(run(n, 'add', ['player_site.hide.sections', '12:30', '2024-10-13']).rc, 0);
   assert.deepEqual(run(n, 'get', ['player_site.hide.sections']).data.values['player_site.hide.sections'].slice(-2), ['12:30', '2024-10-13']);
 });
+
+test('get names each setting as the vault\'s own file writes it', () => {
+  const s = scratch(wrap('  mode: player\n'));
+  const old = run(s, 'get').data.written;
+  assert.equal(old['player_site.title'], 'publish.site_title');
+  assert.equal(old['player_site.hide.sections'], 'publish.exclude_sections');
+  const moved = scratch(null);
+  fs.writeFileSync(path.join(moved.vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
+  const now = run(moved, 'get').data.written;
+  assert.equal(now['player_site.title'], 'player_site.title');
+});
