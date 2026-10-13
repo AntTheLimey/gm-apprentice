@@ -266,9 +266,9 @@ function refusal(name) {
 
 // Hands the changes to the writer. { ok } or { errors } (one line for each refusal).
 function write(options, changes) {
-  const { vaultPath } = target(options);
+  const { vaultPath, siteConfig } = target(options);
   try {
-    return { ok: applyChanges(vaultPath, changes, { create: !!options.create }) };
+    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig }) };
   } catch (e) {
     if (e.refusals) return { errors: e.refusals };
     throw e;
@@ -535,9 +535,25 @@ function fillOf(pairs) {
   return out;
 }
 
+// The site folder an old-layout vault names (player_site.folder), and its vault.config.json: { dir, file, exists }.
+// null when the vault is not on the old layout, names no folder, or its settings cannot be read (the plan says so).
+function siteFileNamedBy(vaultPath) {
+  if (layoutOf(vaultPath) !== 'legacy') return null;
+  let raw;
+  try {
+    raw = getPath(readSettings({ vaultPath, siteConfig: {} }).values, ['player_site', 'folder']);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  const dir = require('../lines-cli').siteDirPath(vaultPath, raw);
+  const file = path.join(dir, 'vault.config.json');
+  return { dir, file, exists: fs.existsSync(file) };
+}
+
 function move(options) {
   // The vault is --vault, or the one the site folder's file names. A site file that cannot say is a blocker, not a crash.
-  const siteConfigPath = options.config ? path.resolve(options.config) : (options.vault ? null : path.resolve('./vault.config.json'));
+  let siteConfigPath = options.config ? path.resolve(options.config) : (options.vault ? null : path.resolve('./vault.config.json'));
   const stopped = (blockers) => ({ result: { ok: false, moved: false, lines: [], blockers, files: { write: [], remove: [] } }, lines: ['Nothing was changed. The move is blocked:', ...blockers.map((b) => `  ${b}`)], rc: 1 });
   let vaultPath;
   if (options.vault) {
@@ -551,6 +567,12 @@ function move(options) {
     }
     if (!isMap(site) || typeof site.vaultPath !== 'string' || site.vaultPath.trim() === '') return stopped([`${siteConfigPath} has no "vaultPath"`]);
     vaultPath = path.resolve(path.dirname(siteConfigPath), site.vaultPath);
+  }
+  // With only --vault, the site folder is the one the vault's own settings name; the move must see its file.
+  if (!siteConfigPath) {
+    const named = siteFileNamedBy(vaultPath);
+    if (named && !named.exists) return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
+    if (named) siteConfigPath = named.file;
   }
   const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill) });
   const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files });

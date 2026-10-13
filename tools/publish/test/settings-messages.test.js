@@ -187,3 +187,17 @@ test('doctor --site: the fix names the vault\'s file, and an old file with a sit
     assert.ok(!(await run(other)).findings.some((f) => f.code === 'SETTINGS_OLD_FILE'));
   } finally { done(o); done(n); done(other); }
 });
+
+test('seedVaultSettings makes no settings file while the site file still holds settings, and makes one when it holds none', () => {
+  const held = make('none');
+  const bare = make('none');
+  try {
+    const refused = seedVaultSettings(held.vault, { 'player_site.title': 'A' }, { siteConfig: { vaultPath: '../v', siteTitle: 'Kept' } });
+    assert.deepEqual(refused.written, []);
+    assert.match(refused.skipped, /still holds this vault's settings; run the update first/);
+    assert.equal(fs.existsSync(path.join(held.vault, NEW.file)), false);
+    const ok = seedVaultSettings(bare.vault, { 'player_site.title': 'A' }, { siteConfig: { host: 'github-pages', siteUrl: 'u', vaultPath: '../v', outputDir: './docs' } });
+    assert.deepEqual(ok.written, ['player_site.title']);
+    assert.equal(fs.existsSync(path.join(bare.vault, NEW.file)), true);
+  } finally { done(held); done(bare); }
+});

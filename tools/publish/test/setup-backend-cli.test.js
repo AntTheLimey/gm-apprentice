@@ -119,3 +119,25 @@ test('a vault file the editor refuses stops the command before any KV or wrangle
   assert.strictEqual(files['wrangler.toml'], tomlBefore, 'wrangler.toml untouched');
   assert.deepStrictEqual(calls, [], 'no wrangler call of any kind');
 });
+
+test('a vault with no settings file whose site file still holds settings is left as it is, before any KV or toml change', async () => {
+  const vault = tempVault();
+  const lines = [];
+  const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
+  files['./vault.config.json'] = JSON.stringify({ vaultPath: vault, siteTitle: 'Kept', excludeSections: ['Spoilers'] });
+  const tomlBefore = files['wrangler.toml'];
+  const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
+  assert.strictEqual(rc, 1);
+  assert.match(lines.join('\n'), /still holds this vault's settings; run the update first/);
+  assert.strictEqual(files['wrangler.toml'], tomlBefore);
+  assert.deepStrictEqual(calls, []);
+  assert.strictEqual(fs.existsSync(nodePath.join(vault, '_meta')), false, 'no settings file was made');
+});
+
+test('a vault with no settings file whose site file holds no settings gets the new file, as before', async () => {
+  const vault = tempVault();
+  const { deps } = harness({}, vault);
+  const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
+  assert.strictEqual(rc, 0);
+  assert.match(fs.readFileSync(nodePath.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), /inbox: true/);
+});

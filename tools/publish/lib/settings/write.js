@@ -17,7 +17,7 @@ const { makeFault } = require('./faults');
 const { isLeaf } = require('./describe');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
 const { LAYOUT_VERSION, NEWER_VERSION } = require('./read');
-const { OLD_BLOCK } = require('./legacy');
+const { OLD_BLOCK, hasLegacy } = require('./legacy');
 
 const { Scalar, isScalar, isMap: isYMap, isSeq: isYSeq, isCollection } = YAML;
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
@@ -555,13 +555,18 @@ function runStep(text, step, label, eol, keepBlock) {
 }
 
 // Plans the changes without writing: { rel, file, before, after, changed, notes, wrote, removed, created }.
-function planChanges(vaultPath, changes, { create = false, allowState = false } = {}) {
+// `siteConfig` is the site folder's vault.config.json, when the caller has it: a vault with no settings file whose
+// site file still holds settings is not given a new one (the new file would switch those settings off).
+function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null } = {}) {
   const layout = layoutOf(vaultPath);
   const { steps, refusals } = prepare(changes, layout, { allowState });
   if (refusals.length) {
     const err = new Error(refusals.join('\n'));
     err.refusals = refusals;
     throw err;
+  }
+  if (layout === 'none' && create && hasLegacy(siteConfig)) {
+    throw plain("the site folder's vault.config.json still holds this vault's settings; run the update first, which brings them into the vault. Nothing was written.");
   }
   const doc = open(vaultPath, layout, create);
   if (layout === 'new' || doc.created) {

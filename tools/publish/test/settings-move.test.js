@@ -553,3 +553,42 @@ test('an alias used before its anchor is the ordinary not-valid-YAML blocker', (
     assert.deepEqual(hashes(s.root), before);
   }
 });
+
+// ---- --vault alone: the site folder the vault names ----
+
+test('--vault alone uses the vault.config.json in the folder the vault names, and moves its settings too', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const site = path.join(s.root, 'Site');
+  fs.mkdirSync(site);
+  const siteFile = path.join(site, 'vault.config.json');
+  fs.writeFileSync(siteFile, JSON.stringify({ vaultPath: '../Vault', siteTitle: 'Four', folderMap: { People: 'people' }, excludeSections: ['Spoilers'] }));
+  const before = strip(loadPublishConfig(s.vault, JSON.parse(fs.readFileSync(siteFile, 'utf8')), quiet));
+  const r = cliMove({ vault: s.vault });
+  assert.equal(r.rc, 0);
+  assert.equal(layoutOf(s.vault), 'new');
+  const siteAfter = JSON.parse(fs.readFileSync(siteFile, 'utf8'));
+  assert.deepEqual(siteAfter, { vaultPath: '../Vault' });
+  assert.deepEqual(strip(loadPublishConfig(s.vault, siteAfter, quiet)), before);
+});
+
+test('--vault alone is blocked, and writes nothing, when the folder the vault names cannot be read', () => {
+  const s = scratch(old('  site_dir: ../Missing\n'));
+  const before = hashes(s.root);
+  const r = cliMove({ vault: s.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(layoutOf(s.vault), 'legacy');
+  assert.deepEqual(hashes(s.root), before);
+  const noFile = scratch(old('  site_dir: ../Empty\n'));
+  fs.mkdirSync(path.join(noFile.root, 'Empty'));
+  assert.equal(cliMove({ vault: noFile.vault }).rc, 1);
+  assert.equal(layoutOf(noFile.vault), 'legacy');
+  const text = [];
+  runSettings({ verb: 'move', args: [], vault: s.vault }, { out: (l) => text.push(l), err: () => {} });
+  assert.match(text.join('\n'), /the vault names a site folder at .*Missing that cannot be read; give --config or fix the path/);
+});
+
+test('--vault alone moves a vault that names no site folder, as it always did', () => {
+  const s = scratch(old('  mode: player\n'));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  assert.equal(layoutOf(s.vault), 'new');
+});

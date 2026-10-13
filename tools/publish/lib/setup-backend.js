@@ -111,7 +111,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const turnOn = [{ op: 'set', name: SWITCH_NAME[feature], value: true }];
   if (!config.vaultPath) { out(`${configPath} has no "vaultPath"`); return 1; }
   const vaultPath = path.resolve(siteRoot, config.vaultPath);
-  try { planChanges(vaultPath, turnOn, { create: true }); } catch (e) { out(`cannot edit the vault's settings: ${String(e.message).split('\n')[0]}`); return 1; }
+  try { planChanges(vaultPath, turnOn, { create: true, siteConfig: config }); } catch (e) { out(`cannot edit the vault's settings: ${String(e.message).split('\n')[0]}`); return 1; }
 
   // Preflight: KV permission.
   const perm = checkKvPermission({ runWrangler: runWranglerAt });
@@ -128,7 +128,7 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   writeFile(tomlPath, tomlText);
 
   // Turn the switch on in the vault's settings, the one place they live.
-  try { applyChanges(vaultPath, turnOn, { create: true }); } catch (e) { out(e.message); return 1; }
+  try { applyChanges(vaultPath, turnOn, { create: true, siteConfig: config }); } catch (e) { out(e.message); return 1; }
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot, configPath);

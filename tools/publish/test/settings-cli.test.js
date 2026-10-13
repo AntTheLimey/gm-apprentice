@@ -810,3 +810,14 @@ test('set --create with an old name makes the new file under the new name', () =
   assert.equal(run(s, 'set', ['publish.exclude_drafts=true'], { create: true }).rc, 0);
   assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), 'version: 1\nplayer_site:\n  hide:\n    drafts: true\n');
 });
+
+test('set --create makes no settings file while the site file still holds settings', () => {
+  const held = scratch(null, { vaultPath: './vault', siteTitle: 'Kept' });
+  const refused = run(held, 'set', ['player_site.title=T'], { create: true, config: held.config });
+  assert.equal(refused.rc, 1);
+  assert.match(refused.err[0], /still holds this vault's settings; run the update first/);
+  assert.equal(fs.existsSync(path.join(held.vault, '_meta', 'vault-config.yaml')), false);
+  const bare = scratch(null, { vaultPath: './vault', host: 'github-pages' });
+  assert.equal(run(bare, 'set', ['player_site.title=T'], { create: true, config: bare.config }).rc, 0);
+  assert.equal(fs.existsSync(path.join(bare.vault, '_meta', 'vault-config.yaml')), true);
+});
