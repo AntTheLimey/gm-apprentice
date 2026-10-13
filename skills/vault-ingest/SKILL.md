@@ -129,8 +129,8 @@ Read `references/synthesis-templates.md`.
    story entry (synthesis-templates.md § Character Story
    Backstory Entries). A PC whose sources hold no stats:
    `shared/pc-body-structure.md` § A sheet kept somewhere else; on a
-   campaign that does not publish sheets (`publish.character_sheets:
-   false`) do not ask where one is kept; when `vault_check.py pc-body`
+   campaign that does not publish sheets (`player_site.sheets.show`
+   off) do not ask where one is kept; when `vault_check.py pc-body`
    emits no Stat Sheet rows there is nothing to ask.
 
 Check each entity as you write it: entity mentions are

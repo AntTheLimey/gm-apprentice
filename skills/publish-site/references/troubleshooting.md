@@ -35,7 +35,7 @@ or shows a broken image icon.
 
 One of two things:
 
-- `publish.attachments_dir` does not name the folder that holds the
+- `vault.attachments` does not name the folder that holds the
   vault's images.
 - The portrait file referenced in the entity's frontmatter does
   not exist at the expected path.
@@ -45,13 +45,13 @@ One of two things:
 Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
 `PORTRAIT_MISSING` row names the entity and the portrait filename it
 expected inside the attachments folder (`settings get
-publish.attachments_dir`) — the fix line says whether to add the file
+vault.attachments`) — the fix line says whether to add the file
 or correct the `portrait:` value.
 
 ### Fix
 
 - If the folder is wrong: `settings set
-  publish.attachments_dir=<folder>`.
+  vault.attachments=<folder>`.
 - If the image file is missing: add the image to the vault, or
   remove the `portrait` field from the entity's frontmatter
   (the page will render cleanly without it).
@@ -138,8 +138,8 @@ vault but does not appear anywhere on the built site.
 
 One of:
 
-- The entity's vault folder is not in `publish.folder_map`
-- The entity's vault folder is in `publish.exclude_dirs`
+- The entity's vault folder is not in `player_site.folder_map`
+- The entity's vault folder is in `player_site.hide.folders`
 - The entity's markdown file does not have a `type` frontmatter
   field
 - The file's frontmatter is not valid YAML, most often a key written
@@ -150,7 +150,7 @@ One of:
 ### Diagnosis steps
 
 For one entity, run `node "$TOOL" explain "<vault-relative path>"` — it
-prints the folder's `folder_map` mapping (or lack of one), the file's
+prints the folder's place in the folder map (or lack of one), the file's
 `type:` status, and the build's verdict in one shot. Vault-wide, `node
 "$TOOL" doctor --site --config <dir>/vault.config.json` reports the same
 causes: `FOLDER_UNMAPPED` (a folder with typed pages inside that will
@@ -162,15 +162,15 @@ lists the unparseable files too.
 ### Fix
 
 **Folder not in the folder map:**
-`settings get publish.folder_map`, then `settings set` the map whole
+`settings get player_site.folder_map`, then `settings set` the map whole
 with the folder and a URL slug added. For creatures kept in a folder
 called `Bestiary`:
 ```bash
-node "$TOOL" settings set 'publish.folder_map={<existing entries>,"Bestiary":"creatures"}' --config <dir>/vault.config.json
+node "$TOOL" settings set 'player_site.folder_map={<existing entries>,"Bestiary":"creatures"}' --config <dir>/vault.config.json
 ```
 
-**Folder in exclude_dirs:**
-On the GM's yes, `settings remove publish.exclude_dirs <folder>`,
+**Folder hidden (`player_site.hide.folders`):**
+On the GM's yes, `settings remove player_site.hide.folders <folder>`,
 or move the entity to a different folder.
 
 **Missing type field:**
@@ -374,9 +374,9 @@ pages. The wrap-up (`type: session_wrap`) supplies the recap text, but it
 only surfaces when its paired session index — and for the Campaign Saga,
 a chapter page — are published too. Two common breakdowns:
 
-1. The vault's `Chapters/` folder is missing from `publish.folder_map`,
+1. The vault's `Chapters/` folder is missing from `player_site.folder_map`,
    so every chapter, session, scene, and wrap-up file is skipped. Builds from tool 1.6.0 print a
-   `scanner: skipping "<dir>" — not in publish.folder_map` warning; older builds
+   `scanner: skipping "<dir>" — not in player_site.folder_map` warning; older builds
    skip silently. (Scaffolds from 1.6.0 include the mapping by default.)
 2. The session index or chapter page exists but is unpublished — held
    back by the manifest, `DRAFT` status, or player-mode auto-exclusion.
@@ -390,7 +390,7 @@ missing — exactly the two breakdowns above.
 
 ### Fix
 
-Add the missing `folder_map` entry, publish the session index and a
+Add the missing folder to `player_site.folder_map`, publish the session index and a
 player-safe chapter page alongside the wrap-up, and rebuild. To show a
 recap, all three must publish: the session index (`type: session`), its
 chapter (`type: chapter`), and the wrap-up (`type: session_wrap`).

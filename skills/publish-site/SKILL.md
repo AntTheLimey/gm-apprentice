@@ -78,7 +78,7 @@ read-only on the vault, so this lives in the skill, not in
 **On a D&D vault, before every build**, also run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>" --on-build --write`
 and pass on any `ERROR`, `CHECK` or `REMOVE` row. It does nothing unless
-`publish.dndbeyond_sync` is `build`.
+`vault.dndbeyond_sync` is `build`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
 from the scaffold's `file:` pin — no registry, no network):
@@ -95,21 +95,21 @@ https://nodejs.org (LTS).
 
 **Settings.** Read and change every setting through `node "$TOOL"
 settings … --config <dir>/vault.config.json` (`--help` lists the
-verbs); never open `_meta/vault-config.md` to read one or edit it by
-hand.
+verbs); never open a settings file in `_meta/` to read one or edit it
+by hand.
 
-**Is there a site?** `node "$TOOL" settings get publish.site
-publish.site_dir --vault <vault>`.
+**Is there a site?** `node "$TOOL" settings get player_site.publish
+player_site.folder --vault <vault>`.
 
 - **Off:** no site. Nothing to register, so skip `publish-played`. If
   the GM asks for a site, run capability 1; `init` turns the switch
   on. `build` and `deploy` refuse only when the file says `false`:
   say it is off and offer to turn it back on. `get` also prints
-  `false (default)` for a vault with no switch and no `site_dir`; a
+  `false (default)` for a vault with no switch and no folder; a
   site folder from before 1.10.25 still builds then.
-- **On, with no `publish.site_dir`:** a site still to be set up. Run
+- **On, with no `player_site.folder`:** a site still to be set up. Run
   capability 1.
-- **On, with a `publish.site_dir`:** capabilities 2 and 4 read the
+- **On, with a `player_site.folder`:** capabilities 2 and 4 read the
   folder from it; a relative value is relative to the vault.
 
 ## Nine Capabilities
@@ -120,7 +120,7 @@ campaign")
 
 Follow `references/setup-wizard.md` step by step — it is
 authoritative (preflight doctor first, Cloudflare default, resumes
-from `publish.setup_progress`). Don't improvise or skip steps.
+from its set-up note). Don't improvise or skip steps.
 
 ### 2. Routine updates
 ("update my site", "rebuild", "I've updated the vault")
@@ -155,7 +155,7 @@ campaign-qa.
 "new folder in the vault", "pages missing after an update")
 
 1. Locate the site directory; `node "$TOOL" settings get
-   publish.folder_map publish.exclude_dirs --config
+   player_site.folder_map player_site.hide.folders --config
    <dir>/vault.config.json`.
 2. Compare them with the vault's folders; propose additions.
 3. After confirmation, `settings set` the folder map whole and
@@ -175,13 +175,13 @@ site before pushing.
 see", "publish without spoilers")
 
 Read `references/content-filtering.md` § Content Visibility Model
-and § Manifest Format. In `mode: player` a file publishes only as
+and § Manifest Format. In `player` mode a file publishes only as
 a **checked** entry under `## Publishing` — checking it under
 `## Excluded` or `## Needs Decision` does not publish it;
-`mode: full` ignores the manifest.
+`full` mode ignores the manifest.
 
-1. `node "$TOOL" settings get publish.theme publish.four_oh_four
-   publish.mode --config <dir>/vault.config.json`. If every theme and
+1. `node "$TOOL" settings get player_site.theme player_site.not_found
+   player_site.hide.mode --config <dir>/vault.config.json`. If every theme and
    404 line says `(default)`, first follow
    content-filtering.md § Setup Questioning Flow. If the mode is
    `full`, stop and ask the GM to change it before building the
@@ -201,7 +201,7 @@ the inbox", "watch for sheet changes")
 
 Follow `references/change-request-loop.md` — an unattended,
 self-paced loop that applies clean player sheet edits (GURPS 4e,
-CoC 7e and D&D 5e) and flags edge cases. With `publish.character_sheets`
+CoC 7e and D&D 5e) and flags edge cases. With `player_site.sheets.show`
 off it only answers questions.
 
 ### 8. Live status bar setup (Tier 2a) / 9. At-table inbox setup (Tier 2b)
@@ -211,8 +211,8 @@ up the inbox", "let players submit changes")
 Cloudflare Pages only. From the site directory run
 `node "$TOOL" setup-status-bar` or `node "$TOOL" setup-inbox`
 (`--config <path>` if not `./vault.config.json`). Both are
-preflight-gated, idempotent, handle KV themselves and write
-`publish.live_stats` / `publish.inbox` to the vault file — see
+preflight-gated, idempotent, handle KV themselves and turn on
+`player_site.features.live_stats` / `player_site.features.inbox` — see
 `references/cloudflare-pages.md` § The fast way. `setup-inbox` is
 infra only; the at-table session is capability 7.
 

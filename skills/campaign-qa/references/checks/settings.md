@@ -17,21 +17,20 @@ groups.
    anything on. Tell the GM in a short list; on a yes add `--fix`.
 2. `proposed:` rows would switch something on or publish more; each
    says what it does. Put them three to five at a time. For each yes
-   run the command again with `--apply publish.inbx` (the name in the
+   run the command again with `--apply player_site.features.inbx` (the name in the
    row), several names allowed.
 3. Rows with no fix give what the setting takes (`<name>` is as shown
-   in the row in full: `settings describe publish.link_previews`).
+   in the row in full: `settings describe player_site.features.link_previews`).
    With no suggested name, ask the GM what the key was meant to do,
-   then find it with `settings list`. A hiding key written beside
-   `publish:` instead of under it has no fix (the tool cannot move it):
-   add its entries with `settings add`, then, on the GM's yes, delete
-   the stray line. Apply the answer:
+   find the setting with `settings list`, and `carry` the key to it.
+   Apply the answer:
 
 ```bash
 TOOL="${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
-node "$TOOL" settings set publish.link_previews=off --vault "<vault>"
-node "$TOOL" settings add publish.exclude_sections Rumours --vault "<vault>"
-node "$TOOL" settings unset publish.link_preview --vault "<vault>"
+node "$TOOL" settings set player_site.features.link_previews=off --vault "<vault>"
+node "$TOOL" settings add player_site.hide.sections Rumours --vault "<vault>"
+node "$TOOL" settings unset player_site.features.link_preview --vault "<vault>"
+node "$TOOL" settings carry hide.sections player_site.hide.sections --vault "<vault>"
 node "$TOOL" settings list
 ```
 

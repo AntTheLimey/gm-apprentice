@@ -21,6 +21,30 @@ $TOOL = <plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-
 
 Do not skip ahead. Some steps depend on answers from earlier ones.
 
+## Where the answers are kept
+
+Nothing is held in your head between steps: each answer is written
+down as the GM gives it, so an interrupted run loses nothing.
+
+- **An answer that is a setting** (the title, tagline, image, 404
+  message, palette, fonts) is written at once with
+  `node "$TOOL" settings set <name>=<value> --vault <vault>` and read
+  back with `settings get <name> --vault <vault>`.
+- **Everything else** (the host, the project name, the site folder,
+  how far the run got) goes in the set-up note:
+
+  ```bash
+  node "$TOOL" settings setup-note set last_completed_step=4 host=cloudflare-pages --vault <vault>
+  node "$TOOL" settings setup-note get --vault <vault>
+  ```
+
+  `set` keeps the keys already there; `get` prints one `key: value`
+  line each, or `No set-up note.`
+
+After each step, `setup-note set last_completed_step=<N>` with any
+answer the step names. Never open or edit a file in `_meta/` for any
+of this.
+
 ---
 
 ## Before you start
@@ -49,8 +73,7 @@ that choice tailors the preflight and forks the deploy at the end.
 
 ## Phase A — Preflight (runs first)
 
-Nothing is created or changed in this phase except the small
-`publish.setup_progress` block in the vault (see "Resume state" below).
+Nothing is created or changed in this phase except the set-up note.
 Every red must be cleared before moving to Phase B.
 
 ### Step 1: Locate and validate the vault
@@ -71,31 +94,37 @@ vault. Explain:
 > campaign-organizer first to set up your vault structure, then
 > come back here."
 
-The vault must exist before anything else, because the resume state
+The vault must exist before anything else, because the set-up note
 lives inside it. If `_meta/` exists, confirm:
 
 > "Found your vault. Continuing."
 
-Record `vault_path` (see "Resume state" below).
+This path is `<vault>` in every command below.
 
 ### Step 2: Resume check
 
-Read the frontmatter of `_meta/vault-config.md`. If a
-`publish.setup_progress` block exists with `tier1_complete: false`,
-setup was interrupted on an earlier run. Tell the GM:
+Run `node "$TOOL" settings setup-note get --vault <vault>`. (If the
+shell cannot find `node`, do Step 3 and come back.)
 
-> "It looks like we started setting up your site before and didn't
-> finish. I can pick up right where we left off — no need to
-> re-answer anything you already told me."
+- **`No set-up note.`** Start fresh: `setup-note set started=<today>
+  last_completed_step=1`.
+- **A note with `tier1_complete: true`.** The site was already set up:
+  this is not first-time setup. Point the GM at "update my site" for a
+  refresh, or the tiered close (Phase G) if they want the status bar or
+  inbox.
+- **Any other note.** Setup was interrupted on an earlier run. Tell the
+  GM:
 
-Resume from `last_completed_step`, reusing every gathered answer
-already recorded (vault path, title, tagline, project/repo name, site
-directory). Skip any step whose answer is already present.
+  > "It looks like we started setting up your site before and didn't
+  > finish. I can pick up right where we left off — no need to
+  > re-answer anything you already told me."
 
-If `tier1_complete: true`, Tier 1 setup already succeeded on this vault
-— this is not first-time setup. Point the GM at "update my site" for a
-refresh, or the tiered close (Phase G) if they want the status bar or
-inbox. If the block is absent, start fresh.
+  Carry on from the step after `last_completed_step`. The note holds
+  the host, project name and site folder; `settings get player_site
+  --vault <vault>` shows the settings already given (the lines not
+  marked `(default)`). Skip a step whose answer is there. A note begun
+  before plugin 1.10.54 may hold `site_title` or `tagline`: write each
+  to its setting now (Steps 6 and 7).
 
 ### Step 3: Node check (chicken-and-egg)
 
@@ -126,9 +155,9 @@ This is just a question — it touches nothing on disk yet. Ask:
 > The site itself is identical either way. I'd suggest Cloudflare
 > Pages unless you already live in GitHub. Which would you like?"
 
-Record the answer as `host` (`cloudflare-pages` or `github-pages`) in
-`publish.setup_progress`. This choice parameterizes the preflight below
-and forks the deploy in Phase E.
+Record the answer in the set-up note as `host` (`cloudflare-pages` or
+`github-pages`). This choice parameterizes the preflight below and
+forks the deploy in Phase E.
 
 > Note: choosing Cloudflare means the wizard writes an explicit
 > `host: cloudflare-pages` into `vault.config.json` later. This is a
@@ -196,59 +225,12 @@ manual repo path.
 
 ---
 
-## Resume state — `publish.setup_progress`
-
-The wizard maintains a small block in the frontmatter of
-`_meta/vault-config.md` so an interrupted run can resume. Add it under
-the existing top-level `publish:` key — **do not** overwrite any other
-`publish` settings already there (theme, four_oh_four, and so on); you
-are adding a `setup_progress:` child alongside them.
-
-```yaml
----
-publish:
-  setup_progress:
-    host: cloudflare-pages         # or github-pages
-    last_completed_step: 4         # highest completed step number
-    started: "2026-07-22"          # ISO date the run began
-    tier1_complete: false          # flips true only after post-deploy verify
-    # gathered answers (added as each is confirmed):
-    vault_path: "/abs/path/to/vault"
-    site_title: "The Iron Crown"
-    tagline: "A GURPS Special Forces campaign set in 1990s Britain."
-    project_name: "iron-crown"     # Cloudflare project (or repo_name for GitHub)
-    github_username: "jsmith"      # GitHub path only
-    site_dir: "/abs/path/to/site"
-    deferred: []                   # e.g. [status-bar, inbox] — features deferred for later
----
-```
-
-Update `last_completed_step` and append each gathered answer as it's
-confirmed. Rules:
-
-- This block is **transient setup progress**, not durable config. It
-  exists so a later run knows where the GM stopped and what they already
-  answered.
-- **Durable config** lives in two places. The campaign settings (site
-  title, tagline, theme, folder map, exclusions, the switches) go in
-  the same file's `publish:` block, beside `setup_progress`. The
-  site's `vault.config.json` holds only the deployment keys —
-  `vaultPath`, `outputDir`, `host`, `siteUrl`, `cloudflarePagesProject`
-  and `preserveDirs` — written once the site directory exists
-  (Phase C). Do not try to keep durable config in `setup_progress`.
-- On a fresh successful finish, set `tier1_complete: true` after the
-  post-deploy verify (Phase F) succeeds. **Keep the block** — a later
-  run reads it to know Tier 1 is done and what (if anything) was
-  deferred.
-
----
-
 ## Phase B — Gather creative inputs
 
 These are the conversational, creative steps. Keep them exactly as
 open-ended as they are today — do not turn them into a rigid form.
-Record the resume-relevant answers into `publish.setup_progress` as each
-is confirmed, and advance `last_completed_step`.
+Write each answer down as it is confirmed (see "Where the answers are
+kept") and advance `last_completed_step`.
 
 ### Step 6: Campaign display name
 
@@ -264,9 +246,9 @@ If `_Campaign/Campaign Overview.md` exists in the vault, read its
 > "I found a title in your campaign overview: '[title]'. Would
 > you like to use that, or something different?"
 
-Store the confirmed name as `site_title` in `setup_progress`. Step 13
-hands it to `init` as `--title`, which writes `publish.site_title` in
-`_meta/vault-config.md` when the vault file does not already set it.
+Write the confirmed name: `node "$TOOL" settings set
+player_site.title="<title>" --vault <vault>`. (The later steps name
+the setting only; the command is the same.)
 
 ### Step 7: Landing page tagline
 
@@ -279,10 +261,7 @@ Ask:
 > or
 > 'A Regency-era Call of Cthulhu investigation in Bath, 1814.'"
 
-Store as `tagline` in `setup_progress`. Step 13 hands it to `init` as
-`--tagline`, which writes `publish.theme.tagline` in
-`_meta/vault-config.md` (a child of `theme:`, beside any palette and
-fonts set later) when the vault file does not already set it.
+Write it: `settings set player_site.theme.tagline="<tagline>"`.
 
 ### Step 8: Name the site (host-specific)
 
@@ -293,8 +272,8 @@ fonts set later) when the vault file does not already set it.
 > site will live at `https://<project>.pages.dev`."
 
 Validate it's lowercase letters, numbers, and hyphens only; suggest a
-corrected version if not. Store as `project_name`. Compose
-`siteUrl`: `https://<project_name>.pages.dev`.
+corrected version if not. Note it as `project_name`. The site's
+address is `https://<project_name>.pages.dev`.
 
 **GitHub Pages:** ask for username and repo:
 
@@ -304,9 +283,9 @@ corrected version if not. Store as `project_name`. Compose
 > live at `https://jsmith.github.io/iron-crown-campaign/`"
 
 Validate the repo name is URL-safe (lowercase letters, numbers, hyphens
-only); suggest a correction if not. Store `github_username` and the repo
-name as `project_name`. Compose
-`siteUrl`: `https://<github_username>.github.io/<project_name>/`.
+only); suggest a correction if not. Note `github_username`, and the
+repo name as `project_name`. The site's address is
+`https://<github_username>.github.io/<project_name>/`.
 
 ### Step 9: Choose the site directory
 
@@ -319,8 +298,8 @@ Ask:
 > Desktop or in your Documents folder. Give me the full path when
 > ready."
 
-For GitHub Pages, note this folder becomes the GitHub repository. Store
-the confirmed path as `site_dir`.
+For GitHub Pages, say that this folder becomes the GitHub repository.
+Note the confirmed path as `site_dir`.
 
 ### Step 10: Campaign image
 
@@ -332,8 +311,8 @@ Ask:
 > your campaign."
 
 **If the GM has an image:** ask for the vault-relative path (e.g.
-`_attachments/campaign-image.svg`), validate the file exists, and store
-it in `_meta/vault-config.md` under `publish.theme.campaign_image`.
+`_attachments/campaign-image.svg`), validate the file exists, and
+`settings set player_site.theme.campaign_image=<path>`.
 
 **If the GM does not have an image:** offer to generate a procedural SVG:
 
@@ -341,8 +320,8 @@ it in `_meta/vault-config.md` under `publish.theme.campaign_image`.
 > colours and genre-appropriate motifs. Want me to create one?"
 
 If yes, generate the SVG, save it to `_attachments/campaign-image.svg`
-in the vault, and store the path. If no, skip — the site works without
-a campaign image.
+in the vault, and set the same setting to that path. If no, skip — the
+site works without a campaign image.
 
 ### Step 11: 404 message
 
@@ -360,28 +339,31 @@ tags. Examples:
 - Fantasy: "This page has been lost to the mists..."
 - Generic: "This content is not available."
 
-Accept a custom message if the GM prefers. Store it in
-`_meta/vault-config.md` under `publish.four_oh_four.message`.
+Accept a custom message if the GM prefers, then
+`settings set player_site.not_found="<message>"`.
 
 ### Step 12: Theme confirmation
 
-Read genre tags from the vault's `_Campaign/Campaign Overview.md` or
-`vault-config.md` if available. Propose a colour palette and font
-pairing based on the genre:
+Read the genre from the vault's `_Campaign/Campaign Overview.md`, or
+judge it from `settings get vault.system`. Propose a colour palette and
+font pairing based on the genre:
 
 > "Based on your campaign's genre, I'd suggest this theme:
 > - Primary: [colour] / Accent: [colour] / Background: [colour]
 > - Heading font: [font] / Body font: [font]
 > Does that look right, or would you like to adjust?"
 
-Store confirmed values in `_meta/vault-config.md` under
-`publish.theme.palette` and `publish.theme.fonts`. Always write
-`source: self-host` inside `publish.theme.fonts` for a new vault: the
-build downloads the chosen Google fonts once into the vault's
+Write the confirmed values in one command:
+
+```bash
+node "$TOOL" settings set player_site.theme.palette.primary=#2b1d0e player_site.theme.palette.accent=#8a5a2b player_site.theme.palette.background=#f4ecd8 player_site.theme.fonts.heading="Cormorant Garamond" player_site.theme.fonts.body="EB Garamond" player_site.theme.fonts.source=self-host --vault <vault>
+```
+
+Always include `player_site.theme.fonts.source=self-host` when fonts
+are chosen: the build downloads them once into the vault's
 `_meta/font-cache/` and serves them from the site, so players' browsers
 never contact Google (an IP-address and GDPR concern). If the GM wants
-to skip theming, use the defaults (system-ui fonts, neutral blue-grey
-palette) — no font is fetched then.
+to skip theming, set nothing: the defaults fetch no font.
 
 ---
 
@@ -394,20 +376,16 @@ npm registry. Run its `init` from the plugin cache so the scaffold pins
 itself to the exact version the GM has installed:
 
 ```bash
-node "$TOOL" init "<site_dir>" --vault "<vault_path>" --title "<site_title>" --tagline "<tagline>"
+node "$TOOL" init "<site_dir>" --vault "<vault>"
 ```
 
 Use the plugin cache path for the GM's OS (e.g.
-`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). Pass the
-absolute vault path from Step 1: `--vault` records it as `vaultPath`
-in the site file and tells `init` where the campaign settings go
-(without it `init` assumes `./vault` inside the site directory).
-`--title` and `--tagline` carry the Step 6 and Step 7 answers; leave
-one out and `init` uses "My Campaign" or sets no tagline. `init`
-also writes `publish.site: true` and `publish.site_dir` into the vault
-file, so the vault knows it has a site and where; do not add them by
-hand. This creates the
-following structure inside `<site_dir>`:
+`~/.claude/plugins/cache/gm-apprentice` on macOS/Linux). `<site_dir>`
+is the set-up note's `site_dir`. Pass the absolute vault path from
+Step 1: `--vault` records it as `vaultPath` in the site file and tells
+`init` which vault's settings to write (without it `init` assumes
+`./vault` inside the site directory). This creates the following
+structure inside `<site_dir>`:
 
 ```text
 <site_dir>/
@@ -425,19 +403,18 @@ The scaffold is intentionally minimal — no `functions/` directory and no KV
 binding in `wrangler.toml`. Those are added only if the GM opts into the
 at-table inbox or live status bar later (Phase G).
 
-`init` also writes the starting campaign settings into the vault's
-`_meta/vault-config.md`, under `publish:`, for each key that file does
-not already set: `site_title`, `folder_map` (the standard vault
-folders), `attachments_dir`, `exclude_dirs`, `exclude_sections` and
-`exclude_fields` (the folders, headings and frontmatter fields the site
-never publishes, written out so you can see and edit them; `settings
-describe publish.exclude_sections` says what each holds) and
-`exclude_callouts: true`, plus `site_title` and
-`theme.tagline` from `--title` and `--tagline`. A key already there is
-left alone. If `init` prints `Campaign settings were not written: …`,
-the vault file could not be edited safely: fix what the message
-names, then add the listed keys under `publish:` yourself (Step 15 shows the full block; without a
-`folder_map` no folder publishes).
+`init` also writes the vault's starting settings and prints their
+names on its last line (`wrote player_site.publish,
+player_site.folder, …`): that the vault has a site and where,
+which folders publish, and the folders, headings and fields players
+never see. A setting already there, such as the Step 6 title, is left
+alone.
+
+If `init` prints `Campaign settings were not written: …`, the site
+folder was made but the vault's settings could not be changed, and
+without them no folder publishes. The message says why. Mend that
+(`settings check --vault <vault>` names a fault in the file), delete
+the files `init` just listed as created, and run `init` again.
 
 If the command fails with "command not found", explain:
 
@@ -489,10 +466,9 @@ the package.
 ### Step 15: Fill in vault.config.json
 
 Open `vault.config.json` in `<site_dir>` and set the deployment keys
-from the values gathered in Phase B. These are the only keys the file
-holds; everything about what the site publishes is in the vault's
-`_meta/vault-config.md`. `setup_progress` continues only to track
-`last_completed_step` for resume.
+from the set-up note (`host`, `project_name`, `github_username`).
+These are the only keys the file holds; everything about what the site
+publishes is a setting in the vault.
 
 **Cloudflare Pages (recommended):**
 
@@ -501,7 +477,7 @@ holds; everything about what the site publishes is in the vault's
   "host": "cloudflare-pages",
   "cloudflarePagesProject": "<project_name>",
   "siteUrl": "https://<project_name>.pages.dev",
-  "vaultPath": "<vault_path from Step 1>",
+  "vaultPath": "<as init wrote it>",
   "outputDir": "./docs"
 }
 ```
@@ -512,59 +488,35 @@ holds; everything about what the site publishes is in the vault's
 {
   "host": "github-pages",
   "siteUrl": "https://<github_username>.github.io/<project_name>/",
-  "vaultPath": "<vault_path from Step 1>",
+  "vaultPath": "<as init wrote it>",
   "outputDir": "./docs"
 }
 ```
 
 Do not add campaign settings (`siteTitle`, `folderMap`, exclude lists,
-a `backend` block) to this file. The build would still read them for
-now, with a warning, and they belong in the vault file.
+a `backend` block) to this file: they are not read there.
 
-**Check the vault file's `publish:` block.** After Steps 6, 7 and 13
-it should read like this (plus any theme and 404 settings from Phase
-B, and `setup_progress`):
+**Check the vault's settings:**
 
-```yaml
-publish:
-  site_title: "<site_title from Step 6>"
-  theme:
-    tagline: "<tagline from Step 7>"
-  folder_map:
-    Characters/PCs: characters/pcs
-    Characters/NPCs: characters/npcs
-    Locations: locations
-    "Factions & Organizations": factions
-    "Items & Artifacts": items
-    Creatures: creatures
-    Events: events
-    Documents: documents
-    Clues: clues
-    Chapters: chapters
-    _Campaign: campaign
-    _World: world
-    Heritages: heritages
-  attachments_dir: _attachments
-  # exclude_dirs, exclude_sections and exclude_fields: written by `init`, not shown here
-  exclude_callouts: true
+```bash
+node "$TOOL" settings check --config <site_dir>/vault.config.json
+node "$TOOL" settings get player_site --config <site_dir>/vault.config.json
 ```
 
-`init` writes `exclude_dirs`, `exclude_sections` and `exclude_fields`
-under `publish:` too, each holding the built-in list. Read one with
-`settings get publish.exclude_sections`; the lists are not repeated here.
+`check` says `Every setting in the file reads cleanly.` or lists the
+faults; for a fault, see `configuration.md` § When a setting stops the
+build. `get` lists every site setting; the lines not marked
+`(default)` are this vault's, and should show the Phase B answers.
 
-If `site_title` reads `My Campaign`, `init` ran without `--title`: set
-it to the Step 6 answer. Leave `folder_map`,
-`exclude_dirs` and `attachments_dir` as written unless the vault uses
-non-standard folder names. Ask whether the vault has GM-only headings or
-frontmatter fields of its own; add each to `exclude_sections` /
-`exclude_fields` and keep every built-in entry, because a list in the file
-replaces the built-in one. Leave `live_stats` and `inbox` unset: unset
-means off, which keeps the live status bar and the at-table inbox off
-until the GM opts in (Phase G). Leave `character_sheets` unset too
-(sheets publish) unless the GM asks to keep sheets off the site — see
-`configuration.md` § Switches. Apply these changes directly to the
-files — do not ask the GM to edit them by hand unless they prefer to.
+Ask whether the vault has GM-only headings or frontmatter fields of
+its own, and add each: `settings add player_site.hide.sections "<heading>"`
+(or `player_site.hide.fields`). `add` keeps the entries already there.
+Leave the folder map and the hidden folders as written unless the
+vault uses non-standard folder names. Leave the live status bar and
+inbox switches alone until the GM opts in (Phase G), and the character
+sheets switch too unless the GM asks to keep sheets off the site — see
+`configuration.md` § Switches. Make these changes yourself; do not ask
+the GM to edit a file.
 
 ---
 
@@ -778,8 +730,8 @@ node "$TOOL" deploy --verify --no-build --config vault.config.json
   not a missing path.
 
 Only after a confirmed live result — or the GM acknowledging the "still
-building" state — set `tier1_complete: true` in
-`publish.setup_progress`. Keep the block.
+building" state — run `setup-note set tier1_complete=true`. Keep the
+note: Step 2 of a later run reads it.
 
 ---
 
@@ -834,10 +786,10 @@ node "$TOOL" setup-inbox        # Tier 2b — at-table change-request inbox
 Run from the site directory (each defaults to `./vault.config.json`; pass
 `--config <path>` otherwise). Either command creates or reuses the `INBOX`
 KV namespace, aligns `wrangler.toml`'s `name` to the Cloudflare project,
-sets the matching switch (`publish.live_stats: true` /
-`publish.inbox: true`) in the vault's `_meta/vault-config.md`,
+turns on the matching switch (`player_site.features.live_stats` /
+`player_site.features.inbox`) in the vault's settings,
 rebuilds, and deploys — one step, no manual `wrangler.toml` editing.
-It checks that the vault file can be edited before it touches wrangler
+It checks that the settings can be written before it touches wrangler
 or KV. `setup-inbox` requires and ensures the same KV
 namespace (**inbox ⇒ KV**) and is **infra-only** — it sets the switch but
 does not open a session; that's still "start your checking loop"
@@ -847,15 +799,11 @@ Tokens → their token → Edit → add **Account · Workers KV Storage · Edit*
 Save) — the same one-tick permission mentioned in Phase A — then re-run;
 it picks up right where it left off.
 
-`setup_progress.deferred` lists the features **not yet set up** — the ones
-deferred for later. A feature the GM sets up now is **not** in `deferred`; a
-feature they defer **is**. So: set up both → `deferred: []`; set up the
-status bar but defer the inbox → `deferred: [inbox]`; defer both →
-`deferred: [status-bar, inbox]`.
+Nothing records which add-on was put off: the two switches say what
+is on (`settings get player_site.features`). If the GM puts one off,
+tell them:
 
-- **If the GM defers both:** set `deferred: [status-bar, inbox]` and tell them:
-
-  > "No problem — whenever you're ready, just say 'set up the status
-  > bar' or 'set up the inbox' and I'll set it up with one command."
+> "No problem — whenever you're ready, just say 'set up the status
+> bar' or 'set up the inbox' and I'll set it up with one command."
 
 Setup is complete.

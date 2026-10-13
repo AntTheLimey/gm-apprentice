@@ -3,9 +3,8 @@
 Read when `_meta/` is missing (first-time setup). No migration
 runs here — the vault starts at the current version.
 
-1. **Know the system.** It is `publish.system` in
-   `_meta/vault-config.md`, else the Campaign Overview's
-   `game_system`, else the adventure brief's `system`; the script
+1. **Know the system.** It is the `vault.system` setting, else the
+   Campaign Overview's `game_system`, else the adventure brief's `system`; the script
    reads all three itself. If none is set, ask the GM once. If the
    vault names a system in words the script does not recognise, it
    refuses and names what it found: pass the matching id, or
@@ -29,7 +28,7 @@ runs here — the vault starts at the current version.
    nothing was written.
 
 The script makes the skeleton only: folders, `_Templates/` for the
-system, the four `_meta/` files, the two `_World/` stubs and an
+system, the `_meta/` files, the two `_World/` stubs and an
 empty Timeline and Player Characters page. You write the content:
 the Campaign Overview (from `_Templates/_Template_Campaign_Overview.md`),
 the roster, chapters (each with a `Planning/` subfolder) and

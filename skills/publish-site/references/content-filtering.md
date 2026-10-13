@@ -6,14 +6,14 @@ All campaign content falls into three categories:
 
 ### Always excluded (default, no prompt needed)
 
-- The folders in `publish.exclude_dirs` (the vault's own `_meta` and
+- The folders in `player_site.hide.folders` (the vault's own `_meta` and
   template folders among them), and `personal/` directories
 - All prep files: sessions/scenes with `status: planned | prepped`,
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
-- Sections whose heading is listed in `publish.exclude_sections`
+- Sections whose heading is listed in `player_site.hide.sections`
 - On a `type: document` page, a handout's own Keeper sections, whatever
-  `exclude_sections` says: `Context`, any heading starting `Clues`,
+  that list says: `Context`, any heading starting `Clues`,
   `Prop Notes`, `Physical Prop Notes`, `Delivery`, `Delivery Notes`.
   Rename the heading to publish one
 - Content between `<!-- gm-only -->` / `<!-- /gm-only -->` markers
@@ -32,12 +32,12 @@ All campaign content falls into three categories:
   `%%` in prose, such as `100%% done`: it starts a comment, as it does
   in Obsidian. The build counts those strays in a closing warning, and
   campaign-qa's Site Faults check finds and fixes each one.
-- Frontmatter fields in `publish.exclude_fields`
+- Frontmatter fields in `player_site.hide.fields`
 - Files whose frontmatter says `publish: false` — in **every** mode,
   including `full`. The file still parses, so links to it render as
   plain text rather than as a broken link; no page is emitted.
 - Fields named in a file's own `publish_exclude_fields`, on that file
-  only, merged over the global `exclude_fields`.
+  only, merged over `player_site.hide.fields`.
 - Relationship edges marked `gm_only: true` — removed from the page,
   its Connections (at both ends), and the search index.
 - On a `publish: stub` file, everything except the sections named in
@@ -55,7 +55,7 @@ link brackets and spacing are ignored, and case does not matter. A link
 with a label (`[[Plans|GM Notes]]`) counts as both its label and its
 target. A heading with other words (`GM Notes on travel`) or a trailing
 dash or emoji is a different section and is not hidden. A name in
-`exclude_sections` and in `publish_include_sections` is read the same
+`player_site.hide.sections` and in `publish_include_sections` is read the same
 way.
 
 A heading line written inside a fenced code block is code, not a heading:
@@ -113,9 +113,8 @@ campaign-qa's Tone Words check lists the hostile ties the site shows.
 
 ## Configuration
 
-`node "$TOOL" settings get publish.mode publish.exclude_sections
---config <dir>/vault.config.json` (or any `publish.exclude_*` name)
-says what the site hides. To hide one more heading, field or folder
+`node "$TOOL" settings get player_site.hide --config
+<dir>/vault.config.json` says what the site hides. To hide one more heading, field or folder
 use `settings add`; `settings set` replaces the whole list, built-in
 entries included.
 
@@ -192,14 +191,14 @@ demand — see `campaign-qa/references/checks/open-spoilers.md`.
 
 ## Excluding Callouts (opt-in)
 
-`publish.exclude_callouts` strips Obsidian callouts (`> [!type] Title`
+`player_site.hide.callouts` strips Obsidian callouts (`> [!type] Title`
 blocks): every one, or only the types it lists.
 
 The gm-apprentice convention treats callouts as Keeper-facing
 (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
 State), so **newly scaffolded** sites turn it on. A site created
 before the setting existed publishes every callout until it is set;
-`settings get publish.exclude_callouts` says which this site does. If
+`settings get player_site.hide.callouts` says which this site does. If
 the GM relies on callouts to hide Keeper content, turn it on, or move
 that content under a `## GM Notes` heading or `<!-- gm-only -->`
 markers, which are excluded regardless.
@@ -222,13 +221,13 @@ The build tool reads this file directly — no rescanning needed.
 The manifest is a markdown file with YAML frontmatter and three
 H2 sections. The build tool's parser (`lib/manifest.js`) uses the
 heading to bucket each entry into Publishing/Excluded/Needs
-Decision. Only `mode: player` (see § Publish Modes) enforces the
+Decision. Only `player` mode (see § Publish Modes) enforces the
 manifest as an inclusion filter — and even there, a file publishes
 if and only if it's a **checked** entry under `## Publishing`.
 Checking the box under `## Excluded` or `## Needs Decision` never
 publishes the file: those buckets are read (Excluded, to suppress a
 separate "missing from manifest" warning) but never for inclusion.
-In `mode: full` (the GM's own copy), the manifest isn't applied as
+In `full` mode (the GM's own copy), the manifest isn't applied as
 a filter at all — every scanned page publishes regardless of what's
 checked.
 
@@ -312,7 +311,7 @@ unavailable.
 ## Campaign Image
 
 The campaign image appears on the landing page hero and 404 page.
-The setting is `publish.theme.campaign_image`.
+The setting is `player_site.theme.campaign_image`.
 
 **Path handling:** The value is a vault-relative path (e.g.
 `_attachments/campaign-image.svg`). The build tool copies it to
@@ -340,7 +339,7 @@ for fantasy, tentacles for horror).
 
 Links to excluded entities resolve to a custom 404 page
 with an in-world message, the setting
-`publish.four_oh_four.message`.
+`player_site.not_found`.
 
 The campaign image is also displayed on the 404 page when
 configured. The 404 template uses absolute paths derived from
@@ -357,9 +356,8 @@ custom input as an alternative.
 - `full`: The GM's own copy. Notes held back as prep (`status: planned`
   or `prepped`, `stage: outline`, `draft` or `ready`, `source: prep`, a
   cut or skipped scene) publish, the publish manifest is not applied,
-  and every image in the attachments folder is copied, used or not. `exclude_sections`,
-  `exclude_fields`, `exclude_callouts`, `exclude_dirs`,
-  `exclude_drafts` and a note's own `publish: false` still apply. The
+  and every image in the attachments folder is copied, used or not. Every other
+  `player_site.hide` setting and a note's own `publish: false` still apply. The
   built-in lists keep GM-only sections and fields off a `full` site;
   a list the GM has replaced must still name them
 

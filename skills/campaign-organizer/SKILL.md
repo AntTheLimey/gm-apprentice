@@ -46,15 +46,19 @@ The vault's `_meta/` is the source of truth, not this skill.
 |------|----------|
 | `_meta/entity-types.md` | Type hierarchy, frontmatter schemas, folder mappings |
 | `_meta/relationship-types.md` | Relationship taxonomy, domain/range, symmetry, genre tags |
-| `_meta/vault-config.md` | Folder structure, naming conventions, campaign settings |
 | `_meta/index.md` | Master registry of every entity and narrative element |
+| `_meta/vault-notes.md` | The GM's own notes on how this vault is kept; read it if it exists |
+
+The vault's settings (system, campaign name, site) are not a file to
+read: ask `node "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
+settings get vault --vault <vault>`.
 
 ### Initialization
 
 On first contact with a vault:
 
-1. **`_meta/` exists** → read all four files; they are the live
-   schema. Don't assume defaults. Then run the version check.
+1. **`_meta/` exists** → read the files in the table; they are the
+   live schema. Don't assume defaults. Then run the version check.
 2. **`_meta/` missing** → first-time setup: read
    `references/vault-setup.md` (it runs `vault_scaffold.py`). No
    version check.

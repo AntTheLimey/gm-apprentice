@@ -49,4 +49,11 @@ migration is a script; this file says how to drive it.
    tell the GM the line it printed and stop. A `--choose` it rejects
    means the id was wrong: check it against `plan` and run again.
 
+**The settings move.** The update itself moves the vault's settings
+to the new settings file (`settings-move`); never do it by hand. A
+`settings` row under Needs a person that says the vault stays on the
+old file comes back on every pass: tell the GM once and carry on. One
+that says the settings cannot move yet holds the stamp: run
+campaign-qa's Settings check, then the update again.
+
 Then return to the calling skill, or carry on with the GM's request.

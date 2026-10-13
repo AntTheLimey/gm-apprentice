@@ -4,8 +4,8 @@ A **skin** is the dress of a PC page: colours, lettering, edging and
 the shape of its marks. A **frame** is the ornament round the
 portrait. Neither changes a sheet's layout, on any of the five systems.
 
-The campaign's look is two settings, `publish.sheet_skin` and
-`publish.sheet_frame`. One character's own look is the same two keys,
+The campaign's look is two settings, `player_site.sheets.skin` and
+`player_site.sheets.frame`. One character's own look is the same two keys,
 `sheet_skin` and `sheet_frame`, in that `type: pc` note's frontmatter;
 a key the note leaves out takes the campaign's. Skin and frame are
 settled separately, so a PC note may set either key alone:
@@ -60,11 +60,11 @@ run a command. If they are unsure, offer the skin that suits the game.
 For the campaign, from the site directory:
 
 ```bash
-npx gm-apprentice-publish settings set publish.sheet_skin=parchment publish.sheet_frame=thorns
+npx gm-apprentice-publish settings set player_site.sheets.skin=parchment player_site.sheets.frame=thorns
 ```
 
 It refuses an id it does not know and says which it takes. To go back
-to the skin's own frame, `settings unset publish.sheet_frame`. For one
+to the skin's own frame, `settings unset player_site.sheets.frame`. For one
 character, write either line or both in that PC note's frontmatter:
 
 ```yaml

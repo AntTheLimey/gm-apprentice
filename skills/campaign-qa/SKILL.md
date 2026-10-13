@@ -108,7 +108,7 @@ Read the named check file when the mode runs.
   `sheet_source` (`shared/pc-body-structure.md`). When `pc-body`
   emits no such rows there is nothing to ask; never ask where a
   sheet is kept on a campaign that does not publish sheets
-  (`publish.character_sheets: false`)
+  (`player_site.sheets.show` off)
 - `createdSession` vs timeline: for `source: "play"` or `"prep"`,
   it should match the session whose timeline entry introduces the
   entity; `source: "backstory"` is exempt

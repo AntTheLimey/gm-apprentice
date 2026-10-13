@@ -564,17 +564,17 @@ no `precedes` or `alternative_to`. A vault vocabulary with a
 | world_domain | _World/ |
 | world_flags | _World/ |
 
-## Vault Configuration Fields
+## Vault Settings
 
-Frontmatter of `_meta/vault-config.md`, read by several skills.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `gm_apprentice_version` | string | Plugin version the vault was last migrated to; set by migration and checked by `vault_check.py <vault> version`. |
-
-Every site setting (`publish.*` and `setting_year`) is held by the
-publish tool, not listed here. Never open the file to read one: run
+The vault's settings (`vault.*` for the campaign, `player_site.*` for
+its site) are held by the publish tool, not listed here. Never open a
+settings file to read one: run
 `node "$TOOL" settings get <name> --vault <vault>` for its value and
 where that came from, `settings describe <name>` for what it does and
 takes, `settings list` for all of them. `$TOOL` is as in
-`publish-site/SKILL.md`.
+`publish-site/SKILL.md`. `vault.system` is the game system the tools
+read; the Campaign Overview's `game_system` is that note's own field.
+
+The plugin version the vault was last updated to is the tools' own
+record: `vault_check.py <vault> version` reads it and the update
+writes it.

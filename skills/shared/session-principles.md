@@ -87,7 +87,6 @@ ambiguous.
 
 ## Session Note Naming
 
-Convention from `_meta/vault-config.md`; default
 `Session {NN} - {Title}.md`, zero-padded and evocative
 (`Session 07 - The Opera and the Invitation.md`, not
 `Session 7 - March 15 2025.md`).
