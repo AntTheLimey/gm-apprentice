@@ -52,3 +52,37 @@ def test_no_page_writes_out_a_default_hiding_list():
             for text in [GENERATED.sub("", p.read_text(encoding="utf-8"))]
             for name, entries in lists.items() if _written_out(text, entries)]
     assert hits == []
+
+
+# The old settings file and the names its settings had. A page tells the reader to ask the
+# `settings` command, which knows both layouts; it never names the old file or an old name.
+OLD_FILE = re.compile(r"vault-config\.md")
+OLD_NAME = re.compile(r"(?<![\w-])publish\.[a-z_]+(?:\.[a-z_]+)*")
+# The record of what each release changed, and the page for authors of other tools, whose
+# section on the old layout is what that section is for.
+RECORDS = {"migrations.md"}
+OLD_LAYOUT_SECTION = ("vault-config-format.md", re.compile(r"^## The old file\n.*?(?=^## |\Z)", re.M | re.S))
+
+
+def _old_layout_mentions(name, text):
+    """The old file name and old setting names in a page's hand-written text."""
+    text = GENERATED.sub("", text.replace("\r\n", "\n"))
+    if name == OLD_LAYOUT_SECTION[0]:
+        text = OLD_LAYOUT_SECTION[1].sub("", text)
+    return sorted({m.group(0) for pattern in (OLD_FILE, OLD_NAME) for m in pattern.finditer(text)})
+
+
+def test_the_old_layout_scan_finds_what_it_looks_for():
+    text = ("Open `_meta/vault-config.md` and set `publish.exclude_sections`.\n"
+            "Run gm-publish.js; the note's own `publish: false` and `player_site.publish` are fine.\n"
+            "<!-- settings:site -->\nwas `publish.site`\n<!-- /settings:site -->\n")
+    assert _old_layout_mentions("any.md", text) == ["publish.exclude_sections", "vault-config.md"]
+    page = "## The old file\n\n`publish.mode` in `vault-config.md`.\n\n## The state file\n\n`publish.mode`\n"
+    assert _old_layout_mentions(OLD_LAYOUT_SECTION[0], page) == ["publish.mode"]
+
+
+def test_no_page_names_the_old_settings_file_or_an_old_setting_name():
+    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"] if p.name not in RECORDS]
+    hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
+            for found in _old_layout_mentions(p.name, p.read_text(encoding="utf-8"))]
+    assert hits == []
