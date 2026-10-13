@@ -320,24 +320,28 @@ each setting as that file writes it (`publish.site`, not
 `player_site.publish`). The `settings` command can still change an old
 file, at the old names.
 
-Do not run `settings move` by hand yet. The next release runs it for you,
-and teaches the plugin's own scripts to read the new file at the same time;
-a vault moved before then would stop the current scripts from finding its
-version stamp.
-
 `settings move` takes a vault to the new file. It checks that every
 setting would resolve to what it resolved to before, then writes
 `_meta/vault-config.yaml`, moves bookkeeping into
 `_meta/vault-state.json` and your own notes into `_meta/vault-notes.md`,
 and removes the old file. It does all of it or none of it; `--check` shows
-what it would do. When the next release's update runs it, a site pinned
-to this tool by something else than `update-pin` is not the update's to
-change, so its vault stays on the old file until you move it. If both
+what it would do. The plugin's update normally runs it for you. Running
+it by hand is safe: when the tool installed in the vault's site is older
+than 1.23.0, whoever pinned it, that tool could not read the new file,
+so the move leaves the vault on the old file and says so in one line.
+The vault moves once that tool is 1.23.0 or later. `--discard-old-file`
+removes a left-over old file that holds more than the new one;
+`--site-tool-updated` is for a caller that has just repinned the site.
+`--fold-site-file` is for a vault that has already moved while its site
+folder's `vault.config.json` still holds settings that differ from the
+vault's. Without it the command only reports them and changes nothing.
+With it, those settings come out of the site file and what they say goes
+into the vault: a hiding list's entries are added to the vault's list
+(the built-in entries stay), the stricter of two callout rules is kept,
+and for any other setting the vault's own value stays. The two files
+change together or not at all.
+If both
 files exist the new one is read, and the old one is reported as left over.
-
-`migrate-config` still ships in this release because the update uses it
-to move settings out of a site's `vault.config.json`. You do not need to
-run it yourself.
 
 ---
 

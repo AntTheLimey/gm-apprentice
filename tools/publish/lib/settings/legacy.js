@@ -231,14 +231,14 @@ function childSegs(parent) {
 
 // Reads the old file and the site's vault.config.json. `core` is read.js's shared pieces.
 // Returns { values, origins, faults, legacy, file } like readSettings (without `layout`).
-function readLegacy({ vaultPath, siteConfig }, core) {
+function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
   const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY } = core;
   const site = siteConfig || {};
   const faults = [];
   const fault = makeFault;
-  const file = { path: at(vaultPath, OLD_FILE), exists: false, hasPublish: false, inline: false, leftover: false };
+  const file = { path: at(vaultPath, OLD_FILE), exists: false, hasSiteBlock: false, inline: false, leftover: false };
   let data = {};
-  if (fs.existsSync(file.path)) {
+  if (!skipOldFile && fs.existsSync(file.path)) {
     file.exists = true;
     const text = fs.readFileSync(file.path, 'utf-8');
     try {
@@ -251,7 +251,7 @@ function readLegacy({ vaultPath, siteConfig }, core) {
     file.inline = new RegExp(`^${PUBLISH}:[ \\t]*\\{`, 'm').test(text);
   }
   const publish = isMap(data[PUBLISH]) ? data[PUBLISH] : {};
-  file.hasPublish = isMap(data[PUBLISH]);
+  file.hasSiteBlock = isMap(data[PUBLISH]);
   if (data[PUBLISH] && !isMap(data[PUBLISH])) {
     faults.push(fault({ name: PUBLISH, setting: null, kind: 'not-allowed', level: 'warn', value: data[PUBLISH], entry: MAP_ENTRY }));
   }
@@ -333,7 +333,8 @@ function readLegacy({ vaultPath, siteConfig }, core) {
   // A setting the old file never had reads as its default.
   for (const e of REGISTRY) {
     if (e.legacyOnly || legacyNameOf(e) || e.container) continue;
-    setIn(values, e.name, e.default === undefined ? null : clone(e.default));
+    // (The campaign, unset, is the vault folder's name on every layout.)
+    setIn(values, e.name, e.defaultFromVaultFolder ? path.basename(path.resolve(vaultPath)) : (e.default === undefined ? null : clone(e.default)));
     origins[e.name] = 'default';
   }
 

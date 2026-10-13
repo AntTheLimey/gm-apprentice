@@ -258,10 +258,27 @@ test('the groups come out as version, vault, player_site, and a comment above ty
   assert.match(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), /^---\n# a note on the type\ntype: meta\n/);
 });
 
-test('a comment that cannot be placed is listed, not dropped', () => {
+test('a comment that cannot be placed is listed and kept in the notes, under its key, after the GM\'s own text', () => {
   const s = scratch(old('  # about the theme block\n  theme:\n    genre: horror\n  mode: player\n'));
   const { plan } = moveAndCompare(s);
-  assert.ok(plan.lines.some((l) => l.startsWith('a comment could not be carried: # about the theme block') || l.startsWith('a comment could not be carried: about the theme block')), plan.lines.join('\n'));
+  assert.ok(plan.lines.some((l) => /a comment could not be carried into the new file \(it sat on publish\.theme\)/.test(l) && l.includes('about the theme block')), plan.lines.join('\n'));
+  const notes = fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8');
+  assert.match(notes, /## Comments from the old settings file\n\n- `publish\.theme`: about the theme block\n$/);
+  // With prose of the GM's own, the prose comes first and is kept exactly.
+  const t = scratch(`---\ntype: meta\npublish:\n  # about the theme block\n  theme:\n    genre: horror\n---\nMy own prose.\nNo final newline`);
+  moveAndCompare(t);
+  const kept = fs.readFileSync(at(t.vault, NOTES_FILE), 'utf8');
+  assert.ok(kept.includes('---\nMy own prose.\nNo final newline\n\n## Comments from the old settings file\n'), kept);
+});
+
+test('a site-file hiding list merged into the vault\'s says its entries were added, not that it was ignored', () => {
+  const s = scratch(old('  exclude_sections: [A]\n'), { site: { vaultPath: './Vault', excludeSections: ['A', 'Z'] } });
+  const { plan } = moveAndCompare(s);
+  const line = plan.lines.find((l) => l.includes('merged into'));
+  assert.ok(line && /merged into publish\.exclude_sections/.test(line) && line.includes('"Z"') && !/ignored/.test(line), plan.lines.join('\n'));
+  const t = scratch(old('  site_title: V\n'), { site: { vaultPath: './Vault', siteTitle: 'S' } });
+  const plan2 = moveAndCompare(t).plan;
+  assert.ok(plan2.lines.some((l) => /siteTitle` in the site folder's vault\.config\.json was not used, because the vault's own settings already had publish\.site_title/.test(l)), plan2.lines.join('\n'));
 });
 
 test('setup_progress and the version go to the state file, which keeps what it had', () => {
@@ -655,4 +672,332 @@ test('the notes file keeps the old file\'s line ending in its frontmatter', () =
   const notes = fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8');
   assert.equal(notes.replace(/\r\n/g, ''), notes.replace(/\r\n/g, '').replace(/\n/g, ''), 'no bare line feed: every line ends in CRLF');
   assert.ok(notes.startsWith('---\r\ntype: meta\r\ndescription: Mine\r\n---\r\nBody'));
+});
+
+// ---- A stopped move is mended by running it again (R6) ----
+
+const KILL = path.join(__dirname, 'helpers', 'kill-move.js');
+const hiddenLeft = (dir) => {
+  const found = [];
+  (function walk(d) {
+    for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+      const f = path.join(d, e.name);
+      if (e.isDirectory()) walk(f);
+      else if (/\.move\.(old|new)$/.test(e.name)) found.push(f);
+    }
+  }(dir));
+  return found;
+};
+const killable = () => scratch(`---\ntype: meta\ngm_apprentice_version: "1.10.1"\ncampaign: Hollow\npublish:\n  mode: player\n  site_title: Hollow Site\n  exclude_sections: [A, B]\n---\nMy own notes.\n`, {
+  site: { vaultPath: './Vault', siteTitle: 'T', excludeSections: ['Z'], folderMap: { People: 'people' } },
+  files: { [STATE_FILE]: '{"other": 1}\n' },
+});
+
+test('a move killed at any point in its commit is finished by running it again', () => {
+  const s0 = killable();
+  const original = strip(loadPublishConfig(s0.vault, JSON.parse(fs.readFileSync(s0.config, 'utf8')), quiet));
+  const expectedSite = { vaultPath: './Vault' };
+  let total = 0;
+  for (let n = 1; n < 40; n += 1) {
+    for (const when of ['before', 'after']) {
+      const s = killable();
+      const run = require('node:child_process').spawnSync(process.execPath, [KILL, s.vault, s.config, String(n), when], { encoding: 'utf8' });
+      if (run.status === 0) { total = Number(run.stdout.trim()); break; }
+      assert.equal(run.status, 9, `kill ${when} op ${n}: ${run.stderr}`);
+      const again = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+      assert.equal(again.ok, true, `kill ${when} op ${n}: ${again.blockers.join(' | ')}`);
+      applyMove(again);
+      const label = `killed ${when} operation ${n}`;
+      assert.equal(layoutOf(s.vault), 'new', label);
+      assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false, label);
+      assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), expectedSite, label);
+      assert.deepEqual(strip(loadPublishConfig(s.vault, expectedSite, quiet)), original, label);
+      assert.deepEqual(hiddenLeft(s.root), [], label);
+      assert.equal(matter(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), {}).content, 'My own notes.\n', label);
+      assert.equal(readState(s.vault).other, 1, label);
+      assert.equal(readState(s.vault).gm_apprentice_version, '1.10.1', label);
+      // And a third run finds nothing.
+      const third = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+      assert.deepEqual(third.files, { write: [], remove: [] }, label);
+    }
+    if (total) break;
+  }
+  assert.ok(total >= 5, `the move made ${total} renames and removals`);
+});
+
+test('the notes file a stopped move wrote is accepted when it is what this move would write; another is a blocker', () => {
+  const s = killable();
+  const first = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+  fs.writeFileSync(at(s.vault, NOTES_FILE), fs.readFileSync(at(s.vault, OLD_FILE), 'utf8').includes('My own notes') ? '---\ntype: meta\n---\nMy own notes.\n' : '');
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: s.config }).ok, true);
+  fs.writeFileSync(at(s.vault, NOTES_FILE), 'something else\n');
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: s.config }).ok, false);
+  assert.equal(first.ok, true);
+});
+
+test('a moved vault whose site file still holds settings the new file has: the second run strips them; settings it has differently stay', () => {
+  const s = scratch(old('  mode: player\n  site_title: Mine\n'), { site: { vaultPath: './Vault', siteTitle: 'Mine', folderMap: { A: 'a' } } });
+  const sibling = JSON.parse(fs.readFileSync(s.config, 'utf8'));
+  assert.equal(cliMove({ vault: s.vault, config: s.config }).rc, 0);
+  fs.writeFileSync(s.config, JSON.stringify(sibling));
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0);
+  assert.match(r.data.lines.join('\n'), /Removed the settings from/);
+  assert.deepEqual(JSON.parse(fs.readFileSync(s.config, 'utf8')), { vaultPath: './Vault' });
+  fs.writeFileSync(s.config, JSON.stringify({ vaultPath: './Vault', siteTitle: 'Different' }));
+  const kept = cliMove({ vault: s.vault, config: s.config });
+  assert.match(kept.data.lines.join('\n'), /left it as it is|left as it is/);
+  assert.equal(JSON.parse(fs.readFileSync(s.config, 'utf8')).siteTitle, 'Different');
+});
+
+test('--vault alone on a moved vault finds the site folder the new file names', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const site = path.join(s.root, 'Site');
+  fs.mkdirSync(site);
+  const siteFile = path.join(site, 'vault.config.json');
+  fs.writeFileSync(siteFile, JSON.stringify({ vaultPath: '../Vault', siteTitle: 'Four' }));
+  const keep = fs.readFileSync(siteFile, 'utf8');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(siteFile, keep);
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(siteFile, 'utf8')), { vaultPath: '../Vault' });
+});
+
+test('an old file left beside the new one: removed when it holds nothing more, kept and listed otherwise, removed on request', () => {
+  const s = scratch(old('  mode: player\n  site_title: Mine\n'));
+  const text = fs.readFileSync(at(s.vault, OLD_FILE), 'utf8');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(at(s.vault, OLD_FILE), text);
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.leftover, { redundant: true, keys: [] });
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false);
+  fs.writeFileSync(at(s.vault, OLD_FILE), old('  mode: player\n  site_title: Mine\n  search: false\n'));
+  const kept = cliMove({ vault: s.vault });
+  assert.equal(kept.data.leftover.redundant, false);
+  assert.deepEqual(kept.data.leftover.keys, ['player_site.features.search']);
+  assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), true);
+  assert.equal(cliMove({ vault: s.vault }, { discardOld: true }).rc, 0);
+  assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false);
+});
+
+test('no settings file but settings in the site file: the move makes the new file from them, with no old file to remove', () => {
+  const s = scratch(null, { site: { vaultPath: './Vault', siteTitle: 'Only Here', excludeSections: ['Z'], folderMap: { A: 'a' } } });
+  const before = strip(loadPublishConfig(s.vault, JSON.parse(fs.readFileSync(s.config, 'utf8')), quiet));
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: s.config, fill: { 'vault.system': 'coc-7e' } });
+  assert.equal(plan.ok, true, plan.blockers.join(' | '));
+  assert.deepEqual(plan.files.remove, []);
+  assert.equal(applyMove(plan).moved, true);
+  assert.equal(layoutOf(s.vault), 'new');
+  const siteAfter = JSON.parse(fs.readFileSync(s.config, 'utf8'));
+  assert.deepEqual(siteAfter, { vaultPath: './Vault' });
+  const after = strip(loadPublishConfig(s.vault, siteAfter, quiet));
+  assert.deepEqual({ ...after, system: before.system }, before);
+  assert.equal(after.system, 'coc-7e');
+  assert.equal(fs.existsSync(at(s.vault, NOTES_FILE)), false);
+  assert.equal(planMove({ vaultPath: scratch(null).vault }).files.write.length, 0);
+});
+
+// ---- The site's tool must be able to read the new file (held, not blocked) ----
+
+function siteWithPin(spec, { fileName = 'vault.config.json' } = {}) {
+  const s = scratch(old('  site_dir: ../Site\n  site: false\n  site_title: V\n'));
+  const site = path.join(s.root, 'Site');
+  fs.mkdirSync(site);
+  fs.writeFileSync(path.join(site, fileName), JSON.stringify({ vaultPath: '../Vault', siteTitle: 'Theirs' }));
+  if (spec !== null) fs.writeFileSync(path.join(site, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': spec } }));
+  return { ...s, site };
+}
+
+test('a site whose tool is pinned by something else is held, whatever the site switch says; nothing is written', () => {
+  const s = siteWithPin('^1.20.0');
+  const before = hashes(s.root);
+  const r = cliMove({ vault: s.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(r.data.ok, false);
+  assert.equal(r.data.moved, false);
+  assert.equal(r.data.held, 'site-tool');
+  assert.equal(r.data.spec, '^1.20.0');
+  assert.deepEqual(r.data.blockers, []);
+  assert.match(r.data.line, /stays on the old settings file because its site's tool \(\^1\.20\.0\) cannot read the new one\. When that tool is 1\.23\.0 or later, run the update again\./);
+  assert.deepEqual(hashes(s.root), before);
+  assert.equal(layoutOf(s.vault), 'legacy');
+  // --check says the same.
+  assert.equal(cliMove({ vault: s.vault }, { check: true }).data.held, 'site-tool');
+});
+
+test('a site with no pinned tool moves; a site folder named but missing, or without a vault.config.json, is as it was', () => {
+  const free = siteWithPin(null);
+  assert.equal(cliMove({ vault: free.vault }).rc, 0);
+  assert.equal(layoutOf(free.vault), 'new');
+  const missing = scratch(old('  site_dir: ../Missing\n'));
+  const r = cliMove({ vault: missing.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(r.data.held, undefined);
+  assert.equal(layoutOf(missing.vault), 'legacy');
+  const empty = siteWithPin('^1.20.0', { fileName: 'other.json' });
+  const e = cliMove({ vault: empty.vault });
+  assert.equal(e.rc, 1);
+  assert.equal(e.data.held, undefined, 'no vault.config.json in the folder: no site file to ask about');
+});
+
+test('the four cases: ours or not, able to read the new file or not', () => {
+  const where = (s) => path.join(s.site, 'vault.config.json');
+  const cases = [
+    // [label, pin answer, caller updating, expected held]
+    ['ours, old, the update repins first', { ok: false, ours: true, spec: 'file:/p', installedBefore: '1.20.0' }, true, undefined],
+    ['ours, old, nobody repins', { ok: false, ours: true, spec: 'file:/p', installedBefore: '1.20.0' }, false, 'site-tool-old'],
+    ['not ours, installed 1.24.0', { ok: true, ours: false, spec: '^1.20.0', installedBefore: '1.24.0' }, true, undefined],
+    ['not ours, installed exactly 1.23.0', { ok: true, ours: false, spec: '1.23.0', installedBefore: '1.23.0' }, false, undefined],
+    ['not ours, installed 1.22.9', { ok: true, ours: false, spec: '^1.20.0', installedBefore: '1.22.9' }, true, 'site-tool'],
+    ['not ours, nothing installed, spec asks for 1.25.0', { ok: true, ours: false, spec: '^1.25.0', installedBefore: null }, false, undefined],
+    ['not ours, nothing installed, spec asks for 1.2.0', { ok: true, ours: false, spec: '^1.2.0', installedBefore: null }, false, 'site-tool'],
+    ['not ours, nothing installed, spec says nothing of a version', { ok: true, ours: false, spec: 'github:someone/fork', installedBefore: null }, false, 'site-tool'],
+    ['no tool pinned or installed', { ok: true, ours: false, spec: null, installedBefore: null }, false, undefined],
+  ];
+  for (const [label, pin, updated, held] of cases) {
+    const s = siteWithPin(null);
+    const plan = planMove({ vaultPath: s.vault, siteConfigPath: where(s), siteToolUpdated: updated }, { pinCheck: () => pin });
+    assert.equal(plan.held, held, label);
+    assert.equal(plan.ok, held === undefined, label);
+  }
+});
+
+test('an old copy of the plugin\'s own tool holds the move unless the caller is bringing it up to date', () => {
+  const s = siteWithPin('file:/cache/gm-apprentice/1.10.1/tools/publish');
+  const calls = [];
+  const stale = (dir) => { calls.push(dir); return { ok: false, ours: true, spec: 'file:/cache/gm-apprentice/1.10.1/tools/publish' }; };
+  const held = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.site, 'vault.config.json') }, { pinCheck: stale });
+  assert.equal(held.ok, false);
+  assert.equal(held.held, 'site-tool-old');
+  assert.match(held.line, /older than the plugin's/);
+  const updating = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.site, 'vault.config.json'), siteToolUpdated: true }, { pinCheck: stale });
+  assert.equal(updating.ok, true, updating.blockers.join(' | '));
+  const current = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.site, 'vault.config.json') }, { pinCheck: () => ({ ok: true, ours: true, spec: 'file:/x', installedBefore: '1.24.0' }) });
+  assert.equal(current.ok, true);
+  assert.equal(calls.length, 2);
+});
+
+test('a moved vault is tidied even when its site is pinned by something else', () => {
+  const s = siteWithPin(null);
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(path.join(s.site, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': '^1.20.0' } }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+});
+
+// ---- Every site folder involved is asked, and an installed tool counts whatever package.json says ----
+
+function installTool(dir, version) {
+  const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
+  fs.mkdirSync(pkg, { recursive: true });
+  fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version }));
+}
+
+test('the vault names site A (old tool) and --config names site B (new tool): held, because A is asked too', () => {
+  const s = scratch(old('  site_dir: ../SiteA\n'));
+  const a = path.join(s.root, 'SiteA');
+  const b = path.join(s.root, 'SiteB');
+  for (const d of [a, b]) { fs.mkdirSync(d); fs.writeFileSync(path.join(d, 'vault.config.json'), JSON.stringify({ vaultPath: '../Vault' })); }
+  installTool(a, '1.22.0');
+  installTool(b, '1.23.0');
+  const none = () => null;
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: path.join(b, 'vault.config.json') }, { pinCheck: none });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.held, 'site-tool');
+  assert.match(plan.line, /\(1\.22\.0\)/);
+  installTool(a, '1.23.0');
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: path.join(b, 'vault.config.json') }, { pinCheck: none }).ok, true);
+});
+
+test('an old tool installed in a site folder whose package.json does not name it still holds the move; no tool and no pin does not', () => {
+  const s = siteWithPin(null);
+  installTool(s.site, '1.22.0');
+  const r = cliMove({ vault: s.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(r.data.held, 'site-tool');
+  assert.equal(layoutOf(s.vault), 'legacy');
+  const free = siteWithPin(null);
+  assert.equal(cliMove({ vault: free.vault }).rc, 0);
+  const current = siteWithPin(null);
+  installTool(current.site, '1.23.0');
+  assert.equal(cliMove({ vault: current.vault }).rc, 0);
+});
+
+// ---- A moved vault whose site file holds settings the vault resolves differently ----
+
+test('--fold-site-file adds a site hiding list to the vault\'s, keeps the stricter callout rule, drops the rest, in one change', () => {
+  const s = scratch(old('  site_dir: ../Site\n  site_title: Mine\n  exclude_sections: [A]\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  const siteJson = { vaultPath: '../Vault', outputDir: './docs' };
+  fs.writeFileSync(file, JSON.stringify(siteJson, null, 4) + '\n');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  const extra = { ...siteJson, siteTitle: 'Theirs', excludeSections: ['Z'], excludeCallouts: ['spoiler'] };
+  fs.writeFileSync(file, JSON.stringify(extra, null, 4) + '\n');
+  const before = hashes(s.root);
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(check.data.siteDiffers.sort(), ['player_site.hide.callouts', 'player_site.hide.sections', 'player_site.title']);
+  assert.deepEqual(hashes(s.root), before, 'a check writes nothing');
+  assert.deepEqual(hashes(s.root), before);
+  const plain = cliMove({ vault: s.vault });
+  assert.match(plain.data.lines.join('\n'), /left as it is/);
+  assert.deepEqual(hashes(s.root), before, 'without the flag the site file is left');
+  const done = cliMove({ vault: s.vault }, { foldSiteFile: true });
+  assert.equal(done.rc, 0, done.err.join('\n'));
+  const got = readSettings({ vaultPath: s.vault }).values.player_site;
+  assert.deepEqual(got.hide.sections, ['A', 'Z'], 'the vault\'s own list, plus the site file\'s entry');
+  assert.deepEqual(got.hide.callouts, ['spoiler']);
+  assert.equal(got.title, 'Mine', 'the vault\'s plain value is the one in use');
+  const after = fs.readFileSync(file, 'utf8');
+  assert.equal(after, JSON.stringify(siteJson, null, 4) + '\n', 'the site file keeps its indentation');
+  assert.equal(cliMove({ vault: s.vault }).data.siteDiffers, undefined);
+});
+
+test('the vault already hiding every callout keeps that; a failing site write puts the vault\'s file back', () => {
+  const s = scratch(old('  site_dir: ../Site\n  exclude_callouts: true\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault' }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault', excludeCallouts: ['x'], excludeSections: ['Z'] }));
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null });
+  const vaultBefore = fs.readFileSync(at(s.vault, NEW_FILE), 'utf8');
+  let n = 0;
+  const rename = (a, b) => { n += 1; if (n === 2) throw new Error('disk said no'); fs.renameSync(a, b); };
+  assert.throws(() => applyMove(plan, { rename }), /nothing was changed/);
+  assert.equal(fs.readFileSync(at(s.vault, NEW_FILE), 'utf8'), vaultBefore);
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).excludeSections[0], 'Z');
+  assert.equal(applyMove(planMove({ vaultPath: s.vault, siteConfigPath: file, foldSiteFile: true }, { pinCheck: () => null })).moved, false);
+  assert.equal(readSettings({ vaultPath: s.vault }).values.player_site.hide.callouts, true);
+});
+
+test('a vault with no list of its own keeps the built-in ones when a site hiding list is folded in', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault' }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault', excludeSections: ['Z'] }));
+  assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true }).rc, 0);
+  const got = readSettings({ vaultPath: s.vault }).values.player_site.hide.sections;
+  assert.ok(got.includes('Z') && got.includes('GM Notes'));
+});
+
+test('a left-over old file that also hides a heading does not hide the site file\'s other entries from the check', () => {
+  const s = scratch(old('  site_dir: ../Site\n  exclude_sections: [GM Notes]\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault' }));
+  const oldText = fs.readFileSync(at(s.vault, OLD_FILE), 'utf8');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(at(s.vault, OLD_FILE), oldText);      // a sync brings the old file back
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault', excludeSections: ['Site Secret'] }));
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.ok((check.data.siteDiffers || []).includes('player_site.hide.sections'), JSON.stringify(check.data));
+  assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true }).rc, 0);
+  assert.ok(readSettings({ vaultPath: s.vault }).values.player_site.hide.sections.includes('Site Secret'));
 });

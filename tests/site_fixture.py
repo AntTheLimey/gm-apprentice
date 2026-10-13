@@ -160,3 +160,33 @@ def give_site(vault: Path, cleanup: Callable[[Path], object],
     if text is not None and text != config:
         file.parent.mkdir(exist_ok=True)
         file.write_text(text, encoding="utf-8")
+
+
+def site_of(vault: Path) -> Path:
+    """The site folder a test vault's settings name (`player_site.folder`)."""
+    text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
+    found = re.search(r"^\s*site_dir:\s*(.+)$", text, re.M)
+    assert found, "the vault names no site folder"
+    return Path(found.group(1).strip().strip("\"'"))
+
+
+def point_site_at(vault: Path, site: Path | None = None, **keys: object) -> Path:
+    """Make the site's vault.config.json name `vault` (the update's move
+    refuses a site file that does not say which vault it belongs to), with
+    any `keys` added to it. Returns the site folder."""
+    site = site or site_of(vault)
+    file = site / "vault.config.json"
+    config = json.loads(file.read_text(encoding="utf-8"))
+    config["vaultPath"] = str(vault)
+    config.update(keys)
+    file.write_text(json.dumps(config), encoding="utf-8")
+    return site
+
+
+def pin_site(site: Path, spec: str | None = None) -> None:
+    """Write the site's package.json: pinned to the repo's own publish tool
+    (a plugin path, so the tool is the plugin's own), or to `spec`."""
+    pin = spec if spec is not None else f"file:{TOOL_DIR.as_posix()}"
+    (site / "package.json").write_text(json.dumps(
+        {"name": "site", "dependencies": {"gm-apprentice-publish": pin}}),
+        encoding="utf-8")

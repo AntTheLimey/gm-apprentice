@@ -177,6 +177,8 @@ describe('update-pin', () => {
       desired: '1.11.30',
       changed: false,
       ok: false,
+      ours: true,
+      spec: `file:${CACHE}/1.11.20/tools/publish`,
     });
   });
 
@@ -267,6 +269,8 @@ describe('update-pin', () => {
       desired: '1.11.30',
       changed: true,
       ok: true,
+      ours: true,
+      spec: `file:${CACHE}/1.11.20/tools/publish`,
     });
   });
 
@@ -291,6 +295,8 @@ describe('update-pin', () => {
       desired: '1.11.30',
       changed: false,
       ok: false,
+      ours: false,
+      spec: null,
     });
   });
 
@@ -303,6 +309,27 @@ describe('update-pin', () => {
     assert.strictEqual(rc, 0);
     assert.match(h.out.join('\n'), /no gm-apprentice-publish dependency/);
     assert.deepStrictEqual(h.writes, {});
+  });
+});
+
+describe('update-pin says whether the tool in the site is ours (ours)', () => {
+  const ours = async (files) => {
+    const h = harness({ files, detect: drift('1.11.29', '1.11.30') });
+    await runUpdatePin({ siteDir: '/site', check: true, json: true }, h.deps);
+    const said = JSON.parse(h.out.join(''));
+    return said.spec === null ? said.ours : said.ours;
+  };
+  it('is true for a plugin path, false for a registry spec, a git spec, no dependency and no package.json', async () => {
+    assert.strictEqual(await ours(siteFiles(`file:${CACHE}/1.11.20/tools/publish`, '1.11.20')), true);
+    assert.strictEqual(await ours(siteFiles('^1.20.0', '1.20.0')), false);
+    assert.strictEqual(await ours(siteFiles('github:someone/fork', '1.20.0')), false);
+    assert.strictEqual(await ours({ '/site/package.json': JSON.stringify({ dependencies: {} }) }), false);
+    assert.strictEqual(await ours({}), false);
+  });
+  it('names the spec it found, so a caller can say what the site is pinned to', async () => {
+    const h = harness({ files: siteFiles('^1.20.0', '1.20.0'), detect: drift('1.11.29', '1.11.30') });
+    await runUpdatePin({ siteDir: '/site', check: true, json: true }, h.deps);
+    assert.strictEqual(JSON.parse(h.out.join('')).spec, '^1.20.0');
   });
 });
 

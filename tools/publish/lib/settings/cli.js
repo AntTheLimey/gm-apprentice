@@ -10,6 +10,7 @@
 //   settings list                    every name a GM can set
 //   settings raw [<name>]            the file as written
 //   settings setup-note get|set|clear  the publish set-up note
+//   settings carry <as written> <setting>  put a mis-named key's value under its right name
 //   settings move                    take a vault from the old settings file to the new one
 const fs = require('node:fs');
 const path = require('node:path');
@@ -18,19 +19,20 @@ const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
 const { isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
-const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, at: fileAt } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, nameInFor, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
 const { row, isLeaf } = require('./describe');
 const { OLD_BLOCK, SETUP_NOTE } = require('./legacy');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
-const { planMove, applyMove } = require('./move');
+const { planMove, applyMove, siteFileNamedBy } = require('./move');
 
-const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move'];
+const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
-// Removed in Part B: the name the old vault file gave a setting, which the commands still take for
-// one release. An old name is answered as the setting it became, with a line naming the new one.
+// The name the old vault file gave a setting. The commands take it for as long as legacy.js reads the
+// old file (two releases after 1.10.54). An old name is answered as the setting it became, with a line
+// naming the new one.
 const oldOf = (e) => legacyNameOf(e);
 const oldNamesOf = (e) => (e.legacyOnly ? [e.name] : (e.was || []).filter((w) => w.in === 'vault').map((w) => w.name));
 const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) => inScope(n, scope));
@@ -102,20 +104,15 @@ function get(options, names) {
   const read = readSettings({ vaultPath, siteConfig });
   const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves;
   const now = {};
-  // Removed in Part B: the old shape main's vault scripts read, keyed by the old file's names.
-  const settings = {};
-  for (const e of shown) {
-    const one = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
-    now[e.name] = one;
-    if (oldOf(e)) settings[oldOf(e)] = one;
-  }
+  for (const e of shown) now[e.name] = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
   const asked = (f) => !names.length || names.some((name) => inScope(f.name, name) || inScope(f.use || '', name) || inScope(f.suggest || '', name) || inScope(f.setting || '', name));
   const faults = sortedFaults(read.faults.filter(asked));
   const result = {
     file: read.file,
-    settings,
+    values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])),
+    origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])),
+    written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
     faults: faults.map(faultJson),
-    byNewName: { values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])), origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])) },
   };
   const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));
@@ -190,10 +187,8 @@ function list() {
     const r = row(e);
     return { name: r.name, takes: r.takes, default: r.default, was: wasLine(e) };
   });
-  // Removed in Part B: the same rows under the old file's names, which the vault scripts still ask by.
-  const olds = LEAVES().filter(oldOf).map((e) => { const r = row(e); return { name: oldOf(e), takes: r.takes, default: r.default, now: e.name }; });
   return {
-    result: { names: [...names, ...olds] },
+    result: { names },
     lines: names.flatMap((n) => [`${n.name}: ${n.takes} (default ${plainValue(n.default)})`, ...(n.was ? [`  ${n.was}`] : [])]),
   };
 }
@@ -202,7 +197,7 @@ function list() {
 function helpText() {
   const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
-gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
+gm-apprentice-publish settings <get|set|add|remove|unset|carry|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 
 Reads, writes, describes and checks the settings in the vault's settings file (${NEW_FILE}; ${OLD_FILE} on a vault not yet updated).
 
@@ -214,15 +209,20 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
                                    (the built-in list included): settings add player_site.hide.sections Rumours "Player Handout"
   settings remove <name> <entry> ...  Take entries out of a list setting
   settings unset <name> ...        Remove settings from the file, all or none
+  settings carry <key> <setting>   Put the value of a mis-named key under the setting's right name, then remove the key
   settings describe <name>         What one setting does, what it takes, its default
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
   settings raw [<name>]            The file as written, or the value at one name
-  settings move [--check] [--fill name=value ...]
+  settings move [--check] [--fill name=value ...] [--discard-old-file] [--site-tool-updated] [--fold-site-file]
                                    Take a vault from the old settings file to the new one, all or nothing
-                                   (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none)
-                                   Do not run it by hand yet: the next release runs it for you, and teaches the
-                                   plugin's own scripts to read the new file at the same time
+                                   (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none;
+                                   on a vault already moved it tidies up after a stopped move, and --discard-old-file removes a left-over
+                                   old file that holds more than the new one; --site-tool-updated says the caller is bringing the site's tool up to date first;
+                                   --fold-site-file, on a moved vault, takes the settings a site folder's vault.config.json still holds out of it,
+                                   adding a hiding list's entries to the vault's list and keeping the stricter callout rule)
+                                   The plugin's update normally runs the move for you. Running it by hand is safe:
+                                   it refuses when the site's publish tool cannot read the new file.
   settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
                                    vault not yet updated). Also: setup-note set <key>=<value> ... and setup-note clear
 
@@ -267,7 +267,7 @@ function refusal(name) {
 function write(options, changes) {
   const { vaultPath, siteConfig } = target(options);
   try {
-    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig }) };
+    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig, siteConfigPath: options.config ? path.resolve(options.config) : null }) };
   } catch (e) {
     if (e.refusals) return { errors: e.refusals };
     throw e;
@@ -445,7 +445,8 @@ function unset(options, names) {
     const holds = LEAVES().filter((x) => x.name.startsWith(`${name}.`) || (!!oldOf(x) && oldOf(x).startsWith(`${name}.`))).map((x) => (name.startsWith(`${OLD_BLOCK}.`) ? oldOf(x) : x.name));
     if (r && !r.entry.legacyOnly && !r.entry.container) { changes.push({ op: 'unset', name: r.entry.name, label: name, ...(r.old && legacy ? { spelling: name } : {}) }); given.set(name, r.entry.name); }
     else if (holds.length) errors.push(`${name} holds other settings; unset each setting in it: ${holds.join(', ')}.`);
-    // A key under the old block the list does not know is taken out as written, so a stray key can still be removed.
+    // A key the list does not know is taken out as written, so a stray key can still be removed.
+    else if (!legacy && layoutOf(vaultPath) === 'new') { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else if (legacy && name.startsWith(`${OLD_BLOCK}.`)) { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else errors.push(notASetting(name));
   }
@@ -460,6 +461,21 @@ function unset(options, names) {
     lines.push(spellings.length > 1 ? `Removed ${spellings.join(' and ')} (the same setting).` : `Removed ${shownAs(n)}.`);
   }
   return { result: { removed }, lines, notices: noticesFor(names) };
+}
+
+// carry <as written> <setting>: the value of a key the list does not know (a misspelt or old-named key in the new file)
+// goes under the setting's right name, validated, and the key is removed: one change, all or nothing.
+function carry(options, args) {
+  if (args.length !== 2) throw new Error('settings carry needs the key as it is written and the setting it belongs to.');
+  const [from, to] = args;
+  const why = refusal(to);
+  if (why) return { errors: [why] };
+  const e = resolve(to).entry;
+  const { vaultPath } = target(options);
+  if (layoutOf(vaultPath) !== 'new') return { errors: ['settings carry works on the new settings file; run the update first.'] };
+  const done = write(options, [{ op: 'carry', from: from.split('.'), name: e.name, label: to }]);
+  if (done.errors) return done;
+  return { result: { carried: from, into: e.name }, lines: [`Moved ${from} to ${e.name}.`], notices: noticesFor([to]) };
 }
 
 // ---- The set-up note ----------------------------------------------------------------------
@@ -534,22 +550,6 @@ function fillOf(pairs) {
   return out;
 }
 
-// The site folder an old-layout vault names (player_site.folder), and its vault.config.json: { dir, file, exists }.
-// null when the vault is not on the old layout, names no folder, or its settings cannot be read (the plan says so).
-function siteFileNamedBy(vaultPath) {
-  if (layoutOf(vaultPath) !== 'legacy') return null;
-  let raw;
-  try {
-    raw = getPath(readSettings({ vaultPath, siteConfig: {} }).values, ['player_site', 'folder']);
-  } catch {
-    return null;
-  }
-  if (typeof raw !== 'string' || raw.trim() === '') return null;
-  const dir = require('../lines-cli').siteDirPath(vaultPath, raw);
-  const file = path.join(dir, 'vault.config.json');
-  return { dir, file, exists: fs.existsSync(file) };
-}
-
 function move(options) {
   // The vault is --vault, or the one the site folder's file names. A site file that cannot say is a blocker, not a crash.
   let siteConfigPath = options.config ? path.resolve(options.config) : (options.vault ? null : path.resolve('./vault.config.json'));
@@ -570,16 +570,20 @@ function move(options) {
   // With only --vault, the site folder is the one the vault's own settings name; the move must see its file.
   if (!siteConfigPath) {
     const named = siteFileNamedBy(vaultPath);
-    if (named && !named.exists) return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
-    if (named) siteConfigPath = named.file;
+    // A vault already moved may have lost its site folder; there is then nothing in it to mend.
+    if (named && !named.exists && layoutOf(vaultPath) === 'legacy') return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
+    if (named && named.exists) siteConfigPath = named.file;
   }
-  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill) });
-  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files });
+  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
+  if (plan.held) {
+    return { result: base(false, [plan.line]), lines: ['Nothing was changed.', plan.line], rc: 1 };
+  }
   if (!plan.ok) {
     return { result: base(false, plan.lines), lines: ['Nothing was changed. The move is blocked:', ...plan.blockers.map((b) => `  ${b}`)], rc: 1 };
   }
   if (options.check) {
-    const lines = plan.files.remove.length ? ['Nothing was changed (check only). This is what the move will do:', ...plan.lines] : plan.lines;
+    const lines = plan.files.remove.length || plan.files.write.length ? ['Nothing was changed (check only). This is what the move will do:', ...plan.lines] : plan.lines;
     return { result: base(false, plan.lines), lines };
   }
   const done = applyMove(plan);
@@ -601,6 +605,7 @@ function runSettings(options, deps = {}) {
     else if (options.verb === 'add' || options.verb === 'remove') done = changeList(options, options.verb, args);
     else if (options.verb === 'setup-note') done = setupNote(options, args);
     else if (options.verb === 'move') done = move(options);
+    else if (options.verb === 'carry') done = carry(options, args);
     else if (options.verb === 'unset') done = unset(options, args);
     else if (options.verb === 'describe') {
       if (!args[0]) throw new Error('settings describe needs a setting name.');

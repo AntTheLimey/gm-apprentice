@@ -20,7 +20,7 @@ does the waiting, and you only wake when a request actually arrives.
   It prints the three values as the build resolves them, e.g.
   `{'characterSheets': True, 'liveStats': False, 'inbox': True}`.
   - `inbox` is `False`: the site has no widget, so there is nothing to
-    drain. Tell the GM (`publish.inbox` in `_meta/vault-config.md`, or
+    drain. Tell the GM (the `player_site.features.inbox` setting, or
     `setup-inbox`) and stop.
   - `characterSheets` is `False`: run the loop as a question channel. See
     "When character sheets are off" below.
@@ -221,7 +221,7 @@ the cell being changed, on a PC that is not live), read first from the PC's
    the request's `character` field interpolated — and answer from that output
    only, never opening the vault sheet for a player question. The command is
    the primary data
-   boundary: it already strips the sections `publish.exclude_sections` hides
+   boundary: it already strips the sections `player_site.hide.sections` hides
    in the target PC's own note (`GM Notes` among them), and
    `<!-- gm-only -->`/`<!-- spoiler -->` regions —
    that part is enforced by it, not remembered by you. What it *cannot* know:
@@ -280,7 +280,7 @@ lost reports `status: gone` to the widget, which tells the player to resend.
 
 ## When character sheets are off
 
-With `publish.character_sheets` off (`switches.characterSheets` is `false`
+With `player_site.sheets.show` off (`switches.characterSheets` is `false`
 in the Prerequisites check), the site carries no sheet and the widget is a
 question channel labelled "Ask the GM". This holds for every system, not
 only GURPS, CoC and D&D. The Start, watcher, failure and Stop sections apply
@@ -318,7 +318,7 @@ ask which.
 - **SAN, HP, MP, Luck, Reputation (Regency) and conditions** ("lost 4 SAN",
   "HP is 7 now", "spent 10 Luck", "I'm unconscious"). First check whether the
   sheet is live-tracked. Look at what the site actually built, not the config:
-  `publish.live_stats` can be on while the build leaves live tracking out
+  `player_site.features.live_stats` can be on while the build leaves live tracking out
   (no KV store wired in `wrangler.toml`). The PC's built page in the site's
   output folder contains `id="coc-live-data"` when it is live.
   - **Live-tracked:** these values, and the skill improvement ticks, live on

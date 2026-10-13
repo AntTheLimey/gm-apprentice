@@ -74,15 +74,12 @@ test('no default is written as a fallback', () => {
 });
 
 // Each file below names the settings file in code, and why:
-//   vault-config-edit.js  the old editor of the `publish:` block, used only by migrate-config.js (both go in Part B)
-//   migrate-config.js     moves the settings an older site kept in vault.config.json into the file
+//   (none: the old editor and the old migration command are gone)
 // The settings package reads and writes the file for everything else (settings/write.js is the one writer),
 // and layout.js is the one place that writes either file's name: a message to the GM gets the name from
 // fileLabel / nameIn (or their `For` forms), which know which of the two files the vault is on.
 test('nothing reads the vault settings file but the settings package', () => {
-  const allowed = new Set([
-    'lib/vault-config-edit.js', 'lib/migrate-config.js',
-  ]);
+  const allowed = new Set([]);
   // Either file's name anywhere in code: a path joined, a template, a line of help text.
   const named = /vault-config\.(?:md|yaml)/;
   const hits = grep(named, code);
@@ -161,11 +158,10 @@ test('the connection and link-preview modes the templates use come from the list
 
 // A message names a setting as the vault's own file writes it: the old name on the old file, the new
 // one on the new. So no file outside the settings package holds a setting's old name as text; the
-// pair lives in the list (`was`), and the helpers in layout.js read it. migrate-config.js and the
-// editor it uses (both deleted in Part B) only ever speak of the old file.
+// pair lives in the list (`was`), and the helpers in layout.js read it.
 test('no message states a setting under its old name', () => {
   const old = new Set(REGISTRY.filter((e) => !e.legacyOnly).flatMap((e) => (e.was || []).filter((w) => w.in === 'vault').map((w) => w.name)));
-  const exempt = new Set(['lib/vault-config-edit.js', 'lib/migrate-config.js', 'bin/gm-publish.js']);
+  const exempt = new Set(['bin/gm-publish.js']);
   const found = [];
   for (const f of sources) {
     if (exempt.has(rel(f))) continue;

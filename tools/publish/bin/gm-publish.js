@@ -40,7 +40,6 @@ Usage:
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
-  gm-apprentice-publish migrate-config       Move settings out of vault.config.json (used by the update)
   gm-apprentice-publish settings <cmd>       Read, set, describe and check any site setting
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
@@ -275,27 +274,6 @@ withholds because its Wrap-Up publishes.
   --all              Every file at once (needs --json)
   --vault <dir>      Read this vault through the site's rules instead of
                      the vault the config names
-  --help, -h         Show this help
-`,
-  'migrate-config': `
-gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
-
-Used by the update, which moves a vault's settings to the new file for you; you
-do not need to run it. On a vault still on the old file (${OLD_FILE}), it
-moves the campaign settings in the site's vault.config.json (title, folder map,
-exclude lists, images, ...) into publish: there, renames publish.backend.statusBar /
-inbox to publish.live_stats / inbox, and leaves only the deployment keys in the
-site file, plus any key the tool does not read (named in the output, never removed). The vault file wins when both set a
-key (the difference is reported); exclude lists are merged. Both files are
-backed up as <file>.pre-migrate first (an existing backup is never replaced).
-Nothing is written if the vault file cannot be edited safely. Running it again
-changes nothing.
-
-  --dry-run, -n      Print what would change; write nothing
-  --json             Print the plan as JSON
-  --config <path>    Path to vault.config.json (default: ./vault.config.json)
-  --vault <dir>      The vault to edit (default: the one the config names). With
-                     no site file, only the backend rename is planned.
   --help, -h         Show this help
 `,
   deploy: `
@@ -739,31 +717,6 @@ if (command === 'explain' && args[1] === '--all') {
   return;
 }
 
-if (command === 'migrate-config') {
-  const parsed = parseSubcommandArgs(
-    args.slice(1),
-    { '--dry-run': 'dryRun', '-n': 'dryRun', '--json': 'json' },
-    { '--vault': 'vault' },
-  );
-  if (parsed.error) {
-    console.error(`Error: ${parsed.error}`);
-    printSubcommandHelp('migrate-config');
-    process.exit(1);
-  }
-  // With --vault and no site file, plan only the vault file's own rename.
-  const explicitConfig = args.includes('--config');
-  const hasSite = explicitConfig || fs.existsSync(parsed.configPath) || !parsed.flags.vault;
-  const { runMigrateConfig } = require('../lib/migrate-config.js');
-  const rc = runMigrateConfig({
-    configPath: hasSite ? parsed.configPath : undefined,
-    vaultPath: parsed.flags.vault,
-    dryRun: !!parsed.flags.dryRun,
-    json: !!parsed.flags.json,
-  });
-  exitAfterFlush(rc);
-  return;
-}
-
 // --vault is the vault; --config is the site folder's vault.config.json. Neither given means the
 // config in the current folder.
 function settingsTarget(parsed, args) {
@@ -780,14 +733,14 @@ if (command === 'settings') {
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check' }, { '--vault': 'vault' }, { '--fill': 'fill' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile' }, { '--vault': 'vault' }, { '--fill': 'fill' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, fill: parsed.flags.fill });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, fill: parsed.flags.fill });
   exitAfterFlush(rc);
   return;
 }

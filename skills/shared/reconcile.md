@@ -133,9 +133,9 @@ campaign-organizer if entity filing is needed.
 ### 6.1. Publish registration (conditional)
 
 Only if `_meta/publish-manifest.md` exists and `node "$TOOL" settings
-get publish.site publish.site_dir publish.mode --vault <vault>` gives
+get player_site.publish player_site.folder player_site.hide.mode --vault <vault>` gives
 `true`, a folder and `player`; otherwise skip. `$TOOL` is as in
-`publish-site/SKILL.md`; a relative `site_dir` is relative to the
+`publish-site/SKILL.md`; a relative folder is relative to the
 vault. A played session left in the manifest's Needs Decision
 never reaches the player site (#277). Run it yourself,
 unconditionally, and report the paths it ticked:
@@ -198,7 +198,7 @@ item is Keeper-facing. Pass the section, heading first, on stdin
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_write.py" <vault>
 wrapup-add "<wrap-up>" --write`; a later reconcile adds its
 decisions to the section with `--append`. Never a top-level
-`## Reconciliation Context`, and never an `exclude_sections` entry
+`## Reconciliation Context`, and never a `player_site.hide.sections` entry
 instead. A Plan file may get a one-line pointer (`See Wrap-Up for
 reconciliation context`).
 

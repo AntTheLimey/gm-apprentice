@@ -107,6 +107,54 @@ describe('doctor --site', () => {
     } finally { buildModule.build = realBuild; }
   });
 
+  it('a vault still on the old file: one note, whose words depend on whether the site\'s tool is ours', async () => {
+    const vault = settingsVault('  mode: player\n');
+    const { dir, configPath } = siteFor(vault);
+    const pin = (spec) => fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': spec } }));
+    const notes = async () => {
+      const cap = capture();
+      await runSiteDoctor({ configPath, json: true }, cap.deps);
+      return JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
+    };
+    assert.deepEqual(await notes(), [], 'no package.json: nothing to say');
+    pin('file:/cache/gm-apprentice/1.10.54/tools/publish');
+    const ours = await notes();
+    assert.equal(ours.length, 1);
+    assert.equal(ours[0].detail, 'this vault is still on the old settings file; the next update moves it');
+    pin('^1.20.0');
+    const theirs = await notes();
+    assert.equal(theirs.length, 1);
+    assert.match(theirs[0].detail, /stays on the old settings file because its site's tool \(\^1\.20\.0\) cannot read the new one\. When that tool is 1\.23\.0 or later, run the update again\./);
+    pin('^1.24.0');
+    const fine = await notes();
+    assert.equal(fine.length, 1);
+    assert.equal(fine[0].detail, 'this vault is still on the old settings file; the next update moves it');
+  });
+
+  it('an old tool installed in a site folder with no package.json is said to hold the vault, as the move holds it', async () => {
+    const { dir, configPath } = siteFor(settingsVault('  mode: player\n'));
+    const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.22.0' }));
+    const cap = capture();
+    await runSiteDoctor({ configPath, json: true }, cap.deps);
+    const notes = JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
+    assert.equal(notes.length, 1);
+    assert.match(notes[0].detail, /stays on the old settings file because its site's tool \(1\.22\.0\) cannot read the new one/);
+  });
+
+  it('a setting left in the site folder\'s file is fixed in vault.config.json, not in the vault\'s settings file', async () => {
+    const vault = settingsVault('  mode: player\n');
+    fs.unlinkSync(path.join(vault, '_meta', 'vault-config.md'));
+    write(vault, '_meta/vault-config.yaml', 'version: 1\n');
+    const { configPath } = siteFor(vault, { siteTitle: 'Left Behind' });
+    const cap = capture();
+    await runSiteDoctor({ configPath, json: true }, cap.deps);
+    const row = JSON.parse(cap.text()).findings.find((f) => f.code === 'SETTINGS_FAULT' && f.path === 'vault.config.json');
+    assert.ok(row, cap.text());
+    assert.match(row.fix, /remove it from vault\.config\.json/);
+  });
+
   it('a look-side settings fault is a warning finding, and the audit goes on to build', async () => {
     const { configPath } = siteFor(settingsVault('  link_preview: off\n'));
     const buildModule = require('../lib/build');

@@ -15,7 +15,7 @@ const { REGISTRY, resolve, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath } = require('./types');
 const { makeFault } = require('./faults');
 const { isLeaf } = require('./describe');
-const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
+const { NEW_FILE, OLD_FILE, GROUPS: GROUP_NAMES, layoutOf, at } = require('./layout');
 const { LAYOUT_VERSION, NEWER_VERSION } = require('./read');
 const { OLD_BLOCK, hasLegacy } = require('./legacy');
 const { parseNote } = require('../frontmatter');
@@ -452,8 +452,21 @@ function prepare(changes, layout, { allowState = false } = {}) {
   const legacy = layout === 'legacy';
   for (const change of changes) {
     if (change.op === 'unset-raw') {
-      if (!legacy) refusals.push('a raw path can be taken out only of the old settings file');
-      else steps.push({ kind: 'del', keys: change.path, setting: change.path.join('.'), shown: change.path.join('.') });
+      const dotted = change.path.join('.');
+      // On the new file only a key the list does not know can be taken out as written (`version` and the groups stay).
+      const known = dotted === 'version' || REGISTRY.some((x) => x.name === dotted || x.name.startsWith(`${dotted}.`)) || GROUP_NAMES.includes(dotted);
+      if (layout === 'none') refusals.push('there is no settings file to take it out of');
+      else if (!legacy && known) refusals.push(`${dotted} is a setting; remove it with settings unset ${dotted}.`);
+      else steps.push({ kind: 'del', keys: change.path, setting: dotted, shown: dotted });
+      continue;
+    }
+    if (change.op === 'carry') {
+      const to = BY_NAME.get(change.name);
+      const dotted = change.from.join('.');
+      if (layout !== 'new') refusals.push('a key can be carried to its right name only in the new settings file');
+      else if (!to || !isLeaf(to, REGISTRY) || to.state || to.settable === false || to.retired || to.container || to.legacyOnly) refusals.push(`${change.label || change.name} is not a setting that can be set.`);
+      else if (REGISTRY.some((x) => x.name === dotted) || dotted === 'version') refusals.push(`${dotted} is a setting already; it does not need carrying.`);
+      else steps.push({ kind: 'carry', from: change.from, entry: to });
       continue;
     }
     const name = change.label || change.name;
@@ -574,10 +587,32 @@ function runStep(text, step, label, eol, keepBlock) {
   return { text: applyEdits(text, res.edits), expected, wrote, removed, notes };
 }
 
+// A carry, as the steps that do it: the setting takes the stray key's value (a list's entries are added to the
+// list, never put in its place), then the stray key goes. Each step is checked on its own, as any step is.
+function expandCarry(text, step, label) {
+  const e = step.entry;
+  const shown = step.from.join('.');
+  const value = getPath(parseText(text, label).toJS() || {}, step.from);
+  if (value === undefined) throw plain(`${shown} is not in the file.`);
+  const base = { shown: e.name, setting: e.name, keys: e.name.split('.'), older: [], olderNames: [], spelling: e.name, entry: e };
+  let first;
+  if ((e.type === 'list' || e.type === 'switchOrList') && Array.isArray(value)) {
+    const entries = value.map((x) => (typeof x === 'string' ? x : String(x)));
+    if (!entries.length || entries.some(blank)) throw plain(`${shown} has an empty or blank entry; it cannot be carried.`);
+    first = { ...base, kind: 'list', verb: 'add', entries, same: (a, b) => a === b };
+  } else {
+    if (blank(value) && e.type !== 'text') throw plain(`${shown} has no value, so it cannot be carried to ${e.name}.`);
+    const read = TYPES[e.type].read(value, e);
+    if (!read.ok) throw plain(`${shown} holds ${JSON.stringify(value)}, and ${e.name} takes ${TYPES[e.type].takes(e)}.`);
+    first = { ...base, kind: 'set', value: e.type === 'text' ? (typeof value === 'number' ? String(value) : value) : read.value };
+  }
+  return [first, { kind: 'del', keys: step.from, older: [], setting: shown, shown }];
+}
+
 // Plans the changes without writing: { rel, file, before, after, changed, notes, wrote, removed, created }.
 // `siteConfig` is the site folder's vault.config.json, when the caller has it: a vault with no settings file whose
 // site file still holds settings is not given a new one (the new file would switch those settings off).
-function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null } = {}) {
+function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null, siteConfigPath = null } = {}) {
   const layout = layoutOf(vaultPath);
   const { steps, refusals } = prepare(changes, layout, { allowState });
   if (refusals.length) {
@@ -586,7 +621,7 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
     throw err;
   }
   if (layout === 'none' && create && hasLegacy(siteConfig)) {
-    throw plain("the site folder's vault.config.json still holds this vault's settings; run the update first, which brings them into the vault. Nothing was written.");
+    throw plain(`the site folder's vault.config.json still holds this vault's settings, so none can be set yet. Bring them into the vault first by running: gm-apprentice-publish settings move --vault "${vaultPath}" --config "${siteConfigPath || '<site folder>/vault.config.json'}". Nothing was written.`);
   }
   const doc = open(vaultPath, layout, create);
   if (layout === 'new' || doc.created) {
@@ -599,7 +634,10 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
   const result = { changed: [], notes: [], wrote: [], removed: [] };
   // Lines in the old file count the opening --- line too.
   const lineBase = layout === 'legacy' ? 1 : 0;
-  for (const step of steps) {
+  const queue = [...steps];
+  while (queue.length) {
+    const step = queue.shift();
+    if (step.kind === 'carry') { queue.unshift(...expandCarry(text, step, doc.label)); continue; }
     const before = text;
     let out;
     try {
@@ -629,7 +667,8 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
 
 // applyChanges(vaultPath, changes, { create }) -> { file, rel, changed, notes, wrote, removed }
 // changes: { op: 'set', name, value } | { op: 'unset', name } | { op: 'add' | 'remove', name, entries, same?, base? }
-//          | { op: 'unset-raw', path: [...] } (old file only)
+//          | { op: 'unset-raw', path: [...] } (a key the list does not know, on either file)
+//          | { op: 'carry', from: [...], name, label? } (new file: the stray key's value to the setting, then the stray key removed)
 // Throws one Error listing every refusal (error.refusals) and writes nothing unless all pass.
 function applyChanges(vaultPath, changes, options = {}) {
   const plan = planChanges(vaultPath, changes, options);

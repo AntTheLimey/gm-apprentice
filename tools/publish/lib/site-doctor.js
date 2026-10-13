@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
-const { formatFault, entry: settingEntry, fileLabel, nameIn } = require('./settings');
+const { formatFault, entry: settingEntry, fileLabel, nameIn, layoutOf } = require('./settings');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -26,7 +26,7 @@ const { getsNoPage } = require('./previews');
 const { pairHubs } = require('./session-hub');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe } = require('./wikilink');
-const { pinnedVersionOf } = require('./update-pin');
+const { pinnedVersionOf, runUpdatePin } = require('./update-pin');
 
 const UNTYPED_ROW_CAP = 20;
 const LINK_ROW_CAP = 30;
@@ -38,7 +38,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
-  'SETTINGS_FAULT', 'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
+  'SETTINGS_FAULT', 'SETTINGS_FILE_OLD', 'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'FRONTMATTER_MISTYPED',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
   ...NOTE_FAULT_CODES,
@@ -159,6 +159,17 @@ function readerView(page, publishConfig, { bodyWithheld = false, rel = '', pcKee
   return { source, safe, frontmatter: publishedFrontmatter(page.frontmatter, publishConfig.exclude_fields, fieldOverrides[rel] || {}) };
 }
 
+// What update-pin says of the site's tool ({ ours, spec, ok }), or null when it says nothing usable.
+async function pinCheck(siteDir, d) {
+  const lines = [];
+  try {
+    await runUpdatePin({ siteDir, check: true, json: true }, { out: (l) => lines.push(l), detect: d.detect });
+    return JSON.parse(lines.join('\n'));
+  } catch {
+    return null;
+  }
+}
+
 async function runSiteDoctor(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -242,11 +253,28 @@ async function runSiteDoctor(options, deps) {
 
   // --- the settings themselves ----------------------------------------------
   for (const f of publishConfig.faults) {
+    // A setting left in the site folder's file is fixed there, not in the vault's settings file.
+    const fromSite = f.source === 'site';
     findings.push(finding(
-      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', fileLabel(vaultPath),
+      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', fromSite ? 'vault.config.json' : fileLabel(vaultPath),
       formatFault(f),
-      `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
+      fromSite
+        ? `remove it from vault.config.json (it is ${f.use} in ${fileLabel(vaultPath)}), or ask the apprentice to run the Settings check`
+        : `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
     ));
+  }
+  // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
+  // site and whether that tool can read the new file (move.js: siteToolHold).
+  if (layoutOf(vaultPath) === 'legacy') {
+    const pin = await (d.pinCheck || pinCheck)(siteRoot, d);
+    const hold = pin && require('./settings/move').siteToolHold(siteRoot, { updated: true, pinCheck: () => pin });
+    if (hold) {
+      findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath), hold.line, 'update that tool, then run the vault update'));
+    } else if (pin && (pin.spec || pin.installedBefore)) {
+      findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath),
+        'this vault is still on the old settings file; the next update moves it',
+        'run the vault update (campaign-organizer\'s migration)'));
+    }
   }
   const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');
 

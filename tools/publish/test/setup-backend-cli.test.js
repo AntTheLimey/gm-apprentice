@@ -128,7 +128,9 @@ test('a vault with no settings file whose site file still holds settings is left
   const tomlBefore = files['wrangler.toml'];
   const rc = await runSetupBackend('inbox', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 1);
-  assert.match(lines.join('\n'), /still holds this vault's settings; run the update first/);
+  assert.match(lines.join('\n'), /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
+  assert.ok(lines.join('\n').includes(`--config "${nodePath.resolve('./vault.config.json')}"`), 'the real site file path, not a placeholder');
+  assert.ok(!lines.join('\n').includes('<site folder>'));
   assert.strictEqual(files['wrangler.toml'], tomlBefore);
   assert.deepStrictEqual(calls, []);
   assert.strictEqual(fs.existsSync(nodePath.join(vault, '_meta')), false, 'no settings file was made');

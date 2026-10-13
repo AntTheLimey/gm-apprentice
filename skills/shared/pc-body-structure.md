@@ -105,13 +105,13 @@ where? It writes each answer to `sheet_source` itself. If stats are
 coming, it leaves the field empty and the warning stands until they
 arrive.
 
-`publish.character_sheets: false` is the campaign-wide answer: the site
+`player_site.sheets.show` off is the campaign-wide answer: the site
 publishes no character sheets, and `pc-body` emits no Stat Sheet rows and
 asks about no `sheet_source`. `sheet_source` is the per-PC answer. With
 sheets off a PC page publishes only the keep-list sections: Background,
 Current Status, Notes, Relationships and Appearances; for CoC, Fellow
 Investigators and Encounters with Strange Entities; for FitD, Friends &
-Rivals and Long-Term Projects. `publish.pc_prose_sections` extends the
+Rivals and Long-Term Projects. `player_site.sheets.prose_sections` extends the
 list; every other section, `## Stat Sheet` included, stays off the site.
 A sheet is read from the note body only, never from frontmatter fields.
 

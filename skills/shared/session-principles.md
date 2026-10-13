@@ -87,10 +87,10 @@ ambiguous.
 
 ## Session Note Naming
 
-Convention from `_meta/vault-config.md`; default
-`Session {NN} - {Title}.md`, zero-padded and evocative
-(`Session 07 - The Opera and the Invitation.md`, not
-`Session 7 - March 15 2025.md`).
+Session notes are named `Session {NN} - {Title}.md` by default, zero-padded
+and evocative (`Session 07 - The Opera and the Invitation.md`, not
+`Session 7 - March 15 2025.md`); if the GM keeps a naming rule of their own,
+it is in `_meta/vault-notes.md`.
 
 ## Canon Workflow
 

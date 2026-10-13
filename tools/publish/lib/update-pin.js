@@ -222,8 +222,13 @@ async function runUpdatePin(options, deps) {
   const asJson = !!opts.json;
   recordSiteDir(siteDir, opts, d);
 
+  // `ours`: whether this tool is the one that manages the site's pin, a plugin path (which it would repoint), as
+  // against no tool in the site, or one a person or another tool chose. The one rule for "is this site's tool
+  // ours to move"; the update and the doctor ask it here.
+  let ours = false;
+  let pinSpec = null; // what the site's package.json says the dependency is, when it says
   const report = (payload, rc) => {
-    if (asJson) out(JSON.stringify(payload, null, 2));
+    if (asJson) out(JSON.stringify({ ...payload, ours, spec: pinSpec }, null, 2));
     return rc;
   };
 
@@ -270,6 +275,14 @@ async function runUpdatePin(options, deps) {
 
   const dependencies = sitePkg.dependencies || {};
   const spec = dependencies[DEP];
+  pinSpec = spec ? String(spec) : null;
+  const readInstalled = () => {
+    try {
+      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
+    } catch {
+      return null;
+    }
+  };
   if (!spec) {
     if (!asJson) out(`${sitePkgPath} has no ${DEP} dependency — nothing to repoint.`);
     return report({
@@ -281,19 +294,14 @@ async function runUpdatePin(options, deps) {
     // A registry or git spec is somebody's deliberate choice; rewriting it to a
     // local cache path would break their install on the next `npm ci`.
     if (!asJson) out(`pinned to ${spec}, not a plugin-cache path — leave it alone`);
+    const installedNow = readInstalled();
     return report({
-      pinnedBefore: null, pinnedAfter: null, installedBefore: null, installedAfter: null,
+      pinnedBefore: null, pinnedAfter: null, installedBefore: installedNow, installedAfter: installedNow,
       desired, changed: false, ok: true,
     }, 0);
   }
 
-  const readInstalled = () => {
-    try {
-      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
-    } catch {
-      return null;
-    }
-  };
+  ours = true;
   const installedBefore = readInstalled();
 
   // suggestedPath is null whenever detectVersionDrift saw no drift — which happens

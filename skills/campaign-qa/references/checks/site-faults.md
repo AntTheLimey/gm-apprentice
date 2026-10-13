@@ -22,7 +22,7 @@ changes the next time it is published.
 
 ## Reading the rows
 
-- `INFO (vault) site-faults has no site to check: publish.site is not
+- `INFO (vault) site-faults has no site to check: player_site.publish is not
   on`: skip this check and say nothing about it, in the conversation or
   the report.
 - `INFO (vault) site-faults has no site to check (<why>); <fix>`: the

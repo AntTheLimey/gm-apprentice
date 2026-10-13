@@ -18,13 +18,14 @@ sys.path.insert(0, str(SCRIPTS))
 import migrate  # noqa: E402
 import migrate_site  # noqa: E402
 import vault_check as vc  # noqa: E402
-from vaultlib import extract_frontmatter  # noqa: E402
+from vaultlib import extract_frontmatter, read_stamp  # noqa: E402
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item,  # noqa: E402
                           StepFailed, edit_frontmatter, write_all_or_none,
                           write_text_atomic)
-from site_fixture import give_site  # noqa: E402
+from site_fixture import give_site, point_site_at  # noqa: E402
 
 PLUGIN = "1.10.33"
+REAL_PLUGIN_TOOL = migrate_site.plugin_tool
 
 
 def make_vault(case, version="1.10.12", eol="\n"):
@@ -42,11 +43,7 @@ def make_vault(case, version="1.10.12", eol="\n"):
 
 
 def stamp_of(vault):
-    text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-    for line in text.splitlines():
-        if line.startswith("gm_apprentice_version:"):
-            return line.split(":", 1)[1].strip().strip('"')
-    return None
+    return read_stamp(vault)
 
 
 def will(name, release=None, band=3, log=None, fail=False, pending=None,
@@ -780,11 +777,14 @@ def map_folder(vault, folder, key):
 class RealToolTests(unittest.TestCase):
     def run_real(self, vault, *args):
         out, err = io.StringIO(), io.StringIO()
-        ok = (0, '{"ok": true}', "")
+        def tool(args):   # the site is current and the plugin's; the rest is real
+            if args[0] == "update-pin":
+                return 0, '{"ok": true, "ours": true, "spec": "file:/p"}', ""
+            return REAL_PLUGIN_TOOL(args)
+
         with mock.patch.object(migrate, "plugin_version",
                                return_value=(PLUGIN, "test")), \
-                mock.patch.object(migrate_site, "plugin_tool",
-                                  return_value=ok), \
+                mock.patch.object(migrate_site, "plugin_tool", tool), \
                 contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
             code = migrate.main([str(vault), *args])
         return code, out.getvalue(), err.getvalue()
@@ -798,6 +798,7 @@ class RealToolTests(unittest.TestCase):
             "Vane.\n", encoding="utf-8")
         # Apply moves the site's settings into the vault: a site of its own.
         give_site(vault, lambda p: None, private=True)
+        point_site_at(vault)
         map_folder(vault, "Documents", "documents")
         code, plan, err = self.run_real(vault, "plan")
         self.assertEqual(code, 0, err)
@@ -830,15 +831,14 @@ class RealToolTests(unittest.TestCase):
         config["footer"] = footer
         (site / "vault.config.json").write_text(json.dumps(config),
                                                 encoding="utf-8")
+        point_site_at(vault, site)
         code, did, err = self.run_real(vault, "apply", "--choose",
                                        "default-mode=leave")
         self.assertEqual(code, 0, err + did)
-        self.assertIn("publish.footer", did)
+        self.assertIn("settings-move\tWrote _meta/vault-config.yaml.", did)
         self.assertEqual(stamp_of(vault), PLUGIN)
-        moved = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        self.assertIn('  footer: "Line one\\n', moved)
-        fm = extract_frontmatter(moved)
-        self.assertIsNotNone(fm)
+        self.assertEqual(vc.settings(vault).get("player_site.footer"), footer)
+        self.assertFalse((vault / "_meta" / "vault-config.md").exists())
         self.assertEqual(self.run_real(vault, "plan")[1].splitlines()[1],
                          "up to date")
         self.assertEqual(self.run_real(vault, "apply")[0], 0)

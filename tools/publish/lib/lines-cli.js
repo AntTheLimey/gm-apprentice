@@ -30,10 +30,10 @@
 //                            or null when the chain removes it
 //
 //   {"op":"site","vault":…}
-//       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault file has a
-//                            `publish:` block, whether the vault has a site (`publish.site`;
-//                            unset, a site_dir says yes), and the site folder `site_dir`
-//                            names (an absolute path; null when the site is off or no
+//       -> {"publishes":…,"site":…,"siteDir":…}  whether the vault's settings have the site's
+//                            block (`player_site:`; `publish:` on the old file), whether the vault
+//                            has a site (`player_site.publish`; unset, a folder says yes), and the
+//                            site folder `player_site.folder` names (an absolute path; null when the site is off or no
 //                            folder is named, which for a site that is on means it is still
 //                            to be set up). Read with the build's own YAML parser, so
 //                            vault_check does not read that file a second way.
@@ -48,7 +48,7 @@ const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { readSettings, nameIn, fileLabel } = require('./settings');
+const { readSettings, nameIn, fileLabel, layoutOf } = require('./settings');
 const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -67,8 +67,14 @@ function list(request, key) {
 function site(vault) {
   if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
   const { values, origins, faults, file } = readSettings({ vaultPath: vault, siteConfig: {} });
-  if (!file.exists || !file.hasPublish) {
-    if (faults.some((f) => f.name === 'publish')) throw new Error(`publish: in ${fileLabel(vault)} is not a block of settings`);
+  if (!file.exists || !file.hasSiteBlock) {
+    // A stray `publish` at the top: on the old file it is the block of settings, written as something
+    // else; on the new file it is not a setting at all, the site's settings go under player_site.
+    if (faults.some((f) => f.name === 'publish')) {
+      throw new Error(layoutOf(vault) === 'new'
+        ? `publish in ${fileLabel(vault)} is not a setting; the site's settings go under player_site`
+        : `publish: in ${fileLabel(vault)} is not a block of settings`);
+    }
     return { publishes: false, site: false, siteDir: null };
   }
   // `publish.site` is the switch, decided where the build decides it. Off: there is no

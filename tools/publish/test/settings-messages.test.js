@@ -178,8 +178,9 @@ test('doctor --site: the fix names the vault\'s file, and an old file adds no no
     assert.equal(left.path, '_meta/vault-config.yaml');
     assert.match(left.detail, /_meta\/vault-config\.md is left over/);
 
-    // A clean old-file vault reads as it did: no findings at all.
-    assert.equal((await run(other)).counts.total, 0);
+    // A clean old-file vault reads as it did, plus the one note that the next update moves it (when the site's tool is ours).
+    const c = await run(other);
+    assert.deepEqual(c.findings.filter((f) => f.code !== 'SETTINGS_FILE_OLD'), []);
   } finally { done(o); done(n); done(other); }
 });
 
@@ -189,7 +190,7 @@ test('seedVaultSettings makes no settings file while the site file still holds s
   try {
     const refused = seedVaultSettings(held.vault, { 'player_site.title': 'A' }, { siteConfig: { vaultPath: '../v', siteTitle: 'Kept' } });
     assert.deepEqual(refused.written, []);
-    assert.match(refused.skipped, /still holds this vault's settings; run the update first/);
+    assert.match(refused.skipped, /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
     assert.equal(fs.existsSync(path.join(held.vault, NEW.file)), false);
     const ok = seedVaultSettings(bare.vault, { 'player_site.title': 'A' }, { siteConfig: { host: 'github-pages', siteUrl: 'u', vaultPath: '../v', outputDir: './docs' } });
     assert.deepEqual(ok.written, ['player_site.title']);

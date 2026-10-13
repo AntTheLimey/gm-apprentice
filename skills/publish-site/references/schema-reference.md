@@ -70,7 +70,7 @@ beneath them. No accordion — the content flows as continuous prose.
 
 Body content renders below the header card. To keep a body section
 such as `Relationships` off the public site, `settings add` its
-heading to `publish.exclude_sections`.
+heading to `player_site.hide.sections`.
 
 ---
 
@@ -314,7 +314,7 @@ and renders a badge next to the page title:
 | Value | Badge | Appearance |
 |-------|-------|-----------|
 | AUTHORITATIVE | None | Normal page (no badge) |
-| DRAFT | "Draft" | Amber badge — content not yet confirmed. With `publish.exclude_drafts` on, the page is left off the site instead |
+| DRAFT | "Draft" | Amber badge — content not yet confirmed. With `player_site.hide.drafts` on, the page is left off the site instead |
 | STUB | "Stub" | Warning-coloured badge — placeholder only |
 | SUPERSEDED | "Superseded" | Grey badge — replaced by newer content |
 
@@ -336,7 +336,7 @@ For a name players mustn't see, use `gm_aliases`.
 ## Portrait paths
 
 Portrait paths must be relative to the vault root and use
-forward slashes. `publish.attachments_dir` names the folder that
+forward slashes. `vault.attachments` names the folder that
 holds them.
 
 Example vault frontmatter:

@@ -33,11 +33,12 @@ import sys
 from pathlib import Path
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
-                          check_editable, edit_frontmatter)
+                          check_editable)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
-from vaultlib import (SettingsUnavailable, extract_frontmatter, parse_version,
-                      plugin_version, set_key)
+from vaultlib import (LEGACY_SETTINGS_FILE, SettingsUnavailable,
+                      StateUnreadable, parse_version, plugin_version,
+                      read_stamp, vault_layout, write_stamp)
 
 FLOOR = "1.10.12"
 LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
@@ -58,12 +59,9 @@ def gate(vault: Path) -> tuple[str, str] | str:
     if not (vault / "_meta").is_dir():
         return f"{vault} has no _meta/ folder: first-time setup, not a migration"
     try:
-        fm = extract_frontmatter((vault / "_meta" / "vault-config.md").read_text(
-            encoding="utf-8-sig", errors="replace")) or {}
-    except OSError:
-        fm = {}
-    current = fm.get("gm_apprentice_version")
-    shown = str(current) if current and not isinstance(current, list) else None
+        shown = read_stamp(vault)
+    except StateUnreadable as e:
+        return str(e)
     if shown is None or parse_version(shown) < parse_version(FLOOR):
         return (f"this vault is at {shown or 'no recorded version'}, below "
                 f"{FLOOR}, the oldest this script migrates from; migrate it "
@@ -134,6 +132,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
     waiting: list[Row] = []
     holding: list[str] = []   # choices apply will not stamp without
+    stuck: list[str] = []     # things only a person can settle, that hold it
     repin_waits = False
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
@@ -153,7 +152,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         for item in items:
             groups[item.group].extend(_rows(item))
             if item.holds_stamp:
-                holding.append(item.id)
+                (stuck if item.group == PERSON else holding).append(item.id)
         if check.name == REPIN and any(i.group == WILL for i in items):
             repin_waits = True
     behind = parse_version(vault_v) < parse_version(plugin_v)
@@ -165,6 +164,9 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         until = (f" (only once {', '.join(holding)} "
                  f"{'is' if len(holding) == 1 else 'are'} answered)"
                  if holding else "")
+        if stuck:
+            until = (f" (not until {', '.join(stuck)} "
+                     f"{'is' if len(stuck) == 1 else 'are'} settled)")
         groups[WILL].append(
             ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> "
                       f"{plugin_v}{until}"))
@@ -177,10 +179,23 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
 
 
 def _stamp(vault: Path, version: str) -> None:
-    edit_frontmatter(
-        vault / "_meta" / "vault-config.md",
-        lambda fm, eol: set_key(fm, "gm_apprentice_version",
-                                f'"{version}"', eol))
+    try:
+        write_stamp(vault, version)
+    except (StateUnreadable, OSError) as e:
+        raise StepFailed(str(e) if isinstance(e, StateUnreadable) else
+                         f"the version stamp cannot be written "
+                         f"({e.__class__.__name__})") from e
+
+
+def _check_stampable(vault: Path) -> None:
+    """Raise StepFailed unless the stamp could be written."""
+    if vault_layout(vault) == "new":
+        try:
+            read_stamp(vault)
+        except StateUnreadable as e:
+            raise StepFailed(str(e)) from e
+    else:
+        check_editable(vault / LEGACY_SETTINGS_FILE)
 
 
 def _choice_problem(choice: str, value: str | None,
@@ -214,7 +229,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
             return 2
     if parse_version(vault_v) < parse_version(plugin_v):
         try:   # a stamp is due, written last; find out now that it can be
-            check_editable(vault / "_meta" / "vault-config.md")
+            _check_stampable(vault)
         except StepFailed as e:
             print(f"migrate.py: {e}; nothing was changed", file=sys.stderr)
             return 1
@@ -226,11 +241,14 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     error = ""
     repinned = waited = False
     unanswered: list[str] = []   # value choices the GM was not asked
+    stuck: list[str] = []        # person rows that hold the stamp
     for n, check in enumerate(todo):
         after_repin = check.asks_site and repinned   # plan did not list it
         try:
             for item in check.find(vault):
                 if item.group == PERSON:
+                    if item.holds_stamp:
+                        stuck.append(item.id)
                     # a check that waited on the repin was not in the plan
                     person.extend(_rows(item) if after_repin else [])
                     shown += 0 if after_repin else len(item.lines)
@@ -268,7 +286,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     if c.release and parse_version(c.release) < first]
             target = max([vault_v, *done], key=parse_version)
     stamped = (parse_version(target) > parse_version(vault_v)
-               and not waited and not unanswered)
+               and not waited and not unanswered and not stuck)
     if stamped:
         try:
             _stamp(vault, target)
@@ -283,6 +301,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         emit(TITLES[PERSON], person, shown)
     for label in unanswered:
         print(f"not answered: {label}")
+    for label in stuck:
+        print(f"not settled: {label}")
     if waited:
         print(WAITED_LINE)
     if failed is not None:
@@ -290,7 +310,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"stamped {target}; the rest is offered again next time"
               if stamped else "not stamped")
         return 1
-    if waited or unanswered:
+    if waited or unanswered or stuck:
         print("not stamped")
     else:
         print(f"stamped {plugin_v}" if stamped else f"already at {plugin_v}")

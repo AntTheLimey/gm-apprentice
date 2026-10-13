@@ -153,8 +153,8 @@ most Linux ship `python3` already; on Windows, install Python from the
 Microsoft Store, whose `python3` alias Git Bash finds on PATH (the
 python.org installer provides only `python` and `py`).
 
-A site is optional, and `publish.site` in the vault's
-`_meta/vault-config.md` says whether there is one. Publishing needs
+A site is optional, and the vault's `player_site.publish` setting
+says whether there is one. Publishing needs
 Node 22 or later, and for a vault whose site is on, the checks that ask
 which lines of a note would publish (`vault_check.py` `gm-leak`,
 `pc-body` and `wrapup`) ask that site's publish tool rather than keep a

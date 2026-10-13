@@ -52,8 +52,8 @@ class ReconcileRegistrationTests(unittest.TestCase):
     def test_asks_the_tool_for_the_site_and_the_mode(self):
         # What an unset switch means is the settings list's to say, so the
         # step asks the tool and never reads the settings file itself.
-        self.assertRegex(self.step, r"settings\s+get publish\.site "
-                                    r"publish\.site_dir publish\.mode "
+        self.assertRegex(self.step, r"settings\s+get player_site\.publish "
+                                    r"player_site\.folder player_site\.hide\.mode "
                                     r"--vault <vault>")
         self.assertNotIn("vault-config.md", self.step)
         self.assertRegex(self.step, r"relative to the\s+vault")

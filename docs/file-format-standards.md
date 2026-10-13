@@ -167,10 +167,9 @@ Notes:
 ### Sheet crest (campaign-wide masthead image)
 
 The optional investigator-sheet crest is a **campaign-level** setting, not a
-per-PC frontmatter field. Set `sheet_crest` (a path or URL to the crest
-image) in the vault config (`_meta/vault-config.md` frontmatter, alongside
-other publish settings such as `setting_year`); it applies to every CoC PC
-page in the campaign. There is **no** per-PC `crest` frontmatter override —
+per-PC frontmatter field. It is the setting `player_site.sheets.crest` (a
+path or URL to the crest image; see [site settings](site-settings.md)); it
+applies to every CoC PC page in the campaign. There is **no** per-PC `crest` frontmatter override —
 that was deliberately deferred, so adding a crest needs no
 schema-change-procedure and no entity-template change.
 
@@ -368,7 +367,7 @@ Notes:
 A D&D PC note may carry `dndbeyond` in its frontmatter: a D&D Beyond
 character link or a bare character id. `dnd_ddb.py` syncs the note from
 it. An absent or empty field means the note is not synced. The vault
-setting `publish.dndbeyond_sync` (`build` or `manual`) says when the
+setting `vault.dndbeyond_sync` (`build` or `manual`) says when the
 sync runs.
 
 Sync owns the cells and rows D&D Beyond has a value for. The cells are

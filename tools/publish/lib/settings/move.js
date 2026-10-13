@@ -7,6 +7,7 @@
 // before a single file of the vault is touched. The vault is then changed by renames, the old
 // files kept aside until the last one succeeds, and put back if any step fails.
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
@@ -15,17 +16,18 @@ const { REGISTRY, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { isLeaf } = require('./describe');
 const { formatFault } = require('./faults');
-const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, layoutOf, at } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_READING_NEW_FILE, layoutOf, at } = require('./layout');
 const read = require('./read');
-const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE } = require('./legacy');
+const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE, hasLegacy } = require('./legacy');
 const { readState, stateText } = require('./state');
-const { splitFront, writeAtomic } = require('./write');
+const { splitFront, writeAtomic, planChanges } = require('./write');
 const { parseNote } = require('../frontmatter');
 
 const { Scalar, Pair, YAMLMap, isScalar, isMap: isYMap, isNode } = YAML;
 const LEAVES = REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 const FILLABLE = ['vault.campaign', 'vault.system'];
+const COMMENTS_HEADING = 'Comments from the old settings file';
 const PLAIN = { lineWidth: 0, flowCollectionPadding: false };
 
 const showValue = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
@@ -74,6 +76,25 @@ function commentLines(doc) {
   return out;
 }
 
+// Every comment line a document holds, with the key it sat on (dotted, as the old file wrote it).
+function commentOwners(doc) {
+  const out = [];
+  const add = (text, key) => { if (text) for (const l of String(text).split('\n')) if (l.trim()) out.push({ text: l.trim(), key }); };
+  add(doc.commentBefore, null);
+  add(doc.comment, null);
+  YAML.visit(doc, {
+    Node(_, node, path) {
+      const names = path.filter((x) => YAML.isPair(x)).map(keyText);
+      const key = names.join('.') || null;
+      // A comment above the first key of a map is held by the map; it sat on that first key.
+      const first = isYMap(node) && node.items.length ? [...names, keyText(node.items[0])].join('.') : key;
+      add(node.commentBefore, first);
+      add(node.comment, key);
+    },
+  });
+  return out;
+}
+
 // Splits the old file into its frontmatter text and body, through the same library the writer uses.
 function split(whole) {
   const m = splitFront(whole);
@@ -96,6 +117,132 @@ function jsonLike(value, text) {
   return (eol === '\n' ? out : out.replace(/\n/g, eol)) + (/\n$/.test(text) ? eol : '');
 }
 
+
+// The site folder's file with every key that is a setting now taken out (the rest is not ours):
+// { siteAfter, siteOut (the new text, or null when no key was there), removedKeys }.
+function stripSiteKeys(siteText) {
+  const siteAfter = JSON.parse(siteText);
+  const removedKeys = [];
+  for (const e of REGISTRY) {
+    for (const w of (e.was || []).filter((x) => x.in === 'site' && x.read !== false)) {
+      const segs = w.name.split('.');
+      const parent = getPath(siteAfter, segs.slice(0, -1));
+      if (segs.length === 1 ? Object.prototype.hasOwnProperty.call(siteAfter, segs[0]) : (isMap(parent) && Object.prototype.hasOwnProperty.call(parent, segs[segs.length - 1]))) {
+        delete (segs.length === 1 ? siteAfter : parent)[segs[segs.length - 1]];
+        if (segs.length > 1 && Object.keys(parent).length === 0) delete siteAfter[segs[0]];
+        removedKeys.push(w.name);
+      }
+    }
+  }
+  return { siteAfter, siteOut: removedKeys.length ? jsonLike(siteAfter, siteText) : null, removedKeys };
+}
+
+// ---- The site's tool ------------------------------------------------------------------------
+
+// What `update-pin --check --json` says of the site folder: { ok, ours, spec, installedBefore }, or null when it says
+// nothing usable. The same code the update uses; asked by running the command, so there is one rule.
+function pinCheck(siteDir) {
+  const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+  const run = spawnSync(process.execPath, [bin, 'update-pin', '--check', '--json', '--site', siteDir], { encoding: 'utf8' });
+  try {
+    const said = JSON.parse(run.stdout);
+    return said && typeof said === 'object' ? said : null;
+  } catch {
+    return null;
+  }
+}
+
+// The numbers of a version in a text ("1.22.0", "^1.20.0", ">=1.4.2 <2"), or null.
+const versionIn = (text) => {
+  const m = /(\d+)\.(\d+)\.(\d+)/.exec(String(text || ''));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+};
+const atLeast = (have, want) => {
+  for (let i = 0; i < 3; i++) if (have[i] !== want[i]) return have[i] > want[i];
+  return true;
+};
+
+// null when the vault may move, else { held, spec, line }. Whether the site's tool can READ the new file decides: the
+// tool installed in the site folder, or, if none is installed, the version its package.json asks for; a tool that
+// cannot be told cannot read. Who owns the pin only decides whether the update can repin it first (`updated`).
+//   held: 'site-tool'      a tool the plugin does not manage, older than FIRST_TOOL_READING_NEW_FILE (or unknown)
+//   held: 'site-tool-old'  the plugin's own tool, old, and the caller is not bringing it up to date
+// A held vault is not wrong: it stays on the old file until its site's tool is new enough. A site with no tool
+// pinned or installed is built by the plugin's own, so it moves. `pin` is the update-pin answer.
+function holdFrom(pin, { updated = false, siteDir = '' } = {}) {
+  if (!pin || (!pin.spec && !pin.installedBefore)) return null;
+  // (A plugin path's number is the plugin's, not the tool's, so only a pin that is not ours is read for one.)
+  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
+  if (installed && atLeast(installed, versionIn(FIRST_TOOL_READING_NEW_FILE))) return null;
+  if (pin.ours && updated) return null;
+  const shown = pin.installedBefore || pin.spec;
+  if (!pin.ours) {
+    return { held: 'site-tool', spec: shown, line: `This vault stays on the old settings file because its site's tool (${shown}) cannot read the new one. When that tool is ${FIRST_TOOL_READING_NEW_FILE} or later, run the update again.` };
+  }
+  return { held: 'site-tool-old', spec: shown, line: `This vault stays on the old settings file for now: its site's publish tool (${shown}) is older than the plugin's and cannot read the new file. Update it first (gm-apprentice-publish update-pin --site "${siteDir}"), then move the vault.` };
+}
+
+// The version the tool INSTALLED in a site folder says it is, whatever the folder's package.json says; null if none.
+function installedIn(siteDir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'), 'utf8')).version || null;
+  } catch {
+    return null;
+  }
+}
+
+// One site folder: the pin's answer, with the installed tool's own version read directly (an old tool installed in a
+// folder whose package.json does not name it still builds that site). A folder with no tool installed and no pin at
+// all has nothing that could build it, so it holds nothing.
+function siteToolHold(siteDir, { updated = false, pinCheck: ask = pinCheck } = {}) {
+  const pin = { ...(ask(siteDir) || {}) };
+  const installed = installedIn(siteDir);
+  if (installed) {
+    pin.installedBefore = installed;
+    if (!pin.spec) pin.ours = false;
+  }
+  return holdFrom(pin, { updated, siteDir });
+}
+
+// Every site folder involved: the one the vault's settings name (when it holds a vault.config.json) and the one the
+// caller gave. Held if any cannot read the new file; the first that cannot is the one said.
+function siteToolHoldAll(vault, siteDirs, options) {
+  const seen = new Set();
+  const dirs = [];
+  for (const d of siteDirs.filter(Boolean)) {
+    let key = path.resolve(d);
+    try { key = fs.realpathSync.native(key); } catch { /* as given */ }
+    if (!seen.has(key)) { seen.add(key); dirs.push(path.resolve(d)); }
+  }
+  for (const d of dirs) {
+    const held = siteToolHold(d, options);
+    if (held) return held;
+  }
+  return null;
+}
+
+// The site folder a vault's own settings name (player_site.folder), and its vault.config.json: { dir, file, exists }.
+// null when the vault has no settings file, names no folder, or its settings cannot be read. The one place that says it.
+function siteFileNamedBy(vault) {
+  if (layoutOf(vault) === 'none') return null;
+  let raw;
+  try {
+    raw = getPath(read.readSettings({ vaultPath: vault, siteConfig: {} }).values, ['player_site', 'folder']);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  const dir = require('../lines-cli').siteDirPath(vault, raw);
+  const file = path.join(dir, 'vault.config.json');
+  return { dir, file, exists: fs.existsSync(file) };
+}
+
+// The folder the vault names, when it holds a vault.config.json; null otherwise.
+function namedSiteDir(vault) {
+  const named = siteFileNamedBy(vault);
+  return named && named.exists ? named.dir : null;
+}
+
 // ---- Planning -----------------------------------------------------------------------------
 
 const INTERNAL = Symbol('move');
@@ -112,25 +259,23 @@ function planMove(options, deps = {}) {
   }
 }
 
-function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {}) {
+function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false, siteToolUpdated = false, foldSiteFile = false }, deps = {}) {
   const vault = path.resolve(vaultPath);
   let isDir = false;
   try { isDir = fs.statSync(vault).isDirectory(); } catch { /* said below */ }
   if (!isDir) throw new Error(`${vault} is not a folder.`);
   const plan = (extra) => ({ ok: true, lines: [], blockers: [], files: { write: [], remove: [] }, ...extra });
   const layout = layoutOf(vault);
-  if (layout === 'new') {
-    // A move that was stopped part-way can leave hidden copies beside the files it was changing; the vault is
-    // moved, so they are of no use to anything.
-    const stale = leftovers(vault, siteConfigPath);
-    const done = plan({ lines: [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`] });
-    if (!stale.length) return done;
-    done.lines.push(`${stale.length === 1 ? 'A hidden file' : 'Hidden files'} left by an earlier move will be removed: ${stale.map((f) => path.basename(f)).join(', ')}.`);
-    done.files.remove = stale;
-    Object.defineProperty(done, INTERNAL, { value: { cleanup: stale }, enumerable: false });
-    return done;
+  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld, foldSiteFile });
+  // No settings file at all: there is still something to move when the site folder's file holds settings
+  // (an old layout with an empty old file). Otherwise there is nothing.
+  let noOld = false;
+  if (layout === 'none') {
+    let siteNow = null;
+    try { siteNow = siteConfigPath ? JSON.parse(fs.readFileSync(path.resolve(siteConfigPath), 'utf8')) : null; } catch { /* said by the plan below */ }
+    if (!hasLegacy(siteNow)) return plan({ lines: ['This vault has no settings file; nothing to move.'] });
+    noOld = true;
   }
-  if (layout === 'none') return plan({ lines: ['This vault has no settings file; nothing to move.'] });
 
   const blockers = [];
   const blocked = () => ({ ok: false, lines: [], blockers: [...new Set(blockers)], files: { write: [], remove: [] } });
@@ -141,8 +286,6 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   for (const name of FILLABLE) {
     if (Object.prototype.hasOwnProperty.call(fill, name) && String(fill[name]).trim() === '') blockers.push(`--fill ${name} needs a value, as --fill ${name}=<value>.`);
   }
-  const notesFile = at(vault, NOTES_FILE);
-  if (fs.existsSync(notesFile)) blockers.push(`${NOTES_FILE} already exists; the notes from ${OLD_FILE} would have nowhere to go. Move it aside first.`);
   let state;
   try { state = readState(vault); } catch (e) { blockers.push(firstLine(e.message)); state = {}; }
 
@@ -177,6 +320,13 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
     }
   }
 
+  // The site is built with its own copy of the publish tool, and an older copy reads a moved vault as having no
+  // settings at all. So the vault moves only when that tool is the plugin's own and reads the new file.
+  if (siteFile && !blockers.length) {
+    const held = siteToolHoldAll(vault, [path.dirname(siteFile), namedSiteDir(vault)], { updated: siteToolUpdated, pinCheck: deps.pinCheck });
+    if (held) return { ok: false, lines: [], blockers: [], ...held, files: { write: [], remove: [] } };
+  }
+
   // The old layout, read the way the build reads it.
   const { loadPublishConfig } = require('../config');
   let old;
@@ -193,7 +343,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
     else if (f.level === 'stop' || f.kind === 'not-allowed') blockers.push(firstLine(f.message || formatFault(f)));
   }
 
-  const oldText = fs.readFileSync(at(vault, OLD_FILE), 'utf8');
+  const oldText = noOld ? '' : fs.readFileSync(at(vault, OLD_FILE), 'utf8');
   const { front, body } = split(oldText);
   let doc = null;
   if (front !== null) {
@@ -289,31 +439,47 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   const configText = newDoc.toString(PLAIN);
 
   // The notes: the top-level keys that are neither settings nor state, and the body unless it is the scaffold's own.
-  let notesDoc = null;
-  let notesBody = '';
   const extra = doc && doc.contents ? doc.contents.items.filter((p) => !claimed.has(keyText(p))) : [];
   const keepBody = !isBoilerplate(body);
-  if (extra.length || keepBody) {
-    notesDoc = new YAML.Document();
-    notesDoc.contents = new YAMLMap();
-    const typeKey = new Scalar('type');
-    const oldType = doc && doc.contents && doc.contents.items.find((p) => keyText(p) === 'type');
-    if (oldType && oldType.key.commentBefore) typeKey.commentBefore = oldType.key.commentBefore;
-    notesDoc.contents.items.push(new Pair(typeKey, new Scalar('meta')));
-    for (const p of extra) notesDoc.contents.items.push(new Pair(p.key.clone(), isNode(p.value) ? p.value.clone() : p.value));
-    notesBody = keepBody ? body : '';
-  }
+  const notesDoc = new YAML.Document();
+  notesDoc.contents = new YAMLMap();
+  const typeKey = new Scalar('type');
+  const oldType = doc && doc.contents && doc.contents.items.find((p) => keyText(p) === 'type');
+  if (oldType && oldType.key.commentBefore) typeKey.commentBefore = oldType.key.commentBefore;
+  notesDoc.contents.items.push(new Pair(typeKey, new Scalar('meta')));
+  for (const p of extra) notesDoc.contents.items.push(new Pair(p.key.clone(), isNode(p.value) ? p.value.clone() : p.value));
+
+  // Comments: counted off, so one that could not be placed is said, and kept in the notes, never dropped quietly.
+  const owners = doc ? commentOwners(doc) : [];
+  const unplaced = (withNotes) => {
+    const rest = [...owners];
+    for (const kept of [...commentLines(newDoc), ...(withNotes ? commentLines(notesDoc) : [])]) {
+      const at2 = rest.findIndex((o) => o.text === kept);
+      if (at2 >= 0) rest.splice(at2, 1);
+    }
+    return rest;
+  };
+  const notesAnyway = extra.length > 0 || keepBody;
+  let left = unplaced(notesAnyway);
+  const writeNotes = notesAnyway || left.length > 0;
+  if (!notesAnyway && writeNotes) left = unplaced(true);
+  for (const c of left) lines.push(`a comment could not be carried into the new file${c.key ? ` (it sat on ${c.key})` : ''}, so it is kept in ${NOTES_FILE}: ${c.text}`);
+
   // The notes file's frontmatter ends its lines the way the old file did (the body keeps its own).
   const eol = oldText.includes('\r\n') ? '\r\n' : '\n';
-  const notesText = notesDoc ? `---${eol}${notesDoc.toString(PLAIN).replace(/\n/g, eol)}---${eol}${notesBody}` : null;
-
-  // Comments: counted off, so one that could not be placed is said, never dropped quietly.
-  const left = doc ? commentLines(doc) : [];
-  for (const kept of [...commentLines(newDoc), ...(notesDoc ? commentLines(notesDoc) : [])]) {
-    const at2 = left.indexOf(kept);
-    if (at2 >= 0) left.splice(at2, 1);
+  let notesBody = keepBody ? body : '';
+  if (left.length) {
+    const section = [`## ${COMMENTS_HEADING}`, '', ...left.map((c) => `- ${c.key ? `\`${c.key}\`` : 'at the top of the file'}: ${c.text}`), ''].join(eol);
+    notesBody = keepBody ? `${body}${/\n$/.test(body) ? '' : eol}${eol}${section}` : section;
   }
-  for (const text of left) lines.push(`a comment could not be carried: ${text}`);
+  const notesText = writeNotes ? `---${eol}${notesDoc.toString(PLAIN).replace(/\n/g, eol)}---${eol}${notesBody}` : null;
+
+  // A notes file that is already there is the one a stopped move wrote, when it is exactly what this move would write.
+  const notesFile = at(vault, NOTES_FILE);
+  const notesPresent = fs.existsSync(notesFile);
+  if (notesPresent && fs.readFileSync(notesFile, 'utf8') !== notesText) {
+    blockers.push(`${NOTES_FILE} already exists; the notes from ${OLD_FILE} would have nowhere to go. Move it aside first.`);
+  }
 
   // State.
   const patch = {};
@@ -344,7 +510,10 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
     }
   }
   for (const rec of old.legacy) {
-    if (rec.status === 'ignored') lines.push(`\`${rec.key}\` in the site folder's vault.config.json was ignored, because the vault's own settings already had ${OLD_BLOCK}.${rec.publishKey}; it was removed.`);
+    if (rec.status !== 'ignored') continue;
+    lines.push(rec.stillApplied && rec.stillApplied.length
+      ? `\`${rec.key}\` in the site folder's vault.config.json was merged into ${OLD_BLOCK}.${rec.publishKey}, which the vault's own settings already had: ${rec.stillApplied.length === 1 ? 'its entry' : 'its entries'} ${rec.stillApplied.map((x) => JSON.stringify(x)).join(', ')} ${rec.stillApplied.length === 1 ? 'was' : 'were'} added; the key was removed.`
+      : `\`${rec.key}\` in the site folder's vault.config.json was not used, because the vault's own settings already had ${OLD_BLOCK}.${rec.publishKey}; it was removed.`);
   }
   for (const e of LEAVES) {
     const name = legacyNameOf(e);
@@ -356,25 +525,14 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   // The site folder's file loses every key that is a setting now; the rest is not ours.
   let siteAfter = site;
   let siteOut = null;
-  const removedKeys = [];
+  let removedKeys = [];
   if (siteFile) {
-    siteAfter = JSON.parse(siteText);
-    for (const e of REGISTRY) {
-      for (const w of (e.was || []).filter((x) => x.in === 'site' && x.read !== false)) {
-        const segs = w.name.split('.');
-        const parent = getPath(siteAfter, segs.slice(0, -1));
-        if (segs.length === 1 ? Object.prototype.hasOwnProperty.call(siteAfter, segs[0]) : (isMap(parent) && Object.prototype.hasOwnProperty.call(parent, segs[segs.length - 1]))) {
-          delete (segs.length === 1 ? siteAfter : parent)[segs[segs.length - 1]];
-          if (segs.length > 1 && Object.keys(parent).length === 0) delete siteAfter[segs[0]];
-          removedKeys.push(w.name);
-        }
-      }
-    }
-    if (removedKeys.length) siteOut = jsonLike(siteAfter, siteText);
+    ({ siteAfter, siteOut, removedKeys } = stripSiteKeys(siteText));
   }
 
+  if (blockers.length) return blocked();
   const m = {
-    vault, siteFile, oldText, siteText, stateBefore: fs.existsSync(at(vault, STATE_FILE)) ? fs.readFileSync(at(vault, STATE_FILE), 'utf8') : null,
+    vault, siteFile, noOld, notesPresent, oldText, siteText, stateBefore: fs.existsSync(at(vault, STATE_FILE)) ? fs.readFileSync(at(vault, STATE_FILE), 'utf8') : null,
     configText, notesText, stateOut, siteOut, siteAfter, removedKeys, old, oldPc, planned, stateAfter, data, claimed, notesBody,
     extraKeys: new Set(extra.map(keyText)), carried: lines,
   };
@@ -390,8 +548,8 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
     lines: [...describeFiles(m, false), ...lines],
     blockers: [],
     files: {
-      write: [at(vault, NEW_FILE), ...(notesText ? [at(vault, NOTES_FILE)] : []), ...(stateOut ? [at(vault, STATE_FILE)] : []), ...(siteOut ? [siteFile] : [])],
-      remove: [at(vault, OLD_FILE)],
+      write: [at(vault, NEW_FILE), ...(notesText && !notesPresent ? [at(vault, NOTES_FILE)] : []), ...(stateOut ? [at(vault, STATE_FILE)] : []), ...(siteOut ? [siteFile] : [])],
+      remove: noOld ? [] : [at(vault, OLD_FILE)],
     },
   };
   Object.defineProperty(result, INTERNAL, { value: { ...m, lines }, enumerable: false });
@@ -410,6 +568,220 @@ function leftovers(vault, siteConfigPath) {
   scan(path.dirname(at(vault, NEW_FILE)), [NEW_FILE, OLD_FILE, NOTES_FILE, STATE_FILE].map((f) => path.basename(f)));
   if (siteConfigPath) scan(path.dirname(path.resolve(siteConfigPath)), [path.basename(siteConfigPath)]);
   return found;
+}
+
+// Removes the hidden files; the lines say which went and which would not.
+function removeStale(files, deps = {}) {
+  if (!files.length) return [];
+  const gone = [];
+  const lines = [];
+  for (const f of files) {
+    try { (deps.remove || ((x) => fs.rmSync(x, { force: true })))(f); gone.push(path.basename(f)); } catch { lines.push(`${path.basename(f)} could not be removed; you can delete it.`); }
+  }
+  if (gone.length) lines.push(`Removed ${gone.length === 1 ? 'a hidden file' : 'hidden files'} left by an earlier move: ${gone.join(', ')}.`);
+  return lines;
+}
+
+// ---- A vault that is already moved: what a stopped move (or an older plugin) left behind ------
+
+const scratchDir = () => fs.mkdtempSync(path.join(os.tmpdir(), 'gm-move-'));
+
+// Whether `got` has everything `want` has: equal, or a list holding all of its entries, or a map holding all of its
+// keys with values that do. The new file also holds what the site folder's file added to a list or map.
+function covers(got, want) {
+  if (Array.isArray(want) && Array.isArray(got)) return want.every((w) => got.some((g) => isDeepStrictEqual(g, w)));
+  if (isMap(want) && isMap(got)) return Object.keys(want).every((k) => Object.prototype.hasOwnProperty.call(got, k) && covers(got[k], want[k]));
+  return isDeepStrictEqual(got, want);
+}
+
+// Whether the old file beside the new one holds anything the new file does not: { redundant, keys, why }.
+// It holds nothing more when every setting it sets, and the campaign and system it names, resolve the same
+// in the new file, and its own notes are in the notes file as the move would have written them.
+function oldFileHolds(vault) {
+  const root = scratchDir();
+  try {
+    // The notes and the plain-text carries come from planning the move of a copy of the old file alone.
+    const copy = path.join(root, path.basename(vault) || 'vault');
+    fs.mkdirSync(path.dirname(at(copy, OLD_FILE)), { recursive: true });
+    fs.copyFileSync(at(vault, OLD_FILE), at(copy, OLD_FILE));
+    const p = planMove({ vaultPath: copy });
+    if (!p.ok) return { redundant: false, keys: [], why: p.blockers[0] };
+    const m = p[INTERNAL];
+    if (!m) return { redundant: true, keys: [] };
+    const before = read.readOldLayout({ vaultPath: vault, siteConfig: {} });
+    const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
+    const keys = [];
+    for (const e of LEAVES) {
+      const segs = e.name.split('.');
+      const planned = Object.prototype.hasOwnProperty.call(m.planned, e.name);
+      if (!planned && before.origins[e.name] === 'default') continue;
+      const want = planned ? m.planned[e.name] : getPath(before.values, segs);
+      if (!covers(getPath(now.values, segs), want)) keys.push(e.name);
+    }
+    const notesFile = at(vault, NOTES_FILE);
+    const notes = fs.existsSync(notesFile) ? fs.readFileSync(notesFile, 'utf8') : null;
+    if (m.notesText !== null && notes !== m.notesText) keys.push('its own notes');
+    return { redundant: keys.length === 0, keys };
+  } catch (e) {
+    return { redundant: false, keys: [], why: firstLine(e.message) };
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+// The settings in `site` (the site folder's file) that the new file resolves differently, by their names.
+function siteDiffers(vault, site) {
+  const siteOnly = read.readOldLayout({ vaultPath: vault, siteConfig: site, skipOldFile: true });
+  const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
+  // A left-over old file that sets a setting beat the site folder's file on it, as it did in the move itself.
+  const beaten = fs.existsSync(at(vault, OLD_FILE)) ? read.readOldLayout({ vaultPath: vault, siteConfig: {} }).origins : {};
+  const differs = [];
+  for (const e of LEAVES) {
+    const beat = beaten[e.name] && beaten[e.name] !== 'default';
+    if (siteOnly.origins[e.name] === 'default') continue;
+    if (beat && e.guards) {
+      // A hiding list: the old layout merged both files, so a left-over old file never beat the site's entries. The
+      // new file differs when it lacks one of them (never skipped, or an entry would be dropped by the tidy).
+      const have = getPath(now.values, e.name.split('.'));
+      const lacks = (e.was || []).filter((w) => w.in === 'site' && w.read !== false).some((w) => {
+        const value = getPath(site, w.name.split('.'));
+        if (have === true) return false;
+        if (value === true) return true;
+        if (!Array.isArray(value)) return false;
+        const held = Array.isArray(have) ? have.map((x) => String(x).trim()) : [];
+        return value.some((x) => String(x).trim() !== '' && !held.includes(String(x).trim()));
+      });
+      if (lacks) differs.push(e.name);
+      continue;
+    }
+    if (beat) continue;
+    const segs = e.name.split('.');
+    if (!covers(getPath(now.values, segs), getPath(siteOnly.values, segs))) differs.push(e.name);
+  }
+  return differs;
+}
+
+// What the site folder's file says, as changes to the vault's new file: a hiding list's entries added to the vault's
+// list, the stricter of two callout rules kept, and nothing for a setting the vault's value already decides.
+function foldInto(vault, site) {
+  const now = read.readSettings({ vaultPath: vault, siteConfig: {} }).values;
+  const changes = [];
+  const said = [];
+  for (const e of REGISTRY) {
+    for (const w of (e.was || []).filter((x) => x.in === 'site' && x.read !== false)) {
+      const segs = w.name.split('.');
+      const value = getPath(site, segs);
+      if (value === undefined) continue;
+      const have = getPath(now, e.name.split('.'));
+      const entries = Array.isArray(value) ? value.map((x) => String(x).trim()).filter((x) => x !== '') : [];
+      if (e.type === 'list' && e.guards && entries.length) {
+        changes.push({ op: 'add', name: e.name, entries });
+        said.push(`Its ${w.name} entries were added to ${e.name}.`);
+      } else if (e.type === 'switchOrList') {
+        if (have === true) continue;                                 // the vault already hides every one
+        if (value === true) { changes.push({ op: 'set', name: e.name, value: true }); said.push(`${e.name} is now on (the stricter of the two).`); }
+        else if (entries.length && Array.isArray(have) && have.length) { changes.push({ op: 'add', name: e.name, entries }); said.push(`Its ${w.name} entries were added to ${e.name}.`); }
+        else if (entries.length) { changes.push({ op: 'set', name: e.name, value: entries }); said.push(`Its ${w.name} entries were put in ${e.name}.`); }
+      }
+    }
+  }
+  if (!said.length) said.push('The vault\'s own values are the ones in use, so nothing was carried.');
+  return { changes, said };
+}
+
+function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile = false } = {}) {
+  const lines = [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`];
+  const mend = { cleanup: leftovers(vault, siteConfigPath), removeOld: null, siteFile: null, siteText: null, siteOut: null, removedKeys: [] };
+  const remove = [...mend.cleanup];
+  const write = [];
+  let leftover = null;
+  let siteDiffersNow = [];
+  if (mend.cleanup.length) lines.push(`${mend.cleanup.length === 1 ? 'A hidden file' : 'Hidden files'} left by an earlier move will be removed: ${mend.cleanup.map((f) => path.basename(f)).join(', ')}.`);
+
+  const oldPath = at(vault, OLD_FILE);
+  if (fs.existsSync(oldPath)) {
+    const held = oldFileHolds(vault);
+    leftover = { redundant: held.redundant, keys: held.keys };
+    if (held.redundant || discardOld) {
+      mend.removeOld = { file: oldPath, text: fs.readFileSync(oldPath, 'utf8') };
+      remove.push(oldPath);
+      lines.push(held.redundant
+        ? `${OLD_FILE} is left over from before the update and holds nothing the new file lacks; it will be removed.`
+        : `${OLD_FILE} is left over and holds ${held.keys.join(', ')} that the new file does not; you asked for it to be discarded, so it will be removed.`);
+    } else {
+      lines.push(held.why
+        ? `${OLD_FILE} is left over and could not be compared with the new file (${held.why}); it was left.`
+        : `${OLD_FILE} is left over and holds what the new file does not (${held.keys.join(', ')}); it was left. Check them, then remove it.`);
+    }
+  }
+
+  if (siteConfigPath && fs.existsSync(path.resolve(siteConfigPath))) {
+    const siteFile = path.resolve(siteConfigPath);
+    const siteText = fs.readFileSync(siteFile, 'utf8');
+    let site = null;
+    try { site = JSON.parse(siteText); } catch { /* not ours to mend */ }
+    const real = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
+    const mine = isMap(site) && typeof site.vaultPath === 'string' && real(path.resolve(path.dirname(siteFile), site.vaultPath)) === real(vault);
+    if (mine) {
+      const { siteOut, removedKeys } = stripSiteKeys(siteText);
+      if (siteOut !== null) {
+        const differs = siteDiffers(vault, site);
+        siteDiffersNow = differs;
+        if (differs.length && !foldSiteFile) {
+          lines.push(`${siteFile} still holds settings the new file has differently (${differs.join(', ')}); it was left as it is. The vault's own values are the ones in use.`);
+        } else {
+          Object.assign(mend, { siteFile, siteText, siteOut, removedKeys });
+          write.push(siteFile);
+          if (differs.length) {
+            // Fold what the site file says into the vault's file first: a hiding list's entries are added (built-ins
+            // kept), the stricter of two callout rules is kept, anything else is the vault's value already.
+            const folded = foldInto(vault, site);
+            if (folded.changes.length) {
+              const planned = planChanges(vault, folded.changes);
+              Object.assign(mend, { vaultFile: planned.file, vaultBefore: planned.before, vaultAfter: planned.after });
+              write.push(planned.file);
+            }
+            lines.push(`Will take the settings out of ${siteFile}: ${removedKeys.join(', ')}. ${folded.said.join(' ')} The rest of that file is as it was.`);
+          } else {
+            lines.push(`Will remove the settings from ${siteFile}: ${removedKeys.join(', ')}. The new file already holds them; the rest of that file is as it was.`);
+          }
+        }
+      }
+    }
+  }
+  const done = plan({ lines, files: { write, remove } });
+  if (leftover) done.leftover = leftover;
+  if (siteDiffersNow.length) done.siteDiffers = siteDiffersNow;
+  if (write.length || remove.length) Object.defineProperty(done, INTERNAL, { value: { mend }, enumerable: false });
+  return done;
+}
+
+function applyMend(plan, mend, deps = {}) {
+  const same = (file, text) => fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text;
+  if ((mend.siteFile && !same(mend.siteFile, mend.siteText)) || (mend.removeOld && !same(mend.removeOld.file, mend.removeOld.text))) {
+    throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
+  }
+  const lines = [plan.lines[0]];
+  if (mend.vaultAfter !== undefined && !same(mend.vaultFile, mend.vaultBefore)) {
+    throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
+  }
+  if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultAfter, { rename: deps.rename });
+  if (mend.siteOut !== null) {
+    try {
+      writeAtomic(mend.siteFile, mend.siteOut, { rename: deps.rename });
+    } catch (e) {
+      // One change across two files: the vault's file goes back as it was.
+      if (mend.vaultAfter !== undefined) writeAtomic(mend.vaultFile, mend.vaultBefore);
+      throw new Error(`the settings were not taken out of the site folder's file (${firstLine(e.message)}); nothing was changed`);
+    }
+    lines.push(`Removed the settings from ${mend.siteFile}: ${mend.removedKeys.join(', ')}. The rest of that file is as it was.`);
+  }
+  if (mend.removeOld) {
+    (deps.remove || ((x) => fs.rmSync(x, { force: true })))(mend.removeOld.file);
+    lines.push(`Removed ${OLD_FILE}, left over from before the update.`);
+  }
+  lines.push(...removeStale(mend.cleanup, deps));
+  return { moved: false, lines };
 }
 
 function parseNoteSafe(text) {
@@ -444,8 +816,6 @@ function verify(m, deps = {}) {
     for (const e of LEAVES) {
       const segs = e.name.split('.');
       let want = Object.prototype.hasOwnProperty.call(m.planned, e.name) ? m.planned[e.name] : getPath(m.old.values, segs);
-      // A setting the old layout never had: the new reader gives the campaign the vault folder's name when unset.
-      if (e.name === 'vault.campaign' && m.old.origins[e.name] === 'default' && want === null) want = path.basename(path.resolve(m.vault));
       const wantDefault = !Object.prototype.hasOwnProperty.call(m.planned, e.name) && m.old.origins[e.name] === 'default';
       if (!isDeepStrictEqual(getPath(now.values, segs), want)) throw new Error(`${e.name} would not come out the same after the move`);
       if ((now.origins[e.name] === 'default') !== wantDefault) throw new Error(`${e.name} would change between written and left out`);
@@ -476,10 +846,10 @@ function verify(m, deps = {}) {
 function describeFiles(m, done) {
   const out = [];
   out.push(`${done ? 'Wrote' : 'Will write'} ${NEW_FILE}.`);
-  if (m.notesText !== null) out.push(`${done ? 'Wrote' : 'Will write'} ${NOTES_FILE} (what ${OLD_FILE} held besides settings, kept as it was).`);
+  if (m.notesText !== null && !m.notesPresent) out.push(`${done ? 'Wrote' : 'Will write'} ${NOTES_FILE} (what ${OLD_FILE} held besides settings, kept as it was).`);
   if (m.stateOut !== null) out.push(`${done ? 'Wrote' : 'Will write'} ${STATE_FILE}.`);
   if (m.siteOut !== null) out.push(`${done ? 'Removed' : 'Will remove'} the settings from ${m.siteFile}: ${m.removedKeys.join(', ')}. The rest of that file is as it was.`);
-  out.push(`${done ? 'Removed' : 'Will remove'} ${OLD_FILE}.`);
+  if (!m.noOld) out.push(`${done ? 'Removed' : 'Will remove'} ${OLD_FILE}.`);
   return out;
 }
 
@@ -488,23 +858,15 @@ function describeFiles(m, done) {
 function applyMove(plan, deps = {}) {
   const m = plan[INTERNAL];
   if (!plan.ok) throw new Error(`the move is blocked: ${plan.blockers[0]}`);
-  if (m && m.cleanup) {
-    const gone = [];
-    const lines = [...plan.lines.slice(0, 1)];
-    for (const f of m.cleanup) {
-      try { (deps.remove || ((x) => fs.rmSync(x, { force: true })))(f); gone.push(path.basename(f)); } catch { lines.push(`${path.basename(f)} could not be removed; you can delete it.`); }
-    }
-    if (gone.length) lines.push(`Removed ${gone.length === 1 ? 'a hidden file' : 'hidden files'} left by an earlier move: ${gone.join(', ')}.`);
-    return { moved: false, lines };
-  }
+  if (m && m.mend) return applyMend(plan, m.mend, deps);
   if (!m) return { moved: false, lines: plan.lines };
 
   // Nothing may have changed since the plan was made.
   const same = (file, text) => (text === null ? !fs.existsSync(file) : fs.existsSync(file) && fs.readFileSync(file, 'utf8') === text);
-  if (!same(at(m.vault, OLD_FILE), m.oldText) || (m.siteFile && !same(m.siteFile, m.siteText)) || !same(at(m.vault, STATE_FILE), m.stateBefore)) {
+  if (!same(at(m.vault, OLD_FILE), m.noOld ? null : m.oldText) || (m.siteFile && !same(m.siteFile, m.siteText)) || !same(at(m.vault, STATE_FILE), m.stateBefore)) {
     throw new Error('the settings files changed since the move was planned; nothing was changed. Run it again.');
   }
-  if (fs.existsSync(at(m.vault, NEW_FILE)) || fs.existsSync(at(m.vault, NOTES_FILE))) {
+  if (fs.existsSync(at(m.vault, NEW_FILE)) || (fs.existsSync(at(m.vault, NOTES_FILE)) !== m.notesPresent)) {
     throw new Error('a new settings file appeared since the move was planned; nothing was changed.');
   }
   verify(m, deps);
@@ -518,7 +880,7 @@ function applyMove(plan, deps = {}) {
   // next, then the site folder's file, then the old file goes aside. A file that is already there is
   // copied aside and then replaced by one rename, so no target is ever missing, even for a moment.
   const targets = [];
-  if (m.notesText !== null) targets.push({ file: at(m.vault, NOTES_FILE), text: m.notesText });
+  if (m.notesText !== null && !m.notesPresent) targets.push({ file: at(m.vault, NOTES_FILE), text: m.notesText });
   if (m.stateOut !== null) targets.push({ file: at(m.vault, STATE_FILE), text: m.stateOut });
   targets.push({ file: at(m.vault, NEW_FILE), text: m.configText });
   if (m.siteOut !== null) targets.push({ file: m.siteFile, text: m.siteOut });
@@ -544,9 +906,11 @@ function applyMove(plan, deps = {}) {
       }
       rename(t.tmp, t.file);
     }
-    rename(oldFile, oldBak);
-    undo.push(() => fs.renameSync(oldBak, oldFile));
-    baks.push(oldBak);
+    if (!m.noOld) {
+      rename(oldFile, oldBak);
+      undo.push(() => fs.renameSync(oldBak, oldFile));
+      baks.push(oldBak);
+    }
   } catch (e) {
     const stuck = [];
     for (const step of undo.reverse()) {
@@ -564,7 +928,9 @@ function applyMove(plan, deps = {}) {
   for (const bak of baks) {
     try { remove(bak); } catch { lines.push(`${path.basename(bak)} could not be removed; you can delete it.`); }
   }
+  // Hidden files an earlier, stopped move left (this one's own are gone).
+  lines.push(...removeStale(leftovers(m.vault, m.siteFile), deps));
   return { moved: true, lines };
 }
 
-module.exports = { planMove, applyMove, isBoilerplate };
+module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom, siteToolHoldAll, siteFileNamedBy };

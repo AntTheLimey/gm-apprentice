@@ -52,10 +52,10 @@ def test_a_switch_from_the_site_file_is_not_the_vault_files(tmp_path):
     config = tmp_path / "vault.config.json"
     config.write_text('{"siteTitle": "T"}', encoding="utf-8")
     s = vaultlib.settings(vault, site_config=config)
-    assert s.origins["publish.site_title"] == "site-file"
-    assert not vaultlib.written_in_vault_file(s, "publish.site_title")
+    assert s.origins["player_site.title"] == "site-file"
+    assert not vaultlib.written_in_vault_file(s, "player_site.title")
     assert vaultlib.written_in_vault_file(
-        vaultlib.settings(vault), "publish.mode")
+        vaultlib.settings(vault), "player_site.hide.mode")
 
 
 @pytest.mark.parametrize("publish, want", [
@@ -75,10 +75,10 @@ def test_a_site_when_the_lines_tool_cannot_say(tmp_path, publish, want):
 def test_writing_a_settings_file_atomically_forgets_what_was_read(tmp_path):
     import migrate_core
     vault = make(tmp_path, "  mode: player\n")
-    assert vaultlib.settings(vault).get("publish.mode") == "player"
+    assert vaultlib.settings(vault).get("player_site.hide.mode") == "player"
     migrate_core.write_text_atomic(
         vault / "_meta" / "vault-config.md", "---\npublish:\n  mode: full\n---\n")
-    assert vaultlib.settings(vault).get("publish.mode") == "full"
+    assert vaultlib.settings(vault).get("player_site.hide.mode") == "full"
 
 
 def test_writing_a_note_keeps_what_was_read(tmp_path, monkeypatch):
@@ -91,4 +91,4 @@ def test_writing_a_note_keeps_what_was_read(tmp_path, monkeypatch):
         raise AssertionError("the tool was asked again")
 
     monkeypatch.setattr(vaultlib.subprocess, "run", no_run)
-    assert vaultlib.settings(vault).get("publish.mode") == "player"
+    assert vaultlib.settings(vault).get("player_site.hide.mode") == "player"

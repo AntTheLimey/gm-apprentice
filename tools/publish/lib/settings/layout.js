@@ -22,6 +22,9 @@ const HIDE_GROUP = 'player_site.hide';
 const STRICT_PARENTS = new Set(SETTING_GROUPS);
 const stopsUnknown = (parent) => STRICT_PARENTS.has(parent) || parent === HIDE_GROUP || parent.startsWith(`${HIDE_GROUP}.`);
 
+// The first publish tool version that reads the new settings file; an older one reads a moved vault as having no settings.
+const FIRST_TOOL_READING_NEW_FILE = '1.23.0';
+
 const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
 // 'new' whenever the new file exists (the old file, if it is still there, is not read), 'legacy'
@@ -43,4 +46,4 @@ const layoutOrNone = (vaultPath) => (typeof vaultPath === 'string' && vaultPath 
 const fileLabel = (vaultPath) => fileLabelFor(layoutOrNone(vaultPath));
 const nameIn = (vaultPath, name) => nameInFor(layoutOrNone(vaultPath), name);
 
-module.exports = { SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { FIRST_TOOL_READING_NEW_FILE, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };

@@ -10,183 +10,23 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           cells, edit_frontmatter, plugin_tool, stopped)
-from vault_check import (PUBLISH_PACKAGE, ExplainAll, ToolAnswer,
-                         ask_publish_tool, check_frontmatter, check_gm_leak,
+from migrate_vault import vault_system
+from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
-                         site_pin, vault_settings)
-from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
-                      forget_settings, google_fonts, set_key, settings,
-                      settings_default, settings_raw, settings_set,
-                      site_switch_written, written_in_vault_file, yaml_scalar)
+                         vault_settings)
+from vaultlib import (LEGACY_SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
+                      forget_settings, google_fonts, set_key, setting_name, settings,
+                      settings_default, settings_file, settings_raw, settings_set,
+                      site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
 
-DOES_NOT_PUBLISH = "this vault does not publish"
-NOTHING_TO_DO = "nothing to do"
-# The first publish tool whose `migrate-config` reports its own plan lines.
-NEEDS_PUBLISH = "1.12.0"
-NO_LINES = "migrate-config does not report its lines"
 INLINE_PUBLISH = (
     "the publish: block in _meta/vault-config.md is written on one line "
-    "({…}); write it as a block so its settings can be read")
-# What the tool's note lines start with, for a tool that does not name them
-# (`noteLines`); backups are never changes either.
-NOTE_PREFIXES = ("left in ", "skipped ", "note ")
-
-
-@dataclass
-class StepPlan:
-    applies: bool
-    lines: list[str]        # one human line per change, or why it does not apply
-    error: str | None = None
-    after: tuple[str, ...] = ()  # trailing lines that are not changes (backups)
-    kept_notes: tuple[str, ...] = ()  # the tool's notes: after the changes, not counted
-
-
-# --- the config step ---------------------------------------------------------
-
-def _update_pin(site: Path) -> str:
-    return f"Run update-pin --site {site}, then migrate.py again."
-
-
-def _tool_error(vault: Path, why: str) -> str:
-    """One plain message for a tool that can't answer. The tool's own
-    reason stands when the cause is the vault's files; a site whose tool
-    is too old, or can't be read, says what to run instead."""
-    site, has_config = configured_site(vault)
-    if has_config and site is not None:
-        pin = site_pin(site)
-        if pin.stale and why == pin.stale:
-            if pin.version is None and pin.spec is None:
-                if pin.source == "package.json":
-                    return f"{pin.stale}; fix or restore it, then run migrate.py again"
-                return f"{pin.stale}. {_update_pin(site)}"
-            if pin.version is None:
-                return (f"cannot tell which publish tool the site at {site} "
-                        f"uses ({pin.spec}). {_update_pin(site)}")
-            return (f"the site's publish tool ({pin.version}) is older than "
-                    f"this migration needs ({NEEDS_PUBLISH}). "
-                    f"{_update_pin(site)}")
-    if has_config and site is not None:
-        script = site / "node_modules" / PUBLISH_PACKAGE / "bin" / "gm-publish.js"
-        if why == f"{script} is missing":
-            return f"{why}. {_update_pin(site)}"
-    if why == "node is not on PATH":
-        return f"{why}; install Node.js, then run migrate.py again"
-    if "unknown command" in why.lower() or why == NO_LINES:
-        what = "the site's publish tool" if has_config else "the publish tool"
-        base = (f"{what} does not have migrate-config" if "unknown" in why.lower()
-                else f"{what}'s migrate-config does not report its lines")
-        base += f"; it is older than this migration needs ({NEEDS_PUBLISH}). "
-        if has_config and site is not None:
-            return base + _update_pin(site)
-        return base + "Update the gm-apprentice plugin, then run migrate.py again."
-    return why
-
-
-def _relative(vault: Path, path: str) -> str:
-    """`path` as the vault's or the site's own relative path; a site file is
-    tagged "site:". Anything else is left as it was."""
-    site, _has_config = configured_site(vault)
-    for base, tag in ((vault, ""), (site, "site: ")):
-        if base is None:
-            continue
-        for root in dict.fromkeys((base, base.resolve())):
-            try:
-                return tag + Path(path).relative_to(root).as_posix()
-            except ValueError:
-                continue
-    return path
-
-
-def _backup_places(vault: Path) -> str:
-    site, has_config = configured_site(vault)
-    places = [_relative(vault, str(vault / "_meta" / "vault-config.md.pre-migrate"))]
-    if site is not None and has_config:
-        places.append(_relative(vault, f"{site / 'vault.config.json'}.pre-migrate"))
-    return " and ".join(places)
-
-
-def _backup_line(vault: Path, lines: tuple[str, ...]) -> list[str]:
-    """The tool's "backup <path>" lines as one line of relative paths."""
-    found = []
-    for line in lines:
-        path = line.removeprefix("backup ")
-        kept = path.startswith("kept from an earlier run: ")
-        path = path.removeprefix("kept from an earlier run: ")
-        found.append(_relative(vault, path) + (" (from an earlier run)" if kept else ""))
-    return [f"backups: {', '.join(found)}"] if found else []
-
-
-def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | None]:
-    """(the tool's answer, or why there is none). (None, None) means the
-    vault has no `publish:` block."""
-    answer: ToolAnswer = ask_publish_tool(vault, args, vault_only=True)
-    if answer.why is not None:
-        return None, _tool_error(vault, answer.why)
-    if answer.data is None:
-        return None, None
-    data = answer.data
-    if not isinstance(data, dict) or "applicable" not in data:
-        return None, "migrate-config did not return the expected JSON"
-    lines = data.get("lines")
-    if not isinstance(lines, list) or not all(isinstance(x, str) for x in lines):
-        # A tool from before the plan carried its own lines.
-        return None, _tool_error(vault, NO_LINES)
-    return data, None
-
-
-def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
-    """(the plan, whether it has changes)."""
-    if settings(vault).inline:
-        return StepPlan(False, [], error=INLINE_PUBLISH), False
-    plan, why = _ask(vault, args)
-    if why is not None:
-        return StepPlan(False, [], error=why), False
-    if plan is None:
-        return StepPlan(False, [DOES_NOT_PUBLISH]), False
-    if not plan["applicable"]:
-        return StepPlan(False, [NOTHING_TO_DO]), False
-    named = plan.get("noteLines")
-    def is_note(x: str) -> bool:
-        if isinstance(named, list) and all(isinstance(n, str) for n in named):
-            return x in named
-        return x.startswith(NOTE_PREFIXES)
-    backups = [x for x in plan["lines"] if x.startswith("backup ")]
-    kept = [x for x in plan["lines"] if not x.startswith("backup ") and is_note(x)]
-    changes = [x for x in plan["lines"]
-               if not x.startswith("backup ") and not is_note(x)]
-    return StepPlan(True, changes, after=tuple(backups), kept_notes=tuple(kept)), True
-
-
-def describe_config_to_vault(vault: Path) -> StepPlan:
-    return _config_plan(vault, ["migrate-config", "--dry-run"])[0]
-
-
-def apply_config_to_vault(vault: Path) -> StepPlan:
-    done, _ = _config_plan(vault, ["migrate-config"])
-    # The tool wrote the vault file and the site's (or may have, if it failed).
-    forget_settings(vault)
-    if done.error and ("expected JSON" in done.error
-                       or "does not report its lines" in done.error):
-        # The run exited 0 but said nothing usable: it may have written.
-        done.error += (f"; the files may already have been changed, the "
-                       f"originals are in {_backup_places(vault)}")
-    if done.error or not done.applies:
-        return done
-    # Running it again must plan nothing; anything left is a failure.
-    left, pending = _config_plan(vault, ["migrate-config", "--dry-run"])
-    if left.error:
-        return left
-    if pending:
-        return StepPlan(False, [], error=(
-            "migrate-config left changes planned after applying: "
-            + "; ".join(left.lines)))
-    return done
+    "({…}); write it as a block so its settings can be read")  # old file only
 
 
 # --- the checks ---------------------------------------------------------------
@@ -218,16 +58,18 @@ def find_site_repin(vault: Path) -> list[Item]:
     if settings(vault).inline:
         raise StepFailed(INLINE_PUBLISH)
     site, has_config = configured_site(vault)
+    switch = setting_name(vault, "player_site.publish")
+    folder = setting_name(vault, "player_site.folder")
     if site is None:
         if site_switch_written(settings(vault)) is True:
             raise StepFailed(
-                "publish.site is on but publish.site_dir names no folder; "
-                "set site_dir to the site folder, or set site: false")
+                f"{switch} is on but {folder} names no folder; "
+                f"set {folder} to the site folder, or set {switch}: false")
         return []
     if not has_config:
         raise StepFailed(
-            f"publish.site_dir is set to {site} but no vault.config.json is "
-            f"there; correct the path, or set site: false")
+            f"{folder} is set to {site} but no vault.config.json is "
+            f"there; correct the path, or set {switch}: false")
     data = _pin_check(site)
     if data["ok"]:
         return []
@@ -235,7 +77,7 @@ def find_site_repin(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         code, text, err = plugin_tool(["update-pin", "--site", str(site)])
-        # It may have written publish.site into the vault file.
+        # It may have written the site switch into the vault file.
         forget_settings(vault)
         lines = [line for line in text.splitlines() if line.strip()]
         if code != 0:
@@ -243,8 +85,8 @@ def find_site_repin(vault: Path) -> list[Item]:
             raise StepFailed("; ".join(tail))
         if not _pin_check(site)["ok"]:
             raise StepFailed(
-                "update-pin finished but the site (publish.site_dir in "
-                "_meta/vault-config.md) is still out of date; run "
+                f"update-pin finished but the site ({folder} in "
+                f"{settings_file(vault)}) is still out of date; run "
                 "update-pin --site <that folder> by hand to see why")
         return lines
 
@@ -252,47 +94,139 @@ def find_site_repin(vault: Path) -> list[Item]:
                  [f"repin the site's publish tool (installed: {installed})"], apply)]
 
 
-def find_config_to_vault(vault: Path) -> list[Item]:
-    """Every pass (since 1.10.24): campaign settings move from the site's
-    vault.config.json into the vault file, whenever the site file still
-    holds any. The publish tool plans and does it."""
-    plan = describe_config_to_vault(vault)
-    if plan.error:
-        raise StepFailed(plan.error)
-    if not plan.applies:
+MOVE = "settings-move"
+
+
+def _hidden_move_files(vault: Path) -> bool:
+    """Whether `_meta` holds a hidden file a stopped move left."""
+    meta = vault / "_meta"
+    return meta.is_dir() and any(
+        re.search(r"\.move\.(old|new)$", f.name) for f in meta.iterdir())
+
+
+def _move_args(vault: Path, site: Path | None, has_config: bool,
+               *extra: str) -> list[str]:
+    args = ["settings", "move", "--vault", str(vault), "--json", *extra]
+    if site is not None and has_config:
+        args += ["--config", str(site / "vault.config.json")]
+    return args
+
+
+def _ask_move(vault: Path, args: list[str]) -> dict[str, Any]:
+    """The settings command's answer to a move (a blocked move exits 1 and
+    still answers in JSON). Raises StepFailed when it gives none."""
+    code, out, err = plugin_tool(args)
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool) \
+            or not isinstance(data.get("lines"), list):
+        said = [x for x in err.splitlines() if x.strip()]
+        raise StepFailed("the settings move gave no usable answer: "
+                         + (said[-1].strip().removeprefix("Error: ") if said
+                            else f"it exited {code}"))
+    return data
+
+
+def find_settings_move(vault: Path) -> list[Item]:
+    """Every pass: a vault on the old settings file moves to the new one,
+    all of it by the publish tool (`settings move`): the new file, the
+    state file, the notes file, the settings out of the site folder's
+    vault.config.json. A vault already moved is asked too when something
+    could be left (an old file, a hidden file, a site folder), and tidied.
+    The tool decides what moves; this decides only whether it is the plugin's
+    to move: the move itself holds a vault whose site's publish tool is
+    pinned by something else (its answer has `held`, with the words), because
+    such a tool reads a moved vault as having no settings and would publish
+    with defaults. `held` is a notice that does not hold the stamp; a
+    blocker does."""
+    layout = vault_layout(vault)
+    if layout == "none":
+        return []    # no settings file: nothing names a site folder to ask
+    site, has_config = configured_site(vault)
+    if layout == "new" and not (
+            (vault / LEGACY_SETTINGS_FILE).exists()
+            or _hidden_move_files(vault) or (site is not None and has_config)):
         return []
+    # The repin comes first, but only for a site it looked at: a switched-off
+    # site is not looked at, so its folder's tool is still the move's to judge.
+    extra: list[str] = (["--site-tool-updated"]
+                        if site is not None and has_config else [])
+    if layout == "legacy" and not settings(vault).get("vault.system"):
+        found = vault_system(vault)
+        if found:
+            extra += ["--fill", f"vault.system={found}"]
+    base = _move_args(vault, site, has_config, *extra)
+    plan = _ask_move(vault, [*base, "--check"])
+    if plan.get("held"):
+        # Left behind, not wrong: the tool says why in plain words and the
+        # vault is told it every pass. This does not hold the stamp.
+        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"])]
+    if not plan["ok"]:
+        blockers = [str(b) for b in plan.get("blockers") or []]
+        return [Item(MOVE, PERSON,
+                     [f"settings\tthe settings cannot move to the new file "
+                      f"yet: {b}" for b in blockers]
+                     + ["settings\tfix what each line names, then run the "
+                        "update again; for a line that names a setting, "
+                        "campaign-qa's Settings check fixes it or asks. The "
+                        "vault is not up to date until it has moved"],
+                     holds_stamp=True)]
+    items: list[Item] = []
+    differs = plan.get("siteDiffers")
+    if differs:
+        # Already moved, but the site folder's file still says things the
+        # vault says differently: the Settings check fixes them. A notice, so
+        # it does not hold the stamp.
+        items.append(Item(MOVE + "-site-file", PERSON, [
+            "vault.config.json\tstill holds settings this vault's file "
+            f"decides ({', '.join(str(x) for x in differs)}); run "
+            "campaign-qa's Settings check, which takes them out safely"]))
+    files = plan.get("files") or {}
+    if not (files.get("write") or files.get("remove")):
+        return items
 
     def apply(_value: str | None) -> list[str]:
-        done = apply_config_to_vault(vault)
-        if done.error:
-            raise StepFailed(done.error)
-        return [*done.lines, *done.kept_notes,
-                *_backup_line(vault, done.after)]
+        done = _ask_move(vault, base)
+        forget_settings(vault)
+        if not done["ok"]:
+            raise StepFailed("; ".join(str(b) for b in done.get("blockers")
+                                       or ["the move was blocked"]))
+        if layout == "legacy" and vault_layout(vault) != "new":
+            raise StepFailed("the move finished but the vault is not on the "
+                             "new settings file")
+        return [str(x) for x in done["lines"]]
 
-    return [Item("config-to-vault", WILL, plan.lines, apply)]
+    return [*items, Item(MOVE, WILL, [str(x) for x in plan["lines"]], apply)]
 
 
 def find_publish_site(vault: Path) -> list[Item]:
-    """`publish.site` says whether the vault has a site. Written where it
+    """`player_site.publish` says whether the vault has a site. Written where it
     is missing: true with a site_dir, else false. A vault file with no
     `publish:` block has no site and gets nothing."""
     own = settings(vault)
     if own.inline or site_switch_written(own) is not None:
         return []
-    # `has_publish` is false for a `publish:` line with nothing under it,
+    # `has_site_block` is false for a `publish:` line with nothing under it,
     # which this still writes into; only a vault with no such line gets nothing.
-    if "publish" not in settings_raw(vault):
+    # The block that holds the site's settings, as the file names it.
+    block = "player_site" if vault_layout(vault) == "new" else "publish"
+    if block not in settings_raw(vault):
         return []
-    has_dir = bool(own.get("publish.site_dir"))
+    has_dir = bool(own.get("player_site.folder"))
     value = "true" if has_dir else "false"
-    row = (f"write publish.site: {value} in _meta/vault-config.md" if has_dir
-           else "write publish.site: false in _meta/vault-config.md (no site "
-                "folder is named; if this vault has a site, set "
-                "publish.site_dir to its folder instead)")
+    where = settings_file(vault)
+    switch = setting_name(vault, "player_site.publish")
+    folder = setting_name(vault, "player_site.folder")
+    row = (f"write {switch}: {value} in {where}" if has_dir
+           else f"write {switch}: false in {where} (no site "
+                f"folder is named; if this vault has a site, set "
+                f"{folder} to its folder instead)")
 
     def apply(_value: str | None) -> list[str]:
-        settings_set(vault, [("publish.site", has_dir)])
-        return [f"wrote publish.site: {value}"]
+        settings_set(vault, [("player_site.publish", has_dir)])
+        return [f"wrote {switch}: {value}"]
 
     return [Item("publish-site", WILL, [row], apply)]
 
@@ -564,7 +498,7 @@ def find_default_mode(vault: Path) -> list[Item]:
     palette can start every reader there."""
     if (not _with_site(vault)
             or written_in_vault_file(vault_settings(vault),
-                                     "publish.theme.default_mode")):
+                                     "player_site.theme.default_mode")):
         return []
 
     def apply(value: str | None) -> list[str]:
@@ -572,8 +506,9 @@ def find_default_mode(vault: Path) -> list[Item]:
             raise StepFailed("default-mode takes dark, light or leave")
         if value == "leave":
             return ["left the default palette to the reader's device"]
-        _set_settings(vault, [("publish.theme.default_mode", value)])
-        return [f"wrote publish.theme.default_mode: {value}"]
+        _set_settings(vault, [("player_site.theme.default_mode", value)])
+        return [f"wrote {setting_name(vault, 'player_site.theme.default_mode')}: "
+                f"{value}"]
 
     return [Item("default-mode", CHOICE,
                  ["start every reader on one palette (unset follows the "
@@ -600,8 +535,9 @@ def find_fonts(vault: Path) -> list[Item]:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        _set_settings(vault, [("publish.theme.fonts.source", "self-host")])
-        return ["wrote publish.theme.fonts.source: self-host; the next build "
+        _set_settings(vault, [("player_site.theme.fonts.source", "self-host")])
+        return [f"wrote {setting_name(vault, 'player_site.theme.fonts.source')}: "
+                "self-host; the next build "
                 "downloads the fonts once and serves them from the site"]
 
     return [Item("fonts-self-host", CHOICE,
@@ -630,6 +566,10 @@ def find_tone_shown(vault: Path) -> list[Item]:
         "lists the hostile ties the site shows"])]
 
 
+# The two lists the vault file holds in plain sight.
+EXCLUDE_LISTS = ("player_site.hide.sections", "player_site.hide.fields")
+
+
 def find_exclude_lists(vault: Path) -> list[Item]:
     """1.10.47: the lists of headings and fields the site hides are written
     into the vault file, where the GM can see them. A vault with no list of
@@ -640,39 +580,31 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     now = vault_settings(vault)
     # A list is the vault's own when the vault file holds it, or the site file
     # still does; one the tool could not read is not (the built-in list stands).
-    lists = [(key, default) for key, default in (
-        (key, settings_default(f"publish.{key}"))
-        for key in ("exclude_sections", "exclude_fields"))
-        if now.origins[f"publish.{key}"] not in ("file", "site-file")
+    lists = [(name, default) for name, default in (
+        (name, settings_default(name)) for name in EXCLUDE_LISTS)
+        if now.origins[name] not in ("file", "site-file")
         and isinstance(default, list) and default]
-    # config-to-vault writes the same lists when it runs on this pass: the
-    # plan shows each write once, there. (If it cannot plan, this step goes on.)
-    planned = describe_config_to_vault(vault)
-    lists = [(key, default) for key, default in lists
-             if not any(line.endswith(f"-> publish.{key}")
-                        for line in (planned.lines if planned.applies else []))]
     if not lists:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        _set_settings(vault, [(f"publish.{key}", default)
-                              for key, default in lists])
-        return [f"wrote publish.{key}: {len(default)} entries"
-                for key, default in lists]
+        _set_settings(vault, [(name, default) for name, default in lists])
+        return [f"wrote {setting_name(vault, name)}: {len(default)} entries"
+                for name, default in lists]
 
     return [Item("exclude-lists", WILL,
-                 [f"write the built-in publish.{key} ({', '.join(default)}) "
-                  f"into _meta/vault-config.md so you can see and edit it; "
+                 [f"write the built-in {setting_name(vault, name)} "
+                  f"({', '.join(default)}) "
+                  f"into {settings_file(vault)} so you can see and edit it; "
                   f"what publishes does not change"
-                  for key, default in lists], apply)]
+                  for name, default in lists], apply)]
 
 
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
-    Check("config-to-vault", None, 2,
-          "campaign settings move into the vault file", find_config_to_vault,
-          asks_site=True),
-    Check("publish-site", None, 2, "the publish.site switch",
+    Check(MOVE, None, 2, "the settings move to the new settings file",
+          find_settings_move),
+    Check("publish-site", None, 2, "the site switch",
           find_publish_site),
     Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,
           asks_site=True, choices=("default-mode=",)),

@@ -18,8 +18,8 @@ when nothing changed is a harmless no-op.
 
 Loadout (carried items) and hero points are not synced.
 
-It does nothing when `publish.live_stats` is not `true`, or when
-`character_sheets` is `false` (which forces live stats off): it prints one line
+It does nothing when `player_site.features.live_stats` is off, or when
+`player_site.sheets.show` is off (which forces live stats off): it prints one line
 saying so and reads nothing from KV.
 
 ## D&D 5e: what is written

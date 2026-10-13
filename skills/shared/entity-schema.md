@@ -233,7 +233,7 @@ meaning in frontmatter).
 | Field | Type | Meaning |
 |-------|------|---------|
 | `publish` | `false` \| `stub` | `false` — no page in any mode; links to it render as plain text. `stub` — page emitted for navigation, keeping only `publish_include_sections`. |
-| `publish_exclude_fields` | array | Fields hidden on **this file only**, merged over the vault's `exclude_fields`. Not re-admitted by a config-level `overrides.fields.*.include`. |
+| `publish_exclude_fields` | array | Fields hidden on **this file only**, merged over the vault's `player_site.hide.fields`. Not re-admitted by `player_site.hide.field_exceptions`. |
 | `publish_include_sections` | array | With `publish: stub` only. Headings to keep; default none. |
 
 Absent, or an unrecognized `publish:` value, means normal
@@ -564,17 +564,17 @@ no `precedes` or `alternative_to`. A vault vocabulary with a
 | world_domain | _World/ |
 | world_flags | _World/ |
 
-## Vault Configuration Fields
+## Vault Settings
 
-Frontmatter of `_meta/vault-config.md`, read by several skills.
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `gm_apprentice_version` | string | Plugin version the vault was last migrated to; set by migration and checked by `vault_check.py <vault> version`. |
-
-Every site setting (`publish.*` and `setting_year`) is held by the
-publish tool, not listed here. Never open the file to read one: run
+The vault's settings (`vault.*` for the campaign, `player_site.*` for
+its site) are held by the publish tool, not listed here. Never open a
+settings file to read one: run
 `node "$TOOL" settings get <name> --vault <vault>` for its value and
 where that came from, `settings describe <name>` for what it does and
 takes, `settings list` for all of them. `$TOOL` is as in
-`publish-site/SKILL.md`.
+`publish-site/SKILL.md`. `vault.system` is the game system the tools
+read; the Campaign Overview's `game_system` is that note's own field.
+
+The plugin version the vault was last updated to is the tools' own
+record: `vault_check.py <vault> version` reads it and the update
+writes it.

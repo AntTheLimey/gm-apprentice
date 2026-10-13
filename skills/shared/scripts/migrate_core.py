@@ -52,8 +52,10 @@ class Check:
     choices: tuple[str, ...] = ()
 
 
-# The files the vault's settings are read from: the vault file and a site's.
-SETTINGS_FILES = ("vault-config.md", "vault.config.json")
+# The files the vault's settings are read from: the vault's (either layout)
+# and a site's; and the state file the stamp lives in.
+SETTINGS_FILES = ("vault-config.md", "vault-config.yaml", "vault-state.json",
+                  "vault.config.json")
 
 
 def write_text_atomic(path: Path, text: str) -> None:

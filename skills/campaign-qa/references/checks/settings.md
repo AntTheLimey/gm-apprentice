@@ -4,7 +4,7 @@ Faults in the vault's settings (a misspelt name, a bad value, an old
 name, a retired setting). A `STOP` could show players more than the GM
 meant, and the build refuses. Run it when the GM asks about settings, a
 build stopped on one, and in a full QA pass. Never open the settings
-file to read it.
+file to read it (one exception, at the end).
 
 ```bash
 python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" "<vault>" settings
@@ -17,22 +17,34 @@ groups.
    anything on. Tell the GM in a short list; on a yes add `--fix`.
 2. `proposed:` rows would switch something on or publish more; each
    says what it does. Put them three to five at a time. For each yes
-   run the command again with `--apply publish.inbx` (the name in the
+   run the command again with `--apply player_site.features.inbx` (the name in the
    row), several names allowed.
 3. Rows with no fix give what the setting takes (`<name>` is as shown
-   in the row in full: `settings describe publish.link_previews`).
-   With no suggested name, ask the GM what the key was meant to do,
-   then find it with `settings list`. A hiding key written beside
-   `publish:` instead of under it has no fix (the tool cannot move it):
-   add its entries with `settings add`, then, on the GM's yes, delete
-   the stray line. Apply the answer:
+   in the row in full: `settings describe player_site.features.link_previews`).
+   With no suggested name, ask the GM what the key was meant to do
+   and find the setting with `settings list`. Apply the answer:
 
 ```bash
 TOOL="${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js"
-node "$TOOL" settings set publish.link_previews=off --vault "<vault>"
-node "$TOOL" settings add publish.exclude_sections Rumours --vault "<vault>"
-node "$TOOL" settings unset publish.link_preview --vault "<vault>"
+node "$TOOL" settings set player_site.features.link_previews=off --vault "<vault>"
+node "$TOOL" settings add player_site.hide.sections Rumours --vault "<vault>"
+node "$TOOL" settings unset player_site.features.link_preview --vault "<vault>"
+node "$TOOL" settings carry player_site.exclude_sections player_site.hide.sections --vault "<vault>"
 node "$TOOL" settings list
 ```
 
-A fault in the site folder's file is fixed by the vault update.
+`carry` puts a mis-named key's value under the right name and removes
+the key. Two hiding lists that repeat or disagree (an old-named list
+beside the right one) need no `carry`: `--fix` merges them.
+
+**Keys left in the site folder's `vault.config.json`.** Each has a
+`fix:` row. `--fix` adds a hiding list's entries to the vault's list,
+keeps the stricter of a hiding switch, and removes the key from the
+site file; any other key is just removed, since the vault's value is
+already the one in use.
+
+**A file that is not valid YAML.** No `settings` command and no `--fix`
+can read it, so this is the one time the file is opened. The message
+names the line. Show the GM that line and the ones around it, agree
+the correction, change only that line, then run `node "$TOOL" settings
+check --vault "<vault>"`.

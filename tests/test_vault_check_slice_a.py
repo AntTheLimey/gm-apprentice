@@ -1213,7 +1213,7 @@ class GmLeakCommandTests(unittest.TestCase):
                     lineno=3, line=f"## {raw}", in_code=False, gm_depth=0,
                     spoiler_depth=0, excluded_by=None, heading=(2, raw),
                     marker=None)
-                rows = vc._heading_leak("Bob.md", state, ["GM Notes"])
+                rows = vc._heading_leak("Bob.md", state, ["GM Notes"], "publish.exclude_sections")
                 self.assertEqual(len(rows), 1, rows)
                 self.assertTrue(rows[0].startswith(
                     "ERROR\tBob.md:3\tdecorated heading"), rows)
@@ -1678,7 +1678,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         vault = self.vault()
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
-        self.assertEqual(vc.vault_settings(vault).get("publish.exclude_sections"), ["GM Notes"])
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"), ["GM Notes"])
         config = read(vault, "_meta/vault-config.md")
         self.assertIn("  exclude_fields: [secrets]", config)
         self.assertIn('gm_apprentice_version: "1.8.0"', config)
@@ -1697,7 +1697,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         with mock.patch.object(vc, "settings_set", side_effect=refusal):
             rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "ERROR\t_meta/vault-config.md\t"
-                                       "exclude_sections cannot be collapsed: "
+                                       "publish.exclude_sections cannot be collapsed: "
                                        "not today"), rows)
         self.assertFalse(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
         self.assertEqual(config_of(vault), self.OLD_CONFIG)
@@ -1743,13 +1743,13 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         vault = self.vault(config, **{"Ann.md": text})
         # The vault file sets no list, so the build's own (the tool's) is used.
         stub_publish_tool(self, vault, exclude_sections=list(
-            vaultlib.settings_default("publish.exclude_sections")))
+            vaultlib.settings_default("player_site.hide.sections")))
         config = read(vault, "_meta/vault-config.md")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertFalse(rows_for(rows, "collapsed"), rows)
         self.assertEqual(read(vault, "_meta/vault-config.md"), config)
-        self.assertEqual(vc.vault_settings(vault).get("publish.exclude_sections"),
-                         vaultlib.settings_default("publish.exclude_sections"))
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"),
+                         vaultlib.settings_default("player_site.hide.sections"))
         hidden = vc.hidden_lines(read(vault, "Ann.md"), ["GM Notes"], {})
         self.assertIn("x1", hidden)
         self.assertIn("x2", hidden)
@@ -1784,7 +1784,7 @@ class GmLeakRenestExcludesTests(unittest.TestCase):
         proc = run_cli(vault, "gm-leak", "--renest-excludes", "--fix")
         self.assertEqual(proc.returncode, 0, proc.stderr)
         self.assertIn("FIXED\t_meta/vault-config.md", proc.stdout)
-        self.assertEqual(vc.vault_settings(vault).get("publish.exclude_sections"), ["GM Notes"])
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"), ["GM Notes"])
 
 
 class RenestReviewRegressionTests(unittest.TestCase):
@@ -1806,7 +1806,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
         text = read(vault, rel)
         fm = vc.extract_frontmatter(text) or {}
         return "\n".join(vc.publisher_lines(
-            text, vc.vault_settings(vault).get("publish.exclude_sections"), fm))
+            text, vc.vault_settings(vault).get("player_site.hide.sections"), fm))
 
     # ---- N1: exclude_sections parsed strictly, fail closed -----------
 
@@ -1815,7 +1815,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
                   "    - GM Notes\n    - World State # c\n"
                   "    - 'Keeper Checklist'\n---\n")
         vault = self.vault(config, {"Bob.md": self.WS})
-        self.assertEqual(vc.vault_settings(vault).get("publish.exclude_sections"),
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"),
                          ["GM Notes", "World State", "Keeper Checklist"])
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
@@ -1838,7 +1838,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
         config = ('---\npublish:\n  exclude_sections: ["GM Notes", '
                   '"Keeper, Notes"] # c\n---\n')
         vault = self.vault(config, {})
-        self.assertEqual(vc.vault_settings(vault).get("publish.exclude_sections"),
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"),
                          ["GM Notes", "Keeper, Notes"])
 
     def test_a_multi_line_flow_list_is_read_and_migrated(self):
@@ -1849,7 +1849,7 @@ class RenestReviewRegressionTests(unittest.TestCase):
         vault = self.vault(config, {"Bob.md": self.WS})
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
-        self.assertEqual(vc.vault_settings(vault).get("publish.exclude_sections"),
+        self.assertEqual(vc.vault_settings(vault).get("player_site.hide.sections"),
                          ["GM Notes"])
         self.assertNotIn("SECRET-WS", self.published(vault, "Bob.md"))
 
@@ -2456,7 +2456,7 @@ class NoPublishToolTests(unittest.TestCase):
         installed tool with this package.json."""
         vault = self.vault(site=True)
         (vault / "Bob.md").write_text(self.LEAKY, encoding="utf-8")
-        site = Path(vc.settings(vault).get("publish.site_dir"))
+        site = Path(vc.settings(vault).get("player_site.folder"))
         if package is not None:
             (site / "package.json").write_text(json.dumps(package),
                                                encoding="utf-8")
@@ -2536,7 +2536,7 @@ class NoPublishToolTests(unittest.TestCase):
         # Its answer is the site's. Here it has no `lines` command at all,
         # whatever its version number says.
         vault = self.pinned_site(installed={"version": "9.9.9"})
-        site = Path(vc.settings(vault).get("publish.site_dir"))
+        site = Path(vc.settings(vault).get("player_site.folder"))
         (site / "node_modules" / "gm-apprentice-publish" / "bin"
          / "gm-publish.js").write_text("process.exit(1);\n", encoding="utf-8")
         rows = vc.check_gm_leak(vault, None, fix=True)
@@ -4168,7 +4168,7 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         return rows_for(vc.check_gm_leak(vault, None), "bold label")
 
     def listed(self, vault):
-        return vc.vault_settings(vault).get("publish.exclude_sections")
+        return vc.vault_settings(vault).get("player_site.hide.sections")
 
     def test_a_section_the_list_lacks_is_scanned(self):
         vault = self.vault(vault_list=["GM Notes"])
@@ -4190,13 +4190,13 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         vault = self.vault(site_list=["Keeper Only"])
         self.assertEqual(
             self.listed(vault),
-            vaultlib.settings_default("publish.exclude_sections") + ["Keeper Only"])
+            vaultlib.settings_default("player_site.hide.sections") + ["Keeper Only"])
         self.assertFalse(self.marker_rows(vault))
 
     def test_a_silent_vault_and_site_take_the_built_in_list(self):
         vault = self.vault()
         self.assertEqual(self.listed(vault),
-                         vaultlib.settings_default("publish.exclude_sections"))
+                         vaultlib.settings_default("player_site.hide.sections"))
 
     def test_an_empty_vault_list_hides_nothing(self):
         vault = self.vault(vault_list=[])
@@ -4369,7 +4369,7 @@ class GmLeakWithheldHubTests(unittest.TestCase):
         # every hub body, so the plugin's tool must not answer for it.
         vault = self.vault()
         calls = stub_publish_tool(self, vault, ["Session 01 - Lone.md"])
-        site = Path(vc.settings(vault).get("publish.site_dir"))
+        site = Path(vc.settings(vault).get("player_site.folder"))
         (site / "package.json").write_text(json.dumps({"dependencies": {
             "gm-apprentice-publish":
                 "file:vendor/gm-apprentice-publish-1.11.39.tgz"}}),
@@ -4780,7 +4780,7 @@ class GmLeakHandoutSectionTests(unittest.TestCase):
         # tool could answer. The site will build with 1.12.0, though.
         vault = self.vault()
         calls = stub_publish_tool(self, vault, stripped={"Chit.md": self.STRIPPED})
-        site = Path(vc.settings(vault).get("publish.site_dir"))
+        site = Path(vc.settings(vault).get("player_site.folder"))
         (site / "package.json").write_text(json.dumps({"dependencies": {
             "gm-apprentice-publish": "1.12.0"}}), encoding="utf-8")
         rows = vc.check_gm_leak(vault, None)
@@ -4997,7 +4997,7 @@ class PublishToolEndToEndTests(unittest.TestCase):
             "  mode: player\n",
             '  mode: player\n  exclude_sections: ["GM Notes"]\n'),
             encoding="utf-8")
-        site = Path(vc.settings(vault).get("publish.site_dir"))
+        site = Path(vc.settings(vault).get("player_site.folder"))
         site_cfg = json.loads((site / "vault.config.json").read_text(encoding="utf-8"))
         site_cfg["excludeSections"] = ["Keeper Only"]
         (site / "vault.config.json").write_text(json.dumps(site_cfg), encoding="utf-8")
@@ -5075,7 +5075,7 @@ class GmLeakReviewFollowupTests(unittest.TestCase):
             "---\ntype: meta\npublish:\n  deploy:\n    site_dir: /wrong\n"
             "# a column-0 comment inside the block\n  notes: |\n    site_dir: /also-wrong\n"
             '  site_dir: "C:\\\\Sites\\\\x"\n---\n'))
-        self.assertEqual(vaultlib.settings(vault).get("publish.site_dir"), "C:\\Sites\\x")
+        self.assertEqual(vaultlib.settings(vault).get("player_site.folder"), "C:\\Sites\\x")
 
     def test_no_site_dir_and_no_vault_list_is_an_info(self):
         # With no site there is no list to assume: nothing is checked.
@@ -5102,7 +5102,7 @@ class GmLeakCodeRabbitTests(unittest.TestCase):
     def test_an_apostrophe_in_a_plain_site_dir_is_not_a_quote(self):
         import vaultlib
         vault = make_vault(self, "---\ntype: meta\npublish:\n  site_dir: /sites/GM's Site # player site\n---\n")
-        self.assertEqual(vaultlib.settings(vault).get("publish.site_dir"), "/sites/GM's Site")
+        self.assertEqual(vaultlib.settings(vault).get("player_site.folder"), "/sites/GM's Site")
 
 
 import vaultlib  # noqa: E402

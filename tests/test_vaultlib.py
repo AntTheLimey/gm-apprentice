@@ -480,7 +480,7 @@ class ExcludeSectionsTests(unittest.TestCase):
         vl.forget_settings(None)
 
     def listed(self, vault):
-        return vl.settings(vault).get("publish.exclude_sections")
+        return vl.settings(vault).get("player_site.hide.sections")
 
     # config.js unionExcludeList: the vault's own list replaces the
     # defaults; they are a fallback only when it sets none.
@@ -504,7 +504,7 @@ class ExcludeSectionsTests(unittest.TestCase):
             got = self.listed(vault)
             seen = vl.settings(vault)
         self.assertEqual(got, ["Keeper Notes"])
-        self.assertTrue(seen.has_publish)
+        self.assertTrue(seen.has_site_block)
 
     def test_vault_list_replaces_the_defaults_block(self):
         with tempfile.TemporaryDirectory() as d:
@@ -532,7 +532,7 @@ class ExcludeSectionsTests(unittest.TestCase):
                 vault = Path(d)
                 write(vault, "_meta/vault-config.md", f"---\n{body}---\n")
                 self.assertEqual(self.listed(vault),
-                                 vl.settings_default("publish.exclude_sections"))
+                                 vl.settings_default("player_site.hide.sections"))
 
     def test_a_non_list_is_a_fault_the_caller_can_report(self):
         with tempfile.TemporaryDirectory() as d:
@@ -540,14 +540,14 @@ class ExcludeSectionsTests(unittest.TestCase):
             write(vault, "_meta/vault-config.md",
                   '---\npublish:\n  exclude_sections: "GM Notes"\n---\n')
             seen = vl.settings(vault)
-        self.assertEqual(seen.origins["publish.exclude_sections"], "fault")
+        self.assertEqual(seen.origins["player_site.hide.sections"], "fault")
         self.assertEqual([f["name"] for f in seen.faults],
                          ["publish.exclude_sections"])
 
     def test_no_config_returns_defaults(self):
         with tempfile.TemporaryDirectory() as d:
             self.assertEqual(self.listed(Path(d)),
-                             vl.settings_default("publish.exclude_sections"))
+                             vl.settings_default("player_site.hide.sections"))
 
 
 class VersionTests(unittest.TestCase):

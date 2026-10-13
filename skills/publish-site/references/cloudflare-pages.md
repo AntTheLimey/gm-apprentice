@@ -248,7 +248,7 @@ unaffected — this only changes what a brand-new site ships.
 These do everything the manual steps below do — create/reuse the `INBOX` KV
 namespace, align `wrangler.toml`'s `name` to the Cloudflare project, patch in
 the `[[kv_namespaces]]` block, turn the switch on in the vault's
-`_meta/vault-config.md`, rebuild, and deploy — in one command. Run from the site directory:
+settings, rebuild, and deploy — in one command. Run from the site directory:
 
 ```bash
 node "$TOOL" setup-status-bar   # live status bar (Tier 2a)
@@ -258,11 +258,11 @@ node "$TOOL" setup-inbox        # change-request inbox (Tier 2b)
 Each defaults to `./vault.config.json`; pass `--config <path>` if you're
 running from elsewhere. Both are:
 
-- **Vault-file check first** — the command writes `publish.live_stats: true`
-  (`setup-status-bar`) or `publish.inbox: true` (`setup-inbox`) into the
-  vault's `_meta/vault-config.md`. If that file cannot be edited safely it
-  stops with `cannot edit _meta/vault-config.md: …` before it touches
-  wrangler or KV. Nothing is written to `vault.config.json`.
+- **Settings check first** — the command turns on `player_site.features.live_stats`
+  (`setup-status-bar`) or `player_site.features.inbox` (`setup-inbox`) in the
+  vault's settings. If they cannot be written it
+  stops with `cannot edit the vault's settings: …` before it touches
+  wrangler or KV; the line says why. Nothing is written to `vault.config.json`.
 - **KV-permission probe next** — the command lists KV namespaces to
   confirm the token can manage KV before it creates or changes anything (this is the
   command's own check, not a `doctor` run). If the token can't manage KV, it stops with the fix
@@ -275,13 +275,13 @@ running from elsewhere. Both are:
 
 `setup-inbox` requires and ensures the same KV namespace as the status bar
 (**inbox ⇒ KV** — you never create it separately) and is **infra-only**: it
-sets `publish.inbox: true` but does not open a session or set a
+turns `player_site.features.inbox` on but does not open a session or set a
 `config:code`. Opening a live session is still the `inbox open <CODE>` loop
 (Part 3 / `references/change-request-loop.md`) — run that once the switch is
 live.
 
 The switches are the only thing that turns these features on. The build does
-not detect a deployed backend: with `publish.live_stats` / `publish.inbox`
+not detect a deployed backend: with `player_site.features.live_stats` / `player_site.features.inbox`
 unset, a site that has the KV binding and the Functions still builds without
 them. See `configuration.md` § Switches.
 
@@ -290,13 +290,13 @@ your setup, the manual path below does the same thing by hand.
 
 ### Or by hand
 
-**You do not hand-copy the Functions.** Once a switch (`publish.inbox` or
-`publish.live_stats`) is `true` in the vault's `_meta/vault-config.md`, the next
+**You do not hand-copy the Functions.** Once a switch (`player_site.features.inbox` or
+`player_site.features.live_stats`) is on in the vault's settings, the next
 `npm run build` copies the plugin's Cloudflare Functions into the site's
-`functions/` for you, each feature's files for its own switch (`live_stats`:
-`loadout`, `loadout-list`; `inbox`: `request`; a Tier-1 site with both switches
+`functions/` for you, each feature's files for its own switch (live stats:
+`loadout`, `loadout-list`; the inbox: `request`; a Tier-1 site with both switches
 off gets none — they live beside `vault.config.json`, not in `docs/`). Setting
-a switch to `false` removes that feature's files on the next build or deploy,
+a switch to off removes that feature's files on the next build or deploy,
 and the removal reaches the live site with the next deploy. The manual steps
 below do exactly that: create the namespace, bind it in `wrangler.toml`, turn
 the switch on, rebuild, deploy.
@@ -407,11 +407,11 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
 3. **Turn on the inbox switch.** From the site directory:
 
    ```bash
-   npx gm-apprentice-publish settings set publish.inbox=true
+   npx gm-apprentice-publish settings set player_site.features.inbox=true
    ```
 
    (For the live status bar / party board, also pass
-   `publish.live_stats=true` — it reuses the same namespace.) This is what makes the next build ship the inbox
+   `player_site.features.live_stats=true` — it reuses the same namespace.) This is what makes the next build ship the inbox
    chatbox **and** copy the inbox Functions into `functions/`. With the switch
    on and no real KV id in `wrangler.toml`, the build warns and leaves the
    feature out.

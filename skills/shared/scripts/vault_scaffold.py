@@ -7,7 +7,7 @@
 Without --write it prints what it would create and writes nothing. With
 --write it creates everything or nothing. It never overwrites, moves or
 deletes what is already there, and writes no campaign content: the folders,
-the templates for the game system, the four `_meta/` files, two world stubs
+the templates for the game system, the `_meta/` files (settings, state, entity and relationship types, index), two world stubs
 and an empty Timeline and Player Characters page.
 
 Rows are tab-separated: verb, path. WOULD-CREATE in a plan, CREATED when
@@ -24,7 +24,9 @@ import argparse
 import datetime
 import json
 import re
+import shutil
 import sys
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -34,16 +36,18 @@ import index_build
 import migrate_vault as mv
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
-from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
-                      forget_settings, parse_version, plugin_version,
-                      settings, settings_default, vault_files)
+from vaultlib import (PUBLISH_TOOL, SETTINGS_FILE, STAMP_KEY, STATE_FILE,
+                      SettingsUnavailable, StateUnreadable, entity_type,
+                      extract_frontmatter, forget_settings, parse_version,
+                      plugin_version, read_stamp, settings, settings_default,
+                      settings_set, stamp_file, vault_files, vault_layout)
 
 SHARED = Path(__file__).resolve().parent.parent
 SEEDS = SHARED / "scaffold"
 SCHEMA = SHARED / "entity-schema.md"
 ONTOLOGY = SHARED / "gm-apprentice-ontology.json"
-STRUCTURE = SHARED / "vault-structure.md"
-CONFIG = "_meta/vault-config.md"
+# What a new vault gets, besides folders and schema files. An existing vault, on either layout, never gets them.
+NEW_FILES = (SETTINGS_FILE, STATE_FILE)
 TIMELINE = "_Campaign/Timeline.md"
 
 # The sections of entity-schema.md a vault's `_meta/entity-types.md` starts
@@ -120,29 +124,35 @@ def relationship_types_text() -> str:
         "## Symmetric (stored once, no direction)", "", symmetric, ""])
 
 
-def structure_tree() -> str:
-    """The default layout tree, as shared/vault-structure.md draws it."""
-    found = re.search(r"^```text\n(.*?)\n```", _plugin_text(STRUCTURE),
-                      re.M | re.S)
-    if not found:
-        raise ScaffoldError("the plugin's vault-structure.md has no layout "
-                            "tree")
-    return found.group(1)
-
-
 def seed(name: str, campaign: str) -> str:
     return _plugin_text(SEEDS / name).replace("{CAMPAIGN}", campaign)
 
 
-def config_text(system: str | None, campaign: str, version: str) -> str:
-    """A new vault's `_meta/vault-config.md`. A new vault has no site."""
-    front = ["---", "type: meta", f'gm_apprentice_version: "{version}"',
-             "publish:", "  site: false"]
+def settings_text(system: str | None, campaign: str) -> str:
+    """A new vault's `_meta/vault-config.yaml`, written by the publish tool
+    (`settings set --create`) into a scratch folder and read back, so the
+    file is exactly what the tool writes. A new vault has no site."""
+    pairs: list[tuple[str, object]] = [("vault.campaign", campaign)]
     if system:
-        front.append(f'  system: "{system}"')
-    body = seed("vault-config.md", campaign).replace("{TREE}",
-                                                     structure_tree())
-    return "\n".join([*front, "---", "", body.rstrip("\n"), ""])
+        pairs.append(("vault.system", system))
+    pairs.append(("player_site.publish", False))
+    with tempfile.TemporaryDirectory(prefix="vs-settings-") as tmp:
+        scratch = Path(tmp) / "vault"
+        (scratch / "_meta").mkdir(parents=True)
+        try:
+            settings_set(scratch, pairs, create=True)
+            return (scratch / SETTINGS_FILE).read_text(encoding="utf-8")
+        except (SettingsUnavailable, OSError) as e:
+            raise ScaffoldError(f"the settings file could not be made: "
+                                f"{e}") from e
+        finally:
+            forget_settings(scratch)
+
+
+def state_text(version: str) -> str:
+    """A new vault's `_meta/vault-state.json`: the version stamp, in the
+    form `write_stamp` writes it."""
+    return json.dumps({STAMP_KEY: version}, indent=2, ensure_ascii=False) + "\n"
 
 
 SYSTEMS = ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", "pf2e",
@@ -218,14 +228,14 @@ def _types_in(vault: Path) -> tuple[set[str], bool]:
 def _attachments(vault: Path) -> str | None:
     """The vault's attachments folder, or None when the vault names one
     outside itself: this script creates nothing out there."""
-    if (vault / CONFIG).is_file():
-        named = settings(vault).get("publish.attachments_dir")
+    if vault_layout(vault) != "none":
+        named = settings(vault).get("vault.attachments")
     else:
-        named = settings_default("publish.attachments_dir")
+        named = settings_default("vault.attachments")
     # A blank or non-text value is not a folder: an empty name would put the
     # folders at the disk's root.
     if not isinstance(named, str) or not named.strip():
-        named = settings_default("publish.attachments_dir")
+        named = settings_default("vault.attachments")
     named = named.strip().replace("\\", "/")
     if (named.startswith("/") or re.match(r"[A-Za-z]:", named)
             or ".." in named.split("/")):
@@ -292,7 +302,13 @@ def missing(vault: Path, system: str | None, *, campaign: str, version: str,
     # The index is rendered when it is written, after the files above exist.
     file("_meta/index.md",
          lambda: index_build.render(vault, today=day, previous=None))
-    file(CONFIG, lambda: config_text(system, campaign, version))
+    # Only for a vault with no settings file at all: a vault on either layout
+    # (the update's skeleton check) must never get the new files, nor an old
+    # one back beside them.
+    has_settings = vault_layout(vault) != "none"
+    file(SETTINGS_FILE, lambda: settings_text(system, campaign),
+         present=has_settings)
+    file(STATE_FILE, lambda: state_text(version), present=has_settings)
     return out
 
 
@@ -374,7 +390,9 @@ def resolve_system(vault: Path, given: str | None,
     if no_system:
         return None
     ids = ", ".join(SYSTEMS)
-    recorded = mv.vault_system(vault) if vault.is_dir() else None
+    recorded = None
+    if vault.is_dir():
+        recorded = mv.vault_system(vault)
     if given is not None:
         found = mv._system_id(given)
         if found not in SYSTEMS:
@@ -386,7 +404,7 @@ def resolve_system(vault: Path, given: str | None,
         return found
     if recorded in SYSTEMS:
         return recorded
-    if not (vault / CONFIG).is_file():
+    if vault_layout(vault) == "none":
         if recorded is None:
             raise ScaffoldError(
                 f"the game system is not recorded: ask the GM once, then "
@@ -400,19 +418,19 @@ def resolve_system(vault: Path, given: str | None,
 
 
 def _refuse_unusable_version(vault: Path, plugin: str) -> None:
-    """A vault whose config file carries no version, or a later one than
-    the plugin's, is refused. A vault with no config file is a new one."""
-    try:
-        fm = extract_frontmatter((vault / CONFIG).read_text(
-            encoding="utf-8-sig", errors="replace")) or {}
-    except OSError:
+    """A vault whose settings carry no version, or a later one than the
+    plugin's, is refused. A vault with no settings file is a new one."""
+    if vault_layout(vault) == "none":
         return
-    current = fm.get("gm_apprentice_version")
-    if (not current or isinstance(current, list)
-            or not parse_version(str(current))):
+    try:
+        current = read_stamp(vault)
+    except StateUnreadable as e:
+        raise ScaffoldError(str(e)) from e
+    if not current or not parse_version(current):
         raise ScaffoldError(
-            f"{CONFIG} has no gm_apprentice_version, so this script cannot "
-            f"tell what set the vault up; it never rewrites that file")
+            f"{stamp_file(vault)} has no gm_apprentice_version, so this "
+            f"script cannot tell what set the vault up; it never rewrites "
+            f"that file")
     if parse_version(str(current)) > parse_version(plugin):
         raise ScaffoldError(f"vault {current} is ahead of plugin {plugin}: "
                             f"update the plugin before touching this vault")
@@ -449,6 +467,14 @@ def main(argv: list[str] | None = None) -> int:
             found = plugin_version()
             if found is None:
                 raise ScaffoldError("cannot determine the plugin version")
+            if vault_layout(vault) == "none" and (
+                    not shutil.which("node") or not PUBLISH_TOOL.is_file()):
+                # The settings defaults are the publish tool's, and so is the
+                # new vault's settings file: asking it first would say "could
+                # not read the vault's settings" of a vault that is not there.
+                raise ScaffoldError(
+                    "a new vault needs Node.js, which writes its settings "
+                    "file; install Node.js, then run this again")
             _refuse_unusable_version(vault, found[0])
             system = resolve_system(vault, args.system, args.no_system)
             campaign = " ".join((args.name or vault.resolve().name).split())

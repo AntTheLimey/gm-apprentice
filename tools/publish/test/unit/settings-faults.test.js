@@ -94,7 +94,7 @@ test('no file, and a file with no publish block, give every default and say so',
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-'));
   const r = readSettings({ vaultPath: dir });
   const { path: shown, ...rest } = r.file;
-  assert.deepEqual(rest, { exists: false, hasPublish: false, inline: false, leftover: false });
+  assert.deepEqual(rest, { exists: false, hasSiteBlock: false, inline: false, leftover: false });
   assert.ok(shown.endsWith('vault-config.md'));
   assert.equal(r.values.player_site.features.connections, 'tree');
   assert.deepEqual(r.faults, []);

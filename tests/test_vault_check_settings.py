@@ -2,8 +2,13 @@
 the faults in a vault's settings file, fixes the ones whose fix is certain
 and leaves the rest to the GM."""
 
+import contextlib
+import io
 import json
+import shutil
 import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 import pytest
@@ -70,7 +75,7 @@ def test_a_clean_vault_has_no_faults(tmp_path, monkeypatch, capsys):
 def test_a_misspelt_hiding_list_is_moved_and_keeps_the_built_in_headings(
         tmp_path, monkeypatch, capsys):
     vault = make_vault(tmp_path, "  exclude_sectoins: [GM Notes, Secrets]\n")
-    built_in = vaultlib.settings_default("publish.exclude_sections")
+    built_in = vaultlib.settings_default("player_site.hide.sections")
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     assert code == 0
     first, fix = out.splitlines()[:2]
@@ -83,7 +88,7 @@ def test_a_misspelt_hiding_list_is_moved_and_keeps_the_built_in_headings(
     assert code == 0
     assert out.splitlines()[0].startswith("fixed: moved publish.exclude_sectoins")
     assert out.strip().endswith("Settings: no faults")
-    got = vaultlib.settings(vault).get("publish.exclude_sections")
+    got = vaultlib.settings(vault).get("player_site.hide.sections")
     assert got == built_in + ["Secrets"]
     assert "exclude_sectoins" not in text(vault)
 
@@ -108,7 +113,7 @@ def test_an_old_container_child_is_moved_to_its_new_name(
     code, out, _ = settings_check(monkeypatch, capsys, vault, "--fix")
     assert "fixed: moved publish.backend.statusBar to publish.live_stats" in out
     s = vaultlib.settings(vault)
-    assert s.get("publish.live_stats") is True
+    assert s.get("player_site.features.live_stats") is True
     assert s.faults == []
     assert "backend" not in text(vault)
 
@@ -194,7 +199,7 @@ def test_a_misspelt_switch_that_hides_more_is_moved(
         tmp_path, monkeypatch, capsys):
     vault = make_vault(tmp_path, "  exclude_draft: true\n")
     settings_check(monkeypatch, capsys, vault, "--fix")
-    assert vaultlib.settings(vault).get("publish.exclude_drafts") is True
+    assert vaultlib.settings(vault).get("player_site.hide.drafts") is True
     assert fault_names(vault) == []
 
 
@@ -272,19 +277,19 @@ def test_after_fix_only_uncertain_faults_remain_and_nothing_is_shown_more(
         "  exclude_sectoins: [Secrets]\n  exclude_feilds: [Cost]\n"
         "  exclude_callouts: [secret]\n  total_sessions: 3\n"
         "  link_preview: sideways\n  mode: nonsense\n")
-    names = ("publish.exclude_sections", "publish.exclude_fields",
-             "publish.exclude_callouts", "publish.exclude_drafts")
+    names = ("player_site.hide.sections", "player_site.hide.fields",
+             "player_site.hide.callouts", "player_site.hide.drafts")
     before = {n: vaultlib.settings(vault).get(n) for n in names}
     settings_check(monkeypatch, capsys, vault, "--fix")
     vaultlib.forget_settings(vault)
     s = vaultlib.settings(vault)
     assert sorted(f["name"] for f in s.faults) == [
         "publish.link_preview", "publish.mode"]
-    for n in ("publish.exclude_sections", "publish.exclude_fields"):
+    for n in ("player_site.hide.sections", "player_site.hide.fields"):
         assert set(before[n]) <= set(s.get(n))
-    assert "Cost" in s.get("publish.exclude_fields")
-    assert "Secrets" in s.get("publish.exclude_sections")
-    assert s.get("publish.exclude_callouts") == ["secret"]
+    assert "Cost" in s.get("player_site.hide.fields")
+    assert "Secrets" in s.get("player_site.hide.sections")
+    assert s.get("player_site.hide.callouts") == ["secret"]
 
 
 def test_two_misspellings_of_one_name_both_land(
@@ -292,7 +297,7 @@ def test_two_misspellings_of_one_name_both_land(
     vault = make_vault(
         tmp_path, "  exclude_sectoins: [Secrets]\n  exclude_sectons: [Plans]\n")
     settings_check(monkeypatch, capsys, vault, "--fix")
-    got = vaultlib.settings(vault).get("publish.exclude_sections")
+    got = vaultlib.settings(vault).get("player_site.hide.sections")
     assert "Secrets" in got and "Plans" in got
     assert fault_names(vault) == []
 
@@ -303,7 +308,7 @@ def test_a_removal_that_fails_after_the_write_says_so_and_stops(
     vault hiding at least what it did before."""
     vault = make_vault(
         tmp_path, "  exclude_sectoins: [Secrets]\n  total_sessions: 3\n")
-    before_hidden = vaultlib.settings(vault).get("publish.exclude_sections")
+    before_hidden = vaultlib.settings(vault).get("player_site.hide.sections")
 
     real = vc.settings_unset
 
@@ -323,8 +328,8 @@ def test_a_removal_that_fails_after_the_write_says_so_and_stops(
     monkeypatch.undo()
     vaultlib.forget_settings(vault)
     s = vaultlib.settings(vault)
-    assert set(before_hidden) <= set(s.get("publish.exclude_sections"))
-    assert "Secrets" in s.get("publish.exclude_sections")
+    assert set(before_hidden) <= set(s.get("player_site.hide.sections"))
+    assert "Secrets" in s.get("player_site.hide.sections")
     assert "total_sessions" in text(vault)  # nothing further was changed
 
 
@@ -424,7 +429,7 @@ def test_apply_takes_several_names_and_refuses_a_name_with_no_fix(
     assert out.count("fixed:") == 2
     assert fault_names(vault) == ["publish.link_preview"]
     s = vaultlib.settings(vault)
-    assert s.get("publish.inbox") is True and s.get("publish.live_stats") is True
+    assert s.get("player_site.features.inbox") is True and s.get("player_site.features.live_stats") is True
 
 
 def test_apply_with_a_certain_fix_works_too(tmp_path, monkeypatch, capsys):
@@ -461,12 +466,12 @@ def test_fix_alone_switches_nothing_on_and_no_allow_list_grows(
     # The only differences: the hiding list grew, and the old name's value
     # (statusBar) is read the same as before.
     changed = {n for n in names if before[n] != after[n]}
-    assert changed == {"publish.exclude_sections"}
-    assert set(before["publish.exclude_sections"]) <= set(
-        after["publish.exclude_sections"])
-    assert after["publish.inbox"] is False
-    assert after["publish.pc_prose_sections"] == before[
-        "publish.pc_prose_sections"]
+    assert changed == {"player_site.hide.sections"}
+    assert set(before["player_site.hide.sections"]) <= set(
+        after["player_site.hide.sections"])
+    assert after["player_site.features.inbox"] is False
+    assert after["player_site.sheets.prose_sections"] == before[
+        "player_site.sheets.prose_sections"]
 
 
 @pytest.mark.parametrize("old,value,target", [
@@ -529,7 +534,7 @@ def test_a_hiding_list_one_level_too_deep_is_moved_and_never_hides_less(
     vault = make_vault(
         tmp_path, "  theme:\n    exclude_sections: [Plans]\n"
         "  landing:\n    exclude_drafts: true\n")
-    built_in = vaultlib.settings_default("publish.exclude_sections")
+    built_in = vaultlib.settings_default("player_site.hide.sections")
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     assert code == 0
     assert "STOP\t" in out and "publish.theme.exclude_sections" in out
@@ -539,8 +544,8 @@ def test_a_hiding_list_one_level_too_deep_is_moved_and_never_hides_less(
     assert "fixed: moved publish.landing.exclude_drafts" in out
     assert out.strip().endswith("Settings: no faults")
     got = vaultlib.settings(vault)
-    assert got.get("publish.exclude_sections") == built_in + ["Plans"]
-    assert got.get("publish.exclude_drafts") is True
+    assert got.get("player_site.hide.sections") == built_in + ["Plans"]
+    assert got.get("player_site.hide.drafts") is True
     assert "Plans" in text(vault)
     assert text(vault).count("exclude_sections") == 1
 
@@ -570,3 +575,226 @@ def test_publish_overrides_exclude_is_listed_with_the_only_override(
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     assert "The only override is publish.overrides.fields." in out
     assert not any(line.startswith("fix:") for line in out.splitlines())
+
+
+class NewFileBase(unittest.TestCase):
+    def vault(self, yaml_text):
+        root = Path(tempfile.mkdtemp(prefix="vc-newfix-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "V"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-config.yaml").write_text(yaml_text, "utf-8")
+        return vault
+
+    def rows(self, vault):
+        vc.forget_settings(None)
+        return vc.plan_settings(vault)[0]
+
+
+class NewFileFixTests(NewFileBase):
+    """A mis-named key in the NEW file is fixed in place by the settings
+    command's carry, with the same certain/proposed rule as on the old file."""
+
+    def test_a_stray_hiding_key_is_a_certain_fix_that_adds_to_the_right_list(self):
+        vault = self.vault("version: 1\nplayer_site:\n  exclude_sections: [Rumours]\n")
+        (row,) = [r for r in self.rows(vault) if r.fault["name"].endswith("exclude_sections")]
+        self.assertEqual(row.kind, "certain")
+        self.assertEqual(row.ops[0]["op"], "carry")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(vc.check_settings(vault, True, [], False), 0)
+        vc.forget_settings(None)
+        got = vc.settings(vault).get("player_site.hide.sections")
+        self.assertIn("Rumours", got)
+        self.assertIn("GM Notes", got)
+        self.assertEqual(self.rows(vault), [])
+
+    def test_a_stray_plain_value_is_proposed_and_applied_only_by_name(self):
+        vault = self.vault("version: 1\nplayer_site:\n  site_title: Hollow\n")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "proposed")
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        self.assertIn("site_title", (vault / "_meta" / "vault-config.yaml").read_text())
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, False, ["player_site.site_title"], False)
+        vc.forget_settings(None)
+        self.assertEqual(vc.settings(vault).get("player_site.title"), "Hollow")
+
+    def test_a_stray_value_the_setting_refuses_has_no_fix(self):
+        vault = self.vault("version: 1\nplayer_site:\n  searchh: maybe\n")
+        (row,) = self.rows(vault)
+        self.assertEqual((row.kind, row.ops), ("none", []))
+
+    def test_a_left_over_old_file_is_a_certain_removal_when_it_holds_nothing_more(self):
+        vault = self.vault("version: 1\nplayer_site:\n  title: Hollow\n")
+        old = vault / "_meta" / "vault-config.md"
+        old.write_text("---\ntype: meta\npublish:\n  site_title: Hollow\n---\n", "utf-8")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "certain")
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        self.assertFalse(old.exists())
+
+    def test_a_left_over_old_file_with_more_in_it_is_proposed_and_names_the_keys(self):
+        vault = self.vault("version: 1\nplayer_site:\n  title: Hollow\n")
+        old = vault / "_meta" / "vault-config.md"
+        old.write_text("---\ntype: meta\npublish:\n  site_title: Hollow\n  search: false\n---\n", "utf-8")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "proposed")
+        self.assertIn("player_site.features.search", row.fix)
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        self.assertTrue(old.exists())    # --fix leaves a proposed fix alone
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, False, [str(old.relative_to(vault))], False)
+        self.assertFalse(old.exists())
+
+    def test_an_empty_new_file_is_copied_under_its_own_name(self):
+        vault = self.vault("")
+        self.assertEqual(vc.plan_settings(vault)[0], [])
+
+
+class StrayBlockTests(NewFileBase):
+    """A stray BLOCK in the new file (the old `publish:` block, or a group out
+    of place) is fixed one setting at a time, and a stray hiding key beside a
+    list that is already set adds to it."""
+
+    def fix_all(self, vault):
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        vc.forget_settings(None)
+
+    def test_the_old_publish_block_is_moved_child_by_child_and_removed(self):
+        vault = self.vault(
+            "version: 1\npublish:\n  exclude_sections: [Rumours]\n"
+            "  site_title: Hollow\n  mystery_key: 3\n")
+        rows = self.rows(vault)
+        by = {r.fault["name"]: r for r in rows}
+        self.assertEqual(by["publish.exclude_sections"].kind, "certain")
+        self.assertEqual(by["publish.site_title"].kind, "proposed")
+        self.assertEqual(by["publish"].kind, "none")     # the block itself: no fix
+        self.fix_all(vault)
+        got = vc.settings(vault)
+        self.assertIn("Rumours", got.get("player_site.hide.sections"))
+        self.assertIn("GM Notes", got.get("player_site.hide.sections"))
+        self.assertIn("site_title", (vault / "_meta" / "vault-config.yaml").read_text())  # proposed: waits
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, False, ["publish.site_title"], False)
+        vc.forget_settings(None)
+        self.assertEqual(vc.settings(vault).get("player_site.title"), "Hollow")
+        text = (vault / "_meta" / "vault-config.yaml").read_text()
+        self.assertIn("mystery_key", text)               # maps to nothing: the block stays, listed
+        self.assertTrue(any(r.fault["name"] == "publish" for r in self.rows(vault)))
+
+    def test_a_block_whose_every_child_moves_is_gone(self):
+        vault = self.vault("version: 1\npublish:\n  exclude_sections: [Rumours]\n"
+                           "  exclude_fields: [secret_x]\n")
+        self.fix_all(vault)
+        self.assertNotIn("publish", (vault / "_meta" / "vault-config.yaml").read_text())
+        self.assertEqual(self.rows(vault), [])
+
+    def test_a_misplaced_group_goes_to_its_right_place(self):
+        vault = self.vault("version: 1\nfeatures:\n  hide:\n    drafts: true\n")
+        (row,) = [r for r in self.rows(vault) if r.fault["name"] == "features.hide.drafts"]
+        self.assertEqual(row.ops[0], {"op": "carry", "from": "features.hide.drafts",
+                                       "to": "player_site.hide.drafts"})
+
+    def test_a_stray_hiding_list_is_added_to_a_list_already_set(self):
+        vault = self.vault("version: 1\nplayer_site:\n  hide:\n"
+                           "    sections: [Existing]\n    sectoins: [Mine]\n")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "certain")
+        self.fix_all(vault)
+        got = vc.settings(vault).get("player_site.hide.sections")
+        self.assertEqual(sorted(got), ["Existing", "Mine"])
+        self.assertEqual(self.rows(vault), [])
+
+    def test_an_old_named_list_beside_the_right_one_is_added_too(self):
+        vault = self.vault("version: 1\nplayer_site:\n  exclude_sections: [Mine]\n"
+                           "  hide:\n    sections: [Existing]\n")
+        self.fix_all(vault)
+        self.assertEqual(sorted(vc.settings(vault).get("player_site.hide.sections")),
+                         ["Existing", "Mine"])
+
+    def test_two_different_plain_values_stay_a_question_that_says_which_wins(self):
+        vault = self.vault("version: 1\nplayer_site:\n  title: Right\n  site_title: Stray\n")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "proposed")
+        self.assertIn("this value wins", row.fix)
+        self.assertIn("Right", row.fix)
+        same = self.vault("version: 1\nplayer_site:\n  title: Same\n  site_title: Same\n")
+        (row2,) = self.rows(same)
+        self.assertEqual(row2.kind, "certain")
+
+
+class SiteFileKeyTests(NewFileBase):
+    """A vault already on the new file whose site folder's vault.config.json
+    still holds settings the vault decides differently: the Settings check
+    lists each and fixes them all, the tool doing the work across both files."""
+
+    def moved_vault_with_site_keys(self, **keys):
+        import json
+        import site_fixture
+        from layouts import move_to_new_layout
+        root = Path(tempfile.mkdtemp(prefix="vc-sitekeys-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "V"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\ntype: meta\npublish:\n  site_title: Mine\n  exclude_sections: [A]\n---\n",
+            encoding="utf-8")
+        site_fixture.give_site(vault, lambda p: None, private=True)
+        site = site_fixture.point_site_at(vault)
+        move_to_new_layout(vault)
+        site_file = site / "vault.config.json"
+        config = json.loads(site_file.read_text())
+        site_file.write_text(json.dumps({**config, **keys}, indent=4) + "\n")
+        vc.forget_settings(None)
+        return vault, site_file
+
+    def test_each_key_is_a_certain_fix_and_fix_clears_them_all(self):
+        import json
+        vault, site_file = self.moved_vault_with_site_keys(
+            siteTitle="Theirs", excludeSections=["Z"], excludeCallouts=["spoiler"])
+        rows = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(sorted(r.fault["name"] for r in rows),
+                         ["excludeCallouts", "excludeSections", "siteTitle"])
+        self.assertTrue(all(r.kind == "certain" for r in rows))
+        by = {r.fault["name"]: r for r in rows}
+        self.assertIn("already the value in use", by["siteTitle"].fix)
+        self.assertIn("add its entries", by["excludeSections"].fix)
+        self.assertNotIn("run the vault update", " ".join(str(r.fix) + str(r.note) for r in rows))
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            vc.check_settings(vault, True, [], False)
+        vc.forget_settings(None)
+        got = vc.settings(vault)
+        self.assertEqual(got.get("player_site.title"), "Mine")
+        self.assertIn("Z", got.get("player_site.hide.sections"))
+        self.assertEqual(got.get("player_site.hide.callouts"), ["spoiler"])
+        text = site_file.read_text()
+        self.assertIn("vaultPath", json.loads(text))
+        self.assertNotIn("siteTitle", text)
+        self.assertNotIn("excludeSections", text)
+        self.assertIn('\n    "vaultPath"', text)     # its indentation kept
+        self.assertEqual(self.rows(vault), [])
+
+    def test_a_site_hiding_key_that_is_not_a_list_says_nothing_was_carried(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            excludeSections="Secret", excludeFields=["motive"])
+        by = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        self.assertIn("nothing was carried", by["excludeSections"].done)
+        self.assertIn("nothing is added", by["excludeSections"].fix)
+        self.assertNotIn("nothing was carried", by["excludeFields"].done)
+        self.assertIn("add its entries", by["excludeFields"].fix)
+
+    def test_the_update_points_at_the_settings_check_and_does_not_hold_the_stamp(self):
+        import migrate_site as ms
+        from migrate_core import PERSON
+        vault, _ = self.moved_vault_with_site_keys(siteTitle="Theirs")
+        items = ms.find_settings_move(vault)
+        (item,) = [i for i in items if i.group == PERSON]
+        self.assertFalse(item.holds_stamp)
+        self.assertIn("Settings check", item.lines[0])
+        self.assertNotIn("run the vault update", item.lines[0])

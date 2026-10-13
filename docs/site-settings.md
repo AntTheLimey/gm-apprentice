@@ -1,7 +1,7 @@
 # Site settings
 
 Everything about how a campaign's site looks and what it shows is set in
-one file in the vault: `_meta/vault-config.md`. This page lists every
+one file in the vault: `_meta/vault-config.yaml`. This page lists every
 setting, what it does, the values it takes and what you get when you
 leave it out.
 
@@ -13,21 +13,26 @@ what is possible, or to read what your file already says.
 
 ## Where settings live
 
-There are two files, and they do different jobs.
+| File | Where | What it holds | Who writes it |
+|------|-------|---------------|---------------|
+| `_meta/vault-config.yaml` | In the vault | Every setting: the campaign's name and system, the site's title and theme, what is published, character sheets, the landing page | You, or the apprentice when you ask |
+| `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, and how far setting up a site got | The apprentice only. Leave it alone |
+| `vault.config.json` | In the site folder, the one `player_site.folder` names | Six deployment settings: where the vault is, where the pages are written, where the site is hosted | The apprentice, when it sets the site up |
 
-| File | Where | What it holds |
-|------|-------|---------------|
-| `_meta/vault-config.md` | In the vault | Every campaign setting: title, theme, what is published, character sheets, the landing page |
-| `vault.config.json` | In the site folder, the one `publish.site_dir` names | Six deployment settings: where the vault is, where the pages are written, where the site is hosted |
+The two vault files travel with the campaign. The site file belongs to
+the one computer and host the site is built on.
 
-The vault file travels with the campaign. The site file belongs to the
-one computer and host the site is built on.
+If your vault is older, you may also find `_meta/vault-notes.md`. It
+holds whatever you had written in the old settings file besides
+settings, kept word for word. It is yours: nothing reads it as a
+setting.
 
 ## Seeing and changing a setting
 
-- **To see what your site uses now**, open `_meta/vault-config.md` in
-  Obsidian, or ask the apprentice "what are my site settings?". The file
-  may be short: a setting that is not there is using its default.
+- **To see what your site uses now**, ask the apprentice "what are my
+  site settings?", or open `_meta/vault-config.yaml` in any text editor
+  (Obsidian does not show it). The file may be short: a setting that is
+  not there is using its default.
 - **To change one, ask the apprentice.** It finds the setting, changes
   it and rebuilds the site.
 - **Or edit the file yourself**, save it, then ask for the site to be
@@ -36,42 +41,59 @@ one computer and host the site is built on.
 A change reaches your players only when the site is next rebuilt and
 published. Until then the site is as it was.
 
-## How the vault file is laid out
+## How the settings file is laid out
 
-The settings sit at the top of `_meta/vault-config.md`, between two
-lines of three dashes. Most are indented under `publish:`. This page
-writes a setting as `publish.site_title`; in the file that is the
-`site_title` line below.
+The whole file is settings, in groups. `vault:` holds what is true of
+the campaign wherever it is shown; `player_site:` holds everything about
+the site your players read. This page writes a setting as
+`player_site.title`; in the file that is the `title` line under
+`player_site:` below.
 
 ```yaml
----
-setting_year: 1994
-publish:
-  site_title: "The Iron Crown"
-  mode: player
+version: 1
+
+vault:
+  campaign: The Iron Crown
   system: gurps-4e
-  link_previews: off
+  setting_year: 1994
+
+player_site:
+  title: The Iron Crown
+  features:
+    link_previews: off
   theme:
     genre: military
     tagline: "A Special Forces campaign set in 1990s Britain."
----
 ```
 
 If you edit by hand:
 
-- **Keep both `---` lines**, and keep the settings between them.
-- **Indent with spaces, never tabs**, two for each level. `site_title`
-  is one level under `publish:`; `genre` is two levels, under `theme:`.
-- **Put a space after every colon**: `mode: player`, not `mode:player`.
+- **Leave the `version: 1` line** as it is.
+- **Write settings only.** There are no `---` lines and no room for
+  notes of your own, except on a line that starts with `#`.
+- **Indent with spaces, never tabs**, two for each level. `title` is one
+  level under `player_site:`; `genre` is two levels, under `theme:`.
+- **Put a space after every colon**: `genre: military`, not
+  `genre:military`.
 - **Put quotes round text** that holds a colon or a `#`, and round every
   colour: `"#1a2f3a"`.
 - **A list** is written on one line in square brackets, `["a", "b"]`, or
   one item to a line, each starting with a dash and a space.
-- **Copy the file first.** If the site stops building after an edit, put
-  the copy back, or ask the apprentice to find the mistake.
+- **Ask the apprentice to check the settings** when you are done. It
+  names each mistake and offers the fix.
 
 **Check the spelling of a setting's name against this page.** The build
 names any setting it does not know and suggests the nearest real name.
+
+### A vault not yet updated
+
+A vault last updated before plugin 1.10.54 keeps its settings in an
+older file in the same folder, under older names; each table below
+shows a setting's older name after "was". The next time the apprentice
+updates the vault it moves the settings to the file described here and
+tells you what it did. Until then, asking the apprentice to change a
+setting works as it always did. See
+[the old file](vault-config-format.md#the-old-file) for the detail.
 
 Some settings decide what your players do not see. When the name of one
 is misspelt, or its value cannot be read, the build stops until it is
@@ -90,20 +112,20 @@ fixed, so nothing extra is ever shown by a guess. These are:
 <!-- /settings:hiding-list -->
 
 Every other setting only warns, by name, and the site uses that setting's
-usual value (off, for `publish.site`, `publish.character_sheets`,
-`publish.live_stats` and `publish.inbox`).
+usual value (off, for `player_site.publish`, `player_site.sheets.show`,
+`player_site.features.live_stats` and `player_site.features.inbox`).
 
 ### On and off
 
 A setting shown as **A switch** takes `on` or `off`. `yes` and `no`, and
 `true` and `false`, mean the same, in any capitals, with quotes or
 without. The choices that take `on` and `off` among their words
-(`publish.link_previews`, `publish.connections` and
-`publish.tohit_calculator`) read those words the same way.
+(`player_site.features.link_previews`, `player_site.features.connections` and
+`player_site.features.tohit_calculator`) read those words the same way.
 
 A setting written with nothing after the colon is treated as not set,
-except `publish.site`, `publish.character_sheets`, `publish.live_stats`
-and `publish.inbox`, where an empty line counts as off. A switch that
+except `player_site.publish`, `player_site.sheets.show`, `player_site.features.live_stats`
+and `player_site.features.inbox`, where an empty line counts as off. A switch that
 holds something that is not one of the words is reported by name, and
 what follows is as described under "Check the spelling" above.
 
@@ -143,7 +165,7 @@ With link previews on, a first tap on a phone opens the card and a second
 tap follows the link. A value that is none of the words gives a build
 warning and counts as `on`.
 
-Set `publish.site: false` to stop publishing without losing the site
+Set `player_site.publish: false` to stop publishing without losing the site
 folder's path. With the site off nothing is built.
 
 ## What gets published
@@ -167,14 +189,13 @@ These decide which notes, and which parts of a note, reach the site.
 <!-- /settings:published -->
 
 **Careful: a list in your file replaces the built-in list.** Setting up a
-site writes the full `publish.exclude_sections` and `publish.exclude_fields`
-lists into your file, so you can see them, and an existing site is given
-them the next time you update the apprentice. Add your own heading to that
+site writes the full `player_site.hide.sections` and `player_site.hide.fields`
+lists into your file, so you can see them. Add your own heading to that
 list and keep the rest. A list you delete falls back to the built-in one.
 But a list that is empty (`[]`), or that leaves out `GM Notes`, hides
 only what it names, so your GM notes are published. Repeat every
 built-in entry you still want. The same holds for
-`publish.exclude_dirs`.
+`player_site.hide.folders`.
 
 **`full` mode still hides your notes to yourself.** The excluded
 sections, fields, callouts and folders are left out in both modes, and
@@ -184,17 +205,18 @@ page or not, where `player` copies only the pictures a published page
 shows.
 
 ```yaml
-publish:
+player_site:
   folder_map:
     "Characters/NPCs": characters/npcs
     "Locations": locations
-  # To hide one more heading and keep the built-in ones, run:
-  #   settings add publish.exclude_sections Rumours
-  overrides:
-    fields:
+  hide:
+    field_exceptions:
       "Characters/NPCs/Vex Ambrose.md":
         include: [secrets]
 ```
+
+To hide one more heading and keep the built-in ones, ask the apprentice
+to "stop publishing the Rumours section".
 
 In that folder map, notes in `Characters/NPCs` appear on the site at
 `characters/npcs/`. A folder that holds notes but has no line in the map
@@ -223,7 +245,7 @@ is skipped, and the build says so.
 <!-- /settings:theme -->
 
 ```yaml
-publish:
+player_site:
   theme:
     genre: horror
     palette:
@@ -235,17 +257,18 @@ publish:
       heading: "Cinzel"
       body: "Lora"
       source: self-host
-  section_titles:
-    locations: "Places of Note"
-    creatures: "Bestiary"
+  lists:
+    section_titles:
+      locations: "Places of Note"
+      creatures: "Bestiary"
 ```
 
 Light and dark are a pair only a genre preset has. With a palette of
 your own, or with no genre, the site has one set of colours: the sun and
-moon button is not shown and `publish.theme.default_mode` does nothing.
+moon button is not shown and `player_site.theme.default_mode` does nothing.
 
 A site set up by the apprentice uses `self-host` for its lettering.
-With `local`, each font file is listed under `publish.theme.fonts.files`.
+With `local`, each font file is listed under `player_site.theme.fonts.files`.
 
 ## Character sheets
 
@@ -267,10 +290,10 @@ One character can have its own look: put `sheet_skin` or `sheet_frame`
 in the block at the top of that character's note and it wins over the
 campaign's.
 
-With `publish.character_sheets` off, a character page shows the
+With `player_site.sheets.show` off, a character page shows the
 character's story and no numbers, and live stats are switched off with
 it. The sections still published are the built-in ones named for
-`publish.pc_prose_sections`, plus any you list there.
+`player_site.sheets.prose_sections`, plus any you list there.
 
 ## Live play
 
@@ -310,7 +333,7 @@ Name a note the way a link does, by its file name: `Osric_Marlow`, not
 warning.
 
 ```yaml
-publish:
+player_site:
   landing:
     max_npcs: 6
     featured_npcs: ["Osric_Marlow", "Edda_Marlow"]
@@ -334,13 +357,14 @@ publish:
 <!-- /settings:lists -->
 
 ```yaml
-publish:
-  banners:
-    locations:
-      image: _attachments/sector-map.webp
-      link: _attachments/sector-map-large.webp
-      alt: "Star chart of Sector 9-K"
-    factions: _attachments/factions-hero.svg
+player_site:
+  lists:
+    banners:
+      locations:
+        image: _attachments/sector-map.webp
+        link: _attachments/sector-map-large.webp
+        alt: "Star chart of Sector 9-K"
+      factions: _attachments/factions-hero.svg
 ```
 
 A banner is named by its section's web address from the folder map
@@ -367,10 +391,10 @@ site up; you should not need to touch it.
 | `preserveDirs` | Folders inside the output that a rebuild must leave alone |
 
 An older site may still hold campaign settings in this file under other
-names. Most are still read, each build ends with a warning that lists
-them, and they are planned to stop being read in a later version. The
-next time the apprentice updates the vault it offers to move them into
-the vault file.
+names. They are no longer read there: the build warns about each, and
+stops for one that hides things from players. Ask the apprentice to
+check the settings: it adds anything such a key hid to the vault's own
+list and removes the keys from this file.
 
 ## See also
 

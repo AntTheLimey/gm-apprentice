@@ -27,6 +27,7 @@ from __future__ import annotations
 import atexit
 import copy
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -34,7 +35,7 @@ import sys
 import threading
 import unicodedata
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterable, Iterator, Literal
 
@@ -1056,6 +1057,118 @@ atexit.register(_close_publish_tools)
 
 
 # --------------------------------------------------------------------------
+# The vault's files in `_meta/`: which layout it is on, and the version stamp.
+# The stamp is read with no Node on either layout: `vault_check.py version`
+# runs at the start of every skill.
+# --------------------------------------------------------------------------
+
+SETTINGS_FILE = "_meta/vault-config.yaml"
+LEGACY_SETTINGS_FILE = "_meta/vault-config.md"
+STATE_FILE = "_meta/vault-state.json"
+STAMP_KEY = "gm_apprentice_version"
+
+
+def vault_layout(vault: Path) -> Literal["new", "legacy", "none"]:
+    """Which settings file the vault is on, by which exist: "new" whenever
+    `_meta/vault-config.yaml` does (an old file beside it is not read),
+    "legacy" for `_meta/vault-config.md` alone, "none" for neither. The
+    publish tool's `layoutOf` says the same."""
+    if (vault / SETTINGS_FILE).is_file():
+        return "new"
+    if (vault / LEGACY_SETTINGS_FILE).is_file():
+        return "legacy"
+    return "none"
+
+
+def settings_file(vault: Path) -> str:
+    """The vault-relative name of the file the vault's settings are in, for
+    a message: the new file, unless the vault is still on the old one."""
+    return (LEGACY_SETTINGS_FILE if vault_layout(vault) == "legacy"
+            else SETTINGS_FILE)
+
+
+def stamp_file(vault: Path) -> str:
+    """The vault-relative name of the file that holds the version stamp."""
+    return (LEGACY_SETTINGS_FILE if vault_layout(vault) in ("legacy", "none")
+            else STATE_FILE)
+
+
+class StateUnreadable(RuntimeError):
+    """`_meta/vault-state.json` is not a JSON object. The message is one
+    plain line."""
+
+
+def _read_state(vault: Path) -> dict[str, Any]:
+    """The state file's keys ({} when there is no file)."""
+    try:
+        text = (vault / STATE_FILE).read_text(encoding="utf-8-sig")
+    except FileNotFoundError:
+        return {}
+    except (OSError, UnicodeDecodeError) as e:
+        raise StateUnreadable(
+            f"{STATE_FILE} could not be read ({e.__class__.__name__})") from e
+    try:
+        data = json.loads(text)
+    except ValueError as e:
+        raise StateUnreadable(f"{STATE_FILE} is not valid JSON: {e}") from e
+    if not isinstance(data, dict):
+        raise StateUnreadable(
+            f"{STATE_FILE} is not valid JSON: expected an object")
+    return data
+
+
+def read_stamp(vault: Path) -> str | None:
+    """The plugin version the vault was last updated to, None when it
+    records none. On the new layout it is `vault-state.json`'s
+    `gm_apprentice_version` (a broken file raises `StateUnreadable`).
+    On the old layout it is the old settings file's frontmatter: that
+    branch is legacy and goes two releases after 1.10.54."""
+    if vault_layout(vault) == "new":
+        found: Any = _read_state(vault).get(STAMP_KEY)
+    else:
+        try:
+            fm = extract_frontmatter((vault / LEGACY_SETTINGS_FILE).read_text(
+                encoding="utf-8-sig", errors="replace")) or {}
+        except OSError:
+            fm = {}
+        found = fm.get(STAMP_KEY)
+    if not found or isinstance(found, (list, dict)):
+        return None
+    return str(found)
+
+
+def write_stamp(vault: Path, version: str) -> None:
+    """Record `version` as the plugin version the vault was updated to. On
+    the new layout the state file is read, the one key changed and the file
+    written whole in the form the publish tool writes it (two-space indent,
+    a trailing newline, every other key and the key order kept), through a
+    temporary file swapped in. On the old layout the old file's frontmatter
+    line is edited (legacy, goes two releases after 1.10.54)."""
+    if vault_layout(vault) != "new":
+        from migrate_core import edit_frontmatter
+        edit_frontmatter(
+            vault / LEGACY_SETTINGS_FILE,
+            lambda fm, eol: set_key(fm, STAMP_KEY, f'"{version}"', eol))
+        return
+    state = _read_state(vault)
+    state[STAMP_KEY] = version
+    target = (vault / STATE_FILE).resolve()
+    text = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+    tmp = target.with_name(f".{target.name}.{os.getpid()}.tmp")
+    try:
+        with open(tmp, "w", encoding="utf-8", newline="") as f:
+            f.write(text)
+        os.replace(tmp, target)
+    except OSError:
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        raise
+    forget_settings(vault)
+
+
+# --------------------------------------------------------------------------
 # Settings: the publish tool reads the vault's settings file, declares every
 # setting and its default, and checks the file. Python parses none of it; it
 # asks `gm-publish settings` and gets JSON. Nothing here falls back to a
@@ -1084,9 +1197,19 @@ class Settings:
     values: dict[str, Any]
     origins: dict[str, str]
     faults: list[dict[str, Any]]
-    file_exists: bool
-    has_publish: bool
+    # Whether the file holds the block the site's settings live in
+    # (`player_site:`; on the old file `publish:`). A key with nothing under
+    # it does not count.
+    has_site_block: bool
+    # Old file only: its `publish:` block is written on one line.
     inline: bool
+    # Each setting's name as THIS vault's file writes it (the tool's answer):
+    # the same name on the new file, the old file's name on the old one.
+    names: dict[str, str] = field(default_factory=dict)
+
+    def named(self, name: str) -> str:
+        """`name` as the vault's own file writes it, for a message."""
+        return self.names.get(name, name)
 
     def get(self, name: str) -> Any:
         """The value of `name`; a KeyError for a name that is no setting."""
@@ -1206,23 +1329,31 @@ def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
         answer = _run_settings(["get", *_target_args(vault, site_config)])
         try:
             _SETTINGS_CACHE[key] = {
-                "values": {n: s["value"]
-                           for n, s in answer["settings"].items()},
-                "origins": {n: s["origin"]
-                            for n, s in answer["settings"].items()},
+                "values": dict(answer["values"]),
+                "origins": dict(answer["origins"]),
                 "faults": list(answer["faults"]),
                 "file": dict(answer["file"]),
+                "names": dict(answer.get("written") or {}),
             }
-        except (KeyError, TypeError, AttributeError) as e:
+        except (KeyError, TypeError, AttributeError, ValueError) as e:
             raise SettingsUnavailable(
                 "could not read the vault's settings: the publish tool's "
                 "answer was not in the shape expected") from e
     read = copy.deepcopy(_SETTINGS_CACHE[key])
     return Settings(
         values=read["values"], origins=read["origins"], faults=read["faults"],
-        file_exists=bool(read["file"].get("exists")),
-        has_publish=bool(read["file"].get("hasPublish")),
-        inline=bool(read["file"].get("inline")))
+        has_site_block=bool(read["file"].get("hasSiteBlock")),
+        inline=bool(read["file"].get("inline")), names=read["names"])
+
+
+def setting_name(vault: Path, name: str) -> str:
+    """`name` as the vault's own file writes it, for a message to the GM.
+    The tool says (never a table here); when it cannot be asked the new name
+    stands."""
+    try:
+        return settings(vault).named(name)
+    except SettingsUnavailable:
+        return name
 
 
 # The vault file's own words, as against a value that came from the site
@@ -1237,29 +1368,33 @@ def written_in_vault_file(s: Settings, name: str) -> bool:
 
 
 def site_switch_written(s: Settings) -> bool | None:
-    """`publish.site` when the vault file writes it (True or False; a value
-    that is not a switch word reads off), else None."""
-    if not written_in_vault_file(s, "publish.site"):
+    """`player_site.publish` when the vault file writes it (True or False; a
+    value that is not a switch word reads off), else None."""
+    if not written_in_vault_file(s, "player_site.publish"):
         return None
-    return bool(s.get("publish.site"))
+    return bool(s.get("player_site.publish"))
 
 
 def site_without_tool(s: Settings) -> bool:
     """Whether the vault has a site, for the one time the publish tool's
     site answer cannot be had: the switch where the vault file writes it,
-    else whether a `site_dir` is set."""
+    else whether a site folder is set."""
     switch = site_switch_written(s)
     if switch is not None:
         return switch
-    return bool(s.get("publish.site_dir"))
+    return bool(s.get("player_site.folder"))
 
 
-def settings_set(vault: Path, pairs: list[tuple[str, object]]) -> list[str]:
+def settings_set(vault: Path, pairs: list[tuple[str, object]], *,
+                 create: bool = False) -> list[str]:
     """Write settings, all or none; the names written. A value the tool
-    refuses raises SettingsUnavailable (refused=True) with its reason."""
+    refuses raises SettingsUnavailable (refused=True) with its reason.
+    `create` makes the settings file when the vault has none."""
     _check_vault(vault)
     _check_names([n for n, _ in pairs])
     args = ["set", *_target_args(vault)]
+    if create:
+        args.append("--create")
     args += [f"{name}={json.dumps(value)}" for name, value in pairs]
     forget_settings(vault)
     answer = _run_settings(args, refusable=True)
@@ -1275,6 +1410,60 @@ def settings_unset(vault: Path, names: list[str]) -> list[str]:
     answer = _run_settings(["unset", *_target_args(vault), *names],
                            refusable=True)
     return [str(n) for n in answer["removed"]]
+
+
+def settings_carry(vault: Path, written: str, name: str) -> list[str]:
+    """Put the value of the key `written` (a mis-named key in the new file)
+    under the setting `name`, validated, and remove the key: one change, all
+    or none. A list's entries are added to the list. Refusals raise as
+    `settings_set`'s do."""
+    _check_vault(vault)
+    _check_names([written, name])
+    forget_settings(vault)
+    answer = _run_settings(["carry", *_target_args(vault), written, name],
+                           refusable=True)
+    return [str(answer["into"])]
+
+
+def settings_move_plan(vault: Path) -> dict[str, Any]:
+    """What `settings move --check` says of a vault: `ok`, `lines`,
+    `blockers`, `files`, and for a moved vault with an old file left beside
+    the new one, `leftover` (`redundant`, `keys`). Writes nothing."""
+    _check_vault(vault)
+    answer = _run_settings(["move", *_target_args(vault), "--check"])
+    if not isinstance(answer, dict):
+        raise SettingsUnavailable(
+            "could not read the vault's settings: the publish tool's "
+            "answer was not in the shape expected")
+    return answer
+
+
+def settings_tidy(vault: Path, *, discard_old_file: bool = False) -> list[str]:
+    """Tidy a moved vault (`settings move` on it): remove what a stopped
+    move left, the old settings file when it holds nothing the new one
+    lacks (always, with `discard_old_file`). The lines it reports."""
+    _check_vault(vault)
+    forget_settings(vault)
+    args = ["move", *_target_args(vault)]
+    if discard_old_file:
+        args.append("--discard-old-file")
+    answer = _run_settings(args, refusable=True)
+    forget_settings(vault)
+    return [str(x) for x in answer.get("lines", [])]
+
+
+def settings_fold_site_file(vault: Path) -> list[str]:
+    """On a vault already on the new file, take the settings its site
+    folder's vault.config.json still holds out of that file, in one change
+    across both files: a hiding list's entries are added to the vault's list,
+    the stricter callout rule is kept, any other value is the vault's own
+    already. The lines the tool reports."""
+    _check_vault(vault)
+    forget_settings(vault)
+    answer = _run_settings(["move", *_target_args(vault), "--fold-site-file"],
+                           refusable=True)
+    forget_settings(vault)
+    return [str(x) for x in answer.get("lines", [])]
 
 
 def settings_add(vault: Path, name: str, entries: list[str]) -> list[str]:
@@ -1304,9 +1493,10 @@ def settings_describe(name: str) -> dict[str, Any]:
 
 
 def settings_raw(vault: Path, name: str | None = None) -> Any:
-    """The settings file's frontmatter as written ({} when there is no
-    file), or the value at `name` (None when `name` is not in the file).
-    Not cached."""
+    """The settings file as written ({} when there is no file), or the
+    value at `name` (None when `name` is not in the file). On the old file
+    a name is asked by the old name (`publish.wrap_up`: the names that exist
+    only there); the new file is asked by the new names. Not cached."""
     _check_vault(vault)
     if name is not None:
         _check_names([name])
@@ -1346,7 +1536,7 @@ def forget_settings(vault: Path | None = None) -> None:
 
 def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
     """(whether the vault file has a `publish:` block, whether the vault
-    has a site, the site folder its `site_dir` names). `publish.site` is
+    has a site, the site folder its `site_dir` names). `player_site.publish` is
     the switch: off is no site whatever `site_dir` says, and on with no
     folder is a site still to be set up. Asked of the plugin's own publish
     tool, which reads the file with the build's YAML parser. Raises
@@ -1780,6 +1970,9 @@ def publisher_lines(text: str, excludes: Iterable[str],
 # Publish gating
 # --------------------------------------------------------------------------
 
+# The words of the publish tool's switch list that mean yes. A copy, because the
+# checks that read a note's flag run with no Node; tests/test_vaultlib_state.py
+# pins it to the tool's own list.
 GM_ONLY_YES_WORDS = ("true", "yes", "on")
 
 

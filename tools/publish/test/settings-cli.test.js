@@ -21,6 +21,9 @@ function scratch(text, site) {
 const file = (s) => path.join(s.vault, '_meta', 'vault-config.md');
 const text = (s) => fs.readFileSync(file(s), 'utf8');
 
+// The values and origins of a `get --json` answer as { name: { value, origin } }.
+const view = (data) => Object.fromEntries(Object.keys(data.values).map((n) => [n, { value: data.values[n], origin: data.origins[n] }]));
+
 function run(s, verb, args = [], extra = {}) {
   const out = [];
   const err = [];
@@ -32,17 +35,17 @@ test('get on a block with none of the settings gives defaults and says the block
   const s = scratch(wrap('  mode: player\n'));
   const { rc, data } = run(s, 'get');
   assert.equal(rc, 0);
-  assert.deepEqual(data.settings['publish.connections'], { value: 'tree', origin: 'default' });
-  assert.equal(data.file.hasPublish, true);
+  assert.deepEqual(view(data)['player_site.features.connections'], { value: 'tree', origin: 'default' });
+  assert.equal(data.file.hasSiteBlock, true);
   assert.deepEqual(data.faults, []);
 });
 
 test('get of a group gives exactly the names under it', () => {
   const s = scratch(wrap('  landing:\n    max_npcs: 3\n'));
   const { data } = run(s, 'get', ['publish.landing']);
-  assert.deepEqual(Object.keys(data.settings), REGISTRY.map((e) => legacyNameOf(e)).filter((n) => n && n.startsWith('publish.landing.')));
-  assert.deepEqual(data.settings['publish.landing.max_npcs'], { value: 3, origin: 'file' });
-  assert.deepEqual(run(s, 'get', ['publish.connections']).data.settings, { 'publish.connections': { value: 'tree', origin: 'default' } });
+  assert.deepEqual(Object.keys(data.values), REGISTRY.map((e) => e.name).filter((n) => n.startsWith('player_site.landing.')));
+  assert.deepEqual(view(data)['player_site.landing.max_npcs'], { value: 3, origin: 'file' });
+  assert.deepEqual(view(run(s, 'get', ['publish.connections']).data), { 'player_site.features.connections': { value: 'tree', origin: 'default' } });
 });
 
 test('get of a name that is not a setting exits 1 with a suggestion', () => {
@@ -56,7 +59,7 @@ test('get with a fault lists it, stops first, and still exits 0', () => {
   const s = scratch(wrap('  connections: graph\n  exclude_sectoins: [x]\n'));
   const { rc, data } = run(s, 'get');
   assert.equal(rc, 0);
-  assert.deepEqual(data.settings['publish.connections'], { value: 'tree', origin: 'fault' });
+  assert.deepEqual(view(data)['player_site.features.connections'], { value: 'tree', origin: 'fault' });
   assert.deepEqual(data.faults.map((f) => f.name), ['publish.exclude_sectoins', 'publish.connections']);
   assert.deepEqual(data.faults[0], { name: 'publish.exclude_sectoins', level: 'stop', kind: 'unknown-name', message: 'publish.exclude_sectoins is not a setting. Did you mean publish.exclude_sections?', suggest: 'publish.exclude_sections' });
   assert.equal(data.faults[1].level, 'warn');
@@ -89,7 +92,7 @@ test('set writes one line, keeps a comment above it, and get then says file', ()
   assert.equal(rc, 0);
   assert.deepEqual(data, { written: ['publish.connections'], notes: [] });
   assert.equal(text(s), wrap('  # how the links look\n  mode: player\n  connections: web\n'));
-  assert.deepEqual(run(s, 'get', ['publish.connections']).data.settings['publish.connections'], { value: 'web', origin: 'file' });
+  assert.deepEqual(view(run(s, 'get', ['publish.connections']).data)['player_site.features.connections'], { value: 'web', origin: 'file' });
 });
 
 test('set writes the value the type read: a different case, and a word for a switch', () => {
@@ -253,9 +256,8 @@ test('list names every setting that can be set, and none that cannot', () => {
   assert.ok(names.includes('vault.setting_year') && names.includes('vault.kept_by'));
   for (const gone of ['player_site.landing', 'publish.landing', 'publish.setup_progress', 'publish.wrap_up', 'publish.backend']) assert.ok(!names.includes(gone), gone);
   assert.deepEqual(data.names.find((n) => n.name === 'player_site.features.connections'), { name: 'player_site.features.connections', takes: 'tree, web, cards or off', default: 'tree', was: 'Was: publish.connections' });
-  // Removed in Part B: the same rows under the old names, which the vault scripts still ask by.
-  assert.deepEqual(data.names.find((n) => n.name === 'publish.connections'), { name: 'publish.connections', takes: 'tree, web, cards or off', default: 'tree', now: 'player_site.features.connections' });
-  assert.ok(names.includes('setting_year'));
+  // Only the new names: the old file's names live in each row's "Was" line.
+  assert.ok(!names.includes('publish.connections') && !names.includes('setting_year'));
 });
 
 test('raw returns the file as written, the value at a name, or null', () => {
@@ -290,13 +292,13 @@ test('no value is echoed at more than about 60 characters', () => {
 test('--vault and --config together: the old keys in the site file take part', () => {
   const s = scratch(wrap('  mode: player\n'), { vaultPath: './vault', excludeSections: ['Old Notes'] });
   const both = run(s, 'get', ['publish.exclude_sections'], { config: s.config });
-  assert.equal(both.data.settings['publish.exclude_sections'].origin, 'site-file');
+  assert.equal(view(both.data)['player_site.hide.sections'].origin, 'site-file');
   // The site file's list adds to the built-in list (#371).
-  assert.deepEqual(both.data.settings['publish.exclude_sections'].value.slice(-1), ['Old Notes']);
-  assert.ok(both.data.settings['publish.exclude_sections'].value.includes('GM Notes'));
-  assert.equal(run(s, 'get', ['publish.exclude_sections']).data.settings['publish.exclude_sections'].origin, 'default');
+  assert.deepEqual(view(both.data)['player_site.hide.sections'].value.slice(-1), ['Old Notes']);
+  assert.ok(view(both.data)['player_site.hide.sections'].value.includes('GM Notes'));
+  assert.equal(view(run(s, 'get', ['publish.exclude_sections']).data)['player_site.hide.sections'].origin, 'default');
   const onlyConfig = run(s, 'get', ['publish.exclude_sections'], { vault: undefined, config: s.config });
-  assert.equal(onlyConfig.data.settings['publish.exclude_sections'].origin, 'site-file');
+  assert.equal(view(onlyConfig.data)['player_site.hide.sections'].origin, 'site-file');
 });
 
 test('a verb that does not exist is refused', () => {
@@ -320,7 +322,7 @@ test('the command line: settings get, set and --help', () => {
   assert.equal(set.status, 0, set.stderr);
   assert.deepEqual(JSON.parse(set.stdout).written, ['publish.connections']);
   const got = go('get', 'publish.connections', '--json', '--vault', s.vault);
-  assert.equal(JSON.parse(got.stdout).settings['publish.connections'].value, 'cards');
+  assert.equal(view(JSON.parse(got.stdout))['player_site.features.connections'].value, 'cards');
   assert.equal(set.stderr.trim(), 'publish.connections is now player_site.features.connections.');
   const viaConfig = go('get', 'player_site.features.connections', '--config', s.config);
   assert.equal(viaConfig.stdout.trim(), 'player_site.features.connections: cards (vault file)');
@@ -334,9 +336,9 @@ test('get takes several names and groups, in the order asked', () => {
   const s = scratch(wrap('  mode: player\n  landing:\n    max_npcs: 3\n'));
   const { rc, data } = run(s, 'get', ['player_site.hide.mode', 'player_site.landing', 'player_site.publish']);
   assert.equal(rc, 0);
-  assert.deepEqual(Object.keys(data.settings).slice(0, 2), ['publish.mode', 'publish.landing.max_npcs']);
-  assert.ok(Object.keys(data.settings).includes('publish.site'));
-  assert.ok(!('publish.connections' in data.settings));
+  assert.deepEqual(Object.keys(data.values).slice(0, 2), ['player_site.hide.mode', 'player_site.landing.max_npcs']);
+  assert.ok(Object.keys(data.values).includes('player_site.publish'));
+  assert.ok(!('player_site.features.connections' in data.values));
   const out = [];
   runSettings({ verb: 'get', args: ['player_site.publish', 'player_site.hide.mode'], vault: s.vault }, { out: (l) => out.push(l) });
   assert.match(out[0], /^player_site\.publish: /);
@@ -351,12 +353,12 @@ test('an old name gives the same answer as the new one, and says what it is now 
   const s = scratch(wrap('  search: false\n'));
   const viaNew = run(s, 'get', ['player_site.features.search']);
   const viaOld = run(s, 'get', ['publish.search']);
-  assert.deepEqual(viaOld.data.byNewName, viaNew.data.byNewName);
-  assert.deepEqual(viaNew.data.byNewName, { values: { 'player_site.features.search': false }, origins: { 'player_site.features.search': 'file' } });
+  assert.deepEqual(viaOld.data.values, viaNew.data.values);
+  assert.deepEqual(viaOld.data.origins, viaNew.data.origins);
+  assert.deepEqual(viaNew.data.values, { 'player_site.features.search': false });
+  assert.deepEqual(viaNew.data.origins, { 'player_site.features.search': 'file' });
   assert.deepEqual(viaNew.err, []);
   assert.deepEqual(viaOld.err, ['publish.search is now player_site.features.search.']);
-  // The shape the vault scripts read: names as the old file has them.
-  assert.deepEqual(viaOld.data.settings, { 'publish.search': { value: false, origin: 'file' } });
 });
 
 test('set by an old or new name writes the old file at the old place, and an old name says what it is now', () => {
@@ -384,8 +386,8 @@ test('the two settings the old file never had are refused by set and unset, and 
   const s = scratch(wrap('  mode: player\n'));
   assert.deepEqual(run(s, 'unset', ['vault.kept_by']).err, ['Error: vault.kept_by needs the new settings file; run the update first.']);
   const got = run(s, 'get', ['vault']);
-  assert.deepEqual(got.data.byNewName.values['vault.kept_by'], 'gm');
-  assert.equal(got.data.byNewName.values['vault.campaign'], null);
+  assert.deepEqual(got.data.values['vault.kept_by'], 'gm');
+  assert.equal(got.data.values['vault.campaign'], 'vault', 'unset, the campaign is the vault folder\'s name');
 });
 
 test('get with one name that is not a setting prints nothing and exits 1', () => {
@@ -408,7 +410,7 @@ test('plain output prints lists whole, in get, describe and list', () => {
 });
 
 const SECTIONS = REGISTRY.find((e) => e.name === 'player_site.hide.sections').default;
-const listOf = (s, name = 'publish.exclude_sections') => run(s, 'get', [name]).data.settings[name];
+const listOf = (s, name = 'player_site.hide.sections') => view(run(s, 'get', [name]).data)[name];
 
 test('add to an unset hiding list keeps the built-in entries and adds the new one', () => {
   const s = scratch(wrap('  # mine\n  mode: player\n'));
@@ -640,13 +642,13 @@ test('new file: get reads it, under both the new names and main\'s old ones', ()
   const s = newScratch('player_site:\n  features:\n    connections: web\n  hide:\n    sections: [Rumours]\n');
   const { rc, data } = run(s, 'get');
   assert.equal(rc, 0);
-  assert.deepEqual(data.byNewName.values['player_site.features.connections'], 'web');
-  assert.deepEqual(data.settings['publish.connections'], { value: 'web', origin: 'file' });
-  assert.deepEqual(data.settings['publish.exclude_sections'], { value: ['Rumours'], origin: 'file' });
+  assert.deepEqual(data.values['player_site.features.connections'], 'web');
+  assert.deepEqual(view(data)['player_site.features.connections'], { value: 'web', origin: 'file' });
+  assert.deepEqual(view(data)['player_site.hide.sections'], { value: ['Rumours'], origin: 'file' });
   assert.equal(data.file.exists, true);
   assert.equal(data.file.leftover, false);
   assert.deepEqual(data.faults, []);
-  assert.deepEqual(run(s, 'get', ['player_site.features.connections']).data.settings, { 'publish.connections': { value: 'web', origin: 'file' } });
+  assert.deepEqual(view(run(s, 'get', ['player_site.features.connections']).data), { 'player_site.features.connections': { value: 'web', origin: 'file' } });
 });
 
 test('new file: check lists faults and exits 1 on a stop', () => {
@@ -684,8 +686,8 @@ test('new file: set, add, remove and unset write the new file', () => {
 test('old file: the old-named top level and the new-named one agree', () => {
   const s = scratch(wrap('  connections: cards\n'));
   const { data } = run(s, 'get');
-  assert.equal(data.settings['publish.connections'].value, 'cards');
-  assert.equal(data.byNewName.values['player_site.features.connections'], 'cards');
+  assert.equal(view(data)['player_site.features.connections'].value, 'cards');
+  assert.equal(data.values['player_site.features.connections'], 'cards');
 });
 
 // ---- the older spellings, raw on groups, --create ----
@@ -697,18 +699,18 @@ test('unset of a new name takes out every spelling the old file holds, and says 
   assert.equal(text(s), wrap('  mode: player\n'));
   assert.match(r.out, /publish\.live_stats/);
   assert.match(r.out, /publish\.backend\.statusBar/);
-  assert.equal(run(s, 'get', ['player_site.features.live_stats']).data.byNewName.values['player_site.features.live_stats'], false);
+  assert.equal(run(s, 'get', ['player_site.features.live_stats']).data.values['player_site.features.live_stats'], false);
 });
 
 test('get resolves every older spelling and says what it is now', () => {
   const s = scratch(wrap('  images:\n    maxWidth: 800\n  backend:\n    statusBar: true\n'));
   const a = run(s, 'get', ['publish.images.maxWidth']);
   assert.equal(a.rc, 0);
-  assert.equal(a.data.byNewName.values['player_site.images.max_width'], 800);
+  assert.equal(a.data.values['player_site.images.max_width'], 800);
   assert.deepEqual(a.err, ['publish.images.maxWidth is now player_site.images.max_width.']);
   const b = run(s, 'get', ['publish.backend.statusBar']);
   assert.equal(b.rc, 0);
-  assert.equal(b.data.byNewName.values['player_site.features.live_stats'], true);
+  assert.equal(b.data.values['player_site.features.live_stats'], true);
   assert.deepEqual(b.err, ['publish.backend.statusBar is now player_site.features.live_stats.']);
 });
 
@@ -748,8 +750,8 @@ test('hidden folders written with a slash, a dot-slash or a backslash read the s
   const entries = ['Secrets/', './Private', 'GM\\Stuff'];
   const old = scratch(wrap(`  exclude_dirs: ${JSON.stringify(entries)}\n`));
   const next = newScratch(`version: 1\nplayer_site:\n  hide:\n    folders: ${JSON.stringify(entries)}\n`);
-  assert.deepEqual(run(old, 'get', ['player_site.hide.folders']).data.byNewName.values['player_site.hide.folders'], ['Secrets', 'Private', 'GM/Stuff']);
-  assert.deepEqual(run(next, 'get', ['player_site.hide.folders']).data.byNewName.values['player_site.hide.folders'], ['Secrets', 'Private', 'GM/Stuff']);
+  assert.deepEqual(run(old, 'get', ['player_site.hide.folders']).data.values['player_site.hide.folders'], ['Secrets', 'Private', 'GM/Stuff']);
+  assert.deepEqual(run(next, 'get', ['player_site.hide.folders']).data.values['player_site.hide.folders'], ['Secrets', 'Private', 'GM/Stuff']);
 });
 
 test('set and add write hidden folders tidied, on both layouts', () => {
@@ -780,12 +782,12 @@ for (const [layout, make, readFile] of NEW_AND_OLD) {
     assert.equal(added.rc, 0);
     assert.match(added.out, new RegExp(`Added "Rumours" to ${nameFor('player_site\\.hide\\.sections', 'publish\\.exclude_sections')}\\.`));
     assert.ok(!hasStray(s), 'no publish: block in the new file');
-    assert.ok(run(s, 'get', ['player_site.hide.sections']).data.byNewName.values['player_site.hide.sections'].includes('Rumours'));
+    assert.ok(run(s, 'get', ['player_site.hide.sections']).data.values['player_site.hide.sections'].includes('Rumours'));
     const removed = run(s, 'remove', ['publish.exclude_sections', 'Spoilers'], { json: false });
     assert.equal(removed.rc, 0);
     assert.match(removed.out, new RegExp(`Removed "Spoilers" from ${nameFor('player_site\\.hide\\.sections', 'publish\\.exclude_sections')}\\.`));
     assert.ok(!removed.out.includes('still applies'));
-    assert.ok(!run(s, 'get', ['player_site.hide.sections']).data.byNewName.values['player_site.hide.sections'].includes('Spoilers'));
+    assert.ok(!run(s, 'get', ['player_site.hide.sections']).data.values['player_site.hide.sections'].includes('Spoilers'));
     assert.ok(!hasStray(s));
   });
 
@@ -794,7 +796,7 @@ for (const [layout, make, readFile] of NEW_AND_OLD) {
     const wrote = run(s, 'set', ['publish.exclude_drafts=false'], { json: false });
     assert.equal(wrote.rc, 0);
     assert.match(wrote.out, new RegExp(`Wrote ${nameFor('player_site\\.hide\\.drafts', 'publish\\.exclude_drafts')}\\.`));
-    assert.equal(run(s, 'get', ['player_site.hide.drafts']).data.byNewName.values['player_site.hide.drafts'], false);
+    assert.equal(run(s, 'get', ['player_site.hide.drafts']).data.values['player_site.hide.drafts'], false);
     assert.ok(!hasStray(s));
     const gone = run(s, 'unset', ['publish.exclude_drafts'], { json: false });
     assert.equal(gone.rc, 0);
@@ -815,7 +817,7 @@ test('set --create makes no settings file while the site file still holds settin
   const held = scratch(null, { vaultPath: './vault', siteTitle: 'Kept' });
   const refused = run(held, 'set', ['player_site.title=T'], { create: true, config: held.config });
   assert.equal(refused.rc, 1);
-  assert.match(refused.err[0], /still holds this vault's settings; run the update first/);
+  assert.match(refused.err[0], /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
   assert.equal(fs.existsSync(path.join(held.vault, '_meta', 'vault-config.yaml')), false);
   const bare = scratch(null, { vaultPath: './vault', host: 'github-pages' });
   assert.equal(run(bare, 'set', ['player_site.title=T'], { create: true, config: bare.config }).rc, 0);
@@ -829,14 +831,33 @@ test('old file: entries the build would read as a number or a date are written q
   assert.equal(run(s, 'add', ['publish.exclude_sections', '12:30', '2024-10-13']).rc, 0);
   assert.match(text(s), /exclude_sections: \[Spoilers, "12:30", "2024-10-13"\]/);
   const { data } = run(s, 'get', ['player_site.hide.sections']);
-  assert.deepEqual(data.byNewName.values['player_site.hide.sections'], ['Spoilers', '12:30', '2024-10-13']);
+  assert.deepEqual(data.values['player_site.hide.sections'], ['Spoilers', '12:30', '2024-10-13']);
   assert.deepEqual(data.faults, []);
   assert.equal(run(s, 'set', ['player_site.title=12:30']).rc, 0);
-  assert.equal(run(s, 'get', ['player_site.title']).data.byNewName.values['player_site.title'], '12:30');
+  assert.equal(run(s, 'get', ['player_site.title']).data.values['player_site.title'], '12:30');
 });
 
 test('new file: the same entries are written as typed and read back the same', () => {
   const n = newScratch('version: 1\n');
   assert.equal(run(n, 'add', ['player_site.hide.sections', '12:30', '2024-10-13']).rc, 0);
-  assert.deepEqual(run(n, 'get', ['player_site.hide.sections']).data.byNewName.values['player_site.hide.sections'].slice(-2), ['12:30', '2024-10-13']);
+  assert.deepEqual(run(n, 'get', ['player_site.hide.sections']).data.values['player_site.hide.sections'].slice(-2), ['12:30', '2024-10-13']);
+});
+
+test('get names each setting as the vault\'s own file writes it', () => {
+  const s = scratch(wrap('  mode: player\n'));
+  const old = run(s, 'get').data.written;
+  assert.equal(old['player_site.title'], 'publish.site_title');
+  assert.equal(old['player_site.hide.sections'], 'publish.exclude_sections');
+  const moved = scratch(null);
+  fs.writeFileSync(path.join(moved.vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
+  const now = run(moved, 'get').data.written;
+  assert.equal(now['player_site.title'], 'player_site.title');
+});
+
+test('set --create on a vault whose site file holds its settings names the real site file in the command to run', () => {
+  const s = scratch(null, { vaultPath: './vault', siteTitle: 'Kept' });
+  const r = run(s, 'set', ['player_site.title=New'], { create: true, config: s.config });
+  assert.equal(r.rc, 1);
+  assert.ok(r.err.join('\n').includes(`--config "${s.config}"`), r.err.join('\n'));
+  assert.ok(!r.err.join('\n').includes('<site folder>'));
 });

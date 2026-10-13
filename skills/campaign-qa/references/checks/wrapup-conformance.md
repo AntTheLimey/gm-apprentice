@@ -85,11 +85,10 @@ WARNING when it's already fenced or excluded):
 
 - **GM Notes heading as a sibling H2** already inside a valid
   `<!-- gm-only -->` fence never publishes — Warning (structure
-  drift only). Otherwise read the vault's **effective** exclude
-  list (the one the publish tool reports for the build: the
-  vault file's list, else the site file's, else the defaults;
-  the vault file's own list or the defaults when the tool cannot
-  be asked) — Critical when the heading is not covered by
+  drift only). Otherwise the check uses the hidden headings the
+  publish tool reports for the build (when it cannot ask, it prints a
+  row saying the settings could not be checked: report that row,
+  carry on and assume no default list) — Critical when the heading is not covered by
   it (it publishes today), Warning when it is.
 - **Missing `<!-- gm-only -->` fence** — Warning, Critical if the
   vault has a published site.
