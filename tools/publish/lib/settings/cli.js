@@ -21,7 +21,7 @@ const { readSettings, parseNewFile } = require('./read');
 const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
 const { row, isLeaf, defaultOf } = require('./describe');
-const { OLD_BLOCK } = require('./legacy');
+const { OLD_BLOCK, SETUP_NOTE } = require('./legacy');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
 const { planMove, applyMove } = require('./move');
@@ -468,7 +468,7 @@ function unset(options, names) {
 // The publish set-up guide's note to itself. On the new layout (or none) it is `setup` in the state
 // file; on the old layout it is publish.setup_progress in the old settings file, written through the
 // same writer, which allows that one state entry for this command only.
-const NOTE_NAME = 'publish.setup_progress';
+const NOTE_NAME = SETUP_NOTE;
 const NOTE_PATH = NOTE_NAME.split('.');
 
 function readNote(vaultPath) {

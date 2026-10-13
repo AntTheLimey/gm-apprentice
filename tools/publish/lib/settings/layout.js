@@ -11,6 +11,17 @@ const OLD_FILE = '_meta/vault-config.md';
 const STATE_FILE = '_meta/vault-state.json';
 const NOTES_FILE = '_meta/vault-notes.md';
 
+// The new file's top level: `version`, then the groups, in the order they are written. `gm_site` reads nothing yet.
+const SETTING_GROUPS = ['vault', 'player_site'];
+const GM_GROUP = 'gm_site';
+const GROUPS = [...SETTING_GROUPS, GM_GROUP];
+
+// Where a name the list does not know stops a player build instead of warning: directly under these groups
+// and anywhere in the hiding group. The reader and the JSON Schema both ask here.
+const HIDE_GROUP = 'player_site.hide';
+const STRICT_PARENTS = new Set(SETTING_GROUPS);
+const stopsUnknown = (parent) => STRICT_PARENTS.has(parent) || parent === HIDE_GROUP || parent.startsWith(`${HIDE_GROUP}.`);
+
 const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
 // 'new' whenever the new file exists (the old file, if it is still there, is not read), 'legacy'
@@ -32,4 +43,4 @@ const layoutOrNone = (vaultPath) => (typeof vaultPath === 'string' && vaultPath 
 const fileLabel = (vaultPath) => fileLabelFor(layoutOrNone(vaultPath));
 const nameIn = (vaultPath, name) => nameInFor(layoutOrNone(vaultPath), name);
 
-module.exports = { NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };

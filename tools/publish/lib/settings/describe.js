@@ -2,6 +2,7 @@
 // What the settings command says about one setting, built from its entry in the list.
 const { TYPES, SWITCH_WORDS, emptyIsFault } = require('./types');
 const { REGISTRY } = require('./registry');
+const { stopsUnknown } = require('./layout');
 
 // A setting the GM can read and write by name: not a parent that only holds others, not a
 // retired name, not the tool's own bookkeeping, not a name its children's names stand in for.
@@ -89,10 +90,6 @@ function valueSchema(e) {
   return { ...out, ...s };
 }
 
-// Groups that stop a player build on a name they do not know (read.js STRICT_PARENTS and the
-// hide group). Other groups stay open: the reader only warns there.
-const CLOSED = new Set(['vault', 'player_site', 'player_site.hide']);
-
 function schema() {
   const root = { type: 'object', properties: {} };
   const groupAt = (segs) => {
@@ -112,7 +109,7 @@ function schema() {
   const close = (node, name) => {
     if (!node.properties) return node;
     for (const [k, v] of Object.entries(node.properties)) if (v.properties) close(v, name ? `${name}.${k}` : k);
-    if (CLOSED.has(name)) node.additionalProperties = false;
+    if (stopsUnknown(name)) node.additionalProperties = false;
     return node;
   };
   close(root, '');

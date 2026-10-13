@@ -179,7 +179,14 @@ const saysHiding = (key) => saysHidingName(key, GUARD_LASTS);
 const saysHidingBeside = (key) => saysHidingName(key, GUARD_LASTS, { beside: true });
 // Top-level keys of the old file that are not settings and are not reported: the notes the file
 // kept beside its settings, which the move carries over or the notes file keeps.
-const NOT_SETTINGS = new Set(['type', 'gm_apprentice_version', 'campaign', 'game_system', 'description', 'last_updated', 'changelog', 'chapter_naming', 'session_naming']);
+// The old file's own bookkeeping keys (the plugin version moves to the state file) and the notes it kept
+// beside its settings. This is the one list of the old file's top-level keys that are not settings.
+const VERSION_KEY = 'gm_apprentice_version';
+const FILE_KEYS = ['type', VERSION_KEY];
+const NOTE_KEYS = ['campaign', 'game_system', 'description', 'last_updated', 'changelog', 'chapter_naming', 'session_naming'];
+const NOT_SETTINGS = new Set([...FILE_KEYS, ...NOTE_KEYS]);
+// The old file's set-up note (an entry the list marks as bookkeeping): moves to the state file.
+const SETUP_NOTE = REGISTRY.find((e) => e.state && e.legacyOnly).name;
 
 // The old layout's view of the list, plus the entries that exist only in the old file.
 const BY_NAME = new Map(LEGACY.map((e) => [e.name, e]));
@@ -402,6 +409,6 @@ function readLegacy({ vaultPath, siteConfig }, core) {
 }
 
 module.exports = {
-  readLegacy, LEGACY, OLD_BLOCK, underBlock, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, isText, usable, stricterCallouts,
+  readLegacy, LEGACY, OLD_BLOCK, VERSION_KEY, FILE_KEYS, NOT_SETTINGS, SETUP_NOTE, underBlock, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, isText, usable, stricterCallouts,
   mergeWithSiteFile, mergedMaps,
 };

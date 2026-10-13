@@ -16,9 +16,9 @@ const { REGISTRY, legacyNameOf } = require('./registry');
 const { TYPES, isMap } = require('./types');
 const { isLeaf } = require('./describe');
 const { formatFault } = require('./faults');
-const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, layoutOf, at } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, layoutOf, at } = require('./layout');
 const read = require('./read');
-const { OLD_BLOCK } = require('./legacy');
+const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE } = require('./legacy');
 const { readState, stateText } = require('./state');
 const { parseNote } = require('../frontmatter');
 
@@ -194,7 +194,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   // What is planned beyond the resolved values: the two top-level carries and the fill.
   const planned = {};
   const lines = [];
-  const claimed = new Set(['type', OLD_BLOCK, 'gm_apprentice_version']);
+  const claimed = new Set([...FILE_KEYS, OLD_BLOCK]);
   for (const e of REGISTRY) if (!e.legacyOnly && legacyNameOf(e) && !legacyNameOf(e).includes('.')) claimed.add(legacyNameOf(e));
   const fillOf = (name) => (Object.prototype.hasOwnProperty.call(fill, name) ? String(fill[name]) : undefined);
 
@@ -271,8 +271,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
     mapFor(segs.slice(0, -1)).items.push(new Pair(key, valueNode));
   }
   // The groups in the list's order (the vault's, then the site's), each set off by a blank line.
-  const GROUP_ORDER = ['vault', 'player_site'];
-  const rank = (p) => (keyText(p) === 'version' ? -1 : GROUP_ORDER.indexOf(keyText(p)));
+  const rank = (p) => (keyText(p) === 'version' ? -1 : SETTING_GROUPS.indexOf(keyText(p)));
   newDoc.contents.items.sort((a, b) => rank(a) - rank(b));
   for (const p of newDoc.contents.items) if (keyText(p) !== 'version') p.key.spaceBefore = true;
   const configText = newDoc.toString(PLAIN);
@@ -304,15 +303,15 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
 
   // State.
   const patch = {};
-  if (data.gm_apprentice_version != null && state.gm_apprentice_version === undefined) patch.gm_apprentice_version = data.gm_apprentice_version;
-  const note = getPath(data, [OLD_BLOCK, 'setup_progress']);
+  if (data[VERSION_KEY] != null && state[VERSION_KEY] === undefined) patch[VERSION_KEY] = data[VERSION_KEY];
+  const note = getPath(data, SETUP_NOTE.split('.'));
   if (isMap(note) && state.setup === undefined) patch.setup = note;
-  else if (note != null && !isMap(note)) lines.push(`${OLD_BLOCK}.setup_progress is not a note the set-up guide wrote, so it was not carried over.`);
-  if (data.gm_apprentice_version != null && state.gm_apprentice_version !== undefined && !isDeepStrictEqual(state.gm_apprentice_version, data.gm_apprentice_version)) {
-    lines.push(`${STATE_FILE} already says gm_apprentice_version ${JSON.stringify(state.gm_apprentice_version)}, which was kept; the old file's ${JSON.stringify(data.gm_apprentice_version)} was dropped.`);
+  else if (note != null && !isMap(note)) lines.push(`${SETUP_NOTE} is not a note the set-up guide wrote, so it was not carried over.`);
+  if (data[VERSION_KEY] != null && state[VERSION_KEY] !== undefined && !isDeepStrictEqual(state[VERSION_KEY], data[VERSION_KEY])) {
+    lines.push(`${STATE_FILE} already says ${VERSION_KEY} ${JSON.stringify(state[VERSION_KEY])}, which was kept; the old file's ${JSON.stringify(data[VERSION_KEY])} was dropped.`);
   }
   if (isMap(note) && state.setup !== undefined && !isDeepStrictEqual(state.setup, note)) {
-    lines.push(`${STATE_FILE} already holds a set-up note, which was kept; the old file's ${OLD_BLOCK}.setup_progress was dropped.`);
+    lines.push(`${STATE_FILE} already holds a set-up note, which was kept; the old file's ${SETUP_NOTE} was dropped.`);
   }
   const stateAfter = { ...state, ...patch };
   const stateOut = Object.keys(patch).length ? stateText(stateAfter) : null;

@@ -7,17 +7,16 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
-const { REGISTRY } = require('./registry');
+const { REGISTRY, legacyNameOf } = require('./registry');
 const { TYPES, isMap, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide } = require('./faults');
-const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
+const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
 const { normalizeExcludeDirs } = require('./folders');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
 const MAP_ENTRY = { type: 'map', shape: 'settings, one to a line' };
-const GROUPS = ['vault', 'player_site', 'gm_site'];
 const TOP = ['version', ...GROUPS];
 
 // ---- Shared by both layouts ---------------------------------------------------------------
@@ -114,7 +113,6 @@ function oldNameIn(parent, key) {
 }
 
 const GM_SITE_NOTE = 'the GM site is not built yet; nothing under gm_site is read';
-const STRICT_PARENTS = new Set(['vault', 'player_site']);
 
 // The new file as written, as plain data. {} for an empty file; throws for one that is not valid YAML.
 function parseNewFile(vaultPath) {
@@ -166,8 +164,8 @@ function readNew({ vaultPath, siteConfig }) {
 
   // Every setting that holds a value of its own.
   const defaultOf = (e) => {
-    if (e.name === 'player_site.publish') { const dir = getPath(tree, ['player_site', 'folder']); return typeof dir === 'string' && dir.trim() !== ''; }
-    if (e.name === 'vault.campaign') return path.basename(path.resolve(vaultPath));
+    if (e.onWhenSet) { const held = getPath(tree, e.onWhenSet.split('.')); return typeof held === 'string' && held.trim() !== ''; }
+    if (e.defaultFromVaultFolder) return path.basename(path.resolve(vaultPath));
     return e.default === undefined ? null : clone(e.default);
   };
   for (const e of LIST) {
@@ -192,7 +190,7 @@ function readNew({ vaultPath, siteConfig }) {
     const isGuard = (seg) => !!(KNOWN.get(`${parent}.${seg}`) || {}).guards;
     const near = nearest(key, childSegs(parent));
     const hidingNear = nearest(key, childSegs(parent).filter(isGuard));
-    const strict = STRICT_PARENTS.has(parent) || parent === 'player_site.hide' || parent.startsWith('player_site.hide.');
+    const strict = stopsUnknown(parent);
     let level = 'warn';
     if (strict || (near && isGuard(near)) || saysHiding(key)) level = 'stop';
     // A stop below the top points at a hiding setting only; a warning, or a stop at the top, at the nearest name of any kind.
@@ -220,7 +218,7 @@ function readNew({ vaultPath, siteConfig }) {
   for (const [rawKey, value] of Object.entries(tree)) {
     const key = String(rawKey);
     if (key === 'version') continue;
-    if (key === 'gm_site') {
+    if (key === GM_GROUP) {
       if (value !== null && !(isMap(value) && Object.keys(value).length === 0)) {
         faults.push(makeFault({ name: 'gm_site', setting: null, kind: 'dropped', level: 'warn', message: GM_SITE_NOTE }));
       }
@@ -235,13 +233,14 @@ function readNew({ vaultPath, siteConfig }) {
       walk(key, value);
       continue;
     }
-    if (key === 'publish') {
-      faults.push(makeFault({ name: key, setting: null, kind: 'unknown-name', level: 'stop', value, hint: 'this file uses the new names; publish is the old block' }));
+    if (key === legacy.OLD_BLOCK) {
+      faults.push(makeFault({ name: key, setting: null, kind: 'unknown-name', level: 'stop', value, hint: `this file uses the new names; ${key} is the old block` }));
       continue;
     }
-    if (key === 'setting_year') {
-      const e = BY_NAME.get('vault.setting_year');
-      faults.push(makeFault({ name: key, setting: e.name, kind: 'old-name', level: 'warn', value, use: e.name }));
+    // A setting the old file kept at its top level (beside `publish:`), written there in the new file.
+    const topOld = LIST.find((x) => legacyNameOf(x) === key);
+    if (topOld) {
+      faults.push(makeFault({ name: key, setting: topOld.name, kind: 'old-name', level: 'warn', value, use: topOld.name }));
       continue;
     }
     const near = nearest(key, TOP);

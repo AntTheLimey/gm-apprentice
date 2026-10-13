@@ -13,7 +13,8 @@
 // two old files combine: union, stricter or perKey), legacyOnly (exists only in the old file; its
 // name stays the old one), retired, state, container (a parent that holds only other settings),
 // keepOnFault (an unreadable value is kept as written), keys (the only keys a map may hold),
-// settable, group, does, left_out, same (how the build decides two entries of a list are one:
+// onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
+// value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
 // 'heading', 'folder', 'callout' or 'name'; absent means exact text).
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
@@ -46,7 +47,7 @@ const REGISTRY = [
     left_out: '`gm`',
   },
   {
-    name: 'vault.campaign', type: 'text', group: 'vault',
+    name: 'vault.campaign', type: 'text', defaultFromVaultFolder: true, group: 'vault',
     shape: "the campaign's name",
     does: "The campaign's name",
     left_out: "The vault folder's name",
@@ -54,7 +55,7 @@ const REGISTRY = [
 
   // The site itself
   {
-    name: 'player_site.publish', was: [{ name: 'publish.site', in: 'vault' }], type: 'switch', onFault: false, group: 'site',
+    name: 'player_site.publish', was: [{ name: 'publish.site', in: 'vault' }], type: 'switch', onFault: false, onWhenSet: 'player_site.folder', group: 'site',
     does: 'Whether this vault has a site',
     left_out: 'On when a site folder is set (`player_site.folder`), otherwise off',
   },
@@ -123,7 +124,7 @@ const REGISTRY = [
   {
     name: 'vault.setting_year', was: [{ name: 'setting_year', in: 'vault' }], type: 'text', group: 'site',
     shape: 'a year',
-    does: 'An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. Write it at the left edge of the file, beside `publish:`, not under it',
+    does: 'An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era.',
     left_out: 'Nothing shown',
   },
   {
