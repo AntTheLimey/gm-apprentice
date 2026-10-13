@@ -131,6 +131,8 @@ const strip = (o, skip, isGolden = false, trailingColon = false) => {
   const pc = copy.publishConfig;
   if (pc) {
     delete pc.faults; delete pc.origins;
+    // An absolute site folder resolves with a drive letter and backslashes on Windows.
+    if (typeof pc.siteDir === 'string') pc.siteDir = pc.siteDir.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/');
     if (pc.switches) delete pc.switches.notes;
     if (pc.sheetLook) delete pc.sheetLook.notes;
     if (isGolden && pc.landing && typeof pc.landing === 'object' && pc.landing.max_events === undefined) pc.landing.max_events = entry('publish.landing.max_events').default;

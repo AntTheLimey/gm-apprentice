@@ -19,7 +19,7 @@ function files(dir, out = []) {
   return out;
 }
 const sources = [...files(path.join(ROOT, 'lib')), ...files(path.join(ROOT, 'bin'))];
-const rel = (f) => path.relative(ROOT, f);
+const rel = (f) => path.relative(ROOT, f).split(path.sep).join('/');
 const text = (f) => fs.readFileSync(f, 'utf8');
 // A source file with its comments taken out, so a sentence about a setting is not code: whole
 // comment lines, block comments that start a line, and `  // ...` after code.
