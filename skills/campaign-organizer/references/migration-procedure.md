@@ -50,10 +50,19 @@ migration is a script; this file says how to drive it.
    means the id was wrong: check it against `plan` and run again.
 
 **The settings move.** The update itself moves the vault's settings
-to the new settings file (`settings-move`); never do it by hand. A
-`settings` row under Needs a person that says the vault stays on the
-old file comes back on every pass: tell the GM once and carry on. One
-that says the settings cannot move yet holds the stamp: run
-campaign-qa's Settings check, then the update again.
+to the new settings file (`settings-move`). Its rows under Needs a
+person:
+
+- The vault stays on the old file because its site's publish tool is
+  older than 1.23.0 and cannot read the new one. The row comes back on
+  every pass until that tool is updated; tell the GM once and carry on.
+- The settings cannot move yet. Each row says what blocks the move, and
+  the vault is not stamped until it has moved. A row naming a setting:
+  campaign-qa's Settings check. A site folder that belongs to another
+  vault or cannot be read: correct `vaultPath` in that site's
+  `vault.config.json`. A `vault-notes.md` that already exists and
+  differs: ask the GM, then move it aside. Then run the update again.
+- Settings still in the site folder's file of a vault already moved:
+  campaign-qa's Settings check.
 
 Then return to the calling skill, or carry on with the GM's request.

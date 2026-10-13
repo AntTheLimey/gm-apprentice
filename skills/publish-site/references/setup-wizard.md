@@ -29,7 +29,9 @@ down as the GM gives it, so an interrupted run loses nothing.
 - **An answer that is a setting** (the title, tagline, image, 404
   message, palette, fonts) is written at once with
   `node "$TOOL" settings set <name>=<value> --vault <vault>` and read
-  back with `settings get <name> --vault <vault>`.
+  back with `settings get <name> --vault <vault>`. To change a hiding
+  list use `settings add` or `remove`: `set` replaces the whole list,
+  built-in entries included.
 - **Everything else** (the host, the project name, the site folder,
   how far the run got) goes in the set-up note:
 
@@ -246,9 +248,15 @@ If `_Campaign/Campaign Overview.md` exists in the vault, read its
 > "I found a title in your campaign overview: '[title]'. Would
 > you like to use that, or something different?"
 
-Write the confirmed name: `node "$TOOL" settings set
-player_site.title="<title>" --vault <vault>`. (The later steps name
-the setting only; the command is the same.)
+Write the confirmed name:
+
+```bash
+node "$TOOL" settings set player_site.title="<title>" --vault <vault>
+```
+
+If it answers that the vault has no settings file yet, run it again
+with `--create`. Later steps name the setting only; the command is
+the same.
 
 ### Step 7: Landing page tagline
 
@@ -272,8 +280,8 @@ Write it: `settings set player_site.theme.tagline="<tagline>"`.
 > site will live at `https://<project>.pages.dev`."
 
 Validate it's lowercase letters, numbers, and hyphens only; suggest a
-corrected version if not. Note it as `project_name`. The site's
-address is `https://<project_name>.pages.dev`.
+corrected version if not, then `setup-note set project_name=<name>`.
+The site's address is `https://<project_name>.pages.dev`.
 
 **GitHub Pages:** ask for username and repo:
 
@@ -283,8 +291,8 @@ address is `https://<project_name>.pages.dev`.
 > live at `https://jsmith.github.io/iron-crown-campaign/`"
 
 Validate the repo name is URL-safe (lowercase letters, numbers, hyphens
-only); suggest a correction if not. Note `github_username`, and the
-repo name as `project_name`. The site's address is
+only); suggest a correction if not, then `setup-note set
+github_username=<user> project_name=<repo>`. The site's address is
 `https://<github_username>.github.io/<project_name>/`.
 
 ### Step 9: Choose the site directory
@@ -299,7 +307,7 @@ Ask:
 > ready."
 
 For GitHub Pages, say that this folder becomes the GitHub repository.
-Note the confirmed path as `site_dir`.
+Then `setup-note set site_dir="<path>"`.
 
 ### Step 10: Campaign image
 
@@ -363,7 +371,7 @@ Always include `player_site.theme.fonts.source=self-host` when fonts
 are chosen: the build downloads them once into the vault's
 `_meta/font-cache/` and serves them from the site, so players' browsers
 never contact Google (an IP-address and GDPR concern). If the GM wants
-to skip theming, set nothing: the defaults fetch no font.
+to skip theming, set nothing.
 
 ---
 
@@ -405,7 +413,8 @@ at-table inbox or live status bar later (Phase G).
 
 `init` also writes the vault's starting settings and prints their
 names on its last line (`wrote player_site.publish,
-player_site.folder, …`): that the vault has a site and where,
+player_site.folder, …`, each as the vault's own file writes it): that
+the vault has a site and where,
 which folders publish, and the folders, headings and fields players
 never see. A setting already there, such as the Step 6 title, is left
 alone.
@@ -413,8 +422,10 @@ alone.
 If `init` prints `Campaign settings were not written: …`, the site
 folder was made but the vault's settings could not be changed, and
 without them no folder publishes. The message says why. Mend that
-(`settings check --vault <vault>` names a fault in the file), delete
-the files `init` just listed as created, and run `init` again.
+(`settings check --vault <vault>` names a fault in the file; for a
+file that is not valid YAML see campaign-qa's
+`references/checks/settings.md`, last paragraph), delete the files
+`init` just listed as created, and run `init` again.
 
 If the command fails with "command not found", explain:
 

@@ -13,8 +13,8 @@ settings file to read one, and never edit it by hand:
 `get`, `set`, `add`, `remove`, `unset`, `check`). `$TOOL` is the
 plugin's `gm-publish.js` (`SKILL.md` § The build tool).
 
-Give `--config <dir>/vault.config.json`, which also counts settings
-still left in the site file; with no site yet, `--vault <vault>`. A
+Give `--config <dir>/vault.config.json`; with no site yet, `--vault
+<vault>`. A
 bare `settings get` lists every setting with where its value came
 from; the lines not marked `(default)` are the GM's own.
 
@@ -29,7 +29,9 @@ Settings check, `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
 settings`: tell the GM its `fix:` lines, on a yes run it again with
 `--fix`, and put what is left to the GM, above all whether something
-was meant to be hidden.
+was meant to be hidden. A settings file that is not valid YAML is the
+one thing mended by hand: campaign-qa's
+`references/checks/settings.md`, last paragraph.
 
 > **Landing page state.** The landing hero (in-game date, session count) and the
 > *Latest Session* card are driven by the **`_Campaign` overview frontmatter** —
@@ -215,13 +217,11 @@ site is hosted.
 Campaign settings used to live in the site file under other names
 (`siteTitle`, `excludeSections`). They are not read there any more:
 the build warns for each, and stops for one that hides things, since
-what it hid would be published. Never move one by hand. The plugin's
-update takes them into the vault's settings, removes them from the
-site file and says what it did: run campaign-organizer's
-`references/migration-procedure.md`.
+what it hid would be published. Never move one by hand: the Settings
+check above lists each, and `--fix` takes a hiding one into the vault's
+settings and removes the rest, which the vault already sets.
 
 A vault the update has not moved yet keeps its settings in an older
-file, and there the site file's settings are still read. Every
-`settings` command works on such a vault as it does on any other, so
-nothing in this skill changes; `settings get` with `--config` always
-gives the value the build uses.
+file, and only there are the site file's settings still read (`settings
+get --config` counts them). Every `settings` command works on such a
+vault as on any other, so nothing in this skill changes.

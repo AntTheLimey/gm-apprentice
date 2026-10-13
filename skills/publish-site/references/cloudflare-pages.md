@@ -293,10 +293,10 @@ your setup, the manual path below does the same thing by hand.
 **You do not hand-copy the Functions.** Once a switch (`player_site.features.inbox` or
 `player_site.features.live_stats`) is on in the vault's settings, the next
 `npm run build` copies the plugin's Cloudflare Functions into the site's
-`functions/` for you, each feature's files for its own switch (`live_stats`:
-`loadout`, `loadout-list`; `inbox`: `request`; a Tier-1 site with both switches
+`functions/` for you, each feature's files for its own switch (live stats:
+`loadout`, `loadout-list`; the inbox: `request`; a Tier-1 site with both switches
 off gets none — they live beside `vault.config.json`, not in `docs/`). Setting
-a switch to `false` removes that feature's files on the next build or deploy,
+a switch to off removes that feature's files on the next build or deploy,
 and the removal reaches the live site with the next deploy. The manual steps
 below do exactly that: create the namespace, bind it in `wrangler.toml`, turn
 the switch on, rebuild, deploy.

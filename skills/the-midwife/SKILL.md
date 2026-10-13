@@ -29,9 +29,10 @@ first invocation.
 On start, before any creative conversation:
 
 1. Look for `_meta/` in CWD.
-   - **Found:** run `node
+   - **Found:** CWD is `<vault>`. Run `node
      "${CLAUDE_PLUGIN_ROOT}/tools/publish/bin/gm-publish.js" settings
-     get vault.campaign vault.system --vault .` and ask:
+     get vault.campaign vault.system --vault <vault>` and ask (leave
+     out the system when none is set):
      "I can see your [campaign name] vault ([system]). Are we
      adding a new adventure to this campaign, or starting
      something fresh?"

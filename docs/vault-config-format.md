@@ -189,13 +189,12 @@ old one did. When it cannot promise that, it says why and leaves the vault
 alone. The old file's prose and any keys that are not settings move to
 `_meta/vault-notes.md`.
 
-The update does not move a vault whose site has its publish tool pinned
-by something other than the plugin: an older tool would read the moved
-vault as having no settings. It leaves the vault on the old file and
-says so on every pass. Once that tool is version 1.23.0 or later, which
-reads the new file, move the vault yourself with `settings move --vault
-<vault> --config <site>/vault.config.json` (`--check` first shows what
-it would do).
+The move holds back when the publish tool installed in the vault's site
+is older than 1.23.0, whoever pinned it: that tool would read the moved
+vault as having no settings. The vault stays on the old file and the
+update says so on every pass, until the tool is 1.23.0 or later. That
+makes `settings move` safe to run by hand too; `--check` shows what it
+would do.
 
 ## The state file
 

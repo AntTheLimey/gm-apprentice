@@ -210,12 +210,13 @@ player_site:
     "Characters/NPCs": characters/npcs
     "Locations": locations
   hide:
-    # To hide one more heading and keep the built-in ones, ask the
-    # apprentice to "stop publishing the Rumours section".
     field_exceptions:
       "Characters/NPCs/Vex Ambrose.md":
         include: [secrets]
 ```
+
+To hide one more heading and keep the built-in ones, ask the apprentice
+to "stop publishing the Rumours section".
 
 In that folder map, notes in `Characters/NPCs` appear on the site at
 `characters/npcs/`. A folder that holds notes but has no line in the map
@@ -391,8 +392,9 @@ site up; you should not need to touch it.
 
 An older site may still hold campaign settings in this file under other
 names. They are no longer read there: the build warns about each, and
-stops for one that hides things from players. The next time the
-apprentice updates the vault it moves them into the vault's settings.
+stops for one that hides things from players. Ask the apprentice to
+check the settings: it adds anything such a key hid to the vault's own
+list and removes the keys from this file.
 
 ## See also
 
