@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { runSettings, runVaultSetting, helpText } = require('../lib/settings/cli.js');
+const { runSettings, helpText } = require('../lib/settings/cli.js');
 const { REGISTRY, legacyNameOf } = require('../lib/settings');
 
 const wrap = (publish) => `---\ntype: meta\npublish:\n${publish}---\n`;
@@ -25,7 +25,7 @@ function run(s, verb, args = [], extra = {}) {
   const out = [];
   const err = [];
   const rc = runSettings({ verb, args, vault: s.vault, json: true, ...extra }, { out: (l) => out.push(l), err: (l) => err.push(l) });
-  return { rc, data: out.length ? JSON.parse(out.join('\n')) : null, out: out.join('\n'), err };
+  return { rc, data: out.length && (extra.json ?? true) ? JSON.parse(out.join('\n')) : null, out: out.join('\n'), err };
 }
 
 test('get on a block with none of the settings gives defaults and says the block is there', () => {
@@ -171,9 +171,6 @@ test('set refuses a list with a blank entry, for every list setting, and writes 
     assert.deepEqual(err, [`Error: ${arg.split('=')[0]} has a blank entry; remove it.`], arg);
     assert.equal(text(s), before, arg);
   }
-  const viaAlias = alias(s, ['exclude_sections=["a",""]']);
-  assert.equal(viaAlias.rc, 1);
-  assert.equal(text(s), before);
 });
 
 test('describe of a name that only holds settings lists them', () => {
@@ -330,44 +327,6 @@ test('the command line: settings get, set and --help', () => {
   assert.match(go('--help').stdout, /player_site\.features\.connections/);
   assert.equal(go('bogus', '--vault', s.vault).status, 1);
 });
-
-// ---- The older vault-setting command, against what it printed before it was replaced ----
-
-const before = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures', 'vault-setting-before.json'), 'utf8'));
-
-function alias(s, set) {
-  const out = [];
-  const err = [];
-  const rc = runVaultSetting({ config: s.config, vault: s.vault, set, json: true }, { out: (l) => out.push(l), err: (l) => err.push(l) });
-  return { rc, out: out.length ? JSON.parse(out.join('\n')) : null, err };
-}
-
-for (const c of before.get) {
-  test(`vault-setting prints what it always did: ${c.name}`, () => {
-    const s = scratch(c.config, c.site);
-    const got = alias(s, []);
-    assert.equal(got.rc, c.rc);
-    assert.deepEqual(got.out, c.json);
-    assert.deepEqual(Object.keys(got.out), Object.keys(c.json));
-  });
-}
-
-for (const c of before.set) {
-  test(`vault-setting --set does what it always did: ${c.name}`, () => {
-    const s = scratch(c.config, null);
-    const got = alias(s, c.set);
-    assert.equal(got.rc, c.rc);
-    if (c.rc === 0) {
-      assert.deepEqual(got.out, c.out);
-      assert.equal(text(s), c.after);
-    } else {
-      // Refused as before, the file left alone; the line says it in plain words now.
-      assert.equal(got.err.length >= 1, true);
-      assert.match(got.err[0], /^Error: /);
-      assert.equal(text(s), c.config);
-    }
-  });
-}
 
 // ---- get several, whole values, add and remove ----
 
@@ -710,15 +669,15 @@ test('new file: raw returns the parsed file, or the value at a name', () => {
   assert.equal(run(s, 'raw', ['player_site.footer']).data, null);
 });
 
-test('new file: set, unset, add and remove refuse with one line and change nothing', () => {
-  const s = newScratch('version: 1\n');
-  const before = fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8');
-  for (const [verb, args] of [['set', ['player_site.title=A']], ['unset', ['player_site.title']], ['add', ['player_site.hide.sections', 'X']], ['remove', ['player_site.hide.sections', 'X']]]) {
-    const r = run(s, verb, args);
-    assert.equal(r.rc, 1, verb);
-    assert.deepEqual(r.err, ['Error: this vault is on the new settings file; writing it arrives with the next step'], verb);
-  }
-  assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
+test('new file: set, add, remove and unset write the new file', () => {
+  const s = newScratch('version: 1\nplayer_site:\n  title: A  # name\n');
+  const f = path.join(s.vault, '_meta', 'vault-config.yaml');
+  assert.equal(run(s, 'set', ['player_site.title=B']).rc, 0);
+  assert.equal(run(s, 'add', ['player_site.hide.sections', 'X']).rc, 0);
+  assert.match(fs.readFileSync(f, 'utf8'), /title: B  # name\n/);
+  assert.match(fs.readFileSync(f, 'utf8'), /- X\n/);
+  assert.equal(run(s, 'remove', ['player_site.hide.sections', 'X']).rc, 0);
+  assert.equal(run(s, 'unset', ['player_site.title']).rc, 0);
   assert.equal(fs.existsSync(file(s)), false);
 });
 
@@ -727,4 +686,58 @@ test('old file: the old-named top level and the new-named one agree', () => {
   const { data } = run(s, 'get');
   assert.equal(data.settings['publish.connections'].value, 'cards');
   assert.equal(data.byNewName.values['player_site.features.connections'], 'cards');
+});
+
+// ---- the older spellings, raw on groups, --create ----
+
+test('unset of a new name takes out every spelling the old file holds, and says which', () => {
+  const s = scratch(wrap('  live_stats: true\n  backend:\n    statusBar: true\n  mode: player\n'));
+  const r = run(s, 'unset', ['player_site.features.live_stats'], { json: false });
+  assert.equal(r.rc, 0);
+  assert.equal(text(s), wrap('  mode: player\n'));
+  assert.match(r.out, /publish\.live_stats/);
+  assert.match(r.out, /publish\.backend\.statusBar/);
+  assert.equal(run(s, 'get', ['player_site.features.live_stats']).data.byNewName.values['player_site.features.live_stats'], false);
+});
+
+test('get resolves every older spelling and says what it is now', () => {
+  const s = scratch(wrap('  images:\n    maxWidth: 800\n  backend:\n    statusBar: true\n'));
+  const a = run(s, 'get', ['publish.images.maxWidth']);
+  assert.equal(a.rc, 0);
+  assert.equal(a.data.byNewName.values['player_site.images.max_width'], 800);
+  assert.deepEqual(a.err, ['publish.images.maxWidth is now player_site.images.max_width.']);
+  const b = run(s, 'get', ['publish.backend.statusBar']);
+  assert.equal(b.rc, 0);
+  assert.equal(b.data.byNewName.values['player_site.features.live_stats'], true);
+  assert.deepEqual(b.err, ['publish.backend.statusBar is now player_site.features.live_stats.']);
+});
+
+test('raw of a group of the new layout gives the old file content on an old vault, the node on a new one', () => {
+  const s = scratch(wrap('  theme:\n    tagline: Hi\n'));
+  assert.deepEqual(run(s, 'raw', ['player_site.theme']).data, { tagline: 'Hi' });
+  assert.deepEqual(run(s, 'raw', ['player_site']).data, { theme: { tagline: 'Hi' } });
+  const n = newScratch('version: 1\nplayer_site:\n  theme:\n    tagline: Hi\n');
+  assert.deepEqual(run(n, 'raw', ['player_site.theme']).data, { tagline: 'Hi' });
+  assert.deepEqual(run(n, 'raw', ['player_site']).data, { theme: { tagline: 'Hi' } });
+});
+
+test('set of an older spelling writes the setting once, under the primary name', () => {
+  const s = scratch(wrap('  images:\n    maxWidth: 800\n'));
+  const r = run(s, 'set', ['publish.images.maxWidth=900'], { json: false });
+  assert.equal(r.rc, 0);
+  assert.equal(text(s), wrap('  images:\n    max_width: 900\n'));
+  assert.match(r.out, /Wrote publish\.images\.max_width\./);
+  const t = scratch(wrap('  backend:\n    statusBar: true\n'));
+  assert.equal(run(t, 'set', ['publish.backend.statusBar=false']).rc, 0);
+  assert.equal(text(t), wrap('  live_stats: false\n'));
+});
+
+test('set without --create refuses where there is no settings file; with it the new file is made', () => {
+  const s = scratch(null);
+  const refused = run(s, 'set', ['player_site.title=T']);
+  assert.equal(refused.rc, 1);
+  assert.match(refused.err[0], /--create/);
+  assert.equal(fs.existsSync(path.join(s.vault, '_meta', 'vault-config.yaml')), false);
+  assert.equal(run(s, 'set', ['player_site.title=T'], { create: true }).rc, 0);
+  assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), 'version: 1\nplayer_site:\n  title: T\n');
 });

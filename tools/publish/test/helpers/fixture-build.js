@@ -4,6 +4,7 @@
 // publishes. Shared by the build test, the byte-identity proof and Task 7's proof script.
 const fs = require('fs');
 const path = require('path');
+const { setOldSettings } = require('./settings-files');
 
 const FIXTURES = path.join(__dirname, '..', 'fixtures');
 const SKIP = new Set(['_meta', '_Templates', '_attachments']);
@@ -26,12 +27,11 @@ function folderMapFor(vault) {
 }
 
 // Copies fixture `name` under `root` and returns the config path. `keys` are extra
-// publish keys (e.g. { link_previews: 'off' }); `toolDir` is the publish tool whose
-// vault-config-edit writes them (default: this checkout).
-function prepareFixture(name, root, { keys = {}, toolDir = path.join(__dirname, '..', '..') } = {}) {
+// settings by name (e.g. { 'player_site.features.link_previews': 'off' }).
+function prepareFixture(name, root, { keys = {} } = {}) {
   const vault = path.join(root, 'vault');
   fs.cpSync(path.join(FIXTURES, name), vault, { recursive: true });
-  require(path.join(toolDir, 'lib', 'vault-config-edit')).setPublishKeys(vault, { mode: 'full', ...keys });
+  setOldSettings(vault, { 'player_site.hide.mode': 'full', ...keys });
   const configPath = path.join(root, 'config.json');
   fs.writeFileSync(configPath, JSON.stringify({
     vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T',

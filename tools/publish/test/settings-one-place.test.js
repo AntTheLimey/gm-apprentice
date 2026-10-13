@@ -74,16 +74,13 @@ test('no default is written as a fallback', () => {
 });
 
 // Each file below names the settings file in code, and why:
-//   vault-config-edit.js  the editor that writes the `publish:` block in place, keeping the file's layout
-//   init.js               setting up a site seeds the file with site, site_dir and the standard map
+//   vault-config-edit.js  the old editor of the `publish:` block, used only by migrate-config.js (both go in Part B)
 //   migrate-config.js     moves the settings an older site kept in vault.config.json into the file
-//   setup-backend.js      turns the live-stats or inbox switch on in the file after the host is set up
-//   rename-refs.js        renames a note inside the settings that name it (featured_npcs and so on), through the editor
 //   site-doctor.js        names the file as the place of a finding; it reads nothing from it
-// The first five write or move the file; the settings package reads it for the build.
+// The settings package reads and writes the file for everything else (settings/write.js is the one writer).
 test('nothing reads the vault settings file but the settings package', () => {
   const allowed = new Set([
-    'lib/vault-config-edit.js', 'lib/init.js', 'lib/migrate-config.js', 'lib/setup-backend.js', 'lib/rename-refs.js', 'lib/site-doctor.js',
+    'lib/vault-config-edit.js', 'lib/migrate-config.js', 'lib/site-doctor.js',
   ]);
   // Any string that ends in the file's name: a path joined, a template, either quote style.
   const named = /vault-config\.md['"`]/;

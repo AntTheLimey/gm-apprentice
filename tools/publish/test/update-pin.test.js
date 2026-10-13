@@ -481,11 +481,11 @@ describe('update-pin records the site in its vault', () => {
     try {
       const a = await run(unset);
       assert.strictEqual(unset.publish().site, true);
-      assert.ok(a.out.some((l) => l.includes('turned the site switch on in the vault: publish.site = true')), a.out.join('\n'));
+      assert.ok(a.out.some((l) => l.includes('turned the site switch on in the vault: player_site.publish = on')), a.out.join('\n'));
       const b = await run(off);
       assert.strictEqual(off.publish().site, false);
       assert.strictEqual(off.publish().site_dir, off.posix);
-      assert.ok(!b.out.some((l) => l.includes('publish.site = true')), b.out.join('\n'));
+      assert.ok(!b.out.some((l) => l.includes('player_site.publish = on')), b.out.join('\n'));
     } finally {
       fs.rmSync(unset.root, { recursive: true, force: true });
       fs.rmSync(off.root, { recursive: true, force: true });
@@ -531,7 +531,8 @@ describe('update-pin records the site in its vault', () => {
       const { rc, out } = await run(s);
       assert.strictEqual(rc, 0);
       assert.ok(!fs.existsSync(path.join(s.vault, '_meta', 'vault-config.md')));
-      assert.ok(out.some((l) => l.includes('could not record this site in the vault') && l.includes('has no _meta/vault-config.md') && l.includes(`site_dir: ${s.posix}`)), out.join('\n'));
+      assert.ok(!fs.existsSync(path.join(s.vault, '_meta', 'vault-config.yaml')));
+      assert.ok(out.some((l) => l.includes('could not record this site in the vault') && l.includes('has no settings file') && l.includes(`player_site.folder to ${s.posix}`)), out.join('\n'));
     } finally { fs.rmSync(s.root, { recursive: true, force: true }); }
   });
   it('fills a blank site_dir', async () => {
@@ -570,13 +571,13 @@ describe('update-pin records the site in its vault', () => {
   });
   it('says so when the vault names a different site, and when the file cannot be edited', async () => {
     const other = site('---\npublish:\n  site_dir: /somewhere/else\n---\n');
-    const flow = site('---\npublish: {mode: player}\n---\n');
+    const flow = site('---\npublish: [unclosed\n---\n');
     try {
-      assert.ok((await run(other)).out.some((l) => l.includes('already names a different site (publish.site_dir: /somewhere/else)')));
+      assert.ok((await run(other)).out.some((l) => l.includes('already names a different site (player_site.folder: /somewhere/else)')));
       const { rc, out } = await run(flow);
       assert.strictEqual(rc, 0);
-      assert.ok(out.some((l) => l.includes('could not record this site in the vault') && l.includes(`site_dir: ${flow.posix}`)), out.join('\n'));
-      assert.strictEqual(flow.publish().site_dir, undefined);
+      assert.ok(out.some((l) => l.includes('could not record this site in the vault') && l.includes(`player_site.folder to ${flow.posix}`)), out.join('\n'));
+      assert.strictEqual(fs.readFileSync(path.join(flow.vault, '_meta', 'vault-config.md'), 'utf8'), '---\npublish: [unclosed\n---\n');
     } finally {
       fs.rmSync(other.root, { recursive: true, force: true });
       fs.rmSync(flow.root, { recursive: true, force: true });

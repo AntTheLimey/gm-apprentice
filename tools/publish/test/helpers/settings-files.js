@@ -3,7 +3,8 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const YAML = require('yaml');
-const { NEW_FILE, OLD_FILE, at } = require('../../lib/settings/layout');
+const { NEW_FILE, OLD_FILE, at, layoutOf } = require('../../lib/settings/layout');
+const { applyChanges } = require('../../lib/settings/write');
 
 function put(vaultPath, rel, text) {
   const file = at(vaultPath, rel);
@@ -23,4 +24,10 @@ function writeOldConfig(vaultPath, publishObject, top = {}) {
   return put(vaultPath, OLD_FILE, `---\n${YAML.stringify(data)}---\n`);
 }
 
-module.exports = { writeNewConfig, writeOldConfig };
+// Sets settings by their names in a vault that is on the old file (made empty when the vault has none).
+function setOldSettings(vaultPath, byName) {
+  if (layoutOf(vaultPath) === 'none') writeOldConfig(vaultPath, {});
+  return applyChanges(vaultPath, Object.entries(byName).map(([name, value]) => ({ op: 'set', name, value })));
+}
+
+module.exports = { writeNewConfig, writeOldConfig, setOldSettings };

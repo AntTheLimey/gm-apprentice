@@ -41,8 +41,7 @@
 //   {"op":"google-fonts","vault":…,"config":…}
 //       -> {"families":[…]}  the families the site would load from Google for the vault
 //                            (`config`, the site's vault.config.json, is optional); none
-//                            when the fonts are hosted. The same list `vault-setting`
-//                            prints as `googleFonts`.
+//                            when the fonts are hosted.
 //
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');

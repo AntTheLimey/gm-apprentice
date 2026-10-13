@@ -22,7 +22,7 @@ const { getCanonStatus } = require('./templates/base');
 const { sheetSourceOf } = require('./sheet-source');
 const { parseNote } = require('./frontmatter');
 const { markersIn } = require('./markers');
-const yaml = require('js-yaml');
+const YAML = require('yaml');
 const { nearestNames, readerView } = require('./site-doctor');
 
 // The switches as the build resolves them, without the config notes.
@@ -278,7 +278,7 @@ async function runExplain(options, deps) {
       out('');
       out('  frontmatter as published (a page prints some of these fields, the search and the cards read others):');
       block(Object.keys(shown.frontmatter).length
-        ? yaml.safeDump(shown.frontmatter, { lineWidth: -1, skipInvalid: true }).trimEnd() : '(none)');
+        ? YAML.stringify(shown.frontmatter, { lineWidth: 0 }).trimEnd() : '(none)');
       out('');
       out('  body as published:');
       block(shown.markdown);

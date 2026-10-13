@@ -1,8 +1,7 @@
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
-const { parseNote } = require('./frontmatter');
-const { setPublishKeys, fillUnset } = require('./vault-config-edit');
+const { applyChanges, settingsText } = require('./settings/write');
 const { siteDirPath } = require('./lines-cli');
 const { entry } = require('./settings');
 
@@ -14,8 +13,8 @@ const DEFAULTS = {
   VAULT_PATH: './vault',
 };
 
-// The campaign settings a new site starts with. They live in the vault file
-// (_meta/vault-config.md, under publish:), not in the site's vault.config.json.
+// The campaign settings a new site starts with, by the settings' own names. They live in the
+// vault's settings file, not in the site's vault.config.json.
 const DEFAULT_FOLDER_MAP = {
   'Characters/PCs': 'characters/pcs',
   'Characters/NPCs': 'characters/npcs',
@@ -33,33 +32,35 @@ const DEFAULT_FOLDER_MAP = {
 };
 
 // `siteDir` is where the vault finds its site again: vault_check asks the tool installed
-// there what publishes. `site: true` says the vault has a site; `init` is the GM asking for one.
+// there what publishes. `player_site.publish` says the vault has a site; `init` is the GM asking for one.
 function defaultCampaignSettings(siteTitle, tagline, siteDir) {
   return {
-    ...(siteDir ? { site: true, site_dir: siteDir.split(path.sep).join('/') } : {}),
-    site_title: siteTitle,
-    folder_map: DEFAULT_FOLDER_MAP,
-    attachments_dir: '_attachments',
-    exclude_dirs: ['_meta', '_Templates', '_resources'],
+    ...(siteDir ? { 'player_site.publish': true, 'player_site.folder': siteDir.split(path.sep).join('/') } : {}),
+    'player_site.title': siteTitle,
+    'player_site.folder_map': DEFAULT_FOLDER_MAP,
+    'vault.attachments': '_attachments',
+    'player_site.hide.folders': ['_meta', '_Templates', '_resources'],
     // The built-in lists, written out so the GM sees them and edits them knowingly: a list in
     // the vault replaces the built-in one, so an entry added to an invisible default would drop
     // the rest. One source: the lists the build falls back to when the vault has none.
-    exclude_sections: [...entry('player_site.hide.sections').default],
-    exclude_fields: [...entry('player_site.hide.fields').default],
-    exclude_callouts: true,
-    ...(tagline ? { theme: { tagline } } : {}),
+    'player_site.hide.sections': [...entry('player_site.hide.sections').default],
+    'player_site.hide.fields': [...entry('player_site.hide.fields').default],
+    'player_site.hide.callouts': true,
+    ...(tagline ? { 'player_site.theme.tagline': tagline } : {}),
   };
 }
 
-const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const FOLDER = 'player_site.folder';
+const SWITCH = 'player_site.publish';
 
 /**
- * Write the starting campaign settings into the vault file, for keys it does not
- * already set. Never creates the vault directory and never writes into a vault file
- * the editor refuses. Returns what happened so the caller can tell the user.
+ * Write the starting campaign settings into the vault's settings file, for settings it does not
+ * already set. Never creates the vault directory. A vault with no settings file gets the new one;
+ * a vault still on the old file is written in place. Returns what happened so the caller can tell the user.
+ * `settings` is keyed by the settings' names; so are `written`, `kept` and `missing`.
  * @returns {{ written: string[], kept: string[], skipped: string|null, missing: Record<string, unknown>, otherSite?: string }}
  *
- * `options.existingOnly`: add to a vault file that is already there, never create one
+ * `options.existingOnly`: add to a settings file that is already there, never create one
  * (update-pin, which must not turn whatever folder `vaultPath` names into a vault).
  */
 function seedVaultSettings(vaultDir, settings, options = {}) {
@@ -67,54 +68,43 @@ function seedVaultSettings(vaultDir, settings, options = {}) {
   if (!fsSync.existsSync(vaultDir) || !fsSync.statSync(vaultDir).isDirectory()) {
     return none(`the vault folder ${vaultDir} does not exist yet`, settings);
   }
-  const file = path.join(vaultDir, '_meta', 'vault-config.md');
-  let publish = {};
-  if (!fsSync.existsSync(file) && options.existingOnly) {
-    return none(`${vaultDir} has no _meta/vault-config.md`, settings);
+  let file;
+  try {
+    file = settingsText(vaultDir);
+  } catch (e) {
+    return none(String(e.message).split('\n')[0].trim(), settings);
   }
-  if (fsSync.existsSync(file)) {
-    try {
-      publish = parseNote(fsSync.readFileSync(file, 'utf8')).data.publish ?? {};
-    } catch (e) {
-      return none(`_meta/vault-config.md does not parse: ${String(e.message).split('\n')[0].trim()}`, settings);
-    }
-    if (publish === null || typeof publish !== 'object' || Array.isArray(publish)) {
-      return none('publish: in _meta/vault-config.md is not a map', settings);
-    }
-  }
+  if (!file && options.existingOnly) return none(`${vaultDir} has no settings file`, settings);
+  const have = (name) => (file ? file.get(name) : undefined);
   const set = {};
   const kept = [];
   let otherSite;
-  for (const [key, value] of Object.entries(settings)) {
-    if (publish[key] === undefined) { set[key] = value; continue; }
+  for (const [name, value] of Object.entries(settings)) {
+    const held = have(name);
+    if (held === undefined) { set[name] = value; continue; }
     // `init` is the GM asking for a site, so it turns one on over an earlier off. Any
     // other caller (update-pin) leaves a switch the GM set.
-    if (key === 'site' && options.turnSiteOn && publish[key] !== true) { set[key] = value; continue; }
-    if (key === 'site_dir') {
-      // A blank site_dir is no site: fill it. One naming another folder is the GM's,
+    if (name === SWITCH && options.turnSiteOn && held !== true) { set[name] = value; continue; }
+    if (name === FOLDER) {
+      // A blank folder is no site: fill it. One naming another folder is the GM's,
       // and is left, but said out loud by the caller.
-      if (publish[key] === null || publish[key] === '') { set[key] = value; continue; }
+      if (held === null || held === '') { set[name] = value; continue; }
       // The same folder written another way (relative to the vault, from `~`, a trailing
       // slash, through a symlink) is this site.
       const real = (p) => { try { return fsSync.realpathSync(p); } catch { return path.resolve(p); } };
-      if (typeof publish[key] !== 'string' || real(siteDirPath(vaultDir, publish[key])) !== real(value)) {
-        otherSite = String(publish[key]);
+      if (typeof held !== 'string' || real(siteDirPath(vaultDir, held)) !== real(value)) {
+        otherSite = String(held);
       }
     }
-    // `theme` holds other keys the GM may have set: add the seeded ones beside them, only
-    // where the vault file leaves them unset. (The theme block is re-written, so comments
-    // inside it are not kept, as with migrate-config.)
-    if (key === 'theme' && isMap(value) && isMap(publish.theme)) {
-      const filled = fillUnset(publish.theme, value);
-      if (filled) { set.theme = filled; continue; }
-    }
-    kept.push(key);
+    // The theme's own settings the GM left unset (missing, empty or blank) are filled; the ones set are kept.
+    if (name.startsWith('player_site.theme.') && (held === null || held === '')) { set[name] = value; continue; }
+    kept.push(name);
   }
   if (!Object.keys(set).length) return { written: [], kept, skipped: null, missing: {}, otherSite };
   try {
-    setPublishKeys(vaultDir, set);
+    applyChanges(vaultDir, Object.entries(set).map(([name, value]) => ({ op: 'set', name, value })), { create: true });
   } catch (e) {
-    return { written: [], kept, skipped: e.message, missing: set, otherSite };
+    return { written: [], kept, skipped: String(e.message).split('\n')[0], missing: set, otherSite };
   }
   return { written: Object.keys(set), kept, skipped: null, missing: {}, otherSite };
 }
@@ -241,15 +231,15 @@ async function init(targetDir = '.', options = {}) {
   const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
-    log(`  wrote ${vaultSettings.written.join(', ')} to ${path.join(vaultDir, '_meta', 'vault-config.md')}${which}`);
+    log(`  wrote ${vaultSettings.written.join(', ')} to the settings file in ${vaultDir}${which}`);
   }
   if (vaultSettings.skipped) {
     const keys = Object.keys(vaultSettings.missing).join(', ');
-    const where = vaultSettings.missing.site_dir ? ` (site_dir: ${vaultSettings.missing.site_dir})` : '';
-    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these under publish: in _meta/vault-config.md: ${keys}${where}.`);
+    const where = vaultSettings.missing[FOLDER] ? ` (${FOLDER}: ${vaultSettings.missing[FOLDER]})` : '';
+    console.warn(`Campaign settings were not written: ${vaultSettings.skipped}. Add these to the vault's settings: ${keys}${where}.`);
   }
   if (vaultSettings.otherSite) {
-    console.warn(`The vault already names a different site (publish.site_dir: ${vaultSettings.otherSite}); it was left as it is. Change it by hand if this is now the campaign's site.`);
+    console.warn(`The vault already names a different site (${FOLDER}: ${vaultSettings.otherSite}); it was left as it is. Change it by hand if this is now the campaign's site.`);
   }
 
   return { success: true, files: created, vaultSettings };

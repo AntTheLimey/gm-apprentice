@@ -109,13 +109,13 @@ test('idempotent: a second run with KV already bound + flag true still succeeds 
 });
 
 test('a vault file the editor refuses stops the command before any KV or wrangler.toml change', async () => {
-  const vault = tempVault('---\npublish: {mode: player}\n---\n');
+  const vault = tempVault('---\npublish: [unclosed\n---\n');
   const lines = [];
   const { deps, files, calls } = harness({ out: (m) => lines.push(m) }, vault);
   const tomlBefore = files['wrangler.toml'];
   const rc = await runSetupBackend('status-bar', { configPath: './vault.config.json' }, deps);
   assert.strictEqual(rc, 1);
-  assert.match(lines.join('\n'), /cannot edit _meta\/vault-config\.md/);
+  assert.match(lines.join('\n'), /cannot edit the vault's settings/);
   assert.strictEqual(files['wrangler.toml'], tomlBefore, 'wrangler.toml untouched');
   assert.deepStrictEqual(calls, [], 'no wrangler call of any kind');
 });

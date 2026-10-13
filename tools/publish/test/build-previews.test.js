@@ -159,7 +159,7 @@ test('listing containers carry data-no-preview, and only when previews are on', 
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   };
   check({}, true);
-  check({ link_previews: 'off' }, false);
+  check({ 'player_site.features.link_previews': 'off' }, false);
 });
 
 // Running prose and the landing page's recap keep their cards; the listings below opt out.

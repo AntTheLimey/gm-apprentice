@@ -1,7 +1,6 @@
 'use strict';
 // The `settings` command: reads, writes, describes and checks any setting through the
-// declared list. `vault-setting` stays below as an alias for the older tool pins and for
-// migrate_site.py; it dies with them in 1b.
+// declared list.
 //
 //   settings get [<name>]            what each setting is, and where that came from
 //   settings set <name>=<json> ...   write settings (all or none)
@@ -13,13 +12,14 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseNote } = require('../frontmatter');
-const { REGISTRY, entry, legacyNameOf, resolve } = require('./registry');
-const { TYPES, isMap } = require('./types');
+const { REGISTRY, legacyNameOf, resolve } = require('./registry');
+const { applyChanges, refusalsFor } = require('./write');
+const { isMap } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
 const { OLD_FILE, NEW_FILE, layoutOf, at: fileAt } = require('./layout');
-const { makeFault, nearest } = require('./faults');
+const { nearest } = require('./faults');
 const { row, isLeaf, defaultOf } = require('./describe');
-const { OLD_BLOCK, underBlock } = require('./legacy');
+const { OLD_BLOCK } = require('./legacy');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
@@ -27,7 +27,8 @@ const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // Removed in Part B: the name the old vault file gave a setting, which the commands still take for
 // one release. An old name is answered as the setting it became, with a line naming the new one.
 const oldOf = (e) => legacyNameOf(e);
-const reaches = (e, scope) => inScope(e.name, scope) || (!!oldOf(e) && inScope(oldOf(e), scope));
+const oldNamesOf = (e) => (e.legacyOnly ? [e.name] : (e.was || []).filter((w) => w.in === 'vault').map((w) => w.name));
+const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) => inScope(n, scope));
 const firstLine = (e) => String(e.message).split('\n')[0];
 
 // ---- Finding the vault and the site file --------------------------------------------------
@@ -58,8 +59,6 @@ function rawData(vaultPath) {
   }
 }
 
-// Where the old file holds a setting, as the path under `publish:` (setting_year sits beside it).
-const pathOf = (e) => (underBlock(oldOf(e)) ? oldOf(e).split('.').slice(1) : [oldOf(e)]);
 // Where the old file holds the thing a name points at, as the full path from the top of the file. A name
 // the old file used is taken as it stands (so an older spelling of a setting can be taken out by the
 // spelling it was written in); a new name goes to the setting's place in the old file.
@@ -131,12 +130,24 @@ function check(options) {
   };
 }
 
+// Where a name that is not a setting points in the file: the same name on the new layout; on the old
+// one, a group of the new layout (player_site.theme) is the part of the old file that holds its settings.
+function groupPathOf(name, newLayout) {
+  const own = name.split('.');
+  if (newLayout) return own;
+  const under = LEAVES().filter((e) => e.name.startsWith(`${name}.`) && oldOf(e)).map((e) => oldOf(e).split('.'));
+  if (!under.length) return own;
+  const head = [];
+  for (let i = 0; i < under[0].length; i++) { if (under.every((p) => p[i] === under[0][i] && i < p.length - 1)) head.push(under[0][i]); else break; }
+  return head.length ? head : null;
+}
+
 function raw(options, name) {
   const { vaultPath } = target(options);
   const data = rawData(vaultPath);
   const r = name ? resolve(name) : null;
   const newLayout = layoutOf(vaultPath) === 'new';
-  const at = r ? (newLayout ? r.entry.name.split('.') : (oldOf(r.entry) ? filePathOf(name, r) : null)) : (name ? name.split('.') : null);
+  const at = r ? (newLayout ? r.entry.name.split('.') : (oldOf(r.entry) ? filePathOf(name, r) : null)) : (name ? groupPathOf(name, newLayout) : null);
   const value = name ? (at ? getPath(data, at) : undefined) : data;
   const result = value === undefined ? null : value;
   return { result, lines: [JSON.stringify(result, null, 2)], notices: name ? noticesFor([name]) : [] };
@@ -189,7 +200,7 @@ function list() {
 function helpText() {
   const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
-gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw> [...] [--json] [--vault <dir>] [--config <path>]
+gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 
 Reads, writes, describes and checks the settings in the vault's settings file (${NEW_FILE}; ${OLD_FILE} on a vault not yet updated).
 
@@ -208,6 +219,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
 
   --vault <dir>    The vault (default: the vaultPath in the config)
   --config <path>  The site folder's vault.config.json (default: ./vault.config.json)
+  --create         With set: make the settings file when the vault has none yet
   --json           Print JSON
   --help, -h       Show this help
 
@@ -220,11 +232,7 @@ ${names.join('\n')}
 
 // ---- Writing ------------------------------------------------------------------------------
 
-// Removed when the writer reads the new file (the next step): for now it only edits the old one.
-const NEW_LAYOUT_READ_ONLY = 'this vault is on the new settings file; writing it arrives with the next step';
-const onNewLayout = (options) => layoutOf(target(options).vaultPath) === 'new';
-
-// A plain reason a name cannot be written, or null.
+// A plain reason a name cannot be written, or null. The writer checks every change again.
 function refusal(name) {
   const r = resolve(name);
   const e = r && r.entry;
@@ -243,18 +251,25 @@ function refusal(name) {
   const child = example(e);
   if (child && !e.open) return `${name} holds other settings; set the setting itself, for example ${child}.`;
   if (e.container || e.legacyOnly) return `${name} only holds other settings and cannot be set.`;
-  if (!oldOf(e)) return `${name} needs the new settings file; run the update first.`;
   return null;
 }
 
-const BESIDE = (name) => `${name} is written beside ${OLD_BLOCK}: in the file, not under it; add the line by hand.`;
+// Hands the changes to the writer. { ok } or { errors } (one line for each refusal).
+function write(options, changes) {
+  const { vaultPath } = target(options);
+  try {
+    return { ok: applyChanges(vaultPath, changes, { create: !!options.create }) };
+  } catch (e) {
+    if (e.refusals) return { errors: e.refusals };
+    throw e;
+  }
+}
 
-// Turns `name=json` pairs into the leaves to write. { errors } and nothing else when any is refused.
-// `plain`: a value that is not JSON is taken as the text written (the settings command); the
-// older vault-setting command keeps the strict reading. A leaf's path is where the old file holds it.
-function plan(pairs, { plain = false } = {}) {
+// Turns `name=value` pairs into set changes. { errors } and nothing else when any is refused.
+// A value that is not JSON is taken as the text written.
+function plan(options, pairs) {
   const errors = [];
-  const leaves = [];
+  const changes = [];
   const written = [];
   const empties = [];
   for (const pair of pairs) {
@@ -263,35 +278,23 @@ function plan(pairs, { plain = false } = {}) {
     const why = refusal(name);
     if (why) { errors.push(why); continue; }
     const e = resolve(name).entry;
-    if (!underBlock(oldOf(e))) { errors.push(BESIDE(name)); continue; }
-    if (at < 0) { errors.push(plain ? `${name} needs a value, like ${name}=value.` : `${name} needs a value, like ${name}='"text"'.`); continue; }
-    let value;
+    if (at < 0) { errors.push(`${name} needs a value, like ${name}=value.`); continue; }
     const given = pair.slice(at + 1);
-    if (plain && given.trim() === '') { errors.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
+    if (given.trim() === '') { errors.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
+    let value;
     try {
       value = JSON.parse(given);
     } catch {
-      if (!plain) {
-        errors.push(`The value for ${name} is not written as JSON; put text in quotes, for example ${name}='"text"'.`);
-        continue;
-      }
       value = given.trim();
     }
-    if (Array.isArray(value) && value.some((x) => typeof x === 'string' && x.trim() === '')) {
-      errors.push(`${name} has a blank entry; remove it.`);
-      continue;
-    }
-    const read = TYPES[e.type].read(value, e);
-    if (!read.ok) { errors.push(makeFault({ name, kind: 'not-allowed', level: 'warn', value, entry: e }).message); continue; }
-    const out = e.type === 'text' ? value : read.value;
-    const segs = pathOf(e);
-    const at2 = leaves.findIndex((l) => l.path.join('.') === segs.join('.'));
-    if (at2 >= 0) leaves.splice(at2, 1);
-    leaves.push({ path: segs, value: out });
+    const at2 = changes.findIndex((c) => c.name === e.name);
+    if (at2 >= 0) changes.splice(at2, 1);
+    changes.push({ op: 'set', name: e.name, label: name, value });
     if (!written.includes(name)) written.push(name);
-    if (Array.isArray(out) && out.length === 0 && Array.isArray(e.default) && e.default.length > 0) empties.push(name);
+    if (Array.isArray(value) && value.length === 0 && Array.isArray(e.default) && e.default.length > 0) empties.push(name);
   }
-  return errors.length ? { errors } : { leaves, written, empties };
+  if (errors.length && changes.length) errors.push(...refusalsFor(target(options).vaultPath, changes));
+  return errors.length ? { errors } : { changes, written, empties };
 }
 
 // `noun` is what the list holds, from the setting's own entry.
@@ -299,14 +302,20 @@ const emptyNote = (name, noun = ((resolve(name) || {}).entry || {}).of || 'entri
 
 function set(options, pairs) {
   if (!pairs.length) throw new Error('settings set needs at least one name=value.');
-  if (onNewLayout(options)) return { errors: [NEW_LAYOUT_READ_ONLY] };
-  const planned = plan(pairs, { plain: true });
+  const planned = plan(options, pairs);
   if (planned.errors) return { errors: planned.errors };
-  const { setPublishLeaves } = require('../vault-config-edit');
-  setPublishLeaves(target(options).vaultPath, planned.leaves);
+  const done = write(options, planned.changes);
+  if (done.errors) return done;
   const notes = planned.empties.map((n) => emptyNote(n));
   const result = { written: planned.written, notes };
-  return { result, lines: [...planned.written.map((n) => `Wrote ${n}.`), ...notes], notices: noticesFor(planned.written) };
+  // The line names what is now in the file: an older spelling given is replaced by the primary one.
+  const lines = planned.written.map((n) => {
+    const r = resolve(n);
+    if (!r.old) return `Wrote ${n}.`;
+    const at = planned.changes.findIndex((c) => c.name === r.entry.name);
+    return `Wrote ${done.ok.wrote[at] || n}.`;
+  });
+  return { result, lines: [...lines, ...done.ok.notes, ...notes], notices: noticesFor(planned.written) };
 }
 
 // Whether two entries of a list setting are one entry, by the rule the build itself uses for
@@ -333,7 +342,6 @@ function sameRule(e, vaultPath) {
 function changeList(options, verb, args) {
   const [name, ...items] = args;
   if (!name || !items.length) throw new Error(`settings ${verb} needs a setting name and at least one entry in quotes.`);
-  if (onNewLayout(options)) return { errors: [NEW_LAYOUT_READ_ONLY] };
   const why = refusal(name);
   if (why) return { errors: [why] };
   const e = resolve(name).entry;
@@ -379,10 +387,8 @@ function changeList(options, verb, args) {
   }
   result.list = list || current;
   if (list) {
-    const planned = plan([`${name}=${JSON.stringify(list)}`]);
-    if (planned.errors) return { errors: planned.errors };
-    const { setPublishLeaves } = require('../vault-config-edit');
-    setPublishLeaves(vaultPath, planned.leaves);
+    const done = write(options, [{ op: verb, name: e.name, label: name, entries: verb === 'add' ? result.added : result.removed, same: isSame, base: current }]);
+    if (done.errors) return done;
     result.written = [name];
     if (verb === 'remove') {
       const after = getPath(readSettings({ vaultPath, siteConfig }).values, e.name.split('.')) || [];
@@ -393,7 +399,7 @@ function changeList(options, verb, args) {
     }
     // Not said when the site file's own entries still hide something.
     const stillApplies = verb === 'remove' && result.notes.some((n) => n.includes(' still applies,'));
-    if (!stillApplies) result.notes.push(...planned.empties.map((n) => emptyNote(n)));
+    if (!stillApplies && list.length === 0 && Array.isArray(e.default) && e.default.length > 0) result.notes.push(emptyNote(name));
   }
   const shown = (xs) => xs.map((x) => JSON.stringify(x)).join(', ');
   const done = verb === 'add' ? result.added : result.removed;
@@ -407,28 +413,32 @@ function changeList(options, verb, args) {
 
 function unset(options, names) {
   if (!names.length) throw new Error('settings unset needs at least one name.');
-  if (onNewLayout(options)) return { errors: [NEW_LAYOUT_READ_ONLY] };
+  const { vaultPath } = target(options);
+  const legacy = layoutOf(vaultPath) === 'legacy';
   const errors = [];
-  // A name the list knows is taken out where the old file holds it; any other key under the old
-  // block is taken out as written, so a stray key can still be removed.
-  const at = new Map();
+  const changes = [];
+  const given = new Map();
   for (const name of names) {
+    if (given.has(name)) continue;
     const r = resolve(name);
-    if (r && !oldOf(r.entry)) errors.push(`${name} needs the new settings file; run the update first.`);
-    else if (r && filePathOf(name, r)[0] !== OLD_BLOCK) errors.push(BESIDE(name));
-    else if (r) at.set(name, filePathOf(name, r).slice(1));
-    else if (name.startsWith(`${OLD_BLOCK}.`)) at.set(name, name.split('.').slice(1));
+    const holds = LEAVES().filter((x) => x.name.startsWith(`${name}.`) || (!!oldOf(x) && oldOf(x).startsWith(`${name}.`))).map((x) => (name.startsWith(`${OLD_BLOCK}.`) ? oldOf(x) : x.name));
+    if (r && !r.entry.legacyOnly && !r.entry.container) { changes.push({ op: 'unset', name: r.entry.name, label: name, ...(r.old && legacy ? { spelling: name } : {}) }); given.set(name, r.entry.name); }
+    else if (holds.length) errors.push(`${name} holds other settings; unset each setting in it: ${holds.join(', ')}.`);
+    // A key under the old block the list does not know is taken out as written, so a stray key can still be removed.
+    else if (legacy && name.startsWith(`${OLD_BLOCK}.`)) { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else errors.push(notASetting(name));
   }
   if (errors.length) return { errors };
-  const { vaultPath } = target(options);
-  const data = rawData(vaultPath);
-  const removed = names.filter((n, i) => names.indexOf(n) === i && getPath(data, [OLD_BLOCK, ...at.get(n)]) !== undefined);
-  if (removed.length) {
-    const { removePublishLeaves } = require('../vault-config-edit');
-    removePublishLeaves(vaultPath, removed.map((n) => at.get(n)));
+  const done = write(options, changes);
+  if (done.errors) return done;
+  const gone = new Set(done.ok.changed);
+  const removed = [...given.keys()].filter((n) => gone.has(given.get(n)));
+  const lines = removed.length ? [] : ['Nothing to remove: none of those is in the file.'];
+  for (const n of removed) {
+    const spellings = done.ok.removed.filter((w) => w === n || given.get(n) === w || (resolve(w) && resolve(w).entry.name === given.get(n)));
+    lines.push(spellings.length > 1 ? `Removed ${spellings.join(' and ')} (the same setting).` : `Removed ${n}.`);
   }
-  return { result: { removed }, lines: removed.length ? removed.map((n) => `Removed ${n}.`) : ['Nothing to remove: none of those is in the file.'], notices: noticesFor(names) };
+  return { result: { removed }, lines, notices: noticesFor(names) };
 }
 
 // ---- The command --------------------------------------------------------------------------
@@ -470,60 +480,4 @@ function runSettings(options, deps = {}) {
   }
 }
 
-// ---- The older `vault-setting` command ---------------------------------------------------
-
-// The thirteen keys the older command printed, built from the file as written. migrate_site.py
-// and older pinned site tools call it; both move to `settings` in 1b.
-function aliasRead(options) {
-  const { vaultPath, siteConfig } = target(options);
-  const publish = getPath(rawData(vaultPath), [OLD_BLOCK]);
-  const file = isMap(publish) ? publish : {};
-  const asked = isMap(file.theme) ? file.theme : {};
-  const askedFonts = isMap(asked.fonts) ? asked.fonts : {};
-  const asString = (v) => (typeof v === 'string' && v.trim() ? v : null);
-  return {
-    excludeSectionsOwn: Array.isArray(file.exclude_sections) || Array.isArray(siteConfig.excludeSections),
-    excludeFieldsOwn: Array.isArray(file.exclude_fields) || Array.isArray(siteConfig.excludeFields),
-    defaultExcludeSections: [...entry('player_site.hide.sections').default],
-    defaultExcludeFields: [...entry('player_site.hide.fields').default],
-    defaultModeSet: asked.default_mode !== undefined && asked.default_mode !== null,
-    fontSource: askedFonts.source || null,
-    googleFonts: require('../fonts').googleFontsFor(vaultPath, siteConfig),
-    sheetSkin: asString(file.sheet_skin),
-    sheetFrame: asString(file.sheet_frame),
-    dndbeyondSync: asString(file.dndbeyond_sync),
-    linkPreviews: asString(file.link_previews),
-    tohitCalculator: asString(file.tohit_calculator),
-    connections: asString(file.connections),
-  };
-}
-
-function runVaultSetting(options, deps = {}) {
-  const out = deps.out || console.log;
-  const err = deps.err || console.error;
-  try {
-    let result;
-    if (options.set && options.set.length) {
-      if (onNewLayout(options)) { err(`Error: ${NEW_LAYOUT_READ_ONLY}`); return 1; }
-      const planned = plan(options.set.map((p) => `${OLD_BLOCK}.${p}`));
-      if (planned.errors) {
-        for (const message of planned.errors) err(`Error: ${message}`);
-        return 1;
-      }
-      const { setPublishLeaves } = require('../vault-config-edit');
-      setPublishLeaves(target(options).vaultPath, planned.leaves);
-      const bare = (n) => n.slice(OLD_BLOCK.length + 1);
-      result = { written: planned.written.map(bare) };
-      if (planned.empties.length) result.notes = planned.empties.map((n) => emptyNote(bare(n), 'headings or fields'));
-    } else {
-      result = aliasRead(options);
-    }
-    out(options.json ? JSON.stringify(result, null, 2) : Object.entries(result).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join('\n'));
-    return 0;
-  } catch (e) {
-    err(`Error: ${firstLine(e)}`);
-    return 1;
-  }
-}
-
-module.exports = { runSettings, runVaultSetting, helpText };
+module.exports = { runSettings, helpText };

@@ -41,7 +41,6 @@ Usage:
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
   gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
   gm-apprentice-publish settings <cmd>       Read, set, describe and check any site setting
-  gm-apprentice-publish vault-setting        Older form of settings get and settings set (kept for older sites)
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
@@ -275,20 +274,6 @@ withholds because its Wrap-Up publishes.
   --vault <dir>      Read this vault through the site's rules instead of
                      the vault the config names
   --help, -h         Show this help
-`,
-  'vault-setting': `
-gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <path>] [--vault <dir>]
-
-The older form of "settings get" and "settings set", kept for older sites. Use
-"gm-apprentice-publish settings --help". With no --set it reports what the vault
-file says about a few settings; with --set it writes them, the key given without
-"publish.".
-
-  --set <key>=<json>  The setting and its value as JSON; repeatable
-  --vault <dir>       The vault to read and write (default: the config's vaultPath)
-  --config <path>     Path to vault.config.json (default: ./vault.config.json)
-  --json              Emit JSON
-  --help, -h          Show this help
 `,
   'migrate-config': `
 gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
@@ -792,33 +777,14 @@ if (command === 'settings') {
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, { '--vault': 'vault' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create' }, { '--vault': 'vault' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json });
-  exitAfterFlush(rc);
-  return;
-}
-
-if (command === 'vault-setting') {
-  const sets = [];
-  const rest = [];
-  const tail = args.slice(1);
-  for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--set') { sets.push(tail[i + 1] === undefined ? '' : tail[i + 1]); i += 1; } else rest.push(tail[i]);
-  }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, { '--vault': 'vault' });
-  if (parsed.error) {
-    console.error(`Error: ${parsed.error}`);
-    printSubcommandHelp('vault-setting');
-    process.exit(1);
-  }
-  const { runVaultSetting } = require('../lib/settings/cli.js');
-  const rc = runVaultSetting({ ...settingsTarget(parsed, args), set: sets, json: !!parsed.flags.json });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create });
   exitAfterFlush(rc);
   return;
 }
