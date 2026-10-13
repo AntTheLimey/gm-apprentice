@@ -612,7 +612,7 @@ function expandCarry(text, step, label) {
 // Plans the changes without writing: { rel, file, before, after, changed, notes, wrote, removed, created }.
 // `siteConfig` is the site folder's vault.config.json, when the caller has it: a vault with no settings file whose
 // site file still holds settings is not given a new one (the new file would switch those settings off).
-function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null } = {}) {
+function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null, siteConfigPath = null } = {}) {
   const layout = layoutOf(vaultPath);
   const { steps, refusals } = prepare(changes, layout, { allowState });
   if (refusals.length) {
@@ -621,7 +621,7 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
     throw err;
   }
   if (layout === 'none' && create && hasLegacy(siteConfig)) {
-    throw plain(`the site folder's vault.config.json still holds this vault's settings, so none can be set yet. Bring them into the vault first by running: gm-apprentice-publish settings move --vault "${vaultPath}" --config "<site folder>/vault.config.json". Nothing was written.`);
+    throw plain(`the site folder's vault.config.json still holds this vault's settings, so none can be set yet. Bring them into the vault first by running: gm-apprentice-publish settings move --vault "${vaultPath}" --config "${siteConfigPath || '<site folder>/vault.config.json'}". Nothing was written.`);
   }
   const doc = open(vaultPath, layout, create);
   if (layout === 'new' || doc.created) {

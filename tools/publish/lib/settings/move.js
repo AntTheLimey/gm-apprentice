@@ -689,8 +689,6 @@ function verify(m, deps = {}) {
     for (const e of LEAVES) {
       const segs = e.name.split('.');
       let want = Object.prototype.hasOwnProperty.call(m.planned, e.name) ? m.planned[e.name] : getPath(m.old.values, segs);
-      // A setting the old layout never had: the new reader gives the campaign the vault folder's name when unset.
-      if (e.name === 'vault.campaign' && m.old.origins[e.name] === 'default' && want === null) want = path.basename(path.resolve(m.vault));
       const wantDefault = !Object.prototype.hasOwnProperty.call(m.planned, e.name) && m.old.origins[e.name] === 'default';
       if (!isDeepStrictEqual(getPath(now.values, segs), want)) throw new Error(`${e.name} would not come out the same after the move`);
       if ((now.origins[e.name] === 'default') !== wantDefault) throw new Error(`${e.name} would change between written and left out`);

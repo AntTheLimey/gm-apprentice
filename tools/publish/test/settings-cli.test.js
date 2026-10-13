@@ -387,7 +387,7 @@ test('the two settings the old file never had are refused by set and unset, and 
   assert.deepEqual(run(s, 'unset', ['vault.kept_by']).err, ['Error: vault.kept_by needs the new settings file; run the update first.']);
   const got = run(s, 'get', ['vault']);
   assert.deepEqual(got.data.values['vault.kept_by'], 'gm');
-  assert.equal(got.data.values['vault.campaign'], null);
+  assert.equal(got.data.values['vault.campaign'], 'vault', 'unset, the campaign is the vault folder\'s name');
 });
 
 test('get with one name that is not a setting prints nothing and exits 1', () => {
@@ -852,4 +852,12 @@ test('get names each setting as the vault\'s own file writes it', () => {
   fs.writeFileSync(path.join(moved.vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
   const now = run(moved, 'get').data.written;
   assert.equal(now['player_site.title'], 'player_site.title');
+});
+
+test('set --create on a vault whose site file holds its settings names the real site file in the command to run', () => {
+  const s = scratch(null, { vaultPath: './vault', siteTitle: 'Kept' });
+  const r = run(s, 'set', ['player_site.title=New'], { create: true, config: s.config });
+  assert.equal(r.rc, 1);
+  assert.ok(r.err.join('\n').includes(`--config "${s.config}"`), r.err.join('\n'));
+  assert.ok(!r.err.join('\n').includes('<site folder>'));
 });

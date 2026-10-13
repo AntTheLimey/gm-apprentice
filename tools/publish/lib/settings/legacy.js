@@ -333,7 +333,8 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
   // A setting the old file never had reads as its default.
   for (const e of REGISTRY) {
     if (e.legacyOnly || legacyNameOf(e) || e.container) continue;
-    setIn(values, e.name, e.default === undefined ? null : clone(e.default));
+    // (The campaign, unset, is the vault folder's name on every layout.)
+    setIn(values, e.name, e.defaultFromVaultFolder ? path.basename(path.resolve(vaultPath)) : (e.default === undefined ? null : clone(e.default)));
     origins[e.name] = 'default';
   }
 

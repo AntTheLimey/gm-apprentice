@@ -265,7 +265,7 @@ function refusal(name) {
 function write(options, changes) {
   const { vaultPath, siteConfig } = target(options);
   try {
-    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig }) };
+    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig, siteConfigPath: options.config ? path.resolve(options.config) : null }) };
   } catch (e) {
     if (e.refusals) return { errors: e.refusals };
     throw e;
