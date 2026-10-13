@@ -1,0 +1,839 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/AntTheLimey/gm-apprentice/blob/main/tools/publish/schema/vault-config.schema.json",
+  "title": "gm-apprentice vault settings",
+  "description": "The settings of a campaign vault, as written in _meta/vault-config.yaml. Generated from the tool's list of settings; do not edit by hand.",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "description": "The layout's number",
+      "const": 1
+    },
+    "vault": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "kept_by": {
+          "description": "Who keeps this vault: `gm` for the game master, `player` for a player keeping notes on a campaign they are in",
+          "default": "gm",
+          "enum": [
+            "gm",
+            "player",
+            null
+          ]
+        },
+        "campaign": {
+          "description": "The campaign's name",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "attachments": {
+          "description": "The vault folder that holds pictures",
+          "default": "_attachments",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "system": {
+          "description": "The game system, which decides how a character sheet is drawn",
+          "enum": [
+            "coc-7e",
+            "coc",
+            "regency-cthulhu",
+            "coc-7e-regency",
+            "gurps-4e",
+            "gurps",
+            "dnd-5e",
+            "dnd-5e-2024",
+            "dnd",
+            "fitd",
+            "blades",
+            "pf2e",
+            "pathfinder-2e",
+            "pathfinder",
+            null
+          ]
+        },
+        "setting_year": {
+          "description": "An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. Write it at the left edge of the file, beside `publish:`, not under it",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "dndbeyond_sync": {
+          "description": "When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask",
+          "default": "manual",
+          "enum": [
+            "build",
+            "manual",
+            null
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "player_site": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "properties": {
+        "publish": {
+          "description": "Whether this vault has a site",
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+            }
+          ]
+        },
+        "folder": {
+          "description": "The folder on this computer that holds the site",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "title": {
+          "description": "The name in the menu bar and the browser tab",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "footer": {
+          "description": "A line at the foot of every page",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "features": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "search": {
+              "description": "The search box",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "link_previews": {
+              "description": "The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page",
+              "default": "on",
+              "enum": [
+                "on",
+                "desktop",
+                "off",
+                "true",
+                "yes",
+                "false",
+                "no",
+                true,
+                false,
+                null
+              ]
+            },
+            "connections": {
+              "description": "How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off`",
+              "default": "tree",
+              "enum": [
+                "tree",
+                "web",
+                "cards",
+                "off",
+                "true",
+                "on",
+                "yes",
+                "false",
+                "no",
+                true,
+                false,
+                null
+              ]
+            },
+            "tohit_calculator": {
+              "description": "The to-hit calculator on a GURPS character's Combat tab",
+              "default": "on",
+              "enum": [
+                "on",
+                "off",
+                "true",
+                "yes",
+                "false",
+                "no",
+                true,
+                false,
+                null
+              ]
+            },
+            "live_stats": {
+              "description": "Players change hit points, spent resources and conditions on their own sheet during a session, and the party board follows. For Call of Cthulhu, GURPS and D&D; it does nothing for Pathfinder or Forged in the Dark",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                }
+              ]
+            },
+            "inbox": {
+              "description": "A box on each character page for sending the GM a request or a question",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                }
+              ]
+            }
+          }
+        },
+        "not_found": {
+          "description": "The words a reader sees after following a link to a page that is not there",
+          "default": "This page is not available.",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "hide": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "mode": {
+              "description": "`player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own",
+              "default": "player",
+              "enum": [
+                "player",
+                "full",
+                null
+              ]
+            },
+            "folders": {
+              "description": "Vault folders never published",
+              "default": [
+                "_meta",
+                "_Templates"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "sections": {
+              "description": "Headings whose text is never published, on any page, however the heading is dressed (bold, a colon, a link)",
+              "default": [
+                "GM Notes",
+                "DM Notes",
+                "Player Notes",
+                "Source References",
+                "Reconciliation Context",
+                "Handoff to Reconcile"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "fields": {
+              "description": "Fields in the block at the top of a note (between its `---` lines) that are never shown",
+              "default": [
+                "secrets",
+                "current_plan",
+                "plan_progress",
+                "gm_notes",
+                "prep_notes",
+                "reliability"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "callouts": {
+              "description": "Whether Obsidian callouts (`> [!note]`) are left out",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": [
+                      "string",
+                      "number",
+                      "boolean"
+                    ]
+                  }
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "drafts": {
+              "description": "Whether a note with `canon_status: DRAFT` at its top is left off the site",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "field_exceptions": {
+              "description": "Lets one note show a field that `player_site.hide.fields` hides everywhere else",
+              "default": {},
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          },
+          "additionalProperties": false
+        },
+        "folder_map": {
+          "description": "Which vault folders are published, and the web address each gets",
+          "default": {},
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "theme": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "genre": {
+              "description": "A ready-made look: colours, lettering and section names. A genre the tool does not know is reported, and the site keeps the plain dark look",
+              "enum": [
+                "horror",
+                "fantasy",
+                "noir",
+                "military",
+                "scifi",
+                "gothic",
+                "cthulhu",
+                "adventure",
+                "industrial",
+                "heist",
+                "tactical",
+                "modern",
+                "sci-fi",
+                "science-fiction",
+                "space",
+                "space-opera",
+                "space-noir",
+                null
+              ]
+            },
+            "palette": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "primary": {
+                  "description": "The main colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "default": "#1a2f3a",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "accent": {
+                  "description": "The accent colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "default": "#3d8a7a",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "background": {
+                  "description": "The page background colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "default": "#e8f0f3",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "description": "The text colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "default": "#1a1a1a",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "fonts": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "heading": {
+                  "description": "The lettering for headings",
+                  "default": "system-ui",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "body": {
+                  "description": "The lettering for body text",
+                  "default": "system-ui",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "description": "Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used",
+                  "default": "google",
+                  "enum": [
+                    "google",
+                    "self-host",
+                    "local",
+                    null
+                  ]
+                },
+                "files": {
+                  "description": "Your own font files, each listed with its `family` (the typeface's name) and `path` (the file's place in the vault); used when the source is `local`",
+                  "default": []
+                }
+              }
+            },
+            "campaign_image": {
+              "description": "The large picture at the top of the landing page",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "default_mode": {
+              "description": "Whether a reader starts in light or dark",
+              "default": "system",
+              "enum": [
+                "system",
+                "dark",
+                "light",
+                null
+              ]
+            },
+            "tagline": {
+              "description": "One sentence under the title on the landing page",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "lists": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "section_titles": {
+              "description": "Your own headings for the lists of locations, factions, items, creatures and documents",
+              "default": {},
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "locations": {},
+                "factions": {},
+                "items": {},
+                "creatures": {},
+                "documents": {}
+              }
+            },
+            "banners": {
+              "description": "A picture or map at the top of a section's list",
+              "default": {},
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "locations": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "group_by": {
+                  "description": "Splits the list of locations into one block, under its own heading, for each place of a kind, such as each star system"
+                },
+                "ungrouped_label": {
+                  "description": "The heading for places that fall in no block",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "sheets": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "show": {
+              "description": "Whether a character's page carries its sheet",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                }
+              ]
+            },
+            "prose_sections": {
+              "description": "With sheets off, extra sections of a character's note that are still published",
+              "default": [],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "skin": {
+              "description": "The look of every character sheet",
+              "enum": [
+                "plain",
+                "parchment",
+                "case-file",
+                "console",
+                "ledger",
+                null
+              ]
+            },
+            "frame": {
+              "description": "The ornament round each portrait",
+              "enum": [
+                "none",
+                "ring",
+                "laurel",
+                "thorns",
+                "gilt",
+                "steel",
+                "corners",
+                "hex",
+                "cracked",
+                null
+              ]
+            },
+            "crest": {
+              "description": "A crest or wax seal at the head of a Call of Cthulhu sheet",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "landing": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "max_npcs": {
+              "description": "How many people appear under \"NPCs in Play\"; `0` shows none",
+              "default": 6,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_locations": {
+              "description": "How many places appear under \"Latest Locations\"; `0` shows none",
+              "default": 4,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_events": {
+              "description": "How many events appear under \"Latest Events\"; `0` shows none",
+              "default": 4,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recency_window": {
+              "description": "How many recent sessions decide who and what is \"in play\"; `0` counts none",
+              "default": 3,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "featured_npcs": {
+              "description": "People pinned to the front of their row, in your order",
+              "default": [],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "featured_locations": {
+              "description": "The same, for places",
+              "default": [],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "quick_links": {
+              "description": "A short row of links on the page",
+              "default": [],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "explore_descriptions": {
+              "description": "Your own line under each card in the \"Explore the World\" row",
+              "type": [
+                "object",
+                "null"
+              ]
+            }
+          }
+        },
+        "images": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "optimize": {
+              "description": "Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "format": {
+              "description": "The format pictures are converted to. Only `webp` is available; any other is reported, and pictures are left as they are",
+              "default": "webp",
+              "enum": [
+                "webp",
+                null
+              ]
+            },
+            "max_width": {
+              "description": "The widest a shrunk picture may be, in pixels; `0` for no limit",
+              "default": 1600,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quality": {
+              "description": "The quality of shrunk pictures: 0 is the smallest file, 100 the best picture, and anything above 100 counts as 100",
+              "default": 82,
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "gm_site": {
+      "description": "Reserved for the GM site; nothing under it is read yet",
+      "type": [
+        "object",
+        "null"
+      ]
+    }
+  }
+}

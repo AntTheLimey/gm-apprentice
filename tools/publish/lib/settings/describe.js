@@ -1,6 +1,7 @@
 'use strict';
 // What the settings command says about one setting, built from its entry in the list.
-const { TYPES } = require('./types');
+const { TYPES, SWITCH_WORDS } = require('./types');
+const { REGISTRY } = require('./registry');
 
 // A setting the GM can read and write by name: not a parent that only holds others, not a
 // retired name, not the tool's own bookkeeping, not a name its children's names stand in for.
@@ -36,4 +37,107 @@ function row(entry) {
   };
 }
 
-module.exports = { row, leftOutCell, isLeaf, defaultOf };
+// ---- The JSON Schema of vault-config.yaml ----
+// Built from the list and from types.js's own switch words; it describes the file as a GM writes
+// it (not resolved values), as far as the reader accepts it.
+
+const SCHEMA_ID = 'https://github.com/AntTheLimey/gm-apprentice/blob/main/tools/publish/schema/vault-config.schema.json';
+const caseless = (word) => [...word].map((c) => `[${c}${c.toUpperCase()}]`).join('');
+const stringOrNumber = { type: ['string', 'number', 'boolean'] };
+
+// The reader trims a word and lowercases it, so the pattern allows spaces round it and any casing.
+const switchSchema = () => ({ anyOf: [{ type: 'boolean' }, { type: 'string', pattern: `^\\s*(?:${[...SWITCH_WORDS.keys()].map(caseless).join('|')})\\s*$` }] });
+
+// The schema of one value, from the type's own definition. A choice lists the canonical words and
+// the aliases, in lower case (the reader also accepts other casings and spaces round a word), and
+// the booleans when the word `true` or `false` is one of them.
+const SCHEMAS = {
+  switch: () => switchSchema(),
+  choice(e) {
+    const words = [...e.values, ...Object.keys(e.aliases || {})];
+    const bools = ['true', 'false'].filter((w) => words.includes(w)).map((w) => w === 'true');
+    return { enum: [...new Set(words), ...bools] };
+  },
+  number(e) {
+    const limits = {};
+    if (e.min !== undefined) limits.minimum = e.min;
+    if (e.max !== undefined) limits.maximum = e.max;
+    // The reader also takes a number written as text; limits are described for the number form.
+    const text = e.integer ? '^\\s*-?\\d+\\s*$' : '^\\s*-?\\d+(\\.\\d+)?\\s*$';
+    return { anyOf: [{ type: e.integer ? 'integer' : 'number', ...limits }, { type: 'string', pattern: text }] };
+  },
+  list: () => ({ type: 'array', items: stringOrNumber }),
+  switchOrList: () => ({ anyOf: [...switchSchema().anyOf, { type: 'array', items: stringOrNumber }] }),
+  map(e) {
+    if (!e.keys) return { type: 'object' };
+    return { type: 'object', properties: Object.fromEntries(e.keys.map((k) => [k, {}])) };
+  },
+  text: () => ({ type: ['string', 'number'] }),
+  any: () => ({}),
+};
+
+// The reader treats a key written with nothing after it as "not set", except on a switch that must
+// never fail on one (read.js `emptyIsFault`), where it is unreadable.
+const emptyIsFault = (e) => e.type === 'switch' && e.onFault === false;
+
+function valueSchema(e) {
+  const s = SCHEMAS[e.type](e);
+  if (!emptyIsFault(e) && e.type !== 'any') {
+    if (s.anyOf) s.anyOf.push({ type: 'null' });
+    else if (s.enum) s.enum.push(null);
+    else s.type = [].concat(s.type, 'null');
+  }
+  const out = {};
+  if (e.does) out.description = e.does;
+  if (e.default !== undefined) out.default = e.default;
+  return { ...out, ...s };
+}
+
+// Groups that stop a player build on a name they do not know (read.js STRICT_PARENTS and the
+// hide group). Other groups stay open: the reader only warns there.
+const CLOSED = new Set(['vault', 'player_site', 'player_site.hide']);
+
+function schema() {
+  const root = { type: 'object', properties: {} };
+  const groupAt = (segs) => {
+    let node = root;
+    for (const seg of segs) {
+      if (!node.properties[seg]) node.properties[seg] = { type: ['object', 'null'], properties: {} };
+      node = node.properties[seg];
+    }
+    return node;
+  };
+  for (const e of REGISTRY.filter((x) => !x.legacyOnly)) {
+    const segs = e.name.split('.');
+    const hasKids = REGISTRY.some((x) => !x.legacyOnly && x.name.startsWith(`${e.name}.`));
+    if (hasKids) { groupAt(segs); continue; }
+    groupAt(segs.slice(0, -1)).properties[segs[segs.length - 1]] = valueSchema(e);
+  }
+  const close = (node, name) => {
+    if (!node.properties) return node;
+    for (const [k, v] of Object.entries(node.properties)) if (v.properties) close(v, name ? `${name}.${k}` : k);
+    if (CLOSED.has(name)) node.additionalProperties = false;
+    return node;
+  };
+  close(root, '');
+  const { vault, player_site: playerSite } = root.properties;
+  return {
+    $schema: 'https://json-schema.org/draft/2020-12/schema',
+    $id: SCHEMA_ID,
+    title: 'gm-apprentice vault settings',
+    description: "The settings of a campaign vault, as written in _meta/vault-config.yaml. Generated from the tool's list of settings; do not edit by hand.",
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      version: { description: "The layout's number", const: 1 },
+      vault,
+      player_site: playerSite,
+      gm_site: { description: 'Reserved for the GM site; nothing under it is read yet', type: ['object', 'null'] },
+    },
+  };
+}
+
+// The committed file's exact text: two-space JSON and a final newline, with \n always.
+const schemaText = () => `${JSON.stringify(schema(), null, 2)}\n`;
+
+module.exports = { row, leftOutCell, isLeaf, defaultOf, schema, schemaText, SCHEMA_ID };
