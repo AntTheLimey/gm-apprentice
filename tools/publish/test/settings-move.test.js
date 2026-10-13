@@ -985,3 +985,19 @@ test('a vault with no list of its own keeps the built-in ones when a site hiding
   const got = readSettings({ vaultPath: s.vault }).values.player_site.hide.sections;
   assert.ok(got.includes('Z') && got.includes('GM Notes'));
 });
+
+test('a left-over old file that also hides a heading does not hide the site file\'s other entries from the check', () => {
+  const s = scratch(old('  site_dir: ../Site\n  exclude_sections: [GM Notes]\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault' }));
+  const oldText = fs.readFileSync(at(s.vault, OLD_FILE), 'utf8');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(at(s.vault, OLD_FILE), oldText);      // a sync brings the old file back
+  fs.writeFileSync(file, JSON.stringify({ vaultPath: '../Vault', excludeSections: ['Site Secret'] }));
+  const check = cliMove({ vault: s.vault }, { check: true });
+  assert.ok((check.data.siteDiffers || []).includes('player_site.hide.sections'), JSON.stringify(check.data));
+  assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true }).rc, 0);
+  assert.ok(readSettings({ vaultPath: s.vault }).values.player_site.hide.sections.includes('Site Secret'));
+});

@@ -33,14 +33,16 @@ for file, before and after the move.
   update looks after (you pinned it to a version number or an address,
   say) keeps its vault on the old file. The update says so in one line,
   still brings the rest of the vault up to date, and moves the vault the
-  first time it runs after that tool is updated. Settings that your site
+  first time it runs after that tool is updated. This holds whether or
+  not the site is switched on: a site folder holding a publish tool older
+  than 1.23.0 keeps its vault on the old file. Settings that your site
   folder's `vault.config.json` still holds are taken into the vault's
   file in the same step.
 - A new vault starts with the new files (`_meta/vault-config.yaml` and
   `_meta/vault-state.json`) and no old one.
 - `doctor --site` says when a vault is still on the old settings file and
   what will move it.
-- The Settings check fixes more on its own yes. A misspelt or old-named
+- The Settings check fixes more on one yes. A misspelt or old-named
   key in the new file has its entries moved to the setting it meant, and
   a hiding list is added to rather than replaced. A stray top-level
   `publish:` block is folded in the same way. A hiding list still in the
@@ -68,13 +70,13 @@ for file, before and after the move.
 - The publish tool is 1.23.1. An older plugin pointed at a moved vault
   stops and writes nothing: its version check reports the stamp as absent
   and its update refuses, with advice that is the wrong advice (it names
-  an old plugin version). Update the plugin.
+  an old plugin version). Update the plugin on every computer you use
+  this vault from.
 
 ### Removed
 
-- The `migrate-config` command and the hand-made writer for the old
-  settings file. The update moves a vault, including one whose settings
-  were still in the site folder, and `settings` writes the file.
+- The `migrate-config` command is gone; the update does its work,
+  including for a vault whose settings were still in the site folder.
 
 ---
 

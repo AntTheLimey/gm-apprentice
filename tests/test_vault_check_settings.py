@@ -780,6 +780,15 @@ class SiteFileKeyTests(NewFileBase):
         self.assertIn('\n    "vaultPath"', text)     # its indentation kept
         self.assertEqual(self.rows(vault), [])
 
+    def test_a_site_hiding_key_that_is_not_a_list_says_nothing_was_carried(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            excludeSections="Secret", excludeFields=["motive"])
+        by = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        self.assertIn("nothing was carried", by["excludeSections"].done)
+        self.assertIn("nothing is added", by["excludeSections"].fix)
+        self.assertNotIn("nothing was carried", by["excludeFields"].done)
+        self.assertIn("add its entries", by["excludeFields"].fix)
+
     def test_the_update_points_at_the_settings_check_and_does_not_hold_the_stamp(self):
         import migrate_site as ms
         from migrate_core import PERSON

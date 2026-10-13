@@ -195,6 +195,27 @@ class MoveEndToEndTests(unittest.TestCase):
         self.assertTrue(site.is_dir())
         self.assertNotIn("Wrote _meta/vault-config.yaml", did)
 
+    def test_the_site_switch_being_off_still_holds_an_old_plugin_pinned_tool(self):
+        vault = make_vault(self)
+        site = with_site(self, vault, spec=f"file:{site_fixture.TOOL_DIR.as_posix()}",
+                         installed="1.22.0")
+        (vault / "_meta" / "vault-config.md").write_text(
+            (vault / "_meta" / "vault-config.md").read_text().replace(
+                "site: true", "site: false"), encoding="utf-8")
+        self.assertFalse(vc.settings(vault).get("player_site.publish"))
+        before = hashes(vault.parent)
+        code, plan, err = update(vault, "plan")
+        self.assertIn("stays on the old settings file for now", plan)
+        self.assertNotIn("site-repin", plan)
+        code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
+        self.assertEqual(vault_layout(vault), "legacy")
+        self.assertFalse((vault / "_meta" / "vault-config.yaml").exists())
+        self.assertEqual(read_stamp(vault), PLUGIN)       # a notice, not a hold
+        self.assertNotIn("Wrote _meta/vault-config.yaml", did)
+        self.assertEqual(
+            json.loads((site / "node_modules" / "gm-apprentice-publish"
+                        / "package.json").read_text())["version"], "1.22.0")
+
     def test_a_blocked_vault_holds_the_stamp_and_nothing_is_written(self):
         vault = make_vault(self, "publish:\n  mode: player\n"
                                  "  exclude_sections: not-a-list\n")

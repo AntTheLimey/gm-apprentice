@@ -46,7 +46,6 @@ SHARED = Path(__file__).resolve().parent.parent
 SEEDS = SHARED / "scaffold"
 SCHEMA = SHARED / "entity-schema.md"
 ONTOLOGY = SHARED / "gm-apprentice-ontology.json"
-STRUCTURE = SHARED / "vault-structure.md"
 # What a new vault gets, besides folders and schema files. An existing vault, on either layout, never gets them.
 NEW_FILES = (SETTINGS_FILE, STATE_FILE)
 TIMELINE = "_Campaign/Timeline.md"
@@ -123,16 +122,6 @@ def relationship_types_text() -> str:
         "| Category | Types | Genre |", "|---|---|---|", *rows, "",
         "## Inverses", "", *inverses, "",
         "## Symmetric (stored once, no direction)", "", symmetric, ""])
-
-
-def structure_tree() -> str:
-    """The default layout tree, as shared/vault-structure.md draws it."""
-    found = re.search(r"^```text\n(.*?)\n```", _plugin_text(STRUCTURE),
-                      re.M | re.S)
-    if not found:
-        raise ScaffoldError("the plugin's vault-structure.md has no layout "
-                            "tree")
-    return found.group(1)
 
 
 def seed(name: str, campaign: str) -> str:

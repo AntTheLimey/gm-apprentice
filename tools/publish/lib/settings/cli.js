@@ -25,7 +25,7 @@ const { row, isLeaf } = require('./describe');
 const { OLD_BLOCK, SETUP_NOTE } = require('./legacy');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
-const { planMove, applyMove } = require('./move');
+const { planMove, applyMove, siteFileNamedBy } = require('./move');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
@@ -548,22 +548,6 @@ function fillOf(pairs) {
     out[name] = given;
   }
   return out;
-}
-
-// The site folder a vault names (player_site.folder), and its vault.config.json: { dir, file, exists }.
-// null when the vault has no settings file, names no folder, or its settings cannot be read (the plan says so).
-function siteFileNamedBy(vaultPath) {
-  if (layoutOf(vaultPath) === 'none') return null;
-  let raw;
-  try {
-    raw = getPath(readSettings({ vaultPath, siteConfig: {} }).values, ['player_site', 'folder']);
-  } catch {
-    return null;
-  }
-  if (typeof raw !== 'string' || raw.trim() === '') return null;
-  const dir = require('../lines-cli').siteDirPath(vaultPath, raw);
-  const file = path.join(dir, 'vault.config.json');
-  return { dir, file, exists: fs.existsSync(file) };
 }
 
 function move(options) {

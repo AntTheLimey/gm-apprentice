@@ -221,8 +221,10 @@ function siteToolHoldAll(vault, siteDirs, options) {
   return null;
 }
 
-// The site folder the vault's own settings name, when it holds a vault.config.json; null otherwise.
-function namedSiteDir(vault) {
+// The site folder a vault's own settings name (player_site.folder), and its vault.config.json: { dir, file, exists }.
+// null when the vault has no settings file, names no folder, or its settings cannot be read. The one place that says it.
+function siteFileNamedBy(vault) {
+  if (layoutOf(vault) === 'none') return null;
   let raw;
   try {
     raw = getPath(read.readSettings({ vaultPath: vault, siteConfig: {} }).values, ['player_site', 'folder']);
@@ -231,7 +233,14 @@ function namedSiteDir(vault) {
   }
   if (typeof raw !== 'string' || raw.trim() === '') return null;
   const dir = require('../lines-cli').siteDirPath(vault, raw);
-  return fs.existsSync(path.join(dir, 'vault.config.json')) ? dir : null;
+  const file = path.join(dir, 'vault.config.json');
+  return { dir, file, exists: fs.existsSync(file) };
+}
+
+// The folder the vault names, when it holds a vault.config.json; null otherwise.
+function namedSiteDir(vault) {
+  const named = siteFileNamedBy(vault);
+  return named && named.exists ? named.dir : null;
 }
 
 // ---- Planning -----------------------------------------------------------------------------
@@ -628,7 +637,24 @@ function siteDiffers(vault, site) {
   const beaten = fs.existsSync(at(vault, OLD_FILE)) ? read.readOldLayout({ vaultPath: vault, siteConfig: {} }).origins : {};
   const differs = [];
   for (const e of LEAVES) {
-    if (siteOnly.origins[e.name] === 'default' || (beaten[e.name] && beaten[e.name] !== 'default')) continue;
+    const beat = beaten[e.name] && beaten[e.name] !== 'default';
+    if (siteOnly.origins[e.name] === 'default') continue;
+    if (beat && e.guards) {
+      // A hiding list: the old layout merged both files, so a left-over old file never beat the site's entries. The
+      // new file differs when it lacks one of them (never skipped, or an entry would be dropped by the tidy).
+      const have = getPath(now.values, e.name.split('.'));
+      const lacks = (e.was || []).filter((w) => w.in === 'site' && w.read !== false).some((w) => {
+        const value = getPath(site, w.name.split('.'));
+        if (have === true) return false;
+        if (value === true) return true;
+        if (!Array.isArray(value)) return false;
+        const held = Array.isArray(have) ? have.map((x) => String(x).trim()) : [];
+        return value.some((x) => String(x).trim() !== '' && !held.includes(String(x).trim()));
+      });
+      if (lacks) differs.push(e.name);
+      continue;
+    }
+    if (beat) continue;
     const segs = e.name.split('.');
     if (!covers(getPath(now.values, segs), getPath(siteOnly.values, segs))) differs.push(e.name);
   }
@@ -907,4 +933,4 @@ function applyMove(plan, deps = {}) {
   return { moved: true, lines };
 }
 
-module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom, siteToolHoldAll };
+module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom, siteToolHoldAll, siteFileNamedBy };

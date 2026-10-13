@@ -131,6 +131,18 @@ describe('doctor --site', () => {
     assert.equal(fine[0].detail, 'this vault is still on the old settings file; the next update moves it');
   });
 
+  it('an old tool installed in a site folder with no package.json is said to hold the vault, as the move holds it', async () => {
+    const { dir, configPath } = siteFor(settingsVault('  mode: player\n'));
+    const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.22.0' }));
+    const cap = capture();
+    await runSiteDoctor({ configPath, json: true }, cap.deps);
+    const notes = JSON.parse(cap.text()).findings.filter((f) => f.code === 'SETTINGS_FILE_OLD');
+    assert.equal(notes.length, 1);
+    assert.match(notes[0].detail, /stays on the old settings file because its site's tool \(1\.22\.0\) cannot read the new one/);
+  });
+
   it('a setting left in the site folder\'s file is fixed in vault.config.json, not in the vault\'s settings file', async () => {
     const vault = settingsVault('  mode: player\n');
     fs.unlinkSync(path.join(vault, '_meta', 'vault-config.md'));

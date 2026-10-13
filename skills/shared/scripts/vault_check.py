@@ -5113,7 +5113,8 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
     return row
 
 
-def _site_key_row(fault: dict[str, Any], own: Any) -> SettingsRow:
+def _site_key_row(fault: dict[str, Any], own: Any,
+                  site_value: Any = None) -> SettingsRow:
     """A setting the site folder's vault.config.json still holds, on a vault
     already on the new file. That file is not read now, so the vault's own
     value is the one in use; the fix takes the key out of the site file, in
@@ -5126,7 +5127,17 @@ def _site_key_row(fault: dict[str, Any], own: Any) -> SettingsRow:
     except SettingsUnavailable:
         info = {}
     key = fault["name"]
-    if info.get("guards") and info.get("kind") == "list":
+    carries = (info.get("kind") == "switchOrList" and site_value is True) or (
+        isinstance(site_value, list)
+        and any(isinstance(x, str) and x.strip() for x in site_value))
+    nothing = (info.get("guards") and info.get("kind") in ("list", "switchOrList")
+               and not carries)
+    if nothing:
+        # Not a list of entries: the old layout ignored it too, so nothing it
+        # hid is shown, and nothing is carried over.
+        what = ("remove it from vault.config.json; it holds no list of "
+                f"entries, so nothing is added to {target}")
+    elif info.get("guards") and info.get("kind") == "list":
         what = (f"add its entries to {target} (the built-in entries stay) "
                 "and remove it from vault.config.json")
     elif info.get("guards"):
@@ -5144,7 +5155,9 @@ def _site_key_row(fault: dict[str, Any], own: Any) -> SettingsRow:
     row.kind = "certain"
     row.ops = [{"op": "fold-site"}]
     row.fix = what
-    row.done = f"took {key} out of vault.config.json"
+    row.done = (f"took {key} out of vault.config.json; it held no list of "
+                "entries, so nothing was carried" if nothing
+                else f"took {key} out of vault.config.json")
     return row
 
 
@@ -5342,13 +5355,21 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
     if has_config and site is not None:
         merged = settings(vault, site_config=site / "vault.config.json")
         seen = {(f["name"], f["kind"], f["message"]) for f in own.faults}
+        try:
+            site_json = json.loads(
+                (site / "vault.config.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            site_json = {}
         for f in merged.faults:
             if (f["name"], f["kind"], f["message"]) in seen:
                 continue
             message = (f"{f['message']} (in the site folder's "
                        "vault.config.json)")
             if vault_layout(vault) == "new":
-                rows.append(_site_key_row({**f, "message": message}, own))
+                rows.append(_site_key_row(
+                    {**f, "message": message}, own,
+                    site_json.get(f["name"]) if isinstance(site_json, dict)
+                    else None))
                 continue
             rows.append(SettingsRow(
                 {**f, "message": message}, note=SITE_FILE_NOTE, site=True))

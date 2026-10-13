@@ -264,10 +264,10 @@ async function runSiteDoctor(options, deps) {
     ));
   }
   // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
-  // site and whether that tool can read the new file (move.js: holdFrom).
+  // site and whether that tool can read the new file (move.js: siteToolHold).
   if (layoutOf(vaultPath) === 'legacy') {
     const pin = await (d.pinCheck || pinCheck)(siteRoot, d);
-    const hold = pin && require('./settings/move').holdFrom(pin, { updated: true, siteDir: siteRoot });
+    const hold = pin && require('./settings/move').siteToolHold(siteRoot, { updated: true, pinCheck: () => pin });
     if (hold) {
       findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath), hold.line, 'update that tool, then run the vault update'));
     } else if (pin && (pin.spec || pin.installedBefore)) {

@@ -28,6 +28,14 @@ from vaultlib import (PUBLISH_TOOL, extract_frontmatter, plugin_version,  # noqa
 # default, never restated here.
 ATTACHMENTS = settings_default("vault.attachments")
 
+
+def structure_tree() -> str:
+    """The default layout tree, as shared/vault-structure.md draws it."""
+    text = (vs.SHARED / "vault-structure.md").read_text(encoding="utf-8")
+    found = re.search(r"^```text\n(.*?)\n```", text, re.M | re.S)
+    assert found, "the plugin's vault-structure.md has no layout tree"
+    return found.group(1)
+
 SHARED = SCRIPTS.parent
 
 
@@ -62,7 +70,7 @@ class TextTests(unittest.TestCase):
         self.assertEqual(extract_frontmatter(text)["type"], "meta")
 
     def test_the_tree_comes_from_vault_structure(self):
-        tree = vs.structure_tree()
+        tree = structure_tree()
         self.assertTrue(tree.startswith("{Campaign Name}/"))
         self.assertIn("Factions & Organizations/", tree)
         self.assertNotIn("```", tree)
@@ -251,7 +259,7 @@ class PlanTests(unittest.TestCase):
         return root
 
     def test_the_structure_doc_and_the_skeleton_agree(self):
-        tops = set(re.findall(r"^[├└]── ([^/\n]+)/", vs.structure_tree(),
+        tops = set(re.findall(r"^[├└]── ([^/\n]+)/", structure_tree(),
                               re.M))
         made = {rel.split("/")[0] for rel in
                 (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, ATTACHMENTS)}
@@ -260,7 +268,7 @@ class PlanTests(unittest.TestCase):
     def test_the_structure_doc_and_the_attachment_folders_agree(self):
         inside = re.search(
             rf"^├── {ATTACHMENTS}/[^\n]*\n((?:│   [^\n]*\n)+)",
-            vs.structure_tree(), re.M)
+            structure_tree(), re.M)
         self.assertIsNotNone(inside)
         subs = re.findall(r"^│   [├└]── ([^/\n]+)/", inside.group(1), re.M)
         self.assertEqual(sorted(subs), sorted(vs.ATTACHMENT_SUBS))

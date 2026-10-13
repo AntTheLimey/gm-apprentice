@@ -149,7 +149,10 @@ def find_settings_move(vault: Path) -> list[Item]:
             (vault / LEGACY_SETTINGS_FILE).exists()
             or _hidden_move_files(vault) or (site is not None and has_config)):
         return []
-    extra: list[str] = ["--site-tool-updated"]   # the repin comes first
+    # The repin comes first, but only for a site it looked at: a switched-off
+    # site is not looked at, so its folder's tool is still the move's to judge.
+    extra: list[str] = (["--site-tool-updated"]
+                        if site is not None and has_config else [])
     if layout == "legacy" and not settings(vault).get("vault.system"):
         found = vault_system(vault)
         if found:
