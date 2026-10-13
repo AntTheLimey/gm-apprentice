@@ -7,6 +7,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.53] — 2026-10-13
+
+Nothing in your vault changes with this release. The publish tool now
+understands the new settings file; the next release is the one that
+moves a vault to it.
+
+### Added
+
+- The publish tool reads and writes a new settings file,
+  `_meta/vault-config.yaml`, in plain YAML with the settings grouped by
+  what they do: `vault` for the campaign, `player_site` for the site your
+  players see (`player_site.hide.sections`, `player_site.features.search`,
+  `player_site.theme.genre`). The tool's own notes (which version the
+  vault is on, the publish set-up guide's progress) go in
+  `_meta/vault-state.json`, so the settings file holds only settings.
+- `settings move` takes a vault from the old settings file to the new
+  one. It does all of it or none of it, and `settings move --check`
+  shows what it would do without doing it. Your own notes in the old
+  file (the text below the settings, and any top-level keys that are not
+  settings) go to `_meta/vault-notes.md` unchanged. A setting the tool no
+  longer uses is left behind, and the move says which. Nothing runs it
+  yet.
+- `settings setup-note` reads and writes the publish set-up guide's
+  note to itself, wherever the vault keeps it.
+- `settings set --create` makes the settings file when a vault has none.
+- A JSON Schema for the new file, made from the same list as the tool, so
+  an editor can check the file as you type, and
+  `docs/vault-config-format.md`, which describes the file for anyone
+  writing a tool that reads it.
+
+### Changed
+
+- The `settings` command takes the new names. An old name
+  (`publish.search`) still works and prints a line giving the new one
+  (`player_site.features.search`). Its messages and help name the settings
+  file your vault is on and each setting as it is written there.
+- A change made by command keeps your comments and the order of your
+  settings file, including a comment on a list's own line, and a comment
+  on a list entry that stays. A write is all or nothing and never leaves
+  half a file.
+- `settings set` stores `footer=5` as the text `5`, not a number, and
+  can set `vault.setting_year`.
+- `settings unset` of a whole group (`player_site.theme`) now refuses and
+  lists the settings in it, instead of removing the group and every
+  comment in it without a word.
+
+### Fixed
+
+- A hiding list left in a site folder's `vault.config.json`
+  (`excludeSections` and the others) no longer replaces the built-in list
+  when the vault sets none: it adds to it, as a vault's own list does,
+  so `GM Notes` and the other built-in headings stay hidden (#371).
+- The settings writer's left-overs from #372 that are fixed: a comment on
+  a list's or map's own line, and comments on list entries that stay,
+  are no longer lost on a change; `unset` of a group no longer removes it
+  silently; `footer=5` is no longer stored as a number; `vault.setting_year`
+  can be set; the `vault-setting` command is gone.
+- A top-level key in the old settings file that is not a setting
+  (`total_sessions`) is now reported as a warning, as the tool reports
+  other unknown names. It changes nothing in the site.
+
+### Removed
+
+- The `vault-setting` command. `settings` does everything it did.
+
 ## [1.10.52] — 2026-10-13
 
 ### Added
