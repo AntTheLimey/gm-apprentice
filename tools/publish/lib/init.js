@@ -93,7 +93,7 @@ function seedVaultSettings(vaultDir, settings, options = {}) {
       if (held === null || held === '') { set[name] = value; continue; }
       // The same folder written another way (relative to the vault, from `~`, a trailing
       // slash, through a symlink) is this site.
-      const real = (p) => { try { return fsSync.realpathSync(p); } catch { return path.resolve(p); } };
+      const real = (p) => { try { return fsSync.realpathSync.native(p); } catch { return path.resolve(p); } };
       if (typeof held !== 'string' || real(siteDirPath(vaultDir, held)) !== real(value)) {
         otherSite = String(held);
       }

@@ -409,6 +409,6 @@ function readLegacy({ vaultPath, siteConfig }, core) {
 }
 
 module.exports = {
-  readLegacy, LEGACY, OLD_BLOCK, VERSION_KEY, FILE_KEYS, NOT_SETTINGS, SETUP_NOTE, underBlock, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, isText, usable, stricterCallouts,
-  mergeWithSiteFile, mergedMaps,
+  readLegacy, OLD_BLOCK, VERSION_KEY, FILE_KEYS, NOT_SETTINGS, SETUP_NOTE, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, usable, stricterCallouts,
+  mergedMaps,
 };

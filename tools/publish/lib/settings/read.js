@@ -8,7 +8,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
 const { REGISTRY, legacyNameOf } = require('./registry');
-const { TYPES, isMap, emptyIsFault } = require('./types');
+const { TYPES, isMap, getPath, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
@@ -21,14 +21,6 @@ const TOP = ['version', ...GROUPS];
 
 // ---- Shared by both layouts ---------------------------------------------------------------
 
-const getPath = (obj, segs) => {
-  let cur = obj;
-  for (const s of segs) {
-    if (!isMap(cur) || !Object.prototype.hasOwnProperty.call(cur, s)) return undefined;
-    cur = cur[s];
-  }
-  return cur;
-};
 const clone = (v) => (v !== null && typeof v === 'object' ? structuredClone(v) : v);
 function setIn(obj, name, value) {
   const segs = name.split('.');

@@ -363,15 +363,15 @@ test('a failure at the verify step leaves the vault byte for byte as it was', ()
 test('a failure part-way through the renames puts every file back', () => {
   const s = scratch(old('  mode: player\n', 'gm_apprentice_version: "1.10.1"\n'), { site: { vaultPath: './Vault', siteTitle: 'T' }, files: { [STATE_FILE]: '{"other": 1}\n' } });
   const before = hashes(s.root);
-  for (let failAt = 1; failAt <= 9; failAt++) {
+  for (let failAt = 1; failAt <= 6; failAt++) {
     const plan = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
     assert.equal(plan.ok, true);
     let n = 0;
     const rename = (a, b) => { n += 1; if (n === failAt) throw new Error('disk said no'); fs.renameSync(a, b); };
-    if (failAt > 6) { // six renames in all (state two, settings one, site two, old file one): past them the move has finished
+    if (failAt > 4) { // four renames in all (state one, settings one, site one, old file one): past them the move has finished
       const r = applyMove(plan, { rename });
       assert.equal(r.moved, true);
-      assert.equal(n, 6);
+      assert.equal(n, 4);
       return;
     }
     assert.throws(() => applyMove(plan, { rename }), /did not go through \(disk said no\); nothing was changed/, `fail at rename ${failAt}`);
@@ -591,4 +591,53 @@ test('--vault alone moves a vault that names no site folder, as it always did', 
   const s = scratch(old('  mode: player\n'));
   assert.equal(cliMove({ vault: s.vault }).rc, 0);
   assert.equal(layoutOf(s.vault), 'new');
+});
+
+// ---- A target is never missing, a stopped move is cleaned up, case, CRLF notes (M7, M12, M13) ----
+
+test('no file the move replaces is ever missing while it runs', () => {
+  const s = scratch(old('  mode: player\n', 'gm_apprentice_version: "1.10.1"\n'), { site: { vaultPath: './Vault', siteTitle: 'T' }, files: { [STATE_FILE]: '{"other": 1}\n' } });
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
+  const mustStay = [at(s.vault, STATE_FILE), s.config];
+  const rename = (a, b) => {
+    for (const f of mustStay) assert.equal(fs.existsSync(f), true, `${path.basename(f)} is there before the rename of ${path.basename(a)}`);
+    fs.renameSync(a, b);
+    for (const f of mustStay) assert.equal(fs.existsSync(f), true, `${path.basename(f)} is there after the rename of ${path.basename(a)}`);
+  };
+  assert.equal(applyMove(plan, { rename }).moved, true);
+});
+
+test('a second move on a moved vault removes the hidden files a stopped move left, and says so', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', siteTitle: 'T' } });
+  assert.equal(cliMove({ vault: s.vault, config: s.config }).rc, 0);
+  const strays = [path.join(s.vault, '_meta', `.${path.basename(NEW_FILE)}.4242.move.old`), path.join(s.vault, '_meta', `.${path.basename(OLD_FILE)}.4242.move.old`), path.join(s.root, '.vault.config.json.4242.move.new')];
+  for (const f of strays) fs.writeFileSync(f, 'x');
+  const unrelated = path.join(s.vault, '_meta', '.keep.4242.move.old');
+  fs.writeFileSync(unrelated, 'x');
+  const check = cliMove({ vault: s.vault, config: s.config, check: true });
+  assert.equal(check.rc, 0);
+  for (const f of strays) assert.equal(fs.existsSync(f), true, 'a check removes nothing');
+  const out = [];
+  assert.equal(runSettings({ verb: 'move', args: [], vault: s.vault, config: s.config }, { out: (l) => out.push(l), err: () => {} }), 0);
+  assert.match(out.join('\n'), /already on the new settings file/);
+  assert.match(out.join('\n'), /Removed hidden files left by an earlier move/);
+  for (const f of strays) assert.equal(fs.existsSync(f), false);
+  assert.equal(fs.existsSync(unrelated), true, 'a file that is not the move\'s own is left');
+});
+
+test('the vault is the same vault when the site file spells its folder in another case', (t) => {
+  const s = scratch(old('  mode: player\n'));
+  const swapped = path.join(path.dirname(s.vault), 'VAULT');
+  if (!fs.existsSync(swapped)) return t.skip('this file system tells Vault from VAULT');
+  fs.writeFileSync(path.join(s.root, 'vault.config.json'), JSON.stringify({ vaultPath: './VAULT' }));
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.root, 'vault.config.json') });
+  assert.deepEqual(plan.blockers, []);
+});
+
+test('the notes file keeps the old file\'s line ending in its frontmatter', () => {
+  const s = scratch('---\r\ntype: meta\r\ndescription: Mine\r\npublish:\r\n  mode: player\r\n---\r\nBody\r\n');
+  moveAndCompare(s);
+  const notes = fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8');
+  assert.equal(notes.replace(/\r\n/g, ''), notes.replace(/\r\n/g, '').replace(/\n/g, ''), 'no bare line feed: every line ends in CRLF');
+  assert.ok(notes.startsWith('---\r\ntype: meta\r\ndescription: Mine\r\n---\r\nBody'));
 });

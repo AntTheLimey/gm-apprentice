@@ -16,7 +16,7 @@ const { getsNoPage } = require('./previews');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
 const { linkText } = require('./wikilink');
-const { nameIn, layoutOf, fileLabel } = require('./settings');
+const { nameIn, fileLabel } = require('./settings');
 const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
@@ -44,7 +44,7 @@ const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 // old `backend` block and `landingTagline` are named too: either gives the migration work.
 // A list key that is not a list, or holds only entries that cannot be carried over, gets its
 // own clause (the migration cannot move it) and does not send the GM to migrate.py when it is all that is left. Returns the lines to print.
-function legacyWarning(legacy, rawConfig) {
+function legacyWarning(legacy, rawConfig, layout) {
   const parts = [];
   const byHand = [];
   for (const rec of Array.isArray(legacy) ? legacy : []) {
@@ -62,7 +62,7 @@ function legacyWarning(legacy, rawConfig) {
   for (const key of SITE_OLD_ROOTS) {
     if (rawConfig && rawConfig[key] !== undefined) parts.push(key);
   }
-  const moved = parts.length && layoutOf(rawConfig.vaultPath) === 'new'
+  const moved = parts.length && layout === 'new'
     ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. This vault's settings are in ${fileLabel(rawConfig.vaultPath)}, so these are no longer read; remove them from vault.config.json.`
     : parts.length
     ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`
@@ -1638,7 +1638,7 @@ function buildSite(options) {
   }
 
   // Settings that still live in the site file. One line, so it is the thing the GM reads.
-  for (const line of legacyWarning(publishConfig.legacy, rawConfig)) console.warn(`  ${line}`);
+  for (const line of legacyWarning(publishConfig.legacy, rawConfig, publishConfig.layout)) console.warn(`  ${line}`);
 
   // Live stats and the inbox used to be detected from a deployed backend; unset now means
   // off. A deployed feature whose switch neither file sets is never lost silently: the line
@@ -1646,7 +1646,7 @@ function buildSite(options) {
   // stats when character_sheets is off (that is the GM's own choice, and the files are removed).
   const unset = switches.unset || [];
   const legacySite = hasLegacy(rawConfig);
-  const lost = (key, was, is, subject, them, its) => console.warn(legacySite && layoutOf(rawConfig.vaultPath) !== 'new'
+  const lost = (key, was, is, subject, them, its) => console.warn(legacySite && publishConfig.layout !== 'new'
     ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: ${nm(`player_site.features.${key}`)} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
     : `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
   if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');

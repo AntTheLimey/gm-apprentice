@@ -3,10 +3,9 @@
 // version the vault was last updated to and the publish set-up note. Python writes the version
 // here too, so a write reads what is there, changes only the keys given, and keeps the rest.
 const fs = require('node:fs');
-const path = require('node:path');
 const { STATE_FILE, at } = require('./layout');
-
-const isObject = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+const { isMap } = require('./types');
+const { writeAtomic } = require('./write');
 
 // { gm_apprentice_version?, setup?, ...whatever else is there }; {} when there is no file.
 function readState(vaultPath) {
@@ -24,7 +23,7 @@ function readState(vaultPath) {
   } catch (e) {
     throw new Error(`${STATE_FILE} is not valid JSON: ${e.message}`);
   }
-  if (!isObject(data)) throw new Error(`${STATE_FILE} is not valid JSON: expected an object`);
+  if (!isMap(data)) throw new Error(`${STATE_FILE} is not valid JSON: expected an object`);
   return data;
 }
 
@@ -42,16 +41,7 @@ function writeState(vaultPath, patch) {
     if (value === null) delete merged[key];
     else merged[key] = value;
   }
-  const file = at(vaultPath, STATE_FILE);
-  fs.mkdirSync(path.dirname(file), { recursive: true });
-  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
-  try {
-    fs.writeFileSync(tmp, stateText(merged));
-    fs.renameSync(tmp, file);
-  } catch (e) {
-    fs.rmSync(tmp, { force: true });
-    throw e;
-  }
+  writeAtomic(at(vaultPath, STATE_FILE), stateText(merged));
   return merged;
 }
 

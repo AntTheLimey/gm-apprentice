@@ -133,4 +133,4 @@ function schema() {
 // The committed file's exact text: two-space JSON and a final newline, with \n always.
 const schemaText = () => `${JSON.stringify(schema(), null, 2)}\n`;
 
-module.exports = { row, leftOutCell, isLeaf, defaultOf, schema, schemaText, SCHEMA_ID };
+module.exports = { row, leftOutCell, isLeaf, schema, schemaText };

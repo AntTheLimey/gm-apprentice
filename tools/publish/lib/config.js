@@ -86,7 +86,7 @@ function setOnly(map, prefix, origins) {
 // `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
-  const { values, origins, faults, legacy } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
+  const { values, origins, faults, legacy, layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
   const v = values.vault;
   const p = values.player_site;
   const named = (n) => origins[n] !== 'default';
@@ -163,7 +163,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // Which settings file the vault is on, so a message can name a setting as that file writes it
   // (`nameInFor(publishConfig.layout, name)`). Not listed with the settings: a copy of the
   // object does not carry it, and the message then names the setting by its current name.
-  Object.defineProperty(merged, 'layout', { value: layoutOf(vaultPath), enumerable: false });
+  Object.defineProperty(merged, 'layout', { value: layout, enumerable: false });
 
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
@@ -233,7 +233,7 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) 
   const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn, options);
   const config = Object.assign({}, rawConfig);
   // On the new layout the site file is not merged: a moved key is what the vault's settings resolved, or absent.
-  const fromVaultOnly = layoutOf(vaultPath) === 'new';
+  const fromVaultOnly = publishConfig.layout === 'new';
   for (const entry of movedKeys()) {
     const value = publishConfig[entry.publish];
     if (value !== undefined && value !== null) config[entry.json] = value;

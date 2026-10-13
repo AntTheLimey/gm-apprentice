@@ -12,7 +12,7 @@ const { isDeepStrictEqual } = require('node:util');
 const YAML = require('yaml');
 const matter = require('gray-matter');
 const { REGISTRY, resolve, legacyNameOf } = require('./registry');
-const { TYPES, isMap } = require('./types');
+const { TYPES, isMap, getPath } = require('./types');
 const { makeFault } = require('./faults');
 const { isLeaf } = require('./describe');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
@@ -377,9 +377,6 @@ function renameItem(text, doc, keys, from, to, ctx) {
   return edits;
 }
 
-// ---- JS twins of the edits, to check the result against ----------------------------------------
-
-const getJ = (obj, keys) => keys.reduce((cur, k) => (isMap(cur) && Object.prototype.hasOwnProperty.call(cur, k) ? cur[k] : undefined), obj);
 
 // ---- The layouts -------------------------------------------------------------------------------
 
@@ -392,20 +389,31 @@ function open(vaultPath, layout, create) {
   if (layout === 'legacy') {
     const whole = fs.readFileSync(at(vaultPath, OLD_FILE), 'utf8');
     if (!whole.startsWith('---')) throw new Error(`${OLD_FILE} has no frontmatter to edit`);
-    const m = matter(whole, { engines: { yaml: () => ({}) } }).matter;
+    const m = splitFront(whole).matter;
     if (whole.slice(3, 3 + m.length) !== m || !whole.slice(3 + m.length).startsWith('\n') && !whole.slice(3 + m.length).startsWith('\r\n') && whole.slice(3 + m.length) !== '') {
       throw new Error(`${OLD_FILE} frontmatter is not in a form this command edits`);
     }
     const eol = eolOf(whole);
-    const cr = m.endsWith('\r') ? '\r' : '';
-    let body = cr ? m.slice(0, -1) : m;
-    let lead = '';
-    if (body.startsWith('\r\n')) { lead = '\r\n'; body = body.slice(2); } else if (body.startsWith('\n')) { lead = '\n'; body = body.slice(1); } else if (body === '') lead = eol;
-    const rest = whole.slice(3 + m.length);
-    return { rel: OLD_FILE, label: OLD_FILE, whole, text: body, eol, join: (t) => `---${lead}${t}${cr}${rest}` };
+    return { rel: OLD_FILE, label: OLD_FILE, whole, eol, ...editableFront(whole, eol) };
   }
   if (!create) throw new Error(`this vault has no settings file yet; add --create to make ${NEW_FILE}`);
   return { rel: NEW_FILE, label: NEW_FILE, whole: null, text: 'version: 1\n', eol: '\n', join: (t) => t, created: true };
+}
+
+// The old file split by gray-matter (its own YAML engine turned off): `matter` is the text between the --- lines
+// exactly as written, `content` what follows the closing ---. The one split, used here and by the move.
+const splitFront = (whole) => matter(whole, { engines: { yaml: () => ({}) } });
+
+// The part of the old file that is edited: { text (the frontmatter without its edges), join (puts an edited
+// text back between the same --- lines) }.
+function editableFront(whole, eol) {
+  const m = splitFront(whole).matter;
+  const cr = m.endsWith('\r') ? '\r' : '';
+  let body = cr ? m.slice(0, -1) : m;
+  let lead = '';
+  if (body.startsWith('\r\n')) { lead = '\r\n'; body = body.slice(2); } else if (body.startsWith('\n')) { lead = '\n'; body = body.slice(1); } else if (body === '') lead = eol;
+  const rest = whole.slice(3 + m.length);
+  return { text: body, join: (t) => `---${lead}${t}${cr}${rest}` };
 }
 
 function writeAtomic(link, text, { rename } = {}) {
@@ -505,7 +513,7 @@ function runStep(text, step, label, eol, keepBlock) {
   let edits = [];
   let expected = before;
   const nameOf = (keys) => keys.join('.');
-  const presentAt = (keys) => getJ(before, keys) !== undefined || doc.hasIn(keys);
+  const presentAt = (keys) => getPath(before, keys) !== undefined || doc.hasIn(keys);
 
   if (step.kind === 'set') {
     const olderHere = (step.older || []).filter(presentAt);
@@ -513,12 +521,12 @@ function runStep(text, step, label, eol, keepBlock) {
     if (olderHere.length && !presentAt(step.keys) && olderHere.length === 1 && sameParent(olderHere[0])) {
       edits = renameKey(text, doc, olderHere[0], step.keys[step.keys.length - 1], ctx);
       notes.push(`Replaced ${nameOf(olderHere[0])} with ${step.spelling}.`);
-      expected = withValue(withoutValue(before, olderHere[0], keepBlock), olderHere[0].slice(0, -1).concat(step.keys[step.keys.length - 1]), getJ(before, olderHere[0]));
+      expected = withValue(withoutValue(before, olderHere[0], keepBlock), olderHere[0].slice(0, -1).concat(step.keys[step.keys.length - 1]), getPath(before, olderHere[0]));
       const mid = applyEdits(text, edits);
       const next = runStep(mid, { ...step, older: [] }, label, eol, keepBlock);
       return { ...next, notes: [...notes, ...next.notes], removed: [...removed, ...next.removed] };
     }
-    if (!isDeepStrictEqual(getJ(before, step.keys), step.value) || !presentAt(step.keys)) edits = setAt(text, doc, step.keys, step.value, ctx);
+    if (!isDeepStrictEqual(getPath(before, step.keys), step.value) || !presentAt(step.keys)) edits = setAt(text, doc, step.keys, step.value, ctx);
     expected = withValue(before, step.keys, step.value);
     wrote.push(step.spelling);
     let cur = applyEdits(text, edits);
@@ -545,7 +553,7 @@ function runStep(text, step, label, eol, keepBlock) {
     return { text: cur, expected, wrote, removed, notes };
   }
   // list
-  const held = getJ(before, step.keys);
+  const held = getPath(before, step.keys);
   if (held === true || held === false) {
     if (step.entry.type === 'switchOrList' && held === true) throw plain(`${step.setting} is on, which hides every one of its kind, so a list cannot be changed; use settings set ${step.setting} to give a list or turn it off.`);
   }
@@ -593,7 +601,7 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
       // come out of that reader as it was meant too.
       if (layout === 'legacy' && step.kind !== 'del' && out.text !== before) {
         const built = parseNote(doc.join(out.text)).data || {};
-        if (!isDeepStrictEqual(getJ(built, step.keys), getJ(out.expected, step.keys))) throw new Error('the build would read it differently');
+        if (!isDeepStrictEqual(getPath(built, step.keys), getPath(out.expected, step.keys))) throw new Error('the build would read it differently');
       }
     } catch (e) {
       if (e.plain) throw e;
@@ -633,7 +641,7 @@ function settingsText(vaultPath) {
   const get = (name) => {
     const e = BY_NAME.get(name);
     const where = layout === 'legacy' ? (e && legacyNameOf(e)) : name;
-    return where ? getJ(data, where.split('.')) : undefined;
+    return where ? getPath(data, where.split('.')) : undefined;
   };
   return { rel: opened.rel, whole: opened.whole, data, layout, get };
 }
@@ -647,7 +655,7 @@ function renameInSettings(vaultPath, renames, { text } = {}) {
   if (layout === 'none') return null;
   const opened = open(vaultPath, layout, false);
   let current = text === undefined ? opened.whole : text;
-  const stage = layout === 'legacy' ? openText(current, opened) : { text: current, join: (t) => t };
+  const stage = layout === 'legacy' ? editableFront(current, opened.eol) : { text: current, join: (t) => t };
   let edit = stage.text;
   for (const r of renames) {
     const e = BY_NAME.get(r.name);
@@ -656,7 +664,7 @@ function renameInSettings(vaultPath, renames, { text } = {}) {
     const doc = parseText(edit, opened.label);
     const ctx = { ...styleOf(doc, edit), eol: opened.eol, v11: layout === 'legacy' };
     const before = doc.toJS() || {};
-    const held = getJ(before, keys);
+    const held = getPath(before, keys);
     let edits;
     let expected;
     if (r.key) {
@@ -679,20 +687,9 @@ function renameInSettings(vaultPath, renames, { text } = {}) {
   return { rel: opened.rel, text: stage.join(edit) };
 }
 
-// The editable part of an already-read old file text (for renames that chain on earlier text).
-function openText(whole, opened) {
-  const m = matter(whole, { engines: { yaml: () => ({}) } }).matter;
-  const cr = m.endsWith('\r') ? '\r' : '';
-  let body = cr ? m.slice(0, -1) : m;
-  let lead = '';
-  if (body.startsWith('\r\n')) { lead = '\r\n'; body = body.slice(2); } else if (body.startsWith('\n')) { lead = '\n'; body = body.slice(1); } else if (body === '') lead = opened.eol;
-  const rest = whole.slice(3 + m.length);
-  return { text: body, join: (t) => `---${lead}${t}${cr}${rest}` };
-}
-
 // Every reason the changes would be refused, one line each; [] when they would go through.
 function refusalsFor(vaultPath, changes) {
   return prepare(changes, layoutOf(vaultPath)).refusals;
 }
 
-module.exports = { applyChanges, refusalsFor, planChanges, renameInSettings, settingsText, writeAtomic };
+module.exports = { applyChanges, refusalsFor, planChanges, renameInSettings, settingsText, writeAtomic, splitFront };

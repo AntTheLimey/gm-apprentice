@@ -16,11 +16,11 @@ const path = require('node:path');
 const { parseNote } = require('../frontmatter');
 const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
-const { isMap } = require('./types');
+const { isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
 const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
-const { row, isLeaf, defaultOf } = require('./describe');
+const { row, isLeaf } = require('./describe');
 const { OLD_BLOCK, SETUP_NOTE } = require('./legacy');
 const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
@@ -34,7 +34,6 @@ const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 const oldOf = (e) => legacyNameOf(e);
 const oldNamesOf = (e) => (e.legacyOnly ? [e.name] : (e.was || []).filter((w) => w.in === 'vault').map((w) => w.name));
 const reaches = (e, scope) => inScope(e.name, scope) || oldNamesOf(e).some((n) => inScope(n, scope));
-const firstLine = (e) => String(e.message).split('\n')[0];
 
 // ---- Finding the vault and the site file --------------------------------------------------
 
@@ -70,8 +69,6 @@ function rawData(vaultPath) {
 const filePathOf = (name, r) => ((r.old || r.entry.legacyOnly) ? name : oldOf(r.entry)).split('.');
 const noticeFor = (name) => { const r = resolve(name); return r && r.old ? `${name} is now ${r.entry.name}.` : null; };
 const noticesFor = (names) => names.map(noticeFor).filter(Boolean);
-
-const getPath = (obj, segs) => segs.reduce((cur, s) => (isMap(cur) && Object.prototype.hasOwnProperty.call(cur, s) ? cur[s] : undefined), obj);
 
 // ---- Faults ------------------------------------------------------------------------------
 

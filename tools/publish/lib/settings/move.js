@@ -11,15 +11,15 @@ const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
 const YAML = require('yaml');
-const matter = require('gray-matter');
 const { REGISTRY, legacyNameOf } = require('./registry');
-const { TYPES, isMap } = require('./types');
+const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { isLeaf } = require('./describe');
 const { formatFault } = require('./faults');
 const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, layoutOf, at } = require('./layout');
 const read = require('./read');
 const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE } = require('./legacy');
 const { readState, stateText } = require('./state');
+const { splitFront, writeAtomic } = require('./write');
 const { parseNote } = require('../frontmatter');
 
 const { Scalar, Pair, YAMLMap, isScalar, isMap: isYMap, isNode } = YAML;
@@ -28,8 +28,6 @@ const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 const FILLABLE = ['vault.campaign', 'vault.system'];
 const PLAIN = { lineWidth: 0, flowCollectionPadding: false };
 
-const firstLine = (text) => String(text).split('\n')[0].trim();
-const getPath = (obj, segs) => segs.reduce((cur, s) => (isMap(cur) && Object.prototype.hasOwnProperty.call(cur, s) ? cur[s] : undefined), obj);
 const showValue = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
 const keyText = (pair) => String(isScalar(pair.key) ? pair.key.value : pair.key);
 const normalise = (text) => String(text).replace(/\r\n/g, '\n');
@@ -78,7 +76,7 @@ function commentLines(doc) {
 
 // Splits the old file into its frontmatter text and body, through the same library the writer uses.
 function split(whole) {
-  const m = matter(whole, { engines: { yaml: () => ({}) } });
+  const m = splitFront(whole);
   // The frontmatter is parsed with plain line ends (a CRLF file leaves a lone \r on its last line); the body stays as it is.
   return m.content === whole ? { front: null, body: whole } : { front: m.matter.replace(/\r\n?/g, '\n'), body: m.content };
 }
@@ -121,7 +119,17 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   if (!isDir) throw new Error(`${vault} is not a folder.`);
   const plan = (extra) => ({ ok: true, lines: [], blockers: [], files: { write: [], remove: [] }, ...extra });
   const layout = layoutOf(vault);
-  if (layout === 'new') return plan({ lines: [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`] });
+  if (layout === 'new') {
+    // A move that was stopped part-way can leave hidden copies beside the files it was changing; the vault is
+    // moved, so they are of no use to anything.
+    const stale = leftovers(vault, siteConfigPath);
+    const done = plan({ lines: [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`] });
+    if (!stale.length) return done;
+    done.lines.push(`${stale.length === 1 ? 'A hidden file' : 'Hidden files'} left by an earlier move will be removed: ${stale.map((f) => path.basename(f)).join(', ')}.`);
+    done.files.remove = stale;
+    Object.defineProperty(done, INTERNAL, { value: { cleanup: stale }, enumerable: false });
+    return done;
+  }
   if (layout === 'none') return plan({ lines: ['This vault has no settings file; nothing to move.'] });
 
   const blockers = [];
@@ -158,7 +166,8 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
           blockers.push(`${siteFile} has no "vaultPath", so it cannot be told which vault it belongs to.`);
         } else {
           const theirs = path.resolve(path.dirname(siteFile), site.vaultPath);
-          const real = (p) => { try { return fs.realpathSync(p); } catch { return path.resolve(p); } };
+          // Real paths, in the file system's own spelling, so a difference of case on macOS or Windows is the same vault.
+          const real = (p) => { try { return fs.realpathSync.native(p); } catch { return path.resolve(p); } };
           if (real(theirs) !== real(vault)) blockers.push(`that site folder belongs to another vault: ${theirs}`);
         }
       }
@@ -291,7 +300,9 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
     for (const p of extra) notesDoc.contents.items.push(new Pair(p.key.clone(), isNode(p.value) ? p.value.clone() : p.value));
     notesBody = keepBody ? body : '';
   }
-  const notesText = notesDoc ? `---\n${notesDoc.toString(PLAIN)}---\n${notesBody}` : null;
+  // The notes file's frontmatter ends its lines the way the old file did (the body keeps its own).
+  const eol = oldText.includes('\r\n') ? '\r\n' : '\n';
+  const notesText = notesDoc ? `---${eol}${notesDoc.toString(PLAIN).replace(/\n/g, eol)}---${eol}${notesBody}` : null;
 
   // Comments: counted off, so one that could not be placed is said, never dropped quietly.
   const left = doc ? commentLines(doc) : [];
@@ -384,6 +395,20 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   return result;
 }
 
+// The hidden files a stopped move leaves beside the vault's settings files and the site folder's file.
+function leftovers(vault, siteConfigPath) {
+  const found = [];
+  const scan = (dir, names) => {
+    let entries = [];
+    try { entries = fs.readdirSync(dir); } catch { /* no folder, nothing left in it */ }
+    const mine = new RegExp(`^\\.(${names.map((n) => n.replace(/\./g, '\\.')).join('|')})\\.\\d+\\.move\\.(old|new)$`);
+    for (const f of entries.sort()) if (mine.test(f)) found.push(path.join(dir, f));
+  };
+  scan(path.dirname(at(vault, NEW_FILE)), [NEW_FILE, OLD_FILE, NOTES_FILE, STATE_FILE].map((f) => path.basename(f)));
+  if (siteConfigPath) scan(path.dirname(path.resolve(siteConfigPath)), [path.basename(siteConfigPath)]);
+  return found;
+}
+
 function parseNoteSafe(text) {
   try { return parseNote(text).data; } catch { return null; }
 }
@@ -460,6 +485,15 @@ function describeFiles(m, done) {
 function applyMove(plan, deps = {}) {
   const m = plan[INTERNAL];
   if (!plan.ok) throw new Error(`the move is blocked: ${plan.blockers[0]}`);
+  if (m && m.cleanup) {
+    const gone = [];
+    const lines = [...plan.lines.slice(0, 1)];
+    for (const f of m.cleanup) {
+      try { (deps.remove || ((x) => fs.rmSync(x, { force: true })))(f); gone.push(path.basename(f)); } catch { lines.push(`${path.basename(f)} could not be removed; you can delete it.`); }
+    }
+    if (gone.length) lines.push(`Removed ${gone.length === 1 ? 'a hidden file' : 'hidden files'} left by an earlier move: ${gone.join(', ')}.`);
+    return { moved: false, lines };
+  }
   if (!m) return { moved: false, lines: plan.lines };
 
   // Nothing may have changed since the plan was made.
@@ -478,7 +512,8 @@ function applyMove(plan, deps = {}) {
   const sibling = (file, kind) => path.join(path.dirname(file), `.${path.basename(file)}.${tag}${kind}`);
 
   // Commit order: notes and state first, the new settings file (which makes the vault read as moved)
-  // next, then the site folder's file, then the old file goes aside.
+  // next, then the site folder's file, then the old file goes aside. A file that is already there is
+  // copied aside and then replaced by one rename, so no target is ever missing, even for a moment.
   const targets = [];
   if (m.notesText !== null) targets.push({ file: at(m.vault, NOTES_FILE), text: m.notesText });
   if (m.stateOut !== null) targets.push({ file: at(m.vault, STATE_FILE), text: m.stateOut });
@@ -498,12 +533,13 @@ function applyMove(plan, deps = {}) {
     }
     for (const t of targets) {
       if (t.existed) {
-        rename(t.file, t.bak);
-        undo.push(() => fs.renameSync(t.bak, t.file));
+        fs.copyFileSync(t.file, t.bak);
         baks.push(t.bak);
+        undo.push(() => fs.renameSync(t.bak, t.file));
+      } else {
+        undo.push(() => fs.rmSync(t.file, { force: true }));
       }
       rename(t.tmp, t.file);
-      if (!t.existed) undo.push(() => fs.rmSync(t.file, { force: true }));
     }
     rename(oldFile, oldBak);
     undo.push(() => fs.renameSync(oldBak, oldFile));
@@ -513,7 +549,9 @@ function applyMove(plan, deps = {}) {
     for (const step of undo.reverse()) {
       try { step(); } catch (e2) { stuck.push(firstLine(e2.message)); }
     }
-    for (const t of targets) { try { fs.rmSync(t.tmp, { force: true }); } catch { /* the scratch name is hidden and harmless */ } }
+    for (const t of targets) {
+      for (const f of [t.tmp, t.bak]) { try { fs.rmSync(f, { force: true }); } catch { /* the scratch name is hidden and harmless */ } }
+    }
     if (stuck.length) {
       throw new Error(`the move failed (${firstLine(e.message)}) and could not put everything back (${stuck.join('; ')}); the old files are kept beside the new ones under hidden names ending in .old`);
     }
