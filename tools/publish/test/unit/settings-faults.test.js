@@ -196,3 +196,17 @@ test('a short stray name near mode only warns; a near-miss of mode still stops',
     assert.equal(fault(read(`  ${name}: [A]\n`), `publish.${name}`).level, 'stop', name);
   }
 });
+
+test('saysHiding is one rule: a hiding last part, or an exclude/hid prefix; mode is an everyday word; beside the block only exclude_ counts', () => {
+  const { saysHiding, hidingLasts } = require('../../lib/settings/faults');
+  const lasts = hidingLasts(['player_site.hide.sections', 'player_site.hide.mode', 'publish.exclude_dirs']);
+  assert.equal(saysHiding('sections', lasts), true);
+  assert.equal(saysHiding('exclude_dirs', lasts), true);
+  assert.equal(saysHiding('Excluded', lasts), true);
+  assert.equal(saysHiding('hidden', lasts), true);
+  assert.equal(saysHiding('mode', lasts), false);
+  assert.equal(saysHiding('title', lasts), false);
+  assert.equal(saysHiding('hidden', lasts, { beside: true }), false);
+  assert.equal(saysHiding('exclude_x', lasts, { beside: true }), true);
+  assert.equal(saysHiding('sections', lasts, { beside: true }), true);
+});

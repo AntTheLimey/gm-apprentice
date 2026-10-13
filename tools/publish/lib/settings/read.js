@@ -9,11 +9,12 @@ const path = require('node:path');
 const { parseDocument } = require('yaml');
 const { REGISTRY } = require('./registry');
 const { TYPES, isMap } = require('./types');
-const { nearest, makeFault } = require('./faults');
+const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
 const legacy = require('./legacy');
 
 const LAYOUT_VERSION = 1;
+const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
 const MAP_ENTRY = { type: 'map', shape: 'settings, one to a line' };
 const GROUPS = ['vault', 'player_site', 'gm_site'];
 const TOP = ['version', ...GROUPS];
@@ -63,7 +64,8 @@ function settle(c, e, { written, setting }, first, defaultOf) {
     const kept = e.keepOnFault ? (typeof first.raw === 'string' && first.raw.trim() !== '' ? first.raw : defaultOf(e)) : undefined;
     setIn(values, setting, kept !== undefined ? kept : (e.onFault !== undefined ? e.onFault : defaultOf(e)));
     origins[setting] = 'fault';
-    faults.push(fault({ name: written, setting, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: first.raw, entry: e }));
+    // `shown` is the value as the file wrote it, when what was read is that value merged with another file's.
+    faults.push(fault({ name: written, setting, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: first.shown !== undefined ? first.shown : first.raw, entry: e }));
   }
   return r;
 }
@@ -98,11 +100,8 @@ function childSegs(parent) {
   return out;
 }
 
-// A name that says it hides something is never ignored quietly: the last part of a hiding setting's
-// name, or a name starting `exclude` or `hid`. `mode` is left out: it is also an everyday word.
-const HIDING_PREFIXES = ['exclude', 'hid'];
-const GUARD_LASTS = new Set(LIST.filter((e) => e.guards).map((e) => lastOf(e.name)));
-const saysHiding = (key) => (GUARD_LASTS.has(key) && key !== 'mode') || HIDING_PREFIXES.some((p) => key.toLowerCase().startsWith(p));
+const GUARD_LASTS = hidingLasts(LIST.filter((e) => e.guards).map((e) => e.name));
+const saysHiding = (key) => saysHidingName(key, GUARD_LASTS);
 
 // Old names (the last part of each `was` name) and the setting each belongs to: an old name written
 // in the new file, directly under the group or map that holds the setting now, is told its new name.
@@ -146,8 +145,11 @@ function readNew({ vaultPath, siteConfig }) {
     for (const w of (e.was || []).filter((x) => x.in === 'site')) {
       const value = getPath(site, w.name.split('.'));
       if (value === undefined) continue;
-      faults.push(makeFault({ name: w.name, setting: e.name, kind: 'old-name', level: 'warn', value, use: e.name,
-        hint: `${w.name} in the site folder's vault.config.json is no longer read; it is ${e.name} in the vault's settings.` }));
+      // A list that hides things, left in the site folder, would publish what it meant to hide: it stops the build.
+      faults.push(makeFault({ name: w.name, setting: e.name, kind: 'old-name', level: e.guards ? 'stop' : 'warn', value, use: e.name,
+        hint: e.guards
+          ? `${w.name} in the site folder's vault.config.json is no longer read, so what it hides would be published; put its entries under ${e.name} in the vault's settings.`
+          : `${w.name} in the site folder's vault.config.json is no longer read; it is ${e.name} in the vault's settings.` }));
     }
   }
 
@@ -157,7 +159,7 @@ function readNew({ vaultPath, siteConfig }) {
     if (typeof tree.version !== 'number' || !v.ok) {
       faults.push(makeFault({ name: 'version', setting: null, kind: 'not-allowed', level: 'stop', value: tree.version, entry: { type: 'number', integer: true, min: 1 } }));
     } else if (v.value > LAYOUT_VERSION) {
-      throw new Error("this vault's settings were written by a newer gm-apprentice; update the plugin");
+      throw new Error(NEWER_VERSION);
     }
   }
 
@@ -257,4 +259,4 @@ function readSettings({ vaultPath, siteConfig = {} }) {
   return { ...legacy.readLegacy({ vaultPath, siteConfig: site }, core), layout };
 }
 
-module.exports = { readSettings, parseNewFile };
+module.exports = { readSettings, parseNewFile, LAYOUT_VERSION, NEWER_VERSION };

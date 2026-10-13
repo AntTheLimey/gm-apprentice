@@ -174,3 +174,19 @@ test('every INTENDED and WARNS case id is a real case, listed once', () => {
     for (const d of list) for (const id of d.ids) assert.ok(ids.has(id), `${id} is not a case`);
   }
 });
+
+// Not in the golden (main's output is fixed there): a site file's unreadable hiding list, with the vault file
+// silent, is reported as the site file wrote it, as main did, not as the merged list with the built-ins first.
+test('an unreadable list in the site file is reported as written, not merged', () => {
+  const { readSettings } = require('../lib/settings');
+  const { writeOldConfig } = require('./helpers/settings-files');
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-list-'));
+  writeOldConfig(dir, { mode: 'player' });
+  const read = readSettings({ vaultPath: dir, siteConfig: { excludeSections: ['x', 5, null] } });
+  const f = read.faults.find((x) => x.name === 'publish.exclude_sections' && x.kind === 'not-allowed');
+  assert.ok(f, JSON.stringify(read.faults));
+  assert.deepEqual(f.value, ['x', 5, null]);
+  assert.match(f.message, /^publish\.exclude_sections is \["x",5,null\]; /);
+  assert.equal(f.level, 'stop');
+});

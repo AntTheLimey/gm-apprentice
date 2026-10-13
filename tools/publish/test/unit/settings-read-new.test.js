@@ -52,14 +52,15 @@ test('a value is read from the file and says so', () => {
 });
 
 // 2
-test('the site file is not merged; each setting key still in it is a warning naming the new setting', () => {
+test('the site file is not merged; each setting key still in it is a warning naming the new setting, a stop when it hides things', () => {
   const r = read('version: 1\n', { vaultPath: './v', siteTitle: 'Old', excludeSections: ['X'], backend: { inbox: true }, outputDir: 'docs' });
   assert.equal(r.values.player_site.title, null);
   assert.equal(r.values.player_site.features.inbox, false);
   assert.deepEqual(r.values.player_site.hide.sections, entry('player_site.hide.sections').default);
   const olds = r.faults.filter((f) => f.kind === 'old-name');
   assert.deepEqual(olds.map((f) => f.name).sort(), ['backend.inbox', 'excludeSections', 'siteTitle']);
-  for (const f of olds) assert.equal(f.level, 'warn');
+  for (const f of olds) assert.equal(f.level, f.name === 'excludeSections' ? 'stop' : 'warn', f.name);
+  assert.match(fault(r, 'excludeSections').message, /^excludeSections in the site folder's vault\.config\.json is no longer read, so what it hides would be published; put its entries under player_site\.hide\.sections in the vault's settings\.$/);
   assert.equal(fault(r, 'siteTitle').message, "siteTitle in the site folder's vault.config.json is no longer read; it is player_site.title in the vault's settings.");
   assert.equal(fault(r, 'siteTitle').use, 'player_site.title');
 });
@@ -316,4 +317,24 @@ test('resolveConfig on the new layout: a raw site-file setting never reaches the
   const olds = publishConfig.faults.filter((f) => f.kind === 'old-name').map((f) => f.name).sort();
   assert.deepEqual(olds, ['attachmentsDir', 'excludeDirs', 'excludeSections', 'folderMap', 'footer', 'siteTitle']);
   assert.equal(warned.filter((m) => /no longer read/.test(m)).length, 6);
+});
+
+test('each of the four hiding lists left in the site file is a stop; the other keys stay warnings', () => {
+  const r = read('version: 1\n', { vaultPath: './v', excludeDirs: ['a'], excludeSections: ['b'], excludeFields: ['c'], excludeCallouts: true, siteTitle: 'T', searchEnabled: false });
+  const level = (n) => fault(r, n).level;
+  for (const n of ['excludeDirs', 'excludeSections', 'excludeFields', 'excludeCallouts']) assert.equal(level(n), 'stop', n);
+  for (const n of ['siteTitle', 'searchEnabled']) assert.equal(level(n), 'warn', n);
+});
+
+test('a hiding list left in the site file stops the build and nothing is written', () => {
+  const { build } = require('../../lib/build');
+  const v = vault();
+  writeNewConfig(v, 'version: 1\n');
+  fs.writeFileSync(path.join(v, 'Home.md'), '---\ntype: note\n---\n# Home\n');
+  const site = fs.mkdtempSync(path.join(os.tmpdir(), 'read-new-site-'));
+  const out = path.join(site, 'docs');
+  const configPath = path.join(site, 'vault.config.json');
+  fs.writeFileSync(configPath, JSON.stringify({ vaultPath: v, outputDir: out, excludeSections: ['X'] }));
+  assert.throws(() => build({ configPath }), /excludeSections in the site folder's vault\.config\.json is no longer read/);
+  assert.equal(fs.existsSync(out), false);
 });

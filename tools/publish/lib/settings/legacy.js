@@ -8,7 +8,7 @@ const { isDeepStrictEqual } = require('node:util');
 const { parseNote } = require('../frontmatter');
 const { REGISTRY, entry: settingEntry, legacyNameOf, siteKeyOf } = require('./registry');
 const { TYPES, isMap } = require('./types');
-const { nearest, makeFault } = require('./faults');
+const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, HIDING_PREFIXES } = require('./faults');
 const { OLD_FILE, at } = require('./layout');
 
 // The list as the old layout knew it: each setting the old vault file held, named as that file
@@ -205,16 +205,11 @@ const SITE_FOLDER = legacyNameOf(settingEntry('player_site.folder'));
 // The old container of the field exceptions (it holds nothing but `fields`) and the name that replaced it.
 const OVERRIDES = new Set(REGISTRY.filter((e) => e.legacyOnly && e.guards).map((e) => e.name));
 const OVERRIDE_FIELDS = legacyNameOf(settingEntry('player_site.hide.field_exceptions'));
-// A name directly under `publish` that says it hides something must never be ignored quietly.
-const HIDING_PREFIXES = ['exclude', 'hid'];
-// The last part of each hiding setting's name (exclude_sections, mode, fields, ...): a key called
-// exactly that, anywhere under `publish`, is a hiding setting in the wrong place.
-const GUARD_LASTS = new Set(LEGACY.filter((e) => e.guards).map((e) => e.name.split('.').pop()));
-// `mode` is left out: it is also an everyday word (a colour mode under `theme`), and stopping on it would be a false alarm.
-const guardLast = (key) => GUARD_LASTS.has(key) && key !== 'mode';
-const saysHiding = (key) => guardLast(key) || HIDING_PREFIXES.some((p) => key.toLowerCase().startsWith(p));
+// A name that says it hides something must never be ignored quietly (faults.js has the one rule).
+const GUARD_LASTS = hidingLasts(LEGACY.filter((e) => e.guards).map((e) => e.name));
+const saysHiding = (key) => saysHidingName(key, GUARD_LASTS);
 // Beside `publish:` (the left edge of the frontmatter) the same slip is looked for.
-const saysHidingBeside = (key) => guardLast(key) || key.startsWith('exclude_');
+const saysHidingBeside = (key) => saysHidingName(key, GUARD_LASTS, { beside: true });
 // Top-level keys of the old file that are not settings and are not reported: the notes the file
 // kept beside its settings, which the move carries over or the notes file keeps.
 const NOT_SETTINGS = new Set(['type', 'gm_apprentice_version', 'campaign', 'game_system', 'description', 'last_updated', 'changelog', 'chapter_naming', 'session_naming']);
@@ -346,7 +341,8 @@ function readLegacy({ vaultPath, siteConfig }, core) {
       origins[e.setting] = 'default';
       return;
     }
-    const first = set[0];
+    // Read from the merged value, but a fault shows the value as the site file wrote it (as it always did).
+    const first = set[0].origin === 'site-file' && e.json ? { ...set[0], shown: site[e.json] } : set[0];
     const r = settle(c, e, { written: e.name, setting: e.setting }, first, defaultOf);
     // The merge can hide a vault value the type cannot read behind the site file's list.
     if (r.ok && (e.jsonMerge === 'union' || e.jsonMerge === 'stricter')) {
