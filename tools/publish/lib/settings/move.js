@@ -16,6 +16,7 @@ const { REGISTRY, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { isLeaf } = require('./describe');
 const { formatFault } = require('./faults');
+const { outputProblem, keepProblem } = require('./folders');
 const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, layoutOf, at } = require('./layout');
 const read = require('./read');
 const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE, hasLegacy } = require('./legacy');
@@ -168,12 +169,23 @@ function stripSiteKeys(siteText, { carriedOnly = false } = {}) {
 // Plans what the site file's carried keys do, against what the vault holds. `held(name)` says { set, value } for a
 // setting of the vault. Returns { carried: [{ from, to, value }], dropped: [{ from, why }], lines, values (by setting
 // name, the ones to write), changes (as write.js takes them) }.
-function planCarry(site, held) {
-  const out = { carried: [], dropped: [], lines: [], values: {}, changes: [] };
+function planCarry(site, held, siteDir) {
+  const out = { carried: [], dropped: [], lines: [], values: {}, changes: [], blockers: [] };
+  // The folder checks the reader runs; a value the build would stop on is a blocker, never a drop.
+  const problemOf = (e, value) => (e.check === 'output' ? outputProblem(value, siteDir) : e.check === 'keep' ? keepProblem(value) : null);
+  const sameValue = (e, a, b) => (e.check === 'output' && typeof a === 'string' && typeof b === 'string'
+    ? path.resolve(siteDir || path.sep, a.trim()) === path.resolve(siteDir || path.sep, b.trim()) : isDeepStrictEqual(a, b));
   for (const { e, w } of CARRIED) {
     const raw = getPath(site, w.name.split('.'));
     if (raw === undefined || raw === null) continue;
-    const r = TYPES[e.type].read(raw, e);
+    let r = TYPES[e.type].read(raw, e);
+    if (r.ok && e.type === 'text' && typeof r.value !== 'string' && !e.siteFallback) r = { ok: false };
+    const stops = e.siteFallback || e.stopOnFault;
+    const why = !r.ok ? `it takes ${TYPES[e.type].takes(e)}` : (stops ? problemOf(e, r.value) : null);
+    if (stops && why) {
+      out.blockers.push(`${w.name} is ${showValue(raw)} in the site folder's vault.config.json; ${why}. Fix it there, then run the move again.`);
+      continue;
+    }
     if (!r.ok) {
       out.dropped.push({ from: w.name, why: `it is not usable as ${e.name}; it takes ${TYPES[e.type].takes(e)}` });
       out.lines.push(`\`${w.name}: ${showValue(raw)}\` in the site folder's vault.config.json is not usable as \`${e.name}\` (it takes ${TYPES[e.type].takes(e)}), so it was removed and not carried over.`);
@@ -186,7 +198,7 @@ function planCarry(site, held) {
       out.values[e.name] = r.value;
       out.changes.push({ op: 'set', name: e.name, value: r.value });
       out.lines.push(`\`${w.name}\` moved to \`${e.name}\`.`);
-    } else if (!isDeepStrictEqual(mine.value, r.value)) {
+    } else if (!sameValue(e, mine.value, r.value)) {
       out.dropped.push({ from: w.name, why: `the vault already sets ${e.name} to ${showValue(mine.value)}` });
       out.lines.push(`\`${w.name}\` in the site folder's vault.config.json (${showValue(r.value)}) differs from \`${e.name}\` in the vault's settings (${showValue(mine.value)}); the vault's is kept and the site file's was removed.`);
     }
@@ -823,7 +835,7 @@ function siteDiffers(vault, site) {
   const differs = [];
   for (const e of LEAVES) {
     const beat = beaten[e.name] && beaten[e.name] !== 'default';
-    if (siteOnly.origins[e.name] === 'default') continue;
+    if (siteOnly.origins[e.name] === 'default' || e.siteFallback) continue;   // (the folder settings are carried, not compared)
     if (beat && e.guards) {
       // A hiding list: the old layout merged both files, so a left-over old file never beat the site's entries. The
       // new file differs when it lacks one of them (never skipped, or an entry would be dropped by the tidy).
@@ -912,7 +924,8 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
     if (mine) {
       const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
       const heldNow = (name) => ({ set: now.origins[name] !== undefined && now.origins[name] !== 'default', value: getPath(now.values, name.split('.')) });
-      carry = planCarry(site, heldNow);
+      carry = planCarry(site, heldNow, path.dirname(siteFile));
+      if (carry.blockers.length) return { ok: false, lines: [], blockers: carry.blockers, files: { write: [], remove: [] } };
       stepsPlan = planSteps(path.dirname(siteFile), heldNow, { siteToolUpdated, pinCheck: deps.pinCheck });
       const all = stripSiteKeys(siteText);
       if (all.siteOut !== null || stepsPlan.lines.length > 0) {

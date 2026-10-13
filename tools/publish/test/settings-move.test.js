@@ -1270,3 +1270,44 @@ test('a package.json that is not valid JSON, or holds empty scripts, is left alo
   assert.equal(cliMove({ vault: t.vault, config: t.config }).rc, 0);
   assert.deepEqual(readPackage(t).scripts, { prebuild: '   ', postbuild: '' });
 });
+
+// ---- Fix round 1: an unusable folder setting on a moved vault blocks, with a message that names the key ----
+
+for (const [site, key, rule] of [
+  [{ preserveDirs: 'gazetteer' }, 'preserveDirs', /takes a list/],
+  [{ preserveDirs: ['a/b'] }, 'preserveDirs', /plain folder name/],
+  [{ outputDir: '../outside' }, 'outputDir', /inside the site folder/],
+  [{ host: 'netlify' }, 'host', /github-pages/],
+]) {
+  test(`a moved vault whose site file has an unusable ${key} (${JSON.stringify(site[key])}) is blocked, changes nothing and names the key`, () => {
+    const s = scratch(null, { site: { vaultPath: './Vault', ...site } });
+    writeNewConfig(s.vault, { version: 1 });
+    const before = hashes(s.root);
+    const r = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(r.rc, 1);
+    assert.deepEqual(hashes(s.root), before);
+    const text = JSON.stringify(r.data.blockers);
+    assert.ok(text.includes(key), text);
+    assert.match(text, rule);
+  });
+}
+
+test('a moved vault: a number as campaignImage is dropped with a line and the rest still moves', () => {
+  const s = scratch(null, { site: { vaultPath: './Vault', campaignImage: 5, siteUrl: 'https://x.example' } });
+  writeNewConfig(s.vault, { version: 1 });
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, JSON.stringify(r.data));
+  assert.deepEqual(siteJson(s), { vaultPath: './Vault' });
+  assert.deepEqual(r.data.dropped.map((d) => d.from), ['campaignImage']);
+  assert.equal(vaultValues(s).url, 'https://x.example');
+});
+
+test('a vault output of docs and a site file outputDir of ./docs are the same folder: no differs line, no siteDiffers', () => {
+  const s = scratch(null, { site: { vaultPath: './Vault', outputDir: './docs' } });
+  writeNewConfig(s.vault, { version: 1, player_site: { output: 'docs' } });
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0);
+  assert.ok(!r.data.lines.join('\n').includes('differs'), r.data.lines.join('\n'));
+  assert.equal(r.data.siteDiffers, undefined);
+  assert.deepEqual(siteJson(s), { vaultPath: './Vault' });
+});
