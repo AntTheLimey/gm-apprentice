@@ -9,6 +9,7 @@
 //   settings check                   the faults in the file
 //   settings list                    every name a GM can set
 //   settings raw [<name>]            the file as written
+//   settings setup-note get|set|clear  the publish set-up note
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseNote } = require('../frontmatter');
@@ -16,12 +17,13 @@ const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
 const { isMap } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
-const { OLD_FILE, NEW_FILE, layoutOf, at: fileAt } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
 const { row, isLeaf, defaultOf } = require('./describe');
 const { OLD_BLOCK } = require('./legacy');
+const { readState, writeState } = require('./state');
 
-const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw'];
+const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // Removed in Part B: the name the old vault file gave a setting, which the commands still take for
@@ -200,7 +202,7 @@ function list() {
 function helpText() {
   const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
-gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw> [...] [--json] [--create] [--vault <dir>] [--config <path>]
+gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw|setup-note> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 
 Reads, writes, describes and checks the settings in the vault's settings file (${NEW_FILE}; ${OLD_FILE} on a vault not yet updated).
 
@@ -216,6 +218,8 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
   settings raw [<name>]            The file as written, or the value at one name
+  settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
+                                   vault not yet updated). Also: setup-note set <key>=<value> ... and setup-note clear
 
   --vault <dir>    The vault (default: the vaultPath in the config)
   --config <path>  The site folder's vault.config.json (default: ./vault.config.json)
@@ -265,6 +269,19 @@ function write(options, changes) {
   }
 }
 
+// `name=value` as given on the command line; a value that is not JSON is the text written.
+function splitPair(pair) {
+  const at = pair.indexOf('=');
+  return { name: (at < 0 ? pair : pair.slice(0, at)).trim(), given: at < 0 ? '' : pair.slice(at + 1), hasValue: at >= 0 };
+}
+function valueOf(given) {
+  try {
+    return JSON.parse(given);
+  } catch {
+    return given.trim();
+  }
+}
+
 // Turns `name=value` pairs into set changes. { errors } and nothing else when any is refused.
 // A value that is not JSON is taken as the text written.
 function plan(options, pairs) {
@@ -273,20 +290,13 @@ function plan(options, pairs) {
   const written = [];
   const empties = [];
   for (const pair of pairs) {
-    const at = pair.indexOf('=');
-    const name = (at < 0 ? pair : pair.slice(0, at)).trim();
+    const { name, given, hasValue } = splitPair(pair);
     const why = refusal(name);
     if (why) { errors.push(why); continue; }
     const e = resolve(name).entry;
-    if (at < 0) { errors.push(`${name} needs a value, like ${name}=value.`); continue; }
-    const given = pair.slice(at + 1);
+    if (!hasValue) { errors.push(`${name} needs a value, like ${name}=value.`); continue; }
     if (given.trim() === '') { errors.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
-    let value;
-    try {
-      value = JSON.parse(given);
-    } catch {
-      value = given.trim();
-    }
+    const value = valueOf(given);
     const at2 = changes.findIndex((c) => c.name === e.name);
     if (at2 >= 0) changes.splice(at2, 1);
     changes.push({ op: 'set', name: e.name, label: name, value });
@@ -441,6 +451,66 @@ function unset(options, names) {
   return { result: { removed }, lines, notices: noticesFor(names) };
 }
 
+// ---- The set-up note ----------------------------------------------------------------------
+
+// The publish set-up guide's note to itself. On the new layout (or none) it is `setup` in the state
+// file; on the old layout it is publish.setup_progress in the old settings file, written through the
+// same writer, which allows that one state entry for this command only.
+const NOTE_NAME = 'publish.setup_progress';
+const NOTE_PATH = NOTE_NAME.split('.');
+
+function readNote(vaultPath) {
+  const note = layoutOf(vaultPath) === 'legacy' ? getPath(rawData(vaultPath), NOTE_PATH) : readState(vaultPath).setup;
+  return isMap(note) ? note : null;
+}
+
+function writeNote(vaultPath, note) {
+  if (layoutOf(vaultPath) !== 'legacy') {
+    writeState(vaultPath, { setup: note });
+    return;
+  }
+  const change = note === null ? { op: 'unset', name: NOTE_NAME } : { op: 'set', name: NOTE_NAME, value: note };
+  try {
+    applyChanges(vaultPath, [change], { allowState: true });
+  } catch (e) {
+    if (e.refusals) throw new Error(e.refusals[0]);
+    throw e;
+  }
+}
+
+function setupNote(options, args) {
+  const [sub, ...rest] = args;
+  if (!['get', 'set', 'clear'].includes(sub)) throw new Error('settings setup-note needs get, set or clear.');
+  const { vaultPath } = target(options);
+  const note = readNote(vaultPath);
+  if (sub === 'get') {
+    if (rest.length > 1) throw new Error('settings setup-note get takes at most one key.');
+    if (rest.length) {
+      const value = note && Object.prototype.hasOwnProperty.call(note, rest[0]) ? note[rest[0]] : null;
+      return { result: value, lines: [value === null ? `The set-up note has no ${rest[0]}.` : plainValue(value)] };
+    }
+    const entries = note ? Object.entries(note) : [];
+    return { result: note || {}, lines: entries.length ? entries.map(([k, v]) => `${k}: ${plainValue(v)}`) : ['No set-up note.'] };
+  }
+  if (sub === 'clear') {
+    if (rest.length) throw new Error('settings setup-note clear takes no keys.');
+    if (note) writeNote(vaultPath, null);
+    return { result: {}, lines: [note ? 'Cleared the set-up note.' : 'No set-up note.'] };
+  }
+  if (!rest.length) throw new Error('settings setup-note set needs at least one key=value.');
+  const merged = { ...(note || {}) };
+  const errors = [];
+  for (const pair of rest) {
+    const { name, given, hasValue } = splitPair(pair);
+    if (!name) errors.push(`${pair} needs a key, like key=value.`);
+    else if (!hasValue || given.trim() === '') errors.push(`${name} needs a value, like ${name}=value.`);
+    else merged[name] = valueOf(given);
+  }
+  if (errors.length) return { errors };
+  writeNote(vaultPath, merged);
+  return { result: merged, lines: rest.map((p) => `Noted ${splitPair(p).name}.`) };
+}
+
 // ---- The command --------------------------------------------------------------------------
 
 // options: { verb, args, vault, config, json }. Returns the exit code.
@@ -454,6 +524,7 @@ function runSettings(options, deps = {}) {
     if (options.verb === 'get') done = get(options, args);
     else if (options.verb === 'set') done = set(options, args);
     else if (options.verb === 'add' || options.verb === 'remove') done = changeList(options, options.verb, args);
+    else if (options.verb === 'setup-note') done = setupNote(options, args);
     else if (options.verb === 'unset') done = unset(options, args);
     else if (options.verb === 'describe') {
       if (!args[0]) throw new Error('settings describe needs a setting name.');

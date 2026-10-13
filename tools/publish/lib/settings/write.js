@@ -367,7 +367,7 @@ function writeAtomic(link, text, { rename } = {}) {
 const blank = (x) => typeof x === 'string' && x.trim() === '';
 
 // Turns each change into steps on the file, or refuses it. { steps, refusals }.
-function prepare(changes, layout) {
+function prepare(changes, layout, { allowState = false } = {}) {
   const refusals = [];
   const steps = [];
   const legacy = layout === 'legacy';
@@ -386,10 +386,12 @@ function prepare(changes, layout) {
       else refusals.push(`${name} is not a setting.`);
       continue;
     }
-    if (e.state || e.settable === false) { refusals.push(`${name} is kept by the tool and cannot be set here.`); continue; }
+    // Only the set-up note command passes allowState, for the one state entry the old file holds.
+    const state = allowState && e.state && e.legacyOnly;
+    if (!state && (e.state || e.settable === false)) { refusals.push(`${name} is kept by the tool and cannot be set here.`); continue; }
     if (e.retired) { refusals.push(`${name} is no longer used and cannot be set.`); continue; }
-    if (e.container || e.legacyOnly) { refusals.push(`${name} only holds other settings and cannot be set.`); continue; }
-    if (!isLeaf(e, REGISTRY) && !e.open) {
+    if (!state && (e.container || e.legacyOnly)) { refusals.push(`${name} only holds other settings and cannot be set.`); continue; }
+    if (!state && !isLeaf(e, REGISTRY) && !e.open) {
       const child = REGISTRY.find((x) => x.name.startsWith(`${name}.`) && isLeaf(x, REGISTRY));
       refusals.push(change.op === 'unset' ? `${name} holds other settings; unset each setting in it.` : `${name} holds other settings; set the setting itself, for example ${child && child.name}.`);
       continue;
@@ -493,9 +495,9 @@ function runStep(text, step, label, eol, keepBlock) {
 }
 
 // Plans the changes without writing: { rel, file, before, after, changed, notes, wrote, removed, created }.
-function planChanges(vaultPath, changes, { create = false } = {}) {
+function planChanges(vaultPath, changes, { create = false, allowState = false } = {}) {
   const layout = layoutOf(vaultPath);
-  const { steps, refusals } = prepare(changes, layout);
+  const { steps, refusals } = prepare(changes, layout, { allowState });
   if (refusals.length) {
     const err = new Error(refusals.join('\n'));
     err.refusals = refusals;
