@@ -17,10 +17,10 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from schema_rules import tone_families
 from vault_check import (WRAP_TYPES, WrapDetail, check_wrapup,
                          player_section_key, wrapup_filename_findings)
-from vaultlib import (_KEY_LINE_RE, _frontmatter_lines, entity_type,
-                      extract_frontmatter, frontmatter_span, parse_publish_list,
-                      parse_version, plugin_version, read_publish_scalar,
-                      vault_files, wrapup_filename)
+from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
+                      frontmatter_span, parse_version, plugin_version,
+                      settings, settings_raw, settings_unset, vault_files,
+                      wrapup_filename)
 
 SHARED = Path(__file__).resolve().parent.parent
 TEMPLATES = SHARED / "templates"
@@ -64,7 +64,7 @@ def _system_id(raw: object) -> str | None:
 def vault_system(vault: Path) -> str | None:
     """`publish.system`, else the Campaign Overview's `game_system`, else
     the adventure brief's `system`; aliases mapped to the file ids."""
-    found = _system_id(read_publish_scalar(vault, "system"))
+    found = _system_id(settings(vault).get("publish.system"))
     if found:
         return found
     # The brief's type is written `adventure-brief`; older notes used `_`.
@@ -599,99 +599,17 @@ def read_wrap_up_player_sections(vault: Path) -> list[str]:
     """`publish.wrap_up.player_sections` from `_meta/vault-config.md`: the
     extra H2 titles the vault declares player-facing on a Wrap-Up.
 
-    The nested `wrap_up:` block is lifted out and read through
-    `parse_publish_list`, so the list syntax is exactly the one the
-    other publish lists accept. Absent, empty, null, unreadable or not a
-    list all read as no extra sections — the Keeper-facing default.
+    Read as the publish tool has it in the file. Absent, empty, null or not
+    a list of plain entries all read as no extra sections — the Keeper-facing
+    default.
     """
-    try:
-        text = (vault / CONFIG).read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
+    block = settings_raw(vault, "publish.wrap_up")
+    listed = block.get("player_sections") if isinstance(block, dict) else None
+    if not isinstance(listed, list) or not all(
+            isinstance(x, (str, int, float)) and not isinstance(x, bool)
+            for x in listed):
         return []
-    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
-    start = next((i for i, line in enumerate(lines)
-                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
-    if start is None:
-        return []
-    block: list[str] = []
-    wrap_indent: int | None = None
-    inside = False
-    for line in lines[start + 1:]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            if inside:
-                block.append(line)
-            continue
-        depth = len(line) - len(line.lstrip())
-        if depth == 0:
-            break                                    # the next top-level key
-        m = _KEY_LINE_RE.match(line)
-        if inside and depth > (wrap_indent or 0):
-            block.append(line)
-            continue
-        inside = False
-        if m and m.group(3) == "wrap_up" and not (m.group(4) or "").strip().split("#")[0].strip():
-            inside, wrap_indent = True, depth
-    if not block:
-        return []
-    cfg = parse_publish_list(["publish:"] + block, "player_sections")
-    return [] if cfg.error else list(cfg.value or [])
-
-
-def _drop_player_sections(fm: list[str], _eol: str) -> None:
-    """Remove `publish.wrap_up.player_sections` (and `wrap_up:` when that
-    leaves it empty) from vault-config's frontmatter lines, keeping every
-    other line as it is. Line endings ride on the lines themselves."""
-    def depth(line: str) -> int:
-        return len(line) - len(line.lstrip())
-
-    def block_end(start: int) -> int:
-        end = start + 1
-        while end < len(fm) and (not fm[end].strip()
-                                 or depth(fm[end]) > depth(fm[start])):
-            end += 1
-        while end > start + 1 and not fm[end - 1].strip():
-            end -= 1
-        return end
-
-    def key_at(name: str, lo: int, hi: int, indented: bool) -> int | None:
-        for i in range(lo, hi):
-            m = _KEY_LINE_RE.match(fm[i].rstrip("\r\n"))
-            if m and m.group(3) == name and bool(m.group(1)) == indented:
-                return i
-        return None
-
-    def list_end(start: int) -> int:
-        """The key's block; a block list written at the key's own indent
-        belongs to it too."""
-        end = block_end(start)
-        m = _KEY_LINE_RE.match(fm[start].rstrip("\r\n"))
-        if m and not (m.group(4) or "").split("#")[0].strip():
-            while True:
-                probe = end
-                while probe < len(fm) and (
-                        not fm[probe].strip()
-                        or fm[probe].lstrip().startswith("#")):
-                    probe += 1
-                if not (probe < len(fm)
-                        and depth(fm[probe]) == depth(fm[start])
-                        and re.match(r"-(\s|$)", fm[probe].strip())):
-                    break
-                end = block_end(probe)
-        return end
-
-    publish = key_at("publish", 0, len(fm), False)
-    if publish is None:
-        return
-    wrap = key_at("wrap_up", publish + 1, block_end(publish), True)
-    if wrap is None:
-        return
-    key = key_at("player_sections", wrap + 1, block_end(wrap), True)
-    if key is None:
-        return
-    del fm[key:list_end(key)]
-    if block_end(wrap) == wrap + 1:
-        del fm[wrap]
+    return [str(x) for x in listed]
 
 
 def _name_headings(titles: list[str]) -> str:
@@ -800,18 +718,19 @@ def find_wrapup_sections_key(vault: Path) -> list[Item]:
     if (not stamp or isinstance(stamp, list)
             or parse_version(str(stamp)) < parse_version("1.10.28")):
         return []
-    lines = text.splitlines(keepends=True)
-    end, error = frontmatter_span(lines)
-    if error:
+    if frontmatter_span(text.splitlines(keepends=True))[1]:
         return []
-    fm = lines[1:end]
-    after = list(fm)
-    _drop_player_sections(after, "")
-    if after == fm:
+    block = settings_raw(vault, "publish.wrap_up")
+    if not (isinstance(block, dict) and "player_sections" in block):
         return []
 
     def apply(_value: str | None) -> list[str]:
-        edit_frontmatter(config, _drop_player_sections)
+        try:
+            settings_unset(vault, ["publish.wrap_up.player_sections"])
+        except SettingsUnavailable as e:
+            if not e.refused:
+                raise
+            raise StepFailed(str(e)) from e
         return [f"removed publish.wrap_up.player_sections from {CONFIG}"]
 
     return [Item("wrapup-sections-key", WILL,

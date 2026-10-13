@@ -59,6 +59,7 @@ Exit: 0 done or a clean preview; 1 refused or failed (one line why);
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import unicodedata
@@ -76,8 +77,8 @@ from schema_rules import (
     tone_key,
     tone_proposal,
 )
-from vaultlib import (_frontmatter_lines, extract_frontmatter,
-                      is_unchecked_source, read_publish_list, vault_files)
+from vaultlib import (SettingsUnavailable, extract_frontmatter,
+                      is_unchecked_source, settings, vault_files)
 
 
 class TonesError(Exception):
@@ -199,20 +200,12 @@ def _campaign_hides_relationships(vault: Path) -> bool:
     no `publish.overrides` entry mentions it (a per-note `include` would
     re-admit it for that note; which notes is not worked out, so none is
     skipped)."""
-    cfg = read_publish_list(vault, "exclude_fields")
-    if not _hides_relationships(cfg.value):
+    s = settings(vault)
+    if s.origins["publish.exclude_fields"] != "file":
         return False
-    try:
-        text = (vault / "_meta" / "vault-config.md").read_text(
-            encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
+    if not _hides_relationships(s.get("publish.exclude_fields")):
         return False
-    lines = _frontmatter_lines(text) or []
-    start, end = cfg.span or (0, 0)
-    outside = lines[:start] + lines[end:]
-    return not (any(re.match(r"\s*[\"']?overrides[\"']?\s*:", ln)
-                    for ln in outside)
-                and any("relationships" in ln for ln in outside))
+    return "relationships" not in json.dumps(s.get("publish.overrides.fields"))
 
 
 def shown_edges(vault: Path, published: set[str]
@@ -461,7 +454,7 @@ def main(argv: list[str] | None = None) -> int:
         if args.write:
             apply(p)
         print("\n".join(rows(p, done=args.write)))
-    except TonesError as e:
+    except (TonesError, SettingsUnavailable) as e:
         print(f"tones.py: {e}", file=sys.stderr)
         return 1
     except KeyboardInterrupt as e:

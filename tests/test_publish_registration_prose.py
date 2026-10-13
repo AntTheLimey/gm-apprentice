@@ -49,11 +49,14 @@ class ReconcileRegistrationTests(unittest.TestCase):
         self.assertIn("Report the unclear list", self.step)
         self.assertIn("publish-site asks the GM", self.step)
 
-    def test_says_what_an_unset_or_relative_site_dir_means(self):
-        self.assertRegex(self.step, r"`publish\.site` is `false`, or it is "
-                                    r"unset and so is\s+`publish\.site_dir`, "
-                                    r"the vault has no site")
-        self.assertIn("relative to the vault", self.step)
+    def test_asks_the_tool_for_the_site_and_the_mode(self):
+        # What an unset switch means is the settings list's to say, so the
+        # step asks the tool and never reads the settings file itself.
+        self.assertRegex(self.step, r"settings\s+get publish\.site "
+                                    r"publish\.site_dir publish\.mode "
+                                    r"--vault <vault>")
+        self.assertNotIn("vault-config.md", self.step)
+        self.assertRegex(self.step, r"relative to the\s+vault")
 
 
 class PublishSiteRegistrationTests(unittest.TestCase):

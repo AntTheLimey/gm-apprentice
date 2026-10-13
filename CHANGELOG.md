@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.52] — 2026-10-13
+
+### Added
+
+- campaign-qa has a Settings check. It reads your settings file through
+  the publish tool and lists every fault: a setting that is misspelt,
+  one that cannot be read, one that is no longer used. A fix that is
+  certain (a misspelling with one obvious answer, a retired setting)
+  is made on one yes; a fix that needs your judgement is asked one at
+  a time. It lists a hiding setting in the wrong place too, and moves
+  one that sits a level too deep without hiding less; one written
+  beside `publish:` is listed for you to move by hand.
+
+### Changed
+
+- The vault scripts ask the publish tool for your site settings instead
+  of reading the file themselves, so they and the site always agree.
+  This means the scripts need Node to read settings. The version check
+  at the start of a skill does not.
+- Skills that used to carry a table of settings now ask the tool
+  (`settings get`, `settings describe`) when they need one.
+
+### Fixed
+
+- The site update forgets the settings it read before it re-pinned the
+  tool, so a switch it just wrote is not offered again.
+- The publish-site skill says `build` and `deploy` refuse only when the
+  file says `false`, and the settings guide says only the wrap-up check
+  runs without Node.
+
+### Removed
+
+- The settings tables and lists in the skills and their reference files,
+  and the files that held only those: 24,834 bytes of skill text in
+  all (238,650 down to 213,816), which is less to read at the start of
+  every skill.
+
 ## [1.10.51] — 2026-10-13
 
 ### Added

@@ -70,10 +70,24 @@ def make_vault(case, publish=True, site=True, version="1.10.12", extra=""):
     return vault
 
 
+REAL_RUN = subprocess.run
+REAL_NODE = shutil.which("node")
+
+
+def routed(tool):
+    """`tool` for every run but the settings reads, which go to the real
+    publish tool (it is what the vault's settings are asked of)."""
+    def run(cmd, **kwargs):
+        if len(cmd) > 2 and cmd[2] == "settings":
+            return REAL_RUN([REAL_NODE, *cmd[1:]], **kwargs)
+        return tool(cmd, **kwargs)
+    return run
+
+
 @contextlib.contextmanager
 def stubbed(tool):
-    with mock.patch.object(vc.shutil, "which", return_value="/usr/bin/node"), \
-            mock.patch.object(vc.subprocess, "run", tool):
+    with mock.patch.object(vc.shutil, "which", return_value=REAL_NODE), \
+            mock.patch.object(vc.subprocess, "run", routed(tool)):
         yield
 
 
@@ -147,6 +161,16 @@ class RepinTests(unittest.TestCase):
         self.assertEqual(pin.calls[1][:1], ["update-pin"])
         self.assertNotIn("--check", pin.calls[1])
         self.assertIn(str(site_of(vault)), pin.calls[1])
+
+    def test_the_repin_forgets_the_settings_it_may_have_changed(self):
+        vault = make_vault(self)
+        pin = Pin()
+        with mock.patch.object(ms, "plugin_tool", pin), \
+                mock.patch.object(ms, "forget_settings") as forget:
+            (item,) = ms.find_site_repin(vault)
+            forget.reset_mock()
+            item.apply(None)
+        forget.assert_called_with(vault)
 
     def test_a_failed_install_raises_with_npms_last_lines(self):
         vault = make_vault(self)
@@ -299,8 +323,8 @@ class ConfigStepTests(unittest.TestCase):
 
     def test_no_node_is_not_blamed_on_the_pin(self):
         vault = make_vault(self)
-        with mock.patch.object(ms.shutil, "which", return_value=None), \
-                mock.patch.object(vc.shutil, "which", return_value=None), \
+        vc.vault_settings(vault)    # read while node is still there
+        with mock.patch.object(vc.shutil, "which", return_value=None), \
                 self.assertRaises(StepFailed) as caught:
             ms.find_config_to_vault(vault)
         self.assertEqual(str(caught.exception),
@@ -404,34 +428,55 @@ class ConfigStepTests(unittest.TestCase):
             (item,) = ms.find_config_to_vault(make_vault(self))
         self.assertEqual(item.lines, ["move a -> b", "tidy c"])
 
-    def run_full_checks_on_a_no_site_vault(self, **patches):
+    def stopped_by(self, command, patches):
+        """Run `migrate.py <vault> <command>` over the site checks with
+        `patches` in force: (exit code, stdout, stderr)."""
         vault = make_vault(self, site=False)
+        out, err = io.StringIO(), io.StringIO()
         with contextlib.ExitStack() as stack:
-            for target, attr, value in patches["patches"]:
+            for target, attr, value in patches:
                 stack.enter_context(mock.patch.object(target, attr, value))
-            plan, out = io.StringIO(), io.StringIO()
             stack.enter_context(mock.patch.object(
                 migrate, "plugin_version", return_value=("1.10.26", "t")))
             stack.enter_context(mock.patch.object(
                 migrate, "CHECKS", ms.SITE_CHECKS))
-            with contextlib.redirect_stdout(plan):
-                self.assertEqual(migrate.main([str(vault), "plan"]), 0)
-            with contextlib.redirect_stdout(out):
-                self.assertEqual(migrate.main([str(vault), "apply"]), 0)
-        self.assertNotIn("Needs a person", plan.getvalue())
-        self.assertNotIn("apply stops here", plan.getvalue())
-        self.assertIn("stamped 1.10.26", out.getvalue())
+            stack.enter_context(contextlib.redirect_stdout(out))
+            stack.enter_context(contextlib.redirect_stderr(err))
+            code = migrate.main([str(vault), command])
+        return code, out.getvalue(), err.getvalue()
 
-    def test_no_site_and_no_node_never_stops(self):
-        self.run_full_checks_on_a_no_site_vault(patches=[
-            (ms.shutil, "which", lambda *_a, **_k: None),
+    def test_no_node_stops_the_plan_with_the_one_line(self):
+        # Settings cannot be read without the tool, so nothing is planned,
+        # whether the vault has a site or not.
+        code, out, err = self.stopped_by("plan", [
             (vc.shutil, "which", lambda *_a, **_k: None)])
+        self.assertEqual(code, 1)
+        self.assertEqual(err, "migrate.py: could not read the vault's "
+                              "settings: node is not on PATH\n")
+        self.assertEqual(out, "")
 
-    def test_no_site_on_a_skill_zip_install_never_stops(self):
+    def test_no_node_stops_the_apply_and_stamps_nothing(self):
+        code, out, err = self.stopped_by("apply", [
+            (vc.shutil, "which", lambda *_a, **_k: None)])
+        self.assertEqual(code, 1)
+        self.assertIn("could not read the vault's settings: node is not on "
+                      "PATH", err)
+        self.assertIn("not stamped", out)
+
+    def test_a_skill_zip_install_without_the_tool_says_so_in_one_line(self):
         gone = Path(tempfile.gettempdir()) / "no-such-plugin" / "gm-publish.js"
-        self.run_full_checks_on_a_no_site_vault(patches=[
-            (ms, "PUBLISH_TOOL", gone), (migrate_core, "PUBLISH_TOOL", gone),
+        code, _out, err = self.stopped_by("plan", [
             (vc, "PUBLISH_TOOL", gone)])
+        # vaultlib's own PUBLISH_TOOL is the one settings are read with
+        self.assertEqual(code, 0, err)
+        import vaultlib
+        code, _out, err = self.stopped_by("plan", [
+            (vaultlib, "PUBLISH_TOOL", gone)])
+        self.assertEqual(code, 1)
+        self.assertEqual(err.count("\n"), 1)
+        self.assertTrue(err.startswith(
+            "migrate.py: could not read the vault's settings: the publish "
+            "tool is not at "), err)
 
     def test_a_vault_past_1_10_24_is_still_offered_the_move(self):
         check = next(c for c in ms.SITE_CHECKS if c.name == "config-to-vault")
@@ -494,6 +539,29 @@ class PublishSiteTests(unittest.TestCase):
         before = self.text(vault)
         self.assertEqual(ms.find_publish_site(vault), [])
         self.assertEqual(self.text(vault), before)
+
+    def test_a_publish_line_with_nothing_under_it_still_gets_the_switch(self):
+        # `settings().has_publish` is false for it; the line is there, and
+        # the switch is written under it, as it always was.
+        vault = make_vault(self, publish=False)
+        (vault / "_meta" / "vault-config.md").write_text(
+            '---\ngm_apprentice_version: "1.10.12"\npublish:\n---\n',
+            encoding="utf-8")
+        self.assertFalse(vc.settings(vault).has_publish)
+        (item,) = ms.find_publish_site(vault)
+        item.apply(None)
+        self.assertIn("publish:\n  site: false\n", self.text(vault))
+        self.assertEqual(ms.find_publish_site(vault), [])
+
+    def test_a_publish_block_on_one_line_gets_nothing(self):
+        vault = make_vault(self, publish=False)
+        (vault / "_meta" / "vault-config.md").write_text(
+            "---\npublish: {mode: player}\n---\n", encoding="utf-8")
+        self.assertEqual(ms.find_publish_site(vault), [])
+
+    def test_a_switch_that_is_not_a_switch_word_is_still_a_written_switch(self):
+        vault = make_vault(self, extra="  site: maybe\n")
+        self.assertEqual(ms.find_publish_site(vault), [])
 
 
 class LeakTests(unittest.TestCase):
@@ -900,66 +968,78 @@ class SheetSourceTests(unittest.TestCase):
 
 
 class ThemeChoiceTests(unittest.TestCase):
-    def ask(self, facts, calls):
-        def fake(vault, args, vault_only=False):
-            calls.append(args)
-            if "--set" in args:
-                return vc.ToolAnswer(data={"written": [args[2].split("=")[0]]})
-            return vc.ToolAnswer(data=facts)
-        return fake
+    """The settings are the real tool's: vaults here are real files."""
+
+    def written(self, vault):
+        return vc.settings(vault)
 
     def test_default_mode_is_offered_while_unset_and_writes_the_answer(self):
         vault = make_vault(self)
-        calls = []
-        facts = {"defaultModeSet": False, "fontSource": None, "googleFonts": []}
-        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
-            (item,) = ms.find_default_mode(vault)
-            self.assertEqual((item.id, item.wants),
-                             ("default-mode", "dark, light or leave"))
-            self.assertTrue(item.holds_stamp)
-            self.assertEqual(item.apply("dark"),
-                             ["wrote publish.theme.default_mode: dark"])
-            self.assertEqual(item.apply("leave"),
-                             ["left the default palette to the reader's "
-                              "device"])
-            with self.assertRaises(StepFailed):
-                item.apply("purple")
-        self.assertEqual(calls[1], ["vault-setting", "--set",
-                                    'theme.default_mode="dark"'])
+        (item,) = ms.find_default_mode(vault)
+        self.assertEqual((item.id, item.wants),
+                         ("default-mode", "dark, light or leave"))
+        self.assertTrue(item.holds_stamp)
+        self.assertEqual(item.apply("dark"),
+                         ["wrote publish.theme.default_mode: dark"])
+        self.assertEqual(self.written(vault).get("publish.theme.default_mode"),
+                         "dark")
+        self.assertEqual(item.apply("leave"),
+                         ["left the default palette to the reader's "
+                          "device"])
+        with self.assertRaises(StepFailed):
+            item.apply("purple")
+        # Written, so no longer offered; the file shows the one line added.
+        self.assertEqual(ms.find_default_mode(vault), [])
+        self.assertIn("    default_mode: dark\n",
+                      (vault / "_meta" / "vault-config.md").read_text(
+                          encoding="utf-8"))
 
     def test_default_mode_already_set_is_not_offered(self):
-        facts = {"defaultModeSet": True, "fontSource": None, "googleFonts": []}
-        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, [])):
-            self.assertEqual(ms.find_default_mode(make_vault(self)), [])
+        vault = make_vault(self, extra="  theme:\n    default_mode: light\n")
+        self.assertEqual(ms.find_default_mode(vault), [])
+
+    def test_a_default_mode_only_the_site_file_holds_is_still_offered(self):
+        # The old question was whether the vault file sets it.
+        vault = make_vault(self)
+        site_of(vault).joinpath("vault.config.json").write_text(
+            json.dumps({"theme": {"default_mode": "dark"}}), encoding="utf-8")
+        self.assertEqual([i.id for i in ms.find_default_mode(vault)],
+                         ["default-mode"])
+
+    def google_vault(self, fonts="      heading: Cinzel\n      body: Lora\n"):
+        return make_vault(self, extra="  theme:\n    fonts:\n" + fonts)
 
     def test_google_fonts_offer_self_hosting(self):
-        vault = make_vault(self)
-        calls = []
-        facts = {"defaultModeSet": True, "fontSource": None,
-                 "googleFonts": ["Cinzel", "Rajdhani"]}
-        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
-            (item,) = ms.find_fonts(vault)
-            self.assertEqual(item.id, "fonts-self-host")
-            self.assertIn("Cinzel, Rajdhani", item.lines[0])
-            item.apply(None)
-        self.assertEqual(calls[1], ["vault-setting", "--set",
-                                    'theme.fonts.source="self-host"'])
+        vault = self.google_vault()
+        (item,) = ms.find_fonts(vault)
+        self.assertEqual(item.id, "fonts-self-host")
+        self.assertIn("Cinzel, Lora", item.lines[0])
+        item.apply(None)
+        self.assertEqual(self.written(vault).get("publish.theme.fonts.source"),
+                         "self-host")
+        self.assertEqual(ms.find_fonts(vault), [])
 
-    def test_no_google_fonts_or_no_site_offers_nothing(self):
-        facts = {"defaultModeSet": True, "fontSource": "local", "googleFonts": []}
-        calls = []
-        with mock.patch.object(ms, "ask_publish_tool", self.ask(facts, calls)):
-            self.assertEqual(ms.find_fonts(make_vault(self)), [])
-            calls.clear()
-            self.assertEqual(ms.find_fonts(make_vault(self, site=False)), [])
-            self.assertEqual(ms.find_default_mode(make_vault(self, site=False)), [])
-        self.assertEqual(calls, [])
+    def test_the_families_are_the_plugin_tools_not_the_sites_pinned_copy(self):
+        vault = self.google_vault()
+        site = site_of(vault)
+        pkg = site / "node_modules" / "gm-apprentice-publish"
+        (pkg / "bin").mkdir(parents=True)
+        (pkg / "bin" / "gm-publish.js").write_text("process.exit(1);\n",
+                                                   encoding="utf-8")
+        self.assertEqual(ms._google_fonts(vault), ["Cinzel", "Lora"])
 
-    def test_a_tool_too_old_to_answer_stops(self):
-        with mock.patch.object(ms, "ask_publish_tool", return_value=vc.ToolAnswer(
-                why="vault-setting exited 1: Error: Unknown command")):
+    def test_self_hosted_or_no_theme_or_no_site_offers_nothing(self):
+        self.assertEqual(ms.find_fonts(make_vault(self)), [])
+        self.assertEqual(ms.find_fonts(self.google_vault(
+            "      source: self-host\n      heading: Cinzel\n")), [])
+        self.assertEqual(ms.find_fonts(make_vault(self, site=False)), [])
+        self.assertEqual(ms.find_default_mode(make_vault(self, site=False)), [])
+
+    def test_a_tool_that_cannot_answer_stops(self):
+        gone = vc.PublishToolUnavailable("the publish tool exited without answering")
+        with mock.patch.object(ms, "google_fonts", side_effect=gone):
             with self.assertRaises(StepFailed):
-                ms.find_fonts(make_vault(self))
+                ms.find_fonts(self.google_vault())
 
     def test_the_default_mode_choice_needs_a_value(self):
         check = next(c for c in ms.SITE_CHECKS if c.name == "default-mode")
@@ -972,73 +1052,86 @@ class ThemeChoiceTests(unittest.TestCase):
 
 class ExcludeListTests(unittest.TestCase):
     """1.10.47 (#294): a vault with a site and no list of its own is given
-    the built-in lists; a list it owns is never touched."""
-    SECTIONS = ["GM Notes", "DM Notes"]
-    FIELDS = ["secrets", "gm_notes"]
+    the built-in lists; a list it owns is never touched. The settings are
+    the real tool's; what config-to-vault would plan is set aside, as the
+    step is proved alone."""
 
-    def facts(self, sections_own, fields_own):
-        return {"excludeSectionsOwn": sections_own, "excludeFieldsOwn": fields_own,
-                "defaultExcludeSections": self.SECTIONS,
-                "defaultExcludeFields": self.FIELDS}
-
-    def ask(self, facts, calls):
-        def fake(vault, args, vault_only=False):
-            calls.append(args)
-            if "--set" in args:
-                return vc.ToolAnswer(data={"written": [args[2].split("=")[0]]})
-            return vc.ToolAnswer(data=facts)
-        return fake
+    def setUp(self):
+        patcher = mock.patch.object(ms, "describe_config_to_vault",
+                                    return_value=ms.StepPlan(False, []))
+        patcher.start()
+        self.addCleanup(patcher.stop)
 
     def test_a_vault_with_no_lists_gets_both_built_in_lists(self):
         vault = make_vault(self)
-        calls = []
-        with mock.patch.object(ms, "ask_publish_tool",
-                               self.ask(self.facts(False, False), calls)):
-            (item,) = ms.find_exclude_lists(vault)
-            self.assertEqual((item.id, item.group), ("exclude-lists", WILL))
+        (item,) = ms.find_exclude_lists(vault)
+        self.assertEqual((item.id, item.group), ("exclude-lists", WILL))
+        item.apply(None)
+        s = vc.settings(vault)
+        for name in ("exclude_sections", "exclude_fields"):
+            self.assertEqual(s.origins[f"publish.{name}"], "file")
+            self.assertEqual(s.get(f"publish.{name}"),
+                             ms.settings_default(f"publish.{name}"))
+        # Written once: asking again offers nothing.
+        self.assertEqual(ms.find_exclude_lists(vault), [])
+
+    def test_the_two_lists_are_one_edit(self):
+        vault = make_vault(self)
+        (item,) = ms.find_exclude_lists(vault)
+        writes = []
+        real = ms.settings_set
+        with mock.patch.object(ms, "settings_set",
+                               lambda v, pairs: writes.append(pairs) or real(v, pairs)):
             item.apply(None)
-        # One call, so the tool writes both in one edit: all or none.
-        self.assertEqual([c for c in calls if "--set" in c], [
-            ["vault-setting", "--set", 'exclude_sections=["GM Notes", "DM Notes"]',
-             "--set", 'exclude_fields=["secrets", "gm_notes"]']])
+        self.assertEqual(len(writes), 1)
+        self.assertEqual([n for n, _ in writes[0]],
+                         ["publish.exclude_sections", "publish.exclude_fields"])
 
     def test_a_list_config_to_vault_writes_this_pass_is_not_offered_twice(self):
         both = ms.StepPlan(True, [
             "move the built-in list -> publish.exclude_sections",
             "move the built-in list -> publish.exclude_fields"])
         one = ms.StepPlan(True, ["move the built-in list -> publish.exclude_fields"])
-        calls = []
-        with mock.patch.object(ms, "ask_publish_tool",
-                               self.ask(self.facts(False, False), calls)):
-            with mock.patch.object(ms, "describe_config_to_vault", return_value=both):
-                self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
-            with mock.patch.object(ms, "describe_config_to_vault", return_value=one):
-                (item,) = ms.find_exclude_lists(make_vault(self))
+        with mock.patch.object(ms, "describe_config_to_vault", return_value=both):
+            self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
+        with mock.patch.object(ms, "describe_config_to_vault", return_value=one):
+            (item,) = ms.find_exclude_lists(make_vault(self))
         self.assertEqual(len(item.lines), 1)
         self.assertIn("publish.exclude_sections", item.lines[0])
 
     def test_only_the_missing_list_is_written(self):
-        calls = []
-        with mock.patch.object(ms, "ask_publish_tool",
-                               self.ask(self.facts(True, False), calls)):
-            (item,) = ms.find_exclude_lists(make_vault(self))
-            item.apply(None)
-        self.assertEqual([c[2].split("=")[0] for c in calls if "--set" in c],
-                         ["exclude_fields"])
+        vault = make_vault(self, extra="  exclude_sections: [Mine]\n")
+        (item,) = ms.find_exclude_lists(vault)
+        item.apply(None)
+        s = vc.settings(vault)
+        self.assertEqual(s.get("publish.exclude_sections"), ["Mine"])
+        self.assertEqual(s.get("publish.exclude_fields"),
+                         ms.settings_default("publish.exclude_fields"))
 
     def test_a_vault_with_its_own_lists_is_left_alone(self):
-        calls = []
-        with mock.patch.object(ms, "ask_publish_tool",
-                               self.ask(self.facts(True, True), calls)):
-            self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
-        self.assertFalse([c for c in calls if "--set" in c])
+        vault = make_vault(self, extra="  exclude_sections: [Mine]\n"
+                                       "  exclude_fields: [mine]\n")
+        before = (vault / "_meta" / "vault-config.md").read_bytes()
+        self.assertEqual(ms.find_exclude_lists(vault), [])
+        self.assertEqual((vault / "_meta" / "vault-config.md").read_bytes(), before)
+
+    def test_a_list_only_the_site_file_holds_is_the_vaults_own_for_now(self):
+        vault = make_vault(self)
+        site_of(vault).joinpath("vault.config.json").write_text(
+            json.dumps({"excludeSections": ["Old"]}), encoding="utf-8")
+        (item,) = ms.find_exclude_lists(vault)
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("publish.exclude_fields", item.lines[0])
+
+    def test_a_list_the_tool_could_not_read_is_replaced(self):
+        vault = make_vault(self, extra="  exclude_sections: Mine\n"
+                                       "  exclude_fields: [mine]\n")
+        (item,) = ms.find_exclude_lists(vault)
+        self.assertEqual(len(item.lines), 1)
+        self.assertIn("publish.exclude_sections", item.lines[0])
 
     def test_no_site_offers_nothing(self):
-        calls = []
-        with mock.patch.object(ms, "ask_publish_tool",
-                               self.ask(self.facts(False, False), calls)):
-            self.assertEqual(ms.find_exclude_lists(make_vault(self, site=False)), [])
-        self.assertEqual(calls, [])
+        self.assertEqual(ms.find_exclude_lists(make_vault(self, site=False)), [])
 
     def test_the_check_is_gated_at_1_10_47_in_the_config_band(self):
         (check,) = [c for c in ms.SITE_CHECKS if c.name == "exclude-lists"]
@@ -1055,32 +1148,21 @@ class ExcludeListTests(unittest.TestCase):
                          vc.PUBLISH_TOOL.parent.parent / "node_modules").is_dir()),
                      "node and the publish tool's node_modules are needed")
 class VaultSettingEndToEndTests(unittest.TestCase):
-    def test_the_real_command_reads_sets_and_reads_again(self):
+    def test_the_real_tool_reads_sets_and_reads_again(self):
         vault = tmp(self, "vs-e2e-vault-")
         (vault / "_meta").mkdir()
         (vault / "_meta" / "vault-config.md").write_text(
             "---\ntype: meta\npublish:\n  mode: player\n---\n",
             encoding="utf-8")
         site_fixture.give_site(vault, lambda p: None)
-        before = vc.ask_publish_tool(vault, ["vault-setting"])
-        self.assertIsNone(before.why)
-        self.assertIs(before.data["defaultModeSet"], False)
-        done = vc.ask_publish_tool(
-            vault, ["vault-setting", "--set", 'theme.default_mode="dark"'])
-        self.assertEqual(done.data, {"written": ["theme.default_mode"]})
-        after = vc.ask_publish_tool(vault, ["vault-setting"])
-        self.assertIs(after.data["defaultModeSet"], True)
-
-
-    def test_the_python_copy_of_the_default_sections_is_the_tools_list(self):
-        import vaultlib
-        vault, _config = self.vault_with("  mode: player\n")
-        asked = vc.ask_publish_tool(vault, ["vault-setting"])
-        self.assertIsNone(asked.why)
-        self.assertEqual(list(vaultlib.DEFAULT_EXCLUDE_SECTIONS),
-                         asked.data["defaultExcludeSections"],
-                         "vaultlib.DEFAULT_EXCLUDE_SECTIONS differs from "
-                         "PUBLISH_DEFAULTS.exclude_sections in the publish tool")
+        self.assertFalse(vc.written_in_vault_file(
+            vc.settings(vault), "publish.theme.default_mode"))
+        done = vc.settings_set(vault, [("publish.theme.default_mode", "dark")])
+        self.assertEqual(done, ["publish.theme.default_mode"])
+        after = vc.settings(vault)
+        self.assertTrue(vc.written_in_vault_file(
+            after, "publish.theme.default_mode"))
+        self.assertEqual(after.get("publish.theme.default_mode"), "dark")
 
     def vault_with(self, publish_lines):
         vault = tmp(self, "vs-excl-vault-")

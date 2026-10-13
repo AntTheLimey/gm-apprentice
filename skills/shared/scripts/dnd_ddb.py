@@ -71,8 +71,8 @@ from dnd_note import (BARE, HALF, HEADING, PLACEHOLDER, REASONED, SEPARATOR, YES
                       Cell, Note, clean, column, number, split_cells, to_int)
 from dnd_sheet import to_weight  # noqa: E402
 from migrate_core import StepFailed, write_text_atomic  # noqa: E402
-from vaultlib import (entity_type, extract_frontmatter, fence_step, is_unchecked_source,  # noqa: E402
-                      read_publish_scalar, vault_files)
+from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter, fence_step,  # noqa: E402
+                      is_unchecked_source, settings, vault_files)
 
 REASON = re.compile(r"\(.+\)\s*$")
 HIT_DICE = re.compile(r"^(\d+)\s*/\s*(\d+)$")
@@ -1494,11 +1494,13 @@ def party(vault: Path, write_it: bool, on_build: bool) -> int:
             except (OSError, UnicodeDecodeError):
                 print("dnd_ddb: _meta/vault-config.md could not be read; nothing was synced")
                 return 0
-        setting = (read_publish_scalar(vault, "dndbeyond_sync") or "manual").strip().strip("\"'").strip()
-        if setting.lower() == "manual":
+        now = settings(vault)
+        if now.origins["publish.dndbeyond_sync"] == "fault":
+            said = next((f["message"] for f in now.faults
+                         if f["name"] == "publish.dndbeyond_sync"), "")
+            print(PLAIN.sub(" ", f"dnd_ddb: {said.rstrip('.')}; nothing was synced"))
             return 0
-        if setting.lower() != "build":
-            print(PLAIN.sub(" ", f'dnd_ddb: publish.dndbeyond_sync is "{setting}", not build or manual; nothing was synced'))
+        if now.get("publish.dndbeyond_sync") != "build":
             return 0
     system = vault_system(vault)
     if system != SYSTEM and on_build:
@@ -1559,7 +1561,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.on_build and not args.party:
         ap.error("--on-build goes with --party VAULT")
     if args.party:
-        return party(Path(args.party), args.write, args.on_build)
+        try:
+            return party(Path(args.party), args.write, args.on_build)
+        except SettingsUnavailable as e:
+            print(f"dnd_ddb: {e}", file=sys.stderr)
+            return 2
     return one_sheet(Path(args.sheet), args.write)
 
 

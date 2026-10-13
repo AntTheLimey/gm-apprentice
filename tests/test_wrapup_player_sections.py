@@ -22,6 +22,7 @@ sys.path.insert(0, str(ROOT / "skills" / "shared" / "scripts"))
 
 import vault_check as vc  # noqa: E402
 from migrate_vault import read_wrap_up_player_sections  # noqa: E402
+from vaultlib import SettingsUnavailable  # noqa: E402
 
 REL = "Sessions/Chapter_01_Session_01_Wrap_Up.md"
 
@@ -141,8 +142,16 @@ class ReaderTests(unittest.TestCase):
             self.read(config("  wrap_up:\n    player_sections:\n")), [])
         self.assertEqual(
             self.read(config("  wrap_up:\n    player_sections: null\n")), [])
+
+    def test_a_file_that_is_not_valid_YAML_stops_rather_than_reads_as_none(self):
+        with self.assertRaises(SettingsUnavailable):
+            self.read(config("  wrap_up:\n    player_sections: [A\n"))
+
+    def test_a_list_that_is_not_plain_text_reads_as_none(self):
         self.assertEqual(
-            self.read(config("  wrap_up:\n    player_sections: [A\n")), [])
+            self.read(config("  wrap_up:\n    player_sections: [[A]]\n")), [])
+        self.assertEqual(
+            self.read(config("  wrap_up:\n    player_sections: Recap\n")), [])
 
 
 class WrapupPlayerSectionTests(unittest.TestCase):

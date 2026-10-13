@@ -428,10 +428,11 @@ at-table inbox or live status bar later (Phase G).
 `init` also writes the starting campaign settings into the vault's
 `_meta/vault-config.md`, under `publish:`, for each key that file does
 not already set: `site_title`, `folder_map` (the standard vault
-folders), `attachments_dir`, `exclude_dirs` (`_meta`, `_Templates`,
-`_resources`), `exclude_sections` and `exclude_fields` (the headings and
-frontmatter fields the site never publishes, written out so you can see
-and edit them) and `exclude_callouts: true`, plus `site_title` and
+folders), `attachments_dir`, `exclude_dirs`, `exclude_sections` and
+`exclude_fields` (the folders, headings and frontmatter fields the site
+never publishes, written out so you can see and edit them; `settings
+describe publish.exclude_sections` says what each holds) and
+`exclude_callouts: true`, plus `site_title` and
 `theme.tagline` from `--title` and `--tagline`. A key already there is
 left alone. If `init` prints `Campaign settings were not written: …`,
 the vault file could not be edited safely: fix what the message
@@ -544,11 +545,13 @@ publish:
     _World: world
     Heritages: heritages
   attachments_dir: _attachments
-  exclude_dirs: ["_meta", "_Templates", "_resources"]
-  exclude_sections: ["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]
-  exclude_fields: ["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]
+  # exclude_dirs, exclude_sections and exclude_fields: written by `init`, not shown here
   exclude_callouts: true
 ```
+
+`init` writes `exclude_dirs`, `exclude_sections` and `exclude_fields`
+under `publish:` too, each holding the built-in list. Read one with
+`settings get publish.exclude_sections`; the lists are not repeated here.
 
 If `site_title` reads `My Campaign`, `init` ran without `--title`: set
 it to the Step 6 answer. Leave `folder_map`,

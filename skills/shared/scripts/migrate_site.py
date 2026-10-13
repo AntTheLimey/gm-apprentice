@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import re
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -20,9 +19,11 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from vault_check import (PUBLISH_PACKAGE, ExplainAll, ToolAnswer,
                          ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
-                         publish_block_inline, site_pin)
-from vaultlib import (PUBLISH_TOOL, read_publish_list, read_publish_scalar, set_key,
-                      set_nested_key, site_switch, yaml_scalar)
+                         site_pin, vault_settings)
+from vaultlib import (PublishToolUnavailable, SettingsUnavailable,
+                      forget_settings, google_fonts, set_key, settings,
+                      settings_default, settings_raw, settings_set,
+                      site_switch_written, written_in_vault_file, yaml_scalar)
 
 DOES_NOT_PUBLISH = "this vault does not publish"
 NOTHING_TO_DO = "nothing to do"
@@ -141,7 +142,7 @@ def _ask(vault: Path, args: list[str]) -> tuple[dict[str, Any] | None, str | Non
 
 def _config_plan(vault: Path, args: list[str]) -> tuple[StepPlan, bool]:
     """(the plan, whether it has changes)."""
-    if publish_block_inline(vault):
+    if settings(vault).inline:
         return StepPlan(False, [], error=INLINE_PUBLISH), False
     plan, why = _ask(vault, args)
     if why is not None:
@@ -168,6 +169,8 @@ def describe_config_to_vault(vault: Path) -> StepPlan:
 
 def apply_config_to_vault(vault: Path) -> StepPlan:
     done, _ = _config_plan(vault, ["migrate-config"])
+    # The tool wrote the vault file and the site's (or may have, if it failed).
+    forget_settings(vault)
     if done.error and ("expected JSON" in done.error
                        or "does not report its lines" in done.error):
         # The run exited 0 but said nothing usable: it may have written.
@@ -212,11 +215,11 @@ def find_site_repin(vault: Path) -> list[Item]:
     """The site builds with the tool installed in it, so that tool is
     brought to the plugin's before anything else asks it. `update-pin
     --check` says whether it is; this never reads the pin itself."""
-    if publish_block_inline(vault):
+    if settings(vault).inline:
         raise StepFailed(INLINE_PUBLISH)
     site, has_config = configured_site(vault)
     if site is None:
-        if site_switch(vault) is True:
+        if site_switch_written(settings(vault)) is True:
             raise StepFailed(
                 "publish.site is on but publish.site_dir names no folder; "
                 "set site_dir to the site folder, or set site: false")
@@ -232,6 +235,8 @@ def find_site_repin(vault: Path) -> list[Item]:
 
     def apply(_value: str | None) -> list[str]:
         code, text, err = plugin_tool(["update-pin", "--site", str(site)])
+        # It may have written publish.site into the vault file.
+        forget_settings(vault)
         lines = [line for line in text.splitlines() if line.strip()]
         if code != 0:
             tail = lines[-3:] or [err.strip() or f"update-pin exited {code}"]
@@ -251,12 +256,6 @@ def find_config_to_vault(vault: Path) -> list[Item]:
     """Every pass (since 1.10.24): campaign settings move from the site's
     vault.config.json into the vault file, whenever the site file still
     holds any. The publish tool plans and does it."""
-    if configured_site(vault)[0] is None and (
-            shutil.which("node") is None or not PUBLISH_TOOL.is_file()):
-        # No site to move settings from, and no tool to ask (no Node, or a
-        # skill-zip install without it): a vault that only keeps notes is
-        # never stopped for the publish tool.
-        return []
     plan = describe_config_to_vault(vault)
     if plan.error:
         raise StepFailed(plan.error)
@@ -277,11 +276,14 @@ def find_publish_site(vault: Path) -> list[Item]:
     """`publish.site` says whether the vault has a site. Written where it
     is missing: true with a site_dir, else false. A vault file with no
     `publish:` block has no site and gets nothing."""
-    if (publish_block_inline(vault)
-            or read_publish_list(vault, "exclude_sections").publish_line is None
-            or site_switch(vault) is not None):
+    own = settings(vault)
+    if own.inline or site_switch_written(own) is not None:
         return []
-    has_dir = bool(read_publish_scalar(vault, "site_dir"))
+    # `has_publish` is false for a `publish:` line with nothing under it,
+    # which this still writes into; only a vault with no such line gets nothing.
+    if "publish" not in settings_raw(vault):
+        return []
+    has_dir = bool(own.get("publish.site_dir"))
     value = "true" if has_dir else "false"
     row = (f"write publish.site: {value} in _meta/vault-config.md" if has_dir
            else "write publish.site: false in _meta/vault-config.md (no site "
@@ -289,9 +291,7 @@ def find_publish_site(vault: Path) -> list[Item]:
                 "publish.site_dir to its folder instead)")
 
     def apply(_value: str | None) -> list[str]:
-        edit_frontmatter(
-            vault / "_meta" / "vault-config.md",
-            lambda fm, eol: set_nested_key(fm, "publish", "site", value, eol))
+        settings_set(vault, [("publish.site", has_dir)])
         return [f"wrote publish.site: {value}"]
 
     return [Item("publish-site", WILL, [row], apply)]
@@ -542,35 +542,29 @@ def find_postbuild(vault: Path) -> list[Item]:
                   f"{POSTBUILD}"])]
 
 
-def _theme_facts(vault: Path) -> dict[str, Any] | None:
-    """What the site's tool says about the theme, or None with no site."""
-    if configured_site(vault)[0] is None:
-        return None
-    answer = ask_publish_tool(vault, ["vault-setting"])
-    if answer.why is not None:
-        raise StepFailed(answer.why)
-    return answer.data if isinstance(answer.data, dict) else None
-
-
-def _set_setting(vault: Path, key: str, value: object) -> None:
-    _set_settings(vault, [(key, value)])
+def _with_site(vault: Path) -> bool:
+    """Whether the vault has a site; the steps below ask nothing of it
+    otherwise."""
+    return configured_site(vault)[0] is not None
 
 
 def _set_settings(vault: Path, pairs: list[tuple[str, object]]) -> None:
-    """Every pair in one call: the tool writes them in one edit, all or none."""
-    args = ["vault-setting"]
-    for key, value in pairs:
-        args += ["--set", f"{key}={json.dumps(value)}"]
-    answer = ask_publish_tool(vault, args)
-    if answer.why is not None:
-        raise StepFailed(answer.why)
+    """Every pair in one write: the tool writes them in one edit, all or none.
+    A refusal stops the step with the tool's reason."""
+    try:
+        settings_set(vault, pairs)
+    except SettingsUnavailable as e:
+        if not e.refused:
+            raise
+        raise StepFailed(str(e)) from e
 
 
 def find_default_mode(vault: Path) -> list[Item]:
     """1.10.16: the site has a light/dark toggle. A site designed for one
     palette can start every reader there."""
-    facts = _theme_facts(vault)
-    if not facts or facts.get("defaultModeSet") is not False:
+    if (not _with_site(vault)
+            or written_in_vault_file(vault_settings(vault),
+                                     "publish.theme.default_mode")):
         return []
 
     def apply(value: str | None) -> list[str]:
@@ -578,7 +572,7 @@ def find_default_mode(vault: Path) -> list[Item]:
             raise StepFailed("default-mode takes dark, light or leave")
         if value == "leave":
             return ["left the default palette to the reader's device"]
-        _set_setting(vault, "theme.default_mode", value)
+        _set_settings(vault, [("publish.theme.default_mode", value)])
         return [f"wrote publish.theme.default_mode: {value}"]
 
     return [Item("default-mode", CHOICE,
@@ -587,16 +581,26 @@ def find_default_mode(vault: Path) -> list[Item]:
                  apply, wants="dark, light or leave", holds_stamp=True)]
 
 
+def _google_fonts(vault: Path) -> list[str]:
+    """The families the site would load from Google, as the plugin's own
+    publish tool works them out."""
+    site, has_config = configured_site(vault)
+    try:
+        return google_fonts(
+            vault, site / "vault.config.json" if site and has_config else None)
+    except PublishToolUnavailable as e:
+        raise StepFailed(str(e)) from e
+
+
 def find_fonts(vault: Path) -> list[Item]:
     """1.10.17: fonts loaded from Google send each reader's IP address to
     Google. Self-hosting serves the same fonts from the site."""
-    facts = _theme_facts(vault)
-    names = facts.get("googleFonts") if facts else None
-    if not isinstance(names, list) or not names:
+    names = _google_fonts(vault) if _with_site(vault) else None
+    if not names:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        _set_setting(vault, "theme.fonts.source", "self-host")
+        _set_settings(vault, [("publish.theme.fonts.source", "self-host")])
         return ["wrote publish.theme.fonts.source: self-host; the next build "
                 "downloads the fonts once and serves them from the site"]
 
@@ -631,34 +635,36 @@ def find_exclude_lists(vault: Path) -> list[Item]:
     into the vault file, where the GM can see them. A vault with no list of
     its own only ever had the tool's built-in one, so writing that same list
     changes nothing about what publishes. A list the vault owns is left."""
-    facts = _theme_facts(vault)
-    if not facts:
+    if not _with_site(vault):
         return []
-    lists = [(key, own, default) for key, own, default in (
-        ("exclude_sections", facts.get("excludeSectionsOwn"),
-         facts.get("defaultExcludeSections")),
-        ("exclude_fields", facts.get("excludeFieldsOwn"),
-         facts.get("defaultExcludeFields")))
-        if own is False and isinstance(default, list) and default]
+    now = vault_settings(vault)
+    # A list is the vault's own when the vault file holds it, or the site file
+    # still does; one the tool could not read is not (the built-in list stands).
+    lists = [(key, default) for key, default in (
+        (key, settings_default(f"publish.{key}"))
+        for key in ("exclude_sections", "exclude_fields"))
+        if now.origins[f"publish.{key}"] not in ("file", "site-file")
+        and isinstance(default, list) and default]
     # config-to-vault writes the same lists when it runs on this pass: the
     # plan shows each write once, there. (If it cannot plan, this step goes on.)
     planned = describe_config_to_vault(vault)
-    lists = [(key, own, default) for key, own, default in lists
+    lists = [(key, default) for key, default in lists
              if not any(line.endswith(f"-> publish.{key}")
                         for line in (planned.lines if planned.applies else []))]
     if not lists:
         return []
 
     def apply(_value: str | None) -> list[str]:
-        _set_settings(vault, [(key, default) for key, _own, default in lists])
+        _set_settings(vault, [(f"publish.{key}", default)
+                              for key, default in lists])
         return [f"wrote publish.{key}: {len(default)} entries"
-                for key, _own, default in lists]
+                for key, default in lists]
 
     return [Item("exclude-lists", WILL,
                  [f"write the built-in publish.{key} ({', '.join(default)}) "
                   f"into _meta/vault-config.md so you can see and edit it; "
                   f"what publishes does not change"
-                  for key, _own, default in lists], apply)]
+                  for key, default in lists], apply)]
 
 
 SITE_CHECKS: list[Check] = [

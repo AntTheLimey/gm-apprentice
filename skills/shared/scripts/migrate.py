@@ -36,7 +36,8 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
                           check_editable, edit_frontmatter)
 from migrate_site import REPIN, SITE_CHECKS
 from migrate_vault import VAULT_CHECKS
-from vaultlib import extract_frontmatter, parse_version, plugin_version, set_key
+from vaultlib import (SettingsUnavailable, extract_frontmatter, parse_version,
+                      plugin_version, set_key)
 
 FLOOR = "1.10.12"
 LAST_PROSE = "1.10.25"   # the last release whose skills migrate by hand
@@ -254,7 +255,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     used.add(item.id)
                     repinned = repinned or (check.name == REPIN
                                             and item.group == WILL)
-        except StepFailed as e:
+        except (StepFailed, SettingsUnavailable) as e:
             failed, error = n, f"{check.name}: {e}"
             break
     target = plugin_v
@@ -318,7 +319,11 @@ def main(argv: list[str] | None = None) -> int:
         if args.choose:
             print("migrate.py: --choose goes with apply", file=sys.stderr)
             return 2
-        return run_plan(vault)
+        try:
+            return run_plan(vault)
+        except SettingsUnavailable as e:
+            print(f"migrate.py: {e}", file=sys.stderr)
+            return 1
     chosen: list[tuple[str, str | None]] = []
     for raw in args.choose:
         choice, sep, value = raw.partition("=")

@@ -10,7 +10,8 @@ Many "failures" are stale state from a previous aborted run.
 
 **Run `node "$TOOL" doctor --site --config <dir>/vault.config.json` first.**
 It audits the vault the way the build sees it and prints a fix for every
-finding. For one file that should be on the site and is not, `node "$TOOL"
+finding. Every `settings` command below is short for `node "$TOOL"
+settings … --config <dir>/vault.config.json`. For one file that should be on the site and is not, `node "$TOOL"
 explain "<vault-relative path>"` prints the exact chain the build walked
 and its verdict. The failure modes below name which finding code each
 one is and give the deeper why.
@@ -34,8 +35,8 @@ or shows a broken image icon.
 
 One of two things:
 
-- `publish.attachments_dir` in `_meta/vault-config.md` does not
-  match the actual folder name in the vault.
+- `publish.attachments_dir` does not name the folder that holds the
+  vault's images.
 - The portrait file referenced in the entity's frontmatter does
   not exist at the expected path.
 
@@ -43,13 +44,14 @@ One of two things:
 
 Run `node "$TOOL" doctor --site --config <dir>/vault.config.json`. A
 `PORTRAIT_MISSING` row names the entity and the portrait filename it
-expected inside `attachments_dir` (default `_attachments`) — the fix line
-says whether to add the file or correct the `portrait:` value.
+expected inside the attachments folder (`settings get
+publish.attachments_dir`) — the fix line says whether to add the file
+or correct the `portrait:` value.
 
 ### Fix
 
-- If `attachments_dir` is wrong: update `publish.attachments_dir`
-  in `_meta/vault-config.md` to match the actual folder name.
+- If the folder is wrong: `settings set
+  publish.attachments_dir=<folder>`.
 - If the image file is missing: add the image to the vault, or
   remove the `portrait` field from the entity's frontmatter
   (the page will render cleanly without it).
@@ -76,6 +78,7 @@ Usually one of:
 - The `vaultPath` in the config points to a folder that does not
   exist or that the current user cannot read
 - A vault file has malformed YAML in its frontmatter block
+- The build says `build stopped: the settings have a fault…`
 - Node.js version is below 22
 
 ### Diagnosis steps
@@ -115,6 +118,9 @@ between the `---` markers at the top. Common YAML mistakes:
 - Inconsistent indentation under a list item
 - A tab character instead of spaces
 
+**A setting stopped the build:**
+`configuration.md` § Settings, "When a setting stops the build".
+
 **Node version too low:**
 Install Node 22 LTS from https://nodejs.org and restart your
 terminal.
@@ -132,9 +138,8 @@ vault but does not appear anywhere on the built site.
 
 One of:
 
-- The entity's vault folder is not listed in `publish.folder_map`
-  in `_meta/vault-config.md`
-- The entity's vault folder name is listed in `publish.exclude_dirs`
+- The entity's vault folder is not in `publish.folder_map`
+- The entity's vault folder is in `publish.exclude_dirs`
 - The entity's markdown file does not have a `type` frontmatter
   field
 - The file's frontmatter is not valid YAML, most often a key written
@@ -157,19 +162,16 @@ lists the unparseable files too.
 ### Fix
 
 **Folder not in the folder map:**
-Add the folder to `publish.folder_map` in `_meta/vault-config.md`
-with an appropriate URL slug. For example, if your creatures live in
-a folder called `Bestiary`:
-```yaml
-publish:
-  folder_map:
-    # … existing entries
-    Bestiary: creatures
+`settings get publish.folder_map`, then `settings set` the map whole
+with the folder and a URL slug added. For creatures kept in a folder
+called `Bestiary`:
+```bash
+node "$TOOL" settings set 'publish.folder_map={<existing entries>,"Bestiary":"creatures"}' --config <dir>/vault.config.json
 ```
 
 **Folder in exclude_dirs:**
-Remove it from the `publish.exclude_dirs` list, or move the entity
-to a different folder.
+On the GM's yes, `settings remove publish.exclude_dirs <folder>`,
+or move the entity to a different folder.
 
 **Missing type field:**
 Add `type: npc` (or the appropriate type) to the entity's
@@ -372,9 +374,8 @@ pages. The wrap-up (`type: session_wrap`) supplies the recap text, but it
 only surfaces when its paired session index — and for the Campaign Saga,
 a chapter page — are published too. Two common breakdowns:
 
-1. The vault's `Chapters/` folder is missing from `publish.folder_map`
-   in `_meta/vault-config.md`, so every chapter, session, scene, and wrap-up
-   file is skipped. Builds from tool 1.6.0 print a
+1. The vault's `Chapters/` folder is missing from `publish.folder_map`,
+   so every chapter, session, scene, and wrap-up file is skipped. Builds from tool 1.6.0 print a
    `scanner: skipping "<dir>" — not in publish.folder_map` warning; older builds
    skip silently. (Scaffolds from 1.6.0 include the mapping by default.)
 2. The session index or chapter page exists but is unpublished — held

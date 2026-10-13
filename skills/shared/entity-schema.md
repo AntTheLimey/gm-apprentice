@@ -571,37 +571,10 @@ Frontmatter of `_meta/vault-config.md`, read by several skills.
 | Field | Type | Description |
 |-------|------|-------------|
 | `gm_apprentice_version` | string | Plugin version the vault was last migrated to; set by migration and checked by `vault_check.py <vault> version`. |
-| `setting_year` | string | In-game date shown on the published site |
 
-Under `publish:`:
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `system` | string | `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e` or `fitd`; drives system-specific rendering. |
-| `site` | boolean | Whether the vault has a site. `true`: it does; `vault_check` asks the publish tool installed in `site_dir` what publishes, and with no `site_dir` the site is still to be set up. `false`: it does not, whatever `site_dir` says; `build` and `deploy` refuse, and `gm-leak` has nothing to check. `init` writes `true`. Unset, a `site_dir` says on (a vault from before 1.10.25). Takes `yes`/`no`, `on`/`off` too. |
-| `site_dir` | string | Path to the site folder (`init` writes an absolute one; a relative one is read relative to the vault). `init` writes it, and `update-pin` adds it to a site made before 1.10.25. It is where the vault finds its site when `site` is on. |
-| `mode` | string | `"player"` or `"full"` — GM-only content visibility |
-| `exclude_sections` | array | H2 headings stripped from output (default `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`) |
-| `exclude_fields` | array | Frontmatter fields stripped (default `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`) |
-| `exclude_dirs` | array | Vault folders not published (default `["_meta", "_Templates"]`) |
-| `exclude_callouts` | boolean or array | Strip callouts from output: `true` for all, or an array of callout types (default `false`) |
-| `exclude_drafts` | boolean | Leave DRAFT entities out of the site entirely (default `false`) |
-| `site_title` | string | Title shown on the site (default none) |
-| `footer` | string | Footer text (default none) |
-| `search` | boolean | Site search (default `true`) |
-| `folder_map` | object | Vault folder to site folder, e.g. `Locations: locations` (default `{}`) |
-| `attachments_dir` | string | Vault folder holding images and attachments (default `_attachments`) |
-| `character_sheets` | boolean | Publish PC stat sheets (default `true`). `false` withholds the sheet; the PC page keeps its prose sections and no stats, and live stats go off |
-| `live_stats` | boolean | Live values on each sheet and the Party Status board (default `false`) |
-| `inbox` | boolean | Change-request widget and its inbox (default `false`) |
-| `pc_prose_sections` | array | Extra PC `##` headings that still publish when `character_sheets` is `false` (default none) |
-| `theme` | object | `genre`, `palette`, `fonts`, `campaign_image`, `default_mode` (`system`, `dark` or `light`; default `system`), `tagline` (homepage tagline; default none) |
-| `four_oh_four` | object | Custom 404 page: `style`, `message` |
-| `overrides` | object | Per-file include/exclude/field overrides |
-
-The three switches (`character_sheets`, `live_stats`, `inbox`) take
-`true` or `false`, or the words yes, no, on and off in any case. Any
-other value, including an empty one, means off. These settings live
-only in the vault file: the site's `vault.config.json` keeps just
-`vaultPath`, `outputDir`, `host`, `siteUrl`, `cloudflarePagesProject`
-and `preserveDirs`.
+Every site setting (`publish.*` and `setting_year`) is held by the
+publish tool, not listed here. Never open the file to read one: run
+`node "$TOOL" settings get <name> --vault <vault>` for its value and
+where that came from, `settings describe <name>` for what it does and
+takes, `settings list` for all of them. `$TOOL` is as in
+`publish-site/SKILL.md`.

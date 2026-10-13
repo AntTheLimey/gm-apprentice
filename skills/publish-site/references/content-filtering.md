@@ -6,11 +6,12 @@ All campaign content falls into three categories:
 
 ### Always excluded (default, no prompt needed)
 
-- `_meta/`, `_Templates/`, `personal/` directories
+- The folders in `publish.exclude_dirs` (the vault's own `_meta` and
+  template folders among them), and `personal/` directories
 - All prep files: sessions/scenes with `status: planned | prepped`,
   `stage: outline | draft | ready`
 - Files with `source: "prep"` that have no played counterpart
-- Sections whose heading is listed in `exclude_sections` (default: `["GM Notes", "DM Notes", "Player Notes", "Source References", "Reconciliation Context", "Handoff to Reconcile"]`)
+- Sections whose heading is listed in `publish.exclude_sections`
 - On a `type: document` page, a handout's own Keeper sections, whatever
   `exclude_sections` says: `Context`, any heading starting `Clues`,
   `Prop Notes`, `Physical Prop Notes`, `Delivery`, `Delivery Notes`.
@@ -31,8 +32,7 @@ All campaign content falls into three categories:
   `%%` in prose, such as `100%% done`: it starts a comment, as it does
   in Obsidian. The build counts those strays in a closing warning, and
   campaign-qa's Site Faults check finds and fixes each one.
-- Frontmatter fields in `exclude_fields` (default:
-  `["secrets", "current_plan", "plan_progress", "gm_notes", "prep_notes", "reliability"]`)
+- Frontmatter fields in `publish.exclude_fields`
 - Files whose frontmatter says `publish: false` — in **every** mode,
   including `full`. The file still parses, so links to it render as
   plain text rather than as a broken link; no page is emitted.
@@ -113,8 +113,11 @@ campaign-qa's Tone Words check lists the hostile ties the site shows.
 
 ## Configuration
 
-All settings live in `_meta/vault-config.md` under `publish:`.
-See `configuration.md` for the full list.
+`node "$TOOL" settings get publish.mode publish.exclude_sections
+--config <dir>/vault.config.json` (or any `publish.exclude_*` name)
+says what the site hides. To hide one more heading, field or folder
+use `settings add`; `settings set` replaces the whole list, built-in
+entries included.
 
 ## Inline GM-Only Markers
 
@@ -189,23 +192,17 @@ demand — see `campaign-qa/references/checks/open-spoilers.md`.
 
 ## Excluding Callouts (opt-in)
 
-Obsidian callouts (`> [!type] Title` blocks) are **published by
-default** — `exclude_callouts` defaults to `false`, so an existing
-vault with no explicit setting still renders every callout to the
-site. Enable stripping with `publish.exclude_callouts` in
-`_meta/vault-config.md`:
-
-- `true` — strip every callout
-- an array of types, e.g. `["warning", "danger", "info"]` — strip
-  only callouts of those types
+`publish.exclude_callouts` strips Obsidian callouts (`> [!type] Title`
+blocks): every one, or only the types it lists.
 
 The gm-apprentice convention treats callouts as Keeper-facing
 (Campaign Design Decisions, Alert Levels, Keeper-Only notes, Canon
-State), so **newly scaffolded** sites set `exclude_callouts: true` by
-default. Sites created before this option existed keep the default
-`false` until you set it explicitly — if you rely on callouts to hide
-Keeper content, turn it on, or move that content under a `## GM Notes`
-heading or `<!-- gm-only -->` markers, which are excluded regardless.
+State), so **newly scaffolded** sites turn it on. A site created
+before the setting existed publishes every callout until it is set;
+`settings get publish.exclude_callouts` says which this site does. If
+the GM relies on callouts to hide Keeper content, turn it on, or move
+that content under a `## GM Notes` heading or `<!-- gm-only -->`
+markers, which are excluded regardless.
 
 Plain blockquotes (`> "an in-world quote"`) carry no `[!type]` marker
 and are never touched — keep read-aloud text as a plain blockquote,
@@ -315,7 +312,7 @@ unavailable.
 ## Campaign Image
 
 The campaign image appears on the landing page hero and 404 page.
-Set in `publish.theme.campaign_image` in `vault-config.md`.
+The setting is `publish.theme.campaign_image`.
 
 **Path handling:** The value is a vault-relative path (e.g.
 `_attachments/campaign-image.svg`). The build tool copies it to
@@ -332,7 +329,7 @@ and keeps file size small.
 2. If yes → ask for the path, validate it exists
 3. If no → offer to generate a procedural SVG with genre-appropriate
    motifs using the campaign's theme palette
-4. Store the vault-relative path in `campaign_image`
+4. Store the vault-relative path with `settings set`
 
 The generated SVG should use the theme's primary, accent, and
 background colours and include decorative elements appropriate
@@ -342,8 +339,8 @@ for fantasy, tentacles for horror).
 ## Themed 404 Page
 
 Links to excluded entities resolve to a custom 404 page
-with an in-world message. The message is stored at
-`publish.four_oh_four.message` in `vault-config.md`.
+with an in-world message, the setting
+`publish.four_oh_four.message`.
 
 The campaign image is also displayed on the 404 page when
 configured. The 404 template uses absolute paths derived from
@@ -356,19 +353,15 @@ custom input as an alternative.
 
 ## Publish Modes
 
-- `player` (default): Only player-known content is published
+- `player`: Only player-known content is published
 - `full`: The GM's own copy. Notes held back as prep (`status: planned`
   or `prepped`, `stage: outline`, `draft` or `ready`, `source: prep`, a
   cut or skipped scene) publish, the publish manifest is not applied,
   and every image in the attachments folder is copied, used or not. `exclude_sections`,
   `exclude_fields`, `exclude_callouts`, `exclude_dirs`,
   `exclude_drafts` and a note's own `publish: false` still apply. The
-  default exclude lists keep GM Notes and `secrets` off a `full` site;
+  built-in lists keep GM-only sections and fields off a `full` site;
   a list the GM has replaced must still name them
-
-The build reads `Player` as `player` and ` FULL ` as `full` (case and
-surrounding spaces are ignored); any other value is `player`, with a
-warning naming `publish.mode`.
 
 ## Setup Questioning Flow
 
@@ -377,6 +370,6 @@ wizard (see `setup-wizard.md` steps 8-10). The filtering workflow
 in this document assumes those are already configured.
 
 When content filtering is triggered outside of first-time setup
-(capability 6 in SKILL.md), check `vault-config.md` for existing
-theme/image/404 settings. If missing, ask the questions described
-in the wizard steps before proceeding with the manifest workflow.
+(capability 6 in SKILL.md) and its first step finds no theme, image
+or 404 message set, ask the questions described in the wizard steps
+before proceeding with the manifest workflow.

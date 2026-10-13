@@ -19,7 +19,11 @@ import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 from schema_rules import REQUIRED_FIELDS  # noqa: E402
-from vaultlib import extract_frontmatter  # noqa: E402
+from vaultlib import extract_frontmatter, settings_default  # noqa: E402
+
+# The folder a vault keeps its attachments in until it names another: the tool's
+# default, never restated here.
+ATTACHMENTS = settings_default("publish.attachments_dir")
 
 SHARED = SCRIPTS.parent
 
@@ -223,12 +227,12 @@ class PlanTests(unittest.TestCase):
         tops = set(re.findall(r"^[├└]── ([^/\n]+)/", vs.structure_tree(),
                               re.M))
         made = {rel.split("/")[0] for rel in
-                (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, vs.ATTACHMENTS)}
+                (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, ATTACHMENTS)}
         self.assertEqual(tops, made | set(vs.NOT_CREATED))
 
     def test_the_structure_doc_and_the_attachment_folders_agree(self):
         inside = re.search(
-            rf"^├── {vs.ATTACHMENTS}/[^\n]*\n((?:│   [^\n]*\n)+)",
+            rf"^├── {ATTACHMENTS}/[^\n]*\n((?:│   [^\n]*\n)+)",
             vs.structure_tree(), re.M)
         self.assertIsNotNone(inside)
         subs = re.findall(r"^│   [├└]── ([^/\n]+)/", inside.group(1), re.M)
@@ -279,6 +283,17 @@ class PlanTests(unittest.TestCase):
         self.assertNotIn("Characters/NPCs/", got)
         self.assertNotIn("_Campaign/Timeline.md", got)
 
+    def test_a_blank_attachments_folder_means_the_usual_one(self):
+        for named in ('""', '"  "', '5'):
+            vault = scratch(self) / "V"
+            note(vault, "_meta/vault-config.md",
+                 '---\ngm_apprentice_version: "1.10.29"\npublish:\n'
+                 f'  attachments_dir: {named}\n---\n')
+            got = paths(plan(vault))
+            self.assertIn(f"{ATTACHMENTS}/characters/", got, named)
+            for rel in got:
+                self.assertFalse(rel.startswith("/"), (named, rel))
+
     def test_an_attachments_folder_outside_the_vault_is_not_made(self):
         for named in ('"../shared-art"', '"art/../../shared"', '"/srv/art"',
                       '"C:/art"', r"..\shared-art"):
@@ -290,7 +305,7 @@ class PlanTests(unittest.TestCase):
             self.assertIn("Clues/", got)
             for rel in got:
                 self.assertFalse(rel.startswith(".."), (named, rel))
-                self.assertFalse(rel.startswith(vs.ATTACHMENTS), (named, rel))
+                self.assertFalse(rel.startswith(ATTACHMENTS), (named, rel))
                 self.assertNotIn("art", rel, (named, rel))
 
 

@@ -132,21 +132,19 @@ campaign-organizer if entity filing is needed.
 
 ### 6.1. Publish registration (conditional)
 
-Only if `_meta/publish-manifest.md` exists and `publish.mode` in
-`_meta/vault-config.md` is `player` or unset; otherwise skip. If
-`publish.site` is `false`, or it is unset and so is
-`publish.site_dir`, the vault has no site, so skip this step too; a
-relative `site_dir` is relative to the vault. A played session
-left in the manifest's Needs Decision never reaches the player site
-(#277). Run it yourself, unconditionally, and report the paths it
-ticked:
+Only if `_meta/publish-manifest.md` exists and `node "$TOOL" settings
+get publish.site publish.site_dir publish.mode --vault <vault>` gives
+`true`, a folder and `player`; otherwise skip. `$TOOL` is as in
+`publish-site/SKILL.md`; a relative `site_dir` is relative to the
+vault. A played session left in the manifest's Needs Decision
+never reaches the player site (#277). Run it yourself,
+unconditionally, and report the paths it ticked:
 
 ```bash
 node "$TOOL" manifest publish-played --config <site_dir>/vault.config.json
 ```
 
-`$TOOL` is as in `publish-site/SKILL.md`. The verb registers a
-reviewed session index only together with a Wrap-Up that is linked to
+The verb registers a reviewed session index only together with a Wrap-Up that is linked to
 it (`documents.wrap_up` or the Wrap-Up's `session:`) and will publish.
 Then the site withholds the hub body and builds the session page from
 its frontmatter and the Wrap-Up. Any other played session is listed

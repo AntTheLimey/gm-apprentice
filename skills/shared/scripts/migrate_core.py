@@ -17,7 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from vaultlib import PUBLISH_TOOL, frontmatter_span
+from vaultlib import PUBLISH_TOOL, forget_settings, frontmatter_span
 
 WILL, CHOICE, PERSON = "will", "choice", "person"
 TOOL_TIMEOUT = 600  # update-pin runs npm install
@@ -52,6 +52,10 @@ class Check:
     choices: tuple[str, ...] = ()
 
 
+# The files the vault's settings are read from: the vault file and a site's.
+SETTINGS_FILES = ("vault-config.md", "vault.config.json")
+
+
 def write_text_atomic(path: Path, text: str) -> None:
     """Write `text` to `path` exactly (no newline translation), so a failure
     partway leaves the file as it was. Writes beside it and swaps it in;
@@ -82,6 +86,9 @@ def write_text_atomic(path: Path, text: str) -> None:
                 os.unlink(tmp)
             except OSError:
                 pass
+        if path.name in SETTINGS_FILES:
+            # What was read of the vault's settings is stale from here.
+            forget_settings(None)
 
 
 def write_all_or_none(vault: Path, originals: dict[str, str],

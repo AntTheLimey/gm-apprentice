@@ -69,9 +69,8 @@ beneath them. No accordion — the content flows as continuous prose.
 | `portrait` | Optional | Path relative to vault root |
 
 Body content renders below the header card. To keep a body section
-such as `Relationships` off the public site, list its heading in
-`publish.exclude_sections` in `_meta/vault-config.md` (see
-`configuration.md`).
+such as `Relationships` off the public site, `settings add` its
+heading to `publish.exclude_sections`.
 
 ---
 
@@ -315,7 +314,7 @@ and renders a badge next to the page title:
 | Value | Badge | Appearance |
 |-------|-------|-----------|
 | AUTHORITATIVE | None | Normal page (no badge) |
-| DRAFT | "Draft" | Amber badge — content not yet confirmed |
+| DRAFT | "Draft" | Amber badge — content not yet confirmed. With `publish.exclude_drafts` on, the page is left off the site instead |
 | STUB | "Stub" | Warning-coloured badge — placeholder only |
 | SUPERSEDED | "Superseded" | Grey badge — replaced by newer content |
 
@@ -337,8 +336,8 @@ For a name players mustn't see, use `gm_aliases`.
 ## Portrait paths
 
 Portrait paths must be relative to the vault root and use
-forward slashes. `publish.attachments_dir` in `_meta/vault-config.md`
-sets the base folder (default: `_attachments`).
+forward slashes. `publish.attachments_dir` names the folder that
+holds them.
 
 Example vault frontmatter:
 ```yaml
@@ -353,31 +352,8 @@ area is hidden rather than showing a broken image.
 
 ---
 
-## Site-level configuration fields
+## Site settings
 
-These fields live in `_meta/vault-config.md` under the `publish:` key
-and affect the whole site rather than individual entity pages. See
-`configuration.md` for the full vault-config reference.
-
-| Field | Key path | Type | Default | Description |
-|-------|----------|------|---------|-------------|
-| `system` | `publish.system` | text | none | Game system identifier. Expected values: `coc-7e`, `coc-7e-regency`, `gurps-4e`, `dnd-5e-2024`, `pf2e`, `fitd`. Selects the PC character-sheet renderer at build time; matched case-insensitively, with aliases (`coc`, `gurps`, `dnd`, `pathfinder`, `blades`). An unrecognised or absent value falls back to the generic PC layout. |
-| `site_title` | `publish.site_title` | text | none (`init` writes one) | Name shown in the nav bar and browser tab |
-| `footer` | `publish.footer` | text | none | Footer text on every page |
-| `search` | `publish.search` | true/false | `true` | `false` leaves out the search index |
-| `link_previews` | `publish.link_previews` | `on`/`desktop`/`off` (`yes`/`no` read as `on`/`off`) | `on` | The card opened by resting on, focusing or tapping a link to another page. `desktop` leaves touch taps as they were; `off` leaves the pages as they were. An unknown value is `on`, with a build warning |
-| `connections` | `publish.connections` | `tree`/`web`/`cards`/`off` (`yes`/`true` read as `tree`, `no`/`false` as `off`) | `tree` | How the Connections section on a page is drawn, in tabs by kind. `off` leaves out the section and the list of mentions. An unknown value is `tree`, with a build warning |
-| `folder_map` | `publish.folder_map` | map of vault folder → output path | empty (`init` writes the standard map) | Which vault folders publish, and where. A folder holding typed pages with no entry is skipped with a build warning |
-| `attachments_dir` | `publish.attachments_dir` | text | `_attachments` | Vault folder holding images |
-| `character_sheets` | `publish.character_sheets` | switch | on | Off: PC pages publish prose sections and no stats, and live stats are forced off |
-| `live_stats` | `publish.live_stats` | switch | off | The live status bar on each PC sheet and the live party board. Needs a KV store wired in the site's `wrangler.toml` |
-| `inbox` | `publish.inbox` | switch | off | The change-request widget on each PC page. Needs a KV store wired in the site's `wrangler.toml` |
-| `pc_prose_sections` | `publish.pc_prose_sections` | list of heading titles | empty | Extra `##` sections a PC page keeps when `character_sheets` is off, on top of the built-in list |
-| `sheet_skin`, `sheet_frame` | `publish.sheet_skin`, `publish.sheet_frame` | id | `plain`; the skin's own frame | The look of every PC page. See `sheet-skins.md` |
-| `dndbeyond_sync` | `publish.dndbeyond_sync` | `build` or `manual` | `manual` | When `dnd_ddb.py` syncs D&D PC notes that carry a `dndbeyond` link |
-
-A switch takes `true`/`false` or the words `yes`, `no`, `on`, `off`
-(any case). Any other value, or a key left empty, counts as off and
-the build warns. `configuration.md` § Switches has the full rules,
-and its § Settings left in `vault.config.json` lists the old site-file
-names these keys replace.
+Settings that affect the whole site are not listed here: run
+`node "$TOOL" settings list`, and `settings describe <name>` for one
+(`configuration.md` § Settings).
