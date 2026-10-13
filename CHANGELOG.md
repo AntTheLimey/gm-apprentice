@@ -10,8 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.10.53] — 2026-10-13
 
 Nothing in an existing vault changes with this release. The publish tool
-now understands the new settings file; the next release is the one that
-moves a vault to it. Do not run `settings move` by hand before then: the
+now understands the new settings file; the next release, 1.10.54, is the
+one that moves a vault to it. Do not run `settings move` by hand before then: the
 plugin's own scripts learn the new file in the next release.
 
 ### Added

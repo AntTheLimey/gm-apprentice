@@ -524,7 +524,7 @@ function setupNote(options, args) {
 
 // ---- The move ------------------------------------------------------------------------------
 
-// `--fill name=value` pairs as an object; a pair with no `=` is refused by the plan (its name is not fillable).
+// `--fill name=value` pairs as an object; a pair with no `=`, or nothing after it, comes through as blank and the plan refuses it.
 function fillOf(pairs) {
   const out = {};
   for (const pair of pairs || []) {

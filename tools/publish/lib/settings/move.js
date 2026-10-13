@@ -138,6 +138,9 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {} }, deps = {})
   for (const name of Object.keys(fill)) {
     if (!FILLABLE.includes(name)) blockers.push(`--fill takes only ${FILLABLE.join(' and ')}; ${name} is not one of them.`);
   }
+  for (const name of FILLABLE) {
+    if (Object.prototype.hasOwnProperty.call(fill, name) && String(fill[name]).trim() === '') blockers.push(`--fill ${name} needs a value, as --fill ${name}=<value>.`);
+  }
   const notesFile = at(vault, NOTES_FILE);
   if (fs.existsSync(notesFile)) blockers.push(`${NOTES_FILE} already exists; the notes from ${OLD_FILE} would have nowhere to go. Move it aside first.`);
   let state;

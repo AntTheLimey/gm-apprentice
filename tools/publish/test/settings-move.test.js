@@ -400,6 +400,21 @@ test('the command moves a vault, prints plain lines, and is a no-op the second t
   assert.match(again.join('\n'), /already on the new settings file/);
 });
 
+test('a blank --fill is a blocker for both fillable names, and nothing is written', () => {
+  for (const name of ['vault.campaign', 'vault.system']) {
+    for (const pair of [name, `${name}=`, `${name}=   `]) {
+      const s = scratch(old('  mode: player\n'));
+      const before = hashes(s.vault);
+      const out = [];
+      const rc = runSettings({ verb: 'move', args: [], vault: s.vault, fill: [pair] }, { out: (l) => out.push(l), err: () => {} });
+      assert.equal(rc, 1, pair);
+      assert.match(out.join('\n'), new RegExp(`--fill ${name.replace('.', '\\.')} needs a value`), pair);
+      assert.deepEqual(hashes(s.vault), before, pair);
+      assert.equal(layoutOf(s.vault), 'legacy', pair);
+    }
+  }
+});
+
 // ---- The built site does not change ----
 
 function tree(dir) {

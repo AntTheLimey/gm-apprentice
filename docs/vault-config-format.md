@@ -156,8 +156,9 @@ Do not infer the layout from file contents.
 Before this layout, settings lived in the frontmatter of
 `_meta/vault-config.md`, under a `publish:` block with other names, such as
 `publish.exclude_sections`. The tool still reads that file, and still writes
-to it, at the old names. Its reader will be removed two releases after
-1.10.54.
+to it, at the old names. Version 1.10.54 is the release that moves vaults to
+the new file. The old file's reader stays for two releases after that one,
+then goes.
 
 `gm-apprentice-publish settings move` takes a vault from the old file to the
 new one. Do not run it by hand yet: the next release runs it, and teaches the

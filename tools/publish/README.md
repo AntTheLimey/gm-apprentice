@@ -313,8 +313,9 @@ editor at the schema to get names and values as you type.
 ### The old settings file
 
 Vaults made before this layout keep their settings in the frontmatter of
-`_meta/vault-config.md`, under `publish:`. This tool reads that file for
-two more releases, and every message names the file the vault is on and
+`_meta/vault-config.md`, under `publish:`. Release 1.10.54 moves vaults to
+the new file. This tool keeps reading the old file for two releases after
+that one, and every message names the file the vault is on and
 each setting as that file writes it (`publish.site`, not
 `player_site.publish`). The `settings` command can still change an old
 file, at the old names.
