@@ -1173,6 +1173,17 @@ test('a script is split on && only when it holds nothing a shell would read diff
     ['node a.js &&  node b.js&&node c.js', ['node a.js', 'node b.js', 'node c.js']],
     ['node a.js && && node b.js', ['node a.js && && node b.js']],
     ['node only.js', ['node only.js']],
+    ['cd scripts && node x.mjs', ['cd scripts && node x.mjs']],
+    ['node a.js && cd scripts && node x.mjs', ['node a.js && cd scripts && node x.mjs']],
+    ['FOO=1 && node x.js', ['FOO=1 && node x.js']],
+    ['FOO=1 node a.js && node b.js', ['FOO=1 node a.js && node b.js']],
+    ['export A=1 && node x.js', ['export A=1 && node x.js']],
+    ['set -e && node x.js', ['set -e && node x.js']],
+    ['pushd x && node y.js && popd', ['pushd x && node y.js && popd']],
+    ['source env.sh && node x.js', ['source env.sh && node x.js']],
+    ['. env.sh && node x.js', ['. env.sh && node x.js']],
+    ['node setup.js && node settle.js', ['node setup.js', 'node settle.js']],
+    ['node a.js && node scripts/x=y.mjs', ['node a.js', 'node scripts/x=y.mjs']],
   ];
   for (const [script, want] of cases) {
     const s = STEP_LAYOUTS.new();
@@ -1310,4 +1321,19 @@ test('a vault output of docs and a site file outputDir of ./docs are the same fo
   assert.ok(!r.data.lines.join('\n').includes('differs'), r.data.lines.join('\n'));
   assert.equal(r.data.siteDiffers, undefined);
   assert.deepEqual(siteJson(s), { vaultPath: './Vault' });
+});
+
+test('a vault already on the new file says nothing-to-move only when nothing is moved', () => {
+  const idle = STEP_LAYOUTS.new();
+  const quiet1 = cliMove({ vault: idle.vault, config: idle.config });
+  assert.match(quiet1.data.lines[0], /nothing to move/);
+  const busy = STEP_LAYOUTS.new();
+  writePackage(busy, { postbuild: 'node a.js' });
+  const r = cliMove({ vault: busy.vault, config: busy.config });
+  const text = r.data.lines.join('\n');
+  assert.ok(text.includes('postbuild step moved'), text);
+  assert.doesNotMatch(text, /nothing to move/);
+  const keys = scratch(null, { site: { vaultPath: './Vault', outputDir: 'gazetteer' } });
+  writeNewConfig(keys.vault, { version: 1 });
+  assert.doesNotMatch(cliMove({ vault: keys.vault, config: keys.config }).data.lines.join('\n'), /nothing to move/);
 });

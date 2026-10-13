@@ -161,22 +161,26 @@ function deployHarness(s, { pkg = null } = {}) {
 
 const HOOKS = { scripts: { prebuild: 'node pre.js', postbuild: 'node post.js' } };
 
-test('deploy: on the new layout it does not run the package.json steps itself', async () => {
+test('deploy: a package.json hook is skipped only for the slot the settings hold steps for', async () => {
   const s = scratch({ settings: { after_build: [append('x', 'x.txt')] }, package: HOOKS });
   const h = deployHarness(s, { pkg: HOOKS });
   await runDeploy({ configPath: s.configPath }, h.deps);
-  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), []);
+  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), ['npm run prebuild'], 'prebuild has no steps of its own, so it still runs; postbuild is the vault\'s now');
   const dry = deployHarness(s, { pkg: HOOKS });
   await runDeploy({ configPath: s.configPath, dryRun: true }, dry.deps);
   assert.ok(dry.out.some((l) => l.includes(append('x', 'x.txt'))), 'a dry run lists the vault\'s own steps');
-  assert.ok(!dry.out.some((l) => /npm run (pre|post)build/.test(l)));
+  assert.ok(dry.out.some((l) => /npm run prebuild/.test(l)));
+  assert.ok(!dry.out.some((l) => /npm run postbuild/.test(l)));
 });
 
-test('deploy: the new layout with no steps of its own still leaves package.json to npm', async () => {
+test('deploy: the new layout with no steps of its own runs the package.json hooks exactly as before', async () => {
   const s = scratch({ package: HOOKS });
   const h = deployHarness(s, { pkg: HOOKS });
   await runDeploy({ configPath: s.configPath }, h.deps);
-  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), []);
+  assert.deepEqual(h.commands.filter((c) => c.startsWith('npm')), ['npm run prebuild', 'npm run postbuild']);
+  const dry = deployHarness(s, { pkg: HOOKS });
+  await runDeploy({ configPath: s.configPath, dryRun: true }, dry.deps);
+  assert.ok(dry.out.some((l) => /npm run postbuild/.test(l)), 'a dry run lists it');
 });
 
 test('deploy: on the old layout it keeps running the package.json steps, as before', async () => {
@@ -217,4 +221,34 @@ test('the steps are listed settings that default to nothing and come out in publ
   assert.deepEqual(loadPublishConfig(s.vault, {}, () => {}, { siteDir: s.site }).steps, { before: ['a', 'b'], after: ['c'] });
   const bare = scratch();
   assert.deepEqual(loadPublishConfig(bare.vault, {}, () => {}, { siteDir: bare.site }).steps, { before: [], after: [] });
+});
+
+// ---- Fix round 1 ----------------------------------------------------------------------------
+
+const RECORD_PATH = path.join(__dirname, 'fixtures', 'steps', 'record-path.js');
+
+test('a step sees the site folder\'s node_modules/.bin first on its PATH, as npm run gives it', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-steps-path-'));
+  runSteps([`node ${JSON.stringify(RECORD_PATH)} seen.txt`], { cwd: dir, label: 'after_build', log: () => {} });
+  const first = fs.readFileSync(path.join(dir, 'seen.txt'), 'utf8').trim();
+  assert.equal(first, path.join(dir, 'node_modules', '.bin'));
+});
+
+test('a blank entry in a steps list is a warning and is skipped, never run', () => {
+  const s = scratch({ settings: { before_build: ['', '   ', append('real', 'real.txt')], after_build: ['  '] } });
+  const faults = loadPublishConfig(s.vault, {}, () => {}, { siteDir: s.site });
+  assert.deepEqual(faults.steps, { before: [append('real', 'real.txt')], after: [] });
+  const warn = faults.faults.filter((f) => f.setting === 'player_site.before_build' && f.level === 'warn');
+  assert.equal(warn.length, 1);
+  const r = cli(s, 'build');
+  assert.equal(r.status, 0, r.stderr + r.stdout);
+  assert.deepEqual(lines(path.join(s.site, 'real.txt')), ['real']);
+});
+
+test('under deploy --json a step\'s output goes to stderr, not stdout', () => {
+  const s = scratch({ settings: { before_build: [`node ${JSON.stringify(RECORD_PATH)} seen.txt && node -e "console.log('STEPOUT')"`] } });
+  const r = spawnSync(process.execPath, [BIN, 'deploy', '--json', '--config', s.configPath], { encoding: 'utf8', cwd: s.site });
+  assert.ok(fs.existsSync(path.join(s.site, 'seen.txt')), 'the step ran: ' + r.stderr);
+  assert.ok(!r.stdout.includes('STEPOUT') && !r.stdout.includes('Running before_build'), r.stdout);
+  assert.ok(r.stderr.includes('STEPOUT') && r.stderr.includes('Running before_build'), r.stderr);
 });

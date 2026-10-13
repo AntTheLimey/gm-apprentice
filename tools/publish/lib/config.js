@@ -172,8 +172,19 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     enumerable: false,
   });
 
+  // A blank entry in a steps list is left out, with a warning: it must never reach the shell.
+  const stepsOf = (name, list) => {
+    const kept = list.filter((c) => String(c).trim() !== '');
+    if (kept.length !== list.length) {
+      const written = nameIn(vaultPath, name);
+      faults.push(makeFault({ name: written, setting: name, kind: 'dropped', level: 'warn', message: `${written} has a blank entry; it was left out` }));
+    }
+    return kept;
+  };
+  const steps = { before: stepsOf('player_site.before_build', p.before_build), after: stepsOf('player_site.after_build', p.after_build) };
+
   // The vault's build steps, for the commands that run them. Not listed, like `site`.
-  Object.defineProperty(merged, 'steps', { value: { before: p.before_build, after: p.after_build }, enumerable: false });
+  Object.defineProperty(merged, 'steps', { value: steps, enumerable: false });
 
   // The GM's extra menu entries. A second entry with the same label under the same group is left out, with a
   // warning. Not listed, like `steps`: a site that sets none builds as it did.

@@ -16,7 +16,6 @@ const { failureDetail } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, loadPublishConfig } = require('./config');
 const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
-const { layoutOf } = require('./settings/layout');
 const { nameIn } = require('./settings');
 
 const VERIFY_ATTEMPTS = 3;
@@ -85,7 +84,8 @@ async function runDeploy(options, deps) {
   const build = d.build || (async (o) => {
     require('./sync-functions').syncSiteFunctionsOrWarn(o.configPath);
     await require('./fonts').prefetchForConfig(o.configPath);
-    return require('./build').build({ ...o, runSteps: true });
+    // Under --json stdout is the payload, so the vault's steps talk on stderr.
+    return require('./build').build({ ...o, runSteps: true, ...(opts.json ? { stepsStdio: ['ignore', 2, 2], stepsLog: console.error } : {}) });
   });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
   const sleep = d.sleep || defaultSleep;
@@ -114,18 +114,14 @@ async function runDeploy(options, deps) {
     ? ['pages', 'deploy']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
-  // A vault on the new layout, or one that holds steps, has the tool run them inside the build; the site's package.json
-  // steps are only run here for a vault still on the old layout (the path dated with legacy.js).
+  // The vault's own steps run inside the build. A package.json hook is skipped only for a slot the settings hold steps
+  // for (`before` stands in for prebuild, `after` for postbuild); any other runs here exactly as it always did.
   let vaultSteps = { before: [], after: [] };
-  let steps = false;
   try {
-    if (vaultPath) {
-      vaultSteps = loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps;
-      steps = layoutOf(vaultPath) === 'new' || vaultSteps.before.length > 0 || vaultSteps.after.length > 0;
-    }
+    if (vaultPath) vaultSteps = loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps;
   } catch { /* a vault that cannot be read is reported by the build */ }
-  const hookInfo = opts.noBuild || steps ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
-  const hooks = hookInfo.hooks;
+  const hookInfo = opts.noBuild ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
+  const hooks = hookInfo.hooks.filter((h) => !(h === 'prebuild' ? vaultSteps.before : vaultSteps.after).length);
   const platform = d.platform || process.platform;
 
   // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).

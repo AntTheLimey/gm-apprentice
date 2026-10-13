@@ -238,12 +238,15 @@ const STEP_ENTRIES = REGISTRY.filter((e) => e.stepsFrom);
 const HELD_STEPS_LINE = `The site's build steps stay in its package.json until its publish tool is ${STEPS_FROM} or later.`;
 
 // A package.json script as a list of commands: one entry per `&&` only when the text holds nothing a shell reads
-// differently (a quote, a pipe, a `;`, a bracket, a redirect, a line end, a lone `&`); otherwise it is one entry, whole.
+// differently (a quote, a pipe, a `;`, a bracket, a redirect, a line end, a lone `&`) and no part sets shell state for
+// the next (`cd`, `export`, `NAME=value` ...); otherwise it is one entry, whole.
 function splitScript(text) {
   const whole = [text.trim()];
   if (/["'`|;()<>\n\r]/.test(text) || text.replace(/&&/g, '').includes('&')) return whole;
   const parts = text.split('&&').map((x) => x.trim());
-  return parts.some((x) => x === '') ? whole : parts;
+  // Each step is its own shell, so a part that sets shell state for the next (a folder, a variable) cannot be split off.
+  const setsState = (x) => /^(cd|pushd|popd|export|set|source)(\s|$)/.test(x) || /^\.(\s|$)/.test(x) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(x);
+  return parts.some((x) => x === '' || setsState(x)) ? whole : parts;
 }
 
 // The site folder's package.json: { file, text, data } or null (none, or not an object of JSON).
@@ -980,6 +983,10 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
       }
     }
   }
+  // "Nothing to move" is only true when nothing was carried, dropped, taken out of the site file or held.
+  const moved = carry.carried.length > 0 || carry.dropped.length > 0 || mend.siteOut !== null
+    || (stepsPlan !== null && (stepsPlan.carried.length > 0 || stepsPlan.lines.length > 0 || stepsPlan.stepsHeld !== null));
+  if (moved) lines[0] = `This vault is already on the new settings file (${NEW_FILE}).`;
   const done = plan({ lines, files: { write, remove }, carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])], dropped: carry.dropped });
   if (stepsPlan && stepsPlan.stepsHeld) done.stepsHeld = stepsPlan.stepsHeld;
   if (leftover) done.leftover = leftover;

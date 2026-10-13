@@ -8,13 +8,22 @@ const { REGISTRY } = require('./registry');
 
 const TEN_MINUTES = 10 * 60 * 1000;
 
+// The environment a step runs in: this process's, with the site folder's `node_modules/.bin` first on the path, as
+// `npm run` gives a script (a step naming an installed tool works). Windows may spell the variable `Path`.
+function envFor(cwd) {
+  const env = { ...process.env };
+  const key = Object.keys(env).find((k) => k.toLowerCase() === 'path') || 'PATH';
+  env[key] = [path.join(cwd, 'node_modules', '.bin'), env[key]].filter(Boolean).join(path.delimiter);
+  return env;
+}
+
 // Runs each command in order, in `cwd`, printing it first; the first that fails stops the rest.
 // `stdio` lets a caller whose stdout is a payload send the steps' output to stderr.
 function runSteps(commands, { cwd, label, log = console.log, timeoutMs = TEN_MINUTES, stdio = 'inherit' } = {}) {
   const total = commands.length;
   commands.forEach((command, i) => {
     log(`Running ${label} step ${i + 1} of ${total}: ${command}`);
-    const res = spawnSync(command, { cwd, shell: true, stdio, timeout: timeoutMs });
+    const res = spawnSync(command, { cwd, shell: true, stdio, timeout: timeoutMs, env: envFor(cwd) });
     let why = null;
     if (res.error && res.error.code === 'ETIMEDOUT') why = `it took longer than ${Math.round(timeoutMs / 60000)} minutes`;
     else if (res.error) why = String(res.error.message || res.error);
