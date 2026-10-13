@@ -1,380 +1,43 @@
-const { normalizeDefaultMode } = require('./color-mode');
 const fs = require('fs');
 const path = require('path');
-const { parseNote } = require('./frontmatter');
 const { canonicalPath } = require('./manifest');
-const { isDeepStrictEqual } = require('node:util');
-const { MOVED_KEYS, usable } = require('./config-keys');
-const { resolveSwitches, asBool, siteOff } = require('./switches');
-
-const PUBLISH_DEFAULTS = {
-  mode: 'player',
-  exclude_drafts: false,
-  exclude_callouts: false,
-  // Reconciliation Context / Handoff to Reconcile are written automatically by
-  // reconcile and session-wrapup and carry GM plot state; they must never reach a
-  // published player-mode site (#144).
-  exclude_sections: ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile'],
-  exclude_fields: ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability'],
-  exclude_dirs: ['_meta', '_Templates'],
-  search: true,
-  attachments_dir: '_attachments',
-  folder_map: {},
-  // Landing page selection. build.js has always read publishConfig.landing.*,
-  // but `landing` was missing from the whitelist that builds `merged`, so the
-  // key was permanently undefined and every knob here was silently ignored —
-  // the page was fixed at 6 NPCs / 4 locations / window 3 no matter what the
-  // GM configured (#169).
-  //
-  // featured_* pin entities to the front of their section, in the order given,
-  // with recency filling whatever slots remain. They are the escape hatch from
-  // the scoring heuristic: a GM who knows which five NPCs matter this session
-  // should not have to reverse-engineer a score to feature them.
-  landing: {
-    recency_window: 3,
-    max_npcs: 6,
-    max_locations: 4,
-    featured_npcs: [],
-    featured_locations: [],
-    quick_links: [],
-  },
-  theme: {
-    genre: null,
-    palette: {
-      primary: '#1a2f3a',
-      accent: '#3d8a7a',
-      background: '#e8f0f3',
-      text: '#1a1a1a',
-    },
-    fonts: {
-      heading: 'system-ui',
-      body: 'system-ui',
-      // 'google' (default): custom fonts pull from fonts.googleapis.com, as always.
-      // 'self-host' (#270): the build downloads the Google-hosted families once into the
-      // vault's _meta/font-cache/ and serves them from the site (no request to Google
-      // from visitors). Offline builds reuse the cache; a miss warns and uses the
-      // fallback stack, never a Google import. New vaults are set up with this; the code
-      // default stays 'google' so existing sites don't change look silently.
-      // 'local': no Google import; the build copies theme.fonts.files into the site's
-      // fonts/ and emits @font-face for them instead (#211). No files under 'local'
-      // means no import at all — the fonts are whatever stack cssFontValue falls back to.
-      source: 'google',
-      files: [],
-    },
-    campaign_image: null,
-    // Which palette a reader starts in (#260): 'system' follows their OS, as sites
-    // always have; 'dark' or 'light' starts everyone there. A reader's own choice from
-    // the nav toggle overrides it and is remembered.
-    default_mode: 'system',
-  },
-  four_oh_four: {
-    style: 'in-world',
-    message: 'This page is not available.',
-  },
-  // Opt-in. Off means images are copied byte-for-byte, as they always were.
-  images: {
-    optimize: false,
-    format: 'webp',
-    max_width: 1600,
-    quality: 82,
-  },
-  // Per-file frontmatter overrides, keyed by vault-relative path:
-  //   fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }
-  // `include` re-admits a field that exclude_fields strips, for that one file. `fields` is
-  // the only override the build reads — top-level `exclude`/`include` keys were declared
-  // here for years and read by nothing, so a GM who wrote one got a silent no-op. They are
-  // gone rather than implemented; loadPublishConfig warns if a config still carries one.
-  overrides: {
-    fields: {},
-  },
-  section_titles: {},
-};
-
-// `search` takes the same words as the switches (true/false, yes/no, on/off). Unset is the
-// default (on); a value that is not one of them is the default too, and said so.
-function searchFrom(raw, label, warn = console.warn) {
-  if (raw === undefined) return PUBLISH_DEFAULTS.search;
-  const b = asBool(raw);
-  if (b === null) {
-    warn(`config: ${label} is not true or false (${JSON.stringify(raw)}); search stays on`);
-    return PUBLISH_DEFAULTS.search;
-  }
-  return b;
-}
-
-// A mistyped default_mode falls back to 'system' — say so rather than silently.
-// `mode` is `player` or `full`. Every reader compares it with one of those two words, so
-// a value that is neither (`Player`, `players`) used to count as not-player and publish
-// more, with nothing said. Case and spaces are forgiven; anything else, a line left empty
-// included, is `player` and is said. Only a setting left out is silent.
-function publishModeFrom(raw, warn = console.warn) {
-  if (raw === undefined) return PUBLISH_DEFAULTS.mode;
-  const mode = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
-  if (mode === 'player' || mode === 'full') return mode;
-  warn(`config: publish.mode ${JSON.stringify(raw)} is not player or full; using player`);
-  return 'player';
-}
-
-// `link_previews` is `on`, `desktop` or `off`. YAML reads a bare `on` or `off` as true or
-// false, so those count too, and `yes` and `no` mean on and off. Left out is on; anything else is on, and said.
-function linkPreviewsFrom(raw, warn = console.warn) {
-  if (raw === undefined) return 'on';
-  if (raw === true) return 'on';
-  if (raw === false) return 'off';
-  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
-  if (value === 'on' || value === 'desktop' || value === 'off') return value;
-  if (value === 'yes') return 'on';
-  if (value === 'no') return 'off';
-  warn(`config: publish.link_previews ${JSON.stringify(raw)} is not on, desktop, off, yes, no, true or false; using on`);
-  return 'on';
-}
-
-// `tohit_calculator` is `on` or `off`: the to-hit calculator on a GURPS character's Combat tab.
-// A bare YAML `on`/`off` reads as true/false and `yes`/`no` are taken too. Left out is on;
-// anything else is on, and said.
-function tohitCalculatorFrom(raw, warn = console.warn) {
-  if (raw === undefined || raw === true) return 'on';
-  if (raw === false) return 'off';
-  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
-  if (value === 'on' || value === 'yes' || value === 'true') return 'on';
-  if (value === 'off' || value === 'no' || value === 'false') return 'off';
-  warn(`config: publish.tohit_calculator ${JSON.stringify(raw)} is not on, off, yes, no, true or false; using on`);
-  return 'on';
-}
-
-// `connections` picks how a page's Connections section is drawn: `tree`, `web`, `cards`,
-// or `off` for no section. YAML reads a bare `off` or `no` as false and `on` or `yes` as
-// true, so those count: false is off, true is tree. Left out is tree; anything else is
-// tree, and said.
-function connectionsFrom(raw, warn = console.warn) {
-  if (raw === undefined || raw === true) return 'tree';
-  if (raw === false) return 'off';
-  const value = typeof raw === 'string' ? raw.trim().toLowerCase() : null;
-  if (value === 'tree' || value === 'web' || value === 'cards' || value === 'off') return value;
-  if (value === 'on' || value === 'yes') return 'tree';
-  if (value === 'no') return 'off';
-  warn(`config: publish.connections ${JSON.stringify(raw)} is not tree, web, cards or off; using tree`);
-  return 'tree';
-}
-
-function defaultModeFrom(raw, warn = console.warn) {
-  const mode = normalizeDefaultMode(raw);
-  if (raw != null && String(raw).trim().toLowerCase() !== mode) {
-    warn(`publish.theme.default_mode "${raw}" is not system, dark or light — using system`);
-  }
-  return mode;
-}
-
-// exclude_dirs entries are matched against vault-relative POSIX paths the scanner walks
-// (scanner.js), so an entry authored differently than the scanner spells it fails open —
-// the folder still publishes. Normalizes the common spellings a GM or a JSON/YAML author
-// would reasonably write: backslashes (Windows-authored config), a trailing slash
-// ("NPCs/Hidden/"), a leading "./" ("./NPCs/Hidden"), and an absolute path that resolves
-// inside the vault (rewritten relative to it). An absolute path resolving OUTSIDE the
-// vault can never match anything the scanner walks, so it is dropped with a warning
-// rather than silently doing nothing forever. Returns null for an entry that normalizes
-// to nothing (empty, or outside the vault).
-function normalizeExcludeDir(entry, vaultPath, warn = true) {
-  // `warn`: true = console.warn, false = silent, or a function that takes the message.
-  const say = typeof warn === 'function' ? warn : (warn ? console.warn : () => {});
-  let raw = String(entry).trim().replace(/\\/g, '/');
-  if (!raw) return null;
-  const looksAbsolute = raw.startsWith('/') || /^[A-Za-z]:\//.test(raw);
-  if (looksAbsolute) {
-    const resolved = path.resolve(raw);
-    const vaultRoot = path.resolve(vaultPath);
-    if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
-      say(`config: exclude_dirs entry "${entry}" resolves outside the vault — ignored.`);
-      return null;
-    }
-    raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
-  }
-  raw = raw.replace(/^\.\//, '').replace(/\/+$/, '');
-  return raw || null;
-}
-
-// Normalizes every entry of the chosen exclude_dirs list through normalizeExcludeDir, then
-// de-duplicates case-insensitively (first-seen spelling wins) so dedup and the scanner's own
-// matching operate on the same spelling. Not a union of sources: the caller has already
-// picked one list. Kept separate from the other lists because exclude_sections/exclude_fields
-// are not filesystem paths and must not be slash/absolute-path normalized.
-function normalizeExcludeDirs(list, vaultPath, warn = true) {
-  const seen = new Set();
-  const out = [];
-  for (const item of list) {
-    const normalized = normalizeExcludeDir(item, vaultPath, warn);
-    if (normalized == null) continue;
-    const key = normalized.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(normalized);
-    }
-  }
-  return out;
-}
-
-// exclude_callouts is `true` (strip every callout), a list of types, or off. When both files
-// set it, the stricter wins: true beats a list, a list beats off, two lists are unioned
-// (the vault file's first). An upgrade must never be what publishes a callout.
-function stricterCallouts(fromVault, fromSite) {
-  const stripsAll = (v) => !!v && !Array.isArray(v);
-  if (stripsAll(fromVault)) return fromVault;
-  if (stripsAll(fromSite)) return fromSite;
-  if (Array.isArray(fromVault) && Array.isArray(fromSite)) {
-    const have = new Set(fromVault.map((t) => String(t).toLowerCase()));
-    return [...fromVault, ...fromSite.filter((t) => !have.has(String(t).toLowerCase()) && have.add(String(t).toLowerCase()))];
-  }
-  if (Array.isArray(fromSite)) return fromSite;
-  return fromVault;
-}
-
-// The four settings that always merged per sub-key across the two files: with both set, a
-// sub-key only the site file has still applies, and the vault file wins a sub-key both set.
-const MERGED_MAPS = new Set(['landing', 'images', 'banners', 'locations']);
-const isPlainMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
-
-// Vault file value when set, else the site file's, recording which was used. A moved key
-// is "set" when it is not undefined: an explicit false or null is a value, not silence.
-// `keyOf` spells a list entry the way the build will see it, so "Secrets/" in one file and
-// "Secrets" in the other are the same entry.
-//
-// The three exclude lists (and exclude_callouts, which takes the stricter of the two) are the
-// exception to "the vault file wins outright": a
-// site-file entry the vault list lacks is still applied until the migration moves it (the
-// vault list first, then those entries), and the record names them as `stillApplied`. An
-// upgrade must never be what publishes a section or folder the site file used to hide.
-function pick(publish, json, entry, legacy, normalize = (x) => x, keyOf = (s) => String(s).toLowerCase(), warn = console.warn) {
-  // An empty `exclude_callouts:` in the vault file (null) says nothing, so the site file's
-  // value is not discarded for it.
-  const fromVault = entry.publish === 'exclude_callouts' && publish[entry.publish] === null ? undefined : publish[entry.publish];
-  const fromSite = json[entry.json];
-  const vaultMalformed = entry.kind === 'list' && fromVault !== undefined && !Array.isArray(fromVault);
-  if (vaultMalformed) {
-    // The vault file "sets" the key but gives no list, so the built-in default applies
-    // (the safe direction); entries the site file lists are still added to it.
-    const what = fromVault === null ? 'empty' : `${typeof fromVault}`;
-    warn(`config: publish.${entry.publish} must be a list, but is ${what}. Using the built-in default instead of the vault file's value.`);
-  }
-  let value = fromVault !== undefined ? fromVault : fromSite;
-  if (fromSite !== undefined) {
-    const rec = { key: entry.json, publishKey: entry.publish, status: fromVault !== undefined ? 'ignored' : 'used' };
-    // A site-file list key that is not a list is read as nothing; the migration leaves it too.
-    if (entry.kind === 'list' && !Array.isArray(fromSite)) rec.notAList = true;
-    // A list that holds entries but none the migration can carry over stays in the site file
-    // for good, so the closing line must not send the GM to migrate.py for it.
-    if (entry.kind === 'list' && Array.isArray(fromSite) && fromSite.length && !fromSite.some(usable)) rec.unmovable = true;
-    if (entry.kind === 'list' && fromVault !== undefined && Array.isArray(fromSite)) {
-      const base = vaultMalformed ? PUBLISH_DEFAULTS[entry.publish] : fromVault;
-      const have = new Set(base.map((s) => keyOf(s)));
-      const stillApplied = [];
-      for (const s of fromSite) {
-        const k = keyOf(s);
-        if (!have.has(k)) { have.add(k); stillApplied.push(s); }
-      }
-      if (stillApplied.length) {
-        rec.stillApplied = stillApplied;
-        value = [...base, ...stillApplied];
-      } else if (vaultMalformed) {
-        value = [...base];
-      }
-    }
-    if (MERGED_MAPS.has(entry.publish) && fromVault !== undefined && isPlainMap(fromSite)) {
-      const base = isPlainMap(fromVault) ? fromVault : {};
-      const extra = Object.keys(fromSite).filter((k) => !(k in base));
-      if (extra.length) {
-        rec.stillApplied = extra;
-        value = { ...base, ...Object.fromEntries(extra.map((k) => [k, fromSite[k]])) };
-      }
-    }
-    if (entry.publish === 'exclude_callouts' && fromVault !== undefined) {
-      value = stricterCallouts(fromVault, fromSite);
-      if (!isDeepStrictEqual(value, fromVault)) {
-        // What the site file adds: `true`, or the list entries the vault value lacks.
-        const had = new Set((Array.isArray(fromVault) ? fromVault : []).map((t) => String(t).toLowerCase()));
-        rec.stillApplied = Array.isArray(value) ? value.filter((t) => !had.has(String(t).toLowerCase())) : [value];
-      }
-    }
-    legacy.push(rec);
-  }
-  return normalize(value);
-}
+const { readSettings, formatFault, makeFault, stops, entry, movedKeys } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
 // key typed by the config author in a different normal form (e.g. an NFD-decomposed
-// accented filename) would otherwise never match — canonicalize once here, at load, so
-// build.js's single query-side normalization is enough.
-function canonicalizeOverrideFieldKeys(fields, warn = console.warn) {
-  if (fields == null) return {};
-  // Same trap as the block above: Object.entries on a string yields per-character keys, which
-  // would become override entries no page path can ever match.
-  if (typeof fields !== 'object' || Array.isArray(fields)) {
-    warn(
-      `config: publish.overrides.fields must be a map keyed by vault-relative path, but is ` +
-      `${Array.isArray(fields) ? 'a list' : typeof fields}. No field overrides applied.`
-    );
-    return {};
-  }
+// accented filename) would otherwise never match, so it is canonicalized once here, at load.
+// An entry that is not a map, or whose `include` is not a list of field names, is dropped
+// (the exclusions stay in force, the safe direction) and reported in `problems`.
+function canonicalizeOverrideFieldKeys(fields) {
   const out = {};
-  for (const [key, value] of Object.entries(fields)) {
+  const problems = [];
+  for (const [key, value] of Object.entries(fields || {})) {
     const problem = overrideEntryProblem(value);
     if (problem) {
-      // Dropping the entry leaves the exclusions in force, which is the safe
-      // direction: a malformed `include` must never re-admit a field by accident.
-      warn(
-        `config: publish.overrides.fields["${key}"] ${problem}. That override is ignored. ` +
-        'Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.'
-      );
+      problems.push(`publish.overrides.fields["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
       continue;
     }
     out[canonicalPath(key)] = value;
   }
-  return out;
+  return { fields: out, problems };
 }
 
 // build.js hands each per-file entry straight to filterFields, which does
 // `overrides.include.includes(field)`. A string there is substring matching
 // (`include: sec` would re-admit `secrets`); any other truthy non-array throws.
-// Say which it is rather than letting the build guess or crash.
 function overrideEntryProblem(value) {
   if (value == null || typeof value !== 'object' || Array.isArray(value)) {
     return `must be a map, but is ${Array.isArray(value) ? 'a list' : typeof value}`;
   }
   if (!('include' in value)) return null;
   if (!Array.isArray(value.include)) {
-    return `has an "include" that must be a list of field names, but is ` +
-      `${typeof value.include}`;
+    return `has an "include" that must be a list of field names, but is ${typeof value.include}`;
   }
   if (!value.include.every((f) => typeof f === 'string')) {
     return 'has an "include" list holding something that is not a field name';
   }
   return null;
-}
-
-// A key under `publish.overrides` that the build never reads changes nothing about the
-// published site, and the GM has no way to tell that from "the override didn't match".
-// Name it, and say where the real one lives.
-function warnUnreadOverrideKeys(overrides, warn = console.warn) {
-  if (overrides == null) return;
-  // A malformed block — `overrides: fields` (a bare string), or a list — must not be walked
-  // as a key/value map: Object.keys('fields') is ['0'..'5'], which would report six invented
-  // keys and bury the real problem.
-  if (typeof overrides !== 'object' || Array.isArray(overrides)) {
-    warn(
-      `config: publish.overrides must be a map, but is ${Array.isArray(overrides) ? 'a list' : typeof overrides}. ` +
-      'Nothing under it is being read. Expected shape: overrides: { fields: ' +
-      '{ "Characters/NPCs/Vex.md": { include: ["secrets"] } } }.'
-    );
-    return;
-  }
-  for (const key of Object.keys(overrides)) {
-    if (key === 'fields') continue;
-    warn(
-      `config: publish.overrides.${key} is not read by the build and has no effect. ` +
-      'The only supported override is publish.overrides.fields, keyed by vault-relative ' +
-      'path: fields: { "Characters/NPCs/Vex.md": { include: ["secrets"] } }.'
-    );
-  }
 }
 
 // Shared vault.config.json loading, so `manifest diff`, `deploy` and `explain` fail
@@ -406,132 +69,127 @@ function loadVaultConfig(configPath, deps = {}, { requireVaultPath = false } = {
   return config;
 }
 
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn) {
-  const configFile = path.join(vaultPath, '_meta', 'vault-config.md');
-  let publish = {};
-  let settingYear = null;
-
-  if (fs.existsSync(configFile)) {
-    const raw = fs.readFileSync(configFile, 'utf-8');
-    let data;
-    try {
-      ({ data } = parseNote(raw));
-    } catch (e) {
-      // One line, naming the file: js-yaml's message ends in a code excerpt, and a
-      // caller that reads the last line of stderr (vault_check) got only its caret.
-      throw new Error(`_meta/vault-config.md frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
-    }
-    if (data.publish) {
-      publish = data.publish;
-    }
-    if (data.setting_year !== undefined) {
-      settingYear = data.setting_year;
-    }
+// A map setting's values without the names the file did not set and the list gives no value.
+function setOnly(map, prefix, origins) {
+  const out = {};
+  for (const [k, v] of Object.entries(map || {})) {
+    const e = entry(`${prefix}.${k}`);
+    if (v === null && origins[`${prefix}.${k}`] === 'default' && e && e.default === undefined) continue;
+    out[k] = v;
   }
+  return out;
+}
 
-  warnUnreadOverrideKeys(publish.overrides, warn);
+// The settings, reshaped into the object every command reads. readSettings decides each
+// value; the only rules here join two settings (a genre without a palette, live stats
+// without sheets) or check a map's entries (overrides).
+// `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
+// assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
+  const { values, origins, faults, legacy } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
+  const p = values.publish;
+  const named = (n) => origins[n] !== 'default';
 
-  // One pass over the moved-key table, in table order, so `legacy` reads the same way
-  // every time. The per-key merges below read from `picked`.
-  const legacy = [];
-  const picked = {};
-  const jsonConfig = jsonConfigFallback || {};
-  for (const entry of MOVED_KEYS) {
-    picked[entry.publish] = pick(
-      publish, jsonConfig, entry, legacy,
-      entry.publish === 'exclude_dirs'
-        ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath, warn) : v)
-        : undefined,
-      entry.publish === 'exclude_dirs'
-        ? (s) => (normalizeExcludeDir(s, vaultPath, false) ?? String(s)).toLowerCase()
-        : undefined,
-      warn,
-    );
+  const live = p.live_stats && p.character_sheets;
+  if (p.live_stats && !p.character_sheets) {
+    faults.push(makeFault({ name: 'publish.live_stats', kind: 'dropped', level: 'warn', message: 'publish.live_stats is on but character_sheets is off; live stats are not published' }));
   }
-  const list = (v, fallback) => (Array.isArray(v) ? v : [...fallback]);
-  const asMap = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
-
-  const merged = {
-    mode: publishModeFrom(publish.mode, warn),
-    link_previews: linkPreviewsFrom(publish.link_previews, warn),
-    tohit_calculator: tohitCalculatorFrom(publish.tohit_calculator, warn),
-    connections: connectionsFrom(publish.connections, warn),
-    site_title: picked.site_title ?? null,
-    footer: picked.footer ?? null,
-    search: searchFrom(picked.search, publish.search !== undefined ? 'publish.search' : 'vault.config.json searchEnabled', warn),
-    folder_map: asMap(picked.folder_map),
-    attachments_dir: picked.attachments_dir || PUBLISH_DEFAULTS.attachments_dir,
-    pc_prose_sections: Array.isArray(publish.pc_prose_sections) ? publish.pc_prose_sections : [],
-    system: picked.system || null,
-    // CoC sheet masthead crest/seal.
-    sheet_crest: picked.sheet_crest || null,
-    exclude_drafts: publish.exclude_drafts ?? PUBLISH_DEFAULTS.exclude_drafts,
-    // Boolean (strip all callouts) or an array of types to strip.
-    exclude_callouts: picked.exclude_callouts ?? PUBLISH_DEFAULTS.exclude_callouts,
-    exclude_sections: list(picked.exclude_sections, PUBLISH_DEFAULTS.exclude_sections),
-    exclude_fields: list(picked.exclude_fields, PUBLISH_DEFAULTS.exclude_fields),
-    exclude_dirs: list(picked.exclude_dirs, PUBLISH_DEFAULTS.exclude_dirs),
-    legacy,
-    // Per-key merge, not a whole-block replace: setting only max_npcs must not
-    // silently drop recency_window back to nothing. The chosen source (vault file, else
-    // site file) supplies the keys; the defaults fill the rest.
-    landing: {
-      ...PUBLISH_DEFAULTS.landing,
-      ...asMap(picked.landing),
+  const switchNames = ['site', 'character_sheets', 'live_stats', 'inbox'];
+  const unset = switchNames.filter((n) => origins[`publish.${n}`] === 'default');
+  const switches = {
+    site: p.site,
+    characterSheets: p.character_sheets,
+    liveStats: live,
+    inbox: p.inbox,
+    unset,
+    explicitOff: {
+      liveStats: !live && (!unset.includes('live_stats') || !p.character_sheets),
+      inbox: !p.inbox && !unset.includes('inbox'),
+      site: !p.site && !unset.includes('site'),
     },
-    theme: {
-      ...PUBLISH_DEFAULTS.theme,
-      ...publish.theme,
-      palette: (publish.theme && publish.theme.palette)
-        ? { ...PUBLISH_DEFAULTS.theme.palette, ...publish.theme.palette }
-        : ((publish.theme && publish.theme.genre) ? null : { ...PUBLISH_DEFAULTS.theme.palette }),
-      fonts: {
-        ...PUBLISH_DEFAULTS.theme.fonts,
-        ...(publish.theme && publish.theme.fonts),
-      },
-      default_mode: defaultModeFrom(publish.theme && publish.theme.default_mode, warn),
-    },
-    four_oh_four: {
-      ...PUBLISH_DEFAULTS.four_oh_four,
-      ...publish.four_oh_four,
-    },
-    images: {
-      ...PUBLISH_DEFAULTS.images,
-      ...asMap(picked.images),
-    },
-    // Per-section index banners, keyed by output dir ("locations", "factions", …). No
-    // defaults: absent means "look for the conventional _banner.* in the section folder".
-    banners: { ...asMap(picked.banners) },
-    // Deliberately not merged with a default: the Locations index needs to tell
-    // "group_by never mentioned" (fall back to the genre's pivot) apart from
-    // "group_by explicitly falsy" (grouping off), and a default would erase that.
-    locations: { ...asMap(picked.locations) },
-    // Only `fields` is carried through: nothing downstream reads any other override key, so
-    // passing one along would just relocate the silent no-op into publishConfig.
-    overrides: {
-      fields: canonicalizeOverrideFieldKeys(
-        // `??`, not `||`: an explicitly falsy `fields: false` is malformed config the
-        // validator must see and report, not something to silently swap for the default.
-        (publish.overrides && publish.overrides.fields) ?? PUBLISH_DEFAULTS.overrides.fields,
-        warn
-      ),
-    },
-    section_titles: { ...PUBLISH_DEFAULTS.section_titles, ...publish.section_titles },
-    switches: resolveSwitches(publish, jsonConfigFallback),
-    sheetLook: require('./skins').siteLook(publish),
-    setting_year: settingYear,
   };
 
-  // A keep-list that is not a list, or holds non-text entries, is dropped (never read
-  // as "keep everything"); say so where the build prints the switch notes.
-  const proseRaw = publish.pc_prose_sections;
-  if (proseRaw !== undefined && !Array.isArray(proseRaw)) {
-    merged.switches.notes.push({ key: 'pc_prose_sections', problem: 'is not a list of section titles; ignored' });
-  } else if (Array.isArray(proseRaw) && proseRaw.some((s) => typeof s !== 'string')) {
-    merged.switches.notes.push({ key: 'pc_prose_sections', problem: 'has entries that are not text; those are ignored' });
+  const overrides = canonicalizeOverrideFieldKeys(p.overrides.fields);
+  for (const message of overrides.problems) {
+    faults.push(makeFault({ name: 'publish.overrides.fields', kind: 'dropped', level: 'stop', message }));
   }
 
+  // A genre counts as written even when it was refused (an unknown one reads as null): the page
+  // then takes the plain fallback palette, as it always has.
+  const genreWritten = named('publish.theme.genre');
+  const paletteWritten = Object.keys(origins).some((n) => n.startsWith('publish.theme.palette.') && named(n));
+  const theme = setOnly(p.theme, 'publish.theme', origins);
+  const merged = {
+    mode: p.mode,
+    link_previews: p.link_previews,
+    tohit_calculator: p.tohit_calculator,
+    connections: p.connections,
+    site_title: p.site_title,
+    footer: p.footer,
+    search: p.search,
+    folder_map: p.folder_map,
+    attachments_dir: p.attachments_dir,
+    pc_prose_sections: p.pc_prose_sections,
+    system: p.system,
+    sheet_crest: p.sheet_crest,
+    exclude_drafts: p.exclude_drafts,
+    exclude_callouts: p.exclude_callouts,
+    exclude_sections: p.exclude_sections,
+    exclude_fields: p.exclude_fields,
+    exclude_dirs: p.exclude_dirs,
+    legacy,
+    landing: setOnly(p.landing, 'publish.landing', origins),
+    theme: {
+      ...theme,
+      genre: p.theme.genre,
+      palette: genreWritten && !paletteWritten ? null : p.theme.palette,
+      campaign_image: p.theme.campaign_image,
+    },
+    four_oh_four: { message: p.four_oh_four.message },
+    images: p.images,
+    banners: p.banners,
+    locations: setOnly(p.locations, 'publish.locations', origins),
+    overrides: { fields: overrides.fields },
+    section_titles: p.section_titles,
+    switches,
+    sheetLook: { skin: p.sheet_skin, frame: p.sheet_frame },
+    setting_year: values.setting_year,
+    faults,
+    origins,
+  };
+
+  for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
+}
+
+// Throws when a setting that hides something could not be read: a build must not go on
+// to publish with the safe fallback in place of what the GM meant.
+function assertNoStops(publishConfig, what) {
+  const found = stops(publishConfig.faults || []);
+  if (!found.length) return;
+  throw new Error(`${what} stopped: the settings have a fault that could show players more than you meant.\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}\nFix it, or ask the apprentice to run the Settings check.`);
+}
+
+// assertNoStops for a command that has only the site's vault.config.json path (deploy).
+// A config that cannot be read is left for the command to report in its own words.
+function assertNoStopsFor(configPath, what) {
+  let raw;
+  let vaultPath;
+  try {
+    const resolved = path.resolve(configPath);
+    raw = loadVaultConfig(resolved);
+    vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath);
+  } catch {
+    return;
+  }
+  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}), what);
+}
+
+// What `build` and `deploy` say instead of running when the GM has turned the site off.
+// Only an explicit off stops them: a site folder whose vault never set the switch builds.
+const SITE_OFF = 'the site is off for this vault (publish.site in _meta/vault-config.md); nothing was built. Set publish.site: true to publish again.';
+function siteOff(switches) {
+  return switches && switches.explicitOff && switches.explicitOff.site ? SITE_OFF : null;
 }
 
 // A page's key into `publish.overrides.fields`: its vault-relative path, posix
@@ -561,10 +219,10 @@ function scanConfigFor(config, publishConfig) {
 // silent), so templates and the scanner that read config.siteTitle / folderMap /
 // attachmentsDir keep working. `publishConfig` is loadPublishConfig's own output. The raw
 // object is not mutated. A key neither file sets stays as the raw object had it.
-function resolveConfig(rawConfig, vaultPath, warn = console.warn) {
-  const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn);
+function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) {
+  const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn, options);
   const config = Object.assign({}, rawConfig);
-  for (const entry of MOVED_KEYS) {
+  for (const entry of movedKeys()) {
     const value = publishConfig[entry.publish];
     if (value !== undefined && value !== null) config[entry.json] = value;
   }
@@ -594,4 +252,4 @@ function siteOffFor(configPath) {
   }
 }
 
-module.exports = { connectionsFrom, siteOffFor, MERGED_MAPS, loadPublishConfig, resolveConfig, vaultRelPath, scanConfigFor, PUBLISH_DEFAULTS, loadVaultConfig, normalizeExcludeDir, stricterCallouts };
+module.exports = { siteOffFor, siteOff, SITE_OFF, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

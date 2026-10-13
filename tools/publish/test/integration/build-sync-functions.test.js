@@ -9,7 +9,7 @@ const roots = [];
 after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: true })));
 
 // Runs `gm-publish build` for real, so the function-sync block ahead of the build is what is
-// under test. The vault file carries one config warning (an override key nothing reads).
+// under test. The vault file carries one config warning (an override key that is not a setting).
 function runBuild(extraPublish) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-sync-'));
   roots.push(root);
@@ -30,13 +30,13 @@ describe('the function-sync step of `build`', () => {
     const { root, out, status } = runBuild('');
     assert.strictEqual(status, 0, out);
     assert.ok(!fs.existsSync(path.join(root, 'functions')), 'no functions dir');
-    assert.strictEqual(count(out, 'publish.overrides.bogus is not read'), 1, out);
+    assert.strictEqual(count(out, 'publish.overrides.bogus is not a setting.'), 1, out);
   });
 
   it('copies the function files with inbox on, and each config warning still prints once', () => {
     const { root, out, status } = runBuild('  inbox: true\n');
     assert.strictEqual(status, 0, out);
     assert.ok(fs.existsSync(path.join(root, 'functions', 'api', 'request.js')), out);
-    assert.strictEqual(count(out, 'publish.overrides.bogus is not read'), 1, out);
+    assert.strictEqual(count(out, 'publish.overrides.bogus is not a setting.'), 1, out);
   });
 });

@@ -33,6 +33,7 @@
 const { publishMode } = require('./processor');
 const { storyOwnerPath, isStoryCompanion } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
+const { entry } = require('./settings');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
 const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, ruleValue } = require('./excluding-values');
@@ -163,7 +164,7 @@ function decidePage(page, options) {
     };
   }
 
-  const mode = publishConfig.mode || 'player';
+  const mode = publishConfig.mode || entry('publish.mode').default;
   const index = manifest ? indexOf(manifest) : null;
   const listedForPublish = !!(index && index.publishing.has(rel));
 

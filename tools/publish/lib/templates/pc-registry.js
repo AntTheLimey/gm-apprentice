@@ -54,4 +54,7 @@ function getRenderer(system) {
   return renderers[String(system).toLowerCase()] || null;
 }
 
-module.exports = { getRenderer, getConsumedTitleMatcher, getSheetFamily };
+// Every system id a `publish.system` setting may name, aliases included.
+const RENDERER_IDS = Object.keys(renderers);
+
+module.exports = { RENDERER_IDS, getRenderer, getConsumedTitleMatcher, getSheetFamily };

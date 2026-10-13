@@ -9,10 +9,9 @@ function modeOf(line) {
   fs.mkdirSync(path.join(vault, '_meta'));
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${line}  site_title: T\n---\n`);
   const said = [];
-  const real = console.warn; console.warn = (m) => said.push(String(m));
   try {
-    return { mode: resolveConfig({ vaultPath: vault }, vault).publishConfig.mode, said: said.filter((m) => m.includes('publish.mode')) };
-  } finally { console.warn = real; fs.rmSync(vault, { recursive: true, force: true }); }
+    return { mode: resolveConfig({ vaultPath: vault }, vault, (m) => said.push(String(m))).publishConfig.mode, said: said.filter((m) => m.includes('publish.mode')) };
+  } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
 describe('publish.mode', () => {
@@ -28,11 +27,14 @@ describe('publish.mode', () => {
   // Anything else used to pass through as written, and the build then treated it as
   // not-player: the publish list was ignored and more was published, silently.
   it('is player for any other value, and says so', () => {
-    for (const line of ['  mode: players\n', '  mode: gm\n', '  mode: true\n', '  mode: [player]\n', '  mode:\n', '  mode: ""\n', '  mode: "  "\n']) {
+    for (const line of ['  mode: players\n', '  mode: gm\n', '  mode: true\n', '  mode: [player]\n', '  mode: ""\n', '  mode: "  "\n']) {
       const { mode, said } = modeOf(line);
       assert.strictEqual(mode, 'player', line);
       assert.strictEqual(said.length, 1, line);
-      assert.match(said[0], /publish\.mode .* is not player or full; using player/);
+      assert.match(said[0], /publish\.mode .*; it takes player or full\./);
     }
+  });
+  it('is player for a line left empty, as for a setting left out', () => {
+    assert.deepStrictEqual(modeOf('  mode:\n'), { mode: 'player', said: [] });
   });
 });

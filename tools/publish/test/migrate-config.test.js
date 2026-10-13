@@ -5,10 +5,12 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { planMigration, applyMigration, runMigrateConfig } = require('../lib/migrate-config');
-const { MOVED_KEYS, DEPLOY_KEYS } = require('../lib/config-keys');
+const { movedKeys, DEPLOY_KEYS } = require('../lib/settings/site-file');
+const { entry } = require('../lib/settings');
+const MOVED_KEYS = movedKeys();
 const { parseNote } = require('../lib/frontmatter');
 const { build } = require('../lib/build');
-const { loadPublishConfig, PUBLISH_DEFAULTS } = require('../lib/config');
+const { loadPublishConfig } = require('../lib/config');
 
 const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FIXTURE = path.join(__dirname, 'fixtures', 'with-gurps-pc');
@@ -244,7 +246,7 @@ describe('migrate-config', () => {
     const { result } = migrate(s);
     const data = parseNote(read(s.vaultFile)).data;
     assert.strictEqual(data.type, 'meta');
-    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'], exclude_sections: PUBLISH_DEFAULTS.exclude_sections, exclude_fields: PUBLISH_DEFAULTS.exclude_fields });
+    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'], exclude_sections: entry('publish.exclude_sections').default, exclude_fields: entry('publish.exclude_fields').default });
     assert.deepStrictEqual(result.backups, [`${s.configPath}.pre-migrate`]);
   });
 
@@ -741,8 +743,8 @@ describe('migrate-config writes the built-in exclude lists (#294)', () => {
     const { plan } = migrate(s);
     assert.ok(plan.applicable);
     const pub = publishOf(s.vaultFile);
-    assert.deepStrictEqual(pub.exclude_sections, PUBLISH_DEFAULTS.exclude_sections);
-    assert.deepStrictEqual(pub.exclude_fields, PUBLISH_DEFAULTS.exclude_fields);
+    assert.deepStrictEqual(pub.exclude_sections, entry('publish.exclude_sections').default);
+    assert.deepStrictEqual(pub.exclude_fields, entry('publish.exclude_fields').default);
     assert.strictEqual(pub.exclude_dirs, undefined);
     assert.ok(read(s.vaultFile).includes('mode: player'));
   });

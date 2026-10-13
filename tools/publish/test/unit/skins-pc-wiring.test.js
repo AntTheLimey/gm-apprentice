@@ -1,7 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { pcTemplate } = require('../../lib/templates/pc');
-const { siteLook } = require('../../lib/skins');
 
 const noop = () => '';
 const cfg = { siteTitle: 'S', footer: '' };
@@ -11,7 +10,7 @@ const mkPage = (fm = {}) => ({
 const imageMap = { 'jane.png': { relPath: 'jane.png' } };
 const render = (page, context = {}, map = {}) =>
   pcTemplate(page, { html: '' }, [], noop, cfg, map, undefined, context);
-const withLook = (publish, extra = {}) => ({ publishConfig: { sheetLook: siteLook(publish), ...extra } });
+const withLook = (publish, extra = {}) => ({ publishConfig: { sheetLook: { skin: publish.sheet_skin ?? null, frame: publish.sheet_frame ?? null }, ...extra } });
 
 describe('pcTemplate: look wiring', () => {
   it('no look set: today\'s markup, no hooks', () => {

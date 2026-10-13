@@ -149,16 +149,20 @@ describe('publish.pc_prose_sections in the config', () => {
     try { return resolveConfig({ vaultPath: vault }, vault, () => {}).publishConfig; }
     finally { fs.rmSync(vault, { recursive: true, force: true }); }
   };
-  it('a list is read; a non-list is ignored with a note, never "keep everything"', () => {
+  it('a list is read; a non-list is ignored with a fault, never "keep everything"', () => {
     const ok = load('  pc_prose_sections: [Psionics]\n');
     assert.deepStrictEqual(pcKeepList(ok), [...PC_PROSE_SECTIONS, 'Psionics']);
-    assert.ok(!ok.switches.notes.some((n) => n.key === 'pc_prose_sections'));
+    assert.ok(!ok.faults.some((f) => f.name === 'publish.pc_prose_sections'));
     const bad = load('  pc_prose_sections: everything\n');
     assert.deepStrictEqual(pcKeepList(bad), PC_PROSE_SECTIONS);
-    assert.ok(bad.switches.notes.some((n) => n.key === 'pc_prose_sections' && /not a list/.test(n.problem)));
+    assert.ok(bad.faults.some((f) => f.name === 'publish.pc_prose_sections'));
+    // A number is read as the text it is written as.
     const mixed = load('  pc_prose_sections: [Psionics, 3]\n');
-    assert.deepStrictEqual(pcKeepList(mixed), [...PC_PROSE_SECTIONS, 'Psionics']);
-    assert.ok(mixed.switches.notes.some((n) => n.key === 'pc_prose_sections' && /not text/.test(n.problem)));
+    assert.deepStrictEqual(pcKeepList(mixed), [...PC_PROSE_SECTIONS, 'Psionics', '3']);
+    // An entry that is not plain text refuses the whole list, which then keeps only the built-in ones.
+    const nested = load('  pc_prose_sections: [Psionics, [Deep]]\n');
+    assert.deepStrictEqual(pcKeepList(nested), PC_PROSE_SECTIONS);
+    assert.ok(nested.faults.some((f) => f.name === 'publish.pc_prose_sections'));
   });
 });
 

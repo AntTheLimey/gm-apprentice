@@ -8,11 +8,10 @@ function valueOf(line) {
   fs.mkdirSync(path.join(vault, '_meta'));
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${line}  site_title: T\n---\n`);
   const said = [];
-  const real = console.warn; console.warn = (m) => said.push(String(m));
   try {
-    return { value: resolveConfig({ vaultPath: vault }, vault).publishConfig.link_previews,
+    return { value: resolveConfig({ vaultPath: vault }, vault, (m) => said.push(String(m))).publishConfig.link_previews,
       said: said.filter((m) => m.includes('publish.link_previews')) };
-  } finally { console.warn = real; fs.rmSync(vault, { recursive: true, force: true }); }
+  } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
 describe('publish.link_previews', () => {
@@ -31,11 +30,11 @@ describe('publish.link_previews', () => {
     }
   });
   it('is on for anything else, and says so once, naming every value it takes', () => {
-    for (const line of ['maybe', 'none', 'mobile', '3', '[on]', '', '""']) {
+    for (const line of ['maybe', 'none', 'mobile', '3', '[on]', '""']) {
       const { value, said } = valueOf(`  link_previews: ${line}\n`);
       assert.strictEqual(value, 'on', line);
       assert.strictEqual(said.length, 1, line);
-      assert.match(said[0], /publish\.link_previews .* is not on, desktop, off, yes, no, true or false; using on/);
+      assert.match(said[0], /publish.link_previews .*; it takes on, desktop or off/);
     }
   });
 });

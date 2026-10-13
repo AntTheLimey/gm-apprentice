@@ -47,8 +47,8 @@ function sessionMentions(session, wrapUpFor) {
 }
 
 function scoreByRecency(entities, sessions, chapters, options = {}) {
-  const window = options.window || 3;
-  const max = options.max || 6;
+  const window = options.window;
+  const max = options.max;
   const type = options.type;
   const wrapUpFor = options.wrapUpFor || new Map();
 

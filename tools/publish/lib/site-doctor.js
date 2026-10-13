@@ -14,6 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
+const { formatFault, entry: settingEntry } = require('./settings');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -37,7 +38,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
-  'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
+  'SETTINGS_FAULT', 'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'FRONTMATTER_MISTYPED',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
   ...NOTE_FAULT_CODES,
@@ -200,7 +201,8 @@ async function runSiteDoctor(options, deps) {
   }
 
   const rawSiteConfig = config;
-  const resolved = resolveConfig(config, vaultPath);
+  // The faults are reported as findings below, not also printed as warning lines.
+  const resolved = resolveConfig(config, vaultPath, () => {});
   config = resolved.config;
   const publishConfig = resolved.publishConfig;
   const manifest = loadManifest(vaultPath);
@@ -237,6 +239,16 @@ async function runSiteDoctor(options, deps) {
   };
 
   const findings = [];
+
+  // --- the settings themselves ----------------------------------------------
+  for (const f of publishConfig.faults) {
+    findings.push(finding(
+      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', '_meta/vault-config.md',
+      formatFault(f),
+      'correct it in _meta/vault-config.md, or ask the apprentice to run the Settings check',
+    ));
+  }
+  const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');
 
   // --- the tool the site is pinned to -------------------------------------
   let drift = null;
@@ -347,6 +359,9 @@ async function runSiteDoctor(options, deps) {
   // so this list is the one the build prints its summary of.
   // A build that cannot run is an error, never a clean list.
   let noteFaults = Object.assign([], { namedTargets: new Set() });
+  // A build stops on a hiding-side settings fault, so the in-memory one is not attempted: the
+  // finding above says why, and the audit stops there rather than add a second error for it.
+  if (settingsStopped) return emit(out, findings, vaultPath, asJson);
   try {
     const built = require('./build').build({ configPath, vaultPath, rawConfig: rawSiteConfig, inMemory: true });
     noteFaults = built.noteFaults;
@@ -378,7 +393,7 @@ async function runSiteDoctor(options, deps) {
     if (portrait && !(portrait in attachments)) {
       findings.push(finding(
         'PORTRAIT_MISSING', 'warning', rel,
-        `portrait: ${portrait} is not in ${config.attachmentsDir || '_attachments'}/`,
+        `portrait: ${portrait} is not in ${config.attachmentsDir || settingEntry('publish.attachments_dir').default}/`,
         `put ${portrait} in _attachments/ or fix the portrait: value`,
       ));
     }

@@ -76,6 +76,54 @@ describe('site-doctor similarity', () => {
 });
 
 describe('doctor --site', () => {
+  function settingsVault(yaml) {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-settings-'));
+    write(vault, 'Characters/NPCs/Vex.md', '---\ntype: npc\n---\n\nA fixer.\n');
+    write(vault, '_meta/vault-config.md', `---\ntype: meta\npublish:\n${yaml}---\n`);
+    return vault;
+  }
+
+  it('a hiding-side settings fault is an error finding listed first, exits non-zero, and no in-memory build is attempted', async () => {
+    const { configPath } = siteFor(settingsVault('  exclude_sectoins: [GM Notes]\n'));
+    const buildModule = require('../lib/build');
+    const realBuild = buildModule.build;
+    let built = 0;
+    buildModule.build = (...a) => { built++; return realBuild(...a); };
+    try {
+      const cap = capture();
+      const rc = await runSiteDoctor({ configPath, json: true }, cap.deps);
+      assert.equal(rc, 1);
+      assert.equal(built, 0, 'the in-memory build was not attempted');
+      const { findings } = JSON.parse(cap.text());
+      const rows = findings.filter((f) => f.code === 'SETTINGS_FAULT');
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].severity, 'error');
+      assert.equal(rows[0].detail, 'publish.exclude_sectoins is not a setting. Did you mean publish.exclude_sections?');
+      assert.equal(findings[0].code, 'SETTINGS_FAULT');
+      assert.ok(!findings.some((f) => f.code === 'NOTE_FAULTS_UNCHECKED'));
+      const text = capture();
+      assert.equal(await runSiteDoctor({ configPath }, text.deps), 1);
+      assert.match(text.text(), /SETTINGS_FAULT \(1 error\)\n {2}_meta\/vault-config\.md — publish\.exclude_sectoins is not a setting/);
+    } finally { buildModule.build = realBuild; }
+  });
+
+  it('a look-side settings fault is a warning finding, and the audit goes on to build', async () => {
+    const { configPath } = siteFor(settingsVault('  link_preview: off\n'));
+    const buildModule = require('../lib/build');
+    const realBuild = buildModule.build;
+    let built = 0;
+    buildModule.build = (...a) => { built++; return realBuild(...a); };
+    try {
+      const cap = capture();
+      await runSiteDoctor({ configPath, json: true }, cap.deps);
+      const { findings } = JSON.parse(cap.text());
+      const row = findings.find((f) => f.code === 'SETTINGS_FAULT');
+      assert.equal(row.severity, 'warning');
+      assert.equal(row.detail, 'publish.link_preview is not a setting. Did you mean publish.link_previews?');
+      assert.equal(built, 1);
+    } finally { buildModule.build = realBuild; }
+  });
+
   it('audits the vault named by --vault, through the site\'s rules, instead of the one the config names', async () => {
     const other = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-other-'));
     write(other, 'Characters/NPCs/Fine.md', '---\ntype: npc\n---\n\nNothing wrong.\n');

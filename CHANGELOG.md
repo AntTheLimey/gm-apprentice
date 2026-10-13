@@ -7,6 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.51] — 2026-10-13
+
+### Added
+
+- A `settings` command in the publish tool: `settings get`, `describe`,
+  `list`, `check`, `set`, `unset`, `add` and `remove`. It reads and
+  writes your settings file, and says what any one setting does and
+  what it takes.
+- A misspelt or unreadable setting is reported by name, with the nearest
+  real setting: `publish.exclude_sectoins is not a setting. Did you
+  mean publish.exclude_sections?`
+
+### Changed
+
+- A fault on a setting that hides material (`mode`, `exclude_dirs`,
+  `exclude_sections`, `exclude_fields`, `exclude_callouts`,
+  `exclude_drafts`, `overrides.fields`) now stops the build, the deploy
+  and the other publishing commands until you fix it, and says which
+  setting and how. A fault on a setting that only changes how the site
+  looks still warns and builds.
+- A hiding setting in the wrong place also stops the build: one indented
+  a level too far (`publish.theme.exclude_sections`), one written beside
+  `publish:` instead of under it, a `publish.overrides.exclude` (the only
+  override is `publish.overrides.fields`), or any key under `publish:`
+  that starts with `exclude` or `hid`. Before, these were ignored and
+  hid nothing.
+- `exclude_drafts`, `exclude_callouts` and `images.optimize` read `yes`,
+  `no`, `on` and `off` as well as `true` and `false`. This changes two
+  sites that wrote the word: `exclude_callouts: no` and `exclude_drafts:
+  no` used to hide (any text counted as on) and now show.
+- `settings add` and `settings remove` take a list of text
+  (`'["Rumours","Plans"]'`) as separate entries, and refuse a map, `null`
+  or a list that holds anything but text, instead of adding it as one
+  entry.
+- A `landingTagline` still in the site's `vault.config.json` is named as
+  an old name and is not read, as before. The vault update moves it to
+  `publish.theme.tagline`.
+- `link_previews` and `connections` read a quoted word the same as an
+  unquoted one (`connections: "web"`).
+- A landing count of `0` means none; it no longer falls back to the
+  default.
+- `fonts.source` forgives capitals.
+- An empty key in the settings file means the setting is not set.
+- The settings page (`docs/site-settings.md`) is generated from the
+  tool's own list of settings, so it cannot drift from what the tool
+  does.
+- Publish tool 1.22.0.
+
+### Removed
+
+- `total_sessions` and `four_oh_four.style`, which nothing used. A file
+  that still has one gets a warning to remove it.
+
 ## [1.10.50] — 2026-10-12
 
 ### Added

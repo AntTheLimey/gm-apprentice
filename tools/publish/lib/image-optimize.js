@@ -1,12 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
+const { entry } = require('./settings/registry');
 
 // Only raster formats that reliably shrink when re-encoded. SVG is vector, GIF may be
 // animated, and WebP/AVIF are already in a modern format — all pass through untouched.
 const OPTIMIZABLE_EXT = /\.(png|jpe?g)$/i;
 
-const SUPPORTED_FORMATS = new Set(['webp']);
+const SUPPORTED_FORMATS = new Set(entry('publish.images.format').values);
 
 /**
  * Read an image's pixel width straight from its header.
@@ -107,24 +108,16 @@ function detectEncoder() {
   }
 }
 
-// A non-numeric config value must fall back to the default, not sail through as NaN: cwebp
-// would receive the literal string "NaN" as its -q and fail every single image.
-function numberOr(value, fallback) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : fallback;
-}
-
 function clamp(n, min, max) {
   return Math.min(max, Math.max(min, n));
 }
 
-function resolveImageConfig(images) {
-  const cfg = images || {};
+function resolveImageConfig(cfg) {
   return {
-    optimize: cfg.optimize === true,
-    format: String(cfg.format || 'webp').toLowerCase(),
-    maxWidth: Math.max(0, numberOr(cfg.max_width ?? cfg.maxWidth, 1600)),
-    quality: clamp(numberOr(cfg.quality, 82), 0, 100),
+    optimize: cfg.optimize,
+    format: String(cfg.format).toLowerCase(),
+    maxWidth: cfg.max_width,
+    quality: clamp(cfg.quality, 0, 100),
   };
 }
 

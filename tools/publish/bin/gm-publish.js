@@ -40,7 +40,8 @@ Usage:
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
   gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
-  gm-apprentice-publish vault-setting        Read or set the default palette, font source and sheet look
+  gm-apprentice-publish settings <cmd>       Read, set, describe and check any site setting
+  gm-apprentice-publish vault-setting        Older form of settings get and settings set (kept for older sites)
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
@@ -278,17 +279,10 @@ withholds because its Wrap-Up publishes.
   'vault-setting': `
 gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <path>] [--vault <dir>]
 
-With no --set, reports what the vault file says: whether theme.default_mode is
-set, the font source, the fonts the site would load from Google, and the
-sheet_skin and sheet_frame lines, dndbeyond_sync, link_previews, tohit_calculator and connections (null
-when a line is not there), whether the vault or the site file holds its own
-exclude_sections and exclude_fields list, and the built-in lists. With --set,
-writes one of: exclude_sections or exclude_fields (a list of names), theme.default_mode ("dark",
-"light", "system"), theme.fonts.source ("self-host"), sheet_skin (a skin id),
-sheet_frame (a frame id, or "none"), dndbeyond_sync ("build", "manual") or
-link_previews ("on", "desktop", "off"), tohit_calculator ("on", "off") or connections
-("tree", "web", "cards", "off"). Used by migrate.py, and to set a
-campaign's sheet look.
+The older form of "settings get" and "settings set", kept for older sites. Use
+"gm-apprentice-publish settings --help". With no --set it reports what the vault
+file says about a few settings; with --set it writes them, the key given without
+"publish.".
 
   --set <key>=<json>  The setting and its value as JSON; repeatable
   --vault <dir>       The vault to read and write (default: the config's vaultPath)
@@ -443,7 +437,8 @@ checks it).
 };
 
 function printSubcommandHelp(cmd) {
-  console.log(SUBCOMMAND_HELP[cmd]);
+  // The settings help is built from the list of settings, so it is not typed out here.
+  console.log(cmd === 'settings' ? require('../lib/settings/cli.js').helpText() : SUBCOMMAND_HELP[cmd]);
 }
 
 // Parse `--config <path>` plus an allowlist of flags, rejecting anything else.
@@ -566,7 +561,7 @@ if (command === '--version' || command === '-v') {
 // `--help` on any subcommand prints usage and exits 0 with no side effects (#178).
 const wantsHelp = args.slice(1).some((a) => a === '--help' || a === '-h');
 if (wantsHelp) {
-  if (Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, command)) printSubcommandHelp(command); else printHelp();
+  if (command === 'settings' || Object.prototype.hasOwnProperty.call(SUBCOMMAND_HELP, command)) printSubcommandHelp(command); else printHelp();
   exitAfterFlush(0);
   return;
 }
@@ -640,6 +635,16 @@ if (command === 'build') {
   if (off) {
     console.error(`Build failed: ${off}`);
     process.exit(1);
+  }
+
+  // A hiding-side settings fault stops the build before anything is written: the function
+  // sync and the font download below both write. The message is plain lines, no prefix.
+  try {
+    require('../lib/config').assertNoStopsFor(configPath, 'build');
+  } catch (err) {
+    console.error(err.message);
+    exitAfterFlush(1);
+    return;
   }
 
   // Bring plugin-owned Cloudflare Functions up to date on every build so API routes
@@ -771,6 +776,34 @@ if (command === 'migrate-config') {
   return;
 }
 
+// --vault is the vault; --config is the site folder's vault.config.json. Neither given means the
+// config in the current folder.
+function settingsTarget(parsed, args) {
+  const vault = parsed.flags.vault;
+  return { vault, config: args.includes('--config') || !vault ? parsed.configPath : undefined };
+}
+
+if (command === 'settings') {
+  const positional = [];
+  const rest = [];
+  const tail = args.slice(2);
+  for (let i = 0; i < tail.length; i += 1) {
+    if (tail[i] === '--config' || tail[i] === '--vault') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
+    else if (tail[i].startsWith('-')) rest.push(tail[i]);
+    else positional.push(tail[i]);
+  }
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, { '--vault': 'vault' });
+  if (parsed.error) {
+    console.error(`Error: ${parsed.error}`);
+    printSubcommandHelp('settings');
+    process.exit(1);
+  }
+  const { runSettings } = require('../lib/settings/cli.js');
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json });
+  exitAfterFlush(rc);
+  return;
+}
+
 if (command === 'vault-setting') {
   const sets = [];
   const rest = [];
@@ -784,8 +817,8 @@ if (command === 'vault-setting') {
     printSubcommandHelp('vault-setting');
     process.exit(1);
   }
-  const { runVaultSetting } = require('../lib/vault-setting-cli.js');
-  const rc = runVaultSetting({ configPath: parsed.configPath, vault: parsed.flags.vault, set: sets, json: !!parsed.flags.json });
+  const { runVaultSetting } = require('../lib/settings/cli.js');
+  const rc = runVaultSetting({ ...settingsTarget(parsed, args), set: sets, json: !!parsed.flags.json });
   exitAfterFlush(rc);
   return;
 }

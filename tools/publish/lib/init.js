@@ -4,7 +4,7 @@ const path = require('path');
 const { parseNote } = require('./frontmatter');
 const { setPublishKeys, fillUnset } = require('./vault-config-edit');
 const { siteDirPath } = require('./lines-cli');
-const { PUBLISH_DEFAULTS } = require('./config');
+const { entry } = require('./settings');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -44,8 +44,8 @@ function defaultCampaignSettings(siteTitle, tagline, siteDir) {
     // The built-in lists, written out so the GM sees them and edits them knowingly: a list in
     // the vault replaces the built-in one, so an entry added to an invisible default would drop
     // the rest. One source: the lists the build falls back to when the vault has none.
-    exclude_sections: [...PUBLISH_DEFAULTS.exclude_sections],
-    exclude_fields: [...PUBLISH_DEFAULTS.exclude_fields],
+    exclude_sections: [...entry('publish.exclude_sections').default],
+    exclude_fields: [...entry('publish.exclude_fields').default],
     exclude_callouts: true,
     ...(tagline ? { theme: { tagline } } : {}),
   };

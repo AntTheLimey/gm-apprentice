@@ -3,24 +3,26 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { loadPublishConfig, PUBLISH_DEFAULTS } = require('../../lib/config');
+const { loadPublishConfig } = require('../../lib/config');
+const { entry } = require('../../lib/settings');
+const defaultOf = (name) => entry(`publish.${name}`).default;
 
-describe('PUBLISH_DEFAULTS', () => {
+describe('the built-in defaults', () => {
   it('has player mode by default', () => {
-    assert.strictEqual(PUBLISH_DEFAULTS.mode, 'player');
+    assert.strictEqual(defaultOf('mode'), 'player');
   });
 
   it('excludes GM Notes sections by default', () => {
-    assert.ok(PUBLISH_DEFAULTS.exclude_sections.includes('GM Notes'));
+    assert.ok(defaultOf('exclude_sections').includes('GM Notes'));
   });
 
   it('excludes secrets, current_plan, plan_progress, gm_notes, prep_notes by default', () => {
-    assert.deepStrictEqual(PUBLISH_DEFAULTS.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
+    assert.deepStrictEqual(defaultOf('exclude_fields'), ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
   });
 
   it('excludes _meta and _Templates dirs by default', () => {
-    assert.ok(PUBLISH_DEFAULTS.exclude_dirs.includes('_meta'));
-    assert.ok(PUBLISH_DEFAULTS.exclude_dirs.includes('_Templates'));
+    assert.ok(defaultOf('exclude_dirs').includes('_meta'));
+    assert.ok(defaultOf('exclude_dirs').includes('_Templates'));
   });
 });
 
@@ -41,7 +43,7 @@ describe('exclude_sections default (issue #144)', () => {
   ];
 
   it('includes the six reconcile-bookkeeping sections by default', () => {
-    assert.deepStrictEqual(PUBLISH_DEFAULTS.exclude_sections, EXPECTED);
+    assert.deepStrictEqual(defaultOf('exclude_sections'), EXPECTED);
   });
 
   it('loadPublishConfig uses the six-item default when no vault config is present', () => {
@@ -91,7 +93,7 @@ describe('exclude_drafts', () => {
 
 describe('exclude_callouts (issue #137)', () => {
   it('defaults to false', () => {
-    assert.strictEqual(PUBLISH_DEFAULTS.exclude_callouts, false);
+    assert.strictEqual(defaultOf('exclude_callouts'), false);
     const config = loadPublishConfig('/nonexistent/path');
     assert.strictEqual(config.exclude_callouts, false);
   });
@@ -509,10 +511,6 @@ describe('overrides surface (dead top-level keys)', () => {
     try { return { result: fn(), warns }; } finally { console.warn = orig; }
   }
 
-  it('declares only the override the build actually reads', () => {
-    assert.deepStrictEqual(Object.keys(PUBLISH_DEFAULTS.overrides), ['fields']);
-  });
-
   it('warns instead of silently ignoring an unread top-level override key', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     try {
@@ -520,7 +518,7 @@ describe('overrides surface (dead top-level keys)', () => {
       const { warns } = captureWarns(() => loadPublishConfig(tmpDir));
       const hits = warns.filter(w => w.includes('overrides.exclude'));
       assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
-      assert.match(hits[0], /overrides\.fields/);
+      assert.match(hits[0], /not a setting/);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
@@ -569,7 +567,7 @@ describe('malformed publish.overrides blocks', () => {
     const { result, warns } = loadWithWarns('publish:\n  overrides: fields\n');
     const hits = warns.filter(w => w.includes('publish.overrides'));
     assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
-    assert.match(hits[0], /must be a map/);
+    assert.match(hits[0], /takes/);
     assert.deepStrictEqual(result.overrides, { fields: {} });
   });
 
@@ -577,7 +575,7 @@ describe('malformed publish.overrides blocks', () => {
     const { warns } = loadWithWarns('publish:\n  overrides:\n    - fields\n');
     const hits = warns.filter(w => w.includes('publish.overrides'));
     assert.strictEqual(hits.length, 1, `expected one warning, got: ${warns.join(' | ')}`);
-    assert.match(hits[0], /a list/);
+    assert.match(hits[0], /\["fields"\]/);
   });
 
   it('ignores a non-map overrides.fields instead of inventing per-character keys', () => {
@@ -591,8 +589,8 @@ describe('malformed publish.overrides blocks', () => {
     // GM who wrote `fields: false` got silence and no overrides.
     const { result, warns } = loadWithWarns('publish:\n  overrides:\n    fields: false\n');
     assert.deepStrictEqual(result.overrides.fields, {});
-    assert.ok(warns.some(w => w.includes('overrides.fields') && w.includes('boolean')),
-      `no boolean warning in: ${warns.join(' | ')}`);
+    assert.ok(warns.some(w => w.includes('overrides.fields') && w.includes('is false')),
+      `no 'is false' warning in: ${warns.join(' | ')}`);
   });
 
   it('drops a per-file override whose include is a string, not a list', () => {

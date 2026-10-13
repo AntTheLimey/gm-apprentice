@@ -145,7 +145,48 @@ function dumpAt(key, value, indent, step = 2) {
 // Replace the span of a key with new lines. A key that held nothing (`exclude_sections:`, maybe
 // with a comment after it and comment lines under it) had no value to lose, so its comments are
 // the GM's text and stay: the one after the key on the key's line, the others under the entry.
+// Where the end-of-line comment starts in the text after a key's colon, spacing before it
+// included, or -1. A `#` opens a comment only after whitespace and outside quotes, as in YAML:
+// `"#aa3311"` and `a#b` have none.
+function commentAt(valueText) {
+  let i = 0;
+  while (i < valueText.length) {
+    const ch = valueText[i];
+    const before = valueText.slice(0, i).trimEnd().slice(-1);
+    if ((ch === '"' || ch === "'") && (before === '' || '[{,:'.includes(before))) {
+      i += 1;
+      while (i < valueText.length && valueText[i] !== ch) i += ch === '"' && valueText[i] === '\\' ? 2 : 1;
+      while (ch === "'" && valueText[i] === "'" && valueText[i + 1] === "'") {
+        i += 2;
+        while (i < valueText.length && valueText[i] !== ch) i += 1;
+      }
+    } else if (ch === '#' && i > 0 && /\s/.test(valueText[i - 1])) {
+      let from = i;
+      while (from > 0 && /[ \t]/.test(valueText[from - 1])) from -= 1;
+      return from;
+    }
+    i += 1;
+  }
+  return -1;
+}
+
+// A scalar on the key's own line keeps the comment after it when the value is replaced.
+function trailingComment(line) {
+  const m = KEY_RE.exec(line.trimStart());
+  if (!m) return '';
+  const value = line.trimStart().slice(m[0].length);
+  const at = commentAt(value);
+  return at < 0 || value.slice(0, at).trim() === '' ? '' : value.slice(at);
+}
+
 function replaceSpan(lines, hit, added) {
+  if (hit.to - hit.from === 1) {
+    const comment = trailingComment(lines[hit.from]);
+    if (comment) {
+      lines.splice(hit.from, 1, `${added[0]}${comment}`, ...added.slice(1));
+      return;
+    }
+  }
   const rest = lines.slice(hit.from + 1, hit.to);
   const empty = /^\s*[^\s#][^:]*:[ \t]*(#.*)?$/.exec(lines[hit.from]);
   if (!empty || !rest.every((l) => isBlank(l) || isComment(l))) {
@@ -211,6 +252,63 @@ function setLeaf(lines, from, end, indent, keys, value, data, step) {
   return setLeaf(lines, hit.from + 1, inner.end, innerIndent, rest, value, data && data[head], step);
 }
 
+// `data` without the entry at `keys`; a map the removal leaves empty goes too. Anything that
+// is not a map in the way is left as it is.
+function withoutLeaf(data, keys) {
+  if (!isMap(data) || !Object.prototype.hasOwnProperty.call(data, keys[0])) return data;
+  const out = { ...data };
+  if (keys.length === 1) {
+    delete out[keys[0]];
+    return out;
+  }
+  const child = withoutLeaf(data[keys[0]], keys.slice(1));
+  if (isDeepStrictEqual(child, data[keys[0]])) return data;
+  if (isMap(child) && Object.keys(child).length === 0) delete out[keys[0]];
+  else out[keys[0]] = child;
+  return out;
+}
+
+// Remove the one entry at `keys` from the map whose entries sit at `indent` in
+// lines[from, end); a map it leaves with no entries loses its own key line too, and no other
+// line is touched. Returns { removed } (how many lines went), or { error }.
+function removeLeaf(lines, from, end, indent, keys, data, step) {
+  const scanned = scanKeys(lines, from, end, indent);
+  if (scanned.error) return scanned;
+  const [head, ...rest] = keys;
+  const hit = scanned.keys.find((k) => k.key === head);
+  if (!hit) return { removed: 0 };
+  if (!rest.length) {
+    lines.splice(hit.from, hit.to - hit.from);
+    return { removed: hit.to - hit.from };
+  }
+  if (!/:[ \t]*(#.*)?$/.test(lines[hit.from])) {
+    // An entry written on one line (`theme: {a: 1}`) is written again without the leaf.
+    const next = withoutLeaf(data && data[head], rest);
+    if (isDeepStrictEqual(next, data && data[head])) return { removed: 0 };
+    const added = isMap(next) && Object.keys(next).length === 0 ? [] : dumpAt(head, next, indent, step);
+    lines.splice(hit.from, hit.to - hit.from, ...added);
+    return { removed: hit.to - hit.from - added.length };
+  }
+  const inner = spanOf(lines, hit.from + 1, hit.to);
+  if (inner.indent === null) return { removed: 0 };
+  const done = removeLeaf(lines, hit.from + 1, inner.end, inner.indent, rest, data && data[head], step);
+  if (done.error || done.removed === 0) return done;
+  if (spanOf(lines, hit.from + 1, hit.to - done.removed).indent === null) {
+    lines.splice(hit.from, 1);
+    return { removed: done.removed + 1 };
+  }
+  return done;
+}
+
+function applyRemoval(fm, keys, data) {
+  const lines = fm.lines.slice();
+  const block = locateBlock(lines);
+  if (block.error) return { error: block.error };
+  if (block.absent) return { lines };
+  const done = removeLeaf(lines, block.start + 1, block.end, block.indent, keys, data, block.indent);
+  return done.error ? done : { lines };
+}
+
 // The publish map as the frontmatter lines now parse (what a one-line entry is rewritten from).
 function publishOf(fm) {
   const read = readOrReason(fm.head + fm.lines.map((l) => l + fm.eol).join('') + fm.tail);
@@ -229,13 +327,13 @@ function applyLeaf(fm, leaf, data) {
   return done.error ? done : { lines };
 }
 
-function verify(oldData, newData, set, remove, leaves = []) {
+function verify(oldData, newData, set, remove, leaves = [], removals = []) {
   const bad = { error: 'the edit did not verify' };
   const oldPub = oldData.publish ?? {};
   const newPub = newData.publish ?? {};
   const rest = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => k !== 'publish'));
   if (!isDeepStrictEqual(rest(oldData), rest(newData))) return bad;
-  const touched = new Set([...Object.keys(set), ...remove, ...leaves.map((l) => l.path[0])]);
+  const touched = new Set([...Object.keys(set), ...remove, ...leaves.map((l) => l.path[0]), ...removals.map((p) => p[0])]);
   for (const k of new Set([...Object.keys(oldPub), ...Object.keys(newPub)])) {
     if (touched.has(k)) continue;
     if (!isDeepStrictEqual(oldPub[k], newPub[k])) return bad;
@@ -245,17 +343,20 @@ function verify(oldData, newData, set, remove, leaves = []) {
   // A leaf changes its one entry; everything else in its top-level map comes back as it was.
   let expected = oldPub;
   for (const { path: keys, value } of leaves) expected = withLeaf(expected, keys, value);
-  for (const { path: keys } of leaves) if (!isDeepStrictEqual(newPub[keys[0]], expected[keys[0]])) return bad;
+  for (const keys of removals) expected = withoutLeaf(expected, keys);
+  for (const keys of [...leaves.map((l) => l.path), ...removals]) if (!isDeepStrictEqual(newPub[keys[0]], expected[keys[0]])) return bad;
   return null;
 }
 
-// editPublishBlock(text, { set, remove, leaves }) -> { text } | { error }
+// editPublishBlock(text, { set, remove, leaves, removals }) -> { text } | { error }
 // `set` writes a whole top-level key; `leaves` ([{ path: ['theme', 'tagline'], value }])
-// writes one entry inside a map and leaves every other line of it as the GM wrote it.
+// writes one entry inside a map and leaves every other line of it as the GM wrote it;
+// `removals` ([['theme', 'tagline']]) removes one such entry, and a map it empties.
 function editPublishBlock(text, changes = {}) {
   const set = changes.set || {};
   const remove = changes.remove || [];
   const leaves = changes.leaves || [];
+  const removals = changes.removals || [];
   try {
     const overlap = remove.find((k) => k in set);
     if (overlap) return { error: `${overlap} is both set and removed` };
@@ -286,11 +387,16 @@ function editPublishBlock(text, changes = {}) {
       if (r.error) return { error: r.error };
       cur = { ...cur, lines: r.lines };
     }
+    for (const keys of removals) {
+      const r = applyRemoval(cur, keys, publishOf(cur));
+      if (r.error) return { error: r.error };
+      cur = { ...cur, lines: r.lines };
+    }
     const next = cur.head + cur.lines.map((l) => l + cur.eol).join('') + cur.tail;
     if (next === text) return { text };
     const after = readOrReason(next);
     if (after.error) return { error: `the edit did not verify (${after.error})` };
-    const bad = verify(old.data, after.data, set, remove, leaves);
+    const bad = verify(old.data, after.data, set, remove, leaves, removals);
     if (bad) return bad;
     return { text: next };
   } catch (e) {
@@ -335,6 +441,11 @@ function setPublishLeaves(vaultPath, leaves, deps = {}) {
   return writeChanges(vaultPath, { leaves }, deps);
 }
 
+// removePublishLeaves(vaultPath, paths) -> { changed }: editPublishBlock's `removals`, written.
+function removePublishLeaves(vaultPath, paths, deps = {}) {
+  return writeChanges(vaultPath, { removals: paths }, deps);
+}
+
 // setPublishChanges(vaultPath, { set, remove, leaves }, deps) -> { changed }: all three at once.
 function setPublishChanges(vaultPath, changes, deps = {}) {
   return writeChanges(vaultPath, changes, deps);
@@ -352,4 +463,4 @@ function writeChanges(vaultPath, changes, deps) {
   return { changed: true };
 }
 
-module.exports = { editPublishBlock, setPublishKeys, setPublishLeaves, setPublishChanges, writeAtomic, fillUnset, splitFrontmatter, locateBlock };
+module.exports = { editPublishBlock, setPublishKeys, setPublishLeaves, removePublishLeaves, setPublishChanges, writeAtomic, fillUnset, splitFrontmatter, locateBlock };

@@ -32,6 +32,7 @@ const path = require('path');
 const { parseNote, valueStrays } = require('./frontmatter');
 const { wikilinkRe, parseWikilink, labelsForLinks } = require('./wikilink');
 const { canonicalNfc } = require('./unicode');
+const { SWITCH_WORDS } = require('./settings/types');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { gmAliasList, nameList, gmAliasKey, wikiTargetLabel, humanizeName, isWithheld, WITHHELD_PLACEHOLDERS } = require('./processor');
 const { kindOfType } = require('./kind-label');
@@ -152,7 +153,7 @@ function flagReadable(v) {
   if (typeof v === 'number') return v === 0 || v === 1;
   if (typeof v !== 'string') return false;
   const t = v.trim().toLowerCase();
-  return ['', 'true', 'yes', 'on', 'false', 'no', 'off'].includes(t) || /^\+?0*[01](?:\.0*)?$/.test(t);
+  return t === '' || SWITCH_WORDS.has(t) || /^\+?0*[01](?:\.0*)?$/.test(t);
 }
 
 function noteRel(note) {

@@ -119,8 +119,11 @@ A migration is code, not prose: `migrate.py` runs it, and
 
 ## Adding to a built-in default list
 
-`PUBLISH_DEFAULTS.exclude_sections` and `exclude_fields` are the lists
-a site starts with. Setup and the `exclude-lists` migration (1.10.47)
+The `default` of `publish.exclude_sections` and `publish.exclude_fields`
+are the lists a site starts with. To change one, edit its entry in
+`tools/publish/lib/settings/registry.js` and run
+`node tools/publish/scripts/gen-settings-doc.js --write`, which
+rewrites the tables in `docs/site-settings.md`. Setup and the `exclude-lists` migration (1.10.47)
 write them into the vault's `_meta/vault-config.md`, and from then on
 the list belongs to the GM: the build uses it in place of the built-in
 one. So a heading or field added to a default reaches a new vault and
@@ -130,12 +133,11 @@ the GM what the new entry is for and adds it to their list on a yes,
 and it never adds it unasked. The step that proposes an entry is not
 built yet; it waits for the first release that adds a default.
 
-Change the other copies of the list in the same commit:
-`DEFAULT_EXCLUDE_SECTIONS` in `skills/shared/scripts/vaultlib.py` (a
-test fails when it differs from the tool's list) and the lists repeated
-in `docs/site-settings.md`, `skills/shared/entity-schema.md` and the publish-site
-references `configuration.md`, `content-filtering.md` and
-`change-request-loop.md`.
+There is no other copy in the publish tool to change. The three default
+lists (folders, headings and fields) live only in the registry, and
+`tools/publish/test/settings-one-place.test.js` fails if code under the
+tool's `lib/` or `bin/` restates one. Regenerate the settings page with
+the command above and commit it with the change.
 
 ## Field design guidelines
 

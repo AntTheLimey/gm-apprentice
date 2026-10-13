@@ -16,7 +16,7 @@ const fs = require('fs');
 const path = require('path');
 const matter = require('gray-matter');
 const { scanVault, scanAllNotes, slugify, pcLiveKey } = require('./scanner');
-const { resolveConfig, vaultRelPath, loadVaultConfig } = require('./config');
+const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig } = require('./config');
 const { pcKeepList } = require('./pc-prose');
 const {
   playerSafeMarkdown,
@@ -109,7 +109,8 @@ async function runSheetShow(deps) {
   const vaultPath = deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = deps.publishConfig
     ? { config: rawConfig, publishConfig: deps.publishConfig }
-    : resolveConfig(rawConfig, vaultPath);
+    : resolveConfig(rawConfig, vaultPath, console.warn, { quietStops: playerSafe });
+  if (playerSafe) assertNoStops(publishConfig, 'sheet show --player-safe');
 
   const scan = deps.scan || function () { return scanVault(Object.assign({}, config, { vaultPath: vaultPath })); };
   const scanned = scan();

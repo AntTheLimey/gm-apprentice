@@ -8,11 +8,10 @@ function valueOf(line) {
   fs.mkdirSync(path.join(vault, '_meta'));
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${line}  site_title: T\n---\n`);
   const said = [];
-  const real = console.warn; console.warn = (m) => said.push(String(m));
   try {
-    return { value: resolveConfig({ vaultPath: vault }, vault).publishConfig.tohit_calculator,
+    return { value: resolveConfig({ vaultPath: vault }, vault, (m) => said.push(String(m))).publishConfig.tohit_calculator,
       said: said.filter((m) => m.includes('publish.tohit_calculator')) };
-  } finally { console.warn = real; fs.rmSync(vault, { recursive: true, force: true }); }
+  } finally { fs.rmSync(vault, { recursive: true, force: true }); }
 }
 
 describe('publish.tohit_calculator', () => {
@@ -41,6 +40,6 @@ describe('publish.tohit_calculator', () => {
     const { value, said } = valueOf('  tohit_calculator: maybe\n');
     assert.strictEqual(value, 'on');
     assert.strictEqual(said.length, 1);
-    assert.match(said[0], /publish\.tohit_calculator .* is not on, off, yes, no, true or false; using on/);
+    assert.match(said[0], /publish.tohit_calculator .*; it takes on or off/);
   });
 });

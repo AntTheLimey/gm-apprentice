@@ -231,7 +231,7 @@ function getRecentEvents(pages, max) {
       const db = new Date(b.frontmatter.in_game_date || b.frontmatter.date);
       return db - da;
     })
-    .slice(0, max || 4);
+    .slice(0, max);
 }
 
 // Does `ref` name `title` as a whole title, rather than as the prefix of a longer one?

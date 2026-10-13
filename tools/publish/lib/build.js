@@ -16,12 +16,11 @@ const { getsNoPage } = require('./previews');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
 const { linkText } = require('./wikilink');
-const { resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig } = require('./config');
-const { siteOff } = require('./switches');
+const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { generateThemeCSS, googleFontNames, resolveGenrePreset, FONT_FORMATS, fontOutputPath } = require('./theme');
+const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
 const { storyPage: renderStoryUnit, characterStoryPage } = require('./templates/story');
@@ -29,7 +28,7 @@ const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
-const { hasLegacy } = require('./config-keys');
+const { hasLegacy, SITE_OLD_ROOTS } = require('./settings/site-file');
 const { publishesPage, autoExcludeCode } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
@@ -59,7 +58,7 @@ function legacyWarning(legacy, rawConfig) {
     parts.push(rec.status === 'ignored' ? `${rec.key} (ignored; the vault file sets it)` : rec.key);
     for (const x of rec.stillApplied || []) parts.push(`${rec.key} entry "${x}" is still applied from vault.config.json`);
   }
-  for (const key of ['backend', 'landingTagline']) {
+  for (const key of SITE_OLD_ROOTS) {
     if (rawConfig && rawConfig[key] !== undefined) parts.push(key);
   }
   const moved = parts.length
@@ -95,7 +94,10 @@ function buildSite(options) {
   const configDir = path.dirname(resolvedConfigPath);
   const rawConfig = options.rawConfig ? Object.assign({}, options.rawConfig) : loadVaultConfig(resolvedConfigPath);
   rawConfig.vaultPath = options.vaultPath ? path.resolve(options.vaultPath) : path.resolve(configDir, rawConfig.vaultPath);
-  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath);
+  // `allowFaults` is for the GM-site build a later change adds; nothing passes it yet but tests.
+  const printWarning = (m) => console.warn(`  WARNING: ${m}`);
+  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning, { quietStops: !options.allowFaults });
+  if (!options.allowFaults) assertNoStops(publishConfig, 'build');
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
   const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir || './docs');
   const off = siteOff(publishConfig.switches);
@@ -121,18 +123,11 @@ function buildSite(options) {
     stats: switches.liveStats === true && kvWired,
     inbox: switches.inbox === true && kvWired,
   };
-  for (const note of switches.notes || []) {
-    const label = note.key.startsWith('vault.config.json') ? note.key : `publish.${note.key}`;
-    console.warn(`  WARNING: ${label} ${note.problem}`);
-  }
-  for (const note of (publishConfig.sheetLook || {}).notes || []) {
-    console.warn(`  WARNING: publish.${note.key} ${JSON.stringify(clipValue(note.value))} ${note.problem}; ignored`);
-  }
   if (!kvWired) {
     if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
     if (switches.inbox === true) console.warn('  WARNING: publish.inbox is on but this site has no KV store wired; the change-request inbox is not published');
   }
-  const genrePreset = resolveGenrePreset(publishConfig.theme.genre);
+  const genrePreset = publishConfig.theme.genre;
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
   const excludeSections = publishConfig.exclude_sections;
@@ -681,7 +676,7 @@ function buildSite(options) {
   const locations = pages.filter(p => p.frontmatter.type === 'location');
 
   const landingConfig = (publishConfig.landing || {});
-  const recencyWindow = landingConfig.recency_window || 3;
+  const recencyWindow = landingConfig.recency_window;
 
   // Pinned entries come first, in the order the GM listed them; recency fills
   // whatever slots are left. This is the supported way to override the scoring
@@ -711,8 +706,8 @@ function buildSite(options) {
     return [...pinned, ...rest].slice(0, max);
   }
 
-  const maxNPCs = landingConfig.max_npcs || 6;
-  const maxLocations = landingConfig.max_locations || 4;
+  const maxNPCs = landingConfig.max_npcs;
+  const maxLocations = landingConfig.max_locations;
 
   const recentNPCs = withFeatured(
     scoreByRecency(npcs, sessions, chapters, {
@@ -1718,7 +1713,7 @@ function buildSite(options) {
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
   if (dry) {
-    return { noteFaults, shown: shownOf(), renderErrors, auditGaps };
+    return { noteFaults, shown: shownOf(), renderErrors, auditGaps, faults: publishConfig.faults };
   }
 
   if (errorCount > 0) {
@@ -1728,7 +1723,7 @@ function buildSite(options) {
     throw err;
   }
   console.log('Done!');
-  return { noteFaults, shown: null };
+  return { noteFaults, shown: null, faults: publishConfig.faults };
 }
 
 module.exports = { build };

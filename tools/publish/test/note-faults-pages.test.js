@@ -96,7 +96,7 @@ describe('NAMED_NO_PAGE is decided by the page as built', () => {
       'Hidden/Old_Tam.md': hidden(),
       'Hidden/Brass_Key.md': hidden(),
       'PCs/Ada_Moor.md': pc('## Background\n\nRaised by [[Old_Tam]].\n\n## Notes To Self\n\nFind the [[Brass_Key]].\n'),
-    }, '  character_sheets: false\n  pc_sections:\n    - Background\n');
+    }, '  character_sheets: false\n  pc_prose_sections:\n    - Background\n');
     const found = (await fromDoctor(configPath)).filter((f) => f.code === 'NAMED_NO_PAGE');
     assert.deepStrictEqual(fromBuild(configPath).filter((f) => f.code === 'NAMED_NO_PAGE'), found);
     assert.deepStrictEqual(found.map((f) => f.path), ['Hidden/Old_Tam.md']);
@@ -236,7 +236,7 @@ describe('COMMENT_STRAY: only where it changes what the site shows', () => {
 
 describe('a PC note withheld whole (a link label changes its headings, sheets off)', () => {
   it('reports no stray and names no note: nothing of its body is on the site', async () => {
-    const sheetsOff = '  character_sheets: false\n  pc_sections:\n    - Background\n';
+    const sheetsOff = '  character_sheets: false\n  pc_prose_sections:\n    - Background\n';
     const { configPath } = site({
       'Hidden/Old_Tam.md': hidden(),
       'PCs/Jean.md': '---\ntype: pc\nplayer_name: Pat\n---\n\n# Jean\n## Background\nRaised by [[Old_Tam]], at 100%% and 50%% pay.\n[[Nowhere|## Skills]]\nSTAT14\n',

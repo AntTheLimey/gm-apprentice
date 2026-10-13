@@ -20,52 +20,30 @@ const throwingEncoder = {
   encode: () => { throw new Error('encoder exploded\nstack line'); },
 };
 
+// What loadPublishConfig hands the build: every image setting already read and defaulted.
+const RESOLVED = { optimize: true, format: 'webp', max_width: 1600, quality: 82 };
+
 describe('resolveImageConfig', () => {
-  it('is off with no config at all', () => {
-    assert.strictEqual(resolveImageConfig(undefined).optimize, false);
-    assert.strictEqual(resolveImageConfig({}).optimize, false);
+  it('reads the settings as they come', () => {
+    assert.deepStrictEqual(resolveImageConfig(RESOLVED), { optimize: true, format: 'webp', maxWidth: 1600, quality: 82 });
+    assert.strictEqual(resolveImageConfig({ ...RESOLVED, optimize: false }).optimize, false);
   });
 
-  it('requires optimize to be exactly true, not merely truthy', () => {
-    assert.strictEqual(resolveImageConfig({ optimize: 'yes' }).optimize, false);
-    assert.strictEqual(resolveImageConfig({ optimize: 1 }).optimize, false);
-    assert.strictEqual(resolveImageConfig({ optimize: true }).optimize, true);
+  it('keeps maxWidth 0 as "do not resize"', () => {
+    assert.strictEqual(resolveImageConfig({ ...RESOLVED, max_width: 0 }).maxWidth, 0);
   });
 
-  it('defaults format, width and quality', () => {
-    const cfg = resolveImageConfig({ optimize: true });
-    assert.strictEqual(cfg.format, 'webp');
-    assert.strictEqual(cfg.maxWidth, 1600);
-    assert.strictEqual(cfg.quality, 82);
-  });
-
-  it('accepts camelCase maxWidth as well as snake_case max_width', () => {
-    assert.strictEqual(resolveImageConfig({ maxWidth: 800 }).maxWidth, 800);
-    assert.strictEqual(resolveImageConfig({ max_width: 900 }).maxWidth, 900);
-    // snake_case wins when a config sets both
-    assert.strictEqual(resolveImageConfig({ max_width: 900, maxWidth: 800 }).maxWidth, 900);
-  });
-
-  it('treats maxWidth 0 as "do not resize" rather than falling back to the default', () => {
-    assert.strictEqual(resolveImageConfig({ max_width: 0 }).maxWidth, 0);
-  });
-
-  it('allows quality 0 without silently substituting 82', () => {
-    assert.strictEqual(resolveImageConfig({ quality: 0 }).quality, 0);
-  });
-
-  it('falls back to defaults rather than passing NaN down to the encoder', () => {
-    assert.strictEqual(resolveImageConfig({ quality: 'high' }).quality, 82);
-    assert.strictEqual(resolveImageConfig({ max_width: 'wide' }).maxWidth, 1600);
+  it('allows quality 0 without substituting another', () => {
+    assert.strictEqual(resolveImageConfig({ ...RESOLVED, quality: 0 }).quality, 0);
   });
 
   it('clamps quality into the range cwebp accepts', () => {
-    assert.strictEqual(resolveImageConfig({ quality: 500 }).quality, 100);
-    assert.strictEqual(resolveImageConfig({ quality: -10 }).quality, 0);
+    assert.strictEqual(resolveImageConfig({ ...RESOLVED, quality: 500 }).quality, 100);
+    assert.strictEqual(resolveImageConfig({ ...RESOLVED, quality: -10 }).quality, 0);
   });
 
-  it('treats a negative max_width as "do not resize"', () => {
-    assert.strictEqual(resolveImageConfig({ max_width: -800 }).maxWidth, 0);
+  it('lowercases a format kept as written', () => {
+    assert.strictEqual(resolveImageConfig({ ...RESOLVED, format: 'AVIF' }).format, 'avif');
   });
 });
 
@@ -153,7 +131,7 @@ describe('optimizeImages', () => {
 
   it('does nothing when optimize is off', withTmp(() => {
     const map = imageMapWith({ 'off.png': {} });
-    const stats = optimizeImages(map, { optimize: false }, tmpDir, { encoder: fakeEncoder(1) });
+    const stats = optimizeImages(map, { ...RESOLVED, optimize: false }, tmpDir, { encoder: fakeEncoder(1) });
     assert.strictEqual(stats.reason, 'disabled');
     assert.strictEqual(stats.converted, 0);
     assert.strictEqual(map['off.png'].relPath, 'off.png');
@@ -162,14 +140,14 @@ describe('optimizeImages', () => {
 
   it('refuses an unsupported target format and changes nothing', withTmp(() => {
     const map = imageMapWith({ 'fmt.png': {} });
-    const stats = optimizeImages(map, { optimize: true, format: 'avif' }, tmpDir, { encoder: fakeEncoder(1) });
+    const stats = optimizeImages(map, { ...RESOLVED, format: 'avif' }, tmpDir, { encoder: fakeEncoder(1) });
     assert.match(stats.reason, /unsupported format "avif"/);
     assert.strictEqual(map['fmt.png'].relPath, 'fmt.png');
   }));
 
   it('reports a missing encoder instead of throwing', withTmp(() => {
     const map = imageMapWith({ 'noenc.png': {} });
-    const stats = optimizeImages(map, { optimize: true }, tmpDir, { encoder: null });
+    const stats = optimizeImages(map, RESOLVED, tmpDir, { encoder: null });
     assert.match(stats.reason, /cwebp not found/);
     assert.strictEqual(map['noenc.png'].relPath, 'noenc.png');
   }));
@@ -180,7 +158,7 @@ describe('optimizeImages', () => {
       map[name] = { sourcePath: path.join(dir, name), relPath: name };
       fs.writeFileSync(map[name].sourcePath, 'x');
     }
-    const stats = optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(1) });
+    const stats = optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(1) });
     assert.strictEqual(stats.converted, 0);
     assert.strictEqual(stats.skipped, 3);
     assert.strictEqual(map['vector.svg'].relPath, 'vector.svg');
@@ -189,7 +167,7 @@ describe('optimizeImages', () => {
 
   it('converts a PNG and swaps relPath to .webp', withTmp(() => {
     const map = imageMapWith({ 'portrait.png': {} });
-    const stats = optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(10) });
+    const stats = optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(10) });
 
     assert.strictEqual(stats.converted, 1);
     assert.strictEqual(stats.encoder, 'fake');
@@ -199,21 +177,21 @@ describe('optimizeImages', () => {
 
   it('keys stay the original basename so portrait: and ![[embeds]] still resolve', withTmp(() => {
     const map = imageMapWith({ 'Rock Lavey.png': {} });
-    optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(10) });
+    optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(10) });
     assert.ok(map['Rock Lavey.png'], 'lookup key must not change');
     assert.strictEqual(map['Rock Lavey.png'].relPath, 'Rock Lavey.webp');
   }));
 
   it('preserves the subdirectory when swapping the extension', withTmp(() => {
     const map = imageMapWith({ 'nested.png': { relPath: 'characters/nested.png' } });
-    optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(10) });
+    optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(10) });
     assert.strictEqual(map['nested.png'].relPath, 'characters/nested.webp');
   }));
 
   it('keeps the original when the re-encode is not actually smaller', withTmp(() => {
     const map = imageMapWith({ 'big.png': { width: 4, height: 4 } });
     const original = fs.statSync(map['big.png'].sourcePath).size;
-    const stats = optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(original + 1) });
+    const stats = optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(original + 1) });
 
     assert.strictEqual(stats.converted, 0);
     assert.strictEqual(stats.skipped, 1);
@@ -224,7 +202,7 @@ describe('optimizeImages', () => {
 
   it('keeps the original when the encoder throws, and counts it as failed', withTmp(() => {
     const map = imageMapWith({ 'boom.png': {} });
-    const stats = optimizeImages(map, { optimize: true }, tmpDir, { encoder: throwingEncoder });
+    const stats = optimizeImages(map, RESOLVED, tmpDir, { encoder: throwingEncoder });
 
     assert.strictEqual(stats.failed, 1);
     assert.strictEqual(stats.converted, 0);
@@ -234,7 +212,7 @@ describe('optimizeImages', () => {
 
   it('will not let two sources collide on one .webp path', withTmp(() => {
     const map = imageMapWith({ 'clash.png': {}, 'clash.jpg': {} });
-    const stats = optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(10) });
+    const stats = optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(10) });
 
     const relPaths = Object.values(map).map(e => e.relPath);
     assert.strictEqual(new Set(relPaths).size, 2, `relPaths must stay distinct: ${relPaths}`);
@@ -247,7 +225,7 @@ describe('optimizeImages', () => {
     map['held.webp'] = { sourcePath: path.join(dir, 'held-real.webp'), relPath: 'held.webp' };
     fs.writeFileSync(map['held.webp'].sourcePath, 'pretend webp');
 
-    optimizeImages(map, { optimize: true }, tmpDir, { encoder: fakeEncoder(1) });
+    optimizeImages(map, RESOLVED, tmpDir, { encoder: fakeEncoder(1) });
     assert.strictEqual(map['held.png'].relPath, 'held.png', 'must not clobber the real held.webp');
   }));
 });
@@ -268,7 +246,7 @@ describe('optimizeImages with the real cwebp encoder', { skip: !hasCwebp }, () =
     fs.writeFileSync(sourcePath, makePng(2400, 600));
     const map = { 'wide.png': { sourcePath, relPath: 'wide.png' } };
 
-    const stats = optimizeImages(map, { optimize: true, max_width: 1000 }, tmpDir);
+    const stats = optimizeImages(map, { ...RESOLVED, max_width: 1000 }, tmpDir);
 
     assert.strictEqual(stats.encoder, 'cwebp');
     assert.strictEqual(stats.converted, 1);

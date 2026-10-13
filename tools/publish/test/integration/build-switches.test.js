@@ -163,6 +163,13 @@ describe('the closing line about campaign settings left in vault.config.json', (
     assert.match(said[0], /excludeSections entry "Keeper Only" is still applied from vault\.config\.json/);
   });
 
+  it('a site file landingTagline is named but never put on the landing page', () => {
+    const { root, lines } = buildSite({ siteExtra: { landingTagline: 'TAGLINE-FROM-SITE-FILE' } });
+    const index = fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8');
+    assert.ok(!index.includes('TAGLINE-FROM-SITE-FILE'), 'the landing page carries the site file tagline');
+    assert.ok(lines.some((l) => l.includes('landingTagline')), lines.join('\n'));
+  });
+
   it('names landingTagline and backend, either of which gives the migration work', () => {
     for (const [extra, key] of [[{ landingTagline: 'Hi' }, 'landingTagline'], [{ backend: { inbox: false } }, 'backend']]) {
       const { lines } = buildSite({ siteExtra: extra });
@@ -172,16 +179,12 @@ describe('the closing line about campaign settings left in vault.config.json', (
     }
   });
 
-  it('a site-file list that is not a list gets its own clause', () => {
-    const { lines } = buildSite({ siteExtra: { excludeSections: 'Keeper Only' } });
-    const clause = lines.filter((l) => l.includes('excludeSections in vault.config.json is not a list and is ignored; remove it or move its entries to publish.exclude_sections by hand'));
-    assert.strictEqual(clause.length, 1, lines.join('\n'));
-    assert.ok(!lines.some((l) => l.includes('migrate.py')), 'alone, it does not send the GM to migrate.py');
-    const both = buildSite({ siteExtra: { excludeSections: 'Keeper Only', siteTitle: 'Old' } });
-    const settings = both.lines.filter((l) => l.includes('still holds campaign settings'));
-    assert.strictEqual(settings.length, 1, both.lines.join('\n'));
-    assert.ok(settings[0].includes('settings: siteTitle.') && !settings[0].includes('excludeSections'), settings[0]);
-    assert.ok(both.lines.some((l) => l.includes('excludeSections in vault.config.json is not a list')));
+  it('a site-file hiding list that is not a list stops the build, naming the setting once', () => {
+    assert.throws(() => buildSite({ siteExtra: { excludeSections: 'Keeper Only' } }), (err) => {
+      assert.match(err.message, /^build stopped: the settings have a fault that could show players more than you meant\./);
+      assert.strictEqual(err.message.split('publish.exclude_sections').length - 1, 1, err.message);
+      return true;
+    });
   });
 
   it('a list holding only entries that cannot be moved is named by hand and never sent to migrate.py', () => {
@@ -222,7 +225,7 @@ describe('the PC keep-list reaches the search index', () => {
 describe('a malformed pc_prose_sections', () => {
   it('prints a warning in the build output and never keeps everything', () => {
     const { lines, root } = buildSite({ publish: '  character_sheets: false\n  pc_prose_sections: everything\n' });
-    assert.ok(lines.some((l) => l.includes('WARNING: publish.pc_prose_sections is not a list')), lines.join('\n'));
+    assert.ok(lines.some((l) => l.includes('WARNING: publish.pc_prose_sections is "everything"')), lines.join('\n'));
     assert.ok(!fs.readFileSync(path.join(root, 'docs', 'search-index.json'), 'utf8').includes('"broadsword"'));
   });
 });
