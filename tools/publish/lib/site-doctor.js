@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
-const { formatFault, entry: settingEntry, layoutOf, fileLabel, fileLabelFor, nameIn } = require('./settings');
+const { formatFault, entry: settingEntry, fileLabel, nameIn } = require('./settings');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -38,7 +38,7 @@ const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
 // The order codes appear in the human report: the ones that stop the audit first,
 // then roughly in the order a GM would act on them.
 const CODE_ORDER = [
-  'SETTINGS_FAULT', 'SETTINGS_OLD_FILE', 'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
+  'SETTINGS_FAULT', 'CONFIG_INVALID', 'VAULT_MISSING', 'NOTE_FAULTS_UNCHECKED', 'VERSION_DRIFT', 'FONTS_GOOGLE', 'FOLDER_UNMAPPED', 'FILE_UNTYPED', 'FILE_UNPARSEABLE',
   'FRONTMATTER_MISTYPED',
   'PORTRAIT_MISSING', 'LINK_UNRESOLVED', 'MANIFEST_ORPHAN', 'MANIFEST_UNREGISTERED', 'RECAP_INCOMPLETE',
   ...NOTE_FAULT_CODES,
@@ -97,18 +97,17 @@ function emit(out, findings, vaultLabel, asJson) {
   // the report and the counts.
   const open = findings.filter((f) => !f.settled);
   const errors = open.filter((f) => f.severity === 'error').length;
-  const warnings = open.filter((f) => f.severity === 'warning').length;
-  const notes = open.filter((f) => f.severity === 'info').length;
+  const warnings = open.length - errors;
   if (asJson) {
     out(JSON.stringify({
       ok: errors === 0,
       findings,
-      counts: { errors, warnings, ...(notes ? { notes } : {}), total: open.length, settled: findings.length - open.length },
+      counts: { errors, warnings, total: open.length, settled: findings.length - open.length },
     }, null, 2));
     return errors === 0 ? 0 : 1;
   }
 
-  out(`Site audit (${vaultLabel}) — ${plural(errors, 'error')}, ${plural(warnings, 'warning')}${notes ? `, ${plural(notes, 'note')}` : ''}`);
+  out(`Site audit (${vaultLabel}) — ${plural(errors, 'error')}, ${plural(warnings, 'warning')}`);
   if (open.length === 0) {
     out('No findings.');
     return 0;
@@ -118,9 +117,9 @@ function emit(out, findings, vaultLabel, asJson) {
   for (const code of codes) {
     const rows = open.filter((f) => f.code === code);
     // One code can hold errors and warnings (NAMED_NO_PAGE: an error when its note is withheld).
-    const severities = ['error', 'warning', 'info'].filter((sev) => rows.some((r) => r.severity === sev));
+    const severities = ['error', 'warning'].filter((sev) => rows.some((r) => (r.severity === 'error') === (sev === 'error')));
     out('');
-    out(`${code} (${severities.map((sev) => plural(rows.filter((r) => r.severity === sev).length, sev === 'info' ? 'note' : sev)).join(', ')})`);
+    out(`${code} (${severities.map((sev) => plural(rows.filter((r) => (r.severity === 'error') === (sev === 'error')).length, sev)).join(', ')})`);
     const shown = FAULT_CODES.has(code) ? rows.slice(0, FAULT_ROW_CAP) : rows;
     for (const row of shown) {
       out(`  ${row.path} — ${row.detail}`);
@@ -241,30 +240,12 @@ async function runSiteDoctor(options, deps) {
 
   const findings = [];
 
-  // The site's tool is this one when its package.json pins the tool to a folder (`file:`), which is
-  // what `update-pin` repoints. A site pinned any other way is somebody else's choice, and the
-  // update leaves such a vault where it is.
-  const siteIsOurs = () => {
-    try {
-      const spec = (JSON.parse(readFile(path.join(siteRoot, 'package.json'))).dependencies || {})['gm-apprentice-publish'];
-      return typeof spec === 'string' && spec.startsWith('file:');
-    } catch { return false; }
-  };
-
   // --- the settings themselves ----------------------------------------------
   for (const f of publishConfig.faults) {
     findings.push(finding(
       'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', fileLabel(vaultPath),
       formatFault(f),
       `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
-    ));
-  }
-  // A vault still on the old settings file, with a site this tool looks after: the next update moves it.
-  if (layoutOf(vaultPath) === 'legacy' && siteIsOurs()) {
-    findings.push(finding(
-      'SETTINGS_OLD_FILE', 'info', fileLabelFor('legacy'),
-      `this vault is still on the old settings file; the next update moves it to ${fileLabelFor('new')}`,
-      'nothing to do now: the update moves the settings and keeps what you wrote',
     ));
   }
   const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');

@@ -152,7 +152,7 @@ test('setup-backend\'s refusal for an off site, and for a file it cannot edit, n
   } finally { done(o); done(n); }
 });
 
-test('doctor --site: the fix names the vault\'s file, and an old file with a site of this tool gets a note', async () => {
+test('doctor --site: the fix names the vault\'s file, and an old file adds no note to the report', async () => {
   const run = async (m) => {
     const out = [];
     await runSiteDoctor({ configPath: m.configPath, json: true }, { out: (l) => out.push(String(l)), detect: () => null });
@@ -163,7 +163,6 @@ test('doctor --site: the fix names the vault\'s file, and an old file with a sit
   const other = make('old');
   fs.writeFileSync(path.join(o.vault, OLD.file), '---\ntype: meta\npublish:\n  site: true\n  exclude_sections: GM Notes\n---\n');
   fs.writeFileSync(path.join(other.vault, OLD.file), '---\ntype: meta\npublish:\n  site: true\n---\n');
-  fs.writeFileSync(path.join(other.site, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': '^1.0.0' } }));
   fs.writeFileSync(path.join(n.vault, NEW.file), 'version: 1\nplayer_site:\n  publish: true\n  hide:\n    sections: GM Notes\n');
   fs.writeFileSync(path.join(n.vault, OLD.file), '---\ntype: meta\n---\n');
   try {
@@ -171,20 +170,16 @@ test('doctor --site: the fix names the vault\'s file, and an old file with a sit
     const fault = a.findings.find((f) => f.code === 'SETTINGS_FAULT');
     assert.equal(fault.path, '_meta/vault-config.md');
     assert.match(fault.fix, /correct it in _meta\/vault-config\.md/);
-    const note = a.findings.find((f) => f.code === 'SETTINGS_OLD_FILE');
-    assert.equal(note.severity, 'info');
-    assert.match(note.detail, /still on the old settings file; the next update moves it to _meta\/vault-config\.yaml/);
     assert.equal(a.counts.errors, 1);
-    assert.equal(a.counts.notes, 1);
+    assert.ok(!a.findings.some((f) => f.severity === 'info') && a.counts.notes === undefined);
 
     const b = await run(n);
     const left = b.findings.find((f) => f.code === 'SETTINGS_FAULT');
     assert.equal(left.path, '_meta/vault-config.yaml');
     assert.match(left.detail, /_meta\/vault-config\.md is left over/);
-    assert.ok(!b.findings.some((f) => f.code === 'SETTINGS_OLD_FILE'));
 
-    // A site pinned some other way is not this tool's to move: no note.
-    assert.ok(!(await run(other)).findings.some((f) => f.code === 'SETTINGS_OLD_FILE'));
+    // A clean old-file vault reads as it did: no findings at all.
+    assert.equal((await run(other)).counts.total, 0);
   } finally { done(o); done(n); done(other); }
 });
 
