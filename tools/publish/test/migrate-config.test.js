@@ -769,3 +769,24 @@ describe('migrate-config writes the built-in exclude lists (#294)', () => {
     assert.strictEqual(planMigration({ configPath: s.configPath }).applicable, false);
   });
 });
+
+describe('migrate-config on a vault already on the new settings file', () => {
+  it('refuses, exits non-zero and changes no file', () => {
+    const s = makeSite({ site: { excludeSections: ['Spoilers'], excludeDirs: ['Secrets'] }, vaultFile: null });
+    const yamlFile = path.join(s.vault, '_meta', 'vault-config.yaml');
+    fs.writeFileSync(yamlFile, 'version: 1\nplayer_site:\n  hide:\n    drafts: true\n');
+    const snapshot = () => fs.readdirSync(s.root, { recursive: true }).sort().map((f) => {
+      const full = path.join(s.root, f);
+      return `${f}:${fs.statSync(full).isFile() ? read(full) : ''}`;
+    });
+    const before = snapshot();
+    const plan = planMigration({ configPath: s.configPath });
+    assert.strictEqual(plan.applicable, false);
+    assert.match(plan.reason, /settings are in _meta\/vault-config\.yaml, so migrate-config does not apply/);
+    const r = cli(['--config', s.configPath]);
+    assert.notStrictEqual(r.status, 0);
+    assert.match(r.stderr + r.stdout, /migrate-config does not apply/);
+    assert.deepStrictEqual(snapshot(), before);
+    assert.ok(!fs.existsSync(s.vaultFile));
+  });
+});

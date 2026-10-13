@@ -455,9 +455,10 @@ function prepare(changes, layout, { allowState = false } = {}) {
       refusals.push(change.op === 'unset' ? `${name} holds other settings; unset each setting in it.` : `${name} holds other settings; set the setting itself, for example ${child && child.name}.`);
       continue;
     }
-    let keys = name.split('.');
+    // On the new layout a setting is written under its own name, whatever name the command was given.
+    let keys = (legacy ? name : e.name).split('.');
     let older = [];
-    let spelling = name;
+    let spelling = legacy ? name : e.name;
     if (legacy) {
       const first = legacyNameOf(e);
       if (!first) { refusals.push(`${name} needs the new settings file; run the update first.`); continue; }
@@ -465,7 +466,7 @@ function prepare(changes, layout, { allowState = false } = {}) {
       spelling = first;
       older = (e.was || []).filter((w) => w.in === 'vault' && w.name !== first).map((w) => w.name);
     }
-    const base = { shown: name, setting: change.name, keys, older: older.map((o) => o.split('.')), spelling, olderNames: older };
+    const base = { shown: legacy ? name : e.name, setting: change.name, keys, older: older.map((o) => o.split('.')), spelling, olderNames: older };
     if (change.op === 'set') {
       if (blank(change.value) && e.type !== 'text') { refusals.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
       if (Array.isArray(change.value) && change.value.some(blank)) { refusals.push(`${name} has a blank entry; remove it.`); continue; }

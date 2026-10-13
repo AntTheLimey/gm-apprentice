@@ -10,6 +10,10 @@ const { REGISTRY, entry: settingEntry, legacyNameOf, siteKeyOf } = require('./re
 const { TYPES, isMap } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, HIDING_PREFIXES, startsLikeHide } = require('./faults');
 const { OLD_FILE, at } = require('./layout');
+const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
+
+// The folders list as the old file names it, for the notes the tidying makes.
+const FOLDERS_LABEL = legacyNameOf(settingEntry('player_site.hide.folders'));
 
 // The list as the old layout knew it: each setting the old vault file held, named as that file
 // names it (`name`), with the new name beside (`setting`), the site-file key it was also written
@@ -53,43 +57,6 @@ function hasLegacy(site) {
 // can be carried over; null, a map or list, a non-finite number and an empty string cannot.
 const isText = (v) => typeof v === 'string' && v.trim() !== '';
 const usable = (v) => isText(v) || typeof v === 'boolean' || (typeof v === 'number' && Number.isFinite(v));
-
-// exclude_dirs entries are matched against vault-relative POSIX paths the scanner walks, so
-// an entry authored differently fails open. Normalizes backslashes, a trailing slash, a
-// leading "./" and an absolute path inside the vault. An absolute path outside the vault is
-// dropped (and `say` is told). Returns null for an entry that normalizes to nothing.
-function normalizeExcludeDir(entry, vaultPath, say = () => {}) {
-  let raw = String(entry).trim().replace(/\\/g, '/');
-  if (!raw) return null;
-  const looksAbsolute = raw.startsWith('/') || /^[A-Za-z]:\//.test(raw);
-  if (looksAbsolute) {
-    const resolved = path.resolve(raw);
-    const vaultRoot = path.resolve(vaultPath);
-    if (resolved !== vaultRoot && !resolved.startsWith(vaultRoot + path.sep)) {
-      say(`${legacyNameOf(settingEntry('player_site.hide.folders'))} entry "${entry}" is outside the vault, so it is ignored.`);
-      return null;
-    }
-    raw = path.relative(vaultRoot, resolved).split(path.sep).join('/');
-  }
-  raw = raw.replace(/^\.\//, '').replace(/\/+$/, '');
-  return raw || null;
-}
-
-// Normalizes each entry, then drops repeats ignoring case (first spelling wins).
-function normalizeExcludeDirs(list, vaultPath, say = () => {}) {
-  const seen = new Set();
-  const out = [];
-  for (const item of list) {
-    const normalized = normalizeExcludeDir(item, vaultPath, say);
-    if (normalized == null) continue;
-    const key = normalized.toLowerCase();
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(normalized);
-    }
-  }
-  return out;
-}
 
 // exclude_callouts is `true` (strip every callout), a list of types, or off. When both files
 // set it, the stricter wins: true beats a list, a list beats off, two lists are unioned
@@ -188,8 +155,8 @@ function mergeWithSiteFile(publish, siteConfig, vaultPath) {
     const builtIn = LEGACY.find((e) => sansBlock(e.name) === entry.publish).default;
     picked[entry.publish] = pick(
       publish, json, { ...entry, builtIn }, legacy,
-      dirs ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath, (m) => dropped.push(m)) : v) : (x) => x,
-      dirs ? (s) => (normalizeExcludeDir(s, vaultPath) ?? String(s)).toLowerCase() : (s) => String(s).toLowerCase(),
+      dirs ? (v) => (Array.isArray(v) ? normalizeExcludeDirs(v, vaultPath, (m) => dropped.push(m), FOLDERS_LABEL) : v) : (x) => x,
+      dirs ? (s) => (normalizeExcludeDir(s, vaultPath, undefined, FOLDERS_LABEL) ?? String(s)).toLowerCase() : (s) => String(s).toLowerCase(),
       messages, from,
     );
   }
@@ -316,7 +283,7 @@ function readLegacy({ vaultPath, siteConfig }, core) {
 
   const values = {};
   const origins = {};
-  const c = { values, origins, faults, fault };
+  const c = { values, origins, faults, fault, vaultPath };
   const defaultOf = (e) => {
     if (e.name === SITE_SWITCH) { const dir = getPath(publish, sansBlock(SITE_FOLDER).split('.')); return typeof dir === 'string' && dir.trim() !== ''; }
     return e.default === undefined ? null : clone(e.default);
@@ -436,5 +403,5 @@ function readLegacy({ vaultPath, siteConfig }, core) {
 
 module.exports = {
   readLegacy, LEGACY, OLD_BLOCK, underBlock, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, isText, usable, stricterCallouts,
-  normalizeExcludeDir, normalizeExcludeDirs, mergeWithSiteFile, mergedMaps,
+  mergeWithSiteFile, mergedMaps,
 };

@@ -9,8 +9,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, normalizeExcludeDir, mergedMaps } = require('./settings/legacy');
+const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, mergedMaps } = require('./settings/legacy');
+const { normalizeExcludeDir } = require('./settings/folders');
 const { resolve: resolveSetting } = require('./settings');
+const { layoutOf, NEW_FILE } = require('./settings/layout');
 const { readSwitch } = require('./settings/types');
 const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
@@ -66,6 +68,12 @@ function planMigration({ configPath, vaultPath } = {}) {
   }
   if (!vault) return refuse('migrate-config needs a vault.config.json (--config) or a vault (--vault)');
   if (!fs.existsSync(vault) || !fs.statSync(vault).isDirectory()) return refuse(`vault directory not found: ${vault}`);
+
+  // This command writes the old settings file. A vault on the new one would get a second file that is not read,
+  // and the entries moved into it would hide nothing.
+  if (layoutOf(vault) === 'new') {
+    return refuse(`this vault's settings are in ${NEW_FILE}, so migrate-config does not apply; put anything still in the site folder's vault.config.json there with settings add or settings set`);
+  }
 
   const vaultFile = path.join(vault, VAULT_REL);
   const exists = fs.existsSync(vaultFile);

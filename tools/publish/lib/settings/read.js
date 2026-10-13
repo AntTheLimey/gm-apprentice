@@ -12,6 +12,7 @@ const { TYPES, isMap, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
 const legacy = require('./legacy');
+const { normalizeExcludeDirs } = require('./folders');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
@@ -47,6 +48,10 @@ function setIn(obj, name, value) {
 function settle(c, e, { written, setting }, first, defaultOf) {
   const { values, origins, faults, fault } = c;
   const r = TYPES[e.type].read(first.raw, e);
+  // A list of folders is tidied here for both layouts (the scanner compares exact vault-relative paths).
+  if (r.ok && e.same === 'folder' && Array.isArray(r.value)) {
+    r.value = normalizeExcludeDirs(r.value, c.vaultPath, (message) => faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message })), written);
+  }
   if (r.ok) {
     setIn(values, setting, r.value);
     origins[setting] = first.origin;
@@ -130,7 +135,7 @@ function readNew({ vaultPath, siteConfig }) {
   const values = {};
   const origins = {};
   const fault = makeFault;
-  const c = { values, origins, faults, fault };
+  const c = { values, origins, faults, fault, vaultPath };
 
   if (file.leftover) {
     faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: `${OLD_FILE} is left over from before the update and is not read; the Settings check removes it` }));

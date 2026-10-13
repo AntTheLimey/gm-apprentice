@@ -22,6 +22,7 @@ const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, at: fileAt } = require('./layo
 const { nearest } = require('./faults');
 const { row, isLeaf, defaultOf } = require('./describe');
 const { OLD_BLOCK } = require('./legacy');
+const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
 const { planMove, applyMove } = require('./move');
 
@@ -290,6 +291,7 @@ function valueOf(given) {
 // Turns `name=value` pairs into set changes. { errors } and nothing else when any is refused.
 // A value that is not JSON is taken as the text written.
 function plan(options, pairs) {
+  const { vaultPath } = target(options);
   const errors = [];
   const changes = [];
   const written = [];
@@ -301,7 +303,12 @@ function plan(options, pairs) {
     const e = resolve(name).entry;
     if (!hasValue) { errors.push(`${name} needs a value, like ${name}=value.`); continue; }
     if (given.trim() === '') { errors.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
-    const value = valueOf(given);
+    let value = valueOf(given);
+    // A list of folders is written tidied, as the reader tidies it (one function: folders.js).
+    if (e.same === 'folder' && Array.isArray(value) && value.every((x) => typeof x === 'string' && x.trim() !== '')) {
+      if (value.some((x) => normalizeExcludeDir(x, vaultPath) === null)) { errors.push(`${name} has an entry that is not a folder inside the vault; remove it.`); continue; }
+      value = normalizeExcludeDirs(value, vaultPath);
+    }
     const at2 = changes.findIndex((c) => c.name === e.name);
     if (at2 >= 0) changes.splice(at2, 1);
     changes.push({ op: 'set', name: e.name, label: name, value });
@@ -361,6 +368,8 @@ function changeList(options, verb, args) {
   if (why) return { errors: [why] };
   const e = resolve(name).entry;
   const { vaultPath, siteConfig } = target(options);
+  // The lines name the setting as the vault's file writes it.
+  const shownAs = layoutOf(vaultPath) === 'legacy' ? name : e.name;
   const isSame = sameRule(e, vaultPath);
   const texts = [];
   for (const item of items) {
@@ -373,10 +382,7 @@ function changeList(options, verb, args) {
   }
   const entries = [];
   for (let v of texts) {
-    if (e.same === 'folder') {
-      const { normalizeExcludeDir } = require('./legacy');
-      v = normalizeExcludeDir(v, vaultPath) ?? '';
-    }
+    if (e.same === 'folder') v = normalizeExcludeDir(v, vaultPath) ?? '';
     if (v.trim() === '') return { errors: [`${name} has a blank entry; remove it.`] };
     entries.push(v);
   }
@@ -404,24 +410,24 @@ function changeList(options, verb, args) {
   if (list) {
     const done = write(options, [{ op: verb, name: e.name, label: name, entries: verb === 'add' ? result.added : result.removed, same: isSame, base: current }]);
     if (done.errors) return done;
-    result.written = [name];
+    result.written = [shownAs];
     if (verb === 'remove') {
       const after = getPath(readSettings({ vaultPath, siteConfig }).values, e.name.split('.')) || [];
       for (const x of result.removed) {
         if (Array.isArray(after) && after.some((a) => isSame(a, x))) result.notes.push(`${JSON.stringify(x)} still applies, because vault.config.json also lists it; remove it there too.`);
-        else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) result.notes.push(`${JSON.stringify(x)} was built in to ${name} and is no longer hidden.`);
+        else if (e.guards && Array.isArray(e.default) && e.default.some((d) => isSame(d, x))) result.notes.push(`${JSON.stringify(x)} was built in to ${shownAs} and is no longer hidden.`);
       }
     }
     // Not said when the site file's own entries still hide something.
     const stillApplies = verb === 'remove' && result.notes.some((n) => n.includes(' still applies,'));
-    if (!stillApplies && list.length === 0 && Array.isArray(e.default) && e.default.length > 0) result.notes.push(emptyNote(name));
+    if (!stillApplies && list.length === 0 && Array.isArray(e.default) && e.default.length > 0) result.notes.push(emptyNote(shownAs));
   }
   const shown = (xs) => xs.map((x) => JSON.stringify(x)).join(', ');
   const done = verb === 'add' ? result.added : result.removed;
   const other = verb === 'add' ? result.already : result.absent;
   const lines = [];
-  if (done.length) lines.push(`${verb === 'add' ? 'Added' : 'Removed'} ${shown(done)} ${verb === 'add' ? 'to' : 'from'} ${name}.`);
-  if (other.length) lines.push(`${shown(other)} ${other.length > 1 ? 'were' : 'was'} ${verb === 'add' ? 'already in' : 'not in'} ${name}.`);
+  if (done.length) lines.push(`${verb === 'add' ? 'Added' : 'Removed'} ${shown(done)} ${verb === 'add' ? 'to' : 'from'} ${shownAs}.`);
+  if (other.length) lines.push(`${shown(other)} ${other.length > 1 ? 'were' : 'was'} ${verb === 'add' ? 'already in' : 'not in'} ${shownAs}.`);
   lines.push(...result.notes);
   return { result, lines, notices: noticesFor([name]) };
 }
@@ -430,6 +436,7 @@ function unset(options, names) {
   if (!names.length) throw new Error('settings unset needs at least one name.');
   const { vaultPath } = target(options);
   const legacy = layoutOf(vaultPath) === 'legacy';
+  const shownAs = (n) => (legacy ? n : given.get(n));
   const errors = [];
   const changes = [];
   const given = new Map();
@@ -451,7 +458,7 @@ function unset(options, names) {
   const lines = removed.length ? [] : ['Nothing to remove: none of those is in the file.'];
   for (const n of removed) {
     const spellings = done.ok.removed.filter((w) => w === n || given.get(n) === w || (resolve(w) && resolve(w).entry.name === given.get(n)));
-    lines.push(spellings.length > 1 ? `Removed ${spellings.join(' and ')} (the same setting).` : `Removed ${n}.`);
+    lines.push(spellings.length > 1 ? `Removed ${spellings.join(' and ')} (the same setting).` : `Removed ${shownAs(n)}.`);
   }
   return { result: { removed }, lines, notices: noticesFor(names) };
 }

@@ -58,4 +58,27 @@ describe('build with the new settings file', () => {
       assert.ok(fs.readFileSync(path.join(old.out, rel)).equals(fs.readFileSync(path.join(next.out, rel))), rel);
     }
   });
+
+  it('publishes nothing from a hidden folder written with a slash, a dot-slash or a backslash', () => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-new-folders-'));
+    const note = (word) => `---\ntype: npc\n---\n\n${word}\n`;
+    const folderMap = { People: 'people', Secrets: 'secrets', Private: 'private', 'GM/Stuff': 'gmstuff' };
+    const put = (vault) => {
+      fs.mkdirSync(path.join(vault, 'GM'), { recursive: true });
+      for (const [rel, word] of [['People/Ok.md', 'okword'], ['Secrets/A.md', 'secretword'], ['Private/B.md', 'privateword'], ['GM/Stuff/C.md', 'stuffword']]) {
+        fs.mkdirSync(path.dirname(path.join(vault, rel)), { recursive: true });
+        fs.writeFileSync(path.join(vault, rel), note(word));
+      }
+    };
+    const entries = ['Secrets/', './Private', 'GM\\Stuff', '_meta'];
+    const everything = (out) => filesUnder(out).map((f) => fs.readFileSync(path.join(out, f), 'utf8')).join('\n');
+    const old = buildWith('folders-old', (vault) => { put(vault); writeOldConfig(vault, { mode: 'player', exclude_dirs: entries, folder_map: folderMap }); });
+    const next = buildWith('folders-new', (vault) => { put(vault); writeNewConfig(vault, { version: 1, player_site: { folder_map: folderMap, hide: { mode: 'player', folders: entries } } }); });
+    for (const built of [old, next]) {
+      const all = everything(built.out);
+      assert.ok(all.includes('okword'), 'the folder that is not hidden is published');
+      for (const word of ['secretword', 'privateword', 'stuffword']) assert.ok(!all.includes(word), `${word} is published`);
+    }
+    assert.deepStrictEqual(filesUnder(next.out), filesUnder(old.out));
+  });
 });

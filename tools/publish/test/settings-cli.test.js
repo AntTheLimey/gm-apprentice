@@ -741,3 +741,72 @@ test('set without --create refuses where there is no settings file; with it the 
   assert.equal(run(s, 'set', ['player_site.title=T'], { create: true }).rc, 0);
   assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), 'version: 1\nplayer_site:\n  title: T\n');
 });
+
+// ---- Hidden folders are tidied the same way on both layouts (C1) ----------------------------
+
+test('hidden folders written with a slash, a dot-slash or a backslash read the same on both layouts', () => {
+  const entries = ['Secrets/', './Private', 'GM\\Stuff'];
+  const old = scratch(wrap(`  exclude_dirs: ${JSON.stringify(entries)}\n`));
+  const next = newScratch(`version: 1\nplayer_site:\n  hide:\n    folders: ${JSON.stringify(entries)}\n`);
+  assert.deepEqual(run(old, 'get', ['player_site.hide.folders']).data.byNewName.values['player_site.hide.folders'], ['Secrets', 'Private', 'GM/Stuff']);
+  assert.deepEqual(run(next, 'get', ['player_site.hide.folders']).data.byNewName.values['player_site.hide.folders'], ['Secrets', 'Private', 'GM/Stuff']);
+});
+
+test('set and add write hidden folders tidied, on both layouts', () => {
+  const next = newScratch('version: 1\n');
+  assert.equal(run(next, 'set', ['player_site.hide.folders=["Secrets/","GM\\\\Private"]']).rc, 0);
+  assert.equal(run(next, 'add', ['player_site.hide.folders', './Plots/']).rc, 0);
+  assert.deepEqual(run(next, 'raw', ['player_site.hide.folders']).data, ['Secrets', 'GM/Private', 'Plots']);
+  const old = scratch(wrap(''));
+  assert.equal(run(old, 'set', ['player_site.hide.folders=["Secrets/","GM\\\\Private"]']).rc, 0);
+  assert.equal(run(old, 'add', ['player_site.hide.folders', './Plots/']).rc, 0);
+  assert.deepEqual(run(old, 'raw', ['player_site.hide.folders']).data, ['Secrets', 'GM/Private', 'Plots']);
+});
+
+// ---- An old name given to a write command acts on the setting it became (I1) ------------------
+
+const NEW_AND_OLD = [
+  ['new', () => newScratch('version: 1\nplayer_site:\n  hide:\n    sections: [Spoilers]\n    drafts: true\n'), (s) => fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8')],
+  ['old', () => scratch(wrap('  exclude_sections: [Spoilers]\n  exclude_drafts: true\n')), text],
+];
+
+for (const [layout, make, readFile] of NEW_AND_OLD) {
+  const nameFor = (newName, oldName) => (layout === 'new' ? newName : oldName);
+  const hasStray = (s) => layout === 'new' && /^publish:/m.test(readFile(s));
+
+  test(`${layout} file: add and remove with an old name change the list and name the setting`, () => {
+    const s = make();
+    const added = run(s, 'add', ['publish.exclude_sections', 'Rumours'], { json: false });
+    assert.equal(added.rc, 0);
+    assert.match(added.out, new RegExp(`Added "Rumours" to ${nameFor('player_site\\.hide\\.sections', 'publish\\.exclude_sections')}\\.`));
+    assert.ok(!hasStray(s), 'no publish: block in the new file');
+    assert.ok(run(s, 'get', ['player_site.hide.sections']).data.byNewName.values['player_site.hide.sections'].includes('Rumours'));
+    const removed = run(s, 'remove', ['publish.exclude_sections', 'Spoilers'], { json: false });
+    assert.equal(removed.rc, 0);
+    assert.match(removed.out, new RegExp(`Removed "Spoilers" from ${nameFor('player_site\\.hide\\.sections', 'publish\\.exclude_sections')}\\.`));
+    assert.ok(!removed.out.includes('still applies'));
+    assert.ok(!run(s, 'get', ['player_site.hide.sections']).data.byNewName.values['player_site.hide.sections'].includes('Spoilers'));
+    assert.ok(!hasStray(s));
+  });
+
+  test(`${layout} file: set and unset with an old name act on the setting`, () => {
+    const s = make();
+    const wrote = run(s, 'set', ['publish.exclude_drafts=false'], { json: false });
+    assert.equal(wrote.rc, 0);
+    assert.match(wrote.out, new RegExp(`Wrote ${nameFor('player_site\\.hide\\.drafts', 'publish\\.exclude_drafts')}\\.`));
+    assert.equal(run(s, 'get', ['player_site.hide.drafts']).data.byNewName.values['player_site.hide.drafts'], false);
+    assert.ok(!hasStray(s));
+    const gone = run(s, 'unset', ['publish.exclude_drafts'], { json: false });
+    assert.equal(gone.rc, 0);
+    assert.match(gone.out, new RegExp(`Removed ${nameFor('player_site\\.hide\\.drafts', 'publish\\.exclude_drafts')}\\.`));
+    assert.ok(!gone.out.includes('Nothing to remove'));
+    assert.ok(!/drafts/.test(readFile(s)));
+    assert.equal(run(s, 'check').rc, 0);
+  });
+}
+
+test('set --create with an old name makes the new file under the new name', () => {
+  const s = scratch(null);
+  assert.equal(run(s, 'set', ['publish.exclude_drafts=true'], { create: true }).rc, 0);
+  assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), 'version: 1\nplayer_site:\n  hide:\n    drafts: true\n');
+});
