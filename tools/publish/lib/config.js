@@ -202,6 +202,16 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   }
   Object.defineProperty(merged, 'menu_extra', { value: menuExtra, enumerable: false });
 
+  // The landing banner's four texts (null when unset). Not listed, like `menu_extra`: a site that sets none
+  // builds as it did. The build replaces `image` and `link` with what it resolved.
+  const bannerText = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const b = (p.landing && p.landing.banner) || {};
+  delete merged.landing.banner;
+  Object.defineProperty(merged.landing, 'banner', {
+    value: { title: bannerText(b.title), text: bannerText(b.text), link: bannerText(b.link), image: bannerText(b.image) },
+    enumerable: false, writable: true, configurable: true,
+  });
+
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
 }

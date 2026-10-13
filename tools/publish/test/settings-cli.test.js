@@ -43,7 +43,7 @@ test('get on a block with none of the settings gives defaults and says the block
 test('get of a group gives exactly the names under it', () => {
   const s = scratch(wrap('  landing:\n    max_npcs: 3\n'));
   const { data } = run(s, 'get', ['publish.landing']);
-  assert.deepEqual(Object.keys(data.values), REGISTRY.map((e) => e.name).filter((n) => n.startsWith('player_site.landing.')));
+  assert.deepEqual(Object.keys(data.values), REGISTRY.filter((e) => e.was && !e.legacyOnly).map((e) => e.name).filter((n) => n.startsWith('player_site.landing.')));
   assert.deepEqual(view(data)['player_site.landing.max_npcs'], { value: 3, origin: 'file' });
   assert.deepEqual(view(run(s, 'get', ['publish.connections']).data), { 'player_site.features.connections': { value: 'tree', origin: 'default' } });
 });

@@ -1,4 +1,4 @@
-const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
+const { escapeHtml, plainMetaValue, encodeHref, encodeImageUrl } = require('../processor');
 const { refTarget, linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
@@ -82,6 +82,22 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   ${tagline}
   ${heroDates}
 </div>`;
+
+  // --- Banner (player_site.landing.banner; the build has already resolved its picture and link) ---
+  let bannerZone = '';
+  const banner = landingConfig.banner;
+  if (banner && (banner.title || banner.text || banner.image)) {
+    // A web address is printed as written (spaces aside); a picture copied into the site goes through encodeImageUrl.
+    const imgSrc = !banner.image ? '' : /^https?:\/\//i.test(banner.image) ? banner.image.replace(/ /g, '%20') : encodeImageUrl(banner.image);
+    const img = imgSrc ? `<img class="landing-banner-img" src="${escapeHtml(imgSrc)}" alt="">` : '';
+    const words = (banner.title || banner.text)
+      ? `<div class="landing-banner-body">${banner.title ? `<h2 class="landing-banner-title">${escapeHtml(banner.title)}</h2>` : ''}${banner.text ? `<p class="landing-banner-text">${escapeHtml(banner.text)}</p>` : ''}</div>`
+      : '';
+    const inner = `${img}${words}`;
+    bannerZone = banner.link
+      ? `<a class="landing-banner" href="${escapeHtml(banner.link.external ? banner.link.href : encodeHref(banner.link.href))}"${banner.link.external ? ' rel="noopener"' : ''}>${inner}</a>`
+      : `<div class="landing-banner">${inner}</div>`;
+  }
 
   // --- Zone 2: Latest Session Recap ---
   // Prefer the overview's authoritative last_session pointer, resolved against the *published*
@@ -272,7 +288,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
 </div>`
     : '';
 
-  const content = [heroZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
+  const content = [heroZone, bannerZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
     .filter(Boolean)
     .join('\n');
 

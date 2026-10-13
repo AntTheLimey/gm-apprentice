@@ -333,6 +333,10 @@ The apprentice does the setting up and writes the switch for you.
 | `player_site.landing.featured_locations`<br>was `publish.landing.featured_locations` | The same, for places | A list of note names | Nothing pinned |
 | `player_site.landing.quick_links`<br>was `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
 | `player_site.landing.explore_descriptions`<br>was `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
+| `player_site.landing.banner.title` | The heading of a banner between the top of the landing page and "Latest Session". Plain text, shown as written. A banner shows when it has a title, text or picture | Text | No banner |
+| `player_site.landing.banner.text` | The words in the banner, under its heading. Plain text, shown as written | Text | No words |
+| `player_site.landing.banner.link` | Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner | Text | Not a link |
+| `player_site.landing.banner.image` | A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it | A picture's path in the vault, or a web address | No picture |
 
 <!-- /settings:landing -->
 

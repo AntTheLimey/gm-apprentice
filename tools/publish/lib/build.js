@@ -566,10 +566,6 @@ function buildSite(options) {
   const linkMap = buildLinkMap(pages);
   console.log(`Built link map with ${Object.keys(linkMap).length} entries`);
 
-  // Texts the GM wrote in settings that a public page prints but that are no note's body (a menu label).
-  // Each is { where, text }; the note audit reads every one, once, as it reads a page.
-  const gmTexts = [];
-
   // A GM alias must never reach the site (#212): rewrite every one to the
   // title of the note that owns it, in every scanned page's body and
   // frontmatter, before anything renders or derives from them. Owners come
@@ -980,7 +976,6 @@ function buildSite(options) {
       continue;
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
-    gmTexts.push({ where: 'the menu', text: item.label });
   }
   const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra });
 
@@ -1226,10 +1221,6 @@ function buildSite(options) {
       return !(row && Array.isArray(source.relationships) && isGmOnlyEdge(source.relationships[Number(row[1])]));
     },
   });
-  // The GM's own texts that are no page's body, read for a secret name as a listing page is (it is on every page).
-  for (const { where, text } of gmTexts) {
-    audit.read(null, `<main><p>${escapeHtml(text)}</p></main>`, 'index.html', where);
-  }
   const shown = { page: null, story: null };
   const markedOf = new Map();   // page -> its links to no-page notes, marked (null when it has none)
   const toRender = new Map();   // the pages that may print one of those names: rendered a second time
@@ -1470,6 +1461,35 @@ function buildSite(options) {
 
   publishConfig._banners = dry ? {} : buildBanners(Object.keys(DIR_LABELS));
 
+  // The landing page's banner (player_site.landing.banner.*). Its picture is found and copied by the section
+  // banners' helpers, to images/banners/landing/; its link is read by resolveSiteLink, as a menu entry's is.
+  // `image` and `link` leave here as the hrefs the page prints (null when there is none to print). A banner with
+  // a link and nothing else shows nothing.
+  let landingBannerResolved = false;
+  function resolveLandingBanner() {
+    if (landingBannerResolved) return;
+    landingBannerResolved = true;
+    const banner = publishConfig.landing.banner;
+    if (!banner.title && !banner.text && !banner.image) {
+      if (banner.link) console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is set but the banner has no title, text or picture — no banner is shown`);
+      banner.link = null;
+      return;
+    }
+    if (banner.image && !/^https?:\/\//i.test(banner.image)) {
+      const imageFull = resolveVaultAsset(banner.image, nm('player_site.landing.banner.image'));
+      banner.image = imageFull ? (dry ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
+    }
+    if (banner.link) {
+      const read = resolveSiteLink(banner.link, { linkMap, pages, unpublished });
+      if (read.kind === 'none') {
+        console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", a note the site makes no page of — the banner is not a link`);
+        banner.link = null;
+      } else {
+        banner.link = { href: read.href, external: read.kind === 'outside' };
+      }
+    }
+  }
+
   const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
@@ -1532,6 +1552,7 @@ function buildSite(options) {
     }
 
     // Landing page
+    resolveLandingBanner();
     emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps), '  wrote index.html');
   }
   let characterStories = [];

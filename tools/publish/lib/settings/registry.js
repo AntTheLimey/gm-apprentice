@@ -386,6 +386,29 @@ const REGISTRY = [
     left_out: "The genre's lines, or plain ones",
   },
 
+  { name: 'player_site.landing.banner', type: 'map', container: true },
+  {
+    name: 'player_site.landing.banner.title', type: 'text', group: 'landing',
+    does: 'The heading of a banner between the top of the landing page and "Latest Session". Plain text, shown as written. A banner shows when it has a title, text or picture',
+    left_out: 'No banner',
+  },
+  {
+    name: 'player_site.landing.banner.text', type: 'text', group: 'landing',
+    does: 'The words in the banner, under its heading. Plain text, shown as written',
+    left_out: 'No words',
+  },
+  {
+    name: 'player_site.landing.banner.link', type: 'text', group: 'landing',
+    does: 'Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner',
+    left_out: 'Not a link',
+  },
+  {
+    name: 'player_site.landing.banner.image', type: 'text', group: 'landing',
+    shape: "a picture's path in the vault, or a web address",
+    does: "A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it",
+    left_out: 'No picture',
+  },
+
   // Lists and pictures
   { name: 'player_site.images', was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
