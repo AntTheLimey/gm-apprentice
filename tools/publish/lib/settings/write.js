@@ -110,13 +110,22 @@ function dropLines(text, a, b, eol) {
 // ---- Making text with the library --------------------------------------------------------------
 
 const toStringOptions = (ctx) => ({ indent: ctx.step, indentSeq: ctx.indentSeq, lineWidth: 0, blockQuote: false, flowCollectionPadding: false, minContentWidth: 0 });
+// On the old file (`ctx.v11`) the build reads with another YAML reader (js-yaml, YAML 1.1), which takes some plain
+// text for a number or a date ("12:30", "2024-10-13"). A string that reader would not give back as written is
+// quoted, so both readers agree on it; asked of the reader itself, not of a list of words.
+const buildReadsAsWritten = (text) => {
+  try { return parseNote(`---\nk: ${new YAML.Document(text).toString().trim()}\n---\n`).data.k === text; } catch { return false; }
+};
 // A string with a line break is always written double-quoted on one line: the library would otherwise
 // spread it over lines, which a one-line (flow) group cannot hold.
-// On the old file (`ctx.v11`) the text is made under YAML 1.1's rules, which quote a text that the build's reader
-// (js-yaml, 1.1) would take for a number or a date ("12:30", "2024-10-13"), so both readers agree.
 function documentOf(value, ctx = {}) {
-  const doc = new YAML.Document(value, { aliasDuplicateObjects: false, ...(ctx.v11 ? { version: '1.1' } : {}) });
-  YAML.visit(doc, { Scalar(_, node) { if (typeof node.value === 'string' && /[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE'; } });
+  const doc = new YAML.Document(value, { aliasDuplicateObjects: false });
+  YAML.visit(doc, {
+    Scalar(_, node) {
+      if (typeof node.value !== 'string') return;
+      if (/[\r\n]/.test(node.value) || (ctx.v11 && !buildReadsAsWritten(node.value))) node.type = 'QUOTE_DOUBLE';
+    },
+  });
   return doc;
 }
 
