@@ -124,7 +124,11 @@ describe('doctor --site', () => {
     pin('^1.20.0');
     const theirs = await notes();
     assert.equal(theirs.length, 1);
-    assert.match(theirs[0].detail, /stays on the old settings file until this site's tool \(pinned to \^1\.20\.0\) is 1\.23\.0 or later/);
+    assert.match(theirs[0].detail, /stays on the old settings file because its site's tool \(\^1\.20\.0\) cannot read the new one\. When that tool is 1\.23\.0 or later, run the update again\./);
+    pin('^1.24.0');
+    const fine = await notes();
+    assert.equal(fine.length, 1);
+    assert.equal(fine[0].detail, 'this vault is still on the old settings file; the next update moves it');
   });
 
   it('a setting left in the site folder\'s file is fixed in vault.config.json, not in the vault\'s settings file', async () => {

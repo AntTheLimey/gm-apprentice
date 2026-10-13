@@ -95,7 +95,6 @@ def find_site_repin(vault: Path) -> list[Item]:
 
 
 MOVE = "settings-move"
-NOT_OURS_FIRST = "1.23.0"   # the first publish tool that reads the new file
 
 
 def _hidden_move_files(vault: Path) -> bool:
@@ -137,10 +136,11 @@ def find_settings_move(vault: Path) -> list[Item]:
     vault.config.json. A vault already moved is asked too when something
     could be left (an old file, a hidden file, a site folder), and tidied.
     The tool decides what moves; this decides only whether it is the plugin's
-    to move: a vault with a site moves only when that site's tool is the
-    plugin's own (`update-pin --check` says: `ours`), because an older pinned
-    tool reads a moved vault as having no settings and would publish with
-    defaults."""
+    to move: the move itself holds a vault whose site's publish tool is
+    pinned by something else (its answer has `held`, with the words), because
+    such a tool reads a moved vault as having no settings and would publish
+    with defaults. `held` is a notice that does not hold the stamp; a
+    blocker does."""
     layout = vault_layout(vault)
     if layout == "none":
         return []    # no settings file: nothing names a site folder to ask
@@ -149,23 +149,17 @@ def find_settings_move(vault: Path) -> list[Item]:
             (vault / LEGACY_SETTINGS_FILE).exists()
             or _hidden_move_files(vault) or (site is not None and has_config)):
         return []
-    extra: list[str] = []
-    if layout == "legacy":
-        if site is not None and has_config:
-            pin = _pin_check(site)
-            if not pin.get("ours"):
-                spec = pin.get("spec")
-                return [Item(MOVE, PERSON, [
-                    "settings\tthis vault stays on the old settings file "
-                    f"because its site's publish tool is pinned by something "
-                    f"else ({spec}). When that tool is {NOT_OURS_FIRST} or "
-                    "later, run the update again."])]
-        if not settings(vault).get("vault.system"):
-            found = vault_system(vault)
-            if found:
-                extra = ["--fill", f"vault.system={found}"]
+    extra: list[str] = ["--site-tool-updated"]   # the repin comes first
+    if layout == "legacy" and not settings(vault).get("vault.system"):
+        found = vault_system(vault)
+        if found:
+            extra += ["--fill", f"vault.system={found}"]
     base = _move_args(vault, site, has_config, *extra)
     plan = _ask_move(vault, [*base, "--check"])
+    if plan.get("held"):
+        # Left behind, not wrong: the tool says why in plain words and the
+        # vault is told it every pass. This does not hold the stamp.
+        return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"])]
     if not plan["ok"]:
         blockers = [str(b) for b in plan.get("blockers") or []]
         return [Item(MOVE, PERSON,

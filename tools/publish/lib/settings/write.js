@@ -621,7 +621,7 @@ function planChanges(vaultPath, changes, { create = false, allowState = false, s
     throw err;
   }
   if (layout === 'none' && create && hasLegacy(siteConfig)) {
-    throw plain("the site folder's vault.config.json still holds this vault's settings; run the update first, which brings them into the vault. Nothing was written.");
+    throw plain(`the site folder's vault.config.json still holds this vault's settings, so none can be set yet. Bring them into the vault first by running: gm-apprentice-publish settings move --vault "${vaultPath}" --config "<site folder>/vault.config.json". Nothing was written.`);
   }
   const doc = open(vaultPath, layout, create);
   if (layout === 'new' || doc.created) {

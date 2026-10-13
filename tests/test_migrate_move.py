@@ -50,11 +50,26 @@ def make_vault(case, front="publish:\n  mode: player\n", version="1.10.12",
     return vault
 
 
-def with_site(case, vault, spec=None, **site_keys):
+def install_as(site, version):
+    """The tool installed in the site folder says it is `version`; it is the
+    repo's own tool underneath, so the other steps of the update still work."""
+    pkg = site / "node_modules" / "gm-apprentice-publish"
+    pkg.unlink()
+    (pkg / "bin").mkdir(parents=True)
+    (pkg / "package.json").write_text(json.dumps(
+        {"name": "gm-apprentice-publish", "version": version}), encoding="utf-8")
+    real = site_fixture.TOOL_DIR / "bin" / "gm-publish.js"
+    (pkg / "bin" / "gm-publish.js").write_text(
+        f"require({json.dumps(str(real))});\n", encoding="utf-8")
+
+
+def with_site(case, vault, spec=None, installed="1.20.0", **site_keys):
     """A private site for `vault`, pinned to the repo's tool (or `spec`)."""
     site_fixture.give_site(vault, lambda p: None, private=True)
     site = site_fixture.point_site_at(vault, **site_keys)
     site_fixture.pin_site(site, spec)
+    if spec is not None:
+        install_as(site, installed)
     return site
 
 
@@ -136,9 +151,9 @@ class MoveEndToEndTests(unittest.TestCase):
         site = with_site(self, vault, spec="^1.20.0", siteTitle="Theirs")
         code, plan, err = update(vault, "plan")
         self.assertIn("stays on the old settings file because its site's "
-                      "publish tool is pinned by something else (^1.20.0)",
-                      plan)
-        self.assertIn("1.23.0 or later, run the update again", plan)
+                      "tool (1.20.0) cannot read the new one", plan)
+        self.assertIn("When that tool is 1.23.0 or later, run the update "
+                      "again.", plan)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
         self.assertEqual(vault_layout(vault), "legacy")
@@ -148,11 +163,37 @@ class MoveEndToEndTests(unittest.TestCase):
         # The second pass says the same, and changes nothing.
         before = hashes(vault.parent)
         code, plan, _ = update(vault, "plan")
-        self.assertIn("pinned by something else (^1.20.0)", plan)
+        self.assertIn("its site's tool (1.20.0) cannot read the new one", plan)
         code, again, _ = update(vault, "apply")
         self.assertIn("# 1 row already shown in the plan", again)
         self.assertIn(f"already at {PLUGIN}", again)
         self.assertEqual(hashes(vault.parent), before)
+
+    def test_a_foreign_tool_that_can_read_the_new_file_moves_like_any_other(self):
+        vault = make_vault(self)
+        with_site(self, vault, spec="^1.24.0", installed="1.24.0")
+        # Nothing is installed in the site, so the version the pin asks for
+        # decides. (A later step may stop on the tool not being installed;
+        # the move is what is under test.)
+        code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
+        self.assertEqual(vault_layout(vault), "new", did + err)
+        self.assertIn("settings-move\tWrote _meta/vault-config.yaml.", did)
+
+    def test_the_site_switch_being_off_does_not_skip_the_guard(self):
+        vault = make_vault(self)
+        site = with_site(self, vault, spec="^1.20.0")
+        (vault / "_meta" / "vault-config.md").write_text(
+            (vault / "_meta" / "vault-config.md").read_text().replace(
+                "site: true", "site: false"), encoding="utf-8")
+        self.assertFalse(vc.settings(vault).get("player_site.publish"))
+        before = hashes(vault.parent)
+        code, plan, err = update(vault, "plan")
+        self.assertIn("cannot read the new one", plan)
+        code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
+        self.assertEqual(vault_layout(vault), "legacy")
+        self.assertEqual(read_stamp(vault), PLUGIN)       # a notice, not a hold
+        self.assertTrue(site.is_dir())
+        self.assertNotIn("Wrote _meta/vault-config.yaml", did)
 
     def test_a_blocked_vault_holds_the_stamp_and_nothing_is_written(self):
         vault = make_vault(self, "publish:\n  mode: player\n"

@@ -817,7 +817,7 @@ test('set --create makes no settings file while the site file still holds settin
   const held = scratch(null, { vaultPath: './vault', siteTitle: 'Kept' });
   const refused = run(held, 'set', ['player_site.title=T'], { create: true, config: held.config });
   assert.equal(refused.rc, 1);
-  assert.match(refused.err[0], /still holds this vault's settings; run the update first/);
+  assert.match(refused.err[0], /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
   assert.equal(fs.existsSync(path.join(held.vault, '_meta', 'vault-config.yaml')), false);
   const bare = scratch(null, { vaultPath: './vault', host: 'github-pages' });
   assert.equal(run(bare, 'set', ['player_site.title=T'], { create: true, config: bare.config }).rc, 0);

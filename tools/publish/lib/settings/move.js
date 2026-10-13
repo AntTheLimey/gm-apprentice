@@ -7,6 +7,7 @@
 // before a single file of the vault is touched. The vault is then changed by renames, the old
 // files kept aside until the last one succeeds, and put back if any step fails.
 const fs = require('node:fs');
+const { spawnSync } = require('node:child_process');
 const os = require('node:os');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
@@ -15,7 +16,7 @@ const { REGISTRY, legacyNameOf } = require('./registry');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { isLeaf } = require('./describe');
 const { formatFault } = require('./faults');
-const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, layoutOf, at } = require('./layout');
+const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_READING_NEW_FILE, layoutOf, at } = require('./layout');
 const read = require('./read');
 const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE, hasLegacy } = require('./legacy');
 const { readState, stateText } = require('./state');
@@ -26,6 +27,7 @@ const { Scalar, Pair, YAMLMap, isScalar, isMap: isYMap, isNode } = YAML;
 const LEAVES = REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 const FILLABLE = ['vault.campaign', 'vault.system'];
+const COMMENTS_HEADING = 'Comments from the old settings file';
 const PLAIN = { lineWidth: 0, flowCollectionPadding: false };
 
 const showValue = (v) => (typeof v === 'string' ? v : JSON.stringify(v));
@@ -74,6 +76,25 @@ function commentLines(doc) {
   return out;
 }
 
+// Every comment line a document holds, with the key it sat on (dotted, as the old file wrote it).
+function commentOwners(doc) {
+  const out = [];
+  const add = (text, key) => { if (text) for (const l of String(text).split('\n')) if (l.trim()) out.push({ text: l.trim(), key }); };
+  add(doc.commentBefore, null);
+  add(doc.comment, null);
+  YAML.visit(doc, {
+    Node(_, node, path) {
+      const names = path.filter((x) => YAML.isPair(x)).map(keyText);
+      const key = names.join('.') || null;
+      // A comment above the first key of a map is held by the map; it sat on that first key.
+      const first = isYMap(node) && node.items.length ? [...names, keyText(node.items[0])].join('.') : key;
+      add(node.commentBefore, first);
+      add(node.comment, key);
+    },
+  });
+  return out;
+}
+
 // Splits the old file into its frontmatter text and body, through the same library the writer uses.
 function split(whole) {
   const m = splitFront(whole);
@@ -116,6 +137,55 @@ function stripSiteKeys(siteText) {
   return { siteAfter, siteOut: removedKeys.length ? jsonLike(siteAfter, siteText) : null, removedKeys };
 }
 
+// ---- The site's tool ------------------------------------------------------------------------
+
+// What `update-pin --check --json` says of the site folder: { ok, ours, spec, installedBefore }, or null when it says
+// nothing usable. The same code the update uses; asked by running the command, so there is one rule.
+function pinCheck(siteDir) {
+  const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+  const run = spawnSync(process.execPath, [bin, 'update-pin', '--check', '--json', '--site', siteDir], { encoding: 'utf8' });
+  try {
+    const said = JSON.parse(run.stdout);
+    return said && typeof said === 'object' ? said : null;
+  } catch {
+    return null;
+  }
+}
+
+// The numbers of a version in a text ("1.22.0", "^1.20.0", ">=1.4.2 <2"), or null.
+const versionIn = (text) => {
+  const m = /(\d+)\.(\d+)\.(\d+)/.exec(String(text || ''));
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+};
+const atLeast = (have, want) => {
+  for (let i = 0; i < 3; i++) if (have[i] !== want[i]) return have[i] > want[i];
+  return true;
+};
+
+// null when the vault may move, else { held, spec, line }. Whether the site's tool can READ the new file decides: the
+// tool installed in the site folder, or, if none is installed, the version its package.json asks for; a tool that
+// cannot be told cannot read. Who owns the pin only decides whether the update can repin it first (`updated`).
+//   held: 'site-tool'      a tool the plugin does not manage, older than FIRST_TOOL_READING_NEW_FILE (or unknown)
+//   held: 'site-tool-old'  the plugin's own tool, old, and the caller is not bringing it up to date
+// A held vault is not wrong: it stays on the old file until its site's tool is new enough. A site with no tool
+// pinned or installed is built by the plugin's own, so it moves. `pin` is the update-pin answer.
+function holdFrom(pin, { updated = false, siteDir = '' } = {}) {
+  if (!pin || (!pin.spec && !pin.installedBefore)) return null;
+  // (A plugin path's number is the plugin's, not the tool's, so only a pin that is not ours is read for one.)
+  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
+  if (installed && atLeast(installed, versionIn(FIRST_TOOL_READING_NEW_FILE))) return null;
+  if (pin.ours && updated) return null;
+  const shown = pin.installedBefore || pin.spec;
+  if (!pin.ours) {
+    return { held: 'site-tool', spec: shown, line: `This vault stays on the old settings file because its site's tool (${shown}) cannot read the new one. When that tool is ${FIRST_TOOL_READING_NEW_FILE} or later, run the update again.` };
+  }
+  return { held: 'site-tool-old', spec: shown, line: `This vault stays on the old settings file for now: its site's publish tool (${shown}) is older than the plugin's and cannot read the new file. Update it first (gm-apprentice-publish update-pin --site "${siteDir}"), then move the vault.` };
+}
+
+function siteToolHold(siteDir, { updated = false, pinCheck: ask = pinCheck } = {}) {
+  return holdFrom(ask(siteDir), { updated, siteDir });
+}
+
 // ---- Planning -----------------------------------------------------------------------------
 
 const INTERNAL = Symbol('move');
@@ -132,7 +202,7 @@ function planMove(options, deps = {}) {
   }
 }
 
-function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false }, deps = {}) {
+function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false, siteToolUpdated = false }, deps = {}) {
   const vault = path.resolve(vaultPath);
   let isDir = false;
   try { isDir = fs.statSync(vault).isDirectory(); } catch { /* said below */ }
@@ -191,6 +261,13 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
         }
       }
     }
+  }
+
+  // The site is built with its own copy of the publish tool, and an older copy reads a moved vault as having no
+  // settings at all. So the vault moves only when that tool is the plugin's own and reads the new file.
+  if (siteFile && !blockers.length) {
+    const held = siteToolHold(path.dirname(siteFile), { updated: siteToolUpdated, pinCheck: deps.pinCheck });
+    if (held) return { ok: false, lines: [], blockers: [], ...held, files: { write: [], remove: [] } };
   }
 
   // The old layout, read the way the build reads it.
@@ -305,23 +382,40 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
   const configText = newDoc.toString(PLAIN);
 
   // The notes: the top-level keys that are neither settings nor state, and the body unless it is the scaffold's own.
-  let notesDoc = null;
-  let notesBody = '';
   const extra = doc && doc.contents ? doc.contents.items.filter((p) => !claimed.has(keyText(p))) : [];
   const keepBody = !isBoilerplate(body);
-  if (extra.length || keepBody) {
-    notesDoc = new YAML.Document();
-    notesDoc.contents = new YAMLMap();
-    const typeKey = new Scalar('type');
-    const oldType = doc && doc.contents && doc.contents.items.find((p) => keyText(p) === 'type');
-    if (oldType && oldType.key.commentBefore) typeKey.commentBefore = oldType.key.commentBefore;
-    notesDoc.contents.items.push(new Pair(typeKey, new Scalar('meta')));
-    for (const p of extra) notesDoc.contents.items.push(new Pair(p.key.clone(), isNode(p.value) ? p.value.clone() : p.value));
-    notesBody = keepBody ? body : '';
-  }
+  const notesDoc = new YAML.Document();
+  notesDoc.contents = new YAMLMap();
+  const typeKey = new Scalar('type');
+  const oldType = doc && doc.contents && doc.contents.items.find((p) => keyText(p) === 'type');
+  if (oldType && oldType.key.commentBefore) typeKey.commentBefore = oldType.key.commentBefore;
+  notesDoc.contents.items.push(new Pair(typeKey, new Scalar('meta')));
+  for (const p of extra) notesDoc.contents.items.push(new Pair(p.key.clone(), isNode(p.value) ? p.value.clone() : p.value));
+
+  // Comments: counted off, so one that could not be placed is said, and kept in the notes, never dropped quietly.
+  const owners = doc ? commentOwners(doc) : [];
+  const unplaced = (withNotes) => {
+    const rest = [...owners];
+    for (const kept of [...commentLines(newDoc), ...(withNotes ? commentLines(notesDoc) : [])]) {
+      const at2 = rest.findIndex((o) => o.text === kept);
+      if (at2 >= 0) rest.splice(at2, 1);
+    }
+    return rest;
+  };
+  const notesAnyway = extra.length > 0 || keepBody;
+  let left = unplaced(notesAnyway);
+  const writeNotes = notesAnyway || left.length > 0;
+  if (!notesAnyway && writeNotes) left = unplaced(true);
+  for (const c of left) lines.push(`a comment could not be carried into the new file${c.key ? ` (it sat on ${c.key})` : ''}, so it is kept in ${NOTES_FILE}: ${c.text}`);
+
   // The notes file's frontmatter ends its lines the way the old file did (the body keeps its own).
   const eol = oldText.includes('\r\n') ? '\r\n' : '\n';
-  const notesText = notesDoc ? `---${eol}${notesDoc.toString(PLAIN).replace(/\n/g, eol)}---${eol}${notesBody}` : null;
+  let notesBody = keepBody ? body : '';
+  if (left.length) {
+    const section = [`## ${COMMENTS_HEADING}`, '', ...left.map((c) => `- ${c.key ? `\`${c.key}\`` : 'at the top of the file'}: ${c.text}`), ''].join(eol);
+    notesBody = keepBody ? `${body}${/\n$/.test(body) ? '' : eol}${eol}${section}` : section;
+  }
+  const notesText = writeNotes ? `---${eol}${notesDoc.toString(PLAIN).replace(/\n/g, eol)}---${eol}${notesBody}` : null;
 
   // A notes file that is already there is the one a stopped move wrote, when it is exactly what this move would write.
   const notesFile = at(vault, NOTES_FILE);
@@ -329,14 +423,6 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
   if (notesPresent && fs.readFileSync(notesFile, 'utf8') !== notesText) {
     blockers.push(`${NOTES_FILE} already exists; the notes from ${OLD_FILE} would have nowhere to go. Move it aside first.`);
   }
-
-  // Comments: counted off, so one that could not be placed is said, never dropped quietly.
-  const left = doc ? commentLines(doc) : [];
-  for (const kept of [...commentLines(newDoc), ...(notesDoc ? commentLines(notesDoc) : [])]) {
-    const at2 = left.indexOf(kept);
-    if (at2 >= 0) left.splice(at2, 1);
-  }
-  for (const text of left) lines.push(`a comment could not be carried: ${text}`);
 
   // State.
   const patch = {};
@@ -367,7 +453,10 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     }
   }
   for (const rec of old.legacy) {
-    if (rec.status === 'ignored') lines.push(`\`${rec.key}\` in the site folder's vault.config.json was ignored, because the vault's own settings already had ${OLD_BLOCK}.${rec.publishKey}; it was removed.`);
+    if (rec.status !== 'ignored') continue;
+    lines.push(rec.stillApplied && rec.stillApplied.length
+      ? `\`${rec.key}\` in the site folder's vault.config.json was merged into ${OLD_BLOCK}.${rec.publishKey}, which the vault's own settings already had: ${rec.stillApplied.length === 1 ? 'its entry' : 'its entries'} ${rec.stillApplied.map((x) => JSON.stringify(x)).join(', ')} ${rec.stillApplied.length === 1 ? 'was' : 'were'} added; the key was removed.`
+      : `\`${rec.key}\` in the site folder's vault.config.json was not used, because the vault's own settings already had ${OLD_BLOCK}.${rec.publishKey}; it was removed.`);
   }
   for (const e of LEAVES) {
     const name = legacyNameOf(e);
@@ -719,4 +808,4 @@ function applyMove(plan, deps = {}) {
   return { moved: true, lines };
 }
 
-module.exports = { planMove, applyMove, isBoilerplate };
+module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom };

@@ -276,6 +276,13 @@ async function runUpdatePin(options, deps) {
   const dependencies = sitePkg.dependencies || {};
   const spec = dependencies[DEP];
   pinSpec = spec ? String(spec) : null;
+  const readInstalled = () => {
+    try {
+      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
+    } catch {
+      return null;
+    }
+  };
   if (!spec) {
     if (!asJson) out(`${sitePkgPath} has no ${DEP} dependency — nothing to repoint.`);
     return report({
@@ -287,20 +294,14 @@ async function runUpdatePin(options, deps) {
     // A registry or git spec is somebody's deliberate choice; rewriting it to a
     // local cache path would break their install on the next `npm ci`.
     if (!asJson) out(`pinned to ${spec}, not a plugin-cache path — leave it alone`);
+    const installedNow = readInstalled();
     return report({
-      pinnedBefore: null, pinnedAfter: null, installedBefore: null, installedAfter: null,
+      pinnedBefore: null, pinnedAfter: null, installedBefore: installedNow, installedAfter: installedNow,
       desired, changed: false, ok: true,
     }, 0);
   }
 
   ours = true;
-  const readInstalled = () => {
-    try {
-      return JSON.parse(readFile(path.join(siteDir, 'node_modules', DEP, 'package.json'))).version || null;
-    } catch {
-      return null;
-    }
-  };
   const installedBefore = readInstalled();
 
   // suggestedPath is null whenever detectVersionDrift saw no drift — which happens

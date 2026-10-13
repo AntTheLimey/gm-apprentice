@@ -258,10 +258,27 @@ test('the groups come out as version, vault, player_site, and a comment above ty
   assert.match(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), /^---\n# a note on the type\ntype: meta\n/);
 });
 
-test('a comment that cannot be placed is listed, not dropped', () => {
+test('a comment that cannot be placed is listed and kept in the notes, under its key, after the GM\'s own text', () => {
   const s = scratch(old('  # about the theme block\n  theme:\n    genre: horror\n  mode: player\n'));
   const { plan } = moveAndCompare(s);
-  assert.ok(plan.lines.some((l) => l.startsWith('a comment could not be carried: # about the theme block') || l.startsWith('a comment could not be carried: about the theme block')), plan.lines.join('\n'));
+  assert.ok(plan.lines.some((l) => /a comment could not be carried into the new file \(it sat on publish\.theme\)/.test(l) && l.includes('about the theme block')), plan.lines.join('\n'));
+  const notes = fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8');
+  assert.match(notes, /## Comments from the old settings file\n\n- `publish\.theme`: about the theme block\n$/);
+  // With prose of the GM's own, the prose comes first and is kept exactly.
+  const t = scratch(`---\ntype: meta\npublish:\n  # about the theme block\n  theme:\n    genre: horror\n---\nMy own prose.\nNo final newline`);
+  moveAndCompare(t);
+  const kept = fs.readFileSync(at(t.vault, NOTES_FILE), 'utf8');
+  assert.ok(kept.includes('---\nMy own prose.\nNo final newline\n\n## Comments from the old settings file\n'), kept);
+});
+
+test('a site-file hiding list merged into the vault\'s says its entries were added, not that it was ignored', () => {
+  const s = scratch(old('  exclude_sections: [A]\n'), { site: { vaultPath: './Vault', excludeSections: ['A', 'Z'] } });
+  const { plan } = moveAndCompare(s);
+  const line = plan.lines.find((l) => l.includes('merged into'));
+  assert.ok(line && /merged into publish\.exclude_sections/.test(line) && line.includes('"Z"') && !/ignored/.test(line), plan.lines.join('\n'));
+  const t = scratch(old('  site_title: V\n'), { site: { vaultPath: './Vault', siteTitle: 'S' } });
+  const plan2 = moveAndCompare(t).plan;
+  assert.ok(plan2.lines.some((l) => /siteTitle` in the site folder's vault\.config\.json was not used, because the vault's own settings already had publish\.site_title/.test(l)), plan2.lines.join('\n'));
 });
 
 test('setup_progress and the version go to the state file, which keeps what it had', () => {
@@ -779,4 +796,91 @@ test('no settings file but settings in the site file: the move makes the new fil
   assert.equal(after.system, 'coc-7e');
   assert.equal(fs.existsSync(at(s.vault, NOTES_FILE)), false);
   assert.equal(planMove({ vaultPath: scratch(null).vault }).files.write.length, 0);
+});
+
+// ---- The site's tool must be able to read the new file (held, not blocked) ----
+
+function siteWithPin(spec, { fileName = 'vault.config.json' } = {}) {
+  const s = scratch(old('  site_dir: ../Site\n  site: false\n  site_title: V\n'));
+  const site = path.join(s.root, 'Site');
+  fs.mkdirSync(site);
+  fs.writeFileSync(path.join(site, fileName), JSON.stringify({ vaultPath: '../Vault', siteTitle: 'Theirs' }));
+  if (spec !== null) fs.writeFileSync(path.join(site, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': spec } }));
+  return { ...s, site };
+}
+
+test('a site whose tool is pinned by something else is held, whatever the site switch says; nothing is written', () => {
+  const s = siteWithPin('^1.20.0');
+  const before = hashes(s.root);
+  const r = cliMove({ vault: s.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(r.data.ok, false);
+  assert.equal(r.data.moved, false);
+  assert.equal(r.data.held, 'site-tool');
+  assert.equal(r.data.spec, '^1.20.0');
+  assert.deepEqual(r.data.blockers, []);
+  assert.match(r.data.line, /stays on the old settings file because its site's tool \(\^1\.20\.0\) cannot read the new one\. When that tool is 1\.23\.0 or later, run the update again\./);
+  assert.deepEqual(hashes(s.root), before);
+  assert.equal(layoutOf(s.vault), 'legacy');
+  // --check says the same.
+  assert.equal(cliMove({ vault: s.vault }, { check: true }).data.held, 'site-tool');
+});
+
+test('a site with no pinned tool moves; a site folder named but missing, or without a vault.config.json, is as it was', () => {
+  const free = siteWithPin(null);
+  assert.equal(cliMove({ vault: free.vault }).rc, 0);
+  assert.equal(layoutOf(free.vault), 'new');
+  const missing = scratch(old('  site_dir: ../Missing\n'));
+  const r = cliMove({ vault: missing.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(r.data.held, undefined);
+  assert.equal(layoutOf(missing.vault), 'legacy');
+  const empty = siteWithPin('^1.20.0', { fileName: 'other.json' });
+  const e = cliMove({ vault: empty.vault });
+  assert.equal(e.rc, 1);
+  assert.equal(e.data.held, undefined, 'no vault.config.json in the folder: no site file to ask about');
+});
+
+test('the four cases: ours or not, able to read the new file or not', () => {
+  const where = (s) => path.join(s.site, 'vault.config.json');
+  const cases = [
+    // [label, pin answer, caller updating, expected held]
+    ['ours, old, the update repins first', { ok: false, ours: true, spec: 'file:/p', installedBefore: '1.20.0' }, true, undefined],
+    ['ours, old, nobody repins', { ok: false, ours: true, spec: 'file:/p', installedBefore: '1.20.0' }, false, 'site-tool-old'],
+    ['not ours, installed 1.24.0', { ok: true, ours: false, spec: '^1.20.0', installedBefore: '1.24.0' }, true, undefined],
+    ['not ours, installed exactly 1.23.0', { ok: true, ours: false, spec: '1.23.0', installedBefore: '1.23.0' }, false, undefined],
+    ['not ours, installed 1.22.9', { ok: true, ours: false, spec: '^1.20.0', installedBefore: '1.22.9' }, true, 'site-tool'],
+    ['not ours, nothing installed, spec asks for 1.25.0', { ok: true, ours: false, spec: '^1.25.0', installedBefore: null }, false, undefined],
+    ['not ours, nothing installed, spec asks for 1.2.0', { ok: true, ours: false, spec: '^1.2.0', installedBefore: null }, false, 'site-tool'],
+    ['not ours, nothing installed, spec says nothing of a version', { ok: true, ours: false, spec: 'github:someone/fork', installedBefore: null }, false, 'site-tool'],
+    ['no tool pinned or installed', { ok: true, ours: false, spec: null, installedBefore: null }, false, undefined],
+  ];
+  for (const [label, pin, updated, held] of cases) {
+    const s = siteWithPin(null);
+    const plan = planMove({ vaultPath: s.vault, siteConfigPath: where(s), siteToolUpdated: updated }, { pinCheck: () => pin });
+    assert.equal(plan.held, held, label);
+    assert.equal(plan.ok, held === undefined, label);
+  }
+});
+
+test('an old copy of the plugin\'s own tool holds the move unless the caller is bringing it up to date', () => {
+  const s = siteWithPin('file:/cache/gm-apprentice/1.10.1/tools/publish');
+  const calls = [];
+  const stale = (dir) => { calls.push(dir); return { ok: false, ours: true, spec: 'file:/cache/gm-apprentice/1.10.1/tools/publish' }; };
+  const held = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.site, 'vault.config.json') }, { pinCheck: stale });
+  assert.equal(held.ok, false);
+  assert.equal(held.held, 'site-tool-old');
+  assert.match(held.line, /older than the plugin's/);
+  const updating = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.site, 'vault.config.json'), siteToolUpdated: true }, { pinCheck: stale });
+  assert.equal(updating.ok, true, updating.blockers.join(' | '));
+  const current = planMove({ vaultPath: s.vault, siteConfigPath: path.join(s.site, 'vault.config.json') }, { pinCheck: () => ({ ok: true, ours: true, spec: 'file:/x', installedBefore: '1.24.0' }) });
+  assert.equal(current.ok, true);
+  assert.equal(calls.length, 2);
+});
+
+test('a moved vault is tidied even when its site is pinned by something else', () => {
+  const s = siteWithPin(null);
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(path.join(s.site, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': '^1.20.0' } }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
 });

@@ -190,7 +190,7 @@ test('seedVaultSettings makes no settings file while the site file still holds s
   try {
     const refused = seedVaultSettings(held.vault, { 'player_site.title': 'A' }, { siteConfig: { vaultPath: '../v', siteTitle: 'Kept' } });
     assert.deepEqual(refused.written, []);
-    assert.match(refused.skipped, /still holds this vault's settings; run the update first/);
+    assert.match(refused.skipped, /still holds this vault's settings, so none can be set yet\. Bring them into the vault first by running: gm-apprentice-publish settings move --vault .* --config/);
     assert.equal(fs.existsSync(path.join(held.vault, NEW.file)), false);
     const ok = seedVaultSettings(bare.vault, { 'player_site.title': 'A' }, { siteConfig: { host: 'github-pages', siteUrl: 'u', vaultPath: '../v', outputDir: './docs' } });
     assert.deepEqual(ok.written, ['player_site.title']);

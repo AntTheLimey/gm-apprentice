@@ -214,13 +214,13 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
   settings raw [<name>]            The file as written, or the value at one name
-  settings move [--check] [--fill name=value ...] [--discard-old-file]
+  settings move [--check] [--fill name=value ...] [--discard-old-file] [--site-tool-updated]
                                    Take a vault from the old settings file to the new one, all or nothing
                                    (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none;
                                    on a vault already moved it tidies up after a stopped move, and --discard-old-file removes a left-over
-                                   old file that holds more than the new one)
-                                   Do not run it by hand yet: the next release runs it for you, and teaches the
-                                   plugin's own scripts to read the new file at the same time
+                                   old file that holds more than the new one; --site-tool-updated says the caller is bringing the site's tool up to date first)
+                                   The plugin's update normally runs the move for you. Running it by hand is safe:
+                                   it refuses when the site's publish tool cannot read the new file.
   settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
                                    vault not yet updated). Also: setup-note set <key>=<value> ... and setup-note clear
 
@@ -588,8 +588,11 @@ function move(options) {
     if (named && !named.exists && layoutOf(vaultPath) === 'legacy') return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
     if (named && named.exists) siteConfigPath = named.file;
   }
-  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld });
-  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.leftover ? { leftover: plan.leftover } : {}) });
+  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
+  if (plan.held) {
+    return { result: base(false, [plan.line]), lines: ['Nothing was changed.', plan.line], rc: 1 };
+  }
   if (!plan.ok) {
     return { result: base(false, plan.lines), lines: ['Nothing was changed. The move is blocked:', ...plan.blockers.map((b) => `  ${b}`)], rc: 1 };
   }

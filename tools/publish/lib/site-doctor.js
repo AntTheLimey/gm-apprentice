@@ -264,17 +264,16 @@ async function runSiteDoctor(options, deps) {
     ));
   }
   // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
-  // site, which update-pin alone decides (`ours`).
+  // site and whether that tool can read the new file (move.js: holdFrom).
   if (layoutOf(vaultPath) === 'legacy') {
     const pin = await (d.pinCheck || pinCheck)(siteRoot, d);
-    if (pin && pin.ours) {
+    const hold = pin && require('./settings/move').holdFrom(pin, { updated: true, siteDir: siteRoot });
+    if (hold) {
+      findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath), hold.line, 'update that tool, then run the vault update'));
+    } else if (pin && (pin.spec || pin.installedBefore)) {
       findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath),
         'this vault is still on the old settings file; the next update moves it',
         'run the vault update (campaign-organizer\'s migration)'));
-    } else if (pin && pin.spec) {
-      findings.push(finding('SETTINGS_FILE_OLD', 'warning', fileLabel(vaultPath),
-        `this vault stays on the old settings file until this site's tool (pinned to ${pin.spec}) is 1.23.0 or later`,
-        'update that tool, then run the vault update'));
     }
   }
   const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');
