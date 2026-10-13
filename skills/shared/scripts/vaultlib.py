@@ -1165,6 +1165,7 @@ def write_stamp(vault: Path, version: str) -> None:
         except OSError:
             pass
         raise
+    forget_settings(vault)
 
 
 # --------------------------------------------------------------------------
