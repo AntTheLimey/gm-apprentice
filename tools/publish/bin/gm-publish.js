@@ -773,18 +773,18 @@ if (command === 'settings') {
   const rest = [];
   const tail = args.slice(2);
   for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--config' || tail[i] === '--vault') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
+    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create' }, { '--vault': 'vault' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check' }, { '--vault': 'vault' }, { '--fill': 'fill' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, fill: parsed.flags.fill });
   exitAfterFlush(rc);
   return;
 }

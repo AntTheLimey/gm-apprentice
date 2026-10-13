@@ -10,6 +10,7 @@
 //   settings list                    every name a GM can set
 //   settings raw [<name>]            the file as written
 //   settings setup-note get|set|clear  the publish set-up note
+//   settings move                    take a vault from the old settings file to the new one
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseNote } = require('../frontmatter');
@@ -22,8 +23,9 @@ const { nearest } = require('./faults');
 const { row, isLeaf, defaultOf } = require('./describe');
 const { OLD_BLOCK } = require('./legacy');
 const { readState, writeState } = require('./state');
+const { planMove, applyMove } = require('./move');
 
-const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note'];
+const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // Removed in Part B: the name the old vault file gave a setting, which the commands still take for
@@ -202,7 +204,7 @@ function list() {
 function helpText() {
   const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
-gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw|setup-note> [...] [--json] [--create] [--vault <dir>] [--config <path>]
+gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 
 Reads, writes, describes and checks the settings in the vault's settings file (${NEW_FILE}; ${OLD_FILE} on a vault not yet updated).
 
@@ -218,6 +220,9 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
   settings raw [<name>]            The file as written, or the value at one name
+  settings move [--check] [--fill name=value ...]
+                                   Take a vault from the old settings file to the new one, all or nothing
+                                   (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none)
   settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
                                    vault not yet updated). Also: setup-note set <key>=<value> ... and setup-note clear
 
@@ -511,6 +516,34 @@ function setupNote(options, args) {
   return { result: merged, lines: rest.map((p) => `Noted ${splitPair(p).name}.`) };
 }
 
+// ---- The move ------------------------------------------------------------------------------
+
+// `--fill name=value` pairs as an object; a pair with no `=` is refused by the plan (its name is not fillable).
+function fillOf(pairs) {
+  const out = {};
+  for (const pair of pairs || []) {
+    const { name, given } = splitPair(pair);
+    out[name] = given;
+  }
+  return out;
+}
+
+function move(options) {
+  const { vaultPath } = target(options);
+  const siteConfigPath = options.config ? path.resolve(options.config) : (options.vault ? null : path.resolve('./vault.config.json'));
+  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill) });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files });
+  if (!plan.ok) {
+    return { result: base(false, plan.lines), lines: ['Nothing was changed. The move is blocked:', ...plan.blockers.map((b) => `  ${b}`)], rc: 1 };
+  }
+  if (options.check) {
+    const lines = plan.files.remove.length ? ['Nothing was changed (check only). This is what the move will do:', ...plan.lines] : plan.lines;
+    return { result: base(false, plan.lines), lines };
+  }
+  const done = applyMove(plan);
+  return { result: base(done.moved, done.lines), lines: done.lines };
+}
+
 // ---- The command --------------------------------------------------------------------------
 
 // options: { verb, args, vault, config, json }. Returns the exit code.
@@ -525,6 +558,7 @@ function runSettings(options, deps = {}) {
     else if (options.verb === 'set') done = set(options, args);
     else if (options.verb === 'add' || options.verb === 'remove') done = changeList(options, options.verb, args);
     else if (options.verb === 'setup-note') done = setupNote(options, args);
+    else if (options.verb === 'move') done = move(options);
     else if (options.verb === 'unset') done = unset(options, args);
     else if (options.verb === 'describe') {
       if (!args[0]) throw new Error('settings describe needs a setting name.');

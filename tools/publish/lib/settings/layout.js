@@ -8,6 +8,7 @@ const path = require('node:path');
 const NEW_FILE = '_meta/vault-config.yaml';
 const OLD_FILE = '_meta/vault-config.md';
 const STATE_FILE = '_meta/vault-state.json';
+const NOTES_FILE = '_meta/vault-notes.md';
 
 const at = (vaultPath, rel) => path.join(vaultPath, ...rel.split('/'));
 
@@ -18,4 +19,4 @@ function layoutOf(vaultPath) {
   return fs.existsSync(at(vaultPath, OLD_FILE)) ? 'legacy' : 'none';
 }
 
-module.exports = { NEW_FILE, OLD_FILE, STATE_FILE, layoutOf, at };
+module.exports = { NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at };

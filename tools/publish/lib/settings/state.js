@@ -28,6 +28,9 @@ function readState(vaultPath) {
   return data;
 }
 
+// The file's text for a state object: the one way it is written.
+const stateText = (state) => `${JSON.stringify(state, null, 2)}\n`;
+
 // Shallow-merges `patch` into the file (a key set to null is removed) and writes it whole,
 // atomically. Keys it does not know, and their order, stay; new keys go at the end.
 function writeState(vaultPath, patch) {
@@ -43,7 +46,7 @@ function writeState(vaultPath, patch) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
   try {
-    fs.writeFileSync(tmp, `${JSON.stringify(merged, null, 2)}\n`);
+    fs.writeFileSync(tmp, stateText(merged));
     fs.renameSync(tmp, file);
   } catch (e) {
     fs.rmSync(tmp, { force: true });
@@ -52,4 +55,4 @@ function writeState(vaultPath, patch) {
   return merged;
 }
 
-module.exports = { readState, writeState };
+module.exports = { readState, writeState, stateText };
