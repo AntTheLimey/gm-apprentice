@@ -8,7 +8,7 @@
 // needed; read as unset), guards (the hiding side), onFault, open, was (the names this setting had
 // in the old layout, in order of precedence: each { name, in: 'vault' for _meta/vault-config.md or
 // 'site' for the site's vault.config.json, read: false when the old name is reported but its value
-// is not read }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
+// is not read, carryOnly: true when the reader neither reads nor reports it and only the move carries it }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
 // map: the setting is also a key of the site file, named by its 'site' was), legacyMerge (how the
 // two old files combine: union, stricter or perKey), legacyOnly (exists only in the old file; its
 // name stays the old one), retired, state, container (a parent that holds only other settings),
@@ -94,7 +94,7 @@ const REGISTRY = [
     left_out: '`tree`',
   },
   {
-    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }], type: 'text', default: 'This page is not available.', group: 'site',
+    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }, { name: 'fourOhFour.message', in: 'site', carryOnly: true }], type: 'text', default: 'This page is not available.', group: 'site',
     does: 'The words a reader sees after following a link to a page that is not there',
     left_out: '"This page is not available."',
   },
@@ -254,7 +254,7 @@ const REGISTRY = [
     left_out: 'No files',
   },
   {
-    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }], type: 'text', group: 'theme',
+    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }, { name: 'campaignImage', in: 'site', carryOnly: true }], type: 'text', group: 'theme',
     shape: "a picture's path in the vault",
     does: 'The large picture at the top of the landing page',
     left_out: 'No picture',

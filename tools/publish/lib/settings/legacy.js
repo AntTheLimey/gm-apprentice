@@ -22,7 +22,7 @@ const FOLDERS_LABEL = legacyNameOf(settingEntry('player_site.hide.folders'));
 const LEGACY = REGISTRY.filter((e) => legacyNameOf(e)).map((e) => {
   const first = legacyNameOf(e);
   const json = siteKeyOf(e);
-  const oldNames = (e.was || []).filter((w) => !(w.in === 'vault' && w.name === first) && !(w.in === 'site' && w.name === json));
+  const oldNames = (e.was || []).filter((w) => !w.carryOnly && !(w.in === 'vault' && w.name === first) && !(w.in === 'site' && w.name === json));
   // An entry that exists only in the old file has no new name: its faults carry `setting: null`.
   return { ...e, name: first, setting: e.legacyOnly ? null : e.name, json: json || undefined, jsonKind: e.legacyKind, jsonMerge: e.legacyMerge, oldNames };
 });

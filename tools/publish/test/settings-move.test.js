@@ -14,6 +14,7 @@ const { layoutOf, at, NEW_FILE, OLD_FILE, NOTES_FILE, STATE_FILE } = require('..
 const { loadPublishConfig } = require('../lib/config');
 const { build } = require('../lib/build');
 const { prepareFixture } = require('./helpers/fixture-build');
+const { writeNewConfig } = require('./helpers/settings-files');
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 const REPO_TESTS = path.join(__dirname, '..', '..', '..', 'tests');
@@ -52,7 +53,7 @@ function hashes(dir) {
 const strip = (c) => { const { faults, origins, legacy, ...rest } = c; return rest; };
 
 // Moves a scratch vault and returns what it was before and after, read the build's way.
-function moveAndCompare(s) {
+function moveAndCompare(s, { carried = false } = {}) {
   const site = s.config ? JSON.parse(fs.readFileSync(s.config, 'utf8')) : {};
   const before = strip(loadPublishConfig(s.vault, site, quiet));
   const plan = planMove({ vaultPath: s.vault, siteConfigPath: s.config });
@@ -63,8 +64,16 @@ function moveAndCompare(s) {
   assert.equal(layoutOf(s.vault), 'new');
   assert.equal(fs.existsSync(at(s.vault, OLD_FILE)), false);
   const siteAfter = s.config ? JSON.parse(fs.readFileSync(s.config, 'utf8')) : {};
-  const after = strip(loadPublishConfig(s.vault, siteAfter, quiet));
+  const afterFull = loadPublishConfig(s.vault, siteAfter, quiet);
+  const after = strip(afterFull);
+  // The values the move carries from the site file change what is published, and only those.
+  if (carried) {
+    after.theme = { ...after.theme }; before.theme = { ...before.theme };
+    after.four_oh_four = {}; before.four_oh_four = {};
+    delete after.theme.campaign_image; delete before.theme.campaign_image; delete after.theme.tagline; delete before.theme.tagline;
+  }
   assert.deepEqual(after, before);
+  assert.deepEqual(afterFull.site, loadPublishConfig(s.vault, site, quiet).site, 'the site folder settings come out the same');
   return { before, after, plan, done, siteAfter };
 }
 
@@ -187,16 +196,13 @@ test('the site file is merged in, then loses its setting keys and keeps the rest
     backend: { statusBar: true, inbox: false }, attachmentsDir: 'att', folderMap: { A: 'a' },
   };
   const s = scratch(old('  mode: player\n'), { site });
-  const { before, siteAfter, plan } = moveAndCompare(s);
+  const { before, siteAfter, plan } = moveAndCompare(s, { carried: true });
   assert.equal(before.site_title, 'From the site');
   assert.ok(before.exclude_sections.includes('Extra Secret'));
   assert.ok(before.exclude_sections.length > 1, 'the built-in list is still there (#371)');
-  assert.deepEqual(siteAfter, {
-    vaultPath: './Vault', host: 'cloudflare-pages', siteUrl: 'https://x.example', outputDir: './docs', cloudflarePagesProject: 'p', preserveDirs: ['keep'],
-    campaignImage: 'a.png', fourOhFour: { x: 1 }, landingTagline: 'unread',
-  });
+  assert.deepEqual(siteAfter, { vaultPath: './Vault' });
   assert.ok(plan.lines.some((l) => l.includes('siteTitle')));
-  assert.ok(!plan.lines.some((l) => l.includes('landingTagline')), 'landingTagline is left alone and not mentioned');
+  assert.ok(plan.lines.includes('`landingTagline` moved to `player_site.theme.tagline`.'));
   assert.deepEqual(readSettings({ vaultPath: s.vault, siteConfig: siteAfter }).faults.filter((f) => f.level === 'stop'), []);
 });
 
@@ -546,7 +552,7 @@ test('the site file keeps its indent and trailing newline when it loses its sett
     const raw = JSON.stringify({ vaultPath: './Vault', siteTitle: 'T', outputDir: './docs' }, null, indent) + (newline ? '\n' : '');
     const s = scratch(old('  mode: player\n'), { site: raw });
     const { plan } = moveAndCompare(s);
-    const expected = JSON.stringify({ vaultPath: './Vault', outputDir: './docs' }, null, indent) + (newline ? '\n' : '');
+    const expected = JSON.stringify({ vaultPath: './Vault' }, null, indent) + (newline ? '\n' : '');
     assert.equal(fs.readFileSync(s.config, 'utf8'), expected, String(indent));
     assert.ok(plan.lines.some((l) => l.includes('The rest of that file is as it was.')));
   }
@@ -930,7 +936,7 @@ test('--fold-site-file adds a site hiding list to the vault\'s, keeps the strict
   const siteDir = path.join(s.root, 'Site');
   fs.mkdirSync(siteDir);
   const file = path.join(siteDir, 'vault.config.json');
-  const siteJson = { vaultPath: '../Vault', outputDir: './docs' };
+  const siteJson = { vaultPath: '../Vault', notes: 'kept' };
   fs.writeFileSync(file, JSON.stringify(siteJson, null, 4) + '\n');
   assert.equal(cliMove({ vault: s.vault }).rc, 0);
   const extra = { ...siteJson, siteTitle: 'Theirs', excludeSections: ['Z'], excludeCallouts: ['spoiler'] };
@@ -1000,4 +1006,115 @@ test('a left-over old file that also hides a heading does not hide the site file
   assert.ok((check.data.siteDiffers || []).includes('player_site.hide.sections'), JSON.stringify(check.data));
   assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true }).rc, 0);
   assert.ok(readSettings({ vaultPath: s.vault }).values.player_site.hide.sections.includes('Site Secret'));
+});
+
+// ---- What a site folder's vault.config.json still holds: carried into the vault, then taken out of the site file ----
+
+const SITE_ALL = {
+  vaultPath: './Vault', siteUrl: 'https://x.example', host: 'cloudflare-pages', outputDir: 'gazetteer', cloudflarePagesProject: 'proj', preserveDirs: ['keep', 'audio'],
+  campaignImage: 'pics/cover.png', fourOhFour: { message: 'Sealed.', style: 'in-world' }, landingTagline: 'A tagline', notASetting: { a: 1 },
+};
+const siteJson = (s) => JSON.parse(fs.readFileSync(s.config, 'utf8'));
+// The same vault, on each starting layout, with the new file holding `settings` where it is a new-layout vault.
+const LAYOUTS = {
+  legacy: (publishLines, settings) => scratch(old(publishLines), { site: SITE_ALL }),
+  new: (publishLines, settings) => { const s = scratch(null, { site: SITE_ALL }); writeNewConfig(s.vault, settings); return s; },
+};
+const vaultValues = (s) => readSettings({ vaultPath: s.vault, siteConfig: {} }).values.player_site;
+
+for (const [layout, make] of Object.entries(LAYOUTS)) {
+  test(`${layout} layout: what the site file holds is carried to the vault where the vault sets none, and the site file is left with its vaultPath`, () => {
+    const s = make('  mode: player\n', { version: 1 });
+    const before = loadPublishConfig(s.vault, siteJson(s), quiet);
+    const check = hashes(s.root);
+    const dry = cliMove({ vault: s.vault, config: s.config }, { check: true });
+    assert.equal(dry.rc, 0, dry.err.join('\n'));
+    assert.deepEqual(hashes(s.root), check, '--check writes nothing');
+    const r = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(r.rc, 0, r.err.join('\n'));
+    assert.deepEqual(siteJson(s), { vaultPath: './Vault', notASetting: { a: 1 } }, 'only vaultPath and the key the list does not know');
+    const got = vaultValues(s);
+    assert.equal(got.url, 'https://x.example');
+    assert.equal(got.host, 'cloudflare-pages');
+    assert.equal(got.output, 'gazetteer');
+    assert.equal(got.cloudflare_project, 'proj');
+    assert.deepEqual(got.keep, ['keep', 'audio']);
+    assert.equal(got.theme.campaign_image, 'pics/cover.png');
+    assert.equal(got.not_found, 'Sealed.');
+    assert.equal(got.theme.tagline, 'A tagline');
+    const after = loadPublishConfig(s.vault, siteJson(s), quiet);
+    assert.deepEqual(after.site, before.site, 'the folder settings resolve as they did');
+    const text = r.data.lines.join('\n');
+    assert.ok(text.includes('`siteUrl` moved to `player_site.url`.'), text);
+    assert.ok(text.includes('`outputDir` moved to `player_site.output`.'), text);
+    assert.ok(text.includes('`fourOhFour.message` moved to `player_site.not_found`.'), text);
+    assert.ok(text.includes('`campaignImage` moved to `player_site.theme.campaign_image`.'), text);
+    assert.ok(/fourOhFour\.style[^\n]*no longer used/.test(text), text);
+    assert.ok(/`notASetting`[^\n]*left/.test(text), text);
+    assert.deepEqual(r.data.carried.map((c) => c.from).sort(), ['campaignImage', 'cloudflarePagesProject', 'fourOhFour.message', 'host', 'landingTagline', 'outputDir', 'preserveDirs', 'siteUrl']);
+    assert.deepEqual(r.data.carried.find((c) => c.from === 'preserveDirs'), { from: 'preserveDirs', to: 'player_site.keep', value: ['keep', 'audio'] });
+    assert.deepEqual(r.data.dropped.map((d) => d.from), ['fourOhFour.style']);
+    assert.ok(r.data.dropped[0].why);
+    const again = hashes(s.root);
+    const second = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(second.rc, 0, second.err.join('\n'));
+    assert.deepEqual(hashes(s.root), again, 'a second run changes nothing');
+  });
+
+  test(`${layout} layout: set in both and equal removes the key silently; set in both and different keeps the vault's and says both values`, () => {
+    const settings = {
+      version: 1,
+      player_site: {
+        url: 'https://x.example', host: 'github-pages', theme: { campaign_image: 'mine.png', tagline: 'A tagline' }, not_found: 'Mine', keep: ['keep', 'audio'],
+      },
+    };
+    const lines = '  mode: player\n  theme:\n    campaign_image: mine.png\n    tagline: A tagline\n  four_oh_four:\n    message: Mine\n';
+    const s = make(lines, settings);
+    const r = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(r.rc, 0, r.err.join('\n'));
+    if (layout === 'legacy') {
+      // The old file has no names for the five folder settings: they are the site file's alone there, so all five carry.
+      assert.deepEqual(siteJson(s), { vaultPath: './Vault', notASetting: { a: 1 } });
+      assert.equal(vaultValues(s).host, 'cloudflare-pages');
+      assert.equal(vaultValues(s).theme.campaign_image, 'mine.png');
+      assert.deepEqual(r.data.dropped.map((d) => d.from).sort(), ['campaignImage', 'fourOhFour.message', 'fourOhFour.style']);
+      assert.ok(!r.data.lines.join('\n').includes('`landingTagline`'), 'an equal tagline is not mentioned');
+      return;
+    }
+    assert.deepEqual(siteJson(s), { vaultPath: './Vault', notASetting: { a: 1 } });
+    const got = vaultValues(s);
+    assert.equal(got.url, 'https://x.example', 'equal: the same');
+    assert.equal(got.host, 'github-pages', 'the vault\'s value stays');
+    assert.equal(got.theme.campaign_image, 'mine.png');
+    assert.equal(got.not_found, 'Mine');
+    assert.equal(got.output, 'gazetteer', 'unset in the vault: carried');
+    const text = r.data.lines.join('\n');
+    assert.ok(!text.includes('`siteUrl`'), 'equal values are not mentioned');
+    assert.ok(!text.includes('`landingTagline`'), 'an equal tagline is not mentioned');
+    assert.ok(!text.includes('`preserveDirs`'), 'an equal list is not mentioned');
+    assert.ok(/`host`[^\n]*cloudflare-pages[^\n]*github-pages/.test(text), text);
+    assert.ok(/`campaignImage`[^\n]*pics\/cover\.png[^\n]*mine\.png/.test(text), text);
+    assert.ok(/`fourOhFour\.message`[^\n]*Sealed\.[^\n]*Mine/.test(text), text);
+    assert.deepEqual(r.data.dropped.map((d) => d.from).sort(), ['campaignImage', 'fourOhFour.message', 'fourOhFour.style', 'host']);
+    assert.deepEqual(r.data.carried.map((c) => c.from).sort(), ['cloudflarePagesProject', 'outputDir']);
+  });
+}
+
+test('an empty fourOhFour is removed, a tagline the vault has is not carried, and nothing else in the site file changes', () => {
+  const site = { vaultPath: './Vault', fourOhFour: {}, landingTagline: 'Site words', note: 'mine' };
+  const s = scratch(old('  mode: player\n  theme:\n    tagline: Vault words\n'), { site });
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 0, r.err.join('\n'));
+  assert.deepEqual(siteJson(s), { vaultPath: './Vault', note: 'mine' });
+  assert.equal(vaultValues(s).theme.tagline, 'Vault words');
+  assert.ok(/`landingTagline`[^\n]*Site words[^\n]*Vault words/.test(r.data.lines.join('\n')));
+  assert.deepEqual(r.data.dropped.map((d) => d.from), ['landingTagline']);
+});
+
+test('a folder setting that would stop the build blocks the move and writes nothing', () => {
+  const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', outputDir: '../elsewhere' } });
+  const before = hashes(s.root);
+  const r = cliMove({ vault: s.vault, config: s.config });
+  assert.equal(r.rc, 1);
+  assert.deepEqual(hashes(s.root), before);
 });

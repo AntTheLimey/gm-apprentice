@@ -183,7 +183,7 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
   for (const e of LIST) {
     // The site folder's own five keys are read below, while the vault sets none.
     if (e.siteFallback) continue;
-    for (const w of (e.was || []).filter((x) => x.in === 'site')) {
+    for (const w of (e.was || []).filter((x) => x.in === 'site' && !x.carryOnly)) {
       const value = getPath(site, w.name.split('.'));
       if (value === undefined) continue;
       // A list that hides things, left in the site folder, would publish what it meant to hide: it stops the build.
