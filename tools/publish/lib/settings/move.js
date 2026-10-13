@@ -182,8 +182,56 @@ function holdFrom(pin, { updated = false, siteDir = '' } = {}) {
   return { held: 'site-tool-old', spec: shown, line: `This vault stays on the old settings file for now: its site's publish tool (${shown}) is older than the plugin's and cannot read the new file. Update it first (gm-apprentice-publish update-pin --site "${siteDir}"), then move the vault.` };
 }
 
+// The version the tool INSTALLED in a site folder says it is, whatever the folder's package.json says; null if none.
+function installedIn(siteDir) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(siteDir, 'node_modules', 'gm-apprentice-publish', 'package.json'), 'utf8')).version || null;
+  } catch {
+    return null;
+  }
+}
+
+// One site folder: the pin's answer, with the installed tool's own version read directly (an old tool installed in a
+// folder whose package.json does not name it still builds that site). A folder with no tool installed and no pin at
+// all has nothing that could build it, so it holds nothing.
 function siteToolHold(siteDir, { updated = false, pinCheck: ask = pinCheck } = {}) {
-  return holdFrom(ask(siteDir), { updated, siteDir });
+  const pin = { ...(ask(siteDir) || {}) };
+  const installed = installedIn(siteDir);
+  if (installed) {
+    pin.installedBefore = installed;
+    if (!pin.spec) pin.ours = false;
+  }
+  return holdFrom(pin, { updated, siteDir });
+}
+
+// Every site folder involved: the one the vault's settings name (when it holds a vault.config.json) and the one the
+// caller gave. Held if any cannot read the new file; the first that cannot is the one said.
+function siteToolHoldAll(vault, siteDirs, options) {
+  const seen = new Set();
+  const dirs = [];
+  for (const d of siteDirs.filter(Boolean)) {
+    let key = path.resolve(d);
+    try { key = fs.realpathSync.native(key); } catch { /* as given */ }
+    if (!seen.has(key)) { seen.add(key); dirs.push(path.resolve(d)); }
+  }
+  for (const d of dirs) {
+    const held = siteToolHold(d, options);
+    if (held) return held;
+  }
+  return null;
+}
+
+// The site folder the vault's own settings name, when it holds a vault.config.json; null otherwise.
+function namedSiteDir(vault) {
+  let raw;
+  try {
+    raw = getPath(read.readSettings({ vaultPath: vault, siteConfig: {} }).values, ['player_site', 'folder']);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'string' || raw.trim() === '') return null;
+  const dir = require('../lines-cli').siteDirPath(vault, raw);
+  return fs.existsSync(path.join(dir, 'vault.config.json')) ? dir : null;
 }
 
 // ---- Planning -----------------------------------------------------------------------------
@@ -266,7 +314,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
   // The site is built with its own copy of the publish tool, and an older copy reads a moved vault as having no
   // settings at all. So the vault moves only when that tool is the plugin's own and reads the new file.
   if (siteFile && !blockers.length) {
-    const held = siteToolHold(path.dirname(siteFile), { updated: siteToolUpdated, pinCheck: deps.pinCheck });
+    const held = siteToolHoldAll(vault, [path.dirname(siteFile), namedSiteDir(vault)], { updated: siteToolUpdated, pinCheck: deps.pinCheck });
     if (held) return { ok: false, lines: [], blockers: [], ...held, files: { write: [], remove: [] } };
   }
 
@@ -806,4 +854,4 @@ function applyMove(plan, deps = {}) {
   return { moved: true, lines };
 }
 
-module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom };
+module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom, siteToolHoldAll };

@@ -884,3 +884,41 @@ test('a moved vault is tidied even when its site is pinned by something else', (
   fs.writeFileSync(path.join(s.site, 'package.json'), JSON.stringify({ dependencies: { 'gm-apprentice-publish': '^1.20.0' } }));
   assert.equal(cliMove({ vault: s.vault }).rc, 0);
 });
+
+// ---- Every site folder involved is asked, and an installed tool counts whatever package.json says ----
+
+function installTool(dir, version) {
+  const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
+  fs.mkdirSync(pkg, { recursive: true });
+  fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version }));
+}
+
+test('the vault names site A (old tool) and --config names site B (new tool): held, because A is asked too', () => {
+  const s = scratch(old('  site_dir: ../SiteA\n'));
+  const a = path.join(s.root, 'SiteA');
+  const b = path.join(s.root, 'SiteB');
+  for (const d of [a, b]) { fs.mkdirSync(d); fs.writeFileSync(path.join(d, 'vault.config.json'), JSON.stringify({ vaultPath: '../Vault' })); }
+  installTool(a, '1.22.0');
+  installTool(b, '1.23.0');
+  const none = () => null;
+  const plan = planMove({ vaultPath: s.vault, siteConfigPath: path.join(b, 'vault.config.json') }, { pinCheck: none });
+  assert.equal(plan.ok, false);
+  assert.equal(plan.held, 'site-tool');
+  assert.match(plan.line, /\(1\.22\.0\)/);
+  installTool(a, '1.23.0');
+  assert.equal(planMove({ vaultPath: s.vault, siteConfigPath: path.join(b, 'vault.config.json') }, { pinCheck: none }).ok, true);
+});
+
+test('an old tool installed in a site folder whose package.json does not name it still holds the move; no tool and no pin does not', () => {
+  const s = siteWithPin(null);
+  installTool(s.site, '1.22.0');
+  const r = cliMove({ vault: s.vault });
+  assert.equal(r.rc, 1);
+  assert.equal(r.data.held, 'site-tool');
+  assert.equal(layoutOf(s.vault), 'legacy');
+  const free = siteWithPin(null);
+  assert.equal(cliMove({ vault: free.vault }).rc, 0);
+  const current = siteWithPin(null);
+  installTool(current.site, '1.23.0');
+  assert.equal(cliMove({ vault: current.vault }).rc, 0);
+});
