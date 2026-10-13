@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { build, resolveSiteLink } = require('../lib/build');
+const { build, resolveSiteLink, rememberHiddenNames } = require('../lib/build');
 const { generateNav } = require('../lib/templates/nav');
 const { writeNewConfig } = require('./helpers/settings-files');
 
@@ -68,7 +68,10 @@ function menus(html) {
 
 const pages = [{ title: 'Harbour', outputPath: 'locations/harbour.html' }];
 const linkMap = Object.assign(Object.create(null), { Harbour: 'locations/harbour.html' });
-const unpublished = new Set(['old tam']);
+rememberHiddenNames(linkMap, [
+  { vaultPath: 'Hidden/Old_Tam', displayTitle: 'Old Tam', frontmatter: { aliases: ['Tam the Old'] } },
+  { vaultPath: 'Locations/Harbour', displayTitle: 'Harbour', frontmatter: {} },
+]);
 
 test('a link starting http:// or https:// is an outside address, as written', () => {
   assert.deepEqual(resolveSiteLink('https://example.com/a?b=c', { linkMap, pages }), { kind: 'outside', href: 'https://example.com/a?b=c' });
@@ -81,13 +84,13 @@ test('a link naming a note with a page is that page, whether plain or in [[ ]]',
 });
 
 test('a link naming a note with no page is dropped', () => {
-  assert.deepEqual(resolveSiteLink('Old Tam', { linkMap, pages, unpublished }), { kind: 'none', href: null });
-  assert.deepEqual(resolveSiteLink('old tam', { linkMap, pages, unpublished }), { kind: 'none', href: null });
-  assert.equal(resolveSiteLink('[[Old Tam]]', { linkMap, pages, unpublished }).kind, 'none');
+  assert.deepEqual(resolveSiteLink('Old Tam', { linkMap, pages }), { kind: 'none', href: null });
+  assert.deepEqual(resolveSiteLink('old tam', { linkMap, pages }), { kind: 'none', href: null });
+  assert.equal(resolveSiteLink('[[Old Tam]]', { linkMap, pages }).kind, 'none');
 });
 
 test('anything else is an address on the site, as written', () => {
-  assert.deepEqual(resolveSiteLink('gazetteer/index.html', { linkMap, pages, unpublished }), { kind: 'site', href: 'gazetteer/index.html' });
+  assert.deepEqual(resolveSiteLink('gazetteer/index.html', { linkMap, pages }), { kind: 'site', href: 'gazetteer/index.html' });
   assert.deepEqual(resolveSiteLink('./map.html', { linkMap, pages }), { kind: 'site', href: 'map.html' });
 });
 
@@ -211,6 +214,74 @@ test('rule 6: no extra entries builds every page as it was, with or without the 
   for (const rel of [['index.html'], ['characters', 'mara-quill.html'], ['locations', 'harbour.html']]) {
     assert.equal(bare.read(...rel), empty.read(...rel), rel.join('/'));
   }
+});
+
+// ---- Fix round 1 ----
+
+const HIDDEN = {
+  'Hidden/Old_Tam.md': npc('publish: false\naliases:\n  - The Pale King\n'),
+  'Gm_Only/Secret_Person.md': npc(),
+};
+
+test('a link to a note with no page is dropped, by name, by alias, by underscore name', () => {
+  const s = site([
+    { label: 'ByName', link: 'Old Tam' },
+    { label: 'ByAlias', link: 'The Pale King' },
+    { label: 'ByWithheld', link: 'Lord Zorn' },
+    { label: 'ByUnderscore', link: 'Old_Tam' },
+    { label: 'Fine', link: 'Harbour' },
+  ], { files: HIDDEN, settings: { hide: { mode: 'full', folders: ['_meta', 'Gm_Only'] } } });
+  const { desktop } = menus(s.read('index.html'));
+  for (const label of ['ByName', 'ByAlias', 'ByWithheld', 'ByUnderscore']) assert.doesNotMatch(desktop, new RegExp(`>${label}<`), label);
+  assert.match(desktop, />Fine</);
+  assert.doesNotMatch(s.read('index.html'), /Pale(%20| )King/);
+  for (const label of ['ByName', 'ByAlias', 'ByWithheld', 'ByUnderscore']) {
+    assert.ok(s.warnings.some((w) => w.includes(`"${label}"`)), label);
+  }
+});
+
+test('a link to a note in an excluded folder is dropped', () => {
+  const s = site([{ label: 'Sec', link: 'Secret Person' }], { files: HIDDEN, settings: { hide: { mode: 'full', folders: ['_meta', 'Gm_Only'] } } });
+  assert.doesNotMatch(menus(s.read('index.html')).desktop, />Sec</);
+  assert.ok(s.warnings.some((w) => w.includes('"Sec"')));
+});
+
+test('a link whose case differs from a note that has a page is that page', () => {
+  const s = site([{ label: 'Docks', link: 'harbour' }, { label: 'Her', link: 'mara quill' }]);
+  const { desktop } = menus(s.read('index.html'));
+  assert.match(desktop, /href="locations\/harbour\.html">Docks</);
+  assert.match(desktop, /href="characters\/mara-quill\.html">Her</);
+  assert.ok(!s.warnings.some((w) => /menu_extra/.test(w)), s.warnings.join('\n'));
+});
+
+test('a fragment and a query in a site address survive', () => {
+  const s = site([{ label: 'North', link: 'gazetteer/index.html#north' }, { label: 'Layer', link: 'map.html?layer=2&x=1' }]);
+  const root = menus(s.read('index.html')).desktop;
+  assert.match(root, /href="gazetteer\/index\.html#north"/);
+  assert.match(root, /href="map\.html\?layer=2&amp;x=1"/);
+  const deep = menus(s.read('characters', 'mara-quill.html')).phone;
+  assert.match(deep, /href="\.\.\/gazetteer\/index\.html#north"/);
+  assert.match(deep, /href="\.\.\/map\.html\?layer=2&amp;x=1"/);
+});
+
+test('one bad entry is left out alone, with a warning naming it; the rest show', () => {
+  const s = site([
+    { label: 'Good', link: 'good.html' },
+    { label: '  ', link: 'blank.html' },
+    { label: 'NoLink' },
+    { label: 'Odd', link: 'odd.html', colour: 'red' },
+    { label: 'Also', link: 'also.html' },
+  ]);
+  const { desktop, phone } = menus(s.read('index.html'));
+  for (const html of [desktop, phone]) {
+    assert.match(html, />Good</);
+    assert.match(html, />Also</);
+    assert.doesNotMatch(html, /blank\.html|NoLink|odd\.html/);
+  }
+  const said = s.warnings.filter((w) => /menu_extra/.test(w));
+  assert.ok(said.some((w) => /NoLink/.test(w)), said.join('\n'));
+  assert.ok(said.some((w) => /Odd/.test(w)), said.join('\n'));
+  assert.ok(said.some((w) => /entry 2/.test(w)), said.join('\n'));
 });
 
 test('rule 6: the menu with no extra entries is the same text as with extra undefined', () => {

@@ -76,7 +76,7 @@ const SCHEMAS = {
       type: 'array',
       items: {
         type: 'object',
-        properties: Object.fromEntries(names.map((k) => [k, stringOrNumber])),
+        properties: Object.fromEntries(names.map((k) => [k, { type: ['string', 'number'] }])),
         required: names.filter((k) => e.fields[k].required),
         additionalProperties: false,
       },

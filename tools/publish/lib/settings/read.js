@@ -42,7 +42,15 @@ const CHECKS = { output: (value, c) => outputProblem(value, c.siteDir), keep: (v
 
 function settle(c, e, { written, setting }, first, defaultOf) {
   const { values, origins, faults, fault } = c;
-  let r = TYPES[e.type].read(first.raw, e);
+  // A list of maps is read entry by entry: one that cannot be used is left out alone, with a warning naming it.
+  const each = TYPES[e.type].readEach ? TYPES[e.type].readEach(first.raw, e) : null;
+  let r = each ? { ok: true, value: each.value } : TYPES[e.type].read(first.raw, e);
+  if (each) {
+    for (const d of each.dropped) {
+      const who = d.label ? `"${d.label}"` : `entry ${d.index + 1}`;
+      faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message: `${written} ${who} ${d.why}; it is left out` }));
+    }
+  }
   const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : null;
   if (problem) r = { ok: false, problem };
   else if (r.ok && e.check) r = { ok: true, value: tidyChecked(e.check, r.value) };

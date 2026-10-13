@@ -320,22 +320,19 @@
               "label": {
                 "type": [
                   "string",
-                  "number",
-                  "boolean"
+                  "number"
                 ]
               },
               "link": {
                 "type": [
                   "string",
-                  "number",
-                  "boolean"
+                  "number"
                 ]
               },
               "group": {
                 "type": [
                   "string",
-                  "number",
-                  "boolean"
+                  "number"
                 ]
               }
             },

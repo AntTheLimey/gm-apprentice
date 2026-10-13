@@ -15,7 +15,7 @@ const place = '---\ntype: location\n---\n\nA place.\n';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
 
 // A small vault on the new settings file, built; `banner` is player_site.landing.banner.
-function site(banner, { files = {}, binary = {} } = {}) {
+function site(banner, { files = {}, binary = {}, hide = null } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'landing-banner-'));
   const vault = path.join(root, 'vault');
   const all = {
@@ -36,7 +36,7 @@ function site(banner, { files = {}, binary = {} } = {}) {
   writeNewConfig(vault, {
     version: 1,
     player_site: {
-      hide: { mode: 'full' },
+      hide: { mode: 'full', ...(hide ? { folders: hide } : {}) },
       folder_map: { Characters: 'characters', Locations: 'locations', Hidden: 'hidden' },
       ...(banner === undefined ? {} : { landing: { banner } }),
     },
@@ -137,6 +137,26 @@ test('rule 3: a link to a note with no page is dropped, with a warning; the bann
   assert.doesNotMatch(html, /<a class="landing-banner"/);
   assert.doesNotMatch(html, /Old[ _]Tam/);
   assert.ok(s.warnings.some((w) => /banner/.test(w) && /Old Tam/.test(w)), s.warnings.join('\n'));
+});
+
+test('fix round 1: a link to a hidden note, by name, alias, withheld name or excluded folder, is no link and warns', () => {
+  const files = {
+    'Hidden/Old_Tam.md': npc('publish: false\naliases:\n  - The Pale King\n'),
+    'Gm_Only/Secret_Person.md': npc(),
+  };
+  for (const link of ['Old Tam', 'The Pale King', 'Lord Zorn', 'Secret Person']) {
+    const s = site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] });
+    const html = s.read('index.html');
+    assert.doesNotMatch(html, /<a class="landing-banner"/, link);
+    assert.doesNotMatch(html, /Pale(%20| )King|Old(%20| |_)Tam|Zorn|Secret(%20| |_)Person/, link);
+    assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${link}: ${s.warnings.join('\n')}`);
+  }
+});
+
+test('fix round 1: a link differing in case from a note with a page is that page; a fragment and a query survive', () => {
+  assert.match(site({ title: 'T', link: 'harbour' }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/);
+  assert.match(site({ title: 'T', link: 'gazetteer/index.html#north' }).read('index.html'), /<a class="landing-banner" href="gazetteer\/index\.html#north"/);
+  assert.match(site({ title: 'T', link: 'map.html?layer=2' }).read('index.html'), /<a class="landing-banner" href="map\.html\?layer=2"/);
 });
 
 test('rule 4: a title or text naming a withheld note is a finding on the landing page', () => {

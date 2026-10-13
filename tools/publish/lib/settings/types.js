@@ -72,22 +72,31 @@ const TYPES = {
   // A list whose every item is a small map: the entry's `fields` names the keys (`required: true` for one that
   // must be there and not blank). Every value is plain text or a number, read as text; a blank optional one is left out.
   listOfMaps: {
+    // Every entry must read, or the whole list does not (what `settings set` and `add` hold to).
     read(raw, entry) {
-      if (!Array.isArray(raw)) return bad;
+      const each = TYPES.listOfMaps.readEach(raw, entry);
+      return each === null || each.dropped.length ? bad : ok(each.value);
+    },
+    // Each entry on its own: { value: the entries that read, dropped: [{ index, label, why }] }; null when `raw` is no list.
+    readEach(raw, entry) {
+      if (!Array.isArray(raw)) return null;
       const fields = entry.fields || {};
-      const items = [];
-      for (const item of raw) {
-        if (!isMap(item)) return bad;
+      const value = [];
+      const dropped = [];
+      raw.forEach((item, index) => {
+        const drop = (why) => dropped.push({ index, label: isMap(item) && plain(item[entry.same]) && String(item[entry.same]).trim() !== '' ? String(item[entry.same]).trim() : null, why });
+        if (!isMap(item)) return drop('is not an entry with its parts written as name: value');
         const out = {};
         for (const [k, v] of Object.entries(item)) {
-          if (!Object.prototype.hasOwnProperty.call(fields, k)) return bad;
-          if (typeof v !== 'string' && typeof v !== 'number') return bad;
+          if (!Object.prototype.hasOwnProperty.call(fields, k)) return drop(`has a part \`${k}\` that is not used`);
+          if (typeof v !== 'string' && typeof v !== 'number') return drop(`has a \`${k}\` that is not text`);
           if (String(v).trim() !== '') out[k] = String(v);
         }
-        for (const [k, f] of Object.entries(fields)) if (f.required && out[k] === undefined) return bad;
-        items.push(out);
-      }
-      return ok(items);
+        const missing = Object.keys(fields).find((k) => fields[k].required && out[k] === undefined);
+        if (missing) return drop(`has no \`${missing}\``);
+        value.push(out);
+      });
+      return { value, dropped };
     },
     takes(entry) {
       const names = Object.keys(entry.fields || {});

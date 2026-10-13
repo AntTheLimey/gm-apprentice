@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -84,17 +84,46 @@ function quietly(fn) {
 //   the name of a note that has a page     that page (names are matched as the link map matches them)
 //   the name of a note with no page        dropped: { kind: 'none' }; the caller warns, and prints nothing
 //   anything else                          an address on the site, as written
-// `unpublished` (optional) is the set of names, lower-cased, of the notes the site makes no page for.
+// The notes with no page are known to the link map itself: the build registers every note's names against it
+// (`rememberHiddenNames`), so a caller cannot forget them. A name matches in any letter case, as a wiki-link does;
+// a note's file name, title and aliases all count.
 // Returns { kind: 'outside' | 'page' | 'site' | 'none', href }.
-function resolveSiteLink(link, { linkMap = Object.create(null), pages = [], unpublished = new Set() } = {}) {
+const HIDDEN_NAMES = new WeakMap();   // link map -> Set of lower-cased names of the notes
+const LOWER_KEYS = new WeakMap();     // link map -> Map of lower-cased key -> output path
+
+const foldName = (name) => name.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+
+function rememberHiddenNames(linkMap, notes) {
+  const names = new Set();
+  for (const note of notes) {
+    const fm = note.frontmatter || {};
+    const all = [path.posix.basename(String(note.vaultPath).replace(/\\/g, '/')), note.displayTitle, typeof fm.title === 'string' ? fm.title : '',
+      ...nameList(fm.aliases), ...gmAliasList(fm)];
+    for (const name of all) {
+      if (typeof name === 'string' && name.trim()) names.add(foldName(canonicalNfc(name)));
+    }
+  }
+  HIDDEN_NAMES.set(linkMap, names);
+}
+
+function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
   const wiki = /^\[\[([\s\S]+)\]\]$/.exec(text);
   const name = canonicalNfc(wiki ? parseWikilink(wiki[1]).name.trim() : text);
   if (name) {
-    const found = linkMap[name] || (pages.find(p => canonicalNfc(p.title) === name) || {}).outputPath;
-    if (found) return { kind: 'page', href: found };
-    if (unpublished.has(name.toLowerCase())) return { kind: 'none', href: null };
+    const exact = linkMap[name] || (pages.find(p => canonicalNfc(p.title) === name) || {}).outputPath;
+    if (exact) return { kind: 'page', href: exact };
+    // The same name in another letter case is that page (the names of notes with pages are in the link map).
+    if (!LOWER_KEYS.has(linkMap)) {
+      const keys = new Map();
+      for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
+      LOWER_KEYS.set(linkMap, keys);
+    }
+    const loose = LOWER_KEYS.get(linkMap).get(foldName(name));
+    if (loose) return { kind: 'page', href: loose };
+    const folded = foldName(name);
+    if ((HIDDEN_NAMES.get(linkMap) || new Set()).has(folded)) return { kind: 'none', href: null };
   }
   return { kind: 'site', href: text.replace(/^\.\//, '') };
 }
@@ -575,6 +604,7 @@ function buildSite(options) {
   // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
   // take too, so all three pair on the same frontmatter (#276).
   const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
+  rememberHiddenNames(linkMap, allNotes);
   const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
@@ -962,15 +992,9 @@ function buildSite(options) {
   // The GM's extra menu entries (player_site.menu_extra), each link read by resolveSiteLink. An entry that
   // names a note with no page is left out, with a warning, and prints nothing. The labels of the rest are
   // texts the note audit reads.
-  const unpublished = new Set();
-  for (const note of allNotes) {
-    for (const name of [path.posix.basename(String(note.vaultPath).replace(/\\/g, '/')), note.displayTitle]) {
-      if (name) unpublished.add(canonicalNfc(name).toLowerCase());
-    }
-  }
   const menuExtra = [];
   for (const item of publishConfig.menu_extra || []) {
-    const read = resolveSiteLink(item.link, { linkMap, pages, unpublished });
+    const read = resolveSiteLink(item.link, { linkMap, pages });
     if (read.kind === 'none') {
       console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", a note the site makes no page of — it is left out of the menu`);
       continue;
@@ -1480,7 +1504,7 @@ function buildSite(options) {
       banner.image = imageFull ? (dry ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
     }
     if (banner.link) {
-      const read = resolveSiteLink(banner.link, { linkMap, pages, unpublished });
+      const read = resolveSiteLink(banner.link, { linkMap, pages });
       if (read.kind === 'none') {
         console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", a note the site makes no page of — the banner is not a link`);
         banner.link = null;
@@ -1812,7 +1836,7 @@ function buildSite(options) {
   return { noteFaults, shown: null, faults: publishConfig.faults };
 }
 
-module.exports = { build, resolveSiteLink };
+module.exports = { build, resolveSiteLink, rememberHiddenNames };
 
 // Allow running directly: node lib/build.js
 // Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.

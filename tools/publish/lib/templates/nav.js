@@ -83,7 +83,11 @@ function navLink(link, currentDir, before, cls = '') {
   const label = escapeHtml(link.label);
   const attr = cls ? ` class="${cls}"` : '';
   if (link.external) return `${before}<a${attr} href="${escapeHtml(link.href)}" rel="noopener">${label}</a>`;
-  return `${before}<a${attr} href="${encodeHref(relativePath(currentDir, link.href))}">${label}</a>`;
+  // A `?query` or `#fragment` of a GM's address stays as written; only the path is made relative and encoded.
+  const cut = link.href.search(/[?#]/);
+  const tail = cut < 0 ? '' : escapeHtml(link.href.slice(cut));
+  const path = cut < 0 ? link.href : link.href.slice(0, cut);
+  return `${before}<a${attr} href="${encodeHref(relativePath(currentDir, path))}${tail}">${label}</a>`;
 }
 
 function renderTopNav(pages, currentOutputPath, config, options = {}) {

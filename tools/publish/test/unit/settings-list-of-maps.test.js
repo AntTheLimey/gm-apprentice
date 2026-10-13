@@ -133,9 +133,41 @@ test('on the old settings file set and add are refused with the update line', ()
   assert.equal(text(s), before);
 });
 
-test('an entry the reader cannot use is a warning and the list is left empty', () => {
-  const s = scratch('new', { player_site: { menu_extra: [{ label: '', link: 'a' }] } });
+test('readEach keeps the entries that read and says which it dropped and why', () => {
+  const got = TYPES.listOfMaps.readEach([
+    { label: 'A', link: 'a' }, { label: ' ', link: 'b' }, { label: 'C' }, 'text', { label: 'D', link: 'd', colour: 'red' }, { label: 'E', link: 'e' },
+  ], E);
+  assert.deepEqual(got.value, [{ label: 'A', link: 'a' }, { label: 'E', link: 'e' }]);
+  assert.deepEqual(got.dropped.map((d) => [d.index, d.label || null]), [[1, null], [2, 'C'], [3, null], [4, 'D']]);
+  assert.ok(got.dropped.every((d) => typeof d.why === 'string' && d.why));
+});
+
+test('an entry the reader cannot use is left out alone, with a warning naming it', () => {
+  const s = scratch('new', { player_site: { menu_extra: [{ label: 'A', link: 'a' }, { label: '', link: 'b' }, { label: 'C' }, { label: 'D', link: 'd' }] } });
+  const read = readSettings({ vaultPath: s.vault });
+  assert.deepEqual(read.values.player_site.menu_extra, [{ label: 'A', link: 'a' }, { label: 'D', link: 'd' }]);
+  const warns = read.faults.filter((f) => f.level === 'warn');
+  assert.equal(warns.length, 2);
+  assert.match(warns[0].message, /entry 2/);
+  assert.match(warns[1].message, /"C"/);
+});
+
+test('a value that is not a list is still a fault with the default used', () => {
+  const s = scratch('new', { player_site: { menu_extra: 'nope' } });
   const read = readSettings({ vaultPath: s.vault });
   assert.deepEqual(read.values.player_site.menu_extra, []);
-  assert.ok(read.faults.some((f) => f.setting === NAME && f.level === 'warn'));
+  assert.equal(read.origins[NAME], 'fault');
+});
+
+test('add names the missing key', () => {
+  const s = scratch();
+  const r = run(s, 'add', [NAME, 'label=Map']);
+  assert.notEqual(r.rc, 0);
+  assert.match(r.out + r.err, /`link`/);
+});
+
+test('the schema allows text or a number for a value, not a switch', () => {
+  const s = schema().properties.player_site.properties.menu_extra;
+  const items = (s.anyOf ? s.anyOf.find((x) => x.type === 'array') : s).items;
+  assert.deepEqual(items.properties.label.type, ['string', 'number']);
 });

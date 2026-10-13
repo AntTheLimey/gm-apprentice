@@ -1097,6 +1097,14 @@ function encodeHref(hrefPath) {
     .join('/');
 }
 
+// An address the GM wrote for a place on the site: the path part is encoded as encodeHref does, and a `?query`
+// or `#fragment` after it is kept as written (the caller escapes it for HTML).
+function encodeAddress(address) {
+  const text = String(address);
+  const cut = text.search(/[?#]/);
+  return cut < 0 ? encodeHref(text) : encodeHref(text.slice(0, cut)) + text.slice(cut);
+}
+
 // Alias retained for the image call sites that already named it this way.
 const encodeImageUrl = encodeHref;
 
@@ -1774,4 +1782,4 @@ function gmAliasRewriter(pages, published, rawNotes) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDERS, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDERS, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };

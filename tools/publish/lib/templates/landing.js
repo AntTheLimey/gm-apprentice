@@ -1,4 +1,4 @@
-const { escapeHtml, plainMetaValue, encodeHref, encodeImageUrl } = require('../processor');
+const { escapeHtml, plainMetaValue, encodeHref, encodeAddress, encodeImageUrl } = require('../processor');
 const { refTarget, linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
@@ -95,7 +95,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
       : '';
     const inner = `${img}${words}`;
     bannerZone = banner.link
-      ? `<a class="landing-banner" href="${escapeHtml(banner.link.external ? banner.link.href : encodeHref(banner.link.href))}"${banner.link.external ? ' rel="noopener"' : ''}>${inner}</a>`
+      ? `<a class="landing-banner" href="${escapeHtml(banner.link.external ? banner.link.href : encodeAddress(banner.link.href))}"${banner.link.external ? ' rel="noopener"' : ''}>${inner}</a>`
       : `<div class="landing-banner">${inner}</div>`;
   }
 

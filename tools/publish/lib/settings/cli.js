@@ -379,7 +379,10 @@ function changeMaps(options, verb, name, e, words) {
       entry[key] = given.trim();
     }
     const read = TYPES.listOfMaps.read([entry], e);
-    if (!read.ok) return { errors: [`${name} takes ${TYPES.listOfMaps.takes(e)}; every one of those but the last must have a value.`] };
+    if (!read.ok) {
+      const why = TYPES.listOfMaps.readEach([entry], e).dropped[0];
+      return { errors: [`${name} entry ${why.why}; it takes ${TYPES.listOfMaps.takes(e)}.`] };
+    }
     entries = read.value;
   } else {
     if (words.some((w) => w.trim() === '')) return { errors: [`${name} has a blank entry; remove it.`] };
