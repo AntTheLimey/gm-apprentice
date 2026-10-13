@@ -335,10 +335,6 @@ to this tool by something else than `update-pin` is not the update's to
 change, so its vault stays on the old file until you move it. If both
 files exist the new one is read, and the old one is reported as left over.
 
-`migrate-config` still ships in this release because the update uses it
-to move settings out of a site's `vault.config.json`. You do not need to
-run it yourself.
-
 ---
 
 ## vault.config.json reference

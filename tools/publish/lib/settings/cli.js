@@ -10,6 +10,7 @@
 //   settings list                    every name a GM can set
 //   settings raw [<name>]            the file as written
 //   settings setup-note get|set|clear  the publish set-up note
+//   settings carry <as written> <setting>  put a mis-named key's value under its right name
 //   settings move                    take a vault from the old settings file to the new one
 const fs = require('node:fs');
 const path = require('node:path');
@@ -26,7 +27,7 @@ const { normalizeExcludeDir, normalizeExcludeDirs } = require('./folders');
 const { readState, writeState } = require('./state');
 const { planMove, applyMove } = require('./move');
 
-const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move'];
+const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // The name the old vault file gave a setting. The commands take it for as long as legacy.js reads the
@@ -195,7 +196,7 @@ function list() {
 function helpText() {
   const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
-gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
+gm-apprentice-publish settings <get|set|add|remove|unset|carry|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 
 Reads, writes, describes and checks the settings in the vault's settings file (${NEW_FILE}; ${OLD_FILE} on a vault not yet updated).
 
@@ -207,6 +208,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
                                    (the built-in list included): settings add player_site.hide.sections Rumours "Player Handout"
   settings remove <name> <entry> ...  Take entries out of a list setting
   settings unset <name> ...        Remove settings from the file, all or none
+  settings carry <key> <setting>   Put the value of a mis-named key under the setting's right name, then remove the key
   settings describe <name>         What one setting does, what it takes, its default
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
@@ -440,7 +442,8 @@ function unset(options, names) {
     const holds = LEAVES().filter((x) => x.name.startsWith(`${name}.`) || (!!oldOf(x) && oldOf(x).startsWith(`${name}.`))).map((x) => (name.startsWith(`${OLD_BLOCK}.`) ? oldOf(x) : x.name));
     if (r && !r.entry.legacyOnly && !r.entry.container) { changes.push({ op: 'unset', name: r.entry.name, label: name, ...(r.old && legacy ? { spelling: name } : {}) }); given.set(name, r.entry.name); }
     else if (holds.length) errors.push(`${name} holds other settings; unset each setting in it: ${holds.join(', ')}.`);
-    // A key under the old block the list does not know is taken out as written, so a stray key can still be removed.
+    // A key the list does not know is taken out as written, so a stray key can still be removed.
+    else if (!legacy && layoutOf(vaultPath) === 'new') { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else if (legacy && name.startsWith(`${OLD_BLOCK}.`)) { changes.push({ op: 'unset-raw', path: name.split('.') }); given.set(name, name); }
     else errors.push(notASetting(name));
   }
@@ -455,6 +458,21 @@ function unset(options, names) {
     lines.push(spellings.length > 1 ? `Removed ${spellings.join(' and ')} (the same setting).` : `Removed ${shownAs(n)}.`);
   }
   return { result: { removed }, lines, notices: noticesFor(names) };
+}
+
+// carry <as written> <setting>: the value of a key the list does not know (a misspelt or old-named key in the new file)
+// goes under the setting's right name, validated, and the key is removed: one change, all or nothing.
+function carry(options, args) {
+  if (args.length !== 2) throw new Error('settings carry needs the key as it is written and the setting it belongs to.');
+  const [from, to] = args;
+  const why = refusal(to);
+  if (why) return { errors: [why] };
+  const e = resolve(to).entry;
+  const { vaultPath } = target(options);
+  if (layoutOf(vaultPath) !== 'new') return { errors: ['settings carry works on the new settings file; run the update first.'] };
+  const done = write(options, [{ op: 'carry', from: from.split('.'), name: e.name, label: to }]);
+  if (done.errors) return done;
+  return { result: { carried: from, into: e.name }, lines: [`Moved ${from} to ${e.name}.`], notices: noticesFor([to]) };
 }
 
 // ---- The set-up note ----------------------------------------------------------------------
@@ -597,6 +615,7 @@ function runSettings(options, deps = {}) {
     else if (options.verb === 'add' || options.verb === 'remove') done = changeList(options, options.verb, args);
     else if (options.verb === 'setup-note') done = setupNote(options, args);
     else if (options.verb === 'move') done = move(options);
+    else if (options.verb === 'carry') done = carry(options, args);
     else if (options.verb === 'unset') done = unset(options, args);
     else if (options.verb === 'describe') {
       if (!args[0]) throw new Error('settings describe needs a setting name.');

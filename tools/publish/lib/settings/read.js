@@ -137,7 +137,7 @@ function readNew({ vaultPath, siteConfig }) {
       const value = getPath(site, w.name.split('.'));
       if (value === undefined) continue;
       // A list that hides things, left in the site folder, would publish what it meant to hide: it stops the build.
-      faults.push(makeFault({ name: w.name, setting: e.name, kind: 'old-name', level: e.guards ? 'stop' : 'warn', value, use: e.name,
+      faults.push(makeFault({ name: w.name, setting: e.name, kind: 'old-name', level: e.guards ? 'stop' : 'warn', value, use: e.name, source: 'site',
         hint: e.guards
           ? `${w.name} in the site folder's vault.config.json is no longer read, so what it hides would be published; put its entries under ${e.name} in the vault's settings.`
           : `${w.name} in the site folder's vault.config.json is no longer read; it is ${e.name} in the vault's settings.` }));

@@ -178,8 +178,9 @@ test('doctor --site: the fix names the vault\'s file, and an old file adds no no
     assert.equal(left.path, '_meta/vault-config.yaml');
     assert.match(left.detail, /_meta\/vault-config\.md is left over/);
 
-    // A clean old-file vault reads as it did: no findings at all.
-    assert.equal((await run(other)).counts.total, 0);
+    // A clean old-file vault reads as it did, plus the one note that the next update moves it (when the site's tool is ours).
+    const c = await run(other);
+    assert.deepEqual(c.findings.filter((f) => f.code !== 'SETTINGS_FILE_OLD'), []);
   } finally { done(o); done(n); done(other); }
 });
 
