@@ -16,6 +16,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { nameIn, fileLabel } = require('./settings');
 
 const DEP = 'gm-apprentice-publish';
 
@@ -170,7 +171,7 @@ async function runUpdatePinTag(opts, d) {
   return result({ pinnedBefore: pinnedVersion, pinnedAfter: desired, installedBefore, installedAfter, changed: true }, ok ? 0 : 1);
 }
 
-// A site made before `init` wrote it has no `publish.site_dir` in its vault, so the
+// A site made before `init` wrote it has no site folder setting in its vault, so the
 // vault cannot find the site and vault_check takes it to have none. Any update-pin run
 // puts that right: it is the command a GM with an older site is told to run. It adds to
 // a vault file that is already there and never creates one, never changes a site_dir
@@ -191,14 +192,16 @@ function recordSiteDir(siteDir, opts, d) {
   if (typeof vaultPath !== 'string' || vaultPath === '') return null;
   let result;
   try {
-    result = seed(path.resolve(siteDir, vaultPath), { site: true, site_dir: here }, { existingOnly: true });
+    result = seed(path.resolve(siteDir, vaultPath), { 'player_site.publish': true, 'player_site.folder': here }, { existingOnly: true });
   } catch (err) {
     result = { written: [], kept: [], skipped: err.message, missing: {} };
   }
-  if (result.written.includes('site_dir')) say(`recorded this site in the vault: publish.site_dir = ${here}`);
-  if (result.written.includes('site')) say('turned the site switch on in the vault: publish.site = true');
-  if (!result.written.length && result.skipped) say(`could not record this site in the vault (${result.skipped}). Add \`site: true\` and \`site_dir: ${here}\` under publish: in _meta/vault-config.md.`);
-  if (result.otherSite) say(`the vault already names a different site (publish.site_dir: ${result.otherSite}); it was left as it is.`);
+  const vaultDir = path.resolve(siteDir, vaultPath);
+  const nm = (name) => nameIn(vaultDir, name);
+  if (result.written.includes('player_site.folder')) say(`recorded this site in the vault: ${nm('player_site.folder')} = ${here}`);
+  if (result.written.includes('player_site.publish')) say(`turned the site switch on in the vault: ${nm('player_site.publish')} = on`);
+  if (!result.written.length && result.skipped) say(`could not record this site in the vault (${result.skipped}). Set ${nm('player_site.publish')} to on and ${nm('player_site.folder')} to ${here} in ${fileLabel(vaultDir)}.`);
+  if (result.otherSite) say(`the vault already names a different site (${nm('player_site.folder')}: ${result.otherSite}); it was left as it is.`);
   return result;
 }
 

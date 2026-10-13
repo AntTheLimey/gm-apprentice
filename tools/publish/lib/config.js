@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
-const { readSettings, formatFault, makeFault, stops, entry, movedKeys } = require('./settings');
+const { readSettings, formatFault, makeFault, stops, entry, movedKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -9,13 +9,13 @@ const { readSettings, formatFault, makeFault, stops, entry, movedKeys } = requir
 // accented filename) would otherwise never match, so it is canonicalized once here, at load.
 // An entry that is not a map, or whose `include` is not a list of field names, is dropped
 // (the exclusions stay in force, the safe direction) and reported in `problems`.
-function canonicalizeOverrideFieldKeys(fields) {
+function canonicalizeOverrideFieldKeys(fields, vaultPath) {
   const out = {};
   const problems = [];
   for (const [key, value] of Object.entries(fields || {})) {
     const problem = overrideEntryProblem(value);
     if (problem) {
-      problems.push(`publish.overrides.fields["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
+      problems.push(`${nameIn(vaultPath, 'player_site.hide.field_exceptions')}["${key}"] ${problem}. That override is ignored. Expected shape: "Characters/NPCs/Vex.md": { include: ["secrets"] }.`);
       continue;
     }
     out[canonicalPath(key)] = value;
@@ -86,77 +86,84 @@ function setOnly(map, prefix, origins) {
 // `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
-  const { values, origins, faults, legacy } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
-  const p = values.publish;
+  const { values, origins, faults, legacy, layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
+  const v = values.vault;
+  const p = values.player_site;
   const named = (n) => origins[n] !== 'default';
 
-  const live = p.live_stats && p.character_sheets;
-  if (p.live_stats && !p.character_sheets) {
-    faults.push(makeFault({ name: 'publish.live_stats', kind: 'dropped', level: 'warn', message: 'publish.live_stats is on but character_sheets is off; live stats are not published' }));
+  const live = p.features.live_stats && p.sheets.show;
+  if (p.features.live_stats && !p.sheets.show) {
+    const liveName = nameIn(vaultPath, 'player_site.features.live_stats');
+    faults.push(makeFault({ name: liveName, setting: 'player_site.features.live_stats', kind: 'dropped', level: 'warn', message: `${liveName} is on but ${nameIn(vaultPath, 'player_site.sheets.show')} is off; live stats are not published` }));
   }
-  const switchNames = ['site', 'character_sheets', 'live_stats', 'inbox'];
-  const unset = switchNames.filter((n) => origins[`publish.${n}`] === 'default');
+  const switchNames = { site: 'player_site.publish', character_sheets: 'player_site.sheets.show', live_stats: 'player_site.features.live_stats', inbox: 'player_site.features.inbox' };
+  const unset = Object.keys(switchNames).filter((n) => origins[switchNames[n]] === 'default');
   const switches = {
-    site: p.site,
-    characterSheets: p.character_sheets,
+    site: p.publish,
+    characterSheets: p.sheets.show,
     liveStats: live,
-    inbox: p.inbox,
+    inbox: p.features.inbox,
     unset,
     explicitOff: {
-      liveStats: !live && (!unset.includes('live_stats') || !p.character_sheets),
-      inbox: !p.inbox && !unset.includes('inbox'),
-      site: !p.site && !unset.includes('site'),
+      liveStats: !live && (!unset.includes('live_stats') || !p.sheets.show),
+      inbox: !p.features.inbox && !unset.includes('inbox'),
+      site: !p.publish && !unset.includes('site'),
     },
   };
 
-  const overrides = canonicalizeOverrideFieldKeys(p.overrides.fields);
+  const overrides = canonicalizeOverrideFieldKeys(p.hide.field_exceptions, vaultPath);
   for (const message of overrides.problems) {
-    faults.push(makeFault({ name: 'publish.overrides.fields', kind: 'dropped', level: 'stop', message }));
+    faults.push(makeFault({ name: nameIn(vaultPath, 'player_site.hide.field_exceptions'), setting: 'player_site.hide.field_exceptions', kind: 'dropped', level: 'stop', message }));
   }
 
   // A genre counts as written even when it was refused (an unknown one reads as null): the page
   // then takes the plain fallback palette, as it always has.
-  const genreWritten = named('publish.theme.genre');
-  const paletteWritten = Object.keys(origins).some((n) => n.startsWith('publish.theme.palette.') && named(n));
-  const theme = setOnly(p.theme, 'publish.theme', origins);
+  const genreWritten = named('player_site.theme.genre');
+  const paletteWritten = Object.keys(origins).some((n) => n.startsWith('player_site.theme.palette.') && named(n));
+  const theme = setOnly(p.theme, 'player_site.theme', origins);
   const merged = {
-    mode: p.mode,
-    link_previews: p.link_previews,
-    tohit_calculator: p.tohit_calculator,
-    connections: p.connections,
-    site_title: p.site_title,
+    mode: p.hide.mode,
+    link_previews: p.features.link_previews,
+    tohit_calculator: p.features.tohit_calculator,
+    connections: p.features.connections,
+    site_title: p.title,
     footer: p.footer,
-    search: p.search,
+    search: p.features.search,
     folder_map: p.folder_map,
-    attachments_dir: p.attachments_dir,
-    pc_prose_sections: p.pc_prose_sections,
-    system: p.system,
-    sheet_crest: p.sheet_crest,
-    exclude_drafts: p.exclude_drafts,
-    exclude_callouts: p.exclude_callouts,
-    exclude_sections: p.exclude_sections,
-    exclude_fields: p.exclude_fields,
-    exclude_dirs: p.exclude_dirs,
+    attachments_dir: v.attachments,
+    pc_prose_sections: p.sheets.prose_sections,
+    system: v.system,
+    sheet_crest: p.sheets.crest,
+    exclude_drafts: p.hide.drafts,
+    exclude_callouts: p.hide.callouts,
+    exclude_sections: p.hide.sections,
+    exclude_fields: p.hide.fields,
+    exclude_dirs: p.hide.folders,
     legacy,
-    landing: setOnly(p.landing, 'publish.landing', origins),
+    landing: setOnly(p.landing, 'player_site.landing', origins),
     theme: {
       ...theme,
       genre: p.theme.genre,
       palette: genreWritten && !paletteWritten ? null : p.theme.palette,
       campaign_image: p.theme.campaign_image,
     },
-    four_oh_four: { message: p.four_oh_four.message },
+    four_oh_four: { message: p.not_found },
     images: p.images,
-    banners: p.banners,
-    locations: setOnly(p.locations, 'publish.locations', origins),
+    banners: p.lists.banners,
+    locations: setOnly(p.lists.locations, 'player_site.lists.locations', origins),
     overrides: { fields: overrides.fields },
-    section_titles: p.section_titles,
+    section_titles: p.lists.section_titles,
     switches,
-    sheetLook: { skin: p.sheet_skin, frame: p.sheet_frame },
-    setting_year: values.setting_year,
+    sheetLook: { skin: p.sheets.skin, frame: p.sheets.frame },
+    setting_year: v.setting_year,
     faults,
     origins,
   };
+
+  // Which settings file the vault is on, so a message can name a setting as that file writes it
+  // (`nameInFor(publishConfig.layout, name)`). Not listed with the settings: a copy of the
+  // object does not carry it, and the message then names the setting by its current name.
+  Object.defineProperty(merged, 'layout', { value: layout, enumerable: false });
 
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
@@ -187,9 +194,12 @@ function assertNoStopsFor(configPath, what) {
 
 // What `build` and `deploy` say instead of running when the GM has turned the site off.
 // Only an explicit off stops them: a site folder whose vault never set the switch builds.
-const SITE_OFF = 'the site is off for this vault (publish.site in _meta/vault-config.md); nothing was built. Set publish.site: true to publish again.';
-function siteOff(switches) {
-  return switches && switches.explicitOff && switches.explicitOff.site ? SITE_OFF : null;
+// It names the switch as this vault's file writes it, so it takes the vault (or a layout).
+const siteOffText = (layout) => `the site is off for this vault (${nameInFor(layout, 'player_site.publish')} in ${fileLabelFor(layout)}); nothing was built. Set ${nameInFor(layout, 'player_site.publish')}: true to publish again.`;
+// The text for a vault on the old layout, the one most vaults are on until they are updated.
+const SITE_OFF = siteOffText('legacy');
+function siteOff(switches, vaultPath) {
+  return switches && switches.explicitOff && switches.explicitOff.site ? siteOffText(vaultPath ? layoutOf(vaultPath) : 'legacy') : null;
 }
 
 // A page's key into `publish.overrides.fields`: its vault-relative path, posix
@@ -222,9 +232,12 @@ function scanConfigFor(config, publishConfig) {
 function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) {
   const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn, options);
   const config = Object.assign({}, rawConfig);
+  // On the new layout the site file is not merged: a moved key is what the vault's settings resolved, or absent.
+  const fromVaultOnly = publishConfig.layout === 'new';
   for (const entry of movedKeys()) {
     const value = publishConfig[entry.publish];
     if (value !== undefined && value !== null) config[entry.json] = value;
+    else if (fromVaultOnly) delete config[entry.json];
   }
   return { config, publishConfig };
 }
@@ -244,7 +257,7 @@ function siteOffFor(configPath) {
     return null;
   }
   try {
-    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches);
+    return siteOff(loadPublishConfig(vaultPath, raw, () => {}).switches, vaultPath);
   } catch (err) {
     // A deploy without a build reads nothing else: a vault file that says `site: false`
     // next to a broken line must not be uploaded for.
@@ -252,4 +265,4 @@ function siteOffFor(configPath) {
   }
 }
 
-module.exports = { siteOffFor, siteOff, SITE_OFF, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { siteOffFor, siteOff, siteOffText, SITE_OFF, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

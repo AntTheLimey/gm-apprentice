@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const { NEW_FILE, OLD_FILE } = require('../lib/settings/layout');
 
 // Exit once stdout and stderr have drained. On a pipe (macOS; Linux too for
 // large writes) Node writes asynchronously, and a bare process.exit() right after
@@ -39,9 +40,8 @@ Usage:
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
-  gm-apprentice-publish migrate-config       Move campaign settings from vault.config.json into the vault file
+  gm-apprentice-publish migrate-config       Move settings out of vault.config.json (used by the update)
   gm-apprentice-publish settings <cmd>       Read, set, describe and check any site setting
-  gm-apprentice-publish vault-setting        Older form of settings get and settings set (kept for older sites)
   gm-apprentice-publish doctor [options]     Preflight: check tools/auth (--site audits the vault)
   gm-apprentice-publish setup-status-bar     Enable live stats (KV + deploy)
   gm-apprentice-publish setup-inbox          Enable the inbox (KV + deploy)
@@ -73,18 +73,19 @@ and .nojekyll. Refuses to overwrite — if any of those files already
 exists, nothing is written.
 
 The campaign settings (site title, folder map, attachments folder,
-excluded folders, callout rule) go under publish: in the vault's
-_meta/vault-config.md, for each key the file does not already set. The
-vault is ./vault beside the site unless --vault names it. If the vault
-folder is not there yet, or its config file cannot be edited safely, the
-site is still scaffolded and the settings to add are printed.
+hidden folders, callout rule) go in the vault's ${NEW_FILE}
+(${OLD_FILE} for a vault not yet updated), for each setting the
+file does not already set. The vault is ./vault beside the site unless
+--vault names it. If the vault folder is not there yet, or its settings
+file cannot be edited safely, the site is still scaffolded and the
+settings to add are printed.
 Follow with "build" to generate the site.
 
   --vault <dir>      The vault, read relative to where you run this. Recorded as
                      vaultPath (relative to the site if inside it, else absolute)
                      and given the settings
-  --title <text>     The site title (publish.site_title), instead of "My Campaign"
-  --tagline <text>   The landing-page tagline (publish.theme.tagline); other
+  --title <text>     The site title (player_site.title), instead of "My Campaign"
+  --tagline <text>   The landing-page tagline (player_site.theme.tagline); other
                      theme keys are kept
                      Both are written only where the vault file leaves the key unset.
   --help, -h         Show this help
@@ -175,7 +176,7 @@ excluded versus missing is the GM's call.
                      "companions": [{"from","to"}], "detaches": "<why>",
                      "owners": {<spelling>: <vault path or null>}}
                      and writes nothing. files: the manifest entries and the
-                     vault-config settings that name the note (an overrides
+                     settings that name the note (an overrides
                      path, a landing featured/quick-link name). pin: present
                      for a PC page, with the key its live state is stored
                      under now; the caller writes it as live_key before the
@@ -276,28 +277,15 @@ withholds because its Wrap-Up publishes.
                      the vault the config names
   --help, -h         Show this help
 `,
-  'vault-setting': `
-gm-apprentice-publish vault-setting [--set <key>=<json>]... [--json] [--config <path>] [--vault <dir>]
-
-The older form of "settings get" and "settings set", kept for older sites. Use
-"gm-apprentice-publish settings --help". With no --set it reports what the vault
-file says about a few settings; with --set it writes them, the key given without
-"publish.".
-
-  --set <key>=<json>  The setting and its value as JSON; repeatable
-  --vault <dir>       The vault to read and write (default: the config's vaultPath)
-  --config <path>     Path to vault.config.json (default: ./vault.config.json)
-  --json              Emit JSON
-  --help, -h          Show this help
-`,
   'migrate-config': `
 gm-apprentice-publish migrate-config [--dry-run] [--json] [--config <path>] [--vault <dir>]
 
-Moves the campaign settings in the site's vault.config.json (title, folder map,
-exclude lists, images, ...) into publish: in the vault's _meta/vault-config.md,
-renames publish.backend.statusBar / inbox to publish.live_stats / inbox, and
-leaves only the deployment keys in the site file, plus any key the tool does not
-read (named in the output, never removed). The vault file wins when both set a
+Used by the update, which moves a vault's settings to the new file for you; you
+do not need to run it. On a vault still on the old file (${OLD_FILE}), it
+moves the campaign settings in the site's vault.config.json (title, folder map,
+exclude lists, images, ...) into publish: there, renames publish.backend.statusBar /
+inbox to publish.live_stats / inbox, and leaves only the deployment keys in the
+site file, plus any key the tool does not read (named in the output, never removed). The vault file wins when both set a
 key (the difference is reported); exclude lists are merged. Both files are
 backed up as <file>.pre-migrate first (an existing backup is never replaced).
 Nothing is written if the vault file cannot be edited safely. Running it again
@@ -414,8 +402,8 @@ report lists 20 rows per note-fault code; --json has them all.
 gm-apprentice-publish setup-status-bar [--config <path>]
 
 Enables live stats: creates the KV namespace, records its id in
-wrangler.toml, sets publish.live_stats: true in the vault's
-_meta/vault-config.md (refusing first if that file cannot be edited),
+wrangler.toml, turns on player_site.features.live_stats in the vault's
+settings file (refusing first if that file cannot be edited),
 then rebuilds and deploys the site. Requires wrangler auth ("doctor"
 checks it).
 
@@ -426,8 +414,8 @@ checks it).
 gm-apprentice-publish setup-inbox [--config <path>]
 
 Enables the change-request inbox: creates the KV namespace, records its id
-in wrangler.toml, sets publish.inbox: true in the vault's
-_meta/vault-config.md (refusing first if that file cannot be edited),
+in wrangler.toml, turns on player_site.features.inbox in the vault's
+settings file (refusing first if that file cannot be edited),
 then rebuilds and deploys the site. Requires wrangler auth ("doctor"
 checks it).
 
@@ -569,7 +557,7 @@ if (wantsHelp) {
 
 if (command === 'init') {
   const rest = args.slice(1);
-  // --title / --tagline seed publish.site_title / publish.theme.tagline in the vault file.
+  // --title / --tagline seed player_site.title / player_site.theme.tagline in the vault file.
   const textOption = (flag) => {
     const i = rest.indexOf(flag);
     if (i === -1) return undefined;
@@ -630,7 +618,7 @@ if (command === 'build') {
   warnIfVersionDrift();
   assertRuntimeDeps();
 
-  // A site the GM turned off (publish.site) is not built, and its functions are left alone.
+  // A site the GM turned off (player_site.publish) is not built, and its functions are left alone.
   const off = require('../lib/config').siteOffFor(configPath);
   if (off) {
     console.error(`Build failed: ${off}`);
@@ -788,37 +776,18 @@ if (command === 'settings') {
   const rest = [];
   const tail = args.slice(2);
   for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--config' || tail[i] === '--vault') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
+    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, { '--vault': 'vault' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check' }, { '--vault': 'vault' }, { '--fill': 'fill' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json });
-  exitAfterFlush(rc);
-  return;
-}
-
-if (command === 'vault-setting') {
-  const sets = [];
-  const rest = [];
-  const tail = args.slice(1);
-  for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--set') { sets.push(tail[i + 1] === undefined ? '' : tail[i + 1]); i += 1; } else rest.push(tail[i]);
-  }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, { '--vault': 'vault' });
-  if (parsed.error) {
-    console.error(`Error: ${parsed.error}`);
-    printSubcommandHelp('vault-setting');
-    process.exit(1);
-  }
-  const { runVaultSetting } = require('../lib/settings/cli.js');
-  const rc = runVaultSetting({ ...settingsTarget(parsed, args), set: sets, json: !!parsed.flags.json });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, fill: parsed.flags.fill });
   exitAfterFlush(rc);
   return;
 }

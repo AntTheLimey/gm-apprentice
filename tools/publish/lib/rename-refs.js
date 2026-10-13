@@ -20,7 +20,6 @@
 //          caller can pin it before the file name changes. Only `pcLiveKey` knows it.
 const fs = require('fs');
 const path = require('path');
-const { isDeepStrictEqual } = require('util');
 const { parseNote } = require('./frontmatter');
 const { canonicalPath, ENTRY_RE } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
@@ -32,10 +31,12 @@ const { mapFolder, dirIsExcluded } = require('./scanner');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { loadManifest } = require('./manifest');
 const { publishedPages } = require('./published-pages');
-const { splitFrontmatter, locateBlock } = require('./vault-config-edit');
+const { renameInSettings, settingsText } = require('./settings/write');
+const { nameInFor } = require('./settings');
 
 const MANIFEST_REL = '_meta/publish-manifest.md';
-const CONFIG_REL = '_meta/vault-config.md';
+const EXCEPTIONS = 'player_site.hide.field_exceptions';
+const LANDING = 'player_site.landing';
 const NAME_LISTS = ['featured_npcs', 'featured_locations', 'quick_links'];
 
 function lines(text) {
@@ -82,57 +83,29 @@ function mdFiles(vault) {
   return found;
 }
 
-// The settings in vault-config.md that name the note, edited on their lines and checked by
-// reading the result back: anything that does not come out as intended is an error.
-function renameInConfig(text, vault, from, to) {
-  let data;
-  try { data = parseNote(text).data; } catch (e) { return null; }
-  const publish = data && data.publish;
-  if (!publish || typeof publish !== 'object') return null;
+// The settings that name the note, in whichever settings file the vault is on: a field exception's
+// path, and a landing featured_npcs / featured_locations / quick_links name. The writer changes only
+// those entries and reads the result back; anything that does not come out as intended is an error.
+// `text` is the settings file's text when an earlier move already changed it. Returns the new text, or null.
+function renameInFile(file, vault, from, to, text) {
   const want = canonicalPath(from);
   const oldStem = canonicalNfc(stemOf(from));
   const newStem = stemOf(to);
-  const expected = JSON.parse(JSON.stringify(data));
-  const overrides = expected.publish.overrides;
-  const fields = overrides && overrides.fields;
-  const pathKey = fields && typeof fields === 'object' ? Object.keys(fields).find((k) => canonicalPath(k) === want) : undefined;
-  const landing = expected.publish.landing;
-  const listed = (key) => landing && Array.isArray(landing[key])
-    && landing[key].some((n) => typeof n === 'string' && canonicalNfc(n) === oldStem);
-  let lists = oldStem === canonicalNfc(newStem) ? [] : NAME_LISTS.filter(listed);
+  const exceptions = file.get(EXCEPTIONS);
+  const pathKey = isMapValue(exceptions) ? Object.keys(exceptions).find((k) => canonicalPath(k) === want) : undefined;
+  const spellings = (list) => (Array.isArray(list) ? [...new Set(list.filter((n) => typeof n === 'string' && canonicalNfc(n) === oldStem))] : []);
+  let lists = oldStem === canonicalNfc(newStem) ? [] : NAME_LISTS.filter((l) => spellings(file.get(`${LANDING}.${l}`)).length);
   // A name is the filename: where another note has it too, it may mean that one.
   if (lists.length && mdFiles(vault).some((f) => canonicalNfc(stemOf(f)) === oldStem && canonicalPath(f) !== want)) lists = [];
   if (pathKey === undefined && lists.length === 0) return null;
-
-  if (pathKey !== undefined) { fields[to] = fields[pathKey]; delete fields[pathKey]; }
-  for (const key of lists) landing[key] = landing[key].map((n) => (typeof n === 'string' && canonicalNfc(n) === oldStem ? newStem : n));
-
-  const fm = splitFrontmatter(text);
-  if (fm.error) throw new Error(`${CONFIG_REL}: ${fm.error}`);
-  const edit = fm.lines.slice();
-  const block = locateBlock(edit);
-  if (block.error || block.absent) throw new Error(`${CONFIG_REL}: cannot edit the publish block`);
-  const quoted = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  if (pathKey !== undefined) {
-    const re = new RegExp(`^(\\s*)(["']?)${quoted(pathKey)}\\2(\\s*:)`);
-    for (let i = block.start; i < block.end; i++) edit[i] = edit[i].replace(re, (m, ind, q, colon) => `${ind}${q}${to}${q}${colon}`);
-  }
-  const landingKey = block.keys.find((k) => k.key === 'landing');
-  if (landingKey) {
-    const re = new RegExp(`(^|[\\[\\s,-])(["']?)${quoted(oldStem)}\\2(?=\\s*(?:[,\\]#]|$))`, 'g');
-    let active = false;
-    for (let i = landingKey.from + 1; i < landingKey.to; i++) {
-      const k = /^\s*(["']?)([A-Za-z_]+)\1\s*:/.exec(edit[i]);
-      if (k) active = lists.includes(k[2]);
-      if (active) edit[i] = edit[i].replace(re, (m, lead, q) => `${lead}${q}${newStem}${q}`);
-    }
-  }
-  const next = fm.head + edit.map((l) => l + fm.eol).join('') + fm.tail;
-  let after;
-  try { after = parseNote(next).data; } catch (e) { after = null; }
-  if (!isDeepStrictEqual(after, expected)) throw new Error(`${CONFIG_REL}: the edit for ${from} did not verify`);
-  return next;
+  const renames = [];
+  if (pathKey !== undefined) renames.push({ name: EXCEPTIONS, key: { from: pathKey, to } });
+  for (const l of lists) for (const spelling of spellings(file.get(`${LANDING}.${l}`))) renames.push({ name: `${LANDING}.${l}`, item: { from: spelling, to: newStem } });
+  const done = renameInSettings(vault, renames, { text });
+  return done ? done.text : null;
 }
+
+const isMapValue = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
 
 function pinOf(vault, from, to) {
   const file = path.join(vault, from);
@@ -219,8 +192,8 @@ function unpublishReason(ctx, from, to) {
   const dir = path.posix.dirname(to) === '.' ? '' : path.posix.dirname(to);
   let why = null;
   if (dir.split('/').some((seg) => seg.startsWith('.'))) why = 'it is in a hidden folder';
-  else if (dir && dirIsExcluded(dir, ctx.publishConfig.exclude_dirs)) why = 'its folder is in publish.exclude_dirs';
-  else if (dir && !mapFolder(dir, ctx.scanConfig.folderMap || {})) why = 'its folder is not in publish.folder_map';
+  else if (dir && dirIsExcluded(dir, ctx.publishConfig.exclude_dirs)) why = `its folder is in ${nameInFor(ctx.publishConfig.layout, 'player_site.hide.folders')}`;
+  else if (dir && !mapFolder(dir, ctx.scanConfig.folderMap || {})) why = `its folder is not in ${nameInFor(ctx.publishConfig.layout, 'player_site.folder_map')}`;
   if (!why) {
     const hyp = ctx.manifest ? Object.assign({}, ctx.manifest, {
       publishing: ctx.manifest.publishing.map((r) => (r === canonicalPath(from) ? canonicalPath(to) : r)),
@@ -242,15 +215,17 @@ function renameRefs(vault, from, to, configPath, names) {
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null;
   };
   const manifest = read(MANIFEST_REL);
-  const config = read(CONFIG_REL);
+  // A settings file that cannot be read (no frontmatter, not valid YAML) names no note: nothing to rename in it.
+  let settings = null;
+  try { settings = settingsText(vault); } catch (e) { settings = null; }
   let manifestText = manifest;
-  let configText = config;
+  let configText = settings ? settings.whole : null;
   for (const move of moves) {
     if (manifestText !== null) manifestText = renameInManifest(manifestText, move.from, move.to) ?? manifestText;
-    if (configText !== null) configText = renameInConfig(configText, vault, move.from, move.to) ?? configText;
+    if (settings) configText = renameInFile(settings, vault, move.from, move.to, configText) ?? configText;
   }
   if (manifest !== null && manifestText !== manifest) files[MANIFEST_REL] = manifestText;
-  if (config !== null && configText !== config) files[CONFIG_REL] = configText;
+  if (settings && configText !== settings.whole) files[settings.rel] = configText;
   const answer = { files };
   const ctx = siteContext(vault, configPath);
   const unpublishes = unpublishReason(ctx, from, to);

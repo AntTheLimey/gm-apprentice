@@ -15,6 +15,10 @@ function readSwitch(raw) {
 const ok = (value) => ({ ok: true, value });
 const bad = { ok: false };
 const isMap = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
+// The value at a path of names in nested maps, or undefined. The one reader of a path in this folder.
+const getPath = (obj, segs) => segs.reduce((cur, s) => (isMap(cur) && Object.prototype.hasOwnProperty.call(cur, s) ? cur[s] : undefined), obj);
+// The first line of an error's message (or of a text), trimmed: what a one-line message to the GM carries.
+const firstLine = (x) => String(x instanceof Error ? x.message : x).split('\n')[0].trim();
 const orList = (words) => (words.length < 2 ? words.join('') : `${words.slice(0, -1).join(', ')} or ${words[words.length - 1]}`);
 
 // A list's plain entries (text, numbers, true/false) are read as text; null, a list or a map
@@ -77,4 +81,8 @@ const TYPES = {
   any: { read: (raw) => ok(raw), takes: (entry) => entry.shape || 'see the settings page' },
 };
 
-module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap };
+// A key written with nothing after it is "not set", except on a switch that must never fail on one
+// (`onFault: false`), where it is unreadable. Read by the reader and by the schema.
+const emptyIsFault = (e) => e.type === 'switch' && e.onFault === false;
+
+module.exports = { TYPES, SWITCH_WORDS, readSwitch, isMap, getPath, firstLine, emptyIsFault };

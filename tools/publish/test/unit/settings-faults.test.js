@@ -39,15 +39,15 @@ test('an unknown name with no near neighbour warns and suggests nothing', () => 
 test('a value a hiding setting cannot take stops, and the safe value is used', () => {
   const r = read('  mode: players\n');
   assert.equal(fault(r, 'publish.mode').level, 'stop');
-  assert.equal(r.values.publish.mode, 'player');
-  assert.equal(r.origins['publish.mode'], 'fault');
+  assert.equal(r.values.player_site.hide.mode, 'player');
+  assert.equal(r.origins['player_site.hide.mode'], 'fault');
   assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode is "players"; it takes player or full.');
 });
 
 test('a hiding list that is not a list stops and the built-in list is used', () => {
   const r = read('  exclude_sections: GM Notes\n');
   assert.equal(fault(r, 'publish.exclude_sections').level, 'stop');
-  assert.deepEqual(r.values.publish.exclude_sections.slice(0, 2), ['GM Notes', 'DM Notes']);
+  assert.deepEqual(r.values.player_site.hide.sections.slice(0, 2), ['GM Notes', 'DM Notes']);
 });
 
 // 'gothic' is an accepted name for the horror look, so a name the list does not know stands in.
@@ -55,14 +55,14 @@ test('a bad look value warns and the default is used', () => {
   const r = read('  theme:\n    genre: nonesuch\n  landing:\n    max_npcs: lots\n');
   assert.equal(fault(r, 'publish.theme.genre').level, 'warn');
   assert.equal(fault(r, 'publish.landing.max_npcs').level, 'warn');
-  assert.equal(r.values.publish.landing.max_npcs, 6);
+  assert.equal(r.values.player_site.landing.max_npcs, 6);
 });
 
 test('a switch that cannot be read is off, never on', () => {
   const r = read('  site: maybe\n  site_dir: ../site\n  live_stats:\n');
-  assert.equal(r.values.publish.site, false);
-  assert.equal(r.values.publish.live_stats, false);
-  assert.equal(r.origins['publish.site'], 'fault');
+  assert.equal(r.values.player_site.publish, false);
+  assert.equal(r.values.player_site.features.live_stats, false);
+  assert.equal(r.origins['player_site.publish'], 'fault');
 });
 
 test('keys under an open map are never unknown', () => {
@@ -72,8 +72,8 @@ test('keys under an open map are never unknown', () => {
 
 test('an old name is read, and said', () => {
   const r = read('  backend:\n    statusBar: true\n');
-  assert.equal(r.values.publish.live_stats, true);
-  assert.equal(r.origins['publish.live_stats'], 'old-name');
+  assert.equal(r.values.player_site.features.live_stats, true);
+  assert.equal(r.origins['player_site.features.live_stats'], 'old-name');
   assert.equal(formatFault(fault(r, 'publish.backend.statusBar')), 'publish.backend.statusBar is an old name; use publish.live_stats.');
 });
 
@@ -93,8 +93,10 @@ test('nearest finds one edit, a swap, and a missing letter, and nothing far away
 test('no file, and a file with no publish block, give every default and say so', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-'));
   const r = readSettings({ vaultPath: dir });
-  assert.deepEqual(r.file, { exists: false, hasPublish: false, inline: false });
-  assert.equal(r.values.publish.connections, 'tree');
+  const { path: shown, ...rest } = r.file;
+  assert.deepEqual(rest, { exists: false, hasPublish: false, inline: false, leftover: false });
+  assert.ok(shown.endsWith('vault-config.md'));
+  assert.equal(r.values.player_site.features.connections, 'tree');
   assert.deepEqual(r.faults, []);
 });
 
@@ -163,8 +165,15 @@ test('a hiding setting written beside publish: stops, except mode and unrelated 
   assert.equal(formatFault(f), 'exclude_sections is written beside publish:; it belongs under it, as publish.exclude_sections.');
   assert.match(formatFault(fault(read('  mode: player\n', undefined, 'exclude_whatever: 1\n'), 'exclude_whatever')), /no setting has that name/);
   for (const ok of ['mode: full', 'hide_things: 1', 'system: coc', 'setting_year: 1920', 'sections: x']) {
+    assert.deepEqual(stops(read('  mode: player\n', undefined, `${ok}\n`).faults), [], ok);
+  }
+  // A setting the old file holds, and the notes it keeps beside its settings, say nothing; any other top-level name is a warning (#375).
+  for (const ok of ['setting_year: 1920', 'game_system: coc', 'description: x', 'session_naming: x']) {
     assert.deepEqual(read('  mode: player\n', undefined, `${ok}\n`).faults, [], ok);
   }
+  const stray = fault(read('  mode: player\n', undefined, 'total_sessions: 4\n'), 'total_sessions');
+  assert.equal(stray.level, 'warn');
+  assert.equal(stray.kind, 'unknown-name');
 });
 
 test('hide does not suggest mode', () => {
@@ -186,4 +195,18 @@ test('a short stray name near mode only warns; a near-miss of mode still stops',
   for (const name of ['exclude_sectoins', 'overide', 'hide_sections']) {
     assert.equal(fault(read(`  ${name}: [A]\n`), `publish.${name}`).level, 'stop', name);
   }
+});
+
+test('saysHiding is one rule: a hiding last part, or an exclude/hid prefix; mode is an everyday word; beside the block only exclude_ counts', () => {
+  const { saysHiding, hidingLasts } = require('../../lib/settings/faults');
+  const lasts = hidingLasts(['player_site.hide.sections', 'player_site.hide.mode', 'publish.exclude_dirs']);
+  assert.equal(saysHiding('sections', lasts), true);
+  assert.equal(saysHiding('exclude_dirs', lasts), true);
+  assert.equal(saysHiding('Excluded', lasts), true);
+  assert.equal(saysHiding('hidden', lasts), true);
+  assert.equal(saysHiding('mode', lasts), false);
+  assert.equal(saysHiding('title', lasts), false);
+  assert.equal(saysHiding('hidden', lasts, { beside: true }), false);
+  assert.equal(saysHiding('exclude_x', lasts, { beside: true }), true);
+  assert.equal(saysHiding('sections', lasts, { beside: true }), true);
 });

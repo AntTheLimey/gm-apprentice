@@ -4,8 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { loadPublishConfig } = require('../../lib/config');
-const { entry } = require('../../lib/settings');
-const defaultOf = (name) => entry(`publish.${name}`).default;
+const { resolve } = require('../../lib/settings');
+// The built-in default of a setting, asked by the name the old vault file gave it.
+const defaultOf = (name) => resolve(`publish.${name}`).entry.default;
 
 describe('the built-in defaults', () => {
   it('has player mode by default', () => {
@@ -396,7 +397,8 @@ describe('exclude_fields resolution', () => {
   it('vault.config.json excludeFields applies when the vault file is silent', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
-    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'custom_field']);
+    // The site file's entries add to the built-in list (#371).
+    assert.deepStrictEqual(result.exclude_fields, [...resolve('publish.exclude_fields').entry.default, 'custom_field']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

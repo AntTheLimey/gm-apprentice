@@ -9,8 +9,10 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, normalizeExcludeDir, mergedMaps } = require('./settings/site-file');
-const { entry: settingEntry } = require('./settings');
+const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, mergedMaps } = require('./settings/legacy');
+const { normalizeExcludeDir } = require('./settings/folders');
+const { resolve: resolveSetting } = require('./settings');
+const { layoutOf, NEW_FILE } = require('./settings/layout');
 const { readSwitch } = require('./settings/types');
 const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
 const { detectInbox, detectStatusBar } = require('./backend-flags');
@@ -67,6 +69,12 @@ function planMigration({ configPath, vaultPath } = {}) {
   if (!vault) return refuse('migrate-config needs a vault.config.json (--config) or a vault (--vault)');
   if (!fs.existsSync(vault) || !fs.statSync(vault).isDirectory()) return refuse(`vault directory not found: ${vault}`);
 
+  // This command writes the old settings file. A vault on the new one would get a second file that is not read,
+  // and the entries moved into it would hide nothing.
+  if (layoutOf(vault) === 'new') {
+    return refuse(`this vault's settings are in ${NEW_FILE}, so migrate-config does not apply; put anything still in the site folder's vault.config.json there with settings add or settings set`);
+  }
+
   const vaultFile = path.join(vault, VAULT_REL);
   const exists = fs.existsSync(vaultFile);
   const before = exists ? fs.readFileSync(vaultFile, 'utf8') : NEW_VAULT_FILE;
@@ -115,6 +123,13 @@ function planMigration({ configPath, vaultPath } = {}) {
         if (entry.kind === 'list' && Array.isArray(fromSite)) {
           const { text, skipped } = splitEntries(fromSite);
           move.value = text;
+          // With no vault list the reader now adds the site list to the built-in one (#371), so that is what moves: the vault resolves what it did before.
+          const found = resolveSetting(`publish.${entry.publish}`).entry;
+          if (found.legacyMerge === 'union') {
+            const same = (x) => (normalizeExcludeDir(x, vault) ?? String(x)).toLowerCase();
+            const have = new Set(found.default.map(same));
+            move.value = [...found.default, ...text.filter((t) => !have.has(same(t)) && have.add(same(t)))];
+          }
           if (skipped.length) { move.skipped = skipped; plan.siteSet[entry.json] = skipped; }
         }
         plan.vaultSet[entry.publish] = move.value;
@@ -183,7 +198,7 @@ function planMigration({ configPath, vaultPath } = {}) {
     for (const entry of movedKeys()) {
       if (entry.publish !== 'exclude_sections' && entry.publish !== 'exclude_fields') continue;
       if (site[entry.json] !== undefined || (publish[entry.publish] !== undefined && publish[entry.publish] !== null)) continue;
-      const value = [...settingEntry(`publish.${entry.publish}`).default];
+      const value = [...resolveSetting(`publish.${entry.publish}`).entry.default];
       plan.vaultSet[entry.publish] = value;
       plan.moves.push({ from: 'the built-in list', to: `publish.${entry.publish}`, value });
     }

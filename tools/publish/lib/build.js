@@ -16,6 +16,7 @@ const { getsNoPage } = require('./previews');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
 const { linkText } = require('./wikilink');
+const { nameIn, fileLabel } = require('./settings');
 const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
@@ -28,7 +29,7 @@ const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
-const { hasLegacy, SITE_OLD_ROOTS } = require('./settings/site-file');
+const { hasLegacy, SITE_OLD_ROOTS } = require('./settings/legacy');
 const { publishesPage, autoExcludeCode } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
@@ -43,7 +44,7 @@ const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 // old `backend` block and `landingTagline` are named too: either gives the migration work.
 // A list key that is not a list, or holds only entries that cannot be carried over, gets its
 // own clause (the migration cannot move it) and does not send the GM to migrate.py when it is all that is left. Returns the lines to print.
-function legacyWarning(legacy, rawConfig) {
+function legacyWarning(legacy, rawConfig, layout) {
   const parts = [];
   const byHand = [];
   for (const rec of Array.isArray(legacy) ? legacy : []) {
@@ -61,7 +62,9 @@ function legacyWarning(legacy, rawConfig) {
   for (const key of SITE_OLD_ROOTS) {
     if (rawConfig && rawConfig[key] !== undefined) parts.push(key);
   }
-  const moved = parts.length
+  const moved = parts.length && layout === 'new'
+    ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. This vault's settings are in ${fileLabel(rawConfig.vaultPath)}, so these are no longer read; remove them from vault.config.json.`
+    : parts.length
     ? `WARNING: vault.config.json still holds campaign settings: ${parts.join(', ')}. Settings left in vault.config.json are planned to stop being read in plugin 1.11.0. Run \`migrate.py <vault>\` to move them.`
     : null;
   return [moved, ...byHand.map((c) => `WARNING: ${c}.`)].filter(Boolean);
@@ -100,7 +103,9 @@ function buildSite(options) {
   if (!options.allowFaults) assertNoStops(publishConfig, 'build');
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
   const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir || './docs');
-  const off = siteOff(publishConfig.switches);
+  const off = siteOff(publishConfig.switches, rawConfig.vaultPath);
+  // A setting named in a message is named as this vault's file writes it.
+  const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
 
   const host = config.host || 'github-pages';
@@ -124,8 +129,8 @@ function buildSite(options) {
     inbox: switches.inbox === true && kvWired,
   };
   if (!kvWired) {
-    if (switches.liveStats === true) console.warn('  WARNING: publish.live_stats is on but this site has no KV store wired; live stats are not published');
-    if (switches.inbox === true) console.warn('  WARNING: publish.inbox is on but this site has no KV store wired; the change-request inbox is not published');
+    if (switches.liveStats === true) console.warn(`  WARNING: ${nm('player_site.features.live_stats')} is on but this site has no KV store wired; live stats are not published`);
+    if (switches.inbox === true) console.warn(`  WARNING: ${nm('player_site.features.inbox')} is on but this site has no KV store wired; the change-request inbox is not published`);
   }
   const genrePreset = publishConfig.theme.genre;
   publishConfig._genrePreset = genrePreset;
@@ -318,7 +323,7 @@ function buildSite(options) {
       const outPath = fontOutputPath(f.path);
       const ext = outPath.includes('.') ? outPath.split('.').pop().toLowerCase() : '';
       if (!Object.prototype.hasOwnProperty.call(FONT_FORMATS, ext)) {
-        console.warn(`  WARNING: theme.fonts.files entry "${f.path}" is not a supported font file (.woff2/.woff/.ttf/.otf) — skipping`);
+        console.warn(`  WARNING: ${nm('player_site.theme.fonts.files')} entry "${f.path}" is not a supported font file (.woff2/.woff/.ttf/.otf) — skipping`);
         continue;
       }
       const vaultFontPath = path.resolve(vaultRoot, f.path);
@@ -326,7 +331,7 @@ function buildSite(options) {
         throw new Error(`Refusing to copy font file outside vault: ${f.path}`);
       }
       if (!fs.existsSync(vaultFontPath)) {
-        console.warn(`  WARNING: theme.fonts.files entry "${f.path}" not found in the vault — skipping`);
+        console.warn(`  WARNING: ${nm('player_site.theme.fonts.files')} entry "${f.path}" not found in the vault — skipping`);
         continue;
       }
       // outPath now carries the GM's full relative subpath (not just a basename), so a
@@ -335,7 +340,7 @@ function buildSite(options) {
       const fontsRoot = path.resolve(outputDir, 'fonts');
       const dest = path.resolve(fontsRoot, outPath);
       if (dest !== fontsRoot && !dest.startsWith(fontsRoot + path.sep)) {
-        console.warn(`  WARNING: theme.fonts.files entry "${f.path}" resolves outside the site's fonts/ directory — skipping`);
+        console.warn(`  WARNING: ${nm('player_site.theme.fonts.files')} entry "${f.path}" resolves outside the site's fonts/ directory — skipping`);
         continue;
       }
       ensureDir(dest);
@@ -695,7 +700,7 @@ function buildSite(options) {
       if (!page) {
         // Silence here would repeat the very complaint this fixes: config that
         // looks applied and does nothing.
-        console.warn(`  WARNING: landing.${label} names "${name}", which is not a published ${label.replace('featured_', '').replace(/s$/, '')} — check spelling, or it may be excluded from the site`);
+        console.warn(`  WARNING: ${nm(`player_site.landing.${label}`)} names "${name}", which is not a published ${label.replace('featured_', '').replace(/s$/, '')} — check spelling, or it may be excluded from the site`);
         continue;
       }
       if (seen.has(page.outputPath)) continue;
@@ -734,7 +739,7 @@ function buildSite(options) {
     for (const name of names) {
       const page = byName.get(canonicalNfc(name));
       if (!page) {
-        console.warn(`  WARNING: landing.quick_links names "${name}", which is not a published page — check spelling, or it may be excluded from the site`);
+        console.warn(`  WARNING: ${nm('player_site.landing.quick_links')} names "${name}", which is not a published page — check spelling, or it may be excluded from the site`);
         continue;
       }
       if (seen.has(page.outputPath)) continue;
@@ -866,8 +871,8 @@ function buildSite(options) {
     ? headScript(publishConfig.theme.default_mode, storageKey(config.siteUrl || config.siteTitle || configDir))
     : '');
   if (!twoPalettes && publishConfig.theme.default_mode !== 'system') {
-    console.warn(`publish.theme.default_mode "${publishConfig.theme.default_mode}" has no effect: `
-      + 'it needs a genre preset (theme.genre) and no custom theme.palette, the themes with two palettes');
+    console.warn(`${nm('player_site.theme.default_mode')} "${publishConfig.theme.default_mode}" has no effect: `
+      + `it needs a genre preset (${nm('player_site.theme.genre')}) and no custom ${nm('player_site.theme.palette')}, the themes with two palettes`);
   }
   configureLinkPreviews(publishConfig.link_previews);
   configureConnections(publishConfig.connections);
@@ -1633,7 +1638,7 @@ function buildSite(options) {
   }
 
   // Settings that still live in the site file. One line, so it is the thing the GM reads.
-  for (const line of legacyWarning(publishConfig.legacy, rawConfig)) console.warn(`  ${line}`);
+  for (const line of legacyWarning(publishConfig.legacy, rawConfig, publishConfig.layout)) console.warn(`  ${line}`);
 
   // Live stats and the inbox used to be detected from a deployed backend; unset now means
   // off. A deployed feature whose switch neither file sets is never lost silently: the line
@@ -1641,9 +1646,9 @@ function buildSite(options) {
   // stats when character_sheets is off (that is the GM's own choice, and the files are removed).
   const unset = switches.unset || [];
   const legacySite = hasLegacy(rawConfig);
-  const lost = (key, was, is, subject, them, its) => console.warn(legacySite
-    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: publish.${key} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
-    : `  WARNING: ${subject} ${is} deployed on this site but publish.${key} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set publish.${key} to true to keep ${them}, or to false to remove ${its} functions.`);
+  const lost = (key, was, is, subject, them, its) => console.warn(legacySite && publishConfig.layout !== 'new'
+    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: ${nm(`player_site.features.${key}`)} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
+    : `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
   if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
   if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
 

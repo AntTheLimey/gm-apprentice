@@ -17,6 +17,7 @@ const { resolveConfig, loadVaultConfig } = require('./config');
 const { detectStatusBar } = require('./backend-flags');
 
 const { runCommand, WRANGLER_TIMEOUT_MS } = require('./run-command');
+const { nameIn } = require('./settings');
 
 // Bounded like the watcher's poll (#154). The failure here is milder — the GM
 // watches a flush hang rather than a background watcher going silently dark —
@@ -102,12 +103,13 @@ async function runFlush(deps) {
   // with no `switches` (a test seam) means on, as in pcKeepList.
   const switches = publishConfig.switches;
   if (switches && switches.liveStats !== true) {
+    const liveName = nameIn(vaultPath, 'player_site.features.live_stats');
     const deployedButUnset = switches.characterSheets !== false && (switches.unset || []).includes('live_stats') && detectStatusBar(configDir);
     out(switches.characterSheets === false
       ? 'Nothing flushed: character sheets are off for this campaign, so live stats are off too.'
       : deployedButUnset
-        ? 'Nothing flushed: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, then flush again.'
-        : 'Nothing flushed: live stats are off for this campaign (publish.live_stats is not true).');
+        ? `Nothing flushed: live stats are deployed on this site but ${liveName} is not set, so they are off. Set ${liveName} to true to keep them, then flush again.`
+        : `Nothing flushed: live stats are off for this campaign (${liveName} is not true).`);
     return 0;
   }
 

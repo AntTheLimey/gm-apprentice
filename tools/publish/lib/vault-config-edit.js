@@ -430,22 +430,6 @@ function writeAtomic(link, text, { rename } = {}) {
   }
 }
 
-// setPublishKeys(vaultPath, set, remove) -> { changed }. Throws Error(reason) on refusal.
-// deps.rename replaces fs.renameSync (tests inject a failing one).
-function setPublishKeys(vaultPath, set, remove = [], deps = {}) {
-  return writeChanges(vaultPath, { set, remove }, deps);
-}
-
-// setPublishLeaves(vaultPath, leaves, deps) -> { changed }: editPublishBlock's `leaves`, written.
-function setPublishLeaves(vaultPath, leaves, deps = {}) {
-  return writeChanges(vaultPath, { leaves }, deps);
-}
-
-// removePublishLeaves(vaultPath, paths) -> { changed }: editPublishBlock's `removals`, written.
-function removePublishLeaves(vaultPath, paths, deps = {}) {
-  return writeChanges(vaultPath, { removals: paths }, deps);
-}
-
 // setPublishChanges(vaultPath, { set, remove, leaves }, deps) -> { changed }: all three at once.
 function setPublishChanges(vaultPath, changes, deps = {}) {
   return writeChanges(vaultPath, changes, deps);
@@ -463,4 +447,4 @@ function writeChanges(vaultPath, changes, deps) {
   return { changed: true };
 }
 
-module.exports = { editPublishBlock, setPublishKeys, setPublishLeaves, removePublishLeaves, setPublishChanges, writeAtomic, fillUnset, splitFrontmatter, locateBlock };
+module.exports = { editPublishBlock, setPublishChanges, writeAtomic, fillUnset };

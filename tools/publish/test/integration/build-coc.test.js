@@ -4,7 +4,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs'); const path = require('path'); const os = require('os');
 const { build } = require('../../lib/build');
-const { setPublishKeys } = require('../../lib/vault-config-edit');
+const { setOldSettings } = require('../helpers/settings-files');
 
 describe('build integration — CoC PC', () => {
   const fixturesDir = path.join(__dirname, '..', 'fixtures');
@@ -14,7 +14,7 @@ describe('build integration — CoC PC', () => {
     configPath = path.join(outputDir, 'config.json');
     const vault = path.join(outputDir, 'vault');
     fs.cpSync(path.join(fixturesDir, 'with-coc-pc'), vault, { recursive: true });
-    setPublishKeys(vault, { live_stats: true });
+    setOldSettings(vault, { 'player_site.features.live_stats': true });
     fs.writeFileSync(path.join(outputDir, 'wrangler.toml'), '[[kv_namespaces]]\nbinding = "INBOX"\nid = "abc123def456"\n');
     fs.writeFileSync(configPath, JSON.stringify({
       vaultPath: vault,

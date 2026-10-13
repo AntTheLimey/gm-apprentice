@@ -41,15 +41,14 @@
 //   {"op":"google-fonts","vault":…,"config":…}
 //       -> {"families":[…]}  the families the site would load from Google for the vault
 //                            (`config`, the site's vault.config.json, is optional); none
-//                            when the fonts are hosted. The same list `vault-setting`
-//                            prints as `googleFonts`.
+//                            when the fonts are hosted.
 //
 // A request that cannot be answered gets {"error":…}; the process carries on.
 const { StringDecoder } = require('string_decoder');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { readSettings } = require('./settings');
+const { readSettings, nameIn, fileLabel } = require('./settings');
 const { strippedLines, playerSafeMarkdown, keepOnlySections, keptSectionFlags, sectionVerdicts } = require('./processor');
 
 // A request is checked, not coerced: a list that is not a list read as "no list"
@@ -62,25 +61,25 @@ function list(request, key) {
   return value;
 }
 
-// What `_meta/vault-config.md` says about publishing, from one read through the settings
+// What the vault's settings file says about publishing, from one read through the settings
 // package. A file that is not there says nothing publishes; one that cannot be parsed is
 // an error (the reader throws it), not a "no".
 function site(vault) {
   if (typeof vault !== 'string' || vault === '') throw new Error('vault must be a path');
   const { values, origins, faults, file } = readSettings({ vaultPath: vault, siteConfig: {} });
   if (!file.exists || !file.hasPublish) {
-    if (faults.some((f) => f.name === 'publish')) throw new Error('publish: in _meta/vault-config.md is not a block of settings');
+    if (faults.some((f) => f.name === 'publish')) throw new Error(`publish: in ${fileLabel(vault)} is not a block of settings`);
     return { publishes: false, site: false, siteDir: null };
   }
   // `publish.site` is the switch, decided where the build decides it. Off: there is no
   // site, whatever site_dir says. Unset, in a vault written before the switch, a site_dir
   // says on. An unreadable value is off, as for the other switches.
-  const on = values.publish.site;
-  const raw = values.publish.site_dir;
-  const origin = origins['publish.site_dir'];
+  const on = values.player_site.publish;
+  const raw = values.player_site.folder;
+  const origin = origins['player_site.folder'];
   const blank = origin === 'default' || (typeof raw === 'string' && raw.trim() === '');
   if (!on || blank) return { publishes: true, site: on, siteDir: null };
-  if (origin === 'fault' || typeof raw !== 'string') throw new Error('publish.site_dir in _meta/vault-config.md is not a path');
+  if (origin === 'fault' || typeof raw !== 'string') throw new Error(`${nameIn(vault, 'player_site.folder')} in ${fileLabel(vault)} is not a path`);
   return { publishes: true, site: true, siteDir: siteDirPath(vault, raw) };
 }
 

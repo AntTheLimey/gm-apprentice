@@ -12,7 +12,7 @@ Node 22 or later. Check with `node --version`.
 ## Vendored dependencies
 
 This tool's runtime dependencies (`gray-matter`, `lunr`,
-`markdown-it`, and their transitive deps) are **committed** under
+`markdown-it`, `yaml`, and their transitive deps) are **committed** under
 `node_modules/` — an exception to the usual rule, enforced by a
 negation at the bottom of the repo's root `.gitignore`.
 
@@ -174,12 +174,16 @@ Scaffolds a new site in `dir` (defaults to the current directory).
 Refuses to overwrite existing files — run it in an empty directory
 or provide a new directory name.
 
-`init` also writes `publish.site: true` and `publish.site_dir`, the
-absolute path of the new site folder, into the vault's
-`_meta/vault-config.md`. `update-pin` adds either to a vault that lacks
-it and leaves a `site: false` alone. `publish.site` says whether the
-vault has a site: with it set to `false`, `build` and `deploy` stop
-with one line and exit code 1, and nothing is built.
+`init` also writes `player_site.publish: true` and `player_site.folder`,
+the absolute path of the new site folder, into the vault's
+`_meta/vault-config.yaml`. `update-pin` adds either to a vault that lacks
+it and leaves a `publish: false` alone. `player_site.publish` says
+whether the vault has a site: with it set to `false`, `build` and
+`deploy` stop with one line and exit code 1, and nothing is built.
+On a vault still on the old settings file (see
+[The old settings file](#the-old-settings-file)), the same two settings
+are `publish.site` and `publish.site_dir`, and every message names them
+that way.
 
 ### `build [--config path]`
 
@@ -205,7 +209,7 @@ stdin closes.
 | `{"op":"published","text":…,"excludeSections":[…],"publish":"all"}` | `{"text":…}`: the body the site renders. `publish` is `all`, `stub` (with `include`, the page's `publish_include_sections`) or `none`. |
 | `{"op":"sections","text":…,"excludeSections":[…]}` | `{"withheldBy":[…]}`: for each line of `text`, the excluded section withholding it, or `null`. |
 | `{"op":"stub","text":…,"include":[…]}` | `{"kept":[…]}`: for each line of `text`, whether a stub page keeps it. |
-| `{"op":"site","vault":…}` | `{"publishes":…,"site":…,"siteDir":…}`: whether the vault's `_meta/vault-config.md` has a `publish:` block, whether its site is on (`publish.site`; unset, a `site_dir` says on), and the absolute path its `site_dir` names (`null` when the site is off or no folder is named). |
+| `{"op":"site","vault":…}` | `{"publishes":…,"site":…,"siteDir":…}`: whether the vault's settings file has a site section, whether its site is on (`player_site.publish`; unset, a `player_site.folder` says on), and the absolute path that folder names (`null` when the site is off or no folder is named). |
 
 A request that cannot be answered gets `{"error":…}` and the process
 carries on. That includes a malformed one: `text` must be a string, and
@@ -215,7 +219,7 @@ a list of strings.
 ### `settings <cmd>`
 
 Reads, writes, describes and checks the settings in the vault's
-`_meta/vault-config.md`. Every setting is declared once, in
+`_meta/vault-config.yaml`. Every setting is declared once, in
 `lib/settings/registry.js`; the command works from that list.
 
 ```text
@@ -228,12 +232,112 @@ settings unset <name> ...          Remove settings from the file
 settings add <name> <entry> ...    Add entries to a list setting
 settings remove <name> <entry> ... Take entries out of a list setting
 settings raw [<name>]              The file as written
+settings move [--check]            Take a vault from the old settings file to the new one
+settings setup-note <get|set|clear> The publish set-up guide's note to itself
 ```
+
+`--create` lets `set` make the settings file when the vault has none yet.
+`--vault <dir>` names the vault; without it the command uses the
+`vaultPath` in the site's `vault.config.json`.
+
+```bash
+node "$TOOL" settings set player_site.features.connections=web
+node "$TOOL" settings add player_site.hide.sections Rumours
+node "$TOOL" settings get player_site.landing
+```
+
+A setting's old name (`publish.search` and so on) still works for now.
+The command does the same thing and prints a line saying what the
+setting is called now.
 
 `settings --help` prints the options and `settings list` the names; the
 generated page `docs/site-settings.md` holds the full tables. A fault on
 a setting that hides material stops `build`, `deploy` and the other
 publishing commands until it is fixed.
+
+## Where a vault keeps its settings
+
+| File | Holds | Who writes it |
+|------|-------|---------------|
+| `_meta/vault-config.yaml` | The settings: choices the GM makes | The GM, or the `settings` command |
+| `_meta/vault-state.json` | Bookkeeping the tools keep, such as the publish set-up note | The tools only |
+| `_meta/vault-notes.md` | The GM's own notes about the vault, if any | The GM. Nothing reads it as a setting |
+
+The settings file is plain YAML with nothing else in it: no frontmatter,
+no prose. It holds four names at the top: `version` (the layout's number,
+`1`), `vault` (what is true of the vault whatever site it has),
+`player_site` (the site the players see) and `gm_site` (reserved; nothing
+under it is read yet). A setting is a path through those names:
+`player_site.hide.sections` is `sections` inside `hide` inside
+`player_site`.
+
+```yaml
+version: 1
+vault:
+  system: coc-7e
+  setting_year: 1925
+player_site:
+  publish: true
+  title: The Long Night
+  hide:
+    folders:
+      - GM
+  features:
+    connections: web
+```
+
+Rules for editing it by hand:
+
+- Leave a setting out and it takes its default. A key written with
+  nothing after it counts as not set, except the four switches
+  `player_site.publish`, `player_site.sheets.show`,
+  `player_site.features.live_stats` and `player_site.features.inbox`:
+  left empty, those are a fault and read as off.
+- A hiding list written in the file replaces the built-in list; it does
+  not add to it. `settings add` starts from the built-in list, so use it
+  when you want to add one entry.
+- A switch takes `true` or `false`, or `yes`, `no`, `on` and `off`, in any
+  case.
+- A name the list does not know stops a player build when it sits at the
+  top, inside `vault` or `player_site`, or inside `hide`, and gets a
+  warning elsewhere. A hiding list under an old name (a top-level
+  `publish:` block, or `player_site.exclude_sections`) hides nothing, so
+  it stops the build and the message names the right name.
+- Comments and order survive when the command changes the file.
+
+A [JSON Schema](schema/vault-config.schema.json) for the file is generated
+from the list, and the format is described for tool authors in
+[docs/vault-config-format.md](../../docs/vault-config-format.md). Point an
+editor at the schema to get names and values as you type.
+
+### The old settings file
+
+Vaults made before this layout keep their settings in the frontmatter of
+`_meta/vault-config.md`, under `publish:`. Release 1.10.54 moves vaults to
+the new file. This tool keeps reading the old file for two releases after
+that one, and every message names the file the vault is on and
+each setting as that file writes it (`publish.site`, not
+`player_site.publish`). The `settings` command can still change an old
+file, at the old names.
+
+Do not run `settings move` by hand yet. The next release runs it for you,
+and teaches the plugin's own scripts to read the new file at the same time;
+a vault moved before then would stop the current scripts from finding its
+version stamp.
+
+`settings move` takes a vault to the new file. It checks that every
+setting would resolve to what it resolved to before, then writes
+`_meta/vault-config.yaml`, moves bookkeeping into
+`_meta/vault-state.json` and your own notes into `_meta/vault-notes.md`,
+and removes the old file. It does all of it or none of it; `--check` shows
+what it would do. When the next release's update runs it, a site pinned
+to this tool by something else than `update-pin` is not the update's to
+change, so its vault stays on the old file until you move it. If both
+files exist the new one is read, and the old one is reported as left over.
+
+`migrate-config` still ships in this release because the update uses it
+to move settings out of a site's `vault.config.json`. You do not need to
+run it yourself.
 
 ---
 
@@ -241,17 +345,17 @@ publishing commands until it is fixed.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `siteTitle` | string | Site name shown in the nav bar and page title |
+| `siteTitle` | string | Old layout only. Site name shown in the nav bar and page title |
 | `host` | string | Deploy target: `github-pages` (default/absent) or `cloudflare-pages`. Affects only the deploy step, not the built output. |
 | `siteUrl` | string | Canonical base URL. For `cloudflare-pages` set it to the `.pages.dev` (or custom) URL — Cloudflare serves at the root, so a `github.io` URL breaks the 404 page (the build warns). |
 | `cloudflarePagesProject` | string | Optional. Cloudflare Pages project name; defaults to the site directory name. |
-| `landingTagline` | string | One-sentence campaign hook shown on the landing page hero |
+| `landingTagline` | string | Old layout only. One-sentence campaign hook shown on the landing page hero |
 | `vaultPath` | string | Path to the vault directory (resolved relative to the config file) |
 | `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |
-| `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
-| `folderMap` | object | Maps vault folder paths to site output paths (see below) |
-| `excludeDirs` | array | Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Unioned with `publish.exclude_dirs` from `_meta/vault-config.md` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
-| `excludeSections` | array | Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
+| `attachmentsDir` | string | Old layout only. Subfolder inside `vaultPath` that holds images (default `_attachments`) |
+| `folderMap` | object | Old layout only. Maps vault folder paths to site output paths (see below) |
+| `excludeDirs` | array | Old layout only: a vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.folders`). Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Added to `publish.exclude_dirs` in `_meta/vault-config.md` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
+| `excludeSections` | array | Old layout only: a vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.sections`). Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
 | `preserveDirs` | array | Output subdirectories to keep across builds (e.g. `["superpowers"]`) |
 
 ### folderMap
@@ -321,9 +425,9 @@ time for vaults that haven't run the 1.8.0 migration.
 The root `index.html` is a campaign dashboard generated from vault data.
 It includes these sections (each omitted if no relevant data exists):
 
-- **Hero** — campaign image (from `publish.theme.campaign_image` in
-  `vault-config.md`), site title, last-played date, and in-game date
-  (from `setting_year` in vault-config.md)
+- **Hero** — campaign image (from `player_site.theme.campaign_image` in
+  `_meta/vault-config.yaml`), site title, last-played date, and in-game
+  date (from `vault.setting_year` in the same file)
 - **Story So Far** — first paragraph of the most recent played session's
   `## Narrative Recap` section, with a link to the full session page
 - **The Team** — PC cards with portrait (or initials fallback), status
@@ -341,13 +445,14 @@ drop a `_banner.*` file in the section's vault folder
 (`Locations/_banner.svg`), or name one explicitly:
 
 ```yaml
-publish:
-  banners:
-    locations:
-      image: _attachments/sector-map.webp
-      link: _attachments/sector-map.svg    # optional, click-through target
-      alt: Sector 7-G star chart
-    factions: _attachments/factions-hero.svg   # shorthand: image only
+player_site:
+  lists:
+    banners:
+      locations:
+        image: _attachments/sector-map.webp
+        link: _attachments/sector-map.svg    # optional, click-through target
+        alt: Sector 7-G star chart
+      factions: _attachments/factions-hero.svg   # shorthand: image only
 ```
 
 Keys are output directories (`locations`, `factions`, `items`, …), not
@@ -381,10 +486,11 @@ a single deep tree. Pivot grouping gives each mid-level node its own
 section:
 
 ```yaml
-publish:
-  locations:
-    group_by: system                    # matched against location_type
-    ungrouped_label: Deep Space & Routes
+player_site:
+  lists:
+    locations:
+      group_by: system                    # matched against location_type
+      ungrouped_label: Deep Space & Routes
 ```
 
 `group_by` is a case-insensitive substring of `location_type`, so
@@ -406,14 +512,14 @@ This prevents GM-only images (maps, handouts, portraits of hidden NPCs)
 from leaking into the public site. In full mode, all vault images are
 copied.
 
-`scanAttachments` also honours `excludeDirs`/`publish.exclude_dirs`, so
+`scanAttachments` also honours `excludeDirs`/`player_site.hide.folders`, so
 a vault-relative folder listed there (including a subfolder of the
 attachments tree, e.g. `_attachments/gm-maps`) never reaches the scan at
 all, in either mode.
 
 ### Theme fonts
 
-`publish.theme.fonts.heading`/`.body` name Google Fonts families by
+`player_site.theme.fonts.heading`/`.body` name Google Fonts families by
 default, and the build emits a `fonts.googleapis.com` `@import` at the
 top of `css/theme.css` — every visitor's browser then requests the font
 directly from Google, and the build prints a warning saying so. Two ways
@@ -432,7 +538,7 @@ keep `source: google` until you change it. The scifi preset's Rajdhani
 is self-hosted too.
 
 ```yaml
-publish:
+player_site:
   theme:
     fonts:
       heading: IM Fell English
@@ -443,7 +549,7 @@ publish:
 **`source: local`** self-hosts font files you supply:
 
 ```yaml
-publish:
+player_site:
   theme:
     fonts:
       heading: Cinzel
@@ -487,25 +593,26 @@ system font, then `sans-serif`) rather than rendering as Rajdhani.
 ### Sheet skins and frames
 
 A PC page can wear a skin, and its portrait a frame. Set them under
-`publish:` in `_meta/vault-config.md` for the campaign, or in a
-`type: pc` note's frontmatter for one character (which wins).
+`player_site.sheets` in `_meta/vault-config.yaml` for the campaign, or in
+a `type: pc` note's frontmatter for one character (which wins).
 
 ```yaml
-publish:
-  sheet_skin: ledger      # plain (default), parchment, case-file, console, ledger
-  sheet_frame: thorns     # ring, laurel, thorns, gilt, steel, corners, hex, cracked, none
+player_site:
+  sheets:
+    skin: ledger      # plain (default), parchment, case-file, console, ledger
+    frame: thorns     # ring, laurel, thorns, gilt, steel, corners, hex, cracked, none
 ```
 
-With no `sheet_frame` a skin wears its own frame.
+With no `frame` a skin wears its own frame.
 
 ### Image optimization
 
 Off by default: images are copied byte-for-byte. Turn it on in
-`_meta/vault-config.md` and PNG/JPEG attachments are re-encoded to WebP
+`_meta/vault-config.yaml` and PNG/JPEG attachments are re-encoded to WebP
 as they are copied, with the `<img src>` written to match:
 
 ```yaml
-publish:
+player_site:
   images:
     optimize: true    # default false
     format: webp      # the only supported target today

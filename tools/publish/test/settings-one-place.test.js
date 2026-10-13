@@ -6,8 +6,10 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { names, entry } = require('../lib/settings');
-const { REGISTRY } = require('../lib/settings/registry');
+const os = require('node:os');
+const { entry } = require('../lib/settings');
+const { REGISTRY, names } = require('../lib/settings/registry');
+const { loadPublishConfig } = require('../lib/config');
 
 const ROOT = path.join(__dirname, '..');
 const SETTINGS = path.join(ROOT, 'lib', 'settings');
@@ -45,7 +47,7 @@ test('the switch words are written in one place', () => {
 // The headings and field names a site hides by default are read from the list, not typed here.
 // A file states one of those lists when it quotes two or more of its entries.
 test('no default list is restated', () => {
-  for (const name of ['publish.exclude_sections', 'publish.exclude_fields']) {
+  for (const name of ['player_site.hide.sections', 'player_site.hide.fields']) {
     const defaults = entry(name).default;
     assert.ok(defaults.length >= 3, `${name} has no default list to check`);
     const found = sources.filter((f) => {
@@ -72,19 +74,17 @@ test('no default is written as a fallback', () => {
 });
 
 // Each file below names the settings file in code, and why:
-//   vault-config-edit.js  the editor that writes the `publish:` block in place, keeping the file's layout
-//   init.js               setting up a site seeds the file with site, site_dir and the standard map
+//   vault-config-edit.js  the old editor of the `publish:` block, used only by migrate-config.js (both go in Part B)
 //   migrate-config.js     moves the settings an older site kept in vault.config.json into the file
-//   setup-backend.js      turns the live-stats or inbox switch on in the file after the host is set up
-//   rename-refs.js        renames a note inside the settings that name it (featured_npcs and so on), through the editor
-//   site-doctor.js        names the file as the place of a finding; it reads nothing from it
-// The first five write or move the file; the settings package reads it for the build.
+// The settings package reads and writes the file for everything else (settings/write.js is the one writer),
+// and layout.js is the one place that writes either file's name: a message to the GM gets the name from
+// fileLabel / nameIn (or their `For` forms), which know which of the two files the vault is on.
 test('nothing reads the vault settings file but the settings package', () => {
   const allowed = new Set([
-    'lib/vault-config-edit.js', 'lib/init.js', 'lib/migrate-config.js', 'lib/setup-backend.js', 'lib/rename-refs.js', 'lib/site-doctor.js',
+    'lib/vault-config-edit.js', 'lib/migrate-config.js',
   ]);
-  // Any string that ends in the file's name: a path joined, a template, either quote style.
-  const named = /vault-config\.md['"`]/;
+  // Either file's name anywhere in code: a path joined, a template, a line of help text.
+  const named = /vault-config\.(?:md|yaml)/;
   const hits = grep(named, code);
   const outside = hits.filter((f) => !allowed.has(f));
   assert.deepEqual(outside, []);
@@ -98,14 +98,21 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   live      the live-play flags worked out from those switches (build.js, templates/pc.js)
 //   legacy    the settings an older site file still holds (build.js lists them in its closing warning)
 //   faults    the settings problems found while reading (config.js, site-doctor.js, build.js report them)
+//   layout    which settings file the vault is on, for naming a setting in a message (not enumerable)
 // `setting_year` is a setting, written beside `publish:`; it is checked below as a top-level name.
-const DERIVED = ['switches', 'live', 'legacy', 'faults'];
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)
 // cannot be told from other objects by a pattern without false alarms, so it is not checked.
+// The object config.js builds, read from config.js itself: a vault with no settings file gives every key.
+const built = () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-one-place-'));
+  try { return loadPublishConfig(dir, {}, () => {}); } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+};
+
 test('every setting the code reads is in the list', () => {
-  const known = new Set(names().map((n) => (n.startsWith('publish.') ? n.split('.')[1] : n)));
+  const known = new Set(Object.keys(built()));
   const derived = new Set(DERIVED);
   const read = new Set();
   const first = /\bpublishConfig(?:\??\.([a-z][a-z_0-9]*)\b|\[\s*['"]([a-z][a-z_0-9]*)['"]\s*\])/g;
@@ -115,8 +122,13 @@ test('every setting the code reads is in the list', () => {
 });
 
 test('every setting the code reads inside a group is in the list', () => {
-  const groups = ['theme', 'landing', 'images', 'locations', 'four_oh_four'];
-  const known = new Set(names().filter((n) => groups.some((g) => n.startsWith(`publish.${g}.`))).map((n) => n.split('.').slice(1, 3).join('.')));
+  // Each group of publishConfig, and the part of the list's names that its keys are the last part of.
+  const prefixes = { theme: 'player_site.theme', landing: 'player_site.landing', images: 'player_site.images', locations: 'player_site.lists.locations' };
+  const groups = [...Object.keys(prefixes), 'four_oh_four'];
+  const known = new Set([
+    ...Object.entries(prefixes).flatMap(([g, prefix]) => names().filter((n) => n.startsWith(`${prefix}.`)).map((n) => `${g}.${n.slice(prefix.length + 1).split('.')[0]}`)),
+    ...Object.keys(built().four_oh_four).map((k) => `four_oh_four.${k}`),
+  ]);
   const read = new Set();
   const second = new RegExp(`\\bpublishConfig\\??\\.(${groups.join('|')})(?:\\??\\.([a-z][a-z_0-9]*)\\b|\\[\\s*['"]([a-z][a-z_0-9]*)['"]\\s*\\])`, 'g');
   for (const f of sources) for (const m of code(f).matchAll(second)) read.add(`${m[1]}.${m[2] || m[3]}`);
@@ -125,7 +137,7 @@ test('every setting the code reads inside a group is in the list', () => {
 });
 
 test('every landing setting the code reads is in the list', () => {
-  const known = new Set(names().filter((n) => n.startsWith('publish.landing.')).map((n) => n.split('.')[2]));
+  const known = new Set(names().filter((n) => n.startsWith('player_site.landing.')).map((n) => n.split('.')[2]));
   const read = new Set();
   for (const f of sources) for (const m of code(f).matchAll(/\blandingConfig\??\.([a-z][a-z_0-9]*)\b/g)) read.add(m[1]);
   assert.ok(read.size >= 4, `the scan found only ${read.size} names; it has stopped working`);
@@ -135,14 +147,31 @@ test('every landing setting the code reads is in the list', () => {
 // Client-side strings and modules that cannot require the list state a few allowed values
 // themselves; they must not drift from it.
 test('the colour modes the page script knows are the list\'s', () => {
-  assert.deepEqual(require('../lib/color-mode').MODES, entry('publish.theme.default_mode').values);
+  assert.deepEqual(require('../lib/color-mode').MODES, entry('player_site.theme.default_mode').values);
 });
 
 test('the connection and link-preview modes the templates use come from the list', () => {
   const base = fs.readFileSync(path.join(ROOT, 'lib', 'templates', 'base.js'), 'utf8');
   const conn = fs.readFileSync(path.join(ROOT, 'lib', 'templates', 'connections.js'), 'utf8');
-  assert.match(base, /entry\('publish\.link_previews'\)\.values/);
-  assert.match(base, /entry\('publish\.connections'\)\.values/);
-  assert.match(conn, /entry\('publish\.connections'\)\.values/);
-  assert.match(fs.readFileSync(path.join(ROOT, 'lib', 'image-optimize.js'), 'utf8'), /entry\('publish\.images\.format'\)\.values/);
+  assert.match(base, /entry\('player_site\.features\.link_previews'\)\.values/);
+  assert.match(base, /entry\('player_site\.features\.connections'\)\.values/);
+  assert.match(conn, /entry\('player_site\.features\.connections'\)\.values/);
+  assert.match(fs.readFileSync(path.join(ROOT, 'lib', 'image-optimize.js'), 'utf8'), /entry\('player_site\.images\.format'\)\.values/);
+});
+
+// A message names a setting as the vault's own file writes it: the old name on the old file, the new
+// one on the new. So no file outside the settings package holds a setting's old name as text; the
+// pair lives in the list (`was`), and the helpers in layout.js read it. migrate-config.js and the
+// editor it uses (both deleted in Part B) only ever speak of the old file.
+test('no message states a setting under its old name', () => {
+  const old = new Set(REGISTRY.filter((e) => !e.legacyOnly).flatMap((e) => (e.was || []).filter((w) => w.in === 'vault').map((w) => w.name)));
+  const exempt = new Set(['lib/vault-config-edit.js', 'lib/migrate-config.js', 'bin/gm-publish.js']);
+  const found = [];
+  for (const f of sources) {
+    if (exempt.has(rel(f))) continue;
+    for (const m of code(f).matchAll(/['"`]([^'"`\n]*)['"`]/g)) {
+      for (const word of m[1].match(/[A-Za-z_][A-Za-z_.0-9]*[A-Za-z_0-9]/g) || []) if (old.has(word)) found.push(`${rel(f)}: ${word}`);
+    }
+  }
+  assert.deepEqual(found, []);
 });

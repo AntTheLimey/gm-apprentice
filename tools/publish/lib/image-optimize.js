@@ -7,7 +7,7 @@ const { entry } = require('./settings/registry');
 // animated, and WebP/AVIF are already in a modern format — all pass through untouched.
 const OPTIMIZABLE_EXT = /\.(png|jpe?g)$/i;
 
-const SUPPORTED_FORMATS = new Set(entry('publish.images.format').values);
+const SUPPORTED_FORMATS = new Set(entry('player_site.images.format').values);
 
 /**
  * Read an image's pixel width straight from its header.

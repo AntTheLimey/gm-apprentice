@@ -1,4 +1,4 @@
-const { editPublishBlock, setPublishKeys } = require('../../lib/vault-config-edit');
+const { editPublishBlock, setPublishChanges } = require('../../lib/vault-config-edit');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -157,13 +157,13 @@ describe('editPublishBlock edge cases', () => {
   });
 });
 
-describe('setPublishKeys', () => {
+describe('setPublishChanges', () => {
   const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'vce-'));
   const cfg = (dir) => path.join(dir, '_meta', 'vault-config.md');
 
   it('creates the file with type: meta when absent', () => {
     const dir = tmp();
-    assert.deepStrictEqual(setPublishKeys(dir, { inbox: true }), { changed: true });
+    assert.deepStrictEqual(setPublishChanges(dir, { set: { inbox: true } }), { changed: true });
     assert.strictEqual(fs.readFileSync(cfg(dir), 'utf8'), '---\ntype: meta\npublish:\n  inbox: true\n---\n');
     assert.deepStrictEqual(fs.readdirSync(path.join(dir, '_meta')), ['vault-config.md']);
   });
@@ -172,7 +172,7 @@ describe('setPublishKeys', () => {
     fs.mkdirSync(path.join(dir, '_meta'));
     const before = '---\npublish: {mode: player}\n---\n';
     fs.writeFileSync(cfg(dir), before);
-    assert.throws(() => setPublishKeys(dir, { inbox: true }), /not written as a block/);
+    assert.throws(() => setPublishChanges(dir, { set: { inbox: true } }), /not written as a block/);
     assert.strictEqual(fs.readFileSync(cfg(dir), 'utf8'), before);
     assert.deepStrictEqual(fs.readdirSync(path.join(dir, '_meta')), ['vault-config.md']);
   });
@@ -182,19 +182,19 @@ describe('setPublishKeys', () => {
     fs.writeFileSync(cfg(dir), '---\npublish:\n  inbox: true\n---\n');
     const old = new Date(2020, 0, 1);
     fs.utimesSync(cfg(dir), old, old);
-    assert.deepStrictEqual(setPublishKeys(dir, { inbox: true }), { changed: false });
+    assert.deepStrictEqual(setPublishChanges(dir, { set: { inbox: true } }), { changed: false });
     assert.strictEqual(fs.statSync(cfg(dir)).mtimeMs, old.getTime());
   });
   it('applies removals', () => {
     const dir = tmp();
     fs.mkdirSync(path.join(dir, '_meta'));
     fs.writeFileSync(cfg(dir), '---\npublish:\n  backend:\n    inbox: true\n  mode: player\n---\n');
-    assert.deepStrictEqual(setPublishKeys(dir, {}, ['backend']), { changed: true });
+    assert.deepStrictEqual(setPublishChanges(dir, { remove: ['backend'] }, {}), { changed: true });
     assert.strictEqual(fs.readFileSync(cfg(dir), 'utf8'), '---\npublish:\n  mode: player\n---\n');
   });
 });
 
-describe('setPublishKeys write failure', () => {
+describe('setPublishChanges write failure', () => {
   it('a failed rename leaves the file as it was and no temp file behind', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-vce-'));
     try {
@@ -203,7 +203,7 @@ describe('setPublishKeys write failure', () => {
       const original = '---\npublish:\n  mode: player\n---\n';
       fs.writeFileSync(file, original);
       const failing = () => { throw new Error('rename refused'); };
-      assert.throws(() => setPublishKeys(dir, { inbox: true }, [], { rename: failing }), /rename refused/);
+      assert.throws(() => setPublishChanges(dir, { set: { inbox: true } }, { rename: failing }), /rename refused/);
       assert.strictEqual(fs.readFileSync(file, 'utf8'), original);
       assert.deepStrictEqual(fs.readdirSync(path.join(dir, '_meta')), ['vault-config.md']);
     } finally {
@@ -212,7 +212,7 @@ describe('setPublishKeys write failure', () => {
   });
 });
 
-describe('setPublishKeys keeps a symlink and the file mode', () => {
+describe('setPublishChanges keeps a symlink and the file mode', () => {
   it('writes through a symlinked vault-config.md and keeps its permission bits', { skip: process.platform === 'win32' }, () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-vce-link-'));
     try {
@@ -223,7 +223,7 @@ describe('setPublishKeys keeps a symlink and the file mode', () => {
       fs.mkdirSync(path.join(dir, 'vault', '_meta'), { recursive: true });
       const link = path.join(dir, 'vault', '_meta', 'vault-config.md');
       fs.symlinkSync(real, link);
-      assert.deepStrictEqual(setPublishKeys(path.join(dir, 'vault'), { inbox: true }), { changed: true });
+      assert.deepStrictEqual(setPublishChanges(path.join(dir, 'vault'), { set: { inbox: true } }), { changed: true });
       assert.ok(fs.lstatSync(link).isSymbolicLink(), 'still a symlink');
       assert.match(fs.readFileSync(real, 'utf8'), /^  inbox: true$/m);
       assert.strictEqual(fs.statSync(real).mode & 0o777, 0o640);
@@ -270,20 +270,6 @@ describe('removals', () => {
   it('removes several at once', () => {
     const before = '---\npublish:\n  a: 1\n  b: 2\n  c: 3\n---\n';
     assert.strictEqual(edit(before, [['a'], ['c']]).text, '---\npublish:\n  b: 2\n---\n');
-  });
-  it('removePublishLeaves writes the file, or changes nothing when the key is absent', () => {
-    const { removePublishLeaves } = require('../../lib/vault-config-edit');
-    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-vce-rm-'));
-    try {
-      fs.mkdirSync(path.join(dir, '_meta'));
-      const file = path.join(dir, '_meta', 'vault-config.md');
-      fs.writeFileSync(file, '---\npublish:\n  mode: player\n  inbox: true\n---\n');
-      assert.deepStrictEqual(removePublishLeaves(dir, [['inbox']]), { changed: true });
-      assert.strictEqual(fs.readFileSync(file, 'utf8'), '---\npublish:\n  mode: player\n---\n');
-      assert.deepStrictEqual(removePublishLeaves(dir, [['inbox']]), { changed: false });
-    } finally {
-      fs.rmSync(dir, { recursive: true, force: true });
-    }
   });
 });
 

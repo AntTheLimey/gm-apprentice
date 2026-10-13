@@ -1820,8 +1820,8 @@ class RenestReviewRegressionTests(unittest.TestCase):
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
         self.assertEqual(config_of(vault),
-                         "---\npublish:\n  exclude_sections:\n    - GM Notes\n"
-                         "---\n")
+                         "---\npublish:\n  exclude_sections:   # hidden bits\n"
+                         "    - GM Notes\n---\n")
         out = self.published(vault, "Bob.md")
         self.assertNotIn("SECRET", out)
 
@@ -4186,9 +4186,11 @@ class GmLeakSiteExcludeSectionsTests(unittest.TestCase):
         vault = self.vault(vault_list=["GM Notes", "Keeper Only"])
         self.assertFalse(self.marker_rows(vault))
 
-    def test_a_silent_vault_file_takes_the_site_files_list(self):
+    def test_a_silent_vault_file_adds_the_site_files_list_to_the_built_in_one(self):
         vault = self.vault(site_list=["Keeper Only"])
-        self.assertEqual(self.listed(vault), ["Keeper Only"])
+        self.assertEqual(
+            self.listed(vault),
+            vaultlib.settings_default("publish.exclude_sections") + ["Keeper Only"])
         self.assertFalse(self.marker_rows(vault))
 
     def test_a_silent_vault_and_site_take_the_built_in_list(self):
@@ -5158,7 +5160,9 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
         (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
         return vault
 
-    def test_the_site_files_list_guards_the_move(self):
+    def test_the_site_files_list_is_nested_under_the_built_in_gm_notes(self):
+        # The site file's list adds to the built-in one, so GM Notes is hidden
+        # and the site file's heading can be nested under it without a leak.
         site = Path(tempfile.mkdtemp(prefix="vc-site-"))
         self.addCleanup(shutil.rmtree, site, ignore_errors=True)
         (site / "vault.config.json").write_text(
@@ -5166,9 +5170,13 @@ class RenestExcludesSilentVaultTests(unittest.TestCase):
         vault = make_vault(self, f'---\ntype: meta\npublish:\n  mode: player\n'
                                  f'  site_dir: "{site}"\n---\n')
         (vault / "Bob.md").write_text(self.NOTE, encoding="utf-8")
+        before = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
-        self.assertEqual((vault / "Bob.md").read_text(encoding="utf-8"), self.NOTE)
-        self.assertFalse([r for r in rows if r.startswith(("FIXED", "WOULD-FIX"))], rows)
+        text = (vault / "Bob.md").read_text(encoding="utf-8")
+        self.assertLess(text.index("## GM Notes"), text.index("### Keeper Only"))
+        self.assertTrue(rows_for(rows, "FIXED"), rows)
+        self.assertEqual((vault / "_meta" / "vault-config.md").read_text(
+            encoding="utf-8"), before)
 
     def test_without_node_it_stops_and_writes_nothing(self):
         vault = self.setup_vault()

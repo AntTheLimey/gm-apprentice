@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { nameInFor } = require('./settings');
 
 const SCAFFOLD_FUNCTIONS_DIR = path.join(__dirname, '..', 'templates-scaffold', 'functions');
 
@@ -134,9 +135,12 @@ function syncScaffoldFunctions(siteRoot, options = {}) {
 }
 
 // Why a feature is off, for the line printed with a removal.
+// The setting is named as the vault's file writes it (`layout`: 'new', 'legacy' or 'none').
 const OFF_REASON = {
-  liveStats: (sw) => (sw.characterSheets === false ? 'publish.character_sheets is off, so live stats are off' : 'publish.live_stats is off'),
-  inbox: () => 'publish.inbox is off',
+  liveStats: (sw, layout) => (sw.characterSheets === false
+    ? `${nameInFor(layout, 'player_site.sheets.show')} is off, so live stats are off`
+    : `${nameInFor(layout, 'player_site.features.live_stats')} is off`),
+  inbox: (sw, layout) => `${nameInFor(layout, 'player_site.features.inbox')} is off`,
 };
 
 // True when `file` (a path under `<site>/functions/`) is a regular file whose parent folders
@@ -158,7 +162,7 @@ function isPlainFileInside(siteRoot, file) {
  *
  * @param {string} siteRoot
  * @param {object} switches - loadPublishConfig().switches (reads `explicitOff` and `characterSheets`).
- * @param {object} [options] - `sourceDir` (tests), `log`, `warn`.
+ * @param {object} [options] - `sourceDir` (tests), `log`, `warn`, `layout` (the vault's settings layout, for naming settings in messages).
  * @returns {{ removed: string[], kept: string[] }}
  */
 function removeScaffoldFunctions(siteRoot, switches, options = {}) {
@@ -173,7 +177,7 @@ function removeScaffoldFunctions(siteRoot, switches, options = {}) {
     if (!owning.length || !owning.every((f) => off[f])) continue;
     const file = path.join(siteRoot, 'functions', rel);
     if (!fs.existsSync(file) && !isSymlink(file)) continue;
-    const reason = owning.map((f) => OFF_REASON[f](switches)).join(' and ');
+    const reason = owning.map((f) => OFF_REASON[f](switches, options.layout)).join(' and ');
     if (!isPlainFileInside(siteRoot, file)) {
       warn(`  WARNING: functions/${rel} is not a plain file inside the site folder, so it was not removed although ${reason}. Delete it yourself if you do not want it deployed.`);
       kept.push(rel);
@@ -220,7 +224,7 @@ function syncSiteFunctions({ configPath, options = {} }) {
   });
   for (const f of created) log(`  synced (new) functions/${f}`);
   for (const f of updated) log(`  synced (updated) functions/${f}`);
-  const { removed, kept } = removeScaffoldFunctions(siteRoot, switches, options);
+  const { removed, kept } = removeScaffoldFunctions(siteRoot, switches, { ...options, layout: publishConfig.layout });
   return { created, updated, removed, kept };
 }
 

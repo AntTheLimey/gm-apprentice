@@ -5,15 +5,17 @@
 //   <!-- settings:<group> -->  ...  <!-- /settings:<group> -->
 // and everything between them is replaced. The words around the tables are hand-written.
 //
-//   node tools/publish/scripts/gen-settings-doc.js           says whether the page is current (exit 1 if not)
-//   node tools/publish/scripts/gen-settings-doc.js --write   rewrites the page
+//   node tools/publish/scripts/gen-settings-doc.js           says whether the page and the schema file are current (exit 1 if not)
+//   node tools/publish/scripts/gen-settings-doc.js --write   rewrites them
+// It also writes schema/vault-config.schema.json, the JSON Schema of the vault settings file.
 
 const fs = require('node:fs');
 const path = require('node:path');
 const { REGISTRY, GROUPS } = require('../lib/settings/registry');
-const { row, leftOutCell, isLeaf } = require('../lib/settings/describe');
+const { row, leftOutCell, isLeaf, schemaText } = require('../lib/settings/describe');
 
 const DOC = path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md');
+const SCHEMA = path.join(__dirname, '..', 'schema', 'vault-config.schema.json');
 
 const cell = (text) => String(text).replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ');
 const ticks = (words) => words.map((w) => `\`${w}\``);
@@ -32,11 +34,17 @@ function valuesCell(entry) {
   return upFirst(row(entry).takes);
 }
 
+// The names a setting had before, beneath its name (a site-file key is named as the key).
+function wasNote(e) {
+  const old = (e.was || []).map((w) => `\`${w.name}\``);
+  return old.length ? `<br>was ${old.join(', ')}` : '';
+}
+
 function table(groupId) {
   const rows = REGISTRY.filter((e) => e.group === groupId && isLeaf(e, REGISTRY));
   const lines = ['| Setting | What it does | Values | Left out |', '|---------|--------------|--------|----------|'];
   for (const e of rows) {
-    lines.push(`| \`${e.name}\` | ${cell(e.does)} | ${cell(valuesCell(e))} | ${cell(leftOutCell(e))} |`);
+    lines.push(`| \`${e.name}\`${wasNote(e)} | ${cell(e.does)} | ${cell(valuesCell(e))} | ${cell(leftOutCell(e))} |`);
   }
   return lines.join('\n');
 }
@@ -56,17 +64,27 @@ function render(markdown) {
   });
 }
 
+const readOr = (file) => (fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : null);
+
 function main(argv) {
-  const current = fs.readFileSync(DOC, 'utf8');
-  const next = render(current);
-  if (argv.includes('--write')) {
-    if (next !== current) fs.writeFileSync(DOC, next);
-    console.log(next === current ? 'docs/site-settings.md is already current' : 'docs/site-settings.md rewritten');
-    return 0;
+  const files = [
+    { label: 'docs/site-settings.md', file: DOC, current: readOr(DOC), next: render(readOr(DOC)) },
+    { label: 'tools/publish/schema/vault-config.schema.json', file: SCHEMA, current: readOr(SCHEMA), next: schemaText() },
+  ];
+  let stale = 0;
+  for (const f of files) {
+    const same = f.current === f.next;
+    if (argv.includes('--write')) {
+      if (!same) { fs.mkdirSync(path.dirname(f.file), { recursive: true }); fs.writeFileSync(f.file, f.next); }
+      console.log(same ? `${f.label} is already current` : `${f.label} rewritten`);
+    } else if (same) {
+      console.log(`${f.label} is current`);
+    } else {
+      stale++;
+      console.log(`${f.label} is out of date: run \`node tools/publish/scripts/gen-settings-doc.js --write\``);
+    }
   }
-  if (next === current) { console.log('docs/site-settings.md is current'); return 0; }
-  console.log('docs/site-settings.md is out of date: run `node tools/publish/scripts/gen-settings-doc.js --write`');
-  return 1;
+  return stale ? 1 : 0;
 }
 
 if (require.main === module) process.exit(main(process.argv.slice(2)));

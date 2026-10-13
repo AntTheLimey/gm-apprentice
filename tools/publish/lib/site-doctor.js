@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
-const { formatFault, entry: settingEntry } = require('./settings');
+const { formatFault, entry: settingEntry, fileLabel, nameIn } = require('./settings');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -243,9 +243,9 @@ async function runSiteDoctor(options, deps) {
   // --- the settings themselves ----------------------------------------------
   for (const f of publishConfig.faults) {
     findings.push(finding(
-      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', '_meta/vault-config.md',
+      'SETTINGS_FAULT', f.level === 'stop' ? 'error' : 'warning', fileLabel(vaultPath),
       formatFault(f),
-      'correct it in _meta/vault-config.md, or ask the apprentice to run the Settings check',
+      `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
     ));
   }
   const settingsStopped = publishConfig.faults.some((f) => f.level === 'stop');
@@ -298,9 +298,9 @@ async function runSiteDoctor(options, deps) {
       .filter((v, i, a) => a.indexOf(v) === i);
     if (names.length > 0) {
       findings.push(finding(
-        'FONTS_GOOGLE', 'warning', '_meta/vault-config.md',
+        'FONTS_GOOGLE', 'warning', fileLabel(vaultPath),
         `custom fonts ${names.join(', ')} are loaded from Google Fonts at page load — visitors' IP addresses are sent to Google, and some jurisdictions (e.g. the EU under GDPR) require consent for that`,
-        'set publish.theme.fonts.source: self-host to serve them from your site instead, or use a system font',
+        `set ${nameIn(vaultPath, 'player_site.theme.fonts.source')}: self-host to serve them from your site instead, or use a system font`,
       ));
     }
   }
@@ -310,7 +310,7 @@ async function runSiteDoctor(options, deps) {
     findings.push(finding(
       'FOLDER_UNMAPPED', 'warning', entry.dir,
       `${plural(entry.typedFileCount, 'typed page')} inside will not publish`,
-      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to publish.folder_map or list it in publish.exclude_dirs (_meta/vault-config.md)`,
+      `add "${entry.dir}": "${suggestedSlug(entry.dir)}" to ${nameIn(vaultPath, 'player_site.folder_map')} or list it in ${nameIn(vaultPath, 'player_site.hide.folders')} (${fileLabel(vaultPath)})`,
     ));
   }
   const shownUntyped = report.untyped.slice(0, UNTYPED_ROW_CAP);
@@ -393,7 +393,7 @@ async function runSiteDoctor(options, deps) {
     if (portrait && !(portrait in attachments)) {
       findings.push(finding(
         'PORTRAIT_MISSING', 'warning', rel,
-        `portrait: ${portrait} is not in ${config.attachmentsDir || settingEntry('publish.attachments_dir').default}/`,
+        `portrait: ${portrait} is not in ${config.attachmentsDir || settingEntry('vault.attachments').default}/`,
         `put ${portrait} in _attachments/ or fix the portrait: value`,
       ));
     }

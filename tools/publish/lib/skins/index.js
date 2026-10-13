@@ -35,7 +35,7 @@ function pick(raw, key, entry, notes) {
 
 // The skin used when nothing names one: the list's `fallback` for sheet_skin. Asked at call time,
 // because the list requires this file.
-const fallbackSkin = () => require('../settings/registry').entry('publish.sheet_skin').fallback;
+const fallbackSkin = () => require('../settings/registry').entry('player_site.sheets.skin').fallback;
 
 // The PC's value, else the campaign's, else the default. Skin and frame resolve apart.
 function resolveLook(fm, site) {

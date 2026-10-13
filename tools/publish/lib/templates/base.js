@@ -48,11 +48,11 @@ function clientScripts(outputPath) {
 // configureLinkPreviews before any page renders. Module state for the reason
 // colorModeHead is: build() is synchronous.
 let linkPreviews = 'off';
-function configureLinkPreviews(mode) { linkPreviews = entry('publish.link_previews').values.includes(mode) ? mode : 'off'; }
+function configureLinkPreviews(mode) { linkPreviews = entry('player_site.features.link_previews').values.includes(mode) ? mode : 'off'; }
 // How Connections is drawn for this build ('tree', 'web', 'cards' or 'off'), set once by
 // configureConnections before any page renders, as the link-previews mode is.
 let connectionsMode = 'off';
-function configureConnections(mode) { connectionsMode = entry('publish.connections').values.includes(mode) ? mode : 'off'; }
+function configureConnections(mode) { connectionsMode = entry('player_site.features.connections').values.includes(mode) ? mode : 'off'; }
 
 // A page's Connections section, or '' when the site has none or the page has nothing to show.
 function connectionsSection(page, publishConfig, heading = 'h2') {

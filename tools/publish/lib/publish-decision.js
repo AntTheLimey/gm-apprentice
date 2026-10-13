@@ -33,7 +33,7 @@
 const { publishMode } = require('./processor');
 const { storyOwnerPath, isStoryCompanion } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
-const { entry } = require('./settings');
+const { entry, nameInFor } = require('./settings');
 
 // The values that keep a note off a player site are listed once, in excluding-values.js.
 const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, SCENE_SKIP_STATUS, DRAFT, ruleValue } = require('./excluding-values');
@@ -140,7 +140,7 @@ function decidePage(page, options) {
   const excludedDir = alwaysExcludedSegment(rel);
   if (excludedDir) return verdict('exclude', 'DIR_ALWAYS_EXCLUDED', `in ${excludedDir}/ — never published`);
   if (!folderMapped) {
-    return verdict('decide', 'DIR_UNMAPPED', 'its folder is not in publish.folder_map');
+    return verdict('decide', 'DIR_UNMAPPED', `its folder is not in ${nameInFor(publishConfig.layout, 'player_site.folder_map')}`);
   }
   if (!frontmatter || !frontmatter.type) {
     return verdict('decide', 'NO_TYPE', 'no `type:` in frontmatter');
@@ -164,7 +164,7 @@ function decidePage(page, options) {
     };
   }
 
-  const mode = publishConfig.mode || entry('publish.mode').default;
+  const mode = publishConfig.mode || entry('player_site.hide.mode').default;
   const index = manifest ? indexOf(manifest) : null;
   const listedForPublish = !!(index && index.publishing.has(rel));
 

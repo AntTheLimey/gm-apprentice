@@ -214,24 +214,19 @@ describe('lines: the protocol', () => {
 describe('lines: google-fonts', () => {
   const fs = require('fs');
   const os = require('os');
-  const { runVaultSetting } = require('../lib/settings/cli.js');
   const cases = {
     'a genre and google fonts': 'theme:\n    genre: gothic\n    fonts:\n      heading: Cinzel\n      body: Lora\n',
     'self-hosted fonts': 'theme:\n    genre: gothic\n    fonts:\n      source: self-host\n      heading: Cinzel\n',
     'no theme': 'mode: player\n',
   };
   for (const [name, publish] of Object.entries(cases)) {
-    it(`gives what vault-setting prints as googleFonts: ${name}`, () => {
+    it(`gives the google fonts: ${name}`, () => {
       const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gf-'));
       try {
         const vault = path.join(root, 'vault');
         fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
         fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\ntype: meta\npublish:\n  ${publish.replace(/\n(?=.)/g, '\n  ')}---\n`);
-        const out = [];
-        runVaultSetting({ vault, json: true }, { out: (l) => out.push(l) });
-        const alias = JSON.parse(out.join('\n')).googleFonts;
         const asked = answer({ op: 'google-fonts', vault });
-        assert.deepStrictEqual(asked, { families: alias });
         if (name === 'self-hosted fonts' || name === 'no theme') assert.ok(Array.isArray(asked.families));
         if (name === 'a genre and google fonts') assert.ok(asked.families.includes('Cinzel') && asked.families.includes('Lora'));
         if (name === 'self-hosted fonts') assert.deepStrictEqual(asked.families, []);

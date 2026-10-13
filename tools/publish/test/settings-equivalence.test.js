@@ -17,6 +17,15 @@ const INTENDED = [
   // Not a publishConfig field: the `siteOp` message is compared with one trailing colon cut from each side.
   { row: 'siteOp', why: 'the invalid-YAML message is the reader\'s one line; the old text ended in a stray colon',
     ids: ['broken-yaml'], fields: [], trailingColon: true },
+  // 1b rows (the vault config overhaul, part 1b).
+  { row: '1b #371', why: 'a site file\'s hiding list adds to the built-in list when the vault file sets none (was: it replaced it; hides more, never less)',
+    ids: ['exclude_sections-unset-with-site-list'], fields: ['exclude_sections'] },
+  { row: '1b #371', why: 'a site file\'s hiding list adds to the built-in list when the vault file sets none',
+    ids: ['exclude_fields-unset-with-site-list'], fields: ['exclude_fields'] },
+  { row: '1b #371', why: 'a site file\'s hiding list adds to the built-in list when the vault file sets none',
+    ids: ['exclude_dirs-unset-with-site-list'], fields: ['exclude_dirs'] },
+  { row: '1b #375', why: 'a top-level key the list does not know in the old file is warned about (the reader\'s own fault; no resolved value changes)',
+    ids: ['no-publish-key'], fields: [] },
   { row: 1, why: 'exclude_drafts "false", no, off read as off (was: any text hides)',
     ids: ['exclude-drafts-quoted-false', 'exclude-drafts-no', 'exclude-drafts-off'], fields: ['exclude_drafts'] },
   { row: 1, why: 'exclude_drafts yes, maybe, 1 or a list read as true (was the text itself; representation only)',
@@ -134,7 +143,7 @@ const strip = (o, skip, isGolden = false, trailingColon = false) => {
     delete pc.faults; delete pc.origins;
     if (pc.switches) delete pc.switches.notes;
     if (pc.sheetLook) delete pc.sheetLook.notes;
-    if (isGolden && pc.landing && typeof pc.landing === 'object' && pc.landing.max_events === undefined) pc.landing.max_events = entry('publish.landing.max_events').default;
+    if (isGolden && pc.landing && typeof pc.landing === 'object' && pc.landing.max_events === undefined) pc.landing.max_events = entry('player_site.landing.max_events').default;
     if (pc.four_oh_four && typeof pc.four_oh_four === 'object') delete pc.four_oh_four.style;
     // A field may be dotted (`theme.genre`) so the rest of its group is still compared.
     for (const f of skip) {
@@ -164,4 +173,20 @@ test('every INTENDED and WARNS case id is a real case, listed once', () => {
   for (const list of [INTENDED, WARNS]) {
     for (const d of list) for (const id of d.ids) assert.ok(ids.has(id), `${id} is not a case`);
   }
+});
+
+// Not in the golden (main's output is fixed there): a site file's unreadable hiding list, with the vault file
+// silent, is reported as the site file wrote it, as main did, not as the merged list with the built-ins first.
+test('an unreadable list in the site file is reported as written, not merged', () => {
+  const { readSettings } = require('../lib/settings');
+  const { writeOldConfig } = require('./helpers/settings-files');
+  const os = require('node:os');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'site-list-'));
+  writeOldConfig(dir, { mode: 'player' });
+  const read = readSettings({ vaultPath: dir, siteConfig: { excludeSections: ['x', 5, null] } });
+  const f = read.faults.find((x) => x.name === 'publish.exclude_sections' && x.kind === 'not-allowed');
+  assert.ok(f, JSON.stringify(read.faults));
+  assert.deepEqual(f.value, ['x', 5, null]);
+  assert.match(f.message, /^publish\.exclude_sections is \["x",5,null\]; /);
+  assert.equal(f.level, 'stop');
 });

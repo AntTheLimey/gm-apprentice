@@ -1,0 +1,33 @@
+'use strict';
+// Writes a vault's settings file for a test, in either layout, through the yaml library.
+const fs = require('node:fs');
+const path = require('node:path');
+const YAML = require('yaml');
+const { NEW_FILE, OLD_FILE, at, layoutOf } = require('../../lib/settings/layout');
+const { applyChanges } = require('../../lib/settings/write');
+
+function put(vaultPath, rel, text) {
+  const file = at(vaultPath, rel);
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, text);
+  return file;
+}
+
+// The new file: `settings` is an object (written as YAML) or the file's text as it should be written.
+function writeNewConfig(vaultPath, settings) {
+  return put(vaultPath, NEW_FILE, typeof settings === 'string' ? settings : YAML.stringify(settings));
+}
+
+// The old file: `publishObject` goes under `publish:`, `top` is written beside it.
+function writeOldConfig(vaultPath, publishObject, top = {}) {
+  const data = { type: 'meta', ...top, publish: publishObject };
+  return put(vaultPath, OLD_FILE, `---\n${YAML.stringify(data)}---\n`);
+}
+
+// Sets settings by their names in a vault that is on the old file (made empty when the vault has none).
+function setOldSettings(vaultPath, byName) {
+  if (layoutOf(vaultPath) === 'none') writeOldConfig(vaultPath, {});
+  return applyChanges(vaultPath, Object.entries(byName).map(([name, value]) => ({ op: 'set', name, value })));
+}
+
+module.exports = { writeNewConfig, writeOldConfig, setOldSettings };

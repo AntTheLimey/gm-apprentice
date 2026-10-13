@@ -8,7 +8,7 @@ const { execFileSync, spawnSync } = require('child_process');
 
 const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
-const { setPublishKeys } = require('../lib/vault-config-edit');
+const { setOldSettings } = require('./helpers/settings-files');
 
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FROM = 'Characters/PCs/Emma_Wentworth.md';
@@ -85,6 +85,20 @@ describe('manifest rename', () => {
   it('leaves a featured name alone when two notes share the old name', () => {
     const cfg = '---\npublish:\n  landing:\n    featured_npcs: [Emma_Wentworth]\n---\n';
     const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n', 'Elsewhere/Emma_Wentworth.md': '---\ntype: npc\n---\n' });
+    assert.deepStrictEqual(rename(vault).files, {});
+  });
+
+  it('renames the entries in the new settings file, and only there', () => {
+    const cfg = 'version: 1\nplayer_site:\n  hide:\n    field_exceptions:\n      "Characters/PCs/Emma_Wentworth.md": [secret]  # keep\n  landing:\n    featured_npcs: [Emma_Wentworth, Other]  # two\n';
+    const vault = vaultWith({ '_meta/vault-config.yaml': cfg, [FROM]: '---\ntype: pc\n---\n' });
+    const files = rename(vault).files;
+    assert.deepStrictEqual(Object.keys(files), ['_meta/vault-config.yaml']);
+    assert.strictEqual(files['_meta/vault-config.yaml'], cfg.replace('Emma_Wentworth.md"', 'Emma_Wentworth_Hale.md"').replace('[Emma_Wentworth,', '[Emma_Wentworth_Hale,'));
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), cfg);
+  });
+
+  it('an old settings file with no frontmatter names nothing to rename', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': '# Notes only\n\nNo frontmatter here.\n', [FROM]: '---\ntype: pc\n---\n' });
     assert.deepStrictEqual(rename(vault).files, {});
   });
 
@@ -311,7 +325,7 @@ describe('a pinned key reaches the build', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'live-key-'));
     const vault = path.join(root, 'vault');
     fs.cpSync(path.join(__dirname, 'fixtures', 'with-party-roster'), vault, { recursive: true });
-    setPublishKeys(vault, { live_stats: true });
+    setOldSettings(vault, { 'player_site.features.live_stats': true });
     const pcs = path.join(vault, 'Characters', 'PCs');
     if (pinned) {
       const src = fs.readFileSync(path.join(pcs, 'Karl Brenner.md'), 'utf8');

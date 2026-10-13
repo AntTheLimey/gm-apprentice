@@ -1,6 +1,6 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
-const { readFileSync } = require('fs');
+const { readFileSync, existsSync } = require('fs');
 const fs = require('fs').promises;
 const path = require('path');
 const os = require('os');
@@ -252,6 +252,8 @@ describe('init', () => {
   describe('campaign settings go to the vault file', () => {
     const { parseNote } = require('../../lib/frontmatter');
     const { build } = require('../../lib/build');
+    // A vault with no settings file gets the new one; a vault still on the old file is written in place.
+    const newOf = (vault) => require('yaml').parse(readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'));
     const publishOf = (vault) => parseNote(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8')).data.publish;
 
     it('a fresh init writes the block, and init + build prints no WARNING at all', async () => {
@@ -267,19 +269,22 @@ describe('init', () => {
         assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(),
           ['host', 'outputDir', 'siteUrl', 'vaultPath']);
         assert.deepStrictEqual(result.vaultSettings.written,
-          ['site', 'site_dir', 'site_title', 'folder_map', 'attachments_dir', 'exclude_dirs', 'exclude_sections', 'exclude_fields', 'exclude_callouts']);
-        const pub = publishOf(vault);
-        assert.strictEqual(pub.site, true);
+          ['player_site.publish', 'player_site.folder', 'player_site.title', 'player_site.folder_map', 'vault.attachments', 'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts']);
+        const tree = newOf(vault);
+        const pub = tree.player_site;
+        assert.strictEqual(tree.version, 1);
+        assert.strictEqual(pub.publish, true);
         // The vault can find its site again: an absolute path, forward slashes.
-        assert.strictEqual(pub.site_dir, path.resolve(site).split(path.sep).join('/'));
-        assert.strictEqual(pub.site_title, 'Dead Light');
+        assert.strictEqual(pub.folder, path.resolve(site).split(path.sep).join('/'));
+        assert.strictEqual(pub.title, 'Dead Light');
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
-        assert.strictEqual(pub.attachments_dir, '_attachments');
-        assert.deepStrictEqual(pub.exclude_dirs, ['_meta', '_Templates', '_resources']);
-        assert.strictEqual(pub.exclude_callouts, true);
+        assert.strictEqual(tree.vault.attachments, '_attachments');
+        assert.deepStrictEqual(pub.hide.folders, ['_meta', '_Templates', '_resources']);
+        assert.strictEqual(pub.hide.callouts, true);
         // The built-in lists are written out so the GM sees them (#294): the same lists the build falls back to.
-        assert.deepStrictEqual(pub.exclude_sections, entry('publish.exclude_sections').default);
-        assert.deepStrictEqual(pub.exclude_fields, entry('publish.exclude_fields').default);
+        assert.deepStrictEqual(pub.hide.sections, entry('player_site.hide.sections').default);
+        assert.deepStrictEqual(pub.hide.fields, entry('player_site.hide.fields').default);
+        assert.ok(!existsSync(path.join(vault, '_meta', 'vault-config.md')));
         for (const k of Object.keys(real)) console[k] = (...a) => lines.push(a.join(' '));
         const configPath = path.join(site, 'vault.config.json');
         build({ configPath });
@@ -301,7 +306,7 @@ describe('init', () => {
         await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
         await fs.writeFile(file, '---\ntype: meta\npublish:\n  site: false\n---\n');
         const result = await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
-        assert.ok(result.vaultSettings.written.includes('site'));
+        assert.ok(result.vaultSettings.written.includes('player_site.publish'));
         assert.strictEqual(publishOf(vault).site, true);
         const configPath = path.join(site, 'vault.config.json');
         const { siteOffFor } = require('../../lib/config');
@@ -340,7 +345,7 @@ describe('init', () => {
         const pub = publishOf(vault);
         assert.strictEqual(pub.site_title, 'Mine');
         assert.deepStrictEqual(pub.theme, { tagline: 'Hello' });
-        assert.deepStrictEqual(result.vaultSettings.kept, ['site_title']);
+        assert.deepStrictEqual(result.vaultSettings.kept, ['player_site.title']);
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
       } finally {
         await removeTmpDir(tmpDir);
@@ -378,7 +383,7 @@ describe('init', () => {
         let r = run(['site', '--vault', './site/myvault']);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.strictEqual(JSON.parse(readFileSync(path.join(tmpDir, 'site', 'vault.config.json'), 'utf8')).vaultPath, './myvault');
-        assert.strictEqual(publishOf(path.join(tmpDir, 'site', 'myvault')).attachments_dir, '_attachments');
+        assert.strictEqual(newOf(path.join(tmpDir, 'site', 'myvault')).vault.attachments, '_attachments');
         // vault outside the site folder: absolute, resolved against the cwd
         await fs.mkdir(path.join(tmpDir, 'elsewhere'));
         r = run(['site2', '--vault', 'elsewhere']);
@@ -387,7 +392,7 @@ describe('init', () => {
         const rec = JSON.parse(readFileSync(path.join(tmpDir, 'site2', 'vault.config.json'), 'utf8')).vaultPath;
         assert.strictEqual(await fs.realpath(rec), abs);
         assert.ok(path.isAbsolute(rec));
-        assert.strictEqual(publishOf(path.join(tmpDir, 'elsewhere')).site_title, 'My Campaign');
+        assert.strictEqual(newOf(path.join(tmpDir, 'elsewhere')).player_site.title, 'My Campaign');
         // an absolute --vault is recorded as given
         r = run(['site3', '--vault', path.join(tmpDir, 'elsewhere')]);
         assert.strictEqual(r.status, 0, r.stderr);
@@ -408,7 +413,7 @@ describe('init', () => {
         assert.strictEqual(result.success, true);
         assert.ok(result.vaultSettings.skipped);
         await assert.rejects(fs.access(path.join(site, 'vault')));
-        assert.match(warned.join('\n'), /site_title.*folder_map/);
+        assert.match(warned.join('\n'), /player_site\.title.*player_site\.folder_map/);
       } finally {
         console.warn = real;
         await removeTmpDir(tmpDir);
@@ -424,8 +429,8 @@ describe('init', () => {
         await fs.mkdir(path.join(tmpDir, 'vault'));
         let r = run(['site', '--title', 'The Long Dark', '--vault', 'vault', '--tagline', 'Nobody sleeps']);
         assert.strictEqual(r.status, 0, r.stderr);
-        const pub = publishOf(path.join(tmpDir, 'vault'));
-        assert.strictEqual(pub.site_title, 'The Long Dark');
+        const pub = newOf(path.join(tmpDir, 'vault')).player_site;
+        assert.strictEqual(pub.title, 'The Long Dark');
         assert.deepStrictEqual(pub.theme, { tagline: 'Nobody sleeps' });
         assert.match(readFileSync(path.join(tmpDir, 'site', 'README.md'), 'utf8'), /^# The Long Dark/);
         // a flag with no text is refused before anything is written
@@ -450,7 +455,7 @@ describe('init', () => {
         await fs.writeFile(file, '---\ntype: meta\npublish:\n  theme:\n    genre: noir\n---\n');
         const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault, tagline: 'Rain, always' });
         assert.deepStrictEqual(publishOf(vault).theme, { genre: 'noir', tagline: 'Rain, always' });
-        assert.ok(result.vaultSettings.written.includes('theme'));
+        assert.ok(result.vaultSettings.written.includes('player_site.theme.tagline'));
         // a second scaffold (new site, same vault) keeps the tagline already there
         await init(path.join(tmpDir, 'site2'), { vaultPath: vault, tagline: 'Other words' });
         assert.deepStrictEqual(publishOf(vault).theme, { genre: 'noir', tagline: 'Rain, always' });
@@ -467,10 +472,10 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const original = '---\ntype: meta\npublish: {site_title: X}\n---\n';
+        const original = '---\ntype: meta\npublish: [unclosed\n---\n';
         await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
         const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault, tagline: 'Hi' });
-        assert.deepStrictEqual(result.vaultSettings.missing.theme, { tagline: 'Hi' });
+        assert.strictEqual(result.vaultSettings.missing['player_site.theme.tagline'], 'Hi');
         assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
         assert.match(warned.join('\n'), /theme/);
       } finally {
@@ -487,7 +492,7 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const original = '---\ntype: meta\npublish: {site_title: X}\n---\n';
+        const original = '---\ntype: meta\npublish: [unclosed\n---\n';
         await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
         const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault });
         assert.strictEqual(result.success, true);

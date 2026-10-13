@@ -5,8 +5,16 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { planMigration, applyMigration, runMigrateConfig } = require('../lib/migrate-config');
-const { movedKeys, DEPLOY_KEYS } = require('../lib/settings/site-file');
+const { movedKeys, DEPLOY_KEYS } = require('../lib/settings/legacy');
 const { entry } = require('../lib/settings');
+
+// A hiding list the site file held moves as the built-in list plus its entries (the reader adds them, #371).
+const withBuiltIn = (name, list) => {
+  const base = entry(name).default;
+  const have = new Set(base.map((x) => String(x).toLowerCase()));
+  return [...base, ...list.map(String).filter((x) => !have.has(x.toLowerCase()) && have.add(x.toLowerCase()))];
+};
+const HIDING = { exclude_dirs: 'player_site.hide.folders', exclude_sections: 'player_site.hide.sections', exclude_fields: 'player_site.hide.fields' };
 const MOVED_KEYS = movedKeys();
 const { parseNote } = require('../lib/frontmatter');
 const { build } = require('../lib/build');
@@ -55,7 +63,7 @@ describe('migrate-config', () => {
     const { plan, result } = migrate(s);
     assert.strictEqual(plan.moves.length, MOVED_KEYS.length);
     const pub = publishOf(s.vaultFile);
-    for (const k of MOVED_KEYS) assert.deepStrictEqual(pub[k.publish], FULL[k.json], k.json);
+    for (const k of MOVED_KEYS) assert.deepStrictEqual(pub[k.publish], HIDING[k.publish] ? withBuiltIn(HIDING[k.publish], FULL[k.json]) : FULL[k.json], k.json);
     const site = JSON.parse(read(s.configPath));
     assert.deepStrictEqual(Object.keys(site), ['vaultPath', 'outputDir', 'host', 'siteUrl', 'customThing']);
     assert.ok(Object.keys(site).every((k) => DEPLOY_KEYS.includes(k) || k === 'customThing'));
@@ -211,7 +219,7 @@ describe('migrate-config', () => {
     assert.deepStrictEqual(plan.merges, [{ to: 'publish.exclude_dirs', added: ['Extra'] }]);
     const pub = publishOf(a.vaultFile);
     assert.strictEqual(pub.site_title, 'A title');
-    assert.deepStrictEqual(pub.exclude_dirs, ['Secrets', 'Extra']);
+    assert.deepStrictEqual(pub.exclude_dirs, withBuiltIn(HIDING.exclude_dirs, ['Secrets', 'Extra']));
     assert.deepStrictEqual(JSON.parse(read(b.configPath)), { vaultPath: a.vault });
   });
 
@@ -246,7 +254,7 @@ describe('migrate-config', () => {
     const { result } = migrate(s);
     const data = parseNote(read(s.vaultFile)).data;
     assert.strictEqual(data.type, 'meta');
-    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: ['Secrets'], exclude_sections: entry('publish.exclude_sections').default, exclude_fields: entry('publish.exclude_fields').default });
+    assert.deepStrictEqual(data.publish, { site_title: 'T', exclude_dirs: withBuiltIn(HIDING.exclude_dirs, ['Secrets']), exclude_sections: entry('player_site.hide.sections').default, exclude_fields: entry('player_site.hide.fields').default });
     assert.deepStrictEqual(result.backups, [`${s.configPath}.pre-migrate`]);
   });
 
@@ -438,7 +446,7 @@ describe('migrate-config', () => {
   it('a site list with some usable entries still moves the usable ones', () => {
     const s = makeSite({ site: { excludeFields: ['secret', null] } });
     migrate(s);
-    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_fields, ['secret']);
+    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_fields, withBuiltIn(HIDING.exclude_fields, ['secret']));
   });
 
   it('a vault list key that is set but not a list refuses, naming the key', () => {
@@ -538,13 +546,13 @@ describe('migrate-config', () => {
     const lines = [];
     const plan = planMigration({ configPath: s.configPath });
     assert.deepStrictEqual(plan.merges, [{ to: 'publish.exclude_dirs', added: ['A'], skipped: [{ x: 1 }, null, ''] }]);
-    assert.deepStrictEqual(plan.moves[0].value, ['f']);
+    assert.deepStrictEqual(plan.moves[0].value, withBuiltIn(HIDING.exclude_fields, ['f']));
     assert.deepStrictEqual(plan.moves[0].skipped, [null]);
     runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
     assert.strictEqual(lines.filter((l) => l.startsWith('skipped ')).length, 2, lines.join('\n'));
     const pub = publishOf(s.vaultFile);
     assert.deepStrictEqual(pub.exclude_dirs, ['B', 'A']);
-    assert.deepStrictEqual(pub.exclude_fields, ['f']);
+    assert.deepStrictEqual(pub.exclude_fields, withBuiltIn(HIDING.exclude_fields, ['f']));
   });
 
   // The list the reader resolves for a site, before and after the migration.
@@ -565,7 +573,7 @@ describe('migrate-config', () => {
     }
     const s = makeSite({ site: { excludeDirs: [2024, '_meta'] } });
     migrate(s);
-    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_dirs, ['2024', '_meta']);
+    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_dirs, withBuiltIn(HIDING.exclude_dirs, ['2024', '_meta']));
   });
 
   it('I1: skipped entries stay in the site file, the line says so, and a second run changes nothing', () => {
@@ -573,7 +581,7 @@ describe('migrate-config', () => {
     const lines = [];
     runMigrateConfig({ configPath: s.configPath }, { out: (l) => lines.push(l) });
     assert.deepStrictEqual(JSON.parse(read(s.configPath)).excludeSections, [null]);
-    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_sections, ['X']);
+    assert.deepStrictEqual(publishOf(s.vaultFile).exclude_sections, withBuiltIn(HIDING.exclude_sections, ['X']));
     assert.ok(lines.some((l) => l.startsWith('skipped publish.exclude_sections:') && l.includes('left in vault.config.json')), lines.join('\n'));
     const again = planMigration({ configPath: s.configPath });
     assert.strictEqual(again.applicable, false);
@@ -743,8 +751,8 @@ describe('migrate-config writes the built-in exclude lists (#294)', () => {
     const { plan } = migrate(s);
     assert.ok(plan.applicable);
     const pub = publishOf(s.vaultFile);
-    assert.deepStrictEqual(pub.exclude_sections, entry('publish.exclude_sections').default);
-    assert.deepStrictEqual(pub.exclude_fields, entry('publish.exclude_fields').default);
+    assert.deepStrictEqual(pub.exclude_sections, entry('player_site.hide.sections').default);
+    assert.deepStrictEqual(pub.exclude_fields, entry('player_site.hide.fields').default);
     assert.strictEqual(pub.exclude_dirs, undefined);
     assert.ok(read(s.vaultFile).includes('mode: player'));
   });
@@ -753,11 +761,32 @@ describe('migrate-config writes the built-in exclude lists (#294)', () => {
     migrate(s);
     const pub = publishOf(s.vaultFile);
     assert.deepStrictEqual(pub.exclude_sections, ['Rumours']);
-    assert.deepStrictEqual(pub.exclude_fields, ['x']);
+    assert.deepStrictEqual(pub.exclude_fields, withBuiltIn(HIDING.exclude_fields, ['x']));
   });
   it('a second run plans nothing', () => {
     const s = makeSite({ site: { siteTitle: 'T' } });
     migrate(s);
     assert.strictEqual(planMigration({ configPath: s.configPath }).applicable, false);
+  });
+});
+
+describe('migrate-config on a vault already on the new settings file', () => {
+  it('refuses, exits non-zero and changes no file', () => {
+    const s = makeSite({ site: { excludeSections: ['Spoilers'], excludeDirs: ['Secrets'] }, vaultFile: null });
+    const yamlFile = path.join(s.vault, '_meta', 'vault-config.yaml');
+    fs.writeFileSync(yamlFile, 'version: 1\nplayer_site:\n  hide:\n    drafts: true\n');
+    const snapshot = () => fs.readdirSync(s.root, { recursive: true }).sort().map((f) => {
+      const full = path.join(s.root, f);
+      return `${f}:${fs.statSync(full).isFile() ? read(full) : ''}`;
+    });
+    const before = snapshot();
+    const plan = planMigration({ configPath: s.configPath });
+    assert.strictEqual(plan.applicable, false);
+    assert.match(plan.reason, /settings are in _meta\/vault-config\.yaml, so migrate-config does not apply/);
+    const r = cli(['--config', s.configPath]);
+    assert.notStrictEqual(r.status, 0);
+    assert.match(r.stderr + r.stdout, /migrate-config does not apply/);
+    assert.deepStrictEqual(snapshot(), before);
+    assert.ok(!fs.existsSync(s.vaultFile));
   });
 });

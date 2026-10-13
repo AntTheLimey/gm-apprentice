@@ -97,7 +97,8 @@ def test_site_config_old_keys_take_part(tmp_path):
     config.write_text('{"vaultPath": "vault", "excludeSections": ["Mine"]}',
                       encoding="utf-8")
     s = vaultlib.settings(vault, site_config=config)
-    assert s.get("publish.exclude_sections") == ["Mine"]
+    # The site file's list adds to the built-in one when the vault file sets none.
+    assert s.get("publish.exclude_sections") == built_in() + ["Mine"]
     assert s.origins["publish.exclude_sections"] == "site-file"
     assert vaultlib.settings(vault).get("publish.exclude_sections") == built_in()
 

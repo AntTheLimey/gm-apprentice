@@ -18,6 +18,7 @@ const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
 const { sitePin } = require('./site-pin');
+const { nameIn } = require('./settings');
 
 const SECTIONS = [
   { key: 'publishing', title: 'Publishing', checked: true },
@@ -297,7 +298,7 @@ async function runApply(options, deps, survey) {
   if (missing.length > 0) {
     for (const m of missing) {
       out(inVault(m.rel)
-        ? `cannot list under Publishing: ${m.rel} is in a folder the site leaves out (publish.exclude_dirs), so no page would be built. Put the folder on the site first, or record a decision with --exclude or --decide.`
+        ? `cannot list under Publishing: ${m.rel} is in a folder the site leaves out (${nameIn(vaultPath, 'player_site.hide.folders')}), so no page would be built. Put the folder on the site first, or record a decision with --exclude or --decide.`
         : `no such file in the vault: ${m.rel}`);
     }
     out('Nothing was written. Run `gm-publish manifest diff` for the paths the vault actually has.');
