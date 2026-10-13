@@ -10,7 +10,8 @@ Many "failures" are stale state from a previous aborted run.
 
 **Run `node "$TOOL" doctor --site --config <dir>/vault.config.json` first.**
 It audits the vault the way the build sees it and prints a fix for every
-finding. For one file that should be on the site and is not, `node "$TOOL"
+finding. Every `settings` command below is short for `node "$TOOL"
+settings … --config <dir>/vault.config.json`. For one file that should be on the site and is not, `node "$TOOL"
 explain "<vault-relative path>"` prints the exact chain the build walked
 and its verdict. The failure modes below name which finding code each
 one is and give the deeper why.

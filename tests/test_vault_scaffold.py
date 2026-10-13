@@ -283,6 +283,17 @@ class PlanTests(unittest.TestCase):
         self.assertNotIn("Characters/NPCs/", got)
         self.assertNotIn("_Campaign/Timeline.md", got)
 
+    def test_a_blank_attachments_folder_means_the_usual_one(self):
+        for named in ('""', '"  "', '5'):
+            vault = scratch(self) / "V"
+            note(vault, "_meta/vault-config.md",
+                 '---\ngm_apprentice_version: "1.10.29"\npublish:\n'
+                 f'  attachments_dir: {named}\n---\n')
+            got = paths(plan(vault))
+            self.assertIn(f"{ATTACHMENTS}/characters/", got, named)
+            for rel in got:
+                self.assertFalse(rel.startswith("/"), (named, rel))
+
     def test_an_attachments_folder_outside_the_vault_is_not_made(self):
         for named in ('"../shared-art"', '"art/../../shared"', '"/srv/art"',
                       '"C:/art"', r"..\shared-art"):

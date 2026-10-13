@@ -222,6 +222,10 @@ def _attachments(vault: Path) -> str | None:
         named = settings(vault).get("publish.attachments_dir")
     else:
         named = settings_default("publish.attachments_dir")
+    # A blank or non-text value is not a folder: an empty name would put the
+    # folders at the disk's root.
+    if not isinstance(named, str) or not named.strip():
+        named = settings_default("publish.attachments_dir")
     named = named.strip().replace("\\", "/")
     if (named.startswith("/") or re.match(r"[A-Za-z]:", named)
             or ".." in named.split("/")):

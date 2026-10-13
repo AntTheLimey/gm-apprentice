@@ -1,8 +1,10 @@
 # Configuration Reference
 
 Everything about what the site publishes is a setting in the vault's
-`_meta/vault-config.md`. The site's `vault.config.json` holds only
-deployment keys (see § `vault.config.json`).
+`_meta/vault-config.md`. The site's `vault.config.json` holds the
+deployment keys (see § `vault.config.json`); a campaign setting an older
+site still keeps there is read until the update moves it (see § Settings
+left in `vault.config.json`).
 
 ## Settings
 
