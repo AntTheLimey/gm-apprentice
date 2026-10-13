@@ -5,6 +5,7 @@ import io
 import json
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -19,7 +20,9 @@ import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 from schema_rules import REQUIRED_FIELDS  # noqa: E402
-from vaultlib import extract_frontmatter, settings_default  # noqa: E402
+from layouts import on_layout  # noqa: E402
+from vaultlib import (PUBLISH_TOOL, extract_frontmatter, plugin_version,  # noqa: E402
+                      read_stamp, settings, settings_default, vault_layout)
 
 # The folder a vault keeps its attachments in until it names another: the tool's
 # default, never restated here.
@@ -64,18 +67,30 @@ class TextTests(unittest.TestCase):
         self.assertIn("Factions & Organizations/", tree)
         self.assertNotIn("```", tree)
 
-    def test_config_text_with_and_without_a_system(self):
-        text = vs.config_text("coc-7e", "Ashford", "1.10.29")
-        fm = extract_frontmatter(text)
-        self.assertEqual(fm["type"], "meta")
-        self.assertEqual(fm["gm_apprentice_version"], "1.10.29")
-        self.assertIn('  system: "coc-7e"\n', text)
-        self.assertIn("  site: false\n", text)
-        self.assertIn("Campaign: Ashford", text)
-        self.assertIn("├── _meta/", text)
-        bare = vs.config_text(None, "Ashford", "1.10.29")
-        self.assertNotIn("system:", bare)
-        self.assertIn("  site: false\n", bare)
+    def test_settings_text_with_and_without_a_system(self):
+        text = vs.settings_text("coc-7e", "Ashford")
+        data = json.loads(subprocess.run(
+            [shutil.which("node"), str(PUBLISH_TOOL), "settings", "raw",
+             "--vault", self._vault_with(text), "--json"],
+            capture_output=True, text=True, check=True).stdout)
+        self.assertEqual(data["version"], 1)
+        self.assertEqual(data["vault"], {"campaign": "Ashford",
+                                         "system": "coc-7e"})
+        self.assertIs(data["player_site"]["publish"], False)
+        bare = vs.settings_text(None, "Ashford")
+        self.assertNotIn("system", bare)
+        self.assertIn("publish: false", bare)
+
+    def _vault_with(self, text):
+        root = scratch(self)
+        (root / "V" / "_meta").mkdir(parents=True)
+        (root / "V" / "_meta" / "vault-config.yaml").write_text(
+            text, encoding="utf-8")
+        return str(root / "V")
+
+    def test_state_text_is_the_stamp_in_the_form_write_stamp_writes(self):
+        self.assertEqual(vs.state_text("1.10.54"),
+                         '{\n  "gm_apprentice_version": "1.10.54"\n}\n')
 
     def test_the_seeded_roster_has_the_type_a_site_recognises(self):
         fm = extract_frontmatter(vs.seed("player-characters.md", "X"))
@@ -118,9 +133,12 @@ class PlanTests(unittest.TestCase):
                        "_World/_flags.md", "_Campaign/Timeline.md",
                        "_Campaign/Player Characters.md",
                        "_meta/entity-types.md", "_meta/relationship-types.md",
-                       "_meta/index.md", "_meta/vault-config.md"):
+                       "_meta/index.md", "_meta/vault-config.yaml",
+                       "_meta/vault-state.json"):
             self.assertIn(wanted, got)
-        self.assertEqual(got[-2:], ["_meta/index.md", "_meta/vault-config.md"])
+        self.assertNotIn("_meta/vault-config.md", got)
+        self.assertEqual(got[-3:], ["_meta/index.md", "_meta/vault-config.yaml",
+                                    "_meta/vault-state.json"])
         self.assertEqual(len(got), len(set(got)))
         for unwanted in ("_inbox/", "_midwife/"):
             self.assertNotIn(unwanted, got)
@@ -216,12 +234,21 @@ class PlanTests(unittest.TestCase):
     def test_an_awkward_campaign_name_stays_out_of_frontmatter(self):
         name = 'The "Last": Stand'
         pieces = {p.rel: p for p in plan(scratch(self) / "V", campaign=name)}
-        for rel in ("_Campaign/Timeline.md", "_meta/vault-config.md"):
-            text = pieces[rel].text()
-            self.assertIn(name, text)
-            front = text.split("\n---\n", 1)[0]
-            self.assertNotIn("Last", front)
-            self.assertIsNotNone(extract_frontmatter(text))
+        text = pieces["_Campaign/Timeline.md"].text()
+        self.assertIn(name, text)
+        front = text.split("\n---\n", 1)[0]
+        self.assertNotIn("Last", front)
+        self.assertIsNotNone(extract_frontmatter(text))
+        yaml_text = pieces["_meta/vault-config.yaml"].text()
+        self.assertIn("Last", yaml_text)
+        self.assertEqual(settings(self._written(yaml_text)).get(
+            "vault.campaign"), name)
+
+    def _written(self, text):
+        root = scratch(self) / "V"
+        (root / "_meta").mkdir(parents=True)
+        (root / "_meta" / "vault-config.yaml").write_text(text, "utf-8")
+        return root
 
     def test_the_structure_doc_and_the_skeleton_agree(self):
         tops = set(re.findall(r"^[├└]── ([^/\n]+)/", vs.structure_tree(),
@@ -328,7 +355,9 @@ class BuildTests(unittest.TestCase):
         root = scratch(self)
         code, out = run(root / "V", "--system", "coc")
         self.assertEqual(code, 0, out)
-        self.assertIn("WOULD-CREATE\t_meta/vault-config.md", out)
+        self.assertIn("WOULD-CREATE\t_meta/vault-config.yaml", out)
+        self.assertIn("WOULD-CREATE\t_meta/vault-state.json", out)
+        self.assertNotIn("vault-config.md", out)
         self.assertIn("WOULD-CREATE\tClues/", out)
         self.assertRegex(out, r"# create: \d+\n$")
         self.assertEqual(tree(root), {})
@@ -377,8 +406,7 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(after[rel], data, rel)
         self.assertIn("pc-gurps-4e.md",
                       [p.name for p in (vault / "_Templates").iterdir()])
-        self.assertIn('system: "gurps-4e"',
-                      (vault / "_meta/vault-config.md").read_text("utf-8"))
+        self.assertEqual(settings(vault).get("vault.system"), "gurps-4e")
 
     def test_no_system_and_no_flag_is_a_refusal(self):
         root = scratch(self)
@@ -453,8 +481,8 @@ class BuildTests(unittest.TestCase):
         real = vs.write_text_atomic
 
         def fail_late(path, text):
-            if path.name == "vault-config.md":
-                raise vs.StepFailed("vault-config.md cannot be written")
+            if path.name == "vault-state.json":
+                raise vs.StepFailed("vault-state.json cannot be written")
             real(path, text)
 
         with mock.patch.object(vs, "write_text_atomic", fail_late):
@@ -517,15 +545,14 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("pc-generic.md",
                       [p.name for p in (vault / "_Templates").iterdir()])
-        self.assertNotIn("system:",
-                         (vault / "_meta/vault-config.md").read_text("utf-8"))
+        self.assertNotIn("system:", (vault / "_meta/vault-config.yaml")
+                         .read_text("utf-8"))
 
     def test_a_given_system_settles_an_unrecognised_one(self):
         vault = self.unrecognised()
         code, out = run(vault, "--system", "coc", "--write")
         self.assertEqual(code, 0, out)
-        self.assertIn('system: "coc-7e"',
-                      (vault / "_meta/vault-config.md").read_text("utf-8"))
+        self.assertEqual(settings(vault).get("vault.system"), "coc-7e")
 
     def test_a_flag_that_disagrees_with_the_vault_is_a_refusal(self):
         vault = scratch(self) / "V"
@@ -592,6 +619,65 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(code, 1, out)
         self.assertIn("ERROR\t", out)
         self.assertEqual(tree(vault), before)
+
+
+class NewFilesTests(unittest.TestCase):
+    """A new vault gets the new settings file and the state file, and
+    nothing of the old layout."""
+
+    def test_an_empty_folder_gets_exactly_the_two_files_and_is_clean(self):
+        vault = scratch(self) / "V"
+        code, out = run(vault, "--system", "coc", "--name", "Ashford",
+                        "--write")
+        self.assertEqual(code, 0, out)
+        meta = sorted(p.name for p in (vault / "_meta").iterdir())
+        self.assertEqual(meta, ["entity-types.md", "index.md",
+                                "relationship-types.md", "vault-config.yaml",
+                                "vault-state.json"])
+        self.assertEqual(vault_layout(vault), "new")
+        self.assertEqual(read_stamp(vault), plugin_version()[0])
+        got = settings(vault)
+        self.assertEqual(got.get("vault.campaign"), "Ashford")
+        self.assertEqual(got.get("vault.system"), "coc-7e")
+        self.assertIs(got.get("player_site.publish"), False)
+        self.assertEqual(got.faults, [])
+        shown = io.StringIO()
+        with contextlib.redirect_stdout(shown):
+            self.assertEqual(vc.check_settings(vault, False, [], False), 0)
+        self.assertIn("Settings: no faults", shown.getvalue())
+        with contextlib.redirect_stdout(shown):
+            self.assertEqual(migrate.run_plan(vault), 0)
+        self.assertIn("up to date", shown.getvalue())
+
+    def test_no_node_is_one_plain_line_and_nothing_is_written(self):
+        root = scratch(self)
+        with mock.patch.object(vs.shutil, "which", return_value=None):
+            code, out = run(root / "V", "--no-system", "--write")
+        self.assertEqual(code, 1)
+        self.assertIn("needs Node.js", out)
+        self.assertIn("# nothing written", out)
+        self.assertEqual(tree(root), {})
+        # A plan needs no Node.
+        with mock.patch.object(vs.shutil, "which", return_value=None):
+            self.assertEqual(run(root / "V", "--no-system")[0], 0)
+
+    def test_the_skeleton_check_never_gives_a_vault_either_new_file(self):
+        for layout in ("legacy", "new"):
+            vault = scratch(self) / "V"
+            (vault / "_meta").mkdir(parents=True)
+            (vault / "_meta" / "vault-config.md").write_text(
+                '---\ntype: meta\ngm_apprentice_version: "1.10.30"\n'
+                "publish:\n  system: coc-7e\n---\n", encoding="utf-8")
+            if layout == "new":
+                on_layout(vault, "new")
+            names = {p.rel for p in vs.missing(
+                vault, "coc-7e", campaign="X", version="1.10.54",
+                templates=False, pages=False)}
+            self.assertFalse(names & set(vs.NEW_FILES), layout)
+            self.assertNotIn("_meta/vault-config.md", names, layout)
+
+    def test_the_old_seed_is_gone(self):
+        self.assertFalse((SHARED / "scaffold" / "vault-config.md").exists())
 
 
 if __name__ == "__main__":

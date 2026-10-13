@@ -229,7 +229,7 @@ def test_the_settings_check_lists_a_fault_on_both(tmp_path, layout, monkeypatch,
     assert "exclude_drafts" in out or "hide.drafts" in out
 
 
-def test_a_misspelt_key_is_fixed_on_the_old_file_and_left_to_the_gm_on_the_new(
+def test_a_misspelt_key_is_fixed_on_both_files(
         tmp_path, layout, monkeypatch, capsys):
     if layout == "legacy":
         vault = make_vault(tmp_path, "  exclude_sectoins: [Secrets]\n")
@@ -242,11 +242,9 @@ def test_a_misspelt_key_is_fixed_on_the_old_file_and_left_to_the_gm_on_the_new(
     out = capsys.readouterr().out
     vaultlib.forget_settings(None)
     s = vaultlib.settings(vault)
-    if layout == "legacy":
-        assert "Secrets" in s.get("player_site.hide.sections")
-        assert "fixed:" in out
-    else:
-        assert "by hand" in out and "player_site.hide.sections" in out
-        assert "Secrets" not in s.get("player_site.hide.sections")
+    assert "Secrets" in s.get("player_site.hide.sections")
+    assert "GM Notes" in s.get("player_site.hide.sections")   # the built-in list stays
+    assert "fixed:" in out and "Settings: no faults" in out
+    if layout == "new":
         text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
-        assert "sectoins" in text    # left as the GM wrote it
+        assert "sectoins" not in text

@@ -26,22 +26,7 @@ import site_fixture  # noqa: E402
 import vault_check as vc  # noqa: E402
 from migrate_core import PERSON, WILL, StepFailed  # noqa: E402
 
-MOVES = {"applicable": True,
-         "moves": [{"from": "vault.config.json siteTitle",
-                    "to": "publish.site_title", "value": "T"}],
-         "merges": [], "switches": [], "conflicts": [], "notes": [],
-         "vaultSet": {}, "vaultRemove": [], "siteRemove": [],
-         "lines": ["move vault.config.json siteTitle -> publish.site_title",
-                   'skipped publish.exclude_dirs: not text, so not carried over: 2',
-                   'conflict footer: kept "F" from the vault file, discarded "G"',
-                   "note publish.exclude_dirs is rewritten; comments inside it are not kept"]}
-def backups(vault):
-    """The tool's two backup lines for this vault and its site."""
-    return [f"backup {vault}/_meta/vault-config.md.pre-migrate",
-            f"backup kept from an earlier run: "
-            f"{site_of(vault)}/vault.config.json.pre-migrate"]
-NOTHING = dict(MOVES, applicable=False, moves=[], lines=[],
-               reason="nothing to migrate")
+REAL_PLUGIN_TOOL = migrate_core.plugin_tool
 
 
 def tmp(case, prefix):
@@ -70,68 +55,24 @@ def make_vault(case, publish=True, site=True, version="1.10.12", extra=""):
     return vault
 
 
-REAL_RUN = subprocess.run
-REAL_NODE = shutil.which("node")
-
-
-def routed(tool):
-    """`tool` for every run but the settings reads, which go to the real
-    publish tool (it is what the vault's settings are asked of)."""
-    def run(cmd, **kwargs):
-        if len(cmd) > 2 and cmd[2] == "settings":
-            return REAL_RUN([REAL_NODE, *cmd[1:]], **kwargs)
-        return tool(cmd, **kwargs)
-    return run
-
-
-@contextlib.contextmanager
-def stubbed(tool):
-    with mock.patch.object(vc.shutil, "which", return_value=REAL_NODE), \
-            mock.patch.object(vc.subprocess, "run", routed(tool)):
-        yield
-
-
-class Tool:
-    """A stand-in for subprocess.run: answers `migrate-config` with the
-    pending plan until it has been run for real, then with nothing."""
-
-    def __init__(self, pending=True, fail=None, stays_pending=False,
-                 no_lines=False, stdout=None, plan=None):
-        self.pending, self.fail, self.stays = pending, fail, stays_pending
-        self.no_lines, self.stdout, self.plan = no_lines, stdout, plan
-        self.calls = []
-
-    def __call__(self, cmd, **kwargs):
-        self.calls.append(cmd)
-        if self.fail:
-            return subprocess.CompletedProcess(cmd, 1, "", self.fail + "\n")
-        if self.stdout is not None:
-            return subprocess.CompletedProcess(cmd, 0, self.stdout, "")
-        plan = (self.plan or MOVES) if self.pending else NOTHING
-        if "--dry-run" not in cmd:
-            if self.pending:
-                plan = dict(plan, lines=plan["lines"] + backups(
-                    Path(cmd[cmd.index("--vault") + 1])))
-            if not self.stays:
-                self.pending = False
-        if self.no_lines:
-            plan = {k: v for k, v in plan.items() if k != "lines"}
-        return subprocess.CompletedProcess(cmd, 0, json.dumps(plan), "")
-
-
 class Pin:
     """A stand-in for migrate_core.plugin_tool running update-pin."""
 
-    def __init__(self, ok=False, installed="1.11.41", fails=False, out=None):
+    def __init__(self, ok=False, installed="1.11.41", fails=False, out=None,
+                 ours=True, spec="file:/plugin/1.10.26/tools/publish"):
         self.ok, self.installed, self.fails, self.out = ok, installed, fails, out
+        self.ours, self.spec = ours, spec
         self.calls = []
 
     def __call__(self, args):
+        if args[0] != "update-pin":   # the settings move is the real tool's
+            return REAL_PLUGIN_TOOL(args)
         self.calls.append(args)
         if "--check" in args:
             text = self.out if self.out is not None else json.dumps(
                 {"ok": self.ok, "installedBefore": self.installed,
-                 "desired": "1.10.26", "changed": False})
+                 "desired": "1.10.26", "changed": False,
+                 "ours": self.ours, "spec": self.spec})
             return (0 if self.ok else 1), text, ""
         if self.fails:
             return 1, "Repointed package.json, but npm install left nothing " \
@@ -250,258 +191,6 @@ class RepinTests(unittest.TestCase):
             ms.find_site_repin(vault)
         self.assertTrue(str(caught.exception).endswith(
             "expected JSON: update-pin exited 3"))
-
-
-class ConfigStepTests(unittest.TestCase):
-    def pin_site(self, spec):
-        vault = make_vault(self)
-        site = site_of(vault)
-        (site / "package.json").write_text(json.dumps(
-            {"dependencies": {"gm-apprentice-publish": spec}}), encoding="utf-8")
-        return vault, site
-
-    def fails_with(self, vault, tool):
-        tool = tool or Tool()
-        with stubbed(tool), self.assertRaises(StepFailed) as caught:
-            ms.find_config_to_vault(vault)
-        return str(caught.exception), tool
-
-    def test_unknown_command_names_the_site_and_the_fix(self):
-        vault = make_vault(self)
-        msg, _ = self.fails_with(
-            vault, Tool(fail="Unknown command: migrate-config"))
-        self.assertEqual(
-            msg, f"the site's publish tool does not have migrate-config; it "
-                 f"is older than this migration needs ({ms.NEEDS_PUBLISH}). "
-                 f"Run update-pin --site {site_of(vault)}, then migrate.py "
-                 f"again.")
-
-    def test_unknown_command_without_a_site_says_to_update_the_plugin(self):
-        msg, _ = self.fails_with(make_vault(self, site=False),
-                                 Tool(fail="Unknown command: migrate-config"))
-        self.assertNotIn("update-pin", msg)
-        self.assertIn("Update the gm-apprentice plugin", msg)
-
-    def test_old_numeric_pin_gets_one_plain_message(self):
-        vault, site = self.pin_site("1.10.19")
-        msg, tool = self.fails_with(vault, None)
-        self.assertEqual(tool.calls, [])
-        self.assertEqual(
-            msg, f"the site's publish tool (1.10.19) is older than this "
-                 f"migration needs ({ms.NEEDS_PUBLISH}). Run update-pin "
-                 f"--site {site}, then migrate.py again.")
-
-    def test_unreadable_pin_says_it_cannot_tell(self):
-        vault, site = self.pin_site("file:../tools/publish")
-        msg, tool = self.fails_with(vault, None)
-        self.assertEqual(tool.calls, [])
-        self.assertEqual(
-            msg, f"cannot tell which publish tool the site at {site} uses "
-                 f"(file:../tools/publish). Run update-pin --site {site}, "
-                 f"then migrate.py again.")
-
-    def test_an_unreadable_package_json_is_said_plainly(self):
-        vault = make_vault(self)
-        (site_of(vault) / "package.json").write_text("{not json",
-                                                     encoding="utf-8")
-        msg, _ = self.fails_with(vault, None)
-        self.assertIn("the site's package.json can't be read", msg)
-        self.assertTrue(msg.endswith("then run migrate.py again"))
-
-    def test_a_missing_tool_script_points_at_update_pin(self):
-        vault = make_vault(self)
-        site = site_of(vault)
-        pkg = site / "node_modules" / "gm-apprentice-publish"
-        (pkg / "bin").mkdir(parents=True)
-        (pkg / "package.json").write_text('{"version": "1.12.0"}',
-                                          encoding="utf-8")
-        msg, tool = self.fails_with(vault, None)
-        self.assertEqual(tool.calls, [])
-        self.assertEqual(
-            msg, f"{pkg / 'bin' / 'gm-publish.js'} is missing. Run "
-                 f"update-pin --site {site}, then migrate.py again.")
-
-    def test_no_node_is_not_blamed_on_the_pin(self):
-        vault = make_vault(self)
-        vc.vault_settings(vault)    # read while node is still there
-        with mock.patch.object(vc.shutil, "which", return_value=None), \
-                self.assertRaises(StepFailed) as caught:
-            ms.find_config_to_vault(vault)
-        self.assertEqual(str(caught.exception),
-                         "node is not on PATH; install Node.js, then run "
-                         "migrate.py again")
-
-    def test_temp_dir_failure_is_not_reported_as_node_failing(self):
-        vault, tool = make_vault(self, site=False), Tool()
-        with mock.patch.object(vc.tempfile, "mkdtemp", side_effect=OSError):
-            msg, _ = self.fails_with(vault, tool)
-        self.assertIn("no temporary directory", msg)
-        self.assertNotIn("node could not run", msg)
-        self.assertEqual(tool.calls, [])
-
-    def test_a_publish_block_on_one_line_stops_the_config_step(self):
-        vault = make_vault(self, publish=False)
-        (vault / "_meta" / "vault-config.md").write_text(
-            "---\npublish: {mode: player, site_dir: ../site}\n---\n",
-            encoding="utf-8")
-        msg, tool = self.fails_with(vault, None)
-        self.assertIn("written on one line", msg)
-        self.assertEqual(tool.calls, [])
-
-    def test_a_publish_block_without_a_site_still_reaches_the_tool(self):
-        tool = Tool()
-        with stubbed(tool):
-            (item,) = ms.find_config_to_vault(make_vault(self, site=False))
-        self.assertEqual(len(tool.calls), 1)
-        self.assertNotIn("--config", tool.calls[0])
-        self.assertIn("--vault", tool.calls[0])
-        self.assertEqual(item.id, "config-to-vault")
-
-    def test_pending_moves_are_one_will_do_item(self):
-        vault = make_vault(self)
-        with stubbed(Tool()):
-            (item,) = ms.find_config_to_vault(vault)
-        self.assertEqual((item.id, item.group), ("config-to-vault", WILL))
-        self.assertEqual(item.lines, [MOVES["lines"][0], MOVES["lines"][2]])
-
-    def test_apply_runs_the_tool_then_verifies_with_a_dry_run(self):
-        vault = make_vault(self)
-        tool = Tool()
-        with stubbed(tool):
-            (item,) = ms.find_config_to_vault(vault)
-            done = item.apply(None)
-            self.assertEqual(ms.find_config_to_vault(vault), [])
-        self.assertEqual(done, [MOVES["lines"][0], MOVES["lines"][2],
-                                MOVES["lines"][1], MOVES["lines"][3],
-                                "backups: _meta/vault-config.md.pre-migrate, "
-                                "site: vault.config.json.pre-migrate "
-                                "(from an earlier run)"])
-        self.assertNotIn("--dry-run", tool.calls[1])
-        self.assertIn("--dry-run", tool.calls[2])
-
-    def test_apply_that_leaves_changes_planned_fails(self):
-        vault = make_vault(self)
-        with stubbed(Tool(stays_pending=True)):
-            (item,) = ms.find_config_to_vault(vault)
-            with self.assertRaises(StepFailed) as caught:
-                item.apply(None)
-        self.assertIn("left changes planned", str(caught.exception))
-
-    def test_nothing_to_move_plans_nothing(self):
-        with stubbed(Tool(pending=False)):
-            self.assertEqual(ms.find_config_to_vault(make_vault(self)), [])
-
-    def test_a_vault_that_does_not_publish_never_runs_node(self):
-        tool = Tool()
-        with stubbed(tool):
-            self.assertEqual(
-                ms.find_config_to_vault(make_vault(self, publish=False)), [])
-        self.assertEqual(tool.calls, [])
-
-    def test_a_tool_that_cannot_answer_stops_with_its_reason(self):
-        with stubbed(Tool(fail="Error: vault file is broken")):
-            with self.assertRaises(StepFailed) as caught:
-                ms.find_config_to_vault(make_vault(self))
-        self.assertIn("vault file is broken", str(caught.exception))
-
-    def test_a_tool_without_lines_is_too_old(self):
-        with stubbed(Tool(no_lines=True)):
-            with self.assertRaises(StepFailed) as caught:
-                ms.find_config_to_vault(make_vault(self))
-        self.assertIn(f"older than this migration needs ({ms.NEEDS_PUBLISH})",
-                      str(caught.exception))
-
-    def test_unparseable_apply_output_says_files_may_have_changed(self):
-        vault = make_vault(self)
-        with stubbed(Tool()):
-            (item,) = ms.find_config_to_vault(vault)
-        with stubbed(Tool(stdout="not json")):
-            with self.assertRaises(StepFailed) as caught:
-                item.apply(None)
-        self.assertIn("may already have been changed", str(caught.exception))
-        self.assertIn("vault-config.md.pre-migrate", str(caught.exception))
-
-    def test_the_tools_own_note_lines_decide_what_is_a_note(self):
-        plan = dict(MOVES, lines=["move a -> b", "tidy c", "left over d"],
-                    noteLines=["left over d"])
-        with stubbed(Tool(plan=plan)):
-            (item,) = ms.find_config_to_vault(make_vault(self))
-        self.assertEqual(item.lines, ["move a -> b", "tidy c"])
-
-    def stopped_by(self, command, patches):
-        """Run `migrate.py <vault> <command>` over the site checks with
-        `patches` in force: (exit code, stdout, stderr)."""
-        vault = make_vault(self, site=False)
-        out, err = io.StringIO(), io.StringIO()
-        with contextlib.ExitStack() as stack:
-            for target, attr, value in patches:
-                stack.enter_context(mock.patch.object(target, attr, value))
-            stack.enter_context(mock.patch.object(
-                migrate, "plugin_version", return_value=("1.10.26", "t")))
-            stack.enter_context(mock.patch.object(
-                migrate, "CHECKS", ms.SITE_CHECKS))
-            stack.enter_context(contextlib.redirect_stdout(out))
-            stack.enter_context(contextlib.redirect_stderr(err))
-            code = migrate.main([str(vault), command])
-        return code, out.getvalue(), err.getvalue()
-
-    def test_no_node_stops_the_plan_with_the_one_line(self):
-        # Settings cannot be read without the tool, so nothing is planned,
-        # whether the vault has a site or not.
-        code, out, err = self.stopped_by("plan", [
-            (vc.shutil, "which", lambda *_a, **_k: None)])
-        self.assertEqual(code, 1)
-        self.assertEqual(err, "migrate.py: could not read the vault's "
-                              "settings: node is not on PATH\n")
-        self.assertEqual(out, "")
-
-    def test_no_node_stops_the_apply_and_stamps_nothing(self):
-        code, out, err = self.stopped_by("apply", [
-            (vc.shutil, "which", lambda *_a, **_k: None)])
-        self.assertEqual(code, 1)
-        self.assertIn("could not read the vault's settings: node is not on "
-                      "PATH", err)
-        self.assertIn("not stamped", out)
-
-    def test_a_skill_zip_install_without_the_tool_says_so_in_one_line(self):
-        gone = Path(tempfile.gettempdir()) / "no-such-plugin" / "gm-publish.js"
-        code, _out, err = self.stopped_by("plan", [
-            (vc, "PUBLISH_TOOL", gone)])
-        # vaultlib's own PUBLISH_TOOL is the one settings are read with
-        self.assertEqual(code, 0, err)
-        import vaultlib
-        code, _out, err = self.stopped_by("plan", [
-            (vaultlib, "PUBLISH_TOOL", gone)])
-        self.assertEqual(code, 1)
-        self.assertEqual(err.count("\n"), 1)
-        self.assertTrue(err.startswith(
-            "migrate.py: could not read the vault's settings: the publish "
-            "tool is not at "), err)
-
-    def test_a_vault_past_1_10_24_is_still_offered_the_move(self):
-        check = next(c for c in ms.SITE_CHECKS if c.name == "config-to-vault")
-        self.assertIsNone(check.release)
-        for version in ("1.10.24", "1.10.26"):
-            vault = make_vault(self, version=version)
-            tool = Tool()
-            plans = []
-            with stubbed(tool), \
-                    mock.patch.object(migrate, "plugin_version",
-                                      return_value=("1.10.26", "t")):
-                for command in ("plan", "apply", "plan"):
-                    out = io.StringIO()
-                    with contextlib.redirect_stdout(out):
-                        self.assertEqual(migrate.run_plan(vault, [check])
-                                         if command == "plan" else
-                                         migrate.run_apply(vault, [], [check]),
-                                         0)
-                    plans.append(out.getvalue())
-            self.assertIn("## Will do", plans[0])
-            self.assertIn("config-to-vault\tmove vault.config.json siteTitle",
-                          plans[0])
-            self.assertIn("config-to-vault\t", plans[1])
-            self.assertEqual(plans[2], "vault 1.10.26, plugin 1.10.26\n"
-                                       "up to date\n")
 
 
 class PublishSiteTests(unittest.TestCase):
@@ -1046,21 +735,14 @@ class ThemeChoiceTests(unittest.TestCase):
         self.assertEqual(check.choices, ("default-mode=",))
         self.assertEqual(
             [c.name for c in ms.SITE_CHECKS[:5]],
-            [ms.REPIN, "config-to-vault", "publish-site", "default-mode",
+            [ms.REPIN, ms.MOVE, "publish-site", "default-mode",
              "fonts-self-host"])
 
 
 class ExcludeListTests(unittest.TestCase):
     """1.10.47 (#294): a vault with a site and no list of its own is given
     the built-in lists; a list it owns is never touched. The settings are
-    the real tool's; what config-to-vault would plan is set aside, as the
-    step is proved alone."""
-
-    def setUp(self):
-        patcher = mock.patch.object(ms, "describe_config_to_vault",
-                                    return_value=ms.StepPlan(False, []))
-        patcher.start()
-        self.addCleanup(patcher.stop)
+    the real tool's."""
 
     def test_a_vault_with_no_lists_gets_both_built_in_lists(self):
         vault = make_vault(self)
@@ -1085,18 +767,6 @@ class ExcludeListTests(unittest.TestCase):
         self.assertEqual(len(writes), 1)
         self.assertEqual([n for n, _ in writes[0]],
                          ["player_site.hide.sections", "player_site.hide.fields"])
-
-    def test_a_list_config_to_vault_writes_this_pass_is_not_offered_twice(self):
-        both = ms.StepPlan(True, [
-            "move the built-in list -> publish.exclude_sections",
-            "move the built-in list -> publish.exclude_fields"])
-        one = ms.StepPlan(True, ["move the built-in list -> publish.exclude_fields"])
-        with mock.patch.object(ms, "describe_config_to_vault", return_value=both):
-            self.assertEqual(ms.find_exclude_lists(make_vault(self)), [])
-        with mock.patch.object(ms, "describe_config_to_vault", return_value=one):
-            (item,) = ms.find_exclude_lists(make_vault(self))
-        self.assertEqual(len(item.lines), 1)
-        self.assertIn("player_site.hide.sections", item.lines[0])
 
     def test_only_the_missing_list_is_written(self):
         vault = make_vault(self, extra="  exclude_sections: [Mine]\n")
@@ -1175,11 +845,8 @@ class VaultSettingEndToEndTests(unittest.TestCase):
     def test_the_exclude_lists_are_written_once_and_a_second_run_changes_nothing(self):
         vault, config = self.vault_with(
             "  # who reads\n  mode: player  # keep\n  site_title: X\n")
-        # config-to-vault would write these on a real pass; this proves the step alone.
-        with mock.patch.object(ms, "describe_config_to_vault",
-                               return_value=ms.StepPlan(False, [])):
-            (item,) = ms.find_exclude_lists(vault)
-            item.apply(None)
+        (item,) = ms.find_exclude_lists(vault)
+        item.apply(None)
         text = config.read_text(encoding="utf-8")
         self.assertIn("  # who reads\n  mode: player  # keep\n  site_title: X\n", text)
         self.assertTrue(text.endswith("---\nBody\n"))
@@ -1218,9 +885,11 @@ class MigrateEndToEndTests(unittest.TestCase):
         with mock.patch.object(ms, "plugin_tool", Pin(ok=True)), \
                 contextlib.redirect_stdout(out):
             self.assertEqual(migrate.main([str(vault), "apply"]), 0)
-            self.assertIn("config-to-vault\tmove", out.getvalue())
-            text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-            self.assertIn("site_title", text)
+            self.assertIn("settings-move\tWrote _meta/vault-config.yaml.",
+                          out.getvalue())
+            text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+            self.assertIn("title: Legacy", text)
+            self.assertFalse((vault / "_meta" / "vault-config.md").exists())
             self.assertNotIn("siteTitle", (site / "vault.config.json").read_text())
             again = io.StringIO()
             with contextlib.redirect_stdout(again):
@@ -1259,27 +928,36 @@ class MigrateEndToEndTests(unittest.TestCase):
             out = io.StringIO()
             with contextlib.redirect_stdout(out):
                 self.assertEqual(migrate.main([str(vault), "plan"]), 0)
-            self.assertIn("config-to-vault\tmove", out.getvalue())
+            self.assertIn("settings-move\tWill write _meta/vault-config.yaml.",
+                          out.getvalue())
             with contextlib.redirect_stdout(io.StringIO()):
                 self.assertEqual(migrate.main([str(vault), "apply"]), 0)
-            self.assertEqual(ms.find_config_to_vault(vault), [])
-        self.assertIn("site_title", (vault / "_meta" / "vault-config.md")
+            self.assertEqual(ms.find_settings_move(vault), [])
+        self.assertIn("title: Legacy", (vault / "_meta" / "vault-config.yaml")
                       .read_text(encoding="utf-8"))
 
-    def test_deployment_keys_only_or_no_site_offers_no_move(self):
+    def test_a_vault_with_deployment_keys_only_or_no_site_still_moves_its_own_file(self):
         for site_file in ({"outputDir": "./docs"}, None):
             vault = self.vault_at("1.10.25", site_file, lists=True)
-            self.assertEqual(ms.find_config_to_vault(vault), [], site_file)
+            with mock.patch.object(ms, "plugin_tool", Pin(ok=True)):
+                (item,) = ms.find_settings_move(vault)
+                self.assertNotIn("Will remove the settings from",
+                                 "\n".join(item.lines))
+                item.apply(None)
+                self.assertEqual(ms.find_settings_move(vault), [])
+            self.assertTrue((vault / "_meta" / "vault-config.yaml").is_file())
 
-    def test_a_site_file_with_no_list_moves_the_built_in_lists_in(self):
+    def test_a_site_file_with_no_list_moves_and_the_built_in_lists_are_written(self):
         vault = self.vault_at("1.10.25", {"outputDir": "./docs"})
         with mock.patch.object(ms, "plugin_tool", Pin(ok=True)):
-            (item,) = ms.find_config_to_vault(vault)
+            (item,) = ms.find_settings_move(vault)
             item.apply(None)
-        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8")
-        self.assertIn("exclude_sections:", text)
-        self.assertIn("exclude_fields:", text)
-        self.assertEqual(ms.find_config_to_vault(vault), [])
+        self.assertEqual(ms.find_settings_move(vault), [])
+        (lists,) = ms.find_exclude_lists(vault)
+        lists.apply(None)
+        text = (vault / "_meta" / "vault-config.yaml").read_text(encoding="utf-8")
+        self.assertIn("sections:", text)
+        self.assertIn("fields:", text)
 
 
 @unittest.skipUnless(os.environ.get("VAULT_CHECK_REQUIRE_NODE")

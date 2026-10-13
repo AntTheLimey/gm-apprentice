@@ -132,6 +132,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
     groups: dict[str, list[Row]] = {WILL: [], CHOICE: [], PERSON: []}
     waiting: list[Row] = []
     holding: list[str] = []   # choices apply will not stamp without
+    stuck: list[str] = []     # things only a person can settle, that hold it
     repin_waits = False
     for check in offered(CHECKS if checks is None else checks, vault_v, plugin_v):
         if check.asks_site and repin_waits:
@@ -151,7 +152,7 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         for item in items:
             groups[item.group].extend(_rows(item))
             if item.holds_stamp:
-                holding.append(item.id)
+                (stuck if item.group == PERSON else holding).append(item.id)
         if check.name == REPIN and any(i.group == WILL for i in items):
             repin_waits = True
     behind = parse_version(vault_v) < parse_version(plugin_v)
@@ -163,6 +164,9 @@ def run_plan(vault: Path, checks: list[Check] | None = None) -> int:
         until = (f" (only once {', '.join(holding)} "
                  f"{'is' if len(holding) == 1 else 'are'} answered)"
                  if holding else "")
+        if stuck:
+            until = (f" (not until {', '.join(stuck)} "
+                     f"{'is' if len(stuck) == 1 else 'are'} settled)")
         groups[WILL].append(
             ("stamp", f"stamp\tgm_apprentice_version {vault_v} -> "
                       f"{plugin_v}{until}"))
@@ -237,11 +241,14 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
     error = ""
     repinned = waited = False
     unanswered: list[str] = []   # value choices the GM was not asked
+    stuck: list[str] = []        # person rows that hold the stamp
     for n, check in enumerate(todo):
         after_repin = check.asks_site and repinned   # plan did not list it
         try:
             for item in check.find(vault):
                 if item.group == PERSON:
+                    if item.holds_stamp:
+                        stuck.append(item.id)
                     # a check that waited on the repin was not in the plan
                     person.extend(_rows(item) if after_repin else [])
                     shown += 0 if after_repin else len(item.lines)
@@ -279,7 +286,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
                     if c.release and parse_version(c.release) < first]
             target = max([vault_v, *done], key=parse_version)
     stamped = (parse_version(target) > parse_version(vault_v)
-               and not waited and not unanswered)
+               and not waited and not unanswered and not stuck)
     if stamped:
         try:
             _stamp(vault, target)
@@ -294,6 +301,8 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         emit(TITLES[PERSON], person, shown)
     for label in unanswered:
         print(f"not answered: {label}")
+    for label in stuck:
+        print(f"not settled: {label}")
     if waited:
         print(WAITED_LINE)
     if failed is not None:
@@ -301,7 +310,7 @@ def run_apply(vault: Path, chosen: list[tuple[str, str | None]],
         print(f"stamped {target}; the rest is offered again next time"
               if stamped else "not stamped")
         return 1
-    if waited or unanswered:
+    if waited or unanswered or stuck:
         print("not stamped")
     else:
         print(f"stamped {plugin_v}" if stamped else f"already at {plugin_v}")

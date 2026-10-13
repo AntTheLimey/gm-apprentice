@@ -1366,12 +1366,16 @@ def site_without_tool(s: Settings) -> bool:
     return bool(s.get("player_site.folder"))
 
 
-def settings_set(vault: Path, pairs: list[tuple[str, object]]) -> list[str]:
+def settings_set(vault: Path, pairs: list[tuple[str, object]], *,
+                 create: bool = False) -> list[str]:
     """Write settings, all or none; the names written. A value the tool
-    refuses raises SettingsUnavailable (refused=True) with its reason."""
+    refuses raises SettingsUnavailable (refused=True) with its reason.
+    `create` makes the settings file when the vault has none."""
     _check_vault(vault)
     _check_names([n for n, _ in pairs])
     args = ["set", *_target_args(vault)]
+    if create:
+        args.append("--create")
     args += [f"{name}={json.dumps(value)}" for name, value in pairs]
     forget_settings(vault)
     answer = _run_settings(args, refusable=True)
@@ -1387,6 +1391,46 @@ def settings_unset(vault: Path, names: list[str]) -> list[str]:
     answer = _run_settings(["unset", *_target_args(vault), *names],
                            refusable=True)
     return [str(n) for n in answer["removed"]]
+
+
+def settings_carry(vault: Path, written: str, name: str) -> list[str]:
+    """Put the value of the key `written` (a mis-named key in the new file)
+    under the setting `name`, validated, and remove the key: one change, all
+    or none. A list's entries are added to the list. Refusals raise as
+    `settings_set`'s do."""
+    _check_vault(vault)
+    _check_names([written, name])
+    forget_settings(vault)
+    answer = _run_settings(["carry", *_target_args(vault), written, name],
+                           refusable=True)
+    return [str(answer["into"])]
+
+
+def settings_move_plan(vault: Path) -> dict[str, Any]:
+    """What `settings move --check` says of a vault: `ok`, `lines`,
+    `blockers`, `files`, and for a moved vault with an old file left beside
+    the new one, `leftover` (`redundant`, `keys`). Writes nothing."""
+    _check_vault(vault)
+    answer = _run_settings(["move", *_target_args(vault), "--check"])
+    if not isinstance(answer, dict):
+        raise SettingsUnavailable(
+            "could not read the vault's settings: the publish tool's "
+            "answer was not in the shape expected")
+    return answer
+
+
+def settings_tidy(vault: Path, *, discard_old_file: bool = False) -> list[str]:
+    """Tidy a moved vault (`settings move` on it): remove what a stopped
+    move left, the old settings file when it holds nothing the new one
+    lacks (always, with `discard_old_file`). The lines it reports."""
+    _check_vault(vault)
+    forget_settings(vault)
+    args = ["move", *_target_args(vault)]
+    if discard_old_file:
+        args.append("--discard-old-file")
+    answer = _run_settings(args, refusable=True)
+    forget_settings(vault)
+    return [str(x) for x in answer.get("lines", [])]
 
 
 def settings_add(vault: Path, name: str, entries: list[str]) -> list[str]:

@@ -210,6 +210,9 @@ from vaultlib import (  # noqa: F401
     vault_layout,
     settings,
     settings_add,
+    settings_carry,
+    settings_move_plan,
+    settings_tidy,
     settings_describe,
     settings_raw,
     settings_set,
@@ -5009,6 +5012,10 @@ def _run_ops(vault: Path, ops: list[dict[str, Any]]) -> None:
             settings_set(vault, [(op["name"], op["value"])])
         elif op["op"] == "add":
             settings_add(vault, op["name"], op["entries"])
+        elif op["op"] == "carry":
+            settings_carry(vault, op["from"], op["to"])
+        elif op["op"] == "tidy":
+            settings_tidy(vault, discard_old_file=bool(op.get("discard")))
         else:
             settings_unset(vault, list(op["names"]))
 
@@ -5090,6 +5097,33 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
     return row
 
 
+def _leftover_row(fault: dict[str, Any], vault: Path) -> SettingsRow:
+    """The old settings file left beside the new one: the publish tool says
+    whether it holds anything the new file lacks. Nothing more: removed when
+    it holds nothing (certain), else removed only on the GM's yes."""
+    row = SettingsRow(fault)
+    try:
+        left = settings_move_plan(vault).get("leftover")
+    except SettingsUnavailable:
+        return row
+    if not isinstance(left, dict):
+        return row
+    if left.get("redundant"):
+        row.kind = "certain"
+        row.ops = [{"op": "tidy", "discard": False}]
+        row.fix = (f"remove {LEGACY_SETTINGS_FILE}; it holds nothing the new "
+                   "file lacks")
+        row.done = f"removed {LEGACY_SETTINGS_FILE}"
+    else:
+        keys = ", ".join(str(k) for k in left.get("keys") or []) or "settings"
+        row.kind = "proposed"
+        row.ops = [{"op": "tidy", "discard": True}]
+        row.fix = (f"remove {LEGACY_SETTINGS_FILE} anyway; it holds {keys}, "
+                   "which the new file does not")
+        row.done = f"removed {LEGACY_SETTINGS_FILE}"
+    return row
+
+
 def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
               scratch: Path, text: str) -> SettingsRow:
     row = SettingsRow(fault)
@@ -5114,15 +5148,6 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
     elif kind in ("unknown-name", "old-name"):
         target = fault.get("suggest") if kind == "unknown-name" \
             else fault.get("use")
-        if not old_file:
-            # The settings command takes a mistyped or old-spelled key out of
-            # the old file only; the new file's is the GM's to edit.
-            row.note = (f"the settings command cannot take {name} out of "
-                        f"{settings_file(scratch)}; "
-                        + (f"rename it to {target} there"
-                           if target else "remove it there")
-                        + " by hand.")
-            return row
         if not target:
             return row
         there, held = _written_at(raw, target)
@@ -5135,8 +5160,15 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
             info = settings_describe(target)
         except SettingsUnavailable:
             return row  # not a setting the tool can describe
-        moved = _classify_move(kind, name, value, target, info)
+        # A stray key in the new file is not read at all, so what it holds is
+        # judged as any mistyped name's would be, whatever it was called.
+        moved = _classify_move("unknown-name" if not old_file else kind,
+                               name, value, target, info)
         moved.fault = fault
+        if not old_file:
+            # One all-or-nothing change: the value (a list's entries added to
+            # the list), then the stray key removed.
+            moved.ops = [{"op": "carry", "from": name, "to": target}]
         row = moved
     else:
         return row
@@ -5148,7 +5180,8 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
     # certain fix is tried the way `--fix` will meet it.
     target_file = scratch / settings_file(scratch)
     kept = target_file.read_bytes()
-    before = settings(scratch).values if kind == "old-name" else None
+    before = settings(scratch).values if kind == "old-name" and old_file \
+        else None
     ok = False
     try:
         _run_ops(scratch, row.ops)
@@ -5159,11 +5192,12 @@ def _plan_fix(fault: dict[str, Any], raw: Any, claimed: set[str],
         takes = ""
         if kind != "retired":
             try:
-                takes = settings_describe(row.ops[0]["name"]).get("takes", "")
+                takes = settings_describe(
+                    row.ops[0].get("name") or row.ops[0]["to"]).get("takes", "")
             except SettingsUnavailable:
                 takes = ""
         row.note = (f"{name} holds {_short(value)}"
-                    + (f", and {row.ops[0]['name']} takes {takes}." if takes
+                    + (f", and {target} takes {takes}." if takes
                        else f" ({e})."))
     if ok and before is not None and settings(scratch).values != before:
         # The old name's value was read differently from the new name's.
@@ -5210,14 +5244,17 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
         with tempfile.TemporaryDirectory(prefix="vc-settings-") as tmp:
             scratch = Path(tmp)
             (scratch / "_meta").mkdir()
-            # Whichever file the vault is on, so the tool reads the copy the
-            # way it reads the real one.
-            copy_name = file_name if text else LEGACY_SETTINGS_FILE
-            (scratch / copy_name).write_text(
-                text or "---\ntype: meta\n---\n", encoding="utf-8")
+            # Whichever file the vault is on, under its own name, so the tool
+            # reads the copy the way it reads the real one.
+            empty = ("---\ntype: meta\n---\n"
+                     if vault_layout(vault) == "legacy" else "version: 1\n")
+            (scratch / file_name).write_text(text or empty, encoding="utf-8")
             claimed: set[str] = set()
             try:
                 for f in own.faults:
+                    if f["kind"] == "dropped" and f["name"] == LEGACY_SETTINGS_FILE:
+                        rows.append(_leftover_row(f, vault))
+                        continue
                     rows.append(_plan_fix(f, raw, claimed, scratch, text))
             finally:
                 forget_settings(scratch)

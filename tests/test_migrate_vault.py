@@ -12,6 +12,7 @@ SCRIPTS = Path(__file__).resolve().parent.parent / "skills" / "shared" / "script
 sys.path.insert(0, str(SCRIPTS))
 
 import migrate_vault as mv  # noqa: E402
+from layouts import on_layout  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 from migrate_core import CHOICE, PERSON, WILL, StepFailed  # noqa: E402
 
@@ -177,35 +178,48 @@ class SystemTests(unittest.TestCase):
                                 ("regency-cthulhu", "coc-7e-regency")):
             self.assertEqual(mv.vault_system(make_vault(self, written)), wanted)
 
-    def test_only_the_settings_answer_for_a_vault_in_use(self):
+    def test_only_the_settings_answer_for_a_vault_on_the_new_file(self):
         vault = make_vault(self, None)
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
+            encoding="utf-8")
+        on_layout(vault, "new")
+        self.assertIsNone(mv.vault_system(vault))
+        (vault / "Brief.md").write_text(
+            "---\ntype: adventure-brief\nsystem: gurps\n---\n",
             encoding="utf-8")
         self.assertIsNone(mv.vault_system(vault))
 
-    def test_a_move_guesses_from_the_campaign_overview_when_the_config_has_none(self):
+    def test_a_vault_with_no_settings_file_reads_the_notes(self):
+        vault = Path(tempfile.mkdtemp(prefix="sys-"))
+        self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+        (vault / "Overview.md").write_text(
+            "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
+            encoding="utf-8")
+        self.assertEqual(mv.vault_system(vault), "gurps-4e")
+
+    def test_a_vault_on_the_old_file_falls_back_to_the_campaign_overview(self):
         vault = make_vault(self, None)
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
             encoding="utf-8")
-        self.assertEqual(mv.guess_system_for_move(vault), "gurps-4e")
-        self.assertIsNone(mv.guess_system_for_move(make_vault(self, None)))
+        self.assertEqual(mv.vault_system(vault), "gurps-4e")
+        self.assertIsNone(mv.vault_system(make_vault(self, None)))
 
-    def test_a_move_guesses_from_the_adventure_brief_under_either_spelling(self):
+    def test_a_vault_on_the_old_file_falls_back_to_the_brief_under_either_spelling(self):
         for kind in ("adventure-brief", "adventure_brief"):
             vault = make_vault(self, None)
             (vault / "Brief.md").write_text(
                 f"---\ntype: {kind}\nsystem: gurps\n---\n",
                 encoding="utf-8")
-            self.assertEqual(mv.guess_system_for_move(vault), "gurps-4e", kind)
+            self.assertEqual(mv.vault_system(vault), "gurps-4e", kind)
 
-    def test_the_settings_beat_a_guess(self):
+    def test_the_settings_beat_the_notes(self):
         vault = make_vault(self, "dnd-5e")
         (vault / "Overview.md").write_text(
             "---\ntype: campaign_overview\ngame_system: gurps-4e\n---\n",
             encoding="utf-8")
-        self.assertEqual(mv.guess_system_for_move(vault), "dnd-5e-2024")
+        self.assertEqual(mv.vault_system(vault), "dnd-5e-2024")
 
 
 class TemplateTests(unittest.TestCase):

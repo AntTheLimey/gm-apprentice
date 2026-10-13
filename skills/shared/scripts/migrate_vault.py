@@ -63,18 +63,16 @@ def _system_id(raw: object) -> str | None:
 
 
 def vault_system(vault: Path) -> str | None:
-    """`vault.system` from the vault's settings, aliases mapped to the file
-    ids; None when the vault records none."""
-    return _system_id(settings(vault).get("vault.system"))
-
-
-def guess_system_for_move(vault: Path) -> str | None:
-    """The system of a vault being moved to the new settings file, which
-    must record one: `vault.system`, else the Campaign Overview's
-    `game_system`, else the adventure brief's `system`. Used only by the
-    move step; every other caller asks `vault_system`."""
-    found = vault_system(vault)
-    if found:
+    """The vault's game system, aliases mapped to the file ids; None when
+    the vault records none. A vault on the new settings file records it in
+    `vault.system` and nowhere else. The other two places are for a vault
+    with no settings file yet (the scaffold's and the midwife's first
+    contact) and for a vault still on the old file, which must not lose its
+    system for being left behind: the Campaign Overview's `game_system`,
+    then the adventure brief's `system`. The old-file part goes two releases
+    after 1.10.54, with the old layout."""
+    found = _system_id(settings(vault).get("vault.system"))
+    if found or vault_layout(vault) == "new":
         return found
     # The brief's type is written `adventure-brief`; older notes used `_`.
     for wanted, key in ((("campaign_overview",), "game_system"),
@@ -765,7 +763,7 @@ def find_skeleton(vault: Path) -> list[Item]:
             vault, vault_system(vault), campaign=vault.resolve().name,
             version=found[0] if found else "", templates=False,
             pages=False)
-            if p.rel != vs.CONFIG]
+            if p.rel not in vs.NEW_FILES]
     except vs.ScaffoldError as e:
         raise StepFailed(str(e)) from e
     if not pieces:

@@ -2,8 +2,13 @@
 the faults in a vault's settings file, fixes the ones whose fix is certain
 and leaves the rest to the GM."""
 
+import contextlib
+import io
 import json
+import shutil
 import sys
+import tempfile
+import unittest
 from pathlib import Path
 
 import pytest
@@ -570,3 +575,79 @@ def test_publish_overrides_exclude_is_listed_with_the_only_override(
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     assert "The only override is publish.overrides.fields." in out
     assert not any(line.startswith("fix:") for line in out.splitlines())
+
+
+class NewFileFixTests(unittest.TestCase):
+    """A mis-named key in the NEW file is fixed in place by the settings
+    command's carry, with the same certain/proposed rule as on the old file."""
+
+    def vault(self, yaml_text):
+        root = Path(tempfile.mkdtemp(prefix="vc-newfix-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        vault = root / "V"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-config.yaml").write_text(yaml_text, "utf-8")
+        return vault
+
+    def rows(self, vault):
+        vc.forget_settings(None)
+        return vc.plan_settings(vault)[0]
+
+    def test_a_stray_hiding_key_is_a_certain_fix_that_adds_to_the_right_list(self):
+        vault = self.vault("version: 1\nplayer_site:\n  exclude_sections: [Rumours]\n")
+        (row,) = [r for r in self.rows(vault) if r.fault["name"].endswith("exclude_sections")]
+        self.assertEqual(row.kind, "certain")
+        self.assertEqual(row.ops[0]["op"], "carry")
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            self.assertEqual(vc.check_settings(vault, True, [], False), 0)
+        vc.forget_settings(None)
+        got = vc.settings(vault).get("player_site.hide.sections")
+        self.assertIn("Rumours", got)
+        self.assertIn("GM Notes", got)
+        self.assertEqual(self.rows(vault), [])
+
+    def test_a_stray_plain_value_is_proposed_and_applied_only_by_name(self):
+        vault = self.vault("version: 1\nplayer_site:\n  site_title: Hollow\n")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "proposed")
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        self.assertIn("site_title", (vault / "_meta" / "vault-config.yaml").read_text())
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, False, ["player_site.site_title"], False)
+        vc.forget_settings(None)
+        self.assertEqual(vc.settings(vault).get("player_site.title"), "Hollow")
+
+    def test_a_stray_value_the_setting_refuses_has_no_fix(self):
+        vault = self.vault("version: 1\nplayer_site:\n  searchh: maybe\n")
+        (row,) = self.rows(vault)
+        self.assertEqual((row.kind, row.ops), ("none", []))
+
+    def test_a_left_over_old_file_is_a_certain_removal_when_it_holds_nothing_more(self):
+        vault = self.vault("version: 1\nplayer_site:\n  title: Hollow\n")
+        old = vault / "_meta" / "vault-config.md"
+        old.write_text("---\ntype: meta\npublish:\n  site_title: Hollow\n---\n", "utf-8")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "certain")
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        self.assertFalse(old.exists())
+
+    def test_a_left_over_old_file_with_more_in_it_is_proposed_and_names_the_keys(self):
+        vault = self.vault("version: 1\nplayer_site:\n  title: Hollow\n")
+        old = vault / "_meta" / "vault-config.md"
+        old.write_text("---\ntype: meta\npublish:\n  site_title: Hollow\n  search: false\n---\n", "utf-8")
+        (row,) = self.rows(vault)
+        self.assertEqual(row.kind, "proposed")
+        self.assertIn("player_site.features.search", row.fix)
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, True, [], False)
+        self.assertTrue(old.exists())    # --fix leaves a proposed fix alone
+        with contextlib.redirect_stdout(io.StringIO()):
+            vc.check_settings(vault, False, [str(old.relative_to(vault))], False)
+        self.assertFalse(old.exists())
+
+    def test_an_empty_new_file_is_copied_under_its_own_name(self):
+        vault = self.vault("")
+        self.assertEqual(vc.plan_settings(vault)[0], [])
