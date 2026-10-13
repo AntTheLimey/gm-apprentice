@@ -35,8 +35,8 @@ const sansBlock = (name) => name.slice(OLD_BLOCK.length + 1);
 // The old vault.config.json keys that now live under `publish:`, in the registry's order.
 const movedKeys = () => LEGACY.filter((e) => e.json).map((e) => ({ json: e.json, publish: sansBlock(e.name), kind: e.jsonKind }));
 
-// The six keys that stay in vault.config.json.
-const DEPLOY_KEYS = ['vaultPath', 'outputDir', 'host', 'siteUrl', 'cloudflarePagesProject', 'preserveDirs'];
+// The key that stays in vault.config.json (the other five became settings: the registry entries with `siteFallback`).
+const DEPLOY_KEYS = ['vaultPath'];
 
 // Old switch names in the site file, from the registry: { statusBar: 'live_stats', inbox: 'inbox' }.
 const OLD_SWITCHES = Object.fromEntries(LEGACY.flatMap((e) => (e.oldNames || [])
@@ -231,8 +231,8 @@ function childSegs(parent) {
 
 // Reads the old file and the site's vault.config.json. `core` is read.js's shared pieces.
 // Returns { values, origins, faults, legacy, file } like readSettings (without `layout`).
-function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
-  const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY } = core;
+function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, core) {
+  const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY, siteValueOf } = core;
   const site = siteConfig || {};
   const faults = [];
   const fault = makeFault;
@@ -290,7 +290,7 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
 
   const values = {};
   const origins = {};
-  const c = { values, origins, faults, fault, vaultPath };
+  const c = { values, origins, faults, fault, vaultPath, siteDir };
   const defaultOf = (e) => {
     if (e.name === SITE_SWITCH) { const dir = getPath(publish, sansBlock(SITE_FOLDER).split('.')); return typeof dir === 'string' && dir.trim() !== ''; }
     return e.default === undefined ? null : clone(e.default);
@@ -336,6 +336,12 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
     // (The campaign, unset, is the vault folder's name on every layout.)
     setIn(values, e.name, e.defaultFromVaultFolder ? path.basename(path.resolve(vaultPath)) : (e.default === undefined ? null : clone(e.default)));
     origins[e.name] = 'default';
+  }
+  // The site folder's own five keys: the old file has no name for them, so the site file is their only home and
+  // they are read from it without a fault (dated for removal with this reader).
+  for (const e of REGISTRY.filter((x) => x.siteFallback)) {
+    const held = siteValueOf(site, e);
+    if (held) settle(c, e, { written: held.key, setting: e.name }, { raw: held.raw, origin: 'site-file' }, defaultOf);
   }
 
   // Walk what the file holds against the list: parents that are not maps, names not in the

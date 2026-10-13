@@ -279,7 +279,7 @@ withholds because its Wrap-Up publishes.
   deploy: `
 gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
 
-Builds the site and publishes it to the host named in vault.config.json:
+Builds the site and publishes it to the host the vault names (player_site.host):
 "cloudflare-pages" runs wrangler (checking authentication first, and aligning
 wrangler.toml's project name), "github-pages" commits docs/ and pushes.
 

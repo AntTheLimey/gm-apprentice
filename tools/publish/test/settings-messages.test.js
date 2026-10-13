@@ -88,38 +88,35 @@ test('init says which settings and which file it wrote', async () => {
   const said = [];
   try {
     const { init } = require('../lib/init');
-    for (const m of [o, n, fresh]) {
+    // A vault still on the old file is not set up: the new site settings have no place in it.
+    await assert.rejects(() => init(path.join(o.root, 'made'), { siteTitle: 'Camp', vaultPath: o.vault, verbose: true }),
+      /This vault's settings are still in the old file\. Update the vault first/);
+    for (const m of [n, fresh]) {
       logged.length = 0;
       await init(path.join(m.root, 'made'), { siteTitle: 'Camp', vaultPath: m.vault, verbose: true });
       said.push(logged.join('\n'));
     }
   } finally { console.log = realLog; }
   try {
-    assert.match(said[0], /wrote [^\n]*publish\.site_title[^\n]* to _meta\/vault-config\.md in /);
-    assert.doesNotMatch(said[0], /player_site\./);
-    assert.match(said[1], /wrote [^\n]*player_site\.title[^\n]* to _meta\/vault-config\.yaml in /);
-    assert.doesNotMatch(said[1], /publish\.site_title|vault-config\.md/);
-    assert.match(said[2], /to _meta\/vault-config\.yaml in /);
+    assert.match(said[0], /wrote [^\n]*player_site\.title[^\n]* to _meta\/vault-config\.yaml in /);
+    assert.doesNotMatch(said[0], /publish\.site_title|vault-config\.md/);
+    assert.match(said[1], /to _meta\/vault-config\.yaml in /);
   } finally { done(o); done(n); done(fresh); }
 });
 
 test('init says what it could not write in the vault\'s own words', async () => {
-  const o = make('old');
   const n = make('new');
-  fs.writeFileSync(path.join(o.vault, OLD.file), '---\ntype: meta\npublish: [unclosed\n---\n');
   fs.writeFileSync(path.join(n.vault, NEW.file), 'player_site: [unclosed\n');
   const real = console.warn;
   const warned = [];
   console.warn = (x) => warned.push(String(x));
   try {
     const { init } = require('../lib/init');
-    await init(path.join(o.root, 'made'), { vaultPath: o.vault });
     await init(path.join(n.root, 'made'), { vaultPath: n.vault });
   } finally { console.warn = real; }
   try {
-    assert.match(warned[0], /Add these to _meta\/vault-config\.md: publish\.site, publish\.site_dir/);
-    assert.match(warned[1], /Add these to _meta\/vault-config\.yaml: player_site\.publish, player_site\.folder/);
-  } finally { done(o); done(n); }
+    assert.match(warned[0], /Add these to _meta\/vault-config\.yaml: player_site\.publish, player_site\.folder/);
+  } finally { done(n); }
 });
 
 test('seedVaultSettings still keys its answer by the list\'s names', () => {

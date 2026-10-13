@@ -99,21 +99,20 @@ function buildSite(options) {
   rawConfig.vaultPath = options.vaultPath ? path.resolve(options.vaultPath) : path.resolve(configDir, rawConfig.vaultPath);
   // `allowFaults` is for the GM-site build a later change adds; nothing passes it yet but tests.
   const printWarning = (m) => console.warn(`  WARNING: ${m}`);
-  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning, { quietStops: !options.allowFaults });
+  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning, { quietStops: !options.allowFaults, siteDir: configDir });
   if (!options.allowFaults) assertNoStops(publishConfig, 'build');
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
-  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir || './docs');
+  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
   const off = siteOff(publishConfig.switches, rawConfig.vaultPath);
   // A setting named in a message is named as this vault's file writes it.
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
 
-  const host = config.host || 'github-pages';
-  if (host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
+  if (config.host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
     console.warn(
-      `⚠️  host is "cloudflare-pages" but siteUrl looks like a GitHub Pages URL (${config.siteUrl}).\n` +
+      `⚠️  ${nm('player_site.host')} is "cloudflare-pages" but ${nm('player_site.url')} looks like a GitHub Pages URL (${config.siteUrl}).\n` +
       `   Cloudflare serves at the root, so the 404 page's links will break.\n` +
-      `   Set siteUrl to your Cloudflare URL (e.g. https://<project>.pages.dev) and rebuild.`
+      `   Set ${nm('player_site.url')} to your Cloudflare URL (e.g. https://<project>.pages.dev) and rebuild.`
     );
   }
 
@@ -152,20 +151,23 @@ function buildSite(options) {
     }
     const resolvedVault = path.resolve(config.vaultPath);
     if (resolved === resolvedVault || resolvedVault.startsWith(resolved + path.sep)) {
-      throw new Error(`Refusing to clean outputDir that contains the vault: ${resolved}`);
+      throw new Error(`Refusing to clean the output folder (${nm('player_site.output')}) that contains the vault: ${resolved}`);
     }
     if (resolved.startsWith(resolvedVault + path.sep)) {
-      throw new Error(`Refusing to write outputDir inside the vault: ${resolved}`);
+      throw new Error(`Refusing to write the output folder (${nm('player_site.output')}) inside the vault: ${resolved}`);
     }
   }
 
   function cleanOutput() {
     if (dry) return;
+    // A build that is let past the settings' faults (allowFaults) still never cleans a folder it cannot trust.
+    if (publishConfig.faults.some((f) => f.level === 'stop' && (f.setting === 'player_site.output' || f.setting === 'player_site.keep'))) {
+      throw new Error('The build did not start: it will not clean a folder while it cannot read where to build or what to keep.');
+    }
     if (!fs.existsSync(outputDir)) return;
     assertSafeOutputDir();
-    const preserve = Array.isArray(config.preserveDirs) ? config.preserveDirs : [];
     for (const entry of fs.readdirSync(outputDir)) {
-      if (preserve.includes(entry)) continue;
+      if (config.preserveDirs.includes(entry)) continue;
       const full = path.join(outputDir, entry);
       fs.rmSync(full, { recursive: true, force: true });
     }

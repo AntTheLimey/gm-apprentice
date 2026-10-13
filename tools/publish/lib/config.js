@@ -85,8 +85,9 @@ function setOnly(map, prefix, origins) {
 // without sheets) or check a map's entries (overrides).
 // `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
-  const { values, origins, faults, legacy = [], layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
+// `siteDir` is the site folder (where vault.config.json is): the output folder is judged against it.
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir } = {}) {
+  const { values, origins, faults, legacy = [], layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir });
   const v = values.vault;
   const p = values.player_site;
   const named = (n) => origins[n] !== 'default';
@@ -164,6 +165,11 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // (`nameInFor(publishConfig.layout, name)`). Not listed with the settings: a copy of the
   // object does not carry it, and the message then names the setting by its current name.
   Object.defineProperty(merged, 'layout', { value: layout, enumerable: false });
+  // The site folder's own settings, for code that has only the publishConfig. Not listed, like `layout`.
+  Object.defineProperty(merged, 'site', {
+    value: { url: p.url, host: p.host, output: p.output, cloudflare_project: p.cloudflare_project, keep: p.keep },
+    enumerable: false,
+  });
 
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
@@ -182,14 +188,16 @@ function assertNoStops(publishConfig, what) {
 function assertNoStopsFor(configPath, what) {
   let raw;
   let vaultPath;
+  let siteDir;
   try {
     const resolved = path.resolve(configPath);
     raw = loadVaultConfig(resolved);
-    vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath);
+    siteDir = path.dirname(resolved);
+    vaultPath = path.resolve(siteDir, raw.vaultPath);
   } catch {
     return;
   }
-  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}), what);
+  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}, { siteDir }), what);
 }
 
 // What `build` and `deploy` say instead of running when the GM has turned the site off.
@@ -223,6 +231,9 @@ function scanConfigFor(config, publishConfig) {
   return Object.assign({}, config, { excludeDirs: publishConfig.exclude_dirs });
 }
 
+// The site folder's five keys in the spelling the site file used, and the field of publishConfig.site each is.
+const SITE_KEYS = [['siteUrl', 'url'], ['host', 'host'], ['outputDir', 'output'], ['cloudflarePagesProject', 'cloudflare_project'], ['preserveDirs', 'keep']];
+
 // The one resolved config every command reads. `config` is the raw vault.config.json
 // object with each moved key overwritten, in its old JSON spelling, by the value
 // loadPublishConfig settled on (vault file first, site file only when the vault file is
@@ -239,7 +250,27 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) 
     if (value !== undefined && value !== null) config[entry.json] = value;
     else if (fromVaultOnly) delete config[entry.json];
   }
+  // The site folder's own keys are always what the settings resolved (never the raw site file), or absent.
+  for (const [key, field] of SITE_KEYS) {
+    const value = publishConfig.site[field];
+    if (value !== undefined && value !== null) config[key] = value;
+    else delete config[key];
+  }
   return { config, publishConfig };
+}
+
+// The output folder as a plain relative path ("docs"): no leading "./", no trailing slash. A config nothing resolved
+// (no vaultPath, a test's stand-in) takes the built-in folder.
+function outputFolderOf(config) {
+  const folder = config.outputDir === undefined ? entry('player_site.output').default : config.outputDir;
+  return String(folder).replace(/^\.\//, '').replace(/\/+$/, '');
+}
+
+// The site file's config with its five site keys resolved from the vault's settings, for a command that reads only
+// those (deploy, setup-inbox). A config with no vaultPath (a test's stand-in) is returned as it is.
+function siteConfigFor(raw, siteRoot, warn = () => {}) {
+  if (!raw || !raw.vaultPath) return raw;
+  return resolveConfig(raw, path.resolve(siteRoot, raw.vaultPath), warn, { quietStops: true, siteDir: siteRoot }).config;
 }
 
 // Why `build` and `deploy` must not run for the site at `configPath`: the GM turned the
@@ -265,4 +296,4 @@ function siteOffFor(configPath) {
   }
 }
 
-module.exports = { siteOffFor, siteOff, siteOffText, SITE_OFF, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { siteOffFor, siteOff, siteOffText, SITE_OFF, siteConfigFor, outputFolderOf, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

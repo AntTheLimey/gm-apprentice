@@ -124,6 +124,8 @@ function stripSiteKeys(siteText) {
   const siteAfter = JSON.parse(siteText);
   const removedKeys = [];
   for (const e of REGISTRY) {
+    // The site folder's own five keys stay where they are until the move carries them into the vault.
+    if (e.siteFallback) continue;
     for (const w of (e.was || []).filter((x) => x.in === 'site' && x.read !== false)) {
       const segs = w.name.split('.');
       const parent = getPath(siteAfter, segs.slice(0, -1));

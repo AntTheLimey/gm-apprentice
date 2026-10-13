@@ -182,7 +182,7 @@ test('a setting left at its default is not written, and one written at the defau
 
 test('the site file is merged in, then loses its setting keys and keeps the rest', () => {
   const site = {
-    vaultPath: './Vault', host: 'cloudflare', siteUrl: 'https://x.example', outputDir: './docs', cloudflarePagesProject: 'p', preserveDirs: ['keep'],
+    vaultPath: './Vault', host: 'cloudflare-pages', siteUrl: 'https://x.example', outputDir: './docs', cloudflarePagesProject: 'p', preserveDirs: ['keep'],
     campaignImage: 'a.png', fourOhFour: { x: 1 }, landingTagline: 'unread', siteTitle: 'From the site', footer: 'Foot', excludeSections: ['Extra Secret'],
     backend: { statusBar: true, inbox: false }, attachmentsDir: 'att', folderMap: { A: 'a' },
   };
@@ -192,7 +192,7 @@ test('the site file is merged in, then loses its setting keys and keeps the rest
   assert.ok(before.exclude_sections.includes('Extra Secret'));
   assert.ok(before.exclude_sections.length > 1, 'the built-in list is still there (#371)');
   assert.deepEqual(siteAfter, {
-    vaultPath: './Vault', host: 'cloudflare', siteUrl: 'https://x.example', outputDir: './docs', cloudflarePagesProject: 'p', preserveDirs: ['keep'],
+    vaultPath: './Vault', host: 'cloudflare-pages', siteUrl: 'https://x.example', outputDir: './docs', cloudflarePagesProject: 'p', preserveDirs: ['keep'],
     campaignImage: 'a.png', fourOhFour: { x: 1 }, landingTagline: 'unread',
   });
   assert.ok(plan.lines.some((l) => l.includes('siteTitle')));

@@ -40,4 +40,29 @@ function normalizeExcludeDirs(list, vaultPath, say = () => {}, label) {
   return out;
 }
 
-module.exports = { normalizeExcludeDir, normalizeExcludeDirs };
+// ---- The site folder's own folders -------------------------------------------------------------
+// What a build writes into and keeps. The build empties the output folder, so these are judged strictly.
+
+// Why `value` cannot be the output folder of a site in `siteDir`, or null. It must be text, inside the site folder,
+// and not the site folder itself. Without a site folder only a relative path can be judged; an absolute one passes.
+function outputProblem(value, siteDir) {
+  const rule = 'it must be a folder inside the site folder, not the site folder itself and not outside it';
+  if (typeof value !== 'string' || value.trim() === '') return rule;
+  const text = value.trim();
+  if (siteDir) {
+    const root = path.resolve(siteDir);
+    const full = path.resolve(root, text);
+    return full !== root && full.startsWith(root + path.sep) ? null : rule;
+  }
+  if (path.isAbsolute(text) || /^[A-Za-z]:/.test(text)) return null;
+  const tidy = path.posix.normalize(text.replace(/\\/g, '/'));
+  return tidy === '.' || tidy === '..' || tidy.startsWith('../') ? rule : null;
+}
+
+// Why `list` cannot be the folders to keep, or null: each entry is a plain folder name.
+function keepProblem(list) {
+  const bad = list.find((x) => x.trim() === '' || /[\\/]/.test(x) || x.includes('..'));
+  return bad === undefined ? null : 'each entry must be a plain folder name: not empty, with no slash and no ".."';
+}
+
+module.exports = { normalizeExcludeDir, normalizeExcludeDirs, outputProblem, keepProblem };

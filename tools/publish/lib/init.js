@@ -3,7 +3,7 @@ const fsSync = require('fs');
 const path = require('path');
 const { applyChanges, settingsText } = require('./settings/write');
 const { siteDirPath } = require('./lines-cli');
-const { entry, nameIn, fileLabel } = require('./settings');
+const { entry, nameIn, fileLabel, layoutOf } = require('./settings');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -33,9 +33,14 @@ const DEFAULT_FOLDER_MAP = {
 
 // `siteDir` is where the vault finds its site again: vault_check asks the tool installed
 // there what publishes. `player_site.publish` says the vault has a site; `init` is the GM asking for one.
-function defaultCampaignSettings(siteTitle, tagline, siteDir) {
+// `siteUrl` is the address the site starts with; the host and the output folder start at their built-in values,
+// written out so the GM sees them.
+function defaultCampaignSettings(siteTitle, tagline, siteDir, siteUrl) {
   return {
     ...(siteDir ? { 'player_site.publish': true, 'player_site.folder': siteDir.split(path.sep).join('/') } : {}),
+    'player_site.url': siteUrl,
+    'player_site.host': entry('player_site.host').default,
+    'player_site.output': entry('player_site.output').default,
     'player_site.title': siteTitle,
     'player_site.folder_map': DEFAULT_FOLDER_MAP,
     'vault.attachments': '_attachments',
@@ -160,6 +165,13 @@ async function init(targetDir = '.', options = {}) {
   };
   const dest = path.resolve(targetDir);
 
+  // The site's address, host and output folder are settings of the vault's new file, and the old file has no place for
+  // them: a vault still on the old file is updated first.
+  const vaultDir = path.resolve(dest, values.VAULT_PATH);
+  if (layoutOf(vaultDir) === 'legacy') {
+    throw new Error("This vault's settings are still in the old file. Update the vault first (ask the apprentice to update it), then set up the site.");
+  }
+
   function log(msg) {
     if (verbose) console.log(msg);
   }
@@ -229,8 +241,7 @@ async function init(targetDir = '.', options = {}) {
   // The campaign settings go into the vault file. A vault that is not there yet, or a vault
   // file the editor refuses, never stops the scaffold: the site is written and the caller
   // is told which settings to add.
-  const vaultDir = path.resolve(dest, values.VAULT_PATH);
-  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true, siteConfig: JSON.parse(await fs.readFile(path.join(dest, 'vault.config.json'), 'utf8')) });
+  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest), values.SITE_URL), { turnSiteOn: true, siteConfig: JSON.parse(await fs.readFile(path.join(dest, 'vault.config.json'), 'utf8')) });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
     log(`  wrote ${vaultSettings.written.map((n) => nameIn(vaultDir, n)).join(', ')} to ${fileLabel(vaultDir)} in ${vaultDir}${which}`);

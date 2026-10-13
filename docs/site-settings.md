@@ -17,7 +17,7 @@ what is possible, or to read what your file already says.
 |------|-------|---------------|---------------|
 | `_meta/vault-config.yaml` | In the vault | Every setting: the campaign's name and system, the site's title and theme, what is published, character sheets, the landing page | You, or the apprentice when you ask |
 | `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, and how far setting up a site got | The apprentice only. Leave it alone |
-| `vault.config.json` | In the site folder, the one `player_site.folder` names | Six deployment settings: where the vault is, where the pages are written, where the site is hosted | The apprentice, when it sets the site up |
+| `vault.config.json` | In the site folder, the one `player_site.folder` names | One setting: where the vault is | The apprentice, when it sets the site up |
 
 The two vault files travel with the campaign. The site file belongs to
 the one computer and host the site is built on.
@@ -156,6 +156,11 @@ Where a table says "A switch", see "On and off" above.
 | `player_site.features.link_previews`<br>was `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page | `on`, `desktop` or `off` | `on` |
 | `player_site.features.connections`<br>was `publish.connections` | How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off` | `tree`, `web`, `cards` or `off` | `tree` |
 | `player_site.not_found`<br>was `publish.four_oh_four.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
+| `player_site.url`<br>was `siteUrl` | The site's public address. A site that lives in a sub-folder of its host, such as a project page on GitHub, takes its base path from this | A web address | No address; a Cloudflare site is then taken to be at `https://<project>.pages.dev` |
+| `player_site.host`<br>was `host` | Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used | `github-pages` or `cloudflare-pages` | `github-pages` |
+| `player_site.output`<br>was `outputDir` | The folder the finished pages are written to, inside the site folder. Each build empties it first (except what `player_site.keep` names), so it can be neither the site folder itself nor a folder outside it; a setting that breaks this stops the build | A folder inside the site folder | `docs` |
+| `player_site.cloudflare_project`<br>was `cloudflarePagesProject` | The site's project name on Cloudflare, when it differs from the site folder's name | Text | The site folder's name |
+| `player_site.keep`<br>was `preserveDirs` | Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build | A list of folder names | None: a rebuild empties the output folder |
 | `vault.system`<br>was `publish.system`, `system` | The game system, which decides how a character sheet is drawn | `coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark); the short names `coc`, `regency-cthulhu`, `gurps`, `dnd-5e`, `dnd`, `blades`, `pathfinder-2e` and `pathfinder` work too | A plain character page with no system's sheet |
 | `vault.setting_year`<br>was `setting_year` | An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. | A year | Nothing shown |
 
@@ -377,21 +382,24 @@ pictures unchanged.
 
 ## The site file: `vault.config.json`
 
-This file sits in the site folder and holds only what the build needs to
-find the vault and the host. The apprentice writes it when it sets the
-site up; you should not need to touch it.
+This file sits in the site folder and holds one thing: where the vault is
+on this computer. The apprentice writes it when it sets the site up; you
+should not need to touch it.
 
 | Setting | What it does |
 |---------|--------------|
 | `vaultPath` | Where the vault is on this computer |
-| `outputDir` | The folder the finished pages are written to |
-| `host` | Where the site is hosted: `github-pages` or `cloudflare-pages` |
-| `siteUrl` | The site's public address |
-| `cloudflarePagesProject` | The site's project name on Cloudflare, when it differs from the folder's name |
-| `preserveDirs` | Folders inside the output that a rebuild must leave alone |
 
-An older site may still hold campaign settings in this file under other
-names. They are no longer read there: the build warns about each, and
+The site's address, host, output folder, Cloudflare project name and the
+folders a rebuild leaves alone used to be written here too. They are
+settings of the vault now (`player_site.url`, `player_site.host`,
+`player_site.output`, `player_site.cloudflare_project` and
+`player_site.keep`, in the tables above). Until the next vault update
+moves them, the build still reads them from this file when the vault sets
+none, and warns about each.
+
+An older site may still hold other campaign settings in this file under
+other names. They are no longer read there: the build warns about each, and
 stops for one that hides things from players. Ask the apprentice to
 check the settings: it adds anything such a key hid to the vault's own
 list and removes the keys from this file.

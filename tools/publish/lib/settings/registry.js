@@ -15,7 +15,9 @@
 // keepOnFault (an unreadable value is kept as written), keys (the only keys a map may hold),
 // onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
 // value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
-// 'heading', 'folder', 'callout' or 'name'; absent means exact text).
+// 'heading', 'folder', 'callout' or 'name'; absent means exact text), siteFallback (also a key of the site
+// folder's vault.config.json that is read while the vault sets none), check ('output' or 'keep': a rule on the value
+// beyond its type, folders.js) and stopOnFault (an unreadable value stops the build, as a hiding setting does).
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
 const { SKINS, FRAME_IDS } = require('../skins');
@@ -95,6 +97,36 @@ const REGISTRY = [
     name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }], type: 'text', default: 'This page is not available.', group: 'site',
     does: 'The words a reader sees after following a link to a page that is not there',
     left_out: '"This page is not available."',
+  },
+  // The five keys the site folder's vault.config.json used to hold. `siteFallback` reads the site file's key while
+  // the vault sets none (legacy.js, read.js); `check` and `stopOnFault` keep a build from cleaning a folder it is
+  // unsure of.
+  {
+    name: 'player_site.url', was: [{ name: 'siteUrl', in: 'site' }], type: 'text', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    shape: 'a web address',
+    does: "The site's public address. A site that lives in a sub-folder of its host, such as a project page on GitHub, takes its base path from this",
+    left_out: 'No address; a Cloudflare site is then taken to be at `https://<project>.pages.dev`',
+  },
+  {
+    name: 'player_site.host', was: [{ name: 'host', in: 'site' }], type: 'choice', values: ['github-pages', 'cloudflare-pages'], default: 'github-pages', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    does: 'Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used',
+    left_out: '`github-pages`',
+  },
+  {
+    name: 'player_site.output', was: [{ name: 'outputDir', in: 'site' }], type: 'text', check: 'output', stopOnFault: true, default: 'docs', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    shape: 'a folder inside the site folder',
+    does: "The folder the finished pages are written to, inside the site folder. Each build empties it first (except what `player_site.keep` names), so it can be neither the site folder itself nor a folder outside it; a setting that breaks this stops the build",
+    left_out: '`docs`',
+  },
+  {
+    name: 'player_site.cloudflare_project', was: [{ name: 'cloudflarePagesProject', in: 'site' }], type: 'text', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    does: "The site's project name on Cloudflare, when it differs from the site folder's name",
+    left_out: "The site folder's name",
+  },
+  {
+    name: 'player_site.keep', was: [{ name: 'preserveDirs', in: 'site' }], type: 'list', of: 'folder names', check: 'keep', stopOnFault: true, default: [], legacyKind: 'list', siteFallback: true, group: 'site',
+    does: 'Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build',
+    left_out: 'None: a rebuild empties the output folder',
   },
 
   // What gets published
@@ -404,6 +436,10 @@ const legacyNameOf = (e) => (e.legacyOnly ? e.name : ((e.was || []).find((w) => 
 // The key of the site's vault.config.json that holds a setting, or null.
 const siteKeyOf = (e) => (e.legacyKind ? ((e.was || []).find((w) => w.in === 'site') || {}).name || null : null);
 
+// The settings that are also keys of the site folder's file, read from there while the vault sets none:
+// [{ key: 'siteUrl', name: 'player_site.url' }, ...].
+const siteFolderKeys = () => REGISTRY.filter((e) => e.siteFallback).map((e) => ({ key: siteKeyOf(e), name: e.name }));
+
 // A setting by its new name or by a name the old vault file gave it; { entry, old } where `old` says which.
 const BY_OLD_NAME = new Map(REGISTRY.flatMap((e) => (e.was || []).filter((w) => w.in === 'vault').map((w) => [w.name, e])));
 function resolve(name) {
@@ -412,4 +448,4 @@ function resolve(name) {
   return null;
 }
 
-module.exports = { REGISTRY, entry, names, GROUPS, legacyNameOf, siteKeyOf, resolve };
+module.exports = { REGISTRY, entry, names, GROUPS, legacyNameOf, siteKeyOf, siteFolderKeys, resolve };

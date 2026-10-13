@@ -51,8 +51,11 @@ test('no retired or bookkeeping setting has a row', () => {
   }
 });
 
-test('the page names the six site-file settings', () => {
-  for (const key of DEPLOY_KEYS) assert.ok(DOC.includes('`' + key + '`'), key);
+test('the site-file section names exactly the keys the site file still holds', () => {
+  const section = DOC.match(/^## The site file[^\n]*\n([\s\S]*?)(?=^## )/m);
+  assert.ok(section, 'the site-file section is missing');
+  const named = [...section[1].matchAll(/^\| `([A-Za-z]+)` \|/gm)].map((m) => m[1]);
+  assert.deepEqual(named, DEPLOY_KEYS);
 });
 
 test('the page lists, in one generated region, every setting that stops the build', () => {

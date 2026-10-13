@@ -228,6 +228,55 @@
             "null"
           ]
         },
+        "url": {
+          "description": "The site's public address. A site that lives in a sub-folder of its host, such as a project page on GitHub, takes its base path from this",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "host": {
+          "description": "Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used",
+          "default": "github-pages",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\s*(?:[gG][iI][tT][hH][uU][bB]\\-[pP][aA][gG][eE][sS]|[cC][lL][oO][uU][dD][fF][lL][aA][rR][eE]\\-[pP][aA][gG][eE][sS])\\s*$"
+        },
+        "output": {
+          "description": "The folder the finished pages are written to, inside the site folder. Each build empties it first (except what `player_site.keep` names), so it can be neither the site folder itself nor a folder outside it; a setting that breaks this stops the build",
+          "default": "docs",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "cloudflare_project": {
+          "description": "The site's project name on Cloudflare, when it differs from the site folder's name",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "keep": {
+          "description": "Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
         "hide": {
           "type": [
             "object",

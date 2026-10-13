@@ -96,8 +96,9 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   legacy    the settings an older site file still holds (build.js lists them in its closing warning)
 //   faults    the settings problems found while reading (config.js, site-doctor.js, build.js report them)
 //   layout    which settings file the vault is on, for naming a setting in a message (not enumerable)
+//   site      the site folder's own settings (url, host, output, cloudflare_project, keep), for code that has only the publishConfig (not enumerable)
 // `setting_year` is a setting, written beside `publish:`; it is checked below as a top-level name.
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout'];
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)

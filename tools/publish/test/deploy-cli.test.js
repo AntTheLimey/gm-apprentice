@@ -372,12 +372,12 @@ describe('deploy --verify', () => {
     assert.match(h.text(), /live at/);
   });
 
-  it('says it cannot verify a github-pages site with no siteUrl', async () => {
+  it('says it cannot verify a github-pages site with no site address', async () => {
     const h = harness({ config: { host: 'github-pages', siteUrl: undefined }, statuses: [200] });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(h.fetches, []);
-    assert.match(h.text(), /no siteUrl in vault\.config\.json — cannot verify; check the site by hand/);
+    assert.match(h.text(), /no player_site\.url set — cannot verify; check the site by hand/);
   });
 
   it('--json reports the commands it ran', async () => {

@@ -14,7 +14,8 @@ const fs = require('fs');
 const path = require('path');
 const { failureDetail } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
-const { loadVaultConfig } = require('./config');
+const { loadVaultConfig, siteConfigFor, outputFolderOf } = require('./config');
+const { nameIn } = require('./settings');
 
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_WAIT_MS = 20000;
@@ -33,8 +34,7 @@ function projectNameFor(config, siteRoot) {
 
 // The build's output directory as wrangler wants it: a trailing-slash relative path.
 function outputDirArg(config) {
-  const raw = String(config.outputDir || './docs').replace(/^\.\//, '').replace(/\/+$/, '');
-  return (raw || 'docs') + '/';
+  return outputFolderOf(config) + '/';
 }
 
 // GET the URL and hand back the status, following redirects. Resolves null on any
@@ -120,18 +120,21 @@ async function runDeploy(options, deps) {
 
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const siteRoot = path.dirname(configPath);
-  const config = loadVaultConfig(configPath, d);
-  const host = config.host || 'github-pages';
+  // With --json the payload is the whole of stdout, so progress and failure lines
+  // are collected into it rather than printed alongside it.
+  const messages = [];
+  const say = (line) => { messages.push(line); if (!opts.json) out(line); };
+
+  // The host, address, project name and output folder are the vault's settings, not the site file's.
+  const rawConfig = loadVaultConfig(configPath, d);
+  const vaultPath = rawConfig.vaultPath ? path.resolve(siteRoot, rawConfig.vaultPath) : null;
+  const config = siteConfigFor(rawConfig, siteRoot, (m) => say(`WARNING: ${m}`));
+  const host = config.host;
   const projectName = projectNameFor(config, siteRoot);
   const isCloudflare = host === 'cloudflare-pages';
   const outDir = outputDirArg(config);
   const tomlPath = path.join(siteRoot, 'wrangler.toml');
   const hasToml = exists(tomlPath);
-
-  // With --json the payload is the whole of stdout, so progress and failure lines
-  // are collected into it rather than printed alongside it.
-  const messages = [];
-  const say = (line) => { messages.push(line); if (!opts.json) out(line); };
 
   const commands = [];
   const wranglerDeployArgs = hasToml
@@ -289,7 +292,7 @@ async function runDeploy(options, deps) {
   }
 
   if (!url) {
-    say('no siteUrl in vault.config.json — cannot verify; check the site by hand');
+    say(`no ${nameIn(vaultPath, 'player_site.url')} set — cannot verify; check the site by hand`);
     return finish({ deployed: true, url: null }, 0);
   }
 

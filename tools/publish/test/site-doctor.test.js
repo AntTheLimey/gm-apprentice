@@ -241,9 +241,13 @@ describe('doctor --site', () => {
     write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
     const { configPath } = siteFor(vault);
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    config.outputDir = 7;   // not a path: the build cannot start
     const cap = capture();
-    const rc = await runSiteDoctor({ configPath, json: true }, Object.assign({}, cap.deps, { config }));
+    // The in-memory build fails for a reason of its own (a bad output folder is a settings fault, reported before it).
+    const builder = require('../lib/build');
+    const realBuild = builder.build;
+    builder.build = () => { throw new Error('the build could not start'); };
+    let rc;
+    try { rc = await runSiteDoctor({ configPath, json: true }, Object.assign({}, cap.deps, { config })); } finally { builder.build = realBuild; }
     const found = JSON.parse(cap.text()).findings.filter((f) => f.code === 'NOTE_FAULTS_UNCHECKED');
     assert.strictEqual(found.length, 1, cap.text());
     assert.strictEqual(found[0].severity, 'error');

@@ -14,7 +14,7 @@ const path = require('path');
 const { mapFolder, matchExcludedDir } = require('./scanner');
 const { decidePage, publishesPage, autoExcludeCode, storyCompanionPc, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { surveyVault, pairsWith } = require('./manifest-cli');
-const { assertNoStops } = require('./config');
+const { assertNoStops, outputFolderOf } = require('./config');
 const { canonicalPath } = require('./manifest');
 const { strippedSectionTitles, sheetWithheldTitles, publishMode } = require('./processor');
 const { pcKeepList, retiredSheetFieldsFor } = require('./pc-prose');
@@ -52,11 +52,6 @@ function manifestSectionOf(manifest, rel) {
   if ((manifest.excluded || []).includes(rel)) return 'excluded';
   if ((manifest.needsDecision || []).includes(rel)) return 'needsDecision';
   return null;
-}
-
-function outputRoot(config) {
-  const raw = String(config.outputDir || './docs').replace(/^\.\//, '').replace(/\/+$/, '');
-  return raw || 'docs';
 }
 
 async function runExplain(options, deps) {
@@ -155,8 +150,8 @@ async function runExplain(options, deps) {
   // that is the URL to name.
   const mergedInto = verdict.code === 'STORY_COMPANION' ? storyCompanionPc(target, pagesByRel) : null;
   const outputPath = mergedInto
-    ? `${outputRoot(config)}/${mergedInto.outputPath}`
-    : (publishes && verdict.outputPath ? `${outputRoot(config)}/${verdict.outputPath}` : null);
+    ? `${outputFolderOf(config)}/${mergedInto.outputPath}`
+    : (publishes && verdict.outputPath ? `${outputFolderOf(config)}/${verdict.outputPath}` : null);
   const auto = frontmatter ? autoExcludeCode(frontmatter) : null;
   const canonStatus = frontmatter ? getCanonStatus(frontmatter) : null;
   const section = manifestSectionOf(manifest, target);

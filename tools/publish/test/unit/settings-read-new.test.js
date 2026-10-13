@@ -65,8 +65,14 @@ test('the site file is not merged; each setting key still in it is a warning nam
   assert.equal(fault(r, 'siteTitle').use, 'player_site.title');
 });
 
-test('a site file with only deploy keys says nothing', () => {
-  assert.deepEqual(read('version: 1\n', { vaultPath: './v', outputDir: 'docs', host: 'github-pages' }).faults, []);
+test('a site file with only vaultPath says nothing', () => {
+  assert.deepEqual(read('version: 1\n', { vaultPath: './v' }).faults, []);
+});
+
+test('the site folder\'s own keys are read while the vault sets none, and said to move', () => {
+  const r = read('version: 1\n', { vaultPath: './v', outputDir: 'docs', host: 'github-pages' });
+  assert.deepEqual(r.faults.map((f) => f.name), ['host', 'outputDir']);
+  assert.ok(r.faults.every((f) => f.level === 'warn' && f.source === 'site'));
 });
 
 // 3
