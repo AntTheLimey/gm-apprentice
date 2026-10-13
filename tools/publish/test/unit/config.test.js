@@ -397,7 +397,8 @@ describe('exclude_fields resolution', () => {
   it('vault.config.json excludeFields applies when the vault file is silent', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const result = loadPublishConfig(tmpDir, { excludeFields: ['secrets', 'custom_field'] });
-    assert.deepStrictEqual(result.exclude_fields, ['secrets', 'custom_field']);
+    // The site file's entries add to the built-in list (#371).
+    assert.deepStrictEqual(result.exclude_fields, [...resolve('publish.exclude_fields').entry.default, 'custom_field']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 });

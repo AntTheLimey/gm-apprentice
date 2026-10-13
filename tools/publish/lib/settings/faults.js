@@ -42,7 +42,7 @@ function formatFault(f) {
   if (f.kind === 'old-name') return `${f.name} is an old name; use ${f.use}.`;
   if (f.kind === 'retired') return `${f.name} is no longer used; remove it.`;
   if (f.kind === 'dropped') return f.message;
-  return `${f.name} is ${f.value === null ? 'empty' : show(f.value)}; it takes ${TYPES[f.entry.type].takes(f.entry)}.`;
+  return `${f.name}${f.now ? ` (now ${f.now})` : ''} is ${f.value === null ? 'empty' : show(f.value)}; it takes ${TYPES[f.entry.type].takes(f.entry)}.`;
 }
 
 // A fault with its ready-to-print line. `entry` stays on it for formatFault.

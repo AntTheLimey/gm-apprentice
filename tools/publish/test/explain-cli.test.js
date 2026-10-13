@@ -561,7 +561,9 @@ describe('explain reports the switches and the sheet-withheld sections (#285)', 
     const both = vaultWith('  exclude_sections: ["GM Notes"]\n', { excludeSections: ['Keeper Only'] });
     assert.deepStrictEqual((await explainAll(both.configPath)).excludeSections, ['GM Notes', 'Keeper Only']);
     const siteOnly = vaultWith('', { excludeSections: ['Keeper Only'] });
-    assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections, ['Keeper Only']);
+    // The site file's list adds to the built-in list when the vault file sets none (#371).
+    assert.deepStrictEqual((await explainAll(siteOnly.configPath)).excludeSections,
+      ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile', 'Keeper Only']);
     const none = vaultWith('');
     assert.deepStrictEqual((await explainAll(none.configPath)).excludeSections,
       ['GM Notes', 'DM Notes', 'Player Notes', 'Source References', 'Reconciliation Context', 'Handoff to Reconcile']);
@@ -684,7 +686,7 @@ describe('explain --all (#276)', () => {
         const got = await retiredFor(system, 'skills: [x]\nidentity: x\nlanguages: [x]\npoints: [x]\n');
         assert.deepStrictEqual(got, [], system);
       }
-      assert.match(lastRetiredWarnings.join('\n'), /publish\.system is "generic"; it takes /, 'a system the tool does not know is said, not silent');
+      assert.match(lastRetiredWarnings.join('\n'), /publish\.system \(now vault\.system\) is "generic"; it takes /, 'a system the tool does not know is said, not silent');
     });
 
     it('reports each system its own names, a shared name for every system that read it', async () => {

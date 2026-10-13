@@ -41,7 +41,7 @@ test('a value a hiding setting cannot take stops, and the safe value is used', (
   assert.equal(fault(r, 'publish.mode').level, 'stop');
   assert.equal(r.values.player_site.hide.mode, 'player');
   assert.equal(r.origins['player_site.hide.mode'], 'fault');
-  assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode is "players"; it takes player or full.');
+  assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode (now player_site.hide.mode) is "players"; it takes player or full.');
 });
 
 test('a hiding list that is not a list stops and the built-in list is used', () => {
@@ -93,7 +93,9 @@ test('nearest finds one edit, a swap, and a missing letter, and nothing far away
 test('no file, and a file with no publish block, give every default and say so', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'set-'));
   const r = readSettings({ vaultPath: dir });
-  assert.deepEqual(r.file, { exists: false, hasPublish: false, inline: false });
+  const { path: shown, ...rest } = r.file;
+  assert.deepEqual(rest, { exists: false, hasPublish: false, inline: false, leftover: false });
+  assert.ok(shown.endsWith('vault-config.md'));
   assert.equal(r.values.player_site.features.connections, 'tree');
   assert.deepEqual(r.faults, []);
 });
@@ -163,8 +165,15 @@ test('a hiding setting written beside publish: stops, except mode and unrelated 
   assert.equal(formatFault(f), 'exclude_sections is written beside publish:; it belongs under it, as publish.exclude_sections.');
   assert.match(formatFault(fault(read('  mode: player\n', undefined, 'exclude_whatever: 1\n'), 'exclude_whatever')), /no setting has that name/);
   for (const ok of ['mode: full', 'hide_things: 1', 'system: coc', 'setting_year: 1920', 'sections: x']) {
+    assert.deepEqual(stops(read('  mode: player\n', undefined, `${ok}\n`).faults), [], ok);
+  }
+  // A setting the old file holds, and the notes it keeps beside its settings, say nothing; any other top-level name is a warning (#375).
+  for (const ok of ['setting_year: 1920', 'game_system: coc', 'description: x', 'session_naming: x']) {
     assert.deepEqual(read('  mode: player\n', undefined, `${ok}\n`).faults, [], ok);
   }
+  const stray = fault(read('  mode: player\n', undefined, 'total_sessions: 4\n'), 'total_sessions');
+  assert.equal(stray.level, 'warn');
+  assert.equal(stray.kind, 'unknown-name');
 });
 
 test('hide does not suggest mode', () => {

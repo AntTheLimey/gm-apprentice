@@ -17,6 +17,16 @@ const INTENDED = [
   // Not a publishConfig field: the `siteOp` message is compared with one trailing colon cut from each side.
   { row: 'siteOp', why: 'the invalid-YAML message is the reader\'s one line; the old text ended in a stray colon',
     ids: ['broken-yaml'], fields: [], trailingColon: true },
+  // 1b rows (the vault config overhaul, part 1b). The second one, the fault text naming the new setting after the old, is
+  // one rule in `unnow` below, not a list of cases.
+  { row: '1b #371', why: 'a site file\'s hiding list adds to the built-in list when the vault file sets none (was: it replaced it; hides more, never less)',
+    ids: ['exclude_sections-unset-with-site-list'], fields: ['exclude_sections'] },
+  { row: '1b #371', why: 'a site file\'s hiding list adds to the built-in list when the vault file sets none',
+    ids: ['exclude_fields-unset-with-site-list'], fields: ['exclude_fields'] },
+  { row: '1b #371', why: 'a site file\'s hiding list adds to the built-in list when the vault file sets none',
+    ids: ['exclude_dirs-unset-with-site-list'], fields: ['exclude_dirs'] },
+  { row: '1b #375', why: 'a top-level key the list does not know in the old file is warned about (the reader\'s own fault; no resolved value changes)',
+    ids: ['no-publish-key'], fields: [] },
   { row: 1, why: 'exclude_drafts "false", no, off read as off (was: any text hides)',
     ids: ['exclude-drafts-quoted-false', 'exclude-drafts-no', 'exclude-drafts-off'], fields: ['exclude_drafts'] },
   { row: 1, why: 'exclude_drafts yes, maybe, 1 or a list read as true (was the text itself; representation only)',
@@ -101,7 +111,9 @@ const warnAllowed = (id) => WARNS.some((d) => d.ids.includes(id));
 // The setting a message is about: its first name. A name in the site's vault.config.json that
 // the new messages give bare (`backend.statusBar`) is spelt the way the old build did.
 const NAME = /(publish\.[A-Za-z_.]+|setting_year|vault\.config\.json [A-Za-z.]+|^(?:backend\.[A-Za-z]+|landingTagline))/;
-const namesOf = (messages) => new Set(messages.map((m) => (m.match(NAME) || [])[0]).filter(Boolean)
+// 1b: a fault on a setting that has a new name names it after the old one (`publish.mode (now player_site.hide.mode) is ...`); the one rule that takes it away.
+const unnow = (m) => m.replace(/ \(now [^)]*\)/, '');
+const namesOf = (messages) => new Set(messages.map((m) => (unnow(m).match(NAME) || [])[0]).filter(Boolean)
   .map((n) => n.replace(/\.$/, '')).map((n) => (/^(backend\.|landingTagline)/.test(n) ? `vault.config.json ${n}` : n)));
 // What the old build printed from switches.notes and sheetLook.notes now comes through the
 // warn argument, so the old side counts those names too.
@@ -128,6 +140,7 @@ const strip = (o, skip, isGolden = false, trailingColon = false) => {
   // An absolute site folder resolves with a drive letter and backslashes on Windows.
   const copy = JSON.parse(JSON.stringify(o), (k, v) => (k === 'siteDir' && typeof v === 'string' ? v.replace(/^[A-Za-z]:/, '').replace(/\\/g, '/') : v));
   delete copy.warnings;
+  if (copy.siteOp && typeof copy.siteOp.threw === 'string') copy.siteOp.threw = unnow(copy.siteOp.threw);
   if (trailingColon && copy.siteOp && typeof copy.siteOp.threw === 'string') copy.siteOp.threw = copy.siteOp.threw.replace(/:$/, '');
   const pc = copy.publishConfig;
   if (pc) {

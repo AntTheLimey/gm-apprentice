@@ -9,7 +9,7 @@ const path = require('node:path');
 const { render } = require('../scripts/gen-settings-doc');
 const { REGISTRY, GROUPS } = require('../lib/settings/registry');
 const { isLeaf } = require('../lib/settings/describe');
-const { DEPLOY_KEYS } = require('../lib/settings/site-file');
+const { DEPLOY_KEYS } = require('../lib/settings/legacy');
 
 const DOC = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md'), 'utf8').replace(/\r\n/g, '\n');
 const leaves = REGISTRY.filter((e) => isLeaf(e, REGISTRY)).map((e) => e.name);

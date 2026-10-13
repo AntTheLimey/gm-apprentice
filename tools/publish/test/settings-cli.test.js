@@ -79,7 +79,7 @@ test('plain output is one line per setting, faults last under a blank line', () 
   const blank = lines.indexOf('');
   assert.ok(blank > 0);
   assert.match(lines[blank + 1], /^Stop: publish\.exclude_sectoins is not a setting/);
-  assert.match(lines[blank + 2], /^Warning: publish\.connections is "graph"/);
+  assert.match(lines[blank + 2], /^Warning: publish\.connections \(now player_site\.features\.connections\) is "graph"/);
   assert.equal(lines.length, blank + 3);
 });
 
@@ -294,7 +294,9 @@ test('--vault and --config together: the old keys in the site file take part', (
   const s = scratch(wrap('  mode: player\n'), { vaultPath: './vault', excludeSections: ['Old Notes'] });
   const both = run(s, 'get', ['publish.exclude_sections'], { config: s.config });
   assert.equal(both.data.settings['publish.exclude_sections'].origin, 'site-file');
-  assert.deepEqual(both.data.settings['publish.exclude_sections'].value, ['Old Notes']);
+  // The site file's list adds to the built-in list (#371).
+  assert.deepEqual(both.data.settings['publish.exclude_sections'].value.slice(-1), ['Old Notes']);
+  assert.ok(both.data.settings['publish.exclude_sections'].value.includes('GM Notes'));
   assert.equal(run(s, 'get', ['publish.exclude_sections']).data.settings['publish.exclude_sections'].origin, 'default');
   const onlyConfig = run(s, 'get', ['publish.exclude_sections'], { vault: undefined, config: s.config });
   assert.equal(onlyConfig.data.settings['publish.exclude_sections'].origin, 'site-file');
@@ -665,4 +667,64 @@ test('add and remove spread a JSON list of text and refuse maps, null and mixed 
 test('the help shows the plain form first', () => {
   assert.match(helpText(), /settings set <name>=<value> \.\.\. Write settings, all or none: settings set player_site\.features\.connections=web/);
   assert.match(helpText(), /written as JSON/);
+});
+
+// ---- A vault on the new settings file -------------------------------------------------------
+
+const newScratch = (yamlText) => {
+  const s = scratch(null);
+  fs.writeFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), yamlText);
+  return s;
+};
+
+test('new file: get reads it, under both the new names and main\'s old ones', () => {
+  const s = newScratch('player_site:\n  features:\n    connections: web\n  hide:\n    sections: [Rumours]\n');
+  const { rc, data } = run(s, 'get');
+  assert.equal(rc, 0);
+  assert.deepEqual(data.byNewName.values['player_site.features.connections'], 'web');
+  assert.deepEqual(data.settings['publish.connections'], { value: 'web', origin: 'file' });
+  assert.deepEqual(data.settings['publish.exclude_sections'], { value: ['Rumours'], origin: 'file' });
+  assert.equal(data.file.exists, true);
+  assert.equal(data.file.leftover, false);
+  assert.deepEqual(data.faults, []);
+  assert.deepEqual(run(s, 'get', ['player_site.features.connections']).data.settings, { 'publish.connections': { value: 'web', origin: 'file' } });
+});
+
+test('new file: check lists faults and exits 1 on a stop', () => {
+  const s = newScratch('player_site:\n  exclude_sections: [x]\n');
+  const { rc, data } = run(s, 'check');
+  assert.equal(rc, 1);
+  assert.equal(data.faults[0].use, 'player_site.hide.sections');
+});
+
+test('new file: list and describe do not need the file', () => {
+  const s = newScratch('version: 1\n');
+  assert.equal(run(s, 'list').rc, 0);
+  assert.equal(run(s, 'describe', ['player_site.hide.mode']).data.name, 'player_site.hide.mode');
+});
+
+test('new file: raw returns the parsed file, or the value at a name', () => {
+  const s = newScratch('version: 1\nplayer_site:\n  title: Hello\n');
+  assert.deepEqual(run(s, 'raw').data, { version: 1, player_site: { title: 'Hello' } });
+  assert.equal(run(s, 'raw', ['player_site.title']).data, 'Hello');
+  assert.equal(run(s, 'raw', ['player_site.footer']).data, null);
+});
+
+test('new file: set, unset, add and remove refuse with one line and change nothing', () => {
+  const s = newScratch('version: 1\n');
+  const before = fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8');
+  for (const [verb, args] of [['set', ['player_site.title=A']], ['unset', ['player_site.title']], ['add', ['player_site.hide.sections', 'X']], ['remove', ['player_site.hide.sections', 'X']]]) {
+    const r = run(s, verb, args);
+    assert.equal(r.rc, 1, verb);
+    assert.deepEqual(r.err, ['Error: this vault is on the new settings file; writing it arrives with the next step'], verb);
+  }
+  assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
+  assert.equal(fs.existsSync(file(s)), false);
+});
+
+test('old file: the old-named top level and the new-named one agree', () => {
+  const s = scratch(wrap('  connections: cards\n'));
+  const { data } = run(s, 'get');
+  assert.equal(data.settings['publish.connections'].value, 'cards');
+  assert.equal(data.byNewName.values['player_site.features.connections'], 'cards');
 });

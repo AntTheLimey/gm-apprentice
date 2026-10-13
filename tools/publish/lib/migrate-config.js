@@ -9,7 +9,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { isDeepStrictEqual } = require('node:util');
-const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, normalizeExcludeDir, mergedMaps } = require('./settings/site-file');
+const { movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy: siteHasLegacy, usable, stricterCallouts, normalizeExcludeDir, mergedMaps } = require('./settings/legacy');
 const { resolve: resolveSetting } = require('./settings');
 const { readSwitch } = require('./settings/types');
 const { editPublishBlock, setPublishChanges, writeAtomic, fillUnset } = require('./vault-config-edit');
@@ -115,6 +115,13 @@ function planMigration({ configPath, vaultPath } = {}) {
         if (entry.kind === 'list' && Array.isArray(fromSite)) {
           const { text, skipped } = splitEntries(fromSite);
           move.value = text;
+          // With no vault list the reader now adds the site list to the built-in one (#371), so that is what moves: the vault resolves what it did before.
+          const found = resolveSetting(`publish.${entry.publish}`).entry;
+          if (found.legacyMerge === 'union') {
+            const same = (x) => (normalizeExcludeDir(x, vault) ?? String(x)).toLowerCase();
+            const have = new Set(found.default.map(same));
+            move.value = [...found.default, ...text.filter((t) => !have.has(same(t)) && have.add(same(t)))];
+          }
           if (skipped.length) { move.skipped = skipped; plan.siteSet[entry.json] = skipped; }
         }
         plan.vaultSet[entry.publish] = move.value;

@@ -15,13 +15,13 @@ const path = require('node:path');
 const { parseNote } = require('../frontmatter');
 const { REGISTRY, entry, legacyNameOf, resolve } = require('./registry');
 const { TYPES, isMap } = require('./types');
-const { readSettings } = require('./read');
+const { readSettings, parseNewFile } = require('./read');
+const { OLD_FILE, NEW_FILE, layoutOf, at: fileAt } = require('./layout');
 const { makeFault, nearest } = require('./faults');
 const { row, isLeaf, defaultOf } = require('./describe');
-const { OLD_BLOCK, underBlock } = require('./site-file');
+const { OLD_BLOCK, underBlock } = require('./legacy');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw'];
-const FILE = '_meta/vault-config.md';
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // Removed in Part B: the name the old vault file gave a setting, which the commands still take for
@@ -46,14 +46,15 @@ function target(options) {
   return { vaultPath: path.resolve(path.dirname(config), siteConfig.vaultPath), siteConfig };
 }
 
-// The frontmatter of the settings file as written; {} with no file.
+// The settings file as written: the whole new file, or the frontmatter of the old one; {} with no file.
 function rawData(vaultPath) {
-  const file = path.join(vaultPath, FILE);
+  if (layoutOf(vaultPath) === 'new') return parseNewFile(vaultPath);
+  const file = fileAt(vaultPath, OLD_FILE);
   if (!fs.existsSync(file)) return {};
   try {
     return parseNote(fs.readFileSync(file, 'utf8')).data || {};
   } catch (e) {
-    throw new Error(`${FILE} frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
+    throw new Error(`${OLD_FILE} frontmatter is not valid YAML: ${String(e.message).split('\n')[0].trim().replace(/:$/, '')}`);
   }
 }
 
@@ -134,7 +135,8 @@ function raw(options, name) {
   const { vaultPath } = target(options);
   const data = rawData(vaultPath);
   const r = name ? resolve(name) : null;
-  const at = r ? (oldOf(r.entry) ? filePathOf(name, r) : null) : (name ? name.split('.') : null);
+  const newLayout = layoutOf(vaultPath) === 'new';
+  const at = r ? (newLayout ? r.entry.name.split('.') : (oldOf(r.entry) ? filePathOf(name, r) : null)) : (name ? name.split('.') : null);
   const value = name ? (at ? getPath(data, at) : undefined) : data;
   const result = value === undefined ? null : value;
   return { result, lines: [JSON.stringify(result, null, 2)], notices: name ? noticesFor([name]) : [] };
@@ -189,7 +191,7 @@ function helpText() {
   return `
 gm-apprentice-publish settings <get|set|add|remove|unset|describe|check|list|raw> [...] [--json] [--vault <dir>] [--config <path>]
 
-Reads, writes, describes and checks the settings in the vault's _meta/vault-config.md.
+Reads, writes, describes and checks the settings in the vault's settings file (${NEW_FILE}; ${OLD_FILE} on a vault not yet updated).
 
   settings get [<name> ...]        What each setting is now and where that came from; a
                                    group name (player_site.landing) gives every setting under it
@@ -217,6 +219,10 @@ ${names.join('\n')}
 }
 
 // ---- Writing ------------------------------------------------------------------------------
+
+// Removed when the writer reads the new file (the next step): for now it only edits the old one.
+const NEW_LAYOUT_READ_ONLY = 'this vault is on the new settings file; writing it arrives with the next step';
+const onNewLayout = (options) => layoutOf(target(options).vaultPath) === 'new';
 
 // A plain reason a name cannot be written, or null.
 function refusal(name) {
@@ -293,6 +299,7 @@ const emptyNote = (name, noun = ((resolve(name) || {}).entry || {}).of || 'entri
 
 function set(options, pairs) {
   if (!pairs.length) throw new Error('settings set needs at least one name=value.');
+  if (onNewLayout(options)) return { errors: [NEW_LAYOUT_READ_ONLY] };
   const planned = plan(pairs, { plain: true });
   if (planned.errors) return { errors: planned.errors };
   const { setPublishLeaves } = require('../vault-config-edit');
@@ -326,6 +333,7 @@ function sameRule(e, vaultPath) {
 function changeList(options, verb, args) {
   const [name, ...items] = args;
   if (!name || !items.length) throw new Error(`settings ${verb} needs a setting name and at least one entry in quotes.`);
+  if (onNewLayout(options)) return { errors: [NEW_LAYOUT_READ_ONLY] };
   const why = refusal(name);
   if (why) return { errors: [why] };
   const e = resolve(name).entry;
@@ -343,7 +351,7 @@ function changeList(options, verb, args) {
   const entries = [];
   for (let v of texts) {
     if (e.same === 'folder') {
-      const { normalizeExcludeDir } = require('./site-file');
+      const { normalizeExcludeDir } = require('./legacy');
       v = normalizeExcludeDir(v, vaultPath) ?? '';
     }
     if (v.trim() === '') return { errors: [`${name} has a blank entry; remove it.`] };
@@ -399,6 +407,7 @@ function changeList(options, verb, args) {
 
 function unset(options, names) {
   if (!names.length) throw new Error('settings unset needs at least one name.');
+  if (onNewLayout(options)) return { errors: [NEW_LAYOUT_READ_ONLY] };
   const errors = [];
   // A name the list knows is taken out where the old file holds it; any other key under the old
   // block is taken out as written, so a stray key can still be removed.
@@ -495,6 +504,7 @@ function runVaultSetting(options, deps = {}) {
   try {
     let result;
     if (options.set && options.set.length) {
+      if (onNewLayout(options)) { err(`Error: ${NEW_LAYOUT_READ_ONLY}`); return 1; }
       const planned = plan(options.set.map((p) => `${OLD_BLOCK}.${p}`));
       if (planned.errors) {
         for (const message of planned.errors) err(`Error: ${message}`);
