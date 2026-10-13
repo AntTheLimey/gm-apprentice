@@ -221,6 +221,8 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings move [--check] [--fill name=value ...]
                                    Take a vault from the old settings file to the new one, all or nothing
                                    (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none)
+                                   Do not run it by hand yet: the next release runs it for you, and teaches the
+                                   plugin's own scripts to read the new file at the same time
   settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
                                    vault not yet updated). Also: setup-note set <key>=<value> ... and setup-note clear
 

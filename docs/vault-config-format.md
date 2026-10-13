@@ -38,7 +38,9 @@ The top level holds four names and nothing else: `version`, `vault`,
 
 Names are grouped, so a setting is a path: `player_site.hide.sections` is
 `sections` inside `hide` inside `player_site`. A key written with nothing
-after it counts as not set.
+after it counts as not set, except the four switches `player_site.publish`,
+`player_site.sheets.show`, `player_site.features.live_stats` and
+`player_site.features.inbox`, where an empty key is a fault.
 
 An example:
 
@@ -104,6 +106,10 @@ the file whole loses the GM's comments and may write a value the build then
 refuses. `settings --help` lists the other verbs: `get`, `add`, `remove`,
 `unset`, `describe`, `check`, `list`, `raw`, `setup-note` and `move`.
 
+The command reads the file, changes it and puts it back. Do not write the
+file yourself while the command runs: there is no lock, and whoever saves
+last wins.
+
 ## Reading resolved values
 
 To learn what a setting is now, run:
@@ -154,7 +160,8 @@ to it, at the old names. Its reader will be removed two releases after
 1.10.54.
 
 `gm-apprentice-publish settings move` takes a vault from the old file to the
-new one. It changes nothing unless the new file resolves to exactly what the
+new one. Do not run it by hand yet: the next release runs it, and teaches the
+plugin's own scripts to read the new file at the same time. It changes nothing unless the new file resolves to exactly what the
 old one did. When it cannot promise that, it says why and leaves the vault
 alone. The old file's prose and any keys that are not settings move to
 `_meta/vault-notes.md`.

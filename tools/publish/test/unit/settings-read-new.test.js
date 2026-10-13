@@ -212,7 +212,7 @@ test('both files present: the old one is not read, and one warning says it is le
   assert.equal(r.values.player_site.hide.mode, 'player');
   const left = r.faults.filter((f) => f.level === 'warn' && /left over/.test(f.message));
   assert.equal(left.length, 1);
-  assert.equal(left[0].message, '_meta/vault-config.md is left over from before the update and is not read; the Settings check removes it');
+  assert.equal(left[0].message, '_meta/vault-config.md is left over from before the update and is not read');
   assert.equal(r.faults.length, 1);
 });
 

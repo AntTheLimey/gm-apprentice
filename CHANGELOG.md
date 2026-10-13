@@ -9,9 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.10.53] — 2026-10-13
 
-Nothing in your vault changes with this release. The publish tool now
-understands the new settings file; the next release is the one that
-moves a vault to it.
+Nothing in an existing vault changes with this release. The publish tool
+now understands the new settings file; the next release is the one that
+moves a vault to it. Do not run `settings move` by hand before then: the
+plugin's own scripts learn the new file in the next release.
 
 ### Added
 
@@ -28,7 +29,7 @@ moves a vault to it.
   file (the text below the settings, and any top-level keys that are not
   settings) go to `_meta/vault-notes.md` unchanged. A setting the tool no
   longer uses is left behind, and the move says which. Nothing runs it
-  yet.
+  yet; the next release does.
 - `settings setup-note` reads and writes the publish set-up guide's
   note to itself, wherever the vault keeps it.
 - `settings set --create` makes the settings file when a vault has none.
@@ -47,6 +48,11 @@ moves a vault to it.
   settings file, including a comment on a list's own line, and a comment
   on a list entry that stays. A write is all or nothing and never leaves
   half a file.
+- `init`, `setup-inbox`, `setup-status-bar` and `settings set --create`
+  leave a vault with no settings file alone while its site folder's
+  `vault.config.json` still holds that vault's settings, and say to run
+  the update first. A new settings file would stop those settings being
+  read.
 - `settings set` stores `footer=5` as the text `5`, not a number, and
   can set `vault.setting_year`.
 - `settings unset` of a whole group (`player_site.theme`) now refuses and
@@ -59,11 +65,22 @@ moves a vault to it.
   (`excludeSections` and the others) no longer replaces the built-in list
   when the vault sets none: it adds to it, as a vault's own list does,
   so `GM Notes` and the other built-in headings stay hidden (#371).
-- The settings writer's left-overs from #372 that are fixed: a comment on
-  a list's or map's own line, and comments on list entries that stay,
-  are no longer lost on a change; `unset` of a group no longer removes it
-  silently; `footer=5` is no longer stored as a number; `vault.setting_year`
-  can be set; the `vault-setting` command is gone.
+- A hidden folder written as `Secrets/`, `./Secrets` or `Secrets\Plots`
+  hides the folder in the new settings file too, as it always did in the
+  old one. `settings set` and `settings add` write the folder tidied.
+- `settings add`, `remove`, `set` and `unset` given an old name
+  (`publish.exclude_sections`) now change the setting it became, instead of
+  writing a block of settings the new file does not read.
+- In the old settings file, an entry such as `12:30` or `2024-10-13` is
+  written in quotes, so the site hides the heading you typed and does not
+  read it as a number or a date.
+- `migrate-config` refuses a vault that is already on the new settings
+  file, and changes nothing there.
+- `settings move --vault <dir>` finds the site folder the vault names and
+  moves the settings kept in its `vault.config.json` too. If that folder
+  cannot be read it stops and says so. A move that was stopped part-way
+  leaves hidden files behind; running `settings move` on the vault again
+  removes them.
 - A top-level key in the old settings file that is not a setting
   (`total_sessions`) is now reported as a warning, as the tool reports
   other unknown names. It changes nothing in the site.

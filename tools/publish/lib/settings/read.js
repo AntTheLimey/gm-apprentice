@@ -128,7 +128,7 @@ function readNew({ vaultPath, siteConfig }) {
   const c = { values, origins, faults, fault, vaultPath };
 
   if (file.leftover) {
-    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: `${OLD_FILE} is left over from before the update and is not read; the Settings check removes it` }));
+    faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: `${OLD_FILE} is left over from before the update and is not read` }));
   }
   // A setting still written in the site folder's vault.config.json is not read any more.
   const site = isMap(siteConfig) ? siteConfig : {};

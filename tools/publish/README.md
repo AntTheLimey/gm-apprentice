@@ -289,7 +289,10 @@ player_site:
 Rules for editing it by hand:
 
 - Leave a setting out and it takes its default. A key written with
-  nothing after it counts as not set.
+  nothing after it counts as not set, except the four switches
+  `player_site.publish`, `player_site.sheets.show`,
+  `player_site.features.live_stats` and `player_site.features.inbox`:
+  left empty, those are a fault and read as off.
 - A hiding list written in the file replaces the built-in list; it does
   not add to it. `settings add` starts from the built-in list, so use it
   when you want to add one entry.
@@ -316,16 +319,20 @@ each setting as that file writes it (`publish.site`, not
 `player_site.publish`). The `settings` command can still change an old
 file, at the old names.
 
+Do not run `settings move` by hand yet. The next release runs it for you,
+and teaches the plugin's own scripts to read the new file at the same time;
+a vault moved before then would stop the current scripts from finding its
+version stamp.
+
 `settings move` takes a vault to the new file. It checks that every
 setting would resolve to what it resolved to before, then writes
 `_meta/vault-config.yaml`, moves bookkeeping into
 `_meta/vault-state.json` and your own notes into `_meta/vault-notes.md`,
 and removes the old file. It does all of it or none of it; `--check` shows
-what it would do. The plugin's update normally runs it for you. A site
-pinned to this tool by something else than `update-pin` is not the
-update's to change, so its vault stays on the old file until you move it.
-If both files exist the new one is read, and the old one is reported as
-left over.
+what it would do. When the next release's update runs it, a site pinned
+to this tool by something else than `update-pin` is not the update's to
+change, so its vault stays on the old file until you move it. If both
+files exist the new one is read, and the old one is reported as left over.
 
 `migrate-config` still ships in this release because the update uses it
 to move settings out of a site's `vault.config.json`. You do not need to
@@ -337,17 +344,17 @@ run it yourself.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `siteTitle` | string | Site name shown in the nav bar and page title |
+| `siteTitle` | string | Old layout only. Site name shown in the nav bar and page title |
 | `host` | string | Deploy target: `github-pages` (default/absent) or `cloudflare-pages`. Affects only the deploy step, not the built output. |
 | `siteUrl` | string | Canonical base URL. For `cloudflare-pages` set it to the `.pages.dev` (or custom) URL — Cloudflare serves at the root, so a `github.io` URL breaks the 404 page (the build warns). |
 | `cloudflarePagesProject` | string | Optional. Cloudflare Pages project name; defaults to the site directory name. |
-| `landingTagline` | string | One-sentence campaign hook shown on the landing page hero |
+| `landingTagline` | string | Old layout only. One-sentence campaign hook shown on the landing page hero |
 | `vaultPath` | string | Path to the vault directory (resolved relative to the config file) |
 | `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |
-| `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
-| `folderMap` | object | Maps vault folder paths to site output paths (see below) |
-| `excludeDirs` | array | Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Unioned with `player_site.hide.folders` from `_meta/vault-config.yaml` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
-| `excludeSections` | array | Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
+| `attachmentsDir` | string | Old layout only. Subfolder inside `vaultPath` that holds images (default `_attachments`) |
+| `folderMap` | object | Old layout only. Maps vault folder paths to site output paths (see below) |
+| `excludeDirs` | array | Old layout only: a vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.folders`). Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Added to `publish.exclude_dirs` in `_meta/vault-config.md` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
+| `excludeSections` | array | Old layout only: a vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.sections`). Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
 | `preserveDirs` | array | Output subdirectories to keep across builds (e.g. `["superpowers"]`) |
 
 ### folderMap
