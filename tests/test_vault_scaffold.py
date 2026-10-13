@@ -650,16 +650,23 @@ class NewFilesTests(unittest.TestCase):
         self.assertIn("up to date", shown.getvalue())
 
     def test_no_node_is_one_plain_line_and_nothing_is_written(self):
+        # A real run, with a PATH that has no node, in both forms.
         root = scratch(self)
-        with mock.patch.object(vs.shutil, "which", return_value=None):
-            code, out = run(root / "V", "--no-system", "--write")
-        self.assertEqual(code, 1)
-        self.assertIn("needs Node.js", out)
-        self.assertIn("# nothing written", out)
-        self.assertEqual(tree(root), {})
-        # A plan needs no Node.
-        with mock.patch.object(vs.shutil, "which", return_value=None):
-            self.assertEqual(run(root / "V", "--no-system")[0], 0)
+        env = {"PATH": str(root / "empty-bin"), "HOME": str(root)}
+        (root / "empty-bin").mkdir()
+        for extra in ([], ["--write"]):
+            done = subprocess.run(
+                [sys.executable, str(SCRIPTS / "vault_scaffold.py"),
+                 str(root / "V"), "--system", "coc", *extra],
+                capture_output=True, text=True, env=env, check=False)
+            self.assertEqual(done.returncode, 1, done.stdout + done.stderr)
+            lines = done.stdout.splitlines()
+            self.assertEqual(lines[0], "ERROR\ta new vault needs Node.js, which "
+                             "writes its settings file; install Node.js, then "
+                             "run this again", extra)
+            self.assertEqual(lines[1], "# nothing written")
+            self.assertNotIn("could not read the vault's settings", done.stdout)
+            self.assertFalse((root / "V").exists())
 
     def test_the_skeleton_check_never_gives_a_vault_either_new_file(self):
         for layout in ("legacy", "new"):

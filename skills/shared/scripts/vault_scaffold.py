@@ -478,19 +478,20 @@ def main(argv: list[str] | None = None) -> int:
             found = plugin_version()
             if found is None:
                 raise ScaffoldError("cannot determine the plugin version")
+            if vault_layout(vault) == "none" and (
+                    not shutil.which("node") or not PUBLISH_TOOL.is_file()):
+                # The settings defaults are the publish tool's, and so is the
+                # new vault's settings file: asking it first would say "could
+                # not read the vault's settings" of a vault that is not there.
+                raise ScaffoldError(
+                    "a new vault needs Node.js, which writes its settings "
+                    "file; install Node.js, then run this again")
             _refuse_unusable_version(vault, found[0])
             system = resolve_system(vault, args.system, args.no_system)
             campaign = " ".join((args.name or vault.resolve().name).split())
             pieces = missing(vault, system, campaign=campaign,
                              version=found[0], inbox=args.inbox)
             if args.write:
-                if (any(p.rel == SETTINGS_FILE for p in pieces)
-                        and (not shutil.which("node")
-                             or not PUBLISH_TOOL.is_file())):
-                    raise ScaffoldError(
-                        "the vault's settings file is written by the "
-                        "publish tool, which needs Node.js; install "
-                        "Node.js, then run this again")
                 build(vault, pieces)
         except KeyboardInterrupt:
             raise ScaffoldError("interrupted") from None
