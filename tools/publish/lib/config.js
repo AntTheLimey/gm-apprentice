@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
-const { readSettings, formatFault, makeFault, stops, entry, movedKeys, legacyNameOf } = require('./settings');
+const { readSettings, formatFault, makeFault, stops, entry, movedKeys, legacyNameOf, layoutOf } = require('./settings');
 
 // The name a setting has in this vault's file (the old layout's, until the new file is read).
 const writtenAs = (name) => legacyNameOf(entry(name)) || name;
@@ -227,9 +227,12 @@ function scanConfigFor(config, publishConfig) {
 function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) {
   const publishConfig = loadPublishConfig(vaultPath, rawConfig, warn, options);
   const config = Object.assign({}, rawConfig);
+  // On the new layout the site file is not merged: a moved key is what the vault's settings resolved, or absent.
+  const fromVaultOnly = layoutOf(vaultPath) === 'new';
   for (const entry of movedKeys()) {
     const value = publishConfig[entry.publish];
     if (value !== undefined && value !== null) config[entry.json] = value;
+    else if (fromVaultOnly) delete config[entry.json];
   }
   return { config, publishConfig };
 }

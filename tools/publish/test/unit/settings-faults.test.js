@@ -41,7 +41,7 @@ test('a value a hiding setting cannot take stops, and the safe value is used', (
   assert.equal(fault(r, 'publish.mode').level, 'stop');
   assert.equal(r.values.player_site.hide.mode, 'player');
   assert.equal(r.origins['player_site.hide.mode'], 'fault');
-  assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode (now player_site.hide.mode) is "players"; it takes player or full.');
+  assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode is "players"; it takes player or full.');
 });
 
 test('a hiding list that is not a list stops and the built-in list is used', () => {

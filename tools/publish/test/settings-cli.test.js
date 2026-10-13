@@ -79,7 +79,7 @@ test('plain output is one line per setting, faults last under a blank line', () 
   const blank = lines.indexOf('');
   assert.ok(blank > 0);
   assert.match(lines[blank + 1], /^Stop: publish\.exclude_sectoins is not a setting/);
-  assert.match(lines[blank + 2], /^Warning: publish\.connections \(now player_site\.features\.connections\) is "graph"/);
+  assert.match(lines[blank + 2], /^Warning: publish\.connections is "graph"/);
   assert.equal(lines.length, blank + 3);
 });
 

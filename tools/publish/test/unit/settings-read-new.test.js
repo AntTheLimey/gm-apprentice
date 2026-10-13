@@ -294,3 +294,26 @@ test('a fault on an entry that exists only in the old file carries no new name',
   assert.equal(named.length, 3);
   for (const f of named) assert.equal(f.setting, null, f.name);
 });
+
+// The site file is not merged on the new layout: resolveConfig lets no raw site-file setting through.
+test('resolveConfig on the new layout: a raw site-file setting never reaches the config', () => {
+  const { resolveConfig, scanConfigFor } = require('../../lib/config');
+  const v = vault();
+  writeNewConfig(v, 'version: 1\n');
+  const raw = { vaultPath: v, siteTitle: 'Old', excludeSections: ['X'], excludeDirs: ['Hidden'], folderMap: { A: 'a' }, attachmentsDir: 'Pics', footer: 'F', outputDir: 'docs' };
+  const warned = [];
+  const { config, publishConfig } = resolveConfig(raw, v, (m) => warned.push(m));
+  assert.equal(config.siteTitle, undefined);
+  assert.equal(config.footer, undefined);
+  assert.deepEqual(config.folderMap, {});
+  assert.equal(config.attachmentsDir, entry('vault.attachments').default);
+  assert.equal(config.outputDir, 'docs');
+  assert.deepEqual(publishConfig.exclude_sections, entry('player_site.hide.sections').default);
+  assert.ok(!publishConfig.exclude_sections.includes('X'));
+  const scan = scanConfigFor(config, publishConfig);
+  assert.ok(!scan.excludeDirs.includes('Hidden'));
+  assert.equal(scan.attachmentsDir, entry('vault.attachments').default);
+  const olds = publishConfig.faults.filter((f) => f.kind === 'old-name').map((f) => f.name).sort();
+  assert.deepEqual(olds, ['attachmentsDir', 'excludeDirs', 'excludeSections', 'folderMap', 'footer', 'siteTitle']);
+  assert.equal(warned.filter((m) => /no longer read/.test(m)).length, 6);
+});

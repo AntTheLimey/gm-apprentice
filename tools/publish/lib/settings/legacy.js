@@ -266,8 +266,7 @@ function readLegacy({ vaultPath, siteConfig }, core) {
   const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY } = core;
   const site = siteConfig || {};
   const faults = [];
-  // The GM is about to meet the new names: a fault on a setting that has one names it after the old.
-  const fault = (f) => makeFault(f.setting && f.setting !== f.name ? { ...f, now: f.setting } : f);
+  const fault = makeFault;
   const file = { path: at(vaultPath, OLD_FILE), exists: false, hasPublish: false, inline: false, leftover: false };
   let data = {};
   if (fs.existsSync(file.path)) {

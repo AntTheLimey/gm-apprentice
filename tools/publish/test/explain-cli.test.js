@@ -686,7 +686,7 @@ describe('explain --all (#276)', () => {
         const got = await retiredFor(system, 'skills: [x]\nidentity: x\nlanguages: [x]\npoints: [x]\n');
         assert.deepStrictEqual(got, [], system);
       }
-      assert.match(lastRetiredWarnings.join('\n'), /publish\.system \(now vault\.system\) is "generic"; it takes /, 'a system the tool does not know is said, not silent');
+      assert.match(lastRetiredWarnings.join('\n'), /publish\.system is "generic"; it takes /, 'a system the tool does not know is said, not silent');
     });
 
     it('reports each system its own names, a shared name for every system that read it', async () => {
