@@ -78,8 +78,8 @@ describe('live stats and the inbox follow the switches', () => {
 });
 
 describe('an unmigrated site that loses live stats or the inbox is told', () => {
-  const LIVE = 'WARNING: live stats were on for this site and are now off: publish.live_stats is not set. Run `gm-apprentice-publish settings set publish.live_stats=true` to keep them.';
-  const INBOX = 'WARNING: the inbox was on for this site and is now off: publish.inbox is not set. Run `gm-apprentice-publish settings set publish.inbox=true` to keep it.';
+  const LIVE = 'WARNING: live stats were on for this site and are now off: publish.live_stats is not set. Run `migrate.py <vault>` to keep them.';
+  const INBOX = 'WARNING: the inbox was on for this site and is now off: publish.inbox is not set. Run `migrate.py <vault>` to keep it.';
   const said = (lines, text) => lines.filter((l) => l.includes(text)).length;
   const deployed = { wrangler: true, functions: true };
 

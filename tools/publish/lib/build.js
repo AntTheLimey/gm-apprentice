@@ -1647,7 +1647,7 @@ function buildSite(options) {
   const unset = switches.unset || [];
   const legacySite = hasLegacy(rawConfig);
   const lost = (key, was, is, subject, them, its) => console.warn(legacySite && publishConfig.layout !== 'new'
-    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: ${nm(`player_site.features.${key}`)} is not set. Run \`gm-apprentice-publish settings set ${nm(`player_site.features.${key}`)}=true\` to keep ${them}.`
+    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: ${nm(`player_site.features.${key}`)} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
     : `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
   if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
   if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
