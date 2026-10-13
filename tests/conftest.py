@@ -28,6 +28,7 @@ def _shared_state_stays_shared():
     vaultlib = sys.modules.get("vaultlib")
     if vaultlib is not None:
         vaultlib.use_publish_tool(vaultlib.PUBLISH_TOOL)
+        vaultlib.forget_settings(None)
     yield
     import site_fixture
     problem = site_fixture.shared_site_problem()

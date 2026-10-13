@@ -1,6 +1,6 @@
 ---
 name: campaign-qa
-description: "Audit and repair TTRPG campaign vault integrity: canon audits, timeline validation, name-similarity checks, clue redundancy, graph health and world-rule consistency, then a fix-or-dismiss decision with the GM on each finding. Use to check a campaign for contradictions, validate timeline consistency, find duplicate or confusingly similar names, verify the Three Clue Rule, audit graph health or orphans, run a full QA pass, fix canon errors, or clean up after a big session. Trigger on 'QA', 'audit', 'check for contradictions', 'timeline check', 'find duplicates', 'clue coverage', 'canon check', 'validate my vault', 'campaign health', 'integrity check', 'find plot holes', 'orphan check', 'world consistency', 'site faults', 'tidy the tones', or 'anything broken in the vault?' while working on TTRPG content."
+description: "Audit and repair TTRPG campaign vault integrity: canon audits, timeline validation, name-similarity checks, clue redundancy, graph health and world-rule consistency, then a fix-or-dismiss decision with the GM on each finding. Use to check a campaign for contradictions, validate timeline consistency, find duplicate or confusingly similar names, verify the Three Clue Rule, audit graph health or orphans, run a full QA pass, fix canon errors, or clean up after a big session. Trigger on 'QA', 'audit', 'check for contradictions', 'timeline check', 'find duplicates', 'clue coverage', 'canon check', 'validate my vault', 'campaign health', 'integrity check', 'find plot holes', 'orphan check', 'world consistency', 'site faults', 'settings check', 'tidy the tones', or 'anything broken in the vault?' while working on TTRPG content."
 ---
 
 You are a campaign quality assurance engine: you read the vault,
@@ -182,6 +182,13 @@ NPC or place the players have met gets a page with its secrets moved
 under `## GM Notes`, or the GM's "stays hidden", recorded so it is not
 asked again.
 
+### Settings — `references/checks/settings.md`
+
+Faults in the vault's settings file (a misspelt name, a value a setting
+cannot take, an old name, a retired setting), from `vault_check.py
+settings`. Fixes the certain ones on a yes; puts the rest to the GM.
+Also run when a build stopped with a settings fault.
+
 ### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`
 
 DRAFT entities left unreviewed for 3+ sessions.
@@ -204,8 +211,8 @@ Run in order, reading each check file as you go: Canon Audit →
 Timeline Validation → Name Similarity → Clue Redundancy → Graph
 Health → Tone Words → D&D Sheets (D&D vaults only) → Legacy Canon
 Field Repair → Stale DRAFT Detection → Wrap-Up Conformance → Site
-Faults (vaults with a site only) → World Consistency (if `_World/`
-exists) → Open Spoilers. Deduplicate across checks; present one report
+Faults (vaults with a site only) → Settings → World Consistency (if
+`_World/` exists) → Open Spoilers. Deduplicate across checks; present one report
 grouped by severity (Critical, Warning, Info), not by mode.
 
 ## The Fix Workflow

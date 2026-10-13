@@ -67,7 +67,9 @@ from vaultlib import (
     publish_rename_refs,
     scalar_value,
     set_key,
-    site_unasked,
+    SettingsUnavailable,
+    settings,
+    site_without_tool,
     sub_wikilinks,
     vault_site,
 )
@@ -535,7 +537,7 @@ def _has_site(vault: Path) -> bool:
     try:
         return vault_site(vault)[1]
     except PublishToolUnavailable:
-        return site_unasked(vault)
+        return site_without_tool(settings(vault))
 
 
 def _site_config(vault: Path) -> Path | None:
@@ -1039,6 +1041,9 @@ def main(argv: list[str] | None = None) -> int:
     except RelinkError as e:
         print(f"relink.py: {e}", file=sys.stderr)
         return 2 if e.usage else 1
+    except SettingsUnavailable as e:
+        print(f"relink.py: {e}", file=sys.stderr)
+        return 1
     except KeyboardInterrupt as e:
         print(f"relink.py: interrupted; {e}" if str(e)
               else "relink.py: interrupted", file=sys.stderr)

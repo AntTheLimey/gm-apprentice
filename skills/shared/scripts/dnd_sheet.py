@@ -476,7 +476,12 @@ def main() -> int:
     if args.party:
         if args.write:
             ap.error("--party never writes; run --write on one sheet")
-        return party(Path(args.party))
+        from vaultlib import SettingsUnavailable
+        try:
+            return party(Path(args.party))
+        except SettingsUnavailable as e:
+            print(f"dnd_sheet: {e}", file=sys.stderr)
+            return 2
     path = Path(args.sheet)
     try:
         with path.open("r", encoding="utf-8", newline="") as f:

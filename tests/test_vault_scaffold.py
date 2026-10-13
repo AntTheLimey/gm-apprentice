@@ -19,7 +19,11 @@ import migrate_vault as mv  # noqa: E402
 import vault_check as vc  # noqa: E402
 import vault_scaffold as vs  # noqa: E402
 from schema_rules import REQUIRED_FIELDS  # noqa: E402
-from vaultlib import extract_frontmatter  # noqa: E402
+from vaultlib import extract_frontmatter, settings_default  # noqa: E402
+
+# The folder a vault keeps its attachments in until it names another: the tool's
+# default, never restated here.
+ATTACHMENTS = settings_default("publish.attachments_dir")
 
 SHARED = SCRIPTS.parent
 
@@ -223,12 +227,12 @@ class PlanTests(unittest.TestCase):
         tops = set(re.findall(r"^[├└]── ([^/\n]+)/", vs.structure_tree(),
                               re.M))
         made = {rel.split("/")[0] for rel in
-                (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, vs.ATTACHMENTS)}
+                (*vs.PLAIN_FOLDERS, *vs.TYPE_FOLDERS, ATTACHMENTS)}
         self.assertEqual(tops, made | set(vs.NOT_CREATED))
 
     def test_the_structure_doc_and_the_attachment_folders_agree(self):
         inside = re.search(
-            rf"^├── {vs.ATTACHMENTS}/[^\n]*\n((?:│   [^\n]*\n)+)",
+            rf"^├── {ATTACHMENTS}/[^\n]*\n((?:│   [^\n]*\n)+)",
             vs.structure_tree(), re.M)
         self.assertIsNotNone(inside)
         subs = re.findall(r"^│   [├└]── ([^/\n]+)/", inside.group(1), re.M)
@@ -290,7 +294,7 @@ class PlanTests(unittest.TestCase):
             self.assertIn("Clues/", got)
             for rel in got:
                 self.assertFalse(rel.startswith(".."), (named, rel))
-                self.assertFalse(rel.startswith(vs.ATTACHMENTS), (named, rel))
+                self.assertFalse(rel.startswith(ATTACHMENTS), (named, rel))
                 self.assertNotIn("art", rel, (named, rel))
 
 

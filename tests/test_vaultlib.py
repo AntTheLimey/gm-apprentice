@@ -473,11 +473,14 @@ class ScanBodyTests(unittest.TestCase):
 
 
 class ExcludeSectionsTests(unittest.TestCase):
-    def test_defaults_are_the_publish_defaults(self):
-        self.assertEqual(
-            vl.DEFAULT_EXCLUDE_SECTIONS,
-            ("GM Notes", "DM Notes", "Player Notes", "Source References",
-             "Reconciliation Context", "Handoff to Reconcile"))
+    """`publish.exclude_sections` as `settings` gives it (the tool owns the
+    built-in list and the reading; the Node tests pin both)."""
+
+    def setUp(self):
+        vl.forget_settings(None)
+
+    def listed(self, vault):
+        return vl.settings(vault).get("publish.exclude_sections")
 
     # config.js unionExcludeList: the vault's own list replaces the
     # defaults; they are a fallback only when it sets none.
@@ -487,7 +490,7 @@ class ExcludeSectionsTests(unittest.TestCase):
             write(vault, "_meta/vault-config.md",
                   '---\npublish:\n  mode: full\n'
                   '  exclude_sections: ["GM Notes", "Keeper Notes"]\n---\n')
-            got = vl.effective_exclude_sections(vault)
+            got = self.listed(vault)
         self.assertEqual(got, ["GM Notes", "Keeper Notes"])
 
     def test_a_byte_order_mark_does_not_hide_the_vault_list(self):
@@ -496,22 +499,21 @@ class ExcludeSectionsTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
             write(vault, "_meta/vault-config.md",
-                  '﻿---\npublish:\n'
+                  '\ufeff---\npublish:\n'
                   '  exclude_sections: ["Keeper Notes"]\n---\n')
-            got = vl.effective_exclude_sections(vault)
-            seen = vl.read_publish_list(vault, "exclude_sections")
+            got = self.listed(vault)
+            seen = vl.settings(vault)
         self.assertEqual(got, ["Keeper Notes"])
-        self.assertIsNotNone(seen.publish_line)
+        self.assertTrue(seen.has_publish)
 
     def test_vault_list_replaces_the_defaults_block(self):
         with tempfile.TemporaryDirectory() as d:
             vault = Path(d)
             write(vault, "_meta/vault-config.md",
                   "---\npublish:\n  exclude_sections:\n"
-                  '    - "Keeper Notes"\n    - "keeper notes"\n---\n')
-            got = vl.effective_exclude_sections(vault)
-        # de-duplicated case-insensitively, first casing wins
-        self.assertEqual(got, ["Keeper Notes"])
+                  '    - "Keeper Notes"\n    - "Other"\n---\n')
+            got = self.listed(vault)
+        self.assertEqual(got, ["Keeper Notes", "Other"])
 
     def test_an_empty_list_hides_nothing(self):
         # `[]` is an array to config.js: no defaults, nothing excluded.
@@ -519,7 +521,7 @@ class ExcludeSectionsTests(unittest.TestCase):
             vault = Path(d)
             write(vault, "_meta/vault-config.md",
                   "---\npublish:\n  exclude_sections: []\n---\n")
-            self.assertEqual(vl.effective_exclude_sections(vault), [])
+            self.assertEqual(self.listed(vault), [])
 
     def test_no_list_or_a_non_list_falls_back_to_the_defaults(self):
         for body in ("publish:\n  mode: player\n",
@@ -529,13 +531,23 @@ class ExcludeSectionsTests(unittest.TestCase):
                     tempfile.TemporaryDirectory() as d:
                 vault = Path(d)
                 write(vault, "_meta/vault-config.md", f"---\n{body}---\n")
-                self.assertEqual(vl.effective_exclude_sections(vault),
-                                 list(vl.DEFAULT_EXCLUDE_SECTIONS))
+                self.assertEqual(self.listed(vault),
+                                 vl.settings_default("publish.exclude_sections"))
+
+    def test_a_non_list_is_a_fault_the_caller_can_report(self):
+        with tempfile.TemporaryDirectory() as d:
+            vault = Path(d)
+            write(vault, "_meta/vault-config.md",
+                  '---\npublish:\n  exclude_sections: "GM Notes"\n---\n')
+            seen = vl.settings(vault)
+        self.assertEqual(seen.origins["publish.exclude_sections"], "fault")
+        self.assertEqual([f["name"] for f in seen.faults],
+                         ["publish.exclude_sections"])
 
     def test_no_config_returns_defaults(self):
         with tempfile.TemporaryDirectory() as d:
-            self.assertEqual(vl.effective_exclude_sections(Path(d)),
-                             list(vl.DEFAULT_EXCLUDE_SECTIONS))
+            self.assertEqual(self.listed(Path(d)),
+                             vl.settings_default("publish.exclude_sections"))
 
 
 class VersionTests(unittest.TestCase):

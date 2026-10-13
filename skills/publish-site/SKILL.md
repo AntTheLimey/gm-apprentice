@@ -78,7 +78,7 @@ read-only on the vault, so this lives in the skill, not in
 **On a D&D vault, before every build**, also run
 `python3 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/dnd_ddb.py" --party "<vault>" --on-build --write`
 and pass on any `ERROR`, `CHECK` or `REMOVE` row. It does nothing unless
-`publish.dndbeyond_sync` is `build` (`references/configuration.md`).
+`publish.dndbeyond_sync` is `build`.
 
 Inside a scaffolded site, build with npm (it resolves the tool
 from the scaffold's `file:` pin — no registry, no network):
@@ -93,22 +93,24 @@ npx gm-apprentice-publish sheet show --pc <name> [--player-safe] [--json]
 Node 22+ is required; on a version error, send the GM to
 https://nodejs.org (LTS).
 
-**Is there a site?** `publish.site` in `_meta/vault-config.md` is
-the switch, and `init` turns it on.
+**Settings.** Read and change every setting through `node "$TOOL"
+settings … --config <dir>/vault.config.json` (`--help` lists the
+verbs); never open `_meta/vault-config.md` to read one or edit it by
+hand.
 
-- **Off** (`false`, or unset with no `site_dir`): the vault has no
-  site. No leak check runs, and there is nothing to register, so skip
-  `publish-played`. If the GM asks for a site, run capability 1;
-  `init` turns the switch on. `publish.site: false` also makes `build`
-  and `deploy` refuse: if the GM asks for a build of a site they
-  turned off, say it is off and that `publish.site: true` turns it
-  back on.
+**Is there a site?** `node "$TOOL" settings get publish.site
+publish.site_dir --vault <vault>`.
+
+- **Off:** no site. Nothing to register, so skip `publish-played`. If
+  the GM asks for a site, run capability 1; `init` turns the switch
+  on. `build` and `deploy` refuse only when the file says `false`:
+  say it is off and offer to turn it back on. `get` also prints
+  `false (default)` for a vault with no switch and no `site_dir`; a
+  site folder from before 1.10.25 still builds then.
 - **On, with no `publish.site_dir`:** a site still to be set up. Run
   capability 1.
-- **On, with a `site_dir`:** capabilities 2 and 4 read the folder from
-  it; a relative value is relative to the vault. A vault from before
-  1.10.25 with a `site_dir` and no switch counts as on, and
-  `update-pin --site <dir>` writes both.
+- **On, with a `publish.site_dir`:** capabilities 2 and 4 read the
+  folder from it; a relative value is relative to the vault.
 
 ## Nine Capabilities
 
@@ -152,12 +154,12 @@ campaign-qa.
 ("I added a new entity type", "campaign-organizer was updated",
 "new folder in the vault", "pages missing after an update")
 
-1. Locate the site directory and read `publish:` in the vault's
-   `_meta/vault-config.md`.
-2. Compare `publish.folder_map` with the vault's folders; propose
-   `folder_map` / `exclude_dirs` additions.
-3. Apply to the vault file after confirmation, then `npm run build`
-   to confirm.
+1. Locate the site directory; `node "$TOOL" settings get
+   publish.folder_map publish.exclude_dirs --config
+   <dir>/vault.config.json`.
+2. Compare them with the vault's folders; propose additions.
+3. After confirmation, `settings set` the folder map whole and
+   `settings add` to the excluded folders, then `npm run build`.
 4. Say briefly what the new type renders as (dedicated template or
    smart wiki fallback — `references/schema-reference.md`).
 
@@ -178,11 +180,12 @@ a **checked** entry under `## Publishing` — checking it under
 `## Excluded` or `## Needs Decision` does not publish it;
 `mode: full` ignores the manifest.
 
-1. Read `_meta/vault-config.md`. With no `publish:` section, first
-   follow content-filtering.md § Setup Questioning Flow (theme,
-   image, 404) and write the initial config. Confirm `mode` is
-   `player` — if it's `full`, stop and ask the GM to change it
-   before building the manifest.
+1. `node "$TOOL" settings get publish.theme publish.four_oh_four
+   publish.mode --config <dir>/vault.config.json`. If every theme and
+   404 line says `(default)`, first follow
+   content-filtering.md § Setup Questioning Flow. If the mode is
+   `full`, stop and ask the GM to change it before building the
+   manifest.
 2. Categorize every vault file per the visibility model and write
    `_meta/publish-manifest.md`.
 3. Summarize, then walk the GM through ambiguous items, recording
@@ -215,11 +218,9 @@ infra only; the at-table session is capability 7.
 
 ## References
 
-- `references/configuration.md` — all settings. Everything about what
-  publishes lives under `publish:` in `_meta/vault-config.md`;
-  `vault.config.json` holds only the six deployment keys. § Switches
-  covers `character_sheets`, `live_stats` and `inbox` (on/off, and
-  what a PC page shows with sheets off).
+- `references/configuration.md` — what no setting's description
+  says: banners, pinning, per-file overrides, the switches (and what a
+  PC page shows with sheets off), the six keys of `vault.config.json`.
 - `references/sheet-skins.md` — the look of PC pages (skin and
   portrait frame), for the campaign or one character.
 - `references/schema-reference.md` — which fields each entity type

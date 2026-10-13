@@ -221,9 +221,9 @@ the cell being changed, on a PC that is not live), read first from the PC's
    the request's `character` field interpolated — and answer from that output
    only, never opening the vault sheet for a player question. The command is
    the primary data
-   boundary: it already strips the target PC's own `GM Notes`, `DM Notes`,
-   `Player Notes`, `Source References`, `Reconciliation Context`,
-   `Handoff to Reconcile`, and `<!-- gm-only -->`/`<!-- spoiler -->` regions —
+   boundary: it already strips the sections `publish.exclude_sections` hides
+   in the target PC's own note (`GM Notes` among them), and
+   `<!-- gm-only -->`/`<!-- spoiler -->` regions —
    that part is enforced by it, not remembered by you. What it *cannot* know:
    it only reads the one PC's own file, so it never sees other PCs' private
    data (there's nothing to strip because it's never loaded); and it only

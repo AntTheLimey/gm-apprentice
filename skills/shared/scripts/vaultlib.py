@@ -25,6 +25,7 @@ might see rather than quietly assuming something is hidden.
 from __future__ import annotations
 
 import atexit
+import copy
 import json
 import re
 import shutil
@@ -274,8 +275,8 @@ def nested_mapping(text: str, key: str) -> dict[str, str]:
     session index's `documents:` map and `_meta/vault-config.md`'s
     `publish:` map. Only the block's own level is read — a grandchild
     belongs to its parent's block, not this one. An inline list value
-    (`exclude_sections: ["A", "B"]`) is returned raw; use
-    `effective_exclude_sections` when you want it parsed.
+    (`exclude_sections: ["A", "B"]`) is returned raw; for a parsed
+    setting ask the publish tool (`settings`).
     """
     out: dict[str, str] = {}
     indent: int | None = None
@@ -1054,6 +1055,295 @@ def _close_publish_tools() -> None:
 atexit.register(_close_publish_tools)
 
 
+# --------------------------------------------------------------------------
+# Settings: the publish tool reads the vault's settings file, declares every
+# setting and its default, and checks the file. Python parses none of it; it
+# asks `gm-publish settings` and gets JSON. Nothing here falls back to a
+# default when the tool cannot be asked: a caller that cannot read the
+# settings must stop, never publish more.
+# --------------------------------------------------------------------------
+
+
+class SettingsUnavailable(RuntimeError):
+    """The settings could not be read or written. The message is one plain
+    line. `refused` is True when the tool ran and turned a `set` or `unset`
+    down (the message is its reason, for the GM); False when the tool could
+    not be asked at all (node or the tool missing, bad output, a timeout)."""
+
+    def __init__(self, message: str, *, refused: bool = False) -> None:
+        super().__init__(message)
+        self.refused = refused
+
+
+@dataclass(frozen=True)
+class Settings:
+    """What the tool says the vault's settings are. Every call to
+    `settings()` returns a fresh copy, so changing one never reaches the
+    next caller."""
+
+    values: dict[str, Any]
+    origins: dict[str, str]
+    faults: list[dict[str, Any]]
+    file_exists: bool
+    has_publish: bool
+    inline: bool
+
+    def get(self, name: str) -> Any:
+        """The value of `name`; a KeyError for a name that is no setting."""
+        return copy.deepcopy(self.values[name])
+
+    def written(self, name: str) -> bool:
+        """Whether the GM wrote `name` (its origin is not the default)."""
+        return self.origins[name] != "default"
+
+
+# The cache and its defaults are filled without a lock: not safe to fill
+# from several threads at once. A caller that starts threads must read the
+# settings it needs before starting them.
+_SettingsKey = tuple[Path, Path | None]
+_SETTINGS_CACHE: dict[_SettingsKey, dict[str, Any]] = {}
+_DEFAULTS_CACHE: dict[str, Any] = {}
+
+
+_REASON_LIMIT = 200
+
+
+def _cut(text: str) -> str:
+    return text if len(text) <= _REASON_LIMIT else text[:_REASON_LIMIT - 1] + "…"
+
+
+def _stderr_reason(raw: bytes) -> tuple[str, bool]:
+    """(the reason, whether it is the command's own). The command's own
+    complaint is made only of `Error: ...` lines, and its reason is the last
+    one. Anything else (a Node stack trace, a missing module) is a tool that
+    did not start: the first line that begins with `Error`, else the first
+    line."""
+    lines = [ln.strip() for ln in raw.decode("utf-8", "replace").splitlines()
+             if ln.strip()]
+    if not lines:
+        return "", False
+    if all(ln.startswith("Error: ") for ln in lines):
+        return _cut(lines[-1].removeprefix("Error: ")), True
+    first = next((ln for ln in lines if ln.startswith("Error")), lines[0])
+    return _cut(first), False
+
+
+def _check_vault(vault: Path) -> None:
+    if not vault.is_dir():
+        raise SettingsUnavailable(
+            f"could not read the vault's settings: {vault.as_posix()} "
+            "is not a folder")
+
+
+def _check_names(names: list[str]) -> None:
+    """A name that begins with `-` would be read as an option."""
+    for name in names:
+        if name.startswith("-"):
+            raise SettingsUnavailable(f"{name} is not a setting",
+                                      refused=True)
+
+
+def _run_settings(args: list[str], *, refusable: bool = False) -> Any:
+    """Run `gm-publish settings <args>` and return its JSON. A refusal
+    (`refusable`) carries the command's own reason; any other failure reads
+    "could not read the vault's settings: <reason>"."""
+    def fail(reason: str) -> SettingsUnavailable:
+        return SettingsUnavailable(
+            f"could not read the vault's settings: {reason}")
+
+    node = shutil.which("node")
+    if not node:
+        raise fail("node is not on PATH")
+    if not PUBLISH_TOOL.is_file():
+        raise fail(f"the publish tool is not at {PUBLISH_TOOL.as_posix()}")
+    try:
+        done = subprocess.run(
+            [node, str(PUBLISH_TOOL), "settings", *args, "--json"],
+            capture_output=True, timeout=PUBLISH_LINES_TIMEOUT)
+    except subprocess.TimeoutExpired as e:
+        raise fail(f"the publish tool did not answer within "
+                   f"{PUBLISH_LINES_TIMEOUT}s") from e
+    except OSError as e:
+        raise fail(f"node could not run ({e.__class__.__name__})") from e
+    if done.returncode != 0:
+        reason, own = _stderr_reason(done.stderr)
+        if own and refusable:
+            raise SettingsUnavailable(reason, refused=True)
+        if own:
+            raise fail(reason)
+        started = ("the publish tool failed to start "
+                   f"({reason or 'exit code ' + str(done.returncode)})")
+        if refusable:
+            raise SettingsUnavailable(started)
+        raise fail(started)
+    try:
+        return json.loads(done.stdout.decode("utf-8", "replace"))
+    except ValueError as e:
+        raise fail("the publish tool did not answer in JSON") from e
+
+
+def _target_args(vault: Path, site_config: Path | None = None) -> list[str]:
+    args = ["--vault", str(vault)]
+    if site_config is not None:
+        args += ["--config", str(site_config)]
+    return args
+
+
+def settings(vault: Path, *, site_config: Path | None = None) -> Settings:
+    """Every setting of `vault`, as the publish tool reads it. Asked once
+    per (vault, site_config) for the process. `site_config` is the site
+    folder's vault.config.json, whose old keys take part in the read.
+
+    The answer is fixed for the process until `settings_set`,
+    `settings_unset` or `forget_settings`. Anything else that writes the
+    settings file or the site's vault.config.json (templates, migrations,
+    the scaffold) must call `forget_settings(vault)` afterwards, or a later
+    read here is stale."""
+    _check_vault(vault)
+    key = (vault.resolve(),
+           site_config.resolve() if site_config is not None else None)
+    if key not in _SETTINGS_CACHE:
+        answer = _run_settings(["get", *_target_args(vault, site_config)])
+        try:
+            _SETTINGS_CACHE[key] = {
+                "values": {n: s["value"]
+                           for n, s in answer["settings"].items()},
+                "origins": {n: s["origin"]
+                            for n, s in answer["settings"].items()},
+                "faults": list(answer["faults"]),
+                "file": dict(answer["file"]),
+            }
+        except (KeyError, TypeError, AttributeError) as e:
+            raise SettingsUnavailable(
+                "could not read the vault's settings: the publish tool's "
+                "answer was not in the shape expected") from e
+    read = copy.deepcopy(_SETTINGS_CACHE[key])
+    return Settings(
+        values=read["values"], origins=read["origins"], faults=read["faults"],
+        file_exists=bool(read["file"].get("exists")),
+        has_publish=bool(read["file"].get("hasPublish")),
+        inline=bool(read["file"].get("inline")))
+
+
+# The vault file's own words, as against a value that came from the site
+# folder's old file or an old name.
+_IN_VAULT_FILE = ("file", "fault")
+
+
+def written_in_vault_file(s: Settings, name: str) -> bool:
+    """Whether the GM wrote `name` in the vault's settings file (a value the
+    tool could not read counts: it is written, and reads as the tool says)."""
+    return s.origins[name] in _IN_VAULT_FILE
+
+
+def site_switch_written(s: Settings) -> bool | None:
+    """`publish.site` when the vault file writes it (True or False; a value
+    that is not a switch word reads off), else None."""
+    if not written_in_vault_file(s, "publish.site"):
+        return None
+    return bool(s.get("publish.site"))
+
+
+def site_without_tool(s: Settings) -> bool:
+    """Whether the vault has a site, for the one time the publish tool's
+    site answer cannot be had: the switch where the vault file writes it,
+    else whether a `site_dir` is set."""
+    switch = site_switch_written(s)
+    if switch is not None:
+        return switch
+    return bool(s.get("publish.site_dir"))
+
+
+def settings_set(vault: Path, pairs: list[tuple[str, object]]) -> list[str]:
+    """Write settings, all or none; the names written. A value the tool
+    refuses raises SettingsUnavailable (refused=True) with its reason."""
+    _check_vault(vault)
+    _check_names([n for n, _ in pairs])
+    args = ["set", *_target_args(vault)]
+    args += [f"{name}={json.dumps(value)}" for name, value in pairs]
+    forget_settings(vault)
+    answer = _run_settings(args, refusable=True)
+    return [str(n) for n in answer["written"]]
+
+
+def settings_unset(vault: Path, names: list[str]) -> list[str]:
+    """Remove settings from the file, all or none; the names that were
+    there. Refusals raise as `settings_set`'s do."""
+    _check_vault(vault)
+    _check_names(names)
+    forget_settings(vault)
+    answer = _run_settings(["unset", *_target_args(vault), *names],
+                           refusable=True)
+    return [str(n) for n in answer["removed"]]
+
+
+def settings_add(vault: Path, name: str, entries: list[str]) -> list[str]:
+    """Add entries to the list setting `name`, keeping what it holds now
+    (the built-in list included); the entries that were new. Refusals raise
+    as `settings_set`'s do."""
+    _check_vault(vault)
+    _check_names([name])
+    forget_settings(vault)
+    answer = _run_settings(
+        ["add", *_target_args(vault), name,
+         *[json.dumps(e) for e in entries]], refusable=True)
+    return [str(e) for e in answer["added"]]
+
+
+def settings_describe(name: str) -> dict[str, Any]:
+    """What the tool says of one setting: `{"name", "kind", "does",
+    "takes", "default", "guards", "oldNames"}`. A name that is no setting
+    raises as `settings_set`'s refusals do."""
+    _check_names([name])
+    answer = _run_settings(["describe", name], refusable=True)
+    if not isinstance(answer, dict):
+        raise SettingsUnavailable(
+            "could not read the vault's settings: the publish tool's "
+            "description was not in the shape expected")
+    return answer
+
+
+def settings_raw(vault: Path, name: str | None = None) -> Any:
+    """The settings file's frontmatter as written ({} when there is no
+    file), or the value at `name` (None when `name` is not in the file).
+    Not cached."""
+    _check_vault(vault)
+    if name is not None:
+        _check_names([name])
+    args = ["raw", *_target_args(vault)]
+    if name is not None:
+        args.append(name)
+    return _run_settings(args)
+
+
+def settings_default(name: str) -> Any:
+    """The built-in default of the setting `name`; KeyError if no such
+    setting. Asked of the tool once for the process."""
+    if not _DEFAULTS_CACHE:
+        answer = _run_settings(["list"])
+        try:
+            _DEFAULTS_CACHE.update(
+                {n["name"]: n["default"] for n in answer["names"]})
+        except (KeyError, TypeError) as e:
+            raise SettingsUnavailable(
+                "could not read the vault's settings: the publish tool's "
+                "list was not in the shape expected") from e
+    return copy.deepcopy(_DEFAULTS_CACHE[name])
+
+
+def forget_settings(vault: Path | None = None) -> None:
+    """Drop what was read for `vault` (every vault with None). Call it after
+    anything that writes the vault's settings file or the site's
+    vault.config.json other than `settings_set` and `settings_unset`, which
+    do it themselves."""
+    if vault is None:
+        _SETTINGS_CACHE.clear()
+        return
+    here = vault.resolve()
+    for key in [k for k in _SETTINGS_CACHE if k[0] == here]:
+        del _SETTINGS_CACHE[key]
+
+
 def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
     """(whether the vault file has a `publish:` block, whether the vault
     has a site, the site folder its `site_dir` names). `publish.site` is
@@ -1071,6 +1361,23 @@ def vault_site(vault: Path) -> tuple[bool, bool, Path | None]:
         raise PublishToolUnavailable(
             "the publish tool's answer about the site is not understood")
     return publishes, on, Path(site) if site else None
+
+
+def google_fonts(vault: Path, site_config: Path | None = None) -> list[str]:
+    """The font families the vault's site would load from Google (none when
+    its fonts are hosted), worked out by the plugin's own publish tool, never
+    the site's pinned copy. `site_config` is the site's vault.config.json.
+    Raises `PublishToolUnavailable` when it cannot be asked."""
+    request: dict[str, Any] = {"op": "google-fonts",
+                               "vault": str(vault.resolve())}
+    if site_config is not None:
+        request["config"] = str(site_config.resolve())
+    families = _LINES_BY_TOOL[PUBLISH_TOOL].ask(request).get("families")
+    if not (isinstance(families, list)
+            and all(isinstance(f, str) for f in families)):
+        raise PublishToolUnavailable(
+            "the publish tool's answer about fonts is not understood")
+    return families
 
 
 def publish_rename_refs(vault: Path, old: str, new: str,
@@ -1131,39 +1438,6 @@ def publish_rename_refs(vault: Path, old: str, new: str,
             or not text_or_none(answer.get("refusal"))):
         raise bad
     return answer
-
-
-SITE_ON_WORDS = ("true", "yes", "on")
-
-
-def site_switch(vault: Path) -> bool | None:
-    """`publish.site` as the line reader sees it: True, False, or None when
-    the key is not written. A key left blank, or holding anything that is
-    not one of the switch words, is off, as the publish tool reads it
-    (`asBool` in switches.js). For when the tool cannot be asked; its own
-    reading (`vault_site`) comes first."""
-    written, value = _publish_scalar(vault, "site")
-    if not written:
-        return None
-    return (value or "").strip().lower() in SITE_ON_WORDS
-
-
-def site_unasked(vault: Path) -> bool:
-    """Whether the vault has a site, for the one time the publish tool
-    cannot be asked. The switch as the line reader sees it; where that is
-    unset, a vault file that mentions `site_dir`, or that cannot be read,
-    is taken to have one."""
-    switch = site_switch(vault)
-    if switch is not None:
-        return switch
-    try:
-        text = (vault / "_meta" / "vault-config.md").read_text(
-            encoding="utf-8-sig")
-    except FileNotFoundError:
-        return False
-    except (OSError, UnicodeDecodeError):
-        return True
-    return "site_dir" in text
 
 
 def publish_tool_problem() -> str | None:
@@ -1500,349 +1774,6 @@ def publisher_lines(text: str, excludes: Iterable[str],
         raise PublishToolUnavailable(
             "the publish tool's answer has no text")
     return published.split("\n")
-
-
-# --------------------------------------------------------------------------
-# publish.exclude_sections, parsed strictly
-# --------------------------------------------------------------------------
-
-
-@dataclass
-class ExcludeListConfig:
-    """`publish.<key>` in `_meta/vault-config.md`.
-
-    `value` is the list, or None when the vault sets none (key absent,
-    null, or a scalar — config.js falls back to its defaults for any
-    non-array). `error` is set when the key is present in a shape this
-    parser does not understand exactly; `value` is then None and must not
-    be trusted by anything that writes. `span` is the [start, end)
-    frontmatter-line range (0-based, within the lines between the
-    delimiters) the key and its items occupy, for a writer to replace.
-    """
-
-    value: list[str] | None = None
-    error: str | None = None
-    span: tuple[int, int] | None = None
-    publish_line: int | None = None
-
-
-_KEY_LINE_RE = re.compile(r"""^(\s*)(["']?)([\w.-]+)\2\s*:(?:\s+(.*)|\s*)$""")
-_PLAIN_BAD_START = tuple("[]{}&*!|>'\"%@`,#?:-")
-
-
-def _strip_comment(value: str) -> str:
-    """Drop an unquoted trailing ` # comment`."""
-    quote: str | None = None
-    for i, ch in enumerate(value):
-        if quote:
-            if ch == quote:
-                quote = None
-        elif ch in "\"'":
-            quote = ch
-        elif ch == "#" and (i == 0 or value[i - 1] in " \t"):
-            return value[:i].rstrip()
-    return value.strip()
-
-
-def _yaml_item(raw: str) -> str:
-    """One flow- or block-list scalar, or ValueError if not a plain
-    string this parser reads exactly."""
-    item = raw.strip()
-    if not item:
-        raise ValueError("empty list item")
-    if item[0] == '"':
-        if len(item) < 2 or item[-1] != '"':
-            raise ValueError(f"unterminated quoted item {item!r}")
-        inner = item[1:-1]
-        if re.search(r'\\[^"\\]', inner) or re.search(r'(?<!\\)"', inner):
-            raise ValueError(f"escape sequence in {item!r}")
-        return inner.replace('\\"', '"').replace("\\\\", "\\")
-    if item[0] == "'":
-        if len(item) < 2 or item[-1] != "'":
-            raise ValueError(f"unterminated quoted item {item!r}")
-        inner = item[1:-1]
-        if re.search(r"(?<!')'(?!')", inner):
-            raise ValueError(f"stray quote in {item!r}")
-        return inner.replace("''", "'")
-    if item.startswith(_PLAIN_BAD_START) or ": " in item or item.endswith(":"):
-        raise ValueError(f"list item {item!r} is not a plain string")
-    return item
-
-
-def _flow_items(value: str) -> list[str]:
-    """`[a, "b, c"]` → items, splitting on commas outside quotes."""
-    inner = value[1:-1]
-    items: list[str] = []
-    buf = ""
-    quote: str | None = None
-    for ch in inner:
-        if quote:
-            buf += ch
-            if ch == quote:
-                quote = None
-            continue
-        if ch in "\"'":
-            quote = ch
-            buf += ch
-        elif ch == ",":
-            items.append(buf)
-            buf = ""
-        elif ch in "[]{}":
-            raise ValueError("nested flow collection")
-        else:
-            buf += ch
-    if quote:
-        raise ValueError("unterminated quote in flow list")
-    items.append(buf)
-    if items and not items[-1].strip():
-        items.pop()      # a trailing comma is legal YAML
-    return [_yaml_item(i) for i in items]
-
-
-def parse_publish_list(fm_lines: list[str], key: str) -> ExcludeListConfig:
-    """Strictly read `publish.<key>` from the raw frontmatter lines.
-
-    Understood exactly: an inline flow list on one line, a block list of
-    plain or quoted scalars (items at or below the key's indent), null,
-    or a plain scalar (no list set), each with optional trailing
-    comments; the key itself may be quoted. Anything else — a flow
-    `publish:` mapping that names the key, a multi-line flow list,
-    anchors, tags, a duplicate key, tabs — is an error rather than a
-    guess.
-    """
-    lines = [line.rstrip("\r\n") for line in fm_lines]
-    cfg = ExcludeListConfig()
-    starts = []
-    for i, line in enumerate(lines):
-        m = _KEY_LINE_RE.match(line)
-        if m and not m.group(1) and m.group(3) == "publish":
-            starts.append((i, _strip_comment(m.group(4) or "")))
-        elif re.match(r"""^["']?publish["']?\s*:""", line):
-            starts.append((i, "?"))
-    if not starts:
-        return cfg
-    if len(starts) > 1:
-        cfg.error = "publish: appears more than once"
-        return cfg
-    start, inline = starts[0]
-    cfg.publish_line = start
-    if inline:
-        if key in inline or inline == "?":
-            cfg.error = f"publish: is a flow mapping — write {key} as a block"
-        return cfg
-    end = len(lines)
-    for j in range(start + 1, len(lines)):
-        if lines[j].strip() and not lines[j][:1].isspace():
-            end = j
-            break
-    indent: int | None = None
-    for j in range(start + 1, end):
-        body = lines[j]
-        if "\t" in body[:len(body) - len(body.lstrip())]:
-            cfg.error = "tab indentation under publish:"
-            return cfg
-        if not body.strip() or body.strip().startswith("#"):
-            continue
-        depth = len(body) - len(body.lstrip())
-        if indent is None:
-            indent = depth
-    hits = []
-    for j in range(start + 1, end):
-        m = _KEY_LINE_RE.match(lines[j])
-        if m and len(m.group(1)) == indent and m.group(3) == key:
-            hits.append((j, m))
-        elif re.match(rf"""^\s{{{indent or 0}}}["']?{re.escape(key)}["']?\s*:""",
-                      lines[j]) and len(lines[j]) - len(lines[j].lstrip()) == indent:
-            cfg.error = f"{key}: line not understood"
-            return cfg
-    if not hits:
-        return cfg
-    if len(hits) > 1:
-        cfg.error = f"{key}: appears more than once under publish:"
-        return cfg
-    j, m = hits[0]
-    value = _strip_comment(m.group(4) or "")
-    k = j + 1
-    try:
-        if value in ("", ):
-            items: list[str] = []
-            last = j
-            while k < end:
-                body = lines[k]
-                stripped = body.strip()
-                depth = len(body) - len(body.lstrip())
-                if not stripped or stripped.startswith("#"):
-                    k += 1
-                    continue
-                if stripped.startswith("-") and depth >= len(m.group(1)):
-                    if not re.match(r"^-(\s|$)", stripped):
-                        raise ValueError(f"list item {stripped!r}")
-                    items.append(_yaml_item(_strip_comment(stripped[1:])))
-                    last = k
-                    k += 1
-                    continue
-                if depth > len(m.group(1)):
-                    raise ValueError(f"unexpected line {stripped!r}")
-                break
-            cfg.span = (j, last + 1)
-            cfg.value = items or None
-            return cfg
-        cfg.span = (j, j + 1)
-        if value in ("~", "null", "Null", "NULL"):
-            return cfg
-        if value.startswith("["):
-            if not value.endswith("]"):
-                raise ValueError("multi-line flow list")
-            cfg.value = _flow_items(value)
-            return cfg
-        if value[0] in "{&*!|>":
-            raise ValueError(f"value {value!r}")
-        _yaml_item(value)        # a string: config.js uses its defaults
-        return cfg
-    except ValueError as e:
-        cfg.span = None
-        cfg.value = None
-        cfg.error = f"{key}: {e}"
-        return cfg
-
-
-def _frontmatter_lines(text: str) -> list[str] | None:
-    lines = text.splitlines(keepends=True)
-    if not lines or lines[0].rstrip("\r\n") != "---":
-        return None
-    for i in range(1, len(lines)):
-        if lines[i].rstrip("\r\n") == "---":
-            return lines[1:i]
-    return None
-
-
-def read_publish_list(vault: Path, key: str) -> ExcludeListConfig:
-    """`parse_publish_list` over `_meta/vault-config.md`; no file, no
-    frontmatter → no list set. An unreadable file is an error."""
-    config = vault / "_meta" / "vault-config.md"
-    try:
-        text = config.read_text(encoding="utf-8-sig")
-    except FileNotFoundError:
-        return ExcludeListConfig()
-    except (OSError, UnicodeDecodeError) as e:
-        return ExcludeListConfig(error=f"unreadable _meta/vault-config.md "
-                                       f"({e.__class__.__name__})")
-    fm = _frontmatter_lines(text)
-    if fm is None:
-        return ExcludeListConfig()
-    return parse_publish_list(fm, key)
-
-
-def _publish_scalar(vault: Path, key: str) -> tuple[bool, str | None]:
-    """(whether `publish.<key>` is written in `_meta/vault-config.md`, its
-    value as a scalar: None when null, blank or not a plain scalar). Only
-    a direct child of `publish:` counts: a same-named key nested deeper,
-    or a line inside a block scalar, is someone else's."""
-    try:
-        text = (vault / "_meta" / "vault-config.md").read_text(encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return False, None
-    lines = [line.rstrip("\r\n") for line in (_frontmatter_lines(text) or [])]
-    start = next((i for i, line in enumerate(lines)
-                  if re.match(r"""^["']?publish["']?\s*:\s*(#.*)?$""", line)), None)
-    if start is None:
-        return False, None
-    indent: int | None = None
-    for line in lines[start + 1:]:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue                             # blank and comment lines don't end the block
-        depth = len(line) - len(line.lstrip())
-        if depth == 0:
-            break                                # the next top-level key
-        if indent is None:
-            indent = depth
-        if depth != indent:
-            continue                             # nested deeper, or block-scalar text
-        m = _KEY_LINE_RE.match(line)
-        if not (m and m.group(3) == key):
-            continue
-        raw = (m.group(4) or "").strip()
-        if raw[:1] in ("'", '"'):
-            value = _strip_comment(raw)
-        else:
-            # A plain scalar: a comment starts at whitespace + '#', and an
-            # apostrophe ("GM's Site") is just a character.
-            value = re.split(r"\s#", raw, maxsplit=1)[0].strip()
-        if not value or value in ("~", "null", "Null", "NULL") or value[0] in "[{&*!|>":
-            return True, None
-        if value.startswith('"'):
-            try:
-                return True, json.loads(value) or None  # YAML double quotes use JSON's escapes
-            except ValueError:
-                return True, None
-        if value.startswith("'"):
-            return True, (value[1:-1].replace("''", "'") or None
-                          if value.endswith("'") else None)
-        return True, value
-    return False, None
-
-
-def read_publish_scalar(vault: Path, key: str) -> str | None:
-    """A scalar `publish.<key>` from `_meta/vault-config.md` (`site_dir`,
-    say), or None when absent, null or not a plain scalar."""
-    return _publish_scalar(vault, key)[1]
-
-
-# The publish pipeline's own defaults (tools/publish/lib/config.js
-# PUBLISH_DEFAULTS.exclude_sections). Keep the two in step: a section the
-# site drops but a check treats as published is a leak waiting to happen.
-DEFAULT_EXCLUDE_SECTIONS: tuple[str, ...] = (
-    "GM Notes", "DM Notes", "Player Notes", "Source References",
-    "Reconciliation Context", "Handoff to Reconcile",
-)
-
-
-def resolve_exclude_sections(vault_list: list[str] | None) -> list[str]:
-    """The vault file's own `publish.exclude_sections`, or the built-in
-    defaults when it sets none. This is the fallback for a vault the
-    publish tool cannot be asked about; when it can, the tool's resolved
-    list is used instead (`effective_exclude_sections(tool_list=...)`),
-    because the build decides between the vault file, the site file and
-    the defaults and Python never reads the site file's list. De-duplicated
-    case-insensitively, first casing wins.
-    """
-    source = vault_list if vault_list is not None else list(
-        DEFAULT_EXCLUDE_SECTIONS)
-    result: list[str] = []
-    seen: set[str] = set()
-    for value in source:
-        if value and value.casefold() not in seen:
-            seen.add(value.casefold())
-            result.append(value)
-    return result
-
-
-def effective_exclude_sections(vault: Path,
-                               tool_list: list[str] | None = None) -> list[str]:
-    """The exclude list the publisher applies to this vault.
-
-    `tool_list` is the publish tool's resolved list (`excludeSections` in
-    `explain --all --json`); when given it is the answer, as the tool is
-    the only reader of the vault file's, the site file's and the default
-    list. Without it (no tool answer: no node, no site, an older tool) this
-    falls back to the vault file's own `publish.exclude_sections`, else
-    the built-in defaults. It never reads the site file's `excludeSections`:
-    a vault whose list lives only there is read with the defaults on this
-    path (the caller's tool row says the tool could not be asked).
-    """
-    if tool_list is not None:
-        return list(tool_list)
-    cfg = read_publish_list(vault, "exclude_sections")
-    if cfg.error:
-        # Guessing at a list we cannot read is how a check ends up
-        # trusting a section to be hidden that the site publishes. Treat
-        # nothing as excluded (over-reporting) and say why.
-        print(f"warning: _meta/vault-config.md publish.exclude_sections "
-              f"not understood ({cfg.error}) — treating nothing as "
-              f"excluded", file=sys.stderr)
-        return []
-    return resolve_exclude_sections(cfg.value)
 
 
 # --------------------------------------------------------------------------

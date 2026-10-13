@@ -4,20 +4,16 @@ A **skin** is the dress of a PC page: colours, lettering, edging and
 the shape of its marks. A **frame** is the ornament round the
 portrait. Neither changes a sheet's layout, on any of the five systems.
 
-| Where | Key | Values | Absent means |
-|-------|-----|--------|--------------|
-| `_meta/vault-config.md`, under `publish:` | `sheet_skin` | a skin id | `plain` |
-| same | `sheet_frame` | a frame id, or `none` | the skin's own frame |
-| a `type: pc` note's frontmatter | `sheet_skin` | a skin id | the campaign's |
-| same | `sheet_frame` | a frame id, or `none` | the campaign's, else the skin's own |
-
-Skin and frame are settled separately, so a PC note may set either
-key alone: `sheet_frame: cracked` keeps the campaign's skin.
+The campaign's look is two settings, `publish.sheet_skin` and
+`publish.sheet_frame`. One character's own look is the same two keys,
+`sheet_skin` and `sheet_frame`, in that `type: pc` note's frontmatter;
+a key the note leaves out takes the campaign's. Skin and frame are
+settled separately, so a PC note may set either key alone:
+`sheet_frame: cracked` keeps the campaign's skin.
 
 ## Skins
 
-Plain is the default: a site that sets nothing builds as before.
-Every other skin has a light and a dark look and follows the reader's
+A site that sets no skin builds as before. Every skin but Plain has a light and a dark look and follows the reader's
 light or dark choice. Describe both; the GM may be seeing either.
 
 | Skin id | What it looks like | Suits | Its own frame |
@@ -64,19 +60,21 @@ run a command. If they are unsure, offer the skin that suits the game.
 For the campaign, from the site directory:
 
 ```bash
-npx gm-apprentice-publish vault-setting --set sheet_skin='"parchment"'
-npx gm-apprentice-publish vault-setting --set sheet_frame='"thorns"'
+npx gm-apprentice-publish settings set publish.sheet_skin=parchment publish.sheet_frame=thorns
 ```
 
-The command writes only its own line, and takes only the exact
-lower-case id. To go back to the skin's own frame, remove the
-`sheet_frame` line. For one character, set the two lines in that PC
-note's frontmatter. Then `npm run build` and deploy as usual.
+It refuses an id it does not know and says which it takes. To go back
+to the skin's own frame, `settings unset publish.sheet_frame`. For one
+character, write either line or both in that PC note's frontmatter:
 
-A value that is not a known id is ignored: the build prints one
-warning naming the note (or the config) and the value, and that
-setting falls back one step (a PC's to the campaign's, the campaign's
-to the default). The build ignores case and surrounding spaces.
+```yaml
+sheet_skin: console
+sheet_frame: cracked
+```
+
+An id the build does not know there is ignored with one warning naming
+the note and the value, and that character gets the campaign's look.
+Then `npm run build` and deploy as usual.
 
 ## Known limits
 

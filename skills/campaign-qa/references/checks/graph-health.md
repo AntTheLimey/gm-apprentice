@@ -111,8 +111,8 @@ hidden however it is dressed (`### **GM Notes**`, `### GM Notes:`), so it is
 not a finding.
 The script skips notes the site does not publish, so it only flags
 content that would actually reach the site.
-Severity: Critical if the vault has a site (`publish.site` is on,
-or unset with a `publish.site_dir`); Warning otherwise.
+Severity: Critical if the vault has a site; Warning otherwise. With
+no site the script says so in one INFO row.
 
 ### Step 3: Schema Compliance
 

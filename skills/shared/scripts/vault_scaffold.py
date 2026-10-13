@@ -34,8 +34,9 @@ import index_build
 import migrate_vault as mv
 from migrate_core import StepFailed, write_text_atomic
 from vault_write import utf8_output
-from vaultlib import (entity_type, extract_frontmatter, parse_version,
-                      plugin_version, read_publish_scalar, vault_files)
+from vaultlib import (SettingsUnavailable, entity_type, extract_frontmatter,
+                      forget_settings, parse_version, plugin_version,
+                      settings, settings_default, vault_files)
 
 SHARED = Path(__file__).resolve().parent.parent
 SEEDS = SHARED / "scaffold"
@@ -151,7 +152,6 @@ SYSTEMS = ("coc-7e", "coc-7e-regency", "gurps-4e", "dnd-5e-2024", "pf2e",
 
 PLAIN_FOLDERS = ("_meta", "_Campaign", "_Templates", "_World", "Chapters",
                  "Adventures")
-ATTACHMENTS = "_attachments"
 ATTACHMENT_SUBS = ("characters", "locations", "factions", "items",
                    "creatures", "events", "documents")
 # A type folder counts as present when the vault already keeps a note of one
@@ -218,14 +218,15 @@ def _types_in(vault: Path) -> tuple[set[str], bool]:
 def _attachments(vault: Path) -> str | None:
     """The vault's attachments folder, or None when the vault names one
     outside itself: this script creates nothing out there."""
-    named = None
     if (vault / CONFIG).is_file():
-        named = read_publish_scalar(vault, "attachments_dir")
-    named = (named or "").strip().replace("\\", "/")
+        named = settings(vault).get("publish.attachments_dir")
+    else:
+        named = settings_default("publish.attachments_dir")
+    named = named.strip().replace("\\", "/")
     if (named.startswith("/") or re.match(r"[A-Za-z]:", named)
             or ".." in named.split("/")):
         return None
-    return named.strip("/") or ATTACHMENTS
+    return named.strip("/")
 
 
 def missing(vault: Path, system: str | None, *, campaign: str, version: str,
@@ -328,6 +329,8 @@ def build(vault: Path, pieces: list[Piece]) -> None:
     """Create every piece, or none: a failure part-way, Ctrl-C included,
     removes what this run made and nothing else."""
     made: list[Path] = []
+    # The vault's settings file may be among the pieces (or removed again).
+    forget_settings(vault)
     try:
         for piece in pieces:
             path = vault / piece.rel
@@ -451,6 +454,10 @@ def main(argv: list[str] | None = None) -> int:
                 build(vault, pieces)
         except KeyboardInterrupt:
             raise ScaffoldError("interrupted") from None
+    except SettingsUnavailable as e:
+        print(f"ERROR\t{e}")
+        print("# nothing written")
+        return 1
     except ScaffoldError as e:
         print(f"ERROR\t{e}")
         print("# some of this run's files were left: remove them by hand"

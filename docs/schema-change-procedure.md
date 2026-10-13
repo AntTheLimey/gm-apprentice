@@ -133,11 +133,14 @@ the GM what the new entry is for and adds it to their list on a yes,
 and it never adds it unasked. The step that proposes an entry is not
 built yet; it waits for the first release that adds a default.
 
-There is no other copy in the publish tool to change. The three default
-lists (folders, headings and fields) live only in the registry, and
-`tools/publish/test/settings-one-place.test.js` fails if code under the
-tool's `lib/` or `bin/` restates one. Regenerate the settings page with
-the command above and commit it with the change.
+There is no other copy to change. The three default lists (folders,
+headings and fields) live only in the registry. The Python scripts and
+the hand-written pages under `skills/` and `docs/` do not write them out:
+they point at `settings get publish.exclude_sections` and the settings
+page. `tests/test_settings_one_place.py` fails if a script restates the
+built-in headings, or if a page outside the generated settings tables
+writes one of the three lists out in full. Regenerate the settings page
+with the command above and commit it with the change.
 
 ## Field design guidelines
 

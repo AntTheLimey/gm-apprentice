@@ -404,16 +404,14 @@ skip it only if the loadout endpoint already put it there), then re-deploy.
    `id = "PUT-YOUR-KV-NAMESPACE-ID-HERE"` line, replace that id instead of
    adding a second block.)
 
-3. **Turn on the inbox switch.** In the vault's `_meta/vault-config.md`, set
-   `inbox` to `true` under `publish:`:
+3. **Turn on the inbox switch.** From the site directory:
 
-   ```yaml
-   publish:
-     inbox: true
+   ```bash
+   npx gm-apprentice-publish settings set publish.inbox=true
    ```
 
-   (For the live status bar / party board, set `live_stats: true` too — it
-   reuses the same namespace.) This is what makes the next build ship the inbox
+   (For the live status bar / party board, also pass
+   `publish.live_stats=true` — it reuses the same namespace.) This is what makes the next build ship the inbox
    chatbox **and** copy the inbox Functions into `functions/`. With the switch
    on and no real KV id in `wrangler.toml`, the build warns and leaves the
    feature out.

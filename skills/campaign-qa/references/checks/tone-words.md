@@ -122,7 +122,7 @@ The list errs on the side of showing more. The site colours an item by
 the first relationship it has to a target, so a later hostile tie to the
 same target may be listed that the site does not colour. A campaign that
 hides `relationships` only in the site's own config file, not in
-`vault-config.md`, still has its ties listed, and so does one whose
+the vault's settings, still has its ties listed, and so does one whose
 `overrides` mention `relationships`.
 
 ## What this check never does
