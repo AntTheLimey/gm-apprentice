@@ -1820,8 +1820,8 @@ class RenestReviewRegressionTests(unittest.TestCase):
         rows = vc.check_gm_leak(vault, None, fix=True, renest_excludes=True)
         self.assertTrue(rows_for(rows, "FIXED\t_meta/vault-config.md"), rows)
         self.assertEqual(config_of(vault),
-                         "---\npublish:\n  exclude_sections:\n    - GM Notes\n"
-                         "---\n")
+                         "---\npublish:\n  exclude_sections:   # hidden bits\n"
+                         "    - GM Notes\n---\n")
         out = self.published(vault, "Bob.md")
         self.assertNotIn("SECRET", out)
 
