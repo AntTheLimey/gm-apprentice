@@ -8,7 +8,7 @@ const { isDeepStrictEqual } = require('node:util');
 const { parseNote } = require('../frontmatter');
 const { REGISTRY, entry: settingEntry, legacyNameOf, siteKeyOf } = require('./registry');
 const { TYPES, isMap } = require('./types');
-const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, HIDING_PREFIXES } = require('./faults');
+const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, HIDING_PREFIXES, startsLikeHide } = require('./faults');
 const { OLD_FILE, at } = require('./layout');
 
 // The list as the old layout knew it: each setting the old vault file held, named as that file
@@ -381,7 +381,7 @@ function readLegacy({ vaultPath, siteConfig }, core) {
     let suggest = level === 'stop' ? hidingNear : near;
     suggest = suggest ? `${parent}.${suggest}` : null;
     // `hide` is two edits from `mode` but means neither: a name that starts like "hide" gets no guess.
-    if (parent === PUBLISH && key.toLowerCase().startsWith('hid')) suggest = null;
+    if (parent === PUBLISH && startsLikeHide(key)) suggest = null;
     if (wrongDepth) {
       suggest = BY_NAME.has(`${PUBLISH}.${key}`) ? `${PUBLISH}.${key}` : null;
       if (OVERRIDES.has(parent)) hint = `${full} is not a setting. The only override is ${OVERRIDE_FIELDS}.`;

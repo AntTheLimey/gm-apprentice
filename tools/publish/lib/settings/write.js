@@ -22,6 +22,39 @@ const { OLD_BLOCK } = require('./legacy');
 const { Scalar, isScalar, isMap: isYMap, isSeq: isYSeq, isCollection } = YAML;
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 
+// An error whose text is already for the GM, passed on as it is.
+function plain(message) {
+  const e = new Error(message);
+  e.plain = true;
+  return e;
+}
+
+// The one line for a change the writer could not make safely: the file this command was given is read
+// fine, but the text it made did not read back as intended (or could not be made). Nothing was written.
+function notMade(setting, rel, text, keys) {
+  const at = lineOfKey(text, keys);
+  return plain(`The change to ${setting} was not made and ${rel} is untouched: this file is written in a way this command cannot edit safely. Change that setting by hand${at ? ` (near line ${at})` : ''}.`);
+}
+
+// The 1-based line of the deepest entry on `keys` that the text holds, or null.
+function lineOfKey(text, keys) {
+  try {
+    const lc = new YAML.LineCounter();
+    const doc = YAML.parseDocument(text, { lineCounter: lc });
+    let node = doc.contents;
+    let pair = null;
+    for (const k of keys || []) {
+      const found = findPair(node, k);
+      if (!found) break;
+      pair = found;
+      node = found.value;
+    }
+    return pair ? lc.linePos(pair.key.range[0]).line : null;
+  } catch (e) {
+    return null;
+  }
+}
+
 // ---- Text helpers (offsets come from the library; these only find line edges) -----------------
 
 const lineStart = (t, i) => (i <= 0 ? 0 : t.lastIndexOf('\n', i - 1) + 1);
@@ -31,16 +64,22 @@ const eolOf = (t) => { const i = t.indexOf('\n'); return i > 0 && t[i - 1] === '
 
 // Where a node's own content ends: a block collection's `range` runs on through the comments and
 // blank lines after it, so its last child says where it really ends.
-function endOf(node) {
+function endOf(node, text) {
   if (!node) return 0;
   if (isYMap(node) && !node.flow) {
     const last = node.items[node.items.length - 1];
     if (!last) return node.range[0];
-    return Math.max(last.key.range[1], last.value ? endOf(last.value) : 0);
+    return Math.max(last.key.range[1], last.value ? endOf(last.value, text) : 0);
   }
   if (isYSeq(node) && !node.flow) {
     const last = node.items[node.items.length - 1];
-    return last ? endOf(last) : node.range[0];
+    return last ? endOf(last, text) : node.range[0];
+  }
+  // A block scalar's range runs through its last line break; the content ends before it.
+  if (isScalar(node) && (node.type === 'BLOCK_LITERAL' || node.type === 'BLOCK_FOLDED')) {
+    let end = node.range[1];
+    while (end > node.range[0] && (text[end - 1] === '\n' || text[end - 1] === '\r')) end--;
+    return end;
   }
   return node.range[1];
 }
@@ -70,7 +109,13 @@ function dropLines(text, a, b, eol) {
 // ---- Making text with the library --------------------------------------------------------------
 
 const toStringOptions = (ctx) => ({ indent: ctx.step, indentSeq: ctx.indentSeq, lineWidth: 0, blockQuote: false, flowCollectionPadding: false, minContentWidth: 0 });
-const documentOf = (value) => new YAML.Document(value, { aliasDuplicateObjects: false });
+// A string with a line break is always written double-quoted on one line: the library would otherwise
+// spread it over lines, which a one-line (flow) group cannot hold.
+function documentOf(value) {
+  const doc = new YAML.Document(value, { aliasDuplicateObjects: false });
+  YAML.visit(doc, { Scalar(_, node) { if (typeof node.value === 'string' && /[\r\n]/.test(node.value)) node.type = 'QUOTE_DOUBLE'; } });
+  return doc;
+}
 
 // A scalar, an empty list or map, or (flow) a whole collection, on one line. `old` is the node it
 // replaces: a string keeps the quoting it had.
@@ -104,8 +149,7 @@ function styleOf(doc, text) {
         if (step === null && parentCol !== null && col > parentCol) step = col - parentCol;
         const v = p.value;
         if (isYSeq(v) && !v.flow && v.items.length && indentSeq === null) {
-          const dash = columnOf(text, v.items[0].range[0]) - 2;
-          indentSeq = dash > col;
+          indentSeq = columnOf(text, dashOffset(v, 0)) > col;
         }
         walk(v, col);
       }
@@ -127,11 +171,19 @@ function parseText(text, label) {
 }
 
 // Where a pair's colon ends (the value, if it sits on the key's line, starts after it).
-function colonEnd(text, key) {
-  let i = key.range[1];
-  while (i < text.length && (text[i] === ' ' || text[i] === '\t')) i++;
-  if (text[i] !== ':') throw new Error('a key in the settings file is written in a form this command does not edit');
-  return i + 1;
+// The library's own tokens for the pair say where its `:` is.
+function colonEnd(pair) {
+  const colon = ((pair.srcToken && pair.srcToken.sep) || []).find((t) => t.type === 'map-value-ind');
+  if (!colon) throw new Error('a key in the settings file is written in a form this command does not edit');
+  return colon.offset + 1;
+}
+
+// Where the dash of a block list's item `i` is, from the library's tokens.
+function dashOffset(seq, i) {
+  const item = seq.srcToken && seq.srcToken.items && seq.srcToken.items[i];
+  const dash = item && (item.start || []).find((t) => t.type === 'seq-item-ind');
+  if (!dash) throw new Error('a list in the settings file is written in a form this command does not edit');
+  return dash.offset;
 }
 
 // ---- The edits ---------------------------------------------------------------------------------
@@ -141,20 +193,20 @@ function replaceValue(text, pair, value, ctx) {
   const { eol } = ctx;
   const v = pair.value;
   const empty = isEmptyNode(v);
-  const cEnd = colonEnd(text, pair.key);
+  const cEnd = colonEnd(pair);
   const keyCol = columnOf(text, pair.key.range[0]);
   const sameLine = empty || !text.slice(cEnd, v.range[0]).includes('\n');
   const flowKeep = v && isCollection(v) && v.flow && isFilled(value);
-  if (flowKeep) return [{ from: v.range[0], to: endOf(v), text: inline(value, v, ctx, true) }];
+  if (flowKeep) return [{ from: v.range[0], to: endOf(v, text), text: inline(value, v, ctx, true) }];
   if (!isFilled(value)) {
     const text1 = ` ${inline(value, v, ctx)}`;
-    if (sameLine) return [{ from: cEnd, to: empty ? cEnd : endOf(v), text: text1 }];
-    return [{ from: cEnd, to: cEnd, text: text1 }, dropLines(text, v.range[0], endOf(v), eol)];
+    if (sameLine) return [{ from: cEnd, to: empty ? cEnd : endOf(v, text), text: text1 }];
+    return [{ from: cEnd, to: cEnd, text: text1 }, dropLines(text, v.range[0], endOf(v, text), eol)];
   }
   const block = entryLines('k', value, ctx, keyCol).slice(1);
   if (empty) return [addLines(text, cEnd, block, eol)];
-  if (sameLine) return [{ from: cEnd, to: endOf(v), text: '' }, addLines(text, endOf(v), block, eol)];
-  const to = lineFullEnd(text, endOf(v));
+  if (sameLine) return [{ from: cEnd, to: endOf(v, text), text: '' }, addLines(text, endOf(v, text), block, eol)];
+  const to = lineFullEnd(text, endOf(v, text));
   return [{ from: lineStart(text, v.range[0]), to, text: block.join(eol) + (to === text.length && !text.endsWith('\n') ? '' : eol) }];
 }
 
@@ -163,7 +215,7 @@ function appendEntry(text, map, key, value, ctx) {
   const first = map.items[0];
   const col = columnOf(text, first.key.range[0]);
   const last = map.items[map.items.length - 1];
-  const end = Math.max(last.key.range[1], last.value ? endOf(last.value) : 0);
+  const end = Math.max(last.key.range[1], last.value ? endOf(last.value, text) : 0);
   return [addLines(text, end, entryLines(key, value, ctx, col), ctx.eol)];
 }
 
@@ -174,7 +226,10 @@ function setAt(text, doc, keys, value, ctx) {
   if (doc.contents === null || (isYMap(doc.contents) && doc.contents.items.length === 0 && !doc.contents.flow)) {
     const body = text.trimEnd();
     const lines = entryLines(keys[0], nest(keys.slice(1), value), ctx, 0);
-    return [{ from: 0, to: text.length, text: (body ? body + ctx.eol : '') + lines.join(ctx.eol) + ctx.eol }];
+    // The text keeps its ending: a file that ended in a line break still does; the old file's frontmatter
+    // (cut before its closing ---) has none, and an empty one gets none.
+    const ends = text === '' ? !ctx.keepBlock : /\n$/.test(text);
+    return [{ from: 0, to: text.length, text: (body ? body + ctx.eol : '') + lines.join(ctx.eol) + (ends ? ctx.eol : '') }];
   }
   let map = doc.contents;
   for (let i = 0; i < keys.length; i++) {
@@ -183,7 +238,7 @@ function setAt(text, doc, keys, value, ctx) {
     if (!pair) return appendEntry(text, map, keys[i], nest(keys.slice(i + 1), value), ctx);
     if (i === keys.length - 1) return replaceValue(text, pair, value, ctx);
     if (isYMap(pair.value) && pair.value.items.length) { map = pair.value; continue; }
-    if (i === 0 && !isEmptyNode(pair.value) && !isYMap(pair.value)) throw new Error(`${keys[0]} in the settings file is not a group of settings, so nothing can be written under it`);
+    if (i === 0 && !isEmptyNode(pair.value) && !isYMap(pair.value)) throw plain(`${keys[0]} in the settings file is not a group of settings, so nothing can be written under it`);
     return replaceValue(text, pair, nest(keys.slice(i + 1), value), ctx);
   }
   return [];
@@ -210,16 +265,26 @@ function withoutValue(obj, keys, keep, top = true) {
 // A one-line (flow) map is written again, whole, with the change made.
 function flowRewrite(text, map, ctx, doc, change) {
   const js = change(map.toJS(doc));
-  return [{ from: map.range[0], to: endOf(map), text: inline(js, map, ctx, true) }];
+  return [{ from: map.range[0], to: endOf(map, text), text: inline(js, map, ctx, true) }];
 }
 
 // Removes the entry at `keys`; a group it leaves empty goes too. [] when it is not there.
 function removeAt(text, doc, keys, ctx) {
   const chain = [];
+  let emptiedFlow = false;
   let map = doc.contents;
   for (const k of keys) {
     if (!isYMap(map)) return [];
-    if (map.flow) return flowRewriteRemoval(text, map, keys.slice(chain.length), ctx, doc);
+    if (map.flow) {
+      const rest = keys.slice(chain.length);
+      const now = map.toJS(doc);
+      const next = withoutValue(now, rest);
+      if (isDeepStrictEqual(next, now)) return [];
+      // A one-line group left with nothing goes with its key (below), as a block group does.
+      if (Object.keys(next).length || chain.length === 0) return [{ from: map.range[0], to: endOf(map, text), text: inline(next, map, ctx, true) }];
+      emptiedFlow = true;
+      break;
+    }
     const pair = findPair(map, k);
     if (!pair) return [];
     chain.push({ map, pair });
@@ -229,16 +294,11 @@ function removeAt(text, doc, keys, ctx) {
   // when its last child goes, as it always was; on the new layout the emptied group goes too.
   const floor = ctx.keepBlock && keys.length > 1 && keys[0] === ctx.keepBlock ? 1 : 0;
   let at = chain.length - 1;
+  // The old file's bare `publish:` keeps its key when the one-line group under it empties.
+  if (emptiedFlow && at < floor) return [{ from: colonEnd(chain[at].pair), to: endOf(chain[at].pair.value, text), text: '' }];
   while (at > floor && chain[at].map.items.length === 1) at--;
   const { pair } = chain[at];
-  return [dropLines(text, pair.key.range[0], Math.max(pair.key.range[1], pair.value ? endOf(pair.value) : 0), ctx.eol)];
-}
-
-function flowRewriteRemoval(text, map, rest, ctx, doc) {
-  const now = map.toJS(doc);
-  const next = withoutValue(now, rest);
-  if (isDeepStrictEqual(next, now)) return [];
-  return [{ from: map.range[0], to: endOf(map), text: inline(next, map, ctx, true) }];
+  return [dropLines(text, pair.key.range[0], Math.max(pair.key.range[1], pair.value ? endOf(pair.value, text) : 0), ctx.eol)];
 }
 
 // Changes the list at `keys`: add or remove `entries` (items the list holds are compared with `same`).
@@ -266,21 +326,20 @@ function changeList(text, doc, keys, verb, entries, same, base, ctx) {
         const last = node.items[node.items.length - 1];
         return { edits: [{ from: last.range[1], to: last.range[1], text: fresh.map((x) => `, ${inline(x, null, ctx)}`).join('') }], list };
       }
-      const col = columnOf(text, node.items[0].range[0]) - 2 >= 0 && text.slice(lineStart(text, node.items[0].range[0]), node.items[0].range[0]).trim() === '-'
-        ? text.slice(lineStart(text, node.items[0].range[0]), node.items[0].range[0]).indexOf('-')
-        : columnOf(text, node.items[0].range[0]) - 2;
+      const col = columnOf(text, dashOffset(node, 0));
       const lines = fresh.map((x) => `${' '.repeat(col)}- ${inline(x, null, ctx)}`);
-      return { edits: [addLines(text, endOf(node), lines, eol)], list };
+      return { edits: [addLines(text, endOf(node, text), lines, eol)], list };
     }
     const gone = node.items.filter((i) => isScalar(i) && entries.some((x) => same(String(i.value), x)));
     if (!gone.length) return null;
     const list = node.items.filter((i) => !gone.includes(i)).map((i) => (isScalar(i) ? String(i.value) : null));
     if (!list.length) return { edits: replaceValue(text, pair, [], ctx), list: [] };
-    if (node.flow) return { edits: [{ from: node.range[0], to: endOf(node), text: inline(list, node, ctx, true) }], list };
+    if (node.flow) return { edits: [{ from: node.range[0], to: endOf(node, text), text: inline(list, node, ctx, true) }], list };
     return { edits: gone.map((i) => dropLines(text, i.range[0], i.range[1], eol)), list };
   }
   // No list in the file (missing, empty, or an empty `[]`): start from `base`.
-  const start = base || [];
+  // A list written empty (`[]`) is empty; a key with nothing, or no key, starts from `base` (the built-in list).
+  const start = pair && node && isYSeq(node) ? [] : (base || []);
   const list = verb === 'add'
     ? [...start, ...entries.filter((x, i) => !start.some((h) => same(h, x)) && entries.findIndex((y) => same(y, x)) === i)]
     : start.filter((h) => !entries.some((x) => same(h, x)));
@@ -374,7 +433,7 @@ function prepare(changes, layout, { allowState = false } = {}) {
   for (const change of changes) {
     if (change.op === 'unset-raw') {
       if (!legacy) refusals.push('a raw path can be taken out only of the old settings file');
-      else steps.push({ kind: 'del', keys: change.path, setting: change.path.join('.') });
+      else steps.push({ kind: 'del', keys: change.path, setting: change.path.join('.'), shown: change.path.join('.') });
       continue;
     }
     const name = change.label || change.name;
@@ -406,7 +465,7 @@ function prepare(changes, layout, { allowState = false } = {}) {
       spelling = first;
       older = (e.was || []).filter((w) => w.in === 'vault' && w.name !== first).map((w) => w.name);
     }
-    const base = { setting: change.name, keys, older: older.map((o) => o.split('.')), spelling, olderNames: older };
+    const base = { shown: name, setting: change.name, keys, older: older.map((o) => o.split('.')), spelling, olderNames: older };
     if (change.op === 'set') {
       if (blank(change.value) && e.type !== 'text') { refusals.push(`${name} has no value; to take it out of the file, use settings unset ${name}.`); continue; }
       if (Array.isArray(change.value) && change.value.some(blank)) { refusals.push(`${name} has a blank entry; remove it.`); continue; }
@@ -484,7 +543,7 @@ function runStep(text, step, label, eol, keepBlock) {
   // list
   const held = getJ(before, step.keys);
   if (held === true || held === false) {
-    if (step.entry.type === 'switchOrList' && held === true) throw new Error(`${step.setting} is on, which hides every one of its kind, so a list cannot be changed; use settings set ${step.setting} to give a list or turn it off.`);
+    if (step.entry.type === 'switchOrList' && held === true) throw plain(`${step.setting} is on, which hides every one of its kind, so a list cannot be changed; use settings set ${step.setting} to give a list or turn it off.`);
   }
   const base = step.base !== undefined ? step.base : (Array.isArray(step.entry.default) ? step.entry.default : []);
   const res = changeList(text, doc, step.keys, step.verb, step.entries, step.same, base, ctx);
@@ -509,12 +568,24 @@ function planChanges(vaultPath, changes, { create = false, allowState = false } 
     if (typeof tree.version === 'number' && tree.version > LAYOUT_VERSION) throw new Error(NEWER_VERSION);
   }
   let text = doc.text;
+  // The file as given must read; "not valid YAML" is only ever said about that.
+  parseText(text, doc.label);
   const result = { changed: [], notes: [], wrote: [], removed: [] };
+  // Lines in the old file count the opening --- line too.
+  const lineBase = layout === 'legacy' ? 1 : 0;
   for (const step of steps) {
     const before = text;
-    const out = runStep(text, step, doc.label, doc.eol, layout === 'legacy' ? OLD_BLOCK : null);
-    const after = parseText(out.text, doc.label).toJS() || {};
-    if (!isDeepStrictEqual(after, out.expected)) throw new Error(`cannot edit ${doc.rel}: the edit did not verify`);
+    let out;
+    try {
+      out = runStep(text, step, doc.label, doc.eol, layout === 'legacy' ? OLD_BLOCK : null);
+      const after = parseText(out.text, doc.label).toJS() || {};
+      if (!isDeepStrictEqual(after, out.expected)) throw new Error('did not read back as intended');
+    } catch (e) {
+      if (e.plain) throw e;
+      const err = notMade(step.shown || step.setting, doc.rel, before, step.keys);
+      if (lineBase) err.message = err.message.replace(/near line (\d+)/, (m, n) => `near line ${Number(n) + lineBase}`);
+      throw err;
+    }
     text = out.text;
     if (text !== before && step.setting) result.changed.push(step.setting);
     result.notes.push(...out.notes);
@@ -584,7 +655,9 @@ function renameInSettings(vaultPath, renames, { text } = {}) {
       expected = withValue(before, keys, held.map((x) => (x === r.item.from ? r.item.to : x)));
     }
     const next = applyEdits(edit, edits);
-    if (!isDeepStrictEqual(parseText(next, opened.label).toJS() || {}, expected)) throw new Error(`${opened.rel}: the edit for ${r.name} did not verify`);
+    let back;
+    try { back = parseText(next, opened.label).toJS() || {}; } catch (e) { back = null; }
+    if (!isDeepStrictEqual(back, expected)) throw notMade(r.name, opened.rel, edit, keys);
     edit = next;
   }
   if (edit === stage.text) return null;

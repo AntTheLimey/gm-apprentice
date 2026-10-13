@@ -97,6 +97,11 @@ describe('manifest rename', () => {
     assert.strictEqual(fs.readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), cfg);
   });
 
+  it('an old settings file with no frontmatter names nothing to rename', () => {
+    const vault = vaultWith({ '_meta/vault-config.md': '# Notes only\n\nNo frontmatter here.\n', [FROM]: '---\ntype: pc\n---\n' });
+    assert.deepStrictEqual(rename(vault).files, {});
+  });
+
   it('exits non-zero with one stderr line on bad arguments', () => {
     const r = spawnSync('node', [BIN, 'manifest', 'rename', '--vault', os.tmpdir(), '--from', FROM], { encoding: 'utf8' });
     assert.notStrictEqual(r.status, 0);

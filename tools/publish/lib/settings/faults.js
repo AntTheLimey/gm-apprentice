@@ -56,7 +56,10 @@ function makeFault(fields) {
 // name (`lasts`, taken from the names of the entries that guard, in the layout being read), or a name
 // starting `exclude` or `hid`. `mode` is left out of the first: it is also an everyday word. `beside`
 // is the old file's top level, where only `exclude_` counts as a prefix. The one rule, for both layouts.
-const HIDING_PREFIXES = ['exclude', 'hid'];
+const HID_PREFIX = 'hid';
+const HIDING_PREFIXES = ['exclude', HID_PREFIX];
+// A name that starts like "hide" means no setting by guessing (`hide` is two edits from `mode`).
+const startsLikeHide = (key) => key.toLowerCase().startsWith(HID_PREFIX);
 const hidingLasts = (guardNames) => new Set(guardNames.map((n) => n.split('.').pop()));
 function saysHiding(key, lasts, { beside = false } = {}) {
   if (lasts.has(key) && key !== 'mode') return true;
@@ -65,4 +68,4 @@ function saysHiding(key, lasts, { beside = false } = {}) {
 
 const stops = (faults) => faults.filter((f) => f.level === 'stop');
 
-module.exports = { distance, nearest, formatFault, makeFault, stops, show, saysHiding, hidingLasts, HIDING_PREFIXES };
+module.exports = { distance, nearest, formatFault, makeFault, stops, show, saysHiding, hidingLasts, HIDING_PREFIXES, startsLikeHide };

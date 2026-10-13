@@ -9,7 +9,7 @@ const path = require('node:path');
 const { parseDocument } = require('yaml');
 const { REGISTRY } = require('./registry');
 const { TYPES, isMap } = require('./types');
-const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts } = require('./faults');
+const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at } = require('./layout');
 const legacy = require('./legacy');
 
@@ -196,7 +196,7 @@ function readNew({ vaultPath, siteConfig }) {
     if (strict || (near && isGuard(near)) || saysHiding(key)) level = 'stop';
     // A stop below the top points at a hiding setting only; a warning, or a stop at the top, at the nearest name of any kind.
     let suggest = level === 'stop' && !strict ? hidingNear : near;
-    if (key.toLowerCase().startsWith('hid') && !strict) suggest = null;
+    if (startsLikeHide(key) && !strict) suggest = null;
     faults.push(makeFault({ name: full, setting: null, kind: 'unknown-name', level, value, suggest: suggest ? `${parent}.${suggest}` : null }));
     if (!STRICT_PARENTS.has(parent)) setIn(values, full, clone(value));
   }

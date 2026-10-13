@@ -294,3 +294,52 @@ describe('settings writer: the write itself', () => {
     assert.strictEqual(v.read(), '---\npublish: {site_title: X, footer: F}\n---\n');
   });
 });
+
+describe('settings writer: review fixes', () => {
+  for (const head of ['|', '>', '|-']) {
+    it(`a ${head} block scalar can be set and unset with a key after it`, () => {
+      const text = `version: 1\nplayer_site:\n  footer: ${head}\n    one\n    two\n  title: T\n`;
+      const a = vaultWith(NEW_FILE, text);
+      applyChanges(a.dir, [{ op: 'set', name: 'player_site.footer', value: 'short' }]);
+      assert.strictEqual(a.read(), 'version: 1\nplayer_site:\n  footer: short\n  title: T\n');
+      const b = vaultWith(NEW_FILE, text);
+      applyChanges(b.dir, [{ op: 'unset', name: 'player_site.footer' }]);
+      assert.strictEqual(b.read(), 'version: 1\nplayer_site:\n  title: T\n');
+      const c = vaultWith(NEW_FILE, text);
+      applyChanges(c.dir, [{ op: 'set', name: 'player_site.footer', value: 'a\nb' }]);
+      assert.strictEqual(c.read(), 'version: 1\nplayer_site:\n  footer: "a\\nb"\n  title: T\n');
+    });
+  }
+  it('the only child of a one-line group can be unset; the emptied group goes', () => {
+    const a = vaultWith(NEW_FILE, 'version: 1\nplayer_site:\n  features: {search: false}\n  title: T\n');
+    applyChanges(a.dir, [{ op: 'unset', name: 'player_site.features.search' }]);
+    assert.strictEqual(a.read(), 'version: 1\nplayer_site:\n  title: T\n');
+    const b = vaultWith(NEW_FILE, 'version: 1\nvault: {setting_year: x}\n');
+    applyChanges(b.dir, [{ op: 'unset', name: 'vault.setting_year' }]);
+    assert.strictEqual(b.read(), 'version: 1\n');
+    const c = vaultWith(OLD_FILE, '---\npublish: {site_title: x}\n---\nbody\n');
+    applyChanges(c.dir, [{ op: 'unset', name: 'player_site.title' }]);
+    assert.strictEqual(c.read(), '---\npublish:\n---\nbody\n');
+  });
+  it('a change the writer cannot make safely says so in one plain line and writes nothing', () => {
+    const text = 'version: 1\nplayer_site:\n  title: &a T\n  footer: *a\n';
+    const v = vaultWith(NEW_FILE, text);
+    try {
+      applyChanges(v.dir, [{ op: 'unset', name: 'player_site.title' }]);
+      assert.fail('should have refused');
+    } catch (e) {
+      assert.notStrictEqual(e.code, 'ERR_ASSERTION', 'should have refused');
+      assert.ok(!/not valid YAML|did not verify|Unresolved alias/.test(e.message), e.message);
+      assert.match(e.message, /^The change to player_site\.title was not made and _meta\/vault-config\.yaml is untouched/);
+      assert.match(e.message, /by hand/);
+    }
+    assert.strictEqual(v.read(), text);
+    const bad = vaultWith(NEW_FILE, 'version: 1\nplayer_site: [\n');
+    assert.throws(() => applyChanges(bad.dir, [{ op: 'set', name: 'player_site.title', value: 'T' }]), /not valid YAML/);
+  });
+  it('an old file with empty frontmatter gets no stray blank line', () => {
+    const v = vaultWith(OLD_FILE, '---\n---\nbody\n');
+    applyChanges(v.dir, [{ op: 'set', name: 'player_site.title', value: 'T' }]);
+    assert.strictEqual(v.read(), '---\npublish:\n  site_title: T\n---\nbody\n');
+  });
+});

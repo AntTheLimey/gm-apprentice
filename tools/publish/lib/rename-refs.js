@@ -214,7 +214,9 @@ function renameRefs(vault, from, to, configPath, names) {
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null;
   };
   const manifest = read(MANIFEST_REL);
-  const settings = settingsText(vault);
+  // A settings file that cannot be read (no frontmatter, not valid YAML) names no note: nothing to rename in it.
+  let settings = null;
+  try { settings = settingsText(vault); } catch (e) { settings = null; }
   let manifestText = manifest;
   let configText = settings ? settings.whole : null;
   for (const move of moves) {
