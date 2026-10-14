@@ -75,6 +75,19 @@ describe('parseCoC', () => {
     assert.equal(charm.developed, true);
     assert.ok(model.skills.length > 50, 'full canonical list present');
   });
+  // #366: the worked-out bases reach the sheet through parseCoC (DEX 70 in the fixture).
+  it('works out Dancing from the sheet\'s DEX, and takes Dodge from the Combat table when the skill row is blank', () => {
+    const dancing = model.skills.find(s => s.name === 'Dancing');
+    assert.deepEqual({ reg: dancing.reg, developed: dancing.developed }, { reg: 14, developed: false });
+    const dodge = model.skills.find(s => s.name === 'Dodge');
+    assert.deepEqual({ reg: dodge.reg, developed: dodge.developed }, { reg: 48, developed: true });
+    assert.equal(model.combat.dodge.reg, 48);
+  });
+  it('without a Combat Dodge, Dodge is DEX/2', () => {
+    const noCombatDodge = { ...statSheet, html: statSheet.html.replace(/<tr><td>Dodge[^]*?<\/tr>/g, '') };
+    const m = parseCoC(fm, [noCombatDodge, skillsSection], 'regency-cthulhu');
+    assert.equal(m.skills.find(s => s.name === 'Dodge').reg, 35);
+  });
   it('parses the weapons table', () => {
     assert.equal(model.weapons[0].weapon, 'Brawl');
     assert.equal(model.weapons[0].damage, '1D3+DB');

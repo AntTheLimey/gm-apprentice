@@ -1,6 +1,6 @@
 // tools/publish/lib/templates/coc/parse.js
 const { parseTableRows, findSectionByTitle, extractSubsectionHtml } = require('../gurps/tables');
-const { mergeSkills } = require('./skills');
+const { mergeSkills, normalizeName } = require('./skills');
 
 // "35 (starting 60)" -> { value: 35, note: 'starting 60' }; "—" -> { value: null }
 function num(cell) {
@@ -149,7 +149,15 @@ function parseCoC(frontmatter, sections, system) {
   const variant = /regency/i.test(String(system || '')) ? 'regency' : 'base';
   const stat = findSectionByTitle(secs, 'stat sheet');
   const statHtml = stat ? stat.html : '';
+  const chars = parseChars(statHtml);
+  const combat = parseCombat(statHtml);
+  // Dodge is written twice on the sheet: a blank Skills row takes the Combat table's value, so the two never disagree.
   const rawSkills = parseRawSkills(secs);
+  const dodgeRow = rawSkills.find((r) => normalizeName(r.name).toLowerCase() === 'dodge');
+  if (Number.isFinite(combat.dodge.reg) && !(dodgeRow && Number.isFinite(dodgeRow.reg))) {
+    if (dodgeRow) dodgeRow.reg = combat.dodge.reg;
+    else rawSkills.push({ name: 'Dodge', base: null, reg: combat.dodge.reg });
+  }
   return {
     variant,
     identity: {
@@ -160,13 +168,13 @@ function parseCoC(frontmatter, sections, system) {
       era: fm.era || '',
     },
     player: (fm && fm.player_name) || null,
-    chars: parseChars(statHtml),
+    chars,
     derived: parseDerived(statHtml),
     reputation: parseReputation(statHtml),
-    combat: parseCombat(statHtml),
+    combat,
     conditions: parseConditions(statHtml),
     backstory: parseBackstory(secs),
-    skills: mergeSkills(rawSkills, variant),
+    skills: mergeSkills(rawSkills, variant, chars),
     weapons: parseWeapons(secs),
   };
 }

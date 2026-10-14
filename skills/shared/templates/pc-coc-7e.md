@@ -99,7 +99,7 @@ createdSession: ""
 | Credit Rating | 00 | | | |
 | Cthulhu Mythos | 00 | | | |
 | Disguise | 05 | | | |
-| Dodge | — | | | |
+| Dodge | DEX/2 | | | |
 | Drive Auto | 20 | | | |
 | Electrical Repair | 10 | | | |
 | Fast Talk | 05 | | | |
@@ -123,7 +123,6 @@ createdSession: ""
 | Occult | 05 | | | |
 | Operate Heavy Machinery | 01 | | | |
 | Persuade | 10 | | | |
-| Photography | 05 | | | |
 | Pilot () | 01 | | | |
 | Psychoanalysis | 01 | | | |
 | Psychology | 10 | | | |

@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.57] — 2026-10-14
+
+Regency Cthulhu PC sheets start their skills at the right bases (#366).
+
+### Fixed
+
+- The Regency Cthulhu PC template gives Dancing as DEX/5, Etiquette as
+  INT/5, Reassure as APP/5 and Religion as 10, and both CoC PC templates
+  give Dodge as DEX/2 instead of a dash. The Regency template gains a
+  Fighting (Sword) row at 20.
+- A published CoC sheet works out a base that is a share of a
+  characteristic (Dodge, Language (Own), and Regency's Dancing,
+  Etiquette and Reassure) from the PC's own characteristics. It used to
+  show a flat 5 (or 0), so an untrained skill read as developed. Without
+  the characteristic on the sheet, such a skill is left off unless the
+  PC lists it.
+- The sheet's skill lists match the templates: Regency's lists Fighting
+  (Sword), and the base CoC template drops its Photography row, which the
+  core list has as an Art/Craft specialisation. A test keeps the
+  templates and the sheet's lists the same.
+- A blank Dodge row in a CoC sheet's Skills table takes the Dodge in its
+  Combat table, so the two never disagree. A note that names its native
+  language (`Language (English)`) gets no extra `Language (Own)` row.
+- The update no longer offers a template over yours when the only
+  difference is a value you filled in where the template leaves it blank
+  (`campaign:`, `tags:` and the like). When you do take the plugin's
+  template, those values are kept.
+
+### Changed
+
+- The publish tool is 1.24.2.
+
 ## [1.10.56] — 2026-10-14
 
 The vault scripts, campaign-qa and the skills catch up with the settings

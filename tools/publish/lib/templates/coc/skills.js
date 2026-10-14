@@ -31,37 +31,65 @@ function parentOf(name) {
   return m ? m[1].trim() : null;
 }
 
-// pcSkills: [{ name, base, reg }] parsed from the sheet.
-function mergeSkills(pcSkills, variant) {
+// A list entry's base as the templates write it: a number, or the characteristic share ("DEX/5", "EDU").
+function baseText(entry) {
+  if (entry.of) return entry.div === 1 ? entry.of : `${entry.of}/${entry.div}`;
+  return String(entry.base);
+}
+
+// A list entry's base for this PC: a number, or null when it is a share of a characteristic the sheet does not give.
+function baseFor(entry, chars) {
+  if (!entry.of) return entry.base;
+  const c = chars && chars[entry.of];
+  const v = c ? Number(c.reg) : NaN;
+  return c && c.reg != null && Number.isFinite(v) ? Math.floor(v / entry.div) : null;
+}
+
+// pcSkills: [{ name, base, reg }] parsed from the sheet; chars: { DEX: { reg }, … } from its Characteristics table.
+// A skill whose base cannot be worked out (no such characteristic on the sheet) is left off unless the PC lists it,
+// and a listed one shows its own value without a claim that it was developed: a flat guess would be wrong.
+function mergeSkills(pcSkills, variant, chars) {
   const canonical = variant === 'base' ? BASE_SKILLS : REGENCY_SKILLS;
   const byName = new Map(); // keyed by lowercased canonical name
+  const known = new Map();  // every canonical skill, with its base for this PC (null: unknown)
   for (const c of canonical) {
-    byName.set(c.name.toLowerCase(), { name: c.name, base: c.base, reg: c.base });
+    const base = baseFor(c, chars);
+    known.set(c.name.toLowerCase(), { name: c.name, base });
+    if (base !== null) byName.set(c.name.toLowerCase(), { name: c.name, base, reg: base });
   }
   const specParents = new Set();
+  const listed = new Set();
   for (const pc of (pcSkills || [])) {
     const name = normalizeName(pc.name);
     const key = name.toLowerCase();
-    const existing = byName.get(key);
+    listed.add(key);
+    const existing = known.get(key);
     const base = existing ? existing.base : (Number(pc.base) || 0);
     // A blank/absent Regular means the skill was never developed — keep it at its
     // base default. (Number(null) is 0, so guard the empty cell explicitly.)
     const blank = pc.reg == null || (typeof pc.reg === 'string' && pc.reg.trim() === '');
     const regNum = Number(pc.reg);
+    if (base === null && (blank || !Number.isFinite(regNum))) continue;   // nothing to show but a guess
     const reg = (blank || !Number.isFinite(regNum)) ? base : regNum;
     byName.set(key, { name: existing ? existing.name : name, base, reg });
     const p = parentOf(name);
     if (p && GENERIC_PARENTS.has(p.toLowerCase())) specParents.add(p.toLowerCase());
   }
   let rows = Array.from(byName.values());
+  // A note that names its native language (`Language (English)` at EDU or above) has no blank Language (Own) beside it.
+  const own = byName.get('language (own)');
+  if (own && !listed.has('language (own)') && own.base !== null
+      && rows.some(s => /^language \((?!own\)|other\))/i.test(s.name) && s.reg >= own.base)) {
+    rows = rows.filter(s => s !== own);
+  }
   // Drop bare untouched generic parents that now have specialisations.
   rows = rows.filter(s => !(specParents.has(s.name.toLowerCase()) && s.reg === s.base));
   return rows
     .map(s => ({
       name: s.name, reg: s.reg, half: half(s.reg), fifth: fifth(s.reg),
-      developed: s.reg > s.base,
+      developed: s.base !== null && s.reg > s.base,
     }))
     .sort((a, b) => a.name.toLowerCase().localeCompare(b.name.toLowerCase()));
 }
 
-module.exports = { mergeSkills, normalizeName, REGENCY_SKILLS, BASE_SKILLS };
+module.exports = { mergeSkills, normalizeName, baseText, REGENCY_SKILLS, BASE_SKILLS };
