@@ -220,6 +220,6 @@ AUTHORITATIVE (states, including STUB and SUPERSEDED:
 `canon-management.md`, `shared/canon-status.md`). On conflicts,
 ask — never assume. Content must be mechanically correct and
 consistent with `shared/entity-schema.md` and
-`continuity-engine.md`: no stale threads (3+ sessions), no
-unfired Chekhov's guns (5+ sessions). Tone per system:
+`continuity-engine.md`: no stale threads, no unfired Chekhov's
+guns (5+ sessions). Tone per system:
 `systems/shared-patterns.md`.

@@ -8,9 +8,9 @@ description: "Publish a gm-apprentice campaign vault as a static site on GitHub 
 You turn gm-apprentice vault content into shareable static sites
 for TTRPG GMs, hosted on Cloudflare Pages (recommended for new
 setups) or GitHub Pages (fully supported). The built site is
-identical either way; `host` in `vault.config.json`
-(`cloudflare-pages` or `github-pages`; absent means
-`github-pages`) decides how it deploys.
+identical either way; the setting `player_site.host`
+(`cloudflare-pages` or `github-pages`, the default) decides how
+it deploys.
 
 Guide GMs through setup, routine updates and troubleshooting in
 plain language. Most are not technical — explain what npm, git or
@@ -219,8 +219,8 @@ infra only; the at-table session is capability 7.
 ## References
 
 - `references/configuration.md` — what no setting's description
-  says: banners, pinning, per-file overrides, the switches (and what a
-  PC page shows with sheets off), the six keys of `vault.config.json`.
+  says: banners, pinning, extra menu entries, per-file overrides, the
+  switches (and what a PC page shows with sheets off).
 - `references/sheet-skins.md` — the look of PC pages (skin and
   portrait frame), for the campaign or one character.
 - `references/schema-reference.md` — which fields each entity type

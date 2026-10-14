@@ -151,29 +151,17 @@ variables aren't in `~/.zshenv`, or you need a new terminal / `source`.
 
 ---
 
-## Step 3: Point the site config at Cloudflare
+## Step 3: Point the site at Cloudflare
 
-In the site's `vault.config.json`, set two fields:
-
-```json
-{
-  "host": "cloudflare-pages",
-  "siteUrl": "https://<project-name>.pages.dev"
-}
+```bash
+node "$TOOL" settings set player_site.host=cloudflare-pages player_site.url=https://<project-name>.pages.dev --config <dir>/vault.config.json
 ```
 
-- `host` tells the publish skill to deploy with wrangler instead of git.
-- `siteUrl` **must** be your Cloudflare URL. Cloudflare serves the site
-  at the root (`<project>.pages.dev/`), whereas GitHub Pages serves it
-  under a subpath. If you leave a `github.io` URL here, the build prints
-  a warning and the site's **404 page** will have broken styling (every
-  other page still works, because internal links are relative).
-
-Optional: set `"cloudflarePagesProject": "<name>"` to fix the project
-name. If omitted, the site directory's folder name is used (e.g. a site
-in `~/PROJECTS/iron-crown` deploys to the `iron-crown` project).
-
-Project names must be lowercase letters, numbers, and hyphens.
+The address must be the Cloudflare one: with a `github.io` address
+left from an earlier GitHub site the build warns and the 404 page
+loses its styling. When the project's name is not the site folder's
+name, also set `player_site.cloudflare_project=<project-name>`.
+Project names are lowercase letters, numbers and hyphens.
 
 ---
 
@@ -218,9 +206,9 @@ npx wrangler@4 pages deploy
 wrangler only uploads files that changed, so repeat deploys are fast.
 `gm-publish deploy --verify` runs this same build-then-deploy pair and
 also probes the live URL — the commands above are the fallback for
-running it by hand. It runs the site's own `prebuild` and `postbuild`
-scripts from `package.json` around the build, as `npm run build` does,
-and stops without deploying if either fails.
+running it by hand. The vault's build steps run with every build,
+and a step that fails stops it before anything is deployed. `settings
+get player_site.before_build player_site.after_build` lists them.
 
 ---
 
@@ -456,8 +444,8 @@ of `<project>.pages.dev`:
 2. Enter the domain. If the domain's DNS is already on Cloudflare, it's
    configured automatically. Otherwise Cloudflare shows the DNS record
    to add at your registrar.
-3. Update `siteUrl` in `vault.config.json` to the custom domain and
-   rebuild, so the 404 page's links resolve correctly.
+3. `settings set player_site.url=https://campaign.example.com`, then
+   rebuild and deploy, so the 404 page's links resolve correctly.
 
 ---
 
@@ -477,9 +465,9 @@ first few minutes — asset routes go live before the not-found handler
 propagates. Recheck after a few minutes. If it persists, confirm
 `docs/404.html` exists in the build output.
 
-**The 404 page loads but is unstyled / links are broken.** `siteUrl` is
-still a `github.io` URL. Set it to your `.pages.dev` (or custom) URL and
-rebuild — see Step 3.
+**The 404 page loads but is unstyled / links are broken.**
+`player_site.url` is still a `github.io` address. Set it to your
+`.pages.dev` (or custom) address and rebuild — see Step 3.
 
 **"A project with this name already exists."** The `project create` step
 only runs once per site. Skip it and run the `deploy` command directly.

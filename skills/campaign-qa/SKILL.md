@@ -74,7 +74,7 @@ recommendations.
   - **Critical** — visibly breaks at the table (dead NPC alive,
     timeline impossibility players can spot).
   - **Warning** — could cause confusion (conflicting facts across
-    files, missing clue paths, a DRAFT stale 3+ sessions or with a
+    files, missing clue paths, a stale DRAFT or one with a
     missing/future `createdSession`).
   - **Info** — housekeeping (a young DRAFT, minor naming, orphan).
   Calibrate by context: a DRAFT is expected to have gaps; a name
@@ -191,7 +191,7 @@ Also run when a build stopped with a settings fault.
 
 ### Stale DRAFT Detection — `references/checks/stale-draft-detection.md`
 
-DRAFT entities left unreviewed for 3+ sessions.
+DRAFT entities left unreviewed too long.
 
 ### Open Spoilers — `references/checks/open-spoilers.md`
 

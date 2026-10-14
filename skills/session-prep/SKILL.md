@@ -123,7 +123,8 @@ Notes?
 **8. Threads** — `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/session_context.py" <vault>
 --threads` lists every PC's Open threads with first/last-seen session
-and age, `STALE` at 3+, plus wrap-up threads missing from every sheet.
+and age, the old ones marked `STALE`, plus wrap-up threads missing
+from every sheet.
 You judge whether two wordings are one thread and whether an old one
 is dormant by design (`skills/ttrpg-expert/continuity-engine.md`).
 → `## Active Threads`

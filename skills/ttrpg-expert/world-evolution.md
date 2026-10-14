@@ -56,7 +56,7 @@ Review active threads (`continuity-engine.md`). For each:
 - Dormant threads touched or revived
 - Chekhov elements that fired, or overdue (5+ sessions unfired)
 - Foreshadowing that paid off or needs planting
-- Threads dormant 3+ sessions: recommend revival, retirement,
+- Dormant threads: recommend revival, retirement,
   or background advancement
 
 ### Step 2: Faction Turns

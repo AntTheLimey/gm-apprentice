@@ -1,9 +1,8 @@
 # Configuration Reference
 
-Everything about what the site publishes is a setting in the vault.
-The site's `vault.config.json` holds the deployment keys (see §
-`vault.config.json`); for a campaign setting an older site still keeps
-there, see § Settings left in `vault.config.json`.
+Everything about the site is a setting in the vault. The site
+folder's `vault.config.json` holds only where the vault is
+(`vaultPath`).
 
 ## Settings
 
@@ -31,7 +30,8 @@ settings`: tell the GM its `fix:` lines, on a yes run it again with
 `--fix`, and put what is left to the GM, above all whether something
 was meant to be hidden. A settings file that is not valid YAML is the
 one thing mended by hand: campaign-qa's
-`references/checks/settings.md`, last paragraph.
+`references/checks/settings.md`, last paragraph. The same check moves
+a setting or build step an older site still keeps in its own folder.
 
 > **Landing page state.** The landing hero (in-game date, session count) and the
 > *Latest Session* card are driven by the **`_Campaign` overview frontmatter** —
@@ -84,6 +84,25 @@ the display title. A pinned entity appears even if no session has
 mentioned it. A name that resolves to no published page prints a build
 warning; if it is spelled right, the page is probably excluded from
 the site.
+
+### Extra menu entries
+
+```bash
+node "$TOOL" settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --config <dir>/vault.config.json
+```
+
+One entry a call; `link` can also be a note's name or a web address.
+`settings remove player_site.menu_extra Gazetteer` takes one out by
+its label.
+
+### Landing banner
+
+```bash
+node "$TOOL" settings set player_site.landing.banner.title="Season two starts 4 May" player_site.landing.banner.text="Bring your sheets." --config <dir>/vault.config.json
+```
+
+`.link` and `.image` (a picture in the vault) are the other two parts.
+To take the banner down, `settings unset` each part that is set.
 
 ### Per-file field overrides
 
@@ -196,32 +215,3 @@ WARNING: <page>: a link or embed label changes this note's headings; nothing aft
 ```
 
 Fix the label in the note and rebuild.
-
-## `vault.config.json` (in the site repo)
-
-JSON file in the site directory. It holds six deployment keys and
-nothing else: where the vault is, where the output goes and where the
-site is hosted.
-
-| Setting | Key | Description |
-|---------|-----|-------------|
-| Vault path | `vaultPath` | Path to the vault directory, relative to this file or absolute |
-| Output directory | `outputDir` | Where generated HTML is written |
-| Host | `host` | Where the site is deployed: `github-pages` (default, or when absent) or `cloudflare-pages`. See `cloudflare-pages.md`. |
-| Site URL | `siteUrl` | Canonical base URL. For `cloudflare-pages` this **must** be the Cloudflare URL (e.g. `https://<project>.pages.dev`) — Cloudflare serves at the root, so a leftover `github.io` URL breaks the 404 page. |
-| Cloudflare project | `cloudflarePagesProject` | Optional. Cloudflare Pages project name for deploys. Defaults to the site directory's folder name. |
-| Preserve directories | `preserveDirs` | Output subdirectories to keep across builds |
-
-## Settings left in `vault.config.json`
-
-Campaign settings used to live in the site file under other names
-(`siteTitle`, `excludeSections`). They are not read there any more:
-the build warns for each, and stops for one that hides things, since
-what it hid would be published. Never move one by hand: the Settings
-check above lists each, and `--fix` takes a hiding one into the vault's
-settings and removes the rest, which the vault already sets.
-
-A vault the update has not moved yet keeps its settings in an older
-file, and only there are the site file's settings still read (`settings
-get --config` counts them). Every `settings` command works on such a
-vault as on any other, so nothing in this skill changes.

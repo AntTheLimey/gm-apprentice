@@ -154,7 +154,10 @@ Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 4. When generating content, check for Chekhov payoff opportunities
 5. Forgotten by GM but remembered by players = trust gap
 
-### Dormant Thread Revival (3+ sessions dormant)
+### Dormant Thread Revival
+
+Dormant: untouched for as many sessions as the vault's
+`vault.stale_after_sessions` says.
 
 - Still relevant? → retire explicitly if campaign moved on
 - Connects to current events? → weave back via callback

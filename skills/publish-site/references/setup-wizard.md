@@ -27,7 +27,7 @@ Nothing is held in your head between steps: each answer is written
 down as the GM gives it, so an interrupted run loses nothing.
 
 - **An answer that is a setting** (the title, tagline, image, 404
-  message, palette, fonts) is written at once with
+  message, palette, fonts, the site's address) is written at once with
   `node "$TOOL" settings set <name>=<value> --vault <vault>` and read
   back with `settings get <name> --vault <vault>`. To change a hiding
   list use `settings add` or `remove`: `set` replaces the whole list,
@@ -62,8 +62,7 @@ There are two free host options:
 
 - **Cloudflare Pages — recommended.** Fast global CDN, easy custom
   domains, image optimization, and it's the smoothest path for the
-  live status bar and at-table inbox if the GM ever wants them. The
-  wizard writes `host: cloudflare-pages` into the config.
+  live status bar and at-table inbox if the GM ever wants them.
 - **GitHub Pages — a fully-supported alternative.** A good fit if the
   GM already uses GitHub. Nothing about the site is worse; only how it's
   deployed differs.
@@ -160,13 +159,6 @@ This is just a question — it touches nothing on disk yet. Ask:
 Record the answer in the set-up note as `host` (`cloudflare-pages` or
 `github-pages`). This choice parameterizes the preflight below and
 forks the deploy in Phase E.
-
-> Note: choosing Cloudflare means the wizard writes an explicit
-> `host: cloudflare-pages` into `vault.config.json` later. This is a
-> recommendation the wizard makes, not a change to how the build reads
-> config: a site with **no** `host` field is still treated as GitHub
-> Pages by the build. GitHub Pages remains a first-class, fully-supported
-> choice.
 
 ### Step 5: Run the preflight doctor
 
@@ -280,8 +272,12 @@ Write it: `settings set player_site.theme.tagline="<tagline>"`.
 > site will live at `https://<project>.pages.dev`."
 
 Validate it's lowercase letters, numbers, and hyphens only; suggest a
-corrected version if not, then `setup-note set project_name=<name>`.
-The site's address is `https://<project_name>.pages.dev`.
+corrected version if not, then `setup-note set project_name=<name>`
+and write the host, the project and the site's address:
+
+```bash
+node "$TOOL" settings set player_site.host=cloudflare-pages player_site.cloudflare_project=<project_name> player_site.url=https://<project_name>.pages.dev --vault <vault>
+```
 
 **GitHub Pages:** ask for username and repo:
 
@@ -292,8 +288,8 @@ The site's address is `https://<project_name>.pages.dev`.
 
 Validate the repo name is URL-safe (lowercase letters, numbers, hyphens
 only); suggest a correction if not, then `setup-note set
-github_username=<user> project_name=<repo>`. The site's address is
-`https://<github_username>.github.io/<project_name>/`.
+github_username=<user> project_name=<repo>` and `settings set
+player_site.url=https://<github_username>.github.io/<project_name>/`.
 
 ### Step 9: Choose the site directory
 
@@ -474,40 +470,10 @@ The tool ships its runtime dependencies **vendored**, so a freshly-pinned
 cache version builds with no download step — `npm install` only re-links
 the package.
 
-### Step 15: Fill in vault.config.json
+### Step 15: Check the settings
 
-Open `vault.config.json` in `<site_dir>` and set the deployment keys
-from the set-up note (`host`, `project_name`, `github_username`).
-These are the only keys the file holds; everything about what the site
-publishes is a setting in the vault.
-
-**Cloudflare Pages (recommended):**
-
-```json
-{
-  "host": "cloudflare-pages",
-  "cloudflarePagesProject": "<project_name>",
-  "siteUrl": "https://<project_name>.pages.dev",
-  "vaultPath": "<as init wrote it>",
-  "outputDir": "./docs"
-}
-```
-
-**GitHub Pages:**
-
-```json
-{
-  "host": "github-pages",
-  "siteUrl": "https://<github_username>.github.io/<project_name>/",
-  "vaultPath": "<as init wrote it>",
-  "outputDir": "./docs"
-}
-```
-
-Do not add campaign settings (`siteTitle`, `folderMap`, exclude lists,
-a `backend` block) to this file: they are not read there.
-
-**Check the vault's settings:**
+The site folder's `vault.config.json` holds only where the vault is,
+and `init` wrote that. Everything else is a setting in the vault:
 
 ```bash
 node "$TOOL" settings check --config <site_dir>/vault.config.json
@@ -517,7 +483,8 @@ node "$TOOL" settings get player_site --config <site_dir>/vault.config.json
 `check` says `Every setting in the file reads cleanly.` or lists the
 faults; for a fault, see `configuration.md` § When a setting stops the
 build. `get` lists every site setting; the lines not marked
-`(default)` are this vault's, and should show the Phase B answers.
+`(default)` are this vault's, and should show the Phase B answers,
+the Step 8 address among them.
 
 Ask whether the vault has GM-only headings or frontmatter fields of
 its own, and add each: `settings add player_site.hide.sections "<heading>"`
@@ -726,13 +693,13 @@ node "$TOOL" deploy --verify --no-build --config vault.config.json
 ```
 
 - **On a 2xx / "live at `<url>`":** tell the GM the site **is live** at
-  `<siteUrl>` and to share that URL with their players.
+  `<url>` and to share that URL with their players.
 - **If it reported not-yet-live:** give the honest status rather than
   claiming it's live —
 
   > "The deploy uploaded successfully, but the host is still building
   > and propagating your site. Give it a minute, then open
-  > `<siteUrl>` — it should come up shortly."
+  > `<url>` — it should come up shortly."
 
   Retry the same `deploy --verify --no-build` command in a minute
   rather than rebuilding again. For a brand-new Cloudflare project the
@@ -753,7 +720,7 @@ note: Step 2 of a later run reads it.
 **Tier 1 is complete:** the GM has a live, shareable campaign site. Give
 them the URL and the refresh line:
 
-> "Your campaign site is live at `<siteUrl>`. Share that URL with your
+> "Your campaign site is live at `<url>`. Share that URL with your
 > players.
 >
 > Whenever you update your vault and want to refresh the site, just tell

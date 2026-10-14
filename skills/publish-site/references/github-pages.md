@@ -113,9 +113,8 @@ If you want the site to use a domain you own (e.g.
    take a few minutes to a few hours depending on your registrar.
 4. Once verified, enable **Enforce HTTPS** (recommended).
 
-Update the `siteUrl` field in `vault.config.json` to your
-custom domain, then rebuild and push so all internal links
-in the generated HTML point to the right URL.
+Then `settings set player_site.url=https://campaign.example.com`,
+rebuild and push, so the site's links point to the new address.
 
 ---
 

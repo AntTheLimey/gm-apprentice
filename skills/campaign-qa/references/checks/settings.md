@@ -37,11 +37,10 @@ node "$TOOL" settings list
 the key. Two hiding lists that repeat or disagree (an old-named list
 beside the right one) need no `carry`: `--fix` merges them.
 
-**Keys left in the site folder's `vault.config.json`.** Each has a
-`fix:` row. `--fix` adds a hiding list's entries to the vault's list,
-keeps the stricter of a hiding switch, and removes the key from the
-site file; any other key is just removed, since the vault's value is
-already the one in use.
+**Keys and build steps left in the site folder** (`vault.config.json`,
+`package.json`). Each has a `fix:` row: `--fix` moves it into the
+vault's settings and takes it out of the site folder, and the site
+builds the same. A row with no fix says what holds it there.
 
 **A file that is not valid YAML.** No `settings` command and no `--fix`
 can read it, so this is the one time the file is opened. The message

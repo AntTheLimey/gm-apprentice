@@ -343,7 +343,7 @@ with an in-world message, the setting
 
 The campaign image is also displayed on the 404 page when
 configured. The 404 template uses absolute paths derived from
-`siteUrl` so it works correctly when served from any nested URL.
+`player_site.url` so it works correctly when served from any nested URL.
 
 **Setup flow:** Suggest 2-3 genre-appropriate messages as
 options (e.g. "CLASSIFIED — CLEARANCE LEVEL INSUFFICIENT" for
