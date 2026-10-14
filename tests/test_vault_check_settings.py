@@ -795,7 +795,7 @@ class SiteFileKeyTests(NewFileBase):
         self.assertEqual(sorted(rows), ["outputDir", "preserveDirs"])
         for row in rows.values():
             self.assertEqual(row.kind, "certain")
-            self.assertEqual(row.ops, [{"op": "fold-site"}])
+            self.assertEqual(row.ops, [{"op": "fold-site", "keys": [row.fault["name"]]}])
             self.assertNotIn("not read now", row.fix)
             self.assertIn("read from", row.fix)       # true until it is moved
             self.assertIn("moves", row.fix)
@@ -821,7 +821,7 @@ class SiteFileKeyTests(NewFileBase):
         rows = [r for r in self.rows(vault) if r.site]
         (row,) = rows
         self.assertEqual(row.kind, "certain")
-        self.assertEqual(row.ops, [{"op": "fold-site"}])
+        self.assertEqual(row.ops, [{"op": "fold-site", "keys": ["package.json postbuild"]}])
         self.assertIn("package.json", row.fault["message"])
         self.assertNotIn("not read now", row.fix)
         code, out = self.fix_output(vault)
@@ -889,18 +889,16 @@ class SiteFileKeyTests(NewFileBase):
         self.assertNotIn("failed to start", out)
         self.assertEqual(site_file.read_text(), before)
 
-    def test_fix_beside_an_unusable_key_names_the_key_that_blocked_it(self):
+    def test_fix_beside_an_unusable_key_folds_its_own_key_and_leaves_the_unusable_one(self):
         vault, site_file = self.moved_vault_with_site_keys(
             preserveDirs="gazetteer", excludeSections=["Z"])
-        before = site_file.read_text()
-        with self.assertRaises(vaultlib.SettingsUnavailable) as caught:
-            self.fix_output(vault)
-        said = str(caught.exception)
-        self.assertNotIn("failed to start", said)
-        self.assertIn("preserveDirs", said)
-        self.assertIn("takes a list", said)
-        self.assertIn("nothing more was changed", said)
-        self.assertEqual(site_file.read_text(), before)
+        code, out = self.fix_output(vault)
+        self.assertNotIn("failed to start", out)
+        self.assertIn("preserveDirs", out)          # its STOP row still shows
+        left = json.loads(site_file.read_text())
+        self.assertEqual(left.get("preserveDirs"), "gazetteer")
+        self.assertNotIn("excludeSections", left)
+        self.assertIn("Z", vc.settings(vault).get("player_site.hide.sections"))
 
     def test_a_kept_folder_only_in_the_site_file_is_a_proposed_fix_that_names_it(self):
         vault, site_file = self.moved_vault_with_site_keys(
@@ -908,7 +906,7 @@ class SiteFileKeyTests(NewFileBase):
         vaultlib.settings_set(vault, [("player_site.keep", ["maps"])])
         (row,) = [r for r in self.rows(vault) if r.site]
         self.assertEqual(row.kind, "proposed")
-        self.assertEqual(row.ops, [{"op": "fold-site"}])
+        self.assertEqual(row.ops, [{"op": "fold-site", "keys": ["preserveDirs"]}])
         self.assertIn("gazetteer", row.fix)
         self.assertNotIn("maps", row.fix.split("gazetteer")[0][-5:])
         self.assertIn("cleaned at the next build", row.fix)
@@ -920,6 +918,36 @@ class SiteFileKeyTests(NewFileBase):
             vc.check_settings(vault, False, ["preserveDirs"], False)
         vc.forget_settings(None)
         self.assertNotIn("preserveDirs", site_file.read_text())
+
+    def test_fix_folds_only_the_certain_keys_and_a_proposed_one_waits(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            preserveDirs=["gazetteer", "maps"], siteUrl="https://theirs.example")
+        vaultlib.settings_set(vault, [("player_site.keep", ["maps"]),
+                                      ("player_site.url", "https://mine.example")])
+        code, out = self.fix_output(vault)
+        left = json.loads(site_file.read_text())
+        self.assertNotIn("siteUrl", left)
+        self.assertEqual(left.get("preserveDirs"), ["gazetteer", "maps"])
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(row.kind, "proposed")
+        self.assertEqual(row.fault["name"], "preserveDirs")
+        self.assertIn("waiting for the GM's yes", out)
+
+    def test_apply_folds_only_the_named_key(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            preserveDirs=["gazetteer", "maps"], outputDir="site-out")
+        vaultlib.settings_set(vault, [("player_site.keep", ["maps"]),
+                                      ("player_site.output", "out2")])
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            vc.check_settings(vault, False, ["preserveDirs"], False)
+        vc.forget_settings(None)
+        left = json.loads(site_file.read_text())
+        self.assertNotIn("preserveDirs", left)
+        self.assertEqual(left.get("outputDir"), "site-out")
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(row.fault["name"], "outputDir")
+        self.assertEqual(row.kind, "proposed")
 
     def test_a_differing_output_folder_is_proposed_and_names_both_folders(self):
         vault, _ = self.moved_vault_with_site_keys(outputDir="site-out")

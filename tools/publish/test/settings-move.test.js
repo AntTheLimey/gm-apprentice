@@ -960,6 +960,42 @@ test('--fold-site-file adds a site hiding list to the vault\'s, keeps the strict
   assert.equal(cliMove({ vault: s.vault }).data.siteDiffers, undefined);
 });
 
+test('--fold-site-file with --only takes just the named keys out and leaves every other key where it is', () => {
+  const s = scratch(old('  site_dir: ../Site\n  site_title: Mine\n  exclude_sections: [A]\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  const siteJson = { vaultPath: '../Vault', notes: 'kept' };
+  fs.writeFileSync(file, JSON.stringify(siteJson, null, 4) + '\n');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  const extra = { ...siteJson, siteTitle: 'Theirs', excludeSections: ['Z'], excludeCallouts: ['spoiler'] };
+  fs.writeFileSync(file, JSON.stringify(extra, null, 4) + '\n');
+  const one = cliMove({ vault: s.vault }, { foldSiteFile: true, only: ['excludeSections'] });
+  assert.equal(one.rc, 0, one.err.join('\n'));
+  const got = readSettings({ vaultPath: s.vault }).values.player_site;
+  assert.deepEqual(got.hide.sections, ['A', 'Z'], 'the named key was folded in');
+  assert.notDeepEqual(got.hide.callouts, ['spoiler'], 'a key that was not named was not carried');
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { ...siteJson, siteTitle: 'Theirs', excludeCallouts: ['spoiler'] },
+    'every other key, and the keys the tool does not know, stay in the site file');
+  const rest = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(rest.data.siteDiffers.sort(), ['player_site.hide.callouts', 'player_site.title'], 'what was not named still shows');
+  assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true, only: ['siteTitle', 'excludeCallouts'] }).rc, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+});
+
+test('--only without --fold-site-file is refused and changes nothing', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  fs.writeFileSync(path.join(siteDir, 'vault.config.json'), JSON.stringify({ vaultPath: '../Vault' }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(path.join(siteDir, 'vault.config.json'), JSON.stringify({ vaultPath: '../Vault', excludeSections: ['Z'] }));
+  const before = hashes(s.root);
+  const got = cliMove({ vault: s.vault }, { only: ['excludeSections'] });
+  assert.notEqual(got.rc, 0);
+  assert.deepEqual(hashes(s.root), before);
+});
+
 test('the vault already hiding every callout keeps that; a failing site write puts the vault\'s file back', () => {
   const s = scratch(old('  site_dir: ../Site\n  exclude_callouts: true\n'));
   const siteDir = path.join(s.root, 'Site');

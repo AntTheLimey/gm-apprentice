@@ -399,7 +399,10 @@ With it, those settings come out of the site file and what they say goes
 into the vault: a hiding list's entries are added to the vault's list
 (the built-in entries stay), the stricter of two callout rules is kept,
 and for any other setting the vault's own value stays. The two files
-change together or not at all.
+change together or not at all. Add `--only <key>` (repeatable) to take
+just the named site-file keys (`siteUrl`, `preserveDirs`, `package.json`
+for the build steps, or `package.json postbuild` for one); every other key
+is left where it is.
 If both
 files exist the new one is read, and the old one is reported as left over.
 

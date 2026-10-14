@@ -143,16 +143,42 @@ const hasKey = (obj, key) => isMap(obj) && Object.prototype.hasOwnProperty.call(
 // Whether the site file holds any of the site-folder keys the reader takes from it while the vault sets none.
 const hasFolderKeys = (site) => CARRIED.some(({ e, w }) => e.siteFallback && getPath(site, w.name.split('.')) != null);
 
+// A fold limited to named keys: the names are site-file keys (`siteUrl`, `fourOhFour.message`), or `package.json` for
+// every build step in the site's package.json, or `package.json <script>` for one.
+const PACKAGE_NAME = 'package.json';
+const onlyOf = (names) => (Array.isArray(names) && names.length ? new Set(names.map(String)) : null);
+const siteNameAllowed = (only, name) => !only || only.has(name) || only.has(name.split('.')[0]);
+const scriptAllowed = (only, script) => !only || only.has(PACKAGE_NAME) || only.has(`${PACKAGE_NAME} ${script}`);
+// The site file as the fold sees it: just the named keys (and where it points).
+function restrictSite(site, only) {
+  if (!only) return site;
+  const out = { vaultPath: site.vaultPath };
+  for (const name of only) {
+    if (name.startsWith(PACKAGE_NAME)) continue;
+    const segs = name.split('.');
+    const value = getPath(site, segs);
+    if (value === undefined) continue;
+    let cur = out;
+    for (const seg of segs.slice(0, -1)) {
+      if (!isMap(cur[seg])) cur[seg] = {};
+      cur = cur[seg];
+    }
+    cur[segs[segs.length - 1]] = value;
+  }
+  return out;
+}
+
 // The site folder's file with every key that is a setting now taken out (the rest is not ours):
 // { siteAfter, siteOut (the new text, or null when no key was there), removedKeys }. `carriedOnly` takes out only the
 // keys the move carries (the rest are left for the GM to look at).
 // `leaveFallback` leaves the five site-folder keys where they are (the site's tool cannot read them from the vault).
-function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false } = {}) {
+// `only` (a Set from `onlyOf`) limits it to the named keys; every other key stays.
+function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false, only = null } = {}) {
   const siteAfter = JSON.parse(siteText);
   const removedKeys = [];
   for (const e of REGISTRY) {
     if (leaveFallback && e.siteFallback) continue;
-    for (const w of (e.was || []).filter((x) => x.in === 'site' && (CARRIED_NAMES.has(x.name) || (x.read !== false && !carriedOnly)))) {
+    for (const w of (e.was || []).filter((x) => x.in === 'site' && siteNameAllowed(only, x.name) && (CARRIED_NAMES.has(x.name) || (x.read !== false && !carriedOnly)))) {
       const segs = w.name.split('.');
       const parent = getPath(siteAfter, segs.slice(0, -1));
       if (segs.length === 1 ? hasKey(siteAfter, segs[0]) : hasKey(parent, segs[segs.length - 1])) {
@@ -164,7 +190,7 @@ function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false } 
   }
   // What else sat under a carried name's parent is no longer used, and goes with it.
   for (const root of CARRIED_ROOTS) {
-    if (!hasKey(siteAfter, root)) continue;
+    if (!hasKey(siteAfter, root) || (only && !only.has(root))) continue;
     const rest = siteAfter[root];
     for (const k of isMap(rest) && Object.keys(rest).length ? Object.keys(rest) : ['']) removedKeys.push(k ? `${root}.${k}` : root);
     delete siteAfter[root];
@@ -292,11 +318,11 @@ function stepsGate(siteDir, { siteToolUpdated = false, pinCheck: ask = pinCheck 
   };
 }
 
-function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pinCheck, gate = null } = {}) {
+function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pinCheck, gate = null, only = null } = {}) {
   const out = { carried: [], dropped: [], lines: [], values: {}, changes: [], removed: [], pkg: null, stepsHeld: null, differing: [] };
   const pkg = readSitePackage(siteDir);
   const scripts = pkg && isMap(pkg.data.scripts) ? pkg.data.scripts : {};
-  const present = stepScriptsIn(siteDir);
+  const present = stepScriptsIn(siteDir).filter((e) => scriptAllowed(only, e.stepsFrom));
   if (!present.length) return out;
   out.stepsHeld = (gate || stepsGate(siteDir, { siteToolUpdated, pinCheck: ask }))();
   if (out.stepsHeld) {
@@ -445,14 +471,14 @@ function planMove(options, deps = {}) {
   }
 }
 
-function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false, siteToolUpdated = false, foldSiteFile = false }, deps = {}) {
+function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld = false, siteToolUpdated = false, foldSiteFile = false, only = null }, deps = {}) {
   const vault = path.resolve(vaultPath);
   let isDir = false;
   try { isDir = fs.statSync(vault).isDirectory(); } catch { /* said below */ }
   if (!isDir) throw new Error(`${vault} is not a folder.`);
   const plan = (extra) => ({ ok: true, lines: [], blockers: [], files: { write: [], remove: [] }, ...extra });
   const layout = layoutOf(vault);
-  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld, foldSiteFile, siteToolUpdated }, deps);
+  if (layout === 'new') return mendNew(vault, siteConfigPath, plan, { discardOld, foldSiteFile, siteToolUpdated, only: onlyOf(only) }, deps);
   // No settings file at all: there is still something to move when the site folder's file holds settings
   // (an old layout with an empty old file). Otherwise there is nothing.
   let noOld = false;
@@ -907,7 +933,7 @@ function foldInto(vault, site) {
   return { changes, said };
 }
 
-function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile = false, siteToolUpdated = false } = {}, deps = {}) {
+function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile = false, siteToolUpdated = false, only = null } = {}, deps = {}) {
   const lines = [`This vault is already on the new settings file (${NEW_FILE}); nothing to move.`];
   const mend = { cleanup: leftovers(vault, siteConfigPath), removeOld: null, siteFile: null, siteText: null, siteOut: null, removedKeys: [], carryLines: [] };
   const remove = [...mend.cleanup];
@@ -947,29 +973,30 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
       const now = read.readSettings({ vaultPath: vault, siteConfig: {} });
       const heldNow = (name) => ({ set: now.origins[name] !== undefined && now.origins[name] !== 'default', value: getPath(now.values, name.split('.')) });
       const gate = stepsGate(path.dirname(siteFile), { siteToolUpdated, pinCheck: deps.pinCheck });
-      const keysHeld = hasFolderKeys(site) ? gate() !== null : false;
+      const view = restrictSite(site, only);      // (the whole file, unless a fold was told which keys to take)
+      const keysHeld = hasFolderKeys(view) ? gate() !== null : false;
       if (keysHeld) keysHeldNow = gate();
-      carry = planCarry(site, heldNow, path.dirname(siteFile), { holdKeys: keysHeld });
+      carry = planCarry(view, heldNow, path.dirname(siteFile), { holdKeys: keysHeld });
       if (carry.blockers.length) return { ok: false, lines: [], blockers: carry.blockers, files: { write: [], remove: [] } };
-      stepsPlan = planSteps(path.dirname(siteFile), heldNow, { siteToolUpdated, pinCheck: deps.pinCheck, gate });
+      stepsPlan = planSteps(path.dirname(siteFile), heldNow, { siteToolUpdated, pinCheck: deps.pinCheck, gate, only });
       // (Said once, whether or not anything else is written.)
       if (keysHeld && carry.lines.includes(HELD_KEYS_LINE)) {
         carry.lines = carry.lines.filter((l) => l !== HELD_KEYS_LINE);
         lines.push(HELD_KEYS_LINE);
       }
-      const all = stripSiteKeys(siteText, { leaveFallback: keysHeld });
+      const all = stripSiteKeys(siteText, { leaveFallback: keysHeld, only });
       if (all.siteOut !== null || stepsPlan.lines.length > 0) {
-        const differs = siteDiffers(vault, site);
+        const differs = siteDiffers(vault, view);
         siteDiffersNow = differs;
         const hold = differs.length && !foldSiteFile;
         // Held back, only the carried keys come out; the rest of what the site file holds is left for the GM to look at.
-        const { siteAfter, siteOut, removedKeys } = hold ? stripSiteKeys(siteText, { carriedOnly: true, leaveFallback: keysHeld }) : all;
+        const { siteAfter, siteOut, removedKeys } = hold ? stripSiteKeys(siteText, { carriedOnly: true, leaveFallback: keysHeld, only }) : all;
         const changes = [...carry.changes, ...stepsPlan.changes];
         let said = null;
         if (differs.length && !hold) {
           // Fold what the site file says into the vault's file first: a hiding list's entries are added (built-ins
           // kept), the stricter of two callout rules is kept, anything else is the vault's value already.
-          const folded = foldInto(vault, site);
+          const folded = foldInto(vault, view);
           changes.push(...folded.changes);
           said = folded.said;
         }

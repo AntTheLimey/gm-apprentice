@@ -1463,16 +1463,21 @@ def settings_tidy(vault: Path, *, discard_old_file: bool = False) -> list[str]:
     return [str(x) for x in answer.get("lines", [])]
 
 
-def settings_fold_site_file(vault: Path) -> list[str]:
+def settings_fold_site_file(vault: Path,
+                            keys: list[str] | None = None) -> list[str]:
     """On a vault already on the new file, take the settings its site
     folder's vault.config.json still holds out of that file, in one change
     across both files: a hiding list's entries are added to the vault's list,
     the stricter callout rule is kept, any other value is the vault's own
-    already. The lines the tool reports."""
+    already. With `keys` (site-file key names, `package.json` or
+    `package.json <script>`) only those are taken and every other key is
+    left where it is. The lines the tool reports."""
     _check_vault(vault)
     forget_settings(vault)
-    answer = _run_settings(["move", *_target_args(vault), "--fold-site-file"],
-                           refusable=True, blockable=True)
+    only = [a for k in keys or [] for a in ("--only", k)]
+    answer = _run_settings(
+        ["move", *_target_args(vault), "--fold-site-file", *only],
+        refusable=True, blockable=True)
     if answer.get("ok") is False:
         said = " ".join(str(b) for b in answer.get("blockers") or [])
         raise SettingsUnavailable(said or "the move was blocked",

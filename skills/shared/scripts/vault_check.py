@@ -5032,7 +5032,7 @@ def _run_ops(vault: Path, ops: list[dict[str, Any]]) -> None:
         elif op["op"] == "carry":
             settings_carry(vault, op["from"], op["to"])
         elif op["op"] == "fold-site":
-            settings_fold_site_file(vault)
+            settings_fold_site_file(vault, op.get("keys"))
         elif op["op"] == "tidy":
             settings_tidy(vault, discard_old_file=bool(op.get("discard")))
         else:
@@ -5150,7 +5150,7 @@ def _site_left_row(fault: dict[str, Any]) -> SettingsRow:
     target = str(fault.get("use") or fault.get("setting") or "")
     key = fault["name"]
     row.kind = "certain"
-    row.ops = [{"op": "fold-site"}]
+    row.ops = [{"op": "fold-site", "keys": [key]}]
     row.fix = (f"move it to {target} in the vault's settings and take it out "
                "of vault.config.json (until it moves, the value is read from "
                "vault.config.json, so the site builds the same either way)")
@@ -5182,7 +5182,7 @@ def _site_differs_row(fault: dict[str, Any], own: Any,
         mine = own.get(target)
     except KeyError:
         mine = None
-    row.ops = [{"op": "fold-site"}]
+    row.ops = [{"op": "fold-site", "keys": [key]}]
     row.done = f"took {key} out of vault.config.json"
     checks = fault.get("checks")
     if checks == "keep" and isinstance(site_value, list) \
@@ -5243,7 +5243,7 @@ def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
                             f"the update moves it to {target}"}
         row = SettingsRow(fault, site=True, where="package.json")
         row.kind = "certain"
-        row.ops = [{"op": "fold-site"}]
+        row.ops = [{"op": "fold-site", "keys": [fault["name"]]}]
         row.fix = (f"move it to {target} in the vault's settings and take it "
                    "out of package.json (the tool then runs it from the "
                    "settings)")
@@ -5271,7 +5271,7 @@ def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
                             "npm run build"}
         row = SettingsRow(fault, site=True, where="package.json")
         row.kind = "certain"
-        row.ops = [{"op": "fold-site"}]
+        row.ops = [{"op": "fold-site", "keys": ["package.json"]}]
         row.fix = "take them out of package.json (the tool runs the vault's)"
         row.done = "took the build steps out of package.json"
         rows.append(row)
@@ -5318,7 +5318,7 @@ def _site_key_row(fault: dict[str, Any], own: Any,
                 f"{shown} is already the value in use, because that file "
                 "is not read now")
     row.kind = "certain"
-    row.ops = [{"op": "fold-site"}]
+    row.ops = [{"op": "fold-site", "keys": [key]}]
     row.fix = what
     row.done = (f"took {key} out of vault.config.json; it held no list of "
                 "entries, so nothing was carried" if nothing

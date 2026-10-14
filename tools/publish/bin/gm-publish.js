@@ -743,18 +743,18 @@ if (command === 'settings') {
   const rest = [];
   const tail = args.slice(2);
   for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
+    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill' || tail[i] === '--only') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile' }, { '--vault': 'vault' }, { '--fill': 'fill' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile' }, { '--vault': 'vault' }, { '--fill': 'fill', '--only': 'only' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, fill: parsed.flags.fill });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, fill: parsed.flags.fill, only: parsed.flags.only });
   exitAfterFlush(rc);
   return;
 }
