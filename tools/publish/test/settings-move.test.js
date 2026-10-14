@@ -1141,8 +1141,11 @@ for (const [layout, make] of Object.entries(STEP_LAYOUTS)) {
     const check = cliMove({ vault: s.vault, config: s.config }, { check: true });
     assert.equal(check.rc, 0, check.err.join('\n'));
     assert.deepEqual(readPackage(s).scripts.postbuild, DEAD_END.join(' && '), '--check writes nothing');
+    const checkText = check.data.lines.join('\n');
+    assert.ok(/Will remove postbuild from .*package\.json/.test(checkText), `--check lists the package.json removal:\n${checkText}`);
     const r = cliMove({ vault: s.vault, config: s.config });
     assert.equal(r.rc, 0, r.err.join('\n'));
+    assert.ok(/Removed postbuild from .*package\.json/.test(r.data.lines.join('\n')), r.data.lines.join('\n'));
     assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.after_build, DEAD_END);
     assert.deepEqual(stepsOf(s), { before: [], after: DEAD_END });
     const pkg = readPackage(s);

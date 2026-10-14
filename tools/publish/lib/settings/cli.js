@@ -112,7 +112,9 @@ function get(options, names) {
     values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])),
     origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])),
     written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
-    faults: faults.map(faultJson),
+    // Not the "moves at the next update" fault of a site-folder key: vault_check.py's Settings check would offer to
+    // delete a key that is still read (see the test in settings-cli.test.js). `check` and the build still report it.
+    faults: faults.filter((f) => !f.siteLeft).map(faultJson),
   };
   const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));

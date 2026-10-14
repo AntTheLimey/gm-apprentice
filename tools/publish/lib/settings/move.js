@@ -965,6 +965,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
           write.push(stepsPlan.pkg.file);
         }
         lines.push(...stepsPlan.lines);
+        if (stepsPlan.pkg) lines.push(packageLine(stepsPlan.pkg, stepsPlan.removed, false));
         mend.stepsLines = stepsPlan.lines;
         if (hold) {
           lines.push(`${siteFile} still holds settings the new file has differently (${differs.join(', ')}); ${siteOut !== null ? 'they were left in it' : 'it was left as it is'}. The vault's own values are the ones in use.`);
@@ -1046,6 +1047,7 @@ function applyMend(plan, mend, deps = {}) {
   }
   if (mend.pkg) put(mend.pkg.file, mend.pkg.out, mend.pkg.text, 'the build steps were not taken out of the site folder\'s package.json');
   lines.push(...(mend.stepsLines || []));
+  if (mend.pkg) lines.push(packageLine(mend.pkg, mend.removedScripts, true));
   if (mend.removeOld) {
     (deps.remove || ((x) => fs.rmSync(x, { force: true })))(mend.removeOld.file);
     lines.push(`Removed ${OLD_FILE}, left over from before the update.`);
@@ -1135,8 +1137,14 @@ function describeFiles(m, done) {
   if (m.notesText !== null && !m.notesPresent) out.push(`${done ? 'Wrote' : 'Will write'} ${NOTES_FILE} (what ${OLD_FILE} held besides settings, kept as it was).`);
   if (m.stateOut !== null) out.push(`${done ? 'Wrote' : 'Will write'} ${STATE_FILE}.`);
   if (m.siteOut !== null) out.push(`${done ? 'Removed' : 'Will remove'} the settings from ${m.siteFile}: ${m.removedKeys.join(', ')}. The rest of that file is as it was.`);
+  if (m.pkg) out.push(packageLine(m.pkg, m.removedScripts, done));
   if (!m.noOld) out.push(`${done ? 'Removed' : 'Will remove'} ${OLD_FILE}.`);
   return out;
+}
+
+// The move takes the steps it carried out of the site folder's package.json; the check lists that as the move does.
+function packageLine(pkg, scripts, done) {
+  return `${done ? 'Removed' : 'Will remove'} ${scripts.join(' and ')} from ${pkg.file}. The rest of that file is as it was.`;
 }
 
 // ---- Applying -----------------------------------------------------------------------------
