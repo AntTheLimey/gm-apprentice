@@ -54,7 +54,7 @@ const BASE_SKILLS = [
   { name: 'Medicine', base: 1 }, { name: 'Natural World', base: 10 },
   { name: 'Navigate', base: 10 }, { name: 'Occult', base: 5 },
   { name: 'Operate Heavy Machinery', base: 1 }, { name: 'Persuade', base: 10 },
-  { name: 'Photography', base: 5 }, { name: 'Pilot', base: 1 }, { name: 'Psychoanalysis', base: 1 },
+  { name: 'Pilot', base: 1 }, { name: 'Psychoanalysis', base: 1 },
   { name: 'Psychology', base: 10 }, { name: 'Ride', base: 5 },
   { name: 'Science', base: 1 }, { name: 'Sleight of Hand', base: 10 },
   { name: 'Spot Hidden', base: 25 }, { name: 'Stealth', base: 20 },

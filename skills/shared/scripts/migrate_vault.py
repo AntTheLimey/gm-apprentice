@@ -240,36 +240,56 @@ def _released_hashes(system: str | None) -> dict[str, list[str]]:
     return found if isinstance(found, dict) else {}
 
 
-# A top-level frontmatter key the template leaves blank (`campaign: ""`, `tags: []`, `age:`) is the vault's to fill
-# in: its value is not a difference from the plugin's text, and an overwrite keeps it (#366).
-FILL_IN_RE = re.compile(r"""^([A-Za-z_][\w-]*):[ \t]*(?:""|''|\[\])?[ \t]*(?:#.*)?$""")
-TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):")
+# A top-level frontmatter key the template leaves blank (`campaign: ""`, `tags: []`, `age:`, `play_date: null`,
+# `chapter: "[[]]"`) is the vault's to fill in, and so is `campaign` whatever placeholder a template gives it: its value
+# is not a difference from the plugin's text, and an overwrite keeps it (#366). The cost, taken knowingly: a later
+# release that changes such a key's value can never clean an older default out of a vault's copy.
+BLANK_VALUE_RE = re.compile(r"""^[ \t]*(?:""|''|\[\]|null|~|"\[\[\]\]")?[ \t]*(?:#.*)?$""")
+FILL_IN_BY_NAME = frozenset({"campaign"})
+TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):(.*)$")
 
 
 def _frontmatter_blocks(text: str) -> tuple[list[str], dict[str, tuple[int, int]]]:
     """The text's lines (endings kept) and, for each top-level frontmatter key,
-    the span of lines its value takes (the key's line and any lines under it)."""
+    the span of lines its value takes: the key's line and the lines under it,
+    less any blank or comment-only lines that end it. Empty when the text has
+    no frontmatter, or one this cannot split safely (a line at the margin that
+    is not a key, a list item or a comment; a key given twice)."""
     lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != "---":
+    def bare(i: int) -> str:
+        return lines[i].rstrip("\r\n")
+    if not lines or bare(0) != "---":
         return lines, {}
-    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    end = next((i for i in range(1, len(lines)) if bare(i) == "---"), None)
     if end is None:
         return lines, {}
     blocks: dict[str, tuple[int, int]] = {}
-    key, start = None, 0
+    key, start = None, 1
     for i in range(1, end + 1):
-        m = TOP_KEY_RE.match(lines[i]) if i < end else None
+        m = TOP_KEY_RE.match(bare(i)) if i < end else None
+        if i < end and not m and bare(i)[:1] not in ("", " ", "\t", "#", "-"):
+            return lines, {}
         if i == end or m:
-            if key is not None and key not in blocks:
-                blocks[key] = (start, i)
+            if key is not None:
+                if key in blocks:
+                    return lines, {}
+                stop = i
+                while stop > start + 1 and (not bare(stop - 1).strip()
+                                            or bare(stop - 1).lstrip().startswith("#")):
+                    stop -= 1
+                blocks[key] = (start, stop)
             key, start = (m.group(1), i) if m else (None, i)
     return lines, blocks
 
 
 def _fill_in_keys(template: str) -> set[str]:
     lines, blocks = _frontmatter_blocks(template)
-    return {key for key, (a, b) in blocks.items()
-            if b - a == 1 and FILL_IN_RE.match(lines[a].rstrip("\r\n"))}
+    out = set()
+    for key, (a, b) in blocks.items():
+        m = TOP_KEY_RE.match(lines[a].rstrip("\r\n"))
+        if key in FILL_IN_BY_NAME or (b - a == 1 and m and BLANK_VALUE_RE.match(m.group(2))):
+            out.add(key)
+    return out
 
 
 def _with_values(target: str, source: str, keys: set[str]) -> str:

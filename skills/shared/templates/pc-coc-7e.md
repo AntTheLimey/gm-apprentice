@@ -123,7 +123,6 @@ createdSession: ""
 | Occult | 05 | | | |
 | Operate Heavy Machinery | 01 | | | |
 | Persuade | 10 | | | |
-| Photography | 05 | | | |
 | Pilot () | 01 | | | |
 | Psychoanalysis | 01 | | | |
 | Psychology | 10 | | | |

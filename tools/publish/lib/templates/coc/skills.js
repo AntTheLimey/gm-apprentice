@@ -58,9 +58,11 @@ function mergeSkills(pcSkills, variant, chars) {
     if (base !== null) byName.set(c.name.toLowerCase(), { name: c.name, base, reg: base });
   }
   const specParents = new Set();
+  const listed = new Set();
   for (const pc of (pcSkills || [])) {
     const name = normalizeName(pc.name);
     const key = name.toLowerCase();
+    listed.add(key);
     const existing = known.get(key);
     const base = existing ? existing.base : (Number(pc.base) || 0);
     // A blank/absent Regular means the skill was never developed — keep it at its
@@ -74,6 +76,12 @@ function mergeSkills(pcSkills, variant, chars) {
     if (p && GENERIC_PARENTS.has(p.toLowerCase())) specParents.add(p.toLowerCase());
   }
   let rows = Array.from(byName.values());
+  // A note that names its native language (`Language (English)` at EDU or above) has no blank Language (Own) beside it.
+  const own = byName.get('language (own)');
+  if (own && !listed.has('language (own)') && own.base !== null
+      && rows.some(s => /^language \((?!own\)|other\))/i.test(s.name) && s.reg >= own.base)) {
+    rows = rows.filter(s => s !== own);
+  }
   // Drop bare untouched generic parents that now have specialisations.
   rows = rows.filter(s => !(specParents.has(s.name.toLowerCase()) && s.reg === s.base));
   return rows

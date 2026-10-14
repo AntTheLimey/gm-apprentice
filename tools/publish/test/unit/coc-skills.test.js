@@ -108,4 +108,12 @@ describe('mergeSkills', () => {
     assert.equal(out.find(s => s.name === 'Dodge').reg, 35);
     assert.equal(out.find(s => s.name === 'Language (Own)').reg, 80);
   });
+
+  it('a note that names its own language does not also get a worked-out Language (Own) row', () => {
+    const out = mergeSkills([{ name: 'Language (English)', base: null, reg: 80 }], 'regency', chars);
+    assert.ok(out.some(s => s.name === 'Language (English)'));
+    assert.ok(!out.some(s => s.name === 'Language (Own)'));
+    const second = mergeSkills([{ name: 'Language (French)', base: 1, reg: 30 }], 'regency', chars);
+    assert.equal(second.find(s => s.name === 'Language (Own)').reg, 80, 'a second language below EDU leaves Own alone');
+  });
 });

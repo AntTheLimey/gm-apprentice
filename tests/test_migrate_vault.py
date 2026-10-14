@@ -550,6 +550,50 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("  - letter", path.read_text(encoding="utf-8"))
         self.assertNotIn("template:_Template_Document.md", by_id(mv.find_templates(vault)))
 
+    def write_template(self, vault, name, edit):
+        (vault / "_Templates").mkdir(exist_ok=True)
+        path = vault / "_Templates" / name
+        text = mv.expected_templates(vault)[name]
+        path.write_text(edit(text), encoding="utf-8")
+        return path, text
+
+    def test_a_placeholder_campaign_and_a_commented_blank_list_are_the_vaults_to_fill(self):
+        vault = make_vault(self)
+        self.write_template(vault, "_Template_Plan.md", lambda t: t
+                            .replace('campaign: "[[Campaign_Overview_Updated]]"', 'campaign: "[[Canticle]]"', 1)
+                            .replace("leads_to: []", 'leads_to: ["[[Next]]"]', 1))
+        self.write_template(vault, "_Template_Session_WrapUp.md",
+                            lambda t: t.replace("play_date: null", "play_date: 2026-10-01", 1))
+        found = by_id(mv.find_templates(vault))
+        self.assertNotIn("template:_Template_Plan.md", found)
+        self.assertNotIn("template:_Template_Session_WrapUp.md", found)
+
+    def test_a_multi_line_value_is_kept_whole_by_an_overwrite(self):
+        vault = make_vault(self)
+        path, text = self.write_template(vault, "pc-coc-7e.md", lambda t: t
+                                         .replace('source_document: ""', "source_document: |\n  line one\n  line two", 1)
+                                         + "\nMy edit\n")
+        item = by_id(mv.find_templates(vault))["template:pc-coc-7e.md"]
+        self.assertEqual(item.group, CHOICE)
+        item.apply("y")
+        self.assertEqual(path.read_text(encoding="utf-8"),
+                         text.replace('source_document: ""', "source_document: |\n  line one\n  line two", 1))
+
+    def test_a_blank_key_the_vault_deleted_is_a_difference_and_comes_back(self):
+        vault = make_vault(self)
+        path, text = self.write_template(vault, "pc-coc-7e.md", lambda t: t.replace('portrait: ""\n', "", 1))
+        item = by_id(mv.find_templates(vault))["template:pc-coc-7e.md"]
+        item.apply("y")
+        self.assertEqual(path.read_text(encoding="utf-8"), text)
+
+    def test_a_frontmatter_it_cannot_split_safely_is_compared_whole(self):
+        lines, blocks = mv._frontmatter_blocks('---\ncampaign: ""\n"odd": 1\n---\n')
+        self.assertEqual(blocks, {})
+        self.assertEqual(mv._frontmatter_blocks('---\ntags: []\ntags: [x]\n---\n')[1], {})
+        self.assertEqual(mv._frontmatter_blocks('---\ntags: []\n')[1], {})
+        self.assertEqual(mv._frontmatter_blocks('--- \ntags: []\n---\n')[1], {})
+        self.assertEqual(mv._frontmatter_blocks("no frontmatter\n")[1], {})
+
     def test_a_template_in_no_release_is_a_choice(self):
         for history in (lambda old: {},
                         lambda old: {"coc-7e": {"_Template_Document.md": ["0" * 64]}},

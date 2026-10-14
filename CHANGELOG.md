@@ -24,8 +24,12 @@ Regency Cthulhu PC sheets start their skills at the right bases (#366).
   the characteristic on the sheet, such a skill is left off unless the
   PC lists it.
 - The sheet's skill lists match the templates: Regency's lists Fighting
-  (Sword), and the base CoC list includes Photography. A test keeps the
+  (Sword), and the base CoC template drops its Photography row, which the
+  core list has as an Art/Craft specialisation. A test keeps the
   templates and the sheet's lists the same.
+- A blank Dodge row in a CoC sheet's Skills table takes the Dodge in its
+  Combat table, so the two never disagree. A note that names its native
+  language (`Language (English)`) gets no extra `Language (Own)` row.
 - The update no longer offers a template over yours when the only
   difference is a value you filled in where the template leaves it blank
   (`campaign:`, `tags:` and the like). When you do take the plugin's
