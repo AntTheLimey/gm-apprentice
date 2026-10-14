@@ -174,6 +174,26 @@ test('fix round 1: a link differing in case from a note with a page is that page
   assert.match(site({ title: 'T', link: 'map.html?layer=2' }).read('index.html'), /<a class="landing-banner" href="map\.html\?layer=2"/);
 });
 
+test('final wave: a banner link to a hidden note is no link in any spelling (heading, path, .md, brackets, case)', () => {
+  const files = {
+    'Hidden/Lord_Vex.md': npc('publish: false\ngm_aliases:\n  - Traitor Bob\n'),
+    'Hidden/Lady_Wren.md': npc('publish: false\nwithheld: true\n'),
+  };
+  for (const link of ['Lady Wren#Secrets', 'Hidden/Lady Wren', '[[Hidden/Lord Vex]]', 'Lady Wren.md', 'Traitor Bob#Plans', 'LADY WREN.md', 'hidden/lady-wren.html', '[[Lady Wren#S|x]]']) {
+    const s = site({ title: 'Read this', link }, { files });
+    const html = s.read('index.html');
+    assert.match(html, /landing-banner/, link);
+    assert.doesNotMatch(html, /<a class="landing-banner"/, link);
+    assert.doesNotMatch(html, /Lady(%20| |_|-)Wren|Lord(%20| |_|-)Vex|Traitor(%20| )Bob/i, link);
+    assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${link}: ${s.warnings.join('\n')}`);
+  }
+});
+
+test('final wave: a banner link with a heading to a note with a page is that page', () => {
+  assert.match(site({ title: 'T', link: 'Harbour#Gear' }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/);
+  assert.match(site({ title: 'T', link: '[[Locations/Harbour|x]]' }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/);
+});
+
 test('rule 4: a title or text naming a withheld note is a finding on the landing page', () => {
   for (const banner of [{ title: 'Lord Zorn rides' }, { text: 'Beware Lord Zorn' }]) {
     const s = site(banner);

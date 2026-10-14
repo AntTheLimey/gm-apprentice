@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, mapFolder, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -13,7 +13,7 @@ const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
-const { runSteps, packageScripts, twiceWarning } = require('./settings/steps');
+const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
 const { linkText, parseWikilink } = require('./wikilink');
@@ -93,38 +93,70 @@ const LOWER_KEYS = new WeakMap();     // link map -> Map of lower-cased key -> o
 
 const foldName = (name) => name.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
 
-function rememberHiddenNames(linkMap, notes) {
+// `folderMap` (vault folder -> site folder) lets it also remember where each note's page WOULD be, so a plain site
+// address that lands on it is dropped too.
+const WOULD_BE = new WeakMap();       // link map -> Set of lower-cased output paths of the notes
+
+function rememberHiddenNames(linkMap, notes, { folderMap = {} } = {}) {
   const names = new Set();
+  const wouldBe = new Set();
   for (const note of notes) {
     const fm = note.frontmatter || {};
-    const all = [path.posix.basename(String(note.vaultPath).replace(/\\/g, '/')), note.displayTitle, typeof fm.title === 'string' ? fm.title : '',
+    const vaultPath = String(note.vaultPath).replace(/\\/g, '/');
+    const all = [path.posix.basename(vaultPath), vaultPath, note.displayTitle, typeof fm.title === 'string' ? fm.title : '',
       ...nameList(fm.aliases), ...gmAliasList(fm)];
     for (const name of all) {
       if (typeof name === 'string' && name.trim()) names.add(foldName(canonicalNfc(name)));
     }
+    const dir = path.posix.dirname(vaultPath) === '.' ? '' : path.posix.dirname(vaultPath);
+    const outDir = mapFolder(dir, folderMap);
+    if (!outDir && dir !== '') continue;   // a folder the site does not map has no page to point at
+    wouldBe.add((outDir ? outDir + '/' : '') + slugify(path.posix.basename(vaultPath)) + '.html');
   }
   HIDDEN_NAMES.set(linkMap, names);
+  WOULD_BE.set(linkMap, new Set([...wouldBe].map((p) => p.toLowerCase())));
 }
+
+// Addresses that are not a note and not on the site, and may stand as written (a mail or phone link).
+const PASS_SCHEME_RE = /^(?:mailto|tel):/i;
+const ANY_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
 
 function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
   const text = String(link == null ? '' : link).trim();
   if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
+  if (PASS_SCHEME_RE.test(text)) return { kind: 'outside', href: text };
+  if (ANY_SCHEME_RE.test(text) && !/^[a-z]:[\\/]/i.test(text)) return { kind: 'none', href: null };
+  // The target is read as a wiki-link target is: brackets, `|label`, `#heading`, `^block` and `.md` come off, in
+  // either spelling. The site has no heading anchors, so a heading is dropped. The name is tried with its folder
+  // path and then without it.
   const wiki = /^\[\[([\s\S]+)\]\]$/.exec(text);
-  const name = canonicalNfc(wiki ? parseWikilink(wiki[1]).name.trim() : text);
+  const name = canonicalNfc(parseWikilink(wiki ? wiki[1] : text).name.trim().replace(/\\/g, '/'));
   if (name) {
-    const exact = linkMap[name] || (pages.find(p => canonicalNfc(p.title) === name) || {}).outputPath;
-    if (exact) return { kind: 'page', href: exact };
-    // The same name in another letter case is that page (the names of notes with pages are in the link map).
+    const candidates = [name];
+    const last = name.slice(name.lastIndexOf('/') + 1).trim();
+    if (last && last !== name) candidates.push(last);
     if (!LOWER_KEYS.has(linkMap)) {
       const keys = new Map();
       for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
       LOWER_KEYS.set(linkMap, keys);
     }
-    const loose = LOWER_KEYS.get(linkMap).get(foldName(name));
-    if (loose) return { kind: 'page', href: loose };
-    const folded = foldName(name);
-    if ((HIDDEN_NAMES.get(linkMap) || new Set()).has(folded)) return { kind: 'none', href: null };
+    for (const candidate of candidates) {
+      const exact = linkMap[candidate] || (pages.find(p => canonicalNfc(p.title) === candidate) || {}).outputPath;
+      if (exact) return { kind: 'page', href: exact };
+      // The same name in another letter case is that page (the names of notes with pages are in the link map).
+      const loose = LOWER_KEYS.get(linkMap).get(foldName(candidate));
+      if (loose) return { kind: 'page', href: loose };
+    }
+    const hidden = HIDDEN_NAMES.get(linkMap) || new Set();
+    if (candidates.some((c) => hidden.has(foldName(c)))) return { kind: 'none', href: null };
   }
+  // A bracketed link is a note, and no page was found for it: never printed.
+  if (wiki) return { kind: 'none', href: null };
+  // A site address that lands where a hidden note's page would be.
+  let address = text.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '').replace(/^\/+/, '').replace(/[#?].*$/, '').toLowerCase();
+  try { address = decodeURIComponent(address); } catch (e) { /* as written */ }
+  const taken = new Set(Object.values(linkMap).map((p) => String(p).toLowerCase()));
+  if (!taken.has(address) && (WOULD_BE.get(linkMap) || new Set()).has(address)) return { kind: 'none', href: null };
   return { kind: 'site', href: text.replace(/^\.\//, '') };
 }
 
@@ -161,8 +193,9 @@ function buildSite(options) {
   // the preview, or any command that only reads. Before anything is read from the vault, in the site folder.
   const runningSteps = options.runSteps === true && !dry && !options.outputDirOverride;
   if (runningSteps) {
-    const twice = twiceWarning(publishConfig.layout === 'new' ? packageScripts(configDir) : {});
-    if (twice) printWarning(twice);
+    const notes = packageNotes(publishConfig.layout === 'new' ? packageScripts(configDir) : {}, publishConfig.steps);
+    if (notes.twice) printWarning(notes.twice);
+    if (notes.only) (options.stepsLog || console.log)(`  ${notes.only}`);
     if (publishConfig.steps.before.length) runSteps(publishConfig.steps.before, { cwd: configDir, label: 'before_build', log: options.stepsLog, stdio: options.stepsStdio });
   }
 
@@ -202,12 +235,14 @@ function buildSite(options) {
   const fieldOverrides = publishConfig.overrides.fields || {};
 
   function assertSafeOutputDir() {
-    const resolved = path.resolve(outputDir);
+    // Real paths: a link in the site folder that leads to the vault is the vault.
+    const real = (p) => { try { return fs.realpathSync.native(path.resolve(p)); } catch { return path.resolve(p); } };
+    const resolved = real(outputDir);
     const root = path.parse(resolved).root;
     if (resolved === root) {
       throw new Error(`Refusing to clean filesystem root: ${resolved}`);
     }
-    const resolvedVault = path.resolve(config.vaultPath);
+    const resolvedVault = real(config.vaultPath);
     if (resolved === resolvedVault || resolvedVault.startsWith(resolved + path.sep)) {
       throw new Error(`Refusing to clean the output folder (${nm('player_site.output')}) that contains the vault: ${resolved}`);
     }
@@ -225,7 +260,8 @@ function buildSite(options) {
     if (!fs.existsSync(outputDir)) return;
     assertSafeOutputDir();
     for (const entry of fs.readdirSync(outputDir)) {
-      if (config.preserveDirs.includes(entry)) continue;
+      // A kept folder is kept in any letter case: this can only keep more.
+      if (config.preserveDirs.some((kept) => kept.toLowerCase() === entry.toLowerCase())) continue;
       const full = path.join(outputDir, entry);
       fs.rmSync(full, { recursive: true, force: true });
     }
@@ -604,7 +640,7 @@ function buildSite(options) {
   // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
   // take too, so all three pair on the same frontmatter (#276).
   const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
-  rememberHiddenNames(linkMap, allNotes);
+  rememberHiddenNames(linkMap, allNotes, { folderMap: config.folderMap });
   const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
@@ -996,7 +1032,7 @@ function buildSite(options) {
   for (const item of publishConfig.menu_extra || []) {
     const read = resolveSiteLink(item.link, { linkMap, pages });
     if (read.kind === 'none') {
-      console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", a note the site makes no page of — it is left out of the menu`);
+      console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", which is a note the site makes no page of, or an address the site cannot link to — it is left out of the menu`);
       continue;
     }
     menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
@@ -1510,7 +1546,7 @@ function buildSite(options) {
     if (banner.link) {
       const read = resolveSiteLink(banner.link, { linkMap, pages });
       if (read.kind === 'none') {
-        console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", a note the site makes no page of — the banner is not a link`);
+        console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", which is a note the site makes no page of, or an address the site cannot link to — the banner is not a link`);
         banner.link = null;
       } else {
         banner.link = { href: read.href, external: read.kind === 'outside' };

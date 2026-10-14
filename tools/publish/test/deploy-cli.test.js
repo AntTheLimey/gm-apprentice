@@ -494,6 +494,38 @@ describe('deploy hooks: the ways they used to slip through (#248 review)', () =>
   });
 });
 
+describe('setup-status-bar and setup-inbox build with the vault\'s build steps', () => {
+  it('asks for the steps to run, as build and deploy do', async () => {
+    const fs = require('fs');
+    const { runSetupBackend } = require('../lib/setup-backend');
+    for (const feature of ['status-bar', 'inbox']) {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-steps-'));
+      const vault = path.join(root, 'vault');
+      fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+      fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
+      const site = path.join(root, 'site');
+      fs.mkdirSync(site);
+      const configPath = path.join(site, 'vault.config.json');
+      fs.writeFileSync(configPath, JSON.stringify({ vaultPath: '../vault' }));
+      fs.writeFileSync(path.join(site, 'wrangler.toml'), 'name = "x"\npages_build_output_dir = "docs"\n');
+      const seen = [];
+      const rc = await runSetupBackend(feature, { configPath }, {
+        out: () => {},
+        runWrangler: (args) => {
+          if (args[1] === 'namespace' && args[2] === 'list') return { code: 0, stdout: '[]', stderr: '' };
+          if (args[1] === 'namespace' && args[2] === 'create') return { code: 0, stdout: 'id = "kv1"', stderr: '' };
+          return { code: 0, stdout: '', stderr: '' };
+        },
+        build: (opts) => { seen.push(opts); },
+        syncFunctions: () => {},
+      });
+      assert.strictEqual(rc, 0, feature);
+      assert.strictEqual(seen.length, 1, feature);
+      assert.strictEqual(seen[0].runSteps, true, feature);
+    }
+  });
+});
+
 describe('deploy hooks: an unreadable package.json (CodeRabbit #263)', () => {
   it('stops rather than silently skipping the site\'s build steps', async () => {
     const h = harness();

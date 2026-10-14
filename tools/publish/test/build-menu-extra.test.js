@@ -284,6 +284,56 @@ test('one bad entry is left out alone, with a warning naming it; the rest show',
   assert.ok(said.some((w) => /entry 2/.test(w)), said.join('\n'));
 });
 
+// ---- Final fix wave: the link is read the way a wiki-link target is ----
+
+const SECRETS = {
+  'Hidden/Lord_Vex.md': npc('publish: false\ngm_aliases:\n  - Traitor Bob\n'),
+  'Hidden/Lady_Wren.md': npc('publish: false\nwithheld: true\n'),
+};
+const LEAKY = [
+  'Traitor Bob#Plans', 'Hidden/Lady Wren', 'Lady Wren#Secrets', '[[Hidden/Lord Vex]]', 'Lady Wren.md',
+  'Hidden/Lady_Wren.md', '[[Lady Wren#Secrets|the plans]]', 'LADY WREN.MD', 'Hidden/Lord Vex#Plans',
+  '[[Lord Vex^block]]', 'hidden\\Lady Wren', 'Old Tam#Notes', '[[Old Tam.md]]',
+  'hidden/lady-wren.html', './hidden/lady-wren.html#top', 'hidden/old-tam.html',
+];
+
+test('final wave: a link to a hidden note is dropped in every spelling (heading, path, .md, brackets, case)', () => {
+  const menu = LEAKY.map((link, i) => ({ label: `Leak${i}`, link }));
+  const s = site(menu, { files: SECRETS });
+  const html = s.read('index.html');
+  assert.doesNotMatch(html, /Lady(%20| |_|-)Wren|Lord(%20| |_|-)Vex|Traitor(%20| )Bob|Old(%20| |_|-)Tam|\.md"/i);
+  LEAKY.forEach((link, i) => {
+    assert.doesNotMatch(menus(html).desktop, new RegExp(`>Leak${i}<`), link);
+    assert.ok(s.warnings.some((w) => w.includes(`"Leak${i}"`)), `${link}: ${s.warnings.join('\n')}`);
+  });
+});
+
+test('final wave: a note with a page is that page whatever the spelling; the heading is dropped', () => {
+  const s = site([
+    { label: 'A', link: 'Harbour#Gear' }, { label: 'B', link: 'Locations/Harbour' }, { label: 'C', link: '[[Locations/Harbour#Gear|docks]]' },
+    { label: 'D', link: 'harbour.md' },
+  ]);
+  const { desktop } = menus(s.read('index.html'));
+  for (const label of ['A', 'B', 'C', 'D']) assert.match(desktop, new RegExp(`href="locations/harbour\\.html">${label}<`), label);
+});
+
+test('final wave: a bracketed link that names nothing is dropped; a plain site address still stands', () => {
+  assert.equal(resolveSiteLink('[[Nowhere Special]]', { linkMap, pages }).kind, 'none');
+  assert.equal(resolveSiteLink('gazetteer/index.html#top', { linkMap, pages }).kind, 'site');
+});
+
+test('final wave: mailto and tel stand as written, escaped; any other scheme is dropped with a warning', () => {
+  const s = site([
+    { label: 'Mail', link: 'mailto:gm@example.com' }, { label: 'Call', link: 'tel:+4412345' },
+    { label: 'Bad', link: 'javascript:alert(1)' }, { label: 'Data', link: 'data:text/html,hi' }, { label: 'Caps', link: ' JavaScript:alert(1)' },
+  ]);
+  const html = s.read('index.html');
+  assert.match(menus(html).desktop, /href="mailto:gm@example\.com"[^>]*>Mail</);
+  assert.match(menus(html).desktop, /href="tel:\+4412345"[^>]*>Call</);
+  assert.doesNotMatch(html, /javascript:|data:text/i);
+  for (const label of ['Bad', 'Data', 'Caps']) assert.ok(s.warnings.some((w) => w.includes(`"${label}"`)), label);
+});
+
 test('rule 6: the menu with no extra entries is the same text as with extra undefined', () => {
   const nav = (options) => generateNav([{ outputDir: 'world', outputPath: 'world/a.html', title: 'A', frontmatter: {} }], options)('index.html', { siteTitle: 'T' });
   assert.equal(nav({ extra: [] }), nav({}));

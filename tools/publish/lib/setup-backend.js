@@ -134,7 +134,8 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot, configPath);
-  await build({ configPath });
+  // (The vault's build steps run here too: this build is published straight after.)
+  await build({ configPath, runSteps: true });
   const dep = runWranglerAt(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${failureDetail(dep)}`); return 1; }
 

@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { readSettings, formatFault, makeFault, stops, entry, movedKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
+const { readSettings, formatFault, makeFault, stops, entry, movedKeys, siteFolderKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -252,7 +252,12 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
 function assertNoStops(publishConfig, what) {
   const found = stops(publishConfig.faults || []);
   if (!found.length) return;
-  throw new Error(`${what} stopped: the settings have a fault that could show players more than you meant.\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}\nFix it, or ask the apprentice to run the Settings check.`);
+  // A fault in where to build or what to keep cannot show players anything; it only stops the build from cleaning a folder it cannot trust.
+  const folderOnly = found.every((f) => f.setting === 'player_site.output' || f.setting === 'player_site.keep');
+  const heading = folderOnly
+    ? 'the settings have a fault in where the site is built or what it keeps, so nothing was cleaned or built.'
+    : 'the settings have a fault that could show players more than you meant.';
+  throw new Error(`${what} stopped: ${heading}\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}\nFix it, or ask the apprentice to run the Settings check.`);
 }
 
 // assertNoStops for a command that has only the site's vault.config.json path (deploy).
@@ -302,7 +307,8 @@ function scanConfigFor(config, publishConfig) {
 }
 
 // The site folder's five keys in the spelling the site file used, and the field of publishConfig.site each is.
-const SITE_KEYS = [['siteUrl', 'url'], ['host', 'host'], ['outputDir', 'output'], ['cloudflarePagesProject', 'cloudflare_project'], ['preserveDirs', 'keep']];
+// Derived from the registry, the one place that names them: [['siteUrl', 'url'], ['host', 'host'], ...].
+const SITE_KEYS = siteFolderKeys().map(({ key, name }) => [key, name.split('.').pop()]);
 
 // The one resolved config every command reads. `config` is the raw vault.config.json
 // object with each moved key overwritten, in its old JSON spelling, by the value

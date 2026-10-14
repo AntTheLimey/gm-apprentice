@@ -88,6 +88,33 @@ describe('build with the site-folder settings in the vault', () => {
     assert.strictEqual(hash(sentinel), before);
   });
 
+  it('an output folder that is a link to the vault (or outside the site folder) stops the build, and the vault is untouched', () => {
+    const s = setup({ output: 'vlink' });
+    const vault = path.join(s.root, 'vault');
+    fs.symlinkSync(vault, path.join(s.siteDir, 'vlink'), 'junction');
+    const before = fs.readdirSync(vault).sort();
+    assert.throws(() => run(s.configPath), /settings have a fault/);
+    assert.throws(() => run(s.configPath, { allowFaults: true }), /did not start|Refusing|inside the vault|contains the vault/);
+    assert.deepStrictEqual(fs.readdirSync(vault).sort(), before);
+  });
+
+  it('a kept folder is kept whatever the letter case of its name in the settings', () => {
+    const s = setup({ output: 'public', keep: ['Gazetteer'] });
+    const kept = path.join(s.siteDir, 'public', 'gazetteer');
+    fs.mkdirSync(kept, { recursive: true });
+    fs.writeFileSync(path.join(kept, 'map.txt'), 'mine\n');
+    run(s.configPath);
+    assert.ok(fs.existsSync(path.join(kept, 'map.txt')));
+  });
+
+  it('a fault in where to build or what to keep is not headed as one that could show players more', () => {
+    const s = setup({ output: '../elsewhere' });
+    let message = '';
+    try { run(s.configPath); } catch (e) { message = e.message; }
+    assert.match(message, /build stopped: .*(output|keep|folder)/);
+    assert.doesNotMatch(message, /show players more than you meant/);
+  });
+
   it('an unreadable keep list stops the build before anything is deleted', () => {
     const s = setup({ output: 'public', keep: ['maps/deep'] });
     const out = path.join(s.siteDir, 'public');

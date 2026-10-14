@@ -122,6 +122,10 @@ async function runDeploy(options, deps) {
   } catch { /* a vault that cannot be read is reported by the build */ }
   const hookInfo = opts.noBuild ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
   const hooks = hookInfo.hooks.filter((h) => !(h === 'prebuild' ? vaultSteps.before : vaultSteps.after).length);
+  // A hook left out because the vault holds steps for that slot is said, so the two ways of publishing are not a surprise.
+  for (const h of hookInfo.hooks.filter((x) => !hooks.includes(x))) {
+    say(`\`${h}\` in package.json is not run by deploy: the vault holds ${h === 'prebuild' ? 'before_build' : 'after_build'} steps for that slot, and the tool runs those.`);
+  }
   const platform = d.platform || process.platform;
 
   // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).

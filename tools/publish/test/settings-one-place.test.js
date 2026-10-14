@@ -288,6 +288,17 @@ test('no code reads a site-folder key off the site file', () => {
   assert.deepEqual(bad.map((r) => `${r.file}: ${r.variable}.${r.prop}`), []);
 });
 
+// Two files parse the site file themselves instead of calling loadVaultConfig (`JSON.parse(readFile(configPath))`), so
+// the scan above cannot see them: no site-folder key is read off what they parsed (they ask the settings).
+test('setup-backend.js and site-doctor.js read no site-folder key off the site file they parse', () => {
+  for (const file of ['setup-backend.js', 'site-doctor.js']) {
+    const src = code(path.join(ROOT, 'lib', file));
+    assert.match(src, /JSON\.parse\(|rawSiteConfig/, `${file} no longer parses the site file; this check is out of date`);
+    const bad = [...src.matchAll(new RegExp(`\\b(?:config|rawConfig|rawSiteConfig|raw|site)\\??\\.(${SITE_FOLDER_KEYS.join('|')})\\b`, 'g'))].map((m) => m[0]);
+    assert.deepEqual(bad, [], file);
+  }
+});
+
 // (d) A build step is run in one place: lib/settings/steps.js. This looks at the settings package too, so a second
 // runner there is caught. Files that require child_process: run-command.js (the shared runner for git, npm install,
 // wrangler and gh), image-optimize.js (image tools), steps.js (the steps) and settings/move.js, whose one use runs

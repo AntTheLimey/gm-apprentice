@@ -2,7 +2,9 @@
 // The one place a list of folders is tidied, for both layouts, on reading and on writing. The
 // scanner compares the entries with vault-relative POSIX paths, so an entry written another way
 // ("Secrets/", "./Private", "GM\Stuff", an absolute path inside the vault) would hide nothing.
+const fs = require('node:fs');
 const path = require('node:path');
+const { isDeepStrictEqual } = require('node:util');
 
 // Normalizes backslashes, a trailing slash, a leading "./" and an absolute path inside the vault.
 // An absolute path outside the vault is dropped (and `say` is told, naming the setting as `label`).
@@ -43,6 +45,23 @@ function normalizeExcludeDirs(list, vaultPath, say = () => {}, label) {
 // ---- The site folder's own folders -------------------------------------------------------------
 // What a build writes into and keeps. The build empties the output folder, so these are judged strictly.
 
+// The path with every link in it followed. A folder that does not exist yet is judged by its nearest folder that does,
+// with the rest of the path put back.
+function realPath(p) {
+  const tail = [];
+  let cur = p;
+  for (;;) {
+    try {
+      return path.join(fs.realpathSync.native(cur), ...tail);
+    } catch {
+      const up = path.dirname(cur);
+      if (up === cur) return p;
+      tail.unshift(path.basename(cur));
+      cur = up;
+    }
+  }
+}
+
 // Why `value` cannot be the output folder of a site in `siteDir`, or null. It must be text, inside the site folder,
 // and not the site folder itself. Without a site folder only a relative path can be judged; an absolute one passes.
 function outputProblem(value, siteDir) {
@@ -52,7 +71,11 @@ function outputProblem(value, siteDir) {
   if (siteDir) {
     const root = path.resolve(siteDir);
     const full = path.resolve(root, text);
-    return full !== root && full.startsWith(root + path.sep) ? null : rule;
+    if (!(full !== root && full.startsWith(root + path.sep))) return rule;
+    // A link inside the site folder that leads out of it (to the vault, say) is outside it, whatever it is called.
+    const realRoot = realPath(root);
+    const realFull = realPath(full);
+    return realFull !== realRoot && realFull.startsWith(realRoot + path.sep) ? null : rule;
   }
   if (path.isAbsolute(text) || /^[A-Za-z]:/.test(text)) return null;
   const tidy = path.posix.normalize(text.replace(/\\/g, '/'));
@@ -65,8 +88,17 @@ function keepProblem(list) {
   return bad === undefined ? null : 'each entry must be a plain folder name: not empty, with no slash and no ".."';
 }
 
+// Whether two values of a checked folder setting are the same: an output folder written two ways (`docs`, `./docs/`)
+// is one folder; a list is compared entry by entry.
+function sameChecked(check, a, b, siteDir) {
+  if (check === 'output' && typeof a === 'string' && typeof b === 'string') {
+    return path.resolve(siteDir || path.sep, a.trim()) === path.resolve(siteDir || path.sep, b.trim());
+  }
+  return isDeepStrictEqual(a, b);
+}
+
 // The value a checked folder setting is used as: the text the check judged, trimmed (a name judged trimmed must be
 // used trimmed, or " maps " would never match the folder `maps` and it would be deleted).
 const tidyChecked = (check, value) => (check === 'output' ? value.trim() : value.map((x) => x.trim()));
 
-module.exports = { normalizeExcludeDir, normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked };
+module.exports = { normalizeExcludeDir, normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked, sameChecked };

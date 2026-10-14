@@ -49,12 +49,25 @@ function packageScripts(siteDir) {
   return out;
 }
 
-// The warning for a vault on the new settings whose package.json still holds a step, or null.
-function twiceWarning(scripts) {
-  const names = Object.keys(scripts);
-  if (!names.length) return null;
-  const which = names.map((n) => `\`${n}\``).join(' and ');
-  return `${which} in the site folder's package.json also run${names.length === 1 ? 's' : ''} under \`npm run build\`, after the tool has run the vault's own steps; the next update moves ${names.length === 1 ? 'it' : 'them'}. Nothing is run on ${names.length === 1 ? 'its' : 'their'} account.`;
+// What a vault on the new settings should hear about a build step that package.json still holds. `scripts` is
+// packageScripts(); `steps` is { before, after } from the vault's settings. { twice, only }, each text or null:
+//   twice  the vault holds steps for that slot too: `npm run build` runs both, so the vault's run twice there
+//   only   package.json alone holds it: it still runs under `npm run build` and `deploy` until the next update
+const SLOT = { prebuild: ['before', 'before_build'], postbuild: ['after', 'after_build'] };
+function packageNotes(scripts, steps) {
+  const held = (n) => ((steps || {})[SLOT[n][0]] || []).length > 0;
+  const list = (names) => names.map((n) => `\`${n}\``).join(' and ');
+  const doubled = Object.keys(scripts).filter(held);
+  const alone = Object.keys(scripts).filter((n) => !held(n));
+  const plural = (names, one, many) => (names.length === 1 ? one : many);
+  return {
+    twice: doubled.length
+      ? `${list(doubled)} in the site folder's package.json also run${plural(doubled, 's', '')} under \`npm run build\`, after the tool has run the vault's own ${doubled.map((n) => SLOT[n][1]).join(' and ')} steps, so those run twice there; \`deploy\` runs only the vault's. The next update moves ${plural(doubled, 'it', 'them')}.`
+      : null,
+    only: alone.length
+      ? `${list(alone)} in the site folder's package.json still run${plural(alone, 's', '')} under \`npm run build\` and \`deploy\`, and move${plural(alone, 's', '')} into the vault at the next update.`
+      : null,
+  };
 }
 
-module.exports = { runSteps, packageScripts, twiceWarning };
+module.exports = { runSteps, packageScripts, packageNotes, SLOT };

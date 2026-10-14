@@ -196,11 +196,31 @@ test('a package.json that still holds a step on the new layout: the build warns 
   const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
   const r = cli(s, 'build');
   assert.equal(r.status, 0, r.stderr);
-  assert.match(r.stderr, /`postbuild` in the site folder's package\.json also runs under `npm run build`, after the tool has run the vault's own steps; the next update moves it/);
+  assert.match(r.stderr, /`postbuild` in the site folder's package\.json also runs under `npm run build`, after the tool has run the vault's own after_build steps, so those run twice there/);
   assert.deepEqual(lines(path.join(s.site, 'own.txt')), ['own']);
   assert.equal(fs.existsSync(path.join(s.site, 'npm.txt')), false, 'the tool ran nothing from package.json');
   const doctor = cli(s, 'doctor', '--site');
-  assert.match(doctor.stdout + doctor.stderr, /also runs? under `npm run build`/);
+  assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
+});
+
+test('a package.json step with no steps in the vault for that slot is not a double run: one plain line, no warning, not in doctor', () => {
+  for (const settings of [{}, { before_build: [append('own', 'own.txt')] }]) {
+    const s = scratch({ settings, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
+    const r = cli(s, 'build');
+    assert.equal(r.status, 0, r.stderr);
+    assert.doesNotMatch(r.stderr, /twice|WARNING.*postbuild/);
+    assert.match(r.stdout, /`postbuild` in the site folder's package\.json still runs under `npm run build` and `deploy`, and moves into the vault at the next update/);
+    const doctor = cli(s, 'doctor', '--site', '--json');
+    assert.doesNotMatch(doctor.stdout, /BUILD_STEPS_TWICE|run twice|runs? under `npm run build`, after the tool/);
+  }
+});
+
+test('deploy says so when it skips a package.json hook because the vault holds different steps for that slot', async () => {
+  const s = scratch({ settings: { after_build: [append('x', 'x.txt')] }, package: HOOKS });
+  const h = deployHarness(s, { pkg: HOOKS });
+  await runDeploy({ configPath: s.configPath }, h.deps);
+  assert.ok(h.out.some((l) => /`postbuild` in package\.json is not run by deploy: the vault holds after_build steps for that slot/.test(l)), h.out.join('\n'));
+  assert.ok(!h.out.some((l) => /`prebuild` in package\.json is not run/.test(l)));
 });
 
 test('a package.json with no steps, or on the old layout, gives no such warning', () => {

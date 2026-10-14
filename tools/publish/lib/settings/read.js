@@ -7,13 +7,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
-const { isDeepStrictEqual } = require('node:util');
 const { REGISTRY, legacyNameOf, siteKeyOf } = require('./registry');
 const { TYPES, isMap, getPath, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
-const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked } = require('./folders');
+const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked, sameChecked } = require('./folders');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
@@ -239,7 +238,7 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
       continue;
     }
     settle(c, e, { written: e.name, setting: e.name }, { raw, origin: 'file' }, defaultOf);
-    if (fromSite && !isDeepStrictEqual(fromSite.raw, raw)) {
+    if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
       faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site',
         message: `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
     }
