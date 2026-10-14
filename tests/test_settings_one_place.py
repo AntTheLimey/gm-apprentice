@@ -6,7 +6,8 @@ SCRIPTS = Path(__file__).resolve().parents[1] / "skills" / "shared" / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 GONE = ("parse_publish_list", "read_publish_list", "read_publish_scalar", "_publish_scalar",
         "DEFAULT_EXCLUDE_SECTIONS", "resolve_exclude_sections", "effective_exclude_sections",
-        "publish_block_inline", "collapse_exclude_sections")
+        "publish_block_inline", "collapse_exclude_sections",
+        "PC_INACTIVE_STATUS", "DESCRIPTOR_MAX", "RECENT_CHANGES_CAP")
 
 def test_no_script_reads_the_settings_block_itself():
     hits = [f"{p.name}: {name}" for p in SCRIPTS.glob("*.py") for name in GONE
@@ -16,6 +17,14 @@ def test_no_script_reads_the_settings_block_itself():
 def test_no_script_restates_the_built_in_hidden_sections():
     hits = [p.name for p in SCRIPTS.glob("*.py")
             if re.search(r'"GM Notes",\s*"DM Notes"', p.read_text(encoding="utf-8"))]
+    assert hits == []
+
+
+def test_no_script_restates_a_number_that_is_a_setting():
+    stale = re.compile(r"stale.*>= 3|>= 3.*stale", re.I)
+    hits = [f"{p.name}:{n}" for p in SCRIPTS.glob("*.py")
+            for n, line in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
+            if stale.search(line) or "default=0.85" in line]
     assert hits == []
 
 

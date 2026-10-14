@@ -1521,6 +1521,49 @@ def settings_default(name: str) -> Any:
     return copy.deepcopy(_DEFAULTS_CACHE[name])
 
 
+SETTINGS_SCHEMA = (Path(__file__).resolve().parents[3] / "tools" / "publish"
+                   / "schema" / "vault-config.schema.json")
+_NO_NODE_NOTICE = ("Node was not found, so this vault's own settings were not "
+                   "read; the built-in values were used.")
+_NO_NODE_NOTICE_GIVEN = False
+
+
+def _schema_default(name: str) -> Any:
+    """The `default` of setting `name` in the generated schema file, read
+    with `json`. KeyError when the schema gives the name none."""
+    try:
+        node = json.loads(SETTINGS_SCHEMA.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise SettingsUnavailable(
+            "could not read the vault's settings: the built-in values are "
+            f"not at {SETTINGS_SCHEMA.as_posix()}") from e
+    for part in name.split("."):
+        node = node.get("properties", {}).get(part)
+        if node is None:
+            raise KeyError(name)
+    if "default" not in node:
+        raise KeyError(name)
+    return copy.deepcopy(node["default"])
+
+
+def setting_or_builtin(vault: Path, name: str) -> Any:
+    """The value of setting `name` for `vault`, from the publish tool. For a
+    command that has to keep running where Node cannot be run, the built-in
+    value (the schema file's default) and one line on stderr, once per
+    process. A name the schema gives no default raises KeyError there; any
+    other failure of the tool is raised, never hidden."""
+    global _NO_NODE_NOTICE_GIVEN
+    try:
+        return settings(vault).get(name)
+    except SettingsUnavailable:
+        if shutil.which("node"):
+            raise
+    if not _NO_NODE_NOTICE_GIVEN:
+        _NO_NODE_NOTICE_GIVEN = True
+        print(_NO_NODE_NOTICE, file=sys.stderr)
+    return _schema_default(name)
+
+
 def forget_settings(vault: Path | None = None) -> None:
     """Drop what was read for `vault` (every vault with None). Call it after
     anything that writes the vault's settings file or the site's
@@ -2052,7 +2095,18 @@ def _flat_list(value: list[Any]) -> list[Any]:
 # Vault queries
 # --------------------------------------------------------------------------
 
-PC_INACTIVE_STATUS = {"dead", "retired", "inactive"}
+def out_of_play(vault: Path) -> frozenset[str]:
+    """The statuses that take a character out of play
+    (`vault.statuses.out_of_play`), each word trimmed and lower-cased as the
+    publish tool does. Compare a note's status the same way:
+    `str(status).strip().lower() in out_of_play(vault)`."""
+    words = setting_or_builtin(vault, "vault.statuses.out_of_play")
+    return frozenset(str(w).strip().lower() for w in words)
+
+
+def is_out_of_play(fm: dict[str, Any], words: frozenset[str]) -> bool:
+    """Whether a note's `status:` is one of `words` (from `out_of_play`)."""
+    return str(fm.get("status", "")).strip().lower() in words
 
 
 def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -2060,14 +2114,15 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
 
     `type: pc`, excluding the `*_Story.md` companion notes (same type,
     but narrative history rather than a sheet) and anyone whose status
-    says they have left the table.
+    is on the vault's out-of-play list.
     """
     out: list[tuple[str, dict[str, Any]]] = []
+    gone = out_of_play(vault)
     for rel, text in vault_files(vault):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
-        if str(fm.get("status", "")).casefold() in PC_INACTIVE_STATUS:
+        if is_out_of_play(fm, gone):
             continue
         out.append((rel, fm))
     return out
@@ -2075,7 +2130,7 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
 
 def active_pc_names(vault: Path) -> set[str]:
     """Active PCs, mirroring session_context.py: type: pc, not *_Story.md,
-    status not dead/retired/inactive. Name set = filename stem, each
+    status not on the out-of-play list. Name set = filename stem, each
     capitalised stem token (len >= 3), and each alias — for whole-word
     matching of both 'Katherine Winslow' and 'Katherine'."""
     names: set[str] = set()

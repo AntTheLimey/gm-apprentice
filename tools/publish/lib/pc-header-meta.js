@@ -14,7 +14,8 @@ function formatLabel(fieldName) {
 
 // `defaults` is the site's `header_facts` setting: what a note with no `display_meta` of its own shows.
 function headerMetaFields(fm, defaults) {
-  return Array.isArray(fm.display_meta) ? fm.display_meta : (defaults || []);
+  if (!Array.isArray(defaults)) throw new Error('headerMetaFields was not given the site\'s header_facts; the caller must pass publishConfig.header_facts');
+  return Array.isArray(fm.display_meta) ? fm.display_meta : defaults;
 }
 
 // [label, text] for each header badge that has a value, in order. The text is what the

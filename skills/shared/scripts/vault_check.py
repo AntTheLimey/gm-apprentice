@@ -7,7 +7,7 @@ interpretation stays with the skill. Stdlib only.
 
 Usage:
   vault_check.py VAULT frontmatter [--folder SUB]   (also: notes the site's build cannot parse)
-  vault_check.py VAULT names [--threshold 0.85]
+  vault_check.py VAULT names [--threshold RATIO]
   vault_check.py VAULT index
   vault_check.py VAULT stale-drafts
   vault_check.py VAULT changed --since N
@@ -177,13 +177,12 @@ from schema_rules import (
     tone_families,
     tone_proposal,
 )
-# LINK_RE, SKIP_DIRS and PC_INACTIVE_STATUS are re-exported: they were part
+# LINK_RE and SKIP_DIRS are re-exported: they were part
 # of this module's surface before vaultlib existed.
 from vaultlib import (  # noqa: F401
     FENCE_RE,
     HEADING_RE,
     LINK_RE,
-    PC_INACTIVE_STATUS,
     SKIP_DIRS,
     WRAP_UP_TYPES,
     LineState,
@@ -208,6 +207,7 @@ from vaultlib import (  # noqa: F401
     settings_file,
     stamp_file,
     vault_layout,
+    setting_or_builtin,
     settings,
     settings_add,
     settings_carry,
@@ -603,6 +603,7 @@ def check_stale_drafts(vault: Path) -> list[str]:
     if not current:
         return ["INFO\t(vault)\tno session entities with "
                 "session_number — cannot compute staleness"]
+    stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     for rel, text in files:
         fm = extract_frontmatter(text) or {}
         if fm.get("canon_status") != "DRAFT":
@@ -628,7 +629,7 @@ def check_stale_drafts(vault: Path) -> list[str]:
             rows.append(f"WARNING\t{rel}\tcreatedSession ({created}) "
                         f"exceeds current session ({now}) — check "
                         f"the value (dates don't belong in this field)")
-        elif now - created >= 3:
+        elif now - created >= stale_after:
             rows.append(f"WARNING\t{rel}\tstale DRAFT (created session "
                         f"{created}, now session {now}) — promote "
                         f"to AUTHORITATIVE or delete")
@@ -5548,8 +5549,9 @@ def main() -> int:
                          "exclude_sections entry under ## GM Notes, then "
                          "collapse exclude_sections to [\"GM Notes\"]. "
                          "Dry run unless --fix.")
-    ap.add_argument("--threshold", type=float, default=0.85,
-                    help="similarity ratio for names (default 0.85)")
+    ap.add_argument("--threshold", type=float,
+                    help="similarity ratio for names (default: the vault's "
+                         "vault.name_match setting)")
     ap.add_argument("--since", type=int,
                     help="session number for the changed command")
     args = ap.parse_args()
@@ -5608,7 +5610,9 @@ def main() -> int:
         emit_rows("frontmatter", check_frontmatter(args.vault, args.folder,
                                                    explain))
     if args.command in ("names", "all"):
-        emit_rows("names", check_names(args.vault, args.threshold))
+        threshold = (args.threshold if args.threshold is not None
+                     else setting_or_builtin(args.vault, "vault.name_match"))
+        emit_rows("names", check_names(args.vault, threshold))
     if args.command in ("index", "all"):
         emit_rows("index", check_index(args.vault))
     if args.command in ("stale-drafts", "all"):

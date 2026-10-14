@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { pcTemplate } = require('../../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('../helpers/settings-files');
 const fs = require('node:fs');
 const path = require('node:path');
 const templatesDir = path.join(__dirname, '../../../../skills/shared/templates');

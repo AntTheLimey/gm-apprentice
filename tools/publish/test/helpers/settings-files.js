@@ -36,4 +36,15 @@ function setOldSettings(vaultPath, byName) {
 const defaultWithheldWords = () => ({ person: entry('player_site.withheld_words.person').default, place: entry('player_site.withheld_words.place').default, thing: entry('player_site.withheld_words.thing').default });
 const defaultRecapChars = () => entry('player_site.limits.recap_chars').default;
 
-module.exports = { writeNewConfig, writeOldConfig, setOldSettings, defaultWithheldWords, defaultRecapChars };
+const defaultHeaderFacts = () => [...entry('player_site.sheets.header_facts').default];
+
+// `pcTemplate` given the site's header facts as a build gives them (the page keeps no default of its own and
+// throws without them). A test that wants other facts passes `publishConfig.header_facts` itself.
+const pcTemplateWithSettings = (page, processed, sections, navFor, config, imageMap, storyHtml, context) => {
+  const { pcTemplate } = require('../../lib/templates/pc');
+  const given = context || {};
+  return pcTemplate(page, processed, sections, navFor, config, imageMap, storyHtml,
+    { ...given, publishConfig: { header_facts: defaultHeaderFacts(), ...(given.publishConfig || {}) } });
+};
+
+module.exports = { writeNewConfig, writeOldConfig, setOldSettings, defaultWithheldWords, defaultRecapChars, defaultHeaderFacts, pcTemplateWithSettings };

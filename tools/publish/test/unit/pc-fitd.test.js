@@ -2,7 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { templateBody, setRow, replace, sectionsOf, cutterBody } = require('../helpers/pc-template');
 const { renderFitDSheet, isFitDConsumedTitle } = require('../../lib/templates/pc-fitd');
-const { pcTemplate } = require('../../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('../helpers/settings-files');
 
 const blank = () => templateBody('pc-fitd.md');
 

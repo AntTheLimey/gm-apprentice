@@ -219,3 +219,53 @@ class GmAliasIndexTests(unittest.TestCase):
         (d / "Lord Vane.md").write_text(
             "---\ntype: npc\ngm_aliases:\n  - Elias Crowe\n---\n")
         self.assertEqual(vc.check_index(d), [])
+
+
+def cli(vault, *args):
+    import subprocess
+    return subprocess.run(
+        [sys.executable, str(SCRIPTS / "vault_check.py"), str(vault), *args],
+        capture_output=True, text=True, timeout=60)
+
+
+class SettingsNumbersTests(unittest.TestCase):
+    """`vault.name_match` and `vault.stale_after_sessions` reach the checks."""
+
+    def vault(self, yaml_text, notes):
+        d = Path(tempfile.mkdtemp(prefix="vc-numbers-"))
+        self.addCleanup(shutil.rmtree, d, ignore_errors=True)
+        (d / "_meta").mkdir()
+        (d / "_meta" / "vault-config.yaml").write_text("version: 1\n" + yaml_text)
+        for name, text in notes.items():
+            (d / name).write_text(text)
+        return d
+
+    def names(self, yaml_text, *args):
+        notes = {f"{n}.md": f"---\ntype: npc\nname: {n}\n---\n" for n in ("Adler", "Adley")}
+        out = cli(self.vault(yaml_text, notes), "names", *args)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        return [ln for ln in out.stdout.splitlines() if "Adler" in ln]
+
+    def test_name_match_unset_is_the_built_in(self):
+        self.assertEqual(self.names(""), [])
+
+    def test_name_match_setting_is_used(self):
+        self.assertEqual(len(self.names("vault:\n  name_match: 0.7\n")), 1)
+
+    def test_the_flag_overrides_the_setting(self):
+        self.assertEqual(self.names("vault:\n  name_match: 0.7\n", "--threshold", "0.95"), [])
+        self.assertEqual(len(self.names("vault:\n  name_match: 0.99\n", "--threshold", "0.7")), 1)
+
+    def stale(self, yaml_text, created):
+        notes = {"Session_05.md": "---\ntype: session\nsession_number: 5\n---\n",
+                 "Draft.md": f"---\ntype: npc\ncanon_status: DRAFT\ncreatedSession: {created}\n---\n"}
+        return [r for r in vc.check_stale_drafts(self.vault(yaml_text, notes))
+                if "stale DRAFT" in r]
+
+    def test_stale_after_unset_is_the_built_in(self):
+        self.assertEqual(len(self.stale("", 2)), 1)
+        self.assertEqual(self.stale("", 3), [])
+
+    def test_stale_after_setting_is_used(self):
+        self.assertEqual(len(self.stale("vault:\n  stale_after_sessions: 1\n", 4)), 1)
+        self.assertEqual(self.stale("vault:\n  stale_after_sessions: 5\n", 1), [])

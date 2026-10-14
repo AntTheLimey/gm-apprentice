@@ -5,7 +5,7 @@ const path = require('node:path');
 const matter = require('gray-matter');
 const { extractSections } = require('../../../lib/processor');
 const { renderDnDSheet, isDndConsumedTitle } = require('../../../lib/templates/dnd/index');
-const { pcTemplate } = require('../../../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('../../helpers/settings-files');
 
 // The real template the skills hand a GM. Tests build their PC from it so the
 // renderer and the template cannot drift apart again (#271).

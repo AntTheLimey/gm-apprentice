@@ -217,6 +217,57 @@ class RecentChangesTests(unittest.TestCase):
         self.assertGreater(idx_sessions, idx_scaffold)
 
 
+class IndexNumbersTests(unittest.TestCase):
+    """`vault.index.description_chars` and `vault.index.recent_changes`."""
+
+    def vault_with(self, yaml_text: str) -> Path:
+        vault = Path(tempfile.mkdtemp(prefix="index-build-numbers-"))
+        self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+        write(vault, "_meta/vault-config.yaml", "version: 1\n" + yaml_text)
+        write(vault, "NPCs/Ada.md",
+              "---\ntype: npc\ndescription: Dockworker searching for her "
+              "missing brother and nobody will help.\n---\n\n# Ada\n")
+        return vault
+
+    PREVIOUS = ("## Recent Changes\n- 2026-08-01: one\n- 2026-08-02: two\n"
+                "- 2026-08-03: three\n- 2026-08-04: four\n")
+
+    @staticmethod
+    def changes(text: str) -> list[str]:
+        block = text.split("## Recent Changes", 1)[1]
+        return [ln for ln in block.splitlines() if ln.startswith("- ")]
+
+    def test_description_chars_cuts_the_descriptor(self):
+        vault = self.vault_with("vault:\n  index:\n    description_chars: 12\n")
+        text = ib.render(vault, today=TODAY, previous=None)
+        self.assertIn("- [[Ada]] — Dockworker s", text)
+        self.assertNotIn("Dockworker se", text)
+
+    def test_description_chars_unset_is_the_built_in(self):
+        import vaultlib
+        vault = self.vault_with("")
+        limit = vaultlib.settings_default("vault.index.description_chars")
+        entries, _ = ib.collect(vault)
+        (ada,) = [e for e in entries if e.stem == "Ada"]
+        self.assertEqual(ada.descriptor, "Dockworker searching for her missing brother and nobody will help."[:limit])
+
+    def test_recent_changes_keeps_that_many_lines(self):
+        vault = self.vault_with("vault:\n  index:\n    recent_changes: 3\n")
+        text = ib.render(vault, today=TODAY, previous=self.PREVIOUS)
+        self.assertEqual(len(self.changes(text)), 3)
+        self.assertIn("- 2026-08-02: two", self.changes(text))
+
+    def test_recent_changes_zero_keeps_only_the_rebuild_line(self):
+        vault = self.vault_with("vault:\n  index:\n    recent_changes: 0\n")
+        text = ib.render(vault, today=TODAY, previous=self.PREVIOUS)
+        (only,) = self.changes(text)
+        self.assertTrue(only.startswith(f"- {TODAY}: index rebuilt"))
+
+    def test_the_old_constants_are_gone(self):
+        self.assertFalse(hasattr(ib, "DESCRIPTOR_MAX"))
+        self.assertFalse(hasattr(ib, "RECENT_CHANGES_CAP"))
+
+
 class RoundTripTests(unittest.TestCase):
     def test_roundtrip_with_vault_check(self):
         copy = copy_fixture(self)

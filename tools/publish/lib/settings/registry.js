@@ -78,6 +78,29 @@ const REGISTRY = [
     left_out: '`dead`, `deceased`, `destroyed`, `kia`, `dissolved`',
   },
 
+  // Numbers the vault scripts (not the site build) read
+  {
+    name: 'vault.stale_after_sessions', type: 'number', integer: true, min: 1, default: 3, group: 'vault',
+    does: 'How many sessions a draft note, or a character\'s open thread, can go untouched before the checks call it stale',
+    left_out: '`3`',
+  },
+  {
+    name: 'vault.name_match', type: 'number', min: 0, max: 1, default: 0.85, group: 'vault',
+    does: 'How alike two note names must be, from `0` (anything) to `1` (identical), before the name check lists them as too close. The check\'s `--threshold` option overrides it for one run',
+    left_out: '`0.85`',
+  },
+  { name: 'vault.index', type: 'map', container: true },
+  {
+    name: 'vault.index.recent_changes', type: 'number', integer: true, min: 0, default: 20, group: 'vault',
+    does: 'How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt; `0` keeps only the line for the rebuild itself',
+    left_out: '`20`',
+  },
+  {
+    name: 'vault.index.description_chars', type: 'number', integer: true, min: 1, default: 80, group: 'vault',
+    does: 'How many characters of a note\'s description the index shows beside its link',
+    left_out: '`80`',
+  },
+
   // The site itself
   {
     name: 'player_site.publish', was: [{ name: 'publish.site', in: 'vault' }], type: 'switch', onFault: false, onWhenSet: 'player_site.folder', group: 'site',

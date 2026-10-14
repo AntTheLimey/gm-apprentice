@@ -249,7 +249,7 @@ describe('item template holder/origin humanization (B-batch2)', () => {
 });
 
 describe('PC template display_meta', () => {
-  const { pcTemplate } = require('../../lib/templates/pc');
+  const { pcTemplateWithSettings: pcTemplate } = require('../helpers/settings-files');
 
   const mockNavFor = () => '';
   const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };
@@ -511,7 +511,7 @@ describe('session prev/next links follow story order (#276)', () => {
 });
 
 describe('PC template tabbed layout', () => {
-  const { pcTemplate } = require('../../lib/templates/pc');
+  const { pcTemplateWithSettings: pcTemplate } = require('../helpers/settings-files');
 
   const mockNavFor = () => '';
   const mockConfig = { siteTitle: 'Test', attachmentsDir: '_attachments' };

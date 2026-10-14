@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { pcTemplate } = require('../../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('../helpers/settings-files');
 
 const noop = () => '';
 const cfg = { siteTitle: 'S', footer: '' };
