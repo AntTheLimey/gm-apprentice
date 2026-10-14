@@ -213,7 +213,11 @@ player_site:
 - A step that runs for more than ten minutes is stopped and counts as
   failed.
 
-Add a step with `settings add player_site.after_build "node tools/add-props.js"`.
+Or add a step yourself, from a terminal:
+
+```text
+gm-apprentice-publish settings add player_site.after_build "node tools/add-props.js" --vault <vault>
+```
 
 ### Extra menu entries
 
@@ -222,10 +226,14 @@ a gazetteer you built by hand. Each has a `label`, a `link` and, if you
 like, a `group`. Ask the apprentice, or run:
 
 ```text
-settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World
+gm-apprentice-publish settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --vault <vault>
 ```
 
-Take one out by its label with `settings remove player_site.menu_extra Gazetteer`.
+Take one out by its label:
+
+```text
+gm-apprentice-publish settings remove player_site.menu_extra Gazetteer --vault <vault>
+```
 
 ## What gets published
 
@@ -489,10 +497,13 @@ above), and so are the build steps. A new site's file holds none of them.
 
 An older site may still hold some of these in its file, or other campaign
 settings under other names. The next vault update moves the five site
-settings and the build steps into the vault and tells you what it did. Until
-then the build reads those five from this file when the vault sets none, and
-warns about each. Other campaign settings are not read from this file: the
-build warns about each, and stops for one that hides things from players.
+settings and the build steps into the vault and tells you what it did. A
+site whose own publish tool is older than 1.24.0 keeps them where they are
+until that tool is updated. Until they move, the build reads those five from
+this file when the vault sets none, and warns about each. On a vault that is
+already on the new settings file, other campaign settings are not read from
+this file: the build warns about each, and stops for one that hides things
+from players.
 Ask the apprentice to check the settings: it adds anything such a key hid
 to the vault's own list and removes the keys from this file.
 

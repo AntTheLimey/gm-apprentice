@@ -80,8 +80,8 @@ command an entry is added one at a time, each part as `name=value`, and
 taken out by its `label`:
 
 ```text
-gm-apprentice-publish settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World
-gm-apprentice-publish settings remove player_site.menu_extra Gazetteer
+gm-apprentice-publish settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --vault <vault>
+gm-apprentice-publish settings remove player_site.menu_extra Gazetteer --vault <vault>
 ```
 
 A list of words, such as the statuses under `vault.statuses`, is read by
@@ -104,8 +104,13 @@ the folders a rebuild keeps (`player_site.url`, `player_site.host`,
 
 The build steps are two lists of shell commands, `player_site.before_build`
 and `player_site.after_build`. The publish tool runs them in the site
-folder, in order, each printed first, when it builds or deploys. A step that
-fails stops the build. A dry run, `explain`, `manifest`, `doctor --site`, the
+folder, in order, each printed first, when it builds or deploys. The
+`before_build` steps run before anything is read from the vault, and the
+`after_build` steps run after every file is written (and only if the build
+had no errors). Each step is a shell command with the site folder's
+`node_modules/.bin` put first on the path, as `npm run` does, and a limit of
+ten minutes. A step that fails, or runs out of time, stops the build and
+nothing is published. A dry run, `explain`, `manifest`, `doctor --site`, the
 preview, the sheet view and `deploy --no-build` run none. A tool that builds
 the site itself has to do the same.
 
@@ -157,7 +162,7 @@ The command checks the name and the value against the list, changes only the
 lines it must, and writes all of a change or none of it. A tool that rewrites
 the file whole loses the GM's comments and may write a value the build then
 refuses. `settings --help` lists the other verbs: `get`, `add`, `remove`,
-`unset`, `describe`, `check`, `list`, `raw`, `setup-note` and `move`.
+`unset`, `carry`, `describe`, `check`, `list`, `raw`, `setup-note` and `move`.
 
 The command reads the file, changes it and puts it back. Do not write the
 file yourself while the command runs: there is no lock, and whoever saves

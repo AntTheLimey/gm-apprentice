@@ -156,22 +156,60 @@ def test_no_page_names_an_old_key_bare():
 SITE_FOLDER_WORDS = re.compile(r"\b(?:siteUrl|outputDir|preserveDirs|cloudflarePagesProject|prebuild|postbuild)\b")
 
 
-def _site_folder_word_mentions(name, text):
+# Sections where the old keys are the subject, by page (path from the repository root) and
+# heading: the format page's account of the old layout, and the publish tool's own reference
+# for the keys an older site file may still hold.
+OLD_KEY_SECTIONS = {
+    "docs/vault-config-format.md": OLD_LAYOUT_SECTION[1],
+    "tools/publish/README.md": re.compile(r"^## vault\.config\.json reference\n.*?(?=^## |\Z)", re.M | re.S),
+}
+# `docs/mechanization-analysis/` is a dated analysis of the code as it stood when it was
+# written; it is a record, not a page that tells anyone what to do now. The other folders under
+# docs/ hold local plans and specs (gitignored).
+RECORD_FOLDERS = ("docs/mechanization-analysis/", "docs/superpowers/", "docs/plans/")
+
+
+def _site_folder_word_mentions(rel, text):
     text = GENERATED.sub("", text.replace("\r\n", "\n"))
-    if name == OLD_LAYOUT_SECTION[0]:
-        text = OLD_LAYOUT_SECTION[1].sub("", text)
+    if rel in OLD_KEY_SECTIONS:
+        text = OLD_KEY_SECTIONS[rel].sub("", text)
     return sorted({m.group(0) for m in SITE_FOLDER_WORDS.finditer(text)})
+
+
+def _pages_that_must_not_name_site_folder_keys():
+    pages = [*_hand_written_pages(), *ROOT.glob("docs/**/*.md"), ROOT / "README.md", ROOT / "ROADMAP.md",
+             ROOT / "tools" / "publish" / "README.md"]
+    seen = {}
+    for p in pages:
+        rel = p.relative_to(ROOT).as_posix()
+        if p.name in RECORDS or rel.startswith(RECORD_FOLDERS) or "personal" in p.parts:
+            continue
+        seen[rel] = p
+    return seen
 
 
 def test_the_site_folder_word_scan_finds_what_it_looks_for():
     text = ("Set `siteUrl` and `postbuild`.\n<!-- settings:site -->\nwas `outputDir`\n<!-- /settings:site -->\n")
     assert _site_folder_word_mentions("any.md", text) == ["postbuild", "siteUrl"]
     page = "## The old file\n\n`prebuild`.\n\n## The state file\n\n`preserveDirs`\n"
-    assert _site_folder_word_mentions(OLD_LAYOUT_SECTION[0], page) == ["preserveDirs"]
+    assert _site_folder_word_mentions("docs/vault-config-format.md", page) == ["preserveDirs"]
+    readme = "## Other\n\n`prebuild`\n\n## vault.config.json reference\n\n`siteUrl`\n\n## Next\n\n`outputDir`\n"
+    assert _site_folder_word_mentions("tools/publish/README.md", readme) == ["outputDir", "prebuild"]
+
+
+def test_the_scan_goes_red_on_a_plain_page(tmp_path):
+    page = tmp_path / "plain.md"
+    page.write_text("# A page\n\nSet `cloudflarePagesProject` first.\n", encoding="utf-8")
+    assert _site_folder_word_mentions("docs/plain.md", page.read_text(encoding="utf-8")) == ["cloudflarePagesProject"]
+
+
+def test_the_site_folder_word_scan_covers_the_pages_it_names():
+    rels = set(_pages_that_must_not_name_site_folder_keys())
+    assert {"ROADMAP.md", "README.md", "tools/publish/README.md", "docs/site-settings.md"} <= rels
+    assert not any(r.startswith(RECORD_FOLDERS) or r.endswith("migrations.md") for r in rels)
 
 
 def test_no_page_names_a_site_folder_key_or_build_hook():
-    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"] if p.name not in RECORDS]
-    hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
-            for found in _site_folder_word_mentions(p.name, p.read_text(encoding="utf-8"))]
+    hits = [f"{rel}: {found}" for rel, p in _pages_that_must_not_name_site_folder_keys().items()
+            for found in _site_folder_word_mentions(rel, p.read_text(encoding="utf-8"))]
     assert hits == []

@@ -197,7 +197,7 @@ each build, preserving any folders listed in `player_site.keep`. A
 `player_site.output` or `player_site.keep` that is not a folder inside the
 site folder stops the build before anything is deleted.
 
-`build` and `deploy` also run the vault's build steps, in order (see
+`build`, `deploy`, `setup-status-bar` and `setup-inbox` also run the vault's build steps, in order (see
 [Build steps](#build-steps)). A dry build, `explain`, `manifest`,
 `doctor --site` and the preview run none.
 
@@ -291,12 +291,12 @@ every page is written. The tool prints each command before it runs it, runs
 them in order in the site folder (with the site's `node_modules/.bin` on the
 path, as `npm run` gives a script), and stops the build when one fails or
 takes longer than ten minutes. Nothing is published after a failure. Only
-`build` and `deploy` run steps; a dry build, `explain`, `manifest`,
-`doctor --site`, the live preview and `deploy --no-build` do not. These two
-settings replace the `prebuild` and `postbuild` scripts of the site's
-`package.json`; `settings move` carries them across once the site's tool
-is 1.24.0 or later. Until then `deploy` keeps running the `package.json`
-scripts for a site that has not been moved.
+`build`, `deploy` and the two set-up commands that build before they
+deploy (`setup-status-bar` and `setup-inbox`) run steps; a dry build, `explain`, `manifest`,
+`doctor --site`, the live preview and `deploy --no-build` do not. Build
+scripts an older site keeps in its `package.json` are carried across by
+`settings move` once the site's tool is 1.24.0 or later. Until then
+`deploy` keeps running those scripts for a site that has not been moved.
 
 ## The new settings, by group
 
@@ -721,7 +721,7 @@ build. Images that would grow when re-encoded keep their original bytes,
 and SVG, GIF, WebP and AVIF are always passed through untouched.
 
 Because the tool owns both the image copy and every `<img src>`, it
-converts and re-references in one pass. An external postbuild that
+converts and re-references in one pass. An external script run after the build that
 rewrites `src` attributes after the fact has to string-match paths the
 tool URL-encodes (`images/Rock%20Lavey.jpg`), and silently misses every
 filename containing a space.
