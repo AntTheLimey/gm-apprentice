@@ -202,7 +202,7 @@ test('the site file is merged in, then loses its setting keys and keeps the rest
   assert.ok(before.exclude_sections.length > 1, 'the built-in list is still there (#371)');
   assert.deepEqual(siteAfter, { vaultPath: './Vault' });
   assert.ok(plan.lines.some((l) => l.includes('siteTitle')));
-  assert.ok(plan.lines.includes('`landingTagline` moved to `player_site.theme.tagline`.'));
+  assert.ok(plan.lines.includes('`landingTagline` moves to `player_site.theme.tagline`.'));
   assert.deepEqual(readSettings({ vaultPath: s.vault, siteConfig: siteAfter }).faults.filter((f) => f.level === 'stop'), []);
 });
 
@@ -1315,6 +1315,24 @@ test('steps in both the vault\'s settings and package.json: nothing is carried; 
   assert.equal(d.data.stepsDiffer[0].script, 'postbuild');
   assert.equal(d.data.stepsDiffer[0].setting, 'player_site.after_build');
   assert.ok(d.data.lines.includes(d.data.stepsDiffer[0].line));
+});
+
+test('lines shown before the move are not past tense; the lines after it are', () => {
+  const s = STEP_LAYOUTS.new();
+  writePackage(s, { postbuild: 'node a.js && node b.js' });
+  const check = cliMove({ vault: s.vault, config: s.config }, { check: true });
+  const planned = check.data.lines.join('\n');
+  assert.match(planned, /postbuild steps move to `player_site\.after_build`; the tool will run them/, planned);
+  assert.doesNotMatch(planned, /\bmoved to\b|\bwas removed\b/, planned);
+  const done = cliMove({ vault: s.vault, config: s.config });
+  assert.match(done.data.lines.join('\n'), /postbuild steps moved to `player_site\.after_build`; the tool now runs them/);
+
+  const differ = STEP_LAYOUTS.new();
+  writeNewConfig(differ.vault, { version: 1, player_site: { after_build: ['node mine.js'] } });
+  writePackage(differ, { postbuild: 'node theirs.js' });
+  const d = cliMove({ vault: differ.vault, config: differ.config }, { check: true });
+  assert.ok(d.data.lines.some((l) => /so it is left/.test(l)), d.data.lines.join('\n'));
+  assert.ok(!d.data.lines.some((l) => /was left/.test(l)));
 });
 
 test('a moved vault whose site folder holds only steps or only folder keys is still found to have something to move', () => {

@@ -165,13 +165,19 @@ def find_settings_move(vault: Path) -> list[Item]:
         return [Item(MOVE, PERSON, [f"settings\t{plan.get('line')}"])]
     if not plan["ok"]:
         blockers = [str(b) for b in plan.get("blockers") or []]
+        if layout == "legacy":
+            cannot = "the settings cannot move to the new file yet"
+            tail = "The vault is not up to date until it has moved"
+        else:
+            cannot = ("the site folder's settings cannot be carried into "
+                      "the vault yet")
+            tail = ("The vault is not up to date until the site folder's "
+                    "settings are carried")
         return [Item(MOVE, PERSON,
-                     [f"settings\tthe settings cannot move to the new file "
-                      f"yet: {b}" for b in blockers]
+                     [f"settings\t{cannot}: {b}" for b in blockers]
                      + ["settings\tfix what each line names, then run the "
                         "update again; for a line that names a setting, "
-                        "campaign-qa's Settings check fixes it or asks. The "
-                        "vault is not up to date until it has moved"],
+                        f"campaign-qa's Settings check fixes it or asks. {tail}"],
                      holds_stamp=True)]
     items: list[Item] = []
     differs = plan.get("siteDiffers")

@@ -951,7 +951,7 @@ class MigrateEndToEndTests(unittest.TestCase):
                     # file, and says so.
                     self.assertIn("Will remove the settings from", text)
                     self.assertIn("outputDir", text)
-                    self.assertIn("`outputDir` moved to `player_site.output`.",
+                    self.assertIn("`outputDir` moves to `player_site.output`.",
                                   text)
                 item.apply(None)
                 self.assertEqual(ms.find_settings_move(vault), [])

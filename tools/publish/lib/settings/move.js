@@ -198,6 +198,15 @@ function stripSiteKeys(siteText, { carriedOnly = false, leaveFallback = false, o
   return { siteAfter, siteOut: removedKeys.length ? jsonLike(siteAfter, siteText) : null, removedKeys };
 }
 
+// A line about the carry or the steps is worded for after the move (past tense). Shown before the move it reads in
+// the present or future: `say` records the wording for that, and `beforeMove` swaps it in.
+const BEFORE_MOVE = new Map();
+function say(lines, after, before) {
+  lines.push(after);
+  BEFORE_MOVE.set(after, before);
+}
+const beforeMove = (lines) => lines.map((l) => BEFORE_MOVE.get(l) || l);
+
 // Plans what the site file's carried keys do, against what the vault holds. `held(name)` says { set, value } for a
 // setting of the vault. Returns { carried: [{ from, to, value }], dropped: [{ from, why }], lines, values (by setting
 // name, the ones to write), changes (as write.js takes them) }.
@@ -222,7 +231,8 @@ function planCarry(site, held, siteDir, { holdKeys = false } = {}) {
     }
     if (!r.ok) {
       out.dropped.push({ from: w.name, why: `it is not usable as ${e.name}; it takes ${TYPES[e.type].takes(e)}` });
-      out.lines.push(`\`${w.name}: ${showValue(raw)}\` in the site folder's vault.config.json is not usable as \`${e.name}\` (it takes ${TYPES[e.type].takes(e)}), so it was removed and not carried over.`);
+      const unusable = `\`${w.name}: ${showValue(raw)}\` in the site folder's vault.config.json is not usable as \`${e.name}\` (it takes ${TYPES[e.type].takes(e)}), so it was removed and not carried over.`;
+      say(out.lines, unusable, unusable.replace('so it was removed', 'so it is removed'));
       continue;
     }
     if (r.value === null || (typeof r.value === 'string' && r.value.trim() === '') || (Array.isArray(r.value) && r.value.length === 0)) continue;
@@ -231,10 +241,11 @@ function planCarry(site, held, siteDir, { holdKeys = false } = {}) {
       out.carried.push({ from: w.name, to: e.name, value: r.value, ...(w.shows ? { shows: w.shows } : {}) });
       out.values[e.name] = r.value;
       out.changes.push({ op: 'set', name: e.name, value: r.value });
-      out.lines.push(`\`${w.name}\` moved to \`${e.name}\`.`);
+      say(out.lines, `\`${w.name}\` moved to \`${e.name}\`.`, `\`${w.name}\` moves to \`${e.name}\`.`);
     } else if (!sameValue(e, mine.value, r.value)) {
       out.dropped.push({ from: w.name, why: `the vault already sets ${e.name} to ${showValue(mine.value)}` });
-      out.lines.push(`\`${w.name}\` in the site folder's vault.config.json (${showValue(r.value)}) differs from \`${e.name}\` in the vault's settings (${showValue(mine.value)}); the vault's is kept and the site file's was removed.`);
+      const differs = `\`${w.name}\` in the site folder's vault.config.json (${showValue(r.value)}) differs from \`${e.name}\` in the vault's settings (${showValue(mine.value)}); the vault's is kept and the site file's was removed.`;
+      say(out.lines, differs, differs.replace("site file's was removed", "site file's is removed"));
     }
   }
   if (leftIn) out.lines.push(HELD_KEYS_LINE);
@@ -339,12 +350,15 @@ function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pin
       out.values[e.name] = commands;
       out.changes.push({ op: 'set', name: e.name, value: commands });
       out.removed.push(script);
-      out.lines.push(`The site's ${commands.length} ${script} step${commands.length === 1 ? '' : 's'} moved to \`${e.name}\`; the tool now runs ${commands.length === 1 ? 'it' : 'them'}.`);
+      const some = `${commands.length} ${script} step${commands.length === 1 ? '' : 's'}`;
+      const them = commands.length === 1 ? 'it' : 'them';
+      say(out.lines, `The site's ${some} moved to \`${e.name}\`; the tool now runs ${them}.`, `The site's ${some} ${commands.length === 1 ? 'moves' : 'move'} to \`${e.name}\`; the tool will run ${them}.`);
     } else if (isDeepStrictEqual(commands, mine.value)) {
       out.removed.push(script);
-      out.lines.push(`The site's ${script} in package.json holds the same steps as \`${e.name}\`, so it was removed from package.json; the tool runs the vault's.`);
+      const same = `The site's ${script} in package.json holds the same steps as \`${e.name}\`, so it was removed from package.json; the tool runs the vault's.`;
+      say(out.lines, same, same.replace('so it was removed', 'so it is removed'));
     } else {
-      const line = `The site's ${script} in package.json differs from \`${e.name}\` in the vault's settings, so it was left. The tool runs the vault's steps, and \`npm run build\` also runs the package.json one.`;
+      const line = `The site's ${script} in package.json differs from \`${e.name}\` in the vault's settings, so it is left. The tool runs the vault's steps, and \`npm run build\` also runs the package.json one.`;
       out.differing.push({ script, setting: e.name, line });
       out.lines.push(line);
     }
@@ -784,7 +798,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
 
   const result = {
     ok: true,
-    lines: [...describeFiles(m, false), ...lines],
+    lines: [...describeFiles(m, false), ...beforeMove(lines)],
     blockers: [],
     carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])],
     dropped: carry.dropped,
@@ -1008,7 +1022,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
         if (siteOut !== null) {
           Object.assign(mend, { siteFile, siteText, siteOut, siteAfter, removedKeys });
           write.push(siteFile);
-          lines.push(...carry.lines);
+          lines.push(...beforeMove(carry.lines));
           const unknown = unknownKeysLine(siteAfter, siteFile);
           if (unknown) lines.push(unknown);
           mend.carryLines = [...carry.lines, ...(unknown ? [unknown] : [])];
@@ -1018,7 +1032,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
           mend.removedScripts = stepsPlan.removed;
           write.push(stepsPlan.pkg.file);
         }
-        lines.push(...stepsPlan.lines);
+        lines.push(...beforeMove(stepsPlan.lines));
         if (stepsPlan.pkg) lines.push(packageLine(stepsPlan.pkg, stepsPlan.removed, false));
         mend.stepsLines = stepsPlan.lines;
         if (hold) {

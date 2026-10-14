@@ -319,6 +319,17 @@ DEAD_END_STEPS = " && ".join(f"node scripts/{n}.mjs" for n in "abcdefg")
 
 @NEEDS_NODE
 class SiteLeftoversTests(unittest.TestCase):
+    def test_a_blocked_carry_on_a_moved_vault_does_not_say_the_vault_has_to_move(self):
+        vault, site = moved_vault_with_site(self, outputDir="../out")
+        code, plan, err = update(vault, "plan")
+        self.assertIn("../out", plan)
+        self.assertNotIn("cannot move to the new file", plan)
+        self.assertNotIn("until it has moved", plan)
+        self.assertNotIn("has moved", plan)
+        self.assertIn("site folder's settings cannot be carried into the "
+                      "vault yet", plan)
+        self.assertIn("fix what each line names", plan)
+
     def test_a_canticle_shaped_site_moves_in_one_pass_and_a_second_finds_nothing(self):
         vault = make_vault(self)
         site = with_site(self, vault, campaignImage="images/cover.jpg",
@@ -353,7 +364,7 @@ class SiteLeftoversTests(unittest.TestCase):
         vault, site = moved_vault_with_site(self, preserveDirs=["gazetteer"])
         add_steps(site, postbuild=DEAD_END_STEPS)
         code, plan, err = update(vault, "plan")
-        self.assertIn("settings-move\tThe site's 7 postbuild steps moved to "
+        self.assertIn("settings-move\tThe site's 7 postbuild steps move to "
                       "`player_site.after_build`", plan)
         code, did, err = update(vault, "apply")
         self.assertEqual(code, 0, err + did)
