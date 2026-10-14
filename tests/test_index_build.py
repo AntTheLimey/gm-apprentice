@@ -268,6 +268,19 @@ class IndexNumbersTests(unittest.TestCase):
         self.assertFalse(hasattr(ib, "RECENT_CHANGES_CAP"))
 
 
+class BrokenSettingsTests(unittest.TestCase):
+    def test_a_broken_settings_file_is_a_plain_error_not_a_traceback(self):
+        vault = Path(tempfile.mkdtemp(prefix="index-build-broken-"))
+        self.addCleanup(shutil.rmtree, vault, ignore_errors=True)
+        write(vault, "_meta/vault-config.yaml", "version: 1\nvault: [unclosed\n")
+        result = run_cli(vault)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        self.assertTrue(result.stderr.startswith("error: could not read the vault's settings: "
+                                                 "_meta/vault-config.yaml is not valid YAML"),
+                        result.stderr)
+
+
 class RoundTripTests(unittest.TestCase):
     def test_roundtrip_with_vault_check(self):
         copy = copy_fixture(self)

@@ -53,6 +53,7 @@ from vaultlib import (
     normalize,
     parse_session_number,
     section,
+    report_unreadable_settings,
     setting_or_builtin,
     session_ref_number,
     vault_files,
@@ -648,4 +649,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(report_unreadable_settings(main))

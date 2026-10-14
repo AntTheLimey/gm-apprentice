@@ -69,7 +69,7 @@ from pathlib import Path
 from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
 from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
-                      setting_or_builtin,
+                      report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
                       h3_blocks, nested_mapping, raw_frontmatter, section,
                       session_ref_number, word_count)
@@ -420,11 +420,11 @@ def thread_report(files, current: int, chapter, vault: Path) -> str:
         carry = _bullets(carry_block) if carry_block else []
         wrap_ups.append((n, unresolved, carry))
 
-    gone = out_of_play(vault)
+    not_playing = out_of_play(vault)
     stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     pcs = [(rel, text) for rel, text, fm in files
            if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and not is_out_of_play(fm, gone)]
+           and not is_out_of_play(fm, not_playing)]
 
     # Unresolved bullets a PC thread actually matched, keyed by (session,
     # bullet text) — everything else is reported as an orphan below.
@@ -652,10 +652,10 @@ def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
     prose_forecast = [n for n, rows in plans if rows == []]
     no_section = [n for n, rows in plans if rows is None]
 
-    gone = out_of_play(vault)
+    not_playing = out_of_play(vault)
     pcs = [(rel, text, fm) for rel, text, fm in files
            if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and not is_out_of_play(fm, gone)]
+           and not is_out_of_play(fm, not_playing)]
 
     def since(last: int | None, label: str) -> str:
         if last is None:
@@ -1017,12 +1017,12 @@ def main() -> int:
 
     # --- active PCs: frontmatter line + Current Status block ---
     print("\n===== Active PCs =====")
-    gone = out_of_play(args.vault)
+    not_playing = out_of_play(args.vault)
     found_pc = False
     for rel, text, fm in files:
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
-        if is_out_of_play(fm, gone):
+        if is_out_of_play(fm, not_playing):
             continue
         found_pc = True
         as_of = fm.get("asOfSession", "?")
@@ -1073,4 +1073,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(report_unreadable_settings(main))

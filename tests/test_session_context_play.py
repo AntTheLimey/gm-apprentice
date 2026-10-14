@@ -267,6 +267,16 @@ class ThreadReportTests(unittest.TestCase):
         active = run_cli(tmp).stdout.split("===== Active PCs =====", 1)[1]
         self.assertNotIn("--- Hero (", active.split("=====", 1)[0])
 
+    def test_a_broken_settings_file_is_a_plain_error_not_a_traceback(self):
+        tmp = self.aged_copy("vault: [unclosed\n")
+        for args in ([], ["--threads"], ["--arcs"]):
+            result = run_cli(tmp, *args)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertTrue(result.stderr.startswith(
+                "error: could not read the vault's settings: "
+                "_meta/vault-config.yaml is not valid YAML"), result.stderr)
+
     def test_threads_cli(self):
         result = run_cli(FIXTURE, "--threads", "--session", "7")
         self.assertEqual(result.returncode, 0, result.stderr)

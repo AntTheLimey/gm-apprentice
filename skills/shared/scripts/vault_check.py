@@ -207,6 +207,7 @@ from vaultlib import (  # noqa: F401
     settings_file,
     stamp_file,
     vault_layout,
+    report_unreadable_settings,
     setting_or_builtin,
     settings,
     settings_add,
@@ -5769,10 +5770,7 @@ def run() -> int:
     publish tool going away after a check began asking it, and settings the
     tool cannot read."""
     try:
-        return main()
-    except SettingsUnavailable as e:
-        print(f"error: {e}", file=sys.stderr)
-        return 2
+        return report_unreadable_settings(main)
     except PublishToolUnavailable as e:
         print(f"error: the publish tool stopped answering part-way ({e}) — "
               f"the rows above are incomplete and nothing further was "

@@ -1564,6 +1564,17 @@ def setting_or_builtin(vault: Path, name: str) -> Any:
     return _schema_default(name)
 
 
+def report_unreadable_settings(main: Callable[[], int]) -> int:
+    """`main()`'s exit code; settings that cannot be read (a typo in the
+    settings file, no publish tool) end the command with one `error:` line
+    on stderr and exit code 2, never a traceback."""
+    try:
+        return main()
+    except SettingsUnavailable as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
+
+
 def forget_settings(vault: Path | None = None) -> None:
     """Drop what was read for `vault` (every vault with None). Call it after
     anything that writes the vault's settings file or the site's
