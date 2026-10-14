@@ -65,15 +65,14 @@ function recapParagraph(page) {
   return paragraph ? stripWikiLinks(paragraph) : null;
 }
 
-const RECAP_MAX_CHARS = 500;
 const RECAP_TAGS = { em_open: '<em>', em_close: '</em>', strong_open: '<strong>', strong_close: '</strong>', s_open: '<s>', s_close: '</s>' };
 
 // Walks the paragraph's inline markdown tokens, keeping the words and dropping the
 // syntax (#269): emphasis markers, link URLs and images never show as literal text.
 // With `html`, emphasis, strikethrough and inline code keep their markup (escaped
-// text, a fixed tag set, no links). Truncates to ~RECAP_MAX_CHARS visible characters
+// text, a fixed tag set, no links). Truncates to `maxChars` visible characters
 // at a word boundary and closes any tags still open.
-function renderRecap(paragraph, html) {
+function renderRecap(paragraph, html, maxChars) {
   const tokens = (inlineRenderer().parseInline(paragraph, {})[0] || {}).children || [];
   let out = '';
   let visible = 0;
@@ -83,8 +82,8 @@ function renderRecap(paragraph, html) {
   const addText = (text, wrap) => {
     if (truncated) return;
     let t = text;
-    if (visible + t.length > RECAP_MAX_CHARS) {
-      t = t.slice(0, RECAP_MAX_CHARS - visible);
+    if (visible + t.length > maxChars) {
+      t = t.slice(0, maxChars - visible);
       const lastSpace = t.lastIndexOf(' ');
       if (lastSpace > 0) t = t.slice(0, lastSpace);
       truncated = true;
@@ -116,16 +115,23 @@ function inlineRenderer() {
   return cachedRenderer;
 }
 
+// The length is the site's recap_chars setting, always passed in; a missing one is a mistake in the calling code.
+function assertRecapLength(maxChars, who) {
+  if (!Number.isInteger(maxChars) || maxChars < 1) throw new Error(`${who} was not given a recap length; the caller must pass publishConfig.limits.recap_chars`);
+}
+
 // Plain-text teaser of the latest session's recap (first prose paragraph).
-function extractRecap(page) {
+function extractRecap(page, maxChars) {
+  assertRecapLength(maxChars, 'extractRecap');
   const paragraph = recapParagraph(page);
-  return paragraph ? renderRecap(paragraph, false) : null;
+  return paragraph ? renderRecap(paragraph, false, maxChars) : null;
 }
 
 // Same teaser as HTML, with emphasis rendered rather than shown as asterisks (#269).
-function extractRecapHtml(page) {
+function extractRecapHtml(page, maxChars) {
+  assertRecapLength(maxChars, 'extractRecapHtml');
   const paragraph = recapParagraph(page);
-  return paragraph ? renderRecap(paragraph, true) : null;
+  return paragraph ? renderRecap(paragraph, true, maxChars) : null;
 }
 
 function getInitials(name) {
@@ -140,24 +146,6 @@ function getPCs(pages) {
   return pages
     .filter(p => p.frontmatter.type === 'pc')
     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
-}
-
-const PATRON_TAGS = new Set(['employer', 'patron']);
-const ANTAGONIST_TAGS = new Set(['villain', 'antagonist']);
-const COMPANION_TAGS = new Set(['companion', 'ally']);
-const THREAT_TAGS = new Set(['super', 'fragment-empowered']);
-
-function inferNPCRole(npc, sessionCount) {
-  const tags = new Set(npc.frontmatter.tags || []);
-  const rels = npc.frontmatter.relationships || [];
-
-  if ([...PATRON_TAGS].some(t => tags.has(t)) || rels.some(r => r.type === 'employs')) return 'Patron';
-  if ([...ANTAGONIST_TAGS].some(t => tags.has(t))) return 'Antagonist';
-  if ([...COMPANION_TAGS].some(t => tags.has(t))) return 'Companion';
-  if ([...THREAT_TAGS].some(t => tags.has(t))) return 'Threat';
-  if (rels.some(r => r.type === 'leads' || r.type === 'commands')) return 'Leader';
-  if (sessionCount >= 2) return 'Recurring';
-  return 'NPC';
 }
 
 const EXPLORE_DESCRIPTIONS = {
@@ -291,4 +279,4 @@ function getLatestWrapUp(pages, session, pairs) {
   return null;
 }
 
-module.exports = { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
+module.exports = { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, getRecentEvents, getExploreDescriptions };

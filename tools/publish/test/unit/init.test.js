@@ -59,14 +59,9 @@ describe('init', () => {
       await assert.doesNotReject(fs.access(p));
     });
 
-    it('vault.config.json holds exactly the four scaffold keys', async () => {
+    it('vault.config.json holds only the vault path', async () => {
       const content = await fs.readFile(path.join(tmpDir, 'vault.config.json'), 'utf8');
-      assert.deepStrictEqual(JSON.parse(content), {
-        host: 'github-pages',
-        siteUrl: 'https://example.github.io/my-campaign',
-        vaultPath: './vault',
-        outputDir: './docs',
-      });
+      assert.deepStrictEqual(JSON.parse(content), { vaultPath: './vault' });
     });
 
     it('creates README.md', async () => {
@@ -266,8 +261,7 @@ describe('init', () => {
         await fs.mkdir(vault);
         await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
         const result = await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
-        assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(),
-          ['host', 'outputDir', 'siteUrl', 'vaultPath']);
+        assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(), ['vaultPath']);
         assert.deepStrictEqual(result.vaultSettings.written,
           ['player_site.publish', 'player_site.folder', 'player_site.title', 'player_site.folder_map', 'vault.attachments', 'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts']);
         const tree = newOf(vault);
@@ -277,6 +271,10 @@ describe('init', () => {
         // The vault can find its site again: an absolute path, forward slashes.
         assert.strictEqual(pub.folder, path.resolve(site).split(path.sep).join('/'));
         assert.strictEqual(pub.title, 'Dead Light');
+        // The address, host and output folder are written nowhere: the built-in values stand until the set-up guide sets them.
+        assert.strictEqual(pub.url, undefined);
+        assert.strictEqual(pub.host, undefined);
+        assert.strictEqual(pub.output, undefined);
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
         assert.strictEqual(tree.vault.attachments, '_attachments');
         assert.deepStrictEqual(pub.hide.folders, ['_meta', '_Templates', '_resources']);
@@ -296,35 +294,73 @@ describe('init', () => {
       assert.deepStrictEqual(lines.filter((l) => /WARNING/.test(l)), []);
     });
 
+    it('a fresh init builds, dry-runs a deploy and passes doctor on the built-in defaults; a host and address the old guide writes to vault.config.json take effect', async () => {
+      const tmpDir = await makeTmpDir();
+      const real = { log: console.log, warn: console.warn, error: console.error };
+      try {
+        const site = path.join(tmpDir, 'site');
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(vault);
+        await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
+        await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
+        const configPath = path.join(site, 'vault.config.json');
+        const said = [];
+        for (const k of Object.keys(real)) console[k] = (...a) => said.push(a.join(' '));
+        const { runDeploy } = require('../../lib/deploy-cli');
+        const dry = [];
+        assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => dry.push(String(l)), runCommand: () => ({ code: 1, stdout: '', stderr: '' }) }), 0);
+        assert.match(dry.join('\n'), /git add docs/, dry.join('\n'));
+        assert.doesNotMatch(dry.join('\n'), /WARNING|differs/);
+        const { runSiteDoctor } = require('../../lib/site-doctor');
+        const doc = [];
+        await runSiteDoctor({ configPath, json: true }, { out: (l) => doc.push(String(l)), detect: () => null });
+        const codes = JSON.parse(doc.join('\n')).findings.map((f) => f.code);
+        assert.ok(!codes.includes('SETTINGS_FAULT') && !codes.includes('CONFIG_INVALID'), codes.join(','));
+        build({ configPath });
+        assert.ok(existsSync(path.join(site, 'docs', 'index.html')));
+        assert.deepStrictEqual(said.filter((l) => /WARNING|differs/.test(l)), []);
+        // What the old guide wrote to the site file still takes effect.
+        const raw = JSON.parse(readFileSync(configPath, 'utf8'));
+        await fs.writeFile(configPath, JSON.stringify({ ...raw, host: 'cloudflare-pages', siteUrl: 'https://dead.pages.dev' }));
+        const cf = [];
+        assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => cf.push(String(l)) }), 0);
+        assert.match(cf.join('\n'), /wrangler/, cf.join('\n'));
+        assert.doesNotMatch(cf.join('\n'), /git push/);
+      } finally {
+        Object.assign(console, real);
+        await removeTmpDir(tmpDir);
+      }
+    });
+
     it('the site switch: init turns it on over an off, and a site turned off does not build', async () => {
       const tmpDir = await makeTmpDir();
       try {
         const site = path.join(tmpDir, 'site');
         const vault = path.join(tmpDir, 'vault');
-        const file = path.join(vault, '_meta', 'vault-config.md');
+        const file = path.join(vault, '_meta', 'vault-config.yaml');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
         await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
-        await fs.writeFile(file, '---\ntype: meta\npublish:\n  site: false\n---\n');
+        await fs.writeFile(file, 'version: 1\nplayer_site:\n  publish: false\n');
         const result = await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
         assert.ok(result.vaultSettings.written.includes('player_site.publish'));
-        assert.strictEqual(publishOf(vault).site, true);
+        assert.strictEqual(newOf(vault).player_site.publish, true);
         const configPath = path.join(site, 'vault.config.json');
         const { siteOffFor } = require('../../lib/config');
         assert.strictEqual(siteOffFor(configPath), null);
 
-        await fs.writeFile(file, readFileSync(file, 'utf8').replace('site: true', 'site: false'));
-        assert.strictEqual(publishOf(vault).site, false);
-        assert.match(siteOffFor(configPath), /the site is off for this vault \(publish\.site/);
+        await fs.writeFile(file, readFileSync(file, 'utf8').replace('publish: true', 'publish: false'));
+        assert.strictEqual(newOf(vault).player_site.publish, false);
+        assert.match(siteOffFor(configPath), /the site is off for this vault \(player_site\.publish/);
         assert.throws(() => build({ configPath }), /the site is off for this vault/);
         await assert.rejects(fs.access(path.join(site, 'docs', 'index.html')));
         // Off next to a line the parser rejects: still not built or uploaded.
         const offText = readFileSync(file, 'utf8');
-        await fs.writeFile(file, offText.replace('site: false', 'site: false\n  broken: [unclosed'));
+        await fs.writeFile(file, offText.replace('publish: false', 'publish: false\n  broken: [unclosed'));
         assert.match(siteOffFor(configPath), /^cannot tell whether the site is on \(/);
         await fs.writeFile(file, offText);
         // A site folder whose vault never set the switch still builds.
-        await fs.writeFile(file, readFileSync(file, 'utf8').replace(/^ *site: false\n/m, ''));
-        assert.strictEqual(publishOf(vault).site, undefined);
+        await fs.writeFile(file, readFileSync(file, 'utf8').replace(/^ *publish: false\n/m, ''));
+        assert.strictEqual(newOf(vault).player_site.publish, undefined);
         const real = { log: console.log, warn: console.warn };
         console.log = console.warn = () => {};
         try { build({ configPath }); } finally { Object.assign(console, real); }
@@ -339,11 +375,11 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const original = '---\ntype: meta\npublish:\n  site_title: Mine\n  theme:\n    tagline: Hello\n---\n';
-        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const original = 'version: 1\nplayer_site:\n  title: Mine\n  theme:\n    tagline: Hello\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.yaml'), original);
         const result = await init(path.join(tmpDir, 'site'), { siteTitle: 'Other', vaultPath: vault });
-        const pub = publishOf(vault);
-        assert.strictEqual(pub.site_title, 'Mine');
+        const pub = newOf(vault).player_site;
+        assert.strictEqual(pub.title, 'Mine');
         assert.deepStrictEqual(pub.theme, { tagline: 'Hello' });
         assert.deepStrictEqual(result.vaultSettings.kept, ['player_site.title']);
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
@@ -357,13 +393,13 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const file = path.join(vault, '_meta', 'vault-config.md');
-        await fs.writeFile(file, '---\ntype: meta\npublish:\n  exclude_callouts: false\n  exclude_dirs: []\n---\n');
+        const file = path.join(vault, '_meta', 'vault-config.yaml');
+        await fs.writeFile(file, 'version: 1\nplayer_site:\n  hide:\n    callouts: false\n    folders: []\n');
         const site = path.join(tmpDir, 'site');
         await init(site, { vaultPath: vault });
-        const pub = publishOf(vault);
-        assert.strictEqual(pub.exclude_callouts, false);
-        assert.deepStrictEqual(pub.exclude_dirs, []);
+        const pub = newOf(vault).player_site;
+        assert.strictEqual(pub.hide.callouts, false);
+        assert.deepStrictEqual(pub.hide.folders, []);
         const after1 = readFileSync(file, 'utf8');
         await assert.rejects(() => init(site, { vaultPath: vault }), /already exists/);
         assert.strictEqual(readFileSync(file, 'utf8'), after1);
@@ -397,6 +433,24 @@ describe('init', () => {
         r = run(['site3', '--vault', path.join(tmpDir, 'elsewhere')]);
         assert.strictEqual(r.status, 0, r.stderr);
         assert.strictEqual(JSON.parse(readFileSync(path.join(tmpDir, 'site3', 'vault.config.json'), 'utf8')).vaultPath.split('/').join(path.sep), path.join(tmpDir, 'elsewhere'));
+      } finally {
+        await removeTmpDir(tmpDir);
+      }
+    });
+
+    it('a vault still on the old settings file stops init before anything is written, and says to update the vault first', async () => {
+      const tmpDir = await makeTmpDir();
+      try {
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
+        const original = '---\ntype: meta\npublish:\n  site_title: Mine\n---\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const site = path.join(tmpDir, 'site');
+        await assert.rejects(() => init(site, { vaultPath: vault }),
+          /This vault's settings are still in the old file\. Update the vault first \(ask the apprentice to update it\), then set up the site\./);
+        await assert.rejects(fs.access(site));
+        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
+        assert.ok(!existsSync(path.join(vault, '_meta', 'vault-config.yaml')));
       } finally {
         await removeTmpDir(tmpDir);
       }
@@ -451,14 +505,14 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const file = path.join(vault, '_meta', 'vault-config.md');
-        await fs.writeFile(file, '---\ntype: meta\npublish:\n  theme:\n    genre: noir\n---\n');
+        const file = path.join(vault, '_meta', 'vault-config.yaml');
+        await fs.writeFile(file, 'version: 1\nplayer_site:\n  theme:\n    genre: noir\n');
         const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault, tagline: 'Rain, always' });
-        assert.deepStrictEqual(publishOf(vault).theme, { genre: 'noir', tagline: 'Rain, always' });
+        assert.deepStrictEqual(newOf(vault).player_site.theme, { genre: 'noir', tagline: 'Rain, always' });
         assert.ok(result.vaultSettings.written.includes('player_site.theme.tagline'));
         // a second scaffold (new site, same vault) keeps the tagline already there
         await init(path.join(tmpDir, 'site2'), { vaultPath: vault, tagline: 'Other words' });
-        assert.deepStrictEqual(publishOf(vault).theme, { genre: 'noir', tagline: 'Rain, always' });
+        assert.deepStrictEqual(newOf(vault).player_site.theme, { genre: 'noir', tagline: 'Rain, always' });
       } finally {
         await removeTmpDir(tmpDir);
       }
@@ -472,11 +526,11 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const original = '---\ntype: meta\npublish: [unclosed\n---\n';
-        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const original = 'player_site: [unclosed\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.yaml'), original);
         const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault, tagline: 'Hi' });
         assert.strictEqual(result.vaultSettings.missing['player_site.theme.tagline'], 'Hi');
-        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
+        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), original);
         assert.match(warned.join('\n'), /theme/);
       } finally {
         console.warn = real;
@@ -492,12 +546,12 @@ describe('init', () => {
       try {
         const vault = path.join(tmpDir, 'vault');
         await fs.mkdir(path.join(vault, '_meta'), { recursive: true });
-        const original = '---\ntype: meta\npublish: [unclosed\n---\n';
-        await fs.writeFile(path.join(vault, '_meta', 'vault-config.md'), original);
+        const original = 'player_site: [unclosed\n';
+        await fs.writeFile(path.join(vault, '_meta', 'vault-config.yaml'), original);
         const result = await init(path.join(tmpDir, 'site'), { vaultPath: vault });
         assert.strictEqual(result.success, true);
         assert.ok(result.vaultSettings.skipped);
-        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.md'), 'utf8'), original);
+        assert.strictEqual(readFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'utf8'), original);
         assert.match(warned.join('\n'), /Campaign settings were not written/);
       } finally {
         console.warn = real;
@@ -507,10 +561,10 @@ describe('init', () => {
   });
 
   describe('vault.config.json.tmpl', () => {
-    it('is exactly the four scaffold keys, with no backend flags or campaign settings', () => {
+    it('is exactly the one scaffold key, with no backend flags or campaign settings', () => {
       const tmplPath = path.join(__dirname, '..', '..', 'templates-scaffold', 'vault.config.json.tmpl');
       const config = JSON.parse(readFileSync(tmplPath, 'utf-8').replace(/\{\{\w+\}\}/g, 'x'));
-      assert.deepStrictEqual(Object.keys(config).sort(), ['host', 'outputDir', 'siteUrl', 'vaultPath']);
+      assert.deepStrictEqual(Object.keys(config).sort(), ['vaultPath']);
     });
   });
 });

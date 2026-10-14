@@ -14,7 +14,8 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, buildLinkMap, scanAttachments, scanAllNotes, pairStoryFiles, slugify } = require('./scanner');
 const { resolveConfig, vaultRelPath, scanConfigFor } = require('./config');
-const { formatFault, entry: settingEntry, fileLabel, nameIn, layoutOf } = require('./settings');
+const { formatFault, entry: settingEntry, fileLabel, nameIn, layoutOf, siteFolderKeys } = require('./settings');
+const { packageScripts, packageNotes } = require('./settings/steps');
 const { pcKeepList } = require('./pc-prose');
 const { loadManifest } = require('./manifest');
 const { decidePage, publishesPage } = require('./publish-decision');
@@ -97,17 +98,19 @@ function emit(out, findings, vaultLabel, asJson) {
   // the report and the counts.
   const open = findings.filter((f) => !f.settled);
   const errors = open.filter((f) => f.severity === 'error').length;
-  const warnings = open.length - errors;
+  // A note (severity info) is something to know, not to fix: it is counted apart and never fails the audit.
+  const notes = open.filter((f) => f.severity === 'info').length;
+  const warnings = open.length - errors - notes;
   if (asJson) {
     out(JSON.stringify({
       ok: errors === 0,
       findings,
-      counts: { errors, warnings, total: open.length, settled: findings.length - open.length },
+      counts: { errors, warnings, ...(notes ? { notes } : {}), total: open.length, settled: findings.length - open.length },
     }, null, 2));
     return errors === 0 ? 0 : 1;
   }
 
-  out(`Site audit (${vaultLabel}) — ${plural(errors, 'error')}, ${plural(warnings, 'warning')}`);
+  out(`Site audit (${vaultLabel}) — ${plural(errors, 'error')}, ${plural(warnings, 'warning')}${notes ? `, ${plural(notes, 'note')}` : ''}`);
   if (open.length === 0) {
     out('No findings.');
     return 0;
@@ -117,9 +120,10 @@ function emit(out, findings, vaultLabel, asJson) {
   for (const code of codes) {
     const rows = open.filter((f) => f.code === code);
     // One code can hold errors and warnings (NAMED_NO_PAGE: an error when its note is withheld).
-    const severities = ['error', 'warning'].filter((sev) => rows.some((r) => (r.severity === 'error') === (sev === 'error')));
+    const kindOf = (r) => (r.severity === 'error' || r.severity === 'info' ? r.severity : 'warning');
+    const severities = ['error', 'warning', 'info'].filter((sev) => rows.some((r) => kindOf(r) === sev));
     out('');
-    out(`${code} (${severities.map((sev) => plural(rows.filter((r) => (r.severity === 'error') === (sev === 'error')).length, sev)).join(', ')})`);
+    out(`${code} (${severities.map((sev) => plural(rows.filter((r) => kindOf(r) === sev).length, sev === 'info' ? 'note' : sev)).join(', ')})`);
     const shown = FAULT_CODES.has(code) ? rows.slice(0, FAULT_ROW_CAP) : rows;
     for (const row of shown) {
       out(`  ${row.path} — ${row.detail}`);
@@ -213,7 +217,7 @@ async function runSiteDoctor(options, deps) {
 
   const rawSiteConfig = config;
   // The faults are reported as findings below, not also printed as warning lines.
-  const resolved = resolveConfig(config, vaultPath, () => {});
+  const resolved = resolveConfig(config, vaultPath, () => {}, { siteDir: siteRoot });
   config = resolved.config;
   const publishConfig = resolved.publishConfig;
   const manifest = loadManifest(vaultPath);
@@ -238,7 +242,7 @@ async function runSiteDoctor(options, deps) {
   // Which session index bodies the site withholds, paired as the build pairs (GM
   // aliases rewritten first; session-hub.js pairHubs).
   const allNotes = scanAllNotes(vaultPath);
-  const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes });
+  const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes, withheldWords: publishConfig.withheld_words });
 
   // The body a reader gets of a page (readerView), for the dead-link check.
   const pcKeepSections = pcKeepList(publishConfig);
@@ -253,6 +257,8 @@ async function runSiteDoctor(options, deps) {
 
   // --- the settings themselves ----------------------------------------------
   for (const f of publishConfig.faults) {
+    // A site-folder key the vault does not set yet is an INFO row below: the next update moves it.
+    if (f.siteLeft) continue;
     // A setting left in the site folder's file is fixed there, not in the vault's settings file.
     const fromSite = f.source === 'site';
     findings.push(finding(
@@ -262,6 +268,20 @@ async function runSiteDoctor(options, deps) {
         ? `remove it from vault.config.json (it is ${f.use} in ${fileLabel(vaultPath)}), or ask the apprentice to run the Settings check`
         : `correct it in ${fileLabel(vaultPath)}, or ask the apprentice to run the Settings check`,
     ));
+  }
+  // On a vault that has moved, a site-folder key still in the site file is not a fault: the next update moves it.
+  if (layoutOf(vaultPath) === 'new') {
+    for (const { key, name } of siteFolderKeys()) {
+      if (rawSiteConfig[key] === undefined || rawSiteConfig[key] === null) continue;
+      if (publishConfig.faults.some((f) => f.source === 'site' && !f.siteLeft && f.name === key)) continue;
+      findings.push(finding('SETTINGS_FAULT', 'info', 'vault.config.json', `${key} is still in vault.config.json; it moves to ${name} at the next update`,
+        'nothing to do: the vault update moves it'));
+    }
+  }
+  // A step still in the site's package.json runs under `npm run build` as well as, now, from the vault's settings.
+  if (layoutOf(vaultPath) === 'new') {
+    const notes = packageNotes(packageScripts(siteRoot), publishConfig.steps);
+    if (notes.twice) findings.push(finding('BUILD_STEPS_TWICE', 'warning', path.join(siteRoot, 'package.json'), notes.twice, 'nothing to do: the vault update moves it'));
   }
   // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
   // site and whether that tool can read the new file (move.js: siteToolHold).
@@ -291,6 +311,7 @@ async function runSiteDoctor(options, deps) {
   }
   if (drift) {
     let sitePin = null;
+    let tarball = false; // a vendored release tarball is the GM's own pin (as update-pin treats it): no advice to repin
     const pkgPath = path.join(siteRoot, 'package.json');
     // Absent is fine — plenty of sites have no package.json yet, and the running
     // tool's own drift is still worth reporting. Present-but-unparseable is not:
@@ -298,7 +319,8 @@ async function runSiteDoctor(options, deps) {
     if (exists(pkgPath)) {
       try {
         const spec = (JSON.parse(readFile(pkgPath)).dependencies || {})['gm-apprentice-publish'];
-        if (spec && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
+        tarball = /\.(?:tgz|tar\.gz)$/i.test(String(spec || ''));
+        if (spec && !tarball && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
       } catch (err) {
         findings.push(finding(
           'VERSION_DRIFT', 'warning', pkgPath,
@@ -308,7 +330,7 @@ async function runSiteDoctor(options, deps) {
       }
     }
     const stale = sitePin && sitePin !== drift.latest;
-    if (drift.drift || stale) {
+    if (!tarball && (drift.drift || stale)) {
       findings.push(finding(
         'VERSION_DRIFT', 'warning', pkgPath,
         `site pinned to ${sitePin || drift.pinned}, newest installed is ${drift.latest} — the site builds with the old renderer`,

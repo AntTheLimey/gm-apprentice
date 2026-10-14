@@ -109,7 +109,9 @@ function pages() {
 
 const CONFIG = { vaultPath: '/vault', siteTitle: 'Test Campaign', excludeDirs: [], folderMap: {} };
 
+const { defaultWithheldWords } = require('./helpers/settings-files');
 const PUBLISH_CONFIG = {
+  withheld_words: defaultWithheldWords(),
   exclude_fields: ['secrets'],
   exclude_sections: ['GM Notes'],
   exclude_callouts: true,

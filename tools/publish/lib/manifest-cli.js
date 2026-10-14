@@ -157,7 +157,7 @@ function surveyVault(options, deps) {
     : deps.config ? rawConfig.vaultPath : path.resolve(configDir, rawConfig.vaultPath);
   const { config, publishConfig } = deps.publishConfig
     ? { config: rawConfig, publishConfig: deps.publishConfig }
-    : resolveConfig(rawConfig, vaultPath, console.warn, { quietStops: true });
+    : resolveConfig(rawConfig, vaultPath, console.warn, { quietStops: true, siteDir: configDir });
   const manifest = loadManifest(vaultPath);
 
   // scanConfigFor: same unioned, normalized exclude_dirs build.js uses, so this command
@@ -389,7 +389,7 @@ function publishedWith(survey, extra) {
 // frontmatter the build does. The whole-vault note list is read once per survey.
 function pairsWith(survey, published) {
   if (!survey.allNotes) survey.allNotes = scanAllNotes(survey.vaultPath);
-  return pairHubs([...survey.pagesByRel.values()], published, { allNotes: survey.allNotes });
+  return pairHubs([...survey.pagesByRel.values()], published, { allNotes: survey.allNotes, withheldWords: survey.publishConfig.withheld_words });
 }
 
 // What publish-played would do, without doing it: `ticks` maps each played hub it would

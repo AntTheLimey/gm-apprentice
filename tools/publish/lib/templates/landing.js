@@ -1,4 +1,4 @@
-const { escapeHtml, plainMetaValue, encodeHref } = require('../processor');
+const { escapeHtml, plainMetaValue, encodeHref, encodeAddress, encodeImageUrl } = require('../processor');
 const { refTarget, linkText } = require('../wikilink');
 const { baseShell, cssPath, rootPath, DIR_LABELS, portraitImg, canonStatusBadge, clientScripts, noPreviewAttr } = require('./base');
 const {
@@ -21,8 +21,8 @@ function formatDate(dateStr) {
 }
 
 
-// Label for an In Memoriam card. Every out-of-play status (lib/pc-status.js) gets one, so a
-// fallen PC is never labelled "Active".
+// Label for an In Memoriam card. Every status on the default out-of-play list gets one, so a
+// fallen PC is never labelled "Active"; a status the GM added is shown as written.
 function statusLabel(status) {
   const s = String(status || '').trim().toLowerCase();
   if (s === 'dead' || s === 'deceased' || s === 'kia') return 'KIA';
@@ -31,6 +31,8 @@ function statusLabel(status) {
   if (s === 'departed') return 'Departed';
   if (s === 'inactive') return 'Inactive';
   if (s === 'npc') return 'Now an NPC';
+  if (s === 'destroyed') return 'Destroyed';
+  if (s === 'dissolved') return 'Dissolved';
   return 'Active';
 }
 
@@ -83,6 +85,22 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   ${heroDates}
 </div>`;
 
+  // --- Banner (player_site.landing.banner; the build has already resolved its picture and link) ---
+  let bannerZone = '';
+  const banner = landingConfig.banner;
+  if (banner && (banner.title || banner.text || banner.image)) {
+    // A web address is printed as written (spaces aside); a picture copied into the site goes through encodeImageUrl.
+    const imgSrc = !banner.image ? '' : /^https?:\/\//i.test(banner.image) ? banner.image.replace(/ /g, '%20') : encodeImageUrl(banner.image);
+    const img = imgSrc ? `<img class="landing-banner-img" src="${escapeHtml(imgSrc)}" alt="">` : '';
+    const words = (banner.title || banner.text)
+      ? `<div class="landing-banner-body">${banner.title ? `<h2 class="landing-banner-title">${escapeHtml(banner.title)}</h2>` : ''}${banner.text ? `<p class="landing-banner-text">${escapeHtml(banner.text)}</p>` : ''}</div>`
+      : '';
+    const inner = `${img}${words}`;
+    bannerZone = banner.link
+      ? `<a class="landing-banner" href="${escapeHtml(banner.link.external ? banner.link.href : encodeAddress(banner.link.href))}"${banner.link.external ? ' rel="noopener"' : ''}>${inner}</a>`
+      : `<div class="landing-banner">${inner}</div>`;
+  }
+
   // --- Zone 2: Latest Session Recap ---
   // Prefer the overview's authoritative last_session pointer, resolved against the *published*
   // pages so the "Read full session" link always targets a rendered page. Fall back to scanning
@@ -92,7 +110,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   let recapZone = '';
   if (latestSession) {
     const recapSource = latestWrapUp || latestSession;
-    const recap = extractRecapHtml(recapSource);
+    const recap = extractRecapHtml(recapSource, publishConfig.limits.recap_chars);
     const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const linkTarget = latestWrapUp || latestSession;
@@ -107,8 +125,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
 
   // --- Zone 3: The Team (active PCs) ---
   const allPCs = getPCs(pages);
-  const activePCs = allPCs.filter(p => !isOutOfPlay(p.frontmatter));
-  const fallenPCs = allPCs.filter(p => isOutOfPlay(p.frontmatter));
+  const outOfPlay = publishConfig.statuses.out_of_play;
+  const activePCs = allPCs.filter(p => !isOutOfPlay(p.frontmatter, outOfPlay));
+  const fallenPCs = allPCs.filter(p => isOutOfPlay(p.frontmatter, outOfPlay));
 
   let teamZone = '';
   if (activePCs.length > 0) {
@@ -139,7 +158,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   let memoriamZone = '';
   if (fallenPCs.length > 0) {
     const entries = fallenPCs.map(pc => {
-      const status = statusLabel(pc.frontmatter.status);
+      // A status the GM added to the out-of-play list has no label of its own: it is shown as written.
+      const label = statusLabel(pc.frontmatter.status);
+      const status = label === 'Active' ? String(pc.frontmatter.status || '').trim() || 'Out of play' : label;
       const context = pc.frontmatter.death_context || pc.frontmatter.retirement_context || '';
       const contextHtml = context ? ` <span class="memorial-context">${escapeHtml(context)}</span>` : '';
       return `<a href="${escapeHtml(encodeHref(pc.outputPath))}">${escapeHtml(pc.displayTitle)} (${escapeHtml(status)})</a>${contextHtml}`;
@@ -272,7 +293,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
 </div>`
     : '';
 
-  const content = [heroZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
+  const content = [heroZone, bannerZone, recapZone, teamZone, memoriamZone, quickLinkZone, npcZone, locationZone, eventZone, timelineZone, exploreZone]
     .filter(Boolean)
     .join('\n');
 

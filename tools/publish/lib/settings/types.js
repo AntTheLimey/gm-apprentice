@@ -54,6 +54,7 @@ const TYPES = {
       const kind = entry.integer ? 'a whole number' : 'a number';
       if (entry.min !== undefined && entry.max !== undefined) return `${kind} from ${entry.min} to ${entry.max}`;
       if (entry.min !== undefined) return `${kind}, ${entry.min} or more`;
+      if (entry.max !== undefined) return `${kind}, ${entry.max} or less`;
       return kind;
     },
   },
@@ -68,6 +69,42 @@ const TYPES = {
       return typeof b === 'boolean' ? ok(b) : bad;
     },
     takes: (entry) => `on, off, or a list of ${entry.of || 'names'}`,
+  },
+  // A list whose every item is a small map: the entry's `fields` names the keys (`required: true` for one that
+  // must be there and not blank). Every value is plain text or a number, read as text; a blank optional one is left out.
+  listOfMaps: {
+    // Every entry must read, or the whole list does not (what `settings set` and `add` hold to).
+    read(raw, entry) {
+      const each = TYPES.listOfMaps.readEach(raw, entry);
+      return each === null || each.dropped.length ? bad : ok(each.value);
+    },
+    // Each entry on its own: { value: the entries that read, dropped: [{ index, label, why }] }; null when `raw` is no list.
+    readEach(raw, entry) {
+      if (!Array.isArray(raw)) return null;
+      const fields = entry.fields || {};
+      const value = [];
+      const dropped = [];
+      raw.forEach((item, index) => {
+        const drop = (why) => dropped.push({ index, label: isMap(item) && plain(item[entry.same]) && String(item[entry.same]).trim() !== '' ? String(item[entry.same]).trim() : null, why });
+        if (!isMap(item)) return drop('is not an entry with its parts written as name: value');
+        const out = {};
+        for (const [k, v] of Object.entries(item)) {
+          if (!Object.prototype.hasOwnProperty.call(fields, k)) return drop(`has a part \`${k}\` that is not used`);
+          if (typeof v !== 'string' && typeof v !== 'number') return drop(`has a \`${k}\` that is not text`);
+          if (String(v).trim() !== '') out[k] = String(v);
+        }
+        const missing = Object.keys(fields).find((k) => fields[k].required && out[k] === undefined);
+        if (missing) return drop(`has no \`${missing}\``);
+        value.push(out);
+      });
+      return { value, dropped };
+    },
+    takes(entry) {
+      const names = Object.keys(entry.fields || {});
+      const need = names.filter((k) => entry.fields[k].required).map((k) => `\`${k}\``);
+      const may = names.filter((k) => !entry.fields[k].required).map((k) => `\`${k}\``);
+      return `a list of entries, each with ${need.join(', ')}${may.length ? `, and optionally ${may.join(', ')}` : ''}`;
+    },
   },
   map: {
     read: (raw) => (isMap(raw) ? ok(raw) : bad),

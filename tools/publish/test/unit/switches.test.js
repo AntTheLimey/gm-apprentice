@@ -3,7 +3,8 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { loadPublishConfig, siteOff, SITE_OFF } = require('../../lib/config');
+const config = require('../../lib/config');
+const { loadPublishConfig, siteOff, siteOffText } = config;
 
 // The switches as loadPublishConfig settles them, for a publish block and a site file.
 function resolve(publish, json = {}) {
@@ -126,7 +127,9 @@ describe('site: whether the vault has a site at all', () => {
     assert.ok(got.faults.some((f) => f.name === 'publish.site'), JSON.stringify(got.faults));
   });
   it('siteOff stops a build only for an explicit off', () => {
-    assert.strictEqual(siteOff(resolve({ site: false, site_dir: '/s' })), SITE_OFF);
+    assert.strictEqual(siteOff(resolve({ site: false, site_dir: '/s' })), siteOffText('legacy'));
+    // The text is made from the vault's layout; no module keeps a copy of one layout's wording (#382).
+    assert.strictEqual('SITE_OFF' in config, false);
     assert.strictEqual(siteOff(resolve({})), null);
     assert.strictEqual(siteOff(resolve({ site: true })), null);
     assert.strictEqual(siteOff(undefined), null);

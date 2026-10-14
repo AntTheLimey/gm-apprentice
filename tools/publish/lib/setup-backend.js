@@ -100,7 +100,6 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   const config = JSON.parse(readFile(configPath));
   const siteRoot = path.dirname(path.resolve(configPath));
   const tomlPath = path.join(siteRoot, 'wrangler.toml');
-  const projectName = config.cloudflarePagesProject || path.basename(siteRoot);
 
   // All wrangler calls must run from the site root so a bare `pages deploy`
   // finds wrangler.toml's `pages_build_output_dir`. Harmless for account-level KV ops.
@@ -112,6 +111,9 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
   if (!config.vaultPath) { out(`${configPath} has no "vaultPath"`); return 1; }
   const vaultPath = path.resolve(siteRoot, config.vaultPath);
   try { planChanges(vaultPath, turnOn, { create: true, siteConfig: config, siteConfigPath: path.resolve(configPath) }); } catch (e) { out(`cannot edit the vault's settings: ${String(e.message).split('\n')[0]}`); return 1; }
+  // The project name and the address are the vault's settings, not the site file's.
+  const resolved = require('./config').siteConfigFor(config, siteRoot);
+  const projectName = resolved.cloudflarePagesProject || path.basename(siteRoot);
 
   // Preflight: KV permission.
   const perm = checkKvPermission({ runWrangler: runWranglerAt });
@@ -132,11 +134,12 @@ async function runSetupBackend(feature, { configPath }, deps = {}) {
 
   // Sync plugin-owned Cloudflare Functions into the site, then build + deploy.
   syncFunctions(siteRoot, configPath);
-  await build({ configPath });
+  // (The vault's build steps run here too: this build is published straight after.)
+  await build({ configPath, runSteps: true });
   const dep = runWranglerAt(['pages', 'deploy']);
   if (dep.code !== 0) { out(`Deploy failed: ${failureDetail(dep)}`); return 1; }
 
-  const url = config.siteUrl || `https://${projectName}.pages.dev`;
+  const url = resolved.siteUrl || `https://${projectName}.pages.dev`;
   out(`Your ${LABEL[feature]} is set up and deployed. Live at ${url}.`);
   return 0;
 }

@@ -19,6 +19,7 @@ const { NEW_FILE, OLD_FILE, GROUPS: GROUP_NAMES, layoutOf, at } = require('./lay
 const { LAYOUT_VERSION, NEWER_VERSION } = require('./read');
 const { OLD_BLOCK, hasLegacy } = require('./legacy');
 const { parseNote } = require('../frontmatter');
+const { outputProblem, keepProblem } = require('./folders');
 
 const { Scalar, isScalar, isMap: isYMap, isSeq: isYSeq, isCollection } = YAML;
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
@@ -328,6 +329,28 @@ function changeList(text, doc, keys, verb, entries, same, base, ctx) {
     return found;
   })();
   const node = pair && pair.value;
+  // A list of maps (a listOfMaps setting): its items are maps, compared with `same` as whole entries.
+  if (pair && node && isYSeq(node) && node.items.length && node.items.every(isYMap)) {
+    const held = node.items.map((i) => i.toJS(doc));
+    if (verb === 'add') {
+      const fresh = entries.filter((x, i) => !held.some((h) => same(h, x)) && entries.findIndex((y) => same(y, x)) === i);
+      if (!fresh.length) return null;
+      const list = [...held, ...fresh];
+      if (node.flow) {
+        const last = node.items[node.items.length - 1];
+        return { edits: [{ from: last.range[1], to: last.range[1], text: fresh.map((x) => `, ${inline(x, null, ctx, true)}`).join('') }], list };
+      }
+      const col = columnOf(text, dashOffset(node, 0));
+      const lines = fresh.flatMap((x) => documentOf([x], ctx).toString(toStringOptions(ctx)).replace(/\n$/, '').split('\n').map((l) => ' '.repeat(col) + l));
+      return { edits: [addLines(text, endOf(node, text), lines, eol)], list };
+    }
+    const gone = node.items.filter((i, at) => entries.some((x) => same(held[at], x)));
+    if (!gone.length) return null;
+    const list = held.filter((h, at) => !gone.includes(node.items[at]));
+    if (!list.length) return { edits: replaceValue(text, pair, [], ctx), list: [] };
+    if (node.flow) return { edits: [{ from: node.range[0], to: endOf(node, text), text: inline(list, node, ctx, true) }], list };
+    return { edits: gone.map((i) => dropLines(text, i.range[0], endOf(i, text), eol)), list };
+  }
   if (pair && node && isYSeq(node) && node.items.length) {
     const held = node.items.map((i) => (isScalar(i) ? String(i.value) : null));
     if (verb === 'add') {
@@ -446,7 +469,10 @@ function writeAtomic(link, text, { rename } = {}) {
 const blank = (x) => typeof x === 'string' && x.trim() === '';
 
 // Turns each change into steps on the file, or refuses it. { steps, refusals }.
-function prepare(changes, layout, { allowState = false } = {}) {
+// The rule a folder setting must meet beyond its type (an entry's `check`), the reader's own: why `value` is refused, or null.
+const checkProblem = (e, value, siteDir) => (e.check === 'output' ? outputProblem(value, siteDir) : e.check === 'keep' ? keepProblem(value) : null);
+
+function prepare(changes, layout, { allowState = false, siteDir = null } = {}) {
   const refusals = [];
   const steps = [];
   const legacy = layout === 'legacy';
@@ -505,15 +531,29 @@ function prepare(changes, layout, { allowState = false } = {}) {
       if (Array.isArray(change.value) && change.value.some(blank)) { refusals.push(`${name} has a blank entry; remove it.`); continue; }
       const read = TYPES[e.type].read(change.value, e);
       if (!read.ok) { refusals.push(makeFault({ name, kind: 'not-allowed', level: 'warn', value: change.value, entry: e }).message); continue; }
+      const problem = e.check ? checkProblem(e, read.value, siteDir) : null;
+      if (problem) { refusals.push(`${name} is ${JSON.stringify(change.value)}; ${problem}.`); continue; }
       steps.push({ ...base, kind: 'set', value: e.type === 'text' ? (typeof change.value === 'number' ? String(change.value) : change.value) : read.value, entry: e });
     } else if (change.op === 'unset') {
       // Given an older spelling, only that spelling goes; given the setting's name, every spelling the old file holds goes.
       steps.push({ ...base, kind: 'del', ...(change.spelling ? { keys: change.spelling.split('.'), older: [] } : {}) });
     } else if (change.op === 'add' || change.op === 'remove') {
+      if (e.type === 'listOfMaps') {
+        const entries = change.entries || [];
+        if (!entries.length) { refusals.push(`${name} needs at least one entry.`); continue; }
+        // To add, a whole entry that reads; to remove, the field the entries are told apart by (`same`).
+        const ok = change.op === 'add' ? TYPES.listOfMaps.read(entries, e).ok : entries.every((x) => x && typeof x[e.same] === 'string' && x[e.same].trim() !== '');
+        if (!ok) { refusals.push(change.op === 'add' ? `${name} takes ${TYPES.listOfMaps.takes(e)}.` : `${name} entries are named by their ${e.same}.`); continue; }
+        steps.push({ ...base, kind: 'list', verb: change.op, entries, same: change.same || ((a, b) => a[e.same] === b[e.same]), base: change.base, entry: e });
+        continue;
+      }
       if (!(e.type === 'list' || e.type === 'switchOrList')) { refusals.push(`${name} is not a list, so entries cannot be ${change.op === 'add' ? 'added to' : 'removed from'} it.`); continue; }
       const entries = (change.entries || []).map((x) => (typeof x === 'string' ? x : String(x)));
       if (!entries.length) { refusals.push(`${name} needs at least one entry.`); continue; }
       if (entries.some(blank)) { refusals.push(`${name} has a blank entry; remove it.`); continue; }
+      // Only an entry being added is judged: one already in the file must always be removable.
+      const bad = change.op === 'add' && e.check ? checkProblem(e, entries, siteDir) : null;
+      if (bad) { refusals.push(`${name} entry ${entries.map((x) => JSON.stringify(x)).join(', ')} cannot be added; ${bad}.`); continue; }
       steps.push({ ...base, kind: 'list', verb: change.op, entries, same: change.same || ((a, b) => a === b), base: change.base, entry: e });
     } else {
       refusals.push(`${change.op} is not a change this command makes.`);
@@ -614,7 +654,7 @@ function expandCarry(text, step, label) {
 // site file still holds settings is not given a new one (the new file would switch those settings off).
 function planChanges(vaultPath, changes, { create = false, allowState = false, siteConfig = null, siteConfigPath = null } = {}) {
   const layout = layoutOf(vaultPath);
-  const { steps, refusals } = prepare(changes, layout, { allowState });
+  const { steps, refusals } = prepare(changes, layout, { allowState, siteDir: siteConfigPath ? path.dirname(path.resolve(siteConfigPath)) : null });
   if (refusals.length) {
     const err = new Error(refusals.join('\n'));
     err.refusals = refusals;

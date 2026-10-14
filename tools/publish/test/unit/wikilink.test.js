@@ -11,7 +11,9 @@ const {
   renderMetaValue, gmAliasRewriter,
 } = require('../../lib/processor');
 const { buildBacklinks } = require('../../lib/backlinks');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 const { scoreByRecency } = require('../../lib/recency');
+const GONE = new Set(require('../../lib/settings').entry('vault.statuses.gone').default);
 const { buildSearchIndex } = require('../../lib/search-index');
 const { excerptFromMarkdown } = require('../../lib/excerpt');
 const { runSiteDoctor } = require('../../lib/site-doctor');
@@ -99,7 +101,7 @@ describe('table links with an escaped pipe, in the site build', () => {
 
   it('the gm-alias rewriter keeps the escaped pipe', () => {
     const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias'] } };
-    const rw = gmAliasRewriter([owner]);
+    const rw = gmAliasRewriter([owner], undefined, undefined, WORDS);
     assert.strictEqual(rw.markdown('| [[Elias\\|a patron]] |'), '| [[Lord Vane\\|a patron]] |');
     assert.strictEqual(rw.markdown('| [[Lord Vane\\|Elias]] |'), '| [[Lord Vane]] |');
   });
@@ -107,7 +109,7 @@ describe('table links with an escaped pipe, in the site build', () => {
 
 describe('a secret alias with a ^block anchor is still rewritten', () => {
   const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias Crowe'] } };
-  const rw = gmAliasRewriter([owner]);
+  const rw = gmAliasRewriter([owner], undefined, undefined, WORDS);
 
   it('in every link form', () => {
     assert.strictEqual(rw.markdown('[[Elias Crowe^b1]]'), '[[Lord Vane^b1]]');
@@ -150,14 +152,14 @@ describe('backlinks, recency, search and excerpt read the escaped link', () => {
 
   it('recency counts the mention', () => {
     const npc = { title: 'Emma_Wentworth', frontmatter: { type: 'npc' }, markdown: '' };
-    const scored = scoreByRecency([npc], [page], [], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency([npc], [page], [], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.strictEqual(scored.length, 1);
   });
 
   it('a frontmatter participant written with an escaped pipe is a mention', () => {
     const s = { title: 'S', frontmatter: { type: 'session', status: 'played', session_number: 1, participants: ['[[Emma_Wentworth\\|Emma]]'] }, markdown: '' };
     const npc = { title: 'Emma_Wentworth', frontmatter: { type: 'npc' }, markdown: '' };
-    assert.strictEqual(scoreByRecency([npc], [s], [], { window: 3, max: 10, type: 'npc' }).length, 1);
+    assert.strictEqual(scoreByRecency([npc], [s], [], { gone: GONE, window: 3, max: 10, type: 'npc' }).length, 1);
   });
 
   it('the search index and the excerpt show Emma with no backslash', () => {
@@ -210,7 +212,7 @@ describe('an empty alias is no alias', () => {
 
   it('the gm-alias rewriter still rewrites a secret name with an empty alias', () => {
     const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias'] } };
-    const rw = gmAliasRewriter([owner]);
+    const rw = gmAliasRewriter([owner], undefined, undefined, WORDS);
     for (const form of ['[[Elias|]]', '![[Elias|]]', '[[Elias\\|]]']) {
       const out = rw.markdown(`She met ${form} there.`);
       assert.ok(!out.includes('Elias'), out);
@@ -242,7 +244,7 @@ describe('templates read the escaped link', () => {
 
   it('the landing recap teaser shows the alias without a backslash', () => {
     const page = { frontmatter: {}, markdown: '## Narrative Recap\n\nThey met [[Emma_Wentworth\\|Emma]] at dawn.\n' };
-    assert.strictEqual(extractRecap(page), 'They met Emma at dawn.');
+    assert.strictEqual(extractRecap(page, 500), 'They met Emma at dawn.');
   });
 
   it('a location is found by a parent_location written with an escaped pipe', () => {
@@ -274,7 +276,7 @@ describe('fix round 2: old semantics kept', () => {
   it('an empty-target link never renders as raw brackets', () => {
     assert.strictEqual(excerptFromMarkdown('Met [[|x]] today.'), 'Met |x today.');
     const page = { frontmatter: {}, markdown: '## Narrative Recap\n\nThey met [[|x]] at dawn.\n' };
-    assert.strictEqual(extractRecap(page), 'They met |x at dawn.');
+    assert.strictEqual(extractRecap(page, 500), 'They met |x at dawn.');
   });
 });
 

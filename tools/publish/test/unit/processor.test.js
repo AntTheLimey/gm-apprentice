@@ -674,14 +674,16 @@ describe('publishMode (shared vectors; vaultlib.publish_mode must agree)', () =>
 });
 
 describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', () => {
-  const { isWithheld, gmAliasRewriter, withheldPlaceholder, publishedFrontmatter: published } = require('../../lib/processor');
+  const { isWithheld, gmAliasRewriter, withheldPlaceholder: place, publishedFrontmatter: published } = require('../../lib/processor');
+  const WORDS = { person: 'someone', place: 'somewhere', thing: 'something' };
+  const withheldPlaceholder = (type) => place(type, WORDS);
   const VECTORS = JSON.parse(require('fs').readFileSync(require('path').join(__dirname, '..', 'fixtures', 'gm-only-vectors.json'), 'utf8'));
   for (const v of VECTORS.cases) {
     it(`withheld ${JSON.stringify(v.value)} ${v.hides ? 'is' : 'is not'} withheld`, () => assert.strictEqual(isWithheld({ withheld: v.value }), v.hides));
   }
   it('the placeholder is chosen by the kind of note, in one table', () => {
-    const { withheldPlaceholder: word } = require('../../lib/processor');
-    assert.deepStrictEqual(['npc', 'PC', 'location', 'item', 'creature', 'organization', 'clue', '', undefined, 'constructor', 'other'].map(word),
+    const word = withheldPlaceholder;
+    assert.deepStrictEqual(['npc', 'PC', 'location', 'item', 'creature', 'organization', 'clue', '', undefined, 'constructor', 'other'].map((t) => word(t)),
       ['someone', 'someone', 'somewhere', 'something', 'something', 'something', 'something', 'something', 'something', 'something', 'something']);
   });
   it('absent frontmatter, or none, is not withheld', () => {
@@ -695,14 +697,14 @@ describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', ()
   it('the rewriter labels an unlabelled link to a withheld note, and keeps a label, an anchor, a folder path and a table cell', () => {
     const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { type: 'npc', withheld: true, aliases: ['Duke Zorn'] } },
       { title: 'Mara', displayTitle: 'Mara', frontmatter: { type: 'npc' } }];
-    const rw = gmAliasRewriter(pages, [pages[1]]);
+    const rw = gmAliasRewriter(pages, [pages[1]], undefined, WORDS);
     assert.strictEqual(rw.markdown('[[Lord_Zorn]] [[lord zorn#Past]] [[NPCs/Duke Zorn]] [[Lord_Zorn|the stranger]] [[Mara]]'),
       `[[Lord_Zorn|${withheldPlaceholder('npc')}]] [[lord zorn#Past|${withheldPlaceholder('npc')}]] [[NPCs/Duke Zorn|${withheldPlaceholder('npc')}]] [[Lord_Zorn|the stranger]] [[Mara]]`);
     assert.strictEqual(rw.markdown('| [[Lord_Zorn]] |'), `| [[Lord_Zorn|${withheldPlaceholder('npc')}]] |`);
   });
   it('the rewriter labels a bare name in a field that holds a page name, not in an ordinary field', () => {
     const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { type: 'npc', withheld: true } }];
-    const rw = gmAliasRewriter(pages, []);
+    const rw = gmAliasRewriter(pages, [], undefined, WORDS);
     const fm = rw.frontmatter({ location: 'Lord Zorn', occupation: 'Lord Zorn', relationships: [{ target: 'Lord Zorn', type: 'fears' }, { target: '[[Lord Zorn]]', type: 'knows' }], title: 'Lord Zorn' });
     assert.strictEqual(fm.location, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
     assert.strictEqual(fm.occupation, 'Lord Zorn');
@@ -710,11 +712,11 @@ describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', ()
     assert.strictEqual(fm.relationships[1].target, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
   });
   it('a vault with no withheld note and no gm_aliases has no rewriter', () => {
-    assert.strictEqual(gmAliasRewriter([{ title: 'A', frontmatter: { type: 'npc', withheld: false } }], []), null);
+    assert.strictEqual(gmAliasRewriter([{ title: 'A', frontmatter: { type: 'npc', withheld: false } }], [], undefined, WORDS), null);
   });
   it('a name a published page answers to is not rewritten', () => {
     const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { withheld: true } }];
-    assert.strictEqual(gmAliasRewriter(pages, pages), null);
+    assert.strictEqual(gmAliasRewriter(pages, pages, undefined, WORDS), null);
   });
 });
 

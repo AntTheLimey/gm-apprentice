@@ -33,6 +33,83 @@
             "null"
           ]
         },
+        "statuses": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "out_of_play": {
+              "description": "The statuses that take a character out of play. A character with one leaves the party board and the active team on the landing page, and is listed under \"In Memoriam\" instead; their sheet page stays. An empty list means nobody is ever out of play",
+              "default": [
+                "dead",
+                "deceased",
+                "kia",
+                "retired",
+                "departed",
+                "missing",
+                "unknown",
+                "inactive",
+                "npc",
+                "destroyed",
+                "dissolved"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "fallen": {
+              "description": "The statuses that put a character under \"Fallen\" on the Story page. Each must also be in `vault.statuses.out_of_play`; one that is not is left out, with a warning. `retired` always has its own group",
+              "default": [
+                "dead",
+                "deceased",
+                "kia",
+                "missing",
+                "unknown"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "gone": {
+              "description": "The statuses of things that no longer exist. A note with one is left off the landing page's \"NPCs in Play\" and \"Latest Locations\" unless the latest session mentions it. An empty list drops nothing",
+              "default": [
+                "dead",
+                "deceased",
+                "destroyed",
+                "kia",
+                "dissolved"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            }
+          }
+        },
         "attachments": {
           "description": "The vault folder that holds pictures",
           "default": "_attachments",
@@ -227,6 +304,121 @@
             "number",
             "null"
           ]
+        },
+        "url": {
+          "description": "The site's public address. A site that lives in a sub-folder of its host, such as a project page on GitHub, takes its base path from this",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "host": {
+          "description": "Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used",
+          "default": "github-pages",
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^\\s*(?:[gG][iI][tT][hH][uU][bB]\\-[pP][aA][gG][eE][sS]|[cC][lL][oO][uU][dD][fF][lL][aA][rR][eE]\\-[pP][aA][gG][eE][sS])\\s*$"
+        },
+        "output": {
+          "description": "The folder the finished pages are written to, inside the site folder. Each build empties it first (except what `player_site.keep` names), so it can be neither the site folder itself nor a folder outside it; a setting that breaks this stops the build",
+          "default": "docs",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "cloudflare_project": {
+          "description": "The site's project name on Cloudflare, when it differs from the site folder's name",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "keep": {
+          "description": "Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "before_build": {
+          "description": "Commands the publish tool runs, in order, in the site folder, before it builds. A command that fails stops the build and nothing is published",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "after_build": {
+          "description": "Commands the publish tool runs, in order, in the site folder, after every page is written (image tidying, extra pages). A command that fails stops the build and nothing is published",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "menu_extra": {
+          "description": "Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning",
+          "default": [],
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "link": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "group": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "label",
+              "link"
+            ],
+            "additionalProperties": false
+          }
         },
         "hide": {
           "type": [
@@ -597,6 +789,25 @@
                 "number",
                 "null"
               ]
+            },
+            "header_facts": {
+              "description": "The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none",
+              "default": [
+                "occupation",
+                "age",
+                "nationality"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
             }
           }
         },
@@ -723,6 +934,225 @@
               "description": "Your own line under each card in the \"Explore the World\" row",
               "type": [
                 "object",
+                "null"
+              ]
+            },
+            "banner": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "title": {
+                  "description": "The heading of a banner between the top of the landing page and \"Latest Session\". Plain text, shown as written. A banner shows when it has a title, text or picture",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "description": "The words in the banner, under its heading. Plain text, shown as written",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "link": {
+                  "description": "Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "image": {
+                  "description": "A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "timeline_events": {
+              "description": "How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none",
+              "default": 15,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recap_chars": {
+              "description": "How many characters of the latest session's recap the landing page shows before it stops at a word and adds \"…\"",
+              "default": 500,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_excerpt_chars": {
+              "description": "How many characters of a note's opening the pop-up preview card shows",
+              "default": 200,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_fact_chars": {
+              "description": "How many characters one fact on a preview card shows",
+              "default": 120,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_title_chars": {
+              "description": "How many characters of a note's name a preview card shows",
+              "default": 120,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_facts": {
+              "description": "How many facts a preview card lists; `0` shows none",
+              "default": 3,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "list_goals": {
+              "description": "How many goals a faction's card on the factions page lists; `0` shows none",
+              "default": 3,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "list_relationships": {
+              "description": "How many relationships a faction's card on the factions page lists; `0` shows none",
+              "default": 4,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "withheld_words": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "person": {
+              "description": "The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `|`",
+              "default": "someone",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "place": {
+              "description": "The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `|`",
+              "default": "somewhere",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "thing": {
+              "description": "The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `|`",
+              "default": "something",
+              "type": [
+                "string",
+                "number",
                 "null"
               ]
             }

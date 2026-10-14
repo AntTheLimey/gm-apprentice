@@ -55,7 +55,7 @@ describe('host config warning', () => {
   it('does not warn when host is cloudflare-pages and siteUrl is a pages.dev URL', () => {
     runBuild({ host: 'cloudflare-pages', siteUrl: 'https://my-campaign.pages.dev' });
     assert.ok(
-      !warnings.some((w) => w.includes('siteUrl looks like a GitHub Pages URL')),
+      !warnings.some((w) => w.includes('looks like a GitHub Pages URL')),
       'did not expect a host/siteUrl mismatch warning'
     );
   });
@@ -63,7 +63,7 @@ describe('host config warning', () => {
   it('does not warn for the default github-pages host with a github.io URL', () => {
     runBuild({ siteUrl: 'https://example.github.io/my-campaign/' });
     assert.ok(
-      !warnings.some((w) => w.includes('siteUrl looks like a GitHub Pages URL')),
+      !warnings.some((w) => w.includes('looks like a GitHub Pages URL')),
       'default host should never trigger the Cloudflare mismatch warning'
     );
   });

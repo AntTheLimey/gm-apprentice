@@ -43,7 +43,7 @@ test('get on a block with none of the settings gives defaults and says the block
 test('get of a group gives exactly the names under it', () => {
   const s = scratch(wrap('  landing:\n    max_npcs: 3\n'));
   const { data } = run(s, 'get', ['publish.landing']);
-  assert.deepEqual(Object.keys(data.values), REGISTRY.map((e) => e.name).filter((n) => n.startsWith('player_site.landing.')));
+  assert.deepEqual(Object.keys(data.values), REGISTRY.filter((e) => e.was && !e.legacyOnly).map((e) => e.name).filter((n) => n.startsWith('player_site.landing.')));
   assert.deepEqual(view(data)['player_site.landing.max_npcs'], { value: 3, origin: 'file' });
   assert.deepEqual(view(run(s, 'get', ['publish.connections']).data), { 'player_site.features.connections': { value: 'tree', origin: 'default' } });
 });
@@ -481,6 +481,9 @@ test('add and remove refuse a setting that is not a list, a blank or unquoted en
 test('the help names add and remove', () => {
   assert.match(helpText(), /settings add /);
   assert.match(helpText(), /settings remove /);
+  // A list of entries with several parts: the form to add one, and removing by label.
+  assert.match(helpText(), /settings add player_site\.menu_extra label=\S+ link=\S+ group=\S+/);
+  assert.match(helpText(), /settings remove player_site\.menu_extra \S+/);
 });
 
 // ---- the same entry, by the build's own rule ----
@@ -852,6 +855,24 @@ test('get names each setting as the vault\'s own file writes it', () => {
   fs.writeFileSync(path.join(moved.vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
   const now = run(moved, 'get').data.written;
   assert.equal(now['player_site.title'], 'player_site.title');
+});
+
+// The Python Settings check (skills/shared/scripts/vault_check.py, `_site_key_row`) turns every fault in the faults of
+// `get --json` that the site folder's file adds into a row that offers to take the key out of that file, and says the
+// vault's own value is "already the value in use". That is false for the five folder keys while the vault sets none
+// (they are read from the site file until the next update moves them), so `get --json` must not carry that fault.
+// The words `check` and the build print are unchanged.
+test('get --json leaves out the "moves at the next update" fault of a site-folder key, which check still reports; a hiding key keeps its fault', () => {
+  const s = scratch(null, { vaultPath: './vault', preserveDirs: ['gazetteer'], outputDir: 'site-out', excludeSections: ['Site Secret'] });
+  fs.writeFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
+  const got = run(s, 'get', [], { config: s.config });
+  assert.equal(got.data.values['player_site.keep'][0], 'gazetteer', 'the site file\'s folder keys are still read');
+  assert.equal(got.data.values['player_site.output'], 'site-out');
+  assert.deepEqual(got.data.faults.filter((f) => ['preserveDirs', 'outputDir'].includes(f.name)), []);
+  assert.ok(got.data.faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(got.data.faults));
+  const check = run(s, 'check', [], { config: s.config });
+  assert.ok(check.data.faults.some((f) => f.name === 'preserveDirs' && /moves to `player_site.keep` at the next update/.test(f.message)), JSON.stringify(check.data.faults));
+  assert.ok(check.data.faults.some((f) => f.name === 'outputDir'));
 });
 
 test('set --create on a vault whose site file holds its settings names the real site file in the command to run', () => {

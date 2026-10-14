@@ -41,7 +41,7 @@ function sessionBodyHtml(page, context) {
   }
   const factsHtml = facts.length ? `<p class="session-facts">${facts.join(' · ')}</p>\n` : '';
 
-  const recap = ctx.wrapUp ? extractRecap(ctx.wrapUp) : null;
+  const recap = ctx.wrapUp ? extractRecap(ctx.wrapUp, ctx.recapChars) : null;
   const link = ctx.wrapUp
     ? `<a class="recap-link" href="${href(ctx.wrapUp)}">Read the full session &rarr;</a>`
     : '';

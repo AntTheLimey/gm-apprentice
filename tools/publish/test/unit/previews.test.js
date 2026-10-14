@@ -3,7 +3,9 @@ const assert = require('node:assert');
 const { cardFor, buildPreviews } = require('../../lib/previews');
 const { excerptFromMarkdown } = require('../../lib/excerpt');
 
-const ctx = { imageMap: { 'hallam.webp': { relPath: 'characters/hallam.webp' } }, excludeSections: ['GM Notes'] };
+const LIMITS = { card_excerpt_chars: 200, card_fact_chars: 120, card_title_chars: 120, card_facts: 3 };
+const HEADER_FACTS = ['occupation', 'age', 'nationality'];
+const ctx = { imageMap: { 'hallam.webp': { relPath: 'characters/hallam.webp' } }, excludeSections: ['GM Notes'], limits: LIMITS, headerFacts: HEADER_FACTS };
 function page(type, frontmatter, body, extra) {
   return { title: 'Hallam', displayTitle: 'Hallam', outputPath: `x/${type}.html`,
     frontmatter: { type, ...frontmatter }, publishedMarkdown: body, markdown: 'RAW-SECRET ' + body, ...extra };
@@ -204,7 +206,7 @@ describe('a PC card and the page header share their badges', () => {
   it('shows the same labels and values, in order', () => {
     for (const fm of [{ player_name: 'Sam', occupation: 'Smith', age: 31, nationality: 'Welsh' },
       { player_name: 'Sam', display_meta: ['age', 'home_town', 'occupation'], age: 31, home_town: 'Bath', occupation: 'Smith' }]) {
-      const expected = [['Player', 'Sam'], ...headerMeta(fm).map(([l, v]) => [l, String(v)])].slice(0, 3);
+      const expected = [['Player', 'Sam'], ...headerMeta(fm, HEADER_FACTS).map(([l, v]) => [l, String(v)])].slice(0, 3);
       assert.deepStrictEqual(cardFor(page('pc', fm, ''), ctx).f, expected);
     }
   });

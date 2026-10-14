@@ -66,15 +66,15 @@ const SUBCOMMAND_HELP = {
 gm-apprentice-publish init [target-dir] [--vault <dir>] [--title <text>] [--tagline <text>]
 
 Scaffolds a new site in target-dir (default: the current directory):
-package.json pinned to this tool, vault.config.json (the deployment
-settings only), README.md, css/overrides.css, .gitignore, wrangler.toml,
+package.json pinned to this tool, vault.config.json (the path to the
+vault, nothing else), README.md, css/overrides.css, .gitignore, wrangler.toml,
 and .nojekyll. Refuses to overwrite — if any of those files already
 exists, nothing is written.
 
 The campaign settings (site title, folder map, attachments folder,
-hidden folders, callout rule) go in the vault's ${NEW_FILE}
-(${OLD_FILE} for a vault not yet updated), for each setting the
-file does not already set. The vault is ./vault beside the site unless
+hidden folders, callout rule) go in the vault's ${NEW_FILE}, for each
+setting the file does not already set. A vault still on ${OLD_FILE}
+is not touched: init stops and names the update to run first. The vault is ./vault beside the site unless
 --vault names it. If the vault folder is not there yet, or its settings
 file cannot be edited safely, the site is still scaffolded and the
 settings to add are printed.
@@ -279,7 +279,7 @@ withholds because its Wrap-Up publishes.
   deploy: `
 gm-apprentice-publish deploy [--config <path>] [--verify] [--no-build] [--dry-run] [--json]
 
-Builds the site and publishes it to the host named in vault.config.json:
+Builds the site and publishes it to the host the vault names (player_site.host):
 "cloudflare-pages" runs wrangler (checking authentication first, and aligning
 wrangler.toml's project name), "github-pages" commits docs/ and pushes.
 
@@ -625,7 +625,7 @@ if (command === 'build') {
       // theme.fonts.source: self-host fills the vault's font cache first (network); the
       // build itself only reads the cache (#270).
       await require('../lib/fonts').prefetchForConfig(configPath);
-      build({ configPath });
+      build({ configPath, runSteps: true });
     } catch (err) {
       console.error(`Build failed: ${err.message}`);
       exitAfterFlush(1);

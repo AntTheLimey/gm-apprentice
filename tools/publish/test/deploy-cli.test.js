@@ -372,12 +372,12 @@ describe('deploy --verify', () => {
     assert.match(h.text(), /live at/);
   });
 
-  it('says it cannot verify a github-pages site with no siteUrl', async () => {
+  it('says it cannot verify a github-pages site with no site address', async () => {
     const h = harness({ config: { host: 'github-pages', siteUrl: undefined }, statuses: [200] });
     const rc = await runDeploy({ configPath: CONFIG, verify: true }, h.deps);
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(h.fetches, []);
-    assert.match(h.text(), /no siteUrl in vault\.config\.json — cannot verify; check the site by hand/);
+    assert.match(h.text(), /no player_site\.url set — cannot verify; check the site by hand/);
   });
 
   it('--json reports the commands it ran', async () => {
@@ -491,6 +491,38 @@ describe('deploy hooks: the ways they used to slip through (#248 review)', () =>
     await runDeploy({ configPath: CONFIG, json: true }, j.deps);
     assert.deepStrictEqual(seenJ[0].stdio, ['ignore', 2, 2]);   // never onto the JSON stdout
     assert.strictEqual(seenJ[0].shell, process.platform === 'win32');
+  });
+});
+
+describe('setup-status-bar and setup-inbox build with the vault\'s build steps', () => {
+  it('asks for the steps to run, as build and deploy do', async () => {
+    const fs = require('fs');
+    const { runSetupBackend } = require('../lib/setup-backend');
+    for (const feature of ['status-bar', 'inbox']) {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'setup-steps-'));
+      const vault = path.join(root, 'vault');
+      fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+      fs.writeFileSync(path.join(vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
+      const site = path.join(root, 'site');
+      fs.mkdirSync(site);
+      const configPath = path.join(site, 'vault.config.json');
+      fs.writeFileSync(configPath, JSON.stringify({ vaultPath: '../vault' }));
+      fs.writeFileSync(path.join(site, 'wrangler.toml'), 'name = "x"\npages_build_output_dir = "docs"\n');
+      const seen = [];
+      const rc = await runSetupBackend(feature, { configPath }, {
+        out: () => {},
+        runWrangler: (args) => {
+          if (args[1] === 'namespace' && args[2] === 'list') return { code: 0, stdout: '[]', stderr: '' };
+          if (args[1] === 'namespace' && args[2] === 'create') return { code: 0, stdout: 'id = "kv1"', stderr: '' };
+          return { code: 0, stdout: '', stderr: '' };
+        },
+        build: (opts) => { seen.push(opts); },
+        syncFunctions: () => {},
+      });
+      assert.strictEqual(rc, 0, feature);
+      assert.strictEqual(seen.length, 1, feature);
+      assert.strictEqual(seen[0].runSteps, true, feature);
+    }
   });
 });
 

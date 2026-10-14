@@ -4,6 +4,13 @@ const assert = require('node:assert/strict');
 const { REGISTRY, entry, names, GROUPS, legacyNameOf, resolve } = require('../../lib/settings/registry');
 const { TYPES } = require('../../lib/settings/types');
 
+// The list is written by hand, one entry a line: a comma is followed by a space.
+test('the list is written as the rest of the code is: a space after every comma that ends a key', () => {
+  const source = require('node:fs').readFileSync(require.resolve('../../lib/settings/registry'), 'utf8');
+  const bad = source.split('\n').map((line, i) => [i + 1, line]).filter(([, line]) => /^\s*\{ name: '[^']+',[^ \n]/.test(line));
+  assert.deepEqual(bad.map(([n, line]) => `${n}: ${line.slice(0, 60)}`), []);
+});
+
 test('every entry is complete and its default is a value its own type takes', () => {
   const groups = new Set(GROUPS.map((g) => g.id));
   for (const e of REGISTRY) {
@@ -42,16 +49,30 @@ test('every old name is unique across the list, and resolves to its setting', ()
       seen.set(key, e.name);
       if (w.in === 'vault') assert.equal(resolve(w.name).entry, e, w.name);
     }
-    if (!e.legacyOnly && (e.was || []).length) assert.equal(legacyNameOf(e), e.was.find((w) => w.in === 'vault').name);
+    if (!e.legacyOnly && (e.was || []).length) assert.equal(legacyNameOf(e), (e.was.find((w) => w.in === 'vault') || {}).name || null);
   }
 });
 
 test('the settings the site file also holds are the fifteen it always held, each under its own key', () => {
   const siteKeys = ['siteTitle', 'footer', 'searchEnabled', 'folderMap', 'attachmentsDir', 'system', 'excludeDirs', 'excludeSections',
     'excludeFields', 'excludeCallouts', 'sheet_crest', 'landing', 'images', 'banners', 'locations'];
-  const carrying = REGISTRY.filter((e) => e.legacyKind);
+  const carrying = REGISTRY.filter((e) => e.legacyKind && !e.siteFallback);
   assert.deepEqual(carrying.map((e) => e.was.find((w) => w.in === 'site').name), siteKeys);
   for (const e of carrying) assert.ok(['scalar', 'list', 'map'].includes(e.legacyKind), e.name);
+});
+
+test('the five site-folder keys are settings read from the site file while the vault sets none, and have no name in the old file', () => {
+  const fallback = REGISTRY.filter((e) => e.siteFallback);
+  assert.deepEqual(fallback.map((e) => [e.was.find((w) => w.in === 'site').name, e.name]), [
+    ['siteUrl', 'player_site.url'], ['host', 'player_site.host'], ['outputDir', 'player_site.output'],
+    ['cloudflarePagesProject', 'player_site.cloudflare_project'], ['preserveDirs', 'player_site.keep'],
+  ]);
+  for (const e of fallback) {
+    assert.equal(e.was.length, 1, e.name);
+    assert.equal(legacyNameOf(e), null, e.name);
+    assert.ok(['scalar', 'list'].includes(e.legacyKind), e.name);
+  }
+  assert.deepEqual(fallback.filter((e) => e.stopOnFault).map((e) => e.name), ['player_site.output', 'player_site.keep']);
 });
 
 test('the two settings the old file never had have no old name', () => {

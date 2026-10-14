@@ -13,10 +13,6 @@ const { canonicalNfc } = require('./unicode');
 const { labelsForLinks } = require('./wikilink');
 const { NO_PAGE_TYPES } = require('./excluding-values');
 
-const VALUE_LIMIT = 120;
-const TITLE_LIMIT = 120;
-const EXCERPT_LIMIT = 200;
-const MAX_FACTS = 3;
 const ORDINARY_STATUS = new Set(['alive', 'active']);
 const own = (object, key) => Object.prototype.hasOwnProperty.call(object, key);
 
@@ -53,7 +49,7 @@ function rowsFor(page, ctx) {
   const fm = page.frontmatter || {};
   if (fm.type === 'pc') {
     // The CoC folio prints the player (its identity plate) but none of the header badges.
-    return [['Player', labelsForLinks(valueText(fm.player_name))], ...(ctx && ctx.cocFolio ? [] : headerMeta(fm))];
+    return [['Player', labelsForLinks(valueText(fm.player_name))], ...(ctx && ctx.cocFolio ? [] : headerMeta(fm, ctx.headerFacts))];
   }
   if (!own(FACT_FIELDS, fm.type)) return [];
   return FACT_FIELDS[fm.type].map(([label, fields, how]) => {
@@ -69,12 +65,13 @@ function rowsFor(page, ctx) {
 
 function factsFor(page, ctx) {
   const facts = [];
+  if (ctx.limits.card_facts === 0) return facts;
   for (const [label, raw] of rowsFor(page, ctx)) {
-    const value = capped(oneLine(raw), VALUE_LIMIT);
+    const value = capped(oneLine(raw), ctx.limits.card_fact_chars);
     if (!value) continue;
     if (label === 'Status' && ORDINARY_STATUS.has(value.toLowerCase())) continue;
     facts.push([label, value]);
-    if (facts.length === MAX_FACTS) break;
+    if (facts.length === ctx.limits.card_facts) break;
   }
   return facts;
 }
@@ -83,16 +80,16 @@ function cardFor(page, ctx) {
   const fm = page.frontmatter || {};
   const title = page.displayTitle || page.title;
   if (!title) return null;
-  const card = { t: capped(String(title), TITLE_LIMIT), k: kindLabel(fm.type) };
+  const card = { t: capped(String(title), ctx.limits.card_title_chars), k: kindLabel(fm.type) };
 
   const facts = factsFor(page, ctx);
   if (facts.length) card.f = facts;
 
   // ctx.cocFolio: the CoC folio shows no epithet to repeat (and no header badges, see rowsFor).
   const opening = fm.type === 'pc' ? (ctx && ctx.cocFolio ? '' : pcEpithetText(page)) : excerptFromMarkdown(publishedSource(page), {
-    sentences: 2, limit: EXCERPT_LIMIT, excludeSections: (ctx && ctx.excludeSections) || [], wordUnderscores: true, prose: true,
+    sentences: 2, limit: ctx.limits.card_excerpt_chars, excludeSections: (ctx && ctx.excludeSections) || [], wordUnderscores: true, prose: true,
   });
-  if (opening) card.x = capped(opening, EXCERPT_LIMIT);
+  if (opening) card.x = capped(opening, ctx.limits.card_excerpt_chars);
 
   const basename = portraitBasename(fm);
   // The image map is an NFC-aware lookup table: ask for the NFC key, and only its own entries.

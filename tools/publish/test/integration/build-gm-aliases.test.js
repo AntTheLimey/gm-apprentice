@@ -1,6 +1,7 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 const os = require('os');
 const path = require('path');
 const { build } = require('../../lib/build');
@@ -258,27 +259,27 @@ describe('gmAliasRewriter and a piped secret label', () => {
   const bystander = { title: 'Ada Marsh', displayTitle: 'Ada Marsh', frontmatter: {} };
 
   it('drops a secret label piped onto the owner\'s own public target', () => {
-    const rw = gmAliasRewriter([owner, bystander]);
+    const rw = gmAliasRewriter([owner, bystander], undefined, undefined, WORDS);
     const out = rw.markdown(`She said [[Lord Vane|${PIPED_SECRET}]] aloud.`);
     assert.ok(!out.includes(PIPED_SECRET), out);
     assert.match(out, /\[\[Lord Vane\]\]/);
   });
 
   it('drops a secret label piped onto the secret alias itself', () => {
-    const rw = gmAliasRewriter([owner, bystander]);
+    const rw = gmAliasRewriter([owner, bystander], undefined, undefined, WORDS);
     const out = rw.markdown(`She said [[${PIPED_SECRET}|${PIPED_SECRET}]] aloud.`);
     assert.ok(!out.includes(PIPED_SECRET), out);
     assert.match(out, /\[\[Lord Vane\]\]/);
   });
 
   it('keeps a normal, non-secret label untouched', () => {
-    const rw = gmAliasRewriter([owner, bystander]);
+    const rw = gmAliasRewriter([owner, bystander], undefined, undefined, WORDS);
     const out = rw.markdown(`She said [[Lord Vane|a courtly patron]] aloud.`);
     assert.match(out, /\[\[Lord Vane\|a courtly patron\]\]/);
   });
 
   it('drops a secret label belonging to a different page than the target', () => {
-    const rw = gmAliasRewriter([owner, bystander]);
+    const rw = gmAliasRewriter([owner, bystander], undefined, undefined, WORDS);
     const out = rw.markdown(`She said [[Ada Marsh|${PIPED_SECRET}]] aloud.`);
     assert.ok(!out.includes(PIPED_SECRET), out);
     // The target isn't itself a known alias owner, so it's shown bare.
@@ -287,7 +288,7 @@ describe('gmAliasRewriter and a piped secret label', () => {
 
   it('scalar gm_aliases also feeds the rewriter', () => {
     const scalarOwner = { title: 'Old Mercer', displayTitle: 'Old Mercer', frontmatter: { gm_aliases: SCALAR_SECRET } };
-    const rw = gmAliasRewriter([scalarOwner, bystander]);
+    const rw = gmAliasRewriter([scalarOwner, bystander], undefined, undefined, WORDS);
     const out = rw.markdown(`Beck called him [[${SCALAR_SECRET}]] by mistake.`);
     assert.ok(!out.includes(SCALAR_SECRET), out);
     assert.match(out, /\[\[Old Mercer\]\]/);

@@ -7,6 +7,7 @@ const path = require('path');
 const { runSiteDoctor } = require('../lib/site-doctor');
 const { build } = require('../lib/build');
 const { summaryLines } = require('../lib/note-faults');
+const { writeNewConfig } = require('./helpers/settings-files');
 
 // `withheld: true` (#291): a note's own name is a secret. Its file name, title and aliases are
 // searched for in everything the build publishes, as gm_aliases names are. An unlabelled
@@ -277,6 +278,40 @@ describe('an unlabelled link to a withheld page prints a placeholder', () => {
     buildQuiet(configPath);
     const html = fs.readFileSync(path.join(docs, 'characters', 'mara-quill.html'), 'utf8');
     assert.match(html, /href="[^"]*lord-zorn\.html"[^>]*>Lord Zorn<\/a>/);
+  });
+});
+
+describe('player_site.withheld_words: the audit does not depend on the built-in words', () => {
+  // The same vault with the person word as the built-in one and as 'a stranger', on the new settings file.
+  function withWord(word) {
+    const files = {
+      'Characters/Lord_Zorn.md': zornNote(),
+      'Characters/Mara_Quill.md': mara('She met [[Lord_Zorn]] at the quay. Lord Zorn laughed.'),
+    };
+    const s = site(files, { excluded: ZORN_EXCLUDED });
+    fs.rmSync(path.join(s.vault, '_meta', 'vault-config.md'));
+    writeNewConfig(s.vault, {
+      version: 1,
+      player_site: { hide: { mode: 'player', folders: ['Quiet'] }, folder_map: { Characters: 'characters' }, ...(word ? { withheld_words: { person: word } } : {}) },
+    });
+    fs.writeFileSync(s.configPath, JSON.stringify({ vaultPath: s.vault }));
+    let findings = null;
+    const log = console.log, warn = console.warn;
+    console.log = () => {}; console.warn = () => {};
+    try { build({ configPath: s.configPath, onNoteFaults: (f) => { findings = f; } }); } finally { console.log = log; console.warn = warn; }
+    return { html: fs.readFileSync(path.join(s.docs, 'characters', 'mara-quill.html'), 'utf8'), findings, configPath: s.configPath };
+  }
+  const pick = (findings) => findings.map((f) => `${f.code}|${f.path}|${f.name || ''}|${f.severity}`).sort();
+
+  it('prints the word the GM chose, and finds the same names as with the built-in word', async () => {
+    const def = withWord(null);
+    const own = withWord('a stranger');
+    assert.ok(def.html.includes('She met someone at the quay.'));
+    assert.ok(own.html.includes('She met a stranger at the quay.'));
+    assert.ok(pick(def.findings).some((f) => f.startsWith('WITHHELD_IN_PROSE|')), 'the plain-text name is found');
+    assert.deepStrictEqual(pick(own.findings), pick(def.findings));
+    const [a, b] = [await doctor(def.configPath, { json: true }), await doctor(own.configPath, { json: true })];
+    assert.deepStrictEqual(pick(b.json.findings), pick(a.json.findings));
   });
 });
 

@@ -8,14 +8,17 @@
 // needed; read as unset), guards (the hiding side), onFault, open, was (the names this setting had
 // in the old layout, in order of precedence: each { name, in: 'vault' for _meta/vault-config.md or
 // 'site' for the site's vault.config.json, read: false when the old name is reported but its value
-// is not read }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
+// is not read, carryOnly: true when the reader neither reads nor reports it and only the move carries it }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
 // map: the setting is also a key of the site file, named by its 'site' was), legacyMerge (how the
 // two old files combine: union, stricter or perKey), legacyOnly (exists only in the old file; its
 // name stays the old one), retired, state, container (a parent that holds only other settings),
 // keepOnFault (an unreadable value is kept as written), keys (the only keys a map may hold),
 // onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
 // value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
-// 'heading', 'folder', 'callout' or 'name'; absent means exact text).
+// 'heading', 'folder', 'callout' or 'name'; for a `listOfMaps`, the field two entries are told apart by; absent means exact text),
+// fields (a `listOfMaps` entry's keys: { key: { required?: true } }, each text), siteFallback (also a key of the site
+// folder's vault.config.json that is read while the vault sets none), stepsFrom (the site's package.json script a build-steps list was; the move carries it), check ('output' or 'keep': a rule on the value
+// beyond its type, folders.js) and stopOnFault (an unreadable value stops the build, as a hiding setting does).
 // The entries that carry `legacyKind` stay in the order of the old moved-key table.
 
 const { SKINS, FRAME_IDS } = require('../skins');
@@ -35,6 +38,7 @@ const GROUPS = [
   { id: 'live', title: 'Live play' },
   { id: 'landing', title: 'The landing page' },
   { id: 'lists', title: 'Lists and pictures' },
+  { id: 'limits', title: 'Limits' },
 ];
 
 const ON_OFF = { true: 'on', yes: 'on', false: 'off', no: 'off' };
@@ -51,6 +55,27 @@ const REGISTRY = [
     shape: "the campaign's name",
     does: "The campaign's name",
     left_out: "The vault folder's name",
+  },
+
+  // The status words a note's `status:` is compared with. A word in a note is trimmed and lower-cased first.
+  { name: 'vault.statuses', type: 'map', container: true },
+  {
+    name: 'vault.statuses.out_of_play', type: 'list', of: 'status words', group: 'vault',
+    default: ['dead', 'deceased', 'kia', 'retired', 'departed', 'missing', 'unknown', 'inactive', 'npc', 'destroyed', 'dissolved'],
+    does: 'The statuses that take a character out of play. A character with one leaves the party board and the active team on the landing page, and is listed under "In Memoriam" instead; their sheet page stays. An empty list means nobody is ever out of play',
+    left_out: '`dead`, `deceased`, `kia`, `retired`, `departed`, `missing`, `unknown`, `inactive`, `npc`, `destroyed`, `dissolved`',
+  },
+  {
+    name: 'vault.statuses.fallen', type: 'list', of: 'status words', group: 'vault',
+    default: ['dead', 'deceased', 'kia', 'missing', 'unknown'],
+    does: 'The statuses that put a character under "Fallen" on the Story page. Each must also be in `vault.statuses.out_of_play`; one that is not is left out, with a warning. `retired` always has its own group',
+    left_out: '`dead`, `deceased`, `kia`, `missing`, `unknown`',
+  },
+  {
+    name: 'vault.statuses.gone', type: 'list', of: 'status words', group: 'vault',
+    default: ['dead', 'deceased', 'destroyed', 'kia', 'dissolved'],
+    does: 'The statuses of things that no longer exist. A note with one is left off the landing page\'s "NPCs in Play" and "Latest Locations" unless the latest session mentions it. An empty list drops nothing',
+    left_out: '`dead`, `deceased`, `destroyed`, `kia`, `dissolved`',
   },
 
   // The site itself
@@ -92,9 +117,54 @@ const REGISTRY = [
     left_out: '`tree`',
   },
   {
-    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }], type: 'text', default: 'This page is not available.', group: 'site',
+    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }, { name: 'fourOhFour.message', in: 'site', carryOnly: true }], type: 'text', default: 'This page is not available.', group: 'site',
     does: 'The words a reader sees after following a link to a page that is not there',
     left_out: '"This page is not available."',
+  },
+  // The five keys the site folder's vault.config.json used to hold. `siteFallback` reads the site file's key while
+  // the vault sets none (legacy.js, read.js); `check` and `stopOnFault` keep a build from cleaning a folder it is
+  // unsure of.
+  {
+    name: 'player_site.url', was: [{ name: 'siteUrl', in: 'site' }], type: 'text', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    shape: 'a web address',
+    does: "The site's public address. A site that lives in a sub-folder of its host, such as a project page on GitHub, takes its base path from this",
+    left_out: 'No address; a Cloudflare site is then taken to be at `https://<project>.pages.dev`',
+  },
+  {
+    name: 'player_site.host', was: [{ name: 'host', in: 'site' }], type: 'choice', values: ['github-pages', 'cloudflare-pages'], default: 'github-pages', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    does: 'Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used',
+    left_out: '`github-pages`',
+  },
+  {
+    name: 'player_site.output', was: [{ name: 'outputDir', in: 'site' }], type: 'text', check: 'output', stopOnFault: true, default: 'docs', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    shape: 'a folder inside the site folder',
+    does: "The folder the finished pages are written to, inside the site folder. Each build empties it first (except what `player_site.keep` names), so it can be neither the site folder itself nor a folder outside it; a setting that breaks this stops the build",
+    left_out: '`docs`',
+  },
+  {
+    name: 'player_site.cloudflare_project', was: [{ name: 'cloudflarePagesProject', in: 'site' }], type: 'text', legacyKind: 'scalar', siteFallback: true, group: 'site',
+    does: "The site's project name on Cloudflare, when it differs from the site folder's name",
+    left_out: "The site folder's name",
+  },
+  {
+    name: 'player_site.keep', was: [{ name: 'preserveDirs', in: 'site' }], type: 'list', of: 'folder names', check: 'keep', stopOnFault: true, default: [], legacyKind: 'list', siteFallback: true, group: 'site',
+    does: 'Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build',
+    left_out: 'None: a rebuild empties the output folder',
+  },
+  {
+    name: 'player_site.before_build', type: 'list', of: 'commands', default: [], stepsFrom: 'prebuild', group: 'site',
+    does: 'Commands the publish tool runs, in order, in the site folder, before it builds. A command that fails stops the build and nothing is published',
+    left_out: 'None',
+  },
+  {
+    name: 'player_site.after_build', type: 'list', of: 'commands', default: [], stepsFrom: 'postbuild', group: 'site',
+    does: 'Commands the publish tool runs, in order, in the site folder, after every page is written (image tidying, extra pages). A command that fails stops the build and nothing is published',
+    left_out: 'None',
+  },
+  {
+    name: 'player_site.menu_extra', type: 'listOfMaps', fields: { label: { required: true }, link: { required: true }, group: {} }, same: 'label', default: [], group: 'site',
+    does: "Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning",
+    left_out: 'No extra entries',
   },
 
   // What gets published
@@ -222,7 +292,7 @@ const REGISTRY = [
     left_out: 'No files',
   },
   {
-    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }], type: 'text', group: 'theme',
+    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }, { name: 'campaignImage', in: 'site', carryOnly: true }], type: 'text', group: 'theme',
     shape: "a picture's path in the vault",
     does: 'The large picture at the top of the landing page',
     left_out: 'No picture',
@@ -270,6 +340,11 @@ const REGISTRY = [
     shape: "a picture's path in the vault",
     does: 'A crest or wax seal at the head of a Call of Cthulhu sheet',
     left_out: 'No crest',
+  },
+  {
+    name: 'player_site.sheets.header_facts', type: 'list', of: 'field names', default: ['occupation', 'age', 'nationality'], group: 'sheets',
+    does: "The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none",
+    left_out: '`occupation`, `age`, `nationality`',
   },
   {
     name: 'player_site.features.tohit_calculator', was: [{ name: 'publish.tohit_calculator', in: 'vault' }], type: 'choice', values: ['on', 'off'], aliases: ON_OFF, default: 'on', group: 'sheets',
@@ -338,6 +413,90 @@ const REGISTRY = [
     left_out: "The genre's lines, or plain ones",
   },
 
+  { name: 'player_site.landing.banner', type: 'map', container: true },
+  {
+    name: 'player_site.landing.banner.title', type: 'text', group: 'landing',
+    does: 'The heading of a banner between the top of the landing page and "Latest Session". Plain text, shown as written. A banner shows when it has a title, text or picture',
+    left_out: 'No banner',
+  },
+  {
+    name: 'player_site.landing.banner.text', type: 'text', group: 'landing',
+    does: 'The words in the banner, under its heading. Plain text, shown as written',
+    left_out: 'No words',
+  },
+  {
+    name: 'player_site.landing.banner.link', type: 'text', group: 'landing',
+    does: 'Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner',
+    left_out: 'Not a link',
+  },
+  {
+    name: 'player_site.landing.banner.image', type: 'text', group: 'landing',
+    shape: "a picture's path in the vault, or a web address",
+    does: "A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it",
+    left_out: 'No picture',
+  },
+
+  // Limits
+  { name: 'player_site.limits', type: 'map', container: true },
+  {
+    name: 'player_site.limits.timeline_events', type: 'number', integer: true, min: 0, default: 15, group: 'limits',
+    does: 'How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none',
+    left_out: '`15`',
+  },
+  {
+    name: 'player_site.limits.recap_chars', type: 'number', integer: true, min: 1, default: 500, group: 'limits',
+    does: 'How many characters of the latest session\'s recap the landing page shows before it stops at a word and adds "…"',
+    left_out: '`500`',
+  },
+  {
+    name: 'player_site.limits.card_excerpt_chars', type: 'number', integer: true, min: 1, default: 200, group: 'limits',
+    does: 'How many characters of a note\'s opening the pop-up preview card shows',
+    left_out: '`200`',
+  },
+  {
+    name: 'player_site.limits.card_fact_chars', type: 'number', integer: true, min: 1, default: 120, group: 'limits',
+    does: 'How many characters one fact on a preview card shows',
+    left_out: '`120`',
+  },
+  {
+    name: 'player_site.limits.card_title_chars', type: 'number', integer: true, min: 1, default: 120, group: 'limits',
+    does: "How many characters of a note's name a preview card shows",
+    left_out: '`120`',
+  },
+  {
+    name: 'player_site.limits.card_facts', type: 'number', integer: true, min: 0, default: 3, group: 'limits',
+    does: 'How many facts a preview card lists; `0` shows none',
+    left_out: '`3`',
+  },
+  {
+    name: 'player_site.limits.list_goals', type: 'number', integer: true, min: 0, default: 3, group: 'limits',
+    does: "How many goals a faction's card on the factions page lists; `0` shows none",
+    left_out: '`3`',
+  },
+  {
+    name: 'player_site.limits.list_relationships', type: 'number', integer: true, min: 0, default: 4, group: 'limits',
+    does: "How many relationships a faction's card on the factions page lists; `0` shows none",
+    left_out: '`4`',
+  },
+
+  // Withheld notes: the words a link to one prints in place of its name
+  { name: 'player_site.withheld_words', type: 'map', container: true },
+  {
+    name: 'player_site.withheld_words.person', type: 'text', default: 'someone', group: 'published',
+    does: 'The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `|`',
+    left_out: '`someone`',
+  },
+  {
+    name: 'player_site.withheld_words.place', type: 'text', default: 'somewhere', group: 'published',
+    does: 'The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `|`',
+    left_out: '`somewhere`',
+  },
+  {
+    name: 'player_site.withheld_words.thing', type: 'text', default: 'something', group: 'published',
+    does: 'The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `|`',
+    left_out: '`something`',
+  },
+
   // Lists and pictures
   { name: 'player_site.images', was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
@@ -404,6 +563,10 @@ const legacyNameOf = (e) => (e.legacyOnly ? e.name : ((e.was || []).find((w) => 
 // The key of the site's vault.config.json that holds a setting, or null.
 const siteKeyOf = (e) => (e.legacyKind ? ((e.was || []).find((w) => w.in === 'site') || {}).name || null : null);
 
+// The settings that are also keys of the site folder's file, read from there while the vault sets none:
+// [{ key: 'siteUrl', name: 'player_site.url' }, ...].
+const siteFolderKeys = () => REGISTRY.filter((e) => e.siteFallback).map((e) => ({ key: siteKeyOf(e), name: e.name }));
+
 // A setting by its new name or by a name the old vault file gave it; { entry, old } where `old` says which.
 const BY_OLD_NAME = new Map(REGISTRY.flatMap((e) => (e.was || []).filter((w) => w.in === 'vault').map((w) => [w.name, e])));
 function resolve(name) {
@@ -412,4 +575,4 @@ function resolve(name) {
   return null;
 }
 
-module.exports = { REGISTRY, entry, names, GROUPS, legacyNameOf, siteKeyOf, resolve };
+module.exports = { REGISTRY, entry, names, GROUPS, legacyNameOf, siteKeyOf, siteFolderKeys, resolve };

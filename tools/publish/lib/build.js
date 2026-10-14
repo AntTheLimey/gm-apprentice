@@ -4,18 +4,19 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
+const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
 const { ignoringMark } = require('./heading-key');
-const { linkText } = require('./wikilink');
+const { linkText, parseWikilink } = require('./wikilink');
 const { nameIn, fileLabel } = require('./settings');
 const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
@@ -29,7 +30,7 @@ const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
-const { hasLegacy, SITE_OLD_ROOTS } = require('./settings/legacy');
+const { SITE_OLD_ROOTS } = require('./settings/legacy');
 const { publishesPage, autoExcludeCode } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
@@ -78,6 +79,96 @@ function quietly(fn) {
   try { return fn(); } finally { Object.assign(console, saved); }
 }
 
+// Reads a link the GM wrote in a setting (a menu entry's `link`, a banner's `link`), in this order:
+//   text starting http:// or https://     an address outside the site, as written
+//   the name of a note that has a page     that page (names are matched as the link map matches them)
+//   the name of a note with no page        dropped: { kind: 'none' }; the caller warns, and prints nothing
+//   anything else                          an address on the site, as written
+// The notes with no page are known to the link map itself: the build registers every note's names against it
+// (`rememberHiddenNames`), so a caller cannot forget them. A name matches in any letter case, as a wiki-link does;
+// a note's file name, title and aliases all count.
+// Returns { kind: 'outside' | 'page' | 'site' | 'none', href }.
+const HIDDEN_NAMES = new WeakMap();   // link map -> Set of lower-cased names of the notes
+const LOWER_KEYS = new WeakMap();     // link map -> Map of lower-cased key -> output path
+
+const foldName = (name) => name.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
+
+// A name is folded two ways, and a link is hidden if any of its path segments matches either: the lower-cased name
+// (spaces and underscores alike) and the slug the build gives page file names (so hyphens count too).
+const HIDDEN_SLUGS = new WeakMap();   // link map -> Set of slugs of the notes' names
+
+function rememberHiddenNames(linkMap, notes) {
+  const names = new Set();
+  const slugs = new Set();
+  for (const note of notes) {
+    const fm = note.frontmatter || {};
+    const vaultPath = String(note.vaultPath).replace(/\\/g, '/');
+    const all = [path.posix.basename(vaultPath), vaultPath, note.displayTitle, typeof fm.title === 'string' ? fm.title : '',
+      ...nameList(fm.aliases), ...gmAliasList(fm)];
+    for (const name of all) {
+      if (typeof name !== 'string' || !name.trim()) continue;
+      names.add(foldName(canonicalNfc(name)));
+      const slug = slugify(canonicalNfc(name));
+      if (slug !== 'untitled') slugs.add(slug);
+    }
+  }
+  HIDDEN_NAMES.set(linkMap, names);
+  HIDDEN_SLUGS.set(linkMap, slugs);
+}
+
+// The parts of a link's path, tidied: slashes and dot segments normalised, empty parts dropped, and a .html / .htm / .md
+// ending taken off each part.
+const pathParts = (text) => path.posix.normalize(`/${text.replace(/\\/g, '/')}`).split('/')
+  .filter(Boolean).map((part) => part.replace(/\.(?:html?|md)$/i, ''));
+
+// Addresses that are not a note and not on the site, and may stand as written (a mail or phone link).
+const PASS_SCHEME_RE = /^(?:mailto|tel):/i;
+const ANY_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/i;
+
+function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {}) {
+  const text = String(link == null ? '' : link).trim();
+  if (/^https?:\/\//i.test(text)) return { kind: 'outside', href: text };
+  if (PASS_SCHEME_RE.test(text)) return { kind: 'outside', href: text };
+  if (ANY_SCHEME_RE.test(text) && !/^[a-z]:[\\/]/i.test(text)) return { kind: 'none', href: null };
+  // The target is read as a wiki-link target is: brackets, `|label`, `#heading`, `^block` and `.md` come off, in
+  // either spelling. The site has no heading anchors, so a heading is dropped. The name is tried with its folder
+  // path and then without it.
+  const wiki = /^\[\[([\s\S]+)\]\]$/.exec(text);
+  // Percent-escapes are read as the browser would read them; one that is malformed is a link nobody can vouch for.
+  let decoded;
+  try { decoded = decodeURIComponent(wiki ? wiki[1] : text); } catch (e) { return { kind: 'none', href: null }; }
+  const target = canonicalNfc(parseWikilink(decoded).name.replace(/\?[\s\S]*$/, '').trim());
+  const parts = pathParts(target);
+  const name = parts.length ? canonicalNfc(parts.join('/')) : '';
+  if (name) {
+    const candidates = [name];
+    const last = parts[parts.length - 1];
+    if (last !== name) candidates.push(last);
+    if (!LOWER_KEYS.has(linkMap)) {
+      const keys = new Map();
+      for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
+      LOWER_KEYS.set(linkMap, keys);
+    }
+    for (const candidate of candidates) {
+      const exact = linkMap[candidate] || (pages.find(p => canonicalNfc(p.title) === candidate) || {}).outputPath;
+      if (exact) return { kind: 'page', href: exact };
+      // The same name in another letter case is that page (the names of notes with pages are in the link map).
+      const loose = LOWER_KEYS.get(linkMap).get(foldName(candidate));
+      if (loose) return { kind: 'page', href: loose };
+    }
+  }
+  // A bracketed link is a note, and no page was found for it: never printed.
+  if (wiki) return { kind: 'none', href: null };
+  // The address of a published page, spelled as the build writes it, stands.
+  const address = parts.join('/').toLowerCase();
+  if (Object.values(linkMap).some((p) => String(p).toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
+  // Anything else: if ANY part of the path is the name, file name, title, alias or slug of a hidden note, it is dropped.
+  const hiddenNames = HIDDEN_NAMES.get(linkMap) || new Set();
+  const hiddenSlugs = HIDDEN_SLUGS.get(linkMap) || new Set();
+  if (parts.some((part) => hiddenNames.has(foldName(part)) || hiddenSlugs.has(slugify(part)))) return { kind: 'none', href: null };
+  return { kind: 'site', href: text.replace(/^\.\//, '') };
+}
+
 // Build the site. With `options.inMemory` every page is rendered exactly as it would be
 // written, and nothing is written, cleaned, copied or printed: `doctor --site` and
 // `explain --shown` read the site this way, so what they report is what the build makes.
@@ -99,21 +190,31 @@ function buildSite(options) {
   rawConfig.vaultPath = options.vaultPath ? path.resolve(options.vaultPath) : path.resolve(configDir, rawConfig.vaultPath);
   // `allowFaults` is for the GM-site build a later change adds; nothing passes it yet but tests.
   const printWarning = (m) => console.warn(`  WARNING: ${m}`);
-  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning, { quietStops: !options.allowFaults });
+  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning, { quietStops: !options.allowFaults, siteDir: configDir });
   if (!options.allowFaults) assertNoStops(publishConfig, 'build');
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
-  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir || './docs');
+  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
   const off = siteOff(publishConfig.switches, rawConfig.vaultPath);
   // A setting named in a message is named as this vault's file writes it.
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
+  // The vault's build steps run only for the `build` and `deploy` commands (`options.runSteps`): never in a dry build,
+  // the preview, or any command that only reads. Before anything is read from the vault, in the site folder.
+  const runningSteps = options.runSteps === true && !dry && !options.outputDirOverride;
+  if (runningSteps) {
+    // An output folder the build would refuse stops it before any step runs (a step may change it, so the check also stays below).
+    assertSafeOutputDir();
+    const notes = packageNotes(publishConfig.layout === 'new' ? packageScripts(configDir) : {}, publishConfig.steps);
+    if (notes.twice) printWarning(notes.twice);
+    if (notes.only) (options.stepsLog || console.log)(`  ${notes.only}`);
+    if (publishConfig.steps.before.length) runSteps(publishConfig.steps.before, { cwd: configDir, label: 'before_build', log: options.stepsLog, stdio: options.stepsStdio });
+  }
 
-  const host = config.host || 'github-pages';
-  if (host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
+  if (config.host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
     console.warn(
-      `⚠️  host is "cloudflare-pages" but siteUrl looks like a GitHub Pages URL (${config.siteUrl}).\n` +
+      `⚠️  ${nm('player_site.host')} is "cloudflare-pages" but ${nm('player_site.url')} looks like a GitHub Pages URL (${config.siteUrl}).\n` +
       `   Cloudflare serves at the root, so the 404 page's links will break.\n` +
-      `   Set siteUrl to your Cloudflare URL (e.g. https://<project>.pages.dev) and rebuild.`
+      `   Set ${nm('player_site.url')} to your Cloudflare URL (e.g. https://<project>.pages.dev) and rebuild.`
     );
   }
 
@@ -145,27 +246,45 @@ function buildSite(options) {
   const fieldOverrides = publishConfig.overrides.fields || {};
 
   function assertSafeOutputDir() {
-    const resolved = path.resolve(outputDir);
+    // Real paths: a link in the site folder that leads to the vault is the vault.
+    // A folder not made yet is judged by its nearest folder that exists, so it is compared the same way as the vault.
+    const real = (p) => {
+      const tail = [];
+      let cur = path.resolve(p);
+      for (;;) {
+        try { return path.join(fs.realpathSync.native(cur), ...tail); } catch {
+          const up = path.dirname(cur);
+          if (up === cur) return path.resolve(p);
+          tail.unshift(path.basename(cur));
+          cur = up;
+        }
+      }
+    };
+    const resolved = real(outputDir);
     const root = path.parse(resolved).root;
     if (resolved === root) {
       throw new Error(`Refusing to clean filesystem root: ${resolved}`);
     }
-    const resolvedVault = path.resolve(config.vaultPath);
+    const resolvedVault = real(config.vaultPath);
     if (resolved === resolvedVault || resolvedVault.startsWith(resolved + path.sep)) {
-      throw new Error(`Refusing to clean outputDir that contains the vault: ${resolved}`);
+      throw new Error(`Refusing to clean the output folder (${nm('player_site.output')}) that contains the vault: ${resolved}`);
     }
     if (resolved.startsWith(resolvedVault + path.sep)) {
-      throw new Error(`Refusing to write outputDir inside the vault: ${resolved}`);
+      throw new Error(`Refusing to write the output folder (${nm('player_site.output')}) inside the vault: ${resolved}`);
     }
   }
 
   function cleanOutput() {
     if (dry) return;
+    // A build that is let past the settings' faults (allowFaults) still never cleans a folder it cannot trust.
+    if (publishConfig.faults.some((f) => f.level === 'stop' && (f.setting === 'player_site.output' || f.setting === 'player_site.keep'))) {
+      throw new Error('The build did not start: it will not clean a folder while it cannot read where to build or what to keep.');
+    }
     if (!fs.existsSync(outputDir)) return;
     assertSafeOutputDir();
-    const preserve = Array.isArray(config.preserveDirs) ? config.preserveDirs : [];
     for (const entry of fs.readdirSync(outputDir)) {
-      if (preserve.includes(entry)) continue;
+      // A kept folder is kept in any letter case: this can only keep more.
+      if (config.preserveDirs.some((kept) => kept.toLowerCase() === entry.toLowerCase())) continue;
       const full = path.join(outputDir, entry);
       fs.rmSync(full, { recursive: true, force: true });
     }
@@ -544,7 +663,8 @@ function buildSite(options) {
   // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
   // take too, so all three pair on the same frontmatter (#276).
   const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
-  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes });
+  rememberHiddenNames(linkMap, allNotes);
+  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
@@ -716,13 +836,13 @@ function buildSite(options) {
 
   const recentNPCs = withFeatured(
     scoreByRecency(npcs, sessions, chapters, {
-      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUpFor: hubWrapUps,
+      gone: publishConfig.statuses.gone, window: recencyWindow, max: maxNPCs, type: 'npc', wrapUpFor: hubWrapUps,
     }),
     npcs, landingConfig.featured_npcs, maxNPCs, 'featured_npcs');
 
   const recentLocations = withFeatured(
     scoreByRecency(locations, sessions, chapters, {
-      window: recencyWindow, max: maxLocations, type: 'location', wrapUpFor: hubWrapUps,
+      gone: publishConfig.statuses.gone, window: recencyWindow, max: maxLocations, type: 'location', wrapUpFor: hubWrapUps,
     }),
     locations, landingConfig.featured_locations, maxLocations, 'featured_locations');
 
@@ -928,7 +1048,19 @@ function buildSite(options) {
 
   write404();
 
-  const navFor = generateNav(pages, { hasStory, timelineHref });
+  // The GM's extra menu entries (player_site.menu_extra), each link read by resolveSiteLink. An entry that
+  // names a note with no page is left out, with a warning, and prints nothing. The labels of the rest are
+  // texts the note audit reads.
+  const menuExtra = [];
+  for (const item of publishConfig.menu_extra || []) {
+    const read = resolveSiteLink(item.link, { linkMap, pages });
+    if (read.kind === 'none') {
+      console.warn(`  WARNING: ${nm('player_site.menu_extra')} entry "${item.label}" links to "${item.link}", which is a note the site makes no page of, or an address the site cannot link to — it is left out of the menu`);
+      continue;
+    }
+    menuExtra.push({ label: item.label, href: read.href, external: read.kind === 'outside', group: item.group || null });
+  }
+  const navFor = generateNav(pages, { hasStory, timelineHref, extra: menuExtra });
 
   // Render each page
   const usedImages = new Set();
@@ -1052,7 +1184,7 @@ function buildSite(options) {
         }
         // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
         // off the roster's Party Status board (#265).
-        if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter)) {
+        if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
           // Root-relative output path of the PC portrait, for the party-board
           // thumbnail. Resolved the same way portraitImg does (imageMap keyed
           // by bare basename → the scanner's relPath under images/).
@@ -1077,7 +1209,7 @@ function buildSite(options) {
           identity,
           sheetsOff,
           // The PC's own events (#323), not the campaign's: the landing page has those.
-          timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: 15, from: page.outputPath }),
+          timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: publishConfig.limits.timeline_events, from: page.outputPath }),
           onLook: fx.onLook,
           storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
         });
@@ -1118,7 +1250,7 @@ function buildSite(options) {
           if (wrapUp) {
             // The page shell stays the wiki page's; only the article body is generated.
             const chapter = chapterOfSession(page, pages);
-            processed.html = sessionBodyHtml(page, { wrapUp, chapter });
+            processed.html = sessionBodyHtml(page, { wrapUp, chapter, recapChars: publishConfig.limits.recap_chars });
           }
         }
         html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages });
@@ -1205,7 +1337,7 @@ function buildSite(options) {
     if (publishConfig.link_previews !== 'off') {
       const { cardFor } = require('./previews');
       const { usesCocFolio } = require('./templates/pc');
-      card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+      card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     }
     const { subtitleOf } = require('./search-index');
     return {
@@ -1300,7 +1432,7 @@ function buildSite(options) {
   if (publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
-    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     // The cards are read for withheld names in their own right, whatever the pages print (and
     // also when nothing is written): every string of every card, under the note it is made from.
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
@@ -1359,6 +1491,10 @@ function buildSite(options) {
       console.warn(`  WARNING: ${label} "${vaultRelPath}" not found in the vault — skipping`);
       return null;
     }
+    if (!fs.statSync(full).isFile()) {
+      console.warn(`  WARNING: ${label} "${vaultRelPath}" is not a file — skipping`);
+      return null;
+    }
     return full;
   }
 
@@ -1412,6 +1548,35 @@ function buildSite(options) {
 
   publishConfig._banners = dry ? {} : buildBanners(Object.keys(DIR_LABELS));
 
+  // The landing page's banner (player_site.landing.banner.*). Its picture is found and copied by the section
+  // banners' helpers, to images/banners/landing/; its link is read by resolveSiteLink, as a menu entry's is.
+  // `image` and `link` leave here as the hrefs the page prints (null when there is none to print). A banner with
+  // a link and nothing else shows nothing.
+  let landingBannerResolved = false;
+  function resolveLandingBanner() {
+    if (landingBannerResolved) return;
+    landingBannerResolved = true;
+    const banner = publishConfig.landing.banner;
+    if (!banner.title && !banner.text && !banner.image) {
+      if (banner.link) console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is set but the banner has no title, text or picture — no banner is shown`);
+      banner.link = null;
+      return;
+    }
+    if (banner.image && !/^https?:\/\//i.test(banner.image)) {
+      const imageFull = resolveVaultAsset(banner.image, nm('player_site.landing.banner.image'));
+      banner.image = imageFull ? (dry ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
+    }
+    if (banner.link) {
+      const read = resolveSiteLink(banner.link, { linkMap, pages });
+      if (read.kind === 'none') {
+        console.warn(`  WARNING: ${nm('player_site.landing.banner.link')} is "${banner.link}", which is a note the site makes no page of, or an address the site cannot link to — the banner is not a link`);
+        banner.link = null;
+      } else {
+        banner.link = { href: read.href, external: read.kind === 'outside' };
+      }
+    }
+  }
+
   const pcRoster = pages.find(isRoster);
   const pcRedirectTarget = pcRoster ? pcRoster.outputPath : null;
 
@@ -1459,7 +1624,7 @@ function buildSite(options) {
       // The events are read from the notes as they stand: marked, in the audit's pass.
       const data = live ? timelineData : buildTimelineData(pages);
       emit('timeline.html', timelineTemplate(renderTimelineHTML(data), navFor, config, publishConfig), '  wrote timeline.html');
-      publishConfig._timelineStrip = renderTimelineStrip(data, { maxEvents: 15 });
+      publishConfig._timelineStrip = renderTimelineStrip(data, { maxEvents: publishConfig.limits.timeline_events });
     }
 
     // The story: its chapters, each PC's own story, its contents page.
@@ -1474,6 +1639,7 @@ function buildSite(options) {
     }
 
     // Landing page
+    resolveLandingBanner();
     emit('index.html', landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus, hubWrapUps), '  wrote index.html');
   }
   let characterStories = [];
@@ -1503,7 +1669,7 @@ function buildSite(options) {
     fx.warn(outputPath, processed.warnings);
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
-      sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
+      sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
     };
     const html = characterStoryPage(story, config, publishConfig, navFor);
     if (fx === liveFx) seen(audit.storyRelOf(pc), html, pc, true);
@@ -1645,12 +1811,11 @@ function buildSite(options) {
   // says what happened and what to do, whatever else the site file holds. Not said for live
   // stats when character_sheets is off (that is the GM's own choice, and the files are removed).
   const unset = switches.unset || [];
-  const legacySite = hasLegacy(rawConfig);
-  const lost = (key, was, is, subject, them, its) => console.warn(legacySite && publishConfig.layout !== 'new'
-    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: ${nm(`player_site.features.${key}`)} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
-    : `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
-  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
-  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
+  // (The update does not switch such a feature on, so the line says what works now: set the switch.)
+  const lost = (key, is, subject, them, its) => console.warn(
+    `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
+  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'are', 'live stats', 'them', 'their');
+  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'is', 'the inbox', 'it', 'its');
 
   // Faults in the notes themselves: one line per code, after every other warning, and
   // nothing for a vault with none. `doctor --site` lists the same findings in full.
@@ -1713,6 +1878,8 @@ function buildSite(options) {
   if (auditGaps > 0) {
     console.warn(`  WARNING: the note-faults check could not read ${auditGaps} page${auditGaps === 1 ? '' : 's'} a second time; a note named there with no page may be missing from its list.`);
   }
+  // Every file is written: the after steps run, then the check of the notes and "Done!".
+  if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio });
   const noteFaults = audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
@@ -1731,7 +1898,7 @@ function buildSite(options) {
   return { noteFaults, shown: null, faults: publishConfig.faults };
 }
 
-module.exports = { build };
+module.exports = { build, resolveSiteLink, rememberHiddenNames };
 
 // Allow running directly: node lib/build.js
 // Prefetches self-hosted fonts first, as the CLI does; build() itself only reads the cache.

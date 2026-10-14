@@ -241,9 +241,13 @@ describe('doctor --site', () => {
     write(vault, 'Characters/NPCs/Odd.md', '---\ntype: npc\n---\n\nWe were 100%% done and 50%% off.\n');
     const { configPath } = siteFor(vault);
     const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-    config.outputDir = 7;   // not a path: the build cannot start
     const cap = capture();
-    const rc = await runSiteDoctor({ configPath, json: true }, Object.assign({}, cap.deps, { config }));
+    // The in-memory build fails for a reason of its own (a bad output folder is a settings fault, reported before it).
+    const builder = require('../lib/build');
+    const realBuild = builder.build;
+    builder.build = () => { throw new Error('the build could not start'); };
+    let rc;
+    try { rc = await runSiteDoctor({ configPath, json: true }, Object.assign({}, cap.deps, { config })); } finally { builder.build = realBuild; }
     const found = JSON.parse(cap.text()).findings.filter((f) => f.code === 'NOTE_FAULTS_UNCHECKED');
     assert.strictEqual(found.length, 1, cap.text());
     assert.strictEqual(found[0].severity, 'error');
@@ -404,6 +408,21 @@ describe('doctor --site', () => {
     assert.ok(finding, JSON.stringify(payload.findings));
     assert.match(finding.detail, /1\.11\.20/);
     assert.match(finding.fix, /run `gm-publish update-pin`/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a release-tarball pin is the GM\'s choice: no version fault, no advice to repin', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-tarball-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+      dependencies: { 'gm-apprentice-publish': 'file:vendor/gm-apprentice-publish-1.24.0.tgz' },
+    }));
+    const c = capture();
+    c.deps.detect = () => ({ pinned: '1.11.20', latest: '1.11.30', drift: true, versionsRoot: '/cache/gm-apprentice' });
+    await runSiteDoctor({ configPath, json: true }, c.deps);
+    const payload = JSON.parse(c.out.join(''));
+    assert.deepEqual(payload.findings.filter(f => f.code === 'VERSION_DRIFT'), []);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

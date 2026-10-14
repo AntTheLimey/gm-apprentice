@@ -1,7 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
-const { readSettings, formatFault, makeFault, stops, entry, movedKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
+const { canonicalNfc } = require('./unicode');
+const { readSettings, formatFault, makeFault, stops, entry, movedKeys, siteFolderKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -85,8 +86,9 @@ function setOnly(map, prefix, origins) {
 // without sheets) or check a map's entries (overrides).
 // `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false } = {}) {
-  const { values, origins, faults, legacy = [], layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback });
+// `siteDir` is the site folder (where vault.config.json is): the output folder is judged against it.
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir } = {}) {
+  const { values, origins, faults, legacy = [], layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir });
   const v = values.vault;
   const p = values.player_site;
   const named = (n) => origins[n] !== 'default';
@@ -164,6 +166,82 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // (`nameInFor(publishConfig.layout, name)`). Not listed with the settings: a copy of the
   // object does not carry it, and the message then names the setting by its current name.
   Object.defineProperty(merged, 'layout', { value: layout, enumerable: false });
+  // The site folder's own settings, for code that has only the publishConfig. Not listed, like `layout`.
+  Object.defineProperty(merged, 'site', {
+    value: { url: p.url, host: p.host, output: p.output, cloudflare_project: p.cloudflare_project, keep: p.keep },
+    enumerable: false,
+  });
+
+  // A blank entry in a steps list is left out, with a warning: it must never reach the shell.
+  const stepsOf = (name, list) => {
+    const kept = list.filter((c) => String(c).trim() !== '');
+    if (kept.length !== list.length) {
+      const written = nameIn(vaultPath, name);
+      faults.push(makeFault({ name: written, setting: name, kind: 'dropped', level: 'warn', message: `${written} has a blank entry; it was left out` }));
+    }
+    return kept;
+  };
+  const steps = { before: stepsOf('player_site.before_build', p.before_build), after: stepsOf('player_site.after_build', p.after_build) };
+
+  // The vault's build steps, for the commands that run them. Not listed, like `site`.
+  Object.defineProperty(merged, 'steps', { value: steps, enumerable: false });
+
+  // The GM's extra menu entries. A second entry with the same label under the same group is left out, with a
+  // warning. Not listed, like `steps`: a site that sets none builds as it did.
+  const menuName = nameIn(vaultPath, 'player_site.menu_extra');
+  const menuSeen = new Set();
+  const menuExtra = [];
+  for (const item of p.menu_extra) {
+    const key = `${canonicalNfc(item.label.trim())}\n${(item.group || '').trim().toLowerCase()}`;
+    if (menuSeen.has(key)) {
+      faults.push(makeFault({ name: menuName, setting: 'player_site.menu_extra', kind: 'dropped', level: 'warn', message: `${menuName} lists "${item.label}" twice${item.group ? ` under ${item.group}` : ''}; the second is left out` }));
+      continue;
+    }
+    menuSeen.add(key);
+    menuExtra.push({ label: item.label.trim(), link: item.link.trim(), ...(item.group ? { group: item.group.trim() } : {}) });
+  }
+  Object.defineProperty(merged, 'menu_extra', { value: menuExtra, enumerable: false });
+
+  // The landing banner's four texts (null when unset). Not listed, like `menu_extra`: a site that sets none
+  // builds as it did. The build replaces `image` and `link` with what it resolved.
+  const bannerText = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const b = (p.landing && p.landing.banner) || {};
+  delete merged.landing.banner;
+  Object.defineProperty(merged.landing, 'banner', {
+    value: { title: bannerText(b.title), text: bannerText(b.text), link: bannerText(b.link), image: bannerText(b.image) },
+    enumerable: false, writable: true, configurable: true,
+  });
+
+  // The numbers, the header facts and the withheld words the build used to fix in code. Not listed, like
+  // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.
+  Object.defineProperty(merged, 'limits', { value: { ...p.limits }, enumerable: false });
+  Object.defineProperty(merged, 'header_facts', { value: [...p.sheets.header_facts], enumerable: false });
+  // A blank word reads as unset. A word that would break the link it is printed in is refused, with a warning.
+  const words = {};
+  for (const key of ['person', 'place', 'thing']) {
+    const setting = `player_site.withheld_words.${key}`;
+    const raw = String(p.withheld_words[key]).trim();
+    if (/[[\]|]/.test(raw)) {
+      const written = nameIn(vaultPath, setting);
+      faults.push(makeFault({ name: written, setting, kind: 'dropped', level: 'warn', message: `${written} holds a [, ] or |, which cannot be printed in a link; the built-in word is used` }));
+      words[key] = entry(setting).default;
+    } else words[key] = raw || entry(setting).default;
+  }
+  Object.defineProperty(merged, 'withheld_words', { value: words, enumerable: false });
+
+  // The status lists, every word trimmed and lower-cased once. Not listed, like `limits`. A `fallen` word that is
+  // not out of play is left out, with a warning when the GM wrote it.
+  const wordsOf = (list) => new Set(list.map((w) => String(w).trim().toLowerCase()).filter(Boolean));
+  const statuses = { out_of_play: wordsOf(v.statuses.out_of_play), fallen: new Set(), gone: wordsOf(v.statuses.gone) };
+  for (const word of wordsOf(v.statuses.fallen)) {
+    if (statuses.out_of_play.has(word)) statuses.fallen.add(word);
+    // A built-in word the GM's out_of_play narrowed away is dropped quietly: only a word they wrote is warned about.
+    else if (named('vault.statuses.fallen')) {
+      const written = nameIn(vaultPath, 'vault.statuses.fallen');
+      faults.push(makeFault({ name: written, setting: 'vault.statuses.fallen', kind: 'dropped', level: 'warn', message: `${written} holds "${word}", which is not in ${nameIn(vaultPath, 'vault.statuses.out_of_play')}; it does not count as fallen` }));
+    }
+  }
+  Object.defineProperty(merged, 'statuses', { value: statuses, enumerable: false });
 
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
@@ -174,7 +252,12 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
 function assertNoStops(publishConfig, what) {
   const found = stops(publishConfig.faults || []);
   if (!found.length) return;
-  throw new Error(`${what} stopped: the settings have a fault that could show players more than you meant.\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}\nFix it, or ask the apprentice to run the Settings check.`);
+  // A fault in where to build or what to keep cannot show players anything; it only stops the build from cleaning a folder it cannot trust.
+  const folderOnly = found.every((f) => f.setting === 'player_site.output' || f.setting === 'player_site.keep');
+  const heading = folderOnly
+    ? 'the settings have a fault in where the site is built or what it keeps, so nothing was cleaned or built.'
+    : 'the settings have a fault that could show players more than you meant.';
+  throw new Error(`${what} stopped: ${heading}\n${found.map((f) => `  ${formatFault(f)}`).join('\n')}\nFix it, or ask the apprentice to run the Settings check.`);
 }
 
 // assertNoStops for a command that has only the site's vault.config.json path (deploy).
@@ -182,22 +265,22 @@ function assertNoStops(publishConfig, what) {
 function assertNoStopsFor(configPath, what) {
   let raw;
   let vaultPath;
+  let siteDir;
   try {
     const resolved = path.resolve(configPath);
     raw = loadVaultConfig(resolved);
-    vaultPath = path.resolve(path.dirname(resolved), raw.vaultPath);
+    siteDir = path.dirname(resolved);
+    vaultPath = path.resolve(siteDir, raw.vaultPath);
   } catch {
     return;
   }
-  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}), what);
+  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}, { siteDir }), what);
 }
 
 // What `build` and `deploy` say instead of running when the GM has turned the site off.
 // Only an explicit off stops them: a site folder whose vault never set the switch builds.
 // It names the switch as this vault's file writes it, so it takes the vault (or a layout).
 const siteOffText = (layout) => `the site is off for this vault (${nameInFor(layout, 'player_site.publish')} in ${fileLabelFor(layout)}); nothing was built. Set ${nameInFor(layout, 'player_site.publish')}: true to publish again.`;
-// The text for a vault on the old layout, the one most vaults are on until they are updated.
-const SITE_OFF = siteOffText('legacy');
 function siteOff(switches, vaultPath) {
   return switches && switches.explicitOff && switches.explicitOff.site ? siteOffText(vaultPath ? layoutOf(vaultPath) : 'legacy') : null;
 }
@@ -223,6 +306,10 @@ function scanConfigFor(config, publishConfig) {
   return Object.assign({}, config, { excludeDirs: publishConfig.exclude_dirs });
 }
 
+// The site folder's five keys in the spelling the site file used, and the field of publishConfig.site each is.
+// Derived from the registry, the one place that names them: [['siteUrl', 'url'], ['host', 'host'], ...].
+const SITE_KEYS = siteFolderKeys().map(({ key, name }) => [key, name.split('.').pop()]);
+
 // The one resolved config every command reads. `config` is the raw vault.config.json
 // object with each moved key overwritten, in its old JSON spelling, by the value
 // loadPublishConfig settled on (vault file first, site file only when the vault file is
@@ -239,7 +326,27 @@ function resolveConfig(rawConfig, vaultPath, warn = console.warn, options = {}) 
     if (value !== undefined && value !== null) config[entry.json] = value;
     else if (fromVaultOnly) delete config[entry.json];
   }
+  // The site folder's own keys are always what the settings resolved (never the raw site file), or absent.
+  for (const [key, field] of SITE_KEYS) {
+    const value = publishConfig.site[field];
+    if (value !== undefined && value !== null) config[key] = value;
+    else delete config[key];
+  }
   return { config, publishConfig };
+}
+
+// The output folder as a plain relative path ("docs"): no leading "./", no trailing slash. A config nothing resolved
+// (no vaultPath, a test's stand-in) takes the built-in folder.
+function outputFolderOf(config) {
+  const folder = config.outputDir === undefined ? entry('player_site.output').default : config.outputDir;
+  return String(folder).replace(/^\.\//, '').replace(/\/+$/, '');
+}
+
+// The site file's config with its five site keys resolved from the vault's settings, for a command that reads only
+// those (deploy, setup-inbox). A config with no vaultPath (a test's stand-in) is returned as it is.
+function siteConfigFor(raw, siteRoot, warn = () => {}) {
+  if (!raw || !raw.vaultPath) return raw;
+  return resolveConfig(raw, path.resolve(siteRoot, raw.vaultPath), warn, { quietStops: true, siteDir: siteRoot }).config;
 }
 
 // Why `build` and `deploy` must not run for the site at `configPath`: the GM turned the
@@ -265,4 +372,4 @@ function siteOffFor(configPath) {
   }
 }
 
-module.exports = { siteOffFor, siteOff, siteOffText, SITE_OFF, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { siteOffFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

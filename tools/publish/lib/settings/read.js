@@ -7,12 +7,12 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
-const { REGISTRY, legacyNameOf } = require('./registry');
+const { REGISTRY, legacyNameOf, siteKeyOf } = require('./registry');
 const { TYPES, isMap, getPath, emptyIsFault } = require('./types');
-const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide } = require('./faults');
+const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
-const { normalizeExcludeDirs } = require('./folders');
+const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked, sameChecked } = require('./folders');
 
 const LAYOUT_VERSION = 1;
 const NEWER_VERSION = "this vault's settings were written by a newer gm-apprentice; update the plugin";
@@ -36,9 +36,23 @@ function setIn(obj, name, value) {
 // (the list's name): the value, its origin, and a fault named `written` when it cannot be read.
 // `c` is { values, origins, faults, fault } where `fault` makes a fault; `defaultOf(e)` is the
 // value the entry takes when unset.
+// The rules a value must meet beyond its type (an entry's `check`); each returns why it cannot be used, or null.
+const CHECKS = { output: (value, c) => outputProblem(value, c.siteDir), keep: (value) => keepProblem(value) };
+
 function settle(c, e, { written, setting }, first, defaultOf) {
   const { values, origins, faults, fault } = c;
-  const r = TYPES[e.type].read(first.raw, e);
+  // A list of maps is read entry by entry: one that cannot be used is left out alone, with a warning naming it.
+  const each = TYPES[e.type].readEach ? TYPES[e.type].readEach(first.raw, e) : null;
+  let r = each ? { ok: true, value: each.value } : TYPES[e.type].read(first.raw, e);
+  if (each) {
+    for (const d of each.dropped) {
+      const who = d.label ? `"${d.label}"` : `entry ${d.index + 1}`;
+      faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message: `${written} ${who} ${d.why}; it is left out` }));
+    }
+  }
+  const problem = r.ok && e.check ? CHECKS[e.check](r.value, c) : null;
+  if (problem) r = { ok: false, problem };
+  else if (r.ok && e.check) r = { ok: true, value: tidyChecked(e.check, r.value) };
   // A list of folders is tidied here for both layouts (the scanner compares exact vault-relative paths).
   if (r.ok && e.same === 'folder' && Array.isArray(r.value)) {
     r.value = normalizeExcludeDirs(r.value, c.vaultPath, (message) => faults.push(fault({ name: written, setting, kind: 'dropped', level: 'warn', value: null, message })), written);
@@ -57,12 +71,26 @@ function settle(c, e, { written, setting }, first, defaultOf) {
     setIn(values, setting, kept !== undefined ? kept : (e.onFault !== undefined ? e.onFault : defaultOf(e)));
     origins[setting] = 'fault';
     // `shown` is the value as the file wrote it, when what was read is that value merged with another file's.
-    faults.push(fault({ name: written, setting, kind: 'not-allowed', level: e.guards ? 'stop' : 'warn', value: first.shown !== undefined ? first.shown : first.raw, entry: e }));
+    const shown = first.shown !== undefined ? first.shown : first.raw;
+    faults.push(fault({
+      name: written, setting, kind: 'not-allowed', level: e.guards || e.stopOnFault ? 'stop' : 'warn', value: shown, entry: e,
+      // A value from the site folder's file says so: the GM fixes it there, not in the vault's settings.
+      ...(first.origin === 'site-file'
+        ? { hint: `${written} in the site folder's vault.config.json is ${shown === null ? 'empty' : show(shown)}; ${problem || `it takes ${TYPES[e.type].takes(e)}`}.` }
+        : problem ? { hint: `${written} is ${show(shown)}; ${problem}.` } : {}),
+    }));
   }
   return r;
 }
 
-const core = { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY };
+// A setting that is also a key of the site folder's file (the entry's `siteFallback`): the key and the value the
+// site file holds, or undefined when it holds none (a null is none).
+function siteValueOf(site, e) {
+  const key = siteKeyOf(e);
+  return key !== null && site[key] !== undefined && site[key] !== null ? { key, raw: site[key] } : undefined;
+}
+
+const core = { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY, siteValueOf };
 
 // ---- The new layout -----------------------------------------------------------------------
 
@@ -148,7 +176,7 @@ function parseNewFile(vaultPath) {
   return parsed || {};
 }
 
-function readNew({ vaultPath, siteConfig }) {
+function readNew({ vaultPath, siteConfig, siteDir }) {
   const faults = [];
   const file = { path: at(vaultPath, NEW_FILE), exists: true, hasSiteBlock: false, leftover: fs.existsSync(at(vaultPath, OLD_FILE)) };
   const tree = parseNewFile(vaultPath);
@@ -156,7 +184,7 @@ function readNew({ vaultPath, siteConfig }) {
   const values = {};
   const origins = {};
   const fault = makeFault;
-  const c = { values, origins, faults, fault, vaultPath };
+  const c = { values, origins, faults, fault, vaultPath, siteDir };
 
   if (file.leftover) {
     faults.push(makeFault({ name: OLD_FILE, setting: null, kind: 'dropped', level: 'warn', message: `${OLD_FILE} is left over from before the update and is not read` }));
@@ -164,7 +192,9 @@ function readNew({ vaultPath, siteConfig }) {
   // A setting still written in the site folder's vault.config.json is not read any more.
   const site = isMap(siteConfig) ? siteConfig : {};
   for (const e of LIST) {
-    for (const w of (e.was || []).filter((x) => x.in === 'site')) {
+    // The site folder's own five keys are read below, while the vault sets none.
+    if (e.siteFallback) continue;
+    for (const w of (e.was || []).filter((x) => x.in === 'site' && !x.carryOnly)) {
       const value = getPath(site, w.name.split('.'));
       if (value === undefined) continue;
       // A list that hides things, left in the site folder, would publish what it meant to hide: it stops the build.
@@ -194,12 +224,24 @@ function readNew({ vaultPath, siteConfig }) {
   for (const e of LIST) {
     if (e.container || hasChildren(e.name)) continue;
     const raw = getPath(tree, e.name.split('.'));
+    const fromSite = e.siteFallback ? siteValueOf(site, e) : undefined;
     if (raw === undefined || (raw === null && !emptyIsFault(e))) {
+      if (fromSite) {
+        // The vault sets none and the site folder's file still holds one: it is used until the next update moves it.
+        settle(c, e, { written: fromSite.key, setting: e.name }, { raw: fromSite.raw, origin: 'site-file' }, defaultOf);
+        faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site', siteLeft: true,
+          message: `\`${fromSite.key}\` in the site folder's vault.config.json moves to \`${e.name}\` at the next update` }));
+        continue;
+      }
       setIn(values, e.name, defaultOf(e));
       origins[e.name] = 'default';
       continue;
     }
     settle(c, e, { written: e.name, setting: e.name }, { raw, origin: 'file' }, defaultOf);
+    if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
+      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site',
+        message: `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
+    }
   }
 
   // What the file holds, against the list.
@@ -279,11 +321,11 @@ function readNew({ vaultPath, siteConfig }) {
 
 // ---- The entry point ----------------------------------------------------------------------
 
-function readSettings({ vaultPath, siteConfig = {} }) {
+function readSettings({ vaultPath, siteConfig = {}, siteDir }) {
   const site = siteConfig || {};
   const layout = layoutOf(vaultPath);
-  if (layout === 'new') return readNew({ vaultPath, siteConfig: site });
-  return { ...legacy.readLegacy({ vaultPath, siteConfig: site }, core), layout };
+  if (layout === 'new') return readNew({ vaultPath, siteConfig: site, siteDir });
+  return { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir }, core), layout };
 }
 
 // The settings as the OLD layout reads them, whatever files the vault has: for the move, which compares the old

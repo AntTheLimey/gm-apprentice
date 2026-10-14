@@ -43,7 +43,7 @@ for (const preset of PRESETS) {
     landingTagline: `gm-apprentice publish theme: ${preset.name}`,
     siteUrl: 'https://antthelimey.github.io/gm-apprentice',
     vaultPath: vaultDir,
-    outputDir: path.join(outDir, preset.id),
+    outputDir: 'site',   // inside the work folder; copied to the showcase folder below
     attachmentsDir: '_attachments',
     folderMap: {
       _Campaign: 'campaign', _World: 'world',
@@ -57,6 +57,7 @@ for (const preset of PRESETS) {
 
   console.log(`\n=== Building ${preset.name} showcase ===`);
   build({ configPath });
+  fs.cpSync(path.join(work, 'site'), path.join(outDir, preset.id), { recursive: true });
   fs.rmSync(work, { recursive: true, force: true });
 }
 

@@ -263,11 +263,11 @@ function buildStorySpine(pages, linkMap, pairs) {
   return units;
 }
 
-const FALLEN_STATUSES = new Set(['dead', 'deceased', 'kia', 'missing', 'unknown']);
-function characterStoryGroup(frontmatter) {
-  const s = String((frontmatter || {}).status || '').toLowerCase();
+// `fallen` is `vault.statuses.fallen` (config.js); a missing list throws rather than meaning "nobody".
+function characterStoryGroup(frontmatter, fallen) {
+  const s = String((frontmatter || {}).status || '').trim().toLowerCase();
   if (s === 'retired') return 'retired';
-  if (FALLEN_STATUSES.has(s)) return 'fallen';
+  if (fallen.has(s)) return 'fallen';
   return 'current';
 }
 

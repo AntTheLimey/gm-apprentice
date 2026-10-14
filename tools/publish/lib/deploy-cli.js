@@ -14,7 +14,9 @@ const fs = require('fs');
 const path = require('path');
 const { failureDetail } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
-const { loadVaultConfig } = require('./config');
+const { loadVaultConfig, siteConfigFor, outputFolderOf, loadPublishConfig } = require('./config');
+const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
+const { nameIn } = require('./settings');
 
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_WAIT_MS = 20000;
@@ -33,8 +35,7 @@ function projectNameFor(config, siteRoot) {
 
 // The build's output directory as wrangler wants it: a trailing-slash relative path.
 function outputDirArg(config) {
-  const raw = String(config.outputDir || './docs').replace(/^\.\//, '').replace(/\/+$/, '');
-  return (raw || 'docs') + '/';
+  return outputFolderOf(config) + '/';
 }
 
 // GET the URL and hand back the status, following redirects. Resolves null on any
@@ -69,35 +70,6 @@ function defaultFetchStatus(url, depth = 0) {
 
 const defaultSleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// A site's own post-build work (image optimisation, CSS folds, extra pages) lives in its
-// package.json `prebuild`/`postbuild` scripts, which npm runs around `npm run build`.
-// deploy builds in-process with the plugin's renderer, so npm never sees a build and
-// those steps were silently dropped from what shipped (#248). They run here instead,
-// around the in-process build. Ten minutes: optimising a large image set is slow.
-const HOOK_TIMEOUT_MS = 10 * 60 * 1000;
-
-// { hooks, warning }. No package.json means no hooks. One that won't parse is said out
-// loud: npm would run its hooks, so silently skipping them is #248 all over again. A
-// byte-order mark (Notepad, PowerShell's Out-File) is stripped first, as npm does.
-function buildHooks(siteRoot, readFile) {
-  const pkgPath = path.join(siteRoot, 'package.json');
-  let text;
-  try {
-    text = readFile(pkgPath);
-  } catch (err) {
-    if (err && err.code === 'ENOENT') return { hooks: [], warning: null };
-    // It exists but can't be read (EACCES, …): its build steps may matter, so stop.
-    return { hooks: [], warning: null, error: `Could not read ${pkgPath} (${err.code || err.message}) — its prebuild/postbuild scripts can't be checked, so nothing was deployed.` };
-  }
-  let scripts;
-  try {
-    scripts = JSON.parse(String(text).replace(/^\uFEFF/, '')).scripts || {};
-  } catch (err) {
-    return { hooks: [], warning: `${pkgPath} is not valid JSON (${err.message}) — its prebuild/postbuild scripts, if any, were not run.` };
-  }
-  return { hooks: ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim()), warning: null };
-}
-
 async function runDeploy(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -112,7 +84,8 @@ async function runDeploy(options, deps) {
   const build = d.build || (async (o) => {
     require('./sync-functions').syncSiteFunctionsOrWarn(o.configPath);
     await require('./fonts').prefetchForConfig(o.configPath);
-    return require('./build').build(o);
+    // Under --json stdout is the payload, so the vault's steps talk on stderr.
+    return require('./build').build({ ...o, runSteps: true, ...(opts.json ? { stepsStdio: ['ignore', 2, 2], stepsLog: console.error } : {}) });
   });
   const fetchStatus = d.fetchStatus || defaultFetchStatus;
   const sleep = d.sleep || defaultSleep;
@@ -120,26 +93,39 @@ async function runDeploy(options, deps) {
 
   const configPath = path.resolve(opts.configPath || './vault.config.json');
   const siteRoot = path.dirname(configPath);
-  const config = loadVaultConfig(configPath, d);
-  const host = config.host || 'github-pages';
+  // With --json the payload is the whole of stdout, so progress and failure lines
+  // are collected into it rather than printed alongside it.
+  const messages = [];
+  const say = (line) => { messages.push(line); if (!opts.json) out(line); };
+
+  // The host, address, project name and output folder are the vault's settings, not the site file's.
+  const rawConfig = loadVaultConfig(configPath, d);
+  const vaultPath = rawConfig.vaultPath ? path.resolve(siteRoot, rawConfig.vaultPath) : null;
+  const config = siteConfigFor(rawConfig, siteRoot, (m) => say(`WARNING: ${m}`));
+  const host = config.host;
   const projectName = projectNameFor(config, siteRoot);
   const isCloudflare = host === 'cloudflare-pages';
   const outDir = outputDirArg(config);
   const tomlPath = path.join(siteRoot, 'wrangler.toml');
   const hasToml = exists(tomlPath);
 
-  // With --json the payload is the whole of stdout, so progress and failure lines
-  // are collected into it rather than printed alongside it.
-  const messages = [];
-  const say = (line) => { messages.push(line); if (!opts.json) out(line); };
-
   const commands = [];
   const wranglerDeployArgs = hasToml
     ? ['pages', 'deploy']
     : ['pages', 'deploy', outDir, `--project-name=${projectName}`, '--branch=main', '--commit-dirty=true'];
 
+  // The vault's own steps run inside the build. A package.json hook is skipped only for a slot the settings hold steps
+  // for (`before` stands in for prebuild, `after` for postbuild); any other runs here exactly as it always did.
+  let vaultSteps = { before: [], after: [] };
+  try {
+    if (vaultPath) vaultSteps = loadPublishConfig(vaultPath, rawConfig, () => {}, { siteDir: siteRoot }).steps;
+  } catch { /* a vault that cannot be read is reported by the build */ }
   const hookInfo = opts.noBuild ? { hooks: [], warning: null } : buildHooks(siteRoot, readFile);
-  const hooks = hookInfo.hooks;
+  const hooks = hookInfo.hooks.filter((h) => !(h === 'prebuild' ? vaultSteps.before : vaultSteps.after).length);
+  // A hook left out because the vault holds steps for that slot is said, so the two ways of publishing are not a surprise.
+  for (const h of hookInfo.hooks.filter((x) => !hooks.includes(x))) {
+    say(`\`${h}\` in package.json is not run by deploy: the vault holds ${h === 'prebuild' ? 'before_build' : 'after_build'} steps for that slot, and the tool runs those.`);
+  }
   const platform = d.platform || process.platform;
 
   // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).
@@ -147,7 +133,7 @@ async function runDeploy(options, deps) {
 
   if (opts.dryRun) {
     if (hooks.includes('prebuild')) commands.push('npm run prebuild');
-    if (!opts.noBuild) commands.push(`gm-publish build --config ${configPath}`);
+    if (!opts.noBuild) commands.push(...vaultSteps.before, `gm-publish build --config ${configPath}`, ...vaultSteps.after);
     if (hooks.includes('postbuild')) commands.push('npm run postbuild');
     if (isCloudflare) {
       commands.push('npx wrangler@4 whoami', `npx wrangler@4 ${wranglerDeployArgs.join(' ')}`);
@@ -289,7 +275,7 @@ async function runDeploy(options, deps) {
   }
 
   if (!url) {
-    say('no siteUrl in vault.config.json — cannot verify; check the site by hand');
+    say(`no ${nameIn(vaultPath, 'player_site.url')} set — cannot verify; check the site by hand`);
     return finish({ deployed: true, url: null }, 0);
   }
 

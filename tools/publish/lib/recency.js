@@ -1,7 +1,6 @@
 const { publishedSource } = require('./processor');
 const { canonicalNfc } = require('./unicode');
 const { wikilinkRe, parseWikilink, firstWikilinkTarget } = require('./wikilink');
-const TERMINAL_STATUSES = new Set(['dead', 'deceased', 'destroyed', 'kia', 'dissolved']);
 // A session counts as "played" once it has been run — including the post-wrap-up, pre-reconcile
 // `wrap-up` state — so a freshly wrapped session still drives "recent" before it's reviewed.
 const PLAYED_STATUSES = new Set(['played', 'reviewed', 'wrap-up']);
@@ -51,6 +50,9 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
   const max = options.max;
   const type = options.type;
   const wrapUpFor = options.wrapUpFor || new Map();
+  // `vault.statuses.gone` (config.js). No default here: a missing list throws.
+  const gone = options.gone;
+  if (!gone || typeof gone.has !== 'function') throw new TypeError('scoreByRecency needs the list of gone statuses (options.gone)');
 
   // Most recently *played* first. session_number restarts per chapter, so it can't identify the
   // recent sessions — sort by play_date and fall back to session_number only when dates tie/absent.
@@ -82,9 +84,9 @@ function scoreByRecency(entities, sessions, chapters, options = {}) {
     if (type && entity.frontmatter.type !== type) return null;
     const names = [entity.title, ...(entity.frontmatter.aliases || [])].map(canonicalNfc);
 
-    // Terminal-status entities (dead, destroyed, …) are retired from "in play" — unless they
+    // Entities whose status is in the gone list (dead, destroyed, …) are retired from "in play" — unless they
     // feature in the latest session (e.g. an NPC who died there is still current news).
-    const isTerminal = TERMINAL_STATUSES.has(String(entity.frontmatter.status || '').toLowerCase());
+    const isTerminal = gone.has(String(entity.frontmatter.status || '').trim().toLowerCase());
     const inLatest = names.some(n => latestMentions.has(n));
     if (isTerminal && !inLatest) return null;
 

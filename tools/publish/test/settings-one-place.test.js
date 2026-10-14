@@ -96,8 +96,13 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   legacy    the settings an older site file still holds (build.js lists them in its closing warning)
 //   faults    the settings problems found while reading (config.js, site-doctor.js, build.js report them)
 //   layout    which settings file the vault is on, for naming a setting in a message (not enumerable)
+//   site      the site folder's own settings (url, host, output, cloudflare_project, keep), for code that has only the publishConfig (not enumerable)
 // `setting_year` is a setting, written beside `publish:`; it is checked below as a top-level name.
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout'];
+//   steps     the vault's build steps, { before, after } (not enumerable; only `build` and `deploy` run them)
+//   menu_extra  the GM's extra menu entries with a repeat left out (not enumerable; build.js reads each link)
+//   limits, header_facts, withheld_words  the numbers, header facts and withheld words (not enumerable; passed down to the code that uses each)
+//   statuses  the three status lists as sets, { out_of_play, fallen, gone } (not enumerable; passed down to the code that uses each)
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'statuses'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)
@@ -170,4 +175,166 @@ test('no message states a setting under its old name', () => {
     }
   }
   assert.deepEqual(found, []);
+});
+
+// ---- Plan 1c: what moved into the list stays there ---------------------------------------------------------------
+
+// (a) The constants the numbers, word lists and status lists became settings from are gone: none of these names
+// is in lib/ or bin/ again (comments included), so a returning constant cannot hide.
+test('the constants that became settings do not return', () => {
+  const deleted = [
+    // Task 6: the fixed numbers and words
+    'RECAP_MAX_CHARS', 'VALUE_LIMIT', 'TITLE_LIMIT', 'EXCERPT_LIMIT', 'MAX_FACTS', 'DEFAULT_META_FIELDS', 'WITHHELD_PLACEHOLDERS',
+    // Task 7: the status lists, and the role guess that read the landing tag lists
+    'OUT_OF_PLAY_STATUSES', 'FALLEN_STATUSES', 'TERMINAL_STATUSES', 'inferNPCRole', 'PATRON_TAGS', 'ANTAGONIST_TAGS', 'COMPANION_TAGS', 'THREAT_TAGS',
+  ];
+  const everything = [...sources, ...files(SETTINGS)];
+  assert.ok(everything.some((f) => f.startsWith(SETTINGS)), 'the settings package is not scanned');
+  const found = [];
+  for (const f of everything) for (const name of deleted) if (new RegExp(`\\b${name}\\b`).test(text(f))) found.push(`${rel(f)}: ${name}`);
+  assert.deepEqual(found, []);
+});
+
+// (b) The words that take a character out of play are written once, in the list. A file outside the settings
+// package that quotes three or more of them close together (within 250 characters, so a stray `'npc'` far from
+// `'dead'` is not a list) is stating the list again. The one exception is the In Memoriam card labels in
+// landing.js: a label for each status word, which is not a list of what counts.
+test('the out-of-play words are not restated', () => {
+  const words = entry('vault.statuses.out_of_play').default;
+  assert.ok(words.length >= 8, 'the list to check is missing');
+  const exempt = new Set(['lib/templates/landing.js']);
+  const nearby = (src) => {
+    const hits = [];
+    for (const w of words) for (const m of src.matchAll(new RegExp(`['"\`]${w}['"\`]|\\b${w}\\s*:`, 'g'))) hits.push({ w, at: m.index });
+    hits.sort((a, b) => a.at - b.at);
+    return hits.some((h, i) => new Set(hits.slice(i).filter((o) => o.at - h.at <= 250).map((o) => o.w)).size >= 3);
+  };
+  const found = sources.filter((f) => !exempt.has(rel(f)) && nearby(code(f))).map(rel);
+  assert.deepEqual(found, []);
+  // The exception still earns its place.
+  assert.ok(nearby(code(path.join(ROOT, 'lib', 'templates', 'landing.js'))), 'landing.js no longer needs its exception');
+});
+
+// (c) The five site-folder keys are the vault's settings now. The site file is read for the path to the vault
+// and nothing else, apart from config.js, which maps what an older site file still holds (SITE_KEYS) onto the
+// settings. So: no `rawConfig.<key>`, and no file reads one of the keys off what loadVaultConfig returned.
+const SITE_FOLDER_KEYS = ['siteUrl', 'host', 'outputDir', 'cloudflarePagesProject', 'preserveDirs'];
+// A destructure: `const { outputDir } = loadVaultConfig(p)` or `= rawConfig` (or a name bound to one); the keys named in the
+// braces are reads.
+function destructuredKeys(src, vars) {
+  const from = `(?:[^;\\n]*\\bloadVaultConfig\\(|(?:${[...vars].join('|')})\\s*[;\\n)])`;
+  const keys = [];
+  for (const m of src.matchAll(new RegExp(`\\{([^{}]*)\\}\\s*=\\s*${from}`, 'g'))) {
+    for (const part of m[1].split(',')) {
+      const key = part.trim().split(/[:=\s]/)[0];
+      if (key) keys.push(key);
+    }
+  }
+  return keys;
+}
+
+// Every loadVaultConfig call in lib/ and bin/ -> the names its result is kept in, and the properties read off them.
+function loadVaultConfigReads() {
+  const calls = [];
+  for (const f of [...sources, ...files(SETTINGS)]) {
+    const src = code(f);
+    if (!src.includes('loadVaultConfig(')) continue;
+    if (/^function loadVaultConfig\b/m.test(src) && !/=\s*loadVaultConfig\(|\bloadVaultConfig\(.*\)\./.test(src)) continue;
+    const vars = new Set();
+    for (const m of src.matchAll(/(?:\b(?:const|let|var)\s+)?\b([A-Za-z_]\w*)\s*=\s*[^;\n]*\bloadVaultConfig\(/g)) vars.add(m[1]);
+    for (const m of src.matchAll(/\bloadVaultConfig\([^)\n]*\)(?:\[|\??\.)\s*['"]?(\w+)/g)) calls.push({ file: rel(f), variable: '(call)', prop: m[1] });
+    // The name `rawConfig` counts as a result, and so does a name bound to one (`const c = rawConfig;`), to any depth.
+    if (/\brawConfig\b/.test(src)) vars.add('rawConfig');
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const v of [...vars]) {
+        for (const m of src.matchAll(new RegExp(`\\b(?:const|let|var)\\s+(\\w+)\\s*=\\s*${v}\\s*[;,)\\n]`, 'g'))) if (!vars.has(m[1])) { vars.add(m[1]); grew = true; }
+      }
+    }
+    for (const key of destructuredKeys(src, vars)) calls.push({ file: rel(f), variable: '(destructured)', prop: key });
+    for (const v of vars) {
+      for (const m of src.matchAll(new RegExp(`(?<![\\w.'"/-])${v}(?:\\?\\.|\\.|\\[\\s*['"])(\\w+)`, 'g'))) calls.push({ file: rel(f), variable: v, prop: m[1] });
+    }
+  }
+  return calls;
+}
+
+// The destructure scan, on sample source: each way of naming a site-folder key is read as that key, whole.
+test('the destructure scan reads whole key names', () => {
+  const cases = [
+    ['const { siteUrl } = rawConfig;', ['siteUrl']],
+    ['const { host } = rawConfig;', ['host']],
+    ['const { siteUrl } = loadVaultConfig(p);', ['siteUrl']],
+    ['const { siteUrl: s } = loadVaultConfig(p);', ['siteUrl']],
+    ['const { vaultPath, outputDir = \'docs\', preserveDirs } = loadVaultConfig(p);', ['vaultPath', 'outputDir', 'preserveDirs']],
+    ['const { cloudflarePagesProject } = alias;', ['cloudflarePagesProject']],
+    ['const { siteUrl } = somethingElse;', []],
+  ];
+  for (const [src, want] of cases) assert.deepEqual(destructuredKeys(src, new Set(['rawConfig', 'alias'])), want, src);
+  assert.ok(SITE_FOLDER_KEYS.every((k) => destructuredKeys(`const { ${k} } = rawConfig;`, new Set(['rawConfig'])).includes(k)));
+});
+
+test('no code reads a site-folder key off the site file', () => {
+  const raw = [];
+  for (const f of [...sources, ...files(SETTINGS)]) {
+    for (const m of code(f).matchAll(new RegExp(`\\brawConfig\\??\\.(${SITE_FOLDER_KEYS.join('|')})\\b`, 'g'))) raw.push(`${rel(f)}: ${m[0]}`);
+  }
+  assert.deepEqual(raw, []);
+  const reads = loadVaultConfigReads();
+  assert.ok(reads.some((r) => r.prop === 'vaultPath'), 'the scan found no read of vaultPath; it has stopped working');
+  // Only the path to the vault is read off the site file, except in the settings package (the move and the
+  // fallback read the old keys there, and nowhere else).
+  const bad = reads.filter((r) => r.prop !== 'vaultPath' && !r.file.startsWith('lib/settings/'));
+  assert.deepEqual(bad.map((r) => `${r.file}: ${r.variable}.${r.prop}`), []);
+});
+
+// Two files parse the site file themselves instead of calling loadVaultConfig (`JSON.parse(readFile(configPath))`), so
+// the scan above cannot see them: no site-folder key is read off what they parsed (they ask the settings).
+test('setup-backend.js and site-doctor.js read no site-folder key off the site file they parse', () => {
+  for (const file of ['setup-backend.js', 'site-doctor.js']) {
+    const src = code(path.join(ROOT, 'lib', file));
+    assert.match(src, /JSON\.parse\(|rawSiteConfig/, `${file} no longer parses the site file; this check is out of date`);
+    const bad = [...src.matchAll(new RegExp(`\\b(?:config|rawConfig|rawSiteConfig|raw|site)\\??\\.(${SITE_FOLDER_KEYS.join('|')})\\b`, 'g'))].map((m) => m[0]);
+    assert.deepEqual(bad, [], file);
+  }
+});
+
+// (d) A build step is run in one place: lib/settings/steps.js. This looks at the settings package too, so a second
+// runner there is caught. Files that require child_process: run-command.js (the shared runner for git, npm install,
+// wrangler and gh), image-optimize.js (image tools), steps.js (the steps) and settings/move.js, whose one use runs
+// this tool's own `update-pin --check`. The only code that runs `npm run <hook>` is the dated block in deploy-cli.js,
+// which keeps a site on the old layout running its package.json prebuild/postbuild until the site is updated
+// (legacy.js's buildHooks; it goes with that file). The two script names appear as code only there, in legacy.js (that
+// block's reader) and in the registry (`stepsFrom`); a shell is opened with `shell: true` only by steps.js.
+test('a build step is run only by the steps module and the dated deploy hook', () => {
+  const everywhere = [...sources, ...files(SETTINGS)];
+  const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
+  assert.deepEqual(grepAll(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/),
+    ['lib/image-optimize.js', 'lib/run-command.js', 'lib/settings/move.js', 'lib/settings/steps.js']);
+  // move.js starts exactly one process: this tool, to ask update-pin about the site.
+  const moveSpawns = code(path.join(SETTINGS, 'move.js')).match(/\bspawnSync\(/g) || [];
+  assert.equal(moveSpawns.length, 1, 'move.js: one call');
+  assert.match(code(path.join(SETTINGS, 'move.js')), /spawnSync\(process\.execPath, \[bin, 'update-pin', '--check'/);
+  assert.deepEqual(grepAll(/shell:\s*true/), ['lib/settings/steps.js']);
+  // `npm run <something>` is run by deploy-cli.js alone.
+  assert.deepEqual(grepAll(/runCommand\(\s*['"]npm['"]\s*,\s*\[\s*['"]run['"]/), ['lib/deploy-cli.js']);
+  // The two script names, as code (build.js and the doctor ask steps.js).
+  assert.deepEqual(grepAll(/['"`](?:pre|post)build['"`]/), ['lib/deploy-cli.js', 'lib/settings/legacy.js', 'lib/settings/registry.js']);
+  // The hook list that block runs comes from the dated legacy module.
+  assert.match(code(path.join(ROOT, 'lib', 'deploy-cli.js')), /buildHooks[\s\S]*require\('\.\/settings\/legacy'\)|require\('\.\/settings\/legacy'\)[\s\S]*buildHooks/);
+  // Every call of the steps runner is the settings module's own.
+  for (const f of grep(/\brunSteps\(/, code)) {
+    assert.match(code(path.join(ROOT, f)), /require\('\.\/settings\/steps'\)/, f);
+  }
+});
+
+// #382: the tool installed in a site folder is read by siteToolVersion (settings/layout.js), which update-pin.js
+// calls twice and move.js once; neither of them reads the installed package.json on its own.
+test('the installed tool of a site is read in one place by update-pin and the move', () => {
+  const installedRead = /['"`]node_modules['"`]\s*,\s*['"`]gm-apprentice-publish['"`]|node_modules\/gm-apprentice-publish/;
+  assert.deepEqual(grep(installedRead, code).filter((f) => f === 'lib/update-pin.js'), []);
+  assert.match(code(path.join(SETTINGS, 'layout.js')), installedRead);
+  assert.equal((code(path.join(ROOT, 'lib', 'update-pin.js')).match(/siteToolVersion\(/g) || []).length, 2);
+  assert.doesNotMatch(code(path.join(SETTINGS, 'move.js')), installedRead);
+  assert.match(code(path.join(SETTINGS, 'move.js')), /siteToolVersion\(/);
 });

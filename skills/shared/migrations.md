@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.54"
+current_version: "1.10.55"
 ---
 
 # Vault Migration Record
@@ -61,3 +61,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.52 | No vault change. The vault scripts ask the publish tool for settings and need Node to read them. campaign-qa gains a Settings check | — |
 | 1.10.53 | No vault change. The site's publish tool can read and write a new settings file (`_meta/vault-config.yaml`) and can move a vault to it, but nothing moves a vault yet. A hiding list left in a site folder's file now adds to the built-in list instead of replacing it. The site's publish tool is repinned to 1.23.0 by the every-pass repin | — |
 | 1.10.54 | The settings move to `_meta/vault-config.yaml` under the new names (`player_site.hide.sections` and so on); the version stamp and the publish set-up note move to `_meta/vault-state.json`; the GM's own notes in the old file (the text below the settings and any top-level keys that are not settings) move unchanged to `_meta/vault-notes.md`; the old file is removed. All or nothing. A vault whose site's publish tool is older than 1.23.0 stays on the old file until that tool is updated. The site's publish tool is repinned to 1.23.1 by the every-pass repin. What the site publishes does not change | `settings-move` |
+| 1.10.55 | The settings a site folder still holds move into the vault: the keys in its `vault.config.json` (`siteUrl`, `host`, `outputDir`, `cloudflarePagesProject`, `preserveDirs`) become `player_site.url`, `host`, `output`, `cloudflare_project`, `keep`, and the `prebuild` and `postbuild` steps in its `package.json` become `player_site.before_build` and `player_site.after_build`, which the tool then runs. The site file is left holding only where the vault is. All or nothing, on a vault still on the old settings file (in the same step that moves it) and on one already moved. A site whose publish tool is older than 1.24.0 and is not one the update looks after keeps its keys and steps where they are. The site's publish tool is repinned to 1.24.0 by the every-pass repin. What the site publishes does not change | `settings-move` |

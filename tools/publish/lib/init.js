@@ -3,7 +3,7 @@ const fsSync = require('fs');
 const path = require('path');
 const { applyChanges, settingsText } = require('./settings/write');
 const { siteDirPath } = require('./lines-cli');
-const { entry, nameIn, fileLabel } = require('./settings');
+const { entry, nameIn, fileLabel, layoutOf } = require('./settings');
 
 const TEMPLATES_DIR = path.join(__dirname, '..', 'templates-scaffold');
 
@@ -33,6 +33,8 @@ const DEFAULT_FOLDER_MAP = {
 
 // `siteDir` is where the vault finds its site again: vault_check asks the tool installed
 // there what publishes. `player_site.publish` says the vault has a site; `init` is the GM asking for one.
+// The site's address, host and output folder are not written here: a placeholder address is no setting, and the
+// built-in host and folder stand until the set-up guide sets them.
 function defaultCampaignSettings(siteTitle, tagline, siteDir) {
   return {
     ...(siteDir ? { 'player_site.publish': true, 'player_site.folder': siteDir.split(path.sep).join('/') } : {}),
@@ -160,6 +162,13 @@ async function init(targetDir = '.', options = {}) {
   };
   const dest = path.resolve(targetDir);
 
+  // The site's address, host and output folder are settings of the vault's new file, and the old file has no place for
+  // them: a vault still on the old file is updated first.
+  const vaultDir = path.resolve(dest, values.VAULT_PATH);
+  if (layoutOf(vaultDir) === 'legacy') {
+    throw new Error("This vault's settings are still in the old file. Update the vault first (ask the apprentice to update it), then set up the site.");
+  }
+
   function log(msg) {
     if (verbose) console.log(msg);
   }
@@ -229,7 +238,6 @@ async function init(targetDir = '.', options = {}) {
   // The campaign settings go into the vault file. A vault that is not there yet, or a vault
   // file the editor refuses, never stops the scaffold: the site is written and the caller
   // is told which settings to add.
-  const vaultDir = path.resolve(dest, values.VAULT_PATH);
   const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true, siteConfig: JSON.parse(await fs.readFile(path.join(dest, 'vault.config.json'), 'utf8')) });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';

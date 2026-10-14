@@ -70,6 +70,18 @@ const SCHEMAS = {
   },
   list: () => ({ type: 'array', items: stringOrNumber }),
   switchOrList: () => ({ anyOf: [...switchSchema().anyOf, { type: 'array', items: stringOrNumber }] }),
+  listOfMaps(e) {
+    const names = Object.keys(e.fields);
+    return {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: Object.fromEntries(names.map((k) => [k, { type: ['string', 'number'] }])),
+        required: names.filter((k) => e.fields[k].required),
+        additionalProperties: false,
+      },
+    };
+  },
   map(e) {
     if (!e.keys) return { type: 'object' };
     return { type: 'object', properties: Object.fromEntries(e.keys.map((k) => [k, {}])) };

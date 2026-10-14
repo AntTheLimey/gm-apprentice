@@ -17,7 +17,7 @@ what is possible, or to read what your file already says.
 |------|-------|---------------|---------------|
 | `_meta/vault-config.yaml` | In the vault | Every setting: the campaign's name and system, the site's title and theme, what is published, character sheets, the landing page | You, or the apprentice when you ask |
 | `_meta/vault-state.json` | In the vault | The apprentice's own bookkeeping: which version last updated the vault, and how far setting up a site got | The apprentice only. Leave it alone |
-| `vault.config.json` | In the site folder, the one `player_site.folder` names | Six deployment settings: where the vault is, where the pages are written, where the site is hosted | The apprentice, when it sets the site up |
+| `vault.config.json` | In the site folder, the one `player_site.folder` names | One setting: where the vault is | The apprentice, when it sets the site up |
 
 The two vault files travel with the campaign. The site file belongs to
 the one computer and host the site is built on.
@@ -137,6 +137,9 @@ what follows is as described under "Check the spelling" above.
 |---------|--------------|--------|----------|
 | `vault.kept_by` | Who keeps this vault: `gm` for the game master, `player` for a player keeping notes on a campaign they are in | `gm` or `player` | `gm` |
 | `vault.campaign` | The campaign's name | The campaign's name | The vault folder's name |
+| `vault.statuses.out_of_play` | The statuses that take a character out of play. A character with one leaves the party board and the active team on the landing page, and is listed under "In Memoriam" instead; their sheet page stays. An empty list means nobody is ever out of play | A list of status words | `dead`, `deceased`, `kia`, `retired`, `departed`, `missing`, `unknown`, `inactive`, `npc`, `destroyed`, `dissolved` |
+| `vault.statuses.fallen` | The statuses that put a character under "Fallen" on the Story page. Each must also be in `vault.statuses.out_of_play`; one that is not is left out, with a warning. `retired` always has its own group | A list of status words | `dead`, `deceased`, `kia`, `missing`, `unknown` |
+| `vault.statuses.gone` | The statuses of things that no longer exist. A note with one is left off the landing page's "NPCs in Play" and "Latest Locations" unless the latest session mentions it. An empty list drops nothing | A list of status words | `dead`, `deceased`, `destroyed`, `kia`, `dissolved` |
 
 <!-- /settings:vault -->
 
@@ -155,7 +158,15 @@ Where a table says "A switch", see "On and off" above.
 | `player_site.features.search`<br>was `publish.search`, `searchEnabled` | The search box | A switch | On |
 | `player_site.features.link_previews`<br>was `publish.link_previews` | The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page | `on`, `desktop` or `off` | `on` |
 | `player_site.features.connections`<br>was `publish.connections` | How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off` | `tree`, `web`, `cards` or `off` | `tree` |
-| `player_site.not_found`<br>was `publish.four_oh_four.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
+| `player_site.not_found`<br>was `publish.four_oh_four.message`, `fourOhFour.message` | The words a reader sees after following a link to a page that is not there | Text | "This page is not available." |
+| `player_site.url`<br>was `siteUrl` | The site's public address. A site that lives in a sub-folder of its host, such as a project page on GitHub, takes its base path from this | A web address | No address; a Cloudflare site is then taken to be at `https://<project>.pages.dev` |
+| `player_site.host`<br>was `host` | Where the site is hosted: `github-pages` or `cloudflare-pages`. Any other word is reported, and `github-pages` is used | `github-pages` or `cloudflare-pages` | `github-pages` |
+| `player_site.output`<br>was `outputDir` | The folder the finished pages are written to, inside the site folder. Each build empties it first (except what `player_site.keep` names), so it can be neither the site folder itself nor a folder outside it; a setting that breaks this stops the build | A folder inside the site folder | `docs` |
+| `player_site.cloudflare_project`<br>was `cloudflarePagesProject` | The site's project name on Cloudflare, when it differs from the site folder's name | Text | The site folder's name |
+| `player_site.keep`<br>was `preserveDirs` | Folders inside the output folder that a rebuild must leave alone, each a plain folder name (no slashes). A setting that breaks this stops the build | A list of folder names | None: a rebuild empties the output folder |
+| `player_site.before_build` | Commands the publish tool runs, in order, in the site folder, before it builds. A command that fails stops the build and nothing is published | A list of commands | None |
+| `player_site.after_build` | Commands the publish tool runs, in order, in the site folder, after every page is written (image tidying, extra pages). A command that fails stops the build and nothing is published | A list of commands | None |
+| `player_site.menu_extra` | Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning | A list of entries, each with `label`, `link`, and optionally `group` | No extra entries |
 | `vault.system`<br>was `publish.system`, `system` | The game system, which decides how a character sheet is drawn | `coc-7e` (Call of Cthulhu), `coc-7e-regency` (Regency Cthulhu), `gurps-4e`, `dnd-5e-2024`, `pf2e` (Pathfinder), `fitd` (Forged in the Dark); the short names `coc`, `regency-cthulhu`, `gurps`, `dnd-5e`, `dnd`, `blades`, `pathfinder-2e` and `pathfinder` work too | A plain character page with no system's sheet |
 | `vault.setting_year`<br>was `setting_year` | An in-game year, shown on the landing page when the campaign overview gives no current date, and on a Call of Cthulhu sheet beside its era. | A year | Nothing shown |
 
@@ -185,6 +196,9 @@ These decide which notes, and which parts of a note, reach the site.
 | `player_site.hide.callouts`<br>was `publish.exclude_callouts`, `excludeCallouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
 | `player_site.hide.drafts`<br>was `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
 | `player_site.hide.field_exceptions`<br>was `publish.overrides.fields` | Lets one note show a field that `player_site.hide.fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
+| `player_site.withheld_words.person` | The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `\|` | Text | `someone` |
+| `player_site.withheld_words.place` | The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `\|` | Text | `somewhere` |
+| `player_site.withheld_words.thing` | The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `\|` | Text | `something` |
 
 <!-- /settings:published -->
 
@@ -237,7 +251,7 @@ is skipped, and the build says so.
 | `player_site.theme.fonts.body`<br>was `publish.theme.fonts.body` | The lettering for body text | A typeface's name | The preset's lettering, or the reader's own system font |
 | `player_site.theme.fonts.source`<br>was `publish.theme.fonts.source` | Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used | `google`, `self-host` or `local` | `google`: what a vault that never set a source gets |
 | `player_site.theme.fonts.files`<br>was `publish.theme.fonts.files` | Your own font files, each listed with its `family` (the typeface's name) and `path` (the file's place in the vault); used when the source is `local` | A list of font files, each with a `family`, a `path`, and optionally a `weight` and `style` | No files |
-| `player_site.theme.campaign_image`<br>was `publish.theme.campaign_image` | The large picture at the top of the landing page | A picture's path in the vault | No picture |
+| `player_site.theme.campaign_image`<br>was `publish.theme.campaign_image`, `campaignImage` | The large picture at the top of the landing page | A picture's path in the vault | No picture |
 | `player_site.theme.default_mode`<br>was `publish.theme.default_mode` | Whether a reader starts in light or dark | `system`, `dark` or `light` | `system`: follows the reader's device |
 | `player_site.theme.tagline`<br>was `publish.theme.tagline`, `landingTagline` | One sentence under the title on the landing page | Text | No tagline |
 | `player_site.lists.section_titles`<br>was `publish.section_titles` | Your own headings for the lists of locations, factions, items, creatures and documents | `locations`, `factions`, `items`, `creatures`, `documents`, each a title | Plain titles, or the genre's own |
@@ -281,6 +295,7 @@ With `local`, each font file is listed under `player_site.theme.fonts.files`.
 | `player_site.sheets.skin`<br>was `publish.sheet_skin` | The look of every character sheet | `plain`, `parchment`, `case-file`, `console` or `ledger` | `plain` |
 | `player_site.sheets.frame`<br>was `publish.sheet_frame` | The ornament round each portrait | `none`, `ring`, `laurel`, `thorns`, `gilt`, `steel`, `corners`, `hex` or `cracked` | The skin's own frame |
 | `player_site.sheets.crest`<br>was `publish.sheet_crest`, `sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
+| `player_site.sheets.header_facts` | The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none | A list of field names | `occupation`, `age`, `nationality` |
 | `player_site.features.tohit_calculator`<br>was `publish.tohit_calculator` | The to-hit calculator on a GURPS character's Combat tab | `on` or `off` | `on` |
 | `vault.dndbeyond_sync`<br>was `publish.dndbeyond_sync` | When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask | `build` or `manual` | `manual` |
 
@@ -325,6 +340,10 @@ The apprentice does the setting up and writes the switch for you.
 | `player_site.landing.featured_locations`<br>was `publish.landing.featured_locations` | The same, for places | A list of note names | Nothing pinned |
 | `player_site.landing.quick_links`<br>was `publish.landing.quick_links` | A short row of links on the page | A list of note names | No row |
 | `player_site.landing.explore_descriptions`<br>was `publish.landing.explore_descriptions` | Your own line under each card in the "Explore the World" row | `characters`, `locations`, `story`, `factions`, `items`, `creatures`, `events`, each a sentence | The genre's lines, or plain ones |
+| `player_site.landing.banner.title` | The heading of a banner between the top of the landing page and "Latest Session". Plain text, shown as written. A banner shows when it has a title, text or picture | Text | No banner |
+| `player_site.landing.banner.text` | The words in the banner, under its heading. Plain text, shown as written | Text | No words |
+| `player_site.landing.banner.link` | Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner | Text | Not a link |
+| `player_site.landing.banner.image` | A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it | A picture's path in the vault, or a web address | No picture |
 
 <!-- /settings:landing -->
 
@@ -375,23 +394,55 @@ Shrinking pictures needs a small free program called `cwebp` on the
 computer that builds the site. Without it the build warns and copies the
 pictures unchanged.
 
+## Limits
+
+How long things are on the page. A number below its smallest, a fraction,
+or text that is not a number is reported and the standard number is used.
+Where a limit may be `0`, it means none: no timeline strip, no facts on a
+preview card, no goals or relationships on a faction's card.
+
+<!-- settings:limits -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `player_site.limits.timeline_events` | How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none | A whole number, 0 or more | `15` |
+| `player_site.limits.recap_chars` | How many characters of the latest session's recap the landing page shows before it stops at a word and adds "…" | A whole number, 1 or more | `500` |
+| `player_site.limits.card_excerpt_chars` | How many characters of a note's opening the pop-up preview card shows | A whole number, 1 or more | `200` |
+| `player_site.limits.card_fact_chars` | How many characters one fact on a preview card shows | A whole number, 1 or more | `120` |
+| `player_site.limits.card_title_chars` | How many characters of a note's name a preview card shows | A whole number, 1 or more | `120` |
+| `player_site.limits.card_facts` | How many facts a preview card lists; `0` shows none | A whole number, 0 or more | `3` |
+| `player_site.limits.list_goals` | How many goals a faction's card on the factions page lists; `0` shows none | A whole number, 0 or more | `3` |
+| `player_site.limits.list_relationships` | How many relationships a faction's card on the factions page lists; `0` shows none | A whole number, 0 or more | `4` |
+
+<!-- /settings:limits -->
+
+```yaml
+player_site:
+  limits:
+    timeline_events: 8
+    card_facts: 2
+```
+
 ## The site file: `vault.config.json`
 
-This file sits in the site folder and holds only what the build needs to
-find the vault and the host. The apprentice writes it when it sets the
-site up; you should not need to touch it.
+This file sits in the site folder and holds one thing: where the vault is
+on this computer. The apprentice writes it when it sets the site up; you
+should not need to touch it.
 
 | Setting | What it does |
 |---------|--------------|
 | `vaultPath` | Where the vault is on this computer |
-| `outputDir` | The folder the finished pages are written to |
-| `host` | Where the site is hosted: `github-pages` or `cloudflare-pages` |
-| `siteUrl` | The site's public address |
-| `cloudflarePagesProject` | The site's project name on Cloudflare, when it differs from the folder's name |
-| `preserveDirs` | Folders inside the output that a rebuild must leave alone |
 
-An older site may still hold campaign settings in this file under other
-names. They are no longer read there: the build warns about each, and
+The site's address, host, output folder, Cloudflare project name and the
+folders a rebuild leaves alone used to be written here too. They are
+settings of the vault now (`player_site.url`, `player_site.host`,
+`player_site.output`, `player_site.cloudflare_project` and
+`player_site.keep`, in the tables above). Until the next vault update
+moves them, the build still reads them from this file when the vault sets
+none, and warns about each.
+
+An older site may still hold other campaign settings in this file under
+other names. They are no longer read there: the build warns about each, and
 stops for one that hides things from players. Ask the apprentice to
 check the settings: it adds anything such a key hid to the vault's own
 list and removes the keys from this file.

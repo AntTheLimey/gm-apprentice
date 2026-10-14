@@ -1,12 +1,10 @@
 'use strict';
 // The badges a PC page's header shows after the player: the note's `display_meta` list,
-// else the defaults. The one definition: the page header (templates/pc.js) and the link
+// else the site's `header_facts`. The one definition: the page header (templates/pc.js) and the link
 // preview card (previews.js) both read it, so they cannot disagree.
 const { publishedSource, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS } = require('./processor');
 const { excerptFromMarkdown } = require('./excerpt');
 const { labelsForLinks } = require('./wikilink');
-
-const DEFAULT_META_FIELDS = ['occupation', 'age', 'nationality'];
 
 function formatLabel(fieldName) {
   return String(fieldName)
@@ -14,8 +12,9 @@ function formatLabel(fieldName) {
     .replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function headerMetaFields(fm) {
-  return Array.isArray(fm.display_meta) ? fm.display_meta : DEFAULT_META_FIELDS;
+// `defaults` is the site's `header_facts` setting: what a note with no `display_meta` of its own shows.
+function headerMetaFields(fm, defaults) {
+  return Array.isArray(fm.display_meta) ? fm.display_meta : (defaults || []);
 }
 
 // [label, text] for each header badge that has a value, in order. The text is what the
@@ -27,8 +26,8 @@ function headerMetaFields(fm) {
 const BARE_NOTE_NAME = /^\p{Lu}[^\s\[\]|]*_[^\s\[\]|]*$/u;
 const namesNote = (field, raw) => NOTE_NAME_FIELDS.has(field) || (typeof raw === 'string' && BARE_NOTE_NAME.test(raw.trim()));
 
-function headerMeta(fm) {
-  return headerMetaFields(fm)
+function headerMeta(fm, defaults) {
+  return headerMetaFields(fm, defaults)
     .filter(field => fm[field] != null && fm[field] !== '')
     .map(field => [formatLabel(field), (namesNote(field, fm[field]) ? plainRefValue(fm[field]) : plainMetaValue(fm[field])).trim()]);
 }

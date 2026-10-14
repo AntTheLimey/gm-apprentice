@@ -22,7 +22,7 @@ const FOLDERS_LABEL = legacyNameOf(settingEntry('player_site.hide.folders'));
 const LEGACY = REGISTRY.filter((e) => legacyNameOf(e)).map((e) => {
   const first = legacyNameOf(e);
   const json = siteKeyOf(e);
-  const oldNames = (e.was || []).filter((w) => !(w.in === 'vault' && w.name === first) && !(w.in === 'site' && w.name === json));
+  const oldNames = (e.was || []).filter((w) => !w.carryOnly && !(w.in === 'vault' && w.name === first) && !(w.in === 'site' && w.name === json));
   // An entry that exists only in the old file has no new name: its faults carry `setting: null`.
   return { ...e, name: first, setting: e.legacyOnly ? null : e.name, json: json || undefined, jsonKind: e.legacyKind, jsonMerge: e.legacyMerge, oldNames };
 });
@@ -35,8 +35,8 @@ const sansBlock = (name) => name.slice(OLD_BLOCK.length + 1);
 // The old vault.config.json keys that now live under `publish:`, in the registry's order.
 const movedKeys = () => LEGACY.filter((e) => e.json).map((e) => ({ json: e.json, publish: sansBlock(e.name), kind: e.jsonKind }));
 
-// The six keys that stay in vault.config.json.
-const DEPLOY_KEYS = ['vaultPath', 'outputDir', 'host', 'siteUrl', 'cloudflarePagesProject', 'preserveDirs'];
+// The key that stays in vault.config.json (the other five became settings: the registry entries with `siteFallback`).
+const DEPLOY_KEYS = ['vaultPath'];
 
 // Old switch names in the site file, from the registry: { statusBar: 'live_stats', inbox: 'inbox' }.
 const OLD_SWITCHES = Object.fromEntries(LEGACY.flatMap((e) => (e.oldNames || [])
@@ -231,8 +231,8 @@ function childSegs(parent) {
 
 // Reads the old file and the site's vault.config.json. `core` is read.js's shared pieces.
 // Returns { values, origins, faults, legacy, file } like readSettings (without `layout`).
-function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
-  const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY } = core;
+function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, core) {
+  const { settle, getPath, setIn, clone, emptyIsFault, MAP_ENTRY, siteValueOf } = core;
   const site = siteConfig || {};
   const faults = [];
   const fault = makeFault;
@@ -290,7 +290,7 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
 
   const values = {};
   const origins = {};
-  const c = { values, origins, faults, fault, vaultPath };
+  const c = { values, origins, faults, fault, vaultPath, siteDir };
   const defaultOf = (e) => {
     if (e.name === SITE_SWITCH) { const dir = getPath(publish, sansBlock(SITE_FOLDER).split('.')); return typeof dir === 'string' && dir.trim() !== ''; }
     return e.default === undefined ? null : clone(e.default);
@@ -317,7 +317,8 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
     }
     // Read from the merged value, but a fault shows the value as the site file wrote it (as it always did).
     const first = set[0].origin === 'site-file' && e.json ? { ...set[0], shown: site[e.json] } : set[0];
-    const r = settle(c, e, { written: e.name, setting: e.setting }, first, defaultOf);
+    // A value the site file holds is named as that file writes it (#373).
+    const r = settle(c, e, { written: first.origin === 'site-file' && e.json ? e.json : e.name, setting: e.setting }, first, defaultOf);
     // The merge can hide a vault value the type cannot read behind the site file's list.
     if (r.ok && (e.jsonMerge === 'union' || e.jsonMerge === 'stricter')) {
       const vr = getPath(mergeVault, sansBlock(e.name).split('.'));
@@ -336,6 +337,12 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
     // (The campaign, unset, is the vault folder's name on every layout.)
     setIn(values, e.name, e.defaultFromVaultFolder ? path.basename(path.resolve(vaultPath)) : (e.default === undefined ? null : clone(e.default)));
     origins[e.name] = 'default';
+  }
+  // The site folder's own five keys: the old file has no name for them, so the site file is their only home and
+  // they are read from it without a fault (dated for removal with this reader).
+  for (const e of REGISTRY.filter((x) => x.siteFallback)) {
+    const held = siteValueOf(site, e);
+    if (held) settle(c, e, { written: held.key, setting: e.name }, { raw: held.raw, origin: 'site-file' }, defaultOf);
   }
 
   // Walk what the file holds against the list: parents that are not maps, names not in the
@@ -409,7 +416,40 @@ function readLegacy({ vaultPath, siteConfig, skipOldFile = false }, core) {
   return { values, origins, faults, legacy, file };
 }
 
+// ---- A vault on the old layout keeps running its package.json steps at deploy (dated with this file) -----------------
+// The tool runs a vault's own build steps only when the vault is on the new layout or holds steps; until a site is
+// updated its steps stay in package.json and `deploy` runs them here, as it always did.
+// A site's own post-build work (image optimisation, CSS folds, extra pages) lives in its
+// package.json `prebuild`/`postbuild` scripts, which npm runs around `npm run build`.
+// deploy builds in-process with the plugin's renderer, so npm never sees a build and
+// those steps were silently dropped from what shipped (#248). They run here instead,
+// around the in-process build. Ten minutes: optimising a large image set is slow.
+const HOOK_TIMEOUT_MS = 10 * 60 * 1000;
+
+// { hooks, warning }. No package.json means no hooks. One that won't parse is said out
+// loud: npm would run its hooks, so silently skipping them is #248 all over again. A
+// byte-order mark (Notepad, PowerShell's Out-File) is stripped first, as npm does.
+function buildHooks(siteRoot, readFile) {
+  const pkgPath = path.join(siteRoot, 'package.json');
+  let text;
+  try {
+    text = readFile(pkgPath);
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return { hooks: [], warning: null };
+    // It exists but can't be read (EACCES, …): its build steps may matter, so stop.
+    return { hooks: [], warning: null, error: `Could not read ${pkgPath} (${err.code || err.message}) — its prebuild/postbuild scripts can't be checked, so nothing was deployed.` };
+  }
+  let scripts;
+  try {
+    scripts = JSON.parse(String(text).replace(/^\uFEFF/, '')).scripts || {};
+  } catch (err) {
+    return { hooks: [], warning: `${pkgPath} is not valid JSON (${err.message}) — its prebuild/postbuild scripts, if any, were not run.` };
+  }
+  return { hooks: ['prebuild', 'postbuild'].filter((h) => typeof scripts[h] === 'string' && scripts[h].trim()), warning: null };
+}
+
 module.exports = {
+  HOOK_TIMEOUT_MS, buildHooks,
   readLegacy, OLD_BLOCK, VERSION_KEY, FILE_KEYS, NOT_SETTINGS, SETUP_NOTE, sansBlock, movedKeys, DEPLOY_KEYS, OLD_SWITCHES, SITE_OLD_ROOTS, hasLegacy, usable, stricterCallouts,
   mergedMaps,
 };

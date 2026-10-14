@@ -12,8 +12,8 @@ const { sheetSourceOf } = require('../sheet-source');
 const { resolveLook, isDressed } = require('../skins');
 const { framedPortrait } = require('../skins/portrait');
 
-function renderMetaSpans(fm) {
-  return headerMeta(fm)
+function renderMetaSpans(fm, headerFacts) {
+  return headerMeta(fm, headerFacts)
     .map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(String(value))}</span>`)
     .join('\n    ');
 }
@@ -282,7 +282,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
 
   // --- Cinematic Hero Banner ---
   const hasPortrait = fm.portrait && imageMap && imageMap[String(fm.portrait).split('/').pop()];
-  const metaSpans = renderMetaSpans(fm);
+  const metaSpans = renderMetaSpans(fm, publishConfig.header_facts);
 
   let imgUrl = '';
   if (hasPortrait) {
@@ -404,7 +404,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
   if (sheetsOff) {
     // Who the character is, then the line saying why there is no sheet; the kept prose follows.
     // A fact the header's meta badges already show is not said twice.
-    const headerFields = new Set(headerMetaFields(fm)
+    const headerFields = new Set(headerMetaFields(fm, publishConfig.header_facts)
       .filter(field => fm[field] != null && fm[field] !== ''));
     // ... but only when the header shows the same value the strip would: a header that shows
     // a raw "ca. 150" leaves the strip's valid total (from the Points Summary) in place.
@@ -416,7 +416,7 @@ function pcTemplate(page, processedContent, sections, navFor, config, imageMap, 
     const strip = pairs.length
       ? `<div class="pc-identity">\n${pairs.map(([label, value]) => `<span><span class="label">${escapeHtml(label)}</span> ${escapeHtml(value)}</span>`).join('\n')}\n</div>\n`
       : '';
-    const metaFields = headerMetaFields(fm);
+    const metaFields = headerMetaFields(fm, publishConfig.header_facts);
     const kept = metaFields.includes('sheet_source') ? sheetSourceOf(fm) : '';
     const keptLine = kept ? ` This sheet is kept: ${escapeHtml(kept)}.` : '';
     sheetContent = `${strip}<p class="sheet-withheld">Character sheets aren't published for this campaign.${keptLine}</p>\n${sectionNav}\n${accordions}`;

@@ -279,7 +279,7 @@ describe('PC template display_meta', () => {
     assert.ok(html.includes('8'), 'Should render TL value');
   });
 
-  it('falls back to occupation/age/nationality when display_meta not set', () => {
+  it("falls back to the site's header facts when display_meta not set", () => {
     const page = {
       title: 'Fallback Hero',
       displayTitle: 'Fallback Hero',
@@ -294,7 +294,7 @@ describe('PC template display_meta', () => {
       },
     };
     const processed = { html: '' };
-    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {});
+    const html = pcTemplate(page, processed, [], mockNavFor, mockConfig, {}, undefined, { publishConfig: { header_facts: ['occupation', 'age', 'nationality'] } });
     assert.ok(html.includes('Occupation'), 'Should show occupation label');
     assert.ok(html.includes('Detective'), 'Should show occupation value');
     assert.ok(html.includes('Age'), 'Should show age label');

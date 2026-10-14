@@ -429,7 +429,7 @@ function scanAllNotes(vaultPath) {
         // Only a note that declares aliases (or is `withheld`) needs its frontmatter parsed — or a session
         // index or Wrap-Up the scan skipped, which session-hub.js still counts when it
         // resolves a pairing link (a same-titled hub elsewhere makes a link ambiguous).
-        if (/^(?:(?:gm_)?aliases|withheld):/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
+        if (/^(?:(?:gm_)?aliases|withheld|title):/m.test(text) || SESSION_TYPE_LINE.test(text)) frontmatter = parseNote(text).data || {};
       } catch (err) {
         // Its name still counts. A secret that silently stops being
         // protected is the one failure that must not be quiet.

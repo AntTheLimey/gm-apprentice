@@ -1063,6 +1063,48 @@ tr:nth-child(even) {
   border-radius: 0.5rem;
   margin-bottom: 1.5rem;
 }
+.landing-banner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 2rem;
+  padding: 1.25rem 1.5rem;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  color: var(--text);
+  text-align: center;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+a.landing-banner:hover,
+a.landing-banner:focus-visible {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+}
+.landing-banner-img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+.landing-banner-title {
+  margin: 0 0 0.25rem;
+  font-size: 1.4rem;
+  color: var(--accent);
+}
+.landing-banner-text {
+  margin: 0;
+  color: var(--text-muted);
+}
+@media (min-width: 700px) {
+  .landing-banner { flex-direction: row; text-align: left; }
+  /* The picture takes a fixed share whatever its own size; the words take the rest and may shrink. */
+  .landing-banner-img { flex: 0 0 40%; width: 40%; max-width: 40%; min-width: 0; max-height: 16rem; object-fit: cover; }
+  .landing-banner-img:only-child { flex: 0 1 auto; width: auto; max-width: 100%; }
+  .landing-banner-body { flex: 1 1 0; min-width: 0; }
+}
 .landing-hero h1 {
   font-size: 2rem;
   margin-bottom: 0.5rem;

@@ -1,7 +1,8 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
+const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
 const { pairHubs } = require('../../lib/session-hub');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -65,7 +66,7 @@ describe('getLatestWrapUp', () => {
   // The build hands the landing its hub -> Wrap-Up map (session-hub.js pairHubs); the
   // landing never pairs on its own.
   const latest = (pages, s) => getLatestWrapUp(pages, s,
-    s ? pairHubs(pages.concat([s]), pages.concat([s]), { allNotes: [] }) : new Map());
+    s ? pairHubs(pages.concat([s]), pages.concat([s]), { allNotes: [], withheldWords: WORDS }) : new Map());
   const session = { title: 'Session 05', frontmatter: { type: 'session', session_number: 5 } };
 
   it('matches wrap-up by session_number', () => {
@@ -136,7 +137,7 @@ describe('getLatestWrapUp', () => {
     const ch1Wrap = { title: 'Ch1 Wrap', sourcePath: '/v/Ch1/Ch1 Wrap.md', vaultPath: 'Ch1/Ch1 Wrap', frontmatter: { type: 'session_wrap', session: '[[Session 01]]', session_number: 1 } };
     const ch2Hub = { title: 'Session 01', sourcePath: '/v/Ch2/Session 01.md', vaultPath: 'Ch2/Session 01', frontmatter: { type: 'session', session_number: 1 } };
     const published = [ch1Wrap, ch2Hub];
-    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], published, { allNotes: [] });
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], published, { allNotes: [], withheldWords: WORDS });
     assert.strictEqual(getLatestWrapUp(published, ch2Hub, pairs), null);
   });
 
@@ -241,29 +242,29 @@ describe('extractRecapHtml (#269)', () => {
   const recapOf = para => ({ markdown: `# Session 3\n\n## Narrative Recap\n\n${para}\n` });
 
   it('renders emphasis instead of showing asterisks', () => {
-    const html = extractRecapHtml(recapOf('*Recorded Thursday. 3h 53m.* The crew **finally** met.'));
+    const html = extractRecapHtml(recapOf('*Recorded Thursday. 3h 53m.* The crew **finally** met.'), 500);
     assert.strictEqual(html, '<em>Recorded Thursday. 3h 53m.</em> The crew <strong>finally</strong> met.');
   });
 
   it('keeps link text, drops the URL, drops images, keeps inline code', () => {
-    const html = extractRecapHtml(recapOf('They read [the letter](letters/x.md) ![map](m.png) and `rolled 42`.'));
+    const html = extractRecapHtml(recapOf('They read [the letter](letters/x.md) ![map](m.png) and `rolled 42`.'), 500);
     assert.strictEqual(html, 'They read the letter and <code>rolled 42</code>.');
   });
 
   it('never emits raw HTML from the paragraph', () => {
-    const html = extractRecapHtml(recapOf('A <script>alert(1)</script> & a <b>tag</b>.'));
+    const html = extractRecapHtml(recapOf('A <script>alert(1)</script> & a <b>tag</b>.'), 500);
     assert.strictEqual(html, 'A &amp; a tag.');
   });
 
   it('truncates by visible text and closes open tags', () => {
-    const html = extractRecapHtml(recapOf('*' + 'word '.repeat(200).trim() + '* after'));
+    const html = extractRecapHtml(recapOf('*' + 'word '.repeat(200).trim() + '* after'), 500);
     assert.ok(html.startsWith('<em>word'), html.slice(0, 20));
     assert.ok(html.endsWith('…</em>'), html.slice(-20));
     assert.ok(html.replace(/<[^>]+>/g, '').length <= 501);
   });
 
   it('plain extractRecap strips the same markdown syntax', () => {
-    assert.strictEqual(extractRecap(recapOf('*Recorded.* **Bold** [link](x).')), 'Recorded. Bold link.');
+    assert.strictEqual(extractRecap(recapOf('*Recorded.* **Bold** [link](x).'), 500), 'Recorded. Bold link.');
   });
 });
 
@@ -272,14 +273,14 @@ describe('extractRecap', () => {
     // build.js empties a session index's body; `publishedMarkdown || markdown` treated
     // that '' as missing and quoted the raw text instead.
     const page = { publishedMarkdown: '', markdown: '## Narrative Recap\n\nKeeper-only forecast.\n' };
-    assert.strictEqual(extractRecap(page), null);
+    assert.strictEqual(extractRecap(page, 500), null);
   });
 
   it('extracts first paragraph from Narrative Recap section', () => {
     const page = {
       markdown: '# Session 1\n\nSome intro.\n\n## Narrative Recap\n\nThe party arrived at the castle. They were weary from travel.\n\nThen they fought a dragon.\n\n## Loot\n\nSword',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The party arrived at the castle. They were weary from travel.');
   });
 
@@ -287,7 +288,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S1\n\n## Narrative Recap\n\n[[John Smith]] met [[Jane|Jane Doe]] at the [[Tavern]].\n\n## Next',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'John Smith met Jane Doe at the Tavern.');
   });
 
@@ -295,7 +296,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S1\n\n## Narrative Recap\n\nBreakfast at the [[Locanda_del_Leone]].\n\n## Next',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'Breakfast at the Locanda del Leone.');
   });
 
@@ -303,7 +304,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# Session 1\n\nThe group gathered at dawn.\n\nThey set off.\n',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The group gathered at dawn.');
   });
 
@@ -311,7 +312,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S4\n\n## Session Metadata\n\nStuff.\n\n## What Happened — Narrative Recap\n\nThe party rode for Cairo at dawn.\n\n## World State\n\nSecret.',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The party rode for Cairo at dawn.');
   });
 
@@ -321,7 +322,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '\n# Session 4 — The Hofburg Reception\n\n## Session Metadata\n\n- **Date:** August 5\n',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.ok(result === null || !result.startsWith('#'), `got: ${result}`);
   });
 
@@ -330,7 +331,7 @@ describe('extractRecap', () => {
       markdown: '# S1\n\n## Narrative Recap\n\nKeeper secret draft.\n',
       publishedMarkdown: '# S1\n\n## Narrative Recap\n\nThe players saw this.\n',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The players saw this.');
   });
 
@@ -339,13 +340,13 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S1\n\n## Narrative Recap\n\n' + longParagraph + '\n\n## Next',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.ok(result.length <= 510);
     assert.ok(result.endsWith('…'));
   });
 
   it('returns null for null page', () => {
-    assert.strictEqual(extractRecap(null), null);
+    assert.strictEqual(extractRecap(null, 500), null);
   });
 });
 
@@ -396,63 +397,6 @@ describe('getPCs', () => {
   it('returns empty array when no PCs exist', () => {
     const pages = [{ title: 'NPC', frontmatter: { type: 'npc' } }];
     assert.deepStrictEqual(getPCs(pages), []);
-  });
-});
-
-describe('inferNPCRole', () => {
-  it('returns Patron for employer tag', () => {
-    const npc = { frontmatter: { tags: ['employer'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Patron');
-  });
-
-  it('returns Patron for patron tag', () => {
-    const npc = { frontmatter: { tags: ['patron'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Patron');
-  });
-
-  it('returns Patron for employs relationship', () => {
-    const npc = { frontmatter: { tags: [], relationships: [{ type: 'employs', target: '[[PCs]]' }] } };
-    assert.strictEqual(inferNPCRole(npc), 'Patron');
-  });
-
-  it('returns Antagonist for villain tag', () => {
-    const npc = { frontmatter: { tags: ['villain'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Antagonist');
-  });
-
-  it('returns Companion for ally tag', () => {
-    const npc = { frontmatter: { tags: ['ally'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Companion');
-  });
-
-  it('returns Threat for super tag', () => {
-    const npc = { frontmatter: { tags: ['super'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Threat');
-  });
-
-  it('returns Leader for leads relationship', () => {
-    const npc = { frontmatter: { tags: [], relationships: [{ type: 'leads', target: '[[Squad]]' }] } };
-    assert.strictEqual(inferNPCRole(npc), 'Leader');
-  });
-
-  it('returns NPC as default', () => {
-    const npc = { frontmatter: { tags: [], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'NPC');
-  });
-
-  it('handles missing tags and relationships', () => {
-    const npc = { frontmatter: {} };
-    assert.strictEqual(inferNPCRole(npc), 'NPC');
-  });
-
-  it('returns Recurring when sessionCount >= 2 and no tag matches', () => {
-    const npc = { frontmatter: { tags: [], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc, 2), 'Recurring');
-  });
-
-  it('returns NPC when sessionCount < 2 and no tag matches', () => {
-    const npc = { frontmatter: { tags: [], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc, 1), 'NPC');
   });
 });
 
@@ -530,9 +474,9 @@ describe('getExploreDescriptions', () => {
 
 describe('statusLabel (In Memoriam labels)', () => {
   const { statusLabel } = require('../../lib/templates/landing');
-  const { OUT_OF_PLAY_STATUSES } = require('../../lib/pc-status');
+  const DEFAULT_OUT_OF_PLAY = require('../../lib/settings').entry('vault.statuses.out_of_play').default;
   it('never labels an out-of-play status "Active"', () => {
-    for (const s of OUT_OF_PLAY_STATUSES) {
+    for (const s of DEFAULT_OUT_OF_PLAY) {
       assert.notStrictEqual(statusLabel(s), 'Active', s);
       assert.notStrictEqual(statusLabel(` ${s.toUpperCase()} `), 'Active', s);
     }
