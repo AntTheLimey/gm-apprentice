@@ -13,8 +13,10 @@ The vault scripts, campaign-qa and the skills catch up with the settings
 the publish tool learned in 1.10.55. The next update carries your site
 folder's keys and build steps into the vault as 1.10.55 does, and now
 says plainly what it leaves and why. What the site publishes does not
-change, and no PC stops counting as active: the copies of two real
-campaigns list the same PCs, alive, dead and retired, before and after.
+change. The vault scripts now count the same PCs as out of play as the
+site does, which can move a PC off session-prep's active list (see
+Changed); on the copies of two real campaigns used to test this, no PC
+moved.
 
 ### Added
 
@@ -33,6 +35,14 @@ campaigns list the same PCs, alive, dead and retired, before and after.
 
 ### Changed
 
+- The vault scripts (session-prep's Active PCs, its threads and arcs, and
+  campaign-qa's active-PC checks) used to treat only `dead`, `retired`
+  and `inactive` as out of play. They now use the site's list, which
+  adds `deceased`, `kia`, `departed`, `missing`, `unknown`, `npc`,
+  `destroyed` and `dissolved`. A PC with one of those statuses leaves
+  session-prep's active list, as it already left the party board. To
+  keep one in play, take it out of the list: `settings remove
+  vault.statuses.out_of_play missing`.
 - The update says which build steps and site-folder keys it leaves for a
   site whose own tool is too old, and what the 404 page's line and the
   campaign picture become when a value the site never read is carried.
