@@ -236,6 +236,13 @@ test('housekeeping: a banner link ending index.html stands with _meta/index.md a
   }
 });
 
+test('housekeeping: a campaign note moved into _meta still drops a banner link to it', () => {
+  const files = { '_meta/index.md': '---\ntype: meta\n---\n', '_meta/Dr Black.md': npc() };
+  const s = site({ title: 'T', link: 'Dr Black' }, { files });
+  assert.doesNotMatch(s.read('index.html'), /<a class="landing-banner"/);
+  assert.ok(s.warnings.some((w) => /banner/.test(w)));
+});
+
 test('housekeeping: a hidden campaign note called Index still drops a banner link ending index.html', () => {
   const files = { '_meta/index.md': '---\ntype: meta\n---\n', 'Hidden/Index.md': npc('publish: false\n') };
   const s = site({ title: 'T', link: 'gazetteer/index.html' }, { files });

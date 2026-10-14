@@ -379,20 +379,20 @@ test('rule 6: the menu with no extra entries is the same text as with extra unde
 
 const HOUSEKEEPING = {
   '_meta/index.md': '---\ntype: meta\n---\n\nThe index.\n',
-  '_meta/relationship-ontology.md': '---\ntype: meta\n---\n\nThe types.\n',
+  '_meta/relationship-types.md': '---\ntype: meta\n---\n\nThe types.\n',
   '_Templates/NPC_Template.md': '---\ntype: template\n---\n\nA template.\n',
 };
 
-test('housekeeping: a menu address ending index.html stands when _meta/index.md, a template and a _meta note exist', () => {
+test('housekeeping: a menu address ending index.html stands when _meta/index.md, a template and the plugin\'s own _meta notes exist', () => {
   const s = site([
     { label: 'Gazetteer', link: 'gazetteer/index.html' },
     { label: 'North', link: 'maps/index.html#north' },
-    { label: 'Onto', link: 'relationship-ontology/list.html' },
+    { label: 'Onto', link: 'relationship-types/list.html' },
     { label: 'Tmpl', link: 'forms/NPC_Template.html' },
   ], { files: HOUSEKEEPING });
   const { desktop, phone } = menus(s.read('index.html'));
   for (const [label, href] of [['Gazetteer', 'gazetteer/index.html'], ['North', 'maps/index.html#north'],
-    ['Onto', 'relationship-ontology/list.html'], ['Tmpl', 'forms/NPC_Template.html']]) {
+    ['Onto', 'relationship-types/list.html'], ['Tmpl', 'forms/NPC_Template.html']]) {
     assert.match(desktop, new RegExp(`href="${href.replace(/[.#/]/g, '\\$&')}">${label}<`), `desktop ${label}`);
     assert.match(phone, new RegExp(`href="${href.replace(/[.#/]/g, '\\$&')}">${label}<`), `phone ${label}`);
   }
@@ -409,6 +409,34 @@ test('housekeeping: a hidden campaign note called Index or Map still drops such 
   assert.doesNotMatch(desktop, />Atlas</);
   assert.ok(s.warnings.some((w) => w.includes('"Gazetteer"')));
   assert.ok(s.warnings.some((w) => w.includes('"Atlas"')));
+});
+
+test('housekeeping: a campaign note moved into _meta, or typed meta by mistake, is still a hidden name', () => {
+  const s = site([
+    { label: 'Black', link: 'Dr Black' },
+    { label: 'BlackPath', link: '_meta/Dr Black' },
+    { label: 'Sinister', link: 'mr-sinister/index.html' },
+    { label: 'Gazetteer', link: 'gazetteer/index.html' },
+  ], { files: {
+    ...HOUSEKEEPING,
+    '_meta/Dr Black.md': npc(),
+    'Characters/Mr Sinister.md': '---\ntype: meta\n---\n\nSecret.\n',
+  } });
+  const { desktop, phone } = menus(s.read('index.html'));
+  for (const menu of [desktop, phone]) {
+    assert.doesNotMatch(menu, />Black</);
+    assert.doesNotMatch(menu, />BlackPath</);
+    assert.doesNotMatch(menu, />Sinister</);
+    assert.match(menu, /href="gazetteer\/index\.html">Gazetteer</);
+  }
+  assert.ok(s.warnings.some((w) => w.includes('"Black"')));
+  assert.ok(s.warnings.some((w) => w.includes('"Sinister"')));
+});
+
+test('housekeeping: the tool\'s own example link builds with _meta/index.md and no warning', () => {
+  const s = site([{ label: 'Gazetteer', link: 'gazetteer/index.html', group: 'World' }], { files: { '_meta/index.md': '---\ntype: meta\n---\n' } });
+  assert.match(s.read('index.html'), /href="gazetteer\/index\.html"/);
+  assert.deepEqual(s.warnings.filter((w) => /menu_extra/.test(w)), []);
 });
 
 test('housekeeping: a note with a withheld name or one in the personal folder is still a hidden name', () => {
