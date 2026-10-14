@@ -127,7 +127,8 @@ shell cannot find `node`, do Step 3 and come back.)
   --vault <vault>` shows the settings already given (the lines not
   marked `(default)`). Skip a step whose answer is there. If the run
   is past Step 8 and `player_site.host` or `player_site.url` still
-  reads `(default)`, run Step 8's command now from the note. A note begun
+  reads `(default)`, run Step 8's command now from the note; when the
+  note has no project name, ask the GM for it before going on. A note begun
   before plugin 1.10.54 may hold `site_title` or `tagline`: write each
   to its setting now (Steps 6 and 7).
 
