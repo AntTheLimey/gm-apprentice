@@ -152,7 +152,7 @@
           ],
           "properties": {
             "recent_changes": {
-              "description": "How many lines the \"Recent Changes\" list in `_meta/index.md` keeps when the index is rebuilt; `0` keeps only the line for the rebuild itself",
+              "description": "How many lines the \"Recent Changes\" list in `_meta/index.md` keeps when the index is rebuilt, counting the line for the rebuild itself; `0` and `1` both keep only that line",
               "default": 20,
               "anyOf": [
                 {

@@ -92,7 +92,7 @@ const REGISTRY = [
   { name: 'vault.index', type: 'map', container: true },
   {
     name: 'vault.index.recent_changes', type: 'number', integer: true, min: 0, default: 20, group: 'vault',
-    does: 'How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt; `0` keeps only the line for the rebuild itself',
+    does: 'How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt, counting the line for the rebuild itself; `0` and `1` both keep only that line',
     left_out: '`20`',
   },
   {

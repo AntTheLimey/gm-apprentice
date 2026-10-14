@@ -150,7 +150,7 @@ the index; the site does not use them.
 | `vault.statuses.gone` | The statuses of things that no longer exist. A note with one is left off the landing page's "NPCs in Play" and "Latest Locations" unless the latest session mentions it. An empty list drops nothing | A list of status words | `dead`, `deceased`, `destroyed`, `kia`, `dissolved` |
 | `vault.stale_after_sessions` | How many sessions a draft note, or a character's open thread, can go untouched before the checks call it stale | A whole number, 1 or more | `3` |
 | `vault.name_match` | How alike two note names must be, from `0` (anything) to `1` (identical), before the name check lists them as too close. The check's `--threshold` option overrides it for one run | A number from 0 to 1 | `0.85` |
-| `vault.index.recent_changes` | How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt; `0` keeps only the line for the rebuild itself | A whole number, 0 or more | `20` |
+| `vault.index.recent_changes` | How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt, counting the line for the rebuild itself; `0` and `1` both keep only that line | A whole number, 0 or more | `20` |
 | `vault.index.description_chars` | How many characters of a note's description the index shows beside its link | A whole number, 1 or more | `80` |
 
 <!-- /settings:vault -->
