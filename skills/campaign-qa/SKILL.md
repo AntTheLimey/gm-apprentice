@@ -177,7 +177,8 @@ dice, slots, attunement, more spent than owned), from one call.
 Vaults with a site only; skipped without a word otherwise. Faults in
 the notes that change what the site shows, from `vault_check.py
 site-faults`: a note with no page that published pages name, a stray
-`%%`, a code fence never closed, a secret name in a page's text. An
+`%%`, a code fence never closed, a secret name in a page's text, a
+GURPS sheet row the to-hit calculator cannot fully read. An
 NPC or place the players have met gets a page with its secrets moved
 under `## GM Notes`, or the GM's "stays hidden", recorded so it is not
 asked again.

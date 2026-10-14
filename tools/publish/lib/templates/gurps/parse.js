@@ -729,6 +729,7 @@ function parseEquipment(model, sections) {
           const liName = Math.max(0, loHeader.findIndex(h => h.includes('name') || h.includes('item')));
           const liCost = loHeader.findIndex(h => h.includes('cost'));
           const liWt = loHeader.findIndex(h => h.includes('weight') || h.includes('wt'));
+          const liNotes = loHeader.findIndex(h => h.includes('note'));
           const items = [];
           let totalCost = null; let totalWeight = null;
           for (const r of loRows.slice(1)) {
@@ -744,7 +745,7 @@ function parseEquipment(model, sections) {
               name: rName,
               cost: liCost >= 0 ? r[liCost] : '',
               weight: liWt >= 0 ? r[liWt] : '',
-              location: null, notes: null,
+              location: null, notes: liNotes >= 0 ? r[liNotes] || null : null,
             });
           }
           model.equipment.loadouts.push({ name: loNames[i] || `Load-Out ${i + 1}`, items, totalCost, totalWeight });

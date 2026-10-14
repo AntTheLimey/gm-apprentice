@@ -93,7 +93,10 @@ motivations, and description.}
      level for Climbing, Stealth, Swimming, Judo, and Karate (B17,
      B203) unless a perk such as Armor Familiarity (MA49) offsets it;
      equal to Base for everything else. Refresh Current at wrap-up
-     whenever encumbrance changes. -->
+     whenever encumbrance changes.
+     A weapon skill used only at its default still gets a row here, at
+     its default level for 0 points, so the to-hit calculator has a base
+     for the weapon's row. -->
 
 | Name | Difficulty | Relative Level | Points | Base | Current |
 |------|-----------|----------------|--------|------|---------|
@@ -102,7 +105,13 @@ motivations, and description.}
 ## Techniques
 
 <!-- A technique's level is written without any one weapon's own bonus
-     (a Weapon Bond, a Balanced weapon), as the Skills table writes a skill. -->
+     (a Weapon Bond, a Balanced weapon), as the Skills table writes a skill.
+     The level is read from Effective (on an older sheet, Current, then
+     Base). Name a technique of a specialized skill with the skill in full,
+     in the name and the Default alike:
+     `Dual-Weapon Attack (Beam Weapons (Pistol))`, Default
+     `Beam Weapons (Pistol)-4`. The to-hit calculator offers each technique
+     on the weapon rows of its skill, so a technique needs no weapon row. -->
 
 | Name | Default | Points | Effective |
 |------|---------|--------|-----------|
@@ -140,7 +149,15 @@ Top 5 multi-step combat sequences for quick reference.
 
 ## Melee Weapons
 
-<!-- Notes: the weapon's own bonuses, one per `;`, a name and a signed
+<!-- Skill: the skill as the Skills table names it, then its level:
+     `Axe/Mace-15`, or `Wrestling-15 +4 = 19` for a row-level bonus. Not a
+     bare number, an attribute (`DX-12`) or a technique name, and nothing
+     after the level: a comment goes in Notes. One attack per row. A row for
+     a technique (Kicking, Choke Hold) is needed only for its own damage or
+     reach, and then names the parent skill. In Advantages, Off-Hand Weapon
+     Training names the skill (`(Axe/Mace)`) and Weapon Bond names the
+     weapon as its row here does.
+     Notes: the weapon's own bonuses, one per `;`, a name and a signed
      number: `Weapon Bond +1; Balanced +1`. The Skill cell's level
      includes them. -->
 
@@ -150,7 +167,9 @@ Top 5 multi-step combat sequences for quick reference.
 
 ## Ranged Weapons
 
-<!-- Notes: sighting aids, one per `;`, a name and a signed number, with
+<!-- Skill: as for Melee Weapons, the Skills-table name and the level
+     (`Beam Weapons (Pistol)-17`), nothing after it.
+     Notes: sighting aids, one per `;`, a name and a signed number, with
      `Acc` after it for an aiming bonus: `Scope +2 Acc; HUD link +1 Acc;
      Laser sight +1`. Write `Fixed scope +4 Acc` for a fixed-power scope.
      The Skill cell's level includes any bonus the weapon's own row names. -->

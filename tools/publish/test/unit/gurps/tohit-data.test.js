@@ -202,7 +202,7 @@ describe('buildTohitData: advantages', () => {
     assert.strictEqual(traits('Night Vision 5').nightVision, 5);
   });
   it('a character with none of them gets neutral values', () => {
-    assert.deepStrictEqual(traits('Luck'), { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 });
+    assert.deepStrictEqual(traits('Luck'), { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0, weaponBond: [] });
   });
   it('Ambidexterity, Off-Hand Weapon Training, Weapon Master, Trained by a Master', () => {
     assert.strictEqual(traits('Ambidexterity').ambidextrous, true);
@@ -224,14 +224,14 @@ describe('buildTohitData: techniques', () => {
     assert.strictEqual(r.targeted[0].loc, 'neck');
     assert.strictEqual(r.targeted[0].net, 0);
   });
-  it('arm and leg map to limb; hand and foot to extremity', () => {
+  it('arm and leg are apart; hand and foot share extremity', () => {
     const r = t([
       { name: 'Targeted Attack (Knife Thrust/Arm)', def: 'Knife-4', level: '12' },
       { name: 'Targeted Attack (Knife Thrust/Leg)', def: 'Knife-4', level: '12' },
       { name: 'Targeted Attack (Knife Thrust/Hand)', def: 'Knife-4', level: '12' },
       { name: 'Targeted Attack (Knife Thrust/Foot)', def: 'Knife-4', level: '12' },
     ]);
-    assert.deepStrictEqual(r.targeted.map(x => x.loc), ['limb', 'limb', 'extremity', 'extremity']);
+    assert.deepStrictEqual(r.targeted.map(x => x.loc), ['arm', 'leg', 'extremity', 'extremity']);
   });
   it('leaves out a Targeted Attack with an unknown location, no slash, or a skill not on the sheet', () => {
     const r = t([
@@ -279,9 +279,9 @@ describe('buildTohitData: base, free fall, locations, bands', () => {
   it('locations carry stable keys with numeric penalties, from the shipped reference rows', () => {
     const d = buildTohitData(model({ ranged: [rangedRow()] }), META);
     assert.deepStrictEqual(d.locations.map(l => l[0]),
-      ['torso', 'vitals', 'limb', 'extremity', 'groin', 'face', 'neck', 'skull', 'eye']);
+      ['torso', 'vitals', 'arm', 'leg', 'extremity', 'groin', 'face', 'neck', 'skull', 'eye']);
     const pen = Object.fromEntries(d.locations.map(([k, , p]) => [k, p]));
-    assert.deepStrictEqual(pen, { torso: 0, vitals: -3, limb: -2, extremity: -4, groin: -3, face: -5, neck: -5, skull: -7, eye: -9 });
+    assert.deepStrictEqual(pen, { torso: 0, vitals: -3, arm: -2, leg: -2, extremity: -4, groin: -3, face: -5, neck: -5, skull: -7, eye: -9 });
   });
   it('bands are the yard values of the Speed/Range rows, ascending', () => {
     const { bands } = buildTohitData(model({ ranged: [rangedRow()] }), META);
@@ -348,7 +348,9 @@ describe('buildTohitData: the Ronnie fixture', () => {
   const d = buildTohitData(m, { pcSlug: 'ronnie-vint' });
   it('returns a block with a finite level on every weapon', () => {
     assert.ok(d);
-    assert.strictEqual(d.weapons.length, 7);
+    // Seven weapon rows, and Judo: the sheet has Judo holds and no Judo row (#357).
+    assert.strictEqual(d.weapons.length, 8);
+    assert.deepStrictEqual(d.weapons.filter(w => w.bySkill).map(w => [w.skill, w.level]), [['Judo', 16]]);
     for (const w of d.weapons) assert.ok(Number.isFinite(w.level), w.key);
   });
   it('reads the rifle row: diamond dropped, HUD aid found, base from Skills', () => {
@@ -500,8 +502,8 @@ describe('round two: skill names are matched to the Skills table', () => {
   it('Targeted Attack takes the last WORD after the last slash: Right Arm, Left Leg, Right Hand', () => {
     const t = (l) => buildTohitData(model({ ranged: [rangedRow()], skills: sk,
       techniques: [{ name: `Targeted Attack (Guns (Rifle)/${l})`, def: '', level: '12' }] }), META).techniques.targeted;
-    assert.strictEqual(t('Right Arm')[0].loc, 'limb');
-    assert.strictEqual(t('Left Leg')[0].loc, 'limb');
+    assert.strictEqual(t('Right Arm')[0].loc, 'arm');
+    assert.strictEqual(t('Left Leg')[0].loc, 'leg');
     assert.strictEqual(t('Right Hand')[0].loc, 'extremity');
     assert.strictEqual(t('Right Arm')[0].skill, 'Guns (Rifle)');
   });
@@ -566,7 +568,8 @@ describe('round three: acc means "needs Aim"', () => {
       { name: 'Dual-Weapon Attack (Knife)', def: '', level: '13' },
       { name: 'Dual-Weapon Attack (Knife)', def: '', level: '9' },
     ];
-    const t = buildTohitData(model({ ranged: [rangedRow()], techniques }), META).techniques;
+    const skills = [['Beam Weapons (Pistol)', '17'], ['Knife', '14'], ['Karate', '17']];
+    const t = buildTohitData(model({ ranged: [rangedRow()], techniques, skills }), META).techniques;
     assert.deepStrictEqual(t.targeted.map(x => x.net), [-2]);
     assert.deepStrictEqual(t.other.map(x => x.level), [15]);
     assert.deepStrictEqual(t.dual, { Knife: 3 });
@@ -618,9 +621,18 @@ describe('round four: shown is what the sheet wraps in .wp-tohit', () => {
       if (d) assert.strictEqual(d.weapons[0].shown, sheet);
     });
   }
-  it('Karate-15, Kick-13 has level 15 and shown 13', () => {
+  // #357: the calculator and the sheet's live cell read the same number: the last, the one the
+  // sheet wraps, unless one of the pairs is named like the weapon.
+  it('Karate-15, Kick-13 reads the last pair, the number the sheet wraps', () => {
     const w = one({ skill: 'Karate-15, Kick-13' });
-    assert.strictEqual(w.level, 15); assert.strictEqual(w.shown, 13);
+    assert.strictEqual(w.level, 13); assert.strictEqual(w.shown, 13);
+  });
+  it('Karate-15, Kick-13 on a row named Karate punch reads Karate 15, and says the cell holds two', () => {
+    const report = [];
+    const d = buildTohitData(model({ melee: [meleeRow({ weapon: 'Karate punch', skill: 'Karate-15, Kick-13' })], skills: [['Karate', '15']] }), META, report);
+    assert.strictEqual(d.weapons[0].level, 15);
+    assert.strictEqual(d.weapons[0].skill, 'Karate');
+    assert.ok(report.some(r => r.severity === 'info' && /holds 2 levels/.test(r.text)), JSON.stringify(report));
   });
   it('shown is null when the cell has no trailing number', () => {
     assert.strictEqual(one({ skill: 'Guns (Rifle) 17 (DX+2)' }).shown, null);
@@ -664,5 +676,114 @@ describe('round four: the Ronnie fixture still reads', () => {
     const { data: fm, content } = matter(raw);
     const d = buildTohitData(parseGurps(fm, extractSections(content)), { pcSlug: 'r' });
     for (const w of d.weapons) assert.ok(w.shown === null || Number.isInteger(w.shown), w.key);
+  });
+});
+
+// #392, #393, #394, #357: names written another way are found, and each row the calculator
+// cannot fully read is reported with its reason.
+describe('rows written another way, and the report of what is not read', () => {
+  const build = (parts) => { const report = []; const d = buildTohitData(model(parts), META, report); return { d, report, says: (re, sev) => report.some(r => re.test(r.text) && (!sev || r.severity === sev)) }; };
+  const pistol = rangedRow({ weapon: 'Blaster pistol', skill: 'Beam Weapons (Pistol)-17' });
+  const axe = meleeRow({ weapon: 'Vibro-Axe', skill: 'Axe/Mace-18' });
+  const skills = [['Beam Weapons (Pistol)', '17'], ['Axe/Mace', '18'], ['Judo', '18'], ['Brawling', '12']];
+
+  it('#392: a Skill/Spec technique, a short Default and Off-Hand Weapon Training named for the weapon all resolve', () => {
+    const { d, report } = build({ skills, ranged: [pistol], melee: [axe], advantages: ['Off-Hand Weapon Training (Vibro-Axe)'], techniques: [
+      { name: 'Dual-Weapon Attack (Beam Weapons/Pistol)', def: 'Beam Weapons-4', level: '15' },
+      { name: 'Ranged Rapid Strike (Beam Weapons/Pistol)', def: 'Beam Weapons-6', level: '11' },
+    ] });
+    assert.deepStrictEqual(d.techniques.dual, { 'Beam Weapons (Pistol)': 2 });
+    assert.deepStrictEqual(d.techniques.other, [{ skill: 'Beam Weapons (Pistol)', name: 'Ranged Rapid Strike (Beam Weapons/Pistol)', level: 11 }]);
+    assert.deepStrictEqual(d.traits.offHand, ['Axe/Mace']);
+    assert.deepStrictEqual(report, []);
+  });
+  it('a skill whose own name has a slash is still found as written', () => {
+    const { d } = build({ skills, melee: [axe] });
+    assert.strictEqual(d.weapons[0].skill, 'Axe/Mace');
+    assert.strictEqual(d.weapons[0].base, 18);
+  });
+  it('#393: a weapon row naming a technique is read as the technique on its skill, and said', () => {
+    const { d, says } = build({ skills, melee: [meleeRow({ weapon: 'Choke Hold (carotid)', skill: 'Choke Hold-16' })],
+      techniques: [{ name: 'Choke Hold', def: 'Judo-2', level: '16' }] });
+    const w = d.weapons[0];
+    assert.deepStrictEqual([w.skill, w.technique, w.level, w.base], ['Judo', 'Choke Hold', 16, 16]);
+    assert.ok(says(/names the technique Choke Hold/, 'info'));
+  });
+  it('#393: a weapon row naming an attribute is said, and so is a cell that does not end in its level', () => {
+    const { d, says } = build({ skills, melee: [meleeRow({ weapon: 'Utility knife (thrust)', skill: 'DX-12 (default)' })] });
+    assert.strictEqual(d.weapons[0].base, null);
+    assert.ok(says(/names the attribute DX/, 'warning'));
+    assert.ok(says(/does not end with its level/, 'warning'));
+  });
+  it('an unarmed attack at DX is the rule for an untrained fighter, not a fault', () => {
+    const { d, report } = build({ skills, melee: [meleeRow({ weapon: 'Punch', skill: 'DX 13' }), meleeRow({ weapon: 'Kick', skill: 'DX 11' })] });
+    assert.deepStrictEqual(d.weapons.map(w => [w.skill, w.level]), [['DX', 13], ['DX', 11]]);
+    assert.deepStrictEqual(report, []);
+  });
+  it('#357: a bare number takes the skill the Weapon cell names in its bracket', () => {
+    const { d, report } = build({ skills, melee: [meleeRow({ weapon: 'Punch (Brawling)', skill: '12' })] });
+    assert.deepStrictEqual([d.weapons[0].skill, d.weapons[0].base], ['Brawling', 12]);
+    assert.deepStrictEqual(report, []);
+  });
+  it('a bare number with no skill to find, and a cell with no level, are said', () => {
+    const { d, says } = build({ skills, melee: [meleeRow({ weapon: 'Rock', skill: '11' }), meleeRow({ weapon: 'Stick', skill: '—' })] });
+    assert.deepStrictEqual(d.weapons.map(w => w.key), ['Rock']);
+    assert.ok(says(/"Rock": its Skill cell is a bare number/, 'warning'));
+    assert.ok(says(/"Stick" is left out: its Skill cell "—" has no level/, 'warning'));
+  });
+  it('a skill not in the Skills table is said, with the nearest name', () => {
+    const { says } = build({ skills, ranged: [rangedRow({ skill: 'Beam Weapons (Rifle)-14' })] });
+    assert.ok(says(/skill "Beam Weapons \(Rifle\)" is not in the Skills table \(nearest: "Beam Weapons \(Pistol\)"\)/, 'warning'));
+  });
+  it('a technique, a Dual-Weapon Attack and an Off-Hand Weapon Training that resolve to nothing are said', () => {
+    const { says } = build({ skills, ranged: [pistol], advantages: ['Off-Hand Weapon Training (Flail)'], techniques: [
+      { name: 'Disarming (Whip)', def: 'Whip-0', level: '12' },
+      { name: 'Dual-Weapon Attack (Whip)', def: 'Whip-4', level: '10' },
+    ] });
+    assert.ok(says(/technique "Disarming \(Whip\)" names a skill that is not in the Skills table/));
+    assert.ok(says(/technique "Dual-Weapon Attack \(Whip\)" names a skill/));
+    assert.ok(says(/Off-Hand Weapon Training \(Flail\) names no skill/));
+  });
+  it('#357: a skill with techniques and no weapon row is offered as its own entry; a shooting skill is said', () => {
+    const { d, says } = build({ skills: [...skills, ['Guns (Rifle)', '15']], ranged: [pistol], techniques: [
+      { name: 'Arm Lock', def: 'Judo+0', level: '18' },
+      { name: 'Ranged Rapid Strike (Guns (Rifle))', def: 'Guns (Rifle)-6', level: '9' },
+    ] });
+    const judo = d.weapons.find(w => w.bySkill);
+    assert.deepStrictEqual([judo.key, judo.type, judo.level, judo.base, judo.shown], ['Judo', 'melee', 18, 18, null]);
+    assert.ok(!d.weapons.some(w => w.skill === 'Guns (Rifle)'));
+    assert.ok(says(/techniques of Guns \(Rifle\) are not offered/));
+  });
+  it('#357: a skill default written in the Techniques table is not offered as a technique', () => {
+    const { d } = build({ skills: [...skills, ['Beam Weapons (Rifle)', '13']], ranged: [pistol], techniques: [
+      { name: 'Beam Weapons (Rifle)', def: 'Beam Weapons (Pistol)-4', level: '13' },
+      { name: 'Beam Weapons (Pistol Carbine)', def: 'Beam Weapons (Pistol)-2', level: '15' },
+    ] });
+    assert.deepStrictEqual(d.techniques.other, []);
+  });
+  it('#357: Weapon Bond is read from the advantages and named among the row\'s bonuses', () => {
+    const { d, report } = build({ skills, melee: [meleeRow({ weapon: 'Vibro-Axe', skill: 'Axe/Mace-19' })], advantages: ['Weapon Bond (Vibro-Axe)'] });
+    assert.deepStrictEqual(d.traits.weaponBond, [d.weapons[0].id]);
+    assert.deepStrictEqual(d.weapons[0].bonuses, [{ name: 'Weapon Bond', bonus: 1 }]);
+    assert.deepStrictEqual(report, []);
+  });
+  it('#394: a level above the skill by more than the named bonuses is said, as information', () => {
+    const { says } = build({ skills, melee: [meleeRow({ weapon: 'Vibro-Axe', skill: 'Axe/Mace-20', notes: 'Balanced +1' })] });
+    assert.ok(says(/level 20 is 2 over Axe\/Mace 18, and the row names only \+1 of bonuses/, 'info'));
+  });
+  it('#357: an aid named only in a load-out row is found', () => {
+    const m = model({ skills, ranged: [pistol] });
+    m.equipment.loadouts = [{ name: 'Field', items: [{ name: 'Smartgun link', notes: '+1 Acc' }] }];
+    const d = buildTohitData(m, META);
+    assert.deepStrictEqual(d.aids.map(a => [a.name, a.bonus]), [['Smartgun', 1]]);
+  });
+  it('#357: "HUD link, -1", "+2 scope", and fixed only beside the aid', () => {
+    assert.deepStrictEqual(one({ notes: 'HUD link, -1' }).aids.map(a => [a.name, a.bonus]), [['HUD link', -1]]);
+    assert.deepStrictEqual(one({ notes: '+2 scope' }).aids.map(a => [a.name, a.bonus]), [['Scope', 2]]);
+    assert.strictEqual(one({ notes: 'Scope +3 Acc (fixed)' }).aids[0].fixed, true);
+    assert.strictEqual(one({ notes: 'Scope +3, fixed' }).aids[0].fixed, true);
+    assert.strictEqual(one({ notes: 'Scope +3 Acc, laser sight on a fixed mount' }).aids[0].fixed, false);
+    assert.strictEqual(one({ acc: '6+3 fixed' }).aids[0].fixed, true);
+    assert.strictEqual(one({ acc: '6+3' }).aids[0].fixed, false);
   });
 });

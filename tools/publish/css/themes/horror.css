@@ -7,11 +7,11 @@
   --bg-header: #0f0c08;
   --bg-hero: #0f0c08;
   --text: #d4c5a9;
-  --text-muted: #8a7e6a;
+  --text-muted: #928671;
   /* The header and hero stay dark in both schemes, so their text keeps the
      dark palette's ink even when light mode darkens --text (#259). */
   --text-on-header: #d4c5a9;
-  --text-muted-on-header: #8a7e6a;
+  --text-muted-on-header: #928671;
   --accent: #c9a55a;
   --accent-dim: rgba(201, 165, 90, 0.12);
   --border: #3a3020;
@@ -30,7 +30,7 @@
     --bg-hero: #2a2018;
     --text: #2a2018;
     --text-muted: #6b5e4a;
-    --accent: #8b6914;
+    --accent: #896714;
     --accent-dim: rgba(139, 105, 20, 0.08);
     --border: #d4c5a9;
     --danger: #c0392b;

@@ -15,6 +15,9 @@
 //                        cannot be searched for
 //   WITHHELD_PUBLISHED   a note marked `withheld: true` that the site publishes (an error)
 //   WITHHELD_FLAG_UNREADABLE  a `withheld:` value that is not true or false (read as false)
+//   TOHIT_UNREAD    a row of a GURPS PC sheet the to-hit calculator cannot fully read, with
+//                   why and the fix (the calculator's own words, from tohit-data.js); a row
+//                   it reads but whose numbers do not add up is information
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note
@@ -39,7 +42,7 @@ const { kindOfType } = require('./kind-label');
 const { STORY_SUFFIX } = require('./scanner');
 const { decodeEntities } = require('./templates/gurps/tables');
 
-const CODES = ['ALIAS_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE'];
+const CODES = ['ALIAS_IN_PROSE', 'WITHHELD_PUBLISHED', 'WITHHELD_IN_PROSE', 'WITHHELD_NAME_PUBLIC', 'WITHHELD_FLAG_UNREADABLE', 'FENCE_UNCLOSED', 'COMMENT_STRAY', 'NAMED_NO_PAGE', 'TOHIT_UNREAD'];
 const WORST = 3;
 // The human report names this many of the pages that link a note with no page.
 const PAGES_SHOWN = 3;
@@ -808,6 +811,7 @@ function startNoteAudit(input) {
       }
     }
 
+    for (const c of calcRows) found.push({ code: 'TOHIT_UNREAD', severity: c.severity === 'info' ? 'info' : 'warning', path: c.rel, detail: c.detail, fix: c.fix });
     const sorted = sortFindings(found);
     // The targets that name a note with no page, printed or not, settled or not: the
     // dead-link check leaves them out (a link to a note that exists is not a dead link).
@@ -815,7 +819,13 @@ function startNoteAudit(input) {
     return sorted;
   }
 
-  return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, connections, findings, storyRelOf };
+  // The to-hit calculator's report for one PC sheet (`rel`, the PC's note).
+  const calcRows = [];
+  function calculator(rel, rows) {
+    for (const r of rows || []) if (r && r.detail) calcRows.push({ rel, severity: r.severity, detail: r.detail, fix: r.fix || '' });
+  }
+
+  return { read, readAddresses, readFileName, mark, mayPrint, printed, listing, connections, calculator, findings, storyRelOf };
 }
 
 // A no-page note's `type`: from its scanned page, else from its file (the scan never read a
@@ -884,6 +894,15 @@ function summaryLines(findings) {
       const worst = [...byName].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST)
         .map(([name, pages]) => `${name} ${pages} ${plural(pages, 'page', 'pages')}`);
       lines.push(`${byName.size} withheld ${plural(byName.size, 'name is', 'names are')} printed on published pages (${worst.join(', ')}) — ${where} ${plural(byName.size, 'it', 'these')}.`);
+    } else if (code === 'TOHIT_UNREAD') {
+      // Rows it cannot read; a row whose numbers do not add up is only information.
+      const unread = rows.filter((f) => f.severity !== 'info');
+      if (unread.length === 0) continue;
+      const byPc = new Map();
+      for (const f of unread) byPc.set(f.path, (byPc.get(f.path) || 0) + 1);
+      const worst = [...byPc].sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1)).slice(0, WORST).map(([p, k]) => `${baseName(p)} ${k}`);
+      const m = unread.length;
+      lines.push(`${m} ${plural(m, 'row of a PC sheet is', 'rows of PC sheets are')} not fully read by the to-hit calculator (${worst.join(', ')}) — ${where} ${plural(m, 'it', 'these')}.`);
     } else if (code === 'WITHHELD_NAME_PUBLIC') {
       const names = [...new Set(rows.map((f) => f.name))];
       lines.push(`${names.length} withheld ${plural(names.length, 'name is also the name of a published page', 'names are also the names of published pages')}, so ${plural(names.length, 'it is', 'they are')} not looked for (${names.slice(0, WORST).join(', ')}) — ${where} ${plural(names.length, 'it', 'these')}.`);

@@ -3729,6 +3729,8 @@ sup.fn { font-size: 9px; color: var(--text-muted); vertical-align: super; line-h
   }
   .tohit .th-stick .th-v { font-size: 26px; }
   .tohit .th-stick .th-v.th-sm { font-size: 17px; }
+  .tohit .th-stick, .tohit .th-stick .th-sub { gap: 6px 14px; }
+  .tohit .th-stick .th-sub { flex-wrap: nowrap; align-items: baseline; }
   /* Tap targets: at least 40px. */
   .tohit select, .tohit input[type="number"], .tohit .th-actions button, .tohit .th-chip { min-height: 40px; }
   .tohit .th-c { min-height: 40px; }
@@ -4586,10 +4588,12 @@ svg.cx-web .cx-node.cx-sel text, svg.cx-web .cx-node:focus-visible text { fill: 
 .cr-reply.cr-waiting { opacity: .6; }
 .cr-empty { opacity: .6; font-size: .85rem; }
 
-/* Mobile: center the back-to-top and make it more transparent (Part: advice+log) */
+/* Mobile: the back-to-top in the corner; the change-request form's Send full width */
 @media (max-width: 767px) {
-  .back-to-top { left: 50%; right: auto; transform: translateX(-50%); }
-  .back-to-top.visible { opacity: 0.55; }
+  /* In the corner, a little smaller, with room under the page so its last lines scroll clear of it. */
+  .back-to-top { right: 0.75rem; bottom: 0.75rem; width: 2.5rem; height: 2.5rem; }
+  .back-to-top.visible { opacity: 0.7; }
+  body { padding-bottom: 3.5rem; }
   /* Full-width Send on phones so it's an easy thumb target. */
   .cr-send { align-self: stretch; text-align: center; }
   .cr-text { min-height: 9rem; }

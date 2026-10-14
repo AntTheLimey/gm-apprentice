@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.58] — 2026-10-14
+
+The GURPS to-hit calculator reads every sheet row it can, and says which
+it cannot and why (#392, #393, #394, #395, #357).
+
+### Fixed
+
+- A technique written for a specialized skill as `Skill/Spec`
+  (`Dual-Weapon Attack (Beam Weapons/Pistol)`), or with a Default that
+  shortens the skill (`Beam Weapons-6`), is found and offered on that
+  skill's weapons. Off-Hand Weapon Training named for a weapon
+  (`(Vibro-Axe)`) is read as that weapon's skill.
+- A weapon row whose Skill cell names a technique (`Choke Hold-16`) is
+  read as that technique on its skill (Judo). A bare number takes the
+  skill the Weapon cell names (`Punch (Brawling)`).
+- A skill with techniques and no weapon row (Judo holds, Karate strikes)
+  is offered in the calculator as its own entry. The technique list no
+  longer offers another weapon's skill default.
+- Arms and legs are separate hit locations, so a crouching target's −2
+  applies to a leg and not an arm. A hit location resets when the weapon
+  changes.
+- A sighting aid named in a load-out row's notes is found, and load-out
+  tables show their Notes column. `HUD link, -1` and `+2 scope` are read
+  with their numbers; `fixed` counts only beside the aid, and a scope in
+  the Acc cell can be fixed (`6+3 fixed`).
+- A Skill cell with two levels (`Karate-15, Kick-13`) gives the
+  calculator the same number the sheet shows, unless one is named like
+  the weapon.
+- Weapon Bond is read from the advantages and named in the row's
+  "+N included" line.
+- A calculator setup saved before per-weapon ticks keeps its ticks.
+- On a phone, the calculator's Critical and Fumble stay on the sticky
+  answer line, and the site's back-to-top button sits in the corner with
+  room under the page.
+- Every theme preset's muted text and link colour reach 4.5:1 contrast
+  on the page and its cards (fantasy, horror, military and noir muted
+  text in the dark palette; fantasy, horror, military and scifi links in
+  the light).
+
+### Added
+
+- A sheet row the to-hit calculator cannot fully read is a Site Faults
+  finding, with the reason and the fix: the build counts them, `doctor
+  --site` lists them, and campaign-qa's Site Faults check walks the GM
+  through them.
+- The GURPS PC template says how to write weapon Skill cells, defaulted
+  skills, techniques, Off-Hand Weapon Training and Weapon Bond so the
+  calculator reads them.
+
+### Changed
+
+- The calculator's script is copied only into a GURPS site with the
+  calculator on.
+- The publish tool is 1.25.0.
+
 ## [1.10.57] — 2026-10-14
 
 Regency Cthulhu PC sheets start their skills at the right bases (#366).

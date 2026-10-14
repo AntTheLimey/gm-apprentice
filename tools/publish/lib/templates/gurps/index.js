@@ -11,7 +11,9 @@ function renderGURPSSheet(frontmatter, sections, meta) {
   const model = parseGurps(frontmatter, sections);
   const liveData = meta ? buildLiveData(model, meta) : null;
   // The to-hit calculator rides the build's setting (meta.tohit); with it off, or with no weapon, nothing is made.
-  const tohitData = meta && meta.tohit === true ? buildTohitData(model, meta) : null;
+  // The rows it cannot fully read go to the build's Site Faults audit, not to this page's warnings.
+  const tohitRows = [];
+  const tohitData = meta && meta.tohit === true ? buildTohitData(model, meta, tohitRows) : null;
   const sheetHtml = buildSheet(model, overflowNotes(sections, [...GURPS_CONSUMED_TITLES, ...EQUIPMENT_SECTION_TITLES].filter(t => !RICH_COMBAT_TITLES.includes(t))));
   let equipmentHtml = buildEquipment(model);
   // With no sheet to carry them, the Equipment tab (which takes those sections off the page) lists their extra cells.
@@ -25,6 +27,7 @@ function renderGURPSSheet(frontmatter, sections, meta) {
     warnings: model.warnings,
     liveData,
     tohitData,
+    tohitRows,
     // Panel rides the live-data island: only mount when the island exists AND
     // vitals resolved. Otherwise there is no gurps-live.js to drive it.
     statusPanelHtml: (liveData && liveData.vitals) ? renderStatusPanel(model, liveData.vitals) : null,

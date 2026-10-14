@@ -1770,7 +1770,7 @@ def no_publish_tool(vault: Path, check: str) -> tuple[str | None, list[str]]:
 NOTE_FAULT_CODES = ("ALIAS_IN_PROSE", "WITHHELD_PUBLISHED",
                     "WITHHELD_IN_PROSE", "WITHHELD_NAME_PUBLIC",
                     "WITHHELD_FLAG_UNREADABLE", "FENCE_UNCLOSED",
-                    "COMMENT_STRAY", "NAMED_NO_PAGE")
+                    "COMMENT_STRAY", "NAMED_NO_PAGE", "TOHIT_UNREAD")
 # How many of the pages naming a note a row lists; `--file` lists them all.
 SITE_FAULT_PAGES = 3
 
@@ -1814,6 +1814,9 @@ def _site_fault_row(f: dict[str, Any], whole: bool) -> str:
                f"{_one_line(f.get('text'))}")
     elif code == "FENCE_UNCLOSED":
         msg = f"FENCE_UNCLOSED: {_one_line(f.get('detail'))}"
+    elif code == "TOHIT_UNREAD":
+        msg = (f"TOHIT_UNREAD: {_one_line(f.get('detail'))} — "
+               f"{_one_line(f.get('fix'))}")
     elif code in ("WITHHELD_NAME_PUBLIC", "WITHHELD_PUBLISHED",
                   "WITHHELD_FLAG_UNREADABLE"):
         msg = (f"{code}: {_one_line(f.get('detail'))} — "

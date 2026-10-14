@@ -182,6 +182,25 @@ class SiteFaultRowsTests(unittest.TestCase):
         self.assertIn("FENCE_UNCLOSED: the code fence on line 9 never "
                       "closes", by_code["FENCE_UNCLOSED"])
 
+    def test_a_sheet_row_the_to_hit_calculator_cannot_read_is_a_row(self):
+        # The tool's own words: what is wrong, then the fix.
+        row = vc._site_fault_row({
+            "code": "TOHIT_UNREAD", "severity": "warning",
+            "path": "Characters/PCs/Six.md",
+            "detail": "to-hit calculator: Melee Attacks row \"Knife\": its "
+                      "Skill cell names the attribute DX, not a skill",
+            "fix": "name the weapon's skill at its default level"}, whole=False)
+        self.assertEqual(row, (
+            "WARNING\tCharacters/PCs/Six.md\tTOHIT_UNREAD: to-hit "
+            "calculator: Melee Attacks row \"Knife\": its Skill cell names "
+            "the attribute DX, not a skill — name the weapon's skill at its "
+            "default level"))
+        info = vc._site_fault_row({
+            "code": "TOHIT_UNREAD", "severity": "info", "path": "a.md",
+            "detail": "d", "fix": "f"}, whole=False)
+        self.assertEqual(info, "INFO\ta.md\tTOHIT_UNREAD: d — f")
+        self.assertIn("TOHIT_UNREAD", vc.NOTE_FAULT_CODES)
+
     def test_a_withheld_name_printed_on_a_page_is_a_row(self):
         vault, _site = make(self, {
             MARA: npc("Lord Zorn rides at dawn."),
