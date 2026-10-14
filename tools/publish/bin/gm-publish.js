@@ -567,6 +567,9 @@ if (command === 'init') {
     const rel = path.relative(path.resolve(rest[0] || '.'), vaultAbs);
     vaultPath = rel && !rel.startsWith('..') && !path.isAbsolute(rel) ? `./${rel.split(path.sep).join('/')}` : vaultAbs;
   }
+  // Only the target folder is left: an option init does not know must not be taken for a folder to scaffold in.
+  if (rest[0] !== undefined && rest[0].startsWith('-')) refuseUnknownArgument('init', rest[0]);
+  if (rest.length > 1) refuseUnknownArgument('init', rest[1]);
   const targetDir = rest[0] || '.';
   const { init } = require('../lib/init');
   init(targetDir, { verbose: true, vaultPath, siteTitle, tagline }).then(() => {
@@ -578,14 +581,25 @@ if (command === 'init') {
   return;
 }
 
+// The message for an argument a command does not take, shared by the commands that run steps or write files and
+// had no list of their own. `build` has no dry form (`deploy --dry-run` is the one that prints what would run).
+function refuseUnknownArgument(cmd, bad) {
+  const why = bad === '--dry-run' || bad === '-n'
+    ? (cmd === 'build' ? ' build has no dry run: it always writes the site and runs the vault\'s build steps.' : ` ${cmd} has no dry run.`)
+    : '';
+  console.error(`Error: Unknown ${bad.startsWith('-') ? 'option' : 'argument'}: ${bad}.${why} See \`gm-apprentice-publish ${cmd} --help\`.`);
+  process.exit(1);
+}
+
 if (command === 'build') {
-  let configPath = './vault.config.json';
-  for (let i = 1; i < args.length; i++) {
-    if (args[i] === '--config' && args[i + 1]) {
-      configPath = args[i + 1];
-      break;
-    }
+  const parsed = parseSubcommandArgs(args.slice(1), {});
+  if (parsed.error) {
+    const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
+    if (bad) refuseUnknownArgument('build', bad[1]);
+    console.error(`Error: ${parsed.error}`);
+    process.exit(1);
   }
+  const configPath = parsed.configPath;
 
   if (!fs.existsSync(configPath)) {
     console.error(`Error: Config file not found: ${configPath}`);

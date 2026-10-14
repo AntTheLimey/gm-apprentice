@@ -1,7 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
-const { canonicalNfc } = require('./unicode');
+const { isBlankStep, menuKey, words: statusWords } = require('./settings/entry-faults');
 const { readSettings, formatFault, makeFault, stops, entry, movedKeys, siteFolderKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
@@ -173,30 +173,19 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   });
 
   // A blank entry in a steps list is left out, with a warning: it must never reach the shell.
-  const stepsOf = (name, list) => {
-    const kept = list.filter((c) => String(c).trim() !== '');
-    if (kept.length !== list.length) {
-      const written = nameIn(vaultPath, name);
-      faults.push(makeFault({ name: written, setting: name, kind: 'dropped', level: 'warn', message: `${written} has a blank entry; it was left out` }));
-    }
-    return kept;
-  };
-  const steps = { before: stepsOf('player_site.before_build', p.before_build), after: stepsOf('player_site.after_build', p.after_build) };
+  // (The settings reader has already reported the blank entry.)
+  const steps = { before: p.before_build.filter((c) => !isBlankStep(c)), after: p.after_build.filter((c) => !isBlankStep(c)) };
 
   // The vault's build steps, for the commands that run them. Not listed, like `site`.
   Object.defineProperty(merged, 'steps', { value: steps, enumerable: false });
 
-  // The GM's extra menu entries. A second entry with the same label under the same group is left out, with a
-  // warning. Not listed, like `steps`: a site that sets none builds as it did.
-  const menuName = nameIn(vaultPath, 'player_site.menu_extra');
+  // The GM's extra menu entries. A second entry with the same label under the same group is left out (the settings
+  // reader has already reported it). Not listed, like `steps`: a site that sets none builds as it did.
   const menuSeen = new Set();
   const menuExtra = [];
   for (const item of p.menu_extra) {
-    const key = `${canonicalNfc(item.label.trim())}\n${(item.group || '').trim().toLowerCase()}`;
-    if (menuSeen.has(key)) {
-      faults.push(makeFault({ name: menuName, setting: 'player_site.menu_extra', kind: 'dropped', level: 'warn', message: `${menuName} lists "${item.label}" twice${item.group ? ` under ${item.group}` : ''}; the second is left out` }));
-      continue;
-    }
+    const key = menuKey(item);
+    if (menuSeen.has(key)) continue;
     menuSeen.add(key);
     menuExtra.push({ label: item.label.trim(), link: item.link.trim(), ...(item.group ? { group: item.group.trim() } : {}) });
   }
@@ -230,17 +219,9 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   Object.defineProperty(merged, 'withheld_words', { value: words, enumerable: false });
 
   // The status lists, every word trimmed and lower-cased once. Not listed, like `limits`. A `fallen` word that is
-  // not out of play is left out, with a warning when the GM wrote it.
-  const wordsOf = (list) => new Set(list.map((w) => String(w).trim().toLowerCase()).filter(Boolean));
-  const statuses = { out_of_play: wordsOf(v.statuses.out_of_play), fallen: new Set(), gone: wordsOf(v.statuses.gone) };
-  for (const word of wordsOf(v.statuses.fallen)) {
-    if (statuses.out_of_play.has(word)) statuses.fallen.add(word);
-    // A built-in word the GM's out_of_play narrowed away is dropped quietly: only a word they wrote is warned about.
-    else if (named('vault.statuses.fallen')) {
-      const written = nameIn(vaultPath, 'vault.statuses.fallen');
-      faults.push(makeFault({ name: written, setting: 'vault.statuses.fallen', kind: 'dropped', level: 'warn', message: `${written} holds "${word}", which is not in ${nameIn(vaultPath, 'vault.statuses.out_of_play')}; it does not count as fallen` }));
-    }
-  }
+  // not out of play is left out (the settings reader has already reported one the GM wrote).
+  const statuses = { out_of_play: statusWords(v.statuses.out_of_play), fallen: new Set(), gone: statusWords(v.statuses.gone) };
+  for (const word of statusWords(v.statuses.fallen)) if (statuses.out_of_play.has(word)) statuses.fallen.add(word);
   Object.defineProperty(merged, 'statuses', { value: statuses, enumerable: false });
 
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));

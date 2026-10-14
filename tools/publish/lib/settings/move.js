@@ -21,6 +21,7 @@ const { OLD_FILE, NEW_FILE, STATE_FILE, NOTES_FILE, SETTING_GROUPS, FIRST_TOOL_R
 const read = require('./read');
 const { OLD_BLOCK, VERSION_KEY, FILE_KEYS, SETUP_NOTE, hasLegacy } = require('./legacy');
 const { readState, stateText } = require('./state');
+const { splitScript } = require('./steps');
 const { splitFront, writeAtomic, planChanges } = require('./write');
 const { parseNote } = require('../frontmatter');
 
@@ -247,18 +248,6 @@ const HELD_STEPS_LINE = `The site's build steps stay in its package.json until i
 // The plan's answer for the held site-folder keys, in the shape of the held steps: { held: 'keys', spec, line }.
 const keysHeldAnswer = (hold) => ({ held: 'keys', spec: hold.spec, line: HELD_KEYS_LINE });
 const HELD_KEYS_LINE = `The site's address, host, output folder, project name and kept folders stay in its vault.config.json until its publish tool is ${STEPS_FROM} or later.`;
-
-// A package.json script as a list of commands: one entry per `&&` only when the text holds nothing a shell reads
-// differently (a quote, a pipe, a `;`, a bracket, a redirect, a line end, a lone `&`) and no part sets shell state for
-// the next (`cd`, `export`, `NAME=value` ...); otherwise it is one entry, whole.
-function splitScript(text) {
-  const whole = [text.trim()];
-  if (/["'`|;()<>\n\r]/.test(text) || text.replace(/&&/g, '').includes('&')) return whole;
-  const parts = text.split('&&').map((x) => x.trim());
-  // Each step is its own shell, so a part that sets shell state for the next (a folder, a variable) cannot be split off.
-  const setsState = (x) => /^(cd|pushd|popd|export|set|source)(\s|$)/.test(x) || /^\.(\s|$)/.test(x) || /^[A-Za-z_][A-Za-z0-9_]*=/.test(x);
-  return parts.some((x) => x === '' || setsState(x)) ? whole : parts;
-}
 
 // The site folder's package.json: { file, text, data } or null (none, or not an object of JSON).
 function readSitePackage(siteDir) {

@@ -281,7 +281,7 @@ async function runSiteDoctor(options, deps) {
   // A step still in the site's package.json runs under `npm run build` as well as, now, from the vault's settings.
   if (layoutOf(vaultPath) === 'new') {
     const notes = packageNotes(packageScripts(siteRoot), publishConfig.steps);
-    if (notes.twice) findings.push(finding('BUILD_STEPS_TWICE', 'warning', path.join(siteRoot, 'package.json'), notes.twice, 'nothing to do: the vault update moves it'));
+    if (notes.twice) findings.push(finding('BUILD_STEPS_TWICE', 'warning', path.join(siteRoot, 'package.json'), notes.twice, notes.fix));
   }
   // A vault still on the old settings file: whether the next update moves it depends on whose tool builds this
   // site and whether that tool can read the new file (move.js: siteToolHold).
