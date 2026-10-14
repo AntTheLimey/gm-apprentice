@@ -10,9 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.10.55] — 2026-10-13
 
 The publish tool learns the last settings that lived outside your vault,
-and a few new ones. Nothing moves yet: your site folder's file and its
-build steps keep working as they are, and the next release's update
-carries them into the vault for you.
+and a few new ones. A vault already on the new settings file is left as
+it is: its site folder's file and build steps keep working, and the next
+release's update carries them into the vault. A vault still on the old
+settings file has them carried in the same step that moves it.
 
 ### Added
 
@@ -50,7 +51,10 @@ carries them into the vault for you.
   `vault.statuses.fallen` and `vault.statuses.gone`.
 - `settings move` carries what a site folder still holds (its file's
   keys and its `package.json` build steps) into the vault, all or
-  nothing, and takes them out of the site folder. Nothing calls it yet.
+  nothing, and takes them out of the site folder. The update already
+  runs it when it moves a vault off the old settings file, so that vault
+  gets the site folder's left-overs carried at the same time; a vault
+  that has already moved gets them at the next release.
 
 ### Changed
 
