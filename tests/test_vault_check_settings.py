@@ -967,23 +967,17 @@ class SiteFileKeyTests(NewFileBase):
         self.assertIn("https://theirs.example", row.fix)
         self.assertNotIn("not read now", row.fix)
 
-    def test_while_one_key_blocks_the_move_the_other_site_rows_have_no_fix(self):
+    def test_while_one_key_blocks_the_move_the_other_site_keys_still_fix(self):
         vault, site_file = self.moved_vault_with_site_keys(
-            outputDir="../out", siteUrl="https://theirs.example",
-            preserveDirs=["gazetteer"])
+            outputDir="../out", siteUrl="https://theirs.example")
         by = {r.fault["name"]: r for r in self.rows(vault) if r.site}
-        self.assertEqual(sorted(by), ["outputDir", "preserveDirs", "siteUrl"])
-        self.assertIn("../out", by["outputDir"].fault["message"])
-        for row in by.values():
-            self.assertEqual(row.kind, "none")
-            self.assertEqual(row.ops, [])
-            self.assertIsNone(row.fix)
-        for name in ("siteUrl", "preserveDirs"):
-            self.assertIn("outputDir", by[name].note)
-        before = site_file.read_text()
-        code, out = self.fix_output(vault)
-        self.assertNotIn("not fixed", out)
-        self.assertEqual(site_file.read_text(), before)
+        self.assertEqual(sorted(by), ["outputDir", "siteUrl"])
+        self.assertIsNone(by["outputDir"].fix)
+        self.assertIsNotNone(by["siteUrl"].fix)
+        self.fix_output(vault)
+        left = json.loads(site_file.read_text())
+        self.assertEqual(left.get("outputDir"), "../out")
+        self.assertNotIn("siteUrl", left)
 
     def test_a_site_key_row_names_the_site_file_once(self):
         vault, _ = self.moved_vault_with_site_keys(siteUrl="https://theirs.example")

@@ -5117,22 +5117,6 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
 
 
 SITE_FILE_PLACE = "in the site folder's vault.config.json"
-SITE_FOLDER_KEYS = frozenset({"siteUrl", "host", "outputDir",
-                              "cloudflarePagesProject", "preserveDirs"})
-
-
-def _wait_on_blocker(rows: list[SettingsRow], key: str) -> None:
-    """While a value the tool cannot use blocks the move, the rows for the
-    site folder's own keys and its package.json steps wait on it: they stay,
-    without a fix. (A hiding key folds on its own and keeps its fix.)"""
-    for row in rows:
-        if row.site and row.ops and (
-                row.fault["name"] in SITE_FOLDER_KEYS
-                or row.where == "package.json"):
-            row.kind, row.ops, row.fix, row.done = "none", [], None, None
-            row.note = (f"Waits on {key}: the tool's move cannot run until it "
-                        "is fixed in the site folder's vault.config.json; "
-                        "then run this check again.")
 
 
 def _site_move_plan(vault: Path) -> dict[str, Any]:
@@ -5603,8 +5587,6 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
                 {**f, "message": message}, note=SITE_FILE_NOTE, site=True))
         if moved:
             rows.extend(_package_step_rows(move_plan))
-            if blocked:
-                _wait_on_blocker(rows, next(iter(blocked)))
     rows.sort(key=lambda r: (SETTINGS_KINDS.index(r.kind),
                              r.fault["level"] != "stop"))
     return rows, own.inline
