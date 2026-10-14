@@ -263,7 +263,7 @@ describe('init', () => {
         const result = await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
         assert.deepStrictEqual(Object.keys(JSON.parse(readFileSync(path.join(site, 'vault.config.json'), 'utf8'))).sort(), ['vaultPath']);
         assert.deepStrictEqual(result.vaultSettings.written,
-          ['player_site.publish', 'player_site.folder', 'player_site.url', 'player_site.host', 'player_site.output', 'player_site.title', 'player_site.folder_map', 'vault.attachments', 'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts']);
+          ['player_site.publish', 'player_site.folder', 'player_site.title', 'player_site.folder_map', 'vault.attachments', 'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts']);
         const tree = newOf(vault);
         const pub = tree.player_site;
         assert.strictEqual(tree.version, 1);
@@ -271,10 +271,10 @@ describe('init', () => {
         // The vault can find its site again: an absolute path, forward slashes.
         assert.strictEqual(pub.folder, path.resolve(site).split(path.sep).join('/'));
         assert.strictEqual(pub.title, 'Dead Light');
-        // The address, host and output folder are the vault's settings now, not the site file's.
-        assert.strictEqual(pub.url, 'https://example.github.io/my-campaign');
-        assert.strictEqual(pub.host, 'github-pages');
-        assert.strictEqual(pub.output, 'docs');
+        // The address, host and output folder are written nowhere: the built-in values stand until the set-up guide sets them.
+        assert.strictEqual(pub.url, undefined);
+        assert.strictEqual(pub.host, undefined);
+        assert.strictEqual(pub.output, undefined);
         assert.strictEqual(pub.folder_map['Chapters'], 'chapters');
         assert.strictEqual(tree.vault.attachments, '_attachments');
         assert.deepStrictEqual(pub.hide.folders, ['_meta', '_Templates', '_resources']);
@@ -292,6 +292,44 @@ describe('init', () => {
         await removeTmpDir(tmpDir);
       }
       assert.deepStrictEqual(lines.filter((l) => /WARNING/.test(l)), []);
+    });
+
+    it('a fresh init builds, dry-runs a deploy and passes doctor on the built-in defaults; a host and address the old guide writes to vault.config.json take effect', async () => {
+      const tmpDir = await makeTmpDir();
+      const real = { log: console.log, warn: console.warn, error: console.error };
+      try {
+        const site = path.join(tmpDir, 'site');
+        const vault = path.join(tmpDir, 'vault');
+        await fs.mkdir(vault);
+        await fs.writeFile(path.join(vault, 'Home.md'), '---\ntype: note\n---\n# Home\n');
+        await init(site, { siteTitle: 'Dead Light', vaultPath: vault });
+        const configPath = path.join(site, 'vault.config.json');
+        const said = [];
+        for (const k of Object.keys(real)) console[k] = (...a) => said.push(a.join(' '));
+        const { runDeploy } = require('../../lib/deploy-cli');
+        const dry = [];
+        assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => dry.push(String(l)), runCommand: () => ({ code: 1, stdout: '', stderr: '' }) }), 0);
+        assert.match(dry.join('\n'), /git add docs/, dry.join('\n'));
+        assert.doesNotMatch(dry.join('\n'), /WARNING|differs/);
+        const { runSiteDoctor } = require('../../lib/site-doctor');
+        const doc = [];
+        await runSiteDoctor({ configPath, json: true }, { out: (l) => doc.push(String(l)), detect: () => null });
+        const codes = JSON.parse(doc.join('\n')).findings.map((f) => f.code);
+        assert.ok(!codes.includes('SETTINGS_FAULT') && !codes.includes('CONFIG_INVALID'), codes.join(','));
+        build({ configPath });
+        assert.ok(existsSync(path.join(site, 'docs', 'index.html')));
+        assert.deepStrictEqual(said.filter((l) => /WARNING|differs/.test(l)), []);
+        // What the old guide wrote to the site file still takes effect.
+        const raw = JSON.parse(readFileSync(configPath, 'utf8'));
+        await fs.writeFile(configPath, JSON.stringify({ ...raw, host: 'cloudflare-pages', siteUrl: 'https://dead.pages.dev' }));
+        const cf = [];
+        assert.strictEqual(await runDeploy({ configPath, dryRun: true }, { out: (l) => cf.push(String(l)) }), 0);
+        assert.match(cf.join('\n'), /wrangler/, cf.join('\n'));
+        assert.doesNotMatch(cf.join('\n'), /git push/);
+      } finally {
+        Object.assign(console, real);
+        await removeTmpDir(tmpDir);
+      }
     });
 
     it('the site switch: init turns it on over an off, and a site turned off does not build', async () => {

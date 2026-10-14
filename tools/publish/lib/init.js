@@ -33,14 +33,11 @@ const DEFAULT_FOLDER_MAP = {
 
 // `siteDir` is where the vault finds its site again: vault_check asks the tool installed
 // there what publishes. `player_site.publish` says the vault has a site; `init` is the GM asking for one.
-// `siteUrl` is the address the site starts with; the host and the output folder start at their built-in values,
-// written out so the GM sees them.
-function defaultCampaignSettings(siteTitle, tagline, siteDir, siteUrl) {
+// The site's address, host and output folder are not written here: a placeholder address is no setting, and the
+// built-in host and folder stand until the set-up guide sets them.
+function defaultCampaignSettings(siteTitle, tagline, siteDir) {
   return {
     ...(siteDir ? { 'player_site.publish': true, 'player_site.folder': siteDir.split(path.sep).join('/') } : {}),
-    'player_site.url': siteUrl,
-    'player_site.host': entry('player_site.host').default,
-    'player_site.output': entry('player_site.output').default,
     'player_site.title': siteTitle,
     'player_site.folder_map': DEFAULT_FOLDER_MAP,
     'vault.attachments': '_attachments',
@@ -241,7 +238,7 @@ async function init(targetDir = '.', options = {}) {
   // The campaign settings go into the vault file. A vault that is not there yet, or a vault
   // file the editor refuses, never stops the scaffold: the site is written and the caller
   // is told which settings to add.
-  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest), values.SITE_URL), { turnSiteOn: true, siteConfig: JSON.parse(await fs.readFile(path.join(dest, 'vault.config.json'), 'utf8')) });
+  const vaultSettings = seedVaultSettings(vaultDir, defaultCampaignSettings(siteTitle, options.tagline, path.resolve(dest)), { turnSiteOn: true, siteConfig: JSON.parse(await fs.readFile(path.join(dest, 'vault.config.json'), 'utf8')) });
   if (vaultSettings.written.length) {
     const which = options.vaultPath ? '' : ' (the default vaultPath, ./vault)';
     log(`  wrote ${vaultSettings.written.map((n) => nameIn(vaultDir, n)).join(', ')} to ${fileLabel(vaultDir)} in ${vaultDir}${which}`);

@@ -307,9 +307,9 @@ the generated page `docs/site-settings.md`.
 |-------|----------|
 | The site itself | `player_site.url`, `host`, `output`, `cloudflare_project` and `keep` (these five were keys of the site's `vault.config.json`); `before_build` and `after_build` (the build steps); `menu_extra` (extra menu entries, each with a `label`, a `link` and optionally a `group`) |
 | The landing page | `player_site.landing.banner.title`, `text`, `link` and `image`: a banner across the top of the landing page, with nothing shown until one is set. The text goes through the same audit as any page |
-| Character sheets | `player_site.sheets.header_facts`: the fields a PC page shows as badges beside the player's name, when the note has no `display_meta` of its own (`occupation`, `age`, `nationality` unless set) |
-| What gets published | `player_site.withheld_words.person`, `place` and `thing`: the words printed in place of a withheld note's name (`someone`, `somewhere`, `something` unless set) |
-| Limits | `player_site.limits.timeline_events`, `recap_chars`, `card_excerpt_chars`, `card_fact_chars`, `card_title_chars`, `card_facts`, `list_goals` and `list_relationships`: how many entries a list shows and how long a piece of text runs before it is cut. A number below its floor, a fraction or text is a warning, and the built-in number is used |
+| Character sheets | `player_site.sheets.header_facts`: the fields a PC page shows as badges beside the player's name, when the note has no `display_meta` of its own |
+| What gets published | `player_site.withheld_words.person`, `place` and `thing`: the words printed in place of a withheld note's name |
+| Limits | `player_site.limits.timeline_events`, `recap_chars`, `card_excerpt_chars`, `card_fact_chars`, `card_title_chars`, `card_facts`, `list_goals` and `list_relationships`: how many entries a list shows and how long a piece of text runs before it is cut. A number below its floor, a fraction, or text that is not a number is a warning, and the built-in number is used (a whole number written in quotes is read as that number) |
 | The vault | `vault.statuses.out_of_play` (statuses that take a character off the party board), `vault.statuses.fallen` (the ones listed under "Fallen"; each must also be out of play) and `vault.statuses.gone` (things that no longer exist, left off the landing page's recent rows) |
 
 The generated page holds each setting's meaning and built-in value; this
@@ -425,9 +425,10 @@ The five keys that used to sit here are now:
 | `cloudflarePagesProject` | `player_site.cloudflare_project`: the Cloudflare Pages project name; the site folder's name unless set |
 | `preserveDirs` | `player_site.keep`: folders of the output kept across builds (e.g. `["superpowers"]`) |
 
-While a vault is still on the old settings file, or its site file still
-holds these keys, the tool reads them from the site file when the vault
-sets none, and warns that the next update moves them.
+While the site file still holds these keys and the vault sets none, the
+tool reads them from the site file. On a vault with the new settings file
+it warns that the next update moves them; a site whose own tool is older
+than 1.24.0 keeps them there.
 
 ### Keys an older site file may still hold
 
