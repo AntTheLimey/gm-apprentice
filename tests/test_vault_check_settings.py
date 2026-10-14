@@ -780,6 +780,85 @@ class SiteFileKeyTests(NewFileBase):
         self.assertIn('\n    "vaultPath"', text)     # its indentation kept
         self.assertEqual(self.rows(vault), [])
 
+    def fix_output(self, vault):
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            code = vc.check_settings(vault, True, [], False)
+        vc.forget_settings(None)
+        return code, buf.getvalue()
+
+    def test_a_folder_key_the_vault_does_not_set_is_a_certain_move_not_a_removal(self):
+        import json
+        vault, site_file = self.moved_vault_with_site_keys(
+            preserveDirs=["gazetteer"], outputDir="site-out")
+        rows = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        self.assertEqual(sorted(rows), ["outputDir", "preserveDirs"])
+        for row in rows.values():
+            self.assertEqual(row.kind, "certain")
+            self.assertEqual(row.ops, [{"op": "fold-site"}])
+            self.assertNotIn("not read now", row.fix)
+            self.assertIn("read from", row.fix)       # true until it is moved
+            self.assertIn("moves", row.fix)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        got = vc.settings(vault)
+        self.assertEqual(got.get("player_site.keep"), ["gazetteer"])
+        self.assertEqual(got.get("player_site.output"), "site-out")
+        left = json.loads(site_file.read_text())
+        self.assertNotIn("preserveDirs", left)
+        self.assertNotIn("outputDir", left)
+        self.assertEqual(self.rows(vault), [])
+
+    def test_a_build_step_left_in_package_json_is_a_certain_move(self):
+        import json
+        import site_fixture
+        vault, site_file = self.moved_vault_with_site_keys()
+        site_fixture.pin_site(site_file.parent)
+        pkg = site_file.parent / "package.json"
+        data = json.loads(pkg.read_text())
+        data["scripts"] = {"postbuild": "node scripts/glue.mjs"}
+        pkg.write_text(json.dumps(data))
+        rows = [r for r in self.rows(vault) if r.site]
+        (row,) = rows
+        self.assertEqual(row.kind, "certain")
+        self.assertEqual(row.ops, [{"op": "fold-site"}])
+        self.assertIn("package.json", row.fault["message"])
+        self.assertNotIn("not read now", row.fix)
+        code, out = self.fix_output(vault)
+        self.assertEqual(code, 0, out)
+        self.assertEqual(vc.settings(vault).get("player_site.after_build"),
+                         ["node scripts/glue.mjs"])
+        self.assertNotIn("postbuild", json.loads(pkg.read_text()).get("scripts", {}))
+        self.assertEqual(self.rows(vault), [])
+
+    def test_an_unusable_folder_key_says_what_is_wrong_and_has_no_automatic_fix(self):
+        vault, site_file = self.moved_vault_with_site_keys(preserveDirs="gazetteer")
+        before = site_file.read_text()
+        rows = [r for r in self.rows(vault) if r.site]
+        (row,) = rows
+        self.assertEqual(row.kind, "none")
+        self.assertEqual(row.ops, [])
+        self.assertIn("takes a list", row.fault["message"])
+        self.assertIn("fix it in", row.note)
+        code, out = self.fix_output(vault)
+        self.assertNotIn("failed to start", out)
+        self.assertNotIn("fix:", out)
+        self.assertIn("takes a list", out)
+        self.assertEqual(site_file.read_text(), before)
+
+    def test_a_site_whose_tool_is_older_gets_a_row_that_says_where_they_stay(self):
+        import site_fixture
+        from test_migrate_move import install_as
+        vault, site_file = self.moved_vault_with_site_keys(preserveDirs=["gazetteer"])
+        site = site_file.parent
+        site_fixture.pin_site(site, "^1.20.0")
+        install_as(site, "1.23.1")
+        rows = [r for r in self.rows(vault) if r.site]
+        (row,) = rows
+        self.assertEqual(row.kind, "none")
+        self.assertEqual(row.ops, [])
+        self.assertIn("1.24.0", row.note)
+
     def test_a_site_hiding_key_that_is_not_a_list_says_nothing_was_carried(self):
         vault, site_file = self.moved_vault_with_site_keys(
             excludeSections="Secret", excludeFields=["motive"])

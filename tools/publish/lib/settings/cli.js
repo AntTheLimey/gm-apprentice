@@ -79,6 +79,7 @@ function faultJson(f) {
   if (f.setting) out.setting = f.setting;
   if (f.suggest) out.suggest = f.suggest;
   if (f.use) out.use = f.use;
+  if (f.siteLeft) out.siteLeft = true;
   return out;
 }
 // Stops first, otherwise in the order found.
@@ -112,9 +113,7 @@ function get(options, names) {
     values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])),
     origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])),
     written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
-    // Not the "moves at the next update" fault of a site-folder key: vault_check.py's Settings check would offer to
-    // delete a key that is still read (see the test in settings-cli.test.js). `check` and the build still report it.
-    faults: faults.filter((f) => !f.siteLeft).map(faultJson),
+    faults: faults.map(faultJson),
   };
   const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));
@@ -646,7 +645,7 @@ function move(options) {
     if (named && named.exists) siteConfigPath = named.file;
   }
   const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile });
-  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.keysHeld ? { keysHeld: plan.keysHeld } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
   if (plan.held) {
     return { result: base(false, [plan.line]), lines: ['Nothing was changed.', plan.line], rc: 1 };
   }

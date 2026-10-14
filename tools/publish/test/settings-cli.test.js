@@ -857,19 +857,20 @@ test('get names each setting as the vault\'s own file writes it', () => {
   assert.equal(now['player_site.title'], 'player_site.title');
 });
 
-// The Python Settings check (skills/shared/scripts/vault_check.py, `_site_key_row`) turns every fault in the faults of
-// `get --json` that the site folder's file adds into a row that offers to take the key out of that file, and says the
-// vault's own value is "already the value in use". That is false for the five folder keys while the vault sets none
-// (they are read from the site file until the next update moves them), so `get --json` must not carry that fault.
-// The words `check` and the build print are unchanged.
-test('get --json leaves out the "moves at the next update" fault of a site-folder key, which check still reports; a hiding key keeps its fault', () => {
+// The Python Settings check (skills/shared/scripts/vault_check.py, `_site_key_row`) reads the "moves at the next update"
+// fault of a site-folder key from `get --json`, marked `siteLeft`, and gives it the tool's move as its fix. A hiding key
+// is not marked: it keeps its own row and fix.
+test('get --json carries the "moves at the next update" fault of a site-folder key, marked siteLeft; a hiding key keeps its fault unmarked', () => {
   const s = scratch(null, { vaultPath: './vault', preserveDirs: ['gazetteer'], outputDir: 'site-out', excludeSections: ['Site Secret'] });
   fs.writeFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'version: 1\n');
   const got = run(s, 'get', [], { config: s.config });
   assert.equal(got.data.values['player_site.keep'][0], 'gazetteer', 'the site file\'s folder keys are still read');
   assert.equal(got.data.values['player_site.output'], 'site-out');
-  assert.deepEqual(got.data.faults.filter((f) => ['preserveDirs', 'outputDir'].includes(f.name)), []);
-  assert.ok(got.data.faults.some((f) => f.name === 'excludeSections' && f.level === 'stop'), JSON.stringify(got.data.faults));
+  const left = got.data.faults.filter((f) => ['preserveDirs', 'outputDir'].includes(f.name));
+  assert.deepEqual(left.map((f) => f.name).sort(), ['outputDir', 'preserveDirs']);
+  assert.ok(left.every((f) => f.siteLeft === true && /moves to `player_site\./.test(f.message)), JSON.stringify(left));
+  const hiding = got.data.faults.find((f) => f.name === 'excludeSections');
+  assert.ok(hiding && hiding.level === 'stop' && hiding.siteLeft === undefined, JSON.stringify(got.data.faults));
   const check = run(s, 'check', [], { config: s.config });
   assert.ok(check.data.faults.some((f) => f.name === 'preserveDirs' && /moves to `player_site.keep` at the next update/.test(f.message)), JSON.stringify(check.data.faults));
   assert.ok(check.data.faults.some((f) => f.name === 'outputDir'));

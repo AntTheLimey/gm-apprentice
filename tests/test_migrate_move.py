@@ -284,6 +284,145 @@ class MoveEndToEndTests(unittest.TestCase):
                          "Hollow Site")
 
 
+def add_steps(site, **scripts):
+    """The site's package.json gains these scripts (prebuild, postbuild ...)."""
+    file = site / "package.json"
+    data = json.loads(file.read_text(encoding="utf-8"))
+    data["scripts"] = {**data.get("scripts", {}), **scripts}
+    file.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def moved_vault_with_site(case, spec=None, installed="1.24.0", **site_keys):
+    """A vault already on the new settings file, naming a private site."""
+    vault = tmp(case) / "Vault"
+    (vault / "_meta").mkdir(parents=True)
+    site = site_fixture.private_site()
+    (vault / "_meta" / "vault-config.yaml").write_text(
+        f"version: 1\nplayer_site:\n  publish: true\n"
+        f"  folder: {site.as_posix()}\n", encoding="utf-8")
+    write_stamp(vault, "1.10.50")
+    site_fixture.point_site_at(vault, site, **site_keys)
+    # The shared fixture's folderMap is a setting the vault's file decides;
+    # these sites hold only what the test names.
+    file = site / "vault.config.json"
+    config = json.loads(file.read_text(encoding="utf-8"))
+    config.pop("folderMap", None)
+    file.write_text(json.dumps(config), encoding="utf-8")
+    site_fixture.pin_site(site, spec)
+    if spec is not None:
+        install_as(site, installed)
+    return vault, site
+
+
+DEAD_END_STEPS = " && ".join(f"node scripts/{n}.mjs" for n in "abcdefg")
+
+
+@NEEDS_NODE
+class SiteLeftoversTests(unittest.TestCase):
+    def test_a_canticle_shaped_site_moves_in_one_pass_and_a_second_finds_nothing(self):
+        vault = make_vault(self)
+        site = with_site(self, vault, campaignImage="images/cover.jpg",
+                         fourOhFour={"message": "This document is sealed."},
+                         preserveDirs=["gazetteer"])
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        code, plan, err = update(vault, "plan")
+        self.assertEqual(code, 0, err)
+        self.assertIn("Your site's 'page not found' message becomes: "
+                      "This document is sealed.", plan)
+        self.assertIn("Your campaign picture becomes: images/cover.jpg", plan)
+        code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(vault_layout(vault), "new")
+        self.assertEqual(read_stamp(vault), PLUGIN)
+        s = settings(vault)
+        self.assertEqual(s.get("player_site.not_found"),
+                         "This document is sealed.")
+        self.assertEqual(s.get("player_site.theme.campaign_image"),
+                         "images/cover.jpg")
+        self.assertEqual(s.get("player_site.keep"), ["gazetteer"])
+        self.assertEqual(s.get("player_site.after_build"),
+                         ["node scripts/glue.mjs"])
+        left = json.loads((site / "vault.config.json").read_text())
+        for key in ("campaignImage", "fourOhFour", "preserveDirs"):
+            self.assertNotIn(key, left)
+        pkg = json.loads((site / "package.json").read_text())
+        self.assertNotIn("postbuild", pkg.get("scripts", {}))
+        self.assertEqual(update(vault, "plan")[1].splitlines()[1], "up to date")
+
+    def test_a_vault_moved_earlier_carries_a_dead_end_shaped_sites_steps(self):
+        vault, site = moved_vault_with_site(self, preserveDirs=["gazetteer"])
+        add_steps(site, postbuild=DEAD_END_STEPS)
+        code, plan, err = update(vault, "plan")
+        self.assertIn("settings-move\tThe site's 7 postbuild steps moved to "
+                      "`player_site.after_build`", plan)
+        code, did, err = update(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        s = settings(vault)
+        self.assertEqual(len(s.get("player_site.after_build")), 7)
+        self.assertEqual(s.get("player_site.keep"), ["gazetteer"])
+        self.assertEqual(read_stamp(vault), PLUGIN)
+        self.assertEqual(update(vault, "plan")[1].splitlines()[1], "up to date")
+
+    def test_a_site_whose_tool_is_older_keeps_its_steps_and_keys_and_the_stamp_advances(self):
+        vault, site = moved_vault_with_site(
+            self, spec="^1.20.0", installed="1.23.1", preserveDirs=["gazetteer"])
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        before = hashes(site)
+        code, plan, err = update(vault, "plan")
+        self.assertIn("The site's build steps stay in its package.json until "
+                      "its publish tool is 1.24.0 or later.", plan)
+        self.assertIn("The site's address, host, output folder, project name "
+                      "and kept folders stay in its vault.config.json until "
+                      "its publish tool is 1.24.0 or later.", plan)
+        code, did, err = update(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(read_stamp(vault), PLUGIN)
+        self.assertNotIn("not stamped", did)
+        self.assertEqual(hashes(site), before)
+
+    def test_an_old_layout_vault_with_a_1_23_1_site_moves_and_holds_both_parts(self):
+        vault = make_vault(self)
+        site = with_site(self, vault, spec="^1.23.0", installed="1.23.1",
+                         preserveDirs=["gazetteer"], siteTitle="Hollow")
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        code, plan, err = update(vault, "plan")
+        self.assertIn("The site's build steps stay in its package.json", plan)
+        self.assertIn("stay in its vault.config.json until its publish tool "
+                      "is 1.24.0 or later", plan)
+        code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(vault_layout(vault), "new")
+        self.assertEqual(read_stamp(vault), PLUGIN)
+        left = json.loads((site / "vault.config.json").read_text())
+        self.assertEqual(left["preserveDirs"], ["gazetteer"])
+        self.assertNotIn("siteTitle", left)
+        self.assertIn("postbuild", json.loads(
+            (site / "package.json").read_text())["scripts"])
+
+    def test_the_postbuild_reminder_reads_steps_from_the_settings_not_package_json(self):
+        vault, site = moved_vault_with_site(self)
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        update(vault, "apply")
+        (item,) = ms.find_postbuild(vault)
+        self.assertIn("build steps", item.lines[0])
+        self.assertIn("node scripts/glue.mjs", item.lines[0])
+        self.assertNotIn("package.json", item.lines[0])
+
+    def test_held_keys_alone_are_told_too(self):
+        vault, site = moved_vault_with_site(
+            self, spec="^1.20.0", installed="1.23.1", preserveDirs=["gazetteer"])
+        items = ms.find_settings_move(vault)
+        self.assertEqual([i.group for i in items], [ms.PERSON])
+        self.assertFalse(items[0].holds_stamp)
+        self.assertIn("stay in its vault.config.json", "".join(items[0].lines))
+
+    def test_a_vault_with_no_site_and_the_new_file_finds_nothing(self):
+        vault = tmp(self) / "Vault"
+        (vault / "_meta").mkdir(parents=True)
+        (vault / "_meta" / "vault-config.yaml").write_text("version: 1\n")
+        self.assertEqual(ms.find_settings_move(vault), [])
+
+
 class RuleTests(unittest.TestCase):
     def test_the_check_replaces_config_to_vault(self):
         names = [c.name for c in ms.SITE_CHECKS]

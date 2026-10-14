@@ -201,7 +201,7 @@ function planCarry(site, held, siteDir, { holdKeys = false } = {}) {
     if (r.value === null || (typeof r.value === 'string' && r.value.trim() === '') || (Array.isArray(r.value) && r.value.length === 0)) continue;
     const mine = held(e.name);
     if (!mine.set) {
-      out.carried.push({ from: w.name, to: e.name, value: r.value });
+      out.carried.push({ from: w.name, to: e.name, value: r.value, ...(w.carryOnly ? { shows: true } : {}) });
       out.values[e.name] = r.value;
       out.changes.push({ op: 'set', name: e.name, value: r.value });
       out.lines.push(`\`${w.name}\` moved to \`${e.name}\`.`);
@@ -244,6 +244,8 @@ function expectCarried(before, values) {
 
 const STEP_ENTRIES = REGISTRY.filter((e) => e.stepsFrom);
 const HELD_STEPS_LINE = `The site's build steps stay in its package.json until its publish tool is ${STEPS_FROM} or later.`;
+// The plan's answer for the held site-folder keys, in the shape of the held steps: { held: 'keys', spec, line }.
+const keysHeldAnswer = (hold) => ({ held: 'keys', spec: hold.spec, line: HELD_KEYS_LINE });
 const HELD_KEYS_LINE = `The site's address, host, output folder, project name and kept folders stay in its vault.config.json until its publish tool is ${STEPS_FROM} or later.`;
 
 // A package.json script as a list of commands: one entry per `&&` only when the text holds nothing a shell reads
@@ -774,6 +776,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
       remove: noOld ? [] : [at(vault, OLD_FILE)],
     },
     ...(stepsPlan && stepsPlan.stepsHeld ? { stepsHeld: stepsPlan.stepsHeld } : {}),
+    ...(keysHeld ? { keysHeld: keysHeldAnswer(gate()) } : {}),
   };
   Object.defineProperty(result, INTERNAL, { value: { ...m, lines }, enumerable: false });
   return result;
@@ -921,6 +924,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
   let stepsPlan = null;
   let leftover = null;
   let siteDiffersNow = [];
+  let keysHeldNow = null;
   if (mend.cleanup.length) lines.push(`${mend.cleanup.length === 1 ? 'A hidden file' : 'Hidden files'} left by an earlier move will be removed: ${mend.cleanup.map((f) => path.basename(f)).join(', ')}.`);
 
   const oldPath = at(vault, OLD_FILE);
@@ -952,6 +956,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
       const heldNow = (name) => ({ set: now.origins[name] !== undefined && now.origins[name] !== 'default', value: getPath(now.values, name.split('.')) });
       const gate = stepsGate(path.dirname(siteFile), { siteToolUpdated, pinCheck: deps.pinCheck });
       const keysHeld = hasFolderKeys(site) ? gate() !== null : false;
+      if (keysHeld) keysHeldNow = gate();
       carry = planCarry(site, heldNow, path.dirname(siteFile), { holdKeys: keysHeld });
       if (carry.blockers.length) return { ok: false, lines: [], blockers: carry.blockers, files: { write: [], remove: [] } };
       stepsPlan = planSteps(path.dirname(siteFile), heldNow, { siteToolUpdated, pinCheck: deps.pinCheck, gate });
@@ -1020,6 +1025,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
   if (moved) lines[0] = `This vault is already on the new settings file (${NEW_FILE}).`;
   const done = plan({ lines, files: { write, remove }, carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])], dropped: carry.dropped });
   if (stepsPlan && stepsPlan.stepsHeld) done.stepsHeld = stepsPlan.stepsHeld;
+  if (keysHeldNow) done.keysHeld = keysHeldAnswer(keysHeldNow);
   if (leftover) done.leftover = leftover;
   if (siteDiffersNow.length) done.siteDiffers = siteDiffersNow;
   if (write.length || remove.length) Object.defineProperty(done, INTERNAL, { value: { mend }, enumerable: false });

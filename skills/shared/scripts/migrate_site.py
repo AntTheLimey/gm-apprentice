@@ -183,9 +183,19 @@ def find_settings_move(vault: Path) -> list[Item]:
             "vault.config.json\tstill holds settings this vault's file "
             f"decides ({', '.join(str(x) for x in differs)}); run "
             "campaign-qa's Settings check, which takes them out safely"]))
+    # Left behind, not wrong: the site's installed tool is older than the one
+    # that runs steps and reads the folder keys from the vault. The tool says
+    # which part and in what words; neither holds the stamp.
+    for key, where in (("stepsHeld", "package.json (site)"),
+                       ("keysHeld", "vault.config.json (site)")):
+        held = plan.get(key)
+        if isinstance(held, dict) and held.get("line"):
+            items.append(Item(f"{MOVE}-{key}", PERSON,
+                              [f"{where}\t{held['line']}"]))
     files = plan.get("files") or {}
     if not (files.get("write") or files.get("remove")):
         return items
+    shows = _shows_lines(plan)
 
     def apply(_value: str | None) -> list[str]:
         done = _ask_move(vault, base)
@@ -196,9 +206,30 @@ def find_settings_move(vault: Path) -> list[Item]:
         if layout == "legacy" and vault_layout(vault) != "new":
             raise StepFailed("the move finished but the vault is not on the "
                              "new settings file")
-        return [str(x) for x in done["lines"]]
+        return [*_shows_lines(done), *[str(x) for x in done["lines"]]]
 
-    return [*items, Item(MOVE, WILL, [str(x) for x in plan["lines"]], apply)]
+    return [*items,
+            Item(MOVE, WILL, [*shows, *[str(x) for x in plan["lines"]]], apply)]
+
+
+# What the page says for each value the move carries that changes what the
+# site shows. The tool marks such a value (`shows`); this only words it.
+_SHOWS = {
+    "player_site.not_found": "Your site's 'page not found' message becomes",
+    "player_site.theme.campaign_image": "Your campaign picture becomes",
+}
+
+
+def _shows_lines(plan: dict[str, Any]) -> list[str]:
+    """A value carried out of the site folder that the site did not show
+    before (it was read by nothing), told on its own line."""
+    out = []
+    for c in plan.get("carried") or []:
+        if isinstance(c, dict) and c.get("shows"):
+            what = _SHOWS.get(str(c.get("to")),
+                              f"What your site shows for {c.get('to')} becomes")
+            out.append(f"{what}: {c.get('value')}")
+    return out
 
 
 def find_publish_site(vault: Path) -> list[Item]:
@@ -453,7 +484,7 @@ def find_sheet_source(vault: Path) -> list[Item]:
 
 
 POSTBUILD = ("the publish tool now adds the light/dark toggle and leaves "
-             "retired PCs off the party board; if this script does either, "
+             "retired PCs off the party board; if this step does either, "
              "remove that part")
 
 
@@ -466,13 +497,23 @@ def find_postbuild(vault: Path) -> list[Item]:
     try:
         data = json.loads((site / "package.json").read_text(encoding="utf-8"))
     except (OSError, ValueError):
-        return []
+        data = None
     scripts = data.get("scripts") if isinstance(data, dict) else None
     script = scripts.get("postbuild") if isinstance(scripts, dict) else None
-    if not isinstance(script, str) or not script.strip():
+    if isinstance(script, str) and script.strip():
+        return [Item("postbuild", PERSON,
+                     [f'package.json (site)\tbuild step "{script}": '
+                      f"{POSTBUILD}"])]
+    # The steps are in the vault's settings now (the move carried them).
+    try:
+        steps = settings(vault).get("player_site.after_build")
+    except (SettingsUnavailable, KeyError):
         return []
+    if not isinstance(steps, list) or not steps:
+        return []
+    name = setting_name(vault, "player_site.after_build")
     return [Item("postbuild", PERSON,
-                 [f'package.json (site)\tpostbuild script "{script}": '
+                 [f'{name} (settings)\tbuild steps "{" && ".join(map(str, steps))}": '
                   f"{POSTBUILD}"])]
 
 

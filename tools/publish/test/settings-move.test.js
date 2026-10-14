@@ -1054,6 +1054,8 @@ for (const [layout, make] of Object.entries(LAYOUTS)) {
     assert.deepEqual(r.data.carried.map((c) => c.from).sort(), ['campaignImage', 'cloudflarePagesProject', 'fourOhFour.message', 'host', 'landingTagline', 'outputDir', 'preserveDirs', 'siteUrl']);
     assert.deepEqual(r.data.carried.find((c) => c.from === 'preserveDirs'), { from: 'preserveDirs', to: 'player_site.keep', value: ['keep', 'audio'] });
     assert.deepEqual(r.data.dropped.map((d) => d.from), ['fourOhFour.style']);
+    // The two values only the move reads change what the site shows: the plan marks them.
+    assert.deepEqual(r.data.carried.filter((c) => c.shows).map((c) => c.from).sort(), ['campaignImage', 'fourOhFour.message']);
     assert.ok(r.data.dropped[0].why);
     const again = hashes(s.root);
     const second = cliMove({ vault: s.vault, config: s.config });
@@ -1210,6 +1212,8 @@ test('a site whose installed tool is older than 1.24.0 keeps its steps in packag
   assert.equal(vaultValues(s).output, 'docs', 'the folder key stays in the site file while its tool cannot read it from the vault');
   assert.equal(siteJson(s).outputDir, 'gazetteer');
   assert.deepEqual(r.data.stepsHeld.held, 'steps');
+  assert.equal(r.data.keysHeld.held, 'keys');
+  assert.ok(r.data.keysHeld.line.startsWith('The site\'s address, host, output folder'), r.data.keysHeld.line);
   const line = 'The site\'s build steps stay in its package.json until its publish tool is 1.24.0 or later.';
   assert.ok(r.data.lines.includes(line), r.data.lines.join('\n'));
   assert.equal(r.data.carried.some((c) => c.to === 'player_site.after_build'), false);

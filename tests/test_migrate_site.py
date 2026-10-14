@@ -504,6 +504,7 @@ class PersonRowTests(unittest.TestCase):
         self.assertEqual(item.group, PERSON)
         self.assertIn("node add-toggle.js", item.lines[0])
         self.assertTrue(item.lines[0].startswith("package.json (site)\t"))
+        self.assertIn("build step", item.lines[0])
         (site / "package.json").write_text("{}", encoding="utf-8")
         self.assertEqual(ms.find_postbuild(vault), [])
         self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])

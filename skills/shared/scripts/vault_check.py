@@ -4998,6 +4998,7 @@ class SettingsRow:
     note: str | None = None
     comments: list[str] = field(default_factory=list)
     site: bool = False
+    where: str | None = None    # the file a site row names, when not vault.config.json
 
     @property
     def certain(self) -> bool:
@@ -5112,6 +5113,87 @@ def _classify_move(fault_kind: str, name: str, value: Any, target: str,
         row.fix = f"{move}; {_effect(info, target, value)}"
         row.done = f"moved {name} to {target}"
     return row
+
+
+def _site_move_plan(vault: Path) -> dict[str, Any]:
+    """What the tool's move would do with the site folder's files, or {}
+    when it cannot say (a blocked move exits 1; its words are the fault's)."""
+    try:
+        return settings_move_plan(vault)
+    except SettingsUnavailable:
+        return {}
+
+
+def _site_left_row(fault: dict[str, Any], plan: dict[str, Any]) -> SettingsRow:
+    """A site-folder key the vault sets none of: the site file's value is
+    read until the tool's move carries it into the vault. Certain: the move
+    changes nothing the site shows. Where the site's own tool is too old to
+    read the vault for it, the move leaves it, and the row says so."""
+    row = SettingsRow(fault, site=True)
+    held = plan.get("keysHeld")
+    if isinstance(held, dict) and held.get("line"):
+        row.note = (f"{held['line']} It is read from vault.config.json until "
+                    "then.")
+        return row
+    target = str(fault.get("use") or fault.get("setting") or "")
+    key = fault["name"]
+    row.kind = "certain"
+    row.ops = [{"op": "fold-site"}]
+    row.fix = (f"move it to {target} in the vault's settings and take it out "
+               "of vault.config.json (until it moves, the value is read from "
+               "vault.config.json, so the site builds the same either way)")
+    row.done = f"moved {key} to {target}"
+    return row
+
+
+def _site_unusable_row(fault: dict[str, Any]) -> SettingsRow:
+    """A site-folder key whose value the tool cannot use (the fault says what
+    it takes). The move would stop on it; the GM corrects it in the site
+    file."""
+    row = SettingsRow(fault, site=True)
+    row.note = ("Nothing is changed automatically: fix it in the site "
+                "folder's vault.config.json, then run this check again.")
+    return row
+
+
+def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
+    """The build steps the site folder's package.json still holds on a moved
+    vault: certain rows, fixed by the tool's move. The tool names what it
+    would carry (`carried`, from `package.json <script>`); steps that the
+    vault's settings already hold are removed from package.json."""
+    rows: list[SettingsRow] = []
+    carried = [c for c in plan.get("carried") or []
+               if isinstance(c, dict)
+               and str(c.get("from", "")).startswith("package.json ")]
+    for c in carried:
+        script = str(c["from"]).split(" ", 1)[1]
+        target = str(c.get("to"))
+        fault = {"name": f"package.json {script}", "level": "warn",
+                 "kind": "dropped", "setting": target, "use": target,
+                 "message": f"the site's {script} step is still in "
+                            "package.json; its tool runs it from there until "
+                            f"the update moves it to {target}"}
+        row = SettingsRow(fault, site=True, where="package.json")
+        row.kind = "certain"
+        row.ops = [{"op": "fold-site"}]
+        row.fix = (f"move it to {target} in the vault's settings and take it "
+                   "out of package.json (the tool then runs it from the "
+                   "settings)")
+        row.done = f"moved the {script} step to {target}"
+        rows.append(row)
+    written = [Path(str(p)).name for p in (plan.get("files") or {}).get("write") or []]
+    if not carried and "package.json" in written:
+        fault = {"name": "package.json", "level": "warn", "kind": "dropped",
+                 "message": "package.json holds build steps that the vault's "
+                            "settings already hold, so they run twice under "
+                            "npm run build"}
+        row = SettingsRow(fault, site=True, where="package.json")
+        row.kind = "certain"
+        row.ops = [{"op": "fold-site"}]
+        row.fix = "take them out of package.json (the tool runs the vault's)"
+        row.done = "took the build steps out of package.json"
+        rows.append(row)
+    return rows
 
 
 def _site_key_row(fault: dict[str, Any], own: Any,
@@ -5361,19 +5443,36 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
                 (site / "vault.config.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             site_json = {}
+        moved = vault_layout(vault) == "new"
+        move_plan = _site_move_plan(vault) if moved else {}
+        left_names = {f["name"] for f in merged.faults if f.get("siteLeft")}
         for f in merged.faults:
             if (f["name"], f["kind"], f["message"]) in seen:
                 continue
             message = (f"{f['message']} (in the site folder's "
                        "vault.config.json)")
-            if vault_layout(vault) == "new":
-                rows.append(_site_key_row(
-                    {**f, "message": message}, own,
-                    site_json.get(f["name"]) if isinstance(site_json, dict)
-                    else None))
+            if moved:
+                fault = {**f, "message": message}
+                if f.get("siteLeft") and any(
+                        g["name"] == f["name"] and g["level"] == "stop"
+                        for g in merged.faults):
+                    continue    # the unusable value's own row says it
+                if f.get("siteLeft"):
+                    rows.append(_site_left_row(fault, move_plan))
+                elif f["level"] == "stop" and f["name"] in left_names:
+                    rows.append(_site_unusable_row(fault))
+                else:
+                    rows.append(_site_key_row(
+                        fault, own,
+                        site_json.get(f["name"])
+                        if isinstance(site_json, dict) else None))
                 continue
+            if f.get("siteLeft"):
+                continue    # the update moves it; the legacy file reads it
             rows.append(SettingsRow(
                 {**f, "message": message}, note=SITE_FILE_NOTE, site=True))
+        if moved:
+            rows.extend(_package_step_rows(move_plan))
     rows.sort(key=lambda r: (SETTINGS_KINDS.index(r.kind),
                              r.fault["level"] != "stop"))
     return rows, own.inline
@@ -5397,7 +5496,7 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
 
 def _row_lines(r: SettingsRow, file_name: str) -> list[str]:
     word = "STOP" if r.fault["level"] == "stop" else "WARN"
-    where = "vault.config.json" if r.site else file_name
+    where = r.where or ("vault.config.json" if r.site else file_name)
     lines = [f"{word}\t{where}\t{r.fault['message']}"]
     if r.fix:
         lines.append(f"{'proposed' if r.kind == 'proposed' else 'fix'}: "
