@@ -142,6 +142,15 @@ test('new layout, the vault sets it: the vault wins, and a different value in th
   }
 });
 
+test('new layout: ./docs in the site file and docs in the vault are the same folder, so nothing differs', () => {
+  const s = site('new', { outputDir: 'docs' });
+  s.siteConfig = { ...s.siteConfig, outputDir: './docs/' };
+  const r = read(s);
+  assert.deepEqual(faultsOn(r, 'player_site.output'), []);
+  s.siteConfig = { ...s.siteConfig, outputDir: './public' };
+  assert.equal(faultsOn(read(s), 'player_site.output').length, 1, 'a different folder is still reported');
+});
+
 test('new layout, the vault sets it and the site file says the same: nothing to warn about', () => {
   const s = site('new', FULL);
   s.siteConfig = { vaultPath: '../vault', ...FULL };
@@ -231,6 +240,46 @@ test('doctor --site: a key still in the site file of a moved vault is a note, no
   assert.equal(rc, 0);
   assert.equal(report.counts.notes, 1);
   assert.equal(report.counts.warnings, 0);
+});
+
+// ---- Final fix wave: the writer refuses what the reader would stop on, and a bad value can always be taken out ----
+
+const { runSettings } = require('../lib/settings/cli');
+function settings(s, verb, args) {
+  const out = [];
+  const err = [];
+  const rc = runSettings({ verb, args, vault: s.vault, config: path.join(s.siteDir, 'vault.config.json'), json: true }, { out: (l) => out.push(l), err: (l) => err.push(l) });
+  return { rc, out: out.join('\n'), err: err.join('\n') };
+}
+
+test('settings set and add refuse a folder value the build would stop on, with the reader\'s own message, and write nothing', () => {
+  const s = site('new');
+  fs.writeFileSync(path.join(s.siteDir, 'vault.config.json'), JSON.stringify(s.siteConfig));
+  const file = path.join(s.vault, '_meta', 'vault-config.yaml');
+  const before = fs.readFileSync(file, 'utf8');
+  for (const bad of ['../outside', '.', '/elsewhere/dir']) {
+    const r = settings(s, 'set', [`player_site.output=${bad}`]);
+    assert.notEqual(r.rc, 0, `output=${bad}: ${r.out}${r.err}`);
+    assert.match(r.out + r.err, /a folder inside the site folder, not the site folder itself and not outside it/, bad);
+  }
+  for (const bad of ['gazetteer/', 'a/b', '..', 'x..y']) {
+    const r = settings(s, 'add', ['player_site.keep', bad]);
+    assert.notEqual(r.rc, 0, `keep ${bad}: ${r.out}${r.err}`);
+    assert.match(r.out + r.err, /each entry must be a plain folder name/, bad);
+  }
+  assert.equal(fs.readFileSync(file, 'utf8'), before, 'nothing was written');
+  assert.equal(settings(s, 'set', ['player_site.output=gazetteer']).rc, 0);
+  assert.equal(settings(s, 'add', ['player_site.keep', 'maps']).rc, 0);
+});
+
+test('a bad folder value already in the file can always be taken out, by remove or unset, and a good one set over it', () => {
+  const s = site('new', { outputDir: '../outside', preserveDirs: ['gazetteer/', 'maps'] });
+  fs.writeFileSync(path.join(s.siteDir, 'vault.config.json'), JSON.stringify(s.siteConfig));
+  const gone = settings(s, 'remove', ['player_site.keep', 'gazetteer/']);
+  assert.equal(gone.rc, 0, gone.out + gone.err);
+  assert.deepEqual(readSettings({ vaultPath: s.vault, siteConfig: s.siteConfig, siteDir: s.siteDir }).values.player_site.keep, ['maps']);
+  assert.equal(settings(s, 'unset', ['player_site.output']).rc, 0);
+  assert.equal(readSettings({ vaultPath: s.vault, siteConfig: s.siteConfig, siteDir: s.siteDir }).values.player_site.output, 'docs');
 });
 
 test('the site file holds only vaultPath as far as the tool is concerned', () => {

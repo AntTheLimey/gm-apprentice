@@ -648,7 +648,7 @@ test('no file the move replaces is ever missing while it runs', () => {
 test('a second move on a moved vault removes the hidden files a stopped move left, and says so', () => {
   const s = scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', siteTitle: 'T' } });
   assert.equal(cliMove({ vault: s.vault, config: s.config }).rc, 0);
-  const strays = [path.join(s.vault, '_meta', `.${path.basename(NEW_FILE)}.4242.move.old`), path.join(s.vault, '_meta', `.${path.basename(OLD_FILE)}.4242.move.old`), path.join(s.root, '.vault.config.json.4242.move.new')];
+  const strays = [path.join(s.vault, '_meta', `.${path.basename(NEW_FILE)}.4242.move.old`), path.join(s.vault, '_meta', `.${path.basename(OLD_FILE)}.4242.move.old`), path.join(s.root, '.vault.config.json.4242.move.new'), path.join(s.root, '.package.json.4242.move.new'), path.join(s.root, '.package.json.4242.move.old')];
   for (const f of strays) fs.writeFileSync(f, 'x');
   const unrelated = path.join(s.vault, '_meta', '.keep.4242.move.old');
   fs.writeFileSync(unrelated, 'x');
@@ -1207,7 +1207,8 @@ test('a site whose installed tool is older than 1.24.0 keeps its steps in packag
   assert.equal(r.rc, 0, r.err.join('\n'));
   assert.equal(fs.readFileSync(sitePackage(s), 'utf8'), before, 'package.json is untouched');
   assert.deepEqual(readSettings({ vaultPath: s.vault }).values.player_site.after_build, []);
-  assert.equal(vaultValues(s).output, 'gazetteer', 'the rest of the move happened');
+  assert.equal(vaultValues(s).output, 'docs', 'the folder key stays in the site file while its tool cannot read it from the vault');
+  assert.equal(siteJson(s).outputDir, 'gazetteer');
   assert.deepEqual(r.data.stepsHeld.held, 'steps');
   const line = 'The site\'s build steps stay in its package.json until its publish tool is 1.24.0 or later.';
   assert.ok(r.data.lines.includes(line), r.data.lines.join('\n'));
@@ -1219,6 +1220,34 @@ test('a site whose installed tool is older than 1.24.0 keeps its steps in packag
   assert.equal(cliMove({ vault: t.vault, config: t.config }).rc, 0);
   assert.deepEqual(readSettings({ vaultPath: t.vault }).values.player_site.after_build, ['node a.js', 'node b.js']);
 });
+
+const SITE_FIVE = { siteUrl: 'https://x.example', host: 'cloudflare-pages', outputDir: 'gazetteer', cloudflarePagesProject: 'my-proj', preserveDirs: ['keepme'] };
+const HELD_KEYS_LINE = 'The site\'s address, host, output folder, project name and kept folders stay in its vault.config.json until its publish tool is 1.24.0 or later.';
+
+for (const [layout, make] of Object.entries({
+  legacy: () => scratch(old('  mode: player\n'), { site: { vaultPath: './Vault', ...SITE_FIVE } }),
+  new: () => { const s = scratch(null, { site: { vaultPath: './Vault', ...SITE_FIVE } }); writeNewConfig(s.vault, { version: 1 }); return s; },
+})) {
+  test(`${layout} layout: a site whose installed tool is 1.23.1 keeps the five folder keys in its site file, says so, and builds the same`, () => {
+    const s = make();
+    installTool(path.dirname(s.config), '1.23.1');
+    const before = loadPublishConfig(s.vault, siteJson(s), quiet);
+    const r = cliMove({ vault: s.vault, config: s.config });
+    assert.equal(r.rc, 0, r.err.join('\n'));
+    for (const key of Object.keys(SITE_FIVE)) assert.deepEqual(siteJson(s)[key], SITE_FIVE[key], `${key} is still in the site file`);
+    assert.ok(r.data.lines.includes(HELD_KEYS_LINE), r.data.lines.join('\n'));
+    const raw = fs.readFileSync(at(s.vault, NEW_FILE), 'utf8');
+    for (const name of ['url:', 'host:', 'output:', 'cloudflare_project:', 'keep:']) assert.ok(!raw.includes(name), `${name} not in the vault file:\n${raw}`);
+    const after = loadPublishConfig(s.vault, siteJson(s), quiet);
+    assert.deepEqual(after.site, before.site, 'the same site values');
+    // The same site with its tool at 1.24.0 carries them.
+    const t = make();
+    installTool(path.dirname(t.config), '1.24.0');
+    assert.equal(cliMove({ vault: t.vault, config: t.config }).rc, 0);
+    assert.equal(vaultValues(t).output, 'gazetteer');
+    assert.equal(siteJson(t).outputDir, undefined);
+  });
+}
 
 test('steps in both the vault\'s settings and package.json: nothing is carried; an equal script is removed, a different one is left and said', () => {
   const same = STEP_LAYOUTS.new();

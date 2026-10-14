@@ -272,7 +272,7 @@ function refusal(name) {
 function write(options, changes) {
   const { vaultPath, siteConfig } = target(options);
   try {
-    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig, siteConfigPath: options.config ? path.resolve(options.config) : null }) };
+    return { ok: applyChanges(vaultPath, changes, { create: !!options.create, siteConfig, siteConfigPath: options.config ? path.resolve(options.config) : (options.vault ? null : path.resolve('./vault.config.json')) }) };
   } catch (e) {
     if (e.refusals) return { errors: e.refusals };
     throw e;
@@ -455,7 +455,12 @@ function changeList(options, verb, args) {
   let current = getPath(read.values, e.name.split('.'));
   const isList = e.type === 'list' || (e.type === 'switchOrList' && (Array.isArray(current) || current === false || current === true));
   if (!isList) return { errors: [`${name} is not a list, so entries cannot be ${verb === 'add' ? 'added to' : 'removed from'} it.`] };
-  if (read.origins[e.name] === 'fault') return { errors: [`${name} in the file cannot be read; fix it with settings set first.`] };
+  if (read.origins[e.name] === 'fault') {
+    // A bad value that is already in the file can always be taken out, entry by entry: it is the list as written that is removed from.
+    const written = verb === 'remove' && e.check && layoutOf(vaultPath) === 'new' ? getPath(rawData(vaultPath), e.name.split('.')) : null;
+    if (Array.isArray(written) && written.every((x) => typeof x === 'string')) current = written;
+    else return { errors: [`${name} in the file cannot be read; fix it with settings set first.`] };
+  }
   if (current === true) return { errors: [`${name} is on, which hides every one of its kind, so a list cannot be changed; use settings set ${name} to give a list or turn it off.`] };
   if (current === false) current = [];
   const unique = entries.filter((x, i) => entries.findIndex((y) => isSame(x, y)) === i);
