@@ -240,6 +240,52 @@ def _released_hashes(system: str | None) -> dict[str, list[str]]:
     return found if isinstance(found, dict) else {}
 
 
+# A top-level frontmatter key the template leaves blank (`campaign: ""`, `tags: []`, `age:`) is the vault's to fill
+# in: its value is not a difference from the plugin's text, and an overwrite keeps it (#366).
+FILL_IN_RE = re.compile(r"""^([A-Za-z_][\w-]*):[ \t]*(?:""|''|\[\])?[ \t]*(?:#.*)?$""")
+TOP_KEY_RE = re.compile(r"^([A-Za-z_][\w-]*):")
+
+
+def _frontmatter_blocks(text: str) -> tuple[list[str], dict[str, tuple[int, int]]]:
+    """The text's lines (endings kept) and, for each top-level frontmatter key,
+    the span of lines its value takes (the key's line and any lines under it)."""
+    lines = text.splitlines(keepends=True)
+    if not lines or lines[0].strip() != "---":
+        return lines, {}
+    end = next((i for i in range(1, len(lines)) if lines[i].strip() == "---"), None)
+    if end is None:
+        return lines, {}
+    blocks: dict[str, tuple[int, int]] = {}
+    key, start = None, 0
+    for i in range(1, end + 1):
+        m = TOP_KEY_RE.match(lines[i]) if i < end else None
+        if i == end or m:
+            if key is not None and key not in blocks:
+                blocks[key] = (start, i)
+            key, start = (m.group(1), i) if m else (None, i)
+    return lines, blocks
+
+
+def _fill_in_keys(template: str) -> set[str]:
+    lines, blocks = _frontmatter_blocks(template)
+    return {key for key, (a, b) in blocks.items()
+            if b - a == 1 and FILL_IN_RE.match(lines[a].rstrip("\r\n"))}
+
+
+def _with_values(target: str, source: str, keys: set[str]) -> str:
+    """`target` with each of `keys` given the value `source` has for it, where
+    both have the key; everything else in `target` is kept as it is."""
+    t_lines, t_blocks = _frontmatter_blocks(target)
+    s_lines, s_blocks = _frontmatter_blocks(source)
+    newline = "\r\n" if "\r\n" in target else "\n"
+    swaps = sorted(((t_blocks[k], s_blocks[k]) for k in keys
+                    if k in t_blocks and k in s_blocks), reverse=True)
+    for (a, b), (c, d) in swaps:
+        taken = [line.rstrip("\r\n") + newline for line in s_lines[c:d]]
+        t_lines[a:b] = taken
+    return "".join(t_lines)
+
+
 def find_templates(vault: Path) -> list[Item]:
     folder = vault / "_Templates"
     items: list[Item] = []
@@ -260,8 +306,12 @@ def find_templates(vault: Path) -> list[Item]:
         elif regency_pc and system == "coc-7e" and name.startswith("pc-"):
             continue   # the Regency PC template is the one in use
 
+        filled = _fill_in_keys(text)
+        mine = current if path.is_file() else text
+        written = _with_values(text, mine, filled)
+
         def apply(_value: str | None, path: Path = path,
-                  text: str = text, name: str = name) -> list[str]:
+                  text: str = written, name: str = name) -> list[str]:
             write_text_atomic(path, text)
             return [f"wrote _Templates/{name}"]
 
@@ -270,11 +320,13 @@ def find_templates(vault: Path) -> list[Item]:
                               [f"copy the missing template _Templates/{name}"],
                               apply))
             continue
-        shown = (_without_setup_comment(current)
-                 if _regency_build(system, name, current) else current)
+        shown = _with_values(
+            _without_setup_comment(current)
+            if _regency_build(system, name, current) else current, text, filled)
         if _same(shown, text):
             continue
-        if text_hash(current) in released.get(name, []):
+        if {text_hash(current), text_hash(_with_values(current, text, filled))} \
+                & set(released.get(name, [])):
             items.append(Item(
                 f"template:{name}", WILL,
                 [f"update _Templates/{name} from an earlier release's text"],

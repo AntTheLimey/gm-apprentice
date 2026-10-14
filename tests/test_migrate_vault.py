@@ -350,8 +350,10 @@ class TemplateTests(unittest.TestCase):
         self.assertIn("1 line differs (", self.row_for(one))
         self.assertIn("1 line differs (", self.row_for(expected + "\nExtra\n"))
         lines = expected.split("\n")
-        for i in range(5):   # five edited lines
-            lines[10 + i] = lines[10 + i] + " EDIT"
+        body = [i for i, line in enumerate(lines)
+                if i > lines.index("---", 1) and line.strip()]
+        for i in body[:5]:   # five edited lines (a blank frontmatter value is the vault's own)
+            lines[i] = lines[i] + " EDIT"
         row = self.row_for("\n".join(lines))
         self.assertIn("5 lines differ (", row)
         self.assertTrue(row.endswith("and 1 more"), row)
@@ -503,6 +505,50 @@ class TemplateTests(unittest.TestCase):
         path.write_text(path.read_text(encoding="utf-8") + "\nMy edit\n",
                         encoding="utf-8")
         self.assertEqual(self.doc(vault).group, CHOICE)
+
+    # #366: a frontmatter value the template leaves blank (campaign, tags, ...) is the vault's to fill in.
+    def pc_template(self, vault):
+        (vault / "_Templates").mkdir(exist_ok=True)
+        path = vault / "_Templates" / "pc-coc-7e.md"
+        path.write_text(mv.expected_templates(vault)["pc-coc-7e.md"], encoding="utf-8")
+        return path
+
+    def test_a_filled_in_blank_value_is_not_a_difference(self):
+        vault = make_vault(self)
+        path = self.pc_template(vault)
+        text = path.read_text(encoding="utf-8")
+        filled = text.replace('campaign: ""', 'campaign: "Canticle of the End"', 1) \
+            .replace("tags: []", "tags:\n  - investigator", 1)
+        self.assertNotEqual(filled, text)
+        path.write_text(filled, encoding="utf-8")
+        self.assertNotIn("template:pc-coc-7e.md", by_id(mv.find_templates(vault)))
+
+    def test_an_overwrite_keeps_the_values_the_vault_filled_in(self):
+        vault = make_vault(self)
+        path = self.pc_template(vault)
+        text = path.read_text(encoding="utf-8")
+        path.write_text(text.replace('campaign: ""', 'campaign: "Canticle"', 1)
+                        .replace("| Dodge | DEX/2 |", "| Dodge | DEX/2 | 40 |", 1), encoding="utf-8")
+        item = by_id(mv.find_templates(vault))["template:pc-coc-7e.md"]
+        self.assertEqual(item.group, CHOICE)
+        self.assertNotIn("campaign", item.lines[0])
+        item.apply("y")
+        after = path.read_text(encoding="utf-8")
+        self.assertIn('campaign: "Canticle"', after)
+        self.assertIn("| Dodge | DEX/2 |", after)
+        self.assertEqual(after, text.replace('campaign: ""', 'campaign: "Canticle"', 1))
+
+    def test_an_untouched_older_template_with_values_filled_in_is_upgraded_without_asking(self):
+        vault = self.older(lambda old: {"coc-7e": {
+            "_Template_Document.md": [mv.text_hash(old)]}})
+        path = vault / "_Templates" / "_Template_Document.md"
+        path.write_text(path.read_text(encoding="utf-8").replace(
+            "tags: []", "tags:\r\n  - letter", 1), encoding="utf-8", newline="")
+        item = self.doc(vault)
+        self.assertEqual(item.group, WILL)
+        item.apply(None)
+        self.assertIn("  - letter", path.read_text(encoding="utf-8"))
+        self.assertNotIn("template:_Template_Document.md", by_id(mv.find_templates(vault)))
 
     def test_a_template_in_no_release_is_a_choice(self):
         for history in (lambda old: {},

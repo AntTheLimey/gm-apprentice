@@ -5,7 +5,7 @@ const { mergeSkills, REGENCY_SKILLS } = require('../../lib/templates/coc/skills'
 
 describe('mergeSkills', () => {
   it('renders the full canonical list even when the PC has no skills', () => {
-    const out = mergeSkills([], 'regency');
+    const out = mergeSkills([], 'regency', { DEX: { reg: 50 }, INT: { reg: 50 }, APP: { reg: 50 }, EDU: { reg: 50 } });
     assert.equal(out.length, REGENCY_SKILLS.length);
     const spot = out.find(s => s.name === 'Spot Hidden');
     assert.deepEqual(
@@ -73,5 +73,39 @@ describe('mergeSkills', () => {
     const out = mergeSkills([{ name: 'Art/Craft (Pianoforte)', base: 5, reg: 41 }], 'regency');
     assert.ok(out.some(s => s.name === 'Art/Craft (Pianoforte)'));
     assert.ok(!out.some(s => s.name === 'Art/Craft'), 'bare parent suppressed when a real specialisation exists');
+  });
+
+  // #366: a base that is a share of a characteristic (Regency Dancing DEX/5, Dodge DEX/2,
+  // Language (Own) EDU) is worked out from the PC's own characteristics.
+  const chars = { DEX: { reg: 70 }, INT: { reg: 60 }, APP: { reg: 50 }, EDU: { reg: 80 } };
+
+  it('works out a derived base from the PC\'s characteristics', () => {
+    const out = mergeSkills([], 'regency', chars);
+    const at = (n) => out.find(s => s.name === n);
+    assert.deepEqual(
+      ['Dancing', 'Etiquette', 'Reassure', 'Dodge', 'Language (Own)'].map(n => [n, at(n).reg, at(n).developed]),
+      [['Dancing', 14, false], ['Etiquette', 12, false], ['Reassure', 10, false], ['Dodge', 35, false], ['Language (Own)', 80, false]]);
+    assert.equal(at('Religion').reg, 10);
+    assert.equal(at('Fighting (Sword)').reg, 20);
+  });
+
+  it('a derived skill above its worked-out base is developed, and at it is not', () => {
+    const out = mergeSkills([{ name: 'Dancing', base: null, reg: 30 }, { name: 'Dodge', base: null, reg: 35 }], 'regency', chars);
+    assert.equal(out.find(s => s.name === 'Dancing').developed, true);
+    assert.equal(out.find(s => s.name === 'Dodge').developed, false);
+  });
+
+  it('without the characteristic, a derived skill the PC does not list is left off, and one it lists shows its value', () => {
+    const out = mergeSkills([{ name: 'Etiquette', base: null, reg: 40 }], 'regency', {});
+    assert.ok(!out.some(s => s.name === 'Dancing'), 'no flat guess at DEX/5');
+    assert.ok(!out.some(s => s.name === 'Dodge'));
+    const etiquette = out.find(s => s.name === 'Etiquette');
+    assert.deepEqual({ reg: etiquette.reg, developed: etiquette.developed }, { reg: 40, developed: false });
+  });
+
+  it('the base CoC list works out Dodge and Language (Own) the same way', () => {
+    const out = mergeSkills([], 'base', chars);
+    assert.equal(out.find(s => s.name === 'Dodge').reg, 35);
+    assert.equal(out.find(s => s.name === 'Language (Own)').reg, 80);
   });
 });

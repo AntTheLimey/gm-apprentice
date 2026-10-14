@@ -109,15 +109,16 @@ createdSession: ""
 | Climb | 20 | | | |
 | Credit Rating | 00 | | | |
 | Cthulhu Mythos | 00 | | | |
-| Dancing | 05 | | | |
+| Dancing | DEX/5 | | | |
 | Demolitions | 01 | | | |
 | Disguise | 05 | | | |
-| Dodge | — | | | |
+| Dodge | DEX/2 | | | |
 | Drive Carriage | 20 | | | |
-| Etiquette | 15 | | | |
+| Etiquette | INT/5 | | | |
 | Fashion | 10 | | | |
 | Fast Talk | 05 | | | |
 | Fighting (Brawl) | 25 | | | |
+| Fighting (Sword) | 20 | | | |
 | Firearms (Pistol) | 20 | | | |
 | Firearms (Rifle/Blunderbuss) | 25 | | | |
 | First Aid | 30 | | | |
@@ -143,8 +144,8 @@ createdSession: ""
 | Pilot (Boat) | 01 | | | |
 | Psychology | 10 | | | |
 | Read Lips | 01 | | | |
-| Reassure | 10 | | | |
-| Religion | 05 | | | |
+| Reassure | APP/5 | | | |
+| Religion | 10 | | | |
 | Ride | 05 | | | |
 | Sleight of Hand | 10 | | | |
 | Spot Hidden | 25 | | | |

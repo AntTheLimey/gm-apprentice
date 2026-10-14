@@ -99,7 +99,7 @@ createdSession: ""
 | Credit Rating | 00 | | | |
 | Cthulhu Mythos | 00 | | | |
 | Disguise | 05 | | | |
-| Dodge | — | | | |
+| Dodge | DEX/2 | | | |
 | Drive Auto | 20 | | | |
 | Electrical Repair | 10 | | | |
 | Fast Talk | 05 | | | |

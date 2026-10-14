@@ -150,6 +150,7 @@ function parseCoC(frontmatter, sections, system) {
   const stat = findSectionByTitle(secs, 'stat sheet');
   const statHtml = stat ? stat.html : '';
   const rawSkills = parseRawSkills(secs);
+  const chars = parseChars(statHtml);
   return {
     variant,
     identity: {
@@ -160,13 +161,13 @@ function parseCoC(frontmatter, sections, system) {
       era: fm.era || '',
     },
     player: (fm && fm.player_name) || null,
-    chars: parseChars(statHtml),
+    chars,
     derived: parseDerived(statHtml),
     reputation: parseReputation(statHtml),
     combat: parseCombat(statHtml),
     conditions: parseConditions(statHtml),
     backstory: parseBackstory(secs),
-    skills: mergeSkills(rawSkills, variant),
+    skills: mergeSkills(rawSkills, variant, chars),
     weapons: parseWeapons(secs),
   };
 }
