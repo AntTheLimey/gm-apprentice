@@ -157,7 +157,7 @@ Ripeness: [Planted / Ripening / Ready / Paid Off / Retired]
 ### Dormant Thread Revival
 
 Dormant: untouched for as many sessions as the vault's
-`vault.stale_after_sessions` says.
+`vault.stale_after_sessions` says; with no vault, three.
 
 - Still relevant? → retire explicitly if campaign moved on
 - Connects to current events? → weave back via callback

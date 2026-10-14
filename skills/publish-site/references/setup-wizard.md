@@ -27,13 +27,15 @@ Nothing is held in your head between steps: each answer is written
 down as the GM gives it, so an interrupted run loses nothing.
 
 - **An answer that is a setting** (the title, tagline, image, 404
-  message, palette, fonts, the site's address) is written at once with
+  message, palette, fonts, and at Step 8 the site's host and address)
+  is written at once with
   `node "$TOOL" settings set <name>=<value> --vault <vault>` and read
   back with `settings get <name> --vault <vault>`. To change a hiding
   list use `settings add` or `remove`: `set` replaces the whole list,
   built-in entries included.
-- **Everything else** (the host, the project name, the site folder,
-  how far the run got) goes in the set-up note:
+- **Everything else** (the project name, the site folder, how far the
+  run got, and the host until Step 8 writes it) goes in the set-up
+  note:
 
   ```bash
   node "$TOOL" settings setup-note set last_completed_step=4 host=cloudflare-pages --vault <vault>
@@ -123,7 +125,9 @@ shell cannot find `node`, do Step 3 and come back.)
   Carry on from the step after `last_completed_step`. The note holds
   the host, project name and site folder; `settings get player_site
   --vault <vault>` shows the settings already given (the lines not
-  marked `(default)`). Skip a step whose answer is there. A note begun
+  marked `(default)`). Skip a step whose answer is there. If the run
+  is past Step 8 and `player_site.host` or `player_site.url` still
+  reads `(default)`, run Step 8's command now from the note. A note begun
   before plugin 1.10.54 may hold `site_title` or `tagline`: write each
   to its setting now (Steps 6 and 7).
 
@@ -288,8 +292,12 @@ node "$TOOL" settings set player_site.host=cloudflare-pages player_site.cloudfla
 
 Validate the repo name is URL-safe (lowercase letters, numbers, hyphens
 only); suggest a correction if not, then `setup-note set
-github_username=<user> project_name=<repo>` and `settings set
-player_site.url=https://<github_username>.github.io/<project_name>/`.
+github_username=<user> project_name=<repo>` and write the host and
+the site's address:
+
+```bash
+node "$TOOL" settings set player_site.host=github-pages player_site.url=https://<github_username>.github.io/<project_name>/ --vault <vault>
+```
 
 ### Step 9: Choose the site directory
 

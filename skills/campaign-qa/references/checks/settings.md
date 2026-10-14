@@ -38,9 +38,11 @@ the key. Two hiding lists that repeat or disagree (an old-named list
 beside the right one) need no `carry`: `--fix` merges them.
 
 **Keys and build steps left in the site folder** (`vault.config.json`,
-`package.json`). Each has a `fix:` row: `--fix` moves it into the
-vault's settings and takes it out of the site folder, and the site
-builds the same. A row with no fix says what holds it there.
+`package.json`). Each has a row of one of the three kinds above. A
+`fix:` row goes on `--fix`: moved into the vault's settings, or
+dropped where the vault already sets it. A `proposed:` row waits for
+the GM's yes and `--apply`. A row with neither says what holds it
+there, or what to correct in the site folder.
 
 **A file that is not valid YAML.** No `settings` command and no `--fix`
 can read it, so this is the one time the file is opened. The message

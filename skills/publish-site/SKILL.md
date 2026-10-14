@@ -96,7 +96,10 @@ https://nodejs.org (LTS).
 **Settings.** Read and change every setting through `node "$TOOL"
 settings … --config <dir>/vault.config.json` (`--help` lists the
 verbs); never open a settings file in `_meta/` to read one or edit it
-by hand.
+by hand. When `settings` answers "needs the new settings file; run the
+update first", or `init` says the settings are still in the old file,
+run campaign-organizer's `references/migration-procedure.md`, then
+carry on.
 
 **Is there a site?** `node "$TOOL" settings get player_site.publish
 player_site.folder --vault <vault>`.

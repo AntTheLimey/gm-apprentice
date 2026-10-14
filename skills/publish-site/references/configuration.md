@@ -91,9 +91,10 @@ the site.
 node "$TOOL" settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --config <dir>/vault.config.json
 ```
 
-One entry a call; `link` can also be a note's name or a web address.
-`settings remove player_site.menu_extra Gazetteer` takes one out by
-its label.
+One entry a call. `link` is a note's name, a page on the site or a web
+address; a link to a note with no page is left out of the menu, with a
+build warning. `settings remove player_site.menu_extra Gazetteer`
+takes one out by its label.
 
 ### Landing banner
 
