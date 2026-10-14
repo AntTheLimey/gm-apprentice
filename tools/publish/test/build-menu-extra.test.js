@@ -448,3 +448,23 @@ test('housekeeping: a note with a withheld name or one in the personal folder is
   assert.doesNotMatch(desktop, />P</);
   assert.doesNotMatch(desktop, />Z</);
 });
+
+test('housekeeping: _meta/index.md written over by a campaign note is a hidden name again', () => {
+  const s = site([{ label: 'Gazetteer', link: 'gazetteer/index.html' }],
+    { files: { '_meta/index.md': '---\ntype: npc\n---\n\nA secret NPC.\n' } });
+  assert.doesNotMatch(menus(s.read('index.html')).desktop, />Gazetteer</);
+  assert.ok(s.warnings.some((w) => w.includes('"Gazetteer"')));
+});
+
+test('housekeeping: an empty gm_aliases list does not make _meta/index.md a hidden name', () => {
+  const s = site([{ label: 'Gazetteer', link: 'gazetteer/index.html' }],
+    { files: { '_meta/index.md': '---\ntype: meta\ngm_aliases: []\n---\n' } });
+  assert.match(menus(s.read('index.html')).desktop, /href="gazetteer\/index\.html">Gazetteer</);
+  assert.deepEqual(s.warnings.filter((w) => /menu_extra/.test(w)), []);
+});
+
+test('housekeeping: a templates folder inside another folder holds the plugin\'s own notes too', () => {
+  const s = site([{ label: 'Gazetteer', link: 'gazetteer/index.html' }],
+    { files: { 'Characters/_Templates/Index.md': '---\ntype: template\n---\n' } });
+  assert.match(menus(s.read('index.html')).desktop, /href="gazetteer\/index\.html">Gazetteer</);
+});

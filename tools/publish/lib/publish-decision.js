@@ -52,18 +52,24 @@ const ALWAYS_EXCLUDE_DIRS = [...HOUSEKEEPING_DIRS, 'personal'];
 const PLUGIN_META_NOTES = ['index', 'entity-types', 'relationship-types', 'vault-config', 'vault-notes', 'publish-manifest'];
 const TEMPLATE_DIRS = ['_Templates', '_templates'];
 
-// The plugin's own housekeeping notes: any file in a templates folder, and the files in PLUGIN_META_NOTES directly
-// under `_meta/`. They hold no campaign secret, so their names are not names a site link must avoid. Everything else
-// stays a hidden name, whatever folder or type it has: the "personal" folder (the GM's own reference copies), a
-// campaign note moved into `_meta`, a note typed "meta" by mistake. A note that names secrets of its own (withheld,
-// gm_aliases) or says publish: false is never housekeeping.
+// The plugin's own housekeeping notes: any file in a templates folder (at any depth), and the files in
+// PLUGIN_META_NOTES directly under `_meta/` while they are still typed "meta" (as the plugin writes them). They hold
+// no campaign secret, so their names are not names a site link must avoid. Everything else stays a hidden name,
+// whatever folder or type it has: the "personal" folder (the GM's own reference copies), a campaign note moved into
+// `_meta` or written over one of the plugin's files there, a note typed "meta" by mistake. A note that names secrets
+// of its own (withheld, gm_aliases) or says publish: false is never housekeeping.
+function hasEntries(value) {
+  if (Array.isArray(value)) return value.some((v) => v != null && String(v).trim() !== '');
+  return value != null && String(value).trim() !== '';
+}
 function isHousekeepingNote(vaultPath, frontmatter) {
   const fm = frontmatter || {};
-  if (fm.withheld === true || fm.withheld === 'true' || (fm.gm_aliases != null && fm.gm_aliases !== '')) return false;
+  if (fm.withheld === true || fm.withheld === 'true' || hasEntries(fm.gm_aliases)) return false;
   if (fm.publish === false || fm.publish === 'false') return false;
   const parts = String(vaultPath == null ? '' : vaultPath).replace(/\\/g, '/').split('/');
-  if (parts.length > 1 && TEMPLATE_DIRS.includes(parts[0])) return true;
-  return parts.length === 2 && parts[0] === '_meta' && PLUGIN_META_NOTES.includes(parts[1]);
+  if (parts.slice(0, -1).some((part) => TEMPLATE_DIRS.includes(part))) return true;
+  const typedMeta = fm.type == null || String(fm.type).trim().toLowerCase() === 'meta';
+  return parts.length === 2 && parts[0] === '_meta' && PLUGIN_META_NOTES.includes(parts[1]) && typedMeta;
 }
 
 // A scene that was cut or skipped did not happen. content-filtering.md has listed
