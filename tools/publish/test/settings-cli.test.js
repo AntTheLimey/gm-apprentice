@@ -876,6 +876,16 @@ test('get --json carries the "moves at the next update" fault of a site-folder k
   assert.ok(check.data.faults.some((f) => f.name === 'outputDir'));
 });
 
+test('get --json marks the "differs" fault of a site-folder key the vault also sets, and says which rule guards the value', () => {
+  const s = scratch(null, { vaultPath: './vault', preserveDirs: ['gazetteer'], outputDir: 'site-out', siteTitle: 'Theirs' });
+  fs.writeFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'version: 1\nplayer_site:\n  keep: [maps]\n  output: out2\n  url: https://mine.example\n');
+  const got = run(s, 'get', [], { config: s.config });
+  const by = Object.fromEntries(got.data.faults.filter((f) => f.siteDiffers).map((f) => [f.name, f]));
+  assert.equal(by.preserveDirs.checks, 'keep');
+  assert.equal(by.outputDir.checks, 'output');
+  assert.equal(by.preserveDirs.siteLeft, undefined);
+});
+
 test('set --create on a vault whose site file holds its settings names the real site file in the command to run', () => {
   const s = scratch(null, { vaultPath: './vault', siteTitle: 'Kept' });
   const r = run(s, 'set', ['player_site.title=New'], { create: true, config: s.config });

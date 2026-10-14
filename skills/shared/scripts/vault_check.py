@@ -5125,17 +5125,28 @@ def _site_move_plan(vault: Path) -> dict[str, Any]:
         return {}
 
 
-def _site_left_row(fault: dict[str, Any], plan: dict[str, Any]) -> SettingsRow:
-    """A site-folder key the vault sets none of: the site file's value is
-    read until the tool's move carries it into the vault. Certain: the move
-    changes nothing the site shows. Where the site's own tool is too old to
-    read the vault for it, the move leaves it, and the row says so."""
-    row = SettingsRow(fault, site=True)
+def _site_held(plan: dict[str, Any]) -> str | None:
+    """The tool's sentence when the site's own tool is too old to read the
+    site-folder keys from the vault, else None."""
     held = plan.get("keysHeld")
     if isinstance(held, dict) and held.get("line"):
-        row.note = (f"{held['line']} It is read from vault.config.json until "
-                    "then.")
-        return row
+        return str(held["line"])
+    return None
+
+
+def _site_held_row(fault: dict[str, Any], line: str) -> SettingsRow:
+    """One informational row for every site-folder key a too-old site tool
+    leaves in the site file: nothing for the GM to do in the vault, so it is
+    a note, not a warning, and the report does not count it."""
+    return SettingsRow({**fault, "level": "info", "kind": "held",
+                        "message": line}, site=True)
+
+
+def _site_left_row(fault: dict[str, Any]) -> SettingsRow:
+    """A site-folder key the vault sets none of: the site file's value is
+    read until the tool's move carries it into the vault. Certain: the move
+    changes nothing the site shows."""
+    row = SettingsRow(fault, site=True)
     target = str(fault.get("use") or fault.get("setting") or "")
     key = fault["name"]
     row.kind = "certain"
@@ -5154,6 +5165,62 @@ def _site_unusable_row(fault: dict[str, Any]) -> SettingsRow:
     row = SettingsRow(fault, site=True)
     row.note = ("Nothing is changed automatically: fix it in the site "
                 "folder's vault.config.json, then run this check again.")
+    return row
+
+
+def _site_differs_row(fault: dict[str, Any], own: Any,
+                      site_value: Any) -> SettingsRow:
+    """A site-folder key the vault sets too, to something else: the vault's
+    value is the one in use. Dropping the site file's value is certain for an
+    address, host or project name. For the kept folders and the output folder
+    it is proposed, because a folder only the site file names is cleaned by
+    the next build."""
+    row = SettingsRow(fault, site=True)
+    target = str(fault.get("use") or fault.get("setting") or "")
+    key = fault["name"]
+    try:
+        mine = own.get(target)
+    except KeyError:
+        mine = None
+    row.ops = [{"op": "fold-site"}]
+    row.done = f"took {key} out of vault.config.json"
+    checks = fault.get("checks")
+    if checks == "keep" and isinstance(site_value, list) \
+            and isinstance(mine, list):
+        kept = {str(x).strip().strip("/") for x in mine}
+        lost = [str(x) for x in site_value
+                if str(x).strip().strip("/") not in kept]
+        if lost:
+            names = ", ".join(lost)
+            row.kind = "proposed"
+            row.fix = (f"the site file keeps {names} but the vault's "
+                       f"{target} ({_short(mine)}) does not, so {names} "
+                       "would be cleaned at the next build. To keep "
+                       f"{'it' if len(lost) == 1 else 'them'}, add "
+                       f"{'it' if len(lost) == 1 else 'them'} to {target}; "
+                       "to let "
+                       f"{'it' if len(lost) == 1 else 'them'} go, apply this "
+                       "fix, which drops the site file's list")
+            return row
+        row.kind = "certain"
+        row.fix = (f"everything the site file keeps ({_short(site_value)}) is "
+                   f"already in the vault's {target}; take the list out of "
+                   "vault.config.json")
+        return row
+    if checks == "output":
+        row.kind = "proposed"
+        row.fix = (f"the site file says {_short(site_value)} and the vault's "
+                   f"{target} says {_short(mine)}: the site builds into "
+                   f"{_short(mine)} now and still will once the site file's "
+                   f"is dropped, and {_short(site_value)} is not used. To "
+                   f"build into {_short(site_value)} instead, set {target} to "
+                   "it first; otherwise apply this fix, which drops the site "
+                   "file's value")
+        return row
+    row.kind = "certain"
+    row.fix = (f"the vault's {target} ({_short(mine)}) is the value in use; "
+               f"drop the site file's {_short(site_value)} from "
+               "vault.config.json")
     return row
 
 
@@ -5181,6 +5248,20 @@ def _package_step_rows(plan: dict[str, Any]) -> list[SettingsRow]:
                    "out of package.json (the tool then runs it from the "
                    "settings)")
         row.done = f"moved the {script} step to {target}"
+        rows.append(row)
+    for d in plan.get("stepsDiffer") or []:
+        if not isinstance(d, dict):
+            continue
+        differing: dict[str, Any] = {"name": f"package.json {d.get('script')}", "level": "warn",
+                 "kind": "dropped", "setting": d.get("setting"),
+                 "message": str(d.get("line"))}
+        row = SettingsRow(differing, site=True, where="package.json")
+        row.note = ("Nothing is changed automatically. `npm run build` runs "
+                    "the package.json script as well as the vault's steps, so "
+                    "the step can run twice; the tool's own build and deploy "
+                    "run only the vault's. Either make them the same (set "
+                    f"{d.get('setting')} to match), or take the script out of "
+                    "package.json.")
         rows.append(row)
     written = [Path(str(p)).name for p in (plan.get("files") or {}).get("write") or []]
     if not carried and "package.json" in written:
@@ -5447,6 +5528,15 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
         moved = vault_layout(vault) == "new"
         move_plan = _site_move_plan(vault) if moved else {}
         left_names = {f["name"] for f in merged.faults if f.get("siteLeft")}
+        # A value the tool cannot use blocks the move; the tool names the key
+        # first in its blocker, whatever the vault holds.
+        blocked: dict[str, str] = {}
+        for b in move_plan.get("blockers") or []:
+            key = str(b).split(" ", 1)[0]
+            if any(g["name"] == key for g in merged.faults):
+                blocked.setdefault(key, str(b))
+        held_line = _site_held(move_plan)
+        said: set[str] = set()
         for f in merged.faults:
             if (f["name"], f["kind"], f["message"]) in seen:
                 continue
@@ -5454,14 +5544,33 @@ def plan_settings(vault: Path) -> tuple[list[SettingsRow], bool]:
                        "vault.config.json)")
             if moved:
                 fault = {**f, "message": message}
+                if f["name"] in blocked:
+                    if f["name"] not in said:
+                        said.add(f["name"])
+                        rows.append(_site_unusable_row(
+                            {"name": f["name"], "level": "stop",
+                             "kind": "not-allowed",
+                             "setting": f.get("setting"),
+                             "message": blocked[f["name"]]}))
+                    continue
+                if held_line and (f.get("siteLeft") or f.get("siteDiffers")):
+                    if "held" not in said:
+                        said.add("held")
+                        rows.append(_site_held_row(fault, held_line))
+                    continue
                 if f.get("siteLeft") and any(
                         g["name"] == f["name"] and g["level"] == "stop"
                         for g in merged.faults):
                     continue    # the unusable value's own row says it
                 if f.get("siteLeft"):
-                    rows.append(_site_left_row(fault, move_plan))
+                    rows.append(_site_left_row(fault))
                 elif f["level"] == "stop" and f["name"] in left_names:
                     rows.append(_site_unusable_row(fault))
+                elif f.get("siteDiffers"):
+                    rows.append(_site_differs_row(
+                        fault, own,
+                        site_json.get(f["name"])
+                        if isinstance(site_json, dict) else None))
                 else:
                     rows.append(_site_key_row(
                         fault, own,
@@ -5496,7 +5605,7 @@ def _row_json(r: SettingsRow) -> dict[str, Any]:
 
 
 def _row_lines(r: SettingsRow, file_name: str) -> list[str]:
-    word = "STOP" if r.fault["level"] == "stop" else "WARN"
+    word = {"stop": "STOP", "info": "NOTE"}.get(r.fault["level"], "WARN")
     where = r.where or ("vault.config.json" if r.site else file_name)
     lines = [f"{word}\t{where}\t{r.fault['message']}"]
     if r.fix:
@@ -5593,6 +5702,12 @@ def settings_fault_rows(vault: Path) -> list[str]:
     """One row for a report (`all`, `wrapup`) when the settings have a
     fault, pointing at the Settings check; none when they read cleanly."""
     faults = vault_settings(vault).faults
+    pending = [f for f in faults if f.get("siteLeft") or f.get("siteDiffers")]
+    if pending and vault_layout(vault) == "new" \
+            and _site_held(_site_move_plan(vault)):
+        # The site's own tool is too old to take them: nothing to do in the
+        # vault, so the report does not count them.
+        faults = [f for f in faults if f not in pending]
     if not faults:
         return []
     stops = sum(1 for f in faults if f["level"] == "stop")

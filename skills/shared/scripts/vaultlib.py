@@ -1266,7 +1266,8 @@ def _check_names(names: list[str]) -> None:
                                       refused=True)
 
 
-def _run_settings(args: list[str], *, refusable: bool = False) -> Any:
+def _run_settings(args: list[str], *, refusable: bool = False,
+                  blockable: bool = False) -> Any:
     """Run `gm-publish settings <args>` and return its JSON. A refusal
     (`refusable`) carries the command's own reason; any other failure reads
     "could not read the vault's settings: <reason>"."""
@@ -1289,6 +1290,15 @@ def _run_settings(args: list[str], *, refusable: bool = False) -> Any:
     except OSError as e:
         raise fail(f"node could not run ({e.__class__.__name__})") from e
     if done.returncode != 0:
+        if blockable:
+            # A blocked move exits 1 and still answers in JSON, with its
+            # blockers; that answer is the reason.
+            try:
+                blocked = json.loads(done.stdout.decode("utf-8", "replace"))
+            except ValueError:
+                blocked = None
+            if isinstance(blocked, dict) and blocked.get("ok") is False:
+                return blocked
         reason, own = _stderr_reason(done.stderr)
         if own and refusable:
             raise SettingsUnavailable(reason, refused=True)
@@ -1430,7 +1440,8 @@ def settings_move_plan(vault: Path) -> dict[str, Any]:
     `blockers`, `files`, and for a moved vault with an old file left beside
     the new one, `leftover` (`redundant`, `keys`). Writes nothing."""
     _check_vault(vault)
-    answer = _run_settings(["move", *_target_args(vault), "--check"])
+    answer = _run_settings(["move", *_target_args(vault), "--check"],
+                           blockable=True)
     if not isinstance(answer, dict):
         raise SettingsUnavailable(
             "could not read the vault's settings: the publish tool's "
@@ -1461,7 +1472,11 @@ def settings_fold_site_file(vault: Path) -> list[str]:
     _check_vault(vault)
     forget_settings(vault)
     answer = _run_settings(["move", *_target_args(vault), "--fold-site-file"],
-                           refusable=True)
+                           refusable=True, blockable=True)
+    if answer.get("ok") is False:
+        said = " ".join(str(b) for b in answer.get("blockers") or [])
+        raise SettingsUnavailable(said or "the move was blocked",
+                                  refused=True)
     forget_settings(vault)
     return [str(x) for x in answer.get("lines", [])]
 

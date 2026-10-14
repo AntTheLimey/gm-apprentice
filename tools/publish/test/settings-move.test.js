@@ -1056,6 +1056,8 @@ for (const [layout, make] of Object.entries(LAYOUTS)) {
     assert.deepEqual(r.data.dropped.map((d) => d.from), ['fourOhFour.style']);
     // The two values only the move reads change what the site shows: the plan marks them.
     assert.deepEqual(r.data.carried.filter((c) => c.shows).map((c) => c.from).sort(), ['campaignImage', 'fourOhFour.message']);
+    assert.ok(r.data.carried.find((c) => c.from === 'campaignImage').shows.includes('landing page and the \'page not found\' page'));
+    assert.ok(r.data.carried.find((c) => c.from === 'fourOhFour.message').shows.includes('page not found'));
     assert.ok(r.data.dropped[0].why);
     const again = hashes(s.root);
     const second = cliMove({ vault: s.vault, config: s.config });
@@ -1272,6 +1274,11 @@ test('steps in both the vault\'s settings and package.json: nothing is carried; 
   assert.equal(fs.readFileSync(sitePackage(differ), 'utf8'), before, 'a different script is left');
   assert.deepEqual(readSettings({ vaultPath: differ.vault }).values.player_site.after_build, ['node mine.js']);
   assert.ok(d.data.lines.some((l) => /postbuild[^\n]*differs[^\n]*player_site\.after_build/.test(l) && /vault's[^\n]*(runs|run)/.test(l)), d.data.lines.join('\n'));
+  // The answer names it as data too, so the vault scripts need not read the line.
+  assert.equal(d.data.stepsDiffer.length, 1);
+  assert.equal(d.data.stepsDiffer[0].script, 'postbuild');
+  assert.equal(d.data.stepsDiffer[0].setting, 'player_site.after_build');
+  assert.ok(d.data.lines.includes(d.data.stepsDiffer[0].line));
 });
 
 test('a moved vault whose site folder holds only steps or only folder keys is still found to have something to move', () => {

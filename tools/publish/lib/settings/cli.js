@@ -80,6 +80,7 @@ function faultJson(f) {
   if (f.suggest) out.suggest = f.suggest;
   if (f.use) out.use = f.use;
   if (f.siteLeft) out.siteLeft = true;
+  if (f.siteDiffers) { out.siteDiffers = true; if (f.checks) out.checks = f.checks; }
   return out;
 }
 // Stops first, otherwise in the order found.
@@ -645,7 +646,7 @@ function move(options) {
     if (named && named.exists) siteConfigPath = named.file;
   }
   const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile });
-  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.keysHeld ? { keysHeld: plan.keysHeld } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.keysHeld ? { keysHeld: plan.keysHeld } : {}), ...(plan.stepsDiffer ? { stepsDiffer: plan.stepsDiffer } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
   if (plan.held) {
     return { result: base(false, [plan.line]), lines: ['Nothing was changed.', plan.line], rc: 1 };
   }

@@ -186,16 +186,28 @@ def find_settings_move(vault: Path) -> list[Item]:
     # Left behind, not wrong: the site's installed tool is older than the one
     # that runs steps and reads the folder keys from the vault. The tool says
     # which part and in what words; neither holds the stamp.
+    told: set[str] = set()
     for key, where in (("stepsHeld", "package.json (site)"),
                        ("keysHeld", "vault.config.json (site)")):
         held = plan.get(key)
         if isinstance(held, dict) and held.get("line"):
+            told.add(str(held["line"]))
             items.append(Item(f"{MOVE}-{key}", PERSON,
                               [f"{where}\t{held['line']}"]))
+    # A package.json step that differs from the vault's is left, and runs
+    # beside the vault's under `npm run build`: told each pass, never written.
+    for d in plan.get("stepsDiffer") or []:
+        if isinstance(d, dict) and d.get("line"):
+            told.add(str(d["line"]))
+            items.append(Item(f"{MOVE}-stepsDiffer-{d.get('script')}", PERSON,
+                              [f"package.json (site)\t{d['line']}"]))
     files = plan.get("files") or {}
     if not (files.get("write") or files.get("remove")):
         return items
     shows = _shows_lines(plan)
+
+    def not_told(lines: list[Any]) -> list[str]:
+        return [str(x) for x in lines if str(x) not in told]
 
     def apply(_value: str | None) -> list[str]:
         done = _ask_move(vault, base)
@@ -206,18 +218,10 @@ def find_settings_move(vault: Path) -> list[Item]:
         if layout == "legacy" and vault_layout(vault) != "new":
             raise StepFailed("the move finished but the vault is not on the "
                              "new settings file")
-        return [*_shows_lines(done), *[str(x) for x in done["lines"]]]
+        return [*_shows_lines(done), *not_told(done["lines"])]
 
     return [*items,
-            Item(MOVE, WILL, [*shows, *[str(x) for x in plan["lines"]]], apply)]
-
-
-# What the page says for each value the move carries that changes what the
-# site shows. The tool marks such a value (`shows`); this only words it.
-_SHOWS = {
-    "player_site.not_found": "Your site's 'page not found' message becomes",
-    "player_site.theme.campaign_image": "Your campaign picture becomes",
-}
+            Item(MOVE, WILL, [*shows, *not_told(plan["lines"])], apply)]
 
 
 def _shows_lines(plan: dict[str, Any]) -> list[str]:
@@ -226,9 +230,7 @@ def _shows_lines(plan: dict[str, Any]) -> list[str]:
     out = []
     for c in plan.get("carried") or []:
         if isinstance(c, dict) and c.get("shows"):
-            what = _SHOWS.get(str(c.get("to")),
-                              f"What your site shows for {c.get('to')} becomes")
-            out.append(f"{what}: {c.get('value')}")
+            out.append(f"{c['shows']} becomes: {c.get('value')}")
     return out
 
 

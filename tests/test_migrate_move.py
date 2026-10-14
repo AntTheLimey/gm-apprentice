@@ -329,7 +329,7 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertEqual(code, 0, err)
         self.assertIn("Your site's 'page not found' message becomes: "
                       "This document is sealed.", plan)
-        self.assertIn("Your campaign picture becomes: images/cover.jpg", plan)
+        self.assertIn("Your campaign picture (shown on the landing page and the 'page not found' page) becomes: images/cover.jpg", plan)
         code, did, err = update(vault, "apply", "--choose", "default-mode=leave")
         self.assertEqual(code, 0, err + did)
         self.assertEqual(vault_layout(vault), "new")
@@ -407,6 +407,45 @@ class SiteLeftoversTests(unittest.TestCase):
         self.assertIn("build steps", item.lines[0])
         self.assertIn("node scripts/glue.mjs", item.lines[0])
         self.assertNotIn("package.json", item.lines[0])
+
+    def test_the_held_line_is_told_once_not_also_as_a_move_line(self):
+        vault = make_vault(self)
+        site = with_site(self, vault, spec="^1.23.0", installed="1.23.1",
+                         preserveDirs=["gazetteer"], siteTitle="Hollow")
+        add_steps(site, postbuild="node scripts/glue.mjs")
+        code, plan, err = update(vault, "plan")
+        for line in ("The site's build steps stay in its package.json until "
+                     "its publish tool is 1.24.0 or later.",
+                     "The site's address, host, output folder, project name "
+                     "and kept folders stay in its vault.config.json until "
+                     "its publish tool is 1.24.0 or later."):
+            self.assertEqual(plan.count(line), 1, plan)
+            self.assertIn(f"\t{line}", plan.split("## Needs a person")[1])
+
+    def test_a_package_step_that_differs_from_the_settings_is_told_and_does_not_hold_the_stamp(self):
+        vault, site = moved_vault_with_site(self)
+        settings_set_after = ms.settings_set
+        settings_set_after(vault, [("player_site.after_build", ["node mine.mjs"])])
+        add_steps(site, postbuild="node theirs.mjs")
+        items = ms.find_settings_move(vault)
+        (item,) = items
+        self.assertEqual(item.group, ms.PERSON)
+        self.assertFalse(item.holds_stamp)
+        self.assertIn("differs from `player_site.after_build`", item.lines[0])
+        self.assertIn("npm run build", item.lines[0])
+        code, did, err = update(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertEqual(read_stamp(vault), PLUGIN)
+        self.assertIn("postbuild", json.loads(
+            (site / "package.json").read_text())["scripts"])
+
+    def test_the_picture_line_says_where_it_shows_in_the_tools_words(self):
+        vault = make_vault(self)
+        with_site(self, vault, campaignImage="images/cover.jpg")
+        code, plan, err = update(vault, "plan")
+        self.assertIn("Your campaign picture (shown on the landing page and "
+                      "the 'page not found' page) becomes: images/cover.jpg",
+                      plan)
 
     def test_held_keys_alone_are_told_too(self):
         vault, site = moved_vault_with_site(

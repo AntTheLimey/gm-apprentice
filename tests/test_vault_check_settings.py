@@ -846,18 +846,115 @@ class SiteFileKeyTests(NewFileBase):
         self.assertIn("takes a list", out)
         self.assertEqual(site_file.read_text(), before)
 
-    def test_a_site_whose_tool_is_older_gets_a_row_that_says_where_they_stay(self):
+    def older_site(self, **keys):
         import site_fixture
         from test_migrate_move import install_as
-        vault, site_file = self.moved_vault_with_site_keys(preserveDirs=["gazetteer"])
+        vault, site_file = self.moved_vault_with_site_keys(**keys)
         site = site_file.parent
         site_fixture.pin_site(site, "^1.20.0")
         install_as(site, "1.23.1")
+        return vault, site_file
+
+    def test_a_site_whose_tool_is_older_gets_one_informational_row_with_one_sentence(self):
+        vault, _ = self.older_site(preserveDirs=["gazetteer"], outputDir="site-out")
         rows = [r for r in self.rows(vault) if r.site]
-        (row,) = rows
+        (row,) = rows                                  # one row, not one per key
         self.assertEqual(row.kind, "none")
         self.assertEqual(row.ops, [])
-        self.assertIn("1.24.0", row.note)
+        self.assertEqual(row.fault["level"], "info")
+        self.assertIn("1.24.0", row.fault["message"])
+        self.assertNotIn("next update", row.fault["message"])
+        self.assertIsNone(row.note)
+        self.assertTrue(vc._row_lines(row, "x")[0].startswith("NOTE\t"))
+
+    def test_a_held_site_puts_no_warning_in_the_report(self):
+        vault, _ = self.older_site(preserveDirs=["gazetteer"])
+        self.assertEqual(vc.settings_fault_rows(vault), [])
+
+    def test_an_unusable_value_on_a_key_the_vault_already_sets_has_no_fix(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            preserveDirs="gazetteer", outputDir="../x")
+        vaultlib.settings_set(vault, [("player_site.keep", ["maps"]),
+                                      ("player_site.output", "out2")])
+        before = site_file.read_text()
+        by = {r.fault["name"]: r for r in self.rows(vault) if r.site}
+        self.assertEqual(sorted(by), ["outputDir", "preserveDirs"])
+        for row in by.values():
+            self.assertEqual(row.kind, "none")
+            self.assertEqual(row.ops, [])
+            self.assertIn("fix it in", row.note)
+            self.assertNotIn("differs", row.fault["message"])
+        self.assertIn("takes a list", by["preserveDirs"].fault["message"])
+        code, out = self.fix_output(vault)
+        self.assertNotIn("failed to start", out)
+        self.assertEqual(site_file.read_text(), before)
+
+    def test_fix_beside_an_unusable_key_names_the_key_that_blocked_it(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            preserveDirs="gazetteer", excludeSections=["Z"])
+        before = site_file.read_text()
+        with self.assertRaises(vaultlib.SettingsUnavailable) as caught:
+            self.fix_output(vault)
+        said = str(caught.exception)
+        self.assertNotIn("failed to start", said)
+        self.assertIn("preserveDirs", said)
+        self.assertIn("takes a list", said)
+        self.assertIn("nothing more was changed", said)
+        self.assertEqual(site_file.read_text(), before)
+
+    def test_a_kept_folder_only_in_the_site_file_is_a_proposed_fix_that_names_it(self):
+        vault, site_file = self.moved_vault_with_site_keys(
+            preserveDirs=["gazetteer", "maps"])
+        vaultlib.settings_set(vault, [("player_site.keep", ["maps"])])
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(row.kind, "proposed")
+        self.assertEqual(row.ops, [{"op": "fold-site"}])
+        self.assertIn("gazetteer", row.fix)
+        self.assertNotIn("maps", row.fix.split("gazetteer")[0][-5:])
+        self.assertIn("cleaned at the next build", row.fix)
+        self.assertIn("player_site.keep", row.fix)
+        code, out = self.fix_output(vault)                  # --fix leaves it
+        self.assertIn("preserveDirs", site_file.read_text())
+        buf = io.StringIO()
+        with contextlib.redirect_stdout(buf):
+            vc.check_settings(vault, False, ["preserveDirs"], False)
+        vc.forget_settings(None)
+        self.assertNotIn("preserveDirs", site_file.read_text())
+
+    def test_a_differing_output_folder_is_proposed_and_names_both_folders(self):
+        vault, _ = self.moved_vault_with_site_keys(outputDir="site-out")
+        vaultlib.settings_set(vault, [("player_site.output", "out2")])
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(row.kind, "proposed")
+        self.assertIn("out2", row.fix)
+        self.assertIn("site-out", row.fix)
+        self.assertIn("builds into", row.fix)
+
+    def test_a_differing_address_is_certain_and_names_both_values(self):
+        vault, _ = self.moved_vault_with_site_keys(siteUrl="https://theirs.example")
+        vaultlib.settings_set(vault, [("player_site.url", "https://mine.example")])
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(row.kind, "certain")
+        self.assertIn("https://mine.example", row.fix)
+        self.assertIn("https://theirs.example", row.fix)
+        self.assertNotIn("not read now", row.fix)
+
+    def test_a_package_step_that_differs_from_the_settings_has_a_row_and_no_fix(self):
+        import site_fixture
+        vault, site_file = self.moved_vault_with_site_keys()
+        vaultlib.settings_set(vault, [("player_site.after_build", ["node mine.mjs"])])
+        site_fixture.pin_site(site_file.parent)
+        pkg = site_file.parent / "package.json"
+        data = json.loads(pkg.read_text())
+        data["scripts"] = {"postbuild": "node theirs.mjs"}
+        pkg.write_text(json.dumps(data))
+        (row,) = [r for r in self.rows(vault) if r.site]
+        self.assertEqual(row.kind, "none")
+        self.assertEqual(row.ops, [])
+        self.assertEqual(row.where, "package.json")
+        self.assertIn("npm run build", row.fault["message"])
+        self.assertIn("make them the same", row.note)
+        self.assertIn("take the script out of package.json", row.note)
 
     def test_a_site_hiding_key_that_is_not_a_list_says_nothing_was_carried(self):
         vault, site_file = self.moved_vault_with_site_keys(

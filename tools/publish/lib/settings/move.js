@@ -201,7 +201,7 @@ function planCarry(site, held, siteDir, { holdKeys = false } = {}) {
     if (r.value === null || (typeof r.value === 'string' && r.value.trim() === '') || (Array.isArray(r.value) && r.value.length === 0)) continue;
     const mine = held(e.name);
     if (!mine.set) {
-      out.carried.push({ from: w.name, to: e.name, value: r.value, ...(w.carryOnly ? { shows: true } : {}) });
+      out.carried.push({ from: w.name, to: e.name, value: r.value, ...(w.shows ? { shows: w.shows } : {}) });
       out.values[e.name] = r.value;
       out.changes.push({ op: 'set', name: e.name, value: r.value });
       out.lines.push(`\`${w.name}\` moved to \`${e.name}\`.`);
@@ -304,7 +304,7 @@ function stepsGate(siteDir, { siteToolUpdated = false, pinCheck: ask = pinCheck 
 }
 
 function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pinCheck, gate = null } = {}) {
-  const out = { carried: [], dropped: [], lines: [], values: {}, changes: [], removed: [], pkg: null, stepsHeld: null };
+  const out = { carried: [], dropped: [], lines: [], values: {}, changes: [], removed: [], pkg: null, stepsHeld: null, differing: [] };
   const pkg = readSitePackage(siteDir);
   const scripts = pkg && isMap(pkg.data.scripts) ? pkg.data.scripts : {};
   const present = stepScriptsIn(siteDir);
@@ -329,7 +329,9 @@ function planSteps(siteDir, held, { siteToolUpdated = false, pinCheck: ask = pin
       out.removed.push(script);
       out.lines.push(`The site's ${script} in package.json holds the same steps as \`${e.name}\`, so it was removed from package.json; the tool runs the vault's.`);
     } else {
-      out.lines.push(`The site's ${script} in package.json differs from \`${e.name}\` in the vault's settings, so it was left. The tool runs the vault's steps, and \`npm run build\` also runs the package.json one.`);
+      const line = `The site's ${script} in package.json differs from \`${e.name}\` in the vault's settings, so it was left. The tool runs the vault's steps, and \`npm run build\` also runs the package.json one.`;
+      out.differing.push({ script, setting: e.name, line });
+      out.lines.push(line);
     }
   }
   if (out.removed.length) {
@@ -777,6 +779,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     },
     ...(stepsPlan && stepsPlan.stepsHeld ? { stepsHeld: stepsPlan.stepsHeld } : {}),
     ...(keysHeld ? { keysHeld: keysHeldAnswer(gate()) } : {}),
+    ...(stepsPlan && stepsPlan.differing.length ? { stepsDiffer: stepsPlan.differing } : {}),
   };
   Object.defineProperty(result, INTERNAL, { value: { ...m, lines }, enumerable: false });
   return result;
@@ -1026,6 +1029,7 @@ function mendNew(vault, siteConfigPath, plan, { discardOld = false, foldSiteFile
   const done = plan({ lines, files: { write, remove }, carried: [...carry.carried, ...(stepsPlan ? stepsPlan.carried : [])], dropped: carry.dropped });
   if (stepsPlan && stepsPlan.stepsHeld) done.stepsHeld = stepsPlan.stepsHeld;
   if (keysHeldNow) done.keysHeld = keysHeldAnswer(keysHeldNow);
+  if (stepsPlan && stepsPlan.differing.length) done.stepsDiffer = stepsPlan.differing;
   if (leftover) done.leftover = leftover;
   if (siteDiffersNow.length) done.siteDiffers = siteDiffersNow;
   if (write.length || remove.length) Object.defineProperty(done, INTERNAL, { value: { mend }, enumerable: false });

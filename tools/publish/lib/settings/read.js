@@ -239,7 +239,7 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
     }
     settle(c, e, { written: e.name, setting: e.name }, { raw, origin: 'file' }, defaultOf);
     if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
-      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site',
+      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site', siteDiffers: true, ...(e.check ? { checks: e.check } : {}),
         message: `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
     }
   }
