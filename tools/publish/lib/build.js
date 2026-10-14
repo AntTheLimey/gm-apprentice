@@ -202,6 +202,8 @@ function buildSite(options) {
   // the preview, or any command that only reads. Before anything is read from the vault, in the site folder.
   const runningSteps = options.runSteps === true && !dry && !options.outputDirOverride;
   if (runningSteps) {
+    // An output folder the build would refuse stops it before any step runs (a step may change it, so the check also stays below).
+    assertSafeOutputDir();
     const notes = packageNotes(publishConfig.layout === 'new' ? packageScripts(configDir) : {}, publishConfig.steps);
     if (notes.twice) printWarning(notes.twice);
     if (notes.only) (options.stepsLog || console.log)(`  ${notes.only}`);
@@ -245,7 +247,19 @@ function buildSite(options) {
 
   function assertSafeOutputDir() {
     // Real paths: a link in the site folder that leads to the vault is the vault.
-    const real = (p) => { try { return fs.realpathSync.native(path.resolve(p)); } catch { return path.resolve(p); } };
+    // A folder not made yet is judged by its nearest folder that exists, so it is compared the same way as the vault.
+    const real = (p) => {
+      const tail = [];
+      let cur = path.resolve(p);
+      for (;;) {
+        try { return path.join(fs.realpathSync.native(cur), ...tail); } catch {
+          const up = path.dirname(cur);
+          if (up === cur) return path.resolve(p);
+          tail.unshift(path.basename(cur));
+          cur = up;
+        }
+      }
+    };
     const resolved = real(outputDir);
     const root = path.parse(resolved).root;
     if (resolved === root) {

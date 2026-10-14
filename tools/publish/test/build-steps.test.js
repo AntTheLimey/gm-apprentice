@@ -103,6 +103,18 @@ test('build: the before steps run before the vault is read, so a note they write
   assert.ok(fs.existsSync(path.join(s.site, 'docs', 'items', 'late-wand.html')), 'the note written by the step was published');
 });
 
+test('build: an output folder inside the vault stops the build before any before step runs', () => {
+  // The site folder sits inside the vault, so its output folder does too: the build must refuse it before a step touches anything.
+  const s = scratch({ settings: { before_build: [append('ran', 'marker.txt')] } });
+  const site = path.join(s.vault, 'site');
+  fs.mkdirSync(site);
+  fs.writeFileSync(path.join(site, 'vault.config.json'), JSON.stringify({ vaultPath: '..' }));
+  const r = spawnSync(process.execPath, [BIN, 'build', '--config', path.join(site, 'vault.config.json')], { encoding: 'utf8', cwd: site });
+  assert.equal(r.status, 1, r.stderr + r.stdout);
+  assert.match(r.stderr, /Refusing to write the output folder/);
+  assert.equal(fs.existsSync(path.join(site, 'marker.txt')), false, 'no before step ran');
+});
+
 test('the steps run nowhere but build and deploy: not in a dry build, explain, manifest, doctor --site, the sheet view, the preview, deploy --no-build', async () => {
   const s = scratch({ settings: { before_build: [append('b', 'marker.txt')], after_build: [append('a', 'marker.txt')] } });
   const marker = path.join(s.site, 'marker.txt');
