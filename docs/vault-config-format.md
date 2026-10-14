@@ -73,6 +73,47 @@ list.
 A switch takes `true` or `false`, or one of the words `yes`, `no`, `on`
 and `off`, in any case. Other values are named in the schema.
 
+A setting can hold a list of entries that each have several parts, such as
+`player_site.menu_extra`, where an entry has a `label`, a `link` and
+optionally a `group`. In the file it is a YAML list of maps. Through the
+command an entry is added one at a time, each part as `name=value`, and
+taken out by its `label`:
+
+```text
+gm-apprentice-publish settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --vault <vault>
+gm-apprentice-publish settings remove player_site.menu_extra Gazetteer --vault <vault>
+```
+
+A list of words, such as the statuses under `vault.statuses`, is read by
+more than one tool: the publish tool reads all three lists, and the
+plugin's own scripts read `vault.statuses.out_of_play` and the numbers
+under `vault`. A tool that needs one of these asks the command for it, so
+the answer is the same everywhere; it does not keep its own copy of the
+words.
+
+## The site folder
+
+The folder that holds the site (`player_site.folder`) keeps a
+`vault.config.json` with one setting, `vaultPath`: where the vault is on
+that computer. It stays out of the vault because it belongs to one
+computer. Everything else about the site is a setting of the vault,
+including the address, the host, the output folder, the Cloudflare project,
+the folders a rebuild keeps (`player_site.url`, `player_site.host`,
+`player_site.output`, `player_site.cloudflare_project`,
+`player_site.keep`) and the build steps.
+
+The build steps are two lists of shell commands, `player_site.before_build`
+and `player_site.after_build`. The publish tool runs them in the site
+folder, in order, each printed first, when it builds or deploys. The
+`before_build` steps run before anything is read from the vault, and the
+`after_build` steps run after every file is written (and only if the build
+had no errors). Each step is a shell command with the site folder's
+`node_modules/.bin` put first on the path, as `npm run` does, and a limit of
+ten minutes. A step that fails, or runs out of time, stops the build and
+nothing is published. A dry run, `explain`, `manifest`, `doctor --site`, the
+preview, the sheet view and `deploy --no-build` run none. A tool that builds
+the site itself has to do the same.
+
 ## The schema
 
 [`tools/publish/schema/vault-config.schema.json`](../tools/publish/schema/vault-config.schema.json)
@@ -121,7 +162,7 @@ The command checks the name and the value against the list, changes only the
 lines it must, and writes all of a change or none of it. A tool that rewrites
 the file whole loses the GM's comments and may write a value the build then
 refuses. `settings --help` lists the other verbs: `get`, `add`, `remove`,
-`unset`, `describe`, `check`, `list`, `raw`, `setup-note` and `move`.
+`unset`, `carry`, `describe`, `check`, `list`, `raw`, `setup-note` and `move`.
 
 The command reads the file, changes it and puts it back. Do not write the
 file yourself while the command runs: there is no lock, and whoever saves
@@ -188,6 +229,17 @@ new one, and the plugin's update runs it for each vault. It changes nothing unle
 old one did. When it cannot promise that, it says why and leaves the vault
 alone. The old file's prose and any keys that are not settings move to
 `_meta/vault-notes.md`.
+
+A site folder's `vault.config.json` once held more than `vaultPath`:
+`siteUrl`, `host`, `outputDir`, `cloudflarePagesProject` and `preserveDirs`.
+Its `package.json` held the `prebuild` and `postbuild` scripts that were the
+site's build steps. The update moves these into the vault as the settings
+named under "The site folder" above, and `gm-apprentice-publish settings
+move` carries them on a vault already moved. Until it does, the reader takes
+those five keys from the site file when the vault sets none, and `deploy`
+runs the `package.json` steps. A site whose installed publish tool is older
+than 1.24.0 keeps its keys and steps where they are, because that tool
+cannot run steps from the vault.
 
 The move holds back when the publish tool installed in the vault's site
 is older than 1.23.0, whoever pinned it: that tool would read the moved

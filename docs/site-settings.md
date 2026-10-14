@@ -131,6 +131,14 @@ what follows is as described under "Check the spelling" above.
 
 ## The vault
 
+The status lists are matched against a note's `status` in any case and
+with spaces at either end ignored. `vault.statuses.out_of_play` is read by
+the site and by the apprentice's own checks and session preparation, so a
+word you take out of it changes both: the same characters are out of play
+on the page and at the table. The other two lists shape the site only. The
+four numbers are read by the apprentice's checks, session preparation and
+the index; the site does not use them.
+
 <!-- settings:vault -->
 
 | Setting | What it does | Values | Left out |
@@ -140,6 +148,10 @@ what follows is as described under "Check the spelling" above.
 | `vault.statuses.out_of_play` | The statuses that take a character out of play. A character with one leaves the party board and the active team on the landing page, and is listed under "In Memoriam" instead; their sheet page stays. An empty list means nobody is ever out of play | A list of status words | `dead`, `deceased`, `kia`, `retired`, `departed`, `missing`, `unknown`, `inactive`, `npc`, `destroyed`, `dissolved` |
 | `vault.statuses.fallen` | The statuses that put a character under "Fallen" on the Story page. Each must also be in `vault.statuses.out_of_play`; one that is not is left out, with a warning. `retired` always has its own group | A list of status words | `dead`, `deceased`, `kia`, `missing`, `unknown` |
 | `vault.statuses.gone` | The statuses of things that no longer exist. A note with one is left off the landing page's "NPCs in Play" and "Latest Locations" unless the latest session mentions it. An empty list drops nothing | A list of status words | `dead`, `deceased`, `destroyed`, `kia`, `dissolved` |
+| `vault.stale_after_sessions` | How many sessions a draft note, or a character's open thread, can go untouched before the checks call it stale | A whole number, 1 or more | `3` |
+| `vault.name_match` | How alike two note names must be, from `0` (anything) to `1` (identical), before the name check lists them as too close. The check's `--threshold` option overrides it for one run | A number from 0 to 1 | `0.85` |
+| `vault.index.recent_changes` | How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt, counting the line for the rebuild itself; `0` and `1` both keep only that line | A whole number, 0 or more | `20` |
+| `vault.index.description_chars` | How many characters of a note's description the index shows beside its link | A whole number, 1 or more | `80` |
 
 <!-- /settings:vault -->
 
@@ -178,6 +190,50 @@ warning and counts as `on`.
 
 Set `player_site.publish: false` to stop publishing without losing the site
 folder's path. With the site off nothing is built.
+
+### Build steps
+
+A build step is a command the publish tool runs for you around a build:
+`player_site.before_build` runs before the pages are made, and
+`player_site.after_build` runs once every page is written, for jobs such as
+shrinking pictures or adding a page of your own. Each is a list, so you can
+have several, and they run in the order you wrote them, in the site folder.
+
+```yaml
+player_site:
+  after_build:
+    - node tools/add-props.js
+```
+
+- The tool prints each command before it runs it.
+- A step that fails stops the build, and nothing is published.
+- The steps run when you build the site or deploy it. They do not run for a
+  dry run, the preview, the sheet view, a check of the site, or a deploy
+  told to skip the build.
+- A step that runs for more than ten minutes is stopped and counts as
+  failed.
+
+Or add a step yourself, from a terminal:
+
+```text
+gm-apprentice-publish settings add player_site.after_build "node tools/add-props.js" --vault <vault>
+```
+
+### Extra menu entries
+
+`player_site.menu_extra` adds your own entries to the site's menu, such as
+a gazetteer you built by hand. Each has a `label`, a `link` and, if you
+like, a `group`. Ask the apprentice, or run:
+
+```text
+gm-apprentice-publish settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World --vault <vault>
+```
+
+Take one out by its label:
+
+```text
+gm-apprentice-publish settings remove player_site.menu_extra Gazetteer --vault <vault>
+```
 
 ## What gets published
 
@@ -434,18 +490,22 @@ should not need to touch it.
 | `vaultPath` | Where the vault is on this computer |
 
 The site's address, host, output folder, Cloudflare project name and the
-folders a rebuild leaves alone used to be written here too. They are
-settings of the vault now (`player_site.url`, `player_site.host`,
-`player_site.output`, `player_site.cloudflare_project` and
-`player_site.keep`, in the tables above). Until the next vault update
-moves them, the build still reads them from this file when the vault sets
-none, and warns about each.
+folders a rebuild leaves alone are settings of the vault
+(`player_site.url`, `player_site.host`, `player_site.output`,
+`player_site.cloudflare_project` and `player_site.keep`, in the tables
+above), and so are the build steps. A new site's file holds none of them.
 
-An older site may still hold other campaign settings in this file under
-other names. They are no longer read there: the build warns about each, and
-stops for one that hides things from players. Ask the apprentice to
-check the settings: it adds anything such a key hid to the vault's own
-list and removes the keys from this file.
+An older site may still hold some of these in its file, or other campaign
+settings under other names. The next vault update moves the five site
+settings and the build steps into the vault and tells you what it did. A
+site whose own publish tool is older than 1.24.0 keeps them where they are
+until that tool is updated. Until they move, the build reads those five from
+this file when the vault sets none, and warns about each. On a vault that is
+already on the new settings file, other campaign settings are not read from
+this file: the build warns about each, and stops for one that hides things
+from players.
+Ask the apprentice to check the settings: it adds anything such a key hid
+to the vault's own list and removes the keys from this file.
 
 ## See also
 

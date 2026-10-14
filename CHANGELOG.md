@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.56] — 2026-10-14
+
+The vault scripts, campaign-qa and the skills catch up with the settings
+the publish tool learned in 1.10.55. The next update carries your site
+folder's keys and build steps into the vault as 1.10.55 does, and now
+says plainly what it leaves and why. What the site publishes does not
+change. The vault scripts now count the same PCs as out of play as the
+site does, which can move a PC off session-prep's active list (see
+Changed); on the copies of two real campaigns used to test this, no PC
+moved.
+
+### Added
+
+- The vault scripts read their numbers from the settings: how many
+  sessions before a note is stale (`vault.stale_after_sessions`), how
+  close a name must be to match (`vault.name_match`), and how many recent
+  changes and how many characters of description the vault index holds
+  (`vault.index.recent_changes`, `vault.index.description_chars`).
+- The vault scripts read which statuses put a PC out of play from
+  `vault.statuses.out_of_play`, the same list the site uses.
+- campaign-qa's Settings check fixes a key or build step left in the site
+  folder with the tool's move, and tells once when a site folder's value
+  cannot be used or differs from the vault's.
+- The settings check finds a blank build step, a menu entry listed twice,
+  and a fallen-status word that is not also out of play.
+
+### Changed
+
+- The vault scripts (session-prep's Active PCs, its threads and arcs, and
+  campaign-qa's active-PC checks) used to treat only `dead`, `retired`
+  and `inactive` as out of play. They now use the site's list, which
+  adds `deceased`, `kia`, `departed`, `missing`, `unknown`, `npc`,
+  `destroyed` and `dissolved`. A PC with one of those statuses leaves
+  session-prep's active list, as it already left the party board. To
+  keep one in play, take it out of the list: `settings remove
+  vault.statuses.out_of_play missing`.
+- The update says which build steps and site-folder keys it leaves for a
+  site whose own tool is too old, and what the 404 page's line and the
+  campaign picture become when a value the site never read is carried.
+- A build step in the site's `package.json` that differs from the
+  vault's is left where it is and named on every update, since it runs
+  beside the vault's under `npm run build`.
+- The skills set the site's host, address and Cloudflare project by
+  command, say how to add a menu entry and a banner, and no longer list
+  the site file's keys or the numbers that are now settings. The set-up
+  guide writes the host for GitHub Pages too, and picks up where it left
+  off from what is already set.
+- The docs say the site folder holds only where the vault is, and when
+  build steps run.
+- `session_context` and `index_build` report unreadable settings as one
+  plain error line.
+- `build` and `init` refuse an option they do not know. A new site's
+  `package.json` no longer has a `watch` script; on a site that still
+  has one, `build --watch` builds once and says there is no watch mode.
+- A status written as a one-item list (`status: [dead]`, as Obsidian's
+  list property writes it) is read as its word by the vault scripts, as
+  the site already did.
+- The publish tool is 1.24.1.
+
+### Fixed
+
+- A menu or banner link to a site page such as `gazetteer/index.html` is
+  no longer dropped because the vault's own `_meta/index.md` has the same
+  name. Notes under `_meta` and `_Templates` do not count as hidden
+  names; `personal` still does.
+
 ## [1.10.55] — 2026-10-13
 
 The publish tool learns the last settings that lived outside your vault,

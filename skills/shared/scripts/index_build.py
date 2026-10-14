@@ -53,6 +53,8 @@ from vaultlib import (
     normalize,
     parse_session_number,
     section,
+    report_unreadable_settings,
+    setting_or_builtin,
     session_ref_number,
     vault_files,
     wikilink_target,
@@ -109,8 +111,6 @@ SKIP_TYPES = {"meta", "campaign_overview"}
 ACTIVE_SESSION_STATUSES = {"planned", "prepped"}
 
 DESCRIPTOR_FIELDS = ("description", "summary", "role", "occupation", "tagline")
-DESCRIPTOR_MAX = 80
-RECENT_CHANGES_CAP = 20
 
 
 @dataclass
@@ -172,10 +172,11 @@ def _new_chapter_record() -> ChapterRecord:
     }
 
 
-def descriptor_of(fm: dict[str, object], text: str) -> str:
+def descriptor_of(fm: dict[str, object], text: str, limit: int) -> str:
     """First non-empty scalar among description/summary/role/occupation/
     tagline, reduced to its first sentence, flattened, and capped at
-    `DESCRIPTOR_MAX` characters. "" when none of those fields are set.
+    `limit` characters (`vault.index.description_chars`). "" when none of
+    those fields are set.
 
     `text` is accepted for interface symmetry with the other per-file
     readers in this module (all take the raw file text); the descriptor
@@ -188,7 +189,7 @@ def descriptor_of(fm: dict[str, object], text: str) -> str:
             flat = " ".join(value.split())
             m = re.match(r"^(.*?[.!?])(?:\s|$)", flat)
             first = m.group(1) if m else flat
-            return first[:DESCRIPTOR_MAX]
+            return first[:limit]
     return ""
 
 
@@ -286,6 +287,7 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
         status = fm.get("status")
         record["status"] = status if isinstance(status, str) else ""
 
+    description_chars = setting_or_builtin(vault, "vault.index.description_chars")
     entries: list[Entry] = []
     session_files: list[_SessionFile] = []
     chain_docs: list[tuple[str, str, dict[str, object], str, str]] = []
@@ -342,7 +344,7 @@ def collect(vault: Path) -> tuple[list[Entry], list[ChapterRecord]]:
             continue
         entries.append(Entry(
             rel=rel, stem=stem, type=ftype,
-            descriptor=descriptor_of(fm, text),
+            descriptor=descriptor_of(fm, text, description_chars),
             stub_needs=_stub_needs(fm, text, ftype),
         ))
 
@@ -562,11 +564,12 @@ def render(vault: Path, *, today: str, previous: str | None) -> str:
     lines.append("## Recent Changes")
     rebuilt_line = (f"- {today}: index rebuilt — {entity_count} entities, "
                     f"{narrative_count} narrative, {stub_count} stubs")
+    recent_changes = setting_or_builtin(vault, "vault.index.recent_changes")
     changes = [rebuilt_line]
     if previous:
         seen = {rebuilt_line}
         for prev_line in _recent_changes_lines(previous):
-            if len(changes) >= RECENT_CHANGES_CAP:
+            if len(changes) >= recent_changes:
                 break
             if prev_line in seen:
                 continue
@@ -646,4 +649,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(report_unreadable_settings(main))

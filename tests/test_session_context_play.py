@@ -194,14 +194,14 @@ class FindPlanFallbackTests(unittest.TestCase):
 
 
 class ThreadReportTests(unittest.TestCase):
-    """`thread_report(files, current, chapter)` and `--threads`."""
+    """`thread_report(files, current, chapter, vault)` and `--threads`."""
 
     @classmethod
     def setUpClass(cls):
         cls.files = load_files(FIXTURE)
 
     def test_threads_ages(self):
-        report = sc.thread_report(self.files, 7, "chapter 4 - calcutta")
+        report = sc.thread_report(self.files, 7, "chapter 4 - calcutta", FIXTURE)
         self.assertTrue(report.startswith("===== Threads ====="))
         self.assertIn("--- Hero ---", report)
         self.assertIn(
@@ -211,7 +211,7 @@ class ThreadReportTests(unittest.TestCase):
             "(not in any wrap-up — check it is still live)", report)
 
     def test_threads_orphans(self):
-        report = sc.thread_report(self.files, 7, "chapter 4 - calcutta")
+        report = sc.thread_report(self.files, 7, "chapter 4 - calcutta", FIXTURE)
         self.assertIn("--- Wrap-up threads not on any PC sheet ---", report)
         self.assertIn("session 5\tThe ledger is still missing", report)
         # "Find the missing ledger" matched a PC thread, so it must NOT
@@ -230,9 +230,52 @@ class ThreadReportTests(unittest.TestCase):
             wrap.read_text(encoding="utf-8").replace("session: 7", "session: 4"),
             encoding="utf-8")
         files = load_files(tmp)
-        report = sc.thread_report(files, 7, "chapter 4 - calcutta")
+        report = sc.thread_report(files, 7, "chapter 4 - calcutta", tmp)
         self.assertIn(
             "Find the missing ledger\tfirst=4\tlast=4\tage=3\tSTALE", report)
+
+    def aged_copy(self, settings_yaml):
+        tmp = Path(tempfile.mkdtemp(prefix="session-context-setting-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        shutil.copytree(FIXTURE, tmp, dirs_exist_ok=True)
+        wrap = (tmp / "Chapters" / "Chapter 4 - Calcutta" / "Sessions"
+                / "Chapter_04_Session_07_Wrap_Up.md")
+        wrap.write_text(
+            wrap.read_text(encoding="utf-8").replace("session: 7", "session: 4"),
+            encoding="utf-8")
+        (tmp / "_meta" / "vault-config.md").unlink(missing_ok=True)
+        (tmp / "_meta").mkdir(exist_ok=True)
+        (tmp / "_meta" / "vault-config.yaml").write_text(
+            "version: 1\n" + settings_yaml, encoding="utf-8")
+        return tmp
+
+    def test_threads_stale_after_comes_from_the_setting(self):
+        ledger = "Find the missing ledger\tfirst=4\tlast=4\tage=3\t"
+        tmp = self.aged_copy("vault:\n  stale_after_sessions: 4\n")
+        report = sc.thread_report(load_files(tmp), 7, "chapter 4 - calcutta", tmp)
+        self.assertIn(ledger + "\n", report + "\n")
+        tmp = self.aged_copy("vault:\n  stale_after_sessions: 2\n")
+        report = sc.thread_report(load_files(tmp), 7, "chapter 4 - calcutta", tmp)
+        self.assertIn(ledger + "STALE", report)
+
+    def test_a_deceased_pc_is_not_in_the_active_pcs(self):
+        tmp = self.aged_copy("")
+        hero = tmp / "Characters" / "PCs" / "Hero.md"
+        text = hero.read_text(encoding="utf-8")
+        hero.write_text(text.replace("status: active", "status: ' Deceased '"),
+                        encoding="utf-8")
+        active = run_cli(tmp).stdout.split("===== Active PCs =====", 1)[1]
+        self.assertNotIn("--- Hero (", active.split("=====", 1)[0])
+
+    def test_a_broken_settings_file_is_a_plain_error_not_a_traceback(self):
+        tmp = self.aged_copy("vault: [unclosed\n")
+        for args in ([], ["--threads"], ["--arcs"]):
+            result = run_cli(tmp, *args)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertTrue(result.stderr.startswith(
+                "error: could not read the vault's settings: "
+                "_meta/vault-config.yaml is not valid YAML"), result.stderr)
 
     def test_threads_cli(self):
         result = run_cli(FIXTURE, "--threads", "--session", "7")

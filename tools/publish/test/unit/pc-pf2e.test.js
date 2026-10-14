@@ -2,7 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { templateBody, setRow, replace, sectionsOf, druidBody } = require('../helpers/pc-template');
 const { renderPF2eSheet, isPF2eConsumedTitle } = require('../../lib/templates/pc-pf2e');
-const { pcTemplate } = require('../../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('../helpers/settings-files');
 
 const blank = () => templateBody('pc-pf2e.md');
 

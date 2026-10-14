@@ -154,6 +154,9 @@ test("a PC's facts: the note's own display_meta wins over the site's list; the s
   assert.deepEqual(headerMetaFields({ display_meta: ['rank'] }, ['age']), ['rank']);
   assert.deepEqual(headerMetaFields({}, ['age']), ['age']);
   assert.deepEqual(headerMetaFields({}, []), []);
+  // The page keeps no list of its own: a caller that forgets to pass the site's is told so, not shown an empty header.
+  assert.throws(() => headerMetaFields({}), /not given the site's header_facts/);
+  assert.throws(() => headerMetaFields({ display_meta: ['rank'] }, undefined), /not given the site's header_facts/);
 });
 
 test('withheldPlaceholder: person for a character or NPC, place for a location, thing for any other', () => {

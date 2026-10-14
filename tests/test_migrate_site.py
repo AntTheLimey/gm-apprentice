@@ -504,6 +504,7 @@ class PersonRowTests(unittest.TestCase):
         self.assertEqual(item.group, PERSON)
         self.assertIn("node add-toggle.js", item.lines[0])
         self.assertTrue(item.lines[0].startswith("package.json (site)\t"))
+        self.assertIn("build step", item.lines[0])
         (site / "package.json").write_text("{}", encoding="utf-8")
         self.assertEqual(ms.find_postbuild(vault), [])
         self.assertEqual(ms.find_postbuild(make_vault(self, site=False)), [])
@@ -950,7 +951,7 @@ class MigrateEndToEndTests(unittest.TestCase):
                     # file, and says so.
                     self.assertIn("Will remove the settings from", text)
                     self.assertIn("outputDir", text)
-                    self.assertIn("`outputDir` moved to `player_site.output`.",
+                    self.assertIn("`outputDir` moves to `player_site.output`.",
                                   text)
                 item.apply(None)
                 self.assertEqual(ms.find_settings_move(vault), [])

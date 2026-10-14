@@ -68,7 +68,8 @@ from pathlib import Path
 
 from schema_rules import (chapter_key, chapter_of, extract_frontmatter,
                           parse_session_number, wikilink_target)
-from vaultlib import (GM_MARKER_RE, PC_INACTIVE_STATUS,  # noqa: F401
+from vaultlib import (GM_MARKER_RE, is_out_of_play, out_of_play,  # noqa: F401
+                      report_unreadable_settings, setting_or_builtin,
                       SKIP_DIRS, WRAP_UP_TYPES, body_of, entity_type,
                       h3_blocks, nested_mapping, raw_frontmatter, section,
                       session_ref_number, word_count)
@@ -386,7 +387,7 @@ def play_brief(files, plan_rel: str, plan_text: str) -> str:
     return "\n\n".join(parts)
 
 
-def thread_report(files, current: int, chapter) -> str:
+def thread_report(files, current: int, chapter, vault: Path) -> str:
     """Per-PC Open-threads ages against Wrap-Up Unresolved Threads / PC
     Carry-Forward bullets, plus wrap-up bullets that never made it onto
     any PC sheet (thread-decay candidates).
@@ -419,9 +420,11 @@ def thread_report(files, current: int, chapter) -> str:
         carry = _bullets(carry_block) if carry_block else []
         wrap_ups.append((n, unresolved, carry))
 
+    not_playing = out_of_play(vault)
+    stale_after = setting_or_builtin(vault, "vault.stale_after_sessions")
     pcs = [(rel, text) for rel, text, fm in files
            if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and str(fm.get("status", "")).casefold() not in PC_INACTIVE_STATUS]
+           and not is_out_of_play(fm, not_playing)]
 
     # Unresolved bullets a PC thread actually matched, keyed by (session,
     # bullet text) — everything else is reported as an orphan below.
@@ -451,7 +454,7 @@ def thread_report(files, current: int, chapter) -> str:
             if hits:
                 first, last = min(hits), max(hits)
                 age = current - last
-                stale = "STALE" if age >= 3 else ""
+                stale = "STALE" if age >= stale_after else ""
                 lines.append(f"{thread}\tfirst={first}\tlast={last}\t"
                              f"age={age}\t{stale}")
             else:
@@ -596,9 +599,9 @@ def pc_matches(cell: str, rel: str, fm: dict) -> bool:
             or cell.replace("_", " ").casefold() in candidates)
 
 
-def arcs_report(files, chapter, upcoming: int) -> str:
-    """For each active PC (type pc, not *_Story.md, status not in
-    PC_INACTIVE_STATUS):
+def arcs_report(files, chapter, upcoming: int, vault: Path) -> str:
+    """For each active PC (type pc, not *_Story.md, status not out of play
+    for this vault):
       --- {stem} ({rel}, player: {player_name or ?}) ---
       ## Background
       {section or "(no ## Background section)"}
@@ -649,9 +652,10 @@ def arcs_report(files, chapter, upcoming: int) -> str:
     prose_forecast = [n for n, rows in plans if rows == []]
     no_section = [n for n, rows in plans if rows is None]
 
+    not_playing = out_of_play(vault)
     pcs = [(rel, text, fm) for rel, text, fm in files
            if fm.get("type") == "pc" and not rel.endswith("_Story.md")
-           and str(fm.get("status", "")).casefold() not in PC_INACTIVE_STATUS]
+           and not is_out_of_play(fm, not_playing)]
 
     def since(last: int | None, label: str) -> str:
         if last is None:
@@ -882,8 +886,10 @@ def main() -> int:
                            "against the Wrap-Ups' Unresolved Threads and "
                            "PC Carry-Forward bullets, "
                            "age=N sessions since last touched, STALE at "
-                           "age >= 3 (a candidate, not a verdict — resolve, "
-                           "advance, or retire is the GM's call)")
+                           "the vault's stale-after number "
+                           "(vault.stale_after_sessions; a candidate, not a "
+                           "verdict — resolve, advance, or retire is the "
+                           "GM's call)")
     mode.add_argument(
         "--arcs", action="store_true",
         help="print the Session Context header and the PC Arcs report "
@@ -978,11 +984,11 @@ def main() -> int:
               "and existing Plan outlined — see --help)")
 
     if args.threads:
-        print(f"\n{thread_report(files, current, chapter)}")
+        print(f"\n{thread_report(files, current, chapter, args.vault)}")
         return 0
 
     if args.arcs:
-        print(f"\n{arcs_report(files, chapter, upcoming)}")
+        print(f"\n{arcs_report(files, chapter, upcoming, args.vault)}")
         return 0
 
     # --- latest wrap-up ---
@@ -1011,11 +1017,12 @@ def main() -> int:
 
     # --- active PCs: frontmatter line + Current Status block ---
     print("\n===== Active PCs =====")
+    not_playing = out_of_play(args.vault)
     found_pc = False
     for rel, text, fm in files:
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
-        if str(fm.get("status", "")).casefold() in PC_INACTIVE_STATUS:
+        if is_out_of_play(fm, not_playing):
             continue
         found_pc = True
         as_of = fm.get("asOfSession", "?")
@@ -1066,4 +1073,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(report_unreadable_settings(main))

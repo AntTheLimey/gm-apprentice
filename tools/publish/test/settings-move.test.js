@@ -202,7 +202,7 @@ test('the site file is merged in, then loses its setting keys and keeps the rest
   assert.ok(before.exclude_sections.length > 1, 'the built-in list is still there (#371)');
   assert.deepEqual(siteAfter, { vaultPath: './Vault' });
   assert.ok(plan.lines.some((l) => l.includes('siteTitle')));
-  assert.ok(plan.lines.includes('`landingTagline` moved to `player_site.theme.tagline`.'));
+  assert.ok(plan.lines.includes('`landingTagline` moves to `player_site.theme.tagline`.'));
   assert.deepEqual(readSettings({ vaultPath: s.vault, siteConfig: siteAfter }).faults.filter((f) => f.level === 'stop'), []);
 });
 
@@ -960,6 +960,42 @@ test('--fold-site-file adds a site hiding list to the vault\'s, keeps the strict
   assert.equal(cliMove({ vault: s.vault }).data.siteDiffers, undefined);
 });
 
+test('--fold-site-file with --only takes just the named keys out and leaves every other key where it is', () => {
+  const s = scratch(old('  site_dir: ../Site\n  site_title: Mine\n  exclude_sections: [A]\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  const file = path.join(siteDir, 'vault.config.json');
+  const siteJson = { vaultPath: '../Vault', notes: 'kept' };
+  fs.writeFileSync(file, JSON.stringify(siteJson, null, 4) + '\n');
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  const extra = { ...siteJson, siteTitle: 'Theirs', excludeSections: ['Z'], excludeCallouts: ['spoiler'] };
+  fs.writeFileSync(file, JSON.stringify(extra, null, 4) + '\n');
+  const one = cliMove({ vault: s.vault }, { foldSiteFile: true, only: ['excludeSections'] });
+  assert.equal(one.rc, 0, one.err.join('\n'));
+  const got = readSettings({ vaultPath: s.vault }).values.player_site;
+  assert.deepEqual(got.hide.sections, ['A', 'Z'], 'the named key was folded in');
+  assert.notDeepEqual(got.hide.callouts, ['spoiler'], 'a key that was not named was not carried');
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), { ...siteJson, siteTitle: 'Theirs', excludeCallouts: ['spoiler'] },
+    'every other key, and the keys the tool does not know, stay in the site file');
+  const rest = cliMove({ vault: s.vault }, { check: true });
+  assert.deepEqual(rest.data.siteDiffers.sort(), ['player_site.hide.callouts', 'player_site.title'], 'what was not named still shows');
+  assert.equal(cliMove({ vault: s.vault }, { foldSiteFile: true, only: ['siteTitle', 'excludeCallouts'] }).rc, 0);
+  assert.deepEqual(JSON.parse(fs.readFileSync(file, 'utf8')), siteJson);
+});
+
+test('--only without --fold-site-file is refused and changes nothing', () => {
+  const s = scratch(old('  site_dir: ../Site\n'));
+  const siteDir = path.join(s.root, 'Site');
+  fs.mkdirSync(siteDir);
+  fs.writeFileSync(path.join(siteDir, 'vault.config.json'), JSON.stringify({ vaultPath: '../Vault' }));
+  assert.equal(cliMove({ vault: s.vault }).rc, 0);
+  fs.writeFileSync(path.join(siteDir, 'vault.config.json'), JSON.stringify({ vaultPath: '../Vault', excludeSections: ['Z'] }));
+  const before = hashes(s.root);
+  const got = cliMove({ vault: s.vault }, { only: ['excludeSections'] });
+  assert.notEqual(got.rc, 0);
+  assert.deepEqual(hashes(s.root), before);
+});
+
 test('the vault already hiding every callout keeps that; a failing site write puts the vault\'s file back', () => {
   const s = scratch(old('  site_dir: ../Site\n  exclude_callouts: true\n'));
   const siteDir = path.join(s.root, 'Site');
@@ -1054,6 +1090,10 @@ for (const [layout, make] of Object.entries(LAYOUTS)) {
     assert.deepEqual(r.data.carried.map((c) => c.from).sort(), ['campaignImage', 'cloudflarePagesProject', 'fourOhFour.message', 'host', 'landingTagline', 'outputDir', 'preserveDirs', 'siteUrl']);
     assert.deepEqual(r.data.carried.find((c) => c.from === 'preserveDirs'), { from: 'preserveDirs', to: 'player_site.keep', value: ['keep', 'audio'] });
     assert.deepEqual(r.data.dropped.map((d) => d.from), ['fourOhFour.style']);
+    // The two values only the move reads change what the site shows: the plan marks them.
+    assert.deepEqual(r.data.carried.filter((c) => c.shows).map((c) => c.from).sort(), ['campaignImage', 'fourOhFour.message']);
+    assert.ok(r.data.carried.find((c) => c.from === 'campaignImage').shows.includes('landing page and the \'page not found\' page'));
+    assert.ok(r.data.carried.find((c) => c.from === 'fourOhFour.message').shows.includes('page not found'));
     assert.ok(r.data.dropped[0].why);
     const again = hashes(s.root);
     const second = cliMove({ vault: s.vault, config: s.config });
@@ -1210,6 +1250,8 @@ test('a site whose installed tool is older than 1.24.0 keeps its steps in packag
   assert.equal(vaultValues(s).output, 'docs', 'the folder key stays in the site file while its tool cannot read it from the vault');
   assert.equal(siteJson(s).outputDir, 'gazetteer');
   assert.deepEqual(r.data.stepsHeld.held, 'steps');
+  assert.equal(r.data.keysHeld.held, 'keys');
+  assert.ok(r.data.keysHeld.line.startsWith('The site\'s address, host, output folder'), r.data.keysHeld.line);
   const line = 'The site\'s build steps stay in its package.json until its publish tool is 1.24.0 or later.';
   assert.ok(r.data.lines.includes(line), r.data.lines.join('\n'));
   assert.equal(r.data.carried.some((c) => c.to === 'player_site.after_build'), false);
@@ -1268,6 +1310,29 @@ test('steps in both the vault\'s settings and package.json: nothing is carried; 
   assert.equal(fs.readFileSync(sitePackage(differ), 'utf8'), before, 'a different script is left');
   assert.deepEqual(readSettings({ vaultPath: differ.vault }).values.player_site.after_build, ['node mine.js']);
   assert.ok(d.data.lines.some((l) => /postbuild[^\n]*differs[^\n]*player_site\.after_build/.test(l) && /vault's[^\n]*(runs|run)/.test(l)), d.data.lines.join('\n'));
+  // The answer names it as data too, so the vault scripts need not read the line.
+  assert.equal(d.data.stepsDiffer.length, 1);
+  assert.equal(d.data.stepsDiffer[0].script, 'postbuild');
+  assert.equal(d.data.stepsDiffer[0].setting, 'player_site.after_build');
+  assert.ok(d.data.lines.includes(d.data.stepsDiffer[0].line));
+});
+
+test('lines shown before the move are not past tense; the lines after it are', () => {
+  const s = STEP_LAYOUTS.new();
+  writePackage(s, { postbuild: 'node a.js && node b.js' });
+  const check = cliMove({ vault: s.vault, config: s.config }, { check: true });
+  const planned = check.data.lines.join('\n');
+  assert.match(planned, /postbuild steps move to `player_site\.after_build`; the tool will run them/, planned);
+  assert.doesNotMatch(planned, /\bmoved to\b|\bwas removed\b/, planned);
+  const done = cliMove({ vault: s.vault, config: s.config });
+  assert.match(done.data.lines.join('\n'), /postbuild steps moved to `player_site\.after_build`; the tool now runs them/);
+
+  const differ = STEP_LAYOUTS.new();
+  writeNewConfig(differ.vault, { version: 1, player_site: { after_build: ['node mine.js'] } });
+  writePackage(differ, { postbuild: 'node theirs.js' });
+  const d = cliMove({ vault: differ.vault, config: differ.config }, { check: true });
+  assert.ok(d.data.lines.some((l) => /so it is left/.test(l)), d.data.lines.join('\n'));
+  assert.ok(!d.data.lines.some((l) => /was left/.test(l)));
 });
 
 test('a moved vault whose site folder holds only steps or only folder keys is still found to have something to move', () => {

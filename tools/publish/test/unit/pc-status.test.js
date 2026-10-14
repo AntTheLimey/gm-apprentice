@@ -27,3 +27,11 @@ test('isOutOfPlay: the list it is given decides; an empty list means nobody is o
 test('isOutOfPlay: a missing list fails loudly instead of meaning "nobody"', () => {
   assert.throws(() => isOutOfPlay({ status: 'dead' }), TypeError);
 });
+
+test('isOutOfPlay: a one-item list (as Obsidian writes a list property) is read as its item; any other list is no status', () => {
+  assert.strictEqual(isOutOfPlay({ status: ['dead'] }, OUT), true);
+  assert.strictEqual(isOutOfPlay({ status: [' Dead '] }, OUT), true);
+  assert.strictEqual(isOutOfPlay({ status: ['alive'] }, OUT), false);
+  assert.strictEqual(isOutOfPlay({ status: ['dead', 'alive'] }, OUT), false);
+  assert.strictEqual(isOutOfPlay({ status: [] }, OUT), false);
+});

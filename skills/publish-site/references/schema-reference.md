@@ -27,7 +27,7 @@ These entity types have purpose-built page layouts.
 | `player_name` | Optional | Real-world player name |
 | `portrait` | Optional | Path relative to vault root (e.g. `_attachments/characters/slug.jpg`) |
 | `live_key` | Optional | Written by `relink.py` when it renames a PC, so the PC keeps their live stats on the site. Leave it alone |
-| `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (defaults to `[occupation, age, nationality]`) |
+| `display_meta` | Optional | Ordered list of frontmatter field names to show in the meta row (with none, the setting `player_site.sheets.header_facts` decides) |
 | `sheet_source` | Optional | Where the sheet is kept when it is not in the file. Not shown on the site (unless listed in `display_meta`). Without it, a PC whose note gives the system's sheet nothing to render is named in the build's "published with no character sheet" warning |
 | `sheet_skin`, `sheet_frame` | Optional | This character's own look, over the campaign's. See `sheet-skins.md` |
 | `dndbeyond` | Optional | D&D only. A D&D Beyond character link or id; `dnd_ddb.py` syncs the note from it. Not shown on the site |

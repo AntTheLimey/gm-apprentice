@@ -79,6 +79,8 @@ function faultJson(f) {
   if (f.setting) out.setting = f.setting;
   if (f.suggest) out.suggest = f.suggest;
   if (f.use) out.use = f.use;
+  if (f.siteLeft) out.siteLeft = true;
+  if (f.siteDiffers) { out.siteDiffers = true; if (f.checks) out.checks = f.checks; }
   return out;
 }
 // Stops first, otherwise in the order found.
@@ -112,9 +114,7 @@ function get(options, names) {
     values: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.value])),
     origins: Object.fromEntries(Object.entries(now).map(([n, s]) => [n, s.origin])),
     written: Object.fromEntries(Object.keys(now).map((n) => [n, nameInFor(read.layout, n)])),
-    // Not the "moves at the next update" fault of a site-folder key: vault_check.py's Settings check would offer to
-    // delete a key that is still read (see the test in settings-cli.test.js). `check` and the build still report it.
-    faults: faults.filter((f) => !f.siteLeft).map(faultJson),
+    faults: faults.map(faultJson),
   };
   const lines = Object.entries(now).map(([n, s]) => `${n}: ${plainValue(s.value)} (${ORIGIN_WORDS[s.origin] || s.origin})`);
   if (faults.length) lines.push('', ...faults.map(faultLine));
@@ -219,13 +219,15 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings check                   The faults in the file; exits 1 when one stops the build
   settings list                    Every setting that can be set
   settings raw [<name>]            The file as written, or the value at one name
-  settings move [--check] [--fill name=value ...] [--discard-old-file] [--site-tool-updated] [--fold-site-file]
+  settings move [--check] [--fill name=value ...] [--discard-old-file] [--site-tool-updated] [--fold-site-file [--only <key> ...]]
                                    Take a vault from the old settings file to the new one, all or nothing
                                    (--check only shows what it would do; --fill gives vault.campaign or vault.system when the vault has none;
                                    on a vault already moved it tidies up after a stopped move, and --discard-old-file removes a left-over
                                    old file that holds more than the new one; --site-tool-updated says the caller is bringing the site's tool up to date first;
                                    --fold-site-file, on a moved vault, takes the settings a site folder's vault.config.json still holds out of it,
-                                   adding a hiding list's entries to the vault's list and keeping the stricter callout rule)
+                                   adding a hiding list's entries to the vault's list and keeping the stricter callout rule;
+                                   --only names the site-file keys to take (siteUrl, preserveDirs, ...; package.json, or package.json postbuild, for the
+                                   site's build steps) and every other key is left where it is)
                                    The plugin's update normally runs the move for you. Running it by hand is safe:
                                    it refuses when the site's publish tool cannot read the new file.
   settings setup-note get [<key>]  The publish set-up guide's note to itself (${STATE_FILE}; the old settings file on a
@@ -645,8 +647,10 @@ function move(options) {
     if (named && !named.exists && layoutOf(vaultPath) === 'legacy') return stopped([`the vault names a site folder at ${named.dir} that cannot be read; give --config or fix the path`]);
     if (named && named.exists) siteConfigPath = named.file;
   }
-  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile });
-  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
+  const only = Array.isArray(options.only) && options.only.length ? options.only : null;
+  if (only && !options.foldSiteFile) return stopped(['--only goes with --fold-site-file.']);
+  const plan = planMove({ vaultPath, siteConfigPath, fill: fillOf(options.fill), discardOld: !!options.discardOld, siteToolUpdated: !!options.siteToolUpdated, foldSiteFile: !!options.foldSiteFile, only });
+  const base = (moved, lines) => ({ ok: plan.ok, moved, lines, blockers: plan.blockers, files: plan.files, ...(plan.carried ? { carried: plan.carried, dropped: plan.dropped || [] } : {}), ...(plan.stepsHeld ? { stepsHeld: plan.stepsHeld } : {}), ...(plan.keysHeld ? { keysHeld: plan.keysHeld } : {}), ...(plan.stepsDiffer ? { stepsDiffer: plan.stepsDiffer } : {}), ...(plan.leftover ? { leftover: plan.leftover } : {}), ...(plan.siteDiffers ? { siteDiffers: plan.siteDiffers } : {}), ...(plan.held ? { held: plan.held, spec: plan.spec, line: plan.line } : {}) });
   if (plan.held) {
     return { result: base(false, [plan.line]), lines: ['Nothing was changed.', plan.line], rc: 1 };
   }

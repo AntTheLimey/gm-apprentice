@@ -110,6 +110,83 @@
             }
           }
         },
+        "stale_after_sessions": {
+          "description": "How many sessions a draft note, or a character's open thread, can go untouched before the checks call it stale",
+          "default": 3,
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*-?\\d+\\s*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name_match": {
+          "description": "How alike two note names must be, from `0` (anything) to `1` (identical), before the name check lists them as too close. The check's `--threshold` option overrides it for one run",
+          "default": 0.85,
+          "anyOf": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "index": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "recent_changes": {
+              "description": "How many lines the \"Recent Changes\" list in `_meta/index.md` keeps when the index is rebuilt, counting the line for the rebuild itself; `0` and `1` both keep only that line",
+              "default": 20,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "description_chars": {
+              "description": "How many characters of a note's description the index shows beside its link",
+              "default": 80,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
         "attachments": {
           "description": "The vault folder that holds pictures",
           "default": "_attachments",

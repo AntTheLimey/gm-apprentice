@@ -8,7 +8,7 @@
 // needed; read as unset), guards (the hiding side), onFault, open, was (the names this setting had
 // in the old layout, in order of precedence: each { name, in: 'vault' for _meta/vault-config.md or
 // 'site' for the site's vault.config.json, read: false when the old name is reported but its value
-// is not read, carryOnly: true when the reader neither reads nor reports it and only the move carries it }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
+// is not read, carryOnly: true when the reader neither reads nor reports it and only the move carries it, shows: the plain words for what that value changes on the site, told when the move carries it }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
 // map: the setting is also a key of the site file, named by its 'site' was), legacyMerge (how the
 // two old files combine: union, stricter or perKey), legacyOnly (exists only in the old file; its
 // name stays the old one), retired, state, container (a parent that holds only other settings),
@@ -78,6 +78,29 @@ const REGISTRY = [
     left_out: '`dead`, `deceased`, `destroyed`, `kia`, `dissolved`',
   },
 
+  // Numbers the vault scripts (not the site build) read
+  {
+    name: 'vault.stale_after_sessions', type: 'number', integer: true, min: 1, default: 3, group: 'vault',
+    does: 'How many sessions a draft note, or a character\'s open thread, can go untouched before the checks call it stale',
+    left_out: '`3`',
+  },
+  {
+    name: 'vault.name_match', type: 'number', min: 0, max: 1, default: 0.85, group: 'vault',
+    does: 'How alike two note names must be, from `0` (anything) to `1` (identical), before the name check lists them as too close. The check\'s `--threshold` option overrides it for one run',
+    left_out: '`0.85`',
+  },
+  { name: 'vault.index', type: 'map', container: true },
+  {
+    name: 'vault.index.recent_changes', type: 'number', integer: true, min: 0, default: 20, group: 'vault',
+    does: 'How many lines the "Recent Changes" list in `_meta/index.md` keeps when the index is rebuilt, counting the line for the rebuild itself; `0` and `1` both keep only that line',
+    left_out: '`20`',
+  },
+  {
+    name: 'vault.index.description_chars', type: 'number', integer: true, min: 1, default: 80, group: 'vault',
+    does: 'How many characters of a note\'s description the index shows beside its link',
+    left_out: '`80`',
+  },
+
   // The site itself
   {
     name: 'player_site.publish', was: [{ name: 'publish.site', in: 'vault' }], type: 'switch', onFault: false, onWhenSet: 'player_site.folder', group: 'site',
@@ -117,7 +140,7 @@ const REGISTRY = [
     left_out: '`tree`',
   },
   {
-    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }, { name: 'fourOhFour.message', in: 'site', carryOnly: true }], type: 'text', default: 'This page is not available.', group: 'site',
+    name: 'player_site.not_found', was: [{ name: 'publish.four_oh_four.message', in: 'vault' }, { name: 'fourOhFour.message', in: 'site', carryOnly: true, shows: "Your site's 'page not found' message" }], type: 'text', default: 'This page is not available.', group: 'site',
     does: 'The words a reader sees after following a link to a page that is not there',
     left_out: '"This page is not available."',
   },
@@ -292,7 +315,7 @@ const REGISTRY = [
     left_out: 'No files',
   },
   {
-    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }, { name: 'campaignImage', in: 'site', carryOnly: true }], type: 'text', group: 'theme',
+    name: 'player_site.theme.campaign_image', was: [{ name: 'publish.theme.campaign_image', in: 'vault' }, { name: 'campaignImage', in: 'site', carryOnly: true, shows: 'Your campaign picture (shown on the landing page and the \'page not found\' page)' }], type: 'text', group: 'theme',
     shape: "a picture's path in the vault",
     does: 'The large picture at the top of the landing page',
     left_out: 'No picture',

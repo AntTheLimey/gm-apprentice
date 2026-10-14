@@ -204,15 +204,28 @@ test('deploy: on the old layout it keeps running the package.json steps, as befo
 
 // ---- the second run of a step ------------------------------------------------------------
 
-test('a package.json that still holds a step on the new layout: the build warns it runs twice, and runs nothing for it', () => {
-  const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
+test('a package.json that holds the same step as the vault: the build warns it runs twice and the update removes it, and runs nothing for it', () => {
+  const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('own', 'own.txt') } } });
   const r = cli(s, 'build');
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stderr, /`postbuild` in the site folder's package\.json also runs under `npm run build`, after the tool has run the vault's own after_build steps, so those run twice there/);
-  assert.deepEqual(lines(path.join(s.site, 'own.txt')), ['own']);
+  assert.match(r.stderr, /The next update removes it from package\.json/);
+  assert.deepEqual(lines(path.join(s.site, 'own.txt')), ['own'], 'the tool ran nothing from package.json');
+  const doctor = cli(s, 'doctor', '--site');
+  assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
+});
+
+test('a package.json step that differs from the vault\'s: the build and doctor say both run and the update leaves it, with what to do', () => {
+  const s = scratch({ settings: { after_build: [append('own', 'own.txt')] }, package: { scripts: { postbuild: append('npm', 'npm.txt') } } });
+  const r = cli(s, 'build');
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stderr, /`postbuild` in the site folder's package\.json differs from the vault's after_build steps\. Both run under `npm run build`/);
+  assert.match(r.stderr, /next update leaves it where it is: .*make them the same, or take the script out of package\.json/);
+  assert.doesNotMatch(r.stderr, /run twice|moves it|removes it/);
   assert.equal(fs.existsSync(path.join(s.site, 'npm.txt')), false, 'the tool ran nothing from package.json');
   const doctor = cli(s, 'doctor', '--site');
   assert.match(doctor.stdout + doctor.stderr, /BUILD_STEPS_TWICE/);
+  assert.match(doctor.stdout + doctor.stderr, /make the package\.json script the same as the vault's steps, or take it out/);
 });
 
 test('a package.json step with no steps in the vault for that slot is not a double run: one plain line, no warning, not in doctor', () => {

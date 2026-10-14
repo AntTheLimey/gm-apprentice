@@ -101,7 +101,7 @@ not substance. Over ~1,200 words, check the length is load-bearing.
 
 ## Active Threads
 
-[Carry-forward, stale threads (3+ sessions), unfollowed clues,
+[Carry-forward, stale threads, unfollowed clues,
 pending consequences. Bullets, two lines each.]
 
 ## NPC Quick Reference

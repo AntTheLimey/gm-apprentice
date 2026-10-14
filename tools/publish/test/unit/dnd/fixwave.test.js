@@ -13,7 +13,7 @@ const { renderAttacks } = require('../../../lib/templates/dnd/blocks/attacks');
 const { renderActions } = require('../../../lib/templates/dnd/blocks/actions');
 const { renderAttunement } = require('../../../lib/templates/dnd/blocks/attunement');
 const { renderSkills } = require('../../../lib/templates/dnd/blocks/skills');
-const { pcTemplate } = require('../../../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('../../helpers/settings-files');
 
 const parse = md => parseDnd({ type: 'pc' }, sectionsFromMarkdown(md));
 const empty = () => parse('');

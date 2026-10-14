@@ -1266,7 +1266,8 @@ def _check_names(names: list[str]) -> None:
                                       refused=True)
 
 
-def _run_settings(args: list[str], *, refusable: bool = False) -> Any:
+def _run_settings(args: list[str], *, refusable: bool = False,
+                  blockable: bool = False) -> Any:
     """Run `gm-publish settings <args>` and return its JSON. A refusal
     (`refusable`) carries the command's own reason; any other failure reads
     "could not read the vault's settings: <reason>"."""
@@ -1289,6 +1290,15 @@ def _run_settings(args: list[str], *, refusable: bool = False) -> Any:
     except OSError as e:
         raise fail(f"node could not run ({e.__class__.__name__})") from e
     if done.returncode != 0:
+        if blockable:
+            # A blocked move exits 1 and still answers in JSON, with its
+            # blockers; that answer is the reason.
+            try:
+                blocked = json.loads(done.stdout.decode("utf-8", "replace"))
+            except ValueError:
+                blocked = None
+            if isinstance(blocked, dict) and blocked.get("ok") is False:
+                return blocked
         reason, own = _stderr_reason(done.stderr)
         if own and refusable:
             raise SettingsUnavailable(reason, refused=True)
@@ -1430,7 +1440,8 @@ def settings_move_plan(vault: Path) -> dict[str, Any]:
     `blockers`, `files`, and for a moved vault with an old file left beside
     the new one, `leftover` (`redundant`, `keys`). Writes nothing."""
     _check_vault(vault)
-    answer = _run_settings(["move", *_target_args(vault), "--check"])
+    answer = _run_settings(["move", *_target_args(vault), "--check"],
+                           blockable=True)
     if not isinstance(answer, dict):
         raise SettingsUnavailable(
             "could not read the vault's settings: the publish tool's "
@@ -1452,16 +1463,25 @@ def settings_tidy(vault: Path, *, discard_old_file: bool = False) -> list[str]:
     return [str(x) for x in answer.get("lines", [])]
 
 
-def settings_fold_site_file(vault: Path) -> list[str]:
+def settings_fold_site_file(vault: Path,
+                            keys: list[str] | None = None) -> list[str]:
     """On a vault already on the new file, take the settings its site
     folder's vault.config.json still holds out of that file, in one change
     across both files: a hiding list's entries are added to the vault's list,
     the stricter callout rule is kept, any other value is the vault's own
-    already. The lines the tool reports."""
+    already. With `keys` (site-file key names, `package.json` or
+    `package.json <script>`) only those are taken and every other key is
+    left where it is. The lines the tool reports."""
     _check_vault(vault)
     forget_settings(vault)
-    answer = _run_settings(["move", *_target_args(vault), "--fold-site-file"],
-                           refusable=True)
+    only = [a for k in keys or [] for a in ("--only", k)]
+    answer = _run_settings(
+        ["move", *_target_args(vault), "--fold-site-file", *only],
+        refusable=True, blockable=True)
+    if answer.get("ok") is False:
+        said = " ".join(str(b) for b in answer.get("blockers") or [])
+        raise SettingsUnavailable(said or "the move was blocked",
+                                  refused=True)
     forget_settings(vault)
     return [str(x) for x in answer.get("lines", [])]
 
@@ -1519,6 +1539,60 @@ def settings_default(name: str) -> Any:
                 "could not read the vault's settings: the publish tool's "
                 "list was not in the shape expected") from e
     return copy.deepcopy(_DEFAULTS_CACHE[name])
+
+
+SETTINGS_SCHEMA = (Path(__file__).resolve().parents[3] / "tools" / "publish"
+                   / "schema" / "vault-config.schema.json")
+_NO_NODE_NOTICE = ("Node was not found, so this vault's own settings were not "
+                   "read; the built-in values were used.")
+_NO_NODE_NOTICE_GIVEN = False
+
+
+def _schema_default(name: str) -> Any:
+    """The `default` of setting `name` in the generated schema file, read
+    with `json`. KeyError when the schema gives the name none."""
+    try:
+        node = json.loads(SETTINGS_SCHEMA.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as e:
+        raise SettingsUnavailable(
+            "could not read the vault's settings: the built-in values are "
+            f"not at {SETTINGS_SCHEMA.as_posix()}") from e
+    for part in name.split("."):
+        node = node.get("properties", {}).get(part)
+        if node is None:
+            raise KeyError(name)
+    if "default" not in node:
+        raise KeyError(name)
+    return copy.deepcopy(node["default"])
+
+
+def setting_or_builtin(vault: Path, name: str) -> Any:
+    """The value of setting `name` for `vault`, from the publish tool. For a
+    command that has to keep running where Node cannot be run, the built-in
+    value (the schema file's default) and one line on stderr, once per
+    process. A name the schema gives no default raises KeyError there; any
+    other failure of the tool is raised, never hidden."""
+    global _NO_NODE_NOTICE_GIVEN
+    try:
+        return settings(vault).get(name)
+    except SettingsUnavailable:
+        if shutil.which("node"):
+            raise
+    if not _NO_NODE_NOTICE_GIVEN:
+        _NO_NODE_NOTICE_GIVEN = True
+        print(_NO_NODE_NOTICE, file=sys.stderr)
+    return _schema_default(name)
+
+
+def report_unreadable_settings(main: Callable[[], int]) -> int:
+    """`main()`'s exit code; settings that cannot be read (a typo in the
+    settings file, no publish tool) end the command with one `error:` line
+    on stderr and exit code 2, never a traceback."""
+    try:
+        return main()
+    except SettingsUnavailable as e:
+        print(f"error: {e}", file=sys.stderr)
+        return 2
 
 
 def forget_settings(vault: Path | None = None) -> None:
@@ -2052,7 +2126,23 @@ def _flat_list(value: list[Any]) -> list[Any]:
 # Vault queries
 # --------------------------------------------------------------------------
 
-PC_INACTIVE_STATUS = {"dead", "retired", "inactive"}
+def out_of_play(vault: Path) -> frozenset[str]:
+    """The statuses that take a character out of play
+    (`vault.statuses.out_of_play`), each word trimmed and lower-cased as the
+    publish tool does. Compare a note's status the same way:
+    `str(status).strip().lower() in out_of_play(vault)`."""
+    words = setting_or_builtin(vault, "vault.statuses.out_of_play")
+    return frozenset(str(w).strip().lower() for w in words)
+
+
+def is_out_of_play(fm: dict[str, Any], words: frozenset[str]) -> bool:
+    """Whether a note's `status:` is one of `words` (from `out_of_play`).
+    A one-item list (Obsidian's list property) is read as its item; any
+    other list is no status. The build's `isOutOfPlay` reads it the same."""
+    status = fm.get("status", "")
+    if isinstance(status, list):
+        status = status[0] if len(status) == 1 else ""
+    return str(status).strip().lower() in words
 
 
 def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -2060,14 +2150,15 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
 
     `type: pc`, excluding the `*_Story.md` companion notes (same type,
     but narrative history rather than a sheet) and anyone whose status
-    says they have left the table.
+    is on the vault's out-of-play list.
     """
     out: list[tuple[str, dict[str, Any]]] = []
+    gone = out_of_play(vault)
     for rel, text in vault_files(vault):
         fm = extract_frontmatter(text) or {}
         if fm.get("type") != "pc" or rel.endswith("_Story.md"):
             continue
-        if str(fm.get("status", "")).casefold() in PC_INACTIVE_STATUS:
+        if is_out_of_play(fm, gone):
             continue
         out.append((rel, fm))
     return out
@@ -2075,7 +2166,7 @@ def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:
 
 def active_pc_names(vault: Path) -> set[str]:
     """Active PCs, mirroring session_context.py: type: pc, not *_Story.md,
-    status not dead/retired/inactive. Name set = filename stem, each
+    status not on the out-of-play list. Name set = filename stem, each
     capitalised stem token (len >= 3), and each alias — for whole-word
     matching of both 'Katherine Winslow' and 'Katherine'."""
     names: set[str] = set()

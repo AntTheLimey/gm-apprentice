@@ -12,6 +12,7 @@ const { TYPES, isMap, getPath, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
 const legacy = require('./legacy');
+const { entryFaults } = require('./entry-faults');
 const { normalizeExcludeDirs, outputProblem, keepProblem, tidyChecked, sameChecked } = require('./folders');
 
 const LAYOUT_VERSION = 1;
@@ -239,7 +240,7 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
     }
     settle(c, e, { written: e.name, setting: e.name }, { raw, origin: 'file' }, defaultOf);
     if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
-      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site',
+      faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site', siteDiffers: true, ...(e.check ? { checks: e.check } : {}),
         message: `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
     }
   }
@@ -324,8 +325,9 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
 function readSettings({ vaultPath, siteConfig = {}, siteDir }) {
   const site = siteConfig || {};
   const layout = layoutOf(vaultPath);
-  if (layout === 'new') return readNew({ vaultPath, siteConfig: site, siteDir });
-  return { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir }, core), layout };
+  const read = layout === 'new' ? readNew({ vaultPath, siteConfig: site, siteDir }) : { ...legacy.readLegacy({ vaultPath, siteConfig: site, siteDir }, core), layout };
+  read.faults.push(...entryFaults(vaultPath, read.values, read.origins));
+  return read;
 }
 
 // The settings as the OLD layout reads them, whatever files the vault has: for the move, which compares the old

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { pcTemplate } = require('../lib/templates/pc');
+const { pcTemplateWithSettings: pcTemplate } = require('./helpers/settings-files');
 
 const page = { frontmatter: { type: 'pc', name: 'Six' }, displayTitle: 'Six', outputPath: 'pcs/six.html', title: 'Six' };
 const noop = () => '';

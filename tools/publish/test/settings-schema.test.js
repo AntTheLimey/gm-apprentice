@@ -122,7 +122,7 @@ function sampleFor(e) {
   switch (e.type) {
     case 'switch': return e.default === true ? false : true;
     case 'choice': return [...e.values, ...Object.keys(e.aliases || {})].find((w) => w !== e.default) ?? e.values[0];
-    case 'number': return (e.min || 0) + 7;
+    case 'number': return Math.min((e.min || 0) + 7, e.max ?? Infinity);
     case 'list': return ['Sample'];
     case 'switchOrList': return ['Sample'];
     case 'map': return e.keys ? { [e.keys[0]]: 'Sample' } : { 'Sample key': 'Sample' };
