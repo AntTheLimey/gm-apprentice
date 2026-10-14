@@ -51,6 +51,21 @@ test('build with any other unknown option, or a stray word, stops the same way; 
   assert.equal(fs.existsSync(path.join(dir, 'ran.txt')), false);
 });
 
+test('build --watch, which older scaffolds put in package.json, builds once and says build has no watch mode', () => {
+  const dir = site();
+  const r = run(dir, 'build', '--watch');
+  assert.equal(r.status, 0, r.stderr);
+  const said = (r.stdout + r.stderr).split('\n').filter((l) => /no watch mode/.test(l));
+  assert.equal(said.length, 1, 'one line says there is no watch mode');
+  assert.match(said[0], /built once/);
+  assert.equal(fs.readFileSync(path.join(dir, 'ran.txt'), 'utf8'), 'x', 'the build ran');
+});
+
+test('the scaffold package.json no longer carries a watch script', () => {
+  const tmpl = fs.readFileSync(path.join(__dirname, '..', 'templates-scaffold', 'package.json.tmpl'), 'utf8');
+  assert.equal(/watch/.test(tmpl), false);
+});
+
 test('init with an unknown option writes nothing, instead of taking it for the folder to scaffold in', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'unknown-init-'));
   made.push(dir);

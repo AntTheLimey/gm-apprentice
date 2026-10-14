@@ -592,7 +592,11 @@ function refuseUnknownArgument(cmd, bad) {
 }
 
 if (command === 'build') {
-  const parsed = parseSubcommandArgs(args.slice(1), {});
+  // Sites scaffolded before the watch script was dropped still have `build --watch` in package.json; it never
+  // watched, so it builds once and says so. Every other unknown option is refused below.
+  const buildArgs = args.slice(1).filter((a) => a !== '--watch');
+  const sawWatch = buildArgs.length !== args.length - 1;
+  const parsed = parseSubcommandArgs(buildArgs, {});
   if (parsed.error) {
     const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
     if (bad) refuseUnknownArgument('build', bad[1]);
@@ -640,6 +644,7 @@ if (command === 'build') {
       // build itself only reads the cache (#270).
       await require('../lib/fonts').prefetchForConfig(configPath);
       build({ configPath, runSteps: true });
+      if (sawWatch) console.log('build has no watch mode; built once.');
     } catch (err) {
       console.error(`Build failed: ${err.message}`);
       exitAfterFlush(1);
