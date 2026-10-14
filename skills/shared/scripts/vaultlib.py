@@ -2136,8 +2136,13 @@ def out_of_play(vault: Path) -> frozenset[str]:
 
 
 def is_out_of_play(fm: dict[str, Any], words: frozenset[str]) -> bool:
-    """Whether a note's `status:` is one of `words` (from `out_of_play`)."""
-    return str(fm.get("status", "")).strip().lower() in words
+    """Whether a note's `status:` is one of `words` (from `out_of_play`).
+    A one-item list (Obsidian's list property) is read as its item; any
+    other list is no status. The build's `isOutOfPlay` reads it the same."""
+    status = fm.get("status", "")
+    if isinstance(status, list):
+        status = status[0] if len(status) == 1 else ""
+    return str(status).strip().lower() in words
 
 
 def active_pcs(vault: Path) -> list[tuple[str, dict[str, Any]]]:

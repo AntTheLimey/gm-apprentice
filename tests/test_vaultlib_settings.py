@@ -406,6 +406,15 @@ def test_the_old_constant_is_gone():
     assert not hasattr(vaultlib, "PC_INACTIVE_STATUS")
 
 
+def test_a_one_item_status_list_is_read_as_its_item():
+    words = frozenset({"dead"})
+    assert vaultlib.is_out_of_play({"status": ["dead"]}, words)
+    assert vaultlib.is_out_of_play({"status": [" Dead "]}, words)
+    assert not vaultlib.is_out_of_play({"status": ["alive"]}, words)
+    assert not vaultlib.is_out_of_play({"status": ["dead", "alive"]}, words)
+    assert not vaultlib.is_out_of_play({"status": []}, words)
+
+
 def test_python_and_the_build_agree_on_who_is_out_of_play(tmp_path):
     import json
     import re

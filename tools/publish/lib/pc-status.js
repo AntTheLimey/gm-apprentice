@@ -3,7 +3,11 @@
 // `vault.statuses.out_of_play`, read once in config.js (words trimmed and lower-cased); every caller passes
 // it in, and a missing list throws rather than meaning "nobody".
 function isOutOfPlay(frontmatter, outOfPlay) {
-  return outOfPlay.has(String((frontmatter || {}).status || '').trim().toLowerCase());
+  // A one-item list (Obsidian's list property) is read as its item; any other list is no status. vaultlib.py's
+  // is_out_of_play reads it the same.
+  let status = (frontmatter || {}).status;
+  if (Array.isArray(status)) status = status.length === 1 ? status[0] : '';
+  return outOfPlay.has(String(status || '').trim().toLowerCase());
 }
 
 module.exports = { isOutOfPlay };
