@@ -712,6 +712,25 @@
                 "number",
                 "null"
               ]
+            },
+            "header_facts": {
+              "description": "The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none",
+              "default": [
+                "occupation",
+                "age",
+                "nationality"
+              ],
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
             }
           }
         },
@@ -880,6 +899,185 @@
                   ]
                 }
               }
+            }
+          }
+        },
+        "limits": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "timeline_events": {
+              "description": "How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none",
+              "default": 15,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recap_chars": {
+              "description": "How many characters of the latest session's recap the landing page shows before it stops at a word and adds \"…\"",
+              "default": 500,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_excerpt_chars": {
+              "description": "How many characters of a note's opening the pop-up preview card shows",
+              "default": 200,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_fact_chars": {
+              "description": "How many characters one fact on a preview card shows",
+              "default": 120,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_title_chars": {
+              "description": "How many characters of a note's name a preview card shows",
+              "default": 120,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_facts": {
+              "description": "How many facts a preview card lists; `0` shows none",
+              "default": 3,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "list_goals": {
+              "description": "How many goals a faction's card on the factions page lists; `0` shows none",
+              "default": 3,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "list_relationships": {
+              "description": "How many relationships a faction's card on the factions page lists; `0` shows none",
+              "default": 4,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "withheld_words": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "person": {
+              "description": "The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `|`",
+              "default": "someone",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "place": {
+              "description": "The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `|`",
+              "default": "somewhere",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "thing": {
+              "description": "The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `|`",
+              "default": "something",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
             }
           }
         },

@@ -389,7 +389,7 @@ function publishedWith(survey, extra) {
 // frontmatter the build does. The whole-vault note list is read once per survey.
 function pairsWith(survey, published) {
   if (!survey.allNotes) survey.allNotes = scanAllNotes(survey.vaultPath);
-  return pairHubs([...survey.pagesByRel.values()], published, { allNotes: survey.allNotes });
+  return pairHubs([...survey.pagesByRel.values()], published, { allNotes: survey.allNotes, withheldWords: survey.publishConfig.withheld_words });
 }
 
 // What publish-played would do, without doing it: `ticks` maps each played hub it would

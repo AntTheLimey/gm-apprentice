@@ -212,6 +212,23 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
     enumerable: false, writable: true, configurable: true,
   });
 
+  // The numbers, the header facts and the withheld words the build used to fix in code. Not listed, like
+  // `menu_extra`: a site that sets none builds as it did. Each is passed down to the code that uses it.
+  Object.defineProperty(merged, 'limits', { value: { ...p.limits }, enumerable: false });
+  Object.defineProperty(merged, 'header_facts', { value: [...p.sheets.header_facts], enumerable: false });
+  // A blank word reads as unset. A word that would break the link it is printed in is refused, with a warning.
+  const words = {};
+  for (const key of ['person', 'place', 'thing']) {
+    const setting = `player_site.withheld_words.${key}`;
+    const raw = String(p.withheld_words[key]).trim();
+    if (/[[\]|]/.test(raw)) {
+      const written = nameIn(vaultPath, setting);
+      faults.push(makeFault({ name: written, setting, kind: 'dropped', level: 'warn', message: `${written} holds a [, ] or |, which cannot be printed in a link; the built-in word is used` }));
+      words[key] = entry(setting).default;
+    } else words[key] = raw || entry(setting).default;
+  }
+  Object.defineProperty(merged, 'withheld_words', { value: words, enumerable: false });
+
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
 }

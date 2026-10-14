@@ -242,7 +242,7 @@ describe('templates read the escaped link', () => {
 
   it('the landing recap teaser shows the alias without a backslash', () => {
     const page = { frontmatter: {}, markdown: '## Narrative Recap\n\nThey met [[Emma_Wentworth\\|Emma]] at dawn.\n' };
-    assert.strictEqual(extractRecap(page), 'They met Emma at dawn.');
+    assert.strictEqual(extractRecap(page, 500), 'They met Emma at dawn.');
   });
 
   it('a location is found by a parent_location written with an escaped pipe', () => {
@@ -274,7 +274,7 @@ describe('fix round 2: old semantics kept', () => {
   it('an empty-target link never renders as raw brackets', () => {
     assert.strictEqual(excerptFromMarkdown('Met [[|x]] today.'), 'Met |x today.');
     const page = { frontmatter: {}, markdown: '## Narrative Recap\n\nThey met [[|x]] at dawn.\n' };
-    assert.strictEqual(extractRecap(page), 'They met |x at dawn.');
+    assert.strictEqual(extractRecap(page, 500), 'They met |x at dawn.');
   });
 });
 

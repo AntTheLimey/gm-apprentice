@@ -108,7 +108,7 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   let recapZone = '';
   if (latestSession) {
     const recapSource = latestWrapUp || latestSession;
-    const recap = extractRecapHtml(recapSource);
+    const recap = extractRecapHtml(recapSource, publishConfig.limits.recap_chars);
     const dateStr = formatDate(overviewFm.last_play_date || latestSession.frontmatter.play_date || latestSession.frontmatter.actual_date);
     const dateBadge = dateStr ? ` <span style="opacity:0.7;font-size:0.85rem"> — ${escapeHtml(dateStr)}</span>` : '';
     const linkTarget = latestWrapUp || latestSession;

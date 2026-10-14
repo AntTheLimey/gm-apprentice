@@ -140,12 +140,13 @@ function eventsNaming(data, outputPath, linkMap) {
   return { events: data.events.filter(names), chapters: data.chapters };
 }
 
+// `options.maxEvents` (required) is how many of the latest events to show; 0 shows none.
 // `options.from` is the output path of the page the strip sits on; without it the links
 // are written from the site root, as the landing page needs.
 function renderTimelineStrip(data, options) {
-  const maxEvents = (options && options.maxEvents) || 10;
+  const { maxEvents } = options;
   const href = (out) => (options && options.from) ? relativeHref(options.from, out) : out;
-  const recent = data.events.slice(-maxEvents);
+  const recent = maxEvents > 0 ? data.events.slice(-maxEvents) : [];
   if (recent.length === 0) return '';
 
   const nodes = recent.map(evt => {

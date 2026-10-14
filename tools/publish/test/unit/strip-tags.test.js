@@ -26,7 +26,7 @@ describe('plain-text consumers never carry raw tags', () => {
   });
 
   it('landing recap contains no tags', () => {
-    const recap = extractRecap({ frontmatter: {}, publishedMarkdown: '## Narrative Recap\n\n<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>\n\n<div class="handout">The <b>party</b> fled.</div>\n' });
+    const recap = extractRecap({ frontmatter: {}, publishedMarkdown: '## Narrative Recap\n\n<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>\n\n<div class="handout">The <b>party</b> fled.</div>\n' }, 500);
     assert.doesNotMatch(recap, /[<>]/);
     assert.match(recap, /The party fled\./);
   });

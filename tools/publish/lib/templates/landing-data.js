@@ -65,15 +65,14 @@ function recapParagraph(page) {
   return paragraph ? stripWikiLinks(paragraph) : null;
 }
 
-const RECAP_MAX_CHARS = 500;
 const RECAP_TAGS = { em_open: '<em>', em_close: '</em>', strong_open: '<strong>', strong_close: '</strong>', s_open: '<s>', s_close: '</s>' };
 
 // Walks the paragraph's inline markdown tokens, keeping the words and dropping the
 // syntax (#269): emphasis markers, link URLs and images never show as literal text.
 // With `html`, emphasis, strikethrough and inline code keep their markup (escaped
-// text, a fixed tag set, no links). Truncates to ~RECAP_MAX_CHARS visible characters
+// text, a fixed tag set, no links). Truncates to `maxChars` visible characters
 // at a word boundary and closes any tags still open.
-function renderRecap(paragraph, html) {
+function renderRecap(paragraph, html, maxChars) {
   const tokens = (inlineRenderer().parseInline(paragraph, {})[0] || {}).children || [];
   let out = '';
   let visible = 0;
@@ -83,8 +82,8 @@ function renderRecap(paragraph, html) {
   const addText = (text, wrap) => {
     if (truncated) return;
     let t = text;
-    if (visible + t.length > RECAP_MAX_CHARS) {
-      t = t.slice(0, RECAP_MAX_CHARS - visible);
+    if (visible + t.length > maxChars) {
+      t = t.slice(0, maxChars - visible);
       const lastSpace = t.lastIndexOf(' ');
       if (lastSpace > 0) t = t.slice(0, lastSpace);
       truncated = true;
@@ -117,15 +116,15 @@ function inlineRenderer() {
 }
 
 // Plain-text teaser of the latest session's recap (first prose paragraph).
-function extractRecap(page) {
+function extractRecap(page, maxChars) {
   const paragraph = recapParagraph(page);
-  return paragraph ? renderRecap(paragraph, false) : null;
+  return paragraph ? renderRecap(paragraph, false, maxChars) : null;
 }
 
 // Same teaser as HTML, with emphasis rendered rather than shown as asterisks (#269).
-function extractRecapHtml(page) {
+function extractRecapHtml(page, maxChars) {
   const paragraph = recapParagraph(page);
-  return paragraph ? renderRecap(paragraph, true) : null;
+  return paragraph ? renderRecap(paragraph, true, maxChars) : null;
 }
 
 function getInitials(name) {

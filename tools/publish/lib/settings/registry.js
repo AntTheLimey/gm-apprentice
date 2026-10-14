@@ -38,6 +38,7 @@ const GROUPS = [
   { id: 'live', title: 'Live play' },
   { id: 'landing', title: 'The landing page' },
   { id: 'lists', title: 'Lists and pictures' },
+  { id: 'limits', title: 'Limits' },
 ];
 
 const ON_OFF = { true: 'on', yes: 'on', false: 'off', no: 'off' };
@@ -320,6 +321,11 @@ const REGISTRY = [
     left_out: 'No crest',
   },
   {
+    name: 'player_site.sheets.header_facts', type: 'list', of: 'field names', default: ['occupation', 'age', 'nationality'], group: 'sheets',
+    does: "The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none",
+    left_out: '`occupation`, `age`, `nationality`',
+  },
+  {
     name: 'player_site.features.tohit_calculator', was: [{ name: 'publish.tohit_calculator', in: 'vault' }], type: 'choice', values: ['on', 'off'], aliases: ON_OFF, default: 'on', group: 'sheets',
     does: "The to-hit calculator on a GURPS character's Combat tab",
     left_out: '`on`',
@@ -409,8 +415,69 @@ const REGISTRY = [
     left_out: 'No picture',
   },
 
+  // Limits
+  { name: 'player_site.limits', type: 'map', container: true },
+  {
+    name: 'player_site.limits.timeline_events', type: 'number', integer: true, min: 0, default: 15, group: 'limits',
+    does: 'How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none',
+    left_out: '`15`',
+  },
+  {
+    name: 'player_site.limits.recap_chars', type: 'number', integer: true, min: 1, default: 500, group: 'limits',
+    does: 'How many characters of the latest session\'s recap the landing page shows before it stops at a word and adds "…"',
+    left_out: '`500`',
+  },
+  {
+    name: 'player_site.limits.card_excerpt_chars', type: 'number', integer: true, min: 1, default: 200, group: 'limits',
+    does: 'How many characters of a note\'s opening the pop-up preview card shows',
+    left_out: '`200`',
+  },
+  {
+    name: 'player_site.limits.card_fact_chars', type: 'number', integer: true, min: 1, default: 120, group: 'limits',
+    does: 'How many characters one fact on a preview card shows',
+    left_out: '`120`',
+  },
+  {
+    name: 'player_site.limits.card_title_chars', type: 'number', integer: true, min: 1, default: 120, group: 'limits',
+    does: "How many characters of a note's name a preview card shows",
+    left_out: '`120`',
+  },
+  {
+    name: 'player_site.limits.card_facts', type: 'number', integer: true, min: 0, default: 3, group: 'limits',
+    does: 'How many facts a preview card lists; `0` shows none',
+    left_out: '`3`',
+  },
+  {
+    name: 'player_site.limits.list_goals', type: 'number', integer: true, min: 0, default: 3, group: 'limits',
+    does: "How many goals a faction's card on the factions page lists; `0` shows none",
+    left_out: '`3`',
+  },
+  {
+    name: 'player_site.limits.list_relationships', type: 'number', integer: true, min: 0, default: 4, group: 'limits',
+    does: "How many relationships a faction's card on the factions page lists; `0` shows none",
+    left_out: '`4`',
+  },
+
+  // Withheld notes: the words a link to one prints in place of its name
+  { name: 'player_site.withheld_words', type: 'map', container: true },
+  {
+    name: 'player_site.withheld_words.person', type: 'text', default: 'someone', group: 'published',
+    does: 'The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `|`',
+    left_out: '`someone`',
+  },
+  {
+    name: 'player_site.withheld_words.place', type: 'text', default: 'somewhere', group: 'published',
+    does: 'The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `|`',
+    left_out: '`somewhere`',
+  },
+  {
+    name: 'player_site.withheld_words.thing', type: 'text', default: 'something', group: 'published',
+    does: 'The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `|`',
+    left_out: '`something`',
+  },
+
   // Lists and pictures
-  { name: 'player_site.images', was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
+  { name: 'player_site.images',was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
     name: 'player_site.images.optimize', was: [{ name: 'publish.images.optimize', in: 'vault' }], type: 'switch', default: false, group: 'lists',
     does: 'Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size',

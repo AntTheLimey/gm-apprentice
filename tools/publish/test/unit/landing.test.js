@@ -4,7 +4,7 @@ const { landingTemplate } = require('../../lib/templates/landing');
 
 const navFor = () => '<nav></nav>';
 const config = { siteTitle: 'Canticle of the End', attachmentsDir: '_attachments', footer: '', siteUrl: '' };
-const publishConfig = { theme: {}, setting_year: 1814 };
+const publishConfig = { theme: {}, setting_year: 1814, limits: { recap_chars: 500 } };
 
 function sessionPage() {
   return {

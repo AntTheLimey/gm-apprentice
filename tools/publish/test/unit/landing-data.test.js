@@ -241,29 +241,29 @@ describe('extractRecapHtml (#269)', () => {
   const recapOf = para => ({ markdown: `# Session 3\n\n## Narrative Recap\n\n${para}\n` });
 
   it('renders emphasis instead of showing asterisks', () => {
-    const html = extractRecapHtml(recapOf('*Recorded Thursday. 3h 53m.* The crew **finally** met.'));
+    const html = extractRecapHtml(recapOf('*Recorded Thursday. 3h 53m.* The crew **finally** met.'), 500);
     assert.strictEqual(html, '<em>Recorded Thursday. 3h 53m.</em> The crew <strong>finally</strong> met.');
   });
 
   it('keeps link text, drops the URL, drops images, keeps inline code', () => {
-    const html = extractRecapHtml(recapOf('They read [the letter](letters/x.md) ![map](m.png) and `rolled 42`.'));
+    const html = extractRecapHtml(recapOf('They read [the letter](letters/x.md) ![map](m.png) and `rolled 42`.'), 500);
     assert.strictEqual(html, 'They read the letter and <code>rolled 42</code>.');
   });
 
   it('never emits raw HTML from the paragraph', () => {
-    const html = extractRecapHtml(recapOf('A <script>alert(1)</script> & a <b>tag</b>.'));
+    const html = extractRecapHtml(recapOf('A <script>alert(1)</script> & a <b>tag</b>.'), 500);
     assert.strictEqual(html, 'A &amp; a tag.');
   });
 
   it('truncates by visible text and closes open tags', () => {
-    const html = extractRecapHtml(recapOf('*' + 'word '.repeat(200).trim() + '* after'));
+    const html = extractRecapHtml(recapOf('*' + 'word '.repeat(200).trim() + '* after'), 500);
     assert.ok(html.startsWith('<em>word'), html.slice(0, 20));
     assert.ok(html.endsWith('…</em>'), html.slice(-20));
     assert.ok(html.replace(/<[^>]+>/g, '').length <= 501);
   });
 
   it('plain extractRecap strips the same markdown syntax', () => {
-    assert.strictEqual(extractRecap(recapOf('*Recorded.* **Bold** [link](x).')), 'Recorded. Bold link.');
+    assert.strictEqual(extractRecap(recapOf('*Recorded.* **Bold** [link](x).'), 500), 'Recorded. Bold link.');
   });
 });
 
@@ -272,14 +272,14 @@ describe('extractRecap', () => {
     // build.js empties a session index's body; `publishedMarkdown || markdown` treated
     // that '' as missing and quoted the raw text instead.
     const page = { publishedMarkdown: '', markdown: '## Narrative Recap\n\nKeeper-only forecast.\n' };
-    assert.strictEqual(extractRecap(page), null);
+    assert.strictEqual(extractRecap(page, 500), null);
   });
 
   it('extracts first paragraph from Narrative Recap section', () => {
     const page = {
       markdown: '# Session 1\n\nSome intro.\n\n## Narrative Recap\n\nThe party arrived at the castle. They were weary from travel.\n\nThen they fought a dragon.\n\n## Loot\n\nSword',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The party arrived at the castle. They were weary from travel.');
   });
 
@@ -287,7 +287,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S1\n\n## Narrative Recap\n\n[[John Smith]] met [[Jane|Jane Doe]] at the [[Tavern]].\n\n## Next',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'John Smith met Jane Doe at the Tavern.');
   });
 
@@ -295,7 +295,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S1\n\n## Narrative Recap\n\nBreakfast at the [[Locanda_del_Leone]].\n\n## Next',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'Breakfast at the Locanda del Leone.');
   });
 
@@ -303,7 +303,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# Session 1\n\nThe group gathered at dawn.\n\nThey set off.\n',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The group gathered at dawn.');
   });
 
@@ -311,7 +311,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S4\n\n## Session Metadata\n\nStuff.\n\n## What Happened — Narrative Recap\n\nThe party rode for Cairo at dawn.\n\n## World State\n\nSecret.',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The party rode for Cairo at dawn.');
   });
 
@@ -321,7 +321,7 @@ describe('extractRecap', () => {
     const page = {
       markdown: '\n# Session 4 — The Hofburg Reception\n\n## Session Metadata\n\n- **Date:** August 5\n',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.ok(result === null || !result.startsWith('#'), `got: ${result}`);
   });
 
@@ -330,7 +330,7 @@ describe('extractRecap', () => {
       markdown: '# S1\n\n## Narrative Recap\n\nKeeper secret draft.\n',
       publishedMarkdown: '# S1\n\n## Narrative Recap\n\nThe players saw this.\n',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.strictEqual(result, 'The players saw this.');
   });
 
@@ -339,13 +339,13 @@ describe('extractRecap', () => {
     const page = {
       markdown: '# S1\n\n## Narrative Recap\n\n' + longParagraph + '\n\n## Next',
     };
-    const result = extractRecap(page);
+    const result = extractRecap(page, 500);
     assert.ok(result.length <= 510);
     assert.ok(result.endsWith('…'));
   });
 
   it('returns null for null page', () => {
-    assert.strictEqual(extractRecap(null), null);
+    assert.strictEqual(extractRecap(null, 500), null);
   });
 });
 

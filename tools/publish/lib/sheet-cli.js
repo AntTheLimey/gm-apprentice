@@ -125,7 +125,7 @@ async function runSheetShow(deps) {
     // No page claims a name here: this CLI can't tell which pages the site
     // actually publishes (drafts, the manifest), so it errs toward hiding.
     ? gmAliasRewriter(
-      scanned.concat(allNotes(vaultPath).filter((n) => !scannedPaths.has(n.sourcePath))), [])
+      scanned.concat(allNotes(vaultPath).filter((n) => !scannedPaths.has(n.sourcePath))), [], undefined, publishConfig.withheld_words)
     : null;
   const page = found && gmAliases
     ? Object.assign({}, found, {

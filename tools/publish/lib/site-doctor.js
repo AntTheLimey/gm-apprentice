@@ -242,7 +242,7 @@ async function runSiteDoctor(options, deps) {
   // Which session index bodies the site withholds, paired as the build pairs (GM
   // aliases rewritten first; session-hub.js pairHubs).
   const allNotes = scanAllNotes(vaultPath);
-  const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes });
+  const hubPairs = pairHubs(corpus, published, { vaultPath, allNotes, withheldWords: publishConfig.withheld_words });
 
   // The body a reader gets of a page (readerView), for the dead-link check.
   const pcKeepSections = pcKeepList(publishConfig);

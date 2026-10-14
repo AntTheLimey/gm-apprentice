@@ -100,7 +100,8 @@ test('nothing reads the vault settings file but the settings package', () => {
 // `setting_year` is a setting, written beside `publish:`; it is checked below as a top-level name.
 //   steps     the vault's build steps, { before, after } (not enumerable; only `build` and `deploy` run them)
 //   menu_extra  the GM's extra menu entries with a repeat left out (not enumerable; build.js reads each link)
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra'];
+//   limits, header_facts, withheld_words  the numbers, header facts and withheld words (not enumerable; passed down to the code that uses each)
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)

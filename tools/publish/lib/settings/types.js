@@ -54,6 +54,7 @@ const TYPES = {
       const kind = entry.integer ? 'a whole number' : 'a number';
       if (entry.min !== undefined && entry.max !== undefined) return `${kind} from ${entry.min} to ${entry.max}`;
       if (entry.min !== undefined) return `${kind}, ${entry.min} or more`;
+      if (entry.max !== undefined) return `${kind}, ${entry.max} or less`;
       return kind;
     },
   },

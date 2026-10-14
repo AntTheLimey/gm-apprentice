@@ -193,6 +193,9 @@ These decide which notes, and which parts of a note, reach the site.
 | `player_site.hide.callouts`<br>was `publish.exclude_callouts`, `excludeCallouts` | Whether Obsidian callouts (`> [!note]`) are left out | `on` for all, `off` for none, or a list of callout types | Off; a site set up by the apprentice starts with it on |
 | `player_site.hide.drafts`<br>was `publish.exclude_drafts` | Whether a note with `canon_status: DRAFT` at its top is left off the site | A switch | Off: drafts publish with a "Draft" badge |
 | `player_site.hide.field_exceptions`<br>was `publish.overrides.fields` | Lets one note show a field that `player_site.hide.fields` hides everywhere else | A note's path from the top of the vault, in quotes, then `include:` and the field names | No exceptions |
+| `player_site.withheld_words.person` | The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `\|` | Text | `someone` |
+| `player_site.withheld_words.place` | The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `\|` | Text | `somewhere` |
+| `player_site.withheld_words.thing` | The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `\|` | Text | `something` |
 
 <!-- /settings:published -->
 
@@ -289,6 +292,7 @@ With `local`, each font file is listed under `player_site.theme.fonts.files`.
 | `player_site.sheets.skin`<br>was `publish.sheet_skin` | The look of every character sheet | `plain`, `parchment`, `case-file`, `console` or `ledger` | `plain` |
 | `player_site.sheets.frame`<br>was `publish.sheet_frame` | The ornament round each portrait | `none`, `ring`, `laurel`, `thorns`, `gilt`, `steel`, `corners`, `hex` or `cracked` | The skin's own frame |
 | `player_site.sheets.crest`<br>was `publish.sheet_crest`, `sheet_crest` | A crest or wax seal at the head of a Call of Cthulhu sheet | A picture's path in the vault | No crest |
+| `player_site.sheets.header_facts` | The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none | A list of field names | `occupation`, `age`, `nationality` |
 | `player_site.features.tohit_calculator`<br>was `publish.tohit_calculator` | The to-hit calculator on a GURPS character's Combat tab | `on` or `off` | `on` |
 | `vault.dndbeyond_sync`<br>was `publish.dndbeyond_sync` | When D&D characters that carry a D&D Beyond link are brought up to date: `build` before each site update, or `manual` only when you ask | `build` or `manual` | `manual` |
 
@@ -386,6 +390,35 @@ second picture in the vault, opened when a reader clicks the banner.
 Shrinking pictures needs a small free program called `cwebp` on the
 computer that builds the site. Without it the build warns and copies the
 pictures unchanged.
+
+## Limits
+
+How long things are on the page. A number below its smallest, a fraction,
+or text that is not a number is reported and the standard number is used.
+Where a limit may be `0`, it means none: no timeline strip, no facts on a
+preview card, no goals or relationships on a faction's card.
+
+<!-- settings:limits -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `player_site.limits.timeline_events` | How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none | A whole number, 0 or more | `15` |
+| `player_site.limits.recap_chars` | How many characters of the latest session's recap the landing page shows before it stops at a word and adds "…" | A whole number, 1 or more | `500` |
+| `player_site.limits.card_excerpt_chars` | How many characters of a note's opening the pop-up preview card shows | A whole number, 1 or more | `200` |
+| `player_site.limits.card_fact_chars` | How many characters one fact on a preview card shows | A whole number, 1 or more | `120` |
+| `player_site.limits.card_title_chars` | How many characters of a note's name a preview card shows | A whole number, 1 or more | `120` |
+| `player_site.limits.card_facts` | How many facts a preview card lists; `0` shows none | A whole number, 0 or more | `3` |
+| `player_site.limits.list_goals` | How many goals a faction's card on the factions page lists; `0` shows none | A whole number, 0 or more | `3` |
+| `player_site.limits.list_relationships` | How many relationships a faction's card on the factions page lists; `0` shows none | A whole number, 0 or more | `4` |
+
+<!-- /settings:limits -->
+
+```yaml
+player_site:
+  limits:
+    timeline_events: 8
+    card_facts: 2
+```
 
 ## The site file: `vault.config.json`
 

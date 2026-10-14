@@ -605,7 +605,7 @@ function buildSite(options) {
   // take too, so all three pair on the same frontmatter (#276).
   const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
   rememberHiddenNames(linkMap, allNotes);
-  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes });
+  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
@@ -1150,7 +1150,7 @@ function buildSite(options) {
           identity,
           sheetsOff,
           // The PC's own events (#323), not the campaign's: the landing page has those.
-          timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: 15, from: page.outputPath }),
+          timelineStrip: renderTimelineStrip(eventsNaming(timelineData, page.outputPath, linkMap), { maxEvents: publishConfig.limits.timeline_events, from: page.outputPath }),
           onLook: fx.onLook,
           storyHref: page.storyMarkdown ? ('story/characters/' + require('./scanner').slugify(page.title) + '.html') : null,
         });
@@ -1191,7 +1191,7 @@ function buildSite(options) {
           if (wrapUp) {
             // The page shell stays the wiki page's; only the article body is generated.
             const chapter = chapterOfSession(page, pages);
-            processed.html = sessionBodyHtml(page, { wrapUp, chapter });
+            processed.html = sessionBodyHtml(page, { wrapUp, chapter, recapChars: publishConfig.limits.recap_chars });
           }
         }
         html = wikiTemplate(page, processed, navFor, config, imageMap, { publishConfig, linkMap, pages });
@@ -1278,7 +1278,7 @@ function buildSite(options) {
     if (publishConfig.link_previews !== 'off') {
       const { cardFor } = require('./previews');
       const { usesCocFolio } = require('./templates/pc');
-      card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+      card = cardFor(shownPage, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     }
     const { subtitleOf } = require('./search-index');
     return {
@@ -1373,7 +1373,7 @@ function buildSite(options) {
   if (publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
-    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff) });
+    const cards = buildPreviews(pages, { imageMap, excludeSections, hubWrapUps, cocFolio: usesCocFolio(publishConfig, sheetsOff), limits: publishConfig.limits, headerFacts: publishConfig.header_facts });
     // The cards are read for withheld names in their own right, whatever the pages print (and
     // also when nothing is written): every string of every card, under the note it is made from.
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
@@ -1565,7 +1565,7 @@ function buildSite(options) {
       // The events are read from the notes as they stand: marked, in the audit's pass.
       const data = live ? timelineData : buildTimelineData(pages);
       emit('timeline.html', timelineTemplate(renderTimelineHTML(data), navFor, config, publishConfig), '  wrote timeline.html');
-      publishConfig._timelineStrip = renderTimelineStrip(data, { maxEvents: 15 });
+      publishConfig._timelineStrip = renderTimelineStrip(data, { maxEvents: publishConfig.limits.timeline_events });
     }
 
     // The story: its chapters, each PC's own story, its contents page.

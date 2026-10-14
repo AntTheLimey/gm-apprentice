@@ -567,7 +567,7 @@ function renderBestiary(pages, indexDir) {
   return `<div class="bestiary"${noPreviewAttr()}>${cards}</div>`;
 }
 
-function renderFactions(pages, indexDir, imageMap = {}) {
+function renderFactions(pages, indexDir, imageMap, limits) {
   const factions = pages
     .filter(p => p.frontmatter.type === 'faction' || p.frontmatter.type === 'organization')
     .sort((a, b) => a.displayTitle.localeCompare(b.displayTitle));
@@ -602,8 +602,8 @@ function renderFactions(pages, indexDir, imageMap = {}) {
     const fm = p.frontmatter;
     const ft = String(fm.faction_type || fm.factionType || 'other').toLowerCase();
     const leadership = fm.leadership ? linkText(fm.leadership).words.trim() : '';
-    const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, 3) : [];
-    const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, 4) : [];
+    const goals = Array.isArray(fm.goals) ? fm.goals.slice(0, limits.list_goals) : [];
+    const relationships = Array.isArray(fm.relationships) ? fm.relationships.slice(0, limits.list_relationships) : [];
     const canon = getCanonStatus(fm) || '';
 
     const leaderHtml = leadership
@@ -1008,7 +1008,7 @@ function indexTemplate(dir, label, pages, navFor, config, publishConfig, imageMa
   } else if (isLocations) {
     bodyContent = renderLocationsPage(pages, dir, imageMap, publishConfig);
   } else if (isFactions) {
-    bodyContent = renderFactions(pages, dir, imageMap);
+    bodyContent = renderFactions(pages, dir, imageMap, publishConfig.limits);
   } else if (isItems) {
     bodyContent = renderArmory(pages, dir);
   } else if (isDocuments) {

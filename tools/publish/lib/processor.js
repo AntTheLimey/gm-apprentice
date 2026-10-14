@@ -1536,12 +1536,12 @@ function isWithheld(frontmatter) {
 }
 
 // What an unlabelled link to a withheld page prints in place of the page's name, by the
-// kind of note it is: "She met someone at the quay", "Part of something". One table, so the
-// words are chosen in one place. They must not hold the word for the flag.
-const WITHHELD_PLACEHOLDERS = { npc: 'someone', pc: 'someone', location: 'somewhere', other: 'something' };
-function withheldPlaceholder(type) {
+// kind of note it is: "She met someone at the quay", "Part of something". `words` is the site's
+// `withheld_words` setting ({ person, place, thing }), so the words are chosen in one place.
+const WITHHELD_WORD_OF = { npc: 'person', pc: 'person', location: 'place' };
+function withheldPlaceholder(type, words) {
   const t = String(type == null ? '' : type).trim().toLowerCase();
-  return Object.prototype.hasOwnProperty.call(WITHHELD_PLACEHOLDERS, t) && t !== 'other' ? WITHHELD_PLACEHOLDERS[t] : WITHHELD_PLACEHOLDERS.other;
+  return words[Object.prototype.hasOwnProperty.call(WITHHELD_WORD_OF, t) ? WITHHELD_WORD_OF[t] : 'thing'];
 }
 
 // One page's frontmatter as a reader may see it. Everything derived from
@@ -1637,7 +1637,7 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // A GM alias that is also a published page's title or public alias is
 // skipped: that name belongs to the other page, and its links stay as they
 // are. `published` is the pages the site publishes (default: all of `pages`).
-function gmAliasRewriter(pages, published, rawNotes) {
+function gmAliasRewriter(pages, published, rawNotes, words) {
   const owners = new Map();
   // Every declared secret key, independent of the owner-collision cleanup
   // below. A link's LABEL (not just its target) can carry a secret verbatim
@@ -1675,7 +1675,7 @@ function gmAliasRewriter(pages, published, rawNotes) {
   for (const page of pages) {
     const fm = page.frontmatter || {};
     if (!isWithheld(fm) || (published && published.includes(page))) continue;
-    const word = withheldPlaceholder(fm.type);
+    const word = withheldPlaceholder(fm.type, words);
     const raw = written.get(page.sourcePath) || fm;
     for (const name of [page.title, page.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
       ...nameList(fm.aliases), ...nameList(raw.aliases), ...gmAliasList(fm)]) {
@@ -1782,4 +1782,4 @@ function gmAliasRewriter(pages, published, rawNotes) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, WITHHELD_PLACEHOLDERS, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
