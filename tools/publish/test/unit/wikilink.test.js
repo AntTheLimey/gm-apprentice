@@ -12,6 +12,7 @@ const {
 } = require('../../lib/processor');
 const { buildBacklinks } = require('../../lib/backlinks');
 const { scoreByRecency } = require('../../lib/recency');
+const GONE = new Set(require('../../lib/settings').entry('vault.statuses.gone').default);
 const { buildSearchIndex } = require('../../lib/search-index');
 const { excerptFromMarkdown } = require('../../lib/excerpt');
 const { runSiteDoctor } = require('../../lib/site-doctor');
@@ -150,14 +151,14 @@ describe('backlinks, recency, search and excerpt read the escaped link', () => {
 
   it('recency counts the mention', () => {
     const npc = { title: 'Emma_Wentworth', frontmatter: { type: 'npc' }, markdown: '' };
-    const scored = scoreByRecency([npc], [page], [], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency([npc], [page], [], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.strictEqual(scored.length, 1);
   });
 
   it('a frontmatter participant written with an escaped pipe is a mention', () => {
     const s = { title: 'S', frontmatter: { type: 'session', status: 'played', session_number: 1, participants: ['[[Emma_Wentworth\\|Emma]]'] }, markdown: '' };
     const npc = { title: 'Emma_Wentworth', frontmatter: { type: 'npc' }, markdown: '' };
-    assert.strictEqual(scoreByRecency([npc], [s], [], { window: 3, max: 10, type: 'npc' }).length, 1);
+    assert.strictEqual(scoreByRecency([npc], [s], [], { gone: GONE, window: 3, max: 10, type: 'npc' }).length, 1);
   });
 
   it('the search index and the excerpt show Emma with no backslash', () => {

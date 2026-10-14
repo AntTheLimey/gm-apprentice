@@ -137,6 +137,9 @@ what follows is as described under "Check the spelling" above.
 |---------|--------------|--------|----------|
 | `vault.kept_by` | Who keeps this vault: `gm` for the game master, `player` for a player keeping notes on a campaign they are in | `gm` or `player` | `gm` |
 | `vault.campaign` | The campaign's name | The campaign's name | The vault folder's name |
+| `vault.statuses.out_of_play` | The statuses that take a character out of play. A character with one leaves the party board and the active team on the landing page, and is listed under "In Memoriam" instead; their sheet page stays. An empty list means nobody is ever out of play | A list of status words | `dead`, `deceased`, `kia`, `retired`, `departed`, `missing`, `unknown`, `inactive`, `npc`, `destroyed`, `dissolved` |
+| `vault.statuses.fallen` | The statuses that put a character under "Fallen" on the Story page. Each must also be in `vault.statuses.out_of_play`; one that is not is left out, with a warning. `retired` always has its own group | A list of status words | `dead`, `deceased`, `kia`, `missing`, `unknown` |
+| `vault.statuses.gone` | The statuses of things that no longer exist. A note with one is left off the landing page's "NPCs in Play" and "Latest Locations" unless the latest session mentions it. An empty list drops nothing | A list of status words | `dead`, `deceased`, `destroyed`, `kia`, `dissolved` |
 
 <!-- /settings:vault -->
 

@@ -1,12 +1,9 @@
-// PC statuses that take a character out of play. The landing page lists these PCs
-// under "fallen" rather than the active party, and the roster's Party Status board
-// leaves them off entirely (#265); their sheet pages still render. Compared
-// case-insensitively against frontmatter `status:`.
-// `inactive` and `npc` match vaultlib's PC_INACTIVE_STATUS and session-principles.
-const OUT_OF_PLAY_STATUSES = new Set(['dead', 'deceased', 'kia', 'retired', 'departed', 'missing', 'unknown', 'inactive', 'npc']);
-
-function isOutOfPlay(frontmatter) {
-  return OUT_OF_PLAY_STATUSES.has(String((frontmatter || {}).status || '').trim().toLowerCase());
+// A PC whose status is in the vault's out-of-play list leaves the party board and the active team
+// (#265); the landing page lists them under "In Memoriam". Their sheet pages still render. The list is
+// `vault.statuses.out_of_play`, read once in config.js (words trimmed and lower-cased); every caller passes
+// it in, and a missing list throws rather than meaning "nobody".
+function isOutOfPlay(frontmatter, outOfPlay) {
+  return outOfPlay.has(String((frontmatter || {}).status || '').trim().toLowerCase());
 }
 
-module.exports = { OUT_OF_PLAY_STATUSES, isOutOfPlay };
+module.exports = { isOutOfPlay };

@@ -21,8 +21,8 @@ function formatDate(dateStr) {
 }
 
 
-// Label for an In Memoriam card. Every out-of-play status (lib/pc-status.js) gets one, so a
-// fallen PC is never labelled "Active".
+// Label for an In Memoriam card. Every status on the default out-of-play list gets one, so a
+// fallen PC is never labelled "Active"; a status the GM added is shown as written.
 function statusLabel(status) {
   const s = String(status || '').trim().toLowerCase();
   if (s === 'dead' || s === 'deceased' || s === 'kia') return 'KIA';
@@ -31,6 +31,8 @@ function statusLabel(status) {
   if (s === 'departed') return 'Departed';
   if (s === 'inactive') return 'Inactive';
   if (s === 'npc') return 'Now an NPC';
+  if (s === 'destroyed') return 'Destroyed';
+  if (s === 'dissolved') return 'Dissolved';
   return 'Active';
 }
 
@@ -123,8 +125,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
 
   // --- Zone 3: The Team (active PCs) ---
   const allPCs = getPCs(pages);
-  const activePCs = allPCs.filter(p => !isOutOfPlay(p.frontmatter));
-  const fallenPCs = allPCs.filter(p => isOutOfPlay(p.frontmatter));
+  const outOfPlay = publishConfig.statuses.out_of_play;
+  const activePCs = allPCs.filter(p => !isOutOfPlay(p.frontmatter, outOfPlay));
+  const fallenPCs = allPCs.filter(p => isOutOfPlay(p.frontmatter, outOfPlay));
 
   let teamZone = '';
   if (activePCs.length > 0) {
@@ -155,7 +158,9 @@ function landingTemplate(pages, navFor, config, publishConfig, imageMap, corpus,
   let memoriamZone = '';
   if (fallenPCs.length > 0) {
     const entries = fallenPCs.map(pc => {
-      const status = statusLabel(pc.frontmatter.status);
+      // A status the GM added to the out-of-play list has no label of its own: it is shown as written.
+      const label = statusLabel(pc.frontmatter.status);
+      const status = label === 'Active' ? String(pc.frontmatter.status || '').trim() || 'Out of play' : label;
       const context = pc.frontmatter.death_context || pc.frontmatter.retirement_context || '';
       const contextHtml = context ? ` <span class="memorial-context">${escapeHtml(context)}</span>` : '';
       return `<a href="${escapeHtml(encodeHref(pc.outputPath))}">${escapeHtml(pc.displayTitle)} (${escapeHtml(status)})</a>${contextHtml}`;

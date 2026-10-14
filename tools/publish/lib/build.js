@@ -777,13 +777,13 @@ function buildSite(options) {
 
   const recentNPCs = withFeatured(
     scoreByRecency(npcs, sessions, chapters, {
-      window: recencyWindow, max: maxNPCs, type: 'npc', wrapUpFor: hubWrapUps,
+      gone: publishConfig.statuses.gone, window: recencyWindow, max: maxNPCs, type: 'npc', wrapUpFor: hubWrapUps,
     }),
     npcs, landingConfig.featured_npcs, maxNPCs, 'featured_npcs');
 
   const recentLocations = withFeatured(
     scoreByRecency(locations, sessions, chapters, {
-      window: recencyWindow, max: maxLocations, type: 'location', wrapUpFor: hubWrapUps,
+      gone: publishConfig.statuses.gone, window: recencyWindow, max: maxLocations, type: 'location', wrapUpFor: hubWrapUps,
     }),
     locations, landingConfig.featured_locations, maxLocations, 'featured_locations');
 
@@ -1125,7 +1125,7 @@ function buildSite(options) {
         }
         // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
         // off the roster's Party Status board (#265).
-        if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter)) {
+        if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
           // Root-relative output path of the PC portrait, for the party-board
           // thumbnail. Resolved the same way portraitImg does (imageMap keyed
           // by bare basename → the scanner's relPath under images/).
@@ -1610,7 +1610,7 @@ function buildSite(options) {
     fx.warn(outputPath, processed.warnings);
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
-      sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter),
+      sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
     };
     const html = characterStoryPage(story, config, publishConfig, navFor);
     if (fx === liveFx) seen(audit.storyRelOf(pc), html, pc, true);

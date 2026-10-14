@@ -57,6 +57,27 @@ const REGISTRY = [
     left_out: "The vault folder's name",
   },
 
+  // The status words a note's `status:` is compared with. A word in a note is trimmed and lower-cased first.
+  { name: 'vault.statuses', type: 'map', container: true },
+  {
+    name: 'vault.statuses.out_of_play', type: 'list', of: 'status words', group: 'vault',
+    default: ['dead', 'deceased', 'kia', 'retired', 'departed', 'missing', 'unknown', 'inactive', 'npc', 'destroyed', 'dissolved'],
+    does: 'The statuses that take a character out of play. A character with one leaves the party board and the active team on the landing page, and is listed under "In Memoriam" instead; their sheet page stays. An empty list means nobody is ever out of play',
+    left_out: '`dead`, `deceased`, `kia`, `retired`, `departed`, `missing`, `unknown`, `inactive`, `npc`, `destroyed`, `dissolved`',
+  },
+  {
+    name: 'vault.statuses.fallen', type: 'list', of: 'status words', group: 'vault',
+    default: ['dead', 'deceased', 'kia', 'missing', 'unknown'],
+    does: 'The statuses that put a character under "Fallen" on the Story page. Each must also be in `vault.statuses.out_of_play`; one that is not is left out, with a warning. `retired` always has its own group',
+    left_out: '`dead`, `deceased`, `kia`, `missing`, `unknown`',
+  },
+  {
+    name: 'vault.statuses.gone', type: 'list', of: 'status words', group: 'vault',
+    default: ['dead', 'deceased', 'destroyed', 'kia', 'dissolved'],
+    does: 'The statuses of things that no longer exist. A note with one is left off the landing page\'s "NPCs in Play" and "Latest Locations" unless the latest session mentions it. An empty list drops nothing',
+    left_out: '`dead`, `deceased`, `destroyed`, `kia`, `dissolved`',
+  },
+
   // The site itself
   {
     name: 'player_site.publish', was: [{ name: 'publish.site', in: 'vault' }], type: 'switch', onFault: false, onWhenSet: 'player_site.folder', group: 'site',

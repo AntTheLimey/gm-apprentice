@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { scoreByRecency } = require('../../lib/recency');
 const { pairHubs } = require('../../lib/session-hub');
+const GONE = new Set(require('../../lib/settings').entry('vault.statuses.gone').default);
 
 // The build's hub -> Wrap-Up map (session-hub.js pairHubs): recency never pairs on its own.
 const pairsOf = (sessions, wrapUps) => pairHubs(sessions.concat(wrapUps), sessions.concat(wrapUps), { allNotes: [] });
@@ -28,7 +29,7 @@ describe('scoreByRecency', () => {
   ];
 
   it('scores entities by recent session mentions', () => {
-    const scored = scoreByRecency(entities, sessions, [chapter], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, sessions, [chapter], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.ok(scored.length > 0);
     assert.strictEqual(scored[0].page.title, 'NPC_A');
   });
@@ -40,30 +41,30 @@ describe('scoreByRecency', () => {
       { title: 'S3', frontmatter: { type: 'session', status: 'played', session_number: 3 },
         markdown: 'Met [[NPC_A]] in secret.', publishedMarkdown: 'Nothing public here.' },
     ];
-    const scored = scoreByRecency(entities, gmOnlySessions, [], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, gmOnlySessions, [], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.ok(!scored.map(s => s.page.title).includes('NPC_A'),
       'an NPC mentioned only in stripped content must not be scored as recent');
   });
 
   it('excludes dead/destroyed entities', () => {
-    const scored = scoreByRecency(entities, sessions, [chapter], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, sessions, [chapter], { gone: GONE, window: 3, max: 10, type: 'npc' });
     const titles = scored.map(s => s.page.title);
     assert.ok(!titles.includes('NPC_Dead'));
   });
 
   it('respects max limit', () => {
-    const scored = scoreByRecency(entities, sessions, [chapter], { window: 3, max: 1, type: 'npc' });
+    const scored = scoreByRecency(entities, sessions, [chapter], { gone: GONE, window: 3, max: 1, type: 'npc' });
     assert.strictEqual(scored.length, 1);
   });
 
   it('scores locations', () => {
-    const scored = scoreByRecency(entities, sessions, [chapter], { window: 3, max: 10, type: 'location' });
+    const scored = scoreByRecency(entities, sessions, [chapter], { gone: GONE, window: 3, max: 10, type: 'location' });
     assert.ok(scored.length > 0);
     assert.strictEqual(scored[0].page.title, 'Location_A');
   });
 
   it('returns empty array when no sessions', () => {
-    const scored = scoreByRecency(entities, [], [], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, [], [], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.deepStrictEqual(scored, []);
   });
 });
@@ -80,7 +81,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Old_NPC', frontmatter: { type: 'npc', status: 'alive' } },
       { title: 'New_NPC', frontmatter: { type: 'npc', status: 'alive' } },
     ];
-    const titles = scoreByRecency(entities, sessions, [], { window: 1, max: 10, type: 'npc' }).map(s => s.page.title);
+    const titles = scoreByRecency(entities, sessions, [], { gone: GONE, window: 1, max: 10, type: 'npc' }).map(s => s.page.title);
     assert.ok(titles.includes('New_NPC'), 'the play_date-latest session is scored');
     assert.ok(!titles.includes('Old_NPC'), 'the higher-numbered but older session is outside the recent window');
   });
@@ -96,7 +97,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Dragoman', frontmatter: { type: 'npc', status: 'alive' } },
       { title: 'Thibault', frontmatter: { type: 'npc', status: 'alive' } },
     ];
-    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc', wrapUpFor: pairsOf(sessions, wrapUps) }).map(s => s.page.title);
+    const titles = scoreByRecency(entities, sessions, [], { gone: GONE, window: 3, max: 10, type: 'npc', wrapUpFor: pairsOf(sessions, wrapUps) }).map(s => s.page.title);
     assert.ok(titles.includes('Dragoman'), 'aliased mention in the wrap-up is counted');
     assert.ok(titles.includes('Thibault'), 'bare mention in the wrap-up is counted');
   });
@@ -110,7 +111,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Endicott', frontmatter: { type: 'npc', status: 'dead' } },
       { title: 'Old_Casualty', frontmatter: { type: 'npc', status: 'dead' } },
     ];
-    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc' }).map(s => s.page.title);
+    const titles = scoreByRecency(entities, sessions, [], { gone: GONE, window: 3, max: 10, type: 'npc' }).map(s => s.page.title);
     assert.ok(titles.includes('Endicott'), 'died in the latest session → still in play');
     assert.ok(!titles.includes('Old_Casualty'), 'died earlier → retired from in play');
   });
@@ -124,7 +125,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Fresh_NPC', frontmatter: { type: 'npc', status: 'alive' } },
       { title: 'Older_NPC', frontmatter: { type: 'npc', status: 'alive' } },
     ];
-    const scored = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, sessions, [], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.strictEqual(scored[0].page.title, 'Fresh_NPC', 'latest-session NPC outranks an older-session NPC');
   });
 
@@ -141,7 +142,7 @@ describe('scoreByRecency — play_date recency, wrap-ups, terminal status', () =
       { title: 'Wrong_NPC', frontmatter: { type: 'npc', status: 'alive' } },
       { title: 'Right_NPC', frontmatter: { type: 'npc', status: 'alive' } },
     ];
-    const titles = scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc', wrapUpFor: pairsOf(sessions, wrapUps) }).map(s => s.page.title);
+    const titles = scoreByRecency(entities, sessions, [], { gone: GONE, window: 3, max: 10, type: 'npc', wrapUpFor: pairsOf(sessions, wrapUps) }).map(s => s.page.title);
     assert.ok(titles.includes('Right_NPC'), 'pairs by the session wiki-link');
     assert.ok(!titles.includes('Wrong_NPC'), 'ignores the same-numbered wrap-up from another chapter');
   });
@@ -165,7 +166,7 @@ describe('scoreByRecency tie-break (#169)', () => {
     const session = mkSession('Met [[Zed_Npc]], [[Adam_Npc]] and [[Mabel_Npc]].');
     // deliberately reversed relative to the wanted output
     const entities = [mkNpc('Zed_Npc'), mkNpc('Mabel_Npc'), mkNpc('Adam_Npc')];
-    const scored = scoreByRecency(entities, [session], [], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, [session], [], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.deepStrictEqual(scored.map(s => s.page.title), ['Adam_Npc', 'Mabel_Npc', 'Zed_Npc']);
   });
 
@@ -174,14 +175,41 @@ describe('scoreByRecency tie-break (#169)', () => {
     const chapter = { title: 'Ch', displayTitle: 'Ch', frontmatter: { type: 'chapter' },
       markdown: 'Featuring [[Zed_Npc]].' };
     const entities = [mkNpc('Adam_Npc'), mkNpc('Zed_Npc')];
-    const scored = scoreByRecency(entities, [session], [chapter], { window: 3, max: 10, type: 'npc' });
+    const scored = scoreByRecency(entities, [session], [chapter], { gone: GONE, window: 3, max: 10, type: 'npc' });
     assert.strictEqual(scored[0].page.title, 'Zed_Npc');   // higher score wins over alphabetical
   });
 
   it('cuts at max by the same deterministic order', () => {
     const session = mkSession('Met [[Zed_Npc]], [[Adam_Npc]] and [[Mabel_Npc]].');
     const entities = [mkNpc('Zed_Npc'), mkNpc('Mabel_Npc'), mkNpc('Adam_Npc')];
-    const scored = scoreByRecency(entities, [session], [], { window: 3, max: 2, type: 'npc' });
+    const scored = scoreByRecency(entities, [session], [], { gone: GONE, window: 3, max: 2, type: 'npc' });
     assert.deepStrictEqual(scored.map(s => s.page.title), ['Adam_Npc', 'Mabel_Npc']);
   });
 });
+
+describe('scoreByRecency: the gone list is the one it is given', () => {
+  const sessions = [
+    { title: 'S2', frontmatter: { type: 'session', status: 'reviewed', session_number: 2, play_date: '2026-06-25' }, markdown: 'Now: [[Fresh]].' },
+    { title: 'S1', frontmatter: { type: 'session', status: 'reviewed', session_number: 1, play_date: '2026-06-04' }, markdown: 'Earlier: [[Casualty]], [[Wanderer]].' },
+  ];
+  const entities = [
+    { title: 'Fresh', frontmatter: { type: 'npc', status: 'alive' } },
+    { title: 'Casualty', frontmatter: { type: 'npc', status: ' Dead ' } },
+    { title: 'Wanderer', frontmatter: { type: 'npc', status: 'missing' } },
+  ];
+  const titles = (gone) => scoreByRecency(entities, sessions, [], { gone, window: 3, max: 10, type: 'npc' }).map(s => s.page.title).sort();
+
+  it('a status in a note is compared trimmed and lower-cased', () => {
+    assert.deepStrictEqual(titles(GONE), ['Fresh', 'Wanderer']);
+  });
+  it('an empty list means nobody has gone', () => {
+    assert.deepStrictEqual(titles(new Set()), ['Casualty', 'Fresh', 'Wanderer']);
+  });
+  it('a word in the list drops the note', () => {
+    assert.deepStrictEqual(titles(new Set(['missing'])), ['Casualty', 'Fresh']);
+  });
+  it('a missing list fails loudly', () => {
+    assert.throws(() => scoreByRecency(entities, sessions, [], { window: 3, max: 10, type: 'npc' }), TypeError);
+  });
+});
+

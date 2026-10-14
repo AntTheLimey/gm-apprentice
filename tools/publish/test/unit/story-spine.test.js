@@ -1,5 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
+const { entry } = require('../../lib/settings');
 const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
 const { pairHubs } = require('../../lib/session-hub');
 
@@ -189,13 +190,20 @@ describe('unitRefs', () => {
 });
 
 describe('characterStoryGroup', () => {
-  it('maps status to current/retired/fallen', () => {
-    assert.strictEqual(characterStoryGroup({ status: 'active' }), 'current');
-    assert.strictEqual(characterStoryGroup({}), 'current');
-    assert.strictEqual(characterStoryGroup({ status: 'Retired' }), 'retired');
-    assert.strictEqual(characterStoryGroup({ status: 'dead' }), 'fallen');
-    assert.strictEqual(characterStoryGroup({ status: 'MIA' }), 'current'); // not in fallen set
-    assert.strictEqual(characterStoryGroup({ status: 'missing' }), 'fallen');
+  const FALLEN = new Set(entry('vault.statuses.fallen').default);
+  it('groups a PC by status, using the fallen list it is given', () => {
+    assert.strictEqual(characterStoryGroup({ status: 'active' }, FALLEN), 'current');
+    assert.strictEqual(characterStoryGroup({}, FALLEN), 'current');
+    assert.strictEqual(characterStoryGroup({ status: 'Retired' }, FALLEN), 'retired');
+    assert.strictEqual(characterStoryGroup({ status: 'dead' }, FALLEN), 'fallen');
+    assert.strictEqual(characterStoryGroup({ status: ' KIA ' }, FALLEN), 'fallen');
+    assert.strictEqual(characterStoryGroup({ status: 'MIA' }, FALLEN), 'current'); // not in fallen set
+    assert.strictEqual(characterStoryGroup({ status: 'missing' }, FALLEN), 'fallen');
+    assert.strictEqual(characterStoryGroup({ status: 'dead' }, new Set()), 'current');
+    assert.strictEqual(characterStoryGroup({ status: 'retired' }, new Set(['retired'])), 'retired', 'retired keeps its own group');
+  });
+  it('a missing list fails loudly', () => {
+    assert.throws(() => characterStoryGroup({ status: 'dead' }), TypeError);
   });
 });
 

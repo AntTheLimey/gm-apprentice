@@ -1,6 +1,6 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
-const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
+const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
 const { pairHubs } = require('../../lib/session-hub');
 
 describe('getLatestSession', () => {
@@ -399,63 +399,6 @@ describe('getPCs', () => {
   });
 });
 
-describe('inferNPCRole', () => {
-  it('returns Patron for employer tag', () => {
-    const npc = { frontmatter: { tags: ['employer'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Patron');
-  });
-
-  it('returns Patron for patron tag', () => {
-    const npc = { frontmatter: { tags: ['patron'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Patron');
-  });
-
-  it('returns Patron for employs relationship', () => {
-    const npc = { frontmatter: { tags: [], relationships: [{ type: 'employs', target: '[[PCs]]' }] } };
-    assert.strictEqual(inferNPCRole(npc), 'Patron');
-  });
-
-  it('returns Antagonist for villain tag', () => {
-    const npc = { frontmatter: { tags: ['villain'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Antagonist');
-  });
-
-  it('returns Companion for ally tag', () => {
-    const npc = { frontmatter: { tags: ['ally'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Companion');
-  });
-
-  it('returns Threat for super tag', () => {
-    const npc = { frontmatter: { tags: ['super'], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'Threat');
-  });
-
-  it('returns Leader for leads relationship', () => {
-    const npc = { frontmatter: { tags: [], relationships: [{ type: 'leads', target: '[[Squad]]' }] } };
-    assert.strictEqual(inferNPCRole(npc), 'Leader');
-  });
-
-  it('returns NPC as default', () => {
-    const npc = { frontmatter: { tags: [], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc), 'NPC');
-  });
-
-  it('handles missing tags and relationships', () => {
-    const npc = { frontmatter: {} };
-    assert.strictEqual(inferNPCRole(npc), 'NPC');
-  });
-
-  it('returns Recurring when sessionCount >= 2 and no tag matches', () => {
-    const npc = { frontmatter: { tags: [], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc, 2), 'Recurring');
-  });
-
-  it('returns NPC when sessionCount < 2 and no tag matches', () => {
-    const npc = { frontmatter: { tags: [], relationships: [] } };
-    assert.strictEqual(inferNPCRole(npc, 1), 'NPC');
-  });
-});
-
 describe('getRecentEvents', () => {
   it('returns events sorted by in_game_date, most recent first', () => {
     const pages = [
@@ -530,9 +473,9 @@ describe('getExploreDescriptions', () => {
 
 describe('statusLabel (In Memoriam labels)', () => {
   const { statusLabel } = require('../../lib/templates/landing');
-  const { OUT_OF_PLAY_STATUSES } = require('../../lib/pc-status');
+  const DEFAULT_OUT_OF_PLAY = require('../../lib/settings').entry('vault.statuses.out_of_play').default;
   it('never labels an out-of-play status "Active"', () => {
-    for (const s of OUT_OF_PLAY_STATUSES) {
+    for (const s of DEFAULT_OUT_OF_PLAY) {
       assert.notStrictEqual(statusLabel(s), 'Active', s);
       assert.notStrictEqual(statusLabel(` ${s.toUpperCase()} `), 'Active', s);
     }

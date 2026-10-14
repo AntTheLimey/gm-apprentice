@@ -141,24 +141,6 @@ function getPCs(pages) {
     .sort((a, b) => (a.title || '').localeCompare(b.title || ''));
 }
 
-const PATRON_TAGS = new Set(['employer', 'patron']);
-const ANTAGONIST_TAGS = new Set(['villain', 'antagonist']);
-const COMPANION_TAGS = new Set(['companion', 'ally']);
-const THREAT_TAGS = new Set(['super', 'fragment-empowered']);
-
-function inferNPCRole(npc, sessionCount) {
-  const tags = new Set(npc.frontmatter.tags || []);
-  const rels = npc.frontmatter.relationships || [];
-
-  if ([...PATRON_TAGS].some(t => tags.has(t)) || rels.some(r => r.type === 'employs')) return 'Patron';
-  if ([...ANTAGONIST_TAGS].some(t => tags.has(t))) return 'Antagonist';
-  if ([...COMPANION_TAGS].some(t => tags.has(t))) return 'Companion';
-  if ([...THREAT_TAGS].some(t => tags.has(t))) return 'Threat';
-  if (rels.some(r => r.type === 'leads' || r.type === 'commands')) return 'Leader';
-  if (sessionCount >= 2) return 'Recurring';
-  return 'NPC';
-}
-
 const EXPLORE_DESCRIPTIONS = {
   horror: {
     characters: 'The investigators and their allies — and the things that hunt them.',
@@ -290,4 +272,4 @@ function getLatestWrapUp(pages, session, pairs) {
   return null;
 }
 
-module.exports = { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, inferNPCRole, getRecentEvents, getExploreDescriptions };
+module.exports = { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, getRecentEvents, getExploreDescriptions };
