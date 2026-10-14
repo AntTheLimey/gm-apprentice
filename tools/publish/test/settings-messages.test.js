@@ -194,3 +194,18 @@ test('seedVaultSettings makes no settings file while the site file still holds s
     assert.equal(fs.existsSync(path.join(bare.vault, NEW.file)), true);
   } finally { done(held); done(bare); }
 });
+
+// #373: a hiding list in the site file that is a map stops the build, and the message names the site file's key, not the vault setting.
+test('a hiding list the site file holds as a map is named as the site file writes it', () => {
+  for (const layout of ['old', 'new']) {
+    const m = make(layout);
+    try {
+      const c = loadPublishConfig(m.vault, { vaultPath: '../vault', excludeDirs: { a: 1 } }, () => {});
+      const stop = c.faults.find((f) => f.level === 'stop');
+      assert.ok(stop, layout);
+      assert.match(stop.message, /excludeDirs/, layout);
+      assert.match(stop.message, /site folder's vault\.config\.json/, layout);
+      assert.ok(!stop.message.includes('publish.exclude_dirs'), stop.message);
+    } finally { done(m); }
+  }
+});

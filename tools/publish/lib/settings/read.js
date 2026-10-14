@@ -75,7 +75,10 @@ function settle(c, e, { written, setting }, first, defaultOf) {
     const shown = first.shown !== undefined ? first.shown : first.raw;
     faults.push(fault({
       name: written, setting, kind: 'not-allowed', level: e.guards || e.stopOnFault ? 'stop' : 'warn', value: shown, entry: e,
-      ...(problem ? { hint: `${written} is ${show(shown)}; ${problem}.` } : {}),
+      // A value from the site folder's file says so: the GM fixes it there, not in the vault's settings.
+      ...(first.origin === 'site-file'
+        ? { hint: `${written} in the site folder's vault.config.json is ${shown === null ? 'empty' : show(shown)}; ${problem || `it takes ${TYPES[e.type].takes(e)}`}.` }
+        : problem ? { hint: `${written} is ${show(shown)}; ${problem}.` } : {}),
     }));
   }
   return r;

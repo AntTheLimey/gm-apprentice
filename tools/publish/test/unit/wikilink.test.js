@@ -11,6 +11,7 @@ const {
   renderMetaValue, gmAliasRewriter,
 } = require('../../lib/processor');
 const { buildBacklinks } = require('../../lib/backlinks');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 const { scoreByRecency } = require('../../lib/recency');
 const GONE = new Set(require('../../lib/settings').entry('vault.statuses.gone').default);
 const { buildSearchIndex } = require('../../lib/search-index');
@@ -100,7 +101,7 @@ describe('table links with an escaped pipe, in the site build', () => {
 
   it('the gm-alias rewriter keeps the escaped pipe', () => {
     const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias'] } };
-    const rw = gmAliasRewriter([owner]);
+    const rw = gmAliasRewriter([owner], undefined, undefined, WORDS);
     assert.strictEqual(rw.markdown('| [[Elias\\|a patron]] |'), '| [[Lord Vane\\|a patron]] |');
     assert.strictEqual(rw.markdown('| [[Lord Vane\\|Elias]] |'), '| [[Lord Vane]] |');
   });
@@ -108,7 +109,7 @@ describe('table links with an escaped pipe, in the site build', () => {
 
 describe('a secret alias with a ^block anchor is still rewritten', () => {
   const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias Crowe'] } };
-  const rw = gmAliasRewriter([owner]);
+  const rw = gmAliasRewriter([owner], undefined, undefined, WORDS);
 
   it('in every link form', () => {
     assert.strictEqual(rw.markdown('[[Elias Crowe^b1]]'), '[[Lord Vane^b1]]');
@@ -211,7 +212,7 @@ describe('an empty alias is no alias', () => {
 
   it('the gm-alias rewriter still rewrites a secret name with an empty alias', () => {
     const owner = { title: 'Lord Vane', displayTitle: 'Lord Vane', frontmatter: { gm_aliases: ['Elias'] } };
-    const rw = gmAliasRewriter([owner]);
+    const rw = gmAliasRewriter([owner], undefined, undefined, WORDS);
     for (const form of ['[[Elias|]]', '![[Elias|]]', '[[Elias\\|]]']) {
       const out = rw.markdown(`She met ${form} there.`);
       assert.ok(!out.includes('Elias'), out);

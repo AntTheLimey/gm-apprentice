@@ -5,6 +5,7 @@ const path = require('node:path');
 const YAML = require('yaml');
 const { NEW_FILE, OLD_FILE, at, layoutOf } = require('../../lib/settings/layout');
 const { applyChanges } = require('../../lib/settings/write');
+const { entry } = require('../../lib/settings');
 
 function put(vaultPath, rel, text) {
   const file = at(vaultPath, rel);
@@ -30,4 +31,9 @@ function setOldSettings(vaultPath, byName) {
   return applyChanges(vaultPath, Object.entries(byName).map(([name, value]) => ({ op: 'set', name, value })));
 }
 
-module.exports = { writeNewConfig, writeOldConfig, setOldSettings };
+// The values a build hands down when a vault sets nothing, read from the list (never restated here), for a test that
+// calls a function directly: those functions are always given the value, they keep no default of their own.
+const defaultWithheldWords = () => ({ person: entry('player_site.withheld_words.person').default, place: entry('player_site.withheld_words.place').default, thing: entry('player_site.withheld_words.thing').default });
+const defaultRecapChars = () => entry('player_site.limits.recap_chars').default;
+
+module.exports = { writeNewConfig, writeOldConfig, setOldSettings, defaultWithheldWords, defaultRecapChars };

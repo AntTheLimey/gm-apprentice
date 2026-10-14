@@ -135,6 +135,22 @@ describe('update-pin', () => {
     assert.deepStrictEqual(h.runs, []);
   });
 
+  it('leaves a release-tarball file: pin alone and does not count it as the plugin\'s own (#381)', async () => {
+    const spec = 'file:vendor/gm-apprentice-publish-1.24.0.tgz';
+    const h = harness({ files: siteFiles(spec, '1.24.0'), detect: drift('1.11.29', '1.11.30') });
+    const rc = await runUpdatePin({ siteDir: '/site', json: true }, h.deps);
+    assert.strictEqual(rc, 0);
+    const payload = JSON.parse(h.out.join('\n'));
+    assert.strictEqual(payload.ours, false);
+    assert.strictEqual(payload.spec, spec);
+    assert.strictEqual(payload.changed, false);
+    assert.deepStrictEqual(h.writes, {});
+    assert.deepStrictEqual(h.runs, []);
+    const said = harness({ files: siteFiles(spec, '1.24.0'), detect: drift('1.11.29', '1.11.30') });
+    await runUpdatePin({ siteDir: '/site' }, said.deps);
+    assert.match(said.out.join('\n'), /release tarball, not a plugin-cache path — leave it alone/);
+  });
+
   it('reports current when the pin and the install both match the newest version', async () => {
     const h = harness({
       files: siteFiles(`file:${CACHE}/1.11.30/tools/publish`, '1.11.30'),

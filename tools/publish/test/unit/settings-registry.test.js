@@ -4,6 +4,13 @@ const assert = require('node:assert/strict');
 const { REGISTRY, entry, names, GROUPS, legacyNameOf, resolve } = require('../../lib/settings/registry');
 const { TYPES } = require('../../lib/settings/types');
 
+// The list is written by hand, one entry a line: a comma is followed by a space.
+test('the list is written as the rest of the code is: a space after every comma that ends a key', () => {
+  const source = require('node:fs').readFileSync(require.resolve('../../lib/settings/registry'), 'utf8');
+  const bad = source.split('\n').map((line, i) => [i + 1, line]).filter(([, line]) => /^\s*\{ name: '[^']+',[^ \n]/.test(line));
+  assert.deepEqual(bad.map(([n, line]) => `${n}: ${line.slice(0, 60)}`), []);
+});
+
 test('every entry is complete and its default is a value its own type takes', () => {
   const groups = new Set(GROUPS.map((g) => g.id));
   for (const e of REGISTRY) {

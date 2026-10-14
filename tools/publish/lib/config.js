@@ -275,8 +275,6 @@ function assertNoStopsFor(configPath, what) {
 // Only an explicit off stops them: a site folder whose vault never set the switch builds.
 // It names the switch as this vault's file writes it, so it takes the vault (or a layout).
 const siteOffText = (layout) => `the site is off for this vault (${nameInFor(layout, 'player_site.publish')} in ${fileLabelFor(layout)}); nothing was built. Set ${nameInFor(layout, 'player_site.publish')}: true to publish again.`;
-// The text for a vault on the old layout, the one most vaults are on until they are updated.
-const SITE_OFF = siteOffText('legacy');
 function siteOff(switches, vaultPath) {
   return switches && switches.explicitOff && switches.explicitOff.site ? siteOffText(vaultPath ? layoutOf(vaultPath) : 'legacy') : null;
 }
@@ -367,4 +365,4 @@ function siteOffFor(configPath) {
   }
 }
 
-module.exports = { siteOffFor, siteOff, siteOffText, SITE_OFF, siteConfigFor, outputFolderOf, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { siteOffFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

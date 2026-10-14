@@ -1638,6 +1638,10 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // skipped: that name belongs to the other page, and its links stay as they
 // are. `published` is the pages the site publishes (default: all of `pages`).
 function gmAliasRewriter(pages, published, rawNotes, words) {
+  // The words are the site's withheld_words setting, always passed in; a missing set is a mistake in the calling code.
+  if (!words || typeof words !== 'object' || ['person', 'place', 'thing'].some((k) => typeof words[k] !== 'string')) {
+    throw new Error('gmAliasRewriter was not given the site\'s withheld_words; the caller must pass publishConfig.withheld_words');
+  }
   const owners = new Map();
   // Every declared secret key, independent of the owner-collision cleanup
   // below. A link's LABEL (not just its target) can carry a secret verbatim

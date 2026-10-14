@@ -1,6 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { suppressHubBody, publishedWrapUpFor, pairHubs } = require('../../lib/session-hub');
+const { defaultWithheldWords, defaultRecapChars } = require('../helpers/settings-files');
+const WORDS = defaultWithheldWords();
+const RECAP_CHARS = defaultRecapChars();
 const { sessionBodyHtml } = require('../../lib/templates/session');
 
 const hub = (title, fm = {}) => ({ title, frontmatter: { type: 'session', ...fm } });
@@ -117,7 +120,7 @@ describe('a session: claim resolves against every session index in the vault (#2
 
   it("Ch1's Wrap-Up does not pair with Ch2's hub when Ch1's hub does not publish", () => {
     const { ch1Hub, ch1Wrap, ch2Hub } = repro();
-    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], [ch1Wrap, ch2Hub], { allNotes: [] });
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], [ch1Wrap, ch2Hub], { allNotes: [], withheldWords: WORDS });
     assert.strictEqual(pairs.has(ch2Hub), false);
   });
 
@@ -125,7 +128,7 @@ describe('a session: claim resolves against every session index in the vault (#2
     const { ch1Wrap, ch2Hub } = repro();
     // Ch1's hub lives outside the scan (an excluded folder): only scanAllNotes sees it.
     const skipped = { title: 'Session 01', frontmatter: { type: 'session' }, sourcePath: '/v/Elsewhere/Session 01.md', vaultPath: 'Elsewhere/Session 01' };
-    const pairs = pairHubs([ch1Wrap, ch2Hub], [ch1Wrap, ch2Hub], { allNotes: [skipped] });
+    const pairs = pairHubs([ch1Wrap, ch2Hub], [ch1Wrap, ch2Hub], { allNotes: [skipped], withheldWords: WORDS });
     assert.strictEqual(pairs.has(ch2Hub), false);
   });
 
@@ -141,13 +144,13 @@ describe('a session: claim resolves against every session index in the vault (#2
     const h = at(hub('Session 01', { documents: { wrap_up: '[[Session 01 Wrap-Up]]' } }), '/v/Ch2/Session 01.md', 'Ch2/Session 01');
     const own = at(wrap('Session 01 Wrap-Up', { publish: false }), '/v/Ch2/Session 01 Wrap-Up.md', 'Ch2/Session 01 Wrap-Up');
     const other = at(wrap('Session 01 Wrap-Up'), '/v/Ch1/Session 01 Wrap-Up.md', 'Ch1/Session 01 Wrap-Up');
-    const pairs = pairHubs([h, own, other], [h, other], { allNotes: [] });
+    const pairs = pairHubs([h, own, other], [h, other], { allNotes: [], withheldWords: WORDS });
     assert.strictEqual(pairs.has(h), false);
   });
 
   it('still pairs the real hub when it publishes', () => {
     const { ch1Hub, ch1Wrap, ch2Hub } = repro();
-    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], [ch1Hub, ch1Wrap, ch2Hub], { allNotes: [] });
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], [ch1Hub, ch1Wrap, ch2Hub], { allNotes: [], withheldWords: WORDS });
     assert.strictEqual(pairs.get(ch1Hub), ch1Wrap);
     assert.strictEqual(pairs.has(ch2Hub), false);
   });
@@ -159,19 +162,19 @@ describe('sessionBodyHtml (#276)', () => {
   const chapter = { outputPath: 'chapters/ch-1.html', displayTitle: 'Ch 1', title: 'Ch 1' };
 
   it('quotes the Wrap-Up recap opening and links to the full Wrap-Up', () => {
-    const html = sessionBodyHtml(session, { wrapUp, chapter });
+    const html = sessionBodyHtml(session, { wrapUp, chapter, recapChars: RECAP_CHARS });
     assert.match(html, /<p>They arrived\.<\/p>/);
     assert.match(html, /href="s1-wrap\.html">Read the full session/);
     assert.match(html, /href="\.\.\/chapters\/ch-1\.html">Ch 1<\/a>/);
   });
 
   it('shows no chapter when the chapter page does not publish', () => {
-    assert.ok(!sessionBodyHtml(session, { wrapUp }).includes('Chapter:'));
+    assert.ok(!sessionBodyHtml(session, { wrapUp, recapChars: RECAP_CHARS }).includes('Chapter:'));
   });
 
   it('respects an excluded field: no in_game_date in frontmatter, none on the page', () => {
-    assert.ok(!sessionBodyHtml(session, { wrapUp }).includes('In-game'));
+    assert.ok(!sessionBodyHtml(session, { wrapUp, recapChars: RECAP_CHARS }).includes('In-game'));
     const dated = { ...session, frontmatter: { in_game_date: 'Autumn 1813' } };
-    assert.match(sessionBodyHtml(dated, { wrapUp }), /In-game: Autumn 1813/);
+    assert.match(sessionBodyHtml(dated, { wrapUp, recapChars: RECAP_CHARS }), /In-game: Autumn 1813/);
   });
 });

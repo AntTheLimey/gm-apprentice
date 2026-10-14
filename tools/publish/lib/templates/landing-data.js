@@ -115,14 +115,21 @@ function inlineRenderer() {
   return cachedRenderer;
 }
 
+// The length is the site's recap_chars setting, always passed in; a missing one is a mistake in the calling code.
+function assertRecapLength(maxChars, who) {
+  if (!Number.isInteger(maxChars) || maxChars < 1) throw new Error(`${who} was not given a recap length; the caller must pass publishConfig.limits.recap_chars`);
+}
+
 // Plain-text teaser of the latest session's recap (first prose paragraph).
 function extractRecap(page, maxChars) {
+  assertRecapLength(maxChars, 'extractRecap');
   const paragraph = recapParagraph(page);
   return paragraph ? renderRecap(paragraph, false, maxChars) : null;
 }
 
 // Same teaser as HTML, with emphasis rendered rather than shown as asterisks (#269).
 function extractRecapHtml(page, maxChars) {
+  assertRecapLength(maxChars, 'extractRecapHtml');
   const paragraph = recapParagraph(page);
   return paragraph ? renderRecap(paragraph, true, maxChars) : null;
 }

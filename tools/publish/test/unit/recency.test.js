@@ -2,10 +2,11 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { scoreByRecency } = require('../../lib/recency');
 const { pairHubs } = require('../../lib/session-hub');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 const GONE = new Set(require('../../lib/settings').entry('vault.statuses.gone').default);
 
 // The build's hub -> Wrap-Up map (session-hub.js pairHubs): recency never pairs on its own.
-const pairsOf = (sessions, wrapUps) => pairHubs(sessions.concat(wrapUps), sessions.concat(wrapUps), { allNotes: [] });
+const pairsOf = (sessions, wrapUps) => pairHubs(sessions.concat(wrapUps), sessions.concat(wrapUps), { allNotes: [], withheldWords: WORDS });
 
 describe('scoreByRecency', () => {
   const sessions = [

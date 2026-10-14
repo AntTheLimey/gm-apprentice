@@ -140,11 +140,14 @@ my-campaign-site/
   .nojekyll
 ```
 
-**2. Configure `vault.config.json`**
+**2. Configure the site**
 
 Open `vault.config.json` and set `vaultPath` to the absolute or relative
-path of your gm-apprentice vault, and `siteUrl` to the GitHub Pages URL
-you plan to publish to (e.g. `https://username.github.io/campaign-name`).
+path of your gm-apprentice vault. That is the only key the site's file
+holds. The rest of the site's settings live in the vault: set
+`player_site.url` to the address you plan to publish to (e.g.
+`https://username.github.io/campaign-name`) with
+`settings set player_site.url=<address>`.
 
 **3. Build** (the scaffold pinned the tool, so npm resolves it locally)
 
@@ -187,10 +190,16 @@ that way.
 
 ### `build [--config path]`
 
-Reads `vault.config.json` (or the file at `--config path`) and writes
-the generated site into the `outputDir` specified in that config.
-Cleans the output directory before each build, preserving any
-directories listed in `preserveDirs`.
+Reads `vault.config.json` (or the file at `--config path`) for the path to
+the vault, then writes the generated site into the vault's
+`player_site.output` folder (`docs` when unset). Cleans that folder before
+each build, preserving any folders listed in `player_site.keep`. A
+`player_site.output` or `player_site.keep` that is not a folder inside the
+site folder stops the build before anything is deleted.
+
+`build` and `deploy` also run the vault's build steps, in order (see
+[Build steps](#build-steps)). A dry build, `explain`, `manifest`,
+`doctor --site` and the preview run none.
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -246,6 +255,15 @@ node "$TOOL" settings add player_site.hide.sections Rumours
 node "$TOOL" settings get player_site.landing
 ```
 
+A list whose entries have several parts, such as the extra menu entries,
+takes one entry a call, each part written `name=value`; `remove` takes the
+entry's label:
+
+```bash
+node "$TOOL" settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World
+node "$TOOL" settings remove player_site.menu_extra Gazetteer
+```
+
 A setting's old name (`publish.search` and so on) still works for now.
 The command does the same thing and prints a line saying what the
 setting is called now.
@@ -254,6 +272,48 @@ setting is called now.
 generated page `docs/site-settings.md` holds the full tables. A fault on
 a setting that hides material stops `build`, `deploy` and the other
 publishing commands until it is fixed.
+
+## Build steps
+
+A site's own work around the build (tidying images, folding style sheets,
+writing extra pages) is a list of commands in the vault's settings:
+
+```yaml
+player_site:
+  before_build:
+    - node scripts/fetch-maps.js
+  after_build:
+    - node scripts/tidy-images.js
+```
+
+`before_build` runs before the pages are written and `after_build` after
+every page is written. The tool prints each command before it runs it, runs
+them in order in the site folder (with the site's `node_modules/.bin` on the
+path, as `npm run` gives a script), and stops the build when one fails or
+takes longer than ten minutes. Nothing is published after a failure. Only
+`build` and `deploy` run steps; a dry build, `explain`, `manifest`,
+`doctor --site`, the live preview and `deploy --no-build` do not. These two
+settings replace the `prebuild` and `postbuild` scripts of the site's
+`package.json`; `settings move` carries them across once the site's tool
+is 1.24.0 or later. Until then `deploy` keeps running the `package.json`
+scripts for a site that has not been moved.
+
+## The new settings, by group
+
+Each is set with `settings set`, `add` or `remove`, and each has a row on
+the generated page `docs/site-settings.md`.
+
+| Group | Settings |
+|-------|----------|
+| The site itself | `player_site.url`, `host`, `output`, `cloudflare_project` and `keep` (these five were keys of the site's `vault.config.json`); `before_build` and `after_build` (the build steps); `menu_extra` (extra menu entries, each with a `label`, a `link` and optionally a `group`) |
+| The landing page | `player_site.landing.banner.title`, `text`, `link` and `image`: a banner across the top of the landing page, with nothing shown until one is set. The text goes through the same audit as any page |
+| Character sheets | `player_site.sheets.header_facts`: the fields a PC page shows as badges beside the player's name, when the note has no `display_meta` of its own (`occupation`, `age`, `nationality` unless set) |
+| What gets published | `player_site.withheld_words.person`, `place` and `thing`: the words printed in place of a withheld note's name (`someone`, `somewhere`, `something` unless set) |
+| Limits | `player_site.limits.timeline_events`, `recap_chars`, `card_excerpt_chars`, `card_fact_chars`, `card_title_chars`, `card_facts`, `list_goals` and `list_relationships`: how many entries a list shows and how long a piece of text runs before it is cut. A number below its floor, a fraction or text is a warning, and the built-in number is used |
+| The vault | `vault.statuses.out_of_play` (statuses that take a character off the party board), `vault.statuses.fallen` (the ones listed under "Fallen"; each must also be out of play) and `vault.statuses.gone` (things that no longer exist, left off the landing page's recent rows) |
+
+The generated page holds each setting's meaning and built-in value; this
+list only says where to look.
 
 ## Where a vault keeps its settings
 
@@ -347,26 +407,48 @@ files exist the new one is read, and the old one is reported as left over.
 
 ## vault.config.json reference
 
+The site folder's `vault.config.json` holds one key:
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `siteTitle` | string | Old layout only. Site name shown in the nav bar and page title |
-| `host` | string | Deploy target: `github-pages` (default/absent) or `cloudflare-pages`. Affects only the deploy step, not the built output. |
-| `siteUrl` | string | Canonical base URL. For `cloudflare-pages` set it to the `.pages.dev` (or custom) URL — Cloudflare serves at the root, so a `github.io` URL breaks the 404 page (the build warns). |
-| `cloudflarePagesProject` | string | Optional. Cloudflare Pages project name; defaults to the site directory name. |
-| `landingTagline` | string | Old layout only. One-sentence campaign hook shown on the landing page hero |
 | `vaultPath` | string | Path to the vault directory (resolved relative to the config file) |
-| `outputDir` | string | Directory to write generated HTML into (resolved relative to the config file) |
-| `attachmentsDir` | string | Old layout only. Subfolder inside `vaultPath` that holds images (default `_attachments`) |
-| `folderMap` | object | Old layout only. Maps vault folder paths to site output paths (see below) |
-| `excludeDirs` | array | Old layout only: a vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.folders`). Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Added to `publish.exclude_dirs` in `_meta/vault-config.md` — either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively, so `"NPCs/Hidden/"`, `"./NPCs/Hidden"` and `"npcs/hidden"` all exclude the same folder. |
-| `excludeSections` | array | Old layout only: a vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.sections`). Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
-| `preserveDirs` | array | Output subdirectories to keep across builds (e.g. `["superpowers"]`) |
+
+Every other choice about the site is a setting in the vault (see
+[Where a vault keeps its settings](#where-a-vault-keeps-its-settings)).
+The five keys that used to sit here are now:
+
+| Old key | Setting |
+|---------|---------|
+| `siteUrl` | `player_site.url`: canonical base URL. For `cloudflare-pages` set it to the `.pages.dev` (or custom) URL; Cloudflare serves at the root, so a `github.io` URL breaks the 404 page (the build warns) |
+| `host` | `player_site.host`: `github-pages` (the default) or `cloudflare-pages`. Affects only the deploy step, not the built output |
+| `outputDir` | `player_site.output`: the folder the pages are written to, inside the site folder (`docs` unless set) |
+| `cloudflarePagesProject` | `player_site.cloudflare_project`: the Cloudflare Pages project name; the site folder's name unless set |
+| `preserveDirs` | `player_site.keep`: folders of the output kept across builds (e.g. `["superpowers"]`) |
+
+While a vault is still on the old settings file, or its site file still
+holds these keys, the tool reads them from the site file when the vault
+sets none, and warns that the next update moves them.
+
+### Keys an older site file may still hold
+
+A vault on the old settings file (`_meta/vault-config.md`) still reads
+these from the site file. A vault on `_meta/vault-config.yaml` does not
+read them, and `settings move` carries them across.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `siteTitle` | string | Site name shown in the nav bar and page title |
+| `landingTagline` | string | One-sentence campaign hook shown on the landing page hero |
+| `attachmentsDir` | string | Subfolder inside `vaultPath` that holds images (default `_attachments`) |
+| `folderMap` | object | Maps vault folder paths to site output paths (see below) |
+| `excludeDirs` | array | A vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.folders`). Vault subdirectories to skip entirely (e.g. `["_meta", "_Templates"]`). Added to `publish.exclude_dirs` in `_meta/vault-config.md`: either source can add to the skip list, neither shadows the other. Entries are normalized (a trailing slash, a leading `./`, backslashes, and an absolute path inside the vault are all rewritten to the same vault-relative spelling the scanner uses) and matched case-insensitively |
+| `excludeSections` | array | A vault on `_meta/vault-config.yaml` does not read it, and it stops the build there (use `player_site.hide.sections`). Section headings to strip before rendering, at any heading level (e.g. `["GM Notes"]`) |
 
 ### folderMap
 
 `folderMap` controls which vault folders become pages and where they
 appear in the output. Keys are paths relative to `vaultPath`; values
-are paths relative to `outputDir`.
+are paths relative to the output folder (`player_site.output`).
 
 ```json
 {
@@ -429,16 +511,19 @@ time for vaults that haven't run the 1.8.0 migration.
 The root `index.html` is a campaign dashboard generated from vault data.
 It includes these sections (each omitted if no relevant data exists):
 
+- **Banner** — a title, text, link and picture across the top, shown only
+  when `player_site.landing.banner.*` sets one
 - **Hero** — campaign image (from `player_site.theme.campaign_image` in
   `_meta/vault-config.yaml`), site title, last-played date, and in-game
   date (from `vault.setting_year` in the same file)
 - **Story So Far** — first paragraph of the most recent played session's
   `## Narrative Recap` section, with a link to the full session page
 - **The Team** — PC cards with portrait (or initials fallback), status
-  badge (Active / KIA / MIA), and `key_traits` or `occupation`
+  badge, and `key_traits` or `occupation`; a character whose status is in
+  `vault.statuses.out_of_play` leaves this row and is listed under
+  "In Memoriam"
 - **Key NPCs** — up to 8 NPCs scored by session mentions, relationship
-  count, and tag signals, with inferred role labels (Patron, Antagonist,
-  Companion, etc.)
+  count, and tag signals
 - **Explore** — compact grid of category index pages with entry counts,
   excluding PC and NPC categories (those have dedicated sections above)
 

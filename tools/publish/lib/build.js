@@ -30,7 +30,7 @@ const { storyLanding } = require('./templates/story-landing');
 const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
-const { hasLegacy, SITE_OLD_ROOTS } = require('./settings/legacy');
+const { SITE_OLD_ROOTS } = require('./settings/legacy');
 const { publishesPage, autoExcludeCode } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
@@ -1752,12 +1752,11 @@ function buildSite(options) {
   // says what happened and what to do, whatever else the site file holds. Not said for live
   // stats when character_sheets is off (that is the GM's own choice, and the files are removed).
   const unset = switches.unset || [];
-  const legacySite = hasLegacy(rawConfig);
-  const lost = (key, was, is, subject, them, its) => console.warn(legacySite && publishConfig.layout !== 'new'
-    ? `  WARNING: ${subject} ${was} on for this site and ${is} now off: ${nm(`player_site.features.${key}`)} is not set. Run \`migrate.py <vault>\` to keep ${them}.`
-    : `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
-  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'were', 'are', 'live stats', 'them', 'their');
-  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'was', 'is', 'the inbox', 'it', 'its');
+  // (The update does not switch such a feature on, so the line says what works now: set the switch.)
+  const lost = (key, is, subject, them, its) => console.warn(
+    `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
+  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'are', 'live stats', 'them', 'their');
+  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'is', 'the inbox', 'it', 'its');
 
   // Faults in the notes themselves: one line per code, after every other warning, and
   // nothing for a vault with none. `doctor --site` lists the same findings in full.

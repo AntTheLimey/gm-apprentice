@@ -240,7 +240,7 @@ test('a site-file hiding list that is not a list, beside the vault file\'s own l
 
 test('a site-file hiding list that is not a list, with no vault list, stops the build', async () => {
   const s = site('', { excludeSections: 'oops' });
-  await assert.rejects(capturing(() => build({ configPath: s.configPath })), (err) => HEAD.test(err.message) && err.message.includes('publish.exclude_sections'));
+  await assert.rejects(capturing(() => build({ configPath: s.configPath })), (err) => HEAD.test(err.message) && err.message.includes('excludeSections in the site folder\'s vault.config.json') && !err.message.includes('publish.exclude_sections'));
 });
 
 test('commands that only warn print the fault text alone, one plain line each, with no object', () => {

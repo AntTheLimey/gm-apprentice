@@ -78,15 +78,17 @@ describe('live stats and the inbox follow the switches', () => {
 });
 
 describe('an unmigrated site that loses live stats or the inbox is told', () => {
-  const LIVE = 'WARNING: live stats were on for this site and are now off: publish.live_stats is not set. Run `migrate.py <vault>` to keep them.';
-  const INBOX = 'WARNING: the inbox was on for this site and is now off: publish.inbox is not set. Run `migrate.py <vault>` to keep it.';
+  // The update does not switch these on, so the line says what works now: set the switch (#382). It never sends the GM to migrate.py.
+  const LIVE = 'WARNING: live stats are deployed on this site but publish.live_stats is not set, so they are off. Set publish.live_stats to true to keep them, or to false to remove their functions.';
+  const INBOX = 'WARNING: the inbox is deployed on this site but publish.inbox is not set, so it is off. Set publish.inbox to true to keep it, or to false to remove its functions.';
   const said = (lines, text) => lines.filter((l) => l.includes(text)).length;
   const deployed = { wrangler: true, functions: true };
 
-  it('old settings left, both switches unset, backend deployed: one warning each', () => {
+  it('old settings left, both switches unset, backend deployed: one warning each, none sending the GM to migrate.py', () => {
     const { lines, html } = buildSite({ ...deployed, siteExtra: { siteTitle: 'Old' } });
     assert.strictEqual(said(lines, LIVE), 1, lines.join('\n'));
     assert.strictEqual(said(lines, INBOX), 1, lines.join('\n'));
+    assert.ok(!lines.some((l) => l.includes('migrate.py') && /live stats|inbox/.test(l)), lines.join('\n'));
     assert.ok(!html.includes('gurps-live.js'), 'unset still means off');
   });
 
@@ -179,10 +181,12 @@ describe('the closing line about campaign settings left in vault.config.json', (
     }
   });
 
-  it('a site-file hiding list that is not a list stops the build, naming the setting once', () => {
+  it('a site-file hiding list that is not a list stops the build, naming the site file\'s key once (#373)', () => {
     assert.throws(() => buildSite({ siteExtra: { excludeSections: 'Keeper Only' } }), (err) => {
       assert.match(err.message, /^build stopped: the settings have a fault that could show players more than you meant\./);
-      assert.strictEqual(err.message.split('publish.exclude_sections').length - 1, 1, err.message);
+      assert.strictEqual(err.message.split('excludeSections').length - 1, 1, err.message);
+      assert.match(err.message, /excludeSections in the site folder's vault\.config\.json is "Keeper Only"/);
+      assert.ok(!err.message.includes('publish.exclude_sections'), err.message);
       return true;
     });
   });

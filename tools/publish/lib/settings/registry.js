@@ -498,7 +498,7 @@ const REGISTRY = [
   },
 
   // Lists and pictures
-  { name: 'player_site.images',was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
+  { name: 'player_site.images', was: [{ name: 'publish.images', in: 'vault' }, { name: 'images', in: 'site' }], type: 'map', container: true, legacyKind: 'map', legacyMerge: 'perKey' },
   {
     name: 'player_site.images.optimize', was: [{ name: 'publish.images.optimize', in: 'vault' }], type: 'switch', default: false, group: 'lists',
     does: 'Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size',

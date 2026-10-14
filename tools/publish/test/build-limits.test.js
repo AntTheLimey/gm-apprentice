@@ -115,6 +115,17 @@ test('extractRecap and extractRecapHtml: the default cuts at 500 characters at a
   assert.equal(extractRecap(recapPage('A short recap.'), OLD_LIMITS.recap_chars), 'A short recap.');
 });
 
+// The value is always passed in. A caller that forgets it is a mistake in the code, so it stops with a plain error
+// instead of quietly using a number or words of its own.
+test('extractRecap, extractRecapHtml and gmAliasRewriter throw when the setting is not passed', () => {
+  const { gmAliasRewriter } = require('../lib/processor');
+  assert.throws(() => extractRecap(recapPage('Some text.')), /recap length/);
+  assert.throws(() => extractRecapHtml(recapPage('Some text.')), /recap length/);
+  assert.throws(() => extractRecap(recapPage('Some text.'), 0), /recap length/);
+  assert.throws(() => gmAliasRewriter([]), /withheld_words/);
+  assert.throws(() => gmAliasRewriter([], [], undefined, { person: 'a' }), /withheld_words/);
+});
+
 const npcPage = (frontmatter, body = '') => ({ title: 'Hallam', displayTitle: 'Hallam', outputPath: 'x/hallam.html', frontmatter: { type: 'npc', ...frontmatter }, publishedMarkdown: body, markdown: body });
 const CARD_CTX = { imageMap: {}, excludeSections: [], limits: OLD_LIMITS, headerFacts: ['occupation', 'age', 'nationality'] };
 
@@ -208,6 +219,25 @@ test('recap_chars: nothing set cuts the landing recap at 500 characters; 80 cuts
   const short = recapIn(site({ limits: { recap_chars: 80 } }, files).read('index.html')).replace(/<[^>]+>/g, '').trim();
   assert.ok(short.endsWith('…') && short.length <= 81 && short.length > 50, short);
   assert.ok(/(crew|rowed|out|past|the|breakwater|and|talked|about|cargo|until|lamps|went|cargo)…$/.test(short), short);
+});
+
+// The session hub page shows the recap opening too, cut at the same length. Setting 80 must cut it at 80 there, so a
+// hardcoded 500 in build.js's call for the hub fails here.
+test('recap_chars: the session hub page cuts the Wrap-Up recap at the setting, not at 500', () => {
+  const files = {
+    'Sessions/S1.md': '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[S1 Wrap Up]]"\n---\n\n# Session 1\n\nPrep notes.\n',
+    'Sessions/S1 Wrap Up.md': `---\ntype: session_wrap\nsession: "[[S1]]"\nsession_number: 1\n---\n\n# S1 Wrap-Up\n\n## Narrative Recap\n\n${LONG_RECAP}\n`,
+  };
+  const hubRecap = (settings) => {
+    const html = site(settings, files).read('sessions', 's1.html');
+    const found = /<div class="recap session-recap"><p>([\s\S]*?)<\/p>/.exec(html);
+    assert.ok(found, 'the hub page shows a recap opening');
+    return found[1];
+  };
+  const plain = hubRecap({});
+  assert.ok(plain.endsWith('…') && plain.length <= 501 && plain.length > 450, String(plain.length));
+  const short = hubRecap({ limits: { recap_chars: 80 } });
+  assert.ok(short.endsWith('…') && short.length <= 81 && short.length > 50, short);
 });
 
 test('card_facts and the card_* lengths: nothing set gives three facts; 1 gives one; 0 gives none; the lengths cut', () => {

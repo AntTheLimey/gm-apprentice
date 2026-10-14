@@ -2,6 +2,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const { getLatestSession, getLatestWrapUp, extractRecap, extractRecapHtml, getInitials, getPCs, getRecentEvents, getExploreDescriptions } = require('../../lib/templates/landing-data');
 const { pairHubs } = require('../../lib/session-hub');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 
 describe('getLatestSession', () => {
   it('returns the most recent played session by session_number', () => {
@@ -65,7 +66,7 @@ describe('getLatestWrapUp', () => {
   // The build hands the landing its hub -> Wrap-Up map (session-hub.js pairHubs); the
   // landing never pairs on its own.
   const latest = (pages, s) => getLatestWrapUp(pages, s,
-    s ? pairHubs(pages.concat([s]), pages.concat([s]), { allNotes: [] }) : new Map());
+    s ? pairHubs(pages.concat([s]), pages.concat([s]), { allNotes: [], withheldWords: WORDS }) : new Map());
   const session = { title: 'Session 05', frontmatter: { type: 'session', session_number: 5 } };
 
   it('matches wrap-up by session_number', () => {
@@ -136,7 +137,7 @@ describe('getLatestWrapUp', () => {
     const ch1Wrap = { title: 'Ch1 Wrap', sourcePath: '/v/Ch1/Ch1 Wrap.md', vaultPath: 'Ch1/Ch1 Wrap', frontmatter: { type: 'session_wrap', session: '[[Session 01]]', session_number: 1 } };
     const ch2Hub = { title: 'Session 01', sourcePath: '/v/Ch2/Session 01.md', vaultPath: 'Ch2/Session 01', frontmatter: { type: 'session', session_number: 1 } };
     const published = [ch1Wrap, ch2Hub];
-    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], published, { allNotes: [] });
+    const pairs = pairHubs([ch1Hub, ch1Wrap, ch2Hub], published, { allNotes: [], withheldWords: WORDS });
     assert.strictEqual(getLatestWrapUp(published, ch2Hub, pairs), null);
   });
 

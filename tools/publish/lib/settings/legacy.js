@@ -317,7 +317,8 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, cor
     }
     // Read from the merged value, but a fault shows the value as the site file wrote it (as it always did).
     const first = set[0].origin === 'site-file' && e.json ? { ...set[0], shown: site[e.json] } : set[0];
-    const r = settle(c, e, { written: e.name, setting: e.setting }, first, defaultOf);
+    // A value the site file holds is named as that file writes it (#373).
+    const r = settle(c, e, { written: first.origin === 'site-file' && e.json ? e.json : e.name, setting: e.setting }, first, defaultOf);
     // The merge can hide a vault value the type cannot read behind the site file's list.
     if (r.ok && (e.jsonMerge === 'union' || e.jsonMerge === 'stricter')) {
       const vr = getPath(mergeVault, sansBlock(e.name).split('.'));

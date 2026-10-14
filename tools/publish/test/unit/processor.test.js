@@ -712,11 +712,11 @@ describe('isWithheld (the gm_only vectors; vaultlib.is_withheld must agree)', ()
     assert.strictEqual(fm.relationships[1].target, `[[Lord Zorn|${withheldPlaceholder('npc')}]]`);
   });
   it('a vault with no withheld note and no gm_aliases has no rewriter', () => {
-    assert.strictEqual(gmAliasRewriter([{ title: 'A', frontmatter: { type: 'npc', withheld: false } }], []), null);
+    assert.strictEqual(gmAliasRewriter([{ title: 'A', frontmatter: { type: 'npc', withheld: false } }], [], undefined, WORDS), null);
   });
   it('a name a published page answers to is not rewritten', () => {
     const pages = [{ title: 'Lord_Zorn', displayTitle: 'Lord Zorn', frontmatter: { withheld: true } }];
-    assert.strictEqual(gmAliasRewriter(pages, pages), null);
+    assert.strictEqual(gmAliasRewriter(pages, pages, undefined, WORDS), null);
   });
 });
 

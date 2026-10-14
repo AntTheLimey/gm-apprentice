@@ -279,10 +279,12 @@ async function runUpdatePin(options, deps) {
       desired, changed: false, ok: true,
     }, 0);
   }
-  if (!String(spec).startsWith('file:')) {
-    // A registry or git spec is somebody's deliberate choice; rewriting it to a
+  // A release tarball (`update-pin --tag` vendors one) is a `file:` spec too, but it is not a plugin path.
+  const isTarball = /\.(?:tgz|tar\.gz)$/i.test(String(spec));
+  if (!String(spec).startsWith('file:') || isTarball) {
+    // A registry or git spec, or a vendored release tarball, is somebody's deliberate choice; rewriting it to a
     // local cache path would break their install on the next `npm ci`.
-    if (!asJson) out(`pinned to ${spec}, not a plugin-cache path — leave it alone`);
+    if (!asJson) out(`pinned to ${spec}, ${isTarball ? 'a release tarball, ' : ''}not a plugin-cache path — leave it alone`);
     const installedNow = readInstalled();
     return report({
       pinnedBefore: null, pinnedAfter: null, installedBefore: installedNow, installedAfter: installedNow,

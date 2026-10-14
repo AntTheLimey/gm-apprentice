@@ -3,10 +3,11 @@ const assert = require('node:assert');
 const { entry } = require('../../lib/settings');
 const { findRecap, publishedOf, buildWrapUpIndex, resolveUnitRecap, buildStorySpine: spineWith, unitRefs, characterStoryGroup } = require('../../lib/story-spine');
 const { pairHubs } = require('../../lib/session-hub');
+const WORDS = require('../helpers/settings-files').defaultWithheldWords();
 
 // The build pairs once (session-hub.js pairHubs) and hands the Saga the map; the Saga never
 // pairs on its own.
-const buildStorySpine = (pages, linkMap) => spineWith(pages, linkMap, pairHubs(pages, pages, { allNotes: [] }));
+const buildStorySpine = (pages, linkMap) => spineWith(pages, linkMap, pairHubs(pages, pages, { allNotes: [], withheldWords: WORDS }));
 
 describe('findRecap', () => {
   it('extracts the Narrative Recap H2 section as HTML', () => {
