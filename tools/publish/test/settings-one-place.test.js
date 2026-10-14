@@ -219,6 +219,20 @@ test('the out-of-play words are not restated', () => {
 // and nothing else, apart from config.js, which maps what an older site file still holds (SITE_KEYS) onto the
 // settings. So: no `rawConfig.<key>`, and no file reads one of the keys off what loadVaultConfig returned.
 const SITE_FOLDER_KEYS = ['siteUrl', 'host', 'outputDir', 'cloudflarePagesProject', 'preserveDirs'];
+// A destructure: `const { outputDir } = loadVaultConfig(p)` or `= rawConfig` (or a name bound to one); the keys named in the
+// braces are reads.
+function destructuredKeys(src, vars) {
+  const from = `(?:[^;\\n]*\\bloadVaultConfig\\(|(?:${[...vars].join('|')})\\s*[;\\n)])`;
+  const keys = [];
+  for (const m of src.matchAll(new RegExp(`\\{([^{}]*)\\}\\s*=\\s*${from}`, 'g'))) {
+    for (const part of m[1].split(',')) {
+      const key = part.trim().split(/[:=\s]/)[0];
+      if (key) keys.push(key);
+    }
+  }
+  return keys;
+}
+
 // Every loadVaultConfig call in lib/ and bin/ -> the names its result is kept in, and the properties read off them.
 function loadVaultConfigReads() {
   const calls = [];
@@ -237,20 +251,28 @@ function loadVaultConfigReads() {
         for (const m of src.matchAll(new RegExp(`\\b(?:const|let|var)\\s+(\\w+)\\s*=\\s*${v}\\s*[;,)\\n]`, 'g'))) if (!vars.has(m[1])) { vars.add(m[1]); grew = true; }
       }
     }
-    // A destructure: `const { outputDir } = loadVaultConfig(p)` or `= rawConfig`; the keys named in the braces are reads.
-    const from = `(?:[^;\\n]*\\bloadVaultConfig\\(|(?:${[...vars].join('|')})\\s*[;\\n)])`;
-    for (const m of src.matchAll(new RegExp(`\\{([^{}]*)\\}\\s*=\\s*${from}`, 'g'))) {
-      for (const part of m[1].split(',')) {
-        const key = part.trim().split(/[:=\\s]/)[0];
-        if (key) calls.push({ file: rel(f), variable: '(destructured)', prop: key });
-      }
-    }
+    for (const key of destructuredKeys(src, vars)) calls.push({ file: rel(f), variable: '(destructured)', prop: key });
     for (const v of vars) {
       for (const m of src.matchAll(new RegExp(`(?<![\\w.'"/-])${v}(?:\\?\\.|\\.|\\[\\s*['"])(\\w+)`, 'g'))) calls.push({ file: rel(f), variable: v, prop: m[1] });
     }
   }
   return calls;
 }
+
+// The destructure scan, on sample source: each way of naming a site-folder key is read as that key, whole.
+test('the destructure scan reads whole key names', () => {
+  const cases = [
+    ['const { siteUrl } = rawConfig;', ['siteUrl']],
+    ['const { host } = rawConfig;', ['host']],
+    ['const { siteUrl } = loadVaultConfig(p);', ['siteUrl']],
+    ['const { siteUrl: s } = loadVaultConfig(p);', ['siteUrl']],
+    ['const { vaultPath, outputDir = \'docs\', preserveDirs } = loadVaultConfig(p);', ['vaultPath', 'outputDir', 'preserveDirs']],
+    ['const { cloudflarePagesProject } = alias;', ['cloudflarePagesProject']],
+    ['const { siteUrl } = somethingElse;', []],
+  ];
+  for (const [src, want] of cases) assert.deepEqual(destructuredKeys(src, new Set(['rawConfig', 'alias'])), want, src);
+  assert.ok(SITE_FOLDER_KEYS.every((k) => destructuredKeys(`const { ${k} } = rawConfig;`, new Set(['rawConfig'])).includes(k)));
+});
 
 test('no code reads a site-folder key off the site file', () => {
   const raw = [];
