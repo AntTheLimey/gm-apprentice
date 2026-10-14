@@ -1191,7 +1191,10 @@ function buildSite(options) {
         if (systemOut.warnings && systemOut.warnings.length && !(sheetless && !sheetExpected)) {
           fx.warn(page.outputPath, systemOut.warnings);
         }
-        if (systemOut.tohitRows && systemOut.tohitRows.length) fx.tohitRows.push({ rel: vaultRelPathOf(page), rows: systemOut.tohitRows });
+        // A dead or retired PC's calculator is used by no one: its rows are not reported.
+        if (systemOut.tohitRows && systemOut.tohitRows.length && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
+          fx.tohitRows.push({ rel: vaultRelPathOf(page), rows: systemOut.tohitRows });
+        }
         // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
         // off the roster's Party Status board (#265).
         if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {

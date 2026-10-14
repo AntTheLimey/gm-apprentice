@@ -74,9 +74,22 @@ test('the to-hit calculator on a phone, in a real browser', (t) => {
 <iframe width="375" height="900" src="${page}"></iframe><iframe width="340" height="900" src="${page}"></iframe>
 <pre id="out"></pre><script>${PROBE}</script></body>`);
   const profile = fs.mkdtempSync(path.join(os.tmpdir(), 'tohit-chrome-'));
-  const dom = execFileSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--allow-file-access-from-files',
-    `--user-data-dir=${profile}`, '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
-    'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')], { encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'ignore'] });
+  let dom;
+  try {
+    // Chrome can exit non-zero on its way out under load after it has printed the page: what
+    // counts is the measurements in the printed page.
+    try {
+      dom = execFileSync(chrome, ['--headless=new', '--disable-gpu', '--no-sandbox', '--no-first-run', '--allow-file-access-from-files',
+        `--user-data-dir=${profile}`, '--window-size=900,1000', '--virtual-time-budget=10000', '--dump-dom',
+        'file://' + path.join(out, 'probe.html').replace(/\\/g, '/').replace(/^(?=[A-Za-z]:)/, '/')], { encoding: 'utf8', timeout: 60000, stdio: ['ignore', 'pipe', 'ignore'] });
+    } catch (e) {
+      if (!e.stdout) throw e;
+      dom = String(e.stdout);
+    }
+  } finally {
+    fs.rmSync(profile, { recursive: true, force: true });
+    fs.rmSync(path.dirname(out), { recursive: true, force: true, maxRetries: 3 });
+  }
   const m = /<pre id="out">([^<]*)<\/pre>/.exec(dom);
   assert.ok(m && m[1], 'the probe wrote its measurements');
   const got = JSON.parse(m[1].replace(/&quot;/g, '"').replace(/&amp;/g, '&'));

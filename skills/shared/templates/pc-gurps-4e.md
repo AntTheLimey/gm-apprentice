@@ -154,9 +154,11 @@ Top 5 multi-step combat sequences for quick reference.
      bare number, an attribute (`DX-12`) or a technique name, and nothing
      after the level: a comment goes in Notes. One attack per row. A row for
      a technique (Kicking, Choke Hold) is needed only for its own damage or
-     reach, and then names the parent skill. In Advantages, Off-Hand Weapon
-     Training names the skill (`(Axe/Mace)`) and Weapon Bond names the
-     weapon as its row here does.
+     reach, and then names the parent skill at the technique's level.
+     Off-Hand Weapon Training is a technique (B232): list it in Techniques,
+     named for the skill, `Off-Hand Weapon Training (Axe/Mace)`, Default
+     `Axe/Mace-4`. Weapon Bond, in Advantages, names the weapon as its row
+     here does.
      Notes: the weapon's own bonuses, one per `;`, a name and a signed
      number: `Weapon Bond +1; Balanced +1`. The Skill cell's level
      includes them. -->

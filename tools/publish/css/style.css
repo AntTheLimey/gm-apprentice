@@ -18,6 +18,7 @@
   --text: #c9d1d9;
   --text-muted: #8b949e;
   --accent: #58a6ff;
+  --accent-on-header: var(--accent);   /* the accent on the dark header and hero (a preset sets its own) */
   --accent-dim: rgba(88, 166, 255, 0.15);
   --border: #30363d;
   --danger: #f85149;
@@ -97,7 +98,7 @@ img {
   margin-right: 2rem;
 }
 .nav-brand:hover {
-  color: var(--accent);
+  color: var(--accent-on-header);
   text-decoration: none;
 }
 
@@ -131,7 +132,7 @@ img {
 .nav-group-toggle:hover,
 .nav-group.open .nav-group-toggle {
   color: var(--text-on-header, var(--text));
-  border-bottom-color: var(--accent);
+  border-bottom-color: var(--accent-on-header);
 }
 
 .nav-dropdown {
@@ -160,7 +161,7 @@ img {
 }
 .nav-dropdown a:hover {
   background: var(--accent-dim);
-  color: var(--accent);
+  color: var(--accent-on-header);
   text-decoration: none;
 }
 
@@ -177,7 +178,7 @@ img {
   display: none;
 }
 .nav-search-btn:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-on-header);
   color: var(--text-on-header, var(--text));
 }
 
@@ -216,7 +217,7 @@ img {
   right: 1rem;
 }
 .mobile-nav-overlay h3 {
-  color: var(--accent);
+  color: var(--accent-on-header);
   font-size: 0.8rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
@@ -242,7 +243,7 @@ img {
   align-items: center;
 }
 .mobile-nav-overlay li a:hover {
-  color: var(--accent);
+  color: var(--accent-on-header);
   text-decoration: none;
 }
 .mobile-nav-search {
@@ -266,7 +267,7 @@ img {
   display: none;
 }
 .nav-color-mode-btn:hover {
-  border-color: var(--accent);
+  border-color: var(--accent-on-header);
   color: var(--text-on-header, var(--text));
 }
 .mobile-color-mode-btn {
@@ -305,7 +306,7 @@ img {
 }
 .nav-search-icon-btn:hover,
 .nav-search-icon-btn[aria-expanded="true"] {
-  color: var(--accent);
+  color: var(--accent-on-header);
 }
 .nav-search-icon-btn + .nav-mobile-toggle { margin-left: 0.25rem; }
 
@@ -414,7 +415,7 @@ h3 {
   opacity: 0.9;
 }
 .hero-banner .meta .label {
-  color: var(--accent);
+  color: var(--accent-on-header);
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -466,7 +467,7 @@ h3 {
   color: var(--text-muted);
 }
 .hero-cinematic-overlay .meta .label {
-  color: var(--accent);
+  color: var(--accent-on-header);
   font-weight: 600;
 }
 .hero-cinematic-no-img {
@@ -1108,7 +1109,7 @@ a.landing-banner:focus-visible {
 .landing-hero h1 {
   font-size: 2rem;
   margin-bottom: 0.5rem;
-  color: var(--accent);
+  color: var(--accent-on-header);
 }
 .landing-hero .hero-tagline {
   font-size: 1.1rem;
@@ -1130,7 +1131,7 @@ a.landing-banner:focus-visible {
   font-size: 0.7rem;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--accent);
+  color: var(--accent-on-header);
 }
 
 /* Dashboard sections */

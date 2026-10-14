@@ -17,7 +17,8 @@
 //   WITHHELD_FLAG_UNREADABLE  a `withheld:` value that is not true or false (read as false)
 //   TOHIT_UNREAD    a row of a GURPS PC sheet the to-hit calculator cannot fully read, with
 //                   why and the fix (the calculator's own words, from tohit-data.js); a row
-//                   it reads but whose numbers do not add up is information
+//                   it reads but that is written another way, or whose numbers do not add
+//                   up, is information
 //
 // Nothing here reads a page a second way, and nothing here knows which field a template
 // prints. The names are decided by the page as the build makes it: every link to a note

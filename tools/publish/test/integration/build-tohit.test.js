@@ -104,3 +104,22 @@ test('a row the calculator cannot read is a finding, with a summary line', () =>
   assert.ok(mine.some((f) => f.path === 'Characters/PCs/Test_Hero.md' && /SIG-Sauer P226 \(9mm\)".*names the attribute DX/.test(f.detail) && /default level/.test(f.fix)), JSON.stringify(mine));
   assert.ok(lines.some((l) => /rows? of (a )?PC sheets? (is|are) not fully read by the to-hit calculator \(Test_Hero \d+\) — campaign-qa's Site Faults check fixes/.test(l)), lines.join('\n'));
 });
+
+test('a PC out of play has no rows reported', () => {
+  const body = RONNIE.replace(/\| SIG-Sauer P226 \(9mm\) \| [^|]*\|/, '| SIG-Sauer P226 (9mm) | DX-12 (default) |');
+  let faults = null;
+  quiet(() => buildPc('gurps-4e', body, [], { onNoteFaults: (f) => { faults = f; } }, { status: 'dead' }));
+  assert.deepStrictEqual(faults.filter((f) => f.code === 'TOHIT_UNREAD'), []);
+});
+
+test('doctor --site --json lists the rows with their fix', () => {
+  const { execFileSync } = require('child_process');
+  const body = RONNIE.replace(/\| SIG-Sauer P226 \(9mm\) \| [^|]*\|/, '| SIG-Sauer P226 (9mm) | DX-12 (default) |');
+  const { root } = quiet(() => buildPc('gurps-4e', body));
+  const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+  let out;
+  try { out = execFileSync(process.execPath, [bin, 'doctor', '--site', '--json', '--config', path.join(root, 'config.json')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { out = e.stdout; }
+  const report = JSON.parse(out);
+  const rows = (report.findings || []).filter((f) => f.code === 'TOHIT_UNREAD');
+  assert.ok(rows.some((f) => f.severity === 'warning' && f.path === 'Characters/PCs/Test_Hero.md' && /names the attribute DX/.test(f.detail) && /default level/.test(f.fix)), out);
+});

@@ -202,7 +202,7 @@ describe('buildTohitData: advantages', () => {
     assert.strictEqual(traits('Night Vision 5').nightVision, 5);
   });
   it('a character with none of them gets neutral values', () => {
-    assert.deepStrictEqual(traits('Luck'), { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0, weaponBond: [] });
+    assert.deepStrictEqual(traits('Luck'), { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 });
   });
   it('Ambidexterity, Off-Hand Weapon Training, Weapon Master, Trained by a Master', () => {
     assert.strictEqual(traits('Ambidexterity').ambidextrous, true);
@@ -761,10 +761,10 @@ describe('rows written another way, and the report of what is not read', () => {
     ] });
     assert.deepStrictEqual(d.techniques.other, []);
   });
-  it('#357: Weapon Bond is read from the advantages and named among the row\'s bonuses', () => {
-    const { d, report } = build({ skills, melee: [meleeRow({ weapon: 'Vibro-Axe', skill: 'Axe/Mace-19' })], advantages: ['Weapon Bond (Vibro-Axe)'] });
-    assert.deepStrictEqual(d.traits.weaponBond, [d.weapons[0].id]);
-    assert.deepStrictEqual(d.weapons[0].bonuses, [{ name: 'Weapon Bond', bonus: 1 }]);
+  it('#357: Weapon Bond is read from the advantages and named among the bonuses of every row of the weapon', () => {
+    const { d, report } = build({ skills, advantages: ['Weapon Bond (Vibro-Axe)'], melee: [
+      meleeRow({ weapon: 'Vibro-Axe (swing)', skill: 'Axe/Mace-19' }), meleeRow({ weapon: 'Vibro-Axe (thrust)', skill: 'Axe/Mace-19' })] });
+    assert.deepStrictEqual(d.weapons.map(w => w.bonuses), [[{ name: 'Weapon Bond', bonus: 1 }], [{ name: 'Weapon Bond', bonus: 1 }]]);
     assert.deepStrictEqual(report, []);
   });
   it('#394: a level above the skill by more than the named bonuses is said, as information', () => {
@@ -775,7 +775,8 @@ describe('rows written another way, and the report of what is not read', () => {
     const m = model({ skills, ranged: [pistol] });
     m.equipment.loadouts = [{ name: 'Field', items: [{ name: 'Smartgun link', notes: '+1 Acc' }] }];
     const d = buildTohitData(m, META);
-    assert.deepStrictEqual(d.aids.map(a => [a.name, a.bonus]), [['Smartgun', 1]]);
+    // A load-out is not carried until it is switched on: its aid starts off.
+    assert.deepStrictEqual(d.aids.map(a => [a.name, a.bonus, a.on]), [['Smartgun', 1, false]]);
   });
   it('#357: "HUD link, -1", "+2 scope", and fixed only beside the aid', () => {
     assert.deepStrictEqual(one({ notes: 'HUD link, -1' }).aids.map(a => [a.name, a.bonus]), [['HUD link', -1]]);
@@ -785,5 +786,68 @@ describe('rows written another way, and the report of what is not read', () => {
     assert.strictEqual(one({ notes: 'Scope +3 Acc, laser sight on a fixed mount' }).aids[0].fixed, false);
     assert.strictEqual(one({ acc: '6+3 fixed' }).aids[0].fixed, true);
     assert.strictEqual(one({ acc: '6+3' }).aids[0].fixed, false);
+  });
+});
+
+// The reviews of the branch: sheets as they are really written.
+describe('techniques and rows as real sheets write them', () => {
+  const build = (parts) => { const report = []; const d = buildTohitData(model(parts), META, report); return { d, report }; };
+  const pistol = rangedRow({ weapon: 'Blaster pistol', skill: 'Beam Weapons (Pistol)-17' });
+  it('a technique of a skill that is not a fighting skill, or one that is not an attack, is neither offered nor warned about', () => {
+    const { d, report } = build({ skills: [['Beam Weapons (Pistol)', '17'], ['Judo', '12'], ['Acrobatics', '14'], ['Lockpicking', '13'], ['Driving (Automobile)', '11']], ranged: [pistol], techniques: [
+      { name: 'Breakfall (Acrobatics)', def: 'Acrobatics-0', level: '14' },
+      { name: 'Work by Touch (Lockpicking)', def: 'Lockpicking-5', level: '10' },
+      { name: 'Combat Driving (Automobile)', def: 'Driving (Automobile)', level: '11' },
+      { name: 'Set Trap (Explosives/Demolition)', def: 'Explosives (Demolition)-2', level: '12' },
+      { name: 'Forced Entry', def: 'DX+0', level: '13' },
+      { name: 'Breakfall (Judo)', def: 'Judo', level: '12' },
+    ] });
+    assert.deepStrictEqual(d.weapons.map(w => w.key), ['Blaster pistol']);
+    assert.deepStrictEqual(report, []);
+  });
+  it('a weapon row whose skill is a default in the Techniques table keeps that skill, at that level', () => {
+    const { d, report } = build({ skills: [['Guns (Rifle)', '15']], ranged: [rangedRow({ weapon: 'MP7', skill: 'Guns (SMG) 13' })], techniques: [
+      { name: 'Guns (SMG)', def: 'Guns (Rifle)-2', level: '13' },
+      { name: 'Targeted Attack (Guns (Rifle)/Vitals)', def: 'Guns (Rifle)-3', level: '14' },
+    ] });
+    const w = d.weapons.find(x => x.key === 'MP7');
+    assert.deepStrictEqual([w.skill, w.base, w.technique], ['Guns (SMG)', 13, undefined]);
+    assert.ok(report.some(r => r.severity === 'info' && /add Guns \(SMG\) to the Skills table at 13/.test(r.fix)), JSON.stringify(report));
+  });
+  it('Off-Hand Weapon Training as a technique (B232) buys off the off-hand penalty a point a level', () => {
+    const { d, report } = build({ skills: [['Axe/Mace', '18'], ['Knife', '14']], melee: [meleeRow({ weapon: 'Vibro-Axe', skill: 'Axe/Mace-18' }), meleeRow({ weapon: 'Dagger', skill: 'Knife-14' })], techniques: [
+      { name: 'Off-Hand Weapon Training (Axe/Mace)', def: 'Axe/Mace-4', level: '16' },
+      { name: 'Off-Hand Weapon Training (Dagger)', def: 'Knife-4', level: '14' },
+    ] });
+    assert.deepStrictEqual(d.techniques.offHand, { 'Axe/Mace': 2, Knife: 4 });
+    assert.deepStrictEqual(d.techniques.other, []);
+    assert.deepStrictEqual(report, []);
+  });
+  it('Off-Hand Weapon Training for a weapon with a bare-number Skill cell is warned, not read as every bare row', () => {
+    const { d, report } = build({ skills: [['Axe/Mace', '18']], melee: [meleeRow({ weapon: 'Knee', skill: '12' })], advantages: ['Off-Hand Weapon Training (Knee)'] });
+    assert.deepStrictEqual(d.traits.offHand, []);
+    assert.ok(report.some(r => /Off-Hand Weapon Training \(Knee\)/.test(r.detail)));
+  });
+  it('with Ambidexterity an Off-Hand Weapon Training that finds nothing is not warned about', () => {
+    const { report } = build({ skills: [['Axe/Mace', '18']], melee: [meleeRow()], advantages: ['Ambidexterity', 'Off-Hand Weapon Training (Flail)'] });
+    assert.deepStrictEqual(report, []);
+  });
+  it('Knife (12) is a level the sheet wraps: no warning', () => {
+    const { d, report } = build({ skills: [['Knife', '12']], melee: [meleeRow({ weapon: 'Knife', skill: 'Knife (12)' })] });
+    assert.deepStrictEqual([d.weapons[0].level, d.weapons[0].shown], [12, 12]);
+    assert.deepStrictEqual(report, []);
+  });
+  it('a comment after a comma or semicolon is not an attack', () => {
+    assert.strictEqual(one({ skill: 'Beam Weapons (Pistol)-15; incl. +1 Weapon Bond' }).level, 15);
+    assert.strictEqual(one({ skill: 'Beam Weapons (Pistol)-14, 15 with scope' }).level, 14);
+  });
+  it('an unarmed kick written as a default (DX-2) is warned: the 2 is not its level', () => {
+    const { report } = build({ skills: [['Axe/Mace', '18']], melee: [meleeRow({ weapon: 'Kick', skill: 'DX-2' })] });
+    assert.ok(report.some(r => /gives a default, not the level/.test(r.detail)), JSON.stringify(report));
+  });
+  it('a row split by a | in a link is said as that', () => {
+    const { d, report } = build({ skills: [['Beam Weapons (Pistol)', '17']], ranged: [pistol, rangedRow({ weapon: '**[[Grazer Pistol', skill: 'Grazer pistol]] (alien)**' })] });
+    assert.deepStrictEqual(d.weapons.map(w => w.key), ['Blaster pistol']);
+    assert.ok(report.some(r => /is split: a link in its Weapon cell holds a \|/.test(r.detail)), JSON.stringify(report));
   });
 });

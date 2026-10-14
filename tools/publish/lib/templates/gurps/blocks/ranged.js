@@ -1,14 +1,15 @@
 const { escapeHtml } = require('../../../processor');
 const { wide } = require('../render');
+const { levelAtEnd } = require('../weapon-level');
 
 function renderRanged(model) {
   const attacks = model.ranged || [];
   if (attacks.length === 0) return null;
   const rows = attacks.map(a => {
     const skill = String(a.skill || '');
-    const sm = skill.match(/^(.*?)(\d+)(\s*)$/);   // wrap the TRAILING number (current skill level / default)
+    const sm = levelAtEnd(skill);   // wrap the level the cell ends with (weapon-level.js)
     const skillHtml = sm
-      ? `${escapeHtml(sm[1])}<span class="wp-tohit">${escapeHtml(sm[2])}</span>${escapeHtml(sm[3])}`
+      ? `${escapeHtml(sm.before)}<span class="wp-tohit">${escapeHtml(sm.level)}</span>${escapeHtml(sm.after)}`
       : escapeHtml(skill);
     return `<tr data-weapon-key="${escapeHtml(a.weapon || '')}"><td class="nm">${escapeHtml(a.weapon || '')}</td>` +
       `<td class="num">${skillHtml}</td>` +

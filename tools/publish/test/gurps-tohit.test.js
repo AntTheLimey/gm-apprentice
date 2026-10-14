@@ -1056,3 +1056,18 @@ describe('older saved ticks and rows named by a technique', () => {
     assert.deepStrictEqual(r.included, { amount: 2, over: 'Choke Hold 16', names: ['Weapon Bond'] });
   });
 });
+
+// Off-Hand Weapon Training as a technique (B232): a point a level off the -4.
+describe('the off-hand technique', () => {
+  it('buys off part of the -4, or all of it', () => {
+    const d = mk();
+    d.techniques.offHand = { Knife: 2 };
+    const part = T.effective(d, { weapon: 'Knife', offhand: true });
+    assert.strictEqual(part.roll, 12);
+    assert.ok(part.lines.some((l) => l.label === 'Off hand (technique +2)' && l.value === -2));
+    d.techniques.offHand = { Knife: 4 };
+    const all = T.effective(d, { weapon: 'Knife', offhand: true });
+    assert.strictEqual(all.roll, 14);
+    assert.ok(all.notes.some((n) => /no off-hand penalty/.test(n)));
+  });
+});

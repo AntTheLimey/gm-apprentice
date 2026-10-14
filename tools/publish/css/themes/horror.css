@@ -13,6 +13,7 @@
   --text-on-header: #d4c5a9;
   --text-muted-on-header: #928671;
   --accent: #c9a55a;
+  --accent-on-header: #c9a55a;
   --accent-dim: rgba(201, 165, 90, 0.12);
   --border: #3a3020;
   --danger: #c0392b;
@@ -31,6 +32,9 @@
     --text: #2a2018;
     --text-muted: #6b5e4a;
     --accent: #896714;
+    /* the header and hero stay dark in the light palette: the bright accent reads there */
+    --accent-on-header: #c9a55a;
+    --text-muted-on-header: #958a75;
     --accent-dim: rgba(139, 105, 20, 0.08);
     --border: #d4c5a9;
     --danger: #c0392b;

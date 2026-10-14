@@ -61,6 +61,7 @@
   const DUAL_FOE = -1;
   const DUAL_BOUGHT_MAX = 4;          // the technique buys off at most the -4 (MA83, B230)
   const OFF_HAND = -4;                // none with Ambidexterity (B39) or Off-Hand Weapon Training (B232); B417, B547
+  const OFF_HAND_BOUGHT_MAX = 4;      // the technique buys off at most the -4 (B232)
   const BAD_FOOTING = -2;             // -2 or worse at the GM's option (B547)
   const SHOCK_MAX = 4;                // shock is at most -4 (B419)
   const TOTAL_DARKNESS = -10;         // darkness is -1 to -9, total darkness -10 (B358); Night Vision
@@ -341,7 +342,13 @@
       const offList = Array.isArray(traits.offHand) ? traits.offHand : [];
       if (traits.ambidextrous === true) notes.push('Ambidexterity: no off-hand penalty.');
       else if (offHand(offList, skill)) notes.push('Off-Hand Weapon Training for this skill: no off-hand penalty.');
-      else add('attack', 'Off hand', OFF_HAND);
+      else {
+        // The technique (B232) buys the -4 off a point a level.
+        const offMap = isObj(data.techniques) && isObj(data.techniques.offHand) ? data.techniques.offHand : {};
+        const bought = int(offMap[skill], 0, OFF_HAND_BOUGHT_MAX);
+        if (bought >= OFF_HAND_BOUGHT_MAX) notes.push('Off-Hand Weapon Training for this skill: no off-hand penalty.');
+        else add('attack', 'Off hand' + (bought ? ` (technique +${bought})` : ''), OFF_HAND + bought);
+      }
     }
 
     // Hit location: a matching Targeted Attack technique replaces the plain penalty.
