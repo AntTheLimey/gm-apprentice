@@ -941,11 +941,27 @@ class MigrateEndToEndTests(unittest.TestCase):
             vault = self.vault_at("1.10.25", site_file, lists=True)
             with mock.patch.object(ms, "plugin_tool", Pin(ok=True)):
                 (item,) = ms.find_settings_move(vault)
-                self.assertNotIn("Will remove the settings from",
-                                 "\n".join(item.lines))
+                text = "\n".join(item.lines)
+                if site_file is None:
+                    self.assertNotIn("Will remove the settings from", text)
+                else:
+                    # The site folder's outputDir is a setting of the vault
+                    # now: the move carries it and takes it out of the site
+                    # file, and says so.
+                    self.assertIn("Will remove the settings from", text)
+                    self.assertIn("outputDir", text)
+                    self.assertIn("`outputDir` moved to `player_site.output`.",
+                                  text)
                 item.apply(None)
                 self.assertEqual(ms.find_settings_move(vault), [])
-            self.assertTrue((vault / "_meta" / "vault-config.yaml").is_file())
+            moved = (vault / "_meta" / "vault-config.yaml")
+            self.assertTrue(moved.is_file())
+            if site_file is not None:
+                self.assertIn("output: ./docs", moved.read_text(encoding="utf-8"))
+                site_json = site_of(vault) / "vault.config.json"
+                self.assertEqual(
+                    json.loads(site_json.read_text(encoding="utf-8")),
+                    {"vaultPath": str(vault)})
 
     def test_a_site_file_with_no_list_moves_and_the_built_in_lists_are_written(self):
         vault = self.vault_at("1.10.25", {"outputDir": "./docs"})
