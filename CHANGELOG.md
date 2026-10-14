@@ -24,8 +24,8 @@ which gains the rules for the new banner.
   `player_site.host`, `player_site.output`,
   `player_site.cloudflare_project` and `player_site.keep` (folders in
   the output the build must not clean). Until the update carries them, a
-  value still in the site folder's `vault.config.json` is used, with a
-  line saying it will move. The update leaves them there for a site
+  value still in the site folder's `vault.config.json` is used; on a
+  vault already on the new settings file the build says it will move. The update leaves them there for a site
   whose own publish tool is older than 1.24.0 and is not one the update
   looks after, and says so.
 - Build steps can live in the vault: `player_site.before_build` and
@@ -56,7 +56,8 @@ which gains the rules for the new banner.
   `vault.statuses.fallen` and `vault.statuses.gone`.
 - `settings move` carries what a site folder still holds (its file's
   keys and its `package.json` build steps) into the vault, all or
-  nothing, and takes them out of the site folder. The update runs it on
+  nothing, and takes them out of the site folder (a site whose own tool
+  is too old to read them there keeps them). The update runs it on
   every vault that has a site, whether the vault is still on the old
   settings file or has already moved, and lists what it will carry
   before it does.
