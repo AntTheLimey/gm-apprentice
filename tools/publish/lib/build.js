@@ -31,7 +31,7 @@ const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
 const { SITE_OLD_ROOTS } = require('./settings/legacy');
-const { publishesPage, autoExcludeCode } = require('./publish-decision');
+const { publishesPage, autoExcludeCode, isHousekeepingNote } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
@@ -103,6 +103,8 @@ function rememberHiddenNames(linkMap, notes) {
   for (const note of notes) {
     const fm = note.frontmatter || {};
     const vaultPath = String(note.vaultPath).replace(/\\/g, '/');
+    // The plugin's own housekeeping notes hold no secret, and a link may carry their names (an index.html address).
+    if (isHousekeepingNote(vaultPath, fm)) continue;
     const all = [path.posix.basename(vaultPath), vaultPath, note.displayTitle, typeof fm.title === 'string' ? fm.title : '',
       ...nameList(fm.aliases), ...gmAliasList(fm)];
     for (const name of all) {

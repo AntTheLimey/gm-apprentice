@@ -226,3 +226,19 @@ test('rule 4: words naming nothing secret are no finding', () => {
   const s = site({ title: 'Welcome', text: 'Sit down' });
   assert.deepEqual(s.findings.filter((f) => f.code === 'WITHHELD_IN_PROSE'), []);
 });
+
+test('housekeeping: a banner link ending index.html stands with _meta/index.md and a template in the vault', () => {
+  const files = { '_meta/index.md': '---\ntype: meta\n---\n', '_Templates/NPC_Template.md': '---\ntype: template\n---\n' };
+  for (const link of ['gazetteer/index.html', 'maps/index.html#north', 'forms/NPC_Template.html']) {
+    const s = site({ title: 'T', link }, { files });
+    assert.match(s.read('index.html'), /<a class="landing-banner" href="/, link);
+    assert.deepEqual(s.warnings.filter((w) => /banner/.test(w)), [], link);
+  }
+});
+
+test('housekeeping: a hidden campaign note called Index still drops a banner link ending index.html', () => {
+  const files = { '_meta/index.md': '---\ntype: meta\n---\n', 'Hidden/Index.md': npc('publish: false\n') };
+  const s = site({ title: 'T', link: 'gazetteer/index.html' }, { files });
+  assert.doesNotMatch(s.read('index.html'), /<a class="landing-banner"/);
+  assert.ok(s.warnings.some((w) => /banner/.test(w)));
+});

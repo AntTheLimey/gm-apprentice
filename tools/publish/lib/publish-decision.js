@@ -43,7 +43,20 @@ const { AUTO_EXCLUDE_STATUS, AUTO_EXCLUDE_STAGE, AUTO_EXCLUDE_SOURCE, SCENE_SKIP
 // reference copies. These are belt-and-braces: a vault's excludeDirs normally
 // stops the scanner from ever producing a page here, but `manifest diff` and
 // `explain` walk the raw vault and would otherwise offer them as candidates.
-const ALWAYS_EXCLUDE_DIRS = ['_meta', '_Templates', '_templates', 'personal'];
+const HOUSEKEEPING_DIRS = ['_meta', '_Templates', '_templates'];
+const ALWAYS_EXCLUDE_DIRS = [...HOUSEKEEPING_DIRS, 'personal'];
+
+// The plugin's own housekeeping notes: those under a housekeeping folder (settings, state, indexes, templates), and
+// any note typed "meta" or "template". They hold no campaign secret, so their names are not names a site link must
+// avoid. The "personal" folder is not here: it holds the GM's own reference copies, so it stays hidden. A note that
+// names secrets of its own (withheld, gm_aliases) or says publish: false is never housekeeping.
+function isHousekeepingNote(vaultPath, frontmatter) {
+  const fm = frontmatter || {};
+  if (fm.withheld === true || fm.withheld === 'true' || (fm.gm_aliases != null && fm.gm_aliases !== '')) return false;
+  if (fm.publish === false || fm.publish === 'false') return false;
+  if (alwaysExcludedSegment(String(vaultPath == null ? '' : vaultPath).replace(/\\/g, '/'), HOUSEKEEPING_DIRS)) return true;
+  return ['meta', 'template'].includes(lower(fm.type).trim());
+}
 
 // A scene that was cut or skipped did not happen. content-filtering.md has listed
 // these as always-excluded since the filtering model was written; they are gated
@@ -75,10 +88,10 @@ function autoExcludeReason(code, frontmatter) {
 
 // The first path segment (excluding the filename) that names an always-excluded
 // directory. Segment equality, not prefix matching — `_metadata/` is a normal folder.
-function alwaysExcludedSegment(rel) {
+function alwaysExcludedSegment(rel, dirs = ALWAYS_EXCLUDE_DIRS) {
   const segments = String(rel == null ? '' : rel).split('/');
   segments.pop();
-  return segments.find((s) => ALWAYS_EXCLUDE_DIRS.includes(s)) || null;
+  return segments.find((s) => dirs.includes(s)) || null;
 }
 
 // Manifest sections are arrays; a page-by-page `includes()` would be quadratic on a
@@ -224,6 +237,8 @@ module.exports = {
   publishesPage,
   autoExcludeCode,
   ALWAYS_EXCLUDE_DIRS,
+  HOUSEKEEPING_DIRS,
+  isHousekeepingNote,
   AUTO_EXCLUDE_STATUS,
   AUTO_EXCLUDE_STAGE,
   AUTO_EXCLUDE_SOURCE,
