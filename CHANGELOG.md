@@ -58,7 +58,12 @@ moved.
   build steps run.
 - `session_context` and `index_build` report unreadable settings as one
   plain error line.
-- `build` and `init` refuse an option they do not know.
+- `build` and `init` refuse an option they do not know. A new site's
+  `package.json` no longer has a `watch` script; on a site that still
+  has one, `build --watch` builds once and says there is no watch mode.
+- A status written as a one-item list (`status: [dead]`, as Obsidian's
+  list property writes it) is read as its word by the vault scripts, as
+  the site already did.
 - The publish tool is 1.24.1.
 
 ### Fixed
