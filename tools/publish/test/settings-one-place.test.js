@@ -229,6 +229,22 @@ function loadVaultConfigReads() {
     const vars = new Set();
     for (const m of src.matchAll(/(?:\b(?:const|let|var)\s+)?\b([A-Za-z_]\w*)\s*=\s*[^;\n]*\bloadVaultConfig\(/g)) vars.add(m[1]);
     for (const m of src.matchAll(/\bloadVaultConfig\([^)\n]*\)(?:\[|\??\.)\s*['"]?(\w+)/g)) calls.push({ file: rel(f), variable: '(call)', prop: m[1] });
+    // The name `rawConfig` counts as a result, and so does a name bound to one (`const c = rawConfig;`), to any depth.
+    if (/\brawConfig\b/.test(src)) vars.add('rawConfig');
+    for (let grew = true; grew;) {
+      grew = false;
+      for (const v of [...vars]) {
+        for (const m of src.matchAll(new RegExp(`\\b(?:const|let|var)\\s+(\\w+)\\s*=\\s*${v}\\s*[;,)\\n]`, 'g'))) if (!vars.has(m[1])) { vars.add(m[1]); grew = true; }
+      }
+    }
+    // A destructure: `const { outputDir } = loadVaultConfig(p)` or `= rawConfig`; the keys named in the braces are reads.
+    const from = `(?:[^;\\n]*\\bloadVaultConfig\\(|(?:${[...vars].join('|')})\\s*[;\\n)])`;
+    for (const m of src.matchAll(new RegExp(`\\{([^{}]*)\\}\\s*=\\s*${from}`, 'g'))) {
+      for (const part of m[1].split(',')) {
+        const key = part.trim().split(/[:=\\s]/)[0];
+        if (key) calls.push({ file: rel(f), variable: '(destructured)', prop: key });
+      }
+    }
     for (const v of vars) {
       for (const m of src.matchAll(new RegExp(`(?<![\\w.'"/-])${v}(?:\\?\\.|\\.|\\[\\s*['"])(\\w+)`, 'g'))) calls.push({ file: rel(f), variable: v, prop: m[1] });
     }
@@ -250,21 +266,27 @@ test('no code reads a site-folder key off the site file', () => {
   assert.deepEqual(bad.map((r) => `${r.file}: ${r.variable}.${r.prop}`), []);
 });
 
-// (d) A build step is run in one place: lib/settings/steps.js. Outside the settings package only run-command.js
-// (the shared runner for git, npm install, wrangler and gh) and image-optimize.js (image tools) require
-// child_process; and the only code that runs `npm run <hook>` is the dated block in deploy-cli.js, which keeps a
-// site on the old layout running its package.json prebuild/postbuild until the site is updated (legacy.js's
-// buildHooks; it goes with that file). Nothing else names those two scripts.
+// (d) A build step is run in one place: lib/settings/steps.js. This looks at the settings package too, so a second
+// runner there is caught. Files that require child_process: run-command.js (the shared runner for git, npm install,
+// wrangler and gh), image-optimize.js (image tools), steps.js (the steps) and settings/move.js, whose one use runs
+// this tool's own `update-pin --check`. The only code that runs `npm run <hook>` is the dated block in deploy-cli.js,
+// which keeps a site on the old layout running its package.json prebuild/postbuild until the site is updated
+// (legacy.js's buildHooks; it goes with that file). The two script names appear as code only there, in legacy.js (that
+// block's reader) and in the registry (`stepsFrom`); a shell is opened with `shell: true` only by steps.js.
 test('a build step is run only by the steps module and the dated deploy hook', () => {
-  const spawners = grep(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/, code);
-  assert.deepEqual(spawners.sort(), ['lib/image-optimize.js', 'lib/run-command.js']);
-  // run-command.js never opens a shell on its own; a caller that wants one asks (deploy-cli.js, for npm on Windows).
-  assert.ok(!/shell:\s*true/.test(code(path.join(ROOT, 'lib', 'run-command.js'))));
+  const everywhere = [...sources, ...files(SETTINGS)];
+  const grepAll = (re) => everywhere.filter((f) => re.test(code(f))).map(rel).sort();
+  assert.deepEqual(grepAll(/\brequire\(\s*['"](?:node:)?child_process['"]\s*\)/),
+    ['lib/image-optimize.js', 'lib/run-command.js', 'lib/settings/move.js', 'lib/settings/steps.js']);
+  // move.js starts exactly one process: this tool, to ask update-pin about the site.
+  const moveSpawns = code(path.join(SETTINGS, 'move.js')).match(/\bspawnSync\(/g) || [];
+  assert.equal(moveSpawns.length, 1, 'move.js: one call');
+  assert.match(code(path.join(SETTINGS, 'move.js')), /spawnSync\(process\.execPath, \[bin, 'update-pin', '--check'/);
+  assert.deepEqual(grepAll(/shell:\s*true/), ['lib/settings/steps.js']);
   // `npm run <something>` is run by deploy-cli.js alone.
-  const npmRun = grep(/runCommand\(\s*['"]npm['"]\s*,\s*\[\s*['"]run['"]/, code);
-  assert.deepEqual(npmRun, ['lib/deploy-cli.js']);
-  // The two script names, as code, appear in deploy-cli.js alone (build.js and the doctor ask steps.js).
-  assert.deepEqual(grep(/['"`](?:pre|post)build['"`]/, code), ['lib/deploy-cli.js']);
+  assert.deepEqual(grepAll(/runCommand\(\s*['"]npm['"]\s*,\s*\[\s*['"]run['"]/), ['lib/deploy-cli.js']);
+  // The two script names, as code (build.js and the doctor ask steps.js).
+  assert.deepEqual(grepAll(/['"`](?:pre|post)build['"`]/), ['lib/deploy-cli.js', 'lib/settings/legacy.js', 'lib/settings/registry.js']);
   // The hook list that block runs comes from the dated legacy module.
   assert.match(code(path.join(ROOT, 'lib', 'deploy-cli.js')), /buildHooks[\s\S]*require\('\.\/settings\/legacy'\)|require\('\.\/settings\/legacy'\)[\s\S]*buildHooks/);
   // Every call of the steps runner is the settings module's own.

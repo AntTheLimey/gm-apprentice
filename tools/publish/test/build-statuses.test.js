@@ -64,6 +64,12 @@ test('a fallen word that is not out of play is one warning naming it, and does n
   assert.match(warnings[0], /missing/);
 });
 
+test('narrowing only out_of_play warns about no built-in fallen word, which is dropped quietly', () => {
+  const { publishConfig, warnings } = config({ out_of_play: ['dead'] });
+  assert.deepEqual(words(publishConfig.statuses.fallen), ['dead']);
+  assert.deepEqual(warnings, []);
+});
+
 test('the lists are not listed with the settings, so the equivalence goldens stay as they were', () => {
   const { publishConfig } = config(undefined);
   assert.ok(!Object.keys(publishConfig).includes('statuses'));

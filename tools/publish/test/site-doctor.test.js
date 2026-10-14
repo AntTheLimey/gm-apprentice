@@ -411,6 +411,21 @@ describe('doctor --site', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
+  it('a release-tarball pin is the GM\'s choice: no version fault, no advice to repin', async () => {
+    const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-tarball-'));
+    write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\nHi.\n');
+    const { dir, configPath } = siteFor(vault, { folderMap: { 'Characters/NPCs': 'characters/npcs' } });
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({
+      dependencies: { 'gm-apprentice-publish': 'file:vendor/gm-apprentice-publish-1.24.0.tgz' },
+    }));
+    const c = capture();
+    c.deps.detect = () => ({ pinned: '1.11.20', latest: '1.11.30', drift: true, versionsRoot: '/cache/gm-apprentice' });
+    await runSiteDoctor({ configPath, json: true }, c.deps);
+    const payload = JSON.parse(c.out.join(''));
+    assert.deepEqual(payload.findings.filter(f => f.code === 'VERSION_DRIFT'), []);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
   it('warns about a played session that is in no manifest section', async () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-unreg-'));
     write(vault, 'Sessions/Session_1.md', '---\ntype: session\nstatus: played\n---\n\nIt happened.\n');

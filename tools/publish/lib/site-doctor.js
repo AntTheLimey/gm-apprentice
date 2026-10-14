@@ -311,6 +311,7 @@ async function runSiteDoctor(options, deps) {
   }
   if (drift) {
     let sitePin = null;
+    let tarball = false; // a vendored release tarball is the GM's own pin (as update-pin treats it): no advice to repin
     const pkgPath = path.join(siteRoot, 'package.json');
     // Absent is fine — plenty of sites have no package.json yet, and the running
     // tool's own drift is still worth reporting. Present-but-unparseable is not:
@@ -318,7 +319,8 @@ async function runSiteDoctor(options, deps) {
     if (exists(pkgPath)) {
       try {
         const spec = (JSON.parse(readFile(pkgPath)).dependencies || {})['gm-apprentice-publish'];
-        if (spec && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
+        tarball = /\.(?:tgz|tar\.gz)$/i.test(String(spec || ''));
+        if (spec && !tarball && String(spec).startsWith('file:')) sitePin = pinnedVersionOf(String(spec).slice('file:'.length));
       } catch (err) {
         findings.push(finding(
           'VERSION_DRIFT', 'warning', pkgPath,
@@ -328,7 +330,7 @@ async function runSiteDoctor(options, deps) {
       }
     }
     const stale = sitePin && sitePin !== drift.latest;
-    if (drift.drift || stale) {
+    if (!tarball && (drift.drift || stale)) {
       findings.push(finding(
         'VERSION_DRIFT', 'warning', pkgPath,
         `site pinned to ${sitePin || drift.pinned}, newest installed is ${drift.latest} — the site builds with the old renderer`,

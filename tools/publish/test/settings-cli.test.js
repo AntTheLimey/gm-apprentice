@@ -481,6 +481,9 @@ test('add and remove refuse a setting that is not a list, a blank or unquoted en
 test('the help names add and remove', () => {
   assert.match(helpText(), /settings add /);
   assert.match(helpText(), /settings remove /);
+  // A list of entries with several parts: the form to add one, and removing by label.
+  assert.match(helpText(), /settings add player_site\.menu_extra label=\S+ link=\S+ group=\S+/);
+  assert.match(helpText(), /settings remove player_site\.menu_extra \S+/);
 });
 
 // ---- the same entry, by the build's own rule ----

@@ -208,6 +208,9 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
   settings add <name> <entry> ...  Add entries to a list setting, keeping what it holds now
                                    (the built-in list included): settings add player_site.hide.sections Rumours "Player Handout"
   settings remove <name> <entry> ...  Take entries out of a list setting
+                                   An entry with several parts is added one at a time, each part name=value:
+                                   settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World
+                                   and taken out by its label: settings remove player_site.menu_extra Gazetteer
   settings unset <name> ...        Remove settings from the file, all or none
   settings carry <key> <setting>   Put the value of a mis-named key under the setting's right name, then remove the key
   settings describe <name>         What one setting does, what it takes, its default

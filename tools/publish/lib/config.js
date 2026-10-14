@@ -230,12 +230,13 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   Object.defineProperty(merged, 'withheld_words', { value: words, enumerable: false });
 
   // The status lists, every word trimmed and lower-cased once. Not listed, like `limits`. A `fallen` word that is
-  // not out of play is left out, with a warning.
+  // not out of play is left out, with a warning when the GM wrote it.
   const wordsOf = (list) => new Set(list.map((w) => String(w).trim().toLowerCase()).filter(Boolean));
   const statuses = { out_of_play: wordsOf(v.statuses.out_of_play), fallen: new Set(), gone: wordsOf(v.statuses.gone) };
   for (const word of wordsOf(v.statuses.fallen)) {
     if (statuses.out_of_play.has(word)) statuses.fallen.add(word);
-    else {
+    // A built-in word the GM's out_of_play narrowed away is dropped quietly: only a word they wrote is warned about.
+    else if (named('vault.statuses.fallen')) {
       const written = nameIn(vaultPath, 'vault.statuses.fallen');
       faults.push(makeFault({ name: written, setting: 'vault.statuses.fallen', kind: 'dropped', level: 'warn', message: `${written} holds "${word}", which is not in ${nameIn(vaultPath, 'vault.statuses.out_of_play')}; it does not count as fallen` }));
     }
