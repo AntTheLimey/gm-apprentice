@@ -308,6 +308,41 @@ test('final wave: a link to a hidden note is dropped in every spelling (heading,
   });
 });
 
+const RESIDUAL_FILES = {
+  'Hidden/Lord_Hush.md': npc('publish: false\ntitle: The Whispering Man\n'),
+  'Gm_Only/Secret_Person.md': npc(),
+};
+const RESIDUAL_SETTINGS = { hide: { mode: 'full', folders: ['_meta', 'Gm_Only'] } };
+const RESIDUAL_LEAKY = [
+  'Lord Hush/', 'Lord%20Hush', '[[Lord%20Hush]]', 'Lord%20Hush#x', 'hidden/lord-hush.html/', 'hidden//lord-hush.html',
+  'hidden/./lord-hush.html', 'foo/../hidden/lord-hush.html', 'lord-hush.html', 'hidden/lord-hush', 'hidden/lord-hush.htm',
+  'secret-person.html', 'gm-only/secret-person.html', 'The Whispering Man', 'the-whispering-man', 'The%20Whispering%20Man/', 'Lord%2',
+];
+
+test('residual: a link to a hidden note is dropped however it is spelled (slash, escapes, dots, partial path, slug, title)', () => {
+  const s = site(RESIDUAL_LEAKY.map((link, i) => ({ label: `Res${i}`, link })), { files: RESIDUAL_FILES, settings: RESIDUAL_SETTINGS });
+  const html = s.read('index.html');
+  assert.doesNotMatch(html, /Hush|hush|Whisper|whisper|Secret(%20| |_|-)Person|secret-person|%2/i);
+  RESIDUAL_LEAKY.forEach((link, i) => {
+    assert.doesNotMatch(menus(html).desktop, new RegExp(`>Res${i}<`), link);
+    assert.ok(s.warnings.some((w) => w.includes(`"Res${i}"`)), `${link}: ${s.warnings.join('\n')}`);
+  });
+});
+
+test('residual: ordinary site paths print unchanged and a published note links to its page in any spelling', () => {
+  const s = site([
+    { label: 'G', link: 'gazetteer/index.html' }, { label: 'N', link: 'maps/north.html#key' }, { label: 'M', link: 'map.html?layer=2' },
+    { label: 'P1', link: 'Harbour/' }, { label: 'P2', link: 'Harbour%20' }, { label: 'P3', link: 'Harbour.html' },
+    { label: 'P4', link: 'locations/harbour.html' }, { label: 'P5', link: 'Mara%20Quill' }, { label: 'P6', link: '[[Locations/Harbour#Gear]]' },
+  ], { files: RESIDUAL_FILES, settings: RESIDUAL_SETTINGS });
+  const { desktop } = menus(s.read('index.html'));
+  assert.match(desktop, /href="gazetteer\/index\.html">G</);
+  assert.match(desktop, /href="maps\/north\.html#key">N</);
+  assert.match(desktop, /href="map\.html\?layer=2">M</);
+  for (const label of ['P1', 'P2', 'P3', 'P4', 'P6']) assert.match(desktop, new RegExp(`href="locations/harbour\\.html">${label}<`), label);
+  assert.match(desktop, /href="characters\/mara-quill\.html">P5</);
+});
+
 test('final wave: a note with a page is that page whatever the spelling; the heading is dropped', () => {
   const s = site([
     { label: 'A', link: 'Harbour#Gear' }, { label: 'B', link: 'Locations/Harbour' }, { label: 'C', link: '[[Locations/Harbour#Gear|docks]]' },

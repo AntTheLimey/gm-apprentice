@@ -189,6 +189,26 @@ test('final wave: a banner link to a hidden note is no link in any spelling (hea
   }
 });
 
+test('residual: a banner link to a hidden note is no link however it is spelled; ordinary and published links stand', () => {
+  const files = { 'Hidden/Lord_Hush.md': npc('publish: false\ntitle: The Whispering Man\n'), 'Gm_Only/Secret_Person.md': npc() };
+  const leaky = ['Lord Hush/', 'Lord%20Hush', 'hidden/lord-hush.html/', 'hidden//lord-hush.html', 'foo/../hidden/lord-hush.html',
+    'lord-hush.html', 'hidden/lord-hush', 'hidden/lord-hush.htm', 'secret-person.html', 'The Whispering Man', 'Lord%2'];
+  for (const link of leaky) {
+    const s = site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] });
+    const html = s.read('index.html');
+    assert.match(html, /landing-banner/, link);
+    assert.doesNotMatch(html, /<a class="landing-banner"/, link);
+    assert.doesNotMatch(html, /Hush|hush|Whisper|whisper|secret-person|Secret(%20| )Person/, link);
+    assert.ok(s.warnings.some((w) => /banner/.test(w) && w.includes(link)), `${link}: ${s.warnings.join('\n')}`);
+  }
+  for (const link of ['gazetteer/index.html', 'maps/north.html#key', 'map.html?layer=2']) {
+    assert.ok(site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] }).read('index.html').includes(`<a class="landing-banner" href="${link.replace('&', '&amp;')}"`), link);
+  }
+  for (const link of ['Harbour/', 'Harbour%20', 'Harbour.html', 'locations/harbour.html']) {
+    assert.match(site({ title: 'T', link }, { files, hide: ['_meta', 'Gm_Only'] }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/, link);
+  }
+});
+
 test('final wave: a banner link with a heading to a note with a page is that page', () => {
   assert.match(site({ title: 'T', link: 'Harbour#Gear' }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/);
   assert.match(site({ title: 'T', link: '[[Locations/Harbour|x]]' }).read('index.html'), /<a class="landing-banner" href="locations\/harbour\.html"/);

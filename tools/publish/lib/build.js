@@ -4,7 +4,7 @@ const { hasSheetStructure } = require('./templates/sheet-parse');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, mapFolder, slugify } = require('./scanner');
+const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
@@ -93,29 +93,33 @@ const LOWER_KEYS = new WeakMap();     // link map -> Map of lower-cased key -> o
 
 const foldName = (name) => name.toLowerCase().replace(/_/g, ' ').replace(/\s+/g, ' ').trim();
 
-// `folderMap` (vault folder -> site folder) lets it also remember where each note's page WOULD be, so a plain site
-// address that lands on it is dropped too.
-const WOULD_BE = new WeakMap();       // link map -> Set of lower-cased output paths of the notes
+// A name is folded two ways, and a link is hidden if any of its path segments matches either: the lower-cased name
+// (spaces and underscores alike) and the slug the build gives page file names (so hyphens count too).
+const HIDDEN_SLUGS = new WeakMap();   // link map -> Set of slugs of the notes' names
 
-function rememberHiddenNames(linkMap, notes, { folderMap = {} } = {}) {
+function rememberHiddenNames(linkMap, notes) {
   const names = new Set();
-  const wouldBe = new Set();
+  const slugs = new Set();
   for (const note of notes) {
     const fm = note.frontmatter || {};
     const vaultPath = String(note.vaultPath).replace(/\\/g, '/');
     const all = [path.posix.basename(vaultPath), vaultPath, note.displayTitle, typeof fm.title === 'string' ? fm.title : '',
       ...nameList(fm.aliases), ...gmAliasList(fm)];
     for (const name of all) {
-      if (typeof name === 'string' && name.trim()) names.add(foldName(canonicalNfc(name)));
+      if (typeof name !== 'string' || !name.trim()) continue;
+      names.add(foldName(canonicalNfc(name)));
+      const slug = slugify(canonicalNfc(name));
+      if (slug !== 'untitled') slugs.add(slug);
     }
-    const dir = path.posix.dirname(vaultPath) === '.' ? '' : path.posix.dirname(vaultPath);
-    const outDir = mapFolder(dir, folderMap);
-    if (!outDir && dir !== '') continue;   // a folder the site does not map has no page to point at
-    wouldBe.add((outDir ? outDir + '/' : '') + slugify(path.posix.basename(vaultPath)) + '.html');
   }
   HIDDEN_NAMES.set(linkMap, names);
-  WOULD_BE.set(linkMap, new Set([...wouldBe].map((p) => p.toLowerCase())));
+  HIDDEN_SLUGS.set(linkMap, slugs);
 }
+
+// The parts of a link's path, tidied: slashes and dot segments normalised, empty parts dropped, and a .html / .htm / .md
+// ending taken off each part.
+const pathParts = (text) => path.posix.normalize(`/${text.replace(/\\/g, '/')}`).split('/')
+  .filter(Boolean).map((part) => part.replace(/\.(?:html?|md)$/i, ''));
 
 // Addresses that are not a note and not on the site, and may stand as written (a mail or phone link).
 const PASS_SCHEME_RE = /^(?:mailto|tel):/i;
@@ -130,11 +134,16 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
   // either spelling. The site has no heading anchors, so a heading is dropped. The name is tried with its folder
   // path and then without it.
   const wiki = /^\[\[([\s\S]+)\]\]$/.exec(text);
-  const name = canonicalNfc(parseWikilink(wiki ? wiki[1] : text).name.trim().replace(/\\/g, '/'));
+  // Percent-escapes are read as the browser would read them; one that is malformed is a link nobody can vouch for.
+  let decoded;
+  try { decoded = decodeURIComponent(wiki ? wiki[1] : text); } catch (e) { return { kind: 'none', href: null }; }
+  const target = canonicalNfc(parseWikilink(decoded).name.replace(/\?[\s\S]*$/, '').trim());
+  const parts = pathParts(target);
+  const name = parts.length ? canonicalNfc(parts.join('/')) : '';
   if (name) {
     const candidates = [name];
-    const last = name.slice(name.lastIndexOf('/') + 1).trim();
-    if (last && last !== name) candidates.push(last);
+    const last = parts[parts.length - 1];
+    if (last !== name) candidates.push(last);
     if (!LOWER_KEYS.has(linkMap)) {
       const keys = new Map();
       for (const key of Object.keys(linkMap)) if (!keys.has(foldName(key))) keys.set(foldName(key), linkMap[key]);
@@ -147,16 +156,16 @@ function resolveSiteLink(link, { linkMap = Object.create(null), pages = [] } = {
       const loose = LOWER_KEYS.get(linkMap).get(foldName(candidate));
       if (loose) return { kind: 'page', href: loose };
     }
-    const hidden = HIDDEN_NAMES.get(linkMap) || new Set();
-    if (candidates.some((c) => hidden.has(foldName(c)))) return { kind: 'none', href: null };
   }
   // A bracketed link is a note, and no page was found for it: never printed.
   if (wiki) return { kind: 'none', href: null };
-  // A site address that lands where a hidden note's page would be.
-  let address = text.replace(/\\/g, '/').replace(/^(?:\.\/)+/, '').replace(/^\/+/, '').replace(/[#?].*$/, '').toLowerCase();
-  try { address = decodeURIComponent(address); } catch (e) { /* as written */ }
-  const taken = new Set(Object.values(linkMap).map((p) => String(p).toLowerCase()));
-  if (!taken.has(address) && (WOULD_BE.get(linkMap) || new Set()).has(address)) return { kind: 'none', href: null };
+  // The address of a published page, spelled as the build writes it, stands.
+  const address = parts.join('/').toLowerCase();
+  if (Object.values(linkMap).some((p) => String(p).toLowerCase() === address)) return { kind: 'site', href: text.replace(/^\.\//, '') };
+  // Anything else: if ANY part of the path is the name, file name, title, alias or slug of a hidden note, it is dropped.
+  const hiddenNames = HIDDEN_NAMES.get(linkMap) || new Set();
+  const hiddenSlugs = HIDDEN_SLUGS.get(linkMap) || new Set();
+  if (parts.some((part) => hiddenNames.has(foldName(part)) || hiddenSlugs.has(slugify(part)))) return { kind: 'none', href: null };
   return { kind: 'site', href: text.replace(/^\.\//, '') };
 }
 
@@ -640,7 +649,7 @@ function buildSite(options) {
   // its Wrap-Up — the one alias-then-pair path `explain` and `manifest publish-played`
   // take too, so all three pair on the same frontmatter (#276).
   const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
-  rememberHiddenNames(linkMap, allNotes, { folderMap: config.folderMap });
+  rememberHiddenNames(linkMap, allNotes);
   const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
