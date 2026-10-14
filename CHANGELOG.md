@@ -7,6 +7,74 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.55] — 2026-10-13
+
+The publish tool learns the last settings that lived outside your vault,
+and a few new ones. Nothing moves yet: your site folder's file and its
+build steps keep working as they are, and the next release's update
+carries them into the vault for you.
+
+### Added
+
+- Where the site goes is a set of vault settings: `player_site.url`,
+  `player_site.host`, `player_site.output`,
+  `player_site.cloudflare_project` and `player_site.keep` (folders in
+  the output the build must not clean). Until the update carries them, a
+  value still in the site folder's `vault.config.json` is used, with a
+  line saying it will move.
+- Build steps can live in the vault: `player_site.before_build` and
+  `player_site.after_build` are lists of commands the tool runs, in
+  order, with every `build` and before every `deploy`. Each is printed
+  before it runs, and a step that fails stops the build. A dry run, the
+  preview and the checks run none. A `prebuild` or `postbuild` still in
+  the site's `package.json` keeps running as before until its steps are
+  in the vault.
+- Extra menu entries: `player_site.menu_extra` is a list of entries,
+  each a label and a link (a note, a page on the site, or a web
+  address), and optionally the menu group it joins. `settings add
+  player_site.menu_extra label=Gazetteer link=gazetteer/index.html
+  group=World` adds one.
+- A banner on the landing page: `player_site.landing.banner.title`,
+  `.text`, `.link` and `.image`.
+- A menu entry or banner that links to a note with no page is left out,
+  with a warning; the build's check for secret names reads their words
+  like any page text.
+- Numbers that were fixed are settings, under `player_site.limits`: how
+  many timeline events show, how long a recap and a preview card run,
+  how many facts a card holds, how many goals and relationships a
+  faction card lists. `0` means none where none makes sense.
+- `player_site.sheets.header_facts` lists the facts under a PC's name,
+  and `player_site.withheld_words` sets the words printed in place of a
+  withheld note's name (someone, somewhere, something).
+- Three lists of status words are settings: `vault.statuses.out_of_play`,
+  `vault.statuses.fallen` and `vault.statuses.gone`.
+- `settings move` carries what a site folder still holds (its file's
+  keys and its `package.json` build steps) into the vault, all or
+  nothing, and takes them out of the site folder. Nothing calls it yet.
+
+### Changed
+
+- A build whose output folder is outside the site folder, or is the site
+  folder itself, now stops before it cleans anything. So does a build
+  that cannot read which folders to keep.
+- A PC whose status is `destroyed` or `dissolved` is out of play: off the
+  party board and the active team, and in In Memoriam.
+- A status written with a stray space or capitals (`Dead `) is read as
+  its word on every page; the Story page used to miss it.
+- A new site's `vault.config.json` holds one line, where the vault is.
+  Setting up a site for a vault still on the old settings file stops and
+  asks for the vault to be updated first.
+- Build steps run by the tool find a locally installed command as `npm
+  run` does, but are not given npm's own `npm_*` variables.
+- The update's repin leaves a site alone when its tool is pinned to a
+  release file you chose.
+- The publish tool is 1.24.0.
+
+### Removed
+
+- The landing page's unused guess at an NPC's role, and its four tag
+  lists. No page showed it.
+
 ## [1.10.54] — 2026-10-13
 
 The next update moves your vault's settings to the new file,
