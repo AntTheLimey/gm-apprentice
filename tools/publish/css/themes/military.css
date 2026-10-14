@@ -7,12 +7,13 @@
   --bg-header: #0d1108;
   --bg-hero: #0d1108;
   --text: #bfc9b8;
-  --text-muted: #7a8570;
+  --text-muted: #87927d;
   /* The header and hero stay dark in both schemes, so their text keeps the
      dark palette's ink even when light mode darkens --text (#259). */
   --text-on-header: #bfc9b8;
-  --text-muted-on-header: #7a8570;
+  --text-muted-on-header: #87927d;
   --accent: #4ade80;
+  --accent-on-header: #4ade80;
   --accent-dim: rgba(74, 222, 128, 0.1);
   --border: #2e3828;
   --danger: #ef4444;
@@ -31,7 +32,9 @@
     --bg-hero: #1a1f16;
     --text: #1a1f16;
     --text-muted: #5a6550;
-    --accent: #16a34a;
+    --accent: #117d39;
+    /* the header and hero stay dark in the light palette: the bright accent reads there */
+    --accent-on-header: #4ade80;
     --accent-dim: rgba(22, 163, 74, 0.08);
     --border: #bfc9b8;
   }

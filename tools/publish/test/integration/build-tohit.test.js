@@ -78,3 +78,48 @@ test('a weapon name that tries to close the script builds and reads back exactly
   assert.ok(data.weapons.some((w) => w.name === name), 'the block parses back to that exact name');
   assert.ok(!/<script[^>]*gurps-tohit-data[^>]*>[^]*?Gun<\/script>/.test(html));
 });
+
+// #357: the script is copied only into a site that can link it.
+test('the calculator\'s script is copied only into a GURPS site with the calculator on', () => {
+  const on = quiet(() => buildPc('gurps-4e', RONNIE));
+  assert.ok(fs.existsSync(path.join(on.out, 'js', 'gurps-tohit.js')));
+  const off = quiet(() => buildPc('gurps-4e', RONNIE, ['tohit_calculator: off']));
+  assert.ok(!fs.existsSync(path.join(off.out, 'js', 'gurps-tohit.js')));
+  const coc = quiet(() => buildPc('coc-7e', templateBody('pc-coc-7e.md')));
+  assert.ok(!fs.existsSync(path.join(coc.out, 'js', 'gurps-tohit.js')));
+  assert.ok(fs.existsSync(path.join(coc.out, 'js', 'coc-live.js')), 'the other scripts are still copied');
+});
+
+// #394: a row the calculator cannot fully read is a Site Faults finding on the PC's note,
+// and the build's summary points at campaign-qa.
+test('a row the calculator cannot read is a finding, with a summary line', () => {
+  const body = RONNIE.replace(/\| SIG-Sauer P226 \(9mm\) \| [^|]*\|/, '| SIG-Sauer P226 (9mm) | DX-12 (default) |');
+  assert.notStrictEqual(body, RONNIE);
+  let faults = null;
+  const lines = [];
+  const warn = console.warn; const log = console.log;
+  console.log = () => {}; console.warn = (m) => lines.push(String(m));
+  try { buildPc('gurps-4e', body, [], { onNoteFaults: (f) => { faults = f; } }); } finally { console.warn = warn; console.log = log; }
+  const mine = faults.filter((f) => f.code === 'TOHIT_UNREAD' && f.severity === 'warning');
+  assert.ok(mine.some((f) => f.path === 'Characters/PCs/Test_Hero.md' && /SIG-Sauer P226 \(9mm\)".*names the attribute DX/.test(f.detail) && /default level/.test(f.fix)), JSON.stringify(mine));
+  assert.ok(lines.some((l) => /rows? of (a )?PC sheets? (is|are) not fully read by the to-hit calculator \(Test_Hero \d+\) — campaign-qa's Site Faults check fixes/.test(l)), lines.join('\n'));
+});
+
+test('a PC out of play has no rows reported', () => {
+  const body = RONNIE.replace(/\| SIG-Sauer P226 \(9mm\) \| [^|]*\|/, '| SIG-Sauer P226 (9mm) | DX-12 (default) |');
+  let faults = null;
+  quiet(() => buildPc('gurps-4e', body, [], { onNoteFaults: (f) => { faults = f; } }, { status: 'dead' }));
+  assert.deepStrictEqual(faults.filter((f) => f.code === 'TOHIT_UNREAD'), []);
+});
+
+test('doctor --site --json lists the rows with their fix', () => {
+  const { execFileSync } = require('child_process');
+  const body = RONNIE.replace(/\| SIG-Sauer P226 \(9mm\) \| [^|]*\|/, '| SIG-Sauer P226 (9mm) | DX-12 (default) |');
+  const { root } = quiet(() => buildPc('gurps-4e', body));
+  const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+  let out;
+  try { out = execFileSync(process.execPath, [bin, 'doctor', '--site', '--json', '--config', path.join(root, 'config.json')], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }); } catch (e) { out = e.stdout; }
+  const report = JSON.parse(out);
+  const rows = (report.findings || []).filter((f) => f.code === 'TOHIT_UNREAD');
+  assert.ok(rows.some((f) => f.severity === 'warning' && f.path === 'Characters/PCs/Test_Hero.md' && /names the attribute DX/.test(f.detail) && /default level/.test(f.fix)), out);
+});

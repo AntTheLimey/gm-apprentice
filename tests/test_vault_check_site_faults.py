@@ -34,7 +34,8 @@ def npc(body="", extra=""):
     return f"---\ntype: npc\n{extra}---\n\n{body}\n"
 
 
-def make(case, files, excluded=(), tool="real", site_json=None, site=True):
+def make(case, files, excluded=(), tool="real", site_json=None, site=True,
+         system=None):
     """A vault and its site. `files` maps vault paths to text; every note
     not in `excluded` ("path" or "path — reason") is listed under
     Publishing. `tool`: "real" installs the repo's publish tool in the
@@ -60,6 +61,7 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True):
     site_dir.mkdir()
     (vault / "_meta" / "vault-config.md").write_text(
         "---\npublish:\n  mode: player\n  site: true\n"
+        + (f"  system: {system}\n" if system else "") +
         f"  site_dir: {site_dir.as_posix()}\n  folder_map:\n"
         "    Characters: characters\n---\n", encoding="utf-8")
     # The site file names another vault: the one asked about must be the
@@ -181,6 +183,43 @@ class SiteFaultRowsTests(unittest.TestCase):
                       by_code["ALIAS_IN_PROSE"])
         self.assertIn("FENCE_UNCLOSED: the code fence on line 9 never "
                       "closes", by_code["FENCE_UNCLOSED"])
+
+    def test_a_sheet_row_the_to_hit_calculator_cannot_read_is_a_row(self):
+        # The tool's own words: what is wrong, then the fix.
+        row = vc._site_fault_row({
+            "code": "TOHIT_UNREAD", "severity": "warning",
+            "path": "Characters/PCs/Six.md",
+            "detail": "to-hit calculator: Melee Attacks row \"Knife\": its "
+                      "Skill cell names the attribute DX, not a skill",
+            "fix": "name the weapon's skill at its default level"}, whole=False)
+        self.assertEqual(row, (
+            "WARNING\tCharacters/PCs/Six.md\tTOHIT_UNREAD: to-hit "
+            "calculator: Melee Attacks row \"Knife\": its Skill cell names "
+            "the attribute DX, not a skill — name the weapon's skill at its "
+            "default level"))
+        info = vc._site_fault_row({
+            "code": "TOHIT_UNREAD", "severity": "info", "path": "a.md",
+            "detail": "d", "fix": "f"}, whole=False)
+        self.assertEqual(info, "INFO\ta.md\tTOHIT_UNREAD: d — f")
+        self.assertIn("TOHIT_UNREAD", vc.NOTE_FAULT_CODES)
+
+    def test_the_real_tool_reports_a_sheet_row_the_calculator_cannot_read(self):
+        pc = ("---\ntype: pc\nstatus: alive\n---\n\n## Skills\n\n"
+              "| Name | Difficulty | Relative Level | Points | Effective |\n"
+              "|---|---|---|---|---|\n| Knife | DX/E | DX+0 | [1] | 12 |\n\n"
+              "## Melee Weapons\n\n| Weapon | Skill | Damage | Reach | Parry |\n"
+              "|---|---|---|---|---|\n| Utility knife | DX-12 (default) | 1d-3 imp | C | 8 |\n"
+              "| Dagger | Knife-12 | 1d-3 imp | C | 8 |\n")
+        vault, _site = make(self, {"Characters/Ann_Vole.md": pc},
+                            system="gurps-4e")
+        rows = [r for r in findings(vc.check_site_faults(vault))
+                if "TOHIT_UNREAD" in r]
+        self.assertTrue(any(
+            r.startswith("WARNING\tCharacters/Ann_Vole.md\tTOHIT_UNREAD: "
+                         "to-hit calculator: Melee Attacks row \"Utility "
+                         "knife\": its Skill cell names the attribute DX")
+            and "— name the weapon's skill at its default level" in r
+            for r in rows), rows)
 
     def test_a_withheld_name_printed_on_a_page_is_a_row(self):
         vault, _site = make(self, {

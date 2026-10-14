@@ -15,6 +15,7 @@ const { isRoster } = require('./templates/nav');
 const { getsNoPage } = require('./previews');
 const { runSteps, packageScripts, packageNotes } = require('./settings/steps');
 const { startNoteAudit, summaryLines, pageText, mainOf, MARK_RE } = require('./note-faults');
+const { clientFor } = require('./templates/live-mount');
 const { ignoringMark } = require('./heading-key');
 const { linkText, parseWikilink } = require('./wikilink');
 const { nameIn, fileLabel } = require('./settings');
@@ -351,6 +352,8 @@ function buildSite(options) {
     return true;
   }
 
+  const tohitScriptNeeded = publishConfig.tohit_calculator === 'on' && !sheetsOff
+    && (clientFor(publishConfig.system) || {}).script === 'gurps-live.js';
   function copyJS() {
     if (dry) return;
     const jsDir = path.join(__dirname, '../js');
@@ -363,6 +366,8 @@ function buildSite(options) {
       if (file === 'previews.js' && publishConfig.link_previews === 'off') continue;
       // Likewise the Connections script: with Connections off no page holds a section or loads it.
       if (file === 'connections.js' && publishConfig.connections === 'off') continue;
+      // The to-hit calculator's script: only a GURPS site with sheets and the calculator on links it.
+      if (file === 'gurps-tohit.js' && !tohitScriptNeeded) continue;
       const src = path.join(jsDir, file);
       const dest = path.join(destDir, file);
       ensureDir(dest);
@@ -1083,6 +1088,8 @@ function buildSite(options) {
   // PCs whose system has a sheet renderer that produced no sheet (#273).
   const sheetlessPcs = [];
   const retiredFieldPcs = [];
+  // Rows of PC sheets the to-hit calculator cannot fully read: { rel, rows }, for the audit.
+  const tohitRows = [];
   const SHEETLESS_NAMED = 8;   // names printed before "and N more"
   const partyCampaignId = require('./scanner').slugify(config.siteTitle || 'campaign');
   const deferredRosters = [];
@@ -1184,6 +1191,10 @@ function buildSite(options) {
         if (systemOut.warnings && systemOut.warnings.length && !(sheetless && !sheetExpected)) {
           fx.warn(page.outputPath, systemOut.warnings);
         }
+        // A dead or retired PC's calculator is used by no one: its rows are not reported.
+        if (systemOut.tohitRows && systemOut.tohitRows.length && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
+          fx.tohitRows.push({ rel: vaultRelPathOf(page), rows: systemOut.tohitRows });
+        }
         // Out-of-play PCs (retired, dead, missing…) keep their sheet page but stay
         // off the roster's Party Status board (#265).
         if ((systemOut.liveData || systemOut.boardOnly) && !isOutOfPlay(page.frontmatter, publishConfig.statuses.out_of_play)) {
@@ -1276,13 +1287,13 @@ function buildSite(options) {
   }
 
   const liveFx = {
-    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs,
+    usedImages, warn: logWarnings, partyEntries, sheetlessPcs, retiredFieldPcs, tohitRows,
     onLook: (look, p) => {
       for (const n of look.notes) console.warn(`  WARNING: ${p.vaultPath ? p.vaultPath + '.md' : p.title}: ${n.key} ${JSON.stringify(clipValue(n.value))} ${n.problem}; ignored`);
       if (isDressed(look)) { anyDressed = true; dressedSkins.add(look.skin); }
     },
   };
-  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], onLook: () => {} });
+  const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], onLook: () => {} });
 
   // The note-faults audit reads each page as it is written (`seen`), and at the end renders
   // again the pages that link a note with no page (`namedOnPages`).
@@ -1882,6 +1893,7 @@ function buildSite(options) {
   }
   // Every file is written: the after steps run, then the check of the notes and "Done!".
   if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio });
+  for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
   const noteFaults = audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);

@@ -1,4 +1,5 @@
 'use strict';
+const { levelAtEnd } = require('./weapon-level');
 const gc = require('./gurps-calc');
 
 function num(v) {
@@ -13,8 +14,8 @@ function num(v) {
 // "Beam Weapons (Pistol)-15" -> 15. A signed scan (num) would misread the `-`
 // after `)` as a negative sign, so extract the trailing number explicitly.
 function weaponToHit(skillCell) {
-  const m = String(skillCell).match(/(\d+)\s*$/);
-  return m ? parseFloat(m[1]) : null;
+  const m = levelAtEnd(skillCell);
+  return m ? parseFloat(m.level) : null;
 }
 
 function normalize(name) {

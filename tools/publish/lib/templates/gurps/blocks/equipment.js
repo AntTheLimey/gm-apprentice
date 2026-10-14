@@ -24,13 +24,15 @@ function inventoryTable(items) {
 }
 
 function loadoutTable(loadout) {
+  // A Notes column only when a row has notes, as in the Equipment table.
+  const hasNotes = (loadout.items || []).some(i => i.notes != null);
   const rows = (loadout.items || []).map(item =>
-    `<tr>${toggleCell(item.name, item.weight, false)}<td class="num">${escapeHtml(String(item.qty ?? ''))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(String(item.cost ?? ''))}</td><td class="num">${escapeHtml(String(item.weight ?? ''))}</td></tr>`
+    `<tr>${toggleCell(item.name, item.weight, false)}<td class="num">${escapeHtml(String(item.qty ?? ''))}</td><td>${escapeHtml(item.name)}</td><td class="num">${escapeHtml(String(item.cost ?? ''))}</td><td class="num">${escapeHtml(String(item.weight ?? ''))}</td>${hasNotes ? `<td>${escapeHtml(item.notes ?? '')}</td>` : ''}</tr>`
   ).join('\n');
   const totals = (loadout.totalCost != null || loadout.totalWeight != null)
-    ? `<tr class="totals-row"><td class="eq-toggle-cell"></td><td></td><td><strong>Totals</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalCost ?? ''))}</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalWeight ?? ''))}</strong></td></tr>`
+    ? `<tr class="totals-row"><td class="eq-toggle-cell"></td><td></td><td><strong>Totals</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalCost ?? ''))}</strong></td><td class="num"><strong>${escapeHtml(String(loadout.totalWeight ?? ''))}</strong></td>${hasNotes ? '<td></td>' : ''}</tr>`
     : '';
-  const inner = `<table class="equip-table loadout-table"><thead><tr><th class="eq-toggle-cell"></th><th class="num">Qty</th><th>Item</th><th class="num">Cost</th><th class="num">Weight</th></tr></thead><tbody>${rows}${totals}</tbody></table>`;
+  const inner = `<table class="equip-table loadout-table"><thead><tr><th class="eq-toggle-cell"></th><th class="num">Qty</th><th>Item</th><th class="num">Cost</th><th class="num">Weight</th>${hasNotes ? '<th>Notes</th>' : ''}</tr></thead><tbody>${rows}${totals}</tbody></table>`;
   // wide() escapes its title — escaping here too double-escaped the name (review find).
     return wide('table', `Load-Out: ${loadout.name || ''}`, inner);
 }

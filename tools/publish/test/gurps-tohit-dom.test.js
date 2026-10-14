@@ -82,7 +82,7 @@ function dataBlock(over = {}) {
     techniques: { targeted: [{ skill: 'Beam Weapons (Pistol)', loc: 'skull', net: -5, name: 'Targeted Attack (Beam/Skull)' }], dual: {}, other: [{ skill: 'Axe/Mace', name: 'Hook', level: 15 }] },
     traits: { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 },
     freeFall: 12,
-    locations: [['torso', 'Torso', 0], ['vitals', 'Vitals', -3], ['limb', 'Arm or leg', -2], ['extremity', 'Hand or foot', -4], ['groin', 'Groin', -3], ['face', 'Face', -5], ['neck', 'Neck', -5], ['skull', 'Skull', -7], ['eye', 'Eye', -9]],
+    locations: [['torso', 'Torso', 0], ['vitals', 'Vitals', -3], ['arm', 'Arm', -2], ['leg', 'Leg', -2], ['extremity', 'Hand or foot', -4], ['groin', 'Groin', -3], ['face', 'Face', -5], ['neck', 'Neck', -5], ['skull', 'Skull', -7], ['eye', 'Eye', -9]],
     bands: [2, 3, 5, 7, 10, 15, 20, 30, 50, 70, 100, 150, 200, 300, 500, 700],
   }, over);
 }
@@ -548,12 +548,13 @@ describe('aids and buttons that follow the weapon', () => {
     assert.strictEqual(p.$('.th-chip[data-loc="skull"]').attrs['aria-pressed'], 'true');
     p.set('#th-weapon', 'wr');
     assert.strictEqual(p.$('.th-chip'), null);
-    assert.strictEqual(p.$('#th-loc').value, 'skull', 'a plain location now');
+    // A hit location is chosen for one attack: a new weapon starts back at the torso (#357).
+    assert.strictEqual(p.$('#th-loc').value, 'torso');
     p.set('#th-weapon', 'wb');
     assert.strictEqual(p.all('.th-chip').length, 1);
     assert.strictEqual(p.$('.th-chip[data-loc="eye"]').attrs['aria-pressed'], 'false');
     p.set('#th-weapon', 'w2');
-    assert.strictEqual(p.$('.th-chip[data-loc="skull"]').attrs['aria-pressed'], 'true');
+    assert.strictEqual(p.$('.th-chip[data-loc="skull"]').attrs['aria-pressed'], 'false');
   });
 });
 
@@ -677,5 +678,22 @@ describe('where it is remembered', () => {
     assert.strictEqual(p.$('#th-foe').value, '13');
     assert.ok(p.store.has('tohit-calc:canticle:six'));
     assert.strictEqual(JSON.parse(p.store.get('tohit-calc:canticle:six')).state.foe, '13');
+  });
+});
+
+// #357: a skill with techniques and no weapon row has its own group, and no live cell.
+describe('skills offered for their techniques', () => {
+  it('sit in their own group of the weapon list and follow no table row', () => {
+    const d = dataBlock();
+    d.weapons.forEach((w, i) => { w.id = 'w' + i; });
+    d.weapons.push({ id: 'w3', key: 'Judo', type: 'melee', nth: 0, name: 'Judo', skill: 'Judo', level: 16, base: 16, shown: null, damage: '', range: '', beam: false, aids: [], bonuses: [], bySkill: true });
+    d.techniques.other.push({ skill: 'Judo', name: 'Arm Lock', level: 18 });
+    // A table row that happens to share the skill's name is not this entry's live cell.
+    const p = load(d, { cells: { Judo: '11' } });
+    const groups = p.all('optgroup').map((g) => g.attrs.label);
+    assert.deepStrictEqual(groups, ['Melee', 'Ranged', 'Skills with techniques']);
+    p.set('#th-weapon', 'w3');
+    assert.strictEqual(p.$('#th-roll').textContent, '16');
+    assert.ok(p.$('#th-tech'), 'the technique picker is offered');
   });
 });

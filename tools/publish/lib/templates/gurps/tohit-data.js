@@ -6,6 +6,7 @@
 // the skill (MA83, B230). Aid names are looked for; the bonus is whatever the note says.
 
 const { HIT_LOCATION_ROWS, SIZE_SPEED_RANGE_ROWS } = require('./blocks/reference');
+const { levelAtEnd } = require('./weapon-level');
 
 const AID_NAMES = [
   ['Scope', /\b(?:fixed\s+)?(?:scope|telescopic sight)\b/i],
@@ -24,12 +25,14 @@ const SIGNED_RE = /(?:([+−])|(?:^|[\s(])(-))\s*(\d+)/;
 // Dual-Weapon Attack: default skill-4, so up to 4 points can be bought off (MA83, B230).
 const DUAL_PENALTY = 4;
 
-// [key, label, the reference-table row label whose penalty it carries]. The
-// four limbs share one key, as do hand and foot.
+// [key, label, the reference-table row label whose penalty it carries]. Arms and legs
+// are apart (a low target is harder to hit in the torso, groin and legs, not the arms, B548);
+// hand and foot share one key.
 const LOCATION_KEYS = [
   ['torso', 'Torso', 'Torso'],
   ['vitals', 'Vitals', 'Vitals'],
-  ['limb', 'Arm or leg', 'Right Arm'],
+  ['arm', 'Arm', 'Right Arm'],
+  ['leg', 'Leg', 'Right Leg'],
   ['extremity', 'Hand or foot', 'Hand'],
   ['groin', 'Groin', 'Groin'],
   ['face', 'Face', 'Face'],
@@ -39,7 +42,7 @@ const LOCATION_KEYS = [
 ];
 // Words a Targeted Attack names that are not themselves a key.
 const LOCATION_WORDS = {
-  arm: 'limb', arms: 'limb', leg: 'limb', legs: 'limb',
+  arms: 'arm', legs: 'leg',
   hand: 'extremity', hands: 'extremity', foot: 'extremity', feet: 'extremity', eyes: 'eye',
 };
 
@@ -62,11 +65,11 @@ function buildBands() {
   return SIZE_SPEED_RANGE_ROWS.map(r => firstInt(r[2], NaN)).filter(Number.isFinite);
 }
 
-// The number the sheet wraps in .wp-tohit: the TRAILING number of the Skill cell, exactly
-// as blocks/melee.js and blocks/ranged.js match it (a test keeps the two in step).
+// The number the sheet wraps in .wp-tohit: the level the Skill cell ends with, by the rule
+// blocks/melee.js and blocks/ranged.js wrap it with (weapon-level.js).
 function shownLevel(cell) {
-  const m = /^(.*?)(\d+)(\s*)$/.exec(str(cell));
-  return m ? parseInt(m[2], 10) : null;
+  const m = levelAtEnd(cell);
+  return m ? parseInt(m.level, 10) : null;
 }
 
 // "Beam Weapons (Pistol)-17", "Guns (Rifle) 17", "Knife (12)", "Wrestling-15 +4 = 19",
@@ -74,7 +77,7 @@ function shownLevel(cell) {
 // that directly follows the skill name (after `-`, a space, or inside a trailing
 // `(N)`); parentheticals of prose after it are ignored. Returns null with no level.
 // `/TL<n>` is dropped from the name: it never decides which skill this is.
-function readWeaponSkill(cell) {
+function readOnePair(cell) {
   const s = str(cell).replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\/TL\d+/gi, '').trim();
   const m = /^(.*?)(?:\s*[-\u2212\u2013]\s*(\d+)|\s*\(\s*(\d+)\s*\)|\s*(\d+))/.exec(s);
   if (!m) return null;
@@ -82,6 +85,28 @@ function readWeaponSkill(cell) {
   const level = parseInt(eq ? eq[1] : (m[2] || m[3] || m[4]), 10);
   if (!(level >= 1 && level <= 99)) return null;
   return { skill: m[1].replace(/[\s=:\-\u2212\u2013]+$/, '').trim(), level };
+}
+// A cell can hold two attacks (`Karate-15, Kick-13`). The one named like the weapon is read;
+// else the last, the number the sheet wraps as the row's live cell. `pairs` counts them.
+function readWeaponSkill(cell, weapon) {
+  // A part counts as an attack only when it names one: `incl. +1 Weapon Bond` or `15 with scope`
+  // after a comma is a comment, and the cell is read as one.
+  const parts = splitTop(cell, /[,;]/).map(readOnePair).filter(p => p && /[a-z]/i.test(p.skill) && !/\+/.test(p.skill));
+  if (parts.length < 2) return readOnePair(cell);
+  const stem = weaponStem(weapon);
+  const named = stem ? parts.find(p => p.skill && (norm(p.skill) === stem || stem.includes(norm(p.skill)))) : null;
+  return { ...(named || parts[parts.length - 1]), pairs: parts.length };
+}
+// Split on a separator outside brackets.
+function splitTop(text, sep) {
+  const out = []; let depth = 0; let cur = '';
+  for (const ch of str(text)) {
+    if (ch === '(') depth++;
+    if (ch === ')' && depth > 0) depth--;
+    if (depth === 0 && sep.test(ch)) { out.push(cur); cur = ''; } else cur += ch;
+  }
+  out.push(cur);
+  return out;
 }
 
 // Skills-table lookup: exact, then ignoring /TL<n>, then a bracket written as
@@ -104,9 +129,7 @@ function makeSkillMatcher(skills) {
     for (const ch of a) if (ch === firsts[k]) k++;
     return k === firsts.length;
   };
-  return (name) => {
-    const n = str(name).trim();
-    if (!n) return null;
+  const find = (n) => {
     const exact = entries.find(e => norm(e.name) === norm(n));
     if (exact) return exact;
     const noTl = entries.find(e => bare(e.name) === bare(n));
@@ -118,6 +141,25 @@ function makeSkillMatcher(skills) {
       return b !== null && h === head && b.split(/[^a-z]+/).filter(Boolean).length > 1 && abbrOf(br, b.split(/[^a-z]+/).filter(Boolean));
     }) || null;
   };
+  const match = (name) => {
+    const n = str(name).trim();
+    if (!n) return null;
+    const hit = find(n);
+    if (hit) return hit;
+    // `Beam Weapons/Pistol` is `Beam Weapons (Pistol)`; a skill whose own name has a slash
+    // (Axe/Mace) was found above.
+    const slash = /^([^()/]+?)\s*\/\s*([^()/]+)$/.exec(bare(n));
+    return slash ? find(`${slash[1]} (${slash[2]})`) : null;
+  };
+  // The Skills-table name nearest a name that is not on it: the same head word, else one
+  // that starts the same. Only for a warning.
+  match.closest = (name) => {
+    const [head] = split(str(name).replace(/\//, ' ('));
+    const first = head.split(' ')[0];
+    const same = entries.find(e => split(e.name)[0] === head) || (first ? entries.find(e => norm(e.name).startsWith(first)) : null);
+    return same ? same.name : null;
+  };
+  return match;
 }
 
 function splitPieces(text) {
@@ -146,17 +188,29 @@ function aidMatchIn(text) {
   }
   return null;
 }
-// The signed number nearest AFTER the aid's name in the same piece, or null.
+// The signed number nearest AFTER the aid's name in the same piece; else the one just before
+// it (`+2 scope`); else null.
 function bonusAfter(piece, hit) {
-  return signedIn(str(piece).slice(hit.end));
+  const after = signedIn(str(piece).slice(hit.end));
+  if (after !== null) return after;
+  const before = /(?:([+\u2212])|(?:^|[\s(])(-))\s*(\d+)\s*$/.exec(str(piece).slice(0, hit.start));
+  return before ? ((before[1] || before[2]) === '+' ? 1 : -1) * parseInt(before[3], 10) : null;
 }
-function aidFromPiece(name, piece, bonus) {
+// `fixed` belongs to the aid when it is written beside it: `fixed scope`, `Scope +3 (fixed)`,
+// `Scope +3 Acc fixed`. A `fixed` further along the piece is about something else.
+const FIXED_BEFORE = /\bfixed\s*$/i;
+const FIXED_AFTER = /^\s*(?:[+\u2212-]?\s*\d+\s*)?(?:acc\b\s*)?[(,]?\s*fixed\b/i;
+const fixedBeside = (piece, hit) => /\bfixed\b/i.test(str(piece).slice(hit.start, hit.end))
+  || FIXED_BEFORE.test(str(piece).slice(0, hit.start)) || FIXED_AFTER.test(str(piece).slice(hit.end));
+function aidFromPiece(name, piece, bonus, hit) {
   return {
     name, bonus,
     acc: ALWAYS_ACC.has(name) || /\bacc\b/i.test(piece),
-    fixed: /\bfixed\b/i.test(piece),
+    fixed: fixedBeside(piece, hit),
   };
 }
+// A piece that only finishes the aid before it: `HUD link, -1`, `Scope +2, fixed`, `, +1 Acc`.
+const AID_TAIL = /^\s*(?:([+\u2212]|-)\s*(\d+))?\s*(acc)?\s*(\(?\s*fixed\s*\)?)?\s*$/i;
 // The shooting skills a note can say a bonus is to; the head word only.
 const SKILL_HEADS = { guns: 'Guns', gunner: 'Gunner', 'beam weapons': 'Beam Weapons' };
 function skillsIn(text) {
@@ -195,7 +249,15 @@ function readRowNotes(notes) {
   const aids = []; const bonuses = [];
   for (const piece of splitPieces(notes)) {
     const hit = aidMatchIn(piece);
-    if (hit) { aids.push(aidFromPiece(hit.name, piece, bonusAfter(piece, hit))); continue; }
+    if (hit) { aids.push(aidFromPiece(hit.name, piece, bonusAfter(piece, hit), hit)); continue; }
+    const tail = aids.length ? AID_TAIL.exec(piece) : null;
+    if (tail && (tail[2] || tail[3] || tail[4])) {
+      const last = aids[aids.length - 1];
+      if (tail[2] && last.bonus === null) last.bonus = (tail[1] === '+' ? 1 : -1) * parseInt(tail[2], 10);
+      if (tail[3]) last.acc = true;
+      if (tail[4]) last.fixed = true;
+      continue;
+    }
     const b = BONUS_PIECE.exec(piece);
     if (!b || !b[1].trim() || NOT_TOHIT.test(b[1])) continue;
     bonuses.push({ name: b[1].replace(/[\s:=(]+$/, '').trim(), bonus: (b[2] === '+' ? 1 : -1) * parseInt(b[3], 10) });
@@ -208,7 +270,8 @@ function readAccCell(cell) {
   const acc = firstInt(s, 0);
   const aids = [];
   const m = /^\s*\d+\s*\+\s*(\d+)/.exec(s);
-  if (m) aids.push({ name: 'Scope', bonus: parseInt(m[1], 10), acc: true, fixed: false });
+  // `6+3 fixed` or `6+3 (fixed)`: a fixed scope written in the Acc cell.
+  if (m) aids.push({ name: 'Scope', bonus: parseInt(m[1], 10), acc: true, fixed: /\bfixed\b/i.test(s.slice(m[0].length)) });
   const p = /\(\s*\+\s*(\d+)\s*([^)]*)\)/.exec(s);
   if (p) {
     const hit = aidMatchIn(p[2]);
@@ -259,6 +322,40 @@ function charWideAids(name, notes) {
   return out;
 }
 
+// The attributes a Skill cell can name in place of a skill (`DX-12`).
+const ATTRIBUTES = new Set(['st', 'dx', 'iq', 'ht', 'per', 'will', 'perception']);
+// Unarmed attacks, which an untrained fighter rolls against DX: an attribute and its level in
+// their Skill cell (`DX 13`) is right, not a fault (B182, B231).
+const UNARMED = /^(?:punch|kick|bite|slam|grapple|grab|head ?butt|elbow|knee|shove|trip|unarmed)\b/i;
+// The head words of skills that shoot or throw: their techniques are offered only on a
+// weapon row, since the calculator needs the weapon's Acc, RoF and Rcl.
+const SHOOTING = /^(?:guns|gunner|beam weapons|bow|crossbow|sling|thrown weapon|throwing|blowpipe|liquid projector|artillery|spear thrower|bolas|lasso|net)\b/i;
+// The head words of melee and unarmed fighting skills: a technique of one with no weapon row
+// is offered on the skill's own entry. Acrobatics, Lockpicking or Driving are not attacks.
+const MELEE = /^(?:judo|wrestling|sumo wrestling|karate|brawling|boxing|axe\/mace|two-handed axe\/mace|broadsword|two-handed sword|shortsword|knife|rapier|saber|smallsword|main-gauche|spear|staff|polearm|flail|two-handed flail|jitte\/sai|kusari|lance|whip|garrote|tonfa|cloak|shield|force sword|force whip)\b/i;
+// Techniques that are not an attack roll (a fall, getting up, keeping hold of a weapon): never
+// offered in the calculator.
+const NOT_ATTACK = /^(?:breakfall|acrobatic stand|retain weapon|ground fighting|low fighting|combat riding|combat driving|slip handcuffs|work by touch|set trap)\b/i;
+const isCombat = (skillName) => { const h = norm(str(skillName).replace(/\/TL\d+/gi, '')); return MELEE.test(h) || SHOOTING.test(h); };
+// The last bracket of a name, one level of brackets inside it kept:
+// `Dual-Weapon Attack (Beam Weapons (Pistol))` -> `Beam Weapons (Pistol)`.
+const bracketOf = (name) => { const m = /\(([^()]*(?:\([^()]*\)[^()]*)*)\)\s*$/.exec(str(name)); return m ? m[1].trim() : ''; };
+// A name before its bracket or slash, lower case: `Guns (Rifle)` -> `guns`.
+const headOf = (name) => norm(str(name).replace(/\/TL\d+/gi, '')).split(/\s*[(/]/)[0].trim();
+// The skill a technique's Default cell names: `Judo-2` -> `Judo`; a cell with no number names
+// it whole (`Driving (Automobile)`), less a trailing `(16)`.
+const defSkillOf = (t) => {
+  const d = str(t && t.def).trim();
+  const m = /^\s*(.+?)\s*[-−–+]\s*\d+/.exec(d);
+  return (m ? m[1] : d.replace(/\s*\(\s*\d+\s*\)\s*$/, '')).trim();
+};
+// A row of the Techniques table that is a skill at its default (`Guns (SMG)` from
+// Guns (Rifle)-2, `Forced Entry` from DX+0): a skill for its own weapon's row, not a technique.
+const isSkillDefault = (t, match) => {
+  const name = str(t && t.name).trim(); const def = defSkillOf(t);
+  return !!match(name) || ATTRIBUTES.has(norm(def)) || (!!def && headOf(name) === headOf(def));
+};
+
 // A trait's level: the number after its name ("2", "(2)", "(Level 2)", "2 [10]");
 // the trait with no number is level 1. 0 when the trait is not there.
 function levelOf(name, re) {
@@ -267,17 +364,47 @@ function levelOf(name, re) {
   const n = /(\d+)/.exec(m[1]);
   return n ? parseInt(n[1], 10) : 1;
 }
-function readTraits(advantages, match) {
+// The weapon rows a trait names by the weapon (`Off-Hand Weapon Training (Vibro-Axe)`,
+// `Weapon Bond (Grandfather's Saber)`): every row of it, swing and thrust alike.
+function weaponsNamed(weapons, name) {
+  const want = weaponStem(name);
+  if (!want) return [];
+  return weapons.filter(w => !w.bySkill && (weaponStem(w.key) === want || norm(w.name) === norm(name)));
+}
+// The skill Off-Hand Weapon Training names: a skill, or a weapon read as its skill. null when neither.
+function offHandSkill(said, match, weapons) {
+  const hit = match(said);
+  if (hit) return { name: hit.name, level: hit.level };
+  const w = weaponsNamed(weapons, said).find(x => x.skill);
+  return w ? { name: w.skill, level: w.base } : null;
+}
+function readTraits(advantages, match, weapons, say) {
   const t = { ambidextrous: false, offHand: [], halfRapid: false, telescopic: 0, nightVision: 0 };
+  t.ambidextrous = advantages.some(a => /\bambidext/i.test(str(a && a.name)));
   for (const a of advantages) {
     const n = str(a && a.name);
-    if (/\bambidext/i.test(n)) t.ambidextrous = true;
+    // Off-Hand Weapon Training as a trait: the perk for a shooting skill (Tactical Shooting),
+    // which takes the whole −4 off. It names a skill; a sheet that names the weapon is read as
+    // that weapon's skill. (The Basic Set technique is read from the Techniques table.)
     const oh = /^\s*off-?\s*hand weapon training\s*\((.+)\)/i.exec(n);
     if (oh) {
       for (const s of oh[1].split(',')) {
-        const skill = s.trim();
-        if (skill) t.offHand.push((match(skill) || { name: skill }).name);
+        const said = s.trim();
+        if (!said) continue;
+        const skill = offHandSkill(said, match, weapons);
+        if (skill) t.offHand.push(skill.name);
+        else if (!t.ambidextrous) {
+          say('warning', `Off-Hand Weapon Training (${said}) names no skill in the Skills table and no weapon row, so the off-hand −4 still applies`, `name the skill it is for${match.closest(said) ? ` (${match.closest(said)}?)` : ''}`);
+        }
       }
+    }
+    // Weapon Bond, a perk: +1 with that one weapon (MA53). The Skill cell's level includes it, as
+    // every bonus of the row; it is named so the "+N included" line can say what the +1 is.
+    const bond = /^\s*weapon bond\s*\((.+)\)/i.exec(n);
+    if (bond) {
+      const rows = weaponsNamed(weapons, bond[1].trim());
+      if (!rows.length) say('warning', `Weapon Bond (${bond[1].trim()}) names no weapon row, so its +1 is shown on none`, `name the weapon as its row does`);
+      for (const w of rows) if (!w.bonuses.some(b => /weapon bond/i.test(b.name))) w.bonuses.push({ name: 'Weapon Bond', bonus: 1 });
     }
     if (/\bweapon master\b|\btrained by a master\b/i.test(n)) t.halfRapid = true;
     // "No Targeting" means it gives nothing to an attack roll.
@@ -287,69 +414,159 @@ function readTraits(advantages, match) {
   return t;
 }
 
-function readTechniques(techniques, match, locKeys) {
-  const out = { targeted: [], dual: {}, other: [] };
+// A technique's skill: the one its Default cell names, else the one its own bracket names
+// (`Ranged Rapid Strike (Beam Weapons/Pistol)` with Default `Beam Weapons-6`).
+const techniqueSkill = (t, match) => match(defSkillOf(t)) || match(bracketOf(t && t.name));
+
+// How much of a −4 a technique that defaults to skill−4 buys off: Dual-Weapon Attack (MA83,
+// B230) and Off-Hand Weapon Training (B232), each at most the skill.
+const boughtOff = (level, skillLevel) => Math.max(0, Math.min(DUAL_PENALTY, level - (skillLevel - DUAL_PENALTY)));
+
+function readTechniques(techniques, match, locKeys, weapons, ambidextrous, say) {
+  const out = { targeted: [], dual: {}, offHand: {}, other: [] };
   const seen = new Set();
   for (const t of techniques) {
-    const name = str(t && t.name);
+    const name = str(t && t.name).trim();
     // Read twice (main table, then an "at a glance" table): the first row wins.
-    if (seen.has(norm(name))) continue;
+    if (!name || seen.has(norm(name))) continue;
     seen.add(norm(name));
     const level = firstInt(t && t.level, NaN);
     if (!Number.isFinite(level)) continue;
-    const defSkill = (/^\s*(.+?)\s*[-\u2212\u2013+]\s*\d+/.exec(str(t.def)) || [, ''])[1].trim();
+    const defSkill = defSkillOf(t);
     const targeted = /^targeted attack\s*\((.*)\)\s*$/i.exec(name);
     const dual = /^dual-weapon attack\s*\((.*)\)\s*$/i.exec(name);
+    const offHand = /^off-?\s*hand weapon training\s*\((.*)\)\s*$/i.exec(name);
+    const skillNotFound = [`technique "${name}" names a skill that is not in the Skills table, so it is not offered`, 'spell the skill in full in its name and Default, as the Skills table has it'];
     if (targeted) {
       const inner = targeted[1]; const cut = inner.lastIndexOf('/');
-      if (cut < 0) continue;
-      const word = (/(\S+)\s*$/.exec(inner.slice(cut + 1)) || [, ''])[1].toLowerCase();
+      const word = cut < 0 ? '' : (/(\S+)\s*$/.exec(inner.slice(cut + 1)) || [, ''])[1].toLowerCase();
       const loc = locKeys.has(word) ? word : LOCATION_WORDS[word];
-      if (!loc) continue;
+      if (!loc) { say('warning', `technique "${name}" names no hit location the calculator knows, so it is not offered`, `end its bracket with /Neck, /Vitals, /Arm, /Leg and the like`); continue; }
       const bracket = inner.slice(0, cut).replace(/\s+(?:swing|thrust)$/i, '').trim();
       const hit = match(defSkill) || match(bracket);
-      if (!hit) continue;
+      if (!hit) { say('warning', ...skillNotFound); continue; }
       out.targeted.push({ skill: hit.name, loc, net: level - hit.level, name });
     } else if (dual) {
-      const hit = match(dual[1]);
-      if (!hit) continue;
-      out.dual[hit.name] = Math.max(0, Math.min(DUAL_PENALTY, level - (hit.level - DUAL_PENALTY)));
-    } else if (defSkill) {
-      out.other.push({ skill: (match(defSkill) || { name: defSkill }).name, name, level });
+      const hit = match(dual[1]) || match(defSkill);
+      if (!hit) { say('warning', ...skillNotFound); continue; }
+      out.dual[hit.name] = boughtOff(level, hit.level);
+    } else if (offHand) {
+      // The Basic Set technique (B232): buys off the off-hand −4 for one skill, a point a level.
+      const skill = offHandSkill(offHand[1].trim(), match, weapons) || offHandSkill(defSkill, match, weapons);
+      if (skill && Number.isFinite(skill.level)) out.offHand[skill.name] = boughtOff(level, skill.level);
+      else if (!ambidextrous) say('warning', ...skillNotFound);
+    } else if (defSkill || bracketOf(name)) {
+      // A skill's default written in the Techniques table is a skill, for another weapon's row
+      // (or no weapon's): not a technique to use with this one.
+      if (isSkillDefault(t, match) || NOT_ATTACK.test(name)) continue;
+      const hit = techniqueSkill(t, match);
+      if (hit) out.other.push({ skill: hit.name, name, level });
+      // A technique of a skill that is not on the sheet is the calculator's only if it is a
+      // fighting skill; Combat Driving or Set Trap is not.
+      else if (isCombat(defSkill) || isCombat(bracketOf(name))) say('warning', ...skillNotFound);
     }
   }
   return out;
 }
 
-function buildTohitData(model, meta) {
+// The Equipment table's items, then any a load-out lists that the table does not: a
+// load-out row's notes can name a sighting aid too. A load-out is not carried until it is
+// switched on, so its items are marked `loadout` and their aids start off.
+function equipmentItems(eq) {
+  const items = ((eq && eq.items) || []).filter(Boolean);
+  const seen = new Set(items.map(i => norm(i.name)));
+  const extra = [];
+  for (const lo of (eq && eq.loadouts) || []) {
+    for (const i of (lo && lo.items) || []) {
+      if (!i || seen.has(norm(i.name))) continue;
+      seen.add(norm(i.name));
+      extra.push({ ...i, loadout: true });
+    }
+  }
+  return items.concat(extra);
+}
+
+// `report`, when given, is an array: each row the calculator cannot fully read is pushed to it
+// as { severity: 'warning' | 'info', detail, fix, text }, for the build's Site Faults audit.
+function buildTohitData(model, meta, report) {
   const m = model || {};
   const match = makeSkillMatcher(m.skills || []);
+  const say = (severity, detail, fix) => {
+    if (Array.isArray(report)) report.push({ severity, detail: `to-hit calculator: ${detail}`, fix, text: `to-hit calculator: ${detail}; ${fix}` });
+  };
   const nextId = idMaker();
-  const items = (m.equipment && m.equipment.items) || [];
+  const items = equipmentItems(m.equipment);
+  const techRows = (m.techniques || []).filter(Boolean);
   const weapons = [];
   // `nth`: this row's place among the rows of the same name in its own table (the page reads that
   // row's live to-hit cell); `id` is unique, `key` is the name and may repeat.
   const addWeapon = (row, type, nth) => {
     const key = str(row && row.weapon);
-    const read = key && readWeaponSkill(row.skill);
-    if (!read) return;
-    const hit = match(read.skill);
+    if (!key) return;
+    const where = `${type === 'ranged' ? 'Ranged' : 'Melee'} Attacks row "${key.trim()}"`;
+    // A link with a `|` in a table cell splits the row there unless the `|` is written `\|`.
+    if (/\[\[[^\]]*$/.test(key)) {
+      say('warning', `${where} is split: a link in its Weapon cell holds a | that ends the cell`, 'write the | inside a link in a table as \\|');
+      return;
+    }
+    const read = readWeaponSkill(row.skill, key);
+    if (!read) {
+      say('warning', `${where} is left out: its Skill cell "${str(row.skill).trim()}" has no level`, 'write it as the skill and its level (Broadsword-12), or take the row off if the character does not use it');
+      return;
+    }
+    let hit = match(read.skill);
+    let technique = null;
+    let base = hit ? hit.level : null;
+    if (!hit && !read.skill) {
+      // A bare number: the skill the Weapon cell names in its bracket (`Punch (Brawling)`),
+      // else the weapon's own name when that is a skill (`Knife`).
+      hit = match(bracketOf(key)) || match(weaponStem(key));
+      base = hit ? hit.level : null;
+      if (!hit) say('warning', `${where}: its Skill cell is a bare number, so the row gets no techniques, off-hand rule or "+N included" line`, 'write it as the skill and its level');
+    } else if (!hit && ATTRIBUTES.has(norm(read.skill))) {
+      // `DX-2` is a default, not a level: the number read is the 2.
+      if (read.level < 3) say('warning', `${where}: its Skill cell "${str(row.skill).trim()}" gives a default, not the level`, `write the level the default comes to (${read.skill.toUpperCase()} 13, say)`);
+      else if (!UNARMED.test(weaponStem(key))) say('warning', `${where}: its Skill cell names the attribute ${read.skill}, not a skill`, "name the weapon's skill at its default level, and add that skill to the Skills table at 0 points");
+    } else if (!hit) {
+      // A technique written as a weapon row (`Choke Hold-16`): read as its skill, with the technique.
+      const t = techRows.find(x => norm(x.name) === norm(read.skill) || headOf(x.name) === norm(read.skill));
+      const lv = t ? firstInt(t.level, NaN) : NaN;
+      const parent = t && !isSkillDefault(t, match) ? techniqueSkill(t, match) : null;
+      if (t && isSkillDefault(t, match)) {
+        // A skill at its default, written in the Techniques table (`Guns (SMG)` from Guns (Rifle)-2):
+        // its level there is this row's base; it is a skill of its own, with no technique.
+        base = Number.isFinite(lv) ? lv : null;
+        say('info', `${where}: ${read.skill} is in the Techniques table as a default, not in the Skills table`, `add ${read.skill} to the Skills table${Number.isFinite(lv) ? ` at ${lv}` : ''} for 0 points`);
+      } else if (parent) {
+        hit = parent;
+        technique = str(t.name).trim();
+        base = Number.isFinite(lv) ? lv : null;
+        say('info', `${where} names the technique ${technique}, so it is read as ${parent.name} with that technique`, `the calculator offers ${technique} on the ${parent.name} rows too: keep this row only for its own damage or reach, written ${parent.name}-${Number.isFinite(lv) ? lv : read.level} (the technique's level)`);
+      } else {
+        const near = match.closest(read.skill);
+        say('warning', `${where}: skill "${read.skill}" is not in the Skills table${near ? ` (nearest: "${near}")` : ''}, so the row gets no techniques, off-hand rule or "+N included" line`, 'name the skill as the Skills table does, or add it there at its default level for 0 points');
+      }
+    }
+    const shown = shownLevel(row.skill);
+    if (shown === null) say('warning', `${where}: its Skill cell "${str(row.skill).trim()}" does not end with its level, so the calculator cannot follow encumbrance on this row`, 'end the cell with its level and put any comment in Notes');
+    if (read.pairs > 1) say('info', `${where}: its Skill cell holds ${read.pairs} levels; the calculator uses ${read.skill ? read.skill + ' ' : ''}${read.level}`, 'give each attack its own row');
     const notes = readRowNotes(row.notes);
     const w = {
       id: 'w' + weapons.length, key, type, nth,
-      name: key.replace(/[*\u25c7\u25c6\u2020\u2021]/g, '').replace(/\s+/g, ' ').trim() || key,
+      name: key.replace(/[*◇◆†‡]/g, '').replace(/\s+/g, ' ').trim() || key,
       skill: hit ? hit.name : read.skill, skillAs: read.skill, level: read.level,
-      shown: shownLevel(row.skill),
-      base: hit ? hit.level : null,
+      shown,
+      base,
       range: str(row.range), damage: str(row.damage),
-      beam: /^beam weapons/i.test(read.skill),
+      beam: /^beam weapons/i.test(hit ? hit.name : read.skill),
       aids: [], bonuses: notes.bonuses,
     };
+    if (technique) w.technique = technique;
     if (type === 'ranged') {
       const acc = readAccCell(row.acc);
       // An Equipment row named like this weapon is part of this weapon's own row.
       const stem = weaponStem(key);
-      const own = items.filter(i => i && weaponStem(i.name) === stem).map(i => readRowNotes(i.notes));
+      const own = items.filter(i => weaponStem(i.name) === stem).map(i => readRowNotes(i.notes));
       Object.assign(w, {
         acc: acc.acc, rof: firstInt(row.rof, 1) || 1, rcl: firstInt(row.rcl, 1) || 1,
         bulk: firstInt(row.bulk, 0),
@@ -371,14 +588,40 @@ function buildTohitData(model, meta) {
       addWeapon(r, type, nth);
     }
   }
+
+  const locations = buildLocations();
+  const advantages = (m.traits && m.traits.advantages) || [];
+  const ambidextrous = advantages.some(a => /\bambidext/i.test(str(a && a.name)));
+  const techniques = readTechniques(techRows, match, new Set(locations.map(l => l[0])), weapons, ambidextrous, say);
+  // A fighting skill with techniques and no weapon row (Judo holds, Karate kicks) is offered as its
+  // own entry at its Skills-table level. A shooting skill needs its weapon's numbers: said, not
+  // offered. Any other skill (Acrobatics for Breakfall) is not an attack: left alone.
+  const armed = new Set(weapons.map(w => w.skill));
+  const lone = [...new Set([...techniques.other, ...techniques.targeted].map(t => t.skill))].filter(s => !armed.has(s));
+  for (const skill of lone) {
+    const hit = match(skill);
+    if (!hit) continue;
+    if (SHOOTING.test(headOf(skill))) {
+      say('warning', `the techniques of ${skill} are not offered: no Ranged Attacks row uses ${skill}`, "add the weapon's row");
+      continue;
+    }
+    if (!MELEE.test(norm(skill.replace(/\/TL\d+/gi, '')))) continue;
+    weapons.push({
+      id: 'w' + weapons.length, key: hit.name, type: 'melee', nth: 0, name: hit.name,
+      skill: hit.name, skillAs: hit.name, level: hit.level, shown: null, base: hit.level,
+      range: '', damage: '', beam: false, aids: [], bonuses: [], bySkill: true,
+    });
+  }
+  for (const skill of Object.keys(techniques.dual)) {
+    if (!weapons.some(w => w.skill === skill)) say('warning', `Dual-Weapon Attack (${skill}) is not offered: no weapon row uses ${skill}`, "add the weapon's row, or name the skill as the weapon's row does");
+  }
   if (!weapons.length) return null;
 
-  const stems = new Set(weapons.map(w => weaponStem(w.key)));
-  const advantages = (m.traits && m.traits.advantages) || [];
+  const stems = new Set(weapons.filter(w => !w.bySkill).map(w => weaponStem(w.key)));
   const wide = [];
   for (const item of items) {
-    if (!item || stems.has(weaponStem(item.name))) continue;
-    for (const g of charWideAids(item.name, item.notes)) wide.push({ ...g, id: nextId('gear', item.name, g.aid.name), from: 'gear' });
+    if (stems.has(weaponStem(item.name))) continue;
+    for (const g of charWideAids(item.name, item.notes)) wide.push({ ...g, off: g.off || item.loadout === true, id: nextId('gear', item.name, g.aid.name), from: 'gear' });
   }
   for (const a of advantages) {
     for (const g of charWideAids(a && a.name, '')) wide.push({ ...g, id: nextId('trait', a.name, g.aid.name), from: 'trait' });
@@ -396,16 +639,29 @@ function buildTohitData(model, meta) {
     id: g.id, ...g.aid, from: g.from,
     on: !g.off && (g.aid.bonus === null || best.get(kind(g)) === g),
   }));
+  const traits = readTraits(advantages, match, weapons, say);
 
-  const locations = buildLocations();
+  // A row written above its skill by more than the bonuses it names: said, as information. A
+  // character-wide skill bonus (a targeting program, a reflex sight) can account for it on a
+  // ranged row, as the page's own reading of the row does.
+  const skillAidBonuses = new Set(aids.filter(a => /program$|reflex sight/i.test(a.name) && a.bonus > 0).map(a => a.bonus));
+  for (const w of weapons) {
+    if (w.bySkill || w.base === null) continue;
+    const named = w.bonuses.reduce((t, b) => t + (Number.isFinite(b.bonus) ? b.bonus : 0), 0);
+    const over = w.level - w.base - named;
+    if (over > 0 && !(w.type === 'ranged' && skillAidBonuses.has(over))) {
+      say('info', `${w.type === 'ranged' ? 'Ranged' : 'Melee'} Attacks row "${w.name}": its level ${w.level} is ${w.level - w.base} over ${w.technique || w.skill} ${w.base}, and the row names ${named ? `only +${named} of bonuses` : 'no bonus'}`, 'name the rest in its Notes (+1 Weapon Bond), so the calculator can say what is included');
+    }
+  }
+
   const ff = match('Free Fall');
   return {
     pc: meta && meta.pcSlug,
     campaign: str(meta && meta.campaignId),
     weapons,
     aids,
-    techniques: readTechniques(m.techniques || [], match, new Set(locations.map(l => l[0]))),
-    traits: readTraits(advantages, match),
+    techniques,
+    traits,
     freeFall: ff ? ff.level : null,
     locations,
     bands: buildBands(),

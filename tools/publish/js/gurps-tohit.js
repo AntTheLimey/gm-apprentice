@@ -45,7 +45,7 @@
   const BEHIND = -4;
   const BEHIND_MAX = 20;
   const TARGET_LOW = -2;
-  const TARGET_LOW_LOCS = ['torso', 'groin', 'limb'];
+  const TARGET_LOW_LOCS = ['torso', 'groin', 'leg'];
   // Targeting systems count under the base-Acc sight cap and the twice-Acc cap when aiming
   // (B364, B372, HT155). A laser sight gives +1 with or without Aim (B412, HT156). A targeting
   // or silhouette program is a bonus to the shooting skill, not an Acc bonus (HT157), as is any
@@ -61,6 +61,7 @@
   const DUAL_FOE = -1;
   const DUAL_BOUGHT_MAX = 4;          // the technique buys off at most the -4 (MA83, B230)
   const OFF_HAND = -4;                // none with Ambidexterity (B39) or Off-Hand Weapon Training (B232); B417, B547
+  const OFF_HAND_BOUGHT_MAX = 4;      // the technique buys off at most the -4 (B232)
   const BAD_FOOTING = -2;             // -2 or worse at the GM's option (B547)
   const SHOCK_MAX = 4;                // shock is at most -4 (B419)
   const TOTAL_DARKNESS = -10;         // darkness is -1 to -9, total darkness -10 (B358); Night Vision
@@ -198,12 +199,14 @@
     // are never added here; when the level is above the skills-table level, `included` says so.
     // A picked technique carries that difference, since the technique is worked from the skill.
     let start = level;
-    let startName = skill || w.name || 'Sheet to-hit';
+    // A row written as a technique (`Choke Hold-16`) is named by it; its base is the technique's level.
+    const rowTech = typeof w.technique === 'string' && w.technique ? w.technique : '';
+    let startName = rowTech || skill || w.name || 'Sheet to-hit';
     let included = null;
     const gap = base !== null && level > base ? level - base : 0;
     if (gap) {
       const names = (Array.isArray(w.bonuses) ? w.bonuses : []).map((b) => (b && typeof b.name === 'string' ? b.name : '')).filter(Boolean);
-      included = { amount: gap, over: `${skill} ${base}`.trim(), names };
+      included = { amount: gap, over: `${rowTech || skill} ${base}`.trim(), names };
     }
     if (tech) {
       start = int(tech.level, -99, 99) + gap;
@@ -339,7 +342,13 @@
       const offList = Array.isArray(traits.offHand) ? traits.offHand : [];
       if (traits.ambidextrous === true) notes.push('Ambidexterity: no off-hand penalty.');
       else if (offHand(offList, skill)) notes.push('Off-Hand Weapon Training for this skill: no off-hand penalty.');
-      else add('attack', 'Off hand', OFF_HAND);
+      else {
+        // The technique (B232) buys the -4 off a point a level.
+        const offMap = isObj(data.techniques) && isObj(data.techniques.offHand) ? data.techniques.offHand : {};
+        const bought = int(offMap[skill], 0, OFF_HAND_BOUGHT_MAX);
+        if (bought >= OFF_HAND_BOUGHT_MAX) notes.push('Off-Hand Weapon Training for this skill: no off-hand penalty.');
+        else add('attack', 'Off hand' + (bought ? ` (technique +${bought})` : ''), OFF_HAND + bought);
+      }
     }
 
     // Hit location: a matching Targeted Attack technique replaces the plain penalty.
@@ -352,7 +361,6 @@
     }
     if (ranged && st.targetLow === true && (!loc || TARGET_LOW_LOCS.indexOf(loc[0]) >= 0)) {
       add('target', 'Target crouching, kneeling, sitting or lying', TARGET_LOW);
-      if (loc && loc[0] === 'limb') notes.push('A low target is harder to hit in the legs only; take it off for an arm.');
     }
     add('target', 'Target size', int(st.sm, -30, 30));
 
@@ -532,7 +540,16 @@
       if (typeof v === 'number' && Number.isFinite(v)) s[k] = String(v);
       else if (typeof v === 'string' && num(v) !== null) s[k] = v.trim();
     }
-    if (isObj(raw.aids)) for (const id of Object.keys(s.aids)) if (typeof raw.aids[id] === 'boolean') s.aids[id] = raw.aids[id];
+    // A tick is kept per weapon (`<aid>@<weapon>`); a state saved before that keeps one tick per
+    // aid, which stands for every weapon that has no tick of its own.
+    if (isObj(raw.aids)) {
+      for (const tick of Object.keys(s.aids)) {
+        const at = tick.lastIndexOf('@');
+        const aid = at > 0 ? tick.slice(0, at) : '';
+        if (typeof raw.aids[tick] === 'boolean') s.aids[tick] = raw.aids[tick];
+        else if (aid && typeof raw.aids[aid] === 'boolean') s.aids[tick] = raw.aids[aid];
+      }
+    }
     if (isObj(raw.aidBonus)) {
       const ids = new Set();
       for (const w of list) for (const a of aidsFor(data, w)) ids.add(a.id);
@@ -646,6 +663,8 @@
       return [];
     }
     function liveCell(w) {
+      // A skill offered for its techniques has no row of its own.
+      if (w.bySkill === true) return null;
       const rows = tableRows(w.type);
       let seen = 0;
       for (let i = 0; i < rows.length; i++) {
@@ -806,8 +825,8 @@
     const modeEl = h('span', { class: 'th-mode', id: 'th-mode' });
     const weaponSel = h('select', { id: 'th-weapon' });
     const weaponOpts = [];
-    for (const [kind, label] of [['melee', 'Melee'], ['ranged', 'Ranged']]) {
-      const mine = data.weapons.filter((w) => w.type === kind);
+    for (const [kind, label, bySkill] of [['melee', 'Melee', false], ['ranged', 'Ranged', false], ['melee', 'Skills with techniques', true]]) {
+      const mine = data.weapons.filter((w) => w.type === kind && (w.bySkill === true) === bySkill);
       if (!mine.length) continue;
       const g = h('optgroup', { label });
       for (const w of mine) { const o = h('option', { value: weaponId(w) }); weaponOpts.push([o, w]); g.appendChild(o); }
@@ -846,8 +865,9 @@
       ]), groupsEl]),
       h('div', { class: 'th-out' }, [
         h('div', { class: 'th-big' }, [
-          h('div', { class: 'th-stick' }, [big('Roll', rollEl), big('Hit', hitEl)]),
-          h('div', { class: 'th-sub' }, [big('Critical', critEl), big('Fumble', fumbleEl)]),
+          // One line: on a phone the whole of it stays under the site header as the groups change.
+          h('div', { class: 'th-stick' }, [big('Roll', rollEl), big('Hit', hitEl),
+            h('div', { class: 'th-sub' }, [big('Critical', critEl), big('Fumble', fumbleEl)])]),
         ]),
         liveEl,
         stripEl,
@@ -1001,6 +1021,8 @@
     weaponSel.addEventListener('change', () => {
       state.weapon = weaponSel.value;
       state.technique = '';
+      // A hit location is chosen for one attack: a new weapon starts back at the torso.
+      state.loc = defaultState(data).loc;
       rebuild();
       changed();
     });

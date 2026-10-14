@@ -14,7 +14,7 @@ const { buildTohitData } = require('../lib/templates/gurps/tohit-data');
 const T = require('../js/gurps-tohit');
 
 const LOCATIONS = [
-  ['torso', 'Torso', 0], ['vitals', 'Vitals', -3], ['limb', 'Arm or leg', -2], ['extremity', 'Hand or foot', -4],
+  ['torso', 'Torso', 0], ['vitals', 'Vitals', -3], ['arm', 'Arm', -2], ['leg', 'Leg', -2], ['extremity', 'Hand or foot', -4],
   ['groin', 'Groin', -3], ['face', 'Face', -5], ['neck', 'Neck', -5], ['skull', 'Skull', -7], ['eye', 'Eye', -9],
 ];
 
@@ -578,7 +578,7 @@ describe('the Ronnie fixture through effective', () => {
   });
   it('a full state still gives integers', () => {
     for (const w of block.weapons) {
-      const r = T.effective(block, { weapon: w.key, aim: 3, braced: true, man: 'aod', yards: 40, shots: 3, loc: 'limb', zerog: true,
+      const r = T.effective(block, { weapon: w.key, aim: 3, braced: true, man: 'aod', yards: 40, shots: 3, loc: 'leg', zerog: true,
         dual: true, offhand: true, aids: Object.fromEntries(w.aids.concat(block.aids).map((a) => [a.id, true])) });
       assert.ok(Number.isInteger(r.roll), w.key);
     }
@@ -763,9 +763,9 @@ describe('cover and target posture (B407, B548, B551)', () => {
     assert.strictEqual(rolls(mk(), Object.assign({ targetLow: true, loc: 'groin' }, P)), 12);
     assert.strictEqual(rolls(mk(), Object.assign({ targetLow: true, loc: 'skull' }, P)), 10);
     assert.strictEqual(rolls(mk(), Object.assign({ targetLow: true, loc: 'extremity' }, P)), 13);
-    const limb = T.effective(mk(), Object.assign({ targetLow: true, loc: 'limb' }, P));
-    assert.strictEqual(limb.roll, 13);
-    assert.ok(limb.notes.some((n) => /legs only/.test(n)));
+    // Arms and legs are apart (#357): a low target is harder to hit in the legs only.
+    assert.strictEqual(rolls(mk(), Object.assign({ targetLow: true, loc: 'leg' }, P)), 13);
+    assert.strictEqual(rolls(mk(), Object.assign({ targetLow: true, loc: 'arm' }, P)), 15);
   });
   it('none of it applies to a melee weapon', () => {
     assert.strictEqual(rolls(mk(), { weapon: 'Knife', cover: 'partial', behind: 2, targetLow: true }), 14);
@@ -1036,3 +1036,38 @@ describe('a character-wide skill bonus already in the row\'s level', () => {
   });
 });
 
+
+// #357, #393: older saved ticks, and a row written as a technique.
+describe('older saved ticks and rows named by a technique', () => {
+  it('a state saved with one tick per aid keeps that tick on every weapon', () => {
+    const d = mk();
+    d.aids = [{ id: 'gear-hud', name: 'HUD link', bonus: 1, acc: true, fixed: false, from: 'gear', on: true }];
+    const s = T.cleanState(d, { aids: { 'gear-hud': false } });
+    assert.strictEqual(s.aids['gear-hud@Blaster pistol'], false);
+    // A per-weapon tick, where there is one, wins.
+    assert.strictEqual(T.cleanState(d, { aids: { 'gear-hud': false, 'gear-hud@Blaster pistol': true } }).aids['gear-hud@Blaster pistol'], true);
+  });
+  it('a row written as a technique is named by it, and its "+N included" is over the technique', () => {
+    const d = mk();
+    d.weapons.push({ key: 'Choke Hold (carotid)', type: 'melee', name: 'Choke Hold (carotid)', skill: 'Judo', technique: 'Choke Hold', level: 18, base: 16, range: '', damage: '', beam: false, aids: [], bonuses: [{ name: 'Weapon Bond', bonus: 2 }] });
+    const r = T.effective(d, { weapon: 'Choke Hold (carotid)' });
+    assert.strictEqual(r.lines[0].label, 'Choke Hold');
+    assert.strictEqual(r.roll, 18);
+    assert.deepStrictEqual(r.included, { amount: 2, over: 'Choke Hold 16', names: ['Weapon Bond'] });
+  });
+});
+
+// Off-Hand Weapon Training as a technique (B232): a point a level off the -4.
+describe('the off-hand technique', () => {
+  it('buys off part of the -4, or all of it', () => {
+    const d = mk();
+    d.techniques.offHand = { Knife: 2 };
+    const part = T.effective(d, { weapon: 'Knife', offhand: true });
+    assert.strictEqual(part.roll, 12);
+    assert.ok(part.lines.some((l) => l.label === 'Off hand (technique +2)' && l.value === -2));
+    d.techniques.offHand = { Knife: 4 };
+    const all = T.effective(d, { weapon: 'Knife', offhand: true });
+    assert.strictEqual(all.roll, 14);
+    assert.ok(all.notes.some((n) => /no off-hand penalty/.test(n)));
+  });
+});
