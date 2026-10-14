@@ -147,3 +147,31 @@ def test_no_page_names_an_old_key_bare():
     hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
             for found in _bare_old_key_mentions(p.name, p.read_text(encoding="utf-8"), keys)]
     assert hits == []
+
+
+# The keys a site folder's file and its package.json used to hold. They are settings of the
+# vault now; a page names the setting, never the key it came from. The record of each release
+# (the changelog and the migrations page) and the format page's section on the old layout
+# are where they may still be named.
+SITE_FOLDER_WORDS = re.compile(r"\b(?:siteUrl|outputDir|preserveDirs|cloudflarePagesProject|prebuild|postbuild)\b")
+
+
+def _site_folder_word_mentions(name, text):
+    text = GENERATED.sub("", text.replace("\r\n", "\n"))
+    if name == OLD_LAYOUT_SECTION[0]:
+        text = OLD_LAYOUT_SECTION[1].sub("", text)
+    return sorted({m.group(0) for m in SITE_FOLDER_WORDS.finditer(text)})
+
+
+def test_the_site_folder_word_scan_finds_what_it_looks_for():
+    text = ("Set `siteUrl` and `postbuild`.\n<!-- settings:site -->\nwas `outputDir`\n<!-- /settings:site -->\n")
+    assert _site_folder_word_mentions("any.md", text) == ["postbuild", "siteUrl"]
+    page = "## The old file\n\n`prebuild`.\n\n## The state file\n\n`preserveDirs`\n"
+    assert _site_folder_word_mentions(OLD_LAYOUT_SECTION[0], page) == ["preserveDirs"]
+
+
+def test_no_page_names_a_site_folder_key_or_build_hook():
+    pages = [p for p in [*_hand_written_pages(), ROOT / "README.md"] if p.name not in RECORDS]
+    hits = [f"{p.relative_to(ROOT).as_posix()}: {found}" for p in pages
+            for found in _site_folder_word_mentions(p.name, p.read_text(encoding="utf-8"))]
+    assert hits == []

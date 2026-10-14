@@ -131,6 +131,14 @@ what follows is as described under "Check the spelling" above.
 
 ## The vault
 
+The status lists are matched against a note's `status` in any case and
+with spaces at either end ignored. `vault.statuses.out_of_play` is read by
+the site and by the apprentice's own checks and session preparation, so a
+word you take out of it changes both: the same characters are out of play
+on the page and at the table. The other two lists shape the site only. The
+four numbers are read by the apprentice's checks, session preparation and
+the index; the site does not use them.
+
 <!-- settings:vault -->
 
 | Setting | What it does | Values | Left out |
@@ -182,6 +190,42 @@ warning and counts as `on`.
 
 Set `player_site.publish: false` to stop publishing without losing the site
 folder's path. With the site off nothing is built.
+
+### Build steps
+
+A build step is a command the publish tool runs for you around a build:
+`player_site.before_build` runs before the pages are made, and
+`player_site.after_build` runs once every page is written, for jobs such as
+shrinking pictures or adding a page of your own. Each is a list, so you can
+have several, and they run in the order you wrote them, in the site folder.
+
+```yaml
+player_site:
+  after_build:
+    - node tools/add-props.js
+```
+
+- The tool prints each command before it runs it.
+- A step that fails stops the build, and nothing is published.
+- The steps run when you build the site or deploy it. They do not run for a
+  dry run, the preview, the sheet view, a check of the site, or a deploy
+  told to skip the build.
+- A step that runs for more than ten minutes is stopped and counts as
+  failed.
+
+Add a step with `settings add player_site.after_build "node tools/add-props.js"`.
+
+### Extra menu entries
+
+`player_site.menu_extra` adds your own entries to the site's menu, such as
+a gazetteer you built by hand. Each has a `label`, a `link` and, if you
+like, a `group`. Ask the apprentice, or run:
+
+```text
+settings add player_site.menu_extra label=Gazetteer link=gazetteer/index.html group=World
+```
+
+Take one out by its label with `settings remove player_site.menu_extra Gazetteer`.
 
 ## What gets published
 
@@ -438,18 +482,19 @@ should not need to touch it.
 | `vaultPath` | Where the vault is on this computer |
 
 The site's address, host, output folder, Cloudflare project name and the
-folders a rebuild leaves alone used to be written here too. They are
-settings of the vault now (`player_site.url`, `player_site.host`,
-`player_site.output`, `player_site.cloudflare_project` and
-`player_site.keep`, in the tables above). Until the next vault update
-moves them, the build still reads them from this file when the vault sets
-none, and warns about each.
+folders a rebuild leaves alone are settings of the vault
+(`player_site.url`, `player_site.host`, `player_site.output`,
+`player_site.cloudflare_project` and `player_site.keep`, in the tables
+above), and so are the build steps. A new site's file holds none of them.
 
-An older site may still hold other campaign settings in this file under
-other names. They are no longer read there: the build warns about each, and
-stops for one that hides things from players. Ask the apprentice to
-check the settings: it adds anything such a key hid to the vault's own
-list and removes the keys from this file.
+An older site may still hold some of these in its file, or other campaign
+settings under other names. The next vault update moves the five site
+settings and the build steps into the vault and tells you what it did. Until
+then the build reads those five from this file when the vault sets none, and
+warns about each. Other campaign settings are not read from this file: the
+build warns about each, and stops for one that hides things from players.
+Ask the apprentice to check the settings: it adds anything such a key hid
+to the vault's own list and removes the keys from this file.
 
 ## See also
 
