@@ -10,10 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.10.55] — 2026-10-13
 
 The publish tool learns the last settings that lived outside your vault,
-and a few new ones. A vault already on the new settings file is left as
-it is: its site folder's file and build steps keep working, and the next
-release's update carries them into the vault. A vault still on the old
-settings file has them carried in the same step that moves it.
+and a few new ones. The next update carries what your site folder still
+holds (the keys in its `vault.config.json` and the build steps in its
+`package.json`) into the vault's settings, and from then on the tool
+runs the build steps itself. What the site publishes does not change:
+the copies of two real campaigns used to test this built the same pages
+before and after, and the only file that differs is the stylesheet,
+which gains the rules for the new banner.
 
 ### Added
 
@@ -22,12 +25,14 @@ settings file has them carried in the same step that moves it.
   `player_site.cloudflare_project` and `player_site.keep` (folders in
   the output the build must not clean). Until the update carries them, a
   value still in the site folder's `vault.config.json` is used, with a
-  line saying it will move.
+  line saying it will move. The update leaves them there for a site
+  whose own publish tool is older than 1.24.0 and is not one the update
+  looks after, and says so.
 - Build steps can live in the vault: `player_site.before_build` and
   `player_site.after_build` are lists of commands the tool runs, in
-  order, with every `build` and before every `deploy`. Each is printed
-  before it runs, and a step that fails stops the build. A dry run, the
-  preview and the checks run none. A `prebuild` or `postbuild` still in
+  order, with every `build`, including the build a `deploy` makes. Each
+  is printed before it runs, and a step that fails stops the build. A dry
+  run, the preview, the checks and `deploy --no-build` run none. A `prebuild` or `postbuild` still in
   the site's `package.json` keeps running as before until its steps are
   in the vault.
 - Extra menu entries: `player_site.menu_extra` is a list of entries,
@@ -37,9 +42,9 @@ settings file has them carried in the same step that moves it.
   group=World` adds one.
 - A banner on the landing page: `player_site.landing.banner.title`,
   `.text`, `.link` and `.image`.
-- A menu entry or banner that links to a note with no page is left out,
-  with a warning; the build's check for secret names reads their words
-  like any page text.
+- A menu entry that links to a note with no page is left out, and a
+  banner that does so loses its link, each with a warning. The build's
+  check for secret names reads their words like any page text.
 - Numbers that were fixed are settings, under `player_site.limits`: how
   many timeline events show, how long a recap and a preview card run,
   how many facts a card holds, how many goals and relationships a
@@ -51,16 +56,20 @@ settings file has them carried in the same step that moves it.
   `vault.statuses.fallen` and `vault.statuses.gone`.
 - `settings move` carries what a site folder still holds (its file's
   keys and its `package.json` build steps) into the vault, all or
-  nothing, and takes them out of the site folder. The update already
-  runs it when it moves a vault off the old settings file, so that vault
-  gets the site folder's left-overs carried at the same time; a vault
-  that has already moved gets them at the next release.
+  nothing, and takes them out of the site folder. The update runs it on
+  every vault that has a site, whether the vault is still on the old
+  settings file or has already moved, and lists what it will carry
+  before it does.
 
 ### Changed
 
 - A build whose output folder is outside the site folder, or is the site
   folder itself, now stops before it cleans anything. So does a build
-  that cannot read which folders to keep.
+  that cannot read which folders to keep. A shortcut (symbolic link)
+  named as the output folder is followed first, so it cannot point the
+  build at your vault. A kept folder matches whatever its letter case.
+- `settings set` and `settings add` refuse an output folder or a kept
+  folder the build would stop on, and say why.
 - A PC whose status is `destroyed` or `dissolved` is out of play: off the
   party board and the active team, and in In Memoriam.
 - A status written with a stray space or capitals (`Dead `) is read as
