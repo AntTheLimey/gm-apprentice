@@ -33,6 +33,7 @@ const CASES = {
   manifest: [/manifest <diff\|apply\|publish-played\|rename>/, /--prune/, /is the GM's call/],
   deploy: [/deploy \[--config <path>\] \[--verify\]/, /--dry-run/, /--no-build/],
   explain: [/explain <vault-relative path>/, /gm-only blocks/, /before "doctor --site"/],
+  serve: [/serve \[--site gm\|player\] \[--port <n>\]/, /--port <n>/, /home network/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {

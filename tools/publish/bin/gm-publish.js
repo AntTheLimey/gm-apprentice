@@ -32,6 +32,7 @@ gm-apprentice-publish - Static site generator for gm-apprentice campaign vaults
 Usage:
   gm-apprentice-publish init [target-dir]    Scaffold a new site
   gm-apprentice-publish build [options]      Build the site (--site player|gm)
+  gm-apprentice-publish serve [options]      Serve a built site to the home network (--site gm|player)
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
@@ -279,6 +280,19 @@ withholds because its Wrap-Up publishes.
   --all              Every file at once (needs --json)
   --vault <dir>      Read this vault through the site's rules instead of
                      the vault the config names
+  --help, -h         Show this help
+`,
+  serve: `
+gm-apprentice-publish serve [--site gm|player] [--port <n>] [--config <path>]
+
+Serves an already-built site folder to your home network, read only, so the GM
+site can be opened on a tablet or phone at the table. It builds nothing and
+asks for no passphrase: run build first. It runs until you stop it (Ctrl+C)
+and prints the addresses to open.
+
+  --site <name>      The GM site (the default) or the player site
+  --port <n>         A whole number from 1 to 65535 (default 4321)
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
   deploy: `
@@ -677,6 +691,28 @@ if (command === 'build') {
     }
     exitAfterFlush(0);
   })();
+  return;
+}
+
+if (command === 'serve') {
+  const parsed = parseSubcommandArgs(args.slice(1), {}, { '--site': 'site', '--port': 'port' });
+  if (parsed.error) {
+    const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
+    if (bad) refuseUnknownArgument('serve', bad[1]);
+    console.error(`Error: ${parsed.error}`);
+    process.exit(1);
+  }
+  const site = parsed.flags.site === undefined ? 'gm' : parsed.flags.site;
+  if (site !== 'gm' && site !== 'player') {
+    console.error(`Unknown site: ${site}. Use --site player or --site gm.`);
+    process.exit(1);
+  }
+  // The server keeps the process alive; it stops on Ctrl+C. A refusal exits with the reason.
+  require('../lib/serve.js').runServe({
+    configPath: parsed.configPath,
+    site,
+    ...(parsed.flags.port === undefined ? {} : { port: parsed.flags.port }),
+  }).catch(failAfterFlush);
   return;
 }
 
