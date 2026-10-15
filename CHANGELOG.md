@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.64] — 2026-10-15
+
+`deploy` checks the finished site for hidden text before it uploads
+anything.
+
+### Added
+
+- The leak check. After the build, the build steps and any `postbuild`
+  script, and before any upload, `deploy` reads every text file of the
+  folder it would upload (pages, scripts the vault added, JSON, text).
+  It looks for any hidden sentence, list item or table cell of four words
+  or more (a GM Notes section, a `secrets` field, a GM-only relationship,
+  a gm-only block, a spoiler, a secret callout, a comment, a stub's cut, a
+  note that is not published, a session index's own body) and for secret
+  names (`gm_aliases`, the name of a withheld note). Words a published
+  note also says are not counted as hidden. A finding stops the deploy
+  before any `git` or `wrangler` command and names the page, the sentence,
+  the note it came from and why it is hidden. The check reads only and
+  writes nothing in the site. On a 1,000-page campaign it takes about
+  three seconds on top of the build.
+- `deploy --dry-run` runs the check too and exits 1 when the real deploy
+  would stop; `--json` carries the findings in `leaks`. A site with no
+  built folder yet says there is nothing to check. A vault kept by a
+  player (`vault.kept_by: player`) skips the check with one line. No flag
+  skips it otherwise.
+- `gm-apprentice-publish leaks list | check | accept | prune`. `accept`
+  writes a finding into the publish list under `accepted:`; it is not
+  asked about again while the page and the sentence stay the same.
+  `prune` removes accepted findings that are no longer needed. A vault
+  with no publish list can accept too (the file then holds only
+  `accepted:`); a vault still on `_meta/publish-manifest.md` is told to
+  update first.
+- The publish-site skill walks the GM through each finding when a deploy
+  stops: fix the note, accept the finding, or report a tool bug.
+
+---
+
 ## [1.10.63] — 2026-10-15
 
 Shrunk pictures are kept between builds, and the update offers to retire
