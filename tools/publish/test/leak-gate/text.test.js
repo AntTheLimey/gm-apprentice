@@ -44,6 +44,10 @@ describe('leak gate: text', () => {
     assert.deepEqual(piecesOfMarkdown('The ![[seal.png]] lies under the old altar.').map(wordsOf), [['the', 'lies', 'under', 'the', 'old', 'altar']]);
     assert.deepEqual(piecesOfMarkdown('The vicar&apos;s key opens the crypt.').map(wordsOf), [["the", "vicar's", 'key', 'opens', 'the', 'crypt']]);
   });
+  it('an underscore parts words, as on the page: a link to Edmund_Courtney prints two words', () => {
+    assert.deepEqual(piecesOfMarkdown('She met [[Edmund_Courtney]] at the _old_ snake_case quay.').map(wordsOf),
+      [['she', 'met', 'edmund', 'courtney', 'at', 'the', 'old', 'snake', 'case', 'quay']]);
+  });
   it('takes every string of a frontmatter value', () => {
     assert.deepEqual(piecesOfValue({ target: '[[Vex]]', description: 'pays the harbourmaster every week' }), ['pays the harbourmaster every week']);
   });

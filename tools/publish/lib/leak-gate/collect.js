@@ -11,7 +11,7 @@ const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
 const { publishedPages } = require('../published-pages');
 const { ALWAYS_EXCLUDE_DIRS } = require('../publish-decision');
-const { getsNoPage } = require('../previews');
+const { getsNoPage, rowsFor } = require('../previews');
 const { pcKeepList } = require('../pc-prose');
 const { pairHubs } = require('../session-hub');
 const { parseNote } = require('../frontmatter');
@@ -20,10 +20,14 @@ const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, stringsOfValue, textsOfMarkdown, wordsOf } = require('./text');
+const { piecesOfMarkdown, piecesOfValue, fieldRunsOf, tableRunsOf, textsOfMarkdown, wordsOf } = require('./text');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
+// The fields a page prints under the tool's own labels (occupation as "Role"), as "label value".
+function printedRows(page) {
+  try { return rowsFor(page, {}).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
+}
 const clip = (s, max = 160) => (s.length > max ? `${s.slice(0, max - 1)}…` : s);
 
 function collectHidden({ configPath }) {
@@ -87,7 +91,8 @@ function collectHidden({ configPath }) {
     const fm = page.frontmatter || {};
     const overrides = fieldOverrides[rel] || {};
     for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(piecesOfValue(h.value), rel, h.label);
-    visible.push(String(page.displayTitle || ''), ...stringsOfValue(publishedFrontmatter(fm, excludeFields, overrides)));
+    const shownFields = publishedFrontmatter(fm, excludeFields, overrides);
+    visible.push(String(page.displayTitle || ''), ...fieldRunsOf(shownFields, page.displayTitle), ...printedRows({ ...page, frontmatter: shownFields }));
     if (hubs.has(page)) {
       add(piecesOfMarkdown(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
       continue;
@@ -110,8 +115,11 @@ function collectHidden({ configPath }) {
         shownText = stubCut(source, include, withhold).text;
       }
       addMarked(playerSafeMarkdown(text, { ...options, mark }).text, rel);
-      // Read as the hidden pieces are (textsOfMarkdown), so a sentence the GM wrote in both places matches.
-      visible.push(...textsOfMarkdown(playerSafeMarkdown(shownText, options).text));
+      // Read as the hidden pieces are (textsOfMarkdown), so a sentence the GM wrote in both places matches; its blocks as
+      // one run, in order, as the page shows them (a table row's cells, a callout's title and its text, a heading).
+      const shownMarkdown = playerSafeMarkdown(shownText, options).text;
+      visible.push(textsOfMarkdown(shownMarkdown, { headings: true }).join('\n'));
+      visible.push(...tableRunsOf(shownMarkdown));
     }
   }
 

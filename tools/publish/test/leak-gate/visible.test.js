@@ -37,6 +37,52 @@ describe('leak gate: also visible, read as the page reads it', () => {
     });
   }
 
+  // The page runs a note's blocks together in order: a table row's cells, a callout's title and its text.
+  for (const [kind, published, hidden] of [
+    ['a table read across its cells', '| Stat | Value |\n| --- | --- |\n| STR | 55 |\n| CON | 60 |\n| Dodge | 30% (15/6) |', 'STR: 55 CON: 60 Dodge 30% (15/6)'],
+    ['a callout title and its text', '> [!info] Source\n> the tavern ledger was copied by hand.', 'Source: the tavern ledger was copied by hand.'],
+    ['a table printed without its header row (a sheet)', '**Wealth:**\n\n| Attribute | Value |\n| --- | --- |\n| Spending Level | 2 |\n| Cash | 40 |', 'Wealth: Spending Level: £2 | Cash: £40'],
+    ['a heading','### Rank is served, not stated\n\nThe soup comes first.', 'Rank is served, not stated.'],
+    ['a table cell holding labelled links', '| When | What |\n| --- | --- |\n| Night | [[Mayor|The mayor]] and [[Baker|the baker]] scout the old mill. |', 'The mayor and the baker scout the old mill.'],
+  ]) {
+    it(`hidden text a published note says as ${kind} is not a finding`, () => {
+      const site = leakSite({
+        'NPCs/Baker.md': `---\ntype: npc\n---\n${published}\n`,
+        'Prep/Draft.md': `---\ntype: npc\npublish: false\n---\n${hidden}\n`,
+      }, SETTINGS);
+      try {
+        // The page prints the published note's words in that run (a sheet prints a table without its header row).
+        leakInto(site.outputDir, 'npcs/baker.html', hidden);
+        assert.deepEqual(gate(site).findings, []);
+      } finally { site.cleanup(); }
+    });
+  }
+
+  it('a published field, as its label and value or under its note\'s title, is not a finding', () => {
+    const site = leakSite({
+      'NPCs/Sir Andrew Duncan.md': '---\ntype: npc\nrole: Junior government minister\n---\nA minister.\n',
+      'NPCs/Lord Digby.md': '---\ntype: npc\noccupation: Retired colonial officer\nmood: Cheerful and very loud\n---\nA lord.\n',
+      'Prep/Draft.md': '---\ntype: npc\npublish: false\n---\n- Sir Andrew Duncan (Junior government minister)\n- Role: Retired colonial officer\n- Mood: Cheerful and very loud\n',
+    }, SETTINGS);
+    try {
+      // occupation prints as "Role" (the label the tool's pages give it); other fields by their own name.
+      leakInto(site.outputDir, 'npcs/lord-digby.html', 'Role: Retired colonial officer. Sir Andrew Duncan (Junior government minister). Mood: Cheerful and very loud.');
+      assert.deepEqual(gate(site).findings, []);
+    } finally { site.cleanup(); }
+  });
+
+  it('a hidden piece that is only the site\'s public names (a list of mentions) is not a finding', () => {
+    const site = leakSite({
+      'NPCs/Emma Wentworth.md': '---\ntype: npc\n---\nA lady.\n',
+      'NPCs/Marina Garrick.md': '---\ntype: npc\n---\nA lady.\n',
+      'Prep/Draft.md': '---\ntype: npc\npublish: false\n---\n- Emma Wentworth, Marina Garrick\n- Emma Wentworth fears Marina Garrick\n',
+    }, SETTINGS);
+    try {
+      leakInto(site.outputDir, 'npcs/emma-wentworth.html', 'Emma Wentworth, Marina Garrick. Emma Wentworth fears Marina Garrick.');
+      assert.deepEqual(gate(site).findings.map((f) => f.text), ['emma wentworth fears marina garrick']);
+    } finally { site.cleanup(); }
+  });
+
   it('a hidden sentence the site does not say is still found', () => {
     const site = leakSite({
       ...MAYOR,

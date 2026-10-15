@@ -15,9 +15,11 @@ const TOOL_CSS = path.join(__dirname, '..', '..', 'css');
 
 function createMatcher(pieces) {
   const index = new Map();
+  const firsts = new Set();   // a quick test before the four-word key is made
   for (const piece of pieces) {
     if (piece.words.length < MIN_WORDS) continue;
     const key = piece.words.slice(0, MIN_WORDS).join(' ');
+    firsts.add(piece.words[0]);
     const list = index.get(key);
     if (list) list.push(piece); else index.set(key, [piece]);
   }
@@ -25,6 +27,7 @@ function createMatcher(pieces) {
     scan(words) {
       const hits = [];
       for (let i = 0; i + MIN_WORDS <= words.length; i++) {
+        if (!firsts.has(words[i])) continue;
         const list = index.get(`${words[i]} ${words[i + 1]} ${words[i + 2]} ${words[i + 3]}`);
         if (!list) continue;
         for (const piece of list) {
