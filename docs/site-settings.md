@@ -499,7 +499,9 @@ folder, named after it with `-gm` added, and writes that path to
 gm` or `build --site player` makes one. Every GM page carries a "GM copy:
 not for players" band and asks search engines to keep away, and `deploy`
 refuses to put a GM folder online. The live status bar, the inbox and the
-party board stay on the player site.
+party board stay on the player site. Hidden words that land in a page's
+title, description, image text or script data are shown there without a
+mark, so do not read those places aloud as if players had them.
 
 <!-- settings:gm -->
 

@@ -37,7 +37,8 @@ test('the GM site lays the overrides over, whole values replacing', () => {
   const s = forSite(readSettings({ vaultPath: vaultWith(BASE) }), 'gm').site;
   assert.equal(s.title, 'Table');
   assert.equal(s.footer, 'Foot');
-  assert.deepEqual(s.hide.sections, ['GM Notes']);
+  // A hide list under gm_site is not a setting: what players see has one source, the player site.
+  assert.deepEqual(s.hide.sections, ['GM Notes', 'Secrets']);
 });
 
 test('the GM site never inherits build steps, live stats or the inbox', () => {
@@ -65,7 +66,7 @@ test('the adapter reads the GM site through forSite', () => {
   const gm = loadPublishConfig(v, {}, () => {}, { site: 'gm' });
   const player = loadPublishConfig(v, {}, () => {});
   assert.equal(gm.site_title, 'Table');
-  assert.deepEqual(gm.exclude_sections, ['GM Notes']);
+  assert.deepEqual(gm.exclude_sections, ['GM Notes', 'Secrets']);
   assert.equal(gm.switches.liveStats, false);
   assert.deepEqual(gm.steps.after, []);
   assert.equal(gm.mode, 'player');
