@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { build } = require('../../lib/build');
 const { gmOutputReason } = require('../../lib/gm-site');
-const { buildBoth, markedTexts, allFiles } = require('../helpers/gm-build');
+const { buildBoth, markedTexts, markedAfterMain, allFiles } = require('../helpers/gm-build');
 
 const NOTES = {
   'NPCs/Vex.md': '---\ntype: npc\n---\nA clerk.\n\n## GM Notes\n\nThe traitor.\n',
@@ -94,8 +94,18 @@ describe('the GM build: every hidden part marked, and no mark character in any f
     'PCs/Bo.md': '---\ntype: pc\n---\n# Bo\n\n## Background\n\nA sailor.\n\n## GM Notes\n\nOwes [[The Hand]].\n\n## Debts\n\nThree crowns.\n\n## Gear\n\nA knife.\n',
     'Locations/Dock.md': '---\ntype: location\npublish: stub\npublish_include_sections: [Overview]\n---\n'
       + '## Overview\n\nA quay.\n\n<!-- gm-only -->\nSmugglers land here.\n<!-- /gm-only -->\n\n## Secrets\n\nA tunnel to the keep.\n',
-  }, { player: { hide: { fields: ['secrets'] } } });
+    'NPCs/Cole.md': '---\ntype: npc\nsecrets: ""\nplans: Meets [[Ann]] at dawn.\n---\nA porter.\n',
+  }, { player: { hide: { fields: ['secrets', 'plans'] } } });
   after(() => site.cleanup());
+
+  it('the panel lists no empty field, and a hidden value\'s link is a link', () => {
+    const html = site.gm.read('npcs', 'cole.html');
+    const marks = markedTexts(html);
+    assert.equal(marks.some((m) => m.label === 'field: secrets'), false, JSON.stringify(marks));
+    assert.ok(marks.some((m) => m.label === 'field: plans' && /Meets Ann at dawn\./.test(m.text)), JSON.stringify(marks));
+    assert.match(html, /Meets <a href="ann\.html" class="entity-link">Ann<\/a> at dawn\./);
+    assert.doesNotMatch(html, /\[\[Ann\]\]/);
+  });
 
   it('writes no U+E000 to U+E002 into any file', () => {
     const files = site.gm.files();
@@ -152,6 +162,44 @@ describe('the GM build: every hidden part marked, and no mark character in any f
     assert.doesNotMatch(site.gm.read('previews.json'), PRIVATE_USE);
     const playerTerms = JSON.parse(site.player.read('search-index.json')).index.invertedIndex.map(([term]) => term);
     assert.ok(!playerTerms.includes('forged') && !playerTerms.includes('hand'), playerTerms.join(' '));
+  });
+});
+
+describe('the GM build: an excerpt never cuts a mark open', () => {
+  const site = buildBoth({
+    'NPCs/Vex.md': '---\ntype: npc\n---\n<!-- gm-only -->She is the traitor. She forged the letter and burned the ledger in the harbour, and nobody saw.\n\n'
+      + 'More secret text.\n<!-- /gm-only -->\n\nA clerk at the docks.\n\n## Open\n\nPublic words.\n',
+    'Locations/Dock.md': '---\ntype: location\n---\n## GM Notes\n\nSmugglers land here. A tunnel runs to the keep under the old wall.\n\n## Look\n\nA quay.\n',
+    'Locations/Town.md': '---\ntype: location\n---\nA town.\n',
+    'Locations/Town/Quay.md': '---\ntype: location\nparent_location: "[[Town]]"\n---\n<!-- gm-only -->The quay hides stolen gold beneath the third pier.<!-- /gm-only --> A busy quay.\n',
+  }, { player: { folder_map: { NPCs: 'npcs', Locations: 'locations', 'Locations/Town': 'locations/town' } } });
+  after(() => site.cleanup());
+  const HIDDEN = /traitor|forged|Smugglers|tunnel|stolen gold/;
+
+  it('a page whose opening is hidden keeps its later sections, footer and back-to-top outside every mark', () => {
+    for (const [page, shown] of [[['npcs', 'vex.html'], 'Public words'], [['locations', 'dock.html'], 'A quay.']]) {
+      const html = site.gm.read(...page);
+      assert.equal(markedAfterMain(html), '', page.join('/'));
+      assert.equal(markedTexts(html).some((m) => m.kind !== 'notes' && m.text.includes(shown)), false, `${shown} is not marked`);
+    }
+  });
+
+  it('the pull-quotes, the cards and the link previews hold no hidden word', () => {
+    for (const page of [['npcs', 'vex.html'], ['locations', 'dock.html'], ['locations', 'town.html']]) {
+      const html = site.gm.read(...page);
+      for (const quote of html.match(/<div class="pull-quote">[\s\S]*?<\/div>/g) || []) assert.doesNotMatch(quote, HIDDEN, page.join('/'));
+    }
+    const town = site.gm.read('locations', 'town.html');
+    assert.match(town, /busy quay/, 'the child location card holds what players see');
+    assert.equal(markedTexts(town).some((m) => /stolen gold/.test(m.text)), false);
+    assert.doesNotMatch(town, /stolen gold/);
+    assert.doesNotMatch(site.gm.read('previews.json'), HIDDEN);
+  });
+
+  it('every GM page has balanced marks and nothing after </main> in a mark', () => {
+    const pages = htmlOf(site.gm);
+    assert.ok(pages.length > 0);
+    for (const f of pages) assert.equal(markedAfterMain(fs.readFileSync(f, 'utf8')), '', f);
   });
 });
 
@@ -222,6 +270,20 @@ describe('the GM build refuses a folder it must not write', () => {
 });
 
 describe('the GM build beside the player site', () => {
+  it('the GM build speaks of the GM site: its image count, and an unclosed marker marked to the end of the file', () => {
+    const s = buildBoth({ ...NOTES, 'NPCs/Open.md': '---\ntype: npc\n---\nShown.\n\n<!-- gm-only -->\nNever closed.\n' }, { sites: [] });
+    try {
+      const said = [];
+      const saved = { log: console.log, warn: console.warn };
+      console.log = (m) => said.push(String(m)); console.warn = (m) => said.push(String(m));
+      try { build({ configPath: s.configPath, site: 'gm' }); } finally { Object.assign(console, saved); }
+      assert.ok(said.some((l) => /^GM site: copied \d+ referenced images/.test(l)), said.join('\n'));
+      assert.ok(!said.some((l) => /Player mode/.test(l)), said.join('\n'));
+      assert.ok(said.some((l) => /unclosed <!-- gm-only --> marker .*marked as hidden to end of file/.test(l)), said.join('\n'));
+      assert.ok(!said.some((l) => /stripped to end of file/.test(l)), said.join('\n'));
+    } finally { s.cleanup(); }
+  });
+
   it('builds with the player site off and the GM site on', () => {
     const s = buildBoth(NOTES, { sites: ['gm'], player: { publish: false } });
     try {

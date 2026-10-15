@@ -40,6 +40,11 @@ test('2b: a note with nothing hidden lists nothing', () => {
   assert.deepEqual(hiddenFieldsOf({ title: 'T', publish: true }, []), []);
 });
 
+test('2b2: a hidden field with nothing in it is not listed', () => {
+  const fm = { secrets: '', motives: '  ', fears: [], plans: {}, debts: null, notes: [''], occupation: 'Spy' };
+  assert.deepEqual(hiddenFieldsOf(fm, ['secrets', 'motives', 'fears', 'plans', 'debts', 'notes', 'occupation']).map((h) => h.name), ['occupation']);
+});
+
 test('2c (G12): when every edge is GM-only each is listed as a relationship, not as a field', () => {
   const edge = { target: '[[Elias]]', type: 'serves', gm_only: true };
   assert.deepEqual(hiddenFieldsOf({ relationships: [edge] }, []), [

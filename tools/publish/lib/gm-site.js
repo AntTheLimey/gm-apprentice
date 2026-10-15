@@ -139,25 +139,29 @@ function insideGitWorkTree(dir) {
 
 const escapeAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// One hidden frontmatter value as text: a relationship as "<type>: <target>" and its description, a list joined.
-function hiddenValueText(value) {
-  if (typeof value === 'string') return value;
-  if (Array.isArray(value)) return value.map(hiddenValueText).join(', ');
-  if (value && typeof value === 'object' && 'target' in value) {
-    const head = `${value.type == null ? '' : value.type}: ${value.target == null ? '' : value.target}`;
-    return value.description ? `${head} — ${value.description}` : head;
+// One hidden frontmatter value as HTML, the way a page prints a visible field (renderMetaValue: a link to a page the
+// site has is a link, any other its label): a relationship as "<type>: <target>" and its description, a list joined,
+// anything else as JSON text.
+function hiddenValueHtml(value, render, escapeHtml) {
+  if (Array.isArray(value)) return value.map((v) => hiddenValueHtml(v, render, escapeHtml)).join(', ');
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    if (!('target' in value)) return escapeHtml(JSON.stringify(value));
+    const head = `${escapeHtml(value.type == null ? '' : value.type)}: ${render(value.target)}`;
+    return value.description ? `${head} — ${render(value.description)}` : head;
   }
-  return JSON.stringify(value);
+  return render(value);
 }
 
 // The "Hidden from players" panel: one marked line per value hiddenFieldsOf lists. Empty when it lists nothing.
-function hiddenPanel(hidden) {
+// `linkMap` and `from` (the page's own address) resolve the links in a value, as on the page itself.
+function hiddenPanel(hidden, { linkMap = {}, from = '' } = {}) {
   if (!Array.isArray(hidden) || hidden.length === 0) return '';
-  const { escapeHtml } = require('./processor');   // here: the settings commands load this file, and processor.js is heavy
+  const { escapeHtml, renderMetaValue } = require('./processor');   // here: the settings commands load this file, and processor.js is heavy
+  const render = (v) => renderMetaValue(v, linkMap, from);
   const items = hidden.map((h) => {
     const label = escapeAttr(h.label);
     return `<div class="gm-mark gm-mark--${h.kind}" data-gm-kind="${h.kind}" data-gm-label="${label}">`
-      + `<p class="gm-mark__label">GM: ${escapeHtml(h.label)}</p><p>${escapeHtml(hiddenValueText(h.value))}</p></div>`;
+      + `<p class="gm-mark__label">GM: ${escapeHtml(h.label)}</p><p>${hiddenValueHtml(h.value, render, escapeHtml)}</p></div>`;
   });
   return `<aside class="gm-hidden"><h2 class="gm-hidden__title">Hidden from players</h2>${items.join('')}</aside>`;
 }
@@ -167,7 +171,7 @@ const STYLE_HREF = /<link\b[^>]*\bhref="([^"]*?)css\/style\.css"/;
 // A page as the GM site writes it: noindex, the GM meta tag and gm.css in the head; the band, the reason players do
 // not see the page and the hidden-fields panel at the top of <main> (of <body>, on a page with no <main>); and every
 // mark rendered. gm.css sits beside style.css, so its address is taken from the page's own style.css link.
-function gmPage(html, { marks, hiddenBecause = null, hidden = [] } = {}) {
+function gmPage(html, { marks, hiddenBecause = null, hidden = [], linkMap = {}, from = '' } = {}) {
   const { renderMarks } = require('./gm-marks');
   let out = String(html);
   const style = STYLE_HREF.exec(out);
@@ -178,7 +182,7 @@ function gmPage(html, { marks, hiddenBecause = null, hidden = [] } = {}) {
   const top = [
     '<div class="gm-band" role="note">GM copy: not for players</div>',
     reason ? `<div class="gm-band gm-band--hidden gm-mark" data-gm-kind="notes" data-gm-label="${escapeAttr(reason)}">${escapeAttr(reason)}</div>` : '',
-    hiddenPanel(hidden),
+    hiddenPanel(hidden, { linkMap, from }),
   ].join('');
   const open = /<main(?=[\s>])[^>]*>/i.exec(out) || /<body(?=[\s>])[^>]*>/i.exec(out);
   out = open ? out.slice(0, open.index + open[0].length) + top + out.slice(open.index + open[0].length) : top + out;

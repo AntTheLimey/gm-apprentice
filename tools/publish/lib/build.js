@@ -24,7 +24,7 @@ const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
 const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
-const { createMarks, markKinds, sanitize, unmark } = require('./gm-marks');
+const { createMarks, markKinds, sanitize, unmark, withoutMarked } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
@@ -242,7 +242,10 @@ function buildSite(options) {
   if (off && !dry) throw new Error(off);
   // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
   function writeHtml(full, html, page) {
-    fs.writeFileSync(full, gm ? gmPage(html, { marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden }) : html);
+    fs.writeFileSync(full, gm ? gmPage(html, {
+      marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden,
+      linkMap: publishConfig._linkMap || {}, from: (page && page.outputPath) || '',
+    }) : html);
   }
   // A JSON file the GM site writes holds no mark: the words between them are kept.
   const jsonText = (data) => (gm ? unmark(JSON.stringify(data)) : JSON.stringify(data));
@@ -795,8 +798,10 @@ function buildSite(options) {
       if (gm && show.has('sections')) {
         // The GM site's stub page is the whole note, what the stub cuts marked. The note was sanitized when it was
         // read, so the strips that run on it later keep these marks.
-        page.markdown = stubMarked(source, include, withhold, mark);
-        if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, withhold, mark);
+        // Its cut is decided by the player strips, which would warn in their own words; the page's marked strips say it.
+        const quiet = { ...withhold, warn: undefined };
+        page.markdown = stubMarked(source, include, quiet, mark);
+        if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, quiet, mark);
       } else {
         const cut = stubCut(source, include, withhold);
         stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
@@ -866,11 +871,14 @@ function buildSite(options) {
   for (const page of pages) {
     const source = String(page.markdown || '');
     if (gm) {
-      // The GM site's published view: every hidden part kept and marked. It has no note-faults facts. A PC whose
-      // headings a link label changes has none, as on the player site: its page shows the body, marked, and the
-      // excerpts read from here (pull-quote, cards, search) would cut that one mark open.
-      page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
+      // The GM site keeps two published views. The marked one (every hidden part kept and marked) is the search
+      // index's. `publishedMarkdown`, which every excerpt reads (pull-quotes, cards, link previews, listings, recaps),
+      // is that text with each marked span dropped, as players see it: an excerpt that cut a mark open would wrap the
+      // rest of its page. A PC whose headings a link label changes has neither, as on the player site: its page shows
+      // the body, marked. No note-faults facts.
+      page.gmMarkedPublished = page.headingsUnstable ? '' : filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
         excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections, mark });
+      page.publishedMarkdown = withoutMarked(page.gmMarkedPublished, mark.marks);
       continue;
     }
     const stripped = strippedLines(source, excludeCallouts);
@@ -975,10 +983,12 @@ function buildSite(options) {
 
   // Search index (skip if searchEnabled explicitly set to false in config)
   const searchEnabled = config.searchEnabled !== false;
-  // The GM site's index is made from its pages with the marks taken out: it holds their words and no token.
+  // The GM site's index is made from its pages' marked text with the marks taken out: it holds every word, hidden ones
+  // too, and no token.
   const unmarked = (p) => {
     const view = { ...p, frontmatter: mapStrings(p.frontmatter, unmark) };
-    for (const f of ['displayTitle', 'markdown', 'publishedMarkdown']) if (typeof p[f] === 'string') view[f] = unmark(p[f]);
+    for (const f of ['displayTitle', 'markdown']) if (typeof p[f] === 'string') view[f] = unmark(p[f]);
+    if (typeof p.gmMarkedPublished === 'string') view.publishedMarkdown = unmark(p.gmMarkedPublished);
     return view;
   };
   const searchData = searchEnabled ? buildSearchIndex(gm ? pages.map(unmarked) : pages) : null;
@@ -1589,7 +1599,7 @@ function buildSite(options) {
     }
     copyImages(filteredMap);
     const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
-    console.log(`Player mode: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
+    console.log(`${gm ? 'GM site' : 'Player mode'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
   } else {
     copyImages(imageMap);
   }

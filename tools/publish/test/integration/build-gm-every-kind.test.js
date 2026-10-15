@@ -6,7 +6,7 @@ const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const { buildBoth, markedTexts } = require('../helpers/gm-build');
+const { buildBoth, markedTexts, markedAfterMain } = require('../helpers/gm-build');
 
 const TOKENS = /[-]/;
 
@@ -231,6 +231,8 @@ describe('one of every hidden kind, both ways', () => {
         assert.equal((html.match(new RegExp(`<${tag}\\b`, 'g')) || []).length, (html.match(new RegExp(`</${tag}>`, 'g')) || []).length, `${f} ${tag}`);
       }
       assert.doesNotMatch(html, TOKENS, f);
+      // No mark cut open earlier on the page wraps what comes after the main column (the footer, back-to-top).
+      assert.equal(markedAfterMain(html), '', f);
     }
   });
 

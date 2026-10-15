@@ -40,6 +40,36 @@ const sanitize = (text) => String(text == null ? '' : text).replace(/[\uE000-\uE
 // The text with every token taken out and the words between them kept.
 const unmark = (text) => String(text == null ? '' : text).replace(TOKEN, '');
 
+// The text as players see it: each marked span dropped, its tokens with it, and every half token and stray character.
+// A span whose label says what players see in its place ("players see: someone", "gm_aliases; players see: Vex")
+// leaves those words. A span still open at the end drops the rest. Every excerpt the GM site makes reads this, so no
+// excerpt can cut a mark open.
+function withoutMarked(text, marks) {
+  const s = String(text == null ? '' : text);
+  if (!/[-]/.test(s)) return s;
+  let out = '';
+  let depth = 0;
+  let instead = '';
+  let last = 0;
+  for (const m of s.matchAll(TOKEN)) {
+    if (depth === 0) out += s.slice(last, m.index);
+    last = m.index + m[0].length;
+    if (m[1] !== undefined) {
+      if (depth === 0) {
+        const rec = marks ? marks.get(parseInt(m[1], 36)) : undefined;
+        const seen = rec ? /players see: (.*)$/.exec(rec.label) : null;
+        instead = seen ? seen[1] : '';
+      }
+      depth++;
+    } else if (m[0] === CLOSE && depth > 0) {
+      depth--;
+      if (depth === 0) out += instead;
+    }
+  }
+  if (depth === 0) out += s.slice(last);
+  return out;
+}
+
 // A token that marks a block stands alone between blank lines, so it renders as a paragraph of its own.
 const blockLines = (token) => ['', token, ''];
 
@@ -253,4 +283,4 @@ function renderMarks(html, marks) {
   return out.join('');
 }
 
-module.exports = { createMarks, markKinds, sanitize, unmark, blockLines, marksAtHeadings, renderMarks };
+module.exports = { createMarks, markKinds, sanitize, unmark, withoutMarked, blockLines, marksAtHeadings, renderMarks };

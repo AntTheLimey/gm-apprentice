@@ -107,8 +107,11 @@ function plainValue(v) {
 // Where a player-site setting's value comes from on the GM site: the twin the GM wrote, else the player site's own.
 function gmOrigin(read, name) {
   const twin = name.replace(/^player_site\./, 'gm_site.');
-  if (twin === name || !REGISTRY.some((e) => e.name === twin)) return read.origins[name];
-  return read.origins[twin] === 'file' ? twin : `inherited from ${name}`;
+  const own = REGISTRY.find((e) => e.name === twin);
+  if (twin === name || !own) return read.origins[name];
+  if (read.origins[twin] === 'file') return twin;
+  // A setting the GM site does not inherit (its build steps) has its own default when the GM wrote none.
+  return own.gmDefault !== undefined ? "the GM site's own default (not inherited)" : `inherited from ${name}`;
 }
 
 function get(options, names) {

@@ -905,3 +905,11 @@ test('get --site gm reads a setting through the GM site and says where it came f
   assert.match(run(s, 'get', ['player_site.footer'], { site: 'gm', json: false }).out, /Foot \(inherited from player_site\.footer\)/);
   assert.equal(run(s, 'get', ['player_site.title'], {}).data.values['player_site.title'], 'Players');
 });
+
+test('get --site gm: a build step list the GM site does not inherit is its own default, not inherited', () => {
+  const s = scratch(null);
+  fs.writeFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'version: 1\nplayer_site:\n  after_build:\n    - node a.js\n');
+  const steps = run(s, 'get', ['player_site.after_build'], { site: 'gm' });
+  assert.equal(steps.rc, 0);
+  assert.deepEqual(view(steps.data)['player_site.after_build'], { value: [], origin: "the GM site's own default (not inherited)" });
+});

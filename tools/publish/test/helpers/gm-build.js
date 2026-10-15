@@ -66,4 +66,22 @@ function markedTexts(html) {
   return out;
 }
 
-module.exports = { buildBoth, markedTexts, allFiles };
+// The text after </main> (the footer, the back-to-top button) that sits inside a mark: a mark cut open earlier on the
+// page would wrap it. Empty when none does.
+function markedAfterMain(html) {
+  const end = html.lastIndexOf('</main>');
+  if (end < 0) return '';
+  const stack = [];
+  const re = /<(\/?)(div|span|aside)\b([^>]*)>|([^<]+)|<[^>]*>/g;
+  let found = '';
+  let m;
+  while ((m = re.exec(html))) {
+    if (m[2]) {
+      if (!m[1]) stack.push(/data-gm-kind="/.test(m[3]));
+      else stack.pop();
+    } else if (m[4] && m.index > end && m[4].trim() && stack.some(Boolean)) found += m[4];
+  }
+  return found;
+}
+
+module.exports = { buildBoth, markedTexts, markedAfterMain, allFiles };

@@ -837,7 +837,7 @@ function markBlocksKeeping(lines, markerName, mark) {
   if (stack.length > 0) {
     warnings.push(
       `unclosed <!-- ${markerName} --> marker (${stack.length} block${stack.length === 1 ? '' : 's'} still open) `
-      + '— content stripped to end of file');
+      + '— content marked as hidden to end of file (players see none of it)');
   }
   if (orphanClosers > 0) {
     warnings.push(
@@ -2022,18 +2022,22 @@ function hiddenFieldsOf(frontmatter, excludeFields = [], overrides = {}) {
   const ruled = publishedFrontmatter(probe, excludeFields, overrides);
   const field = (name, value, label = `field: ${name}`) => ({ kind: 'fields', label, name, value });
   const hidden = [];
+  // A value with nothing in it (a template's `secrets: ""`) hides nothing: it is not listed.
+  const blank = (v) => v == null || (typeof v === 'string' && v.trim() === '') || (Array.isArray(v) && v.every(blank))
+    || (typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date) && Object.values(v).every(blank));
   for (const key of Object.keys(fm)) {
     if (BOOKKEEPING_KEYS.has(key)) continue;
     const value = fm[key];
+    if (blank(value)) continue;
     if (key === 'gm_aliases') {
       hidden.push(field('gm_aliases', value));
     } else if (key === 'aliases' && key in ruled) {
       const shown = Array.isArray(out.aliases) ? out.aliases : [];
       const all = Array.isArray(value) ? value : [];
-      for (const a of all) if (!shown.includes(a)) hidden.push(field('aliases', a, 'field: gm_aliases'));
+      for (const a of all) if (!shown.includes(a) && !blank(a)) hidden.push(field('aliases', a, 'field: gm_aliases'));
     } else if (key === 'relationships' && Array.isArray(value) && key in ruled) {
       const shown = Array.isArray(out.relationships) ? out.relationships : [];
-      for (const edge of value) if (!shown.includes(edge)) hidden.push({ kind: 'relationships', label: 'GM-only relationship', name: 'relationships', value: edge });
+      for (const edge of value) if (!shown.includes(edge) && !blank(edge)) hidden.push({ kind: 'relationships', label: 'GM-only relationship', name: 'relationships', value: edge });
     } else if (!(key in out)) {
       hidden.push(field(key, value));
     }

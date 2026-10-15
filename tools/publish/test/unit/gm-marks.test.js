@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
-const { createMarks, markKinds, sanitize, unmark, blockLines, renderMarks, marksAtHeadings } = require('../../lib/gm-marks');
+const { createMarks, markKinds, sanitize, unmark, withoutMarked, blockLines, renderMarks, marksAtHeadings } = require('../../lib/gm-marks');
 const { findHeadings, renderMarkdown, extractSections } = require('../../lib/processor');
 
 const CLOSE = '\uE002';
@@ -223,6 +223,26 @@ test('a setext heading is a heading too: each section the templates cut holds wh
   }
   const plans = renderMarks(sections[1].html, m);
   assert.match(plans, /<div class="gm-mark gm-mark--gm_only_blocks"[^>]*><p class="gm-mark__label">GM: gm-only block<\/p>\s*<p>more hidden<\/p>\s*<\/div>/);
+});
+
+test('withoutMarked: each marked span goes, nested ones with it; a name mark leaves what players see', () => {
+  const m = createMarks();
+  const block = m.open('gm_only_blocks', 'gm-only block');
+  const inner = m.open('spoilers', 'spoiler');
+  const alias = m.open('fields', 'gm_aliases; players see: Lord Vane');
+  const withheld = m.open('withheld_names', 'players see: someone');
+  const text = `A ${block}secret ${inner}deeper${CLOSE} still${CLOSE}b. Met [[Lord Vane|${alias}Elias${CLOSE}]] and [[Vesper|${withheld}Vesper${CLOSE}]].`;
+  assert.equal(withoutMarked(text, m), 'A b. Met [[Lord Vane|Lord Vane]] and [[Vesper|someone]].');
+  assert.equal(withoutMarked(text), 'A b. Met [[Lord Vane|]] and [[Vesper|]].', 'without the table every span goes whole');
+});
+
+test('withoutMarked: a span left open drops the rest; a half token and a stray close go; text with no mark is unchanged', () => {
+  const m = createMarks();
+  const open = m.open('sections', 'GM Notes section');
+  assert.equal(withoutMarked(`Shown. ${open}Hidden to the end`, m), 'Shown. ');
+  assert.equal(withoutMarked(`Shown 7 cut${CLOSE} on`, m), 'Shown  cut on', 'the half token goes with its digits');
+  assert.equal(withoutMarked('Plain text.', m), 'Plain text.');
+  assert.doesNotMatch(withoutMarked(`x${open}y`, m), PUA);
 });
 
 test('a heading in a code block is not a heading', () => {

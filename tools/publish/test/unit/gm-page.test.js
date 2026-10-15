@@ -69,12 +69,22 @@ test('the panel: each value as text, a relationship as type and target, a list j
   assert.match(out, /^<aside class="gm-hidden"><h2 class="gm-hidden__title">Hidden from players<\/h2>/);
   assert.match(out, /<\/aside>$/);
   assert.match(out, /<div class="gm-mark gm-mark--fields" data-gm-kind="fields" data-gm-label="field: secrets"><p class="gm-mark__label">GM: field: secrets<\/p><p>Loves &lt;b&gt;Annie&lt;\/b&gt;<\/p><\/div>/);
-  assert.match(out, /<p>rival: \[\[Ann\]\] — old feud<\/p>/);
+  assert.match(out, /<p>rival: Ann — old feud<\/p>/);
   assert.match(out, /<p>ally: Bo<\/p>/);
   assert.match(out, /<p>The Hand, Red<\/p>/);
   assert.match(out, /<p>3<\/p>/);
   assert.equal(hiddenPanel([]), '');
   assert.equal(hiddenPanel(undefined), '');
+});
+
+test('the panel prints a link to a page the site has as a link, from the page it is on', () => {
+  const out = hiddenPanel([
+    { kind: 'fields', label: 'field: secrets', value: 'Serves [[Duke Orrin]] and [[Nobody]].' },
+    { kind: 'relationships', label: 'GM-only relationship', value: { type: 'serves', target: '[[Duke Orrin]]' } },
+  ], { linkMap: { 'Duke Orrin': 'npcs/duke-orrin.html' }, from: 'npcs/vex.html' });
+  assert.match(out, /<p>Serves <a href="duke-orrin\.html" class="entity-link">Duke Orrin<\/a> and Nobody\.<\/p>/);
+  assert.match(out, /<p>serves: <a href="duke-orrin\.html" class="entity-link">Duke Orrin<\/a><\/p>/);
+  assert.doesNotMatch(out, /\[\[/);
 });
 
 test('a page gmPage made is one the folder check knows as the GM site\'s', () => {
