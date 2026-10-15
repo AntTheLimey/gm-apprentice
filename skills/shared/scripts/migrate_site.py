@@ -21,7 +21,7 @@ from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_
                          _kept_by_player, vault_settings)
 from vaultlib import (LEGACY_SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, setting_name, settings,
-                      settings_default, settings_file, settings_raw, settings_set,
+                      settings_default, settings_file, settings_raw, settings_remove, settings_set,
                       settings_unset, settings_written, site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
 
 INLINE_PUBLISH = (
@@ -848,6 +848,100 @@ def find_exclude_lists(vault: Path) -> list[Item]:
                   for name, default in lists], apply)]
 
 
+AFTER_BUILD = "player_site.after_build"
+OPTIMIZE = "player_site.images.optimize"
+
+# The site build steps the publish tool now does itself, by script name: what
+# the tool does, and what changes on the site once the step is gone.
+RETIRED_STEPS = {
+    "apply-overrides": (
+        "the publish tool already links css/overrides.css on every page. "
+        "Retire it and theme.css stops carrying a second copy of the same "
+        "rules; look at one page in light and dark afterwards"),
+    "add-tohit-calc": (
+        "the publish tool already shows the GURPS to-hit calculator on PC "
+        "pages. Retire it and the step's two extra files "
+        "(css/tohit-calc.css, js/tohit-calc.js) and its link on each PC "
+        "page go"),
+    "add-theme-toggle": (
+        "the publish tool already puts a light/dark button on every page, so "
+        "each page has two. Retire it and the second button goes; a reader's "
+        "saved light/dark choice may be forgotten once"),
+    "optimize-images": (
+        "the publish tool shrinks pictures to WebP itself, the same way, and "
+        "keeps them between builds so a build only shrinks new pictures. "
+        f"Retire it and the update turns on {OPTIMIZE} first, then removes "
+        "the step; the site comes out the same"),
+}
+
+
+def _retired_step(command: str) -> str | None:
+    """The retired step a build step runs, or None: `node` and the script's
+    path, written any way the step runner reads the same file (`./`, either
+    slash, quoted, extra spaces), and nothing after it."""
+    m = re.fullmatch(r"\s*node\s+([\"']?)(?:[^\s\"']*[/\\])?([\w-]+)\.mjs\1\s*",
+                     command)
+    return m.group(2) if m and m.group(2) in RETIRED_STEPS else None
+
+
+def find_retire_steps(vault: Path) -> list[Item]:
+    """1.10.63: a build step the publish tool now does itself is offered for
+    retiring, one choice per step. Only steps the vault's own settings file
+    holds: steps still in the site folder move there first."""
+    try:
+        s = settings(vault)
+    except SettingsUnavailable:
+        return []
+    steps = s.get(AFTER_BUILD)
+    if s.origins.get(AFTER_BUILD) != "file" or not isinstance(steps, list):
+        return []
+    items: list[Item] = []
+    seen: set[str] = set()
+    for command in steps:
+        name = _retired_step(str(command))
+        if name is None or name in seen:
+            continue
+        seen.add(name)
+        # Every spelling of the same step goes ("scripts/x.mjs", "./scripts/x.mjs").
+        same = [str(c) for c in steps if _retired_step(str(c)) == name]
+        had_optimize = (s.origins.get(OPTIMIZE) == "file", s.get(OPTIMIZE))
+
+        def apply(value: str | None, name: str = name,
+                  command: str = str(command), same: list[str] = same,
+                  had: tuple[bool, object] = had_optimize) -> list[str]:
+            if value not in ("retire", "leave"):
+                raise StepFailed(f"retire-step:{name} takes retire or leave")
+            if value == "leave":
+                return [f'kept the build step "{command}"']
+            done: list[str] = []
+            if name == "optimize-images":
+                # Never without the setting: the pictures would ship unshrunk.
+                _set_settings(vault, [(OPTIMIZE, True)])
+                done.append(f"wrote {setting_name(vault, OPTIMIZE)}: true")
+            try:
+                removed = settings_remove(vault, AFTER_BUILD, same)
+                if not removed:
+                    raise StepFailed(f'the build step "{command}" was not in '
+                                     f"{setting_name(vault, AFTER_BUILD)}")
+            except (SettingsUnavailable, StepFailed) as e:
+                if name == "optimize-images":
+                    # Put the setting back as it was: the step still runs.
+                    if had[0]:
+                        _set_settings(vault, [(OPTIMIZE, had[1])])
+                    else:
+                        settings_unset(vault, [OPTIMIZE])
+                raise StepFailed(str(e)) from e
+            done.append(f'removed the build step "{command}" from '
+                        f"{setting_name(vault, AFTER_BUILD)}")
+            return done
+
+        items.append(Item(f"retire-step:{name}", CHOICE,
+                          [f'build step "{command}": {RETIRED_STEPS[name]}. '
+                           f"retire: stop running it; leave: keep the step"],
+                          apply, wants="retire or leave", holds_stamp=True))
+    return items
+
+
 SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check(MOVE, None, 2, "the settings move to the new settings file",
@@ -866,6 +960,8 @@ SITE_CHECKS: list[Check] = [
           find_postbuild),
     Check("tone-shown", "1.10.46", 3, "relationship tones shown on the site",
           find_tone_shown),
+    Check("retire-steps", "1.10.63", 3, "build steps the publish tool now "
+          "does itself", find_retire_steps, choices=("retire-step:=",)),
     Check("publish-played", "1.10.18", 4, "played sessions are registered",
           find_publish_played, asks_site=True, choices=("played:",)),
     Check("session-recaps", "1.10.18", 4, "recaps kept in session indexes",

@@ -1510,6 +1510,18 @@ def settings_add(vault: Path, name: str, entries: list[str]) -> list[str]:
     return [str(e) for e in answer["added"]]
 
 
+def settings_remove(vault: Path, name: str, entries: list[str]) -> list[str]:
+    """Remove entries from the list setting `name`; the entries that were
+    there. Refusals raise as `settings_set`'s do."""
+    _check_vault(vault)
+    _check_names([name])
+    forget_settings(vault)
+    answer = _run_settings(
+        ["remove", *_target_args(vault), name,
+         *[json.dumps(e) for e in entries]], refusable=True)
+    return [str(e) for e in answer["removed"]]
+
+
 def settings_describe(name: str) -> dict[str, Any]:
     """What the tool says of one setting: `{"name", "kind", "does",
     "takes", "default", "guards", "oldNames"}`. A name that is no setting

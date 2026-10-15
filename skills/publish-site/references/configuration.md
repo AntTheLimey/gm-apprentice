@@ -54,7 +54,9 @@ setting one.
 
 `player_site.images.optimize` needs the `cwebp` binary on `PATH`
 (`brew install webp`, `apt install webp`). Without it the build warns
-and copies the originals.
+and copies the originals. Shrunk pictures are kept in
+`.gm-apprentice/image-cache/` in the site folder, so a build shrinks
+only new or changed ones; deleting that folder is safe.
 
 ### Section index banners
 
