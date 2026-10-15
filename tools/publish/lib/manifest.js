@@ -1,7 +1,7 @@
 'use strict';
 // The publish list: `_meta/publish-list.yaml`, read and written with the YAML library.
 //
-//   publishing:        # paths that publish
+//   publishing:        # paths that publish; like excluded, an entry may be { path, reason }
 //     - Characters/NPCs/Vex.md
 //   excluded:          # paths held back on purpose; a reason is optional
 //     - path: Sessions/Session 09.md
@@ -53,7 +53,7 @@ function parseNewFile(text, warn) {
     if (!KEYS.includes(key)) warn(`${PUBLISH_LIST_FILE}: "${key}" is not a section of the publish list (${KEYS.join(', ')}); ignored`);
   }
 
-  const reasons = new Map();
+  const reasonsBy = { publishing: new Map(), excluded: new Map() };
   const sections = {};
   for (const key of KEYS) {
     const raw = top[key];
@@ -67,17 +67,17 @@ function parseNewFile(text, warn) {
       let rel = null;
       let reason = null;
       if (isText(item)) rel = item;
-      else if (key === 'excluded' && item && typeof item === 'object' && !Array.isArray(item) && isText(item.path)) {
+      else if (key !== 'needs_decision' && item && typeof item === 'object' && !Array.isArray(item) && isText(item.path)) {
         rel = item.path;
         if (isText(item.reason)) reason = item.reason.trim();
       }
       if (rel === null) {
-        warn(`${PUBLISH_LIST_FILE}: an entry under "${key}" is not a path${key === 'excluded' ? ' (or a path with a reason)' : ''}; dropped`);
+        warn(`${PUBLISH_LIST_FILE}: an entry under "${key}" is not a path${key !== 'needs_decision' ? ' (or a path with a reason)' : ''}; dropped`);
         continue;
       }
       rel = canonicalPath(rel.trim());
       if (!sections[key].includes(rel)) sections[key].push(rel);
-      if (reason && !reasons.has(rel)) reasons.set(rel, reason);
+      if (reason && reasonsBy[key] && !reasonsBy[key].has(rel)) reasonsBy[key].set(rel, reason);
     }
   }
 
@@ -86,9 +86,12 @@ function parseNewFile(text, warn) {
   const claimed = new Set(publishing);
   const excluded = [];
   for (const rel of sections.excluded) {
-    if (claimed.has(rel)) { warn(`${PUBLISH_LIST_FILE}: "${rel}" is under publishing and excluded; it publishes`); reasons.delete(rel); } else excluded.push(rel);
+    if (claimed.has(rel)) { warn(`${PUBLISH_LIST_FILE}: "${rel}" is under publishing and excluded; it publishes`); } else excluded.push(rel);
   }
   for (const rel of excluded) claimed.add(rel);
+  const reasons = new Map();
+  for (const rel of publishing) if (reasonsBy.publishing.has(rel)) reasons.set(rel, reasonsBy.publishing.get(rel));
+  for (const rel of excluded) if (reasonsBy.excluded.has(rel)) reasons.set(rel, reasonsBy.excluded.get(rel));
   const needsDecision = [];
   for (const rel of sections.needs_decision) {
     if (claimed.has(rel)) warn(`${PUBLISH_LIST_FILE}: "${rel}" is under needs_decision and also another list; the other list wins`);
@@ -128,7 +131,7 @@ const sortedPaths = (list) => [...new Set(list || [])].sort((a, b) => (a < b ? -
 function listText(list) {
   const reasons = list.reasons || new Map();
   const doc = {
-    publishing: sortedPaths(list.publishing),
+    publishing: sortedPaths(list.publishing).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : rel)),
     excluded: sortedPaths(list.excluded).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : { path: rel })),
     needs_decision: sortedPaths(list.needsDecision),
   };

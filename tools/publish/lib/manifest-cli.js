@@ -58,7 +58,7 @@ function listVaultMarkdown(vaultPath, excludeDirs) {
 function entriesOf(list) {
   const entries = new Map();
   if (!list) return entries;
-  for (const rel of list.publishing) entries.set(rel, { section: 'publishing', annotation: null });
+  for (const rel of list.publishing) entries.set(rel, { section: 'publishing', annotation: (list.reasons && list.reasons.get(rel)) || null });
   for (const rel of list.excluded) entries.set(rel, { section: 'excluded', annotation: (list.reasons && list.reasons.get(rel)) || null });
   for (const rel of list.needsDecision) entries.set(rel, { section: 'needsDecision', annotation: null });
   return entries;
@@ -69,7 +69,7 @@ function listOf(entries) {
   const list = { publishing: [], excluded: [], needsDecision: [], reasons: new Map() };
   for (const [rel, entry] of entries) {
     list[entry.section].push(rel);
-    if (entry.section === 'excluded' && entry.annotation) list.reasons.set(rel, entry.annotation);
+    if (entry.section !== 'needsDecision' && entry.annotation) list.reasons.set(rel, entry.annotation);
   }
   return list;
 }

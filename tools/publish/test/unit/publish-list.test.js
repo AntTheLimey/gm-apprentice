@@ -144,3 +144,17 @@ describe('the YAML publish list', () => {
     assert.equal(page('Z.md').reason, 'not on the publish list');
   });
 });
+
+describe('a reason beside a publishing entry', () => {
+  beforeEach(() => manifest.resetNotices());
+  it('is read, written back and kept', () => {
+    const v = vaultWith({ 'publish-list.yaml': 'publishing:\n  - path: A.md\n    reason: "stays hidden: x"\n  - B.md\n' });
+    const { list, warnings } = read(v);
+    assert.deepEqual(warnings, []);
+    assert.deepEqual(list.publishing, ['A.md', 'B.md']);
+    assert.equal(list.reasons.get('A.md'), 'stays hidden: x');
+    const again = read(vaultWith({ 'publish-list.yaml': listText(list) })).list;
+    assert.equal(again.reasons.get('A.md'), 'stays hidden: x');
+    assert.ok(listText(list).includes('  - B.md\n'));
+  });
+});

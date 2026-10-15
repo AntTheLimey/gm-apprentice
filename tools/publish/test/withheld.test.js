@@ -598,14 +598,13 @@ describe('the name matcher\'s word boundaries', () => {
   });
 });
 
-describe('a note under publishing (which holds no reason)', () => {
+describe('a "stays hidden:" reason beside a Publishing entry', () => {
   it('does not settle the link report of a withheld note', async () => {
     const files = { 'Characters/Lord_Zorn.md': zornNote('withheld: true\npublish: false\n'), 'Characters/Mara_Quill.md': mara('Met [[Lord_Zorn]].') };
-    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Lord_Zorn.md'] });
+    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Lord_Zorn.md — stays hidden: x'] });
     const { json } = await doctor(configPath, { json: true });
     const hit = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
-    // The publish list holds a reason only for an excluded entry.
-    assert.strictEqual(hit.reason, null);
+    assert.strictEqual(hit.reason, 'stays hidden: x');
     assert.strictEqual(hit.settled, false);
   });
 });

@@ -723,12 +723,12 @@ function startNoteAudit(input) {
     }
 
     found.push(...aliasFindings());
-    // The publish list's written reason for a note: only an excluded entry has one.
+    // The publish list's written reason for a note (a publishing or excluded entry may have one; only excluded settles).
     const reasons = () => ({
       get: (rel) => {
         const list = input.manifest;
-        if (!list || !(list.excluded || []).includes(rel)) return null;
-        return { section: 'excluded', annotation: (list.reasons && list.reasons.get(rel)) || null };
+        const section = !list ? null : (list.excluded || []).includes(rel) ? 'excluded' : (list.publishing || []).includes(rel) ? 'publishing' : null;
+        return section ? { section, annotation: (list.reasons && list.reasons.get(rel)) || null } : null;
       },
     });
     // --- the names of withheld notes ---------------------------------------------------

@@ -124,3 +124,13 @@ test('manifest list and manifest convert answer through the command', async () =
   assert.deepEqual(payload.counts, { publishing: 1, excluded: 2, needs_decision: 3 });
   assert.equal(await runManifest({ verb: 'list' }, d), 1);
 });
+
+test('a reason beside a Publishing entry round-trips', () => {
+  const v = vaultWith(['## Publishing (1 files)', '', '- [x] NPCs/Vex.md — stays hidden: x', ''].join('\n'));
+  const r = convertPublishList(v);
+  assert.equal(r.ok, true, r.blockers.join('\n'));
+  const list = loadManifest(v);
+  assert.deepEqual(list.publishing, ['NPCs/Vex.md']);
+  assert.equal(list.reasons.get('NPCs/Vex.md'), 'stays hidden: x');
+  assert.match(fs.readFileSync(file(v, 'publish-list.yaml'), 'utf8'), /path: NPCs\/Vex\.md/);
+});

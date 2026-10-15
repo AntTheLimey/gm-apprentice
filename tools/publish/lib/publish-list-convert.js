@@ -25,9 +25,11 @@ function expectedFrom(oldText) {
   const excluded = sorted(built.excluded.filter((rel) => !taken.has(rel)));
   excluded.forEach((rel) => taken.add(rel));
   const reasons = new Map();
-  for (const rel of excluded) {
-    const entry = annotated.get(rel);
-    if (entry && entry.section === 'excluded' && entry.annotation) reasons.set(rel, entry.annotation);
+  for (const [list, section] of [[excluded, 'excluded'], [publishing, 'publishing']]) {
+    for (const rel of list) {
+      const entry = annotated.get(rel);
+      if (entry && entry.section === section && entry.annotation) reasons.set(rel, entry.annotation);
+    }
   }
 
   const buildPublishes = new Set(built.publishing);
@@ -81,6 +83,7 @@ function foldLine(folded) {
 function setsOf(list) {
   return {
     publishing: list.publishing,
+    publishing_reasons: Object.fromEntries(list.publishing.filter((rel) => list.reasons.get(rel)).map((rel) => [rel, list.reasons.get(rel)])),
     excluded: list.excluded.map((rel) => (list.reasons.get(rel) ? { path: rel, reason: list.reasons.get(rel) } : { path: rel })),
     needs_decision: list.needsDecision,
   };

@@ -243,17 +243,17 @@ describe('NAMED_NO_PAGE', () => {
     assert.strictEqual(found.find((f) => f.path.endsWith('Vesper_Hale.md')).reason, 'stays hidden: the ferry is the twist');
   });
 
-  it('a note under Publishing holds no reason, so it is not settled (only an Excluded entry is)', async () => {
+  it('a "stays hidden:" reason beside a Publishing entry is not settled (only an Excluded entry is)', async () => {
     const files = {
       'Characters/Mara_Quill.md': npc('Mara', 'Met [[Vesper_Hale]].'),
       // Listed under Publishing, and kept off the site by its own frontmatter.
       'Characters/Vesper_Hale.md': npc('V', 'x', 'publish: false\n'),
     };
-    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Vesper_Hale.md'] });
+    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Vesper_Hale.md — stays hidden: x'] });
     const { json } = await doctor(configPath, { json: true });
     const found = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
-    // Only an excluded entry holds a reason, so a listed note has none and is never settled.
-    assert.strictEqual(found.reason, null);
+    // The reason is kept, and only an excluded entry settles.
+    assert.strictEqual(found.reason, 'stays hidden: x');
     assert.strictEqual(found.settled, false);
   });
 
