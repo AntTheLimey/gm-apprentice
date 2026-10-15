@@ -23,7 +23,7 @@ describe('build exclusion log attribution', () => {
       fs.writeFileSync(full, body);
     };
 
-    write('_meta/vault-config.md', '---\npublish:\n  mode: player\n  exclude_drafts: true\n---\n');
+    write('_meta/vault-config.md', '---\npublish:\n  exclude_drafts: true\n---\n');
     write('Sessions/Played.md', '---\ntype: session\nstatus: played\n---\n\nHappened.\n');
     // Two reasons at once: prep state AND an explicit publish: false.
     write('Sessions/Both.md', '---\ntype: session\nstatus: planned\npublish: false\n---\n\nPrep.\n');

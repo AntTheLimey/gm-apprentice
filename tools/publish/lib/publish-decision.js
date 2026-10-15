@@ -74,9 +74,8 @@ function isHousekeepingNote(vaultPath, frontmatter) {
 
 // A scene that was cut or skipped did not happen. content-filtering.md has listed
 // these as always-excluded since the filtering model was written; they are gated
-// behind the same mode/manifest checks as the other prep-state heuristics so the
-// GM's own full-mode copy still shows everything and an explicit manifest entry
-// still wins.
+// behind the same publish list check as the other prep-state heuristics, so an
+// explicit publish list entry still wins.
 // (SCENE_SKIP_STATUS, with the other excluding values.)
 
 function lower(value) {
@@ -144,7 +143,7 @@ function storyCompanionPc(rel, pageIndex) {
  *   for a file the scanner never produced — {rel, frontmatter: null}.
  * @param {object} options
  * @param {string} options.rel Vault-relative posix path, NFC-canonicalized.
- * @param {object} options.publishConfig loadPublishConfig() output (mode, exclude_drafts).
+ * @param {object} options.publishConfig loadPublishConfig() output (exclude_drafts).
  * @param {object|null} options.manifest loadManifest() output, or null.
  * @param {boolean} [options.folderMapped=true] False for a file whose directory is
  *   absent from folderMap, which is why the scanner produced no page for it.
@@ -191,7 +190,6 @@ function decidePage(page, options) {
     };
   }
 
-  const mode = publishConfig.mode || entry('player_site.hide.mode').default;
   const index = manifest ? indexOf(manifest) : null;
   const listedForPublish = !!(index && index.publishing.has(rel));
 
@@ -199,9 +197,8 @@ function decidePage(page, options) {
     return verdict('exclude', 'DRAFT_EXCLUDED', 'canon_status: DRAFT and exclude_drafts is on');
   }
 
-  // The prep-state heuristics. Off in full mode (the GM's own copy shows
-  // everything) and overridden by an explicit manifest Publishing entry.
-  if (mode !== 'full' && !listedForPublish) {
+  // The prep-state heuristics, overridden by an explicit publish list Publishing entry.
+  if (!listedForPublish) {
     const auto = autoExcludeCode(frontmatter);
     if (auto) return verdict('exclude', auto, autoExcludeReason(auto, frontmatter));
     if (lower(frontmatter.type) === 'scene' && SCENE_SKIP_STATUS.has(lower(ruleValue('status', frontmatter.status)))) {
@@ -209,15 +206,15 @@ function decidePage(page, options) {
     }
   }
 
-  // The manifest is an allowlist in player mode only. A listed page falls through
+  // The publish list is an allowlist. A listed page falls through
   // rather than returning: `publish: false` still has to be honoured below.
-  if (manifest && mode === 'player' && !listedForPublish) {
+  if (manifest && !listedForPublish) {
     if (index.excluded.has(rel)) return verdict('exclude', 'MANIFEST_EXCLUDED', 'publish list: excluded');
     if (index.needsDecision.has(rel)) return verdict('decide', 'MANIFEST_NEEDS_DECISION', 'publish list: needs a decision');
     return verdict('decide', 'MANIFEST_UNLISTED', 'not on the publish list');
   }
 
-  // `publish: false` is an instruction, not a heuristic — honoured in every mode,
+  // `publish: false` is an instruction, not a heuristic — honoured always,
   // and never overridden by a manifest entry.
   if (publishMode(frontmatter) === 'none') {
     return frontmatter.publish === 'none'
@@ -232,7 +229,7 @@ function decidePage(page, options) {
     return verdict('decide', 'SUPERSEDED_NO_TARGET', 'canon_status: SUPERSEDED with no superseded_by');
   }
 
-  return verdict('publish', 'OK', listedForPublish ? 'publish list: publishing' : `mode: ${mode}`);
+  return verdict('publish', 'OK', listedForPublish ? 'publish list: publishing' : 'no publish list: publishing');
 }
 
 // The one `decide` code the build still emits a page for. A `decide` verdict

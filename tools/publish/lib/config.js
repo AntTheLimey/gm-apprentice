@@ -88,8 +88,7 @@ function setOnly(map, prefix, origins) {
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
 // `siteDir` is the site folder (where vault.config.json is): the output folder is judged against it.
 // `site` is 'player' or 'gm': forSite decides that site's values (and which names the GM wrote for it);
-// everything below reshapes them as it always has. The GM site is built as a player-mode build whatever
-// `hide.mode` says, and its faults are warnings except a GM site kept by a player vault.
+// everything below reshapes them as it always has. The GM site's faults are warnings except a GM site kept by a player vault.
 function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir, site = 'player' } = {}) {
   const read = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir });
   const { legacy = [], layout } = read;
@@ -131,7 +130,6 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const paletteWritten = Object.keys(origins).some((n) => n.startsWith('player_site.theme.palette.') && named(n));
   const theme = setOnly(p.theme, 'player_site.theme', origins);
   const merged = {
-    mode: site === 'gm' ? 'player' : p.hide.mode,
     link_previews: p.features.link_previews,
     tohit_calculator: p.features.tohit_calculator,
     connections: p.features.connections,

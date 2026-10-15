@@ -69,7 +69,6 @@ test('the adapter reads the GM site through forSite', () => {
   assert.deepEqual(gm.exclude_sections, ['GM Notes', 'Secrets']);
   assert.equal(gm.switches.liveStats, false);
   assert.deepEqual(gm.steps.after, []);
-  assert.equal(gm.mode, 'player');
   assert.equal(gm.buildsFor, 'gm');
   assert.equal(player.buildsFor, 'player');
   assert.equal(player.gm.publish, true);

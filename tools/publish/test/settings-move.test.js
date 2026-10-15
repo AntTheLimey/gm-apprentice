@@ -495,7 +495,7 @@ test('an old file with no frontmatter, or an empty one, moves with its whole bod
   for (const text of ['# Just text\n\nSome prose.\n', '---\n---\n# Just text\n']) {
     const s = scratch(text);
     const { before } = moveAndCompare(s);
-    assert.equal(before.mode !== undefined, true);
+    assert.equal(before.link_previews !== undefined, true);
     assert.equal(fs.readFileSync(at(s.vault, NEW_FILE), 'utf8'), 'version: 1\n');
     const notes = matter(fs.readFileSync(at(s.vault, NOTES_FILE), 'utf8'), {});
     assert.deepEqual(notes.data, { type: 'meta' });
@@ -1433,4 +1433,12 @@ test('a vault already on the new file says nothing-to-move only when nothing is 
   const keys = scratch(null, { site: { vaultPath: './Vault', outputDir: 'gazetteer' } });
   writeNewConfig(keys.vault, { version: 1 });
   assert.doesNotMatch(cliMove({ vault: keys.vault, config: keys.config }).data.lines.join('\n'), /nothing to move/);
+});
+
+test('a retired publish.mode is carried as written, comment and all, so the update can read it', () => {
+  const s = scratch(old('  # was a private copy\n  mode: full # kept\n  site_title: T\n'));
+  moveAndCompare(s);
+  const text = fs.readFileSync(at(s.vault, NEW_FILE), 'utf8');
+  assert.match(text, /# was a private copy\n\s+mode: full # kept/);
+  assert.match(text, /hide:\n\s+# was a private copy\n\s+mode: full/);
 });

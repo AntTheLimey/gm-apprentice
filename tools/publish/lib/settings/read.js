@@ -233,6 +233,11 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
   for (const e of LIST) {
     if (e.container || hasChildren(e.name)) continue;
     const raw = getPath(tree, e.name.split('.'));
+    // A retired name is read by nothing: warned when written, never in the values.
+    if (e.retired) {
+      if (raw != null) faults.push(makeFault({ name: e.name, setting: null, kind: 'retired', level: 'warn', value: raw, entry: e }));
+      continue;
+    }
     // A twin the file does not set is not in `values`: the GM site takes the player site's value (resolve.js).
     if (e.twinOf && (raw === undefined || (raw === null && !emptyIsFault(e)))) {
       origins[e.name] = 'inherit';

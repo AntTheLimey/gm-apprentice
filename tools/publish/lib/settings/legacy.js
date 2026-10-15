@@ -328,7 +328,7 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, cor
 
   // The retired names and the tool's bookkeeping hold no value to read; the walk below reports them.
   for (const e of LEGACY) {
-    if (e.container || e.legacyOnly || hasChildren(e.name)) continue;
+    if (e.container || e.legacyOnly || e.retired || hasChildren(e.name)) continue;
     readEntry(e);
   }
   // A setting the old file never had reads as its default.
@@ -382,7 +382,8 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, cor
       const known = KNOWN.get(full);
       if (!known) { unknown(parent, key, value); continue; }
       if (known !== PARENT && known.retired) {
-        faults.push(fault({ name: full, setting: null, kind: 'retired', level: 'warn', value }));
+        if (value == null) continue;
+        faults.push(fault({ name: full, setting: null, kind: 'retired', level: 'warn', value, entry: known }));
         continue;
       }
       if (known !== PARENT && !known.container && !hasChildren(full)) continue;

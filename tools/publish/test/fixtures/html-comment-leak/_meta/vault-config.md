@@ -1,4 +1,4 @@
 ---
 publish:
-  mode: full
+  exclude_drafts: false
 ---

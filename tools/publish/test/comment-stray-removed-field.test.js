@@ -14,7 +14,7 @@ const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // A site over a small vault with no manifest. Folders are mapped to themselves, lower-cased.
-function site(files, { mode = 'player', extra = '' } = {}) {
+function site(files, { extra = '' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'review-findings-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -26,7 +26,7 @@ function site(files, { mode = 'player', extra = '' } = {}) {
   }
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: ${mode}\n${extra}  folder_map:\n${[...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('')}---\n`);
+    `---\npublish:\n${extra}  folder_map:\n${[...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('')}---\n`);
   const configPath = path.join(root, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
   return { root, vault, configPath };
@@ -45,7 +45,7 @@ function quietBuild(configPath) {
 
 describe('COMMENT_STRAY in a frontmatter field the site removes', () => {
   const strays = async (frontmatter, extra = '') => {
-    const { configPath } = site({ 'People/Case.md': `---\ntype: npc\n${frontmatter}---\n\nBody.\n` }, { mode: 'full', extra });
+    const { configPath } = site({ 'People/Case.md': `---\ntype: npc\n${frontmatter}---\n\nBody.\n` }, { extra });
     const { faults } = quietBuild(configPath);
     const out = [];
     await runSiteDoctor({ configPath, json: true }, { out: (l) => out.push(String(l)), detect: () => null });

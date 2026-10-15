@@ -503,15 +503,7 @@
             "null"
           ],
           "properties": {
-            "mode": {
-              "description": "`player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own",
-              "default": "player",
-              "type": [
-                "string",
-                "null"
-              ],
-              "pattern": "^\\s*(?:[pP][lL][aA][yY][eE][rR]|[fF][uU][lL][lL])\\s*$"
-            },
+            "mode": {},
             "folders": {
               "description": "Vault folders never published",
               "default": [

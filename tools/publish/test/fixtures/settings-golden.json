@@ -1,7 +1,6 @@
 {
   "vault-html-comment-leak": {
     "publishConfig": {
-      "mode": "full",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -112,7 +111,6 @@
   },
   "vault-redesign-full": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -220,7 +218,6 @@
   },
   "vault-story": {
     "publishConfig": {
-      "mode": "full",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -326,7 +323,6 @@
   },
   "vault-with-coc-pc": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -437,7 +433,6 @@
   },
   "vault-with-dashboard": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -548,7 +543,6 @@
   },
   "vault-with-dnd-pc": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -659,7 +653,6 @@
   },
   "vault-with-genre": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -770,7 +763,6 @@
   },
   "vault-with-gurps-pc": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -881,7 +873,6 @@
   },
   "vault-with-landing-config": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -998,7 +989,6 @@
   },
   "vault-with-manifest": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1094,7 +1084,6 @@
   },
   "vault-with-party-roster": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1205,7 +1194,6 @@
   },
   "vault-benchmark-campaign": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1316,7 +1304,6 @@
   },
   "vault-slice-a-leak": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1423,7 +1410,6 @@
   },
   "vault-slice-a-version-behind": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1534,7 +1520,6 @@
   },
   "vault-slice-a-wrapup": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1645,7 +1630,6 @@
   },
   "vault-slice-b-index": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1756,7 +1740,6 @@
   },
   "empty-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1867,7 +1850,6 @@
   },
   "no-publish-key": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -1978,7 +1960,6 @@
   },
   "site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2088,7 +2069,6 @@
   },
   "site-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2198,7 +2178,6 @@
   },
   "site-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2308,7 +2287,6 @@
   },
   "site-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2418,7 +2396,6 @@
   },
   "site-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2528,7 +2505,6 @@
   },
   "site-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2638,7 +2614,6 @@
   },
   "site-quoted-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2748,7 +2723,6 @@
   },
   "site-quoted-yes-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2858,7 +2832,6 @@
   },
   "site-padded-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -2968,7 +2941,6 @@
   },
   "site-maybe": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3083,7 +3055,6 @@
   },
   "site-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3198,7 +3169,6 @@
   },
   "site-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3313,7 +3283,6 @@
   },
   "character-sheets-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3423,7 +3392,6 @@
   },
   "character-sheets-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3533,7 +3501,6 @@
   },
   "character-sheets-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3643,7 +3610,6 @@
   },
   "character-sheets-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3753,7 +3719,6 @@
   },
   "character-sheets-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3863,7 +3828,6 @@
   },
   "character-sheets-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -3973,7 +3937,6 @@
   },
   "character-sheets-quoted-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4083,7 +4046,6 @@
   },
   "character-sheets-quoted-yes-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4193,7 +4155,6 @@
   },
   "character-sheets-padded-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4303,7 +4264,6 @@
   },
   "character-sheets-maybe": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4418,7 +4378,6 @@
   },
   "character-sheets-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4533,7 +4492,6 @@
   },
   "character-sheets-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4648,7 +4606,6 @@
   },
   "live-stats-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4758,7 +4715,6 @@
   },
   "live-stats-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4868,7 +4824,6 @@
   },
   "live-stats-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -4978,7 +4933,6 @@
   },
   "live-stats-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5088,7 +5042,6 @@
   },
   "live-stats-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5198,7 +5151,6 @@
   },
   "live-stats-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5308,7 +5260,6 @@
   },
   "live-stats-quoted-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5418,7 +5369,6 @@
   },
   "live-stats-quoted-yes-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5528,7 +5478,6 @@
   },
   "live-stats-padded-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5638,7 +5587,6 @@
   },
   "live-stats-maybe": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5753,7 +5701,6 @@
   },
   "live-stats-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5868,7 +5815,6 @@
   },
   "live-stats-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -5983,7 +5929,6 @@
   },
   "inbox-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6093,7 +6038,6 @@
   },
   "inbox-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6203,7 +6147,6 @@
   },
   "inbox-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6313,7 +6256,6 @@
   },
   "inbox-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6423,7 +6365,6 @@
   },
   "inbox-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6533,7 +6474,6 @@
   },
   "inbox-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6643,7 +6583,6 @@
   },
   "inbox-quoted-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6753,7 +6692,6 @@
   },
   "inbox-quoted-yes-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6863,7 +6801,6 @@
   },
   "inbox-padded-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -6973,7 +6910,6 @@
   },
   "inbox-maybe": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7088,7 +7024,6 @@
   },
   "inbox-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7203,7 +7138,6 @@
   },
   "inbox-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7318,7 +7252,6 @@
   },
   "search-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7429,7 +7362,6 @@
   },
   "search-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7540,7 +7472,6 @@
   },
   "search-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7651,7 +7582,6 @@
   },
   "search-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7762,7 +7692,6 @@
   },
   "search-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7873,7 +7802,6 @@
   },
   "search-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -7984,7 +7912,6 @@
   },
   "search-quoted-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8095,7 +8022,6 @@
   },
   "search-quoted-yes-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8206,7 +8132,6 @@
   },
   "search-padded-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8317,7 +8242,6 @@
   },
   "search-maybe": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8430,7 +8354,6 @@
   },
   "search-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8543,7 +8466,6 @@
   },
   "search-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8656,7 +8578,6 @@
   },
   "mode-player": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8767,7 +8688,6 @@
   },
   "mode-full": {
     "publishConfig": {
-      "mode": "full",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8878,7 +8798,6 @@
   },
   "mode-capital-player": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -8989,7 +8908,6 @@
   },
   "mode-padded-full": {
     "publishConfig": {
-      "mode": "full",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9100,7 +9018,6 @@
   },
   "mode-players": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9213,7 +9130,6 @@
   },
   "mode-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9326,7 +9242,6 @@
   },
   "mode-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9439,7 +9354,6 @@
   },
   "link-previews-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9550,7 +9464,6 @@
   },
   "link-previews-on-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9661,7 +9574,6 @@
   },
   "link-previews-on-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9772,7 +9684,6 @@
   },
   "link-previews-desktop": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "desktop",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9883,7 +9794,6 @@
   },
   "link-previews-desktop-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "desktop",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -9994,7 +9904,6 @@
   },
   "link-previews-desktop-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "desktop",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10105,7 +10014,6 @@
   },
   "link-previews-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10216,7 +10124,6 @@
   },
   "link-previews-off-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10327,7 +10234,6 @@
   },
   "link-previews-off-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10438,7 +10344,6 @@
   },
   "link-previews-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10549,7 +10454,6 @@
   },
   "link-previews-yes-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10660,7 +10564,6 @@
   },
   "link-previews-yes-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10771,7 +10674,6 @@
   },
   "link-previews-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10882,7 +10784,6 @@
   },
   "link-previews-no-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -10993,7 +10894,6 @@
   },
   "link-previews-no-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11104,7 +11004,6 @@
   },
   "link-previews-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11215,7 +11114,6 @@
   },
   "link-previews-true-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11326,7 +11224,6 @@
   },
   "link-previews-true-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11439,7 +11336,6 @@
   },
   "link-previews-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11550,7 +11446,6 @@
   },
   "link-previews-false-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11661,7 +11556,6 @@
   },
   "link-previews-false-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11774,7 +11668,6 @@
   },
   "link-previews-unknown-word": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -11887,7 +11780,6 @@
   },
   "link-previews-number": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -12000,7 +11892,6 @@
   },
   "link-previews-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -12113,7 +12004,6 @@
   },
   "tohit-calculator-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -12224,7 +12114,6 @@
   },
   "tohit-calculator-on-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -12335,7 +12224,6 @@
   },
   "tohit-calculator-on-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -12446,7 +12334,6 @@
   },
   "tohit-calculator-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -12557,7 +12444,6 @@
   },
   "tohit-calculator-off-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -12668,7 +12554,6 @@
   },
   "tohit-calculator-off-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -12779,7 +12664,6 @@
   },
   "tohit-calculator-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -12890,7 +12774,6 @@
   },
   "tohit-calculator-yes-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -13001,7 +12884,6 @@
   },
   "tohit-calculator-yes-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -13112,7 +12994,6 @@
   },
   "tohit-calculator-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -13223,7 +13104,6 @@
   },
   "tohit-calculator-no-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -13334,7 +13214,6 @@
   },
   "tohit-calculator-no-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -13445,7 +13324,6 @@
   },
   "tohit-calculator-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -13556,7 +13434,6 @@
   },
   "tohit-calculator-true-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -13667,7 +13544,6 @@
   },
   "tohit-calculator-true-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -13778,7 +13654,6 @@
   },
   "tohit-calculator-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -13889,7 +13764,6 @@
   },
   "tohit-calculator-false-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -14000,7 +13874,6 @@
   },
   "tohit-calculator-false-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -14111,7 +13984,6 @@
   },
   "tohit-calculator-unknown-word": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -14224,7 +14096,6 @@
   },
   "tohit-calculator-number": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -14337,7 +14208,6 @@
   },
   "tohit-calculator-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -14450,7 +14320,6 @@
   },
   "connections-tree": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -14561,7 +14430,6 @@
   },
   "connections-tree-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -14672,7 +14540,6 @@
   },
   "connections-tree-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -14783,7 +14650,6 @@
   },
   "connections-web": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "web",
@@ -14894,7 +14760,6 @@
   },
   "connections-web-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "web",
@@ -15005,7 +14870,6 @@
   },
   "connections-web-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "web",
@@ -15116,7 +14980,6 @@
   },
   "connections-cards": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "cards",
@@ -15227,7 +15090,6 @@
   },
   "connections-cards-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "cards",
@@ -15338,7 +15200,6 @@
   },
   "connections-cards-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "cards",
@@ -15449,7 +15310,6 @@
   },
   "connections-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -15560,7 +15420,6 @@
   },
   "connections-off-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -15671,7 +15530,6 @@
   },
   "connections-off-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -15782,7 +15640,6 @@
   },
   "connections-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -15893,7 +15750,6 @@
   },
   "connections-on-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -16004,7 +15860,6 @@
   },
   "connections-on-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -16115,7 +15970,6 @@
   },
   "connections-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -16226,7 +16080,6 @@
   },
   "connections-yes-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -16337,7 +16190,6 @@
   },
   "connections-yes-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -16448,7 +16300,6 @@
   },
   "connections-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -16559,7 +16410,6 @@
   },
   "connections-no-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -16670,7 +16520,6 @@
   },
   "connections-no-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -16781,7 +16630,6 @@
   },
   "connections-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -16892,7 +16740,6 @@
   },
   "connections-true-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17003,7 +16850,6 @@
   },
   "connections-true-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17116,7 +16962,6 @@
   },
   "connections-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -17227,7 +17072,6 @@
   },
   "connections-false-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -17338,7 +17182,6 @@
   },
   "connections-false-padded": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17451,7 +17294,6 @@
   },
   "connections-unknown-word": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17564,7 +17406,6 @@
   },
   "connections-number": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17677,7 +17518,6 @@
   },
   "connections-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17790,7 +17630,6 @@
   },
   "exclude_sections-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -17901,7 +17740,6 @@
   },
   "exclude_sections-unset-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18014,7 +17852,6 @@
   },
   "exclude_sections-empty-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18118,7 +17955,6 @@
   },
   "exclude_sections-empty-list-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18235,7 +18071,6 @@
   },
   "exclude_sections-two-entries": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18342,7 +18177,6 @@
   },
   "exclude_sections-two-entries-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18459,7 +18293,6 @@
   },
   "exclude_sections-bare-string": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18572,7 +18405,6 @@
   },
   "exclude_sections-bare-string-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18697,7 +18529,6 @@
   },
   "exclude_sections-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18810,7 +18641,6 @@
   },
   "exclude_sections-empty-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -18935,7 +18765,6 @@
   },
   "exclude_fields-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19046,7 +18875,6 @@
   },
   "exclude_fields-unset-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19159,7 +18987,6 @@
   },
   "exclude_fields-empty-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19263,7 +19090,6 @@
   },
   "exclude_fields-empty-list-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19380,7 +19206,6 @@
   },
   "exclude_fields-two-entries": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19487,7 +19312,6 @@
   },
   "exclude_fields-two-entries-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19604,7 +19428,6 @@
   },
   "exclude_fields-bare-string": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19717,7 +19540,6 @@
   },
   "exclude_fields-bare-string-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19842,7 +19664,6 @@
   },
   "exclude_fields-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -19955,7 +19776,6 @@
   },
   "exclude_fields-empty-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20080,7 +19900,6 @@
   },
   "exclude_dirs-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20191,7 +20010,6 @@
   },
   "exclude_dirs-unset-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20308,7 +20126,6 @@
   },
   "exclude_dirs-empty-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20416,7 +20233,6 @@
   },
   "exclude_dirs-empty-list-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20537,7 +20353,6 @@
   },
   "exclude_dirs-two-entries": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20648,7 +20463,6 @@
   },
   "exclude_dirs-two-entries-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20769,7 +20583,6 @@
   },
   "exclude_dirs-bare-string": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -20882,7 +20695,6 @@
   },
   "exclude_dirs-bare-string-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21007,7 +20819,6 @@
   },
   "exclude_dirs-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21120,7 +20931,6 @@
   },
   "exclude_dirs-empty-with-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21245,7 +21055,6 @@
   },
   "exclude_dirs-entry-trailing-slash": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21355,7 +21164,6 @@
   },
   "exclude_dirs-entry-dot-slash": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21465,7 +21273,6 @@
   },
   "exclude_dirs-entry-backslash": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21575,7 +21382,6 @@
   },
   "exclude_dirs-entry-absolute-inside": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21685,7 +21491,6 @@
   },
   "exclude_dirs-entry-absolute-outside": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21795,7 +21600,6 @@
   },
   "exclude_sections-entry-number-and-boolean": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -21903,7 +21707,6 @@
   },
   "exclude_fields-entry-number-and-boolean": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22011,7 +21814,6 @@
   },
   "exclude_dirs-entry-number-and-boolean": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22123,7 +21925,6 @@
   },
   "exclude_callouts-unset-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22240,7 +22041,6 @@
   },
   "exclude_callouts-unset-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22359,7 +22159,6 @@
   },
   "exclude_callouts-unset-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22470,7 +22269,6 @@
   },
   "exclude_callouts-true-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22587,7 +22385,6 @@
   },
   "exclude_callouts-true-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22704,7 +22501,6 @@
   },
   "exclude_callouts-true-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22815,7 +22611,6 @@
   },
   "exclude_callouts-false-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -22935,7 +22730,6 @@
   },
   "exclude_callouts-false-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23057,7 +22851,6 @@
   },
   "exclude_callouts-false-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23168,7 +22961,6 @@
   },
   "exclude_callouts-list-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23288,7 +23080,6 @@
   },
   "exclude_callouts-list-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23412,7 +23203,6 @@
   },
   "exclude_callouts-list-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23526,7 +23316,6 @@
   },
   "exclude_callouts-empty-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23643,7 +23432,6 @@
   },
   "exclude_callouts-empty-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23762,7 +23550,6 @@
   },
   "exclude_callouts-empty-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23873,7 +23660,6 @@
   },
   "exclude_callouts-bare-no-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -23990,7 +23776,6 @@
   },
   "exclude_callouts-bare-no-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24107,7 +23892,6 @@
   },
   "exclude_callouts-bare-no-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24218,7 +24002,6 @@
   },
   "exclude_callouts-bare-off-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24335,7 +24118,6 @@
   },
   "exclude_callouts-bare-off-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24452,7 +24234,6 @@
   },
   "exclude_callouts-bare-off-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24563,7 +24344,6 @@
   },
   "exclude_callouts-quoted-false-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24680,7 +24460,6 @@
   },
   "exclude_callouts-quoted-false-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24797,7 +24576,6 @@
   },
   "exclude_callouts-quoted-false-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -24908,7 +24686,6 @@
   },
   "exclude_callouts-maybe-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25025,7 +24802,6 @@
   },
   "exclude_callouts-maybe-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25142,7 +24918,6 @@
   },
   "exclude_callouts-maybe-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25253,7 +25028,6 @@
   },
   "exclude_callouts-one-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25370,7 +25144,6 @@
   },
   "exclude_callouts-one-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25487,7 +25260,6 @@
   },
   "exclude_callouts-one-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25598,7 +25370,6 @@
   },
   "exclude_callouts-list-of-number-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25718,7 +25489,6 @@
   },
   "exclude_callouts-list-of-number-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25841,7 +25611,6 @@
   },
   "exclude_callouts-list-of-number-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -25954,7 +25723,6 @@
   },
   "exclude_callouts-list-with-number-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26074,7 +25842,6 @@
   },
   "exclude_callouts-list-with-number-site-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26198,7 +25965,6 @@
   },
   "exclude_callouts-list-with-number-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26312,7 +26078,6 @@
   },
   "exclude-drafts-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26423,7 +26188,6 @@
   },
   "exclude-drafts-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26534,7 +26298,6 @@
   },
   "exclude-drafts-quoted-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26645,7 +26408,6 @@
   },
   "exclude-drafts-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26756,7 +26518,6 @@
   },
   "exclude-drafts-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26867,7 +26628,6 @@
   },
   "exclude-drafts-maybe": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -26978,7 +26738,6 @@
   },
   "exclude-drafts-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27089,7 +26848,6 @@
   },
   "exclude-drafts-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27200,7 +26958,6 @@
   },
   "exclude-drafts-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27314,7 +27071,6 @@
   },
   "images-optimize-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27425,7 +27181,6 @@
   },
   "images-optimize-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27536,7 +27291,6 @@
   },
   "images-optimize-quoted-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27647,7 +27401,6 @@
   },
   "images-max-width-zero": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27758,7 +27511,6 @@
   },
   "images-max-width-camel": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27870,7 +27622,6 @@
   },
   "images-quality-150": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -27981,7 +27732,6 @@
   },
   "images-format-png": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28092,7 +27842,6 @@
   },
   "landing-recency_window-zero": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28203,7 +27952,6 @@
   },
   "landing-recency_window-three": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28314,7 +28062,6 @@
   },
   "landing-recency_window-quoted-three": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28425,7 +28172,6 @@
   },
   "landing-recency_window-lots": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28536,7 +28282,6 @@
   },
   "landing-max_npcs-zero": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28647,7 +28392,6 @@
   },
   "landing-max_npcs-three": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28758,7 +28502,6 @@
   },
   "landing-max_npcs-quoted-three": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28869,7 +28612,6 @@
   },
   "landing-max_npcs-lots": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -28980,7 +28722,6 @@
   },
   "landing-max_locations-zero": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29091,7 +28832,6 @@
   },
   "landing-max_locations-three": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29202,7 +28942,6 @@
   },
   "landing-max_locations-quoted-three": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29313,7 +29052,6 @@
   },
   "landing-max_locations-lots": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29424,7 +29162,6 @@
   },
   "landing-featured-npcs-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29538,7 +29275,6 @@
   },
   "landing-featured-npcs-string": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29649,7 +29385,6 @@
   },
   "landing-site-extra-subkey": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29769,7 +29504,6 @@
   },
   "theme-genre-horror": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29875,7 +29609,6 @@
   },
   "theme-genre-sci-fi": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -29981,7 +29714,6 @@
   },
   "theme-genre-gothic": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30087,7 +29819,6 @@
   },
   "theme-palette-one-colour": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30198,7 +29929,6 @@
   },
   "theme-fonts-source-google": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30309,7 +30039,6 @@
   },
   "theme-fonts-source-self-host": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30420,7 +30149,6 @@
   },
   "theme-fonts-source-local": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30531,7 +30259,6 @@
   },
   "theme-fonts-source-gogle": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30642,7 +30369,6 @@
   },
   "theme-fonts-source-capital-local": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30753,7 +30479,6 @@
   },
   "theme-fonts-source-capital-self-host": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30864,7 +30589,6 @@
   },
   "theme-fonts-source-padded-google": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -30975,7 +30699,6 @@
   },
   "theme-default-mode-dark": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31086,7 +30809,6 @@
   },
   "theme-default-mode-capital-dark": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31197,7 +30919,6 @@
   },
   "theme-default-mode-dim": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31310,7 +31031,6 @@
   },
   "overrides-good-fields": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31427,7 +31147,6 @@
   },
   "overrides-fields-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31540,7 +31259,6 @@
   },
   "overrides-fields-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31653,7 +31371,6 @@
   },
   "overrides-include-string": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31766,7 +31483,6 @@
   },
   "overrides-exclude-key": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31879,7 +31595,6 @@
   },
   "sheet-skin-plain": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -31990,7 +31705,6 @@
   },
   "sheet-skin-parchment": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32101,7 +31815,6 @@
   },
   "sheet-skin-case-file": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32212,7 +31925,6 @@
   },
   "sheet-skin-console": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32323,7 +32035,6 @@
   },
   "sheet-skin-ledger": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32434,7 +32145,6 @@
   },
   "sheet-skin-none": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32551,7 +32261,6 @@
   },
   "sheet-skin-unknown": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32668,7 +32377,6 @@
   },
   "sheet-skin-hundred-chars": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32785,7 +32493,6 @@
   },
   "sheet-frame-none": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -32896,7 +32603,6 @@
   },
   "sheet-frame-ring": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33007,7 +32713,6 @@
   },
   "sheet-frame-laurel": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33118,7 +32823,6 @@
   },
   "sheet-frame-thorns": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33229,7 +32933,6 @@
   },
   "sheet-frame-gilt": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33340,7 +33043,6 @@
   },
   "sheet-frame-steel": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33451,7 +33153,6 @@
   },
   "sheet-frame-corners": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33562,7 +33263,6 @@
   },
   "sheet-frame-hex": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33673,7 +33373,6 @@
   },
   "sheet-frame-cracked": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33784,7 +33483,6 @@
   },
   "sheet-frame-unknown": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -33901,7 +33599,6 @@
   },
   "sheet-frame-hundred-chars": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34018,7 +33715,6 @@
   },
   "pc-prose-sections-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34132,7 +33828,6 @@
   },
   "pc-prose-sections-string": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34248,7 +33943,6 @@
   },
   "pc-prose-sections-list-with-number": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34367,7 +34061,6 @@
   },
   "backend-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34482,7 +34175,6 @@
   },
   "backend-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34597,7 +34289,6 @@
   },
   "backend-both-differ": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34712,7 +34403,6 @@
   },
   "backend-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34828,7 +34518,6 @@
   },
   "folder-map-good": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -34941,7 +34630,6 @@
   },
   "folder-map-wrong-type": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35052,7 +34740,6 @@
   },
   "banners-good": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35165,7 +34852,6 @@
   },
   "banners-wrong-type": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35276,7 +34962,6 @@
   },
   "locations-good": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35389,7 +35074,6 @@
   },
   "locations-wrong-type": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35500,7 +35184,6 @@
   },
   "section-titles-good": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35613,7 +35296,6 @@
   },
   "section-titles-wrong-type": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35729,7 +35411,6 @@
   },
   "four-oh-four-good": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35840,7 +35521,6 @@
   },
   "four-oh-four-wrong-type": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -35955,7 +35635,6 @@
   },
   "setting-year": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36066,7 +35745,6 @@
   },
   "exclude-sectoins-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36177,7 +35855,6 @@
   },
   "link-preview-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36288,7 +35965,6 @@
   },
   "theme-gnere": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36400,7 +36076,6 @@
   },
   "landing-max-npc": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36512,7 +36187,6 @@
   },
   "imagse-map": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36623,7 +36297,6 @@
   },
   "link-previews-string-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36736,7 +36409,6 @@
   },
   "link-previews-string-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36849,7 +36521,6 @@
   },
   "link-previews-string-true-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -36962,7 +36633,6 @@
   },
   "link-previews-string-false-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37075,7 +36745,6 @@
   },
   "link-previews-string-padfalsepad": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37188,7 +36857,6 @@
   },
   "link-previews-string-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37299,7 +36967,6 @@
   },
   "link-previews-string-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37410,7 +37077,6 @@
   },
   "link-previews-string-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37521,7 +37187,6 @@
   },
   "link-previews-string-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "off",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37632,7 +37297,6 @@
   },
   "tohit-calculator-string-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37743,7 +37407,6 @@
   },
   "tohit-calculator-string-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -37854,7 +37517,6 @@
   },
   "tohit-calculator-string-true-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -37965,7 +37627,6 @@
   },
   "tohit-calculator-string-false-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -38076,7 +37737,6 @@
   },
   "tohit-calculator-string-padfalsepad": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -38187,7 +37847,6 @@
   },
   "tohit-calculator-string-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -38298,7 +37957,6 @@
   },
   "tohit-calculator-string-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -38409,7 +38067,6 @@
   },
   "tohit-calculator-string-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -38520,7 +38177,6 @@
   },
   "tohit-calculator-string-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "off",
       "connections": "tree",
@@ -38631,7 +38287,6 @@
   },
   "connections-string-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -38744,7 +38399,6 @@
   },
   "connections-string-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -38857,7 +38511,6 @@
   },
   "connections-string-true-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -38970,7 +38623,6 @@
   },
   "connections-string-false-upper": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39083,7 +38735,6 @@
   },
   "connections-string-padfalsepad": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39196,7 +38847,6 @@
   },
   "connections-string-yes": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39307,7 +38957,6 @@
   },
   "connections-string-no": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -39418,7 +39067,6 @@
   },
   "connections-string-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39529,7 +39177,6 @@
   },
   "connections-string-off": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "off",
@@ -39640,7 +39287,6 @@
   },
   "theme-default-mode-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39751,7 +39397,6 @@
   },
   "theme-default-mode-boolean": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39864,7 +39509,6 @@
   },
   "theme-default-mode-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -39983,7 +39627,6 @@
   },
   "publish-scalar": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40094,7 +39737,6 @@
   },
   "publish-list": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40203,7 +39845,6 @@
   },
   "site-dir-site-unset": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40314,7 +39955,6 @@
   },
   "site-dir-site-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40424,7 +40064,6 @@
   },
   "site-dir-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40534,7 +40173,6 @@
   },
   "site-dir-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40645,7 +40283,6 @@
   },
   "backend-inbox-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40760,7 +40397,6 @@
   },
   "backend-inbox-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40875,7 +40511,6 @@
   },
   "backend-statusbar-site-live-stats-vault-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -40985,7 +40620,6 @@
   },
   "backend-statusbar-site-live-stats-vault-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41095,7 +40729,6 @@
   },
   "character-sheets-off-live-stats-on": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41209,7 +40842,6 @@
   },
   "moved-site-title-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41320,7 +40952,6 @@
   },
   "moved-site-title-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41437,7 +41068,6 @@
   },
   "moved-site-title-both": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41554,7 +41184,6 @@
   },
   "moved-footer-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41665,7 +41294,6 @@
   },
   "moved-footer-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41782,7 +41410,6 @@
   },
   "moved-footer-both": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -41899,7 +41526,6 @@
   },
   "moved-attachments-dir-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42010,7 +41636,6 @@
   },
   "moved-attachments-dir-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42127,7 +41752,6 @@
   },
   "moved-attachments-dir-both": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42244,7 +41868,6 @@
   },
   "moved-system-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42355,7 +41978,6 @@
   },
   "moved-system-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42472,7 +42094,6 @@
   },
   "moved-system-both": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42589,7 +42210,6 @@
   },
   "moved-sheet-crest-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42700,7 +42320,6 @@
   },
   "moved-sheet-crest-site": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42817,7 +42436,6 @@
   },
   "moved-sheet-crest-both": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -42934,7 +42552,6 @@
   },
   "search-enabled-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43051,7 +42668,6 @@
   },
   "search-enabled-site-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43168,7 +42784,6 @@
   },
   "search-vault-true-site-false": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43285,7 +42900,6 @@
   },
   "search-vault-false-site-true": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43402,7 +43016,6 @@
   },
   "images-quality-high": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43513,7 +43126,6 @@
   },
   "images-quality-negative": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43624,7 +43236,6 @@
   },
   "images-quality-empty": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43735,7 +43346,6 @@
   },
   "images-max-width-wide": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43846,7 +43456,6 @@
   },
   "images-max-width-negative": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -43957,7 +43566,6 @@
   },
   "images-max-width-fractional": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44068,7 +43676,6 @@
   },
   "images-optimize-one": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44179,7 +43786,6 @@
   },
   "theme-genre-weird": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44285,7 +43891,6 @@
   },
   "theme-genre-weird-with-palette": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44396,7 +44001,6 @@
   },
   "theme-genre-sci-fi-capitalised": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44502,7 +44106,6 @@
   },
   "landing-zero-window-and-npcs": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44613,7 +44216,6 @@
   },
   "merge-images": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44733,7 +44335,6 @@
   },
   "merge-banners": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44856,7 +44457,6 @@
   },
   "merge-locations": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -44979,7 +44579,6 @@
   },
   "overrides-nfd-key": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45096,7 +44695,6 @@
   },
   "theme-exclude-sections-too-deep": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45210,7 +44808,6 @@
   },
   "landing-exclude-drafts-too-deep": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45322,7 +44919,6 @@
   },
   "images-exclude-fields-too-deep": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45436,7 +45032,6 @@
   },
   "hide-group": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45547,7 +45142,6 @@
   },
   "beside-publish-exclude-sections": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45658,7 +45252,6 @@
   },
   "beside-publish-exclude-drafts": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45769,7 +45362,6 @@
   },
   "landing-tagline-site-only": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",
@@ -45880,7 +45472,6 @@
   },
   "landing-tagline-site-and-vault": {
     "publishConfig": {
-      "mode": "player",
       "link_previews": "on",
       "tohit_calculator": "on",
       "connections": "tree",

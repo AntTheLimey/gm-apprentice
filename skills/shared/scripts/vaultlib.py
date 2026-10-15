@@ -1422,6 +1422,17 @@ def settings_unset(vault: Path, names: list[str]) -> list[str]:
     return [str(n) for n in answer["removed"]]
 
 
+def settings_written(vault: Path, name: str) -> tuple[Any, str]:
+    """What `settings get` says of one name as the file holds it: (value,
+    origin). Unlike `settings`, it answers for a retired name too, with the
+    value the file still writes and origin `file`; a name the file does not
+    write is (None, "default"). Not cached."""
+    _check_vault(vault)
+    _check_names([name])
+    answer = _run_settings(["get", *_target_args(vault), name])
+    return answer["values"].get(name), str(answer["origins"].get(name))
+
+
 def settings_carry(vault: Path, written: str, name: str) -> list[str]:
     """Put the value of the key `written` (a mis-named key in the new file)
     under the setting `name`, validated, and remove the key: one change, all

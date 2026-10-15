@@ -119,7 +119,7 @@ describe('scanAttachments honours exclude_dirs during a real build (#210)', () =
     outputDir = path.join(work, 'docs');
 
     write(vault, '_meta/vault-config.md',
-      '---\npublish:\n  mode: full\n  exclude_dirs:\n    - "_attachments/gm-maps"\n---\n');
+      '---\npublish:\n  exclude_dirs:\n    - "_attachments/gm-maps"\n---\n');
     write(vault, '_attachments/gm-maps/Secret Map.png', 'fake-png-bytes');
     write(vault, '_attachments/Hero.png', 'fake-png-bytes');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\nportrait: Hero.png\n---\n\n# Someone\n');
@@ -164,7 +164,7 @@ describe('excluding the attachments root itself excludes every image, including 
     outputDir = path.join(work, 'docs');
 
     write(vault, '_meta/vault-config.md',
-      '---\npublish:\n  mode: full\n  exclude_dirs:\n    - "_attachments"\n---\n');
+      '---\npublish:\n  exclude_dirs:\n    - "_attachments"\n---\n');
     write(vault, '_attachments/Top Level.png', 'fake-png-bytes');
     write(vault, '_attachments/portraits/Nested.png', 'fake-png-bytes');
     write(vault, 'Characters/NPCs/Someone.md', '---\ntype: npc\n---\n\n# Someone\n');
@@ -206,7 +206,7 @@ describe('player mode prunes unreferenced images with no manifest present (#210)
     outputDir = path.join(work, 'docs');
 
     // No publish list anywhere in this vault.
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+    write(vault, '_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
     write(vault, '_attachments/Referenced.png', 'fake-png-bytes');
     write(vault, '_attachments/Never Embedded.png', 'fake-png-bytes');
     write(vault, 'Characters/NPCs/Someone.md',
@@ -236,43 +236,5 @@ describe('player mode prunes unreferenced images with no manifest present (#210)
 
   it('does not copy an attachment no published page references', () => {
     assert.ok(!fs.existsSync(path.join(outputDir, 'images', 'Never Embedded.png')));
-  });
-});
-
-// GM mode must stay unchanged: every attachment ships regardless of what's referenced.
-describe('full/GM mode still copies every scanned image (#210 regression guard)', () => {
-  let work, outputDir;
-
-  before(() => {
-    work = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-full-mode-images-'));
-    const vault = path.join(work, 'vault');
-    outputDir = path.join(work, 'docs');
-
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  mode: full\n---\n');
-    write(vault, '_attachments/Referenced.png', 'fake-png-bytes');
-    write(vault, '_attachments/Never Embedded.png', 'fake-png-bytes');
-    write(vault, 'Characters/NPCs/Someone.md',
-      '---\ntype: npc\nportrait: Referenced.png\n---\n\n# Someone\n');
-
-    const configPath = path.join(work, 'vault.config.json');
-    fs.writeFileSync(configPath, JSON.stringify({
-      siteTitle: 'Full Mode Images',
-      siteUrl: 'https://example.github.io/full-mode-images',
-      vaultPath: vault,
-      outputDir,
-      attachmentsDir: '_attachments',
-      excludeDirs: ['_meta', '_Templates'],
-      folderMap: { 'Characters/NPCs': 'characters/npcs' },
-    }, null, 2));
-
-    build({ configPath });
-  });
-
-  after(() => {
-    fs.rmSync(work, { recursive: true, force: true });
-  });
-
-  it('copies images not referenced by any page', () => {
-    assert.ok(fs.existsSync(path.join(outputDir, 'images', 'Never Embedded.png')));
   });
 });

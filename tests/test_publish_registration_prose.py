@@ -49,11 +49,11 @@ class ReconcileRegistrationTests(unittest.TestCase):
         self.assertIn("Report the unclear list", self.step)
         self.assertIn("publish-site asks the GM", self.step)
 
-    def test_asks_the_tool_for_the_site_and_the_mode(self):
+    def test_asks_the_tool_for_the_site(self):
         # What an unset switch means is the settings list's to say, so the
         # step asks the tool and never reads the settings file itself.
         self.assertRegex(self.step, r"settings\s+get player_site\.publish "
-                                    r"player_site\.folder player_site\.hide\.mode "
+                                    r"player_site\.folder "
                                     r"--vault <vault>")
         self.assertNotIn("vault-config.md", self.step)
         self.assertRegex(self.step, r"relative to the\s+vault")

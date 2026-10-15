@@ -288,7 +288,7 @@ describe('player_site.withheld_words: the audit does not depend on the built-in 
     fs.rmSync(path.join(s.vault, '_meta', 'vault-config.md'));
     writeNewConfig(s.vault, {
       version: 1,
-      player_site: { hide: { mode: 'player', folders: ['Quiet'] }, folder_map: { Characters: 'characters' }, ...(word ? { withheld_words: { person: word } } : {}) },
+      player_site: { hide: { folders: ['Quiet'] }, folder_map: { Characters: 'characters' }, ...(word ? { withheld_words: { person: word } } : {}) },
     });
     fs.writeFileSync(s.configPath, JSON.stringify({ vaultPath: s.vault }));
     let findings = null;
@@ -491,7 +491,6 @@ describe('the name planted in any frontmatter field is reported or absent from e
 describe('a withheld note that publishes', () => {
   const scenes = [
     ['listed under Publishing', {}, ''],
-    ['full mode, no publish: false', { mode: 'full', publish: [] }, ''],
     ['publish: true, listed', {}, 'publish: true\n'],
     ['publish: stub, listed', {}, 'publish: stub\n'],
   ];

@@ -20,7 +20,7 @@ function buildVault(files) {
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), root };
 }
 
-const CONFIG = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
+const CONFIG = '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
 
 test('a page only mentioned in a session keeps its Connections section, with the session under Mentions', () => {
   const { read, root } = buildVault({

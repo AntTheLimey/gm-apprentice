@@ -1,6 +1,5 @@
 ---
 publish:
-  mode: player
   exclude_sections:
     - "GM Notes"
   exclude_fields:

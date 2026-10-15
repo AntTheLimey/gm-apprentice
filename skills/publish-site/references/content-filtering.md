@@ -33,8 +33,7 @@ All campaign content falls into three categories:
   in Obsidian. The build counts those strays in a closing warning, and
   campaign-qa's Site Faults check finds and fixes each one.
 - Frontmatter fields in `player_site.hide.fields`
-- Files whose frontmatter says `publish: false` — in **every** mode,
-  including `full`. The file still parses, so links to it render as
+- Files whose frontmatter says `publish: false`. The file still parses, so links to it render as
   plain text rather than as a broken link; no page is emitted.
 - Fields named in a file's own `publish_exclude_fields`, on that file
   only, merged over `player_site.hide.fields`.
@@ -214,10 +213,9 @@ The publish list, `_meta/publish-list.yaml`, is the work order for the
 build. It holds every file the GM has decided on: `publishing`,
 `excluded` (each may carry a reason) and `needs_decision`.
 
-In `player` mode (see § Publish Modes) a file publishes if and only if it
-is under `publishing`. Being under `excluded` or `needs_decision` never
+A file publishes if and only if it is under `publishing`. Being under `excluded` or `needs_decision` never
 publishes it; those lists only quiet the "not on the publish list"
-warning. In `full` mode the list is not applied.
+warning.
 
 Never open the file to read or change it. Ask the tool:
 
@@ -281,16 +279,13 @@ options (e.g. "CLASSIFIED — CLEARANCE LEVEL INSUFFICIENT" for
 military, "The stars are not yet right..." for horror). Accept
 custom input as an alternative.
 
-## Publish Modes
+## The GM site
 
-- `player`: Only player-known content is published
-- `full`: The GM's own copy. Notes held back as prep (`status: planned`
-  or `prepped`, `stage: outline`, `draft` or `ready`, `source: prep`, a
-  cut or skipped scene) publish, the publish list is not applied,
-  and every image in the attachments folder is copied, used or not. Every other
-  `player_site.hide` setting and a note's own `publish: false` still apply. The
-  built-in lists keep GM-only sections and fields off a `full` site;
-  a list the GM has replaced must still name them
+The player site is the only site this document's rules decide. For a copy
+that shows everything (notes held back as prep, every hidden section and
+field, each marked with why players do not see it), the GM turns on the
+GM site (`gm_site.publish`); it is built in its own folder and never goes
+online.
 
 ## Setup Questioning Flow
 

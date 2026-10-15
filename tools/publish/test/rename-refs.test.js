@@ -104,7 +104,7 @@ describe('manifest rename', () => {
 
   it('rewrites a vault-config override path and featured names, byte for byte', () => {
     const cfg = [
-      '---', 'publish:', '  mode: player', '  overrides:', '    fields:',
+      '---', 'publish:', '  overrides:', '    fields:',
       `      "${FROM}":`, '        include: [secrets]',
       '  landing:', '    featured_npcs: ["Emma_Wentworth", Other]', '    quick_links:', '      - Emma_Wentworth', '---', '', '# Config', ''].join('\n');
     const vault = vaultWith({ '_meta/vault-config.md': cfg, [FROM]: '---\ntype: npc\n---\n' });
@@ -220,7 +220,7 @@ describe('manifest rename: story companions', () => {
 });
 
 describe('manifest rename: who each spelling goes to', () => {
-  const SITE = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
+  const SITE = '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n';
   const NPC = 'Characters/NPCs/Charlotte_Thorne.md';
   const PC = 'Characters/PCs/Charlotte_Thorne.md';
   const note = (type, extra = '') => `---\ntype: ${type}\n${extra}---\n# C\n`;
@@ -253,7 +253,7 @@ describe('manifest rename: who each spelling goes to', () => {
   });
 
   it('reads the site config the build reads, when the folder map lives there', () => {
-    const vault = vaultWith({ '_meta/vault-config.md': '---\npublish:\n  mode: full\n---\n', [NPC]: note('npc') });
+    const vault = vaultWith({ '_meta/vault-config.md': '---\npublish:\n---\n', [NPC]: note('npc') });
     const cfg = path.join(vault, 'site.config.json');
     fs.writeFileSync(cfg, JSON.stringify({ vaultPath: vault, folderMap: { 'Characters/NPCs': 'characters/npcs' }, excludeDirs: ['_meta'] }));
     assert.strictEqual(ask(vault, ['Charlotte_Thorne']).owners.Charlotte_Thorne, null, 'no folder map without the site config');
@@ -287,7 +287,7 @@ describe('backlinks follow the page a link resolves to', () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'backlink-key-'));
     const vault = path.join(root, 'vault');
     const files = {
-      '_meta/vault-config.md': '---\npublish:\n  mode: full\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n',
+      '_meta/vault-config.md': '---\npublish:\n  folder_map:\n    Characters/NPCs: characters/npcs\n    Characters/PCs: characters/pcs\n    Sessions: sessions\n---\n',
       'Characters/NPCs/Charlotte_Thorne.md': '---\ntype: npc\ncanon_status: SUPERSEDED\n---\n# N\n',
       'Characters/PCs/Charlotte_Thorne.md': '---\ntype: pc\n---\n# P\n',
       'Sessions/S1.md': '---\ntype: session\n---\nWe met [[Charlotte_Thorne]].\n',
@@ -308,7 +308,7 @@ describe('backlinks follow the page a link resolves to', () => {
 });
 
 describe('manifest rename: what the site publishes', () => {
-  const MAP = '---\npublish:\n  mode: full\n  exclude_dirs: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n---\n';
+  const MAP = '---\npublish:\n  exclude_dirs: [GM]\n  folder_map:\n    NPCs: characters/npcs\n    Cultures: cultures\n    Sessions: sessions\n---\n';
   const npc = '---\ntype: npc\n---\n# N\n';
 
   it('lists the notes the site publishes, so links in the rest are not read through its link map', () => {

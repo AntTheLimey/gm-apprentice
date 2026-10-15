@@ -40,7 +40,7 @@ function formatFault(f) {
     : `${f.name} is written beside publish:, where it hides nothing, and no setting has that name; it would belong under publish:.`;
   if (f.kind === 'unknown-name') return `${f.name} is not a setting.${f.suggest ? ` Did you mean ${f.suggest}?` : ''}`;
   if (f.kind === 'old-name') return `${f.name} is an old name; use ${f.use}.`;
-  if (f.kind === 'retired') return `${f.name} is no longer used; remove it.`;
+  if (f.kind === 'retired') return f.entry && f.entry.retiredSays ? `${f.name} ${f.entry.retiredSays}.` : `${f.name} is no longer used; remove it.`;
   if (f.kind === 'dropped' || f.kind === 'gm-not-per-site' || f.kind === 'gm-kept-by-player') return f.message;
   return `${f.name} is ${f.value === null ? 'empty' : show(f.value)}; it takes ${TYPES[f.entry.type].takes(f.entry)}.`;
 }

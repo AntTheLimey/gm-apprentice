@@ -32,7 +32,6 @@ function site(menu, { files = {}, settings = {} } = {}) {
   writeNewConfig(vault, {
     version: 1,
     player_site: {
-      hide: { mode: 'full' },
       folder_map: { Characters: 'characters', Locations: 'locations', Hidden: 'hidden' },
       ...(menu === undefined ? {} : { menu_extra: menu }),
       ...settings,
@@ -230,7 +229,7 @@ test('a link to a note with no page is dropped, by name, by alias, by underscore
     { label: 'ByWithheld', link: 'Lord Zorn' },
     { label: 'ByUnderscore', link: 'Old_Tam' },
     { label: 'Fine', link: 'Harbour' },
-  ], { files: HIDDEN, settings: { hide: { mode: 'full', folders: ['_meta', 'Gm_Only'] } } });
+  ], { files: HIDDEN, settings: { hide: { folders: ['_meta', 'Gm_Only'] } } });
   const { desktop } = menus(s.read('index.html'));
   for (const label of ['ByName', 'ByAlias', 'ByWithheld', 'ByUnderscore']) assert.doesNotMatch(desktop, new RegExp(`>${label}<`), label);
   assert.match(desktop, />Fine</);
@@ -241,7 +240,7 @@ test('a link to a note with no page is dropped, by name, by alias, by underscore
 });
 
 test('a link to a note in an excluded folder is dropped', () => {
-  const s = site([{ label: 'Sec', link: 'Secret Person' }], { files: HIDDEN, settings: { hide: { mode: 'full', folders: ['_meta', 'Gm_Only'] } } });
+  const s = site([{ label: 'Sec', link: 'Secret Person' }], { files: HIDDEN, settings: { hide: { folders: ['_meta', 'Gm_Only'] } } });
   assert.doesNotMatch(menus(s.read('index.html')).desktop, />Sec</);
   assert.ok(s.warnings.some((w) => w.includes('"Sec"')));
 });
@@ -312,7 +311,7 @@ const RESIDUAL_FILES = {
   'Hidden/Lord_Hush.md': npc('publish: false\ntitle: The Whispering Man\n'),
   'Gm_Only/Secret_Person.md': npc(),
 };
-const RESIDUAL_SETTINGS = { hide: { mode: 'full', folders: ['_meta', 'Gm_Only'] } };
+const RESIDUAL_SETTINGS = { hide: { folders: ['_meta', 'Gm_Only'] } };
 const RESIDUAL_LEAKY = [
   'Lord Hush/', 'Lord%20Hush', '[[Lord%20Hush]]', 'Lord%20Hush#x', 'hidden/lord-hush.html/', 'hidden//lord-hush.html',
   'hidden/./lord-hush.html', 'foo/../hidden/lord-hush.html', 'lord-hush.html', 'hidden/lord-hush', 'hidden/lord-hush.htm',

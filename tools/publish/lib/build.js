@@ -622,24 +622,21 @@ function buildSite(options) {
     // the file, and the allowlist then drops it with no signal. The landing "Latest Session"
     // block falls back to the previous session while showing the new date, which reads as a
     // broken link. Warn on registrable types that are in neither the Publishing nor the
-    // Excluded list (a deliberate exclusion is a decision, not an oversight). Only meaningful in
-    // player mode — that is the only mode where the manifest is enforced as an allowlist (the
-    // filter below); in full/GM mode unregistered pages still publish, so the warning would lie.
-    if (publishConfig.mode === 'player') {
-      const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
-      const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
-      for (const page of corpus) {
-        const type = page.frontmatter && page.frontmatter.type;
-        if (!REGISTRABLE_TYPES.has(type)) continue;
-        const rel = vaultRelPathOf(page);
-        if (!registered.has(rel)) {
-          if (type === 'session' && PLAYED_SESSION_STATUSES.has(String(page.frontmatter.status || '').toLowerCase())) {
-            unpublishedPlayedSessions.push({ rel, title: page.title || path.basename(rel, '.md') });
-            continue;
-          }
-          const kind = type === 'chapter' ? 'chapter' : 'session';
-          console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not on the publish list — this ${kind} will NOT publish. Put it on the list with manifest apply --publish "${rel}" (manifest publish-played does it for finished sessions).`);
+    // Excluded list (a deliberate exclusion is a decision, not an oversight).
+    // The publish list is enforced as an allowlist (the filter below), so the warning is true.
+    const registered = new Set([...manifest.publishing, ...(manifest.excluded || [])]);
+    const REGISTRABLE_TYPES = new Set(['session', 'session_wrap', 'chapter']);
+    for (const page of corpus) {
+      const type = page.frontmatter && page.frontmatter.type;
+      if (!REGISTRABLE_TYPES.has(type)) continue;
+      const rel = vaultRelPathOf(page);
+      if (!registered.has(rel)) {
+        if (type === 'session' && PLAYED_SESSION_STATUSES.has(String(page.frontmatter.status || '').toLowerCase())) {
+          unpublishedPlayedSessions.push({ rel, title: page.title || path.basename(rel, '.md') });
+          continue;
         }
+        const kind = type === 'chapter' ? 'chapter' : 'session';
+        console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not on the publish list — this ${kind} will NOT publish. Put it on the list with manifest apply --publish "${rel}" (manifest publish-played does it for finished sessions).`);
       }
     }
   }
@@ -691,7 +688,7 @@ function buildSite(options) {
     'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE', 'SCENE_CUT_SKIPPED');
   if (!gm && autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
 
-  if (!gm && manifest && publishConfig.mode !== 'full') {
+  if (!gm && manifest) {
     // A prep file the GM explicitly listed under Publishing: named here because a
     // reader landing on a published prep page deserves an explanation for why it's
     // there. decidePage checks the manifest allowlist before the auto-exclude
@@ -706,7 +703,7 @@ function buildSite(options) {
     }
   }
 
-  if (!gm && manifest && publishConfig.mode === 'player') {
+  if (!gm && manifest) {
     // Everything the earlier rules let through: the manifest allowlist is the only
     // thing between these pages and the site. decidePage evaluates the allowlist
     // before `publish: false`, in the order build's own passes ran, so both those
@@ -1592,22 +1589,18 @@ function buildSite(options) {
     }
   }
 
-  // Copy images — in player mode, only copy images referenced by published pages. This
-  // always applies in player mode, manifest or not (#210): `pages` is already filtered to
+  // Copy images — only the images referenced by published pages. This
+  // always applies, publish list or not (#210): `pages` is already filtered to
   // what actually publishes (decidePage's verdicts, above), and `usedImages` is populated
   // from that filtered set regardless of whether a manifest exists, so gating this on
   // `manifest` just meant a manifest-less player build shipped every GM-only image.
-  if (publishConfig.mode === 'player') {
-    const filteredMap = {};
-    for (const [basename, entry] of Object.entries(imageMap)) {
-      if (usedImages.has(basename)) filteredMap[basename] = entry;
-    }
-    copyImages(filteredMap);
-    const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
-    console.log(`${gm ? 'GM site' : 'Player mode'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
-  } else {
-    copyImages(imageMap);
+  const filteredMap = {};
+  for (const [basename, entry] of Object.entries(imageMap)) {
+    if (usedImages.has(basename)) filteredMap[basename] = entry;
   }
+  copyImages(filteredMap);
+  const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
+  console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
   // The encoded bytes are now in the output tree. Scratch dir lives under os.tmpdir(), so a
   // build that throws before reaching here leaks nothing the OS won't reclaim.
@@ -1861,7 +1854,7 @@ function buildSite(options) {
   // the vault: the campaign image, a section banner and a font.
   if (!gm) {
     for (const [name, entry] of Object.entries(imageMap)) {
-      if (publishConfig.mode === 'player' && !usedImages.has(name)) continue;
+      if (!usedImages.has(name)) continue;
       audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: entry.sourcePath })), `images/${entry.relPath}`);
     }
     const vaultRoot = path.resolve(config.vaultPath);

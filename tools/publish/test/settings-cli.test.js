@@ -32,7 +32,7 @@ function run(s, verb, args = [], extra = {}) {
 }
 
 test('get on a block with none of the settings gives defaults and says the block is there', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const { rc, data } = run(s, 'get');
   assert.equal(rc, 0);
   assert.deepEqual(view(data)['player_site.features.connections'], { value: 'tree', origin: 'default' });
@@ -87,11 +87,11 @@ test('plain output is one line per setting, faults last under a blank line', () 
 });
 
 test('set writes one line, keeps a comment above it, and get then says file', () => {
-  const s = scratch(wrap('  # how the links look\n  mode: player\n'));
+  const s = scratch(wrap('  # how the links look\n  site_title: Tt\n'));
   const { rc, data } = run(s, 'set', ['publish.connections="web"']);
   assert.equal(rc, 0);
   assert.deepEqual(data, { written: ['publish.connections'], notes: [] });
-  assert.equal(text(s), wrap('  # how the links look\n  mode: player\n  connections: web\n'));
+  assert.equal(text(s), wrap('  # how the links look\n  site_title: Tt\n  connections: web\n'));
   assert.deepEqual(view(run(s, 'get', ['publish.connections']).data)['player_site.features.connections'], { value: 'web', origin: 'file' });
 });
 
@@ -109,7 +109,7 @@ test('set writes text as given', () => {
 });
 
 test('set refuses a value the setting does not take, and leaves the file', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   const { rc, err } = run(s, 'set', ['publish.connections="graph"']);
   assert.equal(rc, 1);
@@ -118,7 +118,7 @@ test('set refuses a value the setting does not take, and leaves the file', () =>
 });
 
 test('set refuses a name that is not a setting, an old name, a bookkeeping name, a retired one, a parent', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   const refused = [
     ['publish.zebra=1', 'Error: publish.zebra is not a setting.'],
@@ -149,7 +149,7 @@ test('set takes a whole map for an open map, and a number for a number', () => {
 });
 
 test('two sets where the second is refused write nothing, and every refusal is named', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   const { rc, err } = run(s, 'set', ['publish.connections="web"', 'publish.connections="graph"', 'publish.zebra=1']);
   assert.equal(rc, 1);
@@ -158,7 +158,7 @@ test('two sets where the second is refused write nothing, and every refusal is n
 });
 
 test('set of an empty built-in list writes it and says it hides nothing', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const { rc, data } = run(s, 'set', ['publish.exclude_sections=[]']);
   assert.equal(rc, 0);
   assert.deepEqual(data.notes, ['publish.exclude_sections is empty: nothing from the built-in list is hidden. Add the headings you want hidden, or remove the key to use the built-in list again.']);
@@ -166,7 +166,7 @@ test('set of an empty built-in list writes it and says it hides nothing', () => 
 });
 
 test('set refuses a list with a blank entry, for every list setting, and writes nothing', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   for (const arg of ['publish.exclude_sections=["a",""]', 'publish.exclude_fields=["  "]', 'publish.landing.featured_npcs=["x",""]', 'publish.exclude_callouts=[" "]']) {
     const { rc, err } = run(s, 'set', [arg]);
@@ -199,11 +199,11 @@ test('a fault already in the file does not block a set, and set replaces a fault
 });
 
 test('unset removes the line, several at once, and names only what was there', () => {
-  const s = scratch(wrap('  mode: player\n  connections: web\n  theme:\n    tagline: Hi\n  exclude_sectoins: [x]\n'));
+  const s = scratch(wrap('  site_title: Tt\n  connections: web\n  theme:\n    tagline: Hi\n  exclude_sectoins: [x]\n'));
   assert.deepEqual(run(s, 'unset', ['publish.connections']).data, { removed: ['publish.connections'] });
   assert.doesNotMatch(text(s), /connections/);
   assert.deepEqual(run(s, 'unset', ['publish.theme.tagline', 'publish.exclude_sectoins', 'publish.inbox']).data, { removed: ['publish.theme.tagline', 'publish.exclude_sectoins'] });
-  assert.equal(text(s), wrap('  mode: player\n'));
+  assert.equal(text(s), wrap('  site_title: Tt\n'));
   assert.deepEqual(run(s, 'unset', ['publish.connections']).data, { removed: [] });
 });
 
@@ -244,7 +244,7 @@ test('check exits 1 on a stop, 0 on a warning, and 0 with no faults', () => {
   const warn = run(scratch(wrap('  connections: graph\n')), 'check');
   assert.equal(warn.rc, 0);
   assert.equal(warn.data.faults.length, 1);
-  const clean = run(scratch(wrap('  mode: player\n')), 'check');
+  const clean = run(scratch(wrap('  site_title: Tt\n')), 'check');
   assert.equal(clean.rc, 0);
   assert.deepEqual(clean.data, { faults: [] });
 });
@@ -261,10 +261,10 @@ test('list names every setting that can be set, and none that cannot', () => {
 });
 
 test('raw returns the file as written, the value at a name, or null', () => {
-  const s = scratch(wrap('  wrap_up:\n    next: Sunday\n  mode: player\n'));
+  const s = scratch(wrap('  wrap_up:\n    next: Sunday\n  site_title: Tt\n'));
   assert.deepEqual(run(s, 'raw', ['publish.wrap_up']).data, { next: 'Sunday' });
   assert.equal(run(s, 'raw', ['publish.nothing']).data, null);
-  assert.equal(run(s, 'raw').data.publish.mode, 'player');
+  assert.equal(run(s, 'raw').data.publish.site_title, 'Tt');
   assert.deepEqual(run(scratch(null), 'raw').data, {});
 });
 
@@ -290,7 +290,7 @@ test('no value is echoed at more than about 60 characters', () => {
 });
 
 test('--vault and --config together: the old keys in the site file take part', () => {
-  const s = scratch(wrap('  mode: player\n'), { vaultPath: './vault', excludeSections: ['Old Notes'] });
+  const s = scratch(wrap('  site_title: Tt\n'), { vaultPath: './vault', excludeSections: ['Old Notes'] });
   const both = run(s, 'get', ['publish.exclude_sections'], { config: s.config });
   assert.equal(view(both.data)['player_site.hide.sections'].origin, 'site-file');
   // The site file's list adds to the built-in list (#371).
@@ -315,7 +315,7 @@ test('the help is built from the list and names every setting that can be set', 
 });
 
 test('the command line: settings get, set and --help', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const bin = path.join(__dirname, '..', 'bin', 'gm-publish.js');
   const go = (...a) => spawnSync(process.execPath, [bin, 'settings', ...a], { encoding: 'utf8' });
   const set = go('set', 'publish.connections="cards"', '--vault', s.vault, '--json');
@@ -333,20 +333,20 @@ test('the command line: settings get, set and --help', () => {
 // ---- get several, whole values, add and remove ----
 
 test('get takes several names and groups, in the order asked', () => {
-  const s = scratch(wrap('  mode: player\n  landing:\n    max_npcs: 3\n'));
-  const { rc, data } = run(s, 'get', ['player_site.hide.mode', 'player_site.landing', 'player_site.publish']);
+  const s = scratch(wrap('  site_title: Tt\n  landing:\n    max_npcs: 3\n'));
+  const { rc, data } = run(s, 'get', ['player_site.title', 'player_site.landing', 'player_site.publish']);
   assert.equal(rc, 0);
-  assert.deepEqual(Object.keys(data.values).slice(0, 2), ['player_site.hide.mode', 'player_site.landing.max_npcs']);
+  assert.deepEqual(Object.keys(data.values).slice(0, 2), ['player_site.title', 'player_site.landing.max_npcs']);
   assert.ok(Object.keys(data.values).includes('player_site.publish'));
   assert.ok(!('player_site.features.connections' in data.values));
   const out = [];
-  runSettings({ verb: 'get', args: ['player_site.publish', 'player_site.hide.mode'], vault: s.vault }, { out: (l) => out.push(l) });
+  runSettings({ verb: 'get', args: ['player_site.publish', 'player_site.title'], vault: s.vault }, { out: (l) => out.push(l) });
   assert.match(out[0], /^player_site\.publish: /);
-  assert.match(out[0].split('\n')[1], /^player_site\.hide\.mode: player/);
+  assert.match(out[0].split('\n')[1], /^player_site\.title: Tt/);
   // The same through the old names: the same lines, after one line saying what each is now called.
   const old = [];
-  runSettings({ verb: 'get', args: ['publish.site', 'publish.mode'], vault: s.vault }, { out: (l) => old.push(l) });
-  assert.deepEqual(old[0].split('\n'), ['publish.site is now player_site.publish.', 'publish.mode is now player_site.hide.mode.', ...out[0].split('\n')]);
+  runSettings({ verb: 'get', args: ['publish.site', 'publish.site_title'], vault: s.vault }, { out: (l) => old.push(l) });
+  assert.deepEqual(old[0].split('\n'), ['publish.site is now player_site.publish.', 'publish.site_title is now player_site.title.', ...out[0].split('\n')]);
 });
 
 test('an old name gives the same answer as the new one, and says what it is now called', () => {
@@ -362,7 +362,7 @@ test('an old name gives the same answer as the new one, and says what it is now 
 });
 
 test('set by an old or new name writes the old file at the old place, and an old name says what it is now', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const viaOld = run(s, 'set', ['publish.search=off']);
   assert.equal(viaOld.rc, 0);
   assert.deepEqual(viaOld.err, ['publish.search is now player_site.features.search.']);
@@ -383,7 +383,7 @@ test('unset takes out an older spelling by the spelling written, and raw reads i
 });
 
 test('the two settings the old file never had are refused by set and unset, and read as their defaults', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   assert.deepEqual(run(s, 'unset', ['vault.kept_by']).err, ['Error: vault.kept_by needs the new settings file; run the update first.']);
   const got = run(s, 'get', ['vault']);
   assert.deepEqual(got.data.values['vault.kept_by'], 'gm');
@@ -394,7 +394,7 @@ test('get with one name that is not a setting prints nothing and exits 1', () =>
   const s = scratch(wrap(''));
   const out = [];
   const err = [];
-  const rc = runSettings({ verb: 'get', args: ['publish.mode', 'publish.zebra'], vault: s.vault }, { out: (l) => out.push(l), err: (l) => err.push(l) });
+  const rc = runSettings({ verb: 'get', args: ['publish.site_title', 'publish.zebra'], vault: s.vault }, { out: (l) => out.push(l), err: (l) => err.push(l) });
   assert.equal(rc, 1);
   assert.deepEqual(out, []);
   assert.deepEqual(err, ['Error: publish.zebra is not a setting.']);
@@ -413,7 +413,7 @@ const SECTIONS = REGISTRY.find((e) => e.name === 'player_site.hide.sections').de
 const listOf = (s, name = 'player_site.hide.sections') => view(run(s, 'get', [name]).data)[name];
 
 test('add to an unset hiding list keeps the built-in entries and adds the new one', () => {
-  const s = scratch(wrap('  # mine\n  mode: player\n'));
+  const s = scratch(wrap('  # mine\n  site_title: Tt\n'));
   const { rc, data } = run(s, 'add', ['publish.exclude_sections', '"Rumours"']);
   assert.equal(rc, 0);
   assert.deepEqual(data, { written: ['publish.exclude_sections'], notes: [], added: ['Rumours'], already: [], list: [...SECTIONS, 'Rumours'] });
@@ -422,7 +422,7 @@ test('add to an unset hiding list keeps the built-in entries and adds the new on
 });
 
 test('add of an entry already there changes nothing and exits 0; add twice is idempotent', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   const same = run(s, 'add', ['publish.exclude_sections', `"${SECTIONS[0]}"`]);
   assert.equal(same.rc, 0);
@@ -436,7 +436,7 @@ test('add of an entry already there changes nothing and exits 0; add twice is id
 });
 
 test('add keeps the entries the site file holds when --config is given', () => {
-  const s = scratch(wrap('  mode: player\n'), { vaultPath: './vault', excludeSections: ['Old Notes'] });
+  const s = scratch(wrap('  site_title: Tt\n'), { vaultPath: './vault', excludeSections: ['Old Notes'] });
   const { data } = run(s, 'add', ['publish.exclude_sections', '"Rumours"'], { config: s.config });
   assert.ok(data.list.includes('Old Notes') && data.list.includes('Rumours'));
   assert.ok(require('../lib/frontmatter').parseNote(text(s)).data.publish.exclude_sections.includes('Old Notes'));
@@ -451,7 +451,7 @@ test('remove takes a custom entry out, and reports one that was not there', () =
 });
 
 test('remove of a built-in entry from a hiding list says it is no longer hidden; the last entry gives the empty-list note', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const { data } = run(s, 'remove', ['publish.exclude_sections', `"${SECTIONS[0]}"`]);
   assert.deepEqual(data.notes, [`"${SECTIONS[0]}" was built in to publish.exclude_sections and is no longer hidden.`]);
   assert.deepEqual(data.list, SECTIONS.slice(1));
@@ -459,7 +459,7 @@ test('remove of a built-in entry from a hiding list says it is no longer hidden;
   const last = run(t, 'remove', ['publish.exclude_sections', '"Plans"']);
   assert.deepEqual(last.data.list, []);
   assert.match(last.data.notes[0], /is empty: nothing from the built-in list is hidden/);
-  const u = scratch(wrap('  mode: player\n'));
+  const u = scratch(wrap('  site_title: Tt\n'));
   const all = run(u, 'remove', ['publish.exclude_sections', ...SECTIONS.map((x) => JSON.stringify(x))]);
   assert.deepEqual(all.data.list, []);
   assert.equal(all.data.notes.length, SECTIONS.length + 1);
@@ -527,7 +527,7 @@ test('a list the build matches exactly treats another case as another entry', ()
 });
 
 test('exclude_callouts: add makes a list when off, is refused when on; remove has nothing to do when off', () => {
-  const off = scratch(wrap('  mode: player\n'));
+  const off = scratch(wrap('  site_title: Tt\n'));
   assert.deepEqual(run(off, 'remove', ['publish.exclude_callouts', '"gm"']).data, { written: [], notes: [], removed: [], absent: ['gm'], list: [] });
   const added = run(off, 'add', ['publish.exclude_callouts', '"gm"', '"secret"']);
   assert.deepEqual([added.rc, added.data.list], [0, ['gm', 'secret']]);
@@ -544,7 +544,7 @@ test('exclude_callouts: add makes a list when off, is refused when on; remove ha
 });
 
 test('remove of a built-in entry the site file also lists says it still applies, not that it is unhidden', () => {
-  const s = scratch(wrap('  mode: player\n'), { vaultPath: './vault', excludeSections: ['GM Notes'] });
+  const s = scratch(wrap('  site_title: Tt\n'), { vaultPath: './vault', excludeSections: ['GM Notes'] });
   const { data } = run(s, 'remove', ['publish.exclude_sections', '"GM Notes"'], { config: s.config });
   assert.equal(data.notes.length, 1);
   assert.match(data.notes[0], /^"GM Notes" still applies, because vault\.config\.json also lists it/);
@@ -559,13 +559,12 @@ test('the empty-list note names what the list holds', () => {
 // ---- plain values ----
 
 test('set takes plain text for any setting, validated by its type', () => {
-  const s = scratch(wrap('  mode: player\n'));
-  const r = run(s, 'set', ['publish.search=off', 'publish.connections=web', 'publish.mode=full', 'publish.site_title=The Long Night', 'publish.theme.palette.accent=#c9a227']);
+  const s = scratch(wrap('  site_title: Tt\n'));
+  const r = run(s, 'set', ['publish.search=off', 'publish.connections=web', 'publish.site_title=The Long Night', 'publish.theme.palette.accent=#c9a227']);
   assert.equal(r.rc, 0, r.err.join());
   const publish = require('../lib/frontmatter').parseNote(text(s)).data.publish;
   assert.equal(publish.search, false);
   assert.equal(publish.connections, 'web');
-  assert.equal(publish.mode, 'full');
   assert.equal(publish.site_title, 'The Long Night');
   assert.equal(publish.theme.palette.accent, '#c9a227');
 });
@@ -578,7 +577,7 @@ test('set still reads valid JSON as JSON', () => {
 });
 
 test('set refuses plain text the setting does not take, and an empty value', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   assert.deepEqual(run(s, 'set', ['publish.connections=sideways']).err, ['Error: publish.connections is "sideways"; it takes tree, web, cards or off.']);
   assert.equal(run(s, 'set', ['publish.landing.max_npcs=three']).rc, 1);
@@ -598,7 +597,7 @@ test('set keeps a = inside the value, broken-looking JSON as text, and a number 
 });
 
 test('add and remove take entries as plain text', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const add = run(s, 'add', ['publish.exclude_sections', 'Secrets', 'Player Handout', '"Quoted"']);
   assert.deepEqual(add.data.added, ['Secrets', 'Player Handout', 'Quoted']);
   assert.deepEqual(run(s, 'remove', ['publish.exclude_sections', 'player handout']).data.removed, ['Player Handout']);
@@ -607,7 +606,7 @@ test('add and remove take entries as plain text', () => {
 });
 
 test('add and remove spread a JSON list of text and refuse maps, null and mixed lists', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const before = text(s);
   const add = run(s, 'add', ['publish.exclude_sections', '["Rumours","Plans"]']);
   assert.equal(add.rc, 0);
@@ -664,7 +663,7 @@ test('new file: check lists faults and exits 1 on a stop', () => {
 test('new file: list and describe do not need the file', () => {
   const s = newScratch('version: 1\n');
   assert.equal(run(s, 'list').rc, 0);
-  assert.equal(run(s, 'describe', ['player_site.hide.mode']).data.name, 'player_site.hide.mode');
+  assert.equal(run(s, 'describe', ['player_site.title']).data.name, 'player_site.title');
 });
 
 test('new file: raw returns the parsed file, or the value at a name', () => {
@@ -696,10 +695,10 @@ test('old file: the old-named top level and the new-named one agree', () => {
 // ---- the older spellings, raw on groups, --create ----
 
 test('unset of a new name takes out every spelling the old file holds, and says which', () => {
-  const s = scratch(wrap('  live_stats: true\n  backend:\n    statusBar: true\n  mode: player\n'));
+  const s = scratch(wrap('  live_stats: true\n  backend:\n    statusBar: true\n  site_title: Tt\n'));
   const r = run(s, 'unset', ['player_site.features.live_stats'], { json: false });
   assert.equal(r.rc, 0);
-  assert.equal(text(s), wrap('  mode: player\n'));
+  assert.equal(text(s), wrap('  site_title: Tt\n'));
   assert.match(r.out, /publish\.live_stats/);
   assert.match(r.out, /publish\.backend\.statusBar/);
   assert.equal(run(s, 'get', ['player_site.features.live_stats']).data.values['player_site.features.live_stats'], false);
@@ -847,7 +846,7 @@ test('new file: the same entries are written as typed and read back the same', (
 });
 
 test('get names each setting as the vault\'s own file writes it', () => {
-  const s = scratch(wrap('  mode: player\n'));
+  const s = scratch(wrap('  site_title: Tt\n'));
   const old = run(s, 'get').data.written;
   assert.equal(old['player_site.title'], 'publish.site_title');
   assert.equal(old['player_site.hide.sections'], 'publish.exclude_sections');
@@ -912,4 +911,32 @@ test('get --site gm: a build step list the GM site does not inherit is its own d
   const steps = run(s, 'get', ['player_site.after_build'], { site: 'gm' });
   assert.equal(steps.rc, 0);
   assert.deepEqual(view(steps.data)['player_site.after_build'], { value: [], origin: "the GM site's own default (not inherited)" });
+});
+
+test('a retired name: get answers what the file holds, set is refused, unset takes it out', () => {
+  // The old layout (publish.mode) and the new (player_site.hide.mode).
+  for (const [s, name, other] of [
+    [scratch(wrap('  mode: full\n  site_title: Tt\n')), 'player_site.hide.mode', 'publish.mode'],
+    [newScratch('version: 1\nplayer_site:\n  title: Tt\n  hide:\n    mode: full\n'), 'player_site.hide.mode', 'publish.mode'],
+  ]) {
+    for (const asked of [name, other]) {
+      const got = run(s, 'get', [asked, 'player_site.title']);
+      assert.equal(got.rc, 0, asked);
+      assert.equal(got.data.values['player_site.hide.mode'], 'full', asked);
+      assert.equal(got.data.origins['player_site.hide.mode'], 'file', asked);
+      assert.equal(got.data.values['player_site.title'], 'Tt', asked);
+    }
+    const refused = run(s, 'set', ['player_site.hide.mode=full']);
+    assert.equal(refused.rc, 1);
+    assert.match(refused.err.join(), /is no longer used and cannot be set/);
+    const gone = run(s, 'unset', [name]);
+    assert.equal(gone.rc, 0, gone.err.join());
+    const after = run(s, 'get', [name]);
+    assert.equal(after.data.values[name], null);
+    assert.equal(after.data.origins[name], 'default');
+    assert.equal(after.data.faults.length, 0);
+  }
+  // Not written: null, from the default.
+  const none = run(scratch(wrap('  site_title: Tt\n')), 'get', ['player_site.hide.mode']);
+  assert.deepEqual([none.data.values['player_site.hide.mode'], none.data.origins['player_site.hide.mode']], [null, 'default']);
 });

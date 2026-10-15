@@ -735,8 +735,8 @@ class ThemeChoiceTests(unittest.TestCase):
         check = next(c for c in ms.SITE_CHECKS if c.name == "default-mode")
         self.assertEqual(check.choices, ("default-mode=",))
         self.assertEqual(
-            [c.name for c in ms.SITE_CHECKS[:6]],
-            [ms.REPIN, ms.MOVE, ms.PUBLISH_LIST, "publish-site",
+            [c.name for c in ms.SITE_CHECKS[:7]],
+            [ms.REPIN, ms.MOVE, ms.PUBLISH_LIST, ms.FULL_MODE, "publish-site",
              "default-mode", "fonts-self-host"])
 
 

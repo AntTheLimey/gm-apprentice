@@ -40,7 +40,7 @@ describe('resolveConfig', () => {
   it('takes a key from the site file when the vault file is silent', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-rc-'));
     fs.mkdirSync(path.join(vault, '_meta'));
-    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\npublish:\n  mode: player\n---\n');
+    fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), '---\npublish:\n  exclude_drafts: false\n---\n');
     const { config, publishConfig } = resolveConfig({ vaultPath: vault, siteTitle: 'From Site', system: 'coc-7e' }, vault);
     assert.strictEqual(config.siteTitle, 'From Site');
     assert.strictEqual(config.system, 'coc-7e');

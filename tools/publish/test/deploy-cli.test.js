@@ -143,6 +143,24 @@ describe('deploy: cloudflare-pages', () => {
     }
   });
 
+  it('a site turned off is refused by --dry-run too, before any command is printed', async () => {
+    for (const json of [false, true]) {
+      const h = harness();
+      h.deps.siteOffFor = () => 'the site is off for this vault';
+      const rc = await runDeploy({ configPath: CONFIG, dryRun: true, json }, h.deps);
+      assert.strictEqual(rc, 1);
+      assert.deepStrictEqual(h.builds, []);
+      assert.deepStrictEqual(h.commands, []);
+      assert.doesNotMatch(h.text(), /DRY RUN|git push|wrangler@4/);
+      assert.match(h.text(), /the site is off for this vault/);
+      if (json) {
+        const payload = JSON.parse(h.out[0]);
+        assert.strictEqual(payload.dryRun, undefined);
+        assert.deepStrictEqual(payload.commands, []);
+      }
+    }
+  });
+
   it('--no-build skips the build', async () => {
     const h = harness();
     await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);

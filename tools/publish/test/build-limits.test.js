@@ -179,7 +179,6 @@ function site(settings, files) {
   writeNewConfig(vault, {
     version: 1,
     player_site: {
-      hide: { mode: 'full' },
       folder_map: { Characters: 'characters', Locations: 'locations', Factions: 'factions', Events: 'events', Sessions: 'sessions', Hidden: 'hidden' },
       ...settings,
     },

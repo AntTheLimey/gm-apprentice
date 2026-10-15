@@ -65,7 +65,7 @@ describe('manifest diff', () => {
     // Every file is New, with its bucket, code and reason on one tab-separated row.
     assert.match(text, /^ {2}Sessions\/Planned Session\.md\texclude\tAUTO_EXCLUDED_STATUS\tstatus: planned$/m);
     assert.match(text, /^ {2}Characters\/NPCs\/Prep Source\.md\texclude\tAUTO_EXCLUDED_SOURCE\tsource: prep$/m);
-    assert.match(text, /^ {2}Sessions\/Played Session\.md\tpublish\tOK\tmode: player$/m);
+    assert.match(text, /^ {2}Sessions\/Played Session\.md\tpublish\tOK\tno publish list: publishing$/m);
     assert.match(text, /^New \(5\):$/m);
     fs.rmSync(vault, { recursive: true, force: true });
   });
@@ -901,7 +901,7 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     writePublishList(vault, variant === 'excluded'
       ? { excluded: [{ path: wrapUpPath, reason: 'secrets' }], needsDecision: ['Sessions/Session 01 - Arrival.md'] }
       : { needsDecision: ['Sessions/Session 01 - Arrival.md', wrapUpPath] });
-    w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+    w('_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
     const configPath = path.join(work, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
       outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
@@ -980,7 +980,7 @@ describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#
     const WRAP = 'Sessions/Session 01 Wrap-Up.md';
     w(HUB, '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[The Sealed Ledger]]"\n---\n\n# Session 01 - Arrival\n\nKEEPERONLYSECRET the Baron appears at the ball\n');
     w(WRAP, '---\ntype: session_wrap\ngm_aliases:\n  - The Sealed Ledger\n---\n\n## Narrative Recap\n\nThey arrived at dusk.\n');
-    w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+    w('_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
     writePublishList(vault, { needsDecision: [HUB, WRAP] });
     const configPath = path.join(work, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,

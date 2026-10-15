@@ -84,7 +84,7 @@ function build_(vault, settings) {
   fs.rmSync(path.join(vault, '_meta'), { recursive: true, force: true });
   writeNewConfig(vault, {
     version: 1,
-    player_site: { hide: { mode: 'full' }, folder_map: { Characters: 'characters', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } },
+    player_site: { folder_map: { Characters: 'characters', 'Characters/PCs': 'characters/pcs', Sessions: 'sessions' } },
     ...settings,
   });
   const configPath = path.join(root, 'vault.config.json');

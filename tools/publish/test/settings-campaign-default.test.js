@@ -16,7 +16,7 @@ test('vault.campaign unset reads as the vault folder\'s name on the old file, th
     return vault;
   };
   const cases = [
-    make('Old Hollow', 'vault-config.md', '---\ntype: meta\npublish:\n  mode: player\n---\n'),
+    make('Old Hollow', 'vault-config.md', '---\ntype: meta\npublish:\n  site_title: T\n---\n'),
     make('New Hollow', 'vault-config.yaml', 'version: 1\n'),
     make('Bare Hollow', null),
   ];

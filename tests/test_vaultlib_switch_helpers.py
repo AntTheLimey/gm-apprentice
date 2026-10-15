@@ -41,26 +41,26 @@ def test_the_switch_as_written(tmp_path, word, want):
 
 
 def test_a_switch_not_written_is_none(tmp_path):
-    for publish in (None, "  mode: player\n", "  site_dir: x\n"):
+    for publish in (None, "  connections: web\n", "  site_dir: x\n"):
         vaultlib.forget_settings(None)
         s = vaultlib.settings(make(tmp_path / str(publish)[:3], publish))
         assert vaultlib.site_switch_written(s) is None
 
 
 def test_a_switch_from_the_site_file_is_not_the_vault_files(tmp_path):
-    vault = make(tmp_path, "  mode: player\n")
+    vault = make(tmp_path, "  connections: web\n")
     config = tmp_path / "vault.config.json"
     config.write_text('{"siteTitle": "T"}', encoding="utf-8")
     s = vaultlib.settings(vault, site_config=config)
     assert s.origins["player_site.title"] == "site-file"
     assert not vaultlib.written_in_vault_file(s, "player_site.title")
     assert vaultlib.written_in_vault_file(
-        vaultlib.settings(vault), "player_site.hide.mode")
+        vaultlib.settings(vault), "player_site.features.connections")
 
 
 @pytest.mark.parametrize("publish, want", [
     (None, False),
-    ("  mode: player\n", False),
+    ("  connections: web\n", False),
     ("  site_dir: /some/site\n", True),
     ("  site: true\n", True),
     ("  site: false\n  site_dir: /some/site\n", False),
@@ -74,16 +74,16 @@ def test_a_site_when_the_lines_tool_cannot_say(tmp_path, publish, want):
 
 def test_writing_a_settings_file_atomically_forgets_what_was_read(tmp_path):
     import migrate_core
-    vault = make(tmp_path, "  mode: player\n")
-    assert vaultlib.settings(vault).get("player_site.hide.mode") == "player"
+    vault = make(tmp_path, "  connections: web\n")
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "web"
     migrate_core.write_text_atomic(
-        vault / "_meta" / "vault-config.md", "---\npublish:\n  mode: full\n---\n")
-    assert vaultlib.settings(vault).get("player_site.hide.mode") == "full"
+        vault / "_meta" / "vault-config.md", "---\npublish:\n  connections: cards\n---\n")
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "cards"
 
 
 def test_writing_a_note_keeps_what_was_read(tmp_path, monkeypatch):
     import migrate_core
-    vault = make(tmp_path, "  mode: player\n")
+    vault = make(tmp_path, "  connections: web\n")
     vaultlib.settings(vault)
     migrate_core.write_text_atomic(vault / "Note.md", "x\n")
 
@@ -91,4 +91,4 @@ def test_writing_a_note_keeps_what_was_read(tmp_path, monkeypatch):
         raise AssertionError("the tool was asked again")
 
     monkeypatch.setattr(vaultlib.subprocess, "run", no_run)
-    assert vaultlib.settings(vault).get("player_site.hide.mode") == "player"
+    assert vaultlib.settings(vault).get("player_site.features.connections") == "web"

@@ -278,9 +278,12 @@ class SettingsUnavailableCommandTests(unittest.TestCase):
             with self.subTest(command):
                 proc = run_cli_without_node(vault, command)
                 self.assertEqual(proc.returncode, 2, proc.stdout)
-                self.assertEqual(
-                    proc.stderr, "error: could not read the vault's settings: "
-                                 "node is not on PATH\n")
+                # The GM-note checks first read vault.kept_by with the
+                # built-in fallback, which says so once; the command then
+                # still ends on the one error line.
+                self.assertTrue(proc.stderr.endswith(
+                    "error: could not read the vault's settings: "
+                    "node is not on PATH\n"), proc.stderr)
                 self.assertNotIn("Traceback", proc.stderr)
 
     def test_version_needs_no_settings_and_no_node(self):
@@ -961,21 +964,13 @@ class SessionsManifestTests(unittest.TestCase):
     def test_no_manifest_is_silent(self):
         self.assertEqual(self.missing(self.vault(None)), [])
 
-    def test_full_mode_is_silent(self):
-        self.assertEqual(self.missing(self.vault(
-            "publishing: []\n",
-            config="---\npublish:\n  mode: full\n---\n")), [])
-
-    def test_a_mode_that_is_neither_player_nor_full_is_player_as_the_build_reads_it(self):
-        """The build takes `players` or `gm` as player mode and applies the
-        publish list, so the row must not go quiet for them."""
-        for mode in ("players", "gm", "Player", " PLAYER "):
+    def test_a_leftover_mode_changes_nothing_the_list_applies(self):
+        """`mode` is retired: the build applies the publish list whatever an
+        old file still says, so the row must not go quiet for any value."""
+        for mode in ("players", "gm", "Player", "full", " FULL "):
             rows = self.missing(self.vault(
                 self.NEEDS, config=f'---\npublish:\n  mode: "{mode}"\n---\n'))
             self.assertEqual(len(rows), 1, (mode, rows))
-        for mode in ("Full", " FULL "):
-            self.assertEqual(self.missing(self.vault(
-                self.NEEDS, config=f'---\npublish:\n  mode: "{mode}"\n---\n')), [], mode)
 
     def test_mode_defaults_to_player(self):
         self.assertEqual(len(self.missing(self.vault(

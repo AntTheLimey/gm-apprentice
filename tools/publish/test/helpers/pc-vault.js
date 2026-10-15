@@ -14,7 +14,7 @@ function buildPc(system, body, publishLines = [], buildOptions = {}, pcOptions =
   fs.mkdirSync(path.join(vault, 'Characters', 'PCs'), { recursive: true });
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   const extra = publishLines.map((l) => `  ${l}\n`).join('');
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  mode: player\n  system: ${system}\n${extra}---\n`);
+  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  system: ${system}\n${extra}---\n`);
   fs.writeFileSync(path.join(vault, 'Characters', 'PCs', 'Test_Hero.md'),
     `---\ntype: pc\ncanon_status: AUTHORITATIVE\nplayer_name: "Test Player"\nstatus: ${pcOptions.status || 'alive'}\nrelationships: []\n---\n${body.replace('{Keeper-only notes. Protected — skills never modify.}', 'GM-SECRET')}`);
   const configPath = path.join(root, 'config.json');

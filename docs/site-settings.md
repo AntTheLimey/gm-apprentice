@@ -101,7 +101,6 @@ fixed, so nothing extra is ever shown by a guess. These are:
 
 <!-- settings:hiding-list -->
 
-- `player_site.hide.mode`
 - `player_site.hide.folders`
 - `player_site.hide.sections`
 - `player_site.hide.fields`
@@ -248,7 +247,6 @@ These decide which notes, and which parts of a note, reach the site.
 
 | Setting | What it does | Values | Left out |
 |---------|--------------|--------|----------|
-| `player_site.hide.mode`<br>was `publish.mode` | `player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own | `player` or `full` | `player` |
 | `player_site.folder_map`<br>was `publish.folder_map`, `folderMap` | Which vault folders are published, and the web address each gets | A vault folder and its address, one pair to a line | Nothing is mapped; setting up a site writes the standard map |
 | `vault.attachments`<br>was `publish.attachments_dir`, `attachmentsDir` | The vault folder that holds pictures | A folder name | `_attachments` |
 | `player_site.hide.folders`<br>was `publish.exclude_dirs`, `excludeDirs` | Vault folders never published | A list of folders | `_meta`, `_Templates` |
@@ -271,13 +269,6 @@ But a list that is empty (`[]`), or that leaves out `GM Notes`, hides
 only what it names, so your GM notes are published. Repeat every
 built-in entry you still want. The same holds for
 `player_site.hide.folders`.
-
-**`full` mode still hides your notes to yourself.** The excluded
-sections, fields, callouts and folders are left out in both modes, and
-so is any note marked `publish: false`. Pictures are different: `full`
-copies every picture in the attachments folder to the site, used on a
-page or not, where `player` copies only the pictures a published page
-shows.
 
 ```yaml
 player_site:
@@ -543,7 +534,6 @@ mark always means hidden from players. The GM site's folder is
 - `player_site.output`
 - `player_site.cloudflare_project`
 - `player_site.keep`
-- `player_site.hide.mode`
 - `player_site.hide.folders`
 - `player_site.hide.sections`
 - `player_site.hide.fields`

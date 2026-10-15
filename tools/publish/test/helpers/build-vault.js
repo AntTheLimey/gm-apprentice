@@ -17,7 +17,7 @@ function buildVault(files, { extraConfig = '' } = {}) {
   }
   const map = [...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  mode: full\n${extraConfig}  folder_map:\n${map}---\n`);
+  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${extraConfig}  folder_map:\n${map}---\n`);
   const configPath = path.join(root, 'config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T' }));
   const log = console.log; const warn = console.warn;

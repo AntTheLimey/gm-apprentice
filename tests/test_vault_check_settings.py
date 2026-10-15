@@ -203,17 +203,6 @@ def test_a_misspelt_switch_that_hides_more_is_moved(
     assert fault_names(vault) == []
 
 
-def test_a_misspelt_mode_is_proposed_not_applied_by_fix(
-        tmp_path, monkeypatch, capsys):
-    """Moving `full` onto publish.mode would show players more."""
-    vault = make_vault(tmp_path, "  modee: full\n")
-    before = text(vault)
-    code, out, _ = settings_check(monkeypatch, capsys, vault, "--fix")
-    assert text(vault) == before
-    assert "proposed: move this to publish.mode" in out
-    assert "fix:" not in out and "1 proposed fix is waiting" in out
-
-
 def test_an_inline_block_has_no_fix_and_fix_writes_nothing(
         tmp_path, monkeypatch, capsys):
     vault = make_vault(
@@ -276,15 +265,14 @@ def test_after_fix_only_uncertain_faults_remain_and_nothing_is_shown_more(
         tmp_path,
         "  exclude_sectoins: [Secrets]\n  exclude_feilds: [Cost]\n"
         "  exclude_callouts: [secret]\n  total_sessions: 3\n"
-        "  link_preview: sideways\n  mode: nonsense\n")
+        "  link_preview: sideways\n")
     names = ("player_site.hide.sections", "player_site.hide.fields",
              "player_site.hide.callouts", "player_site.hide.drafts")
     before = {n: vaultlib.settings(vault).get(n) for n in names}
     settings_check(monkeypatch, capsys, vault, "--fix")
     vaultlib.forget_settings(vault)
     s = vaultlib.settings(vault)
-    assert sorted(f["name"] for f in s.faults) == [
-        "publish.link_preview", "publish.mode"]
+    assert sorted(f["name"] for f in s.faults) == ["publish.link_preview"]
     for n in ("player_site.hide.sections", "player_site.hide.fields"):
         assert set(before[n]) <= set(s.get(n))
     assert "Cost" in s.get("player_site.hide.fields")
@@ -554,7 +542,7 @@ def test_a_hiding_list_beside_publish_is_listed_with_no_fix(
         tmp_path, monkeypatch, capsys):
     vault = make_vault(
         tmp_path, None, raw="type: meta\nexclude_sections: [Rumours]\n"
-        "publish:\n  mode: player")
+        "publish:\n  site_title: T")
     before = text(vault)
     code, out, _ = settings_check(monkeypatch, capsys, vault)
     lines = out.splitlines()
