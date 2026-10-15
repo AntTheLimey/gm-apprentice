@@ -12,7 +12,8 @@ const { isLeaf } = require('../lib/settings/describe');
 const { DEPLOY_KEYS } = require('../lib/settings/legacy');
 
 const DOC = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md'), 'utf8').replace(/\r\n/g, '\n');
-const leaves = REGISTRY.filter((e) => isLeaf(e, REGISTRY)).map((e) => e.name);
+// A twin under gm_site is described once, in the GM site section, not row by row.
+const leaves = REGISTRY.filter((e) => isLeaf(e, REGISTRY) && !e.twinOf).map((e) => e.name);
 
 test('the settings tables match the list', () => {
   assert.equal(render(DOC), DOC, 'docs/site-settings.md is out of date: run `node tools/publish/scripts/gen-settings-doc.js --write`');
@@ -40,7 +41,7 @@ test('the page names every setting the tool reads', () => {
 test('the page names no setting the tool does not read', () => {
   // The page's words still use the names the settings had before; each is the list's own `was`.
   const known = new Set(REGISTRY.filter((e) => !e.retired && !e.state).flatMap((e) => [e.name, ...(e.was || []).map((w) => w.name)]));
-  const named = new Set([...DOC.matchAll(/`((?:publish|vault|player_site)\.[a-z][a-z_0-9.]*)`/g)].map((m) => m[1]).filter((n) => !n.startsWith('vault.config.json')));
+  const named = new Set([...DOC.matchAll(/`((?:publish|vault|player_site|gm_site)\.[a-z][a-z_0-9.]*)`/g)].map((m) => m[1]).filter((n) => !n.startsWith('vault.config.json')));
   const stale = [...named].filter((n) => !known.has(n));
   assert.deepEqual(stale, [], `docs/site-settings.md names ${stale[0]}, which the tool does not read`);
 });

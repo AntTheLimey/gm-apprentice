@@ -73,6 +73,7 @@ test('every setting the file can hold is in the schema, and no legacy-only one i
 test('the schema takes what it should and refuses what it should', () => {
   const ok = (v) => check(schema(), v);
   assert.deepEqual(ok({ version: 1, vault: { kept_by: 'player' }, player_site: { hide: { mode: 'full', drafts: 'On', callouts: ['note'] }, landing: { max_npcs: 0 } }, gm_site: { anything: [1] } }), []);
+  assert.deepEqual(ok({ gm_site: { show: { comments: 'on' } } }), []);
   assert.deepEqual(ok({ player_site: { features: { search: 'Yes', connections: true }, hide: { callouts: false } } }), []);
   assert.deepEqual(ok({ player_site: { folder_map: { Sessions: 'sessions' }, theme: { genre: 'horror', unknown_but_warned: 1 } } }), []);
   assert.deepEqual(ok({ player_site: { hide: { sections: null } } }), []);
@@ -145,6 +146,8 @@ function everySettingFile() {
 
 test('a file that sets every setting to a valid, non-default value validates and reads without a fault', () => {
   const tree = everySettingFile();
+  // (A GM site on a vault kept by a player is a stop of its own; the sample keeps the vault by a player.)
+  tree.gm_site.publish = false;
   assert.deepEqual(check(schema(), tree), []);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-'));
   const vault = path.join(root, 'Vault');

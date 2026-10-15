@@ -479,6 +479,60 @@ player_site:
     card_facts: 2
 ```
 
+## The GM site
+
+The GM site is a second copy of your campaign site, for you at the table.
+It holds every note and shows every part players do not see, each one
+marked with the reason players do not see it. It is written to its own
+folder, and it is never put online: you read it on your own computer, or
+serve it to your home network with `gm-apprentice-publish serve`.
+
+<!-- settings:gm -->
+
+| Setting | What it does | Values | Left out |
+|---------|--------------|--------|----------|
+| `gm_site.publish` | Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online | A switch | Off |
+| `gm_site.folder` | The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder | A folder path | A folder beside the player site's, made when the GM site is turned on |
+| `gm_site.show.notes` | Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked | A switch | On |
+| `gm_site.show.sections` | Sections the player site hides (by heading) are shown, marked | A switch | On |
+| `gm_site.show.fields` | Frontmatter fields the player site hides are listed in a panel at the top of the page, marked | A switch | On |
+| `gm_site.show.relationships` | Relationships the player site hides (GM-only ones) are shown, marked | A switch | On |
+| `gm_site.show.gm_only_blocks` | GM-only blocks (`<!-- gm-only -->`) are shown, marked | A switch | On |
+| `gm_site.show.spoilers` | Spoiler blocks (`<!-- spoiler -->`) are shown, marked | A switch | On |
+| `gm_site.show.callouts` | Callouts the player site hides are shown, marked | A switch | On |
+| `gm_site.show.withheld_names` | Names the player site prints as "someone" or "somewhere" are printed in full, marked with what players see | A switch | On |
+| `gm_site.show.comments` | Comments in a note (`%% ... %%`) are shown, marked. They are off by default: most are notes to yourself, not things to run | A switch | Off |
+
+<!-- /settings:gm -->
+
+Every other player site setting can be written under `gm_site` with the
+same name, for the GM site only. Left out, the GM site uses the player
+site's value. These cannot, because the two sites share one folder, one
+address, one host and one set of live features:
+
+<!-- settings:gm-not-per-site -->
+
+- `player_site.publish`
+- `player_site.folder`
+- `player_site.url`
+- `player_site.host`
+- `player_site.output`
+- `player_site.cloudflare_project`
+- `player_site.keep`
+- `player_site.hide.mode`
+- `player_site.features.live_stats`
+- `player_site.features.inbox`
+
+<!-- /settings:gm-not-per-site -->
+
+```yaml
+gm_site:
+  publish: on
+  title: Table copy
+  show:
+    comments: on
+```
+
 ## The site file: `vault.config.json`
 
 This file sits in the site folder and holds one thing: where the vault is

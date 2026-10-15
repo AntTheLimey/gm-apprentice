@@ -11,7 +11,7 @@ const OLD_FILE = '_meta/vault-config.md';
 const STATE_FILE = '_meta/vault-state.json';
 const NOTES_FILE = '_meta/vault-notes.md';
 
-// The new file's top level: `version`, then the groups, in the order they are written. `gm_site` reads nothing yet.
+// The new file's top level: `version`, then the groups, in the order they are written. `gm_site` is read like the others, but a name or value under it that cannot be read warns and never stops the player build (it is not in STRICT_PARENTS).
 const SETTING_GROUPS = ['vault', 'player_site'];
 const GM_GROUP = 'gm_site';
 const GROUPS = [...SETTING_GROUPS, GM_GROUP];

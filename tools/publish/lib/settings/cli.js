@@ -29,6 +29,8 @@ const { planMove, applyMove, siteFileNamedBy } = require('./move');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
+// The settings the listings show: a twin under gm_site is not listed (the list ends with one line about them).
+const LISTED = () => LEAVES().filter((e) => !e.twinOf);
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // The name the old vault file gave a setting. The commands take it for as long as legacy.js reads the
 // old file (two releases after 1.10.54). An old name is answered as the setting it became, with a line
@@ -104,7 +106,7 @@ function get(options, names) {
   const leaves = LEAVES();
   for (const name of names) if (!leaves.some((e) => reaches(e, name))) throw new Error(notASetting(name));
   const read = readSettings({ vaultPath, siteConfig });
-  const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves;
+  const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves.filter((e) => !e.twinOf);
   const now = {};
   for (const e of shown) now[e.name] = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
   const asked = (f) => !names.length || names.some((name) => inScope(f.name, name) || inScope(f.use || '', name) || inScope(f.suggest || '', name) || inScope(f.setting || '', name));
@@ -179,25 +181,32 @@ function describe(name) {
   const r = row(e);
   const lines = [r.name];
   if (wasLine(e)) lines.push(`  ${wasLine(e)}`);
+  if (e.twinOf) {
+    lines.push(`  For the GM site only; left out, the GM site uses ${e.twinOf}.`, `  takes: ${r.takes}`);
+    return { result: { ...r, twinOf: e.twinOf }, lines, notices: noticesFor([name]) };
+  }
   lines.push(`  ${r.does || '(no description)'}`, `  takes: ${r.takes}`, `  default: ${plainValue(r.default)}`);
   if (r.guards) lines.push('  hides things from players: a mistake here stops the build');
   return { result: r, lines, notices: noticesFor([name]) };
 }
 
 function list() {
-  const names = LEAVES().map((e) => {
+  const names = LISTED().map((e) => {
     const r = row(e);
     return { name: r.name, takes: r.takes, default: r.default, was: wasLine(e) };
   });
   return {
     result: { names },
-    lines: names.flatMap((n) => [`${n.name}: ${n.takes} (default ${plainValue(n.default)})`, ...(n.was ? [`  ${n.was}`] : [])]),
+    lines: [
+      ...names.flatMap((n) => [`${n.name}: ${n.takes} (default ${plainValue(n.default)})`, ...(n.was ? [`  ${n.was}`] : [])]),
+      "Any player_site setting not listed under 'The GM site' can also be written under gm_site, for the GM site only.",
+    ],
   };
 }
 
 // The help for the command, from the list: no setting is named anywhere else.
 function helpText() {
-  const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
+  const names = LISTED().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
 gm-apprentice-publish settings <get|set|add|remove|unset|carry|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 

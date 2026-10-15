@@ -11,7 +11,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { REGISTRY, GROUPS } = require('../lib/settings/registry');
+const { REGISTRY, GROUPS, NOT_PER_SITE } = require('../lib/settings/registry');
 const { row, leftOutCell, isLeaf, schemaText } = require('../lib/settings/describe');
 
 const DOC = path.join(__dirname, '..', '..', '..', 'docs', 'site-settings.md');
@@ -55,11 +55,15 @@ function hidingList() {
   return REGISTRY.filter((e) => e.guards && isLeaf(e, REGISTRY)).map((e) => `- \`${e.name}\``).join('\n');
 }
 
-// Replace each marked region with its group's table, or (hiding-list) the stop list.
+// The player site's settings the GM site cannot set for itself.
+const notPerSiteList = () => [...NOT_PER_SITE].map((n) => `- \`${n}\``).join('\n');
+
+// Replace each marked region with its group's table, or (hiding-list) the stop list or (gm-not-per-site) the settings the GM site shares.
 function render(markdown) {
   return markdown.replace(/<!-- settings:([a-z-]+) -->[\s\S]*?<!-- \/settings:\1 -->/g, (_, id) => {
-    if (id !== 'hiding-list' && !GROUPS.some((g) => g.id === id)) throw new Error(`docs/site-settings.md marks a group the list does not have: ${id}`);
-    const body = id === 'hiding-list' ? hidingList() : table(id);
+    const special = { 'hiding-list': hidingList, 'gm-not-per-site': notPerSiteList };
+    if (!special[id] && !GROUPS.some((g) => g.id === id)) throw new Error(`docs/site-settings.md marks a group the list does not have: ${id}`);
+    const body = special[id] ? special[id]() : table(id);
     return `<!-- settings:${id} -->\n\n${body}\n\n<!-- /settings:${id} -->`;
   });
 }

@@ -7,7 +7,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 const { parseDocument } = require('yaml');
-const { REGISTRY, legacyNameOf, siteKeyOf } = require('./registry');
+const { REGISTRY, NOT_PER_SITE, legacyNameOf, siteKeyOf } = require('./registry');
 const { TYPES, isMap, getPath, emptyIsFault } = require('./types');
 const { nearest, makeFault, saysHiding: saysHidingName, hidingLasts, startsLikeHide, show } = require('./faults');
 const { NEW_FILE, OLD_FILE, layoutOf, at, GROUPS, GM_GROUP, STRICT_PARENTS, stopsUnknown } = require('./layout');
@@ -31,6 +31,16 @@ function setIn(obj, name, value) {
     cur = cur[s];
   }
   cur[segs[segs.length - 1]] = value;
+}
+
+function unsetIn(obj, name) {
+  const segs = name.split('.');
+  let cur = obj;
+  for (const s of segs.slice(0, -1)) {
+    if (!isMap(cur[s])) return;
+    cur = cur[s];
+  }
+  delete cur[segs[segs.length - 1]];
 }
 
 // Reads one chosen raw value `first` ({ raw, origin }) of entry `e` and records it under `setting`
@@ -138,7 +148,7 @@ function oldNameIn(parent, key) {
 // path that names exactly one setting (`features.hide.drafts` is `hide.drafts`, which is player_site.hide.drafts).
 // Returns [{ written: 'publish.exclude_sections', entry, value }]. Anything that names no setting is left out; the
 // block's own fault still says the block is wrong.
-const SETTING_LEAVES = LIST.filter((e) => !e.container && !hasChildren(e.name));
+const SETTING_LEAVES = LIST.filter((e) => !e.container && !e.twinOf && !hasChildren(e.name));
 const OLD_VAULT_NAMES = new Map(SETTING_LEAVES.flatMap((e) => (e.was || []).filter((w) => w.in === 'vault' && w.read !== false).map((w) => [w.name, e])));
 function strayLeaves(block, prefix, byOldName) {
   const found = [];
@@ -163,8 +173,6 @@ function strayLeaves(block, prefix, byOldName) {
   walkStray(block, []);
   return found;
 }
-
-const GM_SITE_NOTE = 'the GM site is not built yet; nothing under gm_site is read';
 
 // The new file as written, as plain data. {} for an empty file; throws for one that is not valid YAML.
 function parseNewFile(vaultPath) {
@@ -225,6 +233,11 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
   for (const e of LIST) {
     if (e.container || hasChildren(e.name)) continue;
     const raw = getPath(tree, e.name.split('.'));
+    // A twin the file does not set is not in `values`: the GM site takes the player site's value (resolve.js).
+    if (e.twinOf && (raw === undefined || (raw === null && !emptyIsFault(e)))) {
+      origins[e.name] = 'inherit';
+      continue;
+    }
     const fromSite = e.siteFallback ? siteValueOf(site, e) : undefined;
     if (raw === undefined || (raw === null && !emptyIsFault(e))) {
       if (fromSite) {
@@ -239,6 +252,8 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
       continue;
     }
     settle(c, e, { written: e.name, setting: e.name }, { raw, origin: 'file' }, defaultOf);
+    // A twin that cannot be read takes the player site's value, as one that is not set does.
+    if (e.twinOf && origins[e.name] === 'fault') unsetIn(values, e.name);
     if (fromSite && !sameChecked(e.check, fromSite.raw, raw, c.siteDir)) {
       faults.push(makeFault({ name: fromSite.key, setting: e.name, kind: 'dropped', level: 'warn', value: fromSite.raw, use: e.name, source: 'site', siteDiffers: true, ...(e.check ? { checks: e.check } : {}),
         message: `\`${fromSite.key}\` in the site folder's vault.config.json (${show(fromSite.raw)}) differs from \`${e.name}\` in the vault's settings (${show(raw)}); the vault's is used` }));
@@ -253,12 +268,20 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
       faults.push(makeFault({ name: full, setting: old.name, kind: 'old-name', level: old.guards ? 'stop' : 'warn', value, use: old.name }));
       return;
     }
+    // A setting both sites share cannot be written for the GM site alone: a warning naming the one place it is set.
+    const shared = parent.startsWith(`${GM_GROUP}.`) || parent === GM_GROUP ? `player_site${parent.slice(GM_GROUP.length)}.${key}` : null;
+    if (shared && NOT_PER_SITE.has(shared)) {
+      faults.push(makeFault({ name: full, setting: null, kind: 'gm-not-per-site', level: 'warn', value, message: `${full} cannot be set for the GM site alone: ${shared} is the same for both sites` }));
+      return;
+    }
     const isGuard = (seg) => !!(KNOWN.get(`${parent}.${seg}`) || {}).guards;
     const near = nearest(key, childSegs(parent));
     const hidingNear = nearest(key, childSegs(parent).filter(isGuard));
     const strict = stopsUnknown(parent);
     let level = 'warn';
-    if (strict || (near && isGuard(near)) || saysHiding(key)) level = 'stop';
+    // The GM site hides nothing from players: a fault under it never stops the player build.
+    const gm = parent === GM_GROUP || parent.startsWith(`${GM_GROUP}.`);
+    if (!gm && (strict || (near && isGuard(near)) || saysHiding(key))) level = 'stop';
     // A stop below the top points at a hiding setting only; a warning, or a stop at the top, at the nearest name of any kind.
     let suggest = level === 'stop' && !strict ? hidingNear : near;
     if (startsLikeHide(key) && !strict) suggest = null;
@@ -284,16 +307,10 @@ function readNew({ vaultPath, siteConfig, siteDir }) {
   for (const [rawKey, value] of Object.entries(tree)) {
     const key = String(rawKey);
     if (key === 'version') continue;
-    if (key === GM_GROUP) {
-      if (value !== null && !(isMap(value) && Object.keys(value).length === 0)) {
-        faults.push(makeFault({ name: 'gm_site', setting: null, kind: 'dropped', level: 'warn', message: GM_SITE_NOTE }));
-      }
-      continue;
-    }
     if (GROUPS.includes(key)) {
       if (value == null) continue;
       if (!isMap(value)) {
-        faults.push(makeFault({ name: key, setting: null, kind: 'not-allowed', level: 'stop', value, entry: MAP_ENTRY }));
+        faults.push(makeFault({ name: key, setting: null, kind: 'not-allowed', level: key === GM_GROUP ? 'warn' : 'stop', value, entry: MAP_ENTRY }));
         continue;
       }
       walk(key, value);
