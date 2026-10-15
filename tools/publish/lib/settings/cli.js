@@ -386,7 +386,9 @@ function turningOnGmSite(options, planned) {
   const problem = gmFolderProblem(folder, { playerSiteDir: playerDir, vaultPath });
   if (problem) return { errors: [problem] };
   // The folder is made inside a folder that is there; one level at most.
-  if (!pathExists(folder) && !fs.existsSync(path.dirname(folder))) return { errors: none };
+  if (!pathExists(folder) && !fs.existsSync(path.dirname(folder))) {
+    return { errors: named ? [`The folder above ${folder} does not exist; make it first, or name a folder inside one that does.`] : none };
+  }
   if (!named) planned.changes.push({ op: 'set', name: 'gm_site.folder', label: 'gm_site.folder', value: folder });
   return { folder };
 }
@@ -410,7 +412,11 @@ function set(options, pairs) {
   }
   const done = write(options, planned.changes);
   if (done.errors) {
-    if (made) { try { fs.rmdirSync(gm.folder); } catch { /* left in place */ } }
+    if (made) {
+      try { fs.rmdirSync(gm.folder); } catch {
+        done.errors = [...done.errors, `The folder ${gm.folder} was made but the settings were not written; remove it, or run the command again.`];
+      }
+    }
     return done;
   }
   if (made) done.ok.notes.push(`Made the GM site's folder: ${gm.folder} (gm_site.folder).`);

@@ -76,12 +76,12 @@ test('3: no player folder and no GM folder: nothing written, one error', () => {
   assert.equal(fs.readFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'utf8'), before);
 });
 
-test('3b: a missing parent for the folder gets the same error and nothing is made', () => {
+test('3b: a missing parent for the folder gets an error naming the folder above, and nothing is made', () => {
   const s = scratch();
   const gm = path.join(s.root, 'nope', 'deeper');
   const { rc, err } = set(s, ['gm_site.publish=on', `gm_site.folder=${gm}`]);
   assert.equal(rc, 1);
-  assert.match(err[0], /^Error: There is no player_site\.folder to put the GM site beside/);
+  assert.match(err[0], /^Error: The folder above .*deeper does not exist/);
   assert.ok(!fs.existsSync(path.join(s.root, 'nope')));
   assert.equal(gmOf(s).publish, undefined);
 });
