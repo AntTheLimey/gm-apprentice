@@ -34,7 +34,9 @@ see it. It is built into its own folder and never goes online.
   `gm_site.show.*` switch for each kind of mark, and a GM site value for
   each player site setting that can differ between the two sites
   (unset, the GM site uses the player site's; build steps are the one
-  exception: the GM site runs only steps given to it).
+  exception: the GM site runs only steps given to it). The `hide.*`
+  lists are the player site's alone, so a mark always means hidden
+  from players.
 
 ### Changed
 

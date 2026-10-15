@@ -92,7 +92,7 @@ describe('the GM build: what players see has one source, the player site', () =>
       assert.doesNotMatch(site.player.read('npcs', 'vex.html'), /The traitor/);
       const marks = markedTexts(site.gm.read('npcs', 'vex.html'));
       assert.ok(marks.some((m) => m.kind === 'sections' && /The traitor/.test(m.text)), JSON.stringify(marks));
-      assert.ok(site.logs.some((l) => /gm_site\.hide\.sections/.test(l)) || true);
+      assert.ok(site.logs.some((l) => /gm_site\.hide/.test(l)), JSON.stringify(site.logs));
     } finally { site.cleanup(); }
   });
 });
