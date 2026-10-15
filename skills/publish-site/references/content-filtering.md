@@ -217,6 +217,11 @@ A file publishes if and only if it is under `publishing`. Being under `excluded`
 publishes it; those lists only quiet the "not on the publish list"
 warning.
 
+The file may also hold `accepted:`, the leak check's findings the GM
+accepted, each `{ page, text, note }`. `leaks accept` writes it; nobody edits
+it by hand; an absent key is an empty list. A file holding only `accepted:` is
+not a publish list: the vault publishes as it would with none.
+
 Never open the file to read or change it. Ask the tool:
 
 - `node "$TOOL" manifest list --vault <vault>` shows the three lists and
