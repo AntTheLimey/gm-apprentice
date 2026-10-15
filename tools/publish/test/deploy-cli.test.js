@@ -83,7 +83,7 @@ describe('deploy: cloudflare-pages', () => {
     const h = harness();
     const rc = await runDeploy({ configPath: CONFIG }, h.deps);
     assert.strictEqual(rc, 0);
-    assert.deepStrictEqual(h.builds, [{ configPath: CONFIG }]);
+    assert.deepStrictEqual(h.builds, [{ configPath: CONFIG, site: 'player' }]);
     assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
   });
 
@@ -523,6 +523,83 @@ describe('setup-status-bar and setup-inbox build with the vault\'s build steps',
       assert.strictEqual(seen.length, 1, feature);
       assert.strictEqual(seen[0].runSteps, true, feature);
     }
+  });
+});
+
+describe('deploy refuses a GM site folder', () => {
+  const GM_TAG = require('../lib/gm-site').GM_META_TAG;
+  const fs = require('fs');
+  // A real site folder in a temp dir, so the real isGmOutput reads the real output folder.
+  function realSite(setup) {
+    const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'deploy-gm-')));
+    const docs = path.join(root, 'docs');
+    if (setup) { fs.mkdirSync(docs); setup(docs); }
+    const h = harness({ files: { [path.join(root, 'wrangler.toml')]: TOML } });
+    return { root, h, config: path.join(root, 'vault.config.json'), done: () => fs.rmSync(root, { recursive: true, force: true }) };
+  }
+  const noBuilt = (h) => { assert.deepStrictEqual(h.wrangler, []); assert.deepStrictEqual(h.commands, []); assert.deepStrictEqual(h.builds, []); };
+
+  for (const [flag, opts] of [['--no-build', { noBuild: true }], ['--dry-run', { dryRun: true }], ['--json', { json: true }]]) {
+    it(`refuses a GM folder under ${flag}: runs nothing, builds nothing`, async () => {
+      const h = harness();
+      h.deps.isGmOutput = (dir) => { h.seen = dir; return true; };
+      const rc = await runDeploy({ configPath: CONFIG, ...opts }, h.deps);
+      assert.strictEqual(rc, 1);
+      noBuilt(h);
+      assert.strictEqual(h.seen, path.join(SITE, 'docs'));
+      assert.match(h.text(), /deploy refused: .* is a GM site folder/);
+      assert.match(h.text(), /The GM site never goes online\./);
+      if (opts.json) {
+        const payload = JSON.parse(h.out[0]);
+        assert.strictEqual(payload.refused, true);
+        assert.ok(payload.messages.some((m) => /The GM site never goes online/.test(m)));
+      }
+    });
+  }
+
+  it('refuses a folder holding only gm-build.json and names it', async () => {
+    const s = realSite((docs) => fs.writeFileSync(path.join(docs, 'gm-build.json'), '{"build":"gm","tool":"1","built":null}\n'));
+    try {
+      const rc = await runDeploy({ configPath: s.config, noBuild: true }, s.h.deps);
+      assert.strictEqual(rc, 1);
+      noBuilt(s.h);
+      assert.match(s.h.text(), /gm-build\.json/);
+    } finally { s.done(); }
+  });
+
+  it('refuses a folder holding only a page with the GM build tag and names it', async () => {
+    const s = realSite((docs) => fs.writeFileSync(path.join(docs, 'index.html'), `<html><head>${GM_TAG}</head></html>`));
+    try {
+      const rc = await runDeploy({ configPath: s.config, noBuild: true }, s.h.deps);
+      assert.strictEqual(rc, 1);
+      noBuilt(s.h);
+      assert.match(s.h.text(), /GM build tag/);
+    } finally { s.done(); }
+  });
+
+  it('does not refuse an ordinary player output folder', async () => {
+    const s = realSite((docs) => fs.writeFileSync(path.join(docs, 'index.html'), '<html><head></head></html>'));
+    try {
+      const rc = await runDeploy({ configPath: s.config, noBuild: true }, s.h.deps);
+      assert.strictEqual(rc, 0);
+      assert.doesNotMatch(s.h.text(), /deploy refused/);
+    } finally { s.done(); }
+  });
+
+  it('does not refuse a missing output folder', async () => {
+    const s = realSite(null);
+    try {
+      const rc = await runDeploy({ configPath: s.config, noBuild: true }, s.h.deps);
+      assert.doesNotMatch(s.h.text(), /deploy refused/);
+      assert.strictEqual(rc, 0);
+    } finally { s.done(); }
+  });
+
+  it('the default build is made for the player site', async () => {
+    const h = harness();
+    await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(h.builds.length, 1);
+    assert.strictEqual(h.builds[0].site, 'player');
   });
 });
 

@@ -70,8 +70,23 @@ function gmOutputReason(dir) {
     if (e.code === 'ENOENT') return null;
     return 'cannot be read as a folder';
   }
-  if (entries.length === 0 || entries.includes(MARKER_FILE) || hasGmPage(dir)) return null;
+  if (entries.length === 0 || gmEvidence(dir, entries)) return null;
   return 'holds files the GM site did not make';
+}
+
+// What shows a folder is a GM build's: the marker file, or a page carrying the GM build tag; null when neither is there.
+// `entries` is the folder's listing when the caller has it already.
+function gmEvidence(dir, entries) {
+  let names = entries;
+  if (!names) { try { names = fs.readdirSync(dir); } catch { return null; } }
+  if (names.includes(MARKER_FILE)) return MARKER_FILE;
+  return hasGmPage(dir) ? 'a page with the GM build tag' : null;
+}
+
+// Whether a folder is, or once was, a GM build's: false for a missing or empty folder and for an ordinary player site.
+// Deploy refuses such a folder, so the GM site cannot go online by that road.
+function isGmOutput(dir) {
+  return gmEvidence(dir) !== null;
 }
 
 // null when `gmFolder` can be the GM site's folder, otherwise the one reason it cannot, as a line for the GM.
@@ -172,5 +187,5 @@ function gmPage(html, { marks, hiddenBecause = null, hidden = [] } = {}) {
 
 module.exports = {
   MARKER_FILE, GM_META_TAG, ROBOTS_META, ROBOTS_TXT, real, resolveGmFolder, defaultGmFolder, gmFolderProblem, gmOutputReason,
-  writeMarker, insideGitWorkTree, hiddenPanel, gmPage,
+  isGmOutput, gmEvidence, writeMarker, insideGitWorkTree, hiddenPanel, gmPage,
 };

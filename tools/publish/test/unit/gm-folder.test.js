@@ -95,6 +95,31 @@ test('refused: the filesystem root', () => {
   assert.ok(gmFolderProblem(path.parse(l.root).root, { playerSiteDir: l.site, vaultPath: l.vault }));
 });
 
+test('isGmOutput: true for the marker file (any content) or a tagged page; false for a player folder, an empty one, a missing one', () => {
+  const { isGmOutput } = require('../../lib/gm-site');
+  const l = layout();
+  const marker = path.join(l.root, 'marker');
+  fs.mkdirSync(marker);
+  fs.writeFileSync(path.join(marker, MARKER_FILE), '{"build":"gm","tool":"1","built":null}\n');
+  assert.equal(isGmOutput(marker), true);
+  const garbled = path.join(l.root, 'garbled');
+  fs.mkdirSync(garbled);
+  fs.writeFileSync(path.join(garbled, MARKER_FILE), 'not json');
+  assert.equal(isGmOutput(garbled), true);
+  const tagged = path.join(l.root, 'tagged');
+  fs.mkdirSync(path.join(tagged, 'npcs'), { recursive: true });
+  fs.writeFileSync(path.join(tagged, 'npcs', 'a.html'), `<html><head>${GM_META_TAG}</head></html>`);
+  assert.equal(isGmOutput(tagged), true);
+  const player = path.join(l.root, 'player');
+  fs.mkdirSync(player);
+  fs.writeFileSync(path.join(player, 'index.html'), '<html><head></head></html>');
+  assert.equal(isGmOutput(player), false);
+  const empty = path.join(l.root, 'empty');
+  fs.mkdirSync(empty);
+  assert.equal(isGmOutput(empty), false);
+  assert.equal(isGmOutput(path.join(l.root, 'missing')), false);
+});
+
 test('a relative folder is read from the player site folder; the default sits beside it', () => {
   assert.equal(resolveGmFolder('../campaign-gm', path.join(path.sep, 'a', 'campaign')), path.join(path.sep, 'a', 'campaign-gm'));
   assert.equal(defaultGmFolder(path.join(path.sep, 'a', 'campaign') + path.sep), path.join(path.sep, 'a', 'campaign-gm'));

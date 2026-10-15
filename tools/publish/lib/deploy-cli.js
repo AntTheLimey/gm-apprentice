@@ -17,6 +17,7 @@ const { alignProjectName } = require('./setup-backend');
 const { loadVaultConfig, siteConfigFor, outputFolderOf, loadPublishConfig } = require('./config');
 const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
 const { nameIn } = require('./settings');
+const { isGmOutput, gmEvidence } = require('./gm-site');
 
 const VERIFY_ATTEMPTS = 3;
 const VERIFY_WAIT_MS = 20000;
@@ -109,6 +110,17 @@ async function runDeploy(options, deps) {
   const tomlPath = path.join(siteRoot, 'wrangler.toml');
   const hasToml = exists(tomlPath);
 
+  // The GM site never goes online: a player output folder that holds a GM build (the marker file, or a page with the
+  // GM build tag) is refused before anything runs or is printed, whatever the flags.
+  const outputFolder = path.join(siteRoot, outputFolderOf(config));
+  if ((d.isGmOutput || isGmOutput)(outputFolder)) {
+    const found = gmEvidence(outputFolder) || 'gm-build.json, or a page with the GM build tag';
+    const line = `deploy refused: ${outputFolder} is a GM site folder (${found}). The GM site never goes online.`;
+    if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands: [], refused: true, messages: [line] }, null, 2));
+    else out(line);
+    return 1;
+  }
+
   const commands = [];
   const wranglerDeployArgs = hasToml
     ? ['pages', 'deploy']
@@ -186,7 +198,7 @@ async function runDeploy(options, deps) {
       if (failed) return buildFailed(failed);
     }
     try {
-      await build({ configPath });
+      await build({ configPath, site: 'player' });
     } catch (err) {
       return buildFailed(`Build failed: ${err.message}`);
     }
