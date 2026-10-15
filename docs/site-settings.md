@@ -498,8 +498,8 @@ folder, named after it with `-gm` added, and writes that path to
 `gm_site.folder`. From then on every build makes both sites; `build --site
 gm` or `build --site player` makes one. Every GM page carries a "GM copy:
 not for players" band and asks search engines to keep away, and `deploy`
-refuses to put a GM folder online. The live status bar and the inbox stay
-on the player site.
+refuses to put a GM folder online. The live status bar, the inbox and the
+party board stay on the player site.
 
 <!-- settings:gm -->
 
@@ -523,8 +523,10 @@ Every other player site setting can be written under `gm_site` with the
 same name, for the GM site only. Left out, the GM site uses the player
 site's value, except the build steps: the player site's steps never run
 for the GM site, so list its own under `gm_site.before_build` and
-`gm_site.after_build` (see [Build steps](#build-steps)). These cannot, because the two sites share one folder, one
-address, one host and one set of live features:
+`gm_site.after_build` (see [Build steps](#build-steps)). These cannot:
+they belong to the player site alone (its switch, its folders, its web
+address and host) or to live play, which the GM site does not have. The
+GM site's folder is `gm_site.folder`.
 
 <!-- settings:gm-not-per-site -->
 

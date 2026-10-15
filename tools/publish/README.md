@@ -349,7 +349,8 @@ do not see it. It never goes online.
 - `deploy` builds only the player site, and refuses an output folder that
   holds `gm-build.json` or a page with the GM meta tag, with
   `--no-build` too.
-- The live status bar and the inbox stay on the player site.
+- The live status bar, the inbox and the party board stay on the player
+  site.
 - What it shows is set by the `gm_site.show.*` switches, and any per-site
   `player_site` setting can be written under `gm_site` for the GM site
   only. The full list is in `docs/site-settings.md`.
