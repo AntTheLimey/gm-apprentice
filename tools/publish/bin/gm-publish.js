@@ -341,13 +341,18 @@ Builds the site and publishes it to the host the vault names (player_site.host):
 "cloudflare-pages" runs wrangler (checking authentication first, and aligning
 wrangler.toml's project name), "github-pages" commits docs/ and pushes.
 
-  --verify           After deploying, fetch the site URL up to 3 times, 20s
+Before anything is uploaded, the leak check reads the built site for hidden text
+and secret names, and stops the deploy on a finding (see leaks --help). --dry-run
+runs the check on the folder as it stands.
+
+  --verify          After deploying, fetch the site URL up to 3 times, 20s
                      apart. A site still propagating is reported, not failed.
   --no-build         Deploy whatever is already in the output directory
   --dry-run, -n      Print the commands that would run; run none of them
+                     (exit 1 when the leak check would stop the deploy)
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --json             Emit { host, built, deployed, url, verified, status,
-                     attempts, commands }
+                     attempts, commands, refused, leaks }
   --help, -h         Show this help
 `,
   'update-pin': `
