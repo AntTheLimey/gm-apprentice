@@ -27,7 +27,7 @@ OLD_LIST = ("---\ngenerated: 2026-10-13\n---\n\n## Publishing (1 files)\n\n"
             "- [x] Sessions/Next.md — prep\n\n"
             "## Needs Decision (1 files)\n\n- [ ] Drafts/Idea.md\n")
 # A site pinned to the plugin's own tool and already at the version that reads
-# the list (the repo's tool is not at 1.27.0 until the release bump).
+# the list.
 PLUGINS_OWN = f"file:{site_fixture.TOOL_DIR.as_posix()}"
 CHOOSE = ("apply", "--choose", "default-mode=leave")
 
@@ -120,6 +120,30 @@ class PublishListMoveTests(unittest.TestCase):
         self.assertEqual(read_stamp(vault), PLUGIN)
         # The step is in the vault's settings now; the second pass still sees it.
         self.assertIn("scripts/add-props.mjs reads it", update(vault, "plan")[1])
+
+    def test_after_the_script_is_fixed_the_next_pass_moves_the_list(self):
+        vault = make_vault(self)
+        put_old_list(vault)
+        site = with_site(self, vault, spec=PLUGINS_OWN, installed="1.27.0")
+        (site / "scripts").mkdir()
+        script = site / "scripts" / "add-props.mjs"
+        script.write_text(
+            "const list = read('../vault/_meta/publish-manifest.md');\n",
+            encoding="utf-8")
+        pkg = site / "package.json"
+        data = json.loads(pkg.read_text(encoding="utf-8"))
+        data.setdefault("scripts", {})["postbuild"] = "node scripts/add-props.mjs"
+        pkg.write_text(json.dumps(data), encoding="utf-8")
+        update(vault, *CHOOSE)
+        self.assertTrue(has_old(vault) and not has_new(vault))
+        script.write_text(
+            "const list = JSON.parse(run('gm-apprentice-publish manifest "
+            "list --json'));\n", encoding="utf-8")
+        code, did, err = update(vault, "apply")
+        self.assertEqual(code, 0, err + did)
+        self.assertTrue(has_new(vault) and not has_old(vault), did)
+        self.assertEqual(listed(vault)["publishing"], ["NPCs/Vex.md"])
+        self.assertEqual(read_stamp(vault), PLUGIN)
 
     def _refusing(self):
         real = ms.plugin_tool
