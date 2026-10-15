@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.62] — 2026-10-15
+
+The publish tool learns to rebuild only the character pages, and the
+inbox loop uses it.
+
+### Added
+
+- `gm-apprentice-publish build --site player --only sheets` rewrites the
+  character pages and nothing else, then runs the `after_build` steps.
+  It refuses when the folder has no full build yet, and says how many
+  pages it updated. A character page that is new is counted, and the
+  message says a full build updates the menu and the lists that link it.
+  `before_build` steps, images, fonts, the search index and the other
+  pages are left as they were.
+
+### Changed
+
+- The change-request inbox loop in the publish-site skill rebuilds with
+  `build --site player --only sheets` before it deploys, so a batch of
+  sheet changes no longer waits for a full build.
+- The publish tool is 1.29.0.
+
+A player site sees nothing new: a full build from the same vault is byte
+for byte what 1.10.61 made.
+
+---
+
 ## [1.10.61] — 2026-10-15
 
 `publish.mode` retires: the GM site is what `full` used to be, and the

@@ -1,6 +1,6 @@
 ---
 # Must equal plugin.json version — CI fails otherwise
-current_version: "1.10.61"
+current_version: "1.10.62"
 ---
 
 # Vault Migration Record
@@ -68,3 +68,4 @@ every-pass check runs on every migration, whatever the vault's version.
 | 1.10.59 | No change to a vault's notes or settings. The publish tool learns the GM site: `settings set gm_site.publish=on` turns it on and makes its folder; nothing changes until you do. The site's publish tool is repinned to 1.26.0 by the every-pass repin | — |
 | 1.10.60 | The publish list moves from `_meta/publish-manifest.md` to `_meta/publish-list.yaml`, all or nothing (`publish-list` step). What publishes does not change. A vault whose site tool is older than 1.27.0, or whose build step reads the old file, keeps it and is told why. The site's publish tool is repinned to 1.27.0 | `publish-list` |
 | 1.10.61 | `publish.mode` retires: the GM site is what `full` was. A vault that wrote `player` loses the line. A vault that wrote `full` has its site turned into its GM site, built in the folder the vault's `gm_site.folder` names, or a new one beside the old (`<site folder>-gm`), and never put online; the player site is turned off and the old site folder is no longer built, though it still holds the last site that published everything (`full-mode` step). A `full` vault with no site folder is asked for one. A `full` vault with a site switch written off (`player_site.publish` or `gm_site.publish`) only loses the line and gets no GM site, and says so. A vault kept by a player (`vault.kept_by: player`) only loses the line, and the update's own gm-leak step skips it. A player site built from a vault that was `full` now leaves out notes still marked as prep and follows the publish list: it shows less, never more. | `full-mode` |
+| 1.10.62 | No vault change; the publish tool learns `build --only sheets`; the inbox loop uses it; repinned to 1.29.0 | — |
