@@ -181,6 +181,20 @@ describe('build --only sheets', () => {
     } finally { s.cleanup(); }
   });
 
+  it('the pictures of the people a PC page lists are copied too', () => {
+    const notes = { ...NOTES, 'NPCs/Vex.md': '---\ntype: npc\nportrait: Vex.png\nrelationships:\n  - target: "[[Ann]]"\n    type: serves\n    description: Her clerk.\n---\nMentions [[Ann]].\n' };
+    const s = buildBoth(notes, { sites: ['player'] });
+    try {
+      const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      fs.mkdirSync(path.join(s.root, 'vault', '_attachments'), { recursive: true });
+      fs.writeFileSync(path.join(s.root, 'vault', '_attachments', 'Vex.png'), png);
+      assert.equal(s.player.exists('images', 'Vex.png'), false);
+      quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.match(s.player.read('pcs', 'ann.html'), /images\/Vex\.png/);
+      assert.ok(s.player.exists('images', 'Vex.png'));
+    } finally { s.cleanup(); }
+  });
+
   it('a prebuild or postbuild script in the site package.json is named, once, as not run', () => {
     const s = buildBoth(NOTES, { sites: ['player'] });
     try {

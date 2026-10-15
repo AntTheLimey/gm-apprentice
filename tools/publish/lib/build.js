@@ -1536,6 +1536,8 @@ function buildSite(options) {
       const out = renderPage(page, liveFx);
       if (out.roster) { deferredRosters.push({ page, processed: out.roster }); continue; }
       seen(vaultRelPathOf(page), out.html, page, false);
+      // A fast build writes no page of the people a PC page lists, so their pictures are copied for this one.
+      if (onlySheets && publishConfig._connections) useConnectionImages(publishConfig._connections.for(page));
       if (writes === 'none') continue;
       const outPath = path.join(outputDir, page.outputPath);
       const isNew = onlySheets && !fs.existsSync(outPath);
@@ -1548,6 +1550,20 @@ function buildSite(options) {
       renderErrors.push(`${page.outputPath}: ${e.message}`);
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
     }
+  }
+
+  // The pictures a Connections model names (`images/<relPath>`) count as used, as a full build counts them
+  // through the pages that own them.
+  function useConnectionImages(model) {
+    const byRel = new Map(Object.entries(imageMap).map(([basename, entry]) => [`images/${entry.relPath}`, basename]));
+    const walk = (v) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') {
+        if (typeof v.image === 'string' && byRel.has(v.image)) usedImages.add(byRel.get(v.image));
+        Object.values(v).forEach(walk);
+      }
+    };
+    walk(model);
   }
 
   // A fast build also writes each PC's story page, as a full build does (not the story's contents page).
