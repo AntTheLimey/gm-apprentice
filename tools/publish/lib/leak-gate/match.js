@@ -14,23 +14,27 @@ const TOOL_JS = path.join(__dirname, '..', '..', 'js');
 const TOOL_CSS = path.join(__dirname, '..', '..', 'css');
 
 function createMatcher(pieces) {
+  // Pieces filed by their first four words, one map per word (no key string is made per position in a scan).
   const index = new Map();
-  const firsts = new Set();   // a quick test before the four-word key is made
   for (const piece of pieces) {
     if (piece.words.length < MIN_WORDS) continue;
-    const key = piece.words.slice(0, MIN_WORDS).join(' ');
-    firsts.add(piece.words[0]);
-    const list = index.get(key);
-    if (list) list.push(piece); else index.set(key, [piece]);
+    let level = index;
+    for (let k = 0; k < MIN_WORDS - 1; k++) {
+      let next = level.get(piece.words[k]);
+      if (!next) { next = new Map(); level.set(piece.words[k], next); }
+      level = next;
+    }
+    const list = level.get(piece.words[MIN_WORDS - 1]);
+    if (list) list.push(piece); else level.set(piece.words[MIN_WORDS - 1], [piece]);
   }
   return {
     scan(words) {
       const hits = [];
       for (let i = 0; i + MIN_WORDS <= words.length; i++) {
-        if (!firsts.has(words[i])) continue;
-        const list = index.get(`${words[i]} ${words[i + 1]} ${words[i + 2]} ${words[i + 3]}`);
-        if (!list) continue;
-        for (const piece of list) {
+        let level = index;
+        for (let k = 0; level && k < MIN_WORDS; k++) level = level.get(words[i + k]);
+        if (!level) continue;
+        for (const piece of level) {
           const n = piece.words.length;
           if (i + n > words.length) continue;
           let k = MIN_WORDS;

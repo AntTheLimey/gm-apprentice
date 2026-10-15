@@ -8,7 +8,7 @@ const { loadPublishList } = require('../manifest');
 const { collectHidden } = require('./collect');
 const { createMatcher, readOutput, listFiles } = require('./match');
 const { nameFindings } = require('./names');
-const { wordsOf, onlyNames } = require('./text');
+const { wordsOf, nameSet, onlyNames } = require('./text');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
 const keyOf = (page, text) => `${page}\n${text}`;
@@ -25,8 +25,7 @@ function runLeakGate({ configPath, outputDir }) {
 
   // A hidden piece the player site's own text also says is not hidden (the GM wrote it in both places).
   // So is one that is only the site's public names (see onlyNames).
-  const names = new Set([...Object.keys(hidden.linkMap), ...hidden.published.map((p) => p.displayTitle || '')]
-    .map((n) => wordsOf(n).join(' ')).filter(Boolean));
+  const names = nameSet([...Object.keys(hidden.linkMap), ...hidden.published.map((p) => p.displayTitle || '')]);
   const pieces = hidden.pieces.filter((p) => !onlyNames(p.words, names));
   const all = createMatcher(pieces);
   const alsoVisible = new Set();

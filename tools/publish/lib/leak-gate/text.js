@@ -10,17 +10,25 @@ const { labelsForLinks, splitTableRow } = require('../wikilink');
 const MIN_WORDS = 4;
 const WORD = /[\p{L}\p{N}]+(?:['-][\p{L}\p{N}]+)*/gu;
 
-function normalize(text) {
+// A text folded for comparison: quotes and dashes in one form, private-use marks out, lower case.
+function folded(text) {
   return foldQuotes(String(text == null ? '' : text))
     .replace(/[-�]/g, '')
     .replace(/[‐-―−]/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim()
     .toLowerCase();
 }
 
+function normalize(text) {
+  return folded(text).replace(/\s+/g, ' ').trim();
+}
+
+// The words of a text, as normalize reads it. Spacing does not matter to words, and a text that is plain ASCII once
+// folded is read with the ASCII form of WORD (the same words, faster).
+const ASCII = /^[\x00-\x7f]*$/;
+const WORD_ASCII = /[a-z0-9]+(?:['-][a-z0-9]+)*/g;
 function wordsOf(text) {
-  return normalize(text).match(WORD) || [];
+  const s = folded(text);
+  return s.match(ASCII.test(s) ? WORD_ASCII : WORD) || [];
 }
 
 const TABLE_RULE = /^\|?\s*:?-{3,}/;
@@ -123,12 +131,19 @@ function fieldRunsOf(fields, title) {
   return runs;
 }
 
+// The site's public names as onlyNames reads them: each name's words, and the words a name can start with.
+function nameSet(names) {
+  const set = new Set(names.map((n) => wordsOf(n).join(' ')).filter(Boolean));
+  set.firsts = new Set([...set].map((n) => n.split(' ')[0]));
+  return set;
+}
+
 // Whether a piece's words are nothing but public names of the site, one after another (a list of mentions, a cast
 // list): the site prints those names wherever it links them, so they are not hidden text. The name checks look for
 // secret names.
 const NAMES_ONLY_MAX = 12;
 function onlyNames(words, names) {
-  if (words.length > NAMES_ONLY_MAX) return false;
+  if (words.length > NAMES_ONLY_MAX || !names.firsts.has(words[0])) return false;
   const ok = [true];
   for (let i = 1; i <= words.length; i++) {
     ok[i] = false;
@@ -141,4 +156,4 @@ function piecesOfValue(value) {
   return stringsOfValue(value).flatMap(piecesOfText);
 }
 
-module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfMarkdown, stringsOfValue, piecesOfValue, fieldRunsOf, tableRunsOf, onlyNames };
+module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfMarkdown, stringsOfValue, piecesOfValue, fieldRunsOf, tableRunsOf, nameSet, onlyNames };
