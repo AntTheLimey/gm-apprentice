@@ -8,15 +8,21 @@ const path = require('node:path');
 const MARKER_FILE = 'gm-build.json';
 // The mark every page of a GM build carries. A GM build that failed before it wrote the marker file leaves pages that
 // carry this, so its own folder is still known as its own.
-const GM_META = /<meta\s+name=["']gm-apprentice-build["']\s+content=["']gm["']/i;
+// The one spelling of it: the GM build writes this exact text and the folder test looks for it.
+const GM_META_TAG = '<meta name="gm-apprentice-build" content="gm">';
 
 // The real path of a path that may not exist yet: its nearest existing folder's real path with the rest put back.
-// A link in the folder that leads somewhere is compared by where it leads.
+// A link in the folder that leads somewhere is compared by where it leads, even when what it leads to is not made yet.
 function real(p) {
   const tail = [];
   let cur = path.resolve(p);
-  for (;;) {
+  for (let hops = 0; ;) {
     try { return path.join(fs.realpathSync.native(cur), ...tail); } catch {
+      let target = null;
+      try {
+        if (fs.lstatSync(cur).isSymbolicLink() && hops++ < 40) target = path.resolve(path.dirname(cur), fs.readlinkSync(cur));
+      } catch { /* not a link */ }
+      if (target) { cur = target; continue; }
       const up = path.dirname(cur);
       if (up === cur) return path.resolve(p);
       tail.unshift(path.basename(cur));
@@ -50,7 +56,7 @@ function hasGmPage(dir) {
     if (e.isDirectory()) {
       if (hasGmPage(full)) return true;
     } else if (e.isFile() && /\.html?$/i.test(e.name)) {
-      try { if (GM_META.test(fs.readFileSync(full, 'utf8'))) return true; } catch { /* unreadable: not a GM page */ }
+      try { if (fs.readFileSync(full, 'utf8').includes(GM_META_TAG)) return true; } catch { /* unreadable: not a GM page */ }
     }
   }
   return false;
@@ -84,9 +90,13 @@ function gmFolderProblem(gmFolder, { playerSiteDir, vaultPath }) {
     if (gm === vault || inside(gm, vault)) return `${shown} is the vault or inside it; the GM site is built outside the vault`;
     if (inside(vault, gm)) return `${shown} holds the vault; the GM site is built outside the vault`;
   }
+  // A link at the folder's own path that leads nowhere cannot be made into a folder.
+  try {
+    if (fs.lstatSync(gmFolder).isSymbolicLink() && !fs.existsSync(gmFolder)) return `${shown} is a link that leads nowhere; use an empty or new folder`;
+  } catch { /* nothing there yet */ }
   const why = gmOutputReason(gm);
   if (why) return `${shown} ${why}; use an empty or new folder`;
   return null;
 }
 
-module.exports = { MARKER_FILE, GM_META, real, resolveGmFolder, defaultGmFolder, gmFolderProblem, gmOutputReason };
+module.exports = { MARKER_FILE, GM_META_TAG, real, resolveGmFolder, defaultGmFolder, gmFolderProblem, gmOutputReason };

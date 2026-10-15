@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { gmFolderProblem, gmOutputReason, resolveGmFolder, defaultGmFolder, MARKER_FILE } = require('../../lib/gm-site');
+const { gmFolderProblem, gmOutputReason, resolveGmFolder, defaultGmFolder, MARKER_FILE, GM_META_TAG } = require('../../lib/gm-site');
 
 const tmp = () => fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gm-folder-')));
 function layout() {
@@ -62,6 +62,32 @@ test('a GM build that failed part-way (pages with the GM meta tag, no marker) is
   fs.writeFileSync(path.join(gm, 'npcs', 'a.html'), '<html><head><meta name="generator" content="x"></head></html>');
   assert.match(gmOutputReason(gm), /did not make/);
   assert.ok(gmFolderProblem(gm, { playerSiteDir: l.site, vaultPath: l.vault }));
+});
+
+// A link to a place not made yet cannot be made on Windows without privileges.
+const linkTest = process.platform === 'win32' ? test.skip : test;
+
+linkTest('refused: a dangling link that points into the player site folder', () => {
+  const l = layout();
+  const link = path.join(l.root, 'dangle');
+  fs.symlinkSync(path.join(l.site, 'notyet'), link);
+  assert.match(gmFolderProblem(link, { playerSiteDir: l.site, vaultPath: l.vault }) || '', /^gm_site\.folder \(.*inside the player/);
+});
+
+linkTest('refused: a dangling link elsewhere, which cannot be made into a folder', () => {
+  const l = layout();
+  const link = path.join(l.root, 'dangle');
+  fs.symlinkSync(path.join(l.root, 'nowhere'), link);
+  assert.match(gmFolderProblem(link, { playerSiteDir: l.site, vaultPath: l.vault }) || '', /^gm_site\.folder \(.*leads nowhere/);
+});
+
+test('the meta tag the folder test looks for is the one exported constant', () => {
+  const l = layout();
+  const gm = path.join(l.root, 'campaign-gm');
+  fs.mkdirSync(gm);
+  fs.writeFileSync(path.join(gm, 'a.html'), `<head>${GM_META_TAG}</head>`);
+  assert.equal(gmOutputReason(gm), null);
+  assert.equal(GM_META_TAG, '<meta name="gm-apprentice-build" content="gm">');
 });
 
 test('refused: the filesystem root', () => {

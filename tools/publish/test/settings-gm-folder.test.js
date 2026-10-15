@@ -122,6 +122,31 @@ test('5b: a folder that holds files the GM site did not make is refused; nothing
   assert.equal(gmOf(s).publish, undefined);
 });
 
+test('a folder that cannot be made writes nothing: the settings file is byte-identical and the error names gm_site.folder', () => {
+  const s = scratch();
+  const file = path.join(s.vault, '_meta', 'vault-config.yaml');
+  const before = fs.readFileSync(file);
+  const real = fs.mkdirSync;
+  fs.mkdirSync = () => { throw Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' }); };
+  let result;
+  try { result = set(s, ['gm_site.publish=on']); } finally { fs.mkdirSync = real; }
+  assert.equal(result.rc, 1);
+  assert.match(result.err[0], /^Error: gm_site\.folder \(.*\) could not be made \(EACCES\); nothing was written/);
+  assert.deepEqual(fs.readFileSync(file), before);
+});
+
+(process.platform === 'win32' ? test.skip : test)('a dangling link as the folder is refused and nothing is written', () => {
+  const s = scratch();
+  const file = path.join(s.vault, '_meta', 'vault-config.yaml');
+  const before = fs.readFileSync(file);
+  const link = path.join(s.root, 'dangle');
+  fs.symlinkSync(path.join(s.site, 'notyet'), link);
+  const { rc, err } = set(s, ['gm_site.publish=on', `gm_site.folder=${link}`]);
+  assert.equal(rc, 1);
+  assert.match(err[0], /^Error: gm_site\.folder \(/);
+  assert.deepEqual(fs.readFileSync(file), before);
+});
+
 test('6: a vault still on the old settings file is refused as every new-only setting is', () => {
   const s = scratch(null, { legacy: true });
   const { rc, err } = set(s, ['gm_site.publish=on']);
