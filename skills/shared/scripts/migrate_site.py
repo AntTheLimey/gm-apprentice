@@ -22,7 +22,7 @@ from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_
 from vaultlib import (LEGACY_SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, setting_name, settings,
                       settings_default, settings_file, settings_raw, settings_set,
-                      site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
+                      settings_unset, settings_written, site_switch_written, vault_layout, written_in_vault_file, yaml_scalar)
 
 INLINE_PUBLISH = (
     "the publish: block in _meta/vault-config.md is written on one line "
@@ -303,6 +303,113 @@ def find_publish_list(vault: Path) -> list[Item]:
         return [str(x) for x in done["lines"]]
 
     return [Item(PUBLISH_LIST, WILL, [str(x) for x in plan["lines"]], apply)]
+
+
+FULL_MODE = "full-mode"
+RETIRED_MODE = "player_site.hide.mode"
+
+
+def _drop_mode(vault: Path) -> list[str]:
+    """Remove the retired `mode` line; nothing else is written."""
+    try:
+        settings_unset(vault, [RETIRED_MODE])
+    except SettingsUnavailable as e:
+        raise StepFailed(f"nothing was changed: {e}") from e
+    return [f"removed {setting_name(vault, RETIRED_MODE)} (no longer used)"]
+
+
+def _move_full_vault(vault: Path) -> list[str]:
+    """A `full` vault becomes a GM site: the GM site on (its folder beside
+    the old site's, made by the tool), the player site off, then `mode` out.
+    The first write is one edit, all or none. If taking `mode` out then
+    fails, the first write is undone, so the vault is as it was; and if that
+    cannot be undone either, the message says exactly what is in the file."""
+    before = settings(vault)
+    was = {n: (written_in_vault_file(before, n), before.get(n))
+           for n in ("gm_site.publish", "gm_site.folder", "player_site.publish")}
+    old_folder = before.get("player_site.folder")
+    _set_settings(vault, [("gm_site.publish", True), ("player_site.publish", False)])
+    after = settings(vault)
+    folder = after.get("gm_site.folder")
+    try:
+        settings_unset(vault, [RETIRED_MODE])
+    except SettingsUnavailable as e:
+        raise StepFailed(_undo_full_move(vault, was, folder, str(e))) from e
+    return [f"This vault's site published everything (`full`), so it is now "
+            f"your GM site, built in {folder}; it never goes online. The old "
+            f"site folder ({old_folder}) is no longer built."]
+
+
+def _undo_full_move(vault: Path, was: dict[str, tuple[bool, Any]],
+                    folder: Any, why: str) -> str:
+    """Put the settings back as they were; the message for the run."""
+    try:
+        drop = [n for n in ("gm_site.publish", "gm_site.folder")
+                if not was[n][0]]
+        if not was["player_site.publish"][0]:
+            drop.append("player_site.publish")
+        if drop:
+            settings_unset(vault, drop)
+        back = [(n, was[n][1]) for n in ("gm_site.publish", "gm_site.folder",
+                                         "player_site.publish")
+                if was[n][0]]
+        if back:
+            _set_settings(vault, back)
+    except (SettingsUnavailable, StepFailed) as e:
+        return (f"{RETIRED_MODE} could not be removed ({why}), and the "
+                f"change before it could not be undone ({e}). The file now "
+                "has gm_site.publish on and player_site.publish off, and "
+                "still has mode: full. Run the update again: it finishes "
+                "from there")
+    made = Path(str(folder)) if folder else None
+    if made is not None and not was["gm_site.folder"][0]:
+        try:
+            made.rmdir()   # the folder the tool made, if still empty
+        except OSError:
+            pass
+    return (f"{RETIRED_MODE} could not be removed ({why}). Nothing was "
+            "changed: the vault is as it was")
+
+
+def find_full_mode(vault: Path) -> list[Item]:
+    """`player_site.hide.mode` is retired: the GM site is what `full` was.
+    Written anything but `full`: it is only removed. Written `full`: the
+    vault's site becomes its GM site. Every pass; not written, nothing."""
+    try:
+        value, origin = settings_written(vault, RETIRED_MODE)
+    except SettingsUnavailable:
+        return []
+    if origin != "file" or value is None:
+        return []
+    name = setting_name(vault, RETIRED_MODE)
+    if str(value).strip().lower() != "full":
+        return [Item(FULL_MODE, WILL, [f"remove {name} (no longer used)"],
+                     lambda _v: _drop_mode(vault))]
+    own = settings(vault)
+    if own.get("vault.kept_by") == "player":
+        return [Item(FULL_MODE, WILL,
+                     [f"remove {name} (no longer used); this vault is kept by "
+                      "a player, so it has no GM site, and its site follows "
+                      "the publish list"],
+                     lambda _v: _drop_mode(vault))]
+    if vault_layout(vault) != "new":
+        return [Item(FULL_MODE, PERSON,
+                     [f"{name}\t`full` is no longer used: this vault's site "
+                      "becomes a GM site once its settings have moved to the "
+                      "new settings file. Run the update again after that"])]
+    if not own.get("player_site.folder") and not own.get("gm_site.folder"):
+        return [Item(FULL_MODE, PERSON,
+                     [f"{name}\t`full` is no longer used: this vault's site "
+                      "published everything, so it becomes a GM site, but no "
+                      "site folder is named to put it beside. Tell me the "
+                      "folder (settings set player_site.folder=<folder>), "
+                      "then run the update again"], holds_stamp=True)]
+    return [Item(FULL_MODE, WILL,
+                 [f"{name} is `full`: turn this vault's site into your GM site "
+                  f"(gm_site.publish on, built beside the old site folder and "
+                  f"never put online) and turn the player site off; then "
+                  f"remove {name}"],
+                 lambda _v: _move_full_vault(vault))]
 
 
 def _shows_lines(plan: dict[str, Any]) -> list[str]:
@@ -730,6 +837,8 @@ SITE_CHECKS: list[Check] = [
           find_settings_move),
     Check(PUBLISH_LIST, None, 2, "the publish list moves to its new file",
           find_publish_list),
+    Check(FULL_MODE, None, 2, "a vault that published everything becomes a "
+          "GM site", find_full_mode),
     Check("publish-site", None, 2, "the site switch",
           find_publish_site),
     Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,
