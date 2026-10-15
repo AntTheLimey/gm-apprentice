@@ -31,7 +31,7 @@
   margin: 0 0 0.25rem;
   font-size: 0.8em;
   font-weight: 700;
-  color: var(--warning);
+  color: var(--text);   /* not --warning: several presets keep a bright warning in light mode, unreadable as text */
 }
 
 span.gm-mark {
@@ -50,7 +50,7 @@ span.gm-mark {
 span.gm-mark::after {
   content: " [" attr(data-gm-label) "]";
   font-size: 0.75em;
-  color: var(--text-muted);
+  color: var(--text);
   text-decoration: none;
 }
 
@@ -78,5 +78,5 @@ span.gm-mark::after {
 .gm-hidden__title {
   margin: 0 0 0.5rem;
   font-size: 1rem;
-  color: var(--warning);
+  color: var(--text);
 }
