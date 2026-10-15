@@ -176,9 +176,14 @@ excluded versus missing is the GM's call.
   manifest convert --vault <dir> [--config <file>] [--check] [--site-tool-updated] [--json]
                      Move the publish list from _meta/publish-manifest.md to
                      _meta/publish-list.yaml, all or nothing: the new file is
-                     read back and must say what the old one says before the
-                     old one is removed. --check changes nothing. Exit 1 when
-                     it cannot move the list; the old file is then untouched.
+                     read back and must hold every entry line and reason of
+                     the old one before the old one is set aside as
+                     _meta/publish-manifest.md.converted. --check changes
+                     nothing. Without --config the site folder the vault's
+                     settings name is asked whether the list must stay. Exit
+                     1 when it cannot move the list; the old file is then
+                     untouched. Only this and the update move a list: apply
+                     and publish-played write the file the vault is on.
   manifest list --vault <dir> [--json]
                      The three lists (publishing, excluded with reasons,
                      needs_decision) and their counts.

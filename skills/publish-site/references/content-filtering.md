@@ -227,13 +227,17 @@ Never open the file to read or change it. Ask the tool:
   by the rules in this document and shows what is not on the list yet.
 - `manifest apply --config <dir>/vault.config.json --publish <path>...
   --exclude "<path>=<reason>"... --decide <path>...` moves entries between
-  the lists. Paths are vault-relative, with forward slashes. A
-  `publishing` entry that matches no vault file prints a build warning
-  rather than silently dropping the page.
+  the lists. Paths are vault-relative, with forward slashes. A path
+  that names no file in the vault is refused and nothing is written;
+  `--publish` also refuses a note in a folder the site leaves out.
 
-A vault the update has not reached yet may still hold the old file,
-`_meta/publish-manifest.md`; the tool reads it, and every command that
-writes moves the vault to the new file first.
+A vault the update has not moved may still hold the old file,
+`_meta/publish-manifest.md`: one the update has not reached, or one it
+held there (the site's publish tool is older than 1.27.0, or a build
+step reads the old file). The commands read it and write their changes
+back into it. Only the update, or `manifest convert --vault <vault>`,
+moves a vault to the new file; it keeps the old file beside it as
+`_meta/publish-manifest.md.converted`.
 
 ## Campaign Image
 

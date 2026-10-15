@@ -17,18 +17,22 @@ it for you.
 - The publish list is now `_meta/publish-list.yaml`, a plain YAML file
   with the pages and folders that publish and the ones that never do.
   The update moves each vault's `_meta/publish-manifest.md` into it, all
-  or nothing, keeping every entry and every reason. What publishes does
-  not change.
-- `manifest list`, `add`, `remove`, `diff` and the build all read and
-  write the new file. `manifest list --json` is the way for a script to
-  read the list, and now says whether a list exists.
+  or nothing, keeping every entry and every reason, and keeps the old
+  file beside it as `_meta/publish-manifest.md.converted`. What
+  publishes does not change. A reason may now sit beside any entry.
+- The build and `manifest list`, `diff`, `apply`, `publish-played` and
+  `rename` read the new file, or the old one on a vault that has not
+  moved; the commands that write keep a vault on the file it is on.
+  Only the update, or `manifest convert`, moves it. `manifest list
+  --json` is the way for a script to read the list, and now says
+  whether a list exists.
 - The update leaves the old list in place, and says why, when the
   site's publish tool is older than 1.27.0 or one of the site's build
   steps still reads the old file (the message names the script and the
   command that replaces the read). It moves the list on the next run
   once that is fixed.
 - A move that was cut off half way is finished by the next run; if the
-  two files disagree, neither is removed.
+  two files disagree, neither is touched.
 - The skills ask the tool for the list and no longer describe the old
   Markdown layout. `vault_check` and `relink` read the list through the
   tool too.
