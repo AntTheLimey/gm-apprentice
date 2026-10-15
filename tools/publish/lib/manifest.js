@@ -115,7 +115,7 @@ function loadManifest(vaultPath, { warn = console.warn } = {}) {
     return parseNewFile(fs.readFileSync(newFile, 'utf-8'), warn);
   }
   if (!hasOld) return null;
-  sayOnce(warn, `The publish list is still in ${OLD_LIST_FILE}; the next update moves it to ${PUBLISH_LIST_FILE}.`);
+  sayOnce(warn, `The publish list is still in ${OLD_LIST_FILE}; the update moves it to ${PUBLISH_LIST_FILE}, or says what holds it back.`);
   const { parseManifest, parseAnnotatedManifest } = require('./manifest-legacy');
   const text = fs.readFileSync(oldFile, 'utf-8');
   const parsed = parseManifest(text);
