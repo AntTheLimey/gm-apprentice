@@ -29,6 +29,12 @@ const CLOUDFLARE_AUTH_FIX =
   'an API token with the Account · Cloudflare Pages · Edit permission, then re-run deploy.';
 
 // A Cloudflare Pages project name is lowercase alphanumerics and hyphens.
+// The folder a wrangler.toml names for upload (pages_build_output_dir), or null when it names none.
+function tomlOutputFolder(text, siteRoot) {
+  const m = /^\s*pages_build_output_dir\s*=\s*["']([^"'\n]+)["']/m.exec(String(text || ''));
+  return m ? path.resolve(siteRoot, m[1]) : null;
+}
+
 function projectNameFor(config, siteRoot) {
   return config.cloudflarePagesProject
     || path.basename(siteRoot).toLowerCase().replace(/[^a-z0-9-]/g, '-');
@@ -112,10 +118,14 @@ async function runDeploy(options, deps) {
 
   // The GM site never goes online: a player output folder that holds a GM build (the marker file, or a page with the
   // GM build tag) is refused before anything runs or is printed, whatever the flags.
+  // With a wrangler.toml, wrangler uploads the folder the toml names, so that folder is checked too.
   const outputFolder = path.join(siteRoot, outputFolderOf(config));
-  if ((d.isGmOutput || isGmOutput)(outputFolder)) {
-    const found = gmEvidence(outputFolder) || 'gm-build.json, or a page with the GM build tag';
-    const line = `deploy refused: ${outputFolder} is a GM site folder (${found}). The GM site never goes online.`;
+  const readTomlSafely = () => { try { return readFile(tomlPath); } catch { return ''; } };
+  const tomlFolder = hasToml ? tomlOutputFolder(readTomlSafely(), siteRoot) : null;
+  const gmFolder = [outputFolder, tomlFolder].filter(Boolean).find((f) => (d.isGmOutput || isGmOutput)(f));
+  if (gmFolder) {
+    const found = gmEvidence(gmFolder) || 'gm-build.json, or a page with the GM build tag';
+    const line = `deploy refused: ${gmFolder} is a GM site folder (${found}). The GM site never goes online.`;
     if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands: [], refused: true, messages: [line] }, null, 2));
     else out(line);
     return 1;

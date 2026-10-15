@@ -557,6 +557,20 @@ describe('deploy refuses a GM site folder', () => {
     });
   }
 
+  it('refuses when wrangler.toml names a GM folder, though player_site.output is not one', async () => {
+    const s = realSite((docs) => fs.writeFileSync(path.join(docs, 'index.html'), '<html></html>'));
+    try {
+      const gm = path.join(s.root, 'elsewhere');
+      fs.mkdirSync(gm);
+      fs.writeFileSync(path.join(gm, 'gm-build.json'), '{}\n');
+      s.h.deps.readFile = (p) => (p === path.join(s.root, 'wrangler.toml') ? 'pages_build_output_dir = "elsewhere"\n' : fs.readFileSync(p, 'utf8'));
+      const rc = await runDeploy({ configPath: s.config, noBuild: true }, s.h.deps);
+      assert.strictEqual(rc, 1);
+      noBuilt(s.h);
+      assert.match(s.h.text(), /elsewhere/);
+    } finally { s.done(); }
+  });
+
   it('refuses a folder holding only gm-build.json and names it', async () => {
     const s = realSite((docs) => fs.writeFileSync(path.join(docs, 'gm-build.json'), '{"build":"gm","tool":"1","built":null}\n'));
     try {
