@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { optimizeImages, imageCacheDir, ignoreCacheInGit, CACHE_FOLDER } = require('../../lib/image-optimize');
+const { optimizeImages, imageCacheDir, ignoreCacheInGit, CACHE_FOLDER, cacheKey, removeOldTempFiles, ENCODE_RECIPE } = require('../../lib/image-optimize');
 const { makePng } = require('../helpers/make-png');
 
 const RESOLVED = { optimize: true, format: 'webp', max_width: 1600, quality: 82 };
@@ -155,5 +155,34 @@ describe('ignoreCacheInGit', () => {
     fs.writeFileSync(path.join(other, '.gitignore'), `/${CACHE_FOLDER}\n`);
     ignoreCacheInGit(other);
     assert.strictEqual(fs.readFileSync(path.join(other, '.gitignore'), 'utf8'), `/${CACHE_FOLDER}\n`);
+  });
+});
+
+describe('the image cache across tool releases and stopped builds', () => {
+  it('a new encode recipe never serves an entry made by the old one', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-key-'));
+    const src = path.join(d, 'a.png');
+    fs.writeFileSync(src, makePng(40, 30));
+    const cfg = { format: 'webp', quality: 82, maxWidth: 1600 };
+    const enc = { name: 'cwebp', version: '1.4.0' };
+    assert.notStrictEqual(cacheKey(src, cfg, enc, ENCODE_RECIPE), cacheKey(src, cfg, enc, ENCODE_RECIPE + 1));
+    assert.strictEqual(cacheKey(src, cfg, enc), cacheKey(src, cfg, enc, ENCODE_RECIPE));
+    fs.rmSync(d, { recursive: true, force: true });
+  });
+
+  it('an old temp file from a stopped build is removed; a fresh one and the entries are kept', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-tmp-'));
+    const old = path.join(d, '.tmp-1-0.webp');
+    const fresh = path.join(d, '.tmp-2-0.webp');
+    const entry = path.join(d, 'abc.webp');
+    for (const f of [old, fresh, entry]) fs.writeFileSync(f, 'x');
+    const twoHoursAgo = (Date.now() - 2 * 60 * 60 * 1000) / 1000;
+    fs.utimesSync(old, twoHoursAgo, twoHoursAgo);
+    fs.utimesSync(entry, twoHoursAgo, twoHoursAgo);
+    removeOldTempFiles(d);
+    assert.strictEqual(fs.existsSync(old), false);
+    assert.strictEqual(fs.existsSync(fresh), true);
+    assert.strictEqual(fs.existsSync(entry), true);
+    fs.rmSync(d, { recursive: true, force: true });
   });
 });

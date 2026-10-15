@@ -147,16 +147,34 @@ function ignoreCacheInGit(siteDir) {
   fs.appendFileSync(file, `${lead}${CACHE_FOLDER}/${eol}`);
 }
 
+// The way this tool asks the encoder for a picture (buildCwebpArgs, the width probe). Raise it whenever
+// either changes, so a cache made by an older tool is never served: nothing else would tell them apart.
+const ENCODE_RECIPE = 1;
+
 // One cache entry per picture: its bytes, and everything that changes what the encoder makes of them.
-function cacheKey(sourcePath, cfg, encoder) {
+function cacheKey(sourcePath, cfg, encoder, recipe = ENCODE_RECIPE) {
   const hash = crypto.createHash('sha256');
   hash.update(JSON.stringify({
+    recipe,
     format: cfg.format, quality: cfg.quality, maxWidth: cfg.maxWidth,
     encoder: encoder.name, version: encoder.version || null,
   }));
   hash.update('\0');
   hash.update(fs.readFileSync(sourcePath));
   return hash.digest('hex');
+}
+
+// A build stopped while encoding leaves its .tmp- file behind; it is never read as a picture. Remove
+// ones more than an hour old, so a build running at the same moment keeps its own. The cache itself
+// is never pruned: an entry costs disk, never a wrong picture, and a picture that comes back is free.
+function removeOldTempFiles(cacheDir, now = Date.now()) {
+  for (const name of fs.readdirSync(cacheDir)) {
+    if (!name.startsWith('.tmp-')) continue;
+    const full = path.join(cacheDir, name);
+    try {
+      if (now - fs.statSync(full).mtimeMs > 60 * 60 * 1000) fs.rmSync(full, { force: true });
+    } catch { /* gone already, or another build has it */ }
+  }
 }
 
 function clamp(n, min, max) {
@@ -203,7 +221,10 @@ function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
     return { ...stats, reason: 'cwebp not found on PATH — install libwebp (brew install webp / apt install webp)' };
   }
   stats.encoder = encoder.name;
-  if (cacheDir) fs.mkdirSync(cacheDir, { recursive: true });
+  if (cacheDir) {
+    fs.mkdirSync(cacheDir, { recursive: true });
+    removeOldTempFiles(cacheDir);
+  }
 
   // Two sources with the same stem in the same directory (`a.png` and `a.jpg`) would both
   // want `a.webp`. First one wins; the loser keeps its original bytes rather than silently
@@ -281,5 +302,5 @@ function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
 
 module.exports = {
   optimizeImages, detectEncoder, resolveImageConfig, probeWidth, buildCwebpArgs, OPTIMIZABLE_EXT,
-  imageCacheDir, ignoreCacheInGit, CACHE_FOLDER,
+  imageCacheDir, ignoreCacheInGit, CACHE_FOLDER, cacheKey, removeOldTempFiles, ENCODE_RECIPE,
 };

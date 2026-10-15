@@ -19,7 +19,9 @@ the site build steps the publish tool now does itself.
   keyed on the picture's bytes and the settings that change the result,
   so a build shrinks only new or changed pictures. The site comes out
   byte for byte the same. The folder is added to the site's `.gitignore`
-  when it has one, and to the one a new site is made with.
+  when it has one, and to the one a new site is made with. Nothing is
+  ever removed from it but the leftovers of a stopped build; deleting the
+  folder is always safe (the next build shrinks everything once).
 - The update offers to retire four `player_site.after_build` steps the
   tool now does itself: `apply-overrides`, `add-tohit-calc`,
   `add-theme-toggle` and `optimize-images`. One choice per step, retire
