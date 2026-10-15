@@ -37,7 +37,7 @@ function site(banner, { files = {}, binary = {}, hide = null, dirs = [] } = {}) 
   writeNewConfig(vault, {
     version: 1,
     player_site: {
-      hide: { mode: 'full', ...(hide ? { folders: hide } : {}) },
+      ...(hide ? { hide: { folders: hide } } : {}),
       folder_map: { Characters: 'characters', Locations: 'locations', Hidden: 'hidden' },
       ...(banner === undefined ? {} : { landing: { banner } }),
     },

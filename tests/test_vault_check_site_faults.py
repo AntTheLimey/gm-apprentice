@@ -63,7 +63,7 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True,
         return vault, site_dir
     site_dir.mkdir()
     (vault / "_meta" / "vault-config.md").write_text(
-        "---\npublish:\n  mode: player\n  site: true\n"
+        "---\npublish:\n  site: true\n"
         + (f"  system: {system}\n" if system else "") +
         f"  site_dir: {site_dir.as_posix()}\n  folder_map:\n"
         "    Characters: characters\n---\n", encoding="utf-8")

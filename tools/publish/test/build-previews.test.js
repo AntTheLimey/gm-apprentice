@@ -33,7 +33,7 @@ function buildVault(files) {
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), root };
 }
 
-const CONFIG = (extra) => `---\npublish:\n  mode: full\n${extra}  folder_map:\n    Characters/NPCs: characters/npcs\n    Locations: locations\n---\n`;
+const CONFIG = (extra) => `---\npublish:\n${extra}  folder_map:\n    Characters/NPCs: characters/npcs\n    Locations: locations\n---\n`;
 const FILES = (extra) => ({
   '_meta/vault-config.md': CONFIG(extra),
   'Characters/NPCs/Hallam.md': '---\ntype: npc\noccupation: Warden\nsecrets: "the killer"\n---\n# Hallam\n\nKeeper of the gate.\n\n## GM Notes\n\nHe did it.\n',
@@ -109,7 +109,7 @@ test('a build with previews off after one with them on keeps nothing from the fi
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-// The fixture vaults, each built as a full-mode site. A fixture that cannot build is listed
+// The fixture vaults, each built as a site. A fixture that cannot build is listed
 // here by name with a reason (none today: every one builds).
 const UNBUILDABLE = {};
 

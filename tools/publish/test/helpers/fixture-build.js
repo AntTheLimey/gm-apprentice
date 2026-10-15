@@ -1,7 +1,7 @@
 'use strict';
-// Builds a fixture vault as a full-mode site, the way the previews proofs need: a temp copy
-// of the vault, every folder holding notes mapped, and publish.mode: full so every page
-// publishes. Shared by the build test, the byte-identity proof and Task 7's proof script.
+// Builds a fixture vault as a site, the way the previews proofs need: a temp copy
+// of the vault, every folder holding notes mapped, and every page
+// that the prep rules allow. Shared by the build test, the byte-identity proof and Task 7's proof script.
 const fs = require('fs');
 const path = require('path');
 const { setOldSettings } = require('./settings-files');
@@ -31,7 +31,7 @@ function folderMapFor(vault) {
 function prepareFixture(name, root, { keys = {} } = {}) {
   const vault = path.join(root, 'vault');
   fs.cpSync(path.join(FIXTURES, name), vault, { recursive: true });
-  setOldSettings(vault, { 'player_site.hide.mode': 'full', ...keys });
+  setOldSettings(vault, { ...keys });
   const configPath = path.join(root, 'config.json');
   fs.writeFileSync(configPath, JSON.stringify({
     vaultPath: vault, outputDir: path.join(root, 'docs'), attachmentsDir: '_attachments', siteTitle: 'T',

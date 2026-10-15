@@ -20,7 +20,7 @@ function buildVault(files) {
   return { read: (...p) => fs.readFileSync(path.join(root, 'docs', ...p), 'utf8'), root };
 }
 
-const CONFIG = '---\npublish:\n  mode: full\n  folder_map:\n    Characters/PCs: characters/pcs\n    Events: events\n    Sessions: sessions\n---\n';
+const CONFIG = '---\npublish:\n  folder_map:\n    Characters/PCs: characters/pcs\n    Events: events\n    Sessions: sessions\n---\n';
 
 function event(date, participants) {
   const list = participants.length ? '\n' + participants.map(p => `  - "${p}"`).join('\n') : ' []';

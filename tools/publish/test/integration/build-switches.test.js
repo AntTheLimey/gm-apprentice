@@ -15,7 +15,7 @@ function buildSite({ publish = '', siteExtra = {}, wrangler = false, functions =
   fs.cpSync(FIXTURE, vault, { recursive: true });
   if (pcAppend) fs.appendFileSync(path.join(vault, 'Characters', 'PCs', 'Karl Brenner.md'), pcAppend);
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: player\n  system: gurps-4e\n  folder_map:\n    Characters/PCs: characters/pcs\n${publish}---\n`);
+    `---\npublish:\n  system: gurps-4e\n  folder_map:\n    Characters/PCs: characters/pcs\n${publish}---\n`);
   if (wrangler) fs.writeFileSync(path.join(root, 'wrangler.toml'), KV_TOML);
   if (functions) {
     fs.mkdirSync(path.join(root, 'functions', 'api'), { recursive: true });

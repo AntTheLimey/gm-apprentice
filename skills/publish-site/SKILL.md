@@ -58,7 +58,7 @@ node "$TOOL" --help
 yourself, so a site never ships missing a played session (#277). It
 ticks a reviewed session index only together with a linked Wrap-Up
 that will publish, so the site withholds the hub body. It skips
-Excluded entries and does nothing without a publish list in player mode.
+Excluded entries and does nothing without a publish list.
 Report the paths it ticked. Every other played session is listed as
 "unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
 that is Excluded or won't publish, or a stale site pin). Ask the GM
@@ -181,16 +181,14 @@ site before pushing.
 see", "publish without spoilers")
 
 Read `references/content-filtering.md` § Content Visibility Model
-and § Publish List. In `player` mode a file publishes only when it is
-under `publishing`; `excluded` and `needs_decision` never publish it;
-`full` mode ignores the publish list.
+and § Publish List. A file publishes only when it is under
+`publishing`; `excluded` and `needs_decision` never publish it. The GM
+site (`gm_site.publish`) is the copy that shows everything.
 
 1. `node "$TOOL" settings get player_site.theme player_site.not_found
-   player_site.hide.mode --config <dir>/vault.config.json`. If every theme and
+   --config <dir>/vault.config.json`. If every theme and
    404 line says `(default)`, first follow
-   content-filtering.md § Setup Questioning Flow. If the mode is
-   `full`, stop and ask the GM to change it before building the
-   publish list.
+   content-filtering.md § Setup Questioning Flow.
 2. Categorize every vault file per the visibility model
    (`manifest diff`).
 3. Summarize, then walk the GM through ambiguous items, recording

@@ -36,12 +36,14 @@ test('an unknown name with no near neighbour warns and suggests nothing', () => 
   assert.equal(formatFault(f), 'publish.zebra is not a setting.');
 });
 
-test('a value a hiding setting cannot take stops, and the safe value is used', () => {
-  const r = read('  mode: players\n');
-  assert.equal(fault(r, 'publish.mode').level, 'stop');
-  assert.equal(r.values.player_site.hide.mode, 'player');
-  assert.equal(r.origins['player_site.hide.mode'], 'fault');
-  assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode is "players"; it takes player or full.');
+test('publish.mode is retired: a warning whatever it holds, never read', () => {
+  for (const written of ['players', 'full', 'player']) {
+    const r = read(`  mode: ${written}\n`);
+    assert.equal(fault(r, 'publish.mode').level, 'warn', written);
+    assert.equal(fault(r, 'publish.mode').kind, 'retired', written);
+    assert.equal(r.values.player_site.hide.mode, undefined, written);
+    assert.equal(formatFault(fault(r, 'publish.mode')), 'publish.mode is no longer used: the GM site is what `full` was; the update removes it, or moves a `full` vault to a GM site.', written);
+  }
 });
 
 test('a hiding list that is not a list stops and the built-in list is used', () => {
@@ -153,25 +155,25 @@ test('publish.overrides.exclude stops and says the only override is overrides.fi
   assert.equal(fault(read('  overrides:\n    feilds: {}\n'), 'publish.overrides.feilds').suggest, 'publish.overrides.fields');
 });
 
-test('a hiding setting written beside publish: stops, except mode and unrelated keys', () => {
+test('a hiding setting written beside publish: stops, except unrelated keys', () => {
   for (const [name, value] of [['exclude_sections', '[Secrets]'], ['exclude_drafts', 'true'], ['exclude_dirs', '[A]'], ['exclude_whatever', '1'], ['overrides', '{}']]) {
-    const r = read('  mode: player\n', undefined, `${name}: ${value}\n`);
+    const r = read('  site_title: T\n', undefined, `${name}: ${value}\n`);
     const f = fault(r, name);
     assert.equal(f.kind, 'misplaced', name);
     assert.equal(f.level, 'stop', name);
     assert.equal(stops(r.faults).length, 1, name);
   }
-  const f = fault(read('  mode: player\n', undefined, 'exclude_sections: [A]\n'), 'exclude_sections');
+  const f = fault(read('  site_title: T\n', undefined, 'exclude_sections: [A]\n'), 'exclude_sections');
   assert.equal(formatFault(f), 'exclude_sections is written beside publish:; it belongs under it, as publish.exclude_sections.');
-  assert.match(formatFault(fault(read('  mode: player\n', undefined, 'exclude_whatever: 1\n'), 'exclude_whatever')), /no setting has that name/);
+  assert.match(formatFault(fault(read('  site_title: T\n', undefined, 'exclude_whatever: 1\n'), 'exclude_whatever')), /no setting has that name/);
   for (const ok of ['mode: full', 'hide_things: 1', 'system: coc', 'setting_year: 1920', 'sections: x']) {
-    assert.deepEqual(stops(read('  mode: player\n', undefined, `${ok}\n`).faults), [], ok);
+    assert.deepEqual(stops(read('  site_title: T\n', undefined, `${ok}\n`).faults), [], ok);
   }
   // A setting the old file holds, and the notes it keeps beside its settings, say nothing; any other top-level name is a warning (#375).
   for (const ok of ['setting_year: 1920', 'game_system: coc', 'description: x', 'session_naming: x']) {
-    assert.deepEqual(read('  mode: player\n', undefined, `${ok}\n`).faults, [], ok);
+    assert.deepEqual(read('  site_title: T\n', undefined, `${ok}\n`).faults, [], ok);
   }
-  const stray = fault(read('  mode: player\n', undefined, 'total_sessions: 4\n'), 'total_sessions');
+  const stray = fault(read('  site_title: T\n', undefined, 'total_sessions: 4\n'), 'total_sessions');
   assert.equal(stray.level, 'warn');
   assert.equal(stray.kind, 'unknown-name');
 });
@@ -182,15 +184,12 @@ test('hide does not suggest mode', () => {
   assert.equal(f.suggest, null);
 });
 
-test('a short stray name near mode only warns; a near-miss of mode still stops', () => {
-  for (const name of ['notes', 'name', 'date']) {
-    assert.equal(fault(read(`  ${name}: x\n`), `publish.${name}`).level, 'warn', name);
-  }
-  // `more` is one letter from `mode`, so the nearest-name rule stops it.
-  for (const name of ['mod', 'mode_', 'more']) {
-    const f = fault(read(`  ${name}: full\n`), `publish.${name}`);
-    assert.equal(f.level, 'stop', name);
-    assert.equal(f.suggest, 'publish.mode', name);
+test('a short stray name only warns; a name near a hiding setting still stops', () => {
+  // `mode` is retired, so a name near it points at nothing and only warns.
+  for (const name of ['notes', 'name', 'date', 'mod', 'mode_', 'more']) {
+    const f = fault(read(`  ${name}: x\n`), `publish.${name}`);
+    assert.equal(f.level, 'warn', name);
+    assert.notEqual(f.suggest, 'publish.mode', name);
   }
   for (const name of ['exclude_sectoins', 'overide', 'hide_sections']) {
     assert.equal(fault(read(`  ${name}: [A]\n`), `publish.${name}`).level, 'stop', name);

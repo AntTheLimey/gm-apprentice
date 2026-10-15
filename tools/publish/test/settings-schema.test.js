@@ -135,7 +135,7 @@ function sampleFor(e) {
 
 function everySettingFile() {
   const tree = { version: 1 };
-  for (const e of REGISTRY.filter((x) => !x.legacyOnly && !x.container && !REGISTRY.some((o) => o.name.startsWith(`${x.name}.`)))) {
+  for (const e of REGISTRY.filter((x) => !x.legacyOnly && !x.retired && !x.container && !REGISTRY.some((o) => o.name.startsWith(`${x.name}.`)))) {
     const segs = e.name.split('.');
     let cur = tree;
     for (const s of segs.slice(0, -1)) cur = cur[s] || (cur[s] = {});
@@ -179,7 +179,7 @@ test('the first YAML example on the format page validates and reads without a fa
 });
 
 test('a file that writes a choice as Tree and a switch as Yes validates and reads as the reader does', () => {
-  const text = 'version: 1\nplayer_site:\n  features:\n    connections: " Tree "\n    search: Yes\n  hide:\n    mode: Full\n';
+  const text = 'version: 1\nplayer_site:\n  features:\n    connections: " Tree "\n    search: Yes\n  hide:\n    drafts: Yes\n';
   assert.deepEqual(check(schema(), parse(text)), []);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-'));
   const vault = path.join(root, 'Vault');

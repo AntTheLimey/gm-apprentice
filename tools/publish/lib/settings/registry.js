@@ -11,7 +11,7 @@
 // is not read, carryOnly: true when the reader neither reads nor reports it and only the move carries it, shows: the plain words for what that value changes on the site, told when the move carries it }; the first 'vault' one is where the old file holds it), legacyKind (scalar, list or
 // map: the setting is also a key of the site file, named by its 'site' was), legacyMerge (how the
 // two old files combine: union, stricter or perKey), legacyOnly (exists only in the old file; its
-// name stays the old one), retired, state, container (a parent that holds only other settings),
+// name stays the old one), retired (read by nothing: a vault that writes it is warned; `retiredSays` finishes the sentence "<name> ..."), state, container (a parent that holds only other settings),
 // keepOnFault (an unreadable value is kept as written), keys (the only keys a map may hold),
 // onWhenSet (the switch is on when the setting this names holds text), defaultFromVaultFolder (unset, the
 // value is the vault folder's name), settable, group, does, left_out, same (how the build decides two entries of a list are one:
@@ -253,9 +253,8 @@ const REGISTRY = [
 
   // What gets published
   {
-    name: 'player_site.hide.mode', was: [{ name: 'publish.mode', in: 'vault' }], type: 'choice', values: ['player', 'full'], default: 'player', guards: true, onFault: 'player', group: 'published',
-    does: '`player` leaves out any note still marked as prep (a planned session, a draft or outline, a scene that was cut) and, when the vault has a publish list, publishes only the notes on it. `full` publishes those too, for a private copy of your own',
-    left_out: '`player`',
+    name: 'player_site.hide.mode', was: [{ name: 'publish.mode', in: 'vault' }], type: 'any', retired: true, group: 'published',
+    retiredSays: 'is no longer used: the GM site is what `full` was; the update removes it, or moves a `full` vault to a GM site',
   },
   {
     name: 'player_site.folder_map', was: [{ name: 'publish.folder_map', in: 'vault' }, { name: 'folderMap', in: 'site' }], type: 'map', open: true, default: {}, legacyKind: 'map', group: 'published',
@@ -639,7 +638,7 @@ const REGISTRY = [
 // the GM site never has. The hide.* settings are here too: what players see has one source, so a mark always means
 // "hidden from players".
 const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'player_site.url', 'player_site.host',
-  'player_site.output', 'player_site.cloudflare_project', 'player_site.keep', 'player_site.hide.mode',
+  'player_site.output', 'player_site.cloudflare_project', 'player_site.keep',
   'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
   'player_site.hide.drafts', 'player_site.hide.field_exceptions',
   'player_site.features.live_stats', 'player_site.features.inbox']);

@@ -110,8 +110,9 @@ const warnAllowed = (id) => WARNS.some((d) => d.ids.includes(id));
 // The setting a message is about: its first name. A name in the site's vault.config.json that
 // the new messages give bare (`backend.statusBar`) is spelt the way the old build did.
 const NAME = /(publish\.[A-Za-z_.]+|setting_year|vault\.config\.json [A-Za-z.]+|^(?:backend\.[A-Za-z]+|landingTagline))/;
+// `publish.mode` is retired: the new reader warns of it where the old build said nothing (Task C1).
 const namesOf = (messages) => new Set(messages.map((m) => (m.match(NAME) || [])[0]).filter(Boolean)
-  .map((n) => n.replace(/\.$/, '')).map((n) => (/^(backend\.|landingTagline)/.test(n) ? `vault.config.json ${n}` : n)));
+  .map((n) => n.replace(/\.$/, '')).filter((n) => n !== 'publish.mode').map((n) => (/^(backend\.|landingTagline)/.test(n) ? `vault.config.json ${n}` : n)));
 // What the old build printed from switches.notes and sheetLook.notes now comes through the
 // warn argument, so the old side counts those names too.
 const oldNames = (want) => {

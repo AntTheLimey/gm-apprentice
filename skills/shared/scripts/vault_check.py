@@ -1044,9 +1044,8 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     """WARNING rows for played sessions (and their Wrap-Ups) that the
     publish list does not list under Publishing (#277).
 
-    Silent unless the vault has a publish list and publishes in player
-    mode — the only mode where the list is an allowlist, matching
-    publish-decision.js. A file under Excluded is a decision, not an
+    Silent unless the vault has a publish list, which is an allowlist,
+    matching publish-decision.js. A file under Excluded is a decision, not an
     oversight, so it is not reported. The list is asked of the publish
     tool (`manifest list`); when it can't be asked, one row says so and
     promises nothing.
@@ -1058,15 +1057,6 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     reason. The Wrap-Up rows come from the same answer. When it can't be
     asked, the rows promise nothing about what happens next.
     """
-    # As the build reads it (the settings list's `player_site.hide.mode`): only
-    # `full`, in any case, is full; anything else is player mode and the
-    # list applies.
-    # Only the vault file's own `mode` counts here; a site file's old one does not.
-    own = settings(vault)
-    if (written_in_vault_file(own, "player_site.hide.mode")
-            and own.get("player_site.hide.mode") == "full"):
-        return []
-
     if not played or not any((vault / "_meta" / name).is_file()
                              for name in ("publish-list.yaml",
                                           "publish-manifest.md")):

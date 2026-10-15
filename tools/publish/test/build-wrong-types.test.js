@@ -7,19 +7,19 @@ const path = require('path');
 const { build } = require('../lib/build');
 const { TEXT_FIELDS, LIST_FIELDS, RECORD_LIST_FIELDS } = require('../lib/frontmatter-shape');
 
-// One note of every kind of page, each carrying `lines` in its frontmatter; built in `mode`.
+// One note of every kind of page, each carrying `lines` in its frontmatter; built as a site.
 // Returns what the build said and whether it finished.
 const KINDS = {
   npc: 'People', pc: 'Heroes', creature: 'Creatures', location: 'Places', faction: 'Factions', item: 'Items',
   event: 'Events', clue: 'Clues', document: 'Documents', heritage: 'Heritages', session: 'Sessions', chapter: 'Chapters',
 };
-function buildWith(lines, { mode = 'full', typed = true } = {}) {
+function buildWith(lines, { typed = true } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'wrong-types-'));
   const vault = path.join(root, 'vault');
   const folders = [...new Set(Object.values(KINDS))];
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: ${mode}\n  folder_map:\n${folders.map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('')}---\n`);
+    `---\npublish:\n  folder_map:\n${folders.map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('')}---\n`);
   for (const [type, folder] of Object.entries(KINDS)) {
     fs.mkdirSync(path.join(vault, folder), { recursive: true });
     for (const n of [1, 2]) {
@@ -57,15 +57,13 @@ const FIELDS = [...TEXT_FIELDS.filter((f) => f !== 'type'), ...Object.keys(LIST_
 
 describe('a frontmatter value of the wrong type does not stop the build', () => {
   for (const [name, write] of Object.entries(SHAPES)) {
-    for (const mode of ['full', 'player']) {
-      it(`${name} in every field read as text or as a list (${mode} mode)`, () => {
-        const v = buildWith(FIELDS.map(write).join('\n'), { mode });
-        try {
-          assert.strictEqual(v.thrown, null, v.thrown && v.thrown.stack);
-          assert.ok(v.read('people', 'npc-1.html').includes('Openword'));
-        } finally { v.cleanup(); }
-      });
-    }
+    it(`${name} in every field read as text or as a list`, () => {
+      const v = buildWith(FIELDS.map(write).join('\n'));
+      try {
+        assert.strictEqual(v.thrown, null, v.thrown && v.thrown.stack);
+        assert.ok(v.read('people', 'npc-1.html').includes('Openword'));
+      } finally { v.cleanup(); }
+    });
     it(`${name} in type:`, () => {
       const v = buildWith(write('type'), { typed: false });
       try { assert.strictEqual(v.thrown, null, v.thrown && v.thrown.stack); } finally { v.cleanup(); }
@@ -97,13 +95,13 @@ describe('a frontmatter value of the wrong type does not stop the build', () => 
 
   it('a one-item list in status, or a list inside one, keeps a planned note off a player site, as the plain value does', () => {
     for (const lines of ['status: planned', 'status:\n  - planned', 'status: [[planned]]', 'status:\n  - [planned]']) {
-      const v = buildWith(lines, { mode: 'player' });
+      const v = buildWith(lines);
       try {
         assert.strictEqual(v.thrown, null);
         assert.throws(() => v.read('people', 'npc-1.html'), /ENOENT/, lines);
       } finally { v.cleanup(); }
     }
-    const open = buildWith('status: alive', { mode: 'player' });
+    const open = buildWith('status: alive');
     try { assert.ok(open.read('people', 'npc-1.html').includes('Openword')); } finally { open.cleanup(); }
   });
 });

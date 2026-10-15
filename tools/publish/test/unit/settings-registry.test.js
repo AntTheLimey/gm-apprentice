@@ -84,7 +84,7 @@ test('the two settings the old file never had have no old name', () => {
 });
 
 test('the hiding side is marked', () => {
-  for (const n of ['player_site.hide.mode', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.folders', 'player_site.hide.callouts', 'player_site.hide.drafts', 'player_site.hide.field_exceptions']) {
+  for (const n of ['player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.folders', 'player_site.hide.callouts', 'player_site.hide.drafts', 'player_site.hide.field_exceptions']) {
     assert.equal(entry(n).guards, true, n);
   }
 });
@@ -104,7 +104,6 @@ test('a value that cannot be read falls back to the side that shows less', () =>
   // onFault when the entry says so, else its default.
   const fallback = (n) => { const e = entry(n); return e.onFault !== undefined ? e.onFault : e.default; };
   const expected = {
-    'player_site.hide.mode': 'player',
     'player_site.hide.callouts': true,
     'player_site.hide.drafts': true,
     'player_site.hide.sections': entry('player_site.hide.sections').default,

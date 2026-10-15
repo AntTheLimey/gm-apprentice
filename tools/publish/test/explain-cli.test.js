@@ -27,7 +27,7 @@ function makeVault() {
     '## Reconciliation Context', '', 'Carried forward.', '',
   ].join('\n'));
   write(vault, 'Sessions/Session_08.md', '---\ntype: session\nsession_number: 8\nstatus: prepped\n---\n\n## Prep\n\nAmbush.\n');
-  write(vault, '_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
+  write(vault, '_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
   return vault;
 }
 
@@ -176,7 +176,7 @@ describe('explain', () => {
     const vault = makeVault();
     write(vault, 'Sessions/Session_09.md', '---\ntype: session\nsession_number: 9\nstatus: reviewed\ndocuments:\n  wrap_up: "[[Session_09_Wrap_Up]]"\n---\n\n## Prep\n\nPrep only words.\n');
     write(vault, 'Sessions/Session_09_Wrap_Up.md', '---\ntype: session_wrap\nsession: "[[Session_09]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Narrative Recap\n\nThe recap as played.\n');
-    write(vault, '_meta/vault-config.md', '---\npublish:\n  mode: full\n---\n');
+    write(vault, '_meta/vault-config.md', '---\npublish:\n  site_title: T\n---\n');
     const c = capture();
     await runExplain({ configPath: siteFor(vault), target: 'Sessions/Session_09.md', shown: true, json: true }, c.deps);
     const { shown, bodyWithheld } = JSON.parse(c.out.join(''));
@@ -506,7 +506,7 @@ describe('explain on a session index that does not publish (#276)', () => {
 describe('explain reports the switches and the sheet-withheld sections (#285)', () => {
   function vaultWith(publishLines, siteExtra) {
     const vault = makeVault();
-    write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${publishLines}---\n`);
+    write(vault, '_meta/vault-config.md', `---\npublish:\n  site_title: T\n${publishLines}---\n`);
     write(vault, 'Sessions/Hero.md', [
       '---', 'type: pc', '---', '',
       '## Stat Sheet', '', 'ST 12', '',
@@ -656,7 +656,7 @@ describe('explain --all (#276)', () => {
     let lastRetiredWarnings = [];
     async function retiredFor(system, fm) {
       const vault = makeVault();
-      write(vault, '_meta/vault-config.md', `---\npublish:\n  mode: player\n${system ? `  system: ${system}\n` : ''}---\n`);
+      write(vault, '_meta/vault-config.md', `---\npublish:\n  site_title: T\n${system ? `  system: ${system}\n` : ''}---\n`);
       write(vault, 'Sessions/Pc.md', `---\ntype: pc\noccupation: Sailor\n${fm}---\n\nA sailor.\n`);
       write(vault, 'Sessions/Npc.md', '---\ntype: npc\nskills: [x]\n---\n\nA clerk.\n');
       const { rc, json, warnings } = await all(siteFor(vault));

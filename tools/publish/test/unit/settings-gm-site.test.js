@@ -31,13 +31,13 @@ test('every per-site player setting has a twin under gm_site, and only those', (
     const twin = entry(e.name.replace(/^player_site\./, 'gm_site.'));
     // The GM site has its own switch and folder, which are not twins; the rest of the shared ones have nothing.
     if (e.name === 'player_site.publish' || e.name === 'player_site.folder') assert.equal(twin.twinOf, undefined, e.name);
-    else if (NOT_PER_SITE.has(e.name) || e.legacyOnly) assert.equal(twin, undefined, e.name);
+    else if (NOT_PER_SITE.has(e.name) || e.legacyOnly || e.retired) assert.equal(twin, undefined, e.name);
     else assert.equal(twin && twin.twinOf, e.name, e.name);
   }
   assert.equal(entry('gm_site.title').guards, undefined);
   assert.equal(entry('gm_site.title').default, undefined);
   // What players see has one source: none of the hide settings is per-site.
-  for (const k of ['folders', 'sections', 'fields', 'callouts', 'drafts', 'field_exceptions', 'mode']) {
+  for (const k of ['folders', 'sections', 'fields', 'callouts', 'drafts', 'field_exceptions']) {
     assert.ok(NOT_PER_SITE.has(`player_site.hide.${k}`), k);
     assert.equal(entry(`gm_site.hide.${k}`), undefined, k);
   }

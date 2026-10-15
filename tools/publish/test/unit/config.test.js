@@ -9,10 +9,6 @@ const { resolve } = require('../../lib/settings');
 const defaultOf = (name) => resolve(`publish.${name}`).entry.default;
 
 describe('the built-in defaults', () => {
-  it('has player mode by default', () => {
-    assert.strictEqual(defaultOf('mode'), 'player');
-  });
-
   it('excludes GM Notes sections by default', () => {
     assert.ok(defaultOf('exclude_sections').includes('GM Notes'));
   });
@@ -112,7 +108,7 @@ describe('loadPublishConfig', () => {
     fs.mkdirSync(metaDir);
     fs.writeFileSync(path.join(metaDir, 'vault-config.md'), '---\ntitle: Test\n---\nSome config');
     const result = loadPublishConfig(tmpDir);
-    assert.strictEqual(result.mode, 'player');
+    assert.strictEqual(result.mode, undefined);
     assert.deepStrictEqual(result.exclude_fields, ['secrets', 'current_plan', 'plan_progress', 'gm_notes', 'prep_notes', 'reliability']);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -124,7 +120,6 @@ describe('loadPublishConfig', () => {
     const yaml = [
       '---',
       'publish:',
-      '  mode: full',
       '  exclude_fields:',
       '    - secrets',
       '  theme:',
@@ -135,7 +130,6 @@ describe('loadPublishConfig', () => {
     ].join('\n');
     fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
     const result = loadPublishConfig(tmpDir);
-    assert.strictEqual(result.mode, 'full');
     assert.deepStrictEqual(result.exclude_fields, ['secrets']);
     assert.strictEqual(result.theme.genre, 'noir');
     assert.strictEqual(result.theme.palette.primary, '#111');
@@ -145,7 +139,7 @@ describe('loadPublishConfig', () => {
   it('returns defaults when vault-config.md does not exist', () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'config-test-'));
     const result = loadPublishConfig(tmpDir);
-    assert.strictEqual(result.mode, 'player');
+    assert.strictEqual(result.mode, undefined);
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 

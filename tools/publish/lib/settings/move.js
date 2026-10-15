@@ -28,6 +28,8 @@ const { parseNote } = require('../frontmatter');
 const { Scalar, Pair, YAMLMap, isScalar, isMap: isYMap, isNode } = YAML;
 // (A twin under gm_site is not in any old file; the move never writes or compares one.)
 const LEAVES = REGISTRY.filter((e) => isLeaf(e, REGISTRY) && !e.twinOf);
+// The retired names the move carries to the new file as written (a name with an old spelling: the update still has work to do on it).
+const RETIRED_CARRIED = REGISTRY.filter((e) => e.retired && !e.legacyOnly && legacyNameOf(e));
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 const FILLABLE = ['vault.campaign', 'vault.system'];
 const COMMENTS_HEADING = 'Comments from the old settings file';
@@ -671,6 +673,12 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     if (keysHeld && e.siteFallback && old.origins[e.name] === 'site-file') continue;   // stays in the site file
     toWrite.push({ e, value: getPath(old.values, e.name.split('.')) });
   }
+  // A retired name the old file holds is carried as written, not dropped: the update's own step reads it (a `full` vault
+  // becomes a GM site) and removes it after.
+  for (const e of RETIRED_CARRIED) {
+    const held = getPath(data, legacyNameOf(e).split('.'));
+    if (held !== undefined && held !== null) toWrite.push({ e, value: held });
+  }
 
   // The new file.
   const newDoc = new YAML.Document();
@@ -695,7 +703,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
     const last = segs[segs.length - 1];
     const key = new Scalar(last);
     let valueNode = null;
-    const where = !isPlanned && old.origins[e.name] === 'file' && legacyNameOf(e) ? pairAt(doc, legacyNameOf(e).split('.')) : null;
+    const where = !isPlanned && (old.origins[e.name] === 'file' || e.retired) && legacyNameOf(e) ? pairAt(doc, legacyNameOf(e).split('.')) : null;
     if (where && where.pair.value && isNode(where.pair.value) && isDeepStrictEqual(plainOf(where.pair.value, doc), value)) {
       valueNode = where.pair.value.clone();
       const above = commentAbove(where);
@@ -771,7 +779,7 @@ function planMoveNow({ vaultPath, siteConfigPath = null, fill = {}, discardOld =
   // What the old file said about names: carried, dropped, empty.
   for (const f of oldPc.faults) {
     const e = f.setting ? BY_NAME.get(f.setting) : null;
-    if (f.kind === 'retired') lines.push(`\`${f.name}: ${showValue(f.value)}\` is no longer used and was not carried over.`);
+    if (f.kind === 'retired' && !RETIRED_CARRIED.some((e) => legacyNameOf(e) === f.name)) lines.push(`\`${f.name}: ${showValue(f.value)}\` is no longer used and was not carried over.`);
     if (f.kind === 'old-name' && e) {
       const w = (e.was || []).find((x) => x.name === f.name);
       if (!w || w.read === false) continue;

@@ -56,7 +56,6 @@ player_site:
   folder: ../long-night-site
   title: The Long Night
   hide:
-    mode: player
     drafts: true
   features:
     search: true
@@ -182,7 +181,7 @@ way to read the result.
 
 The output is one JSON object:
 
-- `values` holds every setting by its full name (`player_site.hide.mode`),
+- `values` holds every setting by its full name (`player_site.title`),
   not nested.
 - `origins` holds, under the same names, where each value came from:
   `default`, `file`, `site-file`, `old-name` or `fault`. `fault` means the

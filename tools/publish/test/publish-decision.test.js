@@ -106,11 +106,6 @@ describe('publish-decision: one case per code', () => {
     assert.strictEqual(v.code, 'PUBLISH_NONE');
   });
 
-  it('publish: false wins in full mode too', () => {
-    const v = decide({ type: 'npc', publish: false }, { publishConfig: { mode: 'full' } });
-    assert.strictEqual(v.code, 'PUBLISH_FALSE');
-  });
-
   it('AUTO_EXCLUDED_STATUS for status: planned', () => {
     const v = decide({ type: 'session', status: 'planned' });
     assert.strictEqual(v.bucket, 'exclude');
@@ -126,10 +121,12 @@ describe('publish-decision: one case per code', () => {
     assert.strictEqual(decide({ type: 'npc', source: 'prep' }).code, 'AUTO_EXCLUDED_SOURCE');
   });
 
-  it('does not auto-exclude in full mode', () => {
+  it('a leftover mode: full in the config changes nothing: the prep rules and the list apply', () => {
     const v = decide({ type: 'session', status: 'planned' }, { publishConfig: { mode: 'full' } });
-    assert.strictEqual(v.bucket, 'publish');
-    assert.strictEqual(v.reason, 'mode: full');
+    assert.strictEqual(v.bucket, 'exclude');
+    assert.strictEqual(v.code, 'AUTO_EXCLUDED_STATUS');
+    const unlisted = decide({ type: 'npc' }, { publishConfig: { mode: 'full' }, manifest: manifestOf({ publishing: ['Other.md'] }) });
+    assert.strictEqual(unlisted.code, 'MANIFEST_UNLISTED');
   });
 
   it('a manifest Publishing entry overrides an auto-exclusion', () => {
@@ -204,15 +201,6 @@ describe('publish-decision: one case per code', () => {
     assert.strictEqual(v.bucket, 'decide');
     assert.strictEqual(v.code, 'MANIFEST_UNLISTED');
     assert.strictEqual(publishesPage(v), false);
-  });
-
-  it('the manifest is not an allowlist in full mode', () => {
-    const v = decide({ type: 'npc' }, {
-      publishConfig: { mode: 'full' },
-      manifest: manifestOf({ excluded: ['Characters/NPCs/Someone.md'] }),
-    });
-    assert.strictEqual(v.bucket, 'publish');
-    assert.strictEqual(v.reason, 'mode: full');
   });
 
   it('OK carries the output path so callers can print the destination', () => {

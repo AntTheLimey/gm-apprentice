@@ -132,7 +132,8 @@ test('an inline publish map is noticed', () => {
   fs.writeFileSync(path.join(dir, '_meta', 'vault-config.md'), '---\npublish: {mode: full}\n---\n');
   const r = readSettings({ vaultPath: dir });
   assert.ok(r.file.exists && r.file.hasSiteBlock && r.file.inline && !r.file.leftover);
-  assert.equal(r.values.player_site.hide.mode, 'full');
+  assert.equal(r.values.player_site.hide.mode, undefined);
+  assert.equal(r.faults.find((f) => f.name === 'publish.mode').kind, 'retired');
 });
 
 test('an unknown system id warns and is kept as written', () => {
@@ -162,8 +163,8 @@ test('a key written with nothing after it is not set', () => {
   assert.equal(s.origins['player_site.hide.sections'], 'default');
   assert.deepEqual(s.faults, []);
   const m = readYaml('  mode:\n');
-  assert.equal(m.values.player_site.hide.mode, 'player');
-  assert.equal(m.origins['player_site.hide.mode'], 'default');
+  assert.equal(m.values.player_site.hide.mode, undefined);
+  assert.equal(m.origins['player_site.hide.mode'], undefined);
   assert.deepEqual(m.faults, []);
 });
 

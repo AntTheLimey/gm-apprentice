@@ -28,7 +28,7 @@ function site(files, extra = '') {
   }
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   const map = [...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
-  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n  mode: full\n${extra}  folder_map:\n${map}---\n`);
+  fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'), `---\npublish:\n${extra}  folder_map:\n${map}---\n`);
   const configPath = path.join(root, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
   return { root, vault, configPath };

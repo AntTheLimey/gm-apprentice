@@ -281,7 +281,6 @@ async function runApply(options, deps, survey) {
       entries,
       generated: now().toISOString(),
       vault: publishConfig.site_title || path.basename(vaultPath),
-      mode: publishConfig.mode,
       totalFiles: files.length,
     })
     : listText(listOf(entries)));
@@ -472,16 +471,15 @@ function planPublishPlayed(survey, { only = null, includeUnreviewed = false, pub
 // the skill asks the GM. `--session <index>` narrows the run to that one session and
 // `--include-unreviewed` (only with --session) lets it through before reconcile;
 // `--publish-body` (only with --session) registers an index no Wrap-Up pairs with, body and all. Files under Excluded
-// are a deliberate GM decision and are left alone. Only meaningful in player mode with a
-// manifest, the one place the manifest is an allowlist; elsewhere a no-op.
+// are a deliberate GM decision and are left alone. Needs a publish list; without one a no-op.
 async function runPublishPlayed(options, deps, survey) {
   const out = deps.out || console.log;
   const { publishConfig, manifest } = survey;
 
   const report = (payload, line) => out(options.json ? JSON.stringify(payload, null, 2) : line);
-  if (!manifest || publishConfig.mode !== 'player') {
-    report({ applicable: false, mode: publishConfig.mode, manifestExists: !!manifest, published: [] },
-      'manifest publish-played: nothing to do (needs a manifest and player mode)');
+  if (!manifest) {
+    report({ applicable: false, manifestExists: false, published: [] },
+      'manifest publish-played: nothing to do (needs a publish list)');
     return 0;
   }
 

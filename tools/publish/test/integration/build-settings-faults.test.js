@@ -24,7 +24,7 @@ test.after(() => roots.forEach((r) => fs.rmSync(r, { recursive: true, force: tru
 
 function writeVaultConfig(vault, yaml) {
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\ntype: meta\npublish:\n  mode: player\n  folder_map:\n    NPCs: npcs\n    Characters/PCs: characters/pcs\n${yaml}---\n`);
+    `---\ntype: meta\npublish:\n  folder_map:\n    NPCs: npcs\n    Characters/PCs: characters/pcs\n${yaml}---\n`);
 }
 
 function site(yaml, siteExtra = {}) {

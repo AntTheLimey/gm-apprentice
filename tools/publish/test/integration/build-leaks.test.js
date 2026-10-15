@@ -123,7 +123,7 @@ function buildVault(work) {
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.writeFileSync(full, body);
   };
-  write('_meta/vault-config.md', `---\npublish:\n  mode: full\n---\n`);
+  write('_meta/vault-config.md', `---\npublish:\n  exclude_drafts: false\n---\n`);
   write('Characters/NPCs/Vex.md', NPC);
   write('_Campaign/Overview.md', OVERVIEW);
   write('Locations/Keep.md', KEEP_CRLF);

@@ -142,7 +142,7 @@ const SECTIONS = [
 ];
 
 // The old file's text for an entries map (parseAnnotatedManifest's shape), in the documented layout.
-function renderManifest({ entries, generated, vault, mode, totalFiles }) {
+function renderManifest({ entries, generated, vault, totalFiles }) {
   const bySection = { publishing: [], excluded: [], needsDecision: [] };
   for (const [rel, entry] of entries) bySection[entry.section].push({ rel, annotation: entry.annotation });
   for (const key of Object.keys(bySection)) bySection[key].sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
@@ -151,7 +151,7 @@ function renderManifest({ entries, generated, vault, mode, totalFiles }) {
     '---',
     `generated: ${generated}`,
     `vault: ${JSON.stringify(vault)}`,
-    `mode: ${mode}`,
+    'mode: player',
     `total_files: ${totalFiles}`,
     `publishing: ${bySection.publishing.length}`,
     `excluded: ${bySection.excluded.length}`,

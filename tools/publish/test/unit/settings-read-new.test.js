@@ -223,7 +223,7 @@ test('both files present: the old one is not read, and one warning says it is le
   const r = readSettings({ vaultPath: v });
   assert.equal(r.file.leftover, true);
   assert.equal(r.values.player_site.title, 'New');
-  assert.equal(r.values.player_site.hide.mode, 'player');
+  assert.equal(r.values.player_site.hide.mode, undefined);
   const left = r.faults.filter((f) => f.level === 'warn' && /left over/.test(f.message));
   assert.equal(left.length, 1);
   assert.equal(left[0].message, '_meta/vault-config.md is left over from before the update and is not read');
@@ -287,10 +287,21 @@ test('types, lists as text, and maps with keys read as the old file read them', 
   assert.ok(fault(r, 'player_site.theme.fonts.sourcee'));
 });
 
+test('a retired name warns once, is not read, and never stops', () => {
+  for (const written of ['player', 'full', 'players']) {
+    const r = read(`player_site:\n  hide:\n    mode: ${written}\n`);
+    const f = fault(r, 'player_site.hide.mode');
+    assert.equal(f.level, 'warn', written);
+    assert.equal(f.kind, 'retired', written);
+    assert.match(f.message, /^player_site\.hide\.mode is no longer used: the GM site is what `full` was;/, written);
+    assert.equal(r.values.player_site.hide.mode, undefined, written);
+    assert.equal(r.faults.filter((x) => x.level === 'stop').length, 0, written);
+  }
+  assert.equal(fault(read('player_site:\n  title: T\n'), 'player_site.hide.mode'), undefined);
+});
+
 test('a hiding value that cannot be read stops and the safe value is used', () => {
-  const r = read('player_site:\n  hide:\n    mode: players\n    sections: GM Notes\n');
-  assert.equal(fault(r, 'player_site.hide.mode').level, 'stop');
-  assert.equal(r.values.player_site.hide.mode, 'player');
+  const r = read('player_site:\n  hide:\n    sections: GM Notes\n');
   assert.equal(fault(r, 'player_site.hide.sections').level, 'stop');
   assert.equal(fault(r, 'player_site.hide.sections').message.startsWith('player_site.hide.sections is "GM Notes"'), true);
 });

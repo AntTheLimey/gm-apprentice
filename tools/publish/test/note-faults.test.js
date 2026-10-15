@@ -14,7 +14,7 @@ after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: t
 // A site over a small player-mode vault. `files` maps vault paths to text; every note in
 // `publish` is listed under Publishing, every `excluded` entry ("path" or "path — reason")
 // under Excluded. Folders are mapped to themselves, lower-cased.
-function site(files, { publish = null, excluded = [], mode = 'player', extra = '' } = {}) {
+function site(files, { publish = null, excluded = [], extra = '' } = {}) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'note-faults-'));
   made.push(root);
   const vault = path.join(root, 'vault');
@@ -29,7 +29,7 @@ function site(files, { publish = null, excluded = [], mode = 'player', extra = '
   writePublishList(vault, { publishing: listed, excluded });
   const map = [...folders].filter((f) => !f.startsWith('Quiet')).map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
-    `---\npublish:\n  mode: ${mode}\n${extra}  exclude_dirs:\n    - Quiet\n  folder_map:\n${map}---\n`);
+    `---\npublish:\n${extra}  exclude_dirs:\n    - Quiet\n  folder_map:\n${map}---\n`);
   const configPath = path.join(root, 'vault.config.json');
   fs.writeFileSync(configPath, JSON.stringify({ vaultPath: vault, outputDir: './docs', attachmentsDir: '_attachments', siteTitle: 'T', excludeDirs: ['_meta', '_Templates'] }));
   return { root, vault, configPath };

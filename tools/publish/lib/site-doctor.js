@@ -489,41 +489,37 @@ async function runSiteDoctor(options, deps) {
         ));
       }
     }
-    if (publishConfig.mode === 'player') {
-      const registered = new Set([...manifest.publishing, ...(manifest.excluded || []), ...(manifest.needsDecision || [])]);
-      for (const page of corpus) {
-        const type = page.frontmatter && page.frontmatter.type;
-        if (!REGISTRABLE_TYPES.has(type)) continue;
-        const rel = relOf(page);
-        if (registered.has(rel)) continue;
-        findings.push(finding(
-          'MANIFEST_UNREGISTERED', 'warning', rel,
-          `is a ${type} that is not on the publish list, so it will not publish`,
-          'run `gm-publish manifest diff`',
-        ));
-      }
+    const registered = new Set([...manifest.publishing, ...(manifest.excluded || []), ...(manifest.needsDecision || [])]);
+    for (const page of corpus) {
+      const type = page.frontmatter && page.frontmatter.type;
+      if (!REGISTRABLE_TYPES.has(type)) continue;
+      const rel = relOf(page);
+      if (registered.has(rel)) continue;
+      findings.push(finding(
+        'MANIFEST_UNREGISTERED', 'warning', rel,
+        `is a ${type} that is not on the publish list, so it will not publish`,
+        'run `gm-publish manifest diff`',
+      ));
     }
   }
 
   // --- the recap chain a player follows -----------------------------------
-  if (publishConfig.mode === 'player') {
-    const typeOf = (page) => page.frontmatter && page.frontmatter.type;
-    const wraps = published.filter((p) => typeOf(p) === 'session_wrap');
-    const playedSessions = published.filter((p) => typeOf(p) === 'session'
-      && ['played', 'reviewed'].includes(String((p.frontmatter && p.frontmatter.status) || '').toLowerCase()));
-    const chapters = published.filter((p) => typeOf(p) === 'chapter');
-    if (wraps.length > 0 && (playedSessions.length === 0 || chapters.length === 0)) {
-      const missing = [
-        playedSessions.length === 0 ? 'no published session with status played/reviewed' : null,
-        chapters.length === 0 ? 'no published chapter page' : null,
-      ].filter(Boolean).join(' and ');
-      for (const wrap of wraps) {
-        findings.push(finding(
-          'RECAP_INCOMPLETE', 'warning', relOf(wrap),
-          `is published but there is ${missing} — readers land on a recap with nothing around it`,
-          'publish the session index and chapter page',
-        ));
-      }
+  const typeOf = (page) => page.frontmatter && page.frontmatter.type;
+  const wraps = published.filter((p) => typeOf(p) === 'session_wrap');
+  const playedSessions = published.filter((p) => typeOf(p) === 'session'
+    && ['played', 'reviewed'].includes(String((p.frontmatter && p.frontmatter.status) || '').toLowerCase()));
+  const chapters = published.filter((p) => typeOf(p) === 'chapter');
+  if (wraps.length > 0 && (playedSessions.length === 0 || chapters.length === 0)) {
+    const missing = [
+      playedSessions.length === 0 ? 'no published session with status played/reviewed' : null,
+      chapters.length === 0 ? 'no published chapter page' : null,
+    ].filter(Boolean).join(' and ');
+    for (const wrap of wraps) {
+      findings.push(finding(
+        'RECAP_INCOMPLETE', 'warning', relOf(wrap),
+        `is published but there is ${missing} — readers land on a recap with nothing around it`,
+        'publish the session index and chapter page',
+      ));
     }
   }
 

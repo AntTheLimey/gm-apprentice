@@ -58,12 +58,12 @@ test('no default list is restated', () => {
   }
 });
 
-// A fallback typed beside a setting (`attachmentsDir || '_attachments'`, `mode || 'player'`) is the
+// A fallback typed beside a setting (`attachmentsDir || '_attachments'`, `theme || 'plain'`) is the
 // default written a second time. The scan looks for `||` or `??` followed by any quoted text
 // default or fallback word in the list.
 test('no default is written as a fallback', () => {
   const words = new Set(REGISTRY.flatMap((e) => [e.default, e.fallback]).filter((d) => typeof d === 'string' && d.length >= 4));
-  assert.ok(words.has('_attachments') && words.has('player') && words.has('plain'), 'the words to look for are missing');
+  assert.ok(words.has('_attachments') && words.has('plain'), 'the words to look for are missing');
   const found = [];
   for (const f of sources) {
     for (const m of code(f).matchAll(/(?:\|\||\?\?)\s*['"`]([^'"`]+)['"`]/g)) {

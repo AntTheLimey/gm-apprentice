@@ -217,7 +217,7 @@ excluded versus missing is the GM's call.
                      or not publishing, or a site pinned to a tool too old
                      to withhold the body) and not ticked: that is the GM's
                      call (manifest apply). Leaves Excluded entries alone.
-                     Player mode with a manifest only; otherwise does
+                     Needs a publish list; without one it does
                      nothing. --session <index> (vault-relative) handles
                      just that session; --include-unreviewed (only with
                      --session) ticks it before reconcile, as session-wrapup's
@@ -673,7 +673,7 @@ if (command === 'build') {
   }
   const sites = siteFlag ? [siteFlag] : (off && gmOn ? ['gm'] : (gmOn ? ['player', 'gm'] : ['player']));
   if (sites.includes('player') && off) {
-    console.error(`Build failed: ${off}`);
+    console.error(`Build failed: ${off}${gmOn ? ' The GM site is on: build it with --site gm, or leave out --site.' : ''}`);
     process.exit(1);
   }
 

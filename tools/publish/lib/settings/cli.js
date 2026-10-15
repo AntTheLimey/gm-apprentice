@@ -117,7 +117,9 @@ function gmOrigin(read, name) {
 function get(options, names) {
   const { vaultPath, siteConfig } = target(options);
   const leaves = LEAVES();
-  for (const name of names) if (!leaves.some((e) => reaches(e, name))) throw new Error(notASetting(name));
+  // A retired name can still be asked for by its name: it answers what the file holds (the update reads it to decide).
+  const retiredAsked = names.map((n) => resolve(n)).filter((r) => r && r.entry.retired && !r.entry.legacyOnly).map((r) => r.entry);
+  for (const name of names) if (!leaves.some((e) => reaches(e, name)) && !retiredAsked.some((e) => e.name === (resolve(name) || {}).entry?.name)) throw new Error(notASetting(name));
   const read = readSettings({ vaultPath, siteConfig });
   // --site gm: the values the GM site builds with, and for each whether the GM wrote it for that site or it is the player site's.
   const gmSite = options.site === 'gm';
@@ -126,6 +128,17 @@ function get(options, names) {
   const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves.filter((e) => !e.twinOf);
   const now = {};
   for (const e of shown) now[e.name] = { value: getPath(view.values, e.name.split('.')) ?? null, origin: gmSite ? gmOrigin(read, e.name) : read.origins[e.name] };
+  if (retiredAsked.length) {
+    const data = rawData(vaultPath);
+    const where = (e) => (read.layout === 'new' ? e.name : legacyNameOf(e)).split('.');
+    // (Listed in the order asked, after the live settings.)
+    for (const name of names) {
+      const e = (resolve(name) || {}).entry;
+      if (!e || !retiredAsked.includes(e)) continue;
+      const held = getPath(data, where(e));
+      now[e.name] = { value: held === undefined ? null : held, origin: held === undefined || held === null ? 'default' : 'file' };
+    }
+  }
   const asked = (f) => !names.length || names.some((name) => inScope(f.name, name) || inScope(f.use || '', name) || inScope(f.suggest || '', name) || inScope(f.setting || '', name));
   const faults = sortedFaults(read.faults.filter(asked));
   const result = {

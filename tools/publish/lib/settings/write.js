@@ -507,9 +507,10 @@ function prepare(changes, layout, { allowState = false, siteDir = null } = {}) {
     // Only the set-up note command passes allowState, for the one state entry the old file holds.
     const state = allowState && e.state && e.legacyOnly;
     if (!state && (e.state || e.settable === false)) { refusals.push(`${name} is kept by the tool and cannot be set here.`); continue; }
-    if (e.retired) { refusals.push(`${name} is no longer used and cannot be set.`); continue; }
+    // A retired name can only be taken out (the update does it): nothing reads it, so nothing may be set to it.
+    if (e.retired && change.op !== 'unset') { refusals.push(`${name} is no longer used and cannot be set.`); continue; }
     if (!state && (e.container || e.legacyOnly)) { refusals.push(`${name} only holds other settings and cannot be set.`); continue; }
-    if (!state && !isLeaf(e, REGISTRY) && !e.open) {
+    if (!state && !e.retired && !isLeaf(e, REGISTRY) && !e.open) {
       const child = REGISTRY.find((x) => x.name.startsWith(`${name}.`) && isLeaf(x, REGISTRY));
       refusals.push(change.op === 'unset' ? `${name} holds other settings; unset each setting in it.` : `${name} holds other settings; set the setting itself, for example ${child && child.name}.`);
       continue;

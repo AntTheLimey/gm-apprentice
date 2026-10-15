@@ -828,42 +828,6 @@ describe('build integration', () => {
       assert.ok(!lines.some(l => l.includes('Session 09') && l.includes('not on the publish list')));
     });
 
-    it('does NOT warn about an unregistered session in full/GM mode (manifest not enforced)', () => {
-      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-full-'));
-      const vault = path.join(tmp, 'vault');
-      fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
-      // Flip the vault to full mode, where the manifest is loaded but NOT enforced as an allowlist,
-      // so an unregistered session still publishes — the "will NOT publish" warning would lie.
-      const vcPath = path.join(vault, '_meta', 'vault-config.md');
-      fs.writeFileSync(vcPath, fs.readFileSync(vcPath, 'utf-8').replace('mode: player', 'mode: full'));
-      fs.writeFileSync(path.join(vault, 'Sessions', 'Unregistered Session.md'),
-        '---\ntype: session_wrap\nsession_number: 6\ncanon_status: AUTHORITATIVE\naliases: []\ntags: []\n---\n\n## Recap\n\nStill played.\n');
-
-      const configPath = path.join(tmp, 'config.json');
-      fs.writeFileSync(configPath, JSON.stringify({
-        vaultPath: vault,
-        outputDir: path.join(tmp, 'docs'),
-        attachmentsDir: '_attachments',
-        siteTitle: 'Full',
-        siteUrl: 'https://example.github.io/t',
-        excludeDirs: ['_meta', '_Templates'],
-        excludeSections: ['GM Notes'],
-        folderMap: { 'Characters/NPCs': 'characters/npcs', Locations: 'locations', Sessions: 'sessions' },
-      }, null, 2));
-
-      const warnings = [];
-      const realWarn = console.warn;
-      console.warn = (...args) => warnings.push(args.join(' '));
-      try {
-        build({ configPath });
-      } finally {
-        console.warn = realWarn;
-        fs.rmSync(tmp, { recursive: true, force: true });
-      }
-
-      assert.ok(!warnings.some(w => w.includes('not on the publish list')),
-        `full mode must not emit the unregistered-session warning, got: ${JSON.stringify(warnings)}`);
-    });
   });
 
   describe('with-manifest fixture', () => {
@@ -1115,7 +1079,7 @@ describe('build integration', () => {
     });
   });
 
-  describe('auto-exclude in full mode', () => {
+  describe('a vault that still says mode: full (retired) follows the prep rules', () => {
     let outputDir;
     let configPath;
 
@@ -1123,10 +1087,7 @@ describe('build integration', () => {
       outputDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-autoexclude-full-'));
       configPath = path.join(outputDir, 'config.json');
 
-      // Copy the fixture rather than writing a `mode: full` vault-config.md into it:
-      // node --test runs test FILES in parallel, so mutating a shared fixture — even
-      // with an after() that cleans it up — makes every other file that reads
-      // auto-exclude during the window see full mode instead of player mode.
+      // Copy the fixture rather than writing into it: node --test runs test FILES in parallel.
       const vaultDir = path.join(outputDir, 'vault');
       fs.cpSync(path.join(fixturesDir, 'auto-exclude'), vaultDir, { recursive: true });
       const metaDir = path.join(vaultDir, '_meta');
@@ -1155,19 +1116,19 @@ describe('build integration', () => {
       fs.rmSync(outputDir, { recursive: true, force: true });
     });
 
-    it('includes planned files in full mode', () => {
+    it('leaves out planned files', () => {
       const planned = path.join(outputDir, 'docs', 'sessions', 'planned-session.html');
-      assert.ok(fs.existsSync(planned));
+      assert.ok(!fs.existsSync(planned));
     });
 
-    it('includes draft files in full mode', () => {
+    it('leaves out draft files', () => {
       const draft = path.join(outputDir, 'docs', 'characters', 'npcs', 'draft-npc.html');
-      assert.ok(fs.existsSync(draft));
+      assert.ok(!fs.existsSync(draft));
     });
 
-    it('includes prep source files in full mode', () => {
+    it('leaves out prep source files', () => {
       const prep = path.join(outputDir, 'docs', 'characters', 'npcs', 'prep-source.html');
-      assert.ok(fs.existsSync(prep));
+      assert.ok(!fs.existsSync(prep));
     });
   });
 
