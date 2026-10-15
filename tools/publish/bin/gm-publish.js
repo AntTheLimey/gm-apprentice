@@ -168,7 +168,13 @@ and stops on a finding; these commands run it without deploying.
   leaks accept <page> <id-or-text>
                              Accept one finding: it is written to the publish
                              list and not asked about again while the page and
-                             the sentence stay the same
+                             the sentence stay the same (its copies in the
+                             site's data files, such as previews.json, too)
+  leaks accept --page <page> Accept every finding on one page (a handout the
+                             GM gave out on purpose)
+  leaks accept --note <note> Accept every finding from one note, on every page
+                             (each is still recorded as its page and sentence;
+                             accepting needs the site's tool at 1.30.0 or later)
   leaks prune                Remove accepted findings that are no longer needed
   --config <path>            Path to vault.config.json (default: ./vault.config.json)
   --json                     Print the result as JSON
@@ -989,14 +995,17 @@ if (command === 'leaks') {
   const rest = args.slice(2);
   const positional = [];
   if (verb === 'accept') { while (rest.length && !rest[0].startsWith('--')) positional.push(rest.shift()); }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json' });
-  if (parsed.error || (verb === 'accept' && positional.length !== 2)) {
-    console.error(`Error: ${parsed.error || 'leaks accept needs a page and the finding\'s id or sentence'}`);
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json' }, verb === 'accept' ? { '--page': 'page', '--note': 'note' } : {});
+  // accept takes one finding (a page and its id or sentence), or every finding on a page (--page), or from a note (--note).
+  const several = parsed.flags ? [parsed.flags.page, parsed.flags.note].filter(Boolean).length : 0;
+  const acceptForm = several === 1 ? positional.length === 0 : several === 0 && positional.length === 2;
+  if (parsed.error || (verb === 'accept' && !acceptForm)) {
+    console.error(`Error: ${parsed.error || 'leaks accept needs a page and the finding\'s id or sentence, or one of --page <page> or --note <note>'}`);
     printSubcommandHelp('leaks');
     process.exit(1);
   }
   const { runLeaks } = require('../lib/leaks-cli.js');
-  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1] })
+  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1], allOnPage: parsed.flags.page, note: parsed.flags.note })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;

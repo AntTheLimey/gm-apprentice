@@ -119,6 +119,73 @@ describe('leaks', () => {
     } finally { site.cleanup(); }
   });
 
+  it('accept --page takes every finding on that page, each recorded as its page and sentence', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      leakInto(site.outputDir, 'npcs/b.html', 'He keeps the vial in his oven.');
+      leakInto(site.outputDir, 'npcs/a.html', 'He keeps the vial in his oven.');
+      const r = await run(site, 'accept', { allOnPage: 'npcs/b.html' });
+      assert.equal(r.rc, 0, r.text);
+      assert.match(r.text, /Accepted 2 findings/);
+      const accepted = loadPublishList(vaultOf(site), { warn: () => {} }).accepted;
+      assert.deepEqual(accepted.map((a) => [a.page, a.text]).sort(), [
+        ['npcs/b.html', 'he keeps the vial in his oven'], ['npcs/b.html', 'the baker poisoned the mayor last winter']]);
+      const again = await run(site, 'check');
+      assert.equal(again.rc, 1);
+      assert.match(again.text, /\] npcs\/a\.html/);
+    } finally { site.cleanup(); }
+  });
+
+  it('accept --note takes every finding from that note, on every page', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      leakInto(site.outputDir, 'npcs/a.html', 'He keeps the vial in his oven.');
+      const r = await run(site, 'accept', { note: 'NPCs/A.md' });
+      assert.equal(r.rc, 0, r.text);
+      assert.equal(loadPublishList(vaultOf(site), { warn: () => {} }).accepted.length, 2);
+      assert.equal((await run(site, 'check')).rc, 0);
+      assert.equal((await run(site, 'accept', { note: 'NPCs/B.md' })).rc, 1, 'a note with no finding is refused');
+    } finally { site.cleanup(); }
+  });
+
+  it('one leak is listed once with every file it is in, and accepting it on its page covers the site\'s data files', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      fs.writeFileSync(path.join(site.outputDir, 'extra.json'), JSON.stringify({ x: 'The baker poisoned the mayor last winter.' }));
+      const listed = await run(site, 'list');
+      assert.equal((listed.text.match(/poisoned the mayor/g) || []).length, 1, listed.text);
+      assert.match(listed.text, /also in extra\.json/);
+      const id = JSON.parse((await run(site, 'list', { json: true })).out.join('')).findings.find((f) => f.page === 'npcs/b.html').id;
+      assert.equal((await run(site, 'accept', { page: 'npcs/b.html', text: id })).rc, 0);
+      assert.deepEqual(loadPublishList(vaultOf(site), { warn: () => {} }).accepted.map((a) => a.page).sort(), ['extra.json', 'npcs/b.html']);
+      assert.equal((await run(site, 'check')).rc, 0);
+    } finally { site.cleanup(); }
+  });
+
+  it('accept refuses while the site\'s installed publish tool is older than 1.30.0, and names the update', async () => {
+    const site = leakSite(NOTES, SETTINGS);
+    try {
+      const tool = path.join(path.dirname(site.configPath), 'node_modules', 'gm-apprentice-publish');
+      fs.mkdirSync(tool, { recursive: true });
+      fs.writeFileSync(path.join(tool, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.29.0' }));
+      leakInto(site.outputDir, 'npcs/b.html', 'The baker poisoned the mayor last winter.');
+      const before = fs.readFileSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml'), 'utf8');
+      for (const extra of [{ page: 'npcs/b.html', text: 'The baker poisoned the mayor last winter.' }, { allOnPage: 'npcs/b.html' }]) {
+        const r = await run(site, 'accept', extra);
+        assert.equal(r.rc, 1);
+        assert.match(r.text, /1\.29\.0/);
+        assert.match(r.text, /1\.30\.0/);
+        assert.match(r.text, /update-pin/);
+      }
+      assert.equal(fs.readFileSync(path.join(vaultOf(site), '_meta', 'publish-list.yaml'), 'utf8'), before);
+      fs.writeFileSync(path.join(tool, 'package.json'), JSON.stringify({ name: 'gm-apprentice-publish', version: '1.30.0' }));
+      assert.equal((await run(site, 'accept', { allOnPage: 'npcs/b.html' })).rc, 0);
+    } finally { site.cleanup(); }
+  });
+
   it('gateFolderFor follows the wrangler.toml output folder, else the output folder', () => {
     const site = leakSite(NOTES, SETTINGS);
     try {

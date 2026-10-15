@@ -53,11 +53,19 @@ function runLeakGate({ configPath, outputDir }) {
   return done({ findings, unneeded, files: files.length });
 }
 
-// The lines a person reads: one block per finding, the page, the sentence, where it came from and why it is hidden.
+// The lines a person reads: one block per leak (a sentence from one note), its first page, the sentence, the other files
+// it is in, where it came from and why it is hidden. A page comes before a data file (the previews, the search index).
 function formatFindings(result) {
   const lines = [];
-  for (const f of result.findings) {
+  const groups = new Map();
+  const pageFirst = (a, b) => Number(!/\.html?$/i.test(a.page)) - Number(!/\.html?$/i.test(b.page));
+  for (const f of [...result.findings].sort(pageFirst)) {
+    const key = `${f.note}\n${f.text}`;
+    if (groups.has(key)) groups.get(key).push(f); else groups.set(key, [f]);
+  }
+  for (const [f, ...rest] of groups.values()) {
     lines.push(`  [${f.id}] ${f.page}: "${f.shown}"`);
+    if (rest.length) lines.push(`         also in ${rest.map((r) => `${r.page} [${r.id}]`).join(', ')}`);
     lines.push(`         from ${f.note} (${f.reason})`);
   }
   for (const a of result.unneeded) lines.push(`  no longer needed: the accepted "${a.text}" on ${a.page} (leaks prune removes it)`);

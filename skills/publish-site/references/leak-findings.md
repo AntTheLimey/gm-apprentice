@@ -2,11 +2,12 @@
 
 Read this only when `deploy` stops on the leak check (its JSON has
 `refused: true` and `leaks.findings`). `TOOL` is the publish tool, as in
-`SKILL.md`.
+`SKILL.md`. If the JSON has `refused: true` and no `leaks`, the check could
+not run: show the GM `messages` word for word and stop. Nothing was uploaded.
 
 ## What happened
 
-The site was built and nothing was uploaded. Before every upload the tool reads
+Nothing was uploaded. Before every upload the tool reads
 the finished player site for sentences the vault hides (four words or more) and
 for secret names. Each finding is something the vault keeps from players and the
 built site shows anyway. Say that in a line or two, in plain words, then take
@@ -16,7 +17,9 @@ the findings one at a time. `node "$TOOL" leaks list --json --config
 ## For each finding
 
 Show the sentence (`shown`), the page it is on (`page`), the note it comes from
-(`note`) and the rule that hides it (`reason`). Offer three choices.
+(`note`) and the rule that hides it (`reason`). The same sentence from the same
+note on a page and in the site's data files (`previews.json`,
+`search-index.json`) is one leak: take it once. Offer three choices.
 
 - **Fix the note.** Open the note at the section or field `reason` names. If the
   sentence is meant to be public, move it into a published section. If it is
@@ -24,7 +27,17 @@ Show the sentence (`shown`), the page it is on (`page`), the note it comes from
   third choice. After a fix, rebuild and deploy again.
 - **Accept it**, only on the GM's word:
   `node "$TOOL" leaks accept <page> <id> --config <dir>/vault.config.json`.
-  Say that the acceptance holds while the page and the sentence stay the same.
+  This also covers the sentence's copies in the site's data files. Say that the
+  acceptance holds while the page and the sentence stay the same.
+
+When several findings sit on one page, or come from one note, ask whether the
+GM gave that page or note to the players on purpose (a handout, a letter the
+party read in full). On a yes, offer to accept them all in one step:
+`leaks accept --page <page>` for every finding on the page, or
+`leaks accept --note <note>` for every finding from the note (same `TOOL` and
+`--config` as above). Each is still recorded as its own page and sentence. If
+accepting stops because the site's publish tool is too old, run the update it
+names, then accept again.
 - **Report a tool bug.** Use it when the note hides the sentence correctly and
   the site shows it. Draft a GitHub issue for `AntTheLimey/gm-apprentice` with
   the finding (page, the sentence clipped, `code`, `reason`), the hiding rule as
