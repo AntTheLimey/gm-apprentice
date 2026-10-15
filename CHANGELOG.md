@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.61] — 2026-10-15
+
+`publish.mode` retires: the GM site is what `full` used to be, and the
+update moves a `full` vault onto it.
+
+### Changed
+
+- `full` is now the GM site. A vault that wrote `publish.mode: full`
+  has its site turned into its GM site: built in a new folder beside the
+  old one (`<site folder>-gm`), never put online, with a band and a mark
+  on everything players do not see. The player site is turned off, the
+  old site folder is no longer built, and `deploy` refuses until you
+  turn the player site back on. A `full` vault with no site folder is
+  asked for one.
+- The update removes the `publish.mode` line from a vault that wrote
+  `player`. Nothing else about that vault changes.
+- A player site built from a vault that was `full` now leaves out notes
+  still marked as prep and follows the publish list: it shows less,
+  never more.
+- A vault kept by a player (`vault.kept_by: player`) stays quiet where
+  the GM's own tools do not apply: the GM-leak, stale-draft, read-aloud,
+  sessions and wrap-up checks each print one line saying so, and session
+  prep says the vault is a player's.
+- A page decided with no publish list now gives the reason `no publish
+  list: publishing` where it used to say `mode: player`.
+- The publish tool is 1.28.0.
+
+A player site sees nothing new: built from the same vault, it is byte
+for byte what 1.10.60 made.
+
 ## [1.10.60] — 2026-10-15
 
 The list of what publishes moves into its own file, and the update moves
