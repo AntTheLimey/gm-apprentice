@@ -653,13 +653,12 @@ pivot is collapsed, into a context caption. Locations with no matching
 ancestor collect under `ungrouped_label`. Fewer than two matches falls
 back to the flat view — one section is not a grouping.
 
-### Player-mode image filtering
+### Player-site image filtering
 
-When building in `player` mode, only images referenced by the published
+On the player site, only images referenced by the published
 pages are copied to the output — with or without a publish list.
 This prevents GM-only images (maps, handouts, portraits of hidden NPCs)
-from leaking into the public site. In full mode, all vault images are
-copied.
+from leaking into the public site.
 
 `scanAttachments` also honours `excludeDirs`/`player_site.hide.folders`, so
 a vault-relative folder listed there (including a subfolder of the

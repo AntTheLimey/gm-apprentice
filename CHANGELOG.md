@@ -34,6 +34,16 @@ update moves a `full` vault onto it.
   list: publishing` where it used to say `mode: player`.
 - The publish tool is 1.28.0.
 
+### Fixed
+
+- `deploy --dry-run` on a vault whose player site is off now refuses, as a
+  real deploy does, before printing any command.
+- The update's `full` line says the old site folder still holds the last
+  everything-site and a copy already online stays up until you remove it.
+  A `full` vault with a site switch written off, or kept by a player, only
+  loses the line. The update's gm-leak step skips a player's vault, and a
+  tool that cannot answer is said, not skipped.
+
 A player site sees nothing new: built from the same vault, it is byte
 for byte what 1.10.60 made.
 
