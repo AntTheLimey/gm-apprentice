@@ -916,4 +916,4 @@ function summaryLines(findings) {
   return lines;
 }
 
-module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE };
+module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE, foldQuotes };
