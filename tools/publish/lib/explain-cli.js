@@ -40,7 +40,7 @@ function sheetWithheldOf(publishConfig, markdown, frontmatter) {
     { pcKeepSections: pcKeepList(publishConfig) }))];
 }
 
-const MANIFEST_LABEL = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
+const MANIFEST_LABEL = { publishing: 'publishing', excluded: 'excluded', needsDecision: 'needs a decision' };
 
 function dirOf(rel) {
   return rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '';
@@ -233,7 +233,7 @@ async function runExplain(options, deps) {
   out(`  publish mode: ${frontmatter ? publishMode(frontmatter) : '(no frontmatter)'}`);
   out(`  auto-exclude: ${auto ? autoExcludeLabel(frontmatter, auto) : 'none'}`);
   out(`  canon status: ${canonStatus || 'none'} (exclude_drafts ${publishConfig.exclude_drafts ? 'on' : 'off'})`);
-  out(`  manifest: ${manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : 'no manifest'}`);
+  out(`  publish list: ${manifest ? (section ? MANIFEST_LABEL[section] : 'not listed') : 'no publish list'}`);
   out(mergedInto
     ? `  VERDICT: publishes as part of ${outputPath}`
     : publishes

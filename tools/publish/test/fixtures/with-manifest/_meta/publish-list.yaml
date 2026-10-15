@@ -1,0 +1,10 @@
+publishing:
+  - Characters/NPCs/Public NPC.md
+  - Locations/Tavern.md
+  - Locations/Typo In This Path.md
+excluded:
+  - path: Sessions/Planned Session.md
+    reason: prep
+  - path: Characters/NPCs/Secret Villain.md
+    reason: GM override
+needs_decision: []

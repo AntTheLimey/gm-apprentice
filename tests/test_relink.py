@@ -836,7 +836,9 @@ PC_OLD = "Characters/PCs/Emma_Wentworth.md"
 PC_NEW = "Characters/PCs/Emma_Wentworth_Hale.md"
 PUBLISH_TOOL = (Path(__file__).resolve().parent.parent
                 / "tools" / "publish" / "bin" / "gm-publish.js")
-MANIFEST = ("---\ngenerated: 2026-10-03\n---\n\n## Publishing (1 files)\n\n"
+MANIFEST = ("# kept by the GM\npublishing:\n"
+            f"  - {PC_OLD}\nexcluded: []\nneeds_decision: []\n")
+OLD_FORM = ("---\ngenerated: 2026-10-03\n---\n\n## Publishing (1 files)\n\n"
             f"- [x] {PC_OLD}\n\n## Excluded (0 files)\n\n")
 SITE_CONFIG = "---\npublish:\n  site: true\n  mode: player\n---\n"
 
@@ -846,7 +848,7 @@ class PublishListTests(unittest.TestCase):
     """A rename keeps the page on the site's publish list."""
 
     def vault(self, extra=None, pc="---\ntype: pc\n---\n# Emma\n"):
-        files = {PC_OLD: pc, "_meta/publish-manifest.md": MANIFEST,
+        files = {PC_OLD: pc, "_meta/publish-list.yaml": MANIFEST,
                  "_meta/vault-config.md": SITE_CONFIG}
         files.update(extra or {})
         return make_vault(self, files)
@@ -858,20 +860,20 @@ class PublishListTests(unittest.TestCase):
     def test_the_plan_shows_the_manifest_row_and_apply_rewrites_it(self):
         vault = self.vault()
         p = relink.plan(vault, PC_OLD, PC_NEW)
-        self.assertIn(f"WOULD-REPUBLISH\t_meta/publish-manifest.md\t"
+        self.assertIn(f"WOULD-REPUBLISH\t_meta/publish-list.yaml\t"
                       f"{PC_OLD} -> {PC_NEW}", relink.rows(p))
-        self.assertEqual(read(vault, "_meta/publish-manifest.md"), MANIFEST)
+        self.assertEqual(read(vault, "_meta/publish-list.yaml"), MANIFEST)
         rows = relink.apply(p)
-        self.assertIn(f"REPUBLISHED\t_meta/publish-manifest.md\t"
+        self.assertIn(f"REPUBLISHED\t_meta/publish-list.yaml\t"
                       f"{PC_OLD} -> {PC_NEW}", rows)
-        self.assertEqual(read(vault, "_meta/publish-manifest.md"),
+        self.assertEqual(read(vault, "_meta/publish-list.yaml"),
                          MANIFEST.replace(PC_OLD, PC_NEW))
 
     def test_a_crlf_manifest_stays_crlf(self):
         crlf = MANIFEST.replace("\n", "\r\n")
-        vault = self.vault({"_meta/publish-manifest.md": crlf})
+        vault = self.vault({"_meta/publish-list.yaml": crlf})
         relink.apply(relink.plan(vault, PC_OLD, PC_NEW))
-        self.assertEqual(read(vault, "_meta/publish-manifest.md"),
+        self.assertEqual(read(vault, "_meta/publish-list.yaml"),
                          crlf.replace(PC_OLD, PC_NEW))
 
     def test_a_failure_after_the_manifest_write_restores_it(self):
@@ -913,12 +915,15 @@ class PublishListTests(unittest.TestCase):
         site.assert_not_called()
         self.assertEqual(set(p.texts), {"A.md"})
 
-    def test_a_manifest_the_links_also_change_gets_both_edits(self):
-        vault = self.vault({"_meta/publish-manifest.md":
-                            MANIFEST + "[[Emma_Wentworth]]\n"})
+    def test_an_old_form_list_the_links_also_change_gets_both_edits(self):
+        # Dated: an un-updated vault still has the Markdown list.
+        vault = make_vault(self, {
+            PC_OLD: "---\ntype: pc\n---\n# Emma\n",
+            "_meta/vault-config.md": SITE_CONFIG,
+            "_meta/publish-manifest.md": OLD_FORM + "[[Emma_Wentworth]]\n"})
         p = relink.plan(vault, PC_OLD, PC_NEW)
         self.assertEqual(p.texts["_meta/publish-manifest.md"],
-                         (MANIFEST + "[[Emma_Wentworth]]\n").replace(
+                         (OLD_FORM + "[[Emma_Wentworth]]\n").replace(
                              PC_OLD, PC_NEW).replace("[[Emma_Wentworth]]",
                                                      "[[Emma_Wentworth_Hale]]"))
 
@@ -1070,9 +1075,9 @@ class CompanionTests(unittest.TestCase):
         files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n",
                  STORY_OLD: STORY_TEXT,
                  "_meta/vault-config.md": SITE_CONFIG,
-                 "_meta/publish-manifest.md":
-                     MANIFEST.replace(f"- [x] {PC_OLD}\n",
-                                      f"- [x] {PC_OLD}\n- [x] {STORY_OLD}\n"),
+                 "_meta/publish-list.yaml":
+                     MANIFEST.replace(f"  - {PC_OLD}\n",
+                                      f"  - {PC_OLD}\n  - {STORY_OLD}\n"),
                  "Sessions/S1.md": "[[Emma_Wentworth]] and [[Emma_Wentworth_Story|her tale]]\n"}
         files.update(extra or {})
         return make_vault(self, files)
@@ -1097,7 +1102,7 @@ class CompanionTests(unittest.TestCase):
         self.assertEqual(
             read(vault, STORY_NEW),
             STORY_TEXT.replace("Emma_Wentworth", "Emma_Wentworth_Hale"))
-        manifest = read(vault, "_meta/publish-manifest.md")
+        manifest = read(vault, "_meta/publish-list.yaml")
         self.assertIn(PC_NEW, manifest)
         self.assertIn(STORY_NEW, manifest)
         self.assertNotIn(STORY_OLD, manifest)
@@ -1174,7 +1179,7 @@ class CompanionTests(unittest.TestCase):
     def test_a_pc_with_no_story_behaves_as_before(self):
         vault = make_vault(self, {PC_OLD: "---\ntype: pc\n---\n",
                                   "_meta/vault-config.md": SITE_CONFIG,
-                                  "_meta/publish-manifest.md": MANIFEST})
+                                  "_meta/publish-list.yaml": MANIFEST})
         p = relink.plan(vault, PC_OLD, PC_NEW)
         self.assertEqual(p.companions, [])
         rows = relink.rows(p)
@@ -1381,7 +1386,7 @@ class SpellingOwnerTests(unittest.TestCase):
         vault = make_vault(self, {
             NPC: typed("npc"), PCN: typed("pc"),
             "Sessions/S1.md": "---\ntype: session\n---\n[[Charlotte_Thorne]]\n",
-            "_meta/publish-manifest.md": "## Publishing (0 files)\n\n"})
+            "_meta/publish-list.yaml": "publishing: []\n"})
         p = relink.plan(vault, NPC, NPC_NEW)
         self.assertEqual(len(p.unsure), 1)
         self.assertEqual(p.owners, {})
@@ -1401,7 +1406,7 @@ class SpellingOwnerTests(unittest.TestCase):
 class CompanionReviewTests(unittest.TestCase):
     def vault(self, extra=None):
         files = {PC_OLD: "---\ntype: pc\n---\n# Emma\n", STORY_OLD: STORY_TEXT,
-                 "_meta/publish-manifest.md": MANIFEST,
+                 "_meta/publish-list.yaml": MANIFEST,
                  "_meta/vault-config.md": SITE_CONFIG}
         files.update(extra or {})
         return make_vault(self, files)
@@ -1477,7 +1482,7 @@ class CompanionReviewTests(unittest.TestCase):
         vault = make_vault(self, {
             PC_OLD: "---\ntype: pc\n---\n", "Characters/PCs/Hallam.md": "---\ntype: npc\n---\n",
             "_meta/vault-config.md": SITE_CONFIG,
-            "_meta/publish-manifest.md": MANIFEST})
+            "_meta/publish-list.yaml": MANIFEST})
         with self.assertRaises(relink.RelinkError) as cm:
             relink.plan(vault, "Characters/PCs/Hallam.md", STORY_OLD)
         self.assertIn("would attach to Emma_Wentworth as its story",
@@ -1536,7 +1541,7 @@ class SitePublishTests(unittest.TestCase):
 class FinalFixTests(unittest.TestCase):
     def test_a_manifest_without_a_site_never_asks_the_tool(self):
         vault = make_vault(self, {"A/Old.md": "x\n",
-                                  "_meta/publish-manifest.md": "## Publishing (1 files)\n\n- [x] A/Old.md\n"})
+                                  "_meta/publish-list.yaml": "publishing:\n  - A/Old.md\n"})
         with mock.patch.object(relink, "publish_rename_refs") as spy:
             relink.plan(vault, "A/Old.md", "A/New.md")
         spy.assert_not_called()

@@ -137,7 +137,7 @@ builds from the note's own fields: reword the field.
 A note marked `withheld: true` is on the site under its name: the row
 names its page. Ask which was meant. If the name is no secret, take
 `withheld: true` off. If it is, stop the note publishing: `publish:
-false` in its frontmatter, or out of Publishing in the manifest
+false` in its frontmatter, or out of `publishing` on the publish list
 (`SITE manifest apply --exclude "<note>"`). Edit on a yes.
 
 ## WITHHELD_NAME_PUBLIC
@@ -185,7 +185,7 @@ field. The row quotes the line, or the frontmatter field.
 A note that has no page is linked from a published page, so its name
 is printed there as plain words. The row says what kind of note it is,
 how many pages name it and as what words, which rule keeps it off the
-site, the reason the GM wrote in the manifest if there is one, and the
+site, the reason the GM wrote on the publish list if there is one, and the
 first pages that name it. A page is counted only when it prints the
 name: a link in a hidden part, or in a field that page does not show,
 is not. A PC's story page is listed as its `…_Story.md` file. A page
@@ -227,7 +227,7 @@ that shows what the players know and keeps the rest hidden.
   the pages that name the note for its name and read around each hit.
   A fact that is only in the note, a plan or a hidden section is not
   known to the players.
-- A reason written in the manifest names the secret. It must end up
+- A reason written on the publish list names the secret. It must end up
   hidden.
 - The row's "no page because" says what holds the note back. A
   manifest rule (`MANIFEST_EXCLUDED`, `MANIFEST_NEEDS_DECISION`,
@@ -271,7 +271,7 @@ that shows what the players know and keeps the rest hidden.
   would name them the moment it is a link. Propose turning those links
   into plain words on the pages that hold them.
 - **A page that already tells the secret.** If a published page says
-  what the manifest reason calls hidden, tell the GM: that page is the
+  what the publish-list reason calls hidden, tell the GM: that page is the
   leak, whatever is decided here.
 
 **3. Ask.** Show the batch and wait.
@@ -416,5 +416,5 @@ raise it again in the same run.
 
 Log each finding with its resolution: fixed, fixed differently, or
 `stays hidden` with the reason. Findings left for next time are
-skipped, not dismissed. `stays hidden:` in the manifest is this
+skipped, not dismissed. `stays hidden:` on the publish list is this
 check's record of a no; do not also add a `QA-DISMISSED` comment.

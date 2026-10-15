@@ -52,7 +52,7 @@ a Gregorian date; without a 4-digit year it is left off the timeline
 
 Derive/verify with `vault_check.py sessions`; fix with
 `stamp_entities.py … --set status=…` (see `shared/vault-access.md`).
-In a player-mode vault with `_meta/publish-manifest.md`, it also
+In a player-mode vault with a publish list, it also
 warns on any played (`played`/`wrap-up`/`reviewed`) session index or
 its Wrap-Up that is not under Publishing, saying what happens next:
 `manifest publish-played` (run by reconcile step 6.1 and publish-site)

@@ -9,7 +9,7 @@ const { execFileSync, spawnSync } = require('child_process');
 const { pcLiveKey, slugify } = require('../lib/scanner');
 const { build } = require('../lib/build');
 const { setOldSettings } = require('./helpers/settings-files');
-
+const { writePublishList } = require('./helpers/publish-list');
 const BIN = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 const FROM = 'Characters/PCs/Emma_Wentworth.md';
 const TO = 'Characters/PCs/Emma_Wentworth_Hale.md';
@@ -28,7 +28,21 @@ function rename(vault, from = FROM, to = TO, extra = []) {
   return JSON.parse(out);
 }
 
-const MANIFEST = (eol = '\n') => [
+const LIST = (eol = '\n') => [
+  '# kept by hand',
+  'publishing:',
+  `  - ${FROM}`,
+  '  - Characters/PCs/Emma_Wentworth_Story.md',
+  'excluded:',
+  `  - path: ${FROM}`,
+  '    reason: kept off while testing',
+  'needs_decision:',
+  `  - ${FROM}`,
+  '',
+].join(eol);
+
+// The old Markdown list, which the build still reads until the update moves it.
+const OLD_LIST = [
   '---', 'generated: 2026-10-03', '---', '',
   '## Publishing (2 files)', '',
   `- [x] ${FROM}`,
@@ -40,34 +54,50 @@ const MANIFEST = (eol = '\n') => [
   '## Needs Decision (1 files)', '',
   `- [ ] ${FROM}`,
   '',
-].join(eol);
+].join('\n');
 
 describe('manifest rename', () => {
   it('rewrites the path in all three sections and leaves a longer name alone', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': MANIFEST() });
+    const vault = vaultWith({ '_meta/publish-list.yaml': LIST() });
     const got = rename(vault);
-    const text = got.files['_meta/publish-manifest.md'];
-    assert.strictEqual(text, MANIFEST().split(FROM).join(TO));
+    const text = got.files['_meta/publish-list.yaml'];
+    // The comment line and the reason stay; only the renamed path changes.
+    assert.strictEqual(text, LIST().split(FROM).join(TO));
     assert.match(text, /Emma_Wentworth_Story\.md/);
+    assert.match(text, /^# kept by hand$/m);
+    assert.match(text, /reason: kept off while testing/);
     assert.strictEqual(got.pin, undefined);
-    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta/publish-manifest.md'), 'utf8'), MANIFEST(), 'writes nothing');
+    assert.strictEqual(fs.readFileSync(path.join(vault, '_meta/publish-list.yaml'), 'utf8'), LIST(), 'writes nothing');
+  });
+
+  it('renames in the old Markdown list while the vault has no YAML list yet', () => {
+    const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST });
+    const got = rename(vault);
+    assert.strictEqual(got.files['_meta/publish-manifest.md'], OLD_LIST.split(FROM).join(TO));
+    assert.strictEqual(got.files['_meta/publish-list.yaml'], undefined);
+  });
+
+  it('renames in the YAML list when both files are there', () => {
+    const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST, '_meta/publish-list.yaml': LIST() });
+    const got = rename(vault);
+    assert.deepStrictEqual(Object.keys(got.files), ['_meta/publish-list.yaml']);
   });
 
   it('keeps CRLF endings', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': MANIFEST('\r\n') });
-    const text = rename(vault).files['_meta/publish-manifest.md'];
-    assert.strictEqual(text, MANIFEST('\r\n').split(FROM).join(TO));
+    const vault = vaultWith({ '_meta/publish-list.yaml': LIST('\r\n') });
+    const text = rename(vault).files['_meta/publish-list.yaml'];
+    assert.strictEqual(text, LIST('\r\n').split(FROM).join(TO));
   });
 
   it('matches an NFD manifest entry against an NFC path', () => {
     const nfc = 'Characters/PCs/Renée.md';
-    const vault = vaultWith({ '_meta/publish-manifest.md': `## Publishing (1 files)\n\n- [x] ${nfc.normalize('NFD')}\n` });
+    const vault = vaultWith({ '_meta/publish-list.yaml': `publishing:\n  - ${nfc.normalize('NFD')}\n` });
     const got = rename(vault, nfc, 'Characters/PCs/Renee.md');
-    assert.strictEqual(got.files['_meta/publish-manifest.md'], '## Publishing (1 files)\n\n- [x] Characters/PCs/Renee.md\n');
+    assert.strictEqual(got.files['_meta/publish-list.yaml'], 'publishing:\n  - Characters/PCs/Renee.md\n');
   });
 
   it('prints {"files": {}} when nothing names the note', () => {
-    const vault = vaultWith({ '_meta/publish-manifest.md': '## Publishing (1 files)\n\n- [x] Locations/Elsewhere.md\n' });
+    const vault = vaultWith({ '_meta/publish-list.yaml': 'publishing:\n  - Locations/Elsewhere.md\n' });
     assert.deepStrictEqual(rename(vault).files, {});
     assert.deepStrictEqual(rename(vaultWith({ 'a.md': 'x' })).files, {});
   });
@@ -140,13 +170,13 @@ const STORY_TO = 'Characters/PCs/Emma_Wentworth_Hale_Story.md';
 const STORY_NOTE = '---\ntype: character-story\ncharacter: "[[Emma_Wentworth]]"\n---\n';
 
 describe('manifest rename: story companions', () => {
-  const manifest = `## Publishing (2 files)\n\n- [x] ${FROM}\n- [x] ${STORY}\n`;
+  const manifest = `publishing:\n  - ${FROM}\n  - ${STORY}\n`;
 
   it('lists the story file beside the PC and rewrites its manifest entry too', () => {
-    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: STORY_NOTE, '_meta/publish-manifest.md': manifest });
+    const vault = vaultWith({ [FROM]: '---\ntype: pc\n---\n', [STORY]: STORY_NOTE, '_meta/publish-list.yaml': manifest });
     const got = rename(vault);
     assert.deepStrictEqual(got.companions.map((x) => [x.from, x.to]), [[STORY, STORY_TO]]);
-    assert.strictEqual(got.files['_meta/publish-manifest.md'], `## Publishing (2 files)\n\n- [x] ${TO}\n- [x] ${STORY_TO}\n`);
+    assert.strictEqual(got.files['_meta/publish-list.yaml'], `publishing:\n  - ${TO}\n  - ${STORY_TO}\n`);
     assert.strictEqual(got.detaches, undefined);
   });
 

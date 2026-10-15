@@ -11,6 +11,12 @@ const OLD_FILE = '_meta/vault-config.md';
 const STATE_FILE = '_meta/vault-state.json';
 const NOTES_FILE = '_meta/vault-notes.md';
 
+// The publish list: the YAML file, and the Markdown file it replaces (read only until the update moves it).
+const PUBLISH_LIST_FILE = '_meta/publish-list.yaml';
+const OLD_LIST_FILE = '_meta/publish-manifest.md';
+// The first publish tool version that reads the YAML publish list; an older one reads a moved vault as having no list.
+const PUBLISH_LIST_FROM = '1.27.0';
+
 // The new file's top level: `version`, then the groups, in the order they are written. `gm_site` is read like the others, but a name or value under it that cannot be read warns and never stops the player build (it is not in STRICT_PARENTS).
 const SETTING_GROUPS = ['vault', 'player_site'];
 const GM_GROUP = 'gm_site';
@@ -59,4 +65,4 @@ const layoutOrNone = (vaultPath) => (typeof vaultPath === 'string' && vaultPath 
 const fileLabel = (vaultPath) => fileLabelFor(layoutOrNone(vaultPath));
 const nameIn = (vaultPath, name) => nameInFor(layoutOrNone(vaultPath), name);
 
-module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };
+module.exports = { FIRST_TOOL_READING_NEW_FILE, STEPS_FROM, siteToolVersion, SETTING_GROUPS, GM_GROUP, GROUPS, HIDE_GROUP, STRICT_PARENTS, stopsUnknown, NEW_FILE, OLD_FILE, STATE_FILE, NOTES_FILE, PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, layoutOf, at, fileLabel, nameIn, fileLabelFor, nameInFor };

@@ -6,25 +6,26 @@
 // `diff` walks the vault, asks publish-decision what each file would do, and shows
 // what the manifest does not yet say about it — so the answer comes from the same
 // code the build runs, not from re-reading the filtering rules.
-// `apply` moves named paths between the three sections and rewrites the file in the
-// documented format (publish-site/references/content-filtering.md § Manifest Format),
-// keeping the annotations on the entries it was not asked to touch.
+// `apply` moves named paths between the three lists and rewrites the list, keeping the reasons
+// on the entries it was not asked to touch. It writes the file the vault is on: a vault whose
+// list is still in the old Markdown file gets it back in that file, by the old writer
+// (manifest-legacy.js); only the update and `manifest convert` move a list.
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
-const { loadManifest, canonicalPath } = require('./manifest');
+const { loadManifest, canonicalPath, counts, listText } = require('./manifest');
+const { parseAnnotatedManifest, renderManifest } = require('./manifest-legacy');
+const { writeAtomic } = require('./settings/write');
+const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
+const { siteToolOlderThan } = require('./settings/move');
+const { convertPublishList, setsOf } = require('./publish-list-convert');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
 const { sitePin } = require('./site-pin');
 const { nameIn } = require('./settings');
 
-const SECTIONS = [
-  { key: 'publishing', title: 'Publishing', checked: true },
-  { key: 'excluded', title: 'Excluded', checked: true },
-  { key: 'needsDecision', title: 'Needs Decision', checked: false },
-];
 const TITLE_OF = { publishing: 'Publishing', excluded: 'Excluded', needsDecision: 'Needs Decision' };
 
 function toPosix(p) {
@@ -55,81 +56,39 @@ function listVaultMarkdown(vaultPath, excludeDirs) {
   return found.sort();
 }
 
-// The manifest as an editable structure: path -> { section, annotation }, in
-// first-seen order. parseManifest() throws annotations away (the build has no use
-// for them); rewriting the file without them would silently delete the GM's own
-// notes on why each entry is where it is.
-function parseAnnotatedManifest(markdown) {
+// The publish list as an editable structure: path -> { section, annotation (its reason) }, in first-seen order.
+function entriesOf(list) {
   const entries = new Map();
-  const body = String(markdown).replace(/\r/g, '').replace(/^---\n[\s\S]*?\n---\n?/, '');
-  const ENTRY = /^- \[([ xX])\]\s+(.+)$/;
-  const GROUPED = /^\s+-\s+(.+)$/;
-  const REASON = /^- Reason:\s*(.+)$/;
-
-  let section = null;
-  let groupReason = null;
-  for (const line of body.split('\n')) {
-    const heading = /^## (.+)/.exec(line);
-    if (heading) {
-      const title = heading[1].trim();
-      section = title.startsWith('Publishing') ? 'publishing'
-        : title.startsWith('Needs Decision') ? 'needsDecision'
-          : title.startsWith('Excluded') ? 'excluded' : null;
-      groupReason = null;
-      continue;
-    }
-    if (!section) continue;
-
-    const reason = REASON.exec(line);
-    if (reason) { groupReason = reason[1].trim(); continue; }
-
-    let raw = null;
-    const checkbox = ENTRY.exec(line);
-    if (checkbox) raw = checkbox[2].trim();
-    else {
-      const grouped = GROUPED.exec(line);
-      if (grouped && !/^reason:/i.test(grouped[1].trim())) raw = grouped[1].trim();
-    }
-    if (!raw) continue;
-
-    // Same anchoring as manifest.js: a filename may legitimately contain " — ".
-    const split = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+(.*))?$/.exec(raw);
-    const rel = canonicalPath(split ? split[1] : raw);
-    const annotation = (split && split[2] ? split[2].trim() : null) || groupReason || null;
-    entries.set(rel, { section, annotation: section === 'needsDecision' ? null : annotation });
-  }
+  if (!list) return entries;
+  const reasonOf = (rel) => (list.reasons && list.reasons.get(rel)) || null;
+  for (const rel of list.publishing) entries.set(rel, { section: 'publishing', annotation: reasonOf(rel) });
+  for (const rel of list.excluded) entries.set(rel, { section: 'excluded', annotation: reasonOf(rel) });
+  for (const rel of list.needsDecision) entries.set(rel, { section: 'needsDecision', annotation: reasonOf(rel) });
   return entries;
 }
 
-function renderManifest({ entries, generated, vault, mode, totalFiles }) {
-  const bySection = { publishing: [], excluded: [], needsDecision: [] };
-  for (const [rel, entry] of entries) bySection[entry.section].push({ rel, annotation: entry.annotation });
-  for (const key of Object.keys(bySection)) bySection[key].sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+// Whether the vault's list lives in the old Markdown file: it is there, or there is no list yet and the site's
+// tool is older than PUBLISH_LIST_FROM (it would read a new file as no list at all).
+function onOldFile(survey) {
+  if (survey.manifest) return survey.manifest.file === 'old';
+  return Boolean(survey.siteDir && siteToolOlderThan(survey.siteDir, PUBLISH_LIST_FROM));
+}
 
-  const lines = [
-    '---',
-    `generated: ${generated}`,
-    `vault: ${JSON.stringify(vault)}`,
-    `mode: ${mode}`,
-    `total_files: ${totalFiles}`,
-    `publishing: ${bySection.publishing.length}`,
-    `excluded: ${bySection.excluded.length}`,
-    `needs_decision: ${bySection.needsDecision.length}`,
-    '---',
-    '',
-  ];
-  for (const section of SECTIONS) {
-    const rows = bySection[section.key];
-    lines.push(`## ${section.title} (${rows.length} files)`, '');
-    for (const row of rows) {
-      const box = section.checked ? '- [x]' : '- [ ]';
-      lines.push(row.annotation ? `${box} ${row.rel} — ${row.annotation}` : `${box} ${row.rel}`);
-    }
-    lines.push('');
+// The list as an entries map, as the file the vault is on is read: the old file by the old annotated reader (every
+// entry line it knows, as the old writer kept them), the new one through loadManifest.
+function listedEntries(survey, readFile = (p) => fs.readFileSync(p, 'utf8')) {
+  if (survey.manifest && survey.manifest.file === 'old') return parseAnnotatedManifest(readFile(at(survey.vaultPath, OLD_LIST_FILE)));
+  return entriesOf(survey.manifest);
+}
+
+// The three lists of an entries map, as loadManifest shapes them.
+function listOf(entries) {
+  const list = { publishing: [], excluded: [], needsDecision: [], reasons: new Map() };
+  for (const [rel, entry] of entries) {
+    list[entry.section].push(rel);
+    if (entry.annotation) list.reasons.set(rel, entry.annotation);
   }
-  // An empty section contributes header + two blanks; collapse those, and end the
-  // file on exactly one newline.
-  return lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '\n');
+  return list;
 }
 
 // `--exclude "Path.md=reason"`. The path is everything before the first `=`, so a
@@ -196,13 +155,10 @@ function surveyVault(options, deps) {
 
 async function runDiff(options, deps, survey) {
   const out = deps.out || console.log;
-  const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const exists = deps.exists || ((p) => fs.existsSync(p));
-  const { vaultPath, publishConfig, manifest, files, verdicts } = survey;
+  const { vaultPath, manifest, files, verdicts } = survey;
 
-  const listed = manifest
-    ? parseAnnotatedManifest(readFile(path.join(vaultPath, '_meta', 'publish-manifest.md')))
-    : new Map();
+  const listed = listedEntries(survey, deps.readFile);
 
   const added = [];
   const unchanged = { publishing: 0, excluded: 0, needsDecision: 0 };
@@ -235,7 +191,6 @@ async function runDiff(options, deps, survey) {
 
   if (options.json) {
     out(JSON.stringify({
-      mode: publishConfig.mode,
       manifestExists: !!manifest,
       new: added,
       removed,
@@ -245,7 +200,7 @@ async function runDiff(options, deps, survey) {
     return 0;
   }
 
-  const header = manifest ? `mode ${publishConfig.mode}` : 'no manifest';
+  const header = manifest ? 'publish list' : 'no manifest';
   out(`manifest: ${header} — ${counts.publishing} publishing, ${counts.excluded} excluded, ${counts.needsDecision} needs decision`);
   out('');
   out(`New (${added.length}):`);
@@ -265,17 +220,15 @@ async function runDiff(options, deps, survey) {
 
 async function runApply(options, deps, survey) {
   const out = deps.out || console.log;
-  const readFile = deps.readFile || ((p) => fs.readFileSync(p, 'utf8'));
-  const writeFile = deps.writeFile || ((p, c) => fs.writeFileSync(p, c));
+  const writeFile = deps.writeFile || ((p, c) => writeAtomic(p, c));
   const exists = deps.exists || ((p) => fs.existsSync(p));
   const mkdir = deps.mkdir || ((p) => fs.mkdirSync(p, { recursive: true }));
   const now = deps.now || (() => new Date());
-  const { config, vaultPath, publishConfig, files } = survey;
+  const { vaultPath, files, publishConfig } = survey;
 
-  const manifestPath = path.join(vaultPath, '_meta', 'publish-manifest.md');
-  const entries = exists(manifestPath)
-    ? parseAnnotatedManifest(readFile(manifestPath))
-    : new Map();
+  const old = onOldFile(survey);
+  const manifestPath = at(vaultPath, old ? OLD_LIST_FILE : PUBLISH_LIST_FILE);
+  const entries = listedEntries(survey, deps.readFile);
 
   const moves = [
     ...(options.publish || []).map((a) => Object.assign(splitReason(a), { section: 'publishing' })),
@@ -322,15 +275,16 @@ async function runApply(options, deps, survey) {
     }
   }
 
-  const text = renderManifest({
-    entries,
-    generated: now().toISOString(),
-    vault: publishConfig.site_title || path.basename(vaultPath),
-    mode: publishConfig.mode,
-    totalFiles: files.length,
-  });
   mkdir(path.dirname(manifestPath));
-  writeFile(manifestPath, text);
+  writeFile(manifestPath, old
+    ? renderManifest({
+      entries,
+      generated: now().toISOString(),
+      vault: publishConfig.site_title || path.basename(vaultPath),
+      mode: publishConfig.mode,
+      totalFiles: files.length,
+    })
+    : listText(listOf(entries)));
 
   const sectionCounts = { publishing: 0, excluded: 0, needsDecision: 0 };
   for (const entry of entries.values()) sectionCounts[entry.section]++;
@@ -338,7 +292,6 @@ async function runApply(options, deps, survey) {
   if (options.json) {
     out(JSON.stringify({
       path: manifestPath,
-      mode: publishConfig.mode,
       totalFiles: files.length,
       publishing: sectionCounts.publishing,
       excluded: sectionCounts.excluded,
@@ -408,8 +361,7 @@ function pairsWith(survey, published) {
 // is left to the checks above, and Excluded or non-session paths are still refused.
 function planPublishPlayed(survey, { only = null, includeUnreviewed = false, publishBody = false } = {}) {
   const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
-  const readFile = survey.readFile || ((p) => fs.readFileSync(p, 'utf8'));
-  const listed = parseAnnotatedManifest(readFile(path.join(vaultPath, '_meta', 'publish-manifest.md')));
+  const listed = listedEntries(survey, survey.readFile);
   const sectionOf = (rel) => (listed.get(rel) || {}).section || null;
   const onDisk = new Set(files);
   const relOf = new Map([...pagesByRel].map(([rel, page]) => [page, rel]));
@@ -571,6 +523,48 @@ async function runPublishPlayed(options, deps, survey) {
   return 0;
 }
 
+function vaultFor(opts, out) {
+  if (!opts.vaultPath) {
+    out(`manifest ${opts.verb} needs --vault <path>`);
+    return null;
+  }
+  return path.resolve(opts.vaultPath);
+}
+
+// `manifest convert`: moves the publish list to _meta/publish-list.yaml, all or nothing.
+function runConvert(opts, d) {
+  const out = d.out || console.log;
+  const vault = vaultFor(opts, out);
+  if (!vault) return 1;
+  const result = convertPublishList(vault, { check: !!opts.check, siteConfigPath: opts.configPath ? path.resolve(opts.configPath) : null, siteToolUpdated: !!opts.siteToolUpdated });
+  if (opts.json) out(JSON.stringify(result, null, 2));
+  else if (result.held) out(`The publish list ${result.lines[0]}`);
+  else if (!result.ok) out(['The publish list was not moved; nothing was changed.', ...result.blockers.map((b) => `  ${b}`)].join('\n'));
+  else out(result.lines.length ? result.lines.join('\n') : 'The publish list is already in _meta/publish-list.yaml.');
+  return result.ok ? 0 : 1;
+}
+
+// `manifest list`: the three lists and their counts, computed on request.
+function runList(opts, d) {
+  const out = d.out || console.log;
+  const vault = vaultFor(opts, out);
+  if (!vault) return 1;
+  const list = loadManifest(vault, { warn: () => {} });
+  const empty = { publishing: [], excluded: [], needsDecision: [], reasons: new Map() };
+  const sets = setsOf(list || empty);
+  const c = counts(list || empty);
+  const payload = { listed: Boolean(list), ...sets, counts: { publishing: c.publishing, excluded: c.excluded, needs_decision: c.needsDecision } };
+  if (opts.json) out(JSON.stringify(payload, null, 2));
+  else {
+    out(`${c.publishing} publishing, ${c.excluded} excluded, ${c.needsDecision} needing a decision.`);
+    const withReason = (reasons) => (rel) => (reasons[rel] ? `${rel} — ${reasons[rel]}` : rel);
+    for (const [title, rows] of [['Publishing', sets.publishing.map(withReason(sets.publishing_reasons))], ['Excluded', sets.excluded.map((e) => (e.reason ? `${e.path} — ${e.reason}` : e.path))], ['Needs decision', sets.needs_decision.map(withReason(sets.needs_decision_reasons))]]) {
+      if (rows.length) out(`\n${title}:\n${rows.map((r) => `  ${r}`).join('\n')}`);
+    }
+  }
+  return 0;
+}
+
 async function runManifest(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -586,6 +580,8 @@ async function runManifest(options, deps) {
     }
   }
   // Answers about one vault from its files alone: no site config, no survey.
+  if (opts.verb === 'convert') return runConvert(opts, d);
+  if (opts.verb === 'list') return runList(opts, d);
   if (opts.verb === 'rename') return require('./rename-refs').runRename(opts, d);
   const survey = surveyVault(opts, d);
   assertNoStops(survey.publishConfig, 'manifest');
@@ -598,4 +594,4 @@ async function runManifest(options, deps) {
 
 // surveyVault is shared with explain-cli so both commands see one vault the same
 // way: the same file list, the same verdicts, the same config resolution.
-module.exports = { runManifest, surveyVault, planPublishPlayed, pairsWith, parseAnnotatedManifest, renderManifest, listVaultMarkdown, splitReason };
+module.exports = { runManifest, surveyVault, planPublishPlayed, pairsWith, listVaultMarkdown, splitReason };

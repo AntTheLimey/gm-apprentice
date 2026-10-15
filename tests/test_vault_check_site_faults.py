@@ -38,7 +38,7 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True,
          system=None):
     """A vault and its site. `files` maps vault paths to text; every note
     not in `excluded` ("path" or "path — reason") is listed under
-    Publishing. `tool`: "real" installs the repo's publish tool in the
+    publishing. `tool`: "real" installs the repo's publish tool in the
     site, any other string is the text of a stand-in gm-publish.js."""
     root = Path(tempfile.mkdtemp(prefix="vc-site-faults-"))
     case.addCleanup(shutil.rmtree, root, ignore_errors=True)
@@ -50,12 +50,15 @@ def make(case, files, excluded=(), tool="real", site_json=None, site=True,
     (vault / "_meta").mkdir(parents=True, exist_ok=True)
     hidden = {e.split(" — ")[0] for e in excluded}
     listed = [rel for rel in files if rel not in hidden]
-    (vault / "_meta" / "publish-manifest.md").write_text("\n".join([
-        "---", "mode: player", "---", "",
-        f"## Publishing ({len(listed)} files)", "",
-        *[f"- [x] {rel}" for rel in listed], "",
-        f"## Excluded ({len(excluded)} files)", "",
-        *[f"- [x] {e}" for e in excluded], ""]), encoding="utf-8")
+    entries = [(e.split(" — ", 1) + [None])[:2] for e in excluded]
+    (vault / "_meta" / "publish-list.yaml").write_text("\n".join([
+        "publishing:" if listed else "publishing: []",
+        *[f"  - {json.dumps(rel)}" for rel in listed],
+        "excluded:" if entries else "excluded: []",
+        *[line for rel, why in entries for line in (
+            [f"  - path: {json.dumps(rel)}"]
+            + ([f"    reason: {json.dumps(why)}"] if why else []))],
+        "needs_decision: []", ""]), encoding="utf-8")
     if not site:
         return vault, site_dir
     site_dir.mkdir()

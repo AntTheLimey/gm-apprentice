@@ -7,7 +7,7 @@ const path = require('path');
 const { runSiteDoctor } = require('../lib/site-doctor');
 const { build } = require('../lib/build');
 const { summaryLines, kindOfType } = require('../lib/note-faults');
-
+const { writePublishList } = require('./helpers/publish-list');
 const made = [];
 after(() => { for (const dir of made) fs.rmSync(dir, { recursive: true, force: true }); });
 
@@ -26,11 +26,7 @@ function site(files, { publish = null, excluded = [], mode = 'player', extra = '
   }
   const listed = publish || Object.keys(files).filter((rel) => !excluded.some((e) => e.startsWith(rel)) && !rel.startsWith('_') && !rel.startsWith('Quiet/'));
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-    '---', `mode: ${mode}`, '---', '',
-    `## Publishing (${listed.length} files)`, '', ...listed.map((rel) => `- [x] ${rel}`), '',
-    `## Excluded (${excluded.length} files)`, '', ...excluded.map((e) => `- [x] ${e}`), '',
-  ].join('\n'));
+  writePublishList(vault, { publishing: listed, excluded });
   const map = [...folders].filter((f) => !f.startsWith('Quiet')).map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
     `---\npublish:\n  mode: ${mode}\n${extra}  exclude_dirs:\n    - Quiet\n  folder_map:\n${map}---\n`);
@@ -59,16 +55,16 @@ describe('NAMED_NO_PAGE', () => {
     'Characters/Vesper_Hale.md': npc('Vesper', 'Secret: he is the ferryman.'),
   };
 
-  it('the fix says listing under Publishing gives a page only when the manifest is what holds the note back', async () => {
+  it('the fix says listing under Publishing gives a page only when the publish list is what holds the note back', async () => {
     const byManifest = await faults(base, { excluded: ['Characters/Vesper_Hale.md'] }, 'NAMED_NO_PAGE');
-    assert.match(byManifest[0].fix, /then list it under Publishing in _meta\/publish-manifest\.md so it gets a page/);
+    assert.match(byManifest[0].fix, /then put it on the publish list so it gets a page: manifest apply --publish "Characters\/Vesper_Hale\.md"/);
     const byNote = await faults({
       'Characters/Mara_Quill.md': npc('Mara', 'She met [[Vesper_Hale]] at the quay.'),
       'Characters/Vesper_Hale.md': npc('Vesper', 'Secret.', 'publish: false\n'),
     }, {}, 'NAMED_NO_PAGE');
     assert.strictEqual(byNote[0].why, 'PUBLISH_FALSE');
     assert.ok(!/so it gets a page/.test(byNote[0].fix), byNote[0].fix);
-    assert.match(byNote[0].fix, /the manifest is not what keeps it off the site \(PUBLISH_FALSE\): run explain "Characters\/Vesper_Hale\.md" for the rule/);
+    assert.match(byNote[0].fix, /the publish list is not what keeps it off the site \(PUBLISH_FALSE\): run explain "Characters\/Vesper_Hale\.md" for the rule/);
     assert.match(byNote[0].fix, /stays hidden: <why>/);
   });
 
@@ -205,7 +201,7 @@ describe('NAMED_NO_PAGE', () => {
       'Characters/Unlisted_One.md': npc('U', 'x'),
     };
     const { vault, configPath } = site(files, { publish: ['Characters/Mara_Quill.md'] });
-    fs.appendFileSync(path.join(vault, '_meta', 'publish-manifest.md'), '\n## Needs Decision (1 files)\n\n- [ ] Characters/Pending_One.md\n');
+    writePublishList(vault, { publishing: ['Characters/Mara_Quill.md'], needsDecision: ['Characters/Pending_One.md'] });
     const { json } = await doctor(configPath, { json: true });
     const why = Object.fromEntries(json.findings.filter((f) => f.code === 'NAMED_NO_PAGE').map((f) => [f.path, f.why]));
     assert.deepStrictEqual(why, {
@@ -253,10 +249,10 @@ describe('NAMED_NO_PAGE', () => {
       // Listed under Publishing, and kept off the site by its own frontmatter.
       'Characters/Vesper_Hale.md': npc('V', 'x', 'publish: false\n'),
     };
-    const { vault, configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Vesper_Hale.md — stays hidden: x'] });
-    assert.match(fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8'), /## Publishing[^#]*Vesper_Hale\.md — stays hidden: x/);
+    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Vesper_Hale.md — stays hidden: x'] });
     const { json } = await doctor(configPath, { json: true });
     const found = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
+    // The reason is kept, and only an excluded entry settles.
     assert.strictEqual(found.reason, 'stays hidden: x');
     assert.strictEqual(found.settled, false);
   });
@@ -279,8 +275,7 @@ describe('NAMED_NO_PAGE with the rest of the audit', () => {
       'Characters/Vesper_Hale.md': npc('V', 'x'),
     };
     const { vault, configPath } = site(files, { publish: ['Characters/Mara_Quill.md'] });
-    fs.appendFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      '\n## Excluded (1 files)\n\n- Reason: stays hidden: the ferry is the twist\n  - Characters/Vesper_Hale.md\n');
+    writePublishList(vault, { publishing: ['Characters/Mara_Quill.md'], excluded: [{ path: 'Characters/Vesper_Hale.md', reason: 'stays hidden: the ferry is the twist' }] });
     const { json } = await doctor(configPath, { json: true });
     const [f] = json.findings.filter((x) => x.code === 'NAMED_NO_PAGE');
     assert.strictEqual(f.settled, true);

@@ -42,8 +42,9 @@ this skill's own cache path). One-off commands run from the cache:
 TOOL="<plugin-cache-path>/gm-apprentice/<plugin-version>/tools/publish/bin/gm-publish.js"
 node "$TOOL" init <target-dir> --vault <vault>   # scaffold a new site (auto-pins itself to this version)
 node "$TOOL" update-pin --site <dir>                       # repoint + npm install a stale site (outside the plugin: add --tag publish-vX.Y.Z to pin a release tarball)
-node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the manifest
-node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # edit the manifest
+node "$TOOL" manifest diff --config <dir>/vault.config.json    # classify vault files vs the publish list
+node "$TOOL" manifest apply --config <dir>/vault.config.json ...  # change the publish list
+node "$TOOL" manifest list --vault <vault>   # show the publish list
 node "$TOOL" manifest publish-played --config <dir>/vault.config.json  # register played sessions
 node "$TOOL" deploy --verify --config <dir>/vault.config.json  # build, deploy, probe the URL
 node "$TOOL" doctor --site --config <dir>/vault.config.json    # audit the vault for publish defects
@@ -57,7 +58,7 @@ node "$TOOL" --help
 yourself, so a site never ships missing a played session (#277). It
 ticks a reviewed session index only together with a linked Wrap-Up
 that will publish, so the site withholds the hub body. It skips
-Excluded entries and does nothing without a manifest in player mode.
+Excluded entries and does nothing without a publish list in player mode.
 Report the paths it ticked. Every other played session is listed as
 "unclear" with its reason (no Wrap-Up, Wrap-Up not reviewed yet, one
 that is Excluded or won't publish, or a stale site pin). Ask the GM
@@ -180,25 +181,24 @@ site before pushing.
 see", "publish without spoilers")
 
 Read `references/content-filtering.md` § Content Visibility Model
-and § Manifest Format. In `player` mode a file publishes only as
-a **checked** entry under `## Publishing` — checking it under
-`## Excluded` or `## Needs Decision` does not publish it;
-`full` mode ignores the manifest.
+and § Publish List. In `player` mode a file publishes only when it is
+under `publishing`; `excluded` and `needs_decision` never publish it;
+`full` mode ignores the publish list.
 
 1. `node "$TOOL" settings get player_site.theme player_site.not_found
    player_site.hide.mode --config <dir>/vault.config.json`. If every theme and
    404 line says `(default)`, first follow
    content-filtering.md § Setup Questioning Flow. If the mode is
    `full`, stop and ask the GM to change it before building the
-   manifest.
-2. Categorize every vault file per the visibility model and write
-   `_meta/publish-manifest.md`.
+   publish list.
+2. Categorize every vault file per the visibility model
+   (`manifest diff`).
 3. Summarize, then walk the GM through ambiguous items, recording
-   each decision in the manifest (checked under `## Publishing`,
-   or moved to `## Excluded` with a reason).
+   each decision with `manifest apply` (`--publish`, or `--exclude`
+   with a reason).
 
 Later publishes pick up new and removed files through capability
-2's manifest diff.
+2's `manifest diff`.
 
 ### 7. Change-request loop (at-table)
 ("start your checking loop", "pick up the change requests", "open

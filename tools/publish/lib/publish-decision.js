@@ -212,9 +212,9 @@ function decidePage(page, options) {
   // The manifest is an allowlist in player mode only. A listed page falls through
   // rather than returning: `publish: false` still has to be honoured below.
   if (manifest && mode === 'player' && !listedForPublish) {
-    if (index.excluded.has(rel)) return verdict('exclude', 'MANIFEST_EXCLUDED', 'manifest: Excluded');
-    if (index.needsDecision.has(rel)) return verdict('decide', 'MANIFEST_NEEDS_DECISION', 'manifest: Needs Decision');
-    return verdict('decide', 'MANIFEST_UNLISTED', 'in no manifest section');
+    if (index.excluded.has(rel)) return verdict('exclude', 'MANIFEST_EXCLUDED', 'publish list: excluded');
+    if (index.needsDecision.has(rel)) return verdict('decide', 'MANIFEST_NEEDS_DECISION', 'publish list: needs a decision');
+    return verdict('decide', 'MANIFEST_UNLISTED', 'not on the publish list');
   }
 
   // `publish: false` is an instruction, not a heuristic — honoured in every mode,
@@ -232,7 +232,7 @@ function decidePage(page, options) {
     return verdict('decide', 'SUPERSEDED_NO_TARGET', 'canon_status: SUPERSEDED with no superseded_by');
   }
 
-  return verdict('publish', 'OK', listedForPublish ? 'manifest: Publishing' : `mode: ${mode}`);
+  return verdict('publish', 'OK', listedForPublish ? 'publish list: publishing' : `mode: ${mode}`);
 }
 
 // The one `decide` code the build still emits a page for. A `decide` verdict

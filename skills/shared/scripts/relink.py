@@ -525,7 +525,9 @@ def _alias_warnings(texts: dict[str, str | None], old: str,
     return out
 
 
-MANIFEST_REL = "_meta/publish-manifest.md"
+MANIFEST_REL = "_meta/publish-list.yaml"
+# Dated: an un-updated vault still has the old file; remove at 1.11.0.
+OLD_MANIFEST_REL = "_meta/publish-manifest.md"
 YAML_WORDS = {"true", "false", "null", "yes", "no", "on", "off", "y", "n"}
 
 
@@ -718,7 +720,8 @@ def plan(vault: Path, old: str, new: str) -> Plan:
     if why:
         raise RelinkError(why)
     p = Plan(vault, old, new)
-    listed = (vault / MANIFEST_REL).is_file()
+    listed = any((vault / rel).is_file()
+                 for rel in (MANIFEST_REL, OLD_MANIFEST_REL))
     site = _has_site(vault)
     answer = _ask_publish(vault, old, new, listed, site)
     _companions(vault, notes, p, answer)

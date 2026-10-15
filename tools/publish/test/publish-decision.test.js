@@ -138,7 +138,7 @@ describe('publish-decision: one case per code', () => {
       manifest: manifestOf({ publishing: ['Sessions/Planned Session.md'] }),
     });
     assert.strictEqual(v.bucket, 'publish');
-    assert.strictEqual(v.reason, 'manifest: Publishing');
+    assert.strictEqual(v.reason, 'publish list: publishing');
   });
 
   it('SCENE_CUT_SKIPPED for a cut scene', () => {

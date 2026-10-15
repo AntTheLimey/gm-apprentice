@@ -8,7 +8,7 @@ const { execFile } = require('child_process');
 const { promisify } = require('util');
 
 const { runExplain, runExplainAll } = require('../lib/explain-cli');
-
+const { writePublishList } = require('./helpers/publish-list');
 const CLI = path.join(__dirname, '..', 'bin', 'gm-publish.js');
 
 function write(root, rel, body) {
@@ -160,7 +160,7 @@ describe('explain', () => {
     const vault = makeVault();
     write(vault, 'People/Vesper.md', hiddenNote);
     write(vault, 'People/Mara.md', '---\ntype: npc\n---\n\nShe met [[Vesper]].\n');
-    write(vault, '_meta/publish-manifest.md', '---\nmode: player\n---\n\n## Publishing (1 files)\n\n- [x] People/Mara.md\n\n## Excluded (1 files)\n\n- [x] People/Vesper.md\n');
+    writePublishList(vault, { publishing: ['People/Mara.md'], excluded: ['People/Vesper.md'] });
     const configPath = npcSite(vault);
     const c = capture();
     await runExplain({ configPath, target: 'People/Vesper.md', shown: true }, c.deps);
@@ -246,7 +246,7 @@ describe('explain', () => {
     assert.match(text, /^ {2}publish mode: all$/m);
     assert.match(text, /^ {2}auto-exclude: none$/m);
     assert.match(text, /^ {2}canon status: none \(exclude_drafts off\)$/m);
-    assert.match(text, /^ {2}manifest: no manifest$/m);
+    assert.match(text, /^ {2}publish list: no publish list$/m);
     assert.match(text, /^ {2}VERDICT: publishes at docs\/sessions\/session-07\.html$/m);
     assert.match(text, /^ {2}sections stripped on publish: GM Notes, Reconciliation Context$/m);
     assert.match(text, /^ {2}gm-only blocks: 1$/m);
@@ -307,21 +307,17 @@ describe('explain', () => {
 
   it('reads the manifest section a file sits in', async () => {
     const vault = makeVault();
-    write(vault, '_meta/publish-manifest.md', [
-      '---', 'mode: player', '---', '',
-      '## Publishing (1 files)', '', '- [x] Sessions/Session_07.md', '',
-      '## Excluded (1 files)', '', '- [x] Sessions/Session_08.md — prep', '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Session_07.md'], excluded: ['Sessions/Session_08.md — prep'] });
     const configPath = siteFor(vault);
 
     const a = capture();
     await runExplain({ configPath, target: 'Sessions/Session_07.md' }, a.deps);
-    assert.match(a.text(), /^ {2}manifest: Publishing$/m);
+    assert.match(a.text(), /^ {2}publish list: publishing$/m);
     assert.match(a.text(), /VERDICT: publishes at docs\/sessions\/session-07\.html/);
 
     const b = capture();
     await runExplain({ configPath, target: 'Sessions/Session_08.md' }, b.deps);
-    assert.match(b.text(), /^ {2}manifest: Excluded$/m);
+    assert.match(b.text(), /^ {2}publish list: excluded$/m);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 

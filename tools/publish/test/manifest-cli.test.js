@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 
 const { runManifest } = require('../lib/manifest-cli');
-
+const { writePublishList, readListText } = require('./helpers/publish-list');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 const FOLDER_MAP = {
@@ -78,7 +78,7 @@ describe('manifest diff', () => {
 
     const payload = JSON.parse(c.out.join(''));
     assert.strictEqual(payload.manifestExists, false);
-    assert.strictEqual(payload.mode, 'player');
+    assert.strictEqual(payload.mode, undefined);
     assert.strictEqual(payload.new.length, 5);
     assert.deepStrictEqual(payload.removed, []);
     assert.deepStrictEqual(payload.counts.publishing, 2);
@@ -96,16 +96,7 @@ describe('manifest diff', () => {
   it('separates new files, removed entries and unchanged ones', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Publishing (2 files)', '',
-      '- [x] Sessions/Played Session.md',
-      '- [x] Locations/Long Gone.md',
-      '',
-      '## Excluded (1 files)', '',
-      '- [x] Sessions/Planned Session.md — prep',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md', 'Locations/Long Gone.md'], excluded: [{ path: 'Sessions/Planned Session.md', reason: 'prep' }] });
     const { configPath } = siteFor(vault);
     const c = capture();
     assert.strictEqual(await runManifest({ verb: 'diff', configPath, json: true }, c.deps), 0);
@@ -121,14 +112,14 @@ describe('manifest diff', () => {
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('the human header names the mode', async () => {
+  it('the human header names the publish list', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), '---\nmode: player\n---\n\n## Publishing (0 files)\n');
+    writePublishList(vault, {  });
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'diff', configPath }, c.deps);
-    assert.match(c.text(), /^manifest: mode player — /m);
+    assert.match(c.text(), /^manifest: publish list — /m);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -219,27 +210,14 @@ describe('manifest apply', () => {
     }, c.deps);
 
     assert.strictEqual(rc, 0);
-    const manifestPath = path.join(vault, '_meta', 'publish-manifest.md');
+    const manifestPath = path.join(vault, '_meta', 'publish-list.yaml');
     assert.strictEqual(c.writes[manifestPath], [
-      '---',
-      'generated: 2026-09-07T12:00:00.000Z',
-      'vault: "Test Campaign"',
-      'mode: player',
-      'total_files: 5',
-      'publishing: 1',
-      'excluded: 1',
-      'needs_decision: 0',
-      '---',
-      '',
-      '## Publishing (1 files)',
-      '',
-      '- [x] Sessions/Played Session.md',
-      '',
-      '## Excluded (1 files)',
-      '',
-      '- [x] Sessions/Planned Session.md — prep',
-      '',
-      '## Needs Decision (0 files)',
+      'publishing:',
+      '  - Sessions/Played Session.md',
+      'excluded:',
+      '  - path: Sessions/Planned Session.md',
+      '    reason: prep',
+      'needs_decision: []',
       '',
     ].join('\n'));
     assert.match(c.text(), /manifest updated: \+1 publishing, \+1 excluded, \+0 needs decision, -0 pruned/);
@@ -249,88 +227,67 @@ describe('manifest apply', () => {
   it('moves an entry out of its old section', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Excluded (1 files)', '', '- [x] Sessions/Played Session.md — prep', '',
-    ].join('\n'));
+    writePublishList(vault, { excluded: [{ path: 'Sessions/Played Session.md', reason: 'prep' }] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
     await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
-    const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
-    assert.match(written, /## Publishing \(1 files\)\n\n- \[x\] Sessions\/Played Session\.md\n/);
-    assert.match(written, /## Excluded \(0 files\)\n/);
-    assert.doesNotMatch(written, /Excluded \(0 files\)\n\n- \[x\]/);
+    const written = c.writes[path.join(vault, '_meta', 'publish-list.yaml')];
+    const list = readListText(written);
+    assert.deepStrictEqual(list.publishing, ['Sessions/Played Session.md']);
+    assert.deepStrictEqual(list.excluded, []);
+    assert.strictEqual(list.reasons.size, 0);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
   it('moves an entry from Needs Decision to Publishing (#277)', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', '',
-    ].join('\n'));
+    writePublishList(vault, { needsDecision: ['Sessions/Played Session.md'] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
     await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
-    const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
-    assert.match(written, /## Publishing \(1 files\)\n\n- \[x\] Sessions\/Played Session\.md\n/);
-    assert.match(written, /## Needs Decision \(0 files\)\n/);
+    const written = c.writes[path.join(vault, '_meta', 'publish-list.yaml')];
+    const list = readListText(written);
+    assert.deepStrictEqual(list.publishing, ['Sessions/Played Session.md']);
+    assert.deepStrictEqual(list.needsDecision, []);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('preserves the annotation on an entry it was not asked to move', async () => {
+  it('preserves the reason on an entry it was not asked to move', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Excluded (1 files)', '',
-      '- [x] Characters/NPCs/Prep Source.md — a spy the party has not met',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { excluded: [{ path: 'Characters/NPCs/Prep Source.md', reason: 'a spy the party has not met' }] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
     await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
-    assert.match(
-      c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
-      /- \[x\] Characters\/NPCs\/Prep Source\.md — a spy the party has not met/,
-    );
+    const list = readListText(c.writes[path.join(vault, '_meta', 'publish-list.yaml')]);
+    assert.deepStrictEqual(list.excluded, ['Characters/NPCs/Prep Source.md']);
+    assert.strictEqual(list.reasons.get('Characters/NPCs/Prep Source.md'), 'a spy the party has not met');
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('carries a grouped "Reason:" heading across as the entry annotation', async () => {
+  it('keeps a reason on an excluded entry it was not asked to move', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Excluded (1 files)', '',
-      '- Reason: prep',
-      '  - Sessions/Planned Session.md',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { excluded: [{ path: 'Sessions/Planned Session.md', reason: 'prep' }] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
     await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
-    assert.match(
-      c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
-      /- \[x\] Sessions\/Planned Session\.md — prep/,
-    );
+    const list = readListText(c.writes[path.join(vault, '_meta', 'publish-list.yaml')]);
+    assert.strictEqual(list.reasons.get('Sessions/Planned Session.md'), 'prep');
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('writes Needs Decision entries unchecked', async () => {
+  it('writes Needs Decision entries under needs_decision', async () => {
     const vault = copyVault('auto-exclude');
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'apply', configPath, decide: ['Characters/NPCs/Draft NPC.md'] }, c.deps);
-    assert.match(
-      c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
-      /## Needs Decision \(1 files\)\n\n- \[ \] Characters\/NPCs\/Draft NPC\.md\n/,
-    );
+    assert.deepStrictEqual(readListText(c.writes[path.join(vault, '_meta', 'publish-list.yaml')]).needsDecision, ['Characters/NPCs/Draft NPC.md']);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -342,8 +299,7 @@ describe('manifest apply', () => {
     const c = capture();
     const rc = await runManifest({ verb: 'apply', configPath, exclude: ['_Templates/Lore.md=stays hidden: reference only'] }, c.deps);
     assert.strictEqual(rc, 0, c.text());
-    assert.match(c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
-      /- \[x\] _Templates\/Lore\.md — stays hidden: reference only\n/);
+    assert.strictEqual(readListText(c.writes[path.join(vault, '_meta', 'publish-list.yaml')]).reasons.get('_Templates/Lore.md'), 'stays hidden: reference only');
 
     const refused = capture();
     assert.strictEqual(await runManifest({ verb: 'apply', configPath, publish: ['_Templates/Lore.md'] }, refused.deps), 1);
@@ -378,8 +334,8 @@ describe('manifest apply', () => {
 
     const pruned = capture();
     await runManifest({ verb: 'apply', configPath, prune: true }, pruned.deps);
-    const text = pruned.writes[path.join(vault, '_meta', 'publish-manifest.md')];
-    assert.match(text, /_Templates\/Lore\.md — stays hidden: reference only/);
+    const text = pruned.writes[path.join(vault, '_meta', 'publish-list.yaml')];
+    assert.strictEqual(readListText(text).reasons.get('_Templates/Lore.md'), 'stays hidden: reference only');
     assert.ok(!text.includes('Played Session.md'));
     fs.rmSync(vault, { recursive: true, force: true });
   });
@@ -391,8 +347,8 @@ describe('manifest apply', () => {
     const c = capture();
     const rc = await runManifest({ verb: 'apply', configPath, vaultPath: audited, exclude: ['Sessions/Played Session.md=stays hidden: not yet'] }, c.deps);
     assert.strictEqual(rc, 0, c.text());
-    assert.deepStrictEqual(Object.keys(c.writes), [path.join(audited, '_meta', 'publish-manifest.md')]);
-    assert.ok(!fs.existsSync(path.join(named, '_meta', 'publish-manifest.md')));
+    assert.deepStrictEqual(Object.keys(c.writes), [path.join(audited, '_meta', 'publish-list.yaml')]);
+    assert.ok(!fs.existsSync(path.join(named, '_meta', 'publish-list.yaml')));
     const d = capture();
     await runManifest({ verb: 'diff', configPath, vaultPath: audited, json: true }, d.deps);
     assert.strictEqual(JSON.parse(d.out.join('')).manifestExists, true);
@@ -409,27 +365,21 @@ describe('manifest apply', () => {
     assert.strictEqual(rc, 1);
     assert.match(c.text(), /no such file in the vault: Sessions\/Nope\.md/);
     assert.deepStrictEqual(c.writes, {});
-    assert.ok(!fs.existsSync(path.join(vault, '_meta', 'publish-manifest.md')));
+    assert.ok(!fs.existsSync(path.join(vault, '_meta', 'publish-list.yaml')));
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
   it('--prune drops entries whose file is gone', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Publishing (2 files)', '',
-      '- [x] Sessions/Played Session.md',
-      '- [x] Locations/Long Gone.md',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md', 'Locations/Long Gone.md'] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
     await runManifest({ verb: 'apply', configPath, prune: true }, c.deps);
-    const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
+    const written = c.writes[path.join(vault, '_meta', 'publish-list.yaml')];
     assert.doesNotMatch(written, /Long Gone/);
-    assert.match(written, /- \[x\] Sessions\/Played Session\.md/);
+    assert.deepStrictEqual(readListText(written).publishing, ['Sessions/Played Session.md']);
     assert.match(c.text(), /manifest updated: \+0 publishing, \+0 excluded, \+0 needs decision, -1 pruned/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
@@ -443,39 +393,28 @@ describe('manifest apply', () => {
     fs.mkdirSync(path.join(vault, '_Templates'), { recursive: true });
     fs.writeFileSync(path.join(vault, '_Templates', 'Old Template.md'), '---\ntype: npc\n---\n\nx\n');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '---', 'mode: player', '---', '',
-      '## Publishing (2 files)', '',
-      '- [x] Sessions/Played Session.md',
-      '- [x] _Templates/Old Template.md',
-      '',
-      '## Excluded (1 files)', '',
-      '- [x] Locations/Long Gone.md',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md', '_Templates/Old Template.md'], excluded: ['Locations/Long Gone.md'] });
     const { configPath } = siteFor(vault);
     const c = capture();
 
     await runManifest({ verb: 'apply', configPath, prune: true }, c.deps);
-    const written = c.writes[path.join(vault, '_meta', 'publish-manifest.md')];
+    const written = c.writes[path.join(vault, '_meta', 'publish-list.yaml')];
     // Genuinely gone (no file on disk at all): pruned.
     assert.doesNotMatch(written, /Long Gone/);
     // Under excludeDirs but still a real file on disk: survives.
-    assert.match(written, /- \[x\] _Templates\/Old Template\.md/);
-    assert.match(written, /- \[x\] Sessions\/Played Session\.md/);
+    assert.deepStrictEqual(readListText(written).publishing.sort(), ['Sessions/Played Session.md', '_Templates/Old Template.md']);
     assert.match(c.text(), /manifest updated: \+0 publishing, \+0 excluded, \+0 needs decision, -1 pruned/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
-  it('an --exclude with no =reason gets no annotation', async () => {
+  it('an --exclude with no =reason gets no reason', async () => {
     const vault = copyVault('auto-exclude');
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'apply', configPath, exclude: ['Sessions/Planned Session.md'] }, c.deps);
-    assert.match(
-      c.writes[path.join(vault, '_meta', 'publish-manifest.md')],
-      /- \[x\] Sessions\/Planned Session\.md\n/,
-    );
+    const list = readListText(c.writes[path.join(vault, '_meta', 'publish-list.yaml')]);
+    assert.deepStrictEqual(list.excluded, ['Sessions/Planned Session.md']);
+    assert.strictEqual(list.reasons.size, 0);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -510,35 +449,32 @@ describe('manifest apply', () => {
 });
 
 describe('manifest publish-played (#277)', () => {
-  function playedVault(manifestBody) {
+  function playedVault(lists) {
     const vault = copyVault('auto-exclude');
     fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
       '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    if (manifestBody != null) {
-      fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-        ['---', 'mode: player', '---', '', manifestBody, ''].join('\n'));
-    }
+    if (lists != null) writePublishList(vault, lists);
     return vault;
   }
-  const manifestFile = (vault) => path.join(vault, '_meta', 'publish-manifest.md');
+  const manifestFile = (vault) => path.join(vault, '_meta', 'publish-list.yaml');
 
   it('moves a played session and its Wrap-Up from Needs Decision to Publishing', async () => {
-    const vault = playedVault('## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md');
+    const vault = playedVault({ needsDecision: ['Sessions/Played Session.md'] });
     const { configPath } = siteFor(vault);
     const c = capture();
     const rc = await runManifest({ verb: 'publish-played', configPath }, c.deps);
     assert.strictEqual(rc, 0);
     const written = c.writes[manifestFile(vault)];
-    assert.match(written, /- \[x\] Sessions\/Played Session\.md\n/);
-    assert.match(written, /- \[x\] Sessions\/Session 06 - Wrap-Up\.md\n/);
-    assert.match(written, /## Needs Decision \(0 files\)/);
+    const list = readListText(written);
+    assert.deepStrictEqual(list.publishing.sort(), ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
+    assert.deepStrictEqual(list.needsDecision, []);
     assert.match(c.text(), /published 2 file\(s\)/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
   it('leaves Excluded entries and unplayed sessions alone', async () => {
-    const vault = playedVault('## Excluded (1 files)\n\n- [x] Sessions/Played Session.md — private');
+    const vault = playedVault({ excluded: [{ path: 'Sessions/Played Session.md', reason: 'private' }] });
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'publish-played', configPath }, c.deps);
@@ -551,7 +487,7 @@ describe('manifest publish-played (#277)', () => {
   });
 
   it('--dry-run reports without writing, --json emits the paths', async () => {
-    const vault = playedVault('## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md');
+    const vault = playedVault({ needsDecision: ['Sessions/Played Session.md'] });
     const before = fs.readFileSync(manifestFile(vault), 'utf8');
     const { configPath } = siteFor(vault);
     const c = capture();
@@ -564,7 +500,7 @@ describe('manifest publish-played (#277)', () => {
   });
 
   it('lists a played session with no Wrap-Up as unclear and does not tick it', async () => {
-    const vault = playedVault('## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md');
+    const vault = playedVault({ needsDecision: ['Sessions/Played Session.md'] });
     fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
     const { configPath } = siteFor(vault);
     const c = capture();
@@ -589,7 +525,7 @@ describe('manifest publish-played (#277)', () => {
   });
 
   it('is idempotent', async () => {
-    const vault = playedVault('## Publishing (2 files)\n\n- [x] Sessions/Played Session.md\n- [x] Sessions/Session 06 - Wrap-Up.md');
+    const vault = playedVault({ publishing: ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md'] });
     const { configPath } = siteFor(vault);
     const c = capture();
     await runManifest({ verb: 'publish-played', configPath }, c.deps);
@@ -609,8 +545,7 @@ describe('manifest publish-played ticks only reviewed sessions (#277 final revie
     fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
       `---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: ${canonStatus}\n---\n\n## Recap\n\nDone.\n`);
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', ''].join('\n'));
+    writePublishList(vault, { needsDecision: ['Sessions/Played Session.md'] });
     return vault;
   }
   async function plan(vault, site) {
@@ -635,9 +570,7 @@ describe('manifest publish-played ticks only reviewed sessions (#277 final revie
 
   it('an unreviewed session already published with its Wrap-Up is left alone', async () => {
     const vault = vaultWith('wrap-up', 'DRAFT');
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Publishing (2 files)', '',
-        '- [x] Sessions/Played Session.md', '- [x] Sessions/Session 06 - Wrap-Up.md', ''].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md'] });
     const { payload, writes } = await plan(vault);
     assert.deepStrictEqual(writes, {});
     assert.deepStrictEqual(payload.published, []);
@@ -647,9 +580,7 @@ describe('manifest publish-played ticks only reviewed sessions (#277 final revie
 
   it('an unreviewed published hub does not get its DRAFT Wrap-Up ticked', async () => {
     const vault = vaultWith('wrap-up', 'DRAFT');
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Publishing (1 files)', '',
-        '- [x] Sessions/Played Session.md', ''].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Played Session.md'] });
     const { payload, writes } = await plan(vault);
     assert.deepStrictEqual(writes, {});
     assert.deepStrictEqual(payload.published, []);
@@ -687,8 +618,7 @@ describe('manifest publish-played answers for the site\'s pinned tool (#277 fina
     fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
       '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', ''].join('\n'));
+    writePublishList(vault, { needsDecision: ['Sessions/Played Session.md'] });
     return vault;
   }
 
@@ -765,8 +695,7 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
     fs.writeFileSync(path.join(vault, 'Sessions', 'Session 05 - Wrap-Up.md'),
       '---\ntype: session_wrap\nsession: "[[Other Session]]"\ncanon_status: DRAFT\n---\n\n## Recap\n\nEarlier.\n');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Needs Decision (1 files)', '', '- [ ] Sessions/Played Session.md', ''].join('\n'));
+    writePublishList(vault, { needsDecision: ['Sessions/Played Session.md'] });
     return vault;
   }
   function pinnedSite(vault, version) {
@@ -790,7 +719,7 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
     assert.strictEqual(rc, 0);
     assert.deepStrictEqual(payload.published, ['Sessions/Played Session.md', 'Sessions/Session 06 - Wrap-Up.md']);
     assert.deepStrictEqual(payload.unclear, []);
-    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8');
+    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-list.yaml'), 'utf8');
     assert.doesNotMatch(written, /Other Session|Session 05/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
@@ -813,8 +742,8 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
     assert.ok(!payload.published.includes(session));
     assert.deepStrictEqual(payload.unclear.map((u) => u.path), [session]);
     assert.strictEqual(payload.unclear[0].reason, 'site is pinned to 1.11.39; update the pin before publishing sessions');
-    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8');
-    assert.doesNotMatch(written, /- \[x\] Sessions\/Played Session\.md/);
+    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-list.yaml'), 'utf8');
+    assert.ok(!readListText(written).publishing.includes('Sessions/Played Session.md'));
     fs.rmSync(vault, { recursive: true, force: true });
   });
 
@@ -832,8 +761,7 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
 
   it('when the Wrap-Up will not publish it ticks nothing and says why', async () => {
     const vault = draftVault();
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Excluded (1 files)', '', '- [x] Sessions/Session 06 - Wrap-Up.md', ''].join('\n'));
+    writePublishList(vault, { excluded: ['Sessions/Session 06 - Wrap-Up.md'] });
     const { configPath } = siteFor(vault);
     const { payload, c } = await run(configPath, { session, includeUnreviewed: true });
     assert.deepStrictEqual(c.writes, {});
@@ -873,8 +801,8 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
     assert.deepStrictEqual(payload.published, [session]);
     assert.deepStrictEqual(payload.bodyPublished, [session]);
     assert.deepStrictEqual(payload.unclear, []);
-    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-manifest.md'), 'utf8');
-    assert.match(written, /- \[x\] Sessions\/Played Session\.md/);
+    const written = fs.readFileSync(path.join(vault, '_meta', 'publish-list.yaml'), 'utf8');
+    assert.ok(readListText(written).publishing.includes('Sessions/Played Session.md'));
     assert.doesNotMatch(written, /Other Session/);
     fs.rmSync(vault, { recursive: true, force: true });
   });
@@ -913,8 +841,7 @@ describe('manifest publish-played --session --include-unreviewed (#278)', () => 
   it('--publish-body never touches an Excluded index', async () => {
     const vault = draftVault();
     fs.rmSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'));
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'),
-      ['---', 'mode: player', '---', '', '## Excluded (1 files)', '', '- [x] Sessions/Played Session.md — private', ''].join('\n'));
+    writePublishList(vault, { excluded: [{ path: 'Sessions/Played Session.md', reason: 'private' }] });
     const { configPath } = siteFor(vault);
     const { payload, c } = await run(configPath, { session, publishBody: true });
     assert.deepStrictEqual(c.writes, {});
@@ -962,8 +889,7 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     let wrapLink = '[[Session 01 Wrap-Up]]';
     let wrapSession = 'session: "[[Session 01 - Arrival]]"\n';
     let wrapExtra = '';
-    let manifestExtra = '';
-    if (variant === 'excluded') manifestExtra = '## Excluded (1 files)\n\n- [x] Sessions/Session 01 Wrap-Up.md — secrets\n\n';
+    const wrapUpPath = 'Sessions/Session 01 Wrap-Up.md';
     if (variant === 'case') { wrapLink = '[[session 01 wrap-up]]'; wrapSession = ''; }
     if (variant === 'heading') { wrapLink = '[[Session 01 Wrap-Up#Narrative Recap]]'; wrapSession = ''; }
     if (variant === 'folder') { wrapLink = '[[Sessions/Session 01 Wrap-Up]]'; wrapSession = ''; }
@@ -972,8 +898,9 @@ describe('manifest publish-played ticks only hubs the site will withhold (#276/#
     w('Sessions/Session 01 - Arrival.md', `---\ntype: session\nsession_number: 1\nstatus: reviewed\n${
       wrapLink ? `documents:\n  wrap_up: "${wrapLink}"\n` : ''}---\n\n# Session 01 - Arrival\n\n- Conspiracy wall: KEEPERONLYSECRET the Baron appears at the ball\n`);
     w('Sessions/Session 01 Wrap-Up.md', `---\ntype: session_wrap\n${wrapSession}${wrapExtra}---\n\n# Session 01 Wrap-Up\n\n## Narrative Recap\n\nThey arrived at dusk.\n`);
-    w('_meta/publish-manifest.md', `---\nmode: player\n---\n\n## Publishing (0 files)\n\n${manifestExtra}## Needs Decision (2 files)\n\n- [ ] Sessions/Session 01 - Arrival.md\n${
-      variant === 'excluded' ? '' : '- [ ] Sessions/Session 01 Wrap-Up.md\n'}`);
+    writePublishList(vault, variant === 'excluded'
+      ? { excluded: [{ path: wrapUpPath, reason: 'secrets' }], needsDecision: ['Sessions/Session 01 - Arrival.md'] }
+      : { needsDecision: ['Sessions/Session 01 - Arrival.md', wrapUpPath] });
     w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
     const configPath = path.join(work, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
@@ -1054,7 +981,7 @@ describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#
     w(HUB, '---\ntype: session\nsession_number: 1\nstatus: reviewed\ndocuments:\n  wrap_up: "[[The Sealed Ledger]]"\n---\n\n# Session 01 - Arrival\n\nKEEPERONLYSECRET the Baron appears at the ball\n');
     w(WRAP, '---\ntype: session_wrap\ngm_aliases:\n  - The Sealed Ledger\n---\n\n## Narrative Recap\n\nThey arrived at dusk.\n');
     w('_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
-    w('_meta/publish-manifest.md', `---\nmode: player\n---\n\n## Publishing (0 files)\n\n## Needs Decision (2 files)\n\n- [ ] ${HUB}\n- [ ] ${WRAP}\n`);
+    writePublishList(vault, { needsDecision: [HUB, WRAP] });
     const configPath = path.join(work, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({ siteTitle: 'T', siteUrl: 'https://x.example', vaultPath: vault,
       outputDir: path.join(work, 'docs'), excludeDirs: ['_meta'], folderMap: { Sessions: 'sessions' } }));
@@ -1084,5 +1011,113 @@ describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#
     } finally {
       fs.rmSync(work, { recursive: true, force: true });
     }
+  });
+});
+
+describe('manifest apply keeps a reason beside a needs_decision entry', () => {
+  it('rewrites the list with the reason still there', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-list.yaml'),
+      'publishing: []\nexcluded: []\nneeds_decision:\n  - path: Sessions/Planned Session.md\n    reason: waiting on Sam\n');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps), 0, c.text());
+    const list = readListText(fs.readFileSync(path.join(vault, '_meta', 'publish-list.yaml'), 'utf8'));
+    assert.strictEqual(list.reasons.get('Sessions/Planned Session.md'), 'waiting on Sam');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
+// Only the update and `manifest convert` move a list (review C1): every other writer keeps the vault on its file.
+describe('a vault still on the old Markdown list stays on it', () => {
+  const oldFile = (vault) => path.join(vault, '_meta', 'publish-manifest.md');
+  const newFile = (vault) => path.join(vault, '_meta', 'publish-list.yaml');
+  // A site whose build step reads the old file: the update holds this vault on it.
+  function heldSite(vault) {
+    const site = siteFor(vault);
+    fs.mkdirSync(path.join(site.dir, 'scripts'));
+    fs.writeFileSync(path.join(site.dir, 'scripts', 'add-props.mjs'), "readFileSync('../vault/_meta/publish-manifest.md')\n");
+    fs.writeFileSync(path.join(site.dir, 'package.json'), JSON.stringify({ scripts: { postbuild: 'node scripts/add-props.mjs' } }));
+    return site;
+  }
+
+  it('apply writes the old file in the old layout, byte for byte what the old writer wrote, and no new file', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Publishing (0 files)\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Planned Session.md\n');
+    const { configPath } = heldSite(vault);
+    const c = capture();
+    const rc = await runManifest({
+      verb: 'apply', configPath, publish: ['Sessions/Played Session.md'], exclude: ['Sessions/Planned Session.md=prep'],
+    }, c.deps);
+    assert.strictEqual(rc, 0, c.text());
+    assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
+    assert.strictEqual(fs.readFileSync(oldFile(vault), 'utf8'), [
+      '---',
+      'generated: 2026-09-07T12:00:00.000Z',
+      'vault: "Test Campaign"',
+      'mode: player',
+      'total_files: 5',
+      'publishing: 1',
+      'excluded: 1',
+      'needs_decision: 0',
+      '---',
+      '',
+      '## Publishing (1 files)',
+      '',
+      '- [x] Sessions/Played Session.md',
+      '',
+      '## Excluded (1 files)',
+      '',
+      '- [x] Sessions/Planned Session.md — prep',
+      '',
+      '## Needs Decision (0 files)',
+      '',
+    ].join('\n'));
+    assert.match(c.text(), /manifest updated: \+1 publishing, \+1 excluded, \+0 needs decision, -0 pruned/);
+    assert.doesNotMatch(c.text(), /Moved the publish list/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('publish-played ticks in the old file and leaves the vault on it', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
+      '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Excluded (1 files)\n\n- [ ] Notes/Kept.md — spoils it\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md\n');
+    const { configPath } = heldSite(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'publish-played', configPath }, c.deps), 0, c.text());
+    assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
+    const written = fs.readFileSync(oldFile(vault), 'utf8');
+    assert.match(written, /- \[x\] Sessions\/Played Session\.md\n/);
+    assert.match(written, /- \[x\] Sessions\/Session 06 - Wrap-Up\.md\n/);
+    assert.match(written, /- \[x\] Notes\/Kept\.md — spoils it\n/, 'the old writer keeps an unticked Excluded entry');
+    assert.match(c.text(), /published 2 file\(s\)/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a vault with no list whose site tool cannot read the new file gets the old file', async () => {
+    const vault = copyVault('auto-exclude');
+    const site = siteFor(vault);
+    const pkg = path.join(site.dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ version: '1.26.0' }));
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath: site.configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
+    assert.strictEqual(fs.existsSync(newFile(vault)), false);
+    assert.match(fs.readFileSync(oldFile(vault), 'utf8'), /## Excluded \(1 files\)\n\n- \[x\] Sessions\/Planned Session\.md — prep\n/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a vault with no list and an up-to-date site gets the new file', async () => {
+    const vault = copyVault('auto-exclude');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
+    assert.strictEqual(fs.existsSync(oldFile(vault)), false);
+    assert.strictEqual(readListText(fs.readFileSync(newFile(vault), 'utf8')).reasons.get('Sessions/Planned Session.md'), 'prep');
+    fs.rmSync(vault, { recursive: true, force: true });
   });
 });

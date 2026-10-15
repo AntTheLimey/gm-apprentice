@@ -3,7 +3,9 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { parseManifest, loadManifest } = require('../../lib/manifest');
+const { parseManifest, stripInlineComment } = require('../../lib/manifest-legacy');
+const { loadManifest } = require('../../lib/manifest');
+const quiet = { warn: () => {} };
 
 describe('parseManifest', () => {
   it('parses frontmatter metadata', () => {
@@ -146,7 +148,7 @@ describe('loadManifest', () => {
     ].join('\n');
     fs.writeFileSync(path.join(metaDir, 'publish-manifest.md'), md);
 
-    const result = loadManifest(tmpDir);
+    const result = loadManifest(tmpDir, quiet);
     assert.strictEqual(result.publishing.length, 1);
     assert.strictEqual(result.publishing[0], 'Characters/PCs/Hero.md');
     fs.rmSync(tmpDir, { recursive: true, force: true });
@@ -154,7 +156,6 @@ describe('loadManifest', () => {
 });
 
 describe('parseManifest inline comments (issue #80)', () => {
-  const { stripInlineComment } = require('../../lib/manifest');
 
   it('keeps only the path from an annotated Publishing entry', () => {
     const md = [
@@ -194,7 +195,6 @@ describe('parseManifest inline comments (issue #80)', () => {
 });
 
 describe('parseManifest does not truncate dashed filenames (review regression)', () => {
-  const { stripInlineComment } = require('../../lib/manifest');
 
   it('keeps an em-dash that is part of the filename', () => {
     assert.strictEqual(
@@ -227,7 +227,7 @@ describe('parseManifest does not truncate dashed filenames (review regression)',
 });
 
 describe('unicode normalization (#139)', () => {
-  const { canonicalPath, stripInlineComment } = require('../../lib/manifest');
+  const { canonicalPath } = require('../../lib/manifest');
 
   // Built with explicit \u escapes (never a literal accented character) so the test
   // file itself cannot be silently re-normalized by an editor or formatter. NFC types

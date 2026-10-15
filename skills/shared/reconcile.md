@@ -132,11 +132,12 @@ campaign-organizer if entity filing is needed.
 
 ### 6.1. Publish registration (conditional)
 
-Only if `_meta/publish-manifest.md` exists and `node "$TOOL" settings
+Only if the vault has a publish list (`node "$TOOL" manifest list --json
+--vault <vault>` says `listed: true`) and `node "$TOOL" settings
 get player_site.publish player_site.folder player_site.hide.mode --vault <vault>` gives
 `true`, a folder and `player`; otherwise skip. `$TOOL` is as in
 `publish-site/SKILL.md`; a relative folder is relative to the
-vault. A played session left in the manifest's Needs Decision
+vault. A played session left in the publish list's `needs_decision`
 never reaches the player site (#277). Run it yourself,
 unconditionally, and report the paths it ticked:
 

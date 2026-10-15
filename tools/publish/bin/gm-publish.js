@@ -150,9 +150,9 @@ the GM.
   --help, -h         Show this help
 `,
   manifest: `
-gm-apprentice-publish manifest <diff|apply|publish-played|rename> [options]
+gm-apprentice-publish manifest <diff|apply|publish-played|rename|convert|list> [options]
 
-Compares the publish manifest (_meta/publish-manifest.md) with what is actually
+Compares the publish list (_meta/publish-list.yaml) with what is actually
 in the vault, and edits it. "diff" classifies every vault file with the same
 decision the build makes, so a file it calls "publish" is a file the build
 publishes. The tool only shows the drift — which files are correctly
@@ -173,6 +173,20 @@ excluded versus missing is the GM's call.
                      --vault (diff and apply): read and write this vault's
                      manifest through the site's rules, as doctor --site --vault
                      audits it, so a fix lands in the vault that was audited.
+  manifest convert --vault <dir> [--config <file>] [--check] [--site-tool-updated] [--json]
+                     Move the publish list from _meta/publish-manifest.md to
+                     _meta/publish-list.yaml, all or nothing: the new file is
+                     read back and must hold every entry line and reason of
+                     the old one before the old one is set aside as
+                     _meta/publish-manifest.md.converted. --check changes
+                     nothing. Without --config the site folder the vault's
+                     settings name is asked whether the list must stay. Exit
+                     1 when it cannot move the list; the old file is then
+                     untouched. Only this and the update move a list: apply
+                     and publish-played write the file the vault is on.
+  manifest list --vault <dir> [--json]
+                     The three lists (publishing, excluded with reasons,
+                     needs_decision) and their counts.
   manifest rename --vault <dir> --from <vault path> --to <vault path> --json
                  [--name <spelling>]... [--config <site vault.config.json>]
                      What renaming a note would change in the files this tool
@@ -878,8 +892,8 @@ if (command === 'deploy') {
 
 if (command === 'manifest') {
   const verb = args[1];
-  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played' && verb !== 'rename') {
-    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply, publish-played or rename)');
+  if (verb !== 'diff' && verb !== 'apply' && verb !== 'publish-played' && verb !== 'rename' && verb !== 'convert' && verb !== 'list') {
+    console.error(verb ? `Error: Unknown manifest command: ${verb}` : 'Error: manifest needs a command (diff, apply, publish-played, rename, convert or list)');
     printSubcommandHelp('manifest');
     process.exit(1);
   }
@@ -889,7 +903,8 @@ if (command === 'manifest') {
   const parsed = parseSubcommandArgs(
     args.slice(2),
     Object.assign({ '--prune': 'prune', '--json': 'json' },
-      verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed', '--publish-body': 'publishBody' } : {}),
+      verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed', '--publish-body': 'publishBody' } : {},
+      verb === 'convert' ? { '--check': 'check', '--site-tool-updated': 'siteToolUpdated' } : {}),
     // --vault: vault_check asks about the vault it is checking, which need not be the
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
@@ -906,7 +921,7 @@ if (command === 'manifest') {
   runManifest({
     verb,
     // For rename, only a --config the caller typed: the default is a path in the working folder.
-    configPath: verb === 'rename' && !args.includes('--config') ? null : parsed.configPath,
+    configPath: (verb === 'rename' || verb === 'convert') && !args.includes('--config') ? null : parsed.configPath,
     vaultPath: parsed.flags.vault,
     session: parsed.flags.session,
     from: parsed.flags.from,
@@ -919,6 +934,8 @@ if (command === 'manifest') {
     decide: parsed.flags.decide,
     prune: !!parsed.flags.prune,
     dryRun: !!parsed.flags.dryRun,
+    check: !!parsed.flags.check,
+    siteToolUpdated: !!parsed.flags.siteToolUpdated,
     json: !!parsed.flags.json,
   })
     .then(exitAfterFlush)

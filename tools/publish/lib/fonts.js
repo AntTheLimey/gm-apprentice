@@ -6,7 +6,7 @@
 // consent question).
 //
 // Cache location: <vault>/_meta/font-cache/<family-slug>/. _meta/ is already the vault's
-// tool-owned directory (vault-config.md, publish-manifest.md), the publisher always
+// tool-owned directory (vault-config.yaml, publish-list.yaml), the publisher always
 // excludes it from the site (publish-decision ALWAYS_EXCLUDE_DIRS), and it travels with
 // the vault, so a later build on the same vault works offline and reproduces the same
 // site. Fonts are OFL; the files are stored and served unmodified (no subsetting, no

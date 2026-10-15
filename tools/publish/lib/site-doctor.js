@@ -498,7 +498,7 @@ async function runSiteDoctor(options, deps) {
         if (registered.has(rel)) continue;
         findings.push(finding(
           'MANIFEST_UNREGISTERED', 'warning', rel,
-          `is a ${type} in no manifest section, so it will not publish`,
+          `is a ${type} that is not on the publish list, so it will not publish`,
           'run `gm-publish manifest diff`',
         ));
       }

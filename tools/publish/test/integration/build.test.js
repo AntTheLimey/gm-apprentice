@@ -737,7 +737,7 @@ describe('build integration', () => {
         'an annotated but valid entry must not warn');
     });
 
-    it('warns when a played session is in the vault but absent from the manifest (#101)', () => {
+    it('warns when a played session is in the vault but absent from the publish list (#101)', () => {
       const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-test-unreg-'));
       const vault = path.join(tmp, 'vault');
       fs.cpSync(path.join(fixturesDir, 'with-manifest'), vault, { recursive: true });
@@ -767,10 +767,10 @@ describe('build integration', () => {
         fs.rmSync(tmp, { recursive: true, force: true });
       }
 
-      assert.ok(warnings.some(w => w.includes('Sessions/Unregistered Session.md') && w.includes('not in the publish manifest')),
+      assert.ok(warnings.some(w => w.includes('Sessions/Unregistered Session.md') && w.includes('not on the publish list')),
         `expected an unregistered-session warning, got: ${JSON.stringify(warnings)}`);
       // The deliberately-excluded prep session (Reason: prep) is a decision, not an oversight — no warning.
-      assert.ok(!warnings.some(w => w.includes('Planned Session.md') && w.includes('not in the publish manifest')),
+      assert.ok(!warnings.some(w => w.includes('Planned Session.md') && w.includes('not on the publish list')),
         'a deliberately excluded session must not warn');
     });
 
@@ -825,7 +825,7 @@ describe('build integration', () => {
       assert.ok(lines.indexOf(summary[0]) > lines.findIndex(l => l.includes('wrote index.html')),
         'summary must come after the per-file output');
       // The played session no longer gets a separate mid-log warning.
-      assert.ok(!lines.some(l => l.includes('Session 09') && l.includes('not in the publish manifest')));
+      assert.ok(!lines.some(l => l.includes('Session 09') && l.includes('not on the publish list')));
     });
 
     it('does NOT warn about an unregistered session in full/GM mode (manifest not enforced)', () => {
@@ -861,7 +861,7 @@ describe('build integration', () => {
         fs.rmSync(tmp, { recursive: true, force: true });
       }
 
-      assert.ok(!warnings.some(w => w.includes('not in the publish manifest')),
+      assert.ok(!warnings.some(w => w.includes('not on the publish list')),
         `full mode must not emit the unregistered-session warning, got: ${JSON.stringify(warnings)}`);
     });
   });

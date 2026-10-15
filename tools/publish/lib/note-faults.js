@@ -723,16 +723,14 @@ function startNoteAudit(input) {
     }
 
     found.push(...aliasFindings());
-    let annotations = null;   // the manifest's written reasons, read only when something is named
-    const reasons = () => {
-      if (annotations) return annotations;
-      annotations = new Map();
-      try {
-        const { parseAnnotatedManifest } = require('./manifest-cli');
-        annotations = parseAnnotatedManifest(readFile(path.join(input.vaultPath, '_meta', 'publish-manifest.md')));
-      } catch (e) { /* no manifest, or none readable: no reasons */ }
-      return annotations;
-    };
+    // The publish list's written reason for a note (a publishing or excluded entry may have one; only excluded settles).
+    const reasons = () => ({
+      get: (rel) => {
+        const list = input.manifest;
+        const section = !list ? null : (list.excluded || []).includes(rel) ? 'excluded' : (list.publishing || []).includes(rel) ? 'publishing' : null;
+        return section ? { section, annotation: (list.reasons && list.reasons.get(rel)) || null } : null;
+      },
+    });
     // --- the names of withheld notes ---------------------------------------------------
     // Not settled by a "stays hidden:" reason: that answers the link report (NAMED_NO_PAGE)
     // only. A name in plain text is fixed in the sentence or by taking the flag off.
@@ -754,7 +752,7 @@ function startNoteAudit(input) {
       found.push({
         code: 'WITHHELD_PUBLISHED', severity: 'error', path: w.rel,
         detail: `is marked withheld and is being published: page ${w.out || 'of the site'}`,
-        fix: 'remove withheld from the note if its name is not a secret, or stop it publishing (publish: false in its frontmatter, or take it out of Publishing in _meta/publish-manifest.md)',
+        fix: 'remove withheld from the note if its name is not a secret, or stop it publishing (publish: false in its frontmatter, or take it off the publish list: manifest apply --exclude "<path>=<why>")',
         page: w.out || null,
       });
     }
@@ -792,8 +790,8 @@ function startNoteAudit(input) {
         } else if (kind === 'entity') {
           // Listing a note under Publishing gives it a page only when the manifest is what holds it back.
           const page = String(record.why).startsWith('MANIFEST_')
-            ? `then list it under Publishing in _meta/publish-manifest.md so it gets a page`
-            : `but the manifest is not what keeps it off the site (${record.why}): run explain "${rel}" for the rule`;
+            ? `then put it on the publish list so it gets a page: manifest apply --publish "${rel}"`
+            : `but the publish list is not what keeps it off the site (${record.why}): run explain "${rel}" for the rule`;
           fix = `move what only you should know under a ## GM Notes heading in ${rel}, ${page}; or leave it hidden and record that with manifest apply --exclude "${rel}=stays hidden: <why>"`;
         } else if (kind === 'working') {
           fix = `turn the link to ${name} into plain words or reword the sentence; a working note like this never gets a page`;

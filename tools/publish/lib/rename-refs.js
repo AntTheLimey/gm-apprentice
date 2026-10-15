@@ -7,7 +7,7 @@
 //   companions  files the site pairs to the note by name, which move with it (a PC's
 //          `_Story.md`): [{ from, to }]. `detaches`, a one-line reason, instead says the
 //          note is such a companion and cannot be renamed alone.
-//   files  the publish list (_meta/publish-manifest.md) and the vault-config settings that
+//   files  the publish list (_meta/publish-list.yaml) and the vault-config settings that
 //          name the note: an `overrides.fields` path, and a `landing` featured_npcs /
 //          featured_locations / quick_links name. Text comes back byte for byte but for
 //          the changed name, line endings kept.
@@ -21,7 +21,9 @@
 const fs = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
-const { canonicalPath, ENTRY_RE } = require('./manifest');
+const YAML = require('yaml');
+const { canonicalPath } = require('./manifest');
+const { renameInOldList } = require('./manifest-legacy');
 const { canonicalNfc } = require('./unicode');
 const {
   pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, buildLinkMap,
@@ -33,8 +35,8 @@ const { loadManifest } = require('./manifest');
 const { publishedPages } = require('./published-pages');
 const { renameInSettings, settingsText } = require('./settings/write');
 const { nameInFor } = require('./settings');
+const { PUBLISH_LIST_FILE, OLD_LIST_FILE } = require('./settings/layout');
 
-const MANIFEST_REL = '_meta/publish-manifest.md';
 const EXCEPTIONS = 'player_site.hide.field_exceptions';
 const LANDING = 'player_site.landing';
 const NAME_LISTS = ['featured_npcs', 'featured_locations', 'quick_links'];
@@ -43,30 +45,30 @@ function lines(text) {
   return text.match(/[^\n]*\n|[^\n]+$/g) || [];
 }
 
-function renameInManifest(text, from, to) {
+// Renames one path in the YAML publish list, through the document model so comments, reasons and layout stay. The
+// new text, or null when no entry names `from`. Line endings are kept.
+function renameInList(text, from, to) {
   const want = canonicalPath(from);
-  let section = null;
+  const doc = YAML.parseDocument(text);
+  if (doc.errors.length) return null;
   let changed = false;
-  const out = lines(text).map((line) => {
-    const eol = /\r?\n$/.exec(line);
-    const body = eol ? line.slice(0, -eol[0].length) : line;
-    const heading = /^## (.+)/.exec(body);
-    if (heading) {
-      const title = heading[1].trim();
-      section = title.startsWith('Publishing') || title.startsWith('Needs Decision') || title.startsWith('Excluded') ? title : null;
-      return line;
+  const rename = (node) => {
+    if (YAML.isScalar(node) && typeof node.value === 'string' && canonicalPath(node.value.trim()) === want) {
+      node.value = to;
+      changed = true;
     }
-    if (!section) return line;
-    const prefix = /^(?:- \[[ xX]\]\s+|\s+-\s+)/.exec(body);
-    if (!prefix) return line;
-    const rest = body.slice(prefix[0].length);
-    const entry = ENTRY_RE.exec(rest.trim());
-    const named = entry ? entry[1] : rest.trim();
-    if (canonicalPath(named) !== want || !rest.startsWith(named)) return line;
-    changed = true;
-    return prefix[0] + to + rest.slice(named.length) + (eol ? eol[0] : '');
-  });
-  return changed ? out.join('') : null;
+  };
+  for (const key of ['publishing', 'excluded', 'needs_decision']) {
+    const seq = doc.get(key, true);
+    if (!YAML.isSeq(seq)) continue;
+    for (const item of seq.items) {
+      if (YAML.isMap(item)) rename(item.get('path', true));
+      else rename(item);
+    }
+  }
+  if (!changed) return null;
+  const out = doc.toString({ lineWidth: 0 });
+  return text.includes('\r\n') ? out.replace(/\r?\n/g, '\r\n') : out;
 }
 
 const stemOf = (rel) => path.posix.basename(rel).replace(/\.md$/i, '');
@@ -162,7 +164,7 @@ function siteContext(vault, configPath) {
   const { config, publishConfig } = resolveConfig(raw, vault, () => {});
   const scanConfig = scanConfigFor(Object.assign({}, config, { vaultPath: vault }), publishConfig);
   const relOf = (page) => canonicalPath(vaultRelPath(vault, page.sourcePath));
-  const manifest = loadManifest(vault);
+  const manifest = loadManifest(vault, { warn: () => {} });
   const pages = scanVaultReport(scanConfig).pages;
   const { published } = publishedPages(pages, { vaultPath: vault, publishConfig, manifest, relOf });
   return { scanConfig, publishConfig, manifest, pages, published, relOf };
@@ -214,6 +216,10 @@ function renameRefs(vault, from, to, configPath, names) {
     const file = path.join(vault, rel);
     return fs.existsSync(file) ? fs.readFileSync(file, 'utf-8') : null;
   };
+  // The list the build reads: the YAML file, or the old Markdown file until the update moves it.
+  const hasNew = read(PUBLISH_LIST_FILE) !== null;
+  const MANIFEST_REL = hasNew ? PUBLISH_LIST_FILE : OLD_LIST_FILE;
+  const renameInManifest = hasNew ? renameInList : renameInOldList;
   const manifest = read(MANIFEST_REL);
   // A settings file that cannot be read (no frontmatter, not valid YAML) names no note: nothing to rename in it.
   let settings = null;
@@ -257,4 +263,4 @@ function runRename(options, deps) {
   return 0;
 }
 
-module.exports = { runRename, renameRefs, renameInManifest };
+module.exports = { runRename, renameRefs, renameInList };

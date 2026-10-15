@@ -5,7 +5,7 @@ const os = require('os');
 const path = require('path');
 
 const { runSiteDoctor, nearestNames, diceCoefficient } = require('../lib/site-doctor');
-
+const { writePublishList } = require('./helpers/publish-list');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 function write(root, rel, body) {
@@ -50,14 +50,7 @@ function messyVault() {
   write(vault, 'Characters/NPCs/Scratchpad.md', '---\nname: Nobody\n---\n\nA note with no type.\n');
   write(vault, 'Locations/Miskatonic_Library.md', '---\ntype: location\n---\n\nRun by [[Dr_Armitag]].\n');
   write(vault, 'Session Notes/Loose Note.md', '---\ntype: session\nstatus: played\n---\n\nIn an unmapped folder.\n');
-  write(vault, '_meta/publish-manifest.md', [
-    '---', 'mode: player', '---', '',
-    '## Publishing (3 files)', '',
-    '- [x] Characters/NPCs/Dr_Armitage.md',
-    '- [x] Locations/Miskatonic_Library.md',
-    '- [x] Locations/Vanished Wing.md',
-    '',
-  ].join('\n'));
+  writePublishList(vault, { publishing: ['Characters/NPCs/Dr_Armitage.md', 'Locations/Miskatonic_Library.md', 'Locations/Vanished Wing.md'] });
   return vault;
 }
 
@@ -430,10 +423,7 @@ describe('doctor --site', () => {
     const vault = fs.mkdtempSync(path.join(os.tmpdir(), 'site-doctor-unreg-'));
     write(vault, 'Sessions/Session_1.md', '---\ntype: session\nstatus: played\n---\n\nIt happened.\n');
     write(vault, 'Sessions/Session_2.md', '---\ntype: session\nstatus: played\n---\n\nAlso happened.\n');
-    write(vault, '_meta/publish-manifest.md', [
-      '---', 'mode: player', '---', '',
-      '## Publishing (1 files)', '', '- [x] Sessions/Session_1.md', '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Sessions/Session_1.md'] });
     const { configPath } = siteFor(vault, { folderMap: { Sessions: 'sessions' } });
     const c = capture();
     await runSiteDoctor({ configPath, json: true }, c.deps);
