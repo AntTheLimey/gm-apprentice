@@ -1,0 +1,82 @@
+/* The GM site's band, its "Hidden from players" panel and its marks. Copied into the GM site's folder only: the player
+   site never links it. Built on the colour names every preset defines (--warning, --bg-card, --border, --text,
+   --text-muted), so it follows the theme, light and dark. */
+
+.gm-band {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  margin: 0 0 1rem;
+  padding: 0.4rem 1rem;
+  background: var(--warning);
+  color: #1a1a1a;
+  font-variant: small-caps;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+  border-radius: 4px;
+}
+
+.gm-mark {
+  display: block;
+  margin: 0.75rem 0;
+  padding: 0.5rem 0.75rem;
+  border-left: 4px solid var(--warning);
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--bg-card));
+  color: var(--text);
+}
+
+.gm-mark__label {
+  margin: 0 0 0.25rem;
+  font-size: 0.8em;
+  font-weight: 700;
+  color: var(--text);   /* not --warning: several presets keep a bright warning in light mode, unreadable as text */
+}
+
+span.gm-mark {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border-left: none;
+  border-radius: 0;
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  text-decoration: underline;
+  text-decoration-color: var(--warning);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 2px;
+}
+
+span.gm-mark::after {
+  content: " [" attr(data-gm-label) "]";
+  font-size: 0.75em;
+  color: var(--text);
+  text-decoration: none;
+}
+
+/* The reason players do not see the page: a band, though it carries the mark's class for the panel reader. */
+.gm-band.gm-band--hidden {
+  margin: 0 0 1rem;
+  padding: 0.4rem 1rem;
+  border-left: none;
+  background: var(--warning);
+  color: #1a1a1a;
+  font-variant: normal;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-align: left;
+}
+
+.gm-hidden {
+  margin: 0 0 1.25rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-card);
+}
+
+.gm-hidden__title {
+  margin: 0 0 0.5rem;
+  font-size: 1rem;
+  color: var(--text);
+}

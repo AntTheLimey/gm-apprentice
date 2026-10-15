@@ -31,7 +31,7 @@
 // allowlist or an explicit `publish: false` and reach the site when the old build
 // dropped it.
 const { publishMode } = require('./processor');
-const { storyOwnerPath, isStoryCompanion } = require('./scanner');
+const { storyOwnerPath, isStoryCompanion, matchExcludedDir } = require('./scanner');
 const { getCanonStatus } = require('./templates/base');
 const { entry, nameInFor } = require('./settings');
 
@@ -245,8 +245,57 @@ function publishesPage(verdict) {
   return verdict.bucket === 'publish' || PUBLISHED_DECIDE_CODES.has(verdict.code);
 }
 
+// The codes for a whole note the player site holds back and the GM site can show (the `notes` switch).
+const NOTE_CODES = new Set([
+  'DRAFT_EXCLUDED', 'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE',
+  'SCENE_CUT_SKIPPED', 'MANIFEST_EXCLUDED', 'MANIFEST_NEEDS_DECISION', 'MANIFEST_UNLISTED',
+  'PUBLISH_FALSE', 'PUBLISH_NONE',
+]);
+
+// The GM site's verdict for one page. `options` is decidePage's plus `show` (a Set of the kinds the GM
+// site shows), `hiddenFolders` (the player site's hide.folders) and `playerConfig` (the player site's
+// publishConfig: the `player` verdict is decided against the real player site, not the GM site's twins).
+// Every verdict carries `.player`, the verdict the player site gives the page.
+function decideGmPage(page, options) {
+  const opts = options || {};
+  if (!opts.playerConfig) throw new Error('decideGmPage needs the player site\'s config (options.playerConfig)');
+  const show = opts.show || new Set();
+  const withPlayer = (v) => ({ ...v, player: v });
+
+  const rel = opts.rel;
+  // The scanner reads folder names case-insensitively, so the GM site's never-shown test does too.
+  const lowerDirs = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
+  const excludedDir = String(rel == null ? '' : rel).split('/').slice(0, -1).find((s) => lowerDirs.includes(s.toLowerCase()));
+  if (excludedDir) {
+    return withPlayer({ bucket: 'exclude', code: 'DIR_ALWAYS_EXCLUDED', reason: `in ${excludedDir}/ — never published`, outputPath: (page && page.outputPath) || null });
+  }
+
+  const outputPath = (page && page.outputPath) || null;
+  const folder = matchExcludedDir(String(rel == null ? '' : rel), opts.hiddenFolders);
+  if (folder !== undefined) {
+    const publishConfig = opts.playerConfig;
+    const player = {
+      bucket: 'exclude',
+      code: 'DIR_CONFIG_EXCLUDED',
+      reason: `in ${folder}/ — listed in ${nameInFor(publishConfig.layout, 'player_site.hide.folders')}`,
+      outputPath,
+    };
+    if (!show.has('notes')) return withPlayer(player);
+    return { bucket: 'publish', code: 'GM_SHOWN', reason: `hide.folders: ${folder}`, outputPath, player };
+  }
+
+  const player = decidePage(page, { ...opts, publishConfig: opts.playerConfig });
+  if (publishesPage(player)) return { ...player, player };
+  if (NOTE_CODES.has(player.code) && show.has('notes')) {
+    return { bucket: 'publish', code: 'GM_SHOWN', reason: player.reason, outputPath: player.outputPath, player };
+  }
+  return { ...player, player };
+}
+
 module.exports = {
   decidePage,
+  decideGmPage,
+  NOTE_CODES,
   storyCompanionPc,
   publishesPage,
   autoExcludeCode,

@@ -1306,11 +1306,986 @@
       "additionalProperties": false
     },
     "gm_site": {
-      "description": "Reserved for the GM site; nothing under it is read yet",
       "type": [
         "object",
         "null"
-      ]
+      ],
+      "properties": {
+        "publish": {
+          "description": "Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online",
+          "default": false,
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "string",
+              "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "folder": {
+          "description": "The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "show": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "notes": {
+              "description": "Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "sections": {
+              "description": "Sections the player site hides (by heading) are shown, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "fields": {
+              "description": "Frontmatter fields the player site hides are listed in a panel at the top of the page, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "relationships": {
+              "description": "Relationships the player site hides (GM-only ones) are shown, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "gm_only_blocks": {
+              "description": "GM-only blocks (`<!-- gm-only -->`) are shown, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "spoilers": {
+              "description": "Spoiler blocks (`<!-- spoiler -->`) are shown, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "callouts": {
+              "description": "Callouts the player site hides are shown, marked",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "withheld_names": {
+              "description": "Names the player site prints as \"someone\" or \"somewhere\" are printed in full, marked with what players see",
+              "default": true,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "comments": {
+              "description": "Comments in a note (`%% ... %%`) are shown, marked. They are off by default: most are notes to yourself, not things to run",
+              "default": false,
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "title": {
+          "description": "The name in the menu bar and the browser tab",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "footer": {
+          "description": "A line at the foot of every page",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "features": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "search": {
+              "description": "The search box",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "link_previews": {
+              "description": "The small card that opens when a reader rests on a link to another page, or taps it once on a phone. `on` shows it everywhere; `desktop` keeps it to a mouse and keyboard, so on a phone a tap goes straight to the page",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[oO][nN]|[dD][eE][sS][kK][tT][oO][pP]|[oO][fF][fF]|[tT][rR][uU][eE]|[yY][eE][sS]|[fF][aA][lL][sS][eE]|[nN][oO])\\s*$"
+                },
+                {
+                  "const": true
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "connections": {
+              "description": "How the Connections section on a page is drawn: what the page's subject is tied to, in tabs by kind (people, places, organisations and so on), with pages that only mention it in a last tab. `tree` is a branching list, readable on a phone; `web` puts the subject in the middle with names around it; `cards` gives a card for each; `off` leaves out the section and the list of mentions. `on`, `yes` and `true` read as `tree`; `no` and `false` as `off`",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][eE][eE]|[wW][eE][bB]|[cC][aA][rR][dD][sS]|[oO][fF][fF]|[tT][rR][uU][eE]|[oO][nN]|[yY][eE][sS]|[fF][aA][lL][sS][eE]|[nN][oO])\\s*$"
+                },
+                {
+                  "const": true
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "tohit_calculator": {
+              "description": "The to-hit calculator on a GURPS character's Combat tab",
+              "anyOf": [
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[oO][nN]|[oO][fF][fF]|[tT][rR][uU][eE]|[yY][eE][sS]|[fF][aA][lL][sS][eE]|[nN][oO])\\s*$"
+                },
+                {
+                  "const": true
+                },
+                {
+                  "const": false
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "not_found": {
+          "description": "The words a reader sees after following a link to a page that is not there",
+          "type": [
+            "string",
+            "number",
+            "null"
+          ]
+        },
+        "before_build": {
+          "description": "Commands the publish tool runs, in order, in the site folder, before it builds. A command that fails stops the build and nothing is published",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "after_build": {
+          "description": "Commands the publish tool runs, in order, in the site folder, after every page is written (image tidying, extra pages). A command that fails stops the build and nothing is published",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": [
+              "string",
+              "number",
+              "boolean"
+            ]
+          }
+        },
+        "menu_extra": {
+          "description": "Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "object",
+            "properties": {
+              "label": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "link": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              },
+              "group": {
+                "type": [
+                  "string",
+                  "number"
+                ]
+              }
+            },
+            "required": [
+              "label",
+              "link"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "folder_map": {
+          "description": "Which vault folders are published, and the web address each gets",
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "theme": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "genre": {
+              "description": "A ready-made look: colours, lettering and section names. A genre the tool does not know is reported, and the site keeps the plain dark look",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[hH][oO][rR][rR][oO][rR]|[fF][aA][nN][tT][aA][sS][yY]|[nN][oO][iI][rR]|[mM][iI][lL][iI][tT][aA][rR][yY]|[sS][cC][iI][fF][iI]|[gG][oO][tT][hH][iI][cC]|[cC][tT][hH][uU][lL][hH][uU]|[aA][dD][vV][eE][nN][tT][uU][rR][eE]|[iI][nN][dD][uU][sS][tT][rR][iI][aA][lL]|[hH][eE][iI][sS][tT]|[tT][aA][cC][tT][iI][cC][aA][lL]|[mM][oO][dD][eE][rR][nN]|[sS][cC][iI]\\-[fF][iI]|[sS][cC][iI][eE][nN][cC][eE]\\-[fF][iI][cC][tT][iI][oO][nN]|[sS][pP][aA][cC][eE]|[sS][pP][aA][cC][eE]\\-[oO][pP][eE][rR][aA]|[sS][pP][aA][cC][eE]\\-[nN][oO][iI][rR])\\s*$"
+            },
+            "palette": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "primary": {
+                  "description": "The main colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "accent": {
+                  "description": "The accent colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "background": {
+                  "description": "The page background colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "description": "The text colour of your own palette. The four colours are set together: set all four, or none. Setting any one replaces the genre's colours, and a colour you leave out takes the built-in one",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "fonts": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "heading": {
+                  "description": "The lettering for headings",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "body": {
+                  "description": "The lettering for body text",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "source": {
+                  "description": "Where the lettering comes from: `self-host` (the site downloads the typefaces once and serves them itself), `google` (the reader's browser fetches them from Google Fonts) or `local` (your own font files). With `self-host` a reader's browser never contacts Google. A source the tool does not know is reported, and `google` is used",
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^\\s*(?:[gG][oO][oO][gG][lL][eE]|[sS][eE][lL][fF]\\-[hH][oO][sS][tT]|[lL][oO][cC][aA][lL])\\s*$"
+                },
+                "files": {
+                  "description": "Your own font files, each listed with its `family` (the typeface's name) and `path` (the file's place in the vault); used when the source is `local`"
+                }
+              }
+            },
+            "campaign_image": {
+              "description": "The large picture at the top of the landing page",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "default_mode": {
+              "description": "Whether a reader starts in light or dark",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[sS][yY][sS][tT][eE][mM]|[dD][aA][rR][kK]|[lL][iI][gG][hH][tT])\\s*$"
+            },
+            "tagline": {
+              "description": "One sentence under the title on the landing page",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "lists": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "section_titles": {
+              "description": "Your own headings for the lists of locations, factions, items, creatures and documents",
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "locations": {},
+                "factions": {},
+                "items": {},
+                "creatures": {},
+                "documents": {}
+              }
+            },
+            "banners": {
+              "description": "A picture or map at the top of a section's list",
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "locations": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "group_by": {
+                  "description": "Splits the list of locations into one block, under its own heading, for each place of a kind, such as each star system"
+                },
+                "ungrouped_label": {
+                  "description": "The heading for places that fall in no block",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "sheets": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "show": {
+              "description": "Whether a character's page carries its sheet",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                }
+              ]
+            },
+            "prose_sections": {
+              "description": "With sheets off, extra sections of a character's note that are still published",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "skin": {
+              "description": "The look of every character sheet",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[pP][lL][aA][iI][nN]|[pP][aA][rR][cC][hH][mM][eE][nN][tT]|[cC][aA][sS][eE]\\-[fF][iI][lL][eE]|[cC][oO][nN][sS][oO][lL][eE]|[lL][eE][dD][gG][eE][rR])\\s*$"
+            },
+            "frame": {
+              "description": "The ornament round each portrait",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[nN][oO][nN][eE]|[rR][iI][nN][gG]|[lL][aA][uU][rR][eE][lL]|[tT][hH][oO][rR][nN][sS]|[gG][iI][lL][tT]|[sS][tT][eE][eE][lL]|[cC][oO][rR][nN][eE][rR][sS]|[hH][eE][xX]|[cC][rR][aA][cC][kK][eE][dD])\\s*$"
+            },
+            "crest": {
+              "description": "A crest or wax seal at the head of a Call of Cthulhu sheet",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "header_facts": {
+              "description": "The facts shown under a character's name, as the names of fields in their note, for a character whose note has no `display_meta` of its own. An empty list shows none",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            }
+          }
+        },
+        "landing": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "max_npcs": {
+              "description": "How many people appear under \"NPCs in Play\"; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_locations": {
+              "description": "How many places appear under \"Latest Locations\"; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "max_events": {
+              "description": "How many events appear under \"Latest Events\"; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recency_window": {
+              "description": "How many recent sessions decide who and what is \"in play\"; `0` counts none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "featured_npcs": {
+              "description": "People pinned to the front of their row, in your order",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "featured_locations": {
+              "description": "The same, for places",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "quick_links": {
+              "description": "A short row of links on the page",
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": [
+                  "string",
+                  "number",
+                  "boolean"
+                ]
+              }
+            },
+            "explore_descriptions": {
+              "description": "Your own line under each card in the \"Explore the World\" row",
+              "type": [
+                "object",
+                "null"
+              ]
+            },
+            "banner": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "properties": {
+                "title": {
+                  "description": "The heading of a banner between the top of the landing page and \"Latest Session\". Plain text, shown as written. A banner shows when it has a title, text or picture",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "description": "The words in the banner, under its heading. Plain text, shown as written",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "link": {
+                  "description": "Makes the whole banner a link. It is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). A link to a note that has no page is left out, with a warning; a link with nothing else set shows no banner",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                },
+                "image": {
+                  "description": "A picture at the top of the banner. A file that is missing from the vault, or outside it, is reported and the banner shows without it",
+                  "type": [
+                    "string",
+                    "number",
+                    "null"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "limits": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "timeline_events": {
+              "description": "How many of the latest events the little timeline shows, on the landing page and on a character page; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "recap_chars": {
+              "description": "How many characters of the latest session's recap the landing page shows before it stops at a word and adds \"…\"",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_excerpt_chars": {
+              "description": "How many characters of a note's opening the pop-up preview card shows",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_fact_chars": {
+              "description": "How many characters one fact on a preview card shows",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_title_chars": {
+              "description": "How many characters of a note's name a preview card shows",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "card_facts": {
+              "description": "How many facts a preview card lists; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "list_goals": {
+              "description": "How many goals a faction's card on the factions page lists; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "list_relationships": {
+              "description": "How many relationships a faction's card on the factions page lists; `0` shows none",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        },
+        "withheld_words": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "person": {
+              "description": "The word that stands in for the name of a withheld person (a character or an NPC) when a note links to them with no label of their own. It cannot hold `[`, `]` or `|`",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "place": {
+              "description": "The word that stands in for the name of a withheld place. It cannot hold `[`, `]` or `|`",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            },
+            "thing": {
+              "description": "The word that stands in for the name of any other withheld note. It cannot hold `[`, `]` or `|`",
+              "type": [
+                "string",
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "images": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "properties": {
+            "optimize": {
+              "description": "Shrinks pictures as the site is built, which can cut a picture-heavy site to a fraction of its size",
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*(?:[tT][rR][uU][eE]|[yY][eE][sS]|[oO][nN]|[fF][aA][lL][sS][eE]|[nN][oO]|[oO][fF][fF])\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "format": {
+              "description": "The format pictures are converted to. Only `webp` is available; any other is reported, and pictures are left as they are",
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\s*(?:[wW][eE][bB][pP])\\s*$"
+            },
+            "max_width": {
+              "description": "The widest a shrunk picture may be, in pixels; `0` for no limit",
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "quality": {
+              "description": "The quality of shrunk pictures: 0 is the smallest file, 100 the best picture, and anything above 100 counts as 100",
+              "anyOf": [
+                {
+                  "type": "number",
+                  "minimum": 0
+                },
+                {
+                  "type": "string",
+                  "pattern": "^\\s*-?\\d+(\\.\\d+)?\\s*$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          }
+        }
+      }
     }
   }
 }

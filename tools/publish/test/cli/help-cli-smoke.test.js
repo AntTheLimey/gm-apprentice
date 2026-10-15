@@ -22,7 +22,7 @@ function runIn(args) {
 // top-level usage (which used to be the case for everything except flush).
 const CASES = {
   init: [/init \[target-dir\]/, /Refuses to overwrite/],
-  build: [/build \[--config/, /--config <path>/],
+  build: [/build \[--site player\|gm\] \[--config/, /--config <path>/, /--site <name>/],
   inbox: [/inbox <open\|code\|pull\|handled\|flag\|reply>/, /inbox reply <id>/],
   doctor: [/doctor \[--host/, /--set-cloudflare-creds/, /--json/, /doctor --site/],
   'setup-status-bar': [/setup-status-bar \[--config/, /--config <path>/],
@@ -33,6 +33,7 @@ const CASES = {
   manifest: [/manifest <diff\|apply\|publish-played\|rename>/, /--prune/, /is the GM's call/],
   deploy: [/deploy \[--config <path>\] \[--verify\]/, /--dry-run/, /--no-build/],
   explain: [/explain <vault-relative path>/, /gm-only blocks/, /before "doctor --site"/],
+  serve: [/serve \[--site gm\|player\] \[--port <n>\]/, /--port <n>/, /home network/],
 };
 
 describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {

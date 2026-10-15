@@ -125,7 +125,7 @@ function schema() {
     return node;
   };
   close(root, '');
-  const { vault, player_site: playerSite } = root.properties;
+  const { vault, player_site: playerSite, gm_site: gmSite } = root.properties;
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $id: SCHEMA_ID,
@@ -137,7 +137,7 @@ function schema() {
       version: { description: "The layout's number", const: 1 },
       vault,
       player_site: playerSite,
-      gm_site: { description: 'Reserved for the GM site; nothing under it is read yet', type: ['object', 'null'] },
+      gm_site: gmSite,
     },
   };
 }

@@ -125,6 +125,8 @@ Follow `references/setup-wizard.md` step by step — it is
 authoritative (preflight doctor first, Cloudflare default, resumes
 from its set-up note). Don't improvise or skip steps.
 
+A GM copy, a copy for the table: setup-wizard.md § A GM site for the table.
+
 ### 2. Routine updates
 ("update my site", "rebuild", "I've updated the vault")
 

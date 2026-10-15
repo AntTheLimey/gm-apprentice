@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.59] — 2026-10-14
+
+A GM site: a second build of the campaign for the GM at the table, with
+every note and every hidden part, each marked with why players do not
+see it. It is built into its own folder and never goes online.
+
+### Added
+
+- The GM site. `settings set gm_site.publish=on` turns it on and makes
+  its folder beside the player site's. Every page players do not see is
+  there with a band naming the reason; every hidden section, field,
+  GM-only relationship, gm-only or spoiler block, callout, comment and
+  withheld or secret name is shown inside a mark that says what hides
+  it. Hidden fields and GM-only relationships are listed in a "Hidden
+  from players" panel at the top of the page. Its pages carry noindex,
+  and the folder holds a `robots.txt` that turns search engines away.
+- `build --site player` and `build --site gm` build one site. Without
+  `--site`, `build` makes the player site and then the GM site while it
+  is on.
+- `serve` shows a built site to the home network, read only, so the GM
+  site can be opened on a tablet or phone at the table (the GM site by
+  default; `--site player` for the player site; `--port` to choose the
+  port).
+- The `gm_site.*` settings: `gm_site.publish`, `gm_site.folder`, a
+  `gm_site.show.*` switch for each kind of mark, and a GM site value for
+  each player site setting that can differ between the two sites
+  (unset, the GM site uses the player site's; build steps are the one
+  exception: the GM site runs only steps given to it). The `hide.*`
+  lists are the player site's alone, so a mark always means hidden
+  from players.
+
+### Changed
+
+- `deploy` refuses to put online a folder a GM build has written into,
+  with or without `--no-build`.
+- Build steps get two variables: `GM_APPRENTICE_SITE` (`player` or `gm`)
+  and `GM_APPRENTICE_OUTPUT` (the folder that build wrote).
+- The publish tool is 1.26.0.
+
+A player site sees nothing new: built from the same vault, it is byte
+for byte what 1.10.58 made.
+
 ## [1.10.58] — 2026-10-14
 
 The GURPS to-hit calculator reads every sheet row it can, and says which

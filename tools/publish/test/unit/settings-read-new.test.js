@@ -196,14 +196,10 @@ test('a top-level setting_year is the old name of vault.setting_year', () => {
 });
 
 // 7
-test('anything under gm_site is one warning for the group', () => {
-  const r = read('gm_site:\n  title: A\n  theme:\n    mode: dark\n');
-  const found = r.faults.filter((f) => f.name === 'gm_site');
-  assert.equal(found.length, 1);
-  assert.equal(found[0].level, 'warn');
-  assert.equal(found[0].message, 'the GM site is not built yet; nothing under gm_site is read');
-  assert.equal(r.faults.length, 1);
-  assert.equal(r.values.gm_site, undefined);
+test('gm_site is read like the other groups', () => {
+  const r = read('gm_site:\n  title: A\n  theme:\n    genre: noir\n');
+  assert.equal(r.faults.find((f) => f.name === 'gm_site'), undefined);
+  assert.equal(r.values.gm_site.title, 'A');
 });
 
 // 8

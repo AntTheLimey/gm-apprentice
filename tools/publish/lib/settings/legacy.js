@@ -334,6 +334,8 @@ function readLegacy({ vaultPath, siteConfig, siteDir, skipOldFile = false }, cor
   // A setting the old file never had reads as its default.
   for (const e of REGISTRY) {
     if (e.legacyOnly || legacyNameOf(e) || e.container) continue;
+    // A twin under gm_site is in no old file: it takes the player site's value, as when the new file does not set it.
+    if (e.twinOf) { origins[e.name] = 'inherit'; continue; }
     // (The campaign, unset, is the vault folder's name on every layout.)
     setIn(values, e.name, e.defaultFromVaultFolder ? path.basename(path.resolve(vaultPath)) : (e.default === undefined ? null : clone(e.default)));
     origins[e.name] = 'default';

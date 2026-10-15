@@ -19,6 +19,9 @@ const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
+const { readSwitch } = require('./types');
+const { resolveGmFolder, defaultGmFolder, gmFolderProblem } = require('../gm-site');
+const { forSite } = require('./resolve');
 const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, nameInFor, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
 const { row, isLeaf } = require('./describe');
@@ -29,6 +32,8 @@ const { planMove, applyMove, siteFileNamedBy } = require('./move');
 
 const VERBS = ['get', 'set', 'add', 'remove', 'unset', 'describe', 'check', 'list', 'raw', 'setup-note', 'move', 'carry'];
 const LEAVES = () => REGISTRY.filter((e) => isLeaf(e, REGISTRY));
+// The settings the listings show: a twin under gm_site is not listed (the list ends with one line about them).
+const LISTED = () => LEAVES().filter((e) => !e.twinOf);
 const SETTABLE_NAMES = () => LEAVES().map((e) => e.name);
 // The name the old vault file gave a setting. The commands take it for as long as legacy.js reads the
 // old file (two releases after 1.10.54). An old name is answered as the setting it became, with a line
@@ -99,14 +104,28 @@ function plainValue(v) {
   return JSON.stringify(v);
 }
 
+// Where a player-site setting's value comes from on the GM site: the twin the GM wrote, else the player site's own.
+function gmOrigin(read, name) {
+  const twin = name.replace(/^player_site\./, 'gm_site.');
+  const own = REGISTRY.find((e) => e.name === twin);
+  if (twin === name || !own) return read.origins[name];
+  if (read.origins[twin] === 'file') return twin;
+  // A setting the GM site does not inherit (its build steps) has its own default when the GM wrote none.
+  return own.gmDefault !== undefined ? "the GM site's own default (not inherited)" : `inherited from ${name}`;
+}
+
 function get(options, names) {
   const { vaultPath, siteConfig } = target(options);
   const leaves = LEAVES();
   for (const name of names) if (!leaves.some((e) => reaches(e, name))) throw new Error(notASetting(name));
   const read = readSettings({ vaultPath, siteConfig });
-  const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves;
+  // --site gm: the values the GM site builds with, and for each whether the GM wrote it for that site or it is the player site's.
+  const gmSite = options.site === 'gm';
+  if (options.site && !gmSite && options.site !== 'player') throw new Error(`settings get --site takes player or gm, not "${options.site}".`);
+  const view = gmSite ? { values: { ...read.values, player_site: forSite(read, 'gm').site }, origins: read.origins } : read;
+  const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves.filter((e) => !e.twinOf);
   const now = {};
-  for (const e of shown) now[e.name] = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
+  for (const e of shown) now[e.name] = { value: getPath(view.values, e.name.split('.')) ?? null, origin: gmSite ? gmOrigin(read, e.name) : read.origins[e.name] };
   const asked = (f) => !names.length || names.some((name) => inScope(f.name, name) || inScope(f.use || '', name) || inScope(f.suggest || '', name) || inScope(f.setting || '', name));
   const faults = sortedFaults(read.faults.filter(asked));
   const result = {
@@ -179,25 +198,32 @@ function describe(name) {
   const r = row(e);
   const lines = [r.name];
   if (wasLine(e)) lines.push(`  ${wasLine(e)}`);
+  if (e.twinOf) {
+    lines.push(`  For the GM site only; left out, the GM site uses ${e.twinOf}.`, `  takes: ${r.takes}`);
+    return { result: { ...r, twinOf: e.twinOf }, lines, notices: noticesFor([name]) };
+  }
   lines.push(`  ${r.does || '(no description)'}`, `  takes: ${r.takes}`, `  default: ${plainValue(r.default)}`);
   if (r.guards) lines.push('  hides things from players: a mistake here stops the build');
   return { result: r, lines, notices: noticesFor([name]) };
 }
 
 function list() {
-  const names = LEAVES().map((e) => {
+  const names = LISTED().map((e) => {
     const r = row(e);
     return { name: r.name, takes: r.takes, default: r.default, was: wasLine(e) };
   });
   return {
     result: { names },
-    lines: names.flatMap((n) => [`${n.name}: ${n.takes} (default ${plainValue(n.default)})`, ...(n.was ? [`  ${n.was}`] : [])]),
+    lines: [
+      ...names.flatMap((n) => [`${n.name}: ${n.takes} (default ${plainValue(n.default)})`, ...(n.was ? [`  ${n.was}`] : [])]),
+      "Any player_site setting not listed under 'The GM site' can also be written under gm_site, for the GM site only.",
+    ],
   };
 }
 
 // The help for the command, from the list: no setting is named anywhere else.
 function helpText() {
-  const names = LEAVES().map((e) => `  ${e.name}  ${row(e).takes}`);
+  const names = LISTED().map((e) => `  ${e.name}  ${row(e).takes}`);
   return `
 gm-apprentice-publish settings <get|set|add|remove|unset|carry|describe|check|list|raw|setup-note|move> [...] [--json] [--create] [--vault <dir>] [--config <path>]
 
@@ -205,6 +231,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
 
   settings get [<name> ...]        What each setting is now and where that came from; a
                                    group name (player_site.landing) gives every setting under it
+                                   --site gm gives the values the GM site builds with
   settings set <name>=<value> ... Write settings, all or none: settings set player_site.features.connections=web
                                    A list or map is written as JSON: settings set 'player_site.landing.quick_links=["A","B"]'
   settings add <name> <entry> ...  Add entries to a list setting, keeping what it holds now
@@ -328,12 +355,71 @@ function plan(options, pairs) {
 // `noun` is what the list holds, from the setting's own entry.
 const emptyNote = (name, noun = ((resolve(name) || {}).entry || {}).of || 'entries') => `${name} is empty: nothing from the built-in list is hidden. Add the ${noun} you want hidden, or remove the key to use the built-in list again.`;
 
+// Whether anything is at the path, a link that leads nowhere included.
+function pathExists(p) {
+  try { fs.lstatSync(p); return true; } catch { return false; }
+}
+
+// Turning the GM site on: the folder it is built into is the one named, or one beside the player site's, and it must
+// be one the GM site can own. { folder } when it is to be made or kept, { errors } when the change is refused, {}
+// when the change does not turn the GM site on. Adds the folder to the changes when it was not named.
+
+function turningOnGmSite(options, planned) {
+  const on = planned.changes.find((c) => c.name === 'gm_site.publish');
+  if (!on || readSwitch(on.value) !== true) return {};
+  const { vaultPath, siteConfig } = target(options);
+  // An old-layout vault is refused by the writer, as every new-only setting is.
+  if (layoutOf(vaultPath) !== 'new') return {};
+  const { values } = readSettings({ vaultPath, siteConfig });
+  const value = (name) => getPath(values, name.split('.'));
+  const namedNow = planned.changes.find((c) => c.name === 'gm_site.folder');
+  const keptBy = (planned.changes.find((c) => c.name === 'vault.kept_by') || {}).value ?? value('vault.kept_by');
+  if (keptBy === 'player') return { errors: ['This vault is kept by a player (vault.kept_by: player), so it has no GM site.'] };
+  const playerNow = planned.changes.find((c) => c.name === 'player_site.folder');
+  const player = playerNow ? playerNow.value : value('player_site.folder');
+  const playerDir = typeof player === 'string' && player.trim() ? resolveGmFolder(player, vaultPath) : null;
+  const written = namedNow ? namedNow.value : value('gm_site.folder');
+  const named = typeof written === 'string' && written.trim() !== '';
+  const none = ['There is no player_site.folder to put the GM site beside. Name its folder too: settings set gm_site.publish=on gm_site.folder=/path/to/folder'];
+  if (!named && !playerDir) return { errors: none };
+  const folder = named ? resolveGmFolder(written, playerDir || vaultPath) : defaultGmFolder(playerDir);
+  const problem = gmFolderProblem(folder, { playerSiteDir: playerDir, vaultPath });
+  if (problem) return { errors: [problem] };
+  // The folder is made inside a folder that is there; one level at most.
+  if (!pathExists(folder) && !fs.existsSync(path.dirname(folder))) {
+    return { errors: named ? [`The folder above ${folder} does not exist; make it first, or name a folder inside one that does.`] : none };
+  }
+  if (!named) planned.changes.push({ op: 'set', name: 'gm_site.folder', label: 'gm_site.folder', value: folder });
+  return { folder };
+}
+
 function set(options, pairs) {
   if (!pairs.length) throw new Error('settings set needs at least one name=value.');
   const planned = plan(options, pairs);
   if (planned.errors) return { errors: planned.errors };
+  const gm = turningOnGmSite(options, planned);
+  if (gm.errors) return gm;
+  // The folder is made before the settings are written, so a folder that cannot be made writes nothing.
+  // Its parent was checked above; a folder already there (a link included) is left as it is.
+  let made = false;
+  if (gm.folder && !pathExists(gm.folder)) {
+    try {
+      fs.mkdirSync(gm.folder, { recursive: false });
+      made = true;
+    } catch (e) {
+      return { errors: [`gm_site.folder (${gm.folder}) could not be made (${e.code || firstLine(e)}); nothing was written. Name a folder that can be made.`] };
+    }
+  }
   const done = write(options, planned.changes);
-  if (done.errors) return done;
+  if (done.errors) {
+    if (made) {
+      try { fs.rmdirSync(gm.folder); } catch {
+        done.errors = [...done.errors, `The folder ${gm.folder} was made but the settings were not written; remove it, or run the command again.`];
+      }
+    }
+    return done;
+  }
+  if (made) done.ok.notes.push(`Made the GM site's folder: ${gm.folder} (gm_site.folder).`);
   const notes = planned.empties.map((n) => emptyNote(n));
   const result = { written: planned.written, notes };
   // The line names what is now in the file: an older spelling given is replaced by the primary one.

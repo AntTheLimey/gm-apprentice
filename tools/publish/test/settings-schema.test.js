@@ -73,6 +73,7 @@ test('every setting the file can hold is in the schema, and no legacy-only one i
 test('the schema takes what it should and refuses what it should', () => {
   const ok = (v) => check(schema(), v);
   assert.deepEqual(ok({ version: 1, vault: { kept_by: 'player' }, player_site: { hide: { mode: 'full', drafts: 'On', callouts: ['note'] }, landing: { max_npcs: 0 } }, gm_site: { anything: [1] } }), []);
+  assert.deepEqual(ok({ gm_site: { show: { comments: 'on' } } }), []);
   assert.deepEqual(ok({ player_site: { features: { search: 'Yes', connections: true }, hide: { callouts: false } } }), []);
   assert.deepEqual(ok({ player_site: { folder_map: { Sessions: 'sessions' }, theme: { genre: 'horror', unknown_but_warned: 1 } } }), []);
   assert.deepEqual(ok({ player_site: { hide: { sections: null } } }), []);
@@ -145,8 +146,13 @@ function everySettingFile() {
 
 test('a file that sets every setting to a valid, non-default value validates and reads without a fault', () => {
   const tree = everySettingFile();
-  assert.deepEqual(check(schema(), tree), []);
+  // (A GM site on a vault kept by a player is a stop of its own; the sample keeps the vault by a player.)
+  tree.gm_site.publish = false;
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-'));
+  // The GM site's folder must be a folder of its own, beside the player site's.
+  tree.player_site.folder = path.join(root, 'site');
+  tree.gm_site.folder = path.join(root, 'site-gm');
+  assert.deepEqual(check(schema(), tree), []);
   const vault = path.join(root, 'Vault');
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(at(vault, NEW_FILE), require('yaml').stringify(tree));

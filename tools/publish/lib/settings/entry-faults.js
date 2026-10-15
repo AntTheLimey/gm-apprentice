@@ -6,6 +6,7 @@
 const { canonicalNfc } = require('../unicode');
 const { makeFault } = require('./faults');
 const { nameIn } = require('./layout');
+const { resolveGmFolder, gmFolderProblem } = require('../gm-site');
 
 // A step that is blank is never run.
 const isBlankStep = (command) => String(command).trim() === '';
@@ -15,7 +16,7 @@ const menuKey = (item) => `${canonicalNfc(String(item.label).trim())}\n${String(
 
 const words = (list) => new Set((list || []).map((w) => String(w).trim().toLowerCase()).filter(Boolean));
 
-// `values` and `origins` are the reader's, under the list's names. Returns the faults, all warnings.
+// `values` and `origins` are the reader's, under the list's names. Returns the faults, all warnings but one: a GM site on a vault kept by a player.
 function entryFaults(vaultPath, values, origins) {
   const faults = [];
   const add = (setting, message) => {
@@ -47,6 +48,23 @@ function entryFaults(vaultPath, values, origins) {
         add('vault.statuses.fallen', (name) => `${name} holds "${word}", which is not in ${nameIn(vaultPath, 'vault.statuses.out_of_play')}; it does not count as fallen`);
       }
     }
+  }
+
+  // A vault kept by a player has no GM site.
+  if (get('gm_site.publish') === true && get('vault.kept_by') === 'player') {
+    const on = nameIn(vaultPath, 'gm_site.publish');
+    const kept = nameIn(vaultPath, 'vault.kept_by');
+    faults.push(makeFault({ name: on, setting: 'gm_site.publish', kind: 'gm-kept-by-player', level: 'stop',
+      message: `${on} is on, but this vault is kept by a player (\`${kept}: player\`), so it has no GM site; turn ${on} off` }));
+  }
+
+  // The GM site's folder must be one it can own: not the player site's, not inside it or holding it, not the vault.
+  const gmFolder = get('gm_site.folder');
+  const playerFolder = get('player_site.folder');
+  if (typeof gmFolder === 'string' && gmFolder.trim() && typeof playerFolder === 'string' && playerFolder.trim()) {
+    const playerDir = resolveGmFolder(playerFolder, vaultPath);
+    const problem = gmFolderProblem(resolveGmFolder(gmFolder, playerDir), { playerSiteDir: playerDir, vaultPath });
+    if (problem) add('gm_site.folder', () => problem);
   }
   return faults;
 }

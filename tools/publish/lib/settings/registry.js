@@ -39,6 +39,7 @@ const GROUPS = [
   { id: 'landing', title: 'The landing page' },
   { id: 'lists', title: 'Lists and pictures' },
   { id: 'limits', title: 'Limits' },
+  { id: 'gm', title: 'The GM site' },
 ];
 
 const ON_OFF = { true: 'on', yes: 'on', false: 'off', no: 'off' };
@@ -188,6 +189,66 @@ const REGISTRY = [
     name: 'player_site.menu_extra', type: 'listOfMaps', fields: { label: { required: true }, link: { required: true }, group: {} }, same: 'label', default: [], group: 'site',
     does: "Extra entries in the site's menu. `link` is the name of a page, a web address (`https://…`), or an address on the site (`gazetteer/index.html`). `group` puts the entry under one of the menu's groups (`Story`, `Characters`, `World`, `Reference`) or makes a new one; with none it stands on its own after the groups. A link to a note that has no page is left out, with a warning",
     left_out: 'No extra entries',
+  },
+
+  // The GM site: a second copy of the site for the GM, never put online. Its own entries; every other per-site
+  // player_site setting also has a twin under gm_site (generated below).
+  {
+    name: 'gm_site.publish', type: 'switch', default: false, group: 'gm',
+    does: 'Whether this vault has a GM site: a second copy of the site with every note and every hidden part shown and marked, for you at the table. It is never put online',
+    left_out: 'Off',
+  },
+  {
+    name: 'gm_site.folder', type: 'text', group: 'gm',
+    shape: 'a folder path',
+    does: "The folder the GM site's pages are written to. It holds built pages only, and cannot be the player site's folder, inside it, or hold it. Turning the GM site on with this unset makes one beside the player site's folder",
+    left_out: "A folder beside the player site's, made when the GM site is turned on",
+  },
+  { name: 'gm_site.show', type: 'map', container: true },
+  {
+    name: 'gm_site.show.notes', type: 'switch', default: true, group: 'gm',
+    does: 'Notes the player site leaves out (prep, drafts, the ones held back by the publish list) get a page, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.sections', type: 'switch', default: true, group: 'gm',
+    does: 'Sections the player site hides (by heading) are shown, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.fields', type: 'switch', default: true, group: 'gm',
+    does: 'Frontmatter fields the player site hides are listed in a panel at the top of the page, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.relationships', type: 'switch', default: true, group: 'gm',
+    does: 'Relationships the player site hides (GM-only ones) are shown, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.gm_only_blocks', type: 'switch', default: true, group: 'gm',
+    does: 'GM-only blocks (`<!-- gm-only -->`) are shown, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.spoilers', type: 'switch', default: true, group: 'gm',
+    does: 'Spoiler blocks (`<!-- spoiler -->`) are shown, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.callouts', type: 'switch', default: true, group: 'gm',
+    does: 'Callouts the player site hides are shown, marked',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.withheld_names', type: 'switch', default: true, group: 'gm',
+    does: 'Names the player site prints as "someone" or "somewhere" are printed in full, marked with what players see',
+    left_out: 'On',
+  },
+  {
+    name: 'gm_site.show.comments', type: 'switch', default: false, group: 'gm',
+    does: 'Comments in a note (`%% ... %%`) are shown, marked. They are off by default: most are notes to yourself, not things to run',
+    left_out: 'Off',
   },
 
   // What gets published
@@ -574,6 +635,29 @@ const REGISTRY = [
   { name: 'publish.setup_progress', legacyOnly: true, type: 'any', state: true, settable: false },
 ];
 
+// The player site's settings the GM site cannot set for itself: one folder, one address, one host, and the live features
+// the GM site never has. The hide.* settings are here too: what players see has one source, so a mark always means
+// "hidden from players".
+const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'player_site.url', 'player_site.host',
+  'player_site.output', 'player_site.cloudflare_project', 'player_site.keep', 'player_site.hide.mode',
+  'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
+  'player_site.hide.drafts', 'player_site.hide.field_exceptions',
+  'player_site.features.live_stats', 'player_site.features.inbox']);
+// A twin that does not inherit when unset: the player site's build steps never run for the GM site.
+const GM_OWN_DEFAULT = { 'player_site.before_build': [], 'player_site.after_build': [] };
+// What a twin does not copy: it has no old names, no default of its own (unset, it takes the player site's value), and
+// is never a hiding setting of its own; `stepsFrom` stays with the player site so the package.json steps move once.
+const TWIN_DROPS = ['was', 'legacyKind', 'legacyMerge', 'siteFallback', 'onWhenSet', 'default', 'left_out', 'guards', 'stopOnFault', 'check', 'stepsFrom'];
+function twinOf(e) {
+  const t = { ...e, name: e.name.replace(/^player_site\./, 'gm_site.'), twinOf: e.name, group: 'gm-twin' };
+  for (const k of TWIN_DROPS) delete t[k];
+  if (Object.prototype.hasOwnProperty.call(GM_OWN_DEFAULT, e.name)) t.gmDefault = GM_OWN_DEFAULT[e.name];
+  return t;
+}
+for (const e of REGISTRY.slice()) {
+  if (e.name.startsWith('player_site.') && !e.legacyOnly && !e.retired && !NOT_PER_SITE.has(e.name)) REGISTRY.push(twinOf(e));
+}
+
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 
 const entry = (name) => BY_NAME.get(name);
@@ -598,4 +682,4 @@ function resolve(name) {
   return null;
 }
 
-module.exports = { REGISTRY, entry, names, GROUPS, legacyNameOf, siteKeyOf, siteFolderKeys, resolve };
+module.exports = { REGISTRY, NOT_PER_SITE, entry, names, GROUPS, legacyNameOf, siteKeyOf, siteFolderKeys, resolve };

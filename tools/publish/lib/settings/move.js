@@ -26,7 +26,8 @@ const { splitFront, writeAtomic, planChanges } = require('./write');
 const { parseNote } = require('../frontmatter');
 
 const { Scalar, Pair, YAMLMap, isScalar, isMap: isYMap, isNode } = YAML;
-const LEAVES = REGISTRY.filter((e) => isLeaf(e, REGISTRY));
+// (A twin under gm_site is not in any old file; the move never writes or compares one.)
+const LEAVES = REGISTRY.filter((e) => isLeaf(e, REGISTRY) && !e.twinOf);
 const BY_NAME = new Map(REGISTRY.map((e) => [e.name, e]));
 const FILLABLE = ['vault.campaign', 'vault.system'];
 const COMMENTS_HEADING = 'Comments from the old settings file';

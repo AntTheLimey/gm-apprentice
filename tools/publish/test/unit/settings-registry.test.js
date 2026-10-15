@@ -15,6 +15,8 @@ test('every entry is complete and its default is a value its own type takes', ()
   const groups = new Set(GROUPS.map((g) => g.id));
   for (const e of REGISTRY) {
     assert.ok(TYPES[e.type], `${e.name}: unknown type ${e.type}`);
+    // A twin under gm_site is the player site's entry again; the player site's entry is the one checked.
+    if (e.twinOf) continue;
     if (e.state || e.retired || e.container || e.legacyOnly) continue;
     assert.ok(typeof e.does === 'string' && e.does.trim().length > 10, `${e.name}: needs a "does" line`);
     assert.ok(groups.has(e.group), `${e.name}: group ${e.group}`);
@@ -30,10 +32,10 @@ test('names are unique, and no old name collides with a live one', () => {
   for (const e of REGISTRY) for (const o of e.was || []) assert.ok(!live.includes(o.name) || o.in === 'site', `${o.name} is both old and live`);
 });
 
-test('a name the list declares is under vault. or player_site., except the legacy-only ones', () => {
+test('a name the list declares is under vault., player_site. or gm_site., except the legacy-only ones', () => {
   for (const e of REGISTRY) {
     if (e.legacyOnly) { assert.ok(!e.was, `${e.name}: legacy-only with a was`); continue; }
-    assert.match(e.name, /^(vault|player_site)\./, e.name);
+    assert.match(e.name, /^(vault|player_site|gm_site)\./, e.name);
   }
   assert.deepEqual(REGISTRY.filter((e) => e.legacyOnly).map((e) => e.name).sort(), [
     'publish.backend', 'publish.four_oh_four.style', 'publish.overrides', 'publish.setup_progress', 'publish.total_sessions', 'publish.wrap_up',

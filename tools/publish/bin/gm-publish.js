@@ -31,7 +31,8 @@ gm-apprentice-publish - Static site generator for gm-apprentice campaign vaults
 
 Usage:
   gm-apprentice-publish init [target-dir]    Scaffold a new site
-  gm-apprentice-publish build [options]      Build the site
+  gm-apprentice-publish build [options]      Build the site (--site player|gm)
+  gm-apprentice-publish serve [options]      Serve a built site to the home network (--site gm|player)
   gm-apprentice-publish inbox <cmd> [args]   Change-request queue (used by the loop)
   gm-apprentice-publish flush [options]      Write players' current KV live-state back into the vault sheets
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
@@ -90,12 +91,17 @@ Follow with "build" to generate the site.
   --help, -h         Show this help
 `,
   build: `
-gm-apprentice-publish build [--config <path>]
+gm-apprentice-publish build [--site player|gm] [--config <path>]
 
 Generates the static site from the vault named in vault.config.json. On a
 site with a backend enabled, re-syncs the plugin-owned Cloudflare Functions
 first so a site scaffolded by an older plugin picks up new API routes.
 
+Without --site it builds the player site, then the GM site while
+gm_site.publish is on (the GM site alone when the player site is switched
+off). The GM site is built into its own folder and never goes online.
+
+  --site <name>      Build one site: player or gm
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
@@ -274,6 +280,19 @@ withholds because its Wrap-Up publishes.
   --all              Every file at once (needs --json)
   --vault <dir>      Read this vault through the site's rules instead of
                      the vault the config names
+  --help, -h         Show this help
+`,
+  serve: `
+gm-apprentice-publish serve [--site gm|player] [--port <n>] [--config <path>]
+
+Serves an already-built site folder to your home network, read only, so the GM
+site can be opened on a tablet or phone at the table. It builds nothing and
+asks for no passphrase: run build first. It runs until you stop it (Ctrl+C)
+and prints the addresses to open.
+
+  --site <name>      The GM site (the default) or the player site
+  --port <n>         A whole number from 1 to 65535 (default 4321)
+  --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
   deploy: `
@@ -601,7 +620,7 @@ if (command === 'build') {
   // watched, so it builds once and says so. Every other unknown option is refused below.
   const buildArgs = args.slice(1).filter((a) => a !== '--watch');
   const sawWatch = buildArgs.length !== args.length - 1;
-  const parsed = parseSubcommandArgs(buildArgs, {});
+  const parsed = parseSubcommandArgs(buildArgs, {}, { '--site': 'site' });
   if (parsed.error) {
     const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
     if (bad) refuseUnknownArgument('build', bad[1]);
@@ -609,6 +628,11 @@ if (command === 'build') {
     process.exit(1);
   }
   const configPath = parsed.configPath;
+  const siteFlag = parsed.flags.site;
+  if (siteFlag !== undefined && siteFlag !== 'player' && siteFlag !== 'gm') {
+    console.error(`Unknown site: ${siteFlag}. Use --site player or --site gm.`);
+    process.exit(1);
+  }
 
   if (!fs.existsSync(configPath)) {
     console.error(`Error: Config file not found: ${configPath}`);
@@ -620,8 +644,21 @@ if (command === 'build') {
   assertRuntimeDeps();
 
   // A site the GM turned off (player_site.publish) is not built, and its functions are left alone.
-  const off = require('../lib/config').siteOffFor(configPath);
-  if (off) {
+  // Which sites to build: --site names one; without it the player site, then the GM site while gm_site.publish is on.
+  // With the player site off and the GM site on, the GM site is built alone.
+  const configLib = require('../lib/config');
+  const off = configLib.siteOffFor(configPath);
+  let gmOn;
+  try { gmOn = configLib.gmSiteOnFor(configPath); } catch (err) {
+    console.error(`Build failed: could not read the GM site's settings: ${String(err.message).split('\n')[0].trim()}`);
+    process.exit(1);
+  }
+  if (siteFlag === 'gm' && !gmOn) {
+    console.error('The GM site is off for this vault (gm_site.publish); nothing was built.');
+    process.exit(1);
+  }
+  const sites = siteFlag ? [siteFlag] : (off && gmOn ? ['gm'] : (gmOn ? ['player', 'gm'] : ['player']));
+  if (sites.includes('player') && off) {
     console.error(`Build failed: ${off}`);
     process.exit(1);
   }
@@ -629,7 +666,7 @@ if (command === 'build') {
   // A hiding-side settings fault stops the build before anything is written: the function
   // sync and the font download below both write. The message is plain lines, no prefix.
   try {
-    require('../lib/config').assertNoStopsFor(configPath, 'build');
+    for (const site of sites) configLib.assertNoStopsFor(configPath, 'build', site);
   } catch (err) {
     console.error(err.message);
     exitAfterFlush(1);
@@ -640,7 +677,7 @@ if (command === 'build') {
   // added or fixed in a newer plugin version reach flagged sites scaffolded before they
   // existed. Each feature's files follow its own switch: on copies them, an explicit off
   // removes them, unset does neither (a Tier-1 static site gets no Functions re-added).
-  require('../lib/sync-functions').syncSiteFunctionsOrWarn(configPath);
+  if (sites.includes('player')) require('../lib/sync-functions').syncSiteFunctionsOrWarn(configPath);
 
   const { build } = loadBuild();
   (async () => {
@@ -648,7 +685,8 @@ if (command === 'build') {
       // theme.fonts.source: self-host fills the vault's font cache first (network); the
       // build itself only reads the cache (#270).
       await require('../lib/fonts').prefetchForConfig(configPath);
-      build({ configPath, runSteps: true });
+      // A failed build stops here: the next site is not built.
+      for (const site of sites) build({ configPath, runSteps: true, site });
       if (sawWatch) console.log('build has no watch mode; built once.');
     } catch (err) {
       console.error(`Build failed: ${err.message}`);
@@ -657,6 +695,28 @@ if (command === 'build') {
     }
     exitAfterFlush(0);
   })();
+  return;
+}
+
+if (command === 'serve') {
+  const parsed = parseSubcommandArgs(args.slice(1), {}, { '--site': 'site', '--port': 'port' });
+  if (parsed.error) {
+    const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
+    if (bad) refuseUnknownArgument('serve', bad[1]);
+    console.error(`Error: ${parsed.error}`);
+    process.exit(1);
+  }
+  const site = parsed.flags.site === undefined ? 'gm' : parsed.flags.site;
+  if (site !== 'gm' && site !== 'player') {
+    console.error(`Unknown site: ${site}. Use --site player or --site gm.`);
+    process.exit(1);
+  }
+  // The server keeps the process alive; it stops on Ctrl+C. A refusal exits with the reason.
+  require('../lib/serve.js').runServe({
+    configPath: parsed.configPath,
+    site,
+    ...(parsed.flags.port === undefined ? {} : { port: parsed.flags.port }),
+  }).catch(failAfterFlush);
   return;
 }
 
@@ -753,18 +813,18 @@ if (command === 'settings') {
   const rest = [];
   const tail = args.slice(2);
   for (let i = 0; i < tail.length; i += 1) {
-    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill' || tail[i] === '--only') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
+    if (tail[i] === '--config' || tail[i] === '--vault' || tail[i] === '--fill' || tail[i] === '--only' || tail[i] === '--site') { rest.push(tail[i]); if (i + 1 < tail.length) rest.push(tail[++i]); }
     else if (tail[i].startsWith('-')) rest.push(tail[i]);
     else positional.push(tail[i]);
   }
-  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile' }, { '--vault': 'vault' }, { '--fill': 'fill', '--only': 'only' });
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json', '--create': 'create', '--check': 'check', '--discard-old-file': 'discardOld', '--site-tool-updated': 'siteToolUpdated', '--fold-site-file': 'foldSiteFile' }, { '--vault': 'vault', '--site': 'site' }, { '--fill': 'fill', '--only': 'only' });
   if (parsed.error) {
     console.error(`Error: ${parsed.error}`);
     printSubcommandHelp('settings');
     process.exit(1);
   }
   const { runSettings } = require('../lib/settings/cli.js');
-  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, fill: parsed.flags.fill, only: parsed.flags.only });
+  const rc = runSettings({ verb: args[1], args: positional, ...settingsTarget(parsed, args), json: !!parsed.flags.json, create: !!parsed.flags.create, check: !!parsed.flags.check, discardOld: !!parsed.flags.discardOld, siteToolUpdated: !!parsed.flags.siteToolUpdated, foldSiteFile: !!parsed.flags.foldSiteFile, fill: parsed.flags.fill, only: parsed.flags.only, site: parsed.flags.site });
   exitAfterFlush(rc);
   return;
 }

@@ -149,7 +149,7 @@ function pairHubs(corpus, published, options) {
   const scanned = new Set(corpus.map((p) => p.sourcePath));
   const notes = opts.allNotes || scanAllNotes(opts.vaultPath);
   const unscanned = notes.filter((n) => !scanned.has(n.sourcePath));
-  const rewriter = gmAliasRewriter(corpus.concat(unscanned), published, notes, opts.withheldWords);
+  const rewriter = gmAliasRewriter(corpus.concat(unscanned), published, notes, opts.withheldWords, opts.mark);
   let view = (p) => p;
   if (rewriter && opts.apply) {
     for (const page of corpus) {

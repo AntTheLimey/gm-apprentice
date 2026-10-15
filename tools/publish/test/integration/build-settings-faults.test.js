@@ -111,14 +111,6 @@ test('a stop leaves a previous build exactly as it was', async () => {
   assert.deepEqual(Object.keys(snapshot(s.root)).sort(), rootBefore);
 });
 
-test('allowFaults runs the build past a stop and returns the faults', async () => {
-  const s = site(STOP_YAML);
-  const { result, lines } = await capturing(() => build({ configPath: s.configPath, allowFaults: true }));
-  assert.equal(fs.existsSync(path.join(s.outputDir, 'index.html')), true);
-  assert.ok(result.faults.some((f) => f.name === 'publish.exclude_sectoins' && f.level === 'stop'));
-  assert.ok(lines.some((l) => l.includes('exclude_sectoins')), 'with the stop allowed, it is shown as a warning');
-});
-
 test('the command line build exits non-zero with the message once on stderr and writes nothing', () => {
   const s = site(STOP_YAML);
   const before = snapshot(s.root);

@@ -1,0 +1,249 @@
+'use strict';
+// tools/publish/test/integration/build-gm-every-kind.test.js
+// Every way a thing is kept off the player site, built both ways: each hidden word is in no player file, and on the
+// GM site it is inside a mark of the right kind. No mark reaches the player site.
+const { describe, it, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { buildBoth, markedTexts, markedAfterMain } = require('../helpers/gm-build');
+
+const TOKENS = /[-]/;
+
+const NOTES = {
+  'NPCs/Sections.md': '---\ntype: npc\n---\nPublic.\n\n## GM Notes\n\nHIDSECTION here.\n\n### Deeper\n\nHIDNESTED here.\n\n## Open\n\nSHOWNOPEN.\n',
+  'NPCs/Fields.md': '---\ntype: npc\nsecrets: HIDFIELD\npublish_exclude_fields: [occupation]\noccupation: HIDOWNFIELD\nrelationships:\n  - target: "[[Sections]]"\n    type: serves\n    description: HIDEDGE\n    gm_only: true\n---\nBody.\n',
+  'NPCs/Blocks.md': '---\ntype: npc\n---\nA <!-- gm-only -->HIDINLINE<!-- /gm-only --> b.\n\n<!-- spoiler -->\nHIDSPOILER\n<!-- /spoiler -->\n\nLead <!-- gm-only -->HIDMIDLINE\nstill hidden\n<!-- /gm-only --> tail.\n',
+  'NPCs/Callout.md': '---\ntype: npc\n---\nText.\n\n> [!secret] Keeper\n> HIDCALLOUT\n\nAfter.\n',
+  'NPCs/Comments.md': '---\ntype: npc\n---\nA <!-- HIDHTMLCOMMENT --> b %% HIDOBSIDIAN %% c.\n',
+  'NPCs/Vesper.md': '---\ntype: npc\nwithheld: true\npublish: false\n---\nHIDWITHHELDPAGE.\n',
+  'NPCs/Linker.md': '---\ntype: npc\n---\nShe met [[Vesper]] at the quay.\n',
+  'NPCs/Lord Vane.md': '---\ntype: npc\ngm_aliases: [Elias Crowe]\n---\nA lord.\n',
+  'NPCs/AliasUser.md': '---\ntype: npc\n---\nThey whisper of [[Elias Crowe]].\n',
+  'NPCs/Draft.md': '---\ntype: npc\nstatus: planned\n---\nHIDPREP.\n',
+  'NPCs/Stub.md': '---\ntype: npc\npublish: stub\npublish_include_sections: [Overview]\n---\n## Overview\n\nSHOWNSTUB.\n\n## Plans\n\nHIDSTUB.\n',
+  'NPCs/Forged.md': '---\ntype: npc\n---\nForged 0HIDFORGE text.\n',
+  // Marks in awkward places: a link label, a table cell, a heading, a callout title, an image alt, a block closed
+  // three paragraphs after it opens, and a hidden block holding a ## heading of its own.
+  'NPCs/Shapes.md': '---\ntype: npc\n---\nLink [<!-- gm-only -->HIDLABEL<!-- /gm-only -->](https://example.com/) end.\n\n| A | B |\n|---|---|\n| x | <!-- gm-only -->HIDCELL<!-- /gm-only --> |\n\n## Head <!-- gm-only -->HIDHEAD<!-- /gm-only -->\n\n> [!secret] Title <!-- gm-only -->HIDTITLE<!-- /gm-only -->\n> inside\n\n![pic <!-- gm-only -->HIDALT<!-- /gm-only -->](pic.png)\n\nStart <!-- gm-only -->HIDLONG1\n\nHIDLONG2\n\nHIDLONG3\n<!-- /gm-only --> end.\n\n<!-- gm-only -->\n## HIDINNERHEAD\n\nHIDINNERBODY\n<!-- /gm-only -->\n\n## GM Notes\n\nHIDGMBODY\n\n## Open Again\n\nSHOWNSHAPES.\n',
+  // A level-1 GM Notes section holds a ## heading of its own (a ## after a ## GM Notes would end that section).
+  'NPCs/Inner.md': '---\ntype: npc\n---\nIntro.\n\n# GM Notes\n\nHIDGMONE\n\n## HIDGMINNER\n\nHIDGMTWO\n\n# Visible Again\n\nSHOWNINNER.\n',
+  '_archive/Old.md': '---\ntype: npc\n---\nHIDARCHIVE.\n',
+  'PCs/Ann.md': '---\ntype: pc\n---\n# Ann\n\n## Background\n\nSHOWNBG.\n\n## GM Notes\n\nHIDPC\n\n## Background Two\n\nSHOWNPCAFTER.\n',
+};
+// word -> the kind of mark it must sit in on the GM site, and the page it is on.
+const EXPECT = [
+  ['HIDSECTION', 'sections', 'npcs/sections.html'],
+  ['HIDNESTED', 'sections', 'npcs/sections.html'],
+  ['HIDFIELD', 'fields', 'npcs/fields.html'],
+  ['HIDOWNFIELD', 'fields', 'npcs/fields.html'],
+  ['HIDEDGE', 'relationships', 'npcs/fields.html'],
+  ['HIDINLINE', 'gm_only_blocks', 'npcs/blocks.html'],
+  ['HIDMIDLINE', 'gm_only_blocks', 'npcs/blocks.html'],
+  ['HIDSPOILER', 'spoilers', 'npcs/blocks.html'],
+  ['HIDCALLOUT', 'callouts', 'npcs/callout.html'],
+  ['HIDSTUB', 'sections', 'npcs/stub.html'],
+  ['HIDPC', 'sections', 'pcs/ann.html'],
+  ['HIDLABEL', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDCELL', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDHEAD', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDTITLE', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDLONG1', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDLONG2', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDLONG3', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDINNERHEAD', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDINNERBODY', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDGMBODY', 'sections', 'npcs/shapes.html'],
+  ['HIDGMONE', 'sections', 'npcs/inner.html'],
+  ['HIDGMINNER', 'sections', 'npcs/inner.html'],
+  ['HIDGMTWO', 'sections', 'npcs/inner.html'],
+];
+
+describe('one of every hidden kind, both ways', () => {
+  let site;
+  before(() => { site = buildBoth(NOTES, { player: { folder_map: { NPCs: 'npcs', PCs: 'pcs', _archive: 'archive' }, hide: { callouts: true, folders: ['_archive'] } }, gm: { show: { comments: true } } }); });
+  after(() => site.cleanup());
+
+  const FORGED = 'npcs/forged.html';
+  // The forged note's own text holds private-use characters; the player build leaves a note's text as written, and no
+  // mark renderer runs there. This is everything the player site wrote except that note's own output.
+  const playerText = ({ withoutForged = false } = {}) => {
+    const files = site.player.files();
+    assert.ok(files.length > 0, 'the player build wrote files');
+    return files.map((f) => {
+      const rel = path.relative(site.player.dir, f).split(path.sep).join('/');
+      const text = fs.readFileSync(f, 'utf8');
+      if (!withoutForged) return text;
+      if (rel === FORGED) return '';
+      if (rel === 'previews.json') {
+        const j = JSON.parse(text);
+        delete j[FORGED];
+        return JSON.stringify(j);
+      }
+      if (rel === 'search-index.json') {
+        const j = JSON.parse(text);
+        for (const [id, d] of Object.entries(j.documents)) if (d.href === FORGED) delete j.documents[id];
+        j.index.invertedIndex = j.index.invertedIndex.filter(([term]) => !TOKENS.test(term));
+        return JSON.stringify(j);
+      }
+      return text;
+    }).join('\n');
+  };
+
+  it('no hidden word, mark, band or token reaches the player site', () => {
+    const all = playerText({ withoutForged: true });
+    for (const [word] of EXPECT) assert.equal(all.includes(word), false, word);
+    for (const w of ['HIDHTMLCOMMENT', 'HIDOBSIDIAN', 'HIDWITHHELDPAGE', 'HIDPREP', 'Elias Crowe']) assert.equal(all.includes(w), false, w);
+    assert.doesNotMatch(all, /gm-mark|gm-band|gm-apprentice-build/);
+    assert.doesNotMatch(all, TOKENS);
+  });
+
+  it('a note\'s own private-use characters reach the player site only in that note, as written', () => {
+    const html = site.player.read('npcs', 'forged.html');
+    assert.ok(html.includes('Forged 0HIDFORGE text.'));
+    assert.doesNotMatch(html, /gm-mark|�/);
+    for (const rel of ['previews.json', 'search-index.json']) {
+      assert.match(site.player.read(rel), TOKENS, rel); // the forged note's own entry
+    }
+    // and nowhere else: every other player file is clean (checked above with the forged note's entries removed)
+    for (const f of site.player.files()) {
+      if (path.relative(site.player.dir, f).split(path.sep).join('/') === FORGED) continue;
+      if (/\.json$/.test(f)) continue;
+      assert.doesNotMatch(fs.readFileSync(f, 'utf8'), TOKENS, f);
+    }
+  });
+
+  it('what players see is on both sites, outside any mark', () => {
+    for (const [word, page] of [['SHOWNOPEN', 'npcs/sections.html'], ['SHOWNSTUB', 'npcs/stub.html'], ['SHOWNBG', 'pcs/ann.html'], ['SHOWNPCAFTER', 'pcs/ann.html']]) {
+      assert.ok(site.player.read(...page.split('/')).includes(word), `player ${word}`);
+      const gm = site.gm.read(...page.split('/'));
+      assert.ok(gm.includes(word), `gm ${word}`);
+      assert.equal(markedTexts(gm).some((m) => m.kind !== 'notes' && m.text.includes(word)), false, `unmarked ${word}`);
+    }
+  });
+
+  for (const [word, kind, page] of EXPECT) {
+    it(`${word} is on the GM site inside a ${kind} mark`, () => {
+      const marks = markedTexts(site.gm.read(...page.split('/')));
+      assert.ok(marks.some((m) => m.kind === kind && m.text.includes(word)), JSON.stringify(marks.map((m) => [m.kind, m.text.slice(0, 40)])));
+    });
+  }
+
+  it('a callout whose title holds a hidden span is marked as a callout and the span as a hidden block', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'shapes.html'));
+    assert.ok(marks.some((m) => m.kind === 'callouts' && m.text.includes('HIDTITLE')), 'callout mark');
+  });
+
+  it('a mark opened mid-line closes three paragraphs later, in one mark', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'shapes.html'));
+    assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && ['HIDLONG1', 'HIDLONG2', 'HIDLONG3'].every((w) => m.text.includes(w))));
+  });
+
+  it('an image alt holds the secret unmarked on the GM site (tokens in tags are dropped) and nothing on the player site', () => {
+    const gm = site.gm.read('npcs', 'shapes.html');
+    assert.ok(gm.includes('HIDALT'));
+    assert.equal(markedTexts(gm).some((m) => m.text.includes('HIDALT')), false);
+    assert.doesNotMatch(gm, TOKENS);
+    assert.equal(site.player.read('npcs', 'shapes.html').includes('HIDALT'), false);
+  });
+
+  it('the text after the hidden shapes is shown to players and sits outside every mark', () => {
+    assert.ok(site.player.read('npcs', 'shapes.html').includes('SHOWNSHAPES'));
+    const gm = site.gm.read('npcs', 'shapes.html');
+    assert.equal(markedTexts(gm).some((m) => m.kind !== 'notes' && m.text.includes('SHOWNSHAPES')), false);
+  });
+
+  // The templates cut a page at its level 1-2 headings, so a mark must close before such a heading, wrap the heading's
+  // own text, and open again below. These pin where the marks fall, not only that the words are marked.
+  it('a ## heading inside a # GM Notes section: body, heading and text under it are each marked; the next section is not', () => {
+    const html = site.gm.read('npcs', 'inner.html');
+    const marks = markedTexts(html).filter((m) => m.kind !== 'notes');
+    for (const w of ['HIDGMONE', 'HIDGMINNER', 'HIDGMTWO']) assert.ok(marks.some((m) => m.kind === 'sections' && m.text.includes(w)), w);
+    assert.equal(marks.some((m) => m.text.includes('HIDGMINNER') && m.text.includes('HIDGMONE')), false, 'heading is not inside the first body mark');
+    assert.equal(marks.some((m) => m.text.includes('HIDGMINNER') && m.text.includes('HIDGMTWO')), false, 'heading is not inside the second body mark');
+    for (const w of ['Visible Again', 'SHOWNINNER']) {
+      assert.ok(html.includes(w), w);
+      assert.equal(marks.some((m) => m.text.includes(w)), false, `unmarked ${w}`);
+    }
+    assert.ok(site.player.read('npcs', 'inner.html').includes('SHOWNINNER'));
+  });
+
+  it('a hidden block holding a ## heading: heading and body in separate marks, the heading after it in none', () => {
+    const html = site.gm.read('npcs', 'shapes.html');
+    const marks = markedTexts(html).filter((m) => m.kind !== 'notes');
+    assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('HIDINNERHEAD')));
+    assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('HIDINNERBODY')));
+    assert.equal(marks.some((m) => m.text.includes('HIDINNERHEAD') && m.text.includes('HIDINNERBODY')), false, 'cut at the heading');
+    // the heading text sits in a mark inside its heading element
+    assert.match(html, /<h2><span class="gm-mark[^"]*"[^>]*data-gm-kind="gm_only_blocks"[^>]*>HIDINNERHEAD<\/span><\/h2>/);
+    assert.match(html, /<h2>Open Again<\/h2>/);
+    assert.equal(marks.some((m) => m.text.includes('Open Again')), false, 'the next heading is outside every mark');
+  });
+
+  it('a note in a hidden folder is on the GM site with a band and the reason, and not on the player site', () => {
+    const gmPages = site.gm.files().filter((f) => /old\.html$/.test(f));
+    assert.equal(gmPages.length, 1, 'one GM page for the archived note');
+    const html = fs.readFileSync(gmPages[0], 'utf8');
+    assert.ok(html.includes('HIDARCHIVE'));
+    const marks = markedTexts(html);
+    assert.ok(marks.some((m) => m.kind === 'notes' && m.label === "Players don't see this page: hide.folders: _archive"), JSON.stringify(marks.map((m) => [m.kind, m.label])));
+    assert.equal(site.player.files().some((f) => /old\.html$/.test(f)), false);
+    assert.equal(playerText().includes('HIDARCHIVE'), false);
+  });
+
+  it('comments, switched on, are marked', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'comments.html'));
+    assert.ok(marks.some((m) => m.kind === 'comments' && m.text.includes('HIDHTMLCOMMENT')));
+    assert.ok(marks.some((m) => m.kind === 'comments' && m.text.includes('HIDOBSIDIAN')));
+  });
+
+  it('a withheld name is shown, marked with what players see', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'linker.html'));
+    assert.ok(marks.some((m) => m.kind === 'withheld_names' && m.text.includes('Vesper') && m.label === 'players see: someone'));
+    assert.match(site.player.read('npcs', 'linker.html'), /someone/);
+  });
+
+  it('a secret alias is shown, marked with the name players see', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'aliasuser.html'));
+    assert.ok(marks.some((m) => m.kind === 'fields' && m.text.includes('Elias Crowe') && /players see: Lord Vane/.test(m.label)));
+  });
+
+  it('pages players do not see are on the GM site with a band', () => {
+    for (const [page, reason] of [['npcs/vesper.html', 'publish: false'], ['npcs/draft.html', 'status: planned']]) {
+      const marks = markedTexts(site.gm.read(...page.split('/')));
+      assert.ok(marks.some((m) => m.kind === 'notes' && m.label.includes(reason)), page);
+      assert.equal(site.player.exists(...page.split('/')), false, page);
+    }
+  });
+
+  it('a note cannot forge a mark', () => {
+    const html = site.gm.read('npcs', 'forged.html');
+    assert.equal(markedTexts(html).some((m) => m.text.includes('HIDFORGE')), false);
+    assert.match(html, /�/);
+  });
+
+  it('every GM page is well nested', () => {
+    const pages = site.gm.files().filter((x) => x.endsWith('.html'));
+    assert.ok(pages.length > 0, 'the GM build wrote pages');
+    for (const f of pages) {
+      const html = fs.readFileSync(f, 'utf8');
+      for (const tag of ['div', 'span', 'aside']) {
+        assert.equal((html.match(new RegExp(`<${tag}\\b`, 'g')) || []).length, (html.match(new RegExp(`</${tag}>`, 'g')) || []).length, `${f} ${tag}`);
+      }
+      assert.doesNotMatch(html, TOKENS, f);
+      // No mark cut open earlier on the page wraps what comes after the main column (the footer, back-to-top).
+      assert.equal(markedAfterMain(html), '', f);
+    }
+  });
+
+  it('the GM search index and link cards hold the hidden words with no tokens', () => {
+    const index = site.gm.read('search-index.json');
+    assert.match(index, /hidsection/i); // the search library stores words in lower case
+    assert.doesNotMatch(index + (site.gm.exists('previews.json') ? site.gm.read('previews.json') : ''), TOKENS);
+  });
+
+  it('a kind switched off is stripped on the GM site as on the player site', () => {
+    const off = buildBoth(NOTES, { player: { hide: { callouts: true } }, gm: { show: { spoilers: false } }, sites: ['gm'] });
+    try { assert.equal(off.gm.read('npcs', 'blocks.html').includes('HIDSPOILER'), false); } finally { off.cleanup(); }
+  });
+});
