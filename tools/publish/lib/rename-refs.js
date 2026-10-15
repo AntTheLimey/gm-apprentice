@@ -21,7 +21,8 @@
 const fs = require('fs');
 const path = require('path');
 const { parseNote } = require('./frontmatter');
-const { canonicalPath, ENTRY_RE } = require('./manifest');
+const { canonicalPath } = require('./manifest');
+const { ENTRY_RE } = require('./manifest-legacy');
 const { canonicalNfc } = require('./unicode');
 const {
   pcLiveKey, storyPathOf, storyOwnerPath, isStoryCompanion, scanVaultReport, buildLinkMap,

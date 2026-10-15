@@ -14,6 +14,7 @@ const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath } = require('./manifest');
+const { parseAnnotatedManifest } = require('./manifest-legacy');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
@@ -53,52 +54,6 @@ function listVaultMarkdown(vaultPath, excludeDirs) {
   }
   walk(vaultPath);
   return found.sort();
-}
-
-// The manifest as an editable structure: path -> { section, annotation }, in
-// first-seen order. parseManifest() throws annotations away (the build has no use
-// for them); rewriting the file without them would silently delete the GM's own
-// notes on why each entry is where it is.
-function parseAnnotatedManifest(markdown) {
-  const entries = new Map();
-  const body = String(markdown).replace(/\r/g, '').replace(/^---\n[\s\S]*?\n---\n?/, '');
-  const ENTRY = /^- \[([ xX])\]\s+(.+)$/;
-  const GROUPED = /^\s+-\s+(.+)$/;
-  const REASON = /^- Reason:\s*(.+)$/;
-
-  let section = null;
-  let groupReason = null;
-  for (const line of body.split('\n')) {
-    const heading = /^## (.+)/.exec(line);
-    if (heading) {
-      const title = heading[1].trim();
-      section = title.startsWith('Publishing') ? 'publishing'
-        : title.startsWith('Needs Decision') ? 'needsDecision'
-          : title.startsWith('Excluded') ? 'excluded' : null;
-      groupReason = null;
-      continue;
-    }
-    if (!section) continue;
-
-    const reason = REASON.exec(line);
-    if (reason) { groupReason = reason[1].trim(); continue; }
-
-    let raw = null;
-    const checkbox = ENTRY.exec(line);
-    if (checkbox) raw = checkbox[2].trim();
-    else {
-      const grouped = GROUPED.exec(line);
-      if (grouped && !/^reason:/i.test(grouped[1].trim())) raw = grouped[1].trim();
-    }
-    if (!raw) continue;
-
-    // Same anchoring as manifest.js: a filename may legitimately contain " — ".
-    const split = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+(.*))?$/.exec(raw);
-    const rel = canonicalPath(split ? split[1] : raw);
-    const annotation = (split && split[2] ? split[2].trim() : null) || groupReason || null;
-    entries.set(rel, { section, annotation: section === 'needsDecision' ? null : annotation });
-  }
-  return entries;
 }
 
 function renderManifest({ entries, generated, vault, mode, totalFiles }) {
