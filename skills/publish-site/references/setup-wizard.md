@@ -557,7 +557,7 @@ Open `<site_dir>/docs/index.html` in a browser for a quick visual check.
 If anything looks wrong (wrong pages, missing content, broken layout),
 troubleshoot before continuing.
 
-### Step 19: Create the publish manifest
+### Step 19: Create the publish list
 
 Run the content-filtering workflow from `references/content-filtering.md`:
 
@@ -567,17 +567,16 @@ Run the content-filtering workflow from `references/content-filtering.md`:
    are excluded, how many need a decision.
 3. Walk through ambiguous files one at a time. For each one, ask the GM:
    publish or exclude?
-4. Write the manifest to `_meta/publish-manifest.md`.
+4. Record the decisions with `node "$TOOL" manifest apply --config <dir>/vault.config.json --publish <path>... --exclude "<path>=<reason>"...`.
 
 Tell the GM:
 
-> "I've created a publish manifest — it controls exactly which
-> files appear on your site. You can edit it any time to add or
-> remove pages."
+> "I've made a publish list — it controls exactly which files
+> appear on your site. Ask me any time to add or remove pages."
 
 ### Step 20: Filtered rebuild
 
-Rebuild with the manifest in place:
+Rebuild with the publish list in place:
 
 ```bash
 npm run build
@@ -588,7 +587,7 @@ Confirm the page count dropped to player-safe content:
 > "Rebuilt with filtering: N pages (down from M). Only
 > player-visible content will be published."
 
-If the GM wants to adjust, edit the manifest and rebuild again.
+If the GM wants to adjust, change the list with `manifest apply` and rebuild again.
 
 ---
 

@@ -208,105 +208,32 @@ and are never touched — keep read-aloud text as a plain blockquote,
 not a callout, if you want it published. Callout examples inside a
 fenced code block are preserved as documentation.
 
-## Publish Manifest
+## Publish List
 
-The manifest at `_meta/publish-manifest.md` is the work order
-for the build tool. It lists every file categorized as
-publish/exclude/needs-decision.
+The publish list, `_meta/publish-list.yaml`, is the work order for the
+build. It holds every file the GM has decided on: `publishing`,
+`excluded` (each may carry a reason) and `needs_decision`.
 
-The build tool reads this file directly — no rescanning needed.
+In `player` mode (see § Publish Modes) a file publishes if and only if it
+is under `publishing`. Being under `excluded` or `needs_decision` never
+publishes it; those lists only quiet the "not on the publish list"
+warning. In `full` mode the list is not applied.
 
-### Manifest Format
+Never open the file to read or change it. Ask the tool:
 
-The manifest is a markdown file with YAML frontmatter and three
-H2 sections. The build tool's parser (`lib/manifest.js`) uses the
-heading to bucket each entry into Publishing/Excluded/Needs
-Decision. Only `player` mode (see § Publish Modes) enforces the
-manifest as an inclusion filter — and even there, a file publishes
-if and only if it's a **checked** entry under `## Publishing`.
-Checking the box under `## Excluded` or `## Needs Decision` never
-publishes the file: those buckets are read (Excluded, to suppress a
-separate "missing from manifest" warning) but never for inclusion.
-In `full` mode (the GM's own copy), the manifest isn't applied as
-a filter at all — every scanned page publishes regardless of what's
-checked.
+- `node "$TOOL" manifest list --vault <vault>` shows the three lists and
+  their counts (`--json` for the whole thing).
+- `manifest diff --config <dir>/vault.config.json` sorts every vault file
+  by the rules in this document and shows what is not on the list yet.
+- `manifest apply --config <dir>/vault.config.json --publish <path>...
+  --exclude "<path>=<reason>"... --decide <path>...` moves entries between
+  the lists. Paths are vault-relative, with forward slashes. A
+  `publishing` entry that matches no vault file prints a build warning
+  rather than silently dropping the page.
 
-**Frontmatter** (metadata, not used by the build tool):
-
-~~~yaml
----
-generated: 2026-04-22T10:00:00Z
-vault: "My Campaign"
-mode: player
-total_files: 25
-publishing: 18
-excluded: 5
-needs_decision: 2
----
-~~~
-
-**Sections:**
-
-- `## Publishing` — files to include in the build. Each entry
-  is a checked checkbox with a vault-relative path:
-  `- [x] Characters/NPCs/Friendly Merchant.md`
-  Optionally annotated with an inline reason, like Excluded:
-  `- [x] Documents/House Rules.md — the party's own notes`
-
-- `## Excluded` — files to exclude. Also uses checked checkboxes.
-  Optionally annotated with a reason:
-  `- [x] Sessions/Session 7.md — prep`
-
-- `## Needs Decision` — files the GM hasn't categorized yet.
-  Uses **unchecked** checkboxes: `- [ ] Events/Ambiguous Event.md`
-  The build tool ignores these (they are not published).
-  When the GM decides, check the box and move the line to
-  Publishing or Excluded.
-
-**Path format:** All paths are vault-relative using forward
-slashes (e.g. `Characters/NPCs/Alice.md`). Never use absolute
-filesystem paths. An inline `— comment` after the path is ignored;
-an em dash inside the filename itself is preserved. A Publishing
-entry that matches no vault file prints a build warning rather
-than silently dropping the page.
-
-**Example manifest:**
-
-~~~markdown
----
-generated: 2026-04-22T10:00:00Z
-vault: "Canticle of the End"
-mode: player
-total_files: 42
-publishing: 30
-excluded: 10
-needs_decision: 2
----
-
-## Publishing (30 files)
-
-- [x] _Campaign/Campaign Overview.md
-- [x] Characters/PCs/Helena Ashworth.md
-- [x] Characters/NPCs/Lord Pemberton.md
-- [x] Locations/Bath Assembly Rooms.md
-- [x] Sessions/Session 1.md
-- [x] Sessions/Session 2.md
-
-## Excluded (10 files)
-
-- [x] Sessions/Session 7.md — prep
-- [x] Sessions/Session 8.md — prep
-- [x] Characters/NPCs/Hidden Antagonist.md — GM override
-
-## Needs Decision (2 files)
-
-- [ ] Events/The Vanishing.md
-- [ ] Documents/Mysterious Letter.md
-~~~
-
-`gm-publish manifest diff` classifies every vault file with these rules
-and `manifest apply` writes this format; edit by hand only when node is
-unavailable.
+A vault the update has not reached yet may still hold the old file,
+`_meta/publish-manifest.md`; the tool reads it, and every command that
+writes moves the vault to the new file first.
 
 ## Campaign Image
 
@@ -355,7 +282,7 @@ custom input as an alternative.
 - `player`: Only player-known content is published
 - `full`: The GM's own copy. Notes held back as prep (`status: planned`
   or `prepped`, `stage: outline`, `draft` or `ready`, `source: prep`, a
-  cut or skipped scene) publish, the publish manifest is not applied,
+  cut or skipped scene) publish, the publish list is not applied,
   and every image in the attachments folder is copied, used or not. Every other
   `player_site.hide` setting and a note's own `publish: false` still apply. The
   built-in lists keep GM-only sections and fields off a `full` site;
@@ -370,4 +297,4 @@ in this document assumes those are already configured.
 When content filtering is triggered outside of first-time setup
 (capability 6 in SKILL.md) and its first step finds no theme, image
 or 404 message set, ask the questions described in the wizard steps
-before proceeding with the manifest workflow.
+before proceeding with the publish list workflow.

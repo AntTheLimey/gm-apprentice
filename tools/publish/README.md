@@ -656,7 +656,7 @@ back to the flat view — one section is not a grouping.
 ### Player-mode image filtering
 
 When building in `player` mode, only images referenced by the published
-pages are copied to the output — with or without a publish manifest.
+pages are copied to the output — with or without a publish list.
 This prevents GM-only images (maps, handouts, portraits of hidden NPCs)
 from leaking into the public site. In full mode, all vault images are
 copied.

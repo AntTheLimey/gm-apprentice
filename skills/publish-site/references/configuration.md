@@ -117,8 +117,7 @@ node "$TOOL" settings set 'player_site.hide.field_exceptions={"Characters/NPCs/V
 
 There is no per-file `exclude`; to strip a field from one page only,
 remove it from that page's frontmatter. Whole files are included or
-excluded through the publish manifest (`_meta/publish-manifest.md`),
-not here — see `content-filtering.md`.
+excluded through the publish list (`manifest apply`), not here — see `content-filtering.md`.
 
 ### Player-facing Wrap-Up sections
 
