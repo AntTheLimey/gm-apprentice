@@ -23,6 +23,10 @@ const NOTES = {
   'NPCs/Draft.md': '---\ntype: npc\nstatus: planned\n---\nHIDPREP.\n',
   'NPCs/Stub.md': '---\ntype: npc\npublish: stub\npublish_include_sections: [Overview]\n---\n## Overview\n\nSHOWNSTUB.\n\n## Plans\n\nHIDSTUB.\n',
   'NPCs/Forged.md': '---\ntype: npc\n---\nForged 0HIDFORGE text.\n',
+  // Marks in awkward places: a link label, a table cell, a heading, a callout title, an image alt, a block closed
+  // three paragraphs after it opens, and a hidden block holding a ## heading of its own.
+  'NPCs/Shapes.md': '---\ntype: npc\n---\nLink [<!-- gm-only -->HIDLABEL<!-- /gm-only -->](https://example.com/) end.\n\n| A | B |\n|---|---|\n| x | <!-- gm-only -->HIDCELL<!-- /gm-only --> |\n\n## Head <!-- gm-only -->HIDHEAD<!-- /gm-only -->\n\n> [!secret] Title <!-- gm-only -->HIDTITLE<!-- /gm-only -->\n> inside\n\n![pic <!-- gm-only -->HIDALT<!-- /gm-only -->](pic.png)\n\nStart <!-- gm-only -->HIDLONG1\n\nHIDLONG2\n\nHIDLONG3\n<!-- /gm-only --> end.\n\n<!-- gm-only -->\n## HIDINNERHEAD\n\nHIDINNERBODY\n<!-- /gm-only -->\n\n## GM Notes\n\nHIDGMBODY\n\n## Open Again\n\nSHOWNSHAPES.\n',
+  '_archive/Old.md': '---\ntype: npc\n---\nHIDARCHIVE.\n',
   'PCs/Ann.md': '---\ntype: pc\n---\n# Ann\n\n## Background\n\nSHOWNBG.\n\n## GM Notes\n\nHIDPC\n\n## Background Two\n\nSHOWNPCAFTER.\n',
 };
 // word -> the kind of mark it must sit in on the GM site, and the page it is on.
@@ -38,11 +42,21 @@ const EXPECT = [
   ['HIDCALLOUT', 'callouts', 'npcs/callout.html'],
   ['HIDSTUB', 'sections', 'npcs/stub.html'],
   ['HIDPC', 'sections', 'pcs/ann.html'],
+  ['HIDLABEL', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDCELL', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDHEAD', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDTITLE', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDLONG1', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDLONG2', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDLONG3', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDINNERHEAD', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDINNERBODY', 'gm_only_blocks', 'npcs/shapes.html'],
+  ['HIDGMBODY', 'sections', 'npcs/shapes.html'],
 ];
 
 describe('one of every hidden kind, both ways', () => {
   let site;
-  before(() => { site = buildBoth(NOTES, { player: { hide: { callouts: true } }, gm: { show: { comments: true } } }); });
+  before(() => { site = buildBoth(NOTES, { player: { folder_map: { NPCs: 'npcs', PCs: 'pcs', _archive: 'archive' }, hide: { callouts: true, folders: ['_archive'] } }, gm: { show: { comments: true } } }); });
   after(() => site.cleanup());
 
   const FORGED = 'npcs/forged.html';
@@ -109,6 +123,41 @@ describe('one of every hidden kind, both ways', () => {
       assert.ok(marks.some((m) => m.kind === kind && m.text.includes(word)), JSON.stringify(marks.map((m) => [m.kind, m.text.slice(0, 40)])));
     });
   }
+
+  it('a callout whose title holds a hidden span is marked as a callout and the span as a hidden block', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'shapes.html'));
+    assert.ok(marks.some((m) => m.kind === 'callouts' && m.text.includes('HIDTITLE')), 'callout mark');
+  });
+
+  it('a mark opened mid-line closes three paragraphs later, in one mark', () => {
+    const marks = markedTexts(site.gm.read('npcs', 'shapes.html'));
+    assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && ['HIDLONG1', 'HIDLONG2', 'HIDLONG3'].every((w) => m.text.includes(w))));
+  });
+
+  it('an image alt holds the secret unmarked on the GM site (tokens in tags are dropped) and nothing on the player site', () => {
+    const gm = site.gm.read('npcs', 'shapes.html');
+    assert.ok(gm.includes('HIDALT'));
+    assert.equal(markedTexts(gm).some((m) => m.text.includes('HIDALT')), false);
+    assert.doesNotMatch(gm, TOKENS);
+    assert.equal(site.player.read('npcs', 'shapes.html').includes('HIDALT'), false);
+  });
+
+  it('the text after the hidden shapes is shown to players and sits outside every mark', () => {
+    assert.ok(site.player.read('npcs', 'shapes.html').includes('SHOWNSHAPES'));
+    const gm = site.gm.read('npcs', 'shapes.html');
+    assert.equal(markedTexts(gm).some((m) => m.kind !== 'notes' && m.text.includes('SHOWNSHAPES')), false);
+  });
+
+  it('a note in a hidden folder is on the GM site with a band and the reason, and not on the player site', () => {
+    const gmPages = site.gm.files().filter((f) => /old\.html$/.test(f));
+    assert.equal(gmPages.length, 1, 'one GM page for the archived note');
+    const html = fs.readFileSync(gmPages[0], 'utf8');
+    assert.ok(html.includes('HIDARCHIVE'));
+    const marks = markedTexts(html);
+    assert.ok(marks.some((m) => m.kind === 'notes' && m.label === "Players don't see this page: hide.folders: _archive"), JSON.stringify(marks.map((m) => [m.kind, m.label])));
+    assert.equal(site.player.files().some((f) => /old\.html$/.test(f)), false);
+    assert.equal(playerText().includes('HIDARCHIVE'), false);
+  });
 
   it('comments, switched on, are marked', () => {
     const marks = markedTexts(site.gm.read('npcs', 'comments.html'));
