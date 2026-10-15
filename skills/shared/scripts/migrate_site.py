@@ -902,9 +902,13 @@ def find_retire_steps(vault: Path) -> list[Item]:
         if name is None or name in seen:
             continue
         seen.add(name)
+        # Every spelling of the same step goes ("scripts/x.mjs", "./scripts/x.mjs").
+        same = [str(c) for c in steps if _retired_step(str(c)) == name]
+        had_optimize = (s.origins.get(OPTIMIZE) == "file", s.get(OPTIMIZE))
 
         def apply(value: str | None, name: str = name,
-                  command: str = str(command)) -> list[str]:
+                  command: str = str(command), same: list[str] = same,
+                  had: tuple[bool, object] = had_optimize) -> list[str]:
             if value not in ("retire", "leave"):
                 raise StepFailed(f"retire-step:{name} takes retire or leave")
             if value == "leave":
@@ -915,12 +919,18 @@ def find_retire_steps(vault: Path) -> list[Item]:
                 _set_settings(vault, [(OPTIMIZE, True)])
                 done.append(f"wrote {setting_name(vault, OPTIMIZE)}: true")
             try:
-                removed = settings_remove(vault, AFTER_BUILD, [command])
-            except SettingsUnavailable as e:
+                removed = settings_remove(vault, AFTER_BUILD, same)
+                if not removed:
+                    raise StepFailed(f'the build step "{command}" was not in '
+                                     f"{setting_name(vault, AFTER_BUILD)}")
+            except (SettingsUnavailable, StepFailed) as e:
+                if name == "optimize-images":
+                    # Put the setting back as it was: the step still runs.
+                    if had[0]:
+                        _set_settings(vault, [(OPTIMIZE, had[1])])
+                    else:
+                        settings_unset(vault, [OPTIMIZE])
                 raise StepFailed(str(e)) from e
-            if not removed:
-                raise StepFailed(f'the build step "{command}" was not in '
-                                 f"{setting_name(vault, AFTER_BUILD)}")
             done.append(f'removed the build step "{command}" from '
                         f"{setting_name(vault, AFTER_BUILD)}")
             return done

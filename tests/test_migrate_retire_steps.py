@@ -110,6 +110,26 @@ class RetireStepsTests(unittest.TestCase):
         self.assertIn("node scripts/optimize-images.mjs", steps_of(vault))
         self.assertFalse(settings(vault).get(OPTIMIZE))
 
+    def test_retire_removes_every_spelling_of_the_step(self):
+        vault = vault_with_steps(self, ["node scripts/add-theme-toggle.mjs",
+                                        "node scripts/add-props.mjs",
+                                        "node ./scripts/add-theme-toggle.mjs"])
+        items = ms.find_retire_steps(vault)
+        self.assertEqual([i.id for i in items], ["retire-step:add-theme-toggle"])
+        items[0].apply("retire")
+        self.assertEqual(steps_of(vault), ["node scripts/add-props.mjs"])
+
+    def test_optimize_images_setting_goes_back_when_the_step_cannot_be_removed(self):
+        vault = vault_with_steps(self, DEAD_END)
+        item = next(i for i in ms.find_retire_steps(vault)
+                    if i.id == "retire-step:optimize-images")
+        with mock.patch.object(ms, "settings_remove", return_value=[]):
+            with self.assertRaises(StepFailed):
+                item.apply("retire")
+        self.assertIn("node scripts/optimize-images.mjs", steps_of(vault))
+        self.assertFalse(settings(vault).get(OPTIMIZE))
+        self.assertNotEqual(settings(vault).origins.get(OPTIMIZE), "file")
+
     def test_leave_keeps_the_step(self):
         vault = vault_with_steps(self, DEAD_END)
         for item in ms.find_retire_steps(vault):

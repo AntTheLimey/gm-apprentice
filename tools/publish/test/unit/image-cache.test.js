@@ -127,6 +127,15 @@ describe('imageCacheDir', () => {
   it('is none when the vault would hold it', () => {
     assert.strictEqual(imageCacheDir(site, { outputDirs: [path.join(site, 'docs')], vaultPath: os.tmpdir() }), null);
   });
+  it('is none when an output folder reached by a link is the site folder', (t) => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-link-'));
+    const real = path.join(root, 'site');
+    fs.mkdirSync(real);
+    const link = path.join(root, 'out');
+    try { fs.symlinkSync(real, link, 'dir'); } catch { t.skip('no symlinks here'); fs.rmSync(root, { recursive: true, force: true }); return; }
+    assert.strictEqual(imageCacheDir(real, { outputDirs: [link], vaultPath: path.join(root, 'v') }), null);
+    fs.rmSync(root, { recursive: true, force: true });
+  });
 });
 
 describe('ignoreCacheInGit', () => {

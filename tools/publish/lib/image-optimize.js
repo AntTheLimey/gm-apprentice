@@ -125,8 +125,11 @@ const CACHE_FOLDER = '.gm-apprentice';
  */
 function imageCacheDir(siteDir, { outputDirs, vaultPath }) {
   const dir = path.resolve(siteDir, CACHE_FOLDER, 'image-cache');
+  // Through links: an output folder or vault reached by a symlink is the same folder.
+  const { real } = require('./gm-site');
+  const realDir = real(dir);
   const within = (outer) => {
-    const rel = path.relative(path.resolve(outer), dir);
+    const rel = path.relative(real(outer), realDir);
     return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
   };
   return [...outputDirs, vaultPath].some(within) ? null : dir;
