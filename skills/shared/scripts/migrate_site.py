@@ -261,7 +261,8 @@ def find_publish_list(vault: Path) -> list[Item]:
     """Every pass: a vault still on `_meta/publish-manifest.md` moves to
     `_meta/publish-list.yaml`, all of it by the publish tool (`manifest
     convert`), which writes the new file, reads it back, compares the three
-    lists with the old file's and only then removes the old one. The tool
+    lists and every entry line with the old file's and only then sets the
+    old one aside as `_meta/publish-manifest.md.converted`. The tool
     decides what moves and whether it should: it holds the list where it is
     (`held`, with the words) when the site's tool is older than 1.27.0 or a
     build step of the site reads the old file. A held list is left behind,

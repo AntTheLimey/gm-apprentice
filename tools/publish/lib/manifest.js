@@ -6,11 +6,12 @@
 //   excluded:          # paths held back on purpose; a reason is optional
 //     - path: Sessions/Session 09.md
 //       reason: prep
-//   needs_decision:    # paths nobody has decided yet
+//   needs_decision:    # paths nobody has decided yet; an entry may be { path, reason } here too
 //     - Drafts/Idea.md
 //
-// A vault whose update has not run still has the Markdown file (`_meta/publish-manifest.md`); it is read by
-// manifest-legacy.js, with a notice, until the list is moved.
+// Only `excluded` reasons settle anything; the others are the GM's notes, kept.
+// A vault whose update has not run still has the Markdown file (`_meta/publish-manifest.md`); it is read and
+// written by manifest-legacy.js, with a notice, until the update or `manifest convert` moves the list.
 const fs = require('fs');
 const YAML = require('yaml');
 const { canonicalNfc } = require('./unicode');
@@ -53,7 +54,7 @@ function parseNewFile(text, warn) {
     if (!KEYS.includes(key)) warn(`${PUBLISH_LIST_FILE}: "${key}" is not a section of the publish list (${KEYS.join(', ')}); ignored`);
   }
 
-  const reasonsBy = { publishing: new Map(), excluded: new Map() };
+  const reasonsBy = { publishing: new Map(), excluded: new Map(), needs_decision: new Map() };
   const sections = {};
   for (const key of KEYS) {
     const raw = top[key];
@@ -67,17 +68,17 @@ function parseNewFile(text, warn) {
       let rel = null;
       let reason = null;
       if (isText(item)) rel = item;
-      else if (key !== 'needs_decision' && item && typeof item === 'object' && !Array.isArray(item) && isText(item.path)) {
+      else if (item && typeof item === 'object' && !Array.isArray(item) && isText(item.path)) {
         rel = item.path;
         if (isText(item.reason)) reason = item.reason.trim();
       }
       if (rel === null) {
-        warn(`${PUBLISH_LIST_FILE}: an entry under "${key}" is not a path${key !== 'needs_decision' ? ' (or a path with a reason)' : ''}; dropped`);
+        warn(`${PUBLISH_LIST_FILE}: an entry under "${key}" is not a path (or a path with a reason); dropped`);
         continue;
       }
       rel = canonicalPath(rel.trim());
       if (!sections[key].includes(rel)) sections[key].push(rel);
-      if (reason && reasonsBy[key] && !reasonsBy[key].has(rel)) reasonsBy[key].set(rel, reason);
+      if (reason && !reasonsBy[key].has(rel)) reasonsBy[key].set(rel, reason);
     }
   }
 
@@ -97,6 +98,7 @@ function parseNewFile(text, warn) {
     if (claimed.has(rel)) warn(`${PUBLISH_LIST_FILE}: "${rel}" is under needs_decision and also another list; the other list wins`);
     else needsDecision.push(rel);
   }
+  for (const rel of needsDecision) if (reasonsBy.needs_decision.has(rel)) reasons.set(rel, reasonsBy.needs_decision.get(rel));
   return { publishing, excluded, needsDecision, reasons, file: 'new' };
 }
 
@@ -109,18 +111,28 @@ function loadManifest(vaultPath, { warn = console.warn } = {}) {
   const hasNew = fs.existsSync(newFile);
   const hasOld = fs.existsSync(oldFile);
   if (hasNew) {
-    if (hasOld) sayOnce(warn, `The old publish list ${OLD_LIST_FILE} is left over and not read; ${PUBLISH_LIST_FILE} is the publish list. Remove the old file once you have checked the new one.`);
+    if (hasOld) sayOnce(warn, `The old publish list ${OLD_LIST_FILE} is left over and not read; ${PUBLISH_LIST_FILE} is the publish list. The next update (or manifest convert) checks the two agree and sets the old file aside.`);
     return parseNewFile(fs.readFileSync(newFile, 'utf-8'), warn);
   }
   if (!hasOld) return null;
   sayOnce(warn, `The publish list is still in ${OLD_LIST_FILE}; the next update moves it to ${PUBLISH_LIST_FILE}.`);
-  const { parseManifest } = require('./manifest-legacy');
-  const parsed = parseManifest(fs.readFileSync(oldFile, 'utf-8'));
+  const { parseManifest, parseAnnotatedManifest } = require('./manifest-legacy');
+  const text = fs.readFileSync(oldFile, 'utf-8');
+  const parsed = parseManifest(text);
+  // The reasons the old reader finds: beside a Publishing or Excluded entry, for the list that entry is in.
+  const annotated = parseAnnotatedManifest(text);
+  const reasons = new Map();
+  for (const [list, section] of [[parsed.publishing, 'publishing'], [parsed.excluded, 'excluded']]) {
+    for (const rel of list) {
+      const entry = annotated.get(rel);
+      if (entry && entry.section === section && entry.annotation && !reasons.has(rel)) reasons.set(rel, entry.annotation);
+    }
+  }
   return {
     publishing: parsed.publishing,
     excluded: parsed.excluded,
     needsDecision: parsed.needsDecision,
-    reasons: new Map(),
+    reasons,
     file: 'old',
   };
 }
@@ -133,7 +145,7 @@ function listText(list) {
   const doc = {
     publishing: sortedPaths(list.publishing).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : rel)),
     excluded: sortedPaths(list.excluded).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : { path: rel })),
-    needs_decision: sortedPaths(list.needsDecision),
+    needs_decision: sortedPaths(list.needsDecision).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : rel)),
   };
   return YAML.stringify(doc, { lineWidth: 0 });
 }

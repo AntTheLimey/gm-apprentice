@@ -22,11 +22,13 @@ function vaultWith(text) {
 }
 const file = (v, f) => path.join(v, '_meta', f);
 
-test('converts all of it, then removes the old file', () => {
+test('converts all of it, then keeps the old file as publish-manifest.md.converted', () => {
   const v = vaultWith(OLD);
   const r = convertPublishList(v);
   assert.equal(r.ok, true);
   assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), false);
+  assert.equal(fs.readFileSync(file(v, 'publish-manifest.md.converted'), 'utf8'), OLD);
+  assert.ok(r.lines.includes('The old file is kept as _meta/publish-manifest.md.converted.'), r.lines.join('\n'));
   const list = loadManifest(v);
   assert.deepEqual(list.publishing, ['NPCs/Vex.md']);
   assert.deepEqual(list.excluded.sort(), ['Archive/Old.md', 'Sessions/Next.md']);
@@ -63,13 +65,14 @@ test('a write that fails half way leaves the old file and no new one', () => {
   assert.equal(fs.existsSync(file(v, 'publish-list.yaml')), false);
 });
 
-test('a stop between the rename and the removal is finished by the next run', () => {
+test('a stop between placing the new file and setting the old aside is finished by the next run', () => {
   const v = vaultWith(OLD);
-  assert.throws(() => convertPublishList(v, { deps: { removeOld: () => { throw new Error('stopped'); } } }), /stopped/);
+  assert.throws(() => convertPublishList(v, { deps: { moveOld: () => { throw new Error('stopped'); } } }), /stopped/);
   assert.ok(fs.existsSync(file(v, 'publish-list.yaml')) && fs.existsSync(file(v, 'publish-manifest.md')));
   const again = convertPublishList(v);
   assert.equal(again.ok, true);
   assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), false);
+  assert.equal(fs.readFileSync(file(v, 'publish-manifest.md.converted'), 'utf8'), OLD);
 });
 
 test('both files that disagree: nothing is removed', () => {
@@ -212,10 +215,10 @@ test('a step word that leaves the site folder is not read', () => {
   assert.equal(convertPublishList(v, { check: true, siteConfigPath: s.config, deps: { pinCheck: () => ({}) } }).held, false);
 });
 
-test('a stop between the new file and the removal of the old leaves both; the next run finishes', () => {
+test('a stop between the new file and setting the old aside leaves both; the next run finishes', () => {
   const v = vaultWith(OLD);
   const boom = () => { throw new Error('stopped'); };
-  assert.throws(() => convertPublishList(v, { deps: { removeOld: boom } }), /stopped/);
+  assert.throws(() => convertPublishList(v, { deps: { moveOld: boom } }), /stopped/);
   assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), true);
   assert.equal(fs.existsSync(file(v, 'publish-list.yaml')), true);
   assert.equal(fs.existsSync(file(v, 'publish-list.yaml.convert')), false);
@@ -237,4 +240,95 @@ test('the command takes --config: a step reading the old file holds the list and
   assert.equal(await runManifest({ verb: 'convert', vaultPath: v, configPath: s.config }, d), 0);
   assert.match(lines.pop(), /^The publish list stays in _meta\/publish-manifest\.md: your build step build\.mjs reads it/);
   assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), true);
+});
+
+test('without --config the site folder the vault names is asked: a step reading the old file holds the list', () => {
+  const s = siteWith({ files: { 'scripts/add-props.mjs': 'publish-manifest.md' }, pkgScripts: { postbuild: 'node scripts/add-props.mjs' } });
+  const v = vaultWith(OLD);
+  fs.writeFileSync(file(v, 'vault-config.yaml'), `version: 1\nplayer_site:\n  folder: ${JSON.stringify(s.dir)}\n`);
+  const before = snapshotOf(v);
+  const r = convertPublishList(v, { deps: { pinCheck: () => ({}) } });
+  assert.equal(r.held, 'site-step');
+  assert.deepEqual(snapshotOf(v), before);
+});
+
+// ---- Nothing the GM wrote is lost (review C2, I1) ---------------------------------------------------------
+
+const WRITTEN = [
+  '---', 'mode: player', '---', '',
+  'A paragraph the GM wrote.', '',
+  '## Publishing (2 files)', '', '- [x] NPCs/Vex.md', '- [ ] NPCs/Later.md — not ready yet', '',
+  '## Excluded (2 files)', '', '- [x] Sessions/Next.md — prep', '- [ ] Drafts/Unticked Excl.md — spoils the twist', '',
+  '## Needs Decision (2 files)', '', '- [ ] Drafts/Idea.md — waiting on Sam', '- [x] Drafts/Resolved.md — decided: keep it hidden', '',
+  '## Notes', '', 'Free prose.', '',
+].join('\n');
+
+test('an unticked Excluded entry stays excluded, with its reason', () => {
+  const v = vaultWith(WRITTEN);
+  const r = convertPublishList(v);
+  assert.equal(r.ok, true, r.blockers.join('\n'));
+  const list = loadManifest(v, { warn: () => {} });
+  assert.ok(list.excluded.includes('Drafts/Unticked Excl.md'), list.excluded.join(', '));
+  assert.equal(list.reasons.get('Drafts/Unticked Excl.md'), 'spoils the twist');
+});
+
+test('a reason beside a needs-decision entry is kept, and an unticked Publishing entry keeps its reason', () => {
+  const v = vaultWith(WRITTEN);
+  assert.equal(convertPublishList(v).ok, true);
+  const list = loadManifest(v, { warn: () => {} });
+  assert.deepEqual(list.needsDecision, ['Drafts/Idea.md', 'Drafts/Resolved.md', 'NPCs/Later.md']);
+  assert.equal(list.reasons.get('Drafts/Idea.md'), 'waiting on Sam');
+  assert.equal(list.reasons.get('Drafts/Resolved.md'), 'decided: keep it hidden');
+  assert.equal(list.reasons.get('NPCs/Later.md'), 'not ready yet');
+  assert.match(fs.readFileSync(file(v, 'publish-list.yaml'), 'utf8'), /needs_decision:\n {2}- path: Drafts\/Idea\.md\n {4}reason: waiting on Sam\n/);
+});
+
+test('the old file, prose and all, is kept beside the new one and is never read as a note or a list', () => {
+  const v = vaultWith(WRITTEN);
+  assert.equal(convertPublishList(v).ok, true);
+  assert.equal(fs.readFileSync(file(v, 'publish-manifest.md.converted'), 'utf8'), WRITTEN);
+  const warned = [];
+  loadManifest(v, { warn: (m) => warned.push(m) });
+  assert.deepEqual(warned.filter((m) => /left over/.test(m)), []);
+  const { listVaultMarkdown } = require('../lib/manifest-cli');
+  assert.equal(listVaultMarkdown(v, []).some((rel) => rel.includes('publish-manifest')), false);
+});
+
+test('a second conversion never overwrites an earlier kept copy', () => {
+  const v = vaultWith(OLD);
+  assert.equal(convertPublishList(v).ok, true);
+  fs.rmSync(file(v, 'publish-list.yaml'));
+  fs.writeFileSync(file(v, 'publish-manifest.md'), WRITTEN);
+  assert.equal(convertPublishList(v).ok, true);
+  assert.equal(fs.readFileSync(file(v, 'publish-manifest.md.converted'), 'utf8'), OLD);
+  assert.equal(fs.readFileSync(file(v, 'publish-manifest.md.converted.2'), 'utf8'), WRITTEN);
+});
+
+test('the check counts every path line of the old file, not what the readers parse', () => {
+  const { lostFromOld } = require('../lib/publish-list-convert');
+  const text = ['## Excluded (1 files)', '', '- [ ] Drafts/A.md — why', '- Reason: old', '  - Archive/B.md', '', '## Notes', '', '- not a path line', ''].join('\n');
+  assert.deepEqual(lostFromOld(text, { publishing: [], excluded: ['Archive/B.md'], needsDecision: [] }), ['Drafts/A.md']);
+  assert.deepEqual(lostFromOld(text, { publishing: [], excluded: ['Archive/B.md'], needsDecision: ['Drafts/A.md'] }), []);
+});
+
+test('manifest list --json on an unconverted vault keeps the reasons the old reader finds', async () => {
+  const { runManifest } = require('../lib/manifest-cli');
+  const v = vaultWith(['## Publishing (1 files)', '', '- [x] NPCs/Vex.md — stays hidden: x', '',
+    '## Excluded (2 files)', '', '- [x] Sessions/Next.md — prep', '- Reason: old notes', '  - Archive/Old.md', ''].join('\n'));
+  const lines = [];
+  assert.equal(await runManifest({ verb: 'list', vaultPath: v, json: true }, { out: (t) => lines.push(t) }), 0);
+  const payload = JSON.parse(lines.pop());
+  assert.deepEqual(payload.publishing_reasons, { 'NPCs/Vex.md': 'stays hidden: x' });
+  assert.deepEqual(payload.excluded, [{ path: 'Sessions/Next.md', reason: 'prep' }, { path: 'Archive/Old.md', reason: 'old notes' }]);
+  assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), true, 'listing moves nothing');
+});
+
+test('a read-back that loses a path line refuses, and the old file stays', () => {
+  const v = vaultWith(WRITTEN);
+  const drop = (list) => ({ ...list, excluded: list.excluded.filter((rel) => rel !== 'Drafts/Unticked Excl.md') });
+  const r = convertPublishList(v, { deps: { readBack: drop } });
+  assert.equal(r.ok, false);
+  assert.match(r.blockers.join('\n'), /Drafts\/Unticked Excl\.md/);
+  assert.equal(fs.readFileSync(file(v, 'publish-manifest.md'), 'utf8'), WRITTEN);
+  assert.equal(fs.existsSync(file(v, 'publish-list.yaml')), false);
 });

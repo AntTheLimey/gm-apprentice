@@ -66,6 +66,8 @@ class PublishListMoveTests(unittest.TestCase):
         code, did, err = update(vault, *CHOOSE)
         self.assertEqual(code, 0, err + did)
         self.assertTrue(has_new(vault) and not has_old(vault), did)
+        kept = vault / "_meta" / (OLD_NAME + ".converted")
+        self.assertEqual(kept.read_text(encoding="utf-8"), OLD_LIST)
         self.assertEqual(read_stamp(vault), PLUGIN)
         data = listed(vault)
         self.assertEqual(data["publishing"], ["NPCs/Vex.md"])
@@ -180,7 +182,7 @@ class PublishListMoveTests(unittest.TestCase):
         subprocess.run(
             ["node", "-e",
              "const {convertPublishList}=require(process.argv[1]);"
-             "try{convertPublishList(process.argv[2],{deps:{removeOld:()=>"
+             "try{convertPublishList(process.argv[2],{deps:{moveOld:()=>"
              "{throw new Error('stop')}}})}catch(e){}",
              str(site_fixture.TOOL_DIR / "lib" / "publish-list-convert.js"),
              str(vault)], check=True)

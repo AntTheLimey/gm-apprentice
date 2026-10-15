@@ -53,14 +53,14 @@ function listVaultMarkdown(vaultPath, excludeDirs) {
   return found.sort();
 }
 
-// The publish list as an editable structure: path -> { section, annotation (the reason, excluded only) }, in
-// first-seen order.
+// The publish list as an editable structure: path -> { section, annotation (its reason) }, in first-seen order.
 function entriesOf(list) {
   const entries = new Map();
   if (!list) return entries;
-  for (const rel of list.publishing) entries.set(rel, { section: 'publishing', annotation: (list.reasons && list.reasons.get(rel)) || null });
-  for (const rel of list.excluded) entries.set(rel, { section: 'excluded', annotation: (list.reasons && list.reasons.get(rel)) || null });
-  for (const rel of list.needsDecision) entries.set(rel, { section: 'needsDecision', annotation: null });
+  const reasonOf = (rel) => (list.reasons && list.reasons.get(rel)) || null;
+  for (const rel of list.publishing) entries.set(rel, { section: 'publishing', annotation: reasonOf(rel) });
+  for (const rel of list.excluded) entries.set(rel, { section: 'excluded', annotation: reasonOf(rel) });
+  for (const rel of list.needsDecision) entries.set(rel, { section: 'needsDecision', annotation: reasonOf(rel) });
   return entries;
 }
 
@@ -69,7 +69,7 @@ function listOf(entries) {
   const list = { publishing: [], excluded: [], needsDecision: [], reasons: new Map() };
   for (const [rel, entry] of entries) {
     list[entry.section].push(rel);
-    if (entry.section !== 'needsDecision' && entry.annotation) list.reasons.set(rel, entry.annotation);
+    if (entry.annotation) list.reasons.set(rel, entry.annotation);
   }
   return list;
 }
@@ -541,7 +541,8 @@ function runList(opts, d) {
   if (opts.json) out(JSON.stringify(payload, null, 2));
   else {
     out(`${c.publishing} publishing, ${c.excluded} excluded, ${c.needsDecision} needing a decision.`);
-    for (const [title, rows] of [['Publishing', sets.publishing], ['Excluded', sets.excluded.map((e) => (e.reason ? `${e.path} — ${e.reason}` : e.path))], ['Needs decision', sets.needs_decision]]) {
+    const withReason = (reasons) => (rel) => (reasons[rel] ? `${rel} — ${reasons[rel]}` : rel);
+    for (const [title, rows] of [['Publishing', sets.publishing.map(withReason(sets.publishing_reasons))], ['Excluded', sets.excluded.map((e) => (e.reason ? `${e.path} — ${e.reason}` : e.path))], ['Needs decision', sets.needs_decision.map(withReason(sets.needs_decision_reasons))]]) {
       if (rows.length) out(`\n${title}:\n${rows.map((r) => `  ${r}`).join('\n')}`);
     }
   }

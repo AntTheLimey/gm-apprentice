@@ -1014,6 +1014,21 @@ describe('a documents.wrap_up written as a GM alias pairs the same everywhere (#
   });
 });
 
+describe('manifest apply keeps a reason beside a needs_decision entry', () => {
+  it('rewrites the list with the reason still there', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(path.join(vault, '_meta', 'publish-list.yaml'),
+      'publishing: []\nexcluded: []\nneeds_decision:\n  - path: Sessions/Planned Session.md\n    reason: waiting on Sam\n');
+    const { configPath } = siteFor(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps), 0, c.text());
+    const list = readListText(fs.readFileSync(path.join(vault, '_meta', 'publish-list.yaml'), 'utf8'));
+    assert.strictEqual(list.reasons.get('Sessions/Planned Session.md'), 'waiting on Sam');
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+});
+
 describe('manifest apply on a vault still holding the old Markdown list', () => {
   it('moves the list first, keeps its reasons, then applies the change', async () => {
     const vault = copyVault('auto-exclude');
