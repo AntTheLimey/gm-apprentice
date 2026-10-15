@@ -3,6 +3,7 @@ const { canonicalNfc } = require('./unicode');
 const { SWITCH_WORDS } = require('./settings/types');
 const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
+const { blockLines } = require('./gm-marks');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink, labelsForLinks, labelsForLinksFully } = require('./wikilink');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
@@ -633,20 +634,133 @@ function setextRisk(prev, next) {
     && typeof next === 'string' && /^ {0,3}(-+|=+)\s*$/.test(next);
 }
 
-// The strip as lines, and `from`: the line of `markdown` each of them came from.
-function markedBlocks(markdown, markerName) {
-  // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
-  // Capitals and spacing inside the comment do not matter (markers.js).
-  const markerRe = markerPattern(markerName);
-  // CRLF would hide a fence line from the fence regex (`.` never matches \r), so a
-  // closer shown inside a fenced example would end the block early. Callers that
-  // pass raw gray-matter content (build.js's published view) keep CRLF.
-  // A marker split over lines ("<!--\ngm-only\n-->") is one marker on its first line; the
-  // line breaks it held follow it, so every line after it stays on its own line number.
-  const lines = String(markdown).replace(/\r\n?/g, '\n')
+// One line's effect on the fence state. A fence closes only on the same character, at least
+// as long as the opener, with nothing but whitespace after it (CommonMark).
+function fenceStep(line, fenceDelim) {
+  // up to 3 leading spaces; 4+ would be an indented code block, not a fence
+  const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
+  let isFenceLine = false;
+  if (fence) {
+    const [, delim, info] = fence;
+    if (fenceDelim === null) {
+      // A backtick fence's info string may not contain a backtick.
+      if (delim[0] !== '`' || !info.includes('`')) {
+        fenceDelim = delim;
+        isFenceLine = true;
+      }
+    } else if (delim[0] === fenceDelim[0]
+               && delim.length >= fenceDelim.length
+               && /^\s*$/.test(info)) {
+      fenceDelim = null;
+      isFenceLine = true;
+    }
+  }
+  return { fenceDelim, isFenceLine };
+}
+
+// The note's lines for a strip. CRLF would hide a fence line from the fence regex (`.` never
+// matches \r), so a closer shown inside a fenced example would end the block early. Callers that
+// pass raw gray-matter content (build.js's published view) keep CRLF.
+// A marker split over lines ("<!--\ngm-only\n-->") is one marker on its first line; the
+// line breaks it held follow it, so every line after it stays on its own line number.
+function markerLines(markdown, markerName) {
+  return String(markdown).replace(/\r\n?/g, '\n')
     .replace(markerPattern(markerName), (whole) => (whole.includes('\n')
       ? whole.replace(/\n/g, ' ') + whole.replace(/[^\n]/g, '') : whole))
     .split('\n');
+}
+
+// The mark kind and label of each marker name on the GM site.
+const MARK_OF = {
+  'gm-only': { kind: 'gm_only_blocks', label: 'gm-only block' },
+  spoiler: { kind: 'spoilers', label: 'spoiler block' },
+};
+
+// The GM site's version of the strip: every line is kept, and each block is wrapped in a mark
+// (gm-marks.js). A block whose open and close share a line is a mark inside the line; any other
+// open or close ends the line's text and stands on lines of its own. `from` is null.
+function markBlocksKeeping(lines, markerName, mark) {
+  const markerRe = markerPattern(markerName);
+  const { kind, label } = MARK_OF[markerName];
+  const out = [];
+  const warnings = [];
+  const stack = [];
+  let orphanClosers = 0;
+  let fenceDelim = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const step = fenceStep(line, fenceDelim);
+    fenceDelim = step.fenceDelim;
+    if (fenceDelim !== null || step.isFenceLine || !markerRe.test(line)) { out.push(line); markerRe.lastIndex = 0; continue; }
+    markerRe.lastIndex = 0;
+    // The line as text pieces and marker events; a pair that opens and closes here is inline.
+    const parts = [];
+    let last = 0;
+    let m;
+    while ((m = markerRe.exec(line)) !== null) {
+      parts.push({ text: line.slice(last, m.index) });
+      last = m.index + m[0].length;
+      const inline = line.slice(0, m.index).trim() !== '';
+      if (m[1] === '') {
+        const ev = { open: true };
+        parts.push(ev);
+        stack.push({ inline, line: i, ev });
+      } else if (stack.length === 0) {
+        orphanClosers += 1;   // dropped
+      } else {
+        const top = stack[stack.length - 1];
+        // As in the strip: a closer after other content ends only a block opened the same way or on this line.
+        if (!inline || top.inline || top.line === i) {
+          stack.pop();
+          const ev = { close: true, pair: top.ev };
+          if (top.line === i) { top.ev.inline = true; ev.inline = true; }
+          parts.push(ev);
+        }
+      }
+    }
+    markerRe.lastIndex = 0;
+    parts.push({ text: line.slice(last) });
+    let segment = '';
+    let fresh = false;   // the segment follows a block break: its leading spaces are dropped
+    const flush = (trailing) => {
+      const t = trailing ? segment.trimEnd() : segment;
+      if (t.trim() !== '') out.push(fresh ? t.trimStart() : t);
+      segment = '';
+      fresh = false;
+    };
+    for (const p of parts) {
+      if (p.text !== undefined) segment += p.text;
+      else if (p.open) {
+        p.token = mark.marks.open(kind, label);
+        if (p.inline) segment += p.token;
+        else { flush(true); blockLines(p.token).forEach((t) => out.push(t)); fresh = true; }
+      } else if (p.inline) segment += mark.marks.close();
+      else { flush(true); blockLines(mark.marks.close()).forEach((t) => out.push(t)); fresh = true; }
+    }
+    flush(false);
+  }
+  for (let d = stack.length; d > 0; d--) blockLines(mark.marks.close()).forEach((t) => out.push(t));
+  if (stack.length > 0) {
+    warnings.push(
+      `unclosed <!-- ${markerName} --> marker (${stack.length} block${stack.length === 1 ? '' : 's'} still open) `
+      + '— content stripped to end of file');
+  }
+  if (orphanClosers > 0) {
+    warnings.push(
+      `${orphanClosers} <!-- /${markerName} --> marker${orphanClosers === 1 ? '' : 's'} `
+      + `without a matching <!-- ${markerName} --> — check the block boundaries`);
+  }
+  return { text: out.join('\n'), warnings, lines: out, from: null };
+}
+
+// The strip as lines, and `from`: the line of `markdown` each of them came from. With `mark`
+// ({ marks, show }) and the marker's kind on in `show`, the GM site's version instead (above).
+function markedBlocks(markdown, markerName, mark) {
+  const lines = markerLines(markdown, markerName);
+  if (mark && MARK_OF[markerName] && mark.show.has(MARK_OF[markerName].kind)) return markBlocksKeeping(lines, markerName, mark);
+  // Group 1 is "/" for a closer, "" for an opener. Non-global copy for the cheap test.
+  // Capitals and spacing inside the comment do not matter (markers.js).
+  const markerRe = markerPattern(markerName);
   const result = [];
   const warnings = [];
   const stack = [];
@@ -672,25 +786,10 @@ function markedBlocks(markdown, markerName) {
     const line = lines[i];
 
     // up to 3 leading spaces; 4+ would be an indented code block, not a fence
-    const fence = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(line);
-    let isFenceLine = false;
-    if (fence) {
-      const [, delim, info] = fence;
-      if (fenceDelim === null) {
-        // A backtick fence's info string may not contain a backtick.
-        if (delim[0] !== '`' || !info.includes('`')) {
-          fenceDelim = delim;
-          isFenceLine = true;
-        }
-      } else if (delim[0] === fenceDelim[0]
-                 && delim.length >= fenceDelim.length
-                 && /^\s*$/.test(info)) {
-        fenceDelim = null;
-        isFenceLine = true;
-      }
-    }
+    const step = fenceStep(line, fenceDelim);
+    fenceDelim = step.fenceDelim;
 
-    if (fenceDelim !== null || isFenceLine) {
+    if (fenceDelim !== null || step.isFenceLine) {
       if (depth === 0) keep(line, i);
       continue;
     }
@@ -1786,4 +1885,4 @@ function gmAliasRewriter(pages, published, rawNotes, words) {
   };
 }
 
-module.exports = { strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { markedBlocksForTest: markedBlocks, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
