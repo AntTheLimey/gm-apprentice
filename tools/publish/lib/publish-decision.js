@@ -258,6 +258,7 @@ const NOTE_CODES = new Set([
 // Every verdict carries `.player`, the verdict the player site gives the page.
 function decideGmPage(page, options) {
   const opts = options || {};
+  if (!opts.playerConfig) throw new Error('decideGmPage needs the player site\'s config (options.playerConfig)');
   const show = opts.show || new Set();
   const withPlayer = (v) => ({ ...v, player: v });
 
@@ -272,7 +273,7 @@ function decideGmPage(page, options) {
   const outputPath = (page && page.outputPath) || null;
   const folder = matchExcludedDir(String(rel == null ? '' : rel), opts.hiddenFolders);
   if (folder !== undefined) {
-    const publishConfig = opts.playerConfig || opts.publishConfig || {};
+    const publishConfig = opts.playerConfig;
     const player = {
       bucket: 'exclude',
       code: 'DIR_CONFIG_EXCLUDED',
@@ -283,7 +284,7 @@ function decideGmPage(page, options) {
     return { bucket: 'publish', code: 'GM_SHOWN', reason: `hide.folders: ${folder}`, outputPath, player };
   }
 
-  const player = decidePage(page, { ...opts, publishConfig: opts.playerConfig || opts.publishConfig });
+  const player = decidePage(page, { ...opts, publishConfig: opts.playerConfig });
   if (publishesPage(player)) return { ...player, player };
   if (NOTE_CODES.has(player.code) && show.has('notes')) {
     return { bucket: 'publish', code: 'GM_SHOWN', reason: player.reason, outputPath: player.outputPath, player };

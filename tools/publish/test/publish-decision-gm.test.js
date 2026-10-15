@@ -15,7 +15,7 @@ function gm(fm, opts = {}) {
   return decideGmPage(page(fm), {
     rel: opts.rel || 'Characters/NPCs/Someone.md',
     publishConfig: opts.publishConfig || PLAYER,
-    playerConfig: opts.playerConfig,
+    playerConfig: opts.playerConfig || opts.publishConfig || PLAYER,
     manifest: opts.manifest || null,
     folderMapped: opts.folderMapped !== false,
     show: opts.show || NOTES_ON,
@@ -157,10 +157,16 @@ describe('decideGmPage: never shown, or not the notes rule', () => {
     pc.title = 'Ann';
     const pageIndex = new Map([['Characters/PCs/Ann.md', pc]]);
     const story = decideGmPage(page({ type: 'pc-story' }), {
-      rel: 'Characters/PCs/Ann_Story.md', publishConfig: PLAYER, pageIndex, show: NOTES_ON, hiddenFolders: [],
+      rel: 'Characters/PCs/Ann_Story.md', publishConfig: PLAYER, playerConfig: PLAYER, pageIndex, show: NOTES_ON, hiddenFolders: [],
     });
     assert.strictEqual(story.code, 'STORY_COMPANION');
     assert.strictEqual(story.player.code, 'STORY_COMPANION');
+  });
+});
+
+describe('decideGmPage: the player site config is required', () => {
+  it('throws without options.playerConfig, never deciding the player verdict on the GM site\'s config', () => {
+    assert.throws(() => decideGmPage(page({ type: 'npc' }), { rel: 'a/b.md', publishConfig: PLAYER, show: NOTES_ON, hiddenFolders: [] }), /playerConfig/);
   });
 });
 
