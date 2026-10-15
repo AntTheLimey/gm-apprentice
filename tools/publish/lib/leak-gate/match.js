@@ -9,6 +9,7 @@ const { wordsOf, MIN_WORDS } = require('./text');
 
 const TEXT_EXT = new Set(['.html', '.htm', '.json', '.js', '.txt']);
 const TOOL_JS = path.join(__dirname, '..', '..', 'js');
+const TOOL_CSS = path.join(__dirname, '..', '..', 'css');
 
 function createMatcher(pieces) {
   const index = new Map();
@@ -63,6 +64,24 @@ function isToolScript(rel) {
   return /^js\//.test(rel) && fs.existsSync(path.join(TOOL_JS, ...rel.slice(3).split('/')));
 }
 
+// A script or style the tool itself ships into every site.
+function isToolFile(rel) {
+  return isToolScript(rel) || (/^css\//.test(rel) && fs.existsSync(path.join(TOOL_CSS, ...rel.slice(4).split('/'))));
+}
+
+// Every file under the folder, whatever its kind, as posix paths relative to it.
+function listFiles(dir) {
+  const out = [];
+  (function walk(abs, rel) {
+    for (const e of fs.readdirSync(abs, { withFileTypes: true })) {
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(path.join(abs, e.name), childRel);
+      else if (e.isFile()) out.push(childRel);
+    }
+  }(dir, ''));
+  return out.sort();
+}
+
 function readOutput(dir) {
   const out = [];
   (function walk(abs, rel) {
@@ -79,4 +98,4 @@ function readOutput(dir) {
   return out.sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
 }
 
-module.exports = { createMatcher, fileText, readOutput, isToolScript };
+module.exports = { createMatcher, fileText, readOutput, isToolScript, isToolFile, listFiles };

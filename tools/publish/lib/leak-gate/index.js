@@ -6,7 +6,8 @@ const crypto = require('crypto');
 const { performance } = require('perf_hooks');
 const { loadPublishList } = require('../manifest');
 const { collectHidden } = require('./collect');
-const { createMatcher, readOutput } = require('./match');
+const { createMatcher, readOutput, listFiles } = require('./match');
+const { nameFindings } = require('./names');
 const { wordsOf } = require('./text');
 
 const findingId = (page, text) => crypto.createHash('sha1').update(`${page}\n${text}`).digest('hex').slice(0, 6);
@@ -37,7 +38,11 @@ function runLeakGate({ configPath, outputDir }) {
       raw.set(key, { id: findingId(file.rel, piece.text), kind: 'text', code: 'HIDDEN_TEXT', page: file.rel, text: piece.text, shown: piece.shown, note: piece.note, reason: piece.reason });
     }
   }
-  // The name checks (Task 4) add their findings to `raw` here, before the accepted list is applied.
+  // The name checks add theirs here, before the accepted list is applied.
+  for (const f of nameFindings({ files, allFiles: listFiles(outputDir), hidden, findingId })) {
+    const key = keyOf(f.page, f.text);
+    if (!raw.has(key)) raw.set(key, f);
+  }
 
   // The whole file, an accepted-only one included (loadManifest answers null for that: it is no publish list).
   const list = loadPublishList(hidden.vaultPath, { warn: () => {} });
