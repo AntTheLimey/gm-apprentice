@@ -33,7 +33,7 @@ function collectHidden({ configPath }) {
   const vaultPath = path.resolve(siteDir, rawConfig.vaultPath);
   rawConfig.vaultPath = vaultPath;
   const keptBy = forSite(readSettings({ vaultPath, siteConfig: rawConfig, siteDir }), 'player').vault.kept_by;
-  const empty = { vaultPath, siteDir, keptBy, pieces: [], visible: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => null };
+  const empty = { vaultPath, siteDir, keptBy, pieces: [], visible: [], warnings: [], notes: [], published: [], publishedRels: new Set(), linkMap: {}, outOf: () => null };
   if (keptBy === 'player') return empty;
 
   const quiet = () => {};
@@ -66,6 +66,7 @@ function collectHidden({ configPath }) {
 
   const pieces = [];
   const visible = [];
+  const warnings = [];
   const add = (texts, note, reason) => {
     for (const shown of texts) {
       const words = wordsOf(shown);
@@ -126,13 +127,19 @@ function collectHidden({ configPath }) {
     const verdict = page ? verdicts.get(page) : null;
     let body = page ? page.markdown : null;
     if (body == null) {
-      try { body = parseNote(fs.readFileSync(note.sourcePath, 'utf8')).content; } catch (e) { body = ''; }
+      // A note that cannot be read is checked as its whole text (it fails closed), and said.
+      let raw = '';
+      try { raw = fs.readFileSync(note.sourcePath, 'utf8'); } catch (e) { warnings.push(`Leak check: ${rel} could not be read (${e.message}); its text is not checked.`); }
+      try { body = parseNote(raw).content; } catch (e) {
+        body = raw;
+        warnings.push(`Leak check: the frontmatter of ${rel} cannot be read (${String(e.message).split('\n')[0]}); its whole text is checked.`);
+      }
     }
     const why = verdict && verdict.player ? verdict.player.reason : 'not on the site';
     add(piecesOfMarkdown(body), rel, `unpublished note: ${why}`);
   }
 
-  return { vaultPath, siteDir, keptBy, pieces, visible, notes, published, publishedRels, linkMap, outOf: (rel) => outputOf.get(rel) || null };
+  return { vaultPath, siteDir, keptBy, pieces, visible, warnings, notes, published, publishedRels, linkMap, outOf: (rel) => outputOf.get(rel) || null };
 }
 
 module.exports = { collectHidden };

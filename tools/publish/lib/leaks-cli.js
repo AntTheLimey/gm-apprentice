@@ -60,7 +60,7 @@ async function runLeaks(options, deps) {
     const head = n === 0 ? `No hidden text or secret name on the player site (${result.files} files read).`
       : `${n} finding${n === 1 ? '' : 's'}: hidden text or a secret name on the player site.`;
     const rc = opts.verb === 'check' && n > 0 ? 1 : 0;
-    return print([head, ...formatFindings(opts.verb === 'list' ? { ...result, unneeded: [] } : result)], gateSummary(result), rc);
+    return print([...(result.warnings || []), head, ...formatFindings(opts.verb === 'list' ? { ...result, unneeded: [] } : result)], gateSummary(result), rc);
   }
 
   if (opts.verb === 'accept') {

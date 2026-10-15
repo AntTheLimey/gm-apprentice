@@ -70,6 +70,17 @@ describe('leak gate: collect', () => {
       for (const n of ['_QA/Audit.md', '_inbox/Chat.md', '_Templates/NPC.md']) assert.ok(!notes.has(n), `${n} was collected`);
     } finally { p.cleanup(); }
   });
+  it('a note that cannot be read is collected as its raw text, with a warning (M2)', () => {
+    const p = leakSite({
+      'NPCs/A.md': '---\ntype: npc\n---\nThe baker is a kind man.\n',
+      'Prep/Broken.md': '---\ntype: [npc\npublish: false\n---\nThe smuggler hides gold in the chapel.\n',
+    }, { player: { folder_map: { NPCs: 'npcs', Prep: 'prep' } } });
+    try {
+      const c = collectHidden({ configPath: p.configPath });
+      assert.ok(c.pieces.some((x) => x.note === 'Prep/Broken.md' && x.text === 'the smuggler hides gold in the chapel'), JSON.stringify(c.pieces.map((x) => x.text)));
+      assert.ok(c.warnings.some((w) => /Prep\/Broken\.md/.test(w)), JSON.stringify(c.warnings));
+    } finally { p.cleanup(); }
+  });
   it('a vault kept by a player collects nothing', () => {
     const p = leakSite({ 'NPCs/A.md': '---\ntype: npc\n---\n## GM Notes\n\nThis is a secret sentence here.\n' }, { vault: { kept_by: 'player' }, gm: { publish: false } });
     try {

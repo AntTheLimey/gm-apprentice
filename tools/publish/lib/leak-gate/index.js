@@ -16,7 +16,7 @@ const byPageText = (a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.tex
 
 function runLeakGate({ configPath, outputDir }) {
   const start = performance.now();
-  const done = (r) => ({ skipped: null, missing: false, findings: [], unneeded: [], files: 0, ...r, seconds: (performance.now() - start) / 1000 });
+  const done = (r) => ({ skipped: null, missing: false, findings: [], unneeded: [], warnings: [], files: 0, ...r, seconds: (performance.now() - start) / 1000 });
   const hidden = collectHidden({ configPath });
   if (hidden.keptBy === 'player') {
     return done({ skipped: 'The leak check is skipped: this vault is kept by a player (vault.kept_by: player), so it holds nothing hidden.' });
@@ -50,7 +50,7 @@ function runLeakGate({ configPath, outputDir }) {
   const acceptedKeys = new Set(accepted.map((a) => keyOf(a.page, a.text)));
   const findings = [...raw.values()].filter((f) => !acceptedKeys.has(keyOf(f.page, f.text))).sort(byPageText);
   const unneeded = accepted.filter((a) => !raw.has(keyOf(a.page, a.text)));
-  return done({ findings, unneeded, files: files.length });
+  return done({ findings, unneeded, warnings: hidden.warnings || [], files: files.length });
 }
 
 // The lines a person reads: one block per leak (a sentence from one note), its first page, the sentence, the other files
@@ -76,6 +76,7 @@ function gateSummary(result) {
   return {
     checked: !result.skipped && !result.missing, skipped: result.skipped, missing: result.missing,
     files: result.files, seconds: Number(result.seconds.toFixed(2)), findings: result.findings, unneeded: result.unneeded,
+    warnings: result.warnings || [],
   };
 }
 

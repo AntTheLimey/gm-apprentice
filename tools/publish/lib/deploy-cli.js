@@ -187,7 +187,7 @@ async function runDeploy(options, deps) {
     }
     // The gate reads the folder as it stands; it writes nothing, so a dry run may run it.
     const gate = checkLeaks();
-    const leakLines = [];
+    const leakLines = gate.result ? [...(gate.result.warnings || [])] : [];
     const refuse = !gate.result || gate.result.findings.length > 0;
     if (!gate.result) leakLines.push(gate.line.replace(' Nothing was uploaded.', ''));
     else if (gate.result.missing) leakLines.push(`Leak check: there is no built site in ${gateFolder} yet, so nothing to check.`);
@@ -257,6 +257,7 @@ async function runDeploy(options, deps) {
   const gate = checkLeaks();
   gateResult = gate.result;
   if (!gateResult) { say(gate.line); return finish({ refused: true }, 1); }
+  for (const line of gateResult.warnings || []) say(line);
   if (gateResult.skipped) say(gateResult.skipped);
   if (gateResult.missing) {
     say(`deploy stopped: there is no built site in ${gateFolder} to check. Nothing was uploaded.`);
