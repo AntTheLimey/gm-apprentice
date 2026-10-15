@@ -5,7 +5,7 @@
 // Also the player site's own source text: a hidden piece that a published note also says is not hidden.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, dirIsExcluded, STORY_SUFFIX } = require('../scanner');
+const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, STORY_SUFFIX } = require('../scanner');
 const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath } = require('../config');
 const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
@@ -24,6 +24,10 @@ const { piecesOfMarkdown, piecesOfValue, fieldRunsOf, tableRunsOf, textsOfMarkdo
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
+// The plugin's own working folders, at the top of the vault: reports, inbox, archive and drafts that routinely quote the
+// published site. Only these: a folder the GM lists in hide.folders (a "Secrets" folder) is collected like any other.
+const WORKING_DIRS = ['_qa', '_inbox', '_archive', '_midwife'];
+const inWorkingDir = (rel) => WORKING_DIRS.includes(rel.split('/')[0].toLowerCase());
 // The fields a page prints under the tool's own labels (occupation as "Role"), as "label value".
 function printedRows(page) {
   try { return rowsFor(page, {}).filter(([, text]) => text).map(([label, text]) => `${label} ${text}`); } catch (e) { return []; }
@@ -123,13 +127,12 @@ function collectHidden({ configPath }) {
     }
   }
 
-  // Every other note's body is hidden text: no page publishes it. The vault's housekeeping folders (hide.folders and the
-  // folders that never publish) are left out: they routinely quote the published site, and the folder rule that keeps
-  // them off it is the simplest and best-tested one.
+  // Every other note's body is hidden text: no page publishes it. The folders that never publish and the plugin's own
+  // working folders are left out (WORKING_DIRS); a folder the GM hides is not.
   const scannedByRel = new Map(corpus.map((p) => [relOf(p), p]));
   for (const note of notes) {
     const rel = canonicalNfc(String(note.vaultPath).replace(/\\/g, '/') + '.md');
-    if (publishedRels.has(rel) || neverShown(rel) || dirIsExcluded(rel, playerConfig.exclude_dirs)) continue;
+    if (publishedRels.has(rel) || neverShown(rel) || inWorkingDir(rel)) continue;
     const page = scannedByRel.get(rel);
     if (page && publishedSet.has(page)) continue;
     const verdict = page ? verdicts.get(page) : null;

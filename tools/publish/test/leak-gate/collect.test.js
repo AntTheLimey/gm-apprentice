@@ -70,6 +70,16 @@ describe('leak gate: collect', () => {
       for (const n of ['_QA/Audit.md', '_inbox/Chat.md', '_Templates/NPC.md']) assert.ok(!notes.has(n), `${n} was collected`);
     } finally { p.cleanup(); }
   });
+  it('a folder the GM hides is still collected: a secret there that a step copies out is caught', () => {
+    const p = leakSite({
+      'NPCs/A.md': '---\ntype: npc\n---\nThe baker is a kind man.\n',
+      'Secrets/Twist.md': '---\ntype: npc\n---\nThe baker poisoned the old mayor last winter.\n',
+    }, { player: { folder_map: { NPCs: 'npcs' }, hide: { folders: ['_meta', 'Secrets'] } } });
+    try {
+      const c = collectHidden({ configPath: p.configPath });
+      assert.ok(c.pieces.some((x) => x.note === 'Secrets/Twist.md' && /poisoned the old mayor/.test(x.text)));
+    } finally { p.cleanup(); }
+  });
   it('a note that cannot be read is collected as its raw text, with a warning (M2)', () => {
     const p = leakSite({
       'NPCs/A.md': '---\ntype: npc\n---\nThe baker is a kind man.\n',
