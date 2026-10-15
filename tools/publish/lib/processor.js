@@ -3,7 +3,7 @@ const { canonicalNfc } = require('./unicode');
 const { SWITCH_WORDS } = require('./settings/types');
 const { gluedBefore } = require('./frontmatter');
 const { markerRe: markerPattern } = require('./markers');
-const { blockLines } = require('./gm-marks');
+const { blockLines, sanitize, marksAtHeadings } = require('./gm-marks');
 const { bareSectionTitle } = require('./pc-prose');
 const { wikilinkRe, parseWikilink, labelsForLinks, labelsForLinksFully } = require('./wikilink');
 const { headingKey, headingKeys, squashedKeys, titleNamedIn } = require('./heading-key');
@@ -676,6 +676,30 @@ const MARK_OF = {
   spoiler: { kind: 'spoilers', label: 'spoiler block' },
 };
 
+// One line of the GM site's strips as text pieces and open/close events (`inline` or not), written to `out`. An
+// inline event is a token inside the line's text; any other ends the text and stands on lines of its own, and the
+// text after it loses its leading spaces. The one place the inline/block rule is applied (blocks, comments).
+function emitMarkedParts(parts, kind, label, mark, out) {
+  let segment = '';
+  let fresh = false;   // the segment follows a block break: its leading spaces are dropped
+  const flush = (trailing) => {
+    const t = trailing ? segment.trimEnd() : segment;
+    if (t.trim() !== '') out.push(fresh ? t.trimStart() : t);
+    segment = '';
+    fresh = false;
+  };
+  for (const p of parts) {
+    if (p.text !== undefined) segment += p.text;
+    else if (p.open) {
+      p.token = mark.marks.open(kind, label);
+      if (p.inline) segment += p.token;
+      else { flush(true); blockLines(p.token).forEach((t) => out.push(t)); fresh = true; }
+    } else if (p.inline) segment += mark.marks.close();
+    else { flush(true); blockLines(mark.marks.close()).forEach((t) => out.push(t)); fresh = true; }
+  }
+  flush(false);
+}
+
 // The GM site's version of the strip: every line is kept, and each block is wrapped in a mark
 // (gm-marks.js). A block whose open and close share a line is a mark inside the line; any other
 // open or close ends the line's text and stands on lines of its own. `from` is null.
@@ -720,24 +744,7 @@ function markBlocksKeeping(lines, markerName, mark) {
     }
     markerRe.lastIndex = 0;
     parts.push({ text: line.slice(last) });
-    let segment = '';
-    let fresh = false;   // the segment follows a block break: its leading spaces are dropped
-    const flush = (trailing) => {
-      const t = trailing ? segment.trimEnd() : segment;
-      if (t.trim() !== '') out.push(fresh ? t.trimStart() : t);
-      segment = '';
-      fresh = false;
-    };
-    for (const p of parts) {
-      if (p.text !== undefined) segment += p.text;
-      else if (p.open) {
-        p.token = mark.marks.open(kind, label);
-        if (p.inline) segment += p.token;
-        else { flush(true); blockLines(p.token).forEach((t) => out.push(t)); fresh = true; }
-      } else if (p.inline) segment += mark.marks.close();
-      else { flush(true); blockLines(mark.marks.close()).forEach((t) => out.push(t)); fresh = true; }
-    }
-    flush(false);
+    emitMarkedParts(parts, kind, label, mark, out);
   }
   for (let d = stack.length; d > 0; d--) blockLines(mark.marks.close()).forEach((t) => out.push(t));
   if (stack.length > 0) {
@@ -871,7 +878,9 @@ function stripCallouts(markdown, exclude) {
 }
 
 // The strip as lines, and `from`: the line of `markdown` each of them came from.
-function calloutLines(markdown, exclude) {
+// With `mark` and the `callouts` kind on, each callout that would be cut is kept instead, in a block mark.
+function calloutLines(markdown, exclude, mark) {
+  if (mark && exclude && mark.show.has('callouts')) return calloutLinesMarking(markdown, exclude, mark);
   const types = Array.isArray(exclude)
     ? new Set(exclude.map(t => String(t).toLowerCase()))
     : null; // null → strip all types
@@ -901,6 +910,29 @@ function calloutLines(markdown, exclude) {
   return { lines: out, from };
 }
 
+// The GM site's callout strip: the same callouts are found, and each is wrapped in a mark instead of cut. The blank
+// line after it, which the strip swallows, is kept. `from` is null.
+function calloutLinesMarking(markdown, exclude, mark) {
+  const types = Array.isArray(exclude) ? new Set(exclude.map((t) => String(t).toLowerCase())) : null;
+  const lines = markdown.split('\n');
+  const out = [];
+  let inCodeFence = false;
+  for (let i = 0; i < lines.length; i++) {
+    if (/^```/.test(lines[i])) inCodeFence = !inCodeFence;
+    if (inCodeFence) { out.push(lines[i]); continue; }
+    const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
+    if (m && (!types || types.has(m[1].toLowerCase()))) {
+      blockLines(mark.marks.open('callouts', `${m[1].toLowerCase()} callout`)).forEach((t) => out.push(t));
+      out.push(lines[i]);
+      while (i + 1 < lines.length && /^>/.test(lines[i + 1])) { i++; out.push(lines[i]); }
+      blockLines(mark.marks.close()).forEach((t) => out.push(t));
+      continue;
+    }
+    out.push(lines[i]);
+  }
+  return { lines: out, from: null };
+}
+
 // Remove every `<!-- ... -->` comment, including multi-line ones, outside fenced code
 // blocks. A comment in indented (four-space or tab) code is cut like any other: one that
 // opens there runs on over lines that are not code, so reading it as literal would publish
@@ -917,7 +949,9 @@ function stripHtmlComments(markdown) {
 }
 
 // The strip as lines, and `from`: the line of `markdown` each of them came from.
-function htmlComments(markdown) {
+// With `mark` ({ marks, show }) and the `comments` kind on, the GM site's version instead (markComments).
+function htmlComments(markdown, mark) {
+  if (mark && mark.show.has('comments')) return htmlCommentsMarking(markdown, mark);
   const lines = String(markdown || '').split('\n');
   const result = [];
   const warnings = [];
@@ -979,7 +1013,8 @@ function htmlComments(markdown) {
 // heading is cut out of that line and the rest of the line stays.
 // Runs after the HTML-comment strip (a `%%` inside `<!-- -->` is part of that comment) and
 // returns the strips' shape: the lines left, and `from` (the line of the input each came from).
-function obsidianComments(markdown) {
+function obsidianComments(markdown, mark) {
+  if (mark && mark.show.has('comments')) return obsidianCommentsMarking(markdown, mark);
   const lines = String(markdown || '').split('\n');
   // No `%%` anywhere: nothing to cut, and no need to ask the parser where the fences are.
   if (!String(markdown || '').includes('%%')) {
@@ -1058,6 +1093,131 @@ function obsidianComments(markdown) {
   const strays = openers.filter(o => o.end === null || o.glued)
     .map(o => ({ line: o.line, end: o.end, kind: o.end === null ? 'UNCLOSED' : 'GLUED' }));
   return { text: result.join('\n'), warnings, lines: result, from, strays };
+}
+
+// The GM site's comment strips: every comment is kept, its delimiters become a mark (kind `comments`). `scan` reads
+// one line into pieces: { text, content } for text outside or inside a comment, { open }, { close }; `skip` says
+// a line is passed through verbatim. A comment that opens and closes on one line is a mark inside the line when the
+// line holds other text, and a block when it does not; one that runs over lines is a block. Returns the strips' shape
+// with `from` null.
+function markComments(markdown, mark, scan, skip, unclosedWarning) {
+  const lines = String(markdown || '').split('\n');
+  const out = [];
+  const warnings = [];
+  const label = 'comment';
+  let inComment = false;
+  for (let n = 0; n < lines.length; n++) {
+    const line = lines[n];
+    if (!inComment && skip(line, n)) { out.push(line); continue; }
+    const scanned = scan(line, inComment);
+    const pieces = scanned.pieces;
+    inComment = scanned.inComment;
+    if (!pieces.some((p) => p.open || p.close)) { out.push(line); continue; }
+    const outside = pieces.some((p) => p.text !== undefined && !p.content && p.text.trim() !== '');
+    // A pair on this line: inline when other text is on the line; its text is trimmed.
+    let openAt = null;
+    pieces.forEach((p, k) => {
+      if (p.open) openAt = k;
+      else if (p.close) {
+        if (openAt !== null && outside) {
+          pieces[openAt].inline = true;
+          p.inline = true;
+          pieces.slice(openAt + 1, k).forEach((c) => { if (c.content) c.text = c.text.trim(); });
+        }
+        openAt = null;
+      }
+    });
+    emitMarkedParts(pieces, 'comments', label, mark, out);
+  }
+  if (inComment) {
+    blockLines(mark.marks.close()).forEach((t) => out.push(t));
+    warnings.push(unclosedWarning);
+  }
+  return { text: out.join('\n'), warnings, lines: out, from: null, strays: [] };
+}
+
+function htmlCommentsMarking(markdown, mark) {
+  let fenceMarker = null;
+  const skip = (line) => {
+    const fence = /^\s*(```|~~~)/.exec(line);
+    if (fence) {
+      if (fenceMarker === null) fenceMarker = fence[1];
+      else if (fenceMarker === fence[1]) fenceMarker = null;
+    }
+    return fenceMarker !== null || Boolean(fence);
+  };
+  const scan = (line, inComment) => {
+    const pieces = [];
+    let i = 0;
+    while (i < line.length) {
+      if (inComment) {
+        const end = line.indexOf('-->', i);
+        if (end === -1) { pieces.push({ text: line.slice(i), content: true }); i = line.length; break; }
+        pieces.push({ text: line.slice(i, end), content: true }, { close: true });
+        inComment = false;
+        i = end + 3;
+      } else {
+        const start = line.indexOf('<!--', i);
+        if (start === -1) { pieces.push({ text: line.slice(i) }); break; }
+        pieces.push({ text: line.slice(i, start) }, { open: true });
+        inComment = true;
+        i = start + 4;
+      }
+    }
+    return { pieces, inComment };
+  };
+  return markComments(markdown, mark, scan, skip, 'unclosed <!-- comment --> — content kept to end of file');
+}
+
+function obsidianCommentsMarking(markdown, mark) {
+  const text = String(markdown || '');
+  if (!text.includes('%%')) {
+    const lines = text.split('\n');
+    return { text, warnings: [], lines, from: null, strays: [] };
+  }
+  let inFence = new Set();
+  try { ({ inFence } = findHeadings(text)); } catch (err) { /* no fence is trusted */ }
+  const skip = (line, n) => inFence.has(n);
+  const scan = (line, inComment) => {
+    const pieces = [];
+    let buf = '';
+    const emitText = () => { pieces.push({ text: buf, content: inComment }); buf = ''; };
+    let i = 0;
+    while (i < line.length) {
+      if (inComment) {
+        const end = line.indexOf('%%', i);
+        if (end === -1) { buf += line.slice(i); i = line.length; break; }
+        buf += line.slice(i, end);
+        emitText();
+        pieces.push({ close: true });
+        inComment = false;
+        i = end + 2;
+        continue;
+      }
+      const ch = line[i];
+      if (ch === '`') {
+        let run = 1;
+        while (line[i + run] === '`') run++;
+        const close = new RegExp('(?<!`)`{' + run + '}(?!`)').exec(line.slice(i + run));
+        const stop = close ? i + run + close.index + run : i + run;
+        buf += line.slice(i, stop);
+        i = stop;
+        continue;
+      }
+      if (ch === '%' && line[i + 1] === '%') {
+        emitText();
+        pieces.push({ open: true });
+        inComment = true;
+        i += 2;
+        continue;
+      }
+      buf += ch;
+      i++;
+    }
+    emitText();
+    return { pieces, inComment };
+  };
+  return markComments(text, mark, scan, skip, 'unclosed %% comment: content kept to end of file');
 }
 
 // The hidden markers still in `lines` once the strip chain has run, outside a code block
@@ -1375,6 +1535,7 @@ function portraitBasename(frontmatter) {
 // Returns { text, warnings } — warnings are the strip functions' own
 // (unclosed markers), for the caller to log wherever its warnings go.
 function playerSafeMarkdown(markdown, options = {}) {
+  if (options.mark) return markedSafeMarkdown(markdown, options);
   const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts);
   const { warnings } = stripped;
   let text = stripped.lines.join('\n');
@@ -1384,6 +1545,19 @@ function playerSafeMarkdown(markdown, options = {}) {
   const { strays, openFence } = noteFacts(stripped, (lines) => keptFlags(lines, options.excludeSections, options.frontmatter,
     { pcKeepSections: options.pcKeepSections }));
   return { text, warnings, strays, openFence };
+}
+
+// playerSafeMarkdown for the GM site. The PC and NPC templates cut a page at its `##` headings, so no mark may span
+// one: marksAtHeadings closes and reopens the marks there, by the heading finder extractSections uses. The sections
+// are filtered as on the player site (A7 gives filterSections its mark).
+function markedSafeMarkdown(markdown, options) {
+  const stripped = strippedLines(String(markdown == null ? '' : markdown).replace(/\r/g, ''), options.excludeCallouts, options.mark);
+  const { warnings } = stripped;
+  let text = stripped.lines.join('\n');
+  text = filterSections(text, options.excludeSections, options.frontmatter,
+    { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m) });
+  try { text = marksAtHeadings(text, findHeadings); } catch (err) { /* extractSections finds no sections either */ }
+  return { text, warnings, strays: [], openFence: null };
 }
 
 // Whatever a strip cut, the lines around the cut must mean what they did: a paragraph line,
@@ -1402,7 +1576,9 @@ function keepApart(lines, from) {
 // lines left, `from` (the line of `text` each came from) and the strips' warnings.
 // playerSafeMarkdown and the stub cut both take this, so the cut cannot be made on a
 // different reading of what is hidden.
-function strippedLines(text, excludeCallouts) {
+// With `mark` ({ marks, show }), the GM site's version (markedStrippedLines).
+function strippedLines(text, excludeCallouts, mark) {
+  if (mark) return markedStrippedLines(text, excludeCallouts, mark);
   const warnings = [];
   let lines = null;
   let from = null;
@@ -1439,6 +1615,31 @@ function strippedLines(text, excludeCallouts) {
     }
   }
   return { lines, from, warnings, strays, pre, blocks };
+}
+
+// The strip chain for the GM site: the note's own private-use characters become U+FFFD first (a note cannot forge a
+// mark), the dataview strip runs as today (never marked), then each strip is given the mark. Lines are kept, so
+// there is no `from`; the note-faults facts (strays, pre, blocks) belong to the player build.
+function markedStrippedLines(text, excludeCallouts, mark) {
+  const warnings = [];
+  let lines = null;
+  const strips = [
+    dataviewLines,
+    (t) => markedBlocks(t, 'gm-only', mark),
+    (t) => markedBlocks(t, 'spoiler', mark),
+    (t) => htmlComments(t, mark),
+    (t) => obsidianComments(t, mark),
+    (t) => calloutLines(t, excludeCallouts, mark),
+  ];
+  for (const strip of strips) {
+    if (lines !== null && lines.length === 0) break;
+    const result = strip(lines === null ? sanitize(text) : lines.join('\n'));
+    lines = result.lines;
+    // A strip that still cuts (its kind is off) keeps a Setext line apart, as the player strip does.
+    if (result.from) keepApart(lines, result.from);
+    if (result.warnings) warnings.push(...result.warnings);
+  }
+  return { lines, from: null, warnings, strays: [], pre: null, blocks: null };
 }
 
 const HEADINGS_UNSTABLE_WARNING = 'a link or embed label changes this note\'s headings; nothing after its title is published while character sheets are off. Fix the label.';
@@ -1885,4 +2086,4 @@ function gmAliasRewriter(pages, published, rawNotes, words) {
   };
 }
 
-module.exports = { markedBlocksForTest: markedBlocks, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
+module.exports = { markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, sectionVerdicts, sheetWithheldTitles };
