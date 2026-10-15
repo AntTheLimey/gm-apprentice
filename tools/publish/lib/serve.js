@@ -26,6 +26,13 @@ const TYPES = {
   '.xml': 'application/xml; charset=utf-8',
 };
 
+// A file that is not there is a plain miss; any other read failure (no permission, a folder, too many open files) is
+// said on the console so a broken page at the table has a cause.
+const isMissing = (err) => err && (err.code === 'ENOENT' || err.code === 'ENOTDIR');
+function logRead(err, file) {
+  if (!isMissing(err)) console.error(`serve: could not read ${file} (${(err && err.code) || err})`);
+}
+
 const within = (child, parent) => child === parent || child.startsWith(parent.endsWith(path.sep) ? parent : parent + path.sep);
 
 // handler(root, { notFound }) -> (req, res). `notFound` is the name of the page a miss gets (default 404.html).
@@ -42,16 +49,20 @@ function handler(root, { notFound = '404.html' } = {}) {
   // leads out of the folder; null when there is no such file.
   function readable(file) {
     let real;
-    try { real = fs.realpathSync(file); } catch { return null; }
+    try { real = fs.realpathSync(file); } catch (err) { logRead(err, file); return null; }
     let realRoot;
-    try { realRoot = fs.realpathSync(lexicalRoot); } catch { return null; }
+    try { realRoot = fs.realpathSync(lexicalRoot); } catch (err) { logRead(err, lexicalRoot); return null; }
     if (!within(real, realRoot)) return 'outside';
-    try { return fs.statSync(real).isFile() ? real : null; } catch { return null; }
+    try { return fs.statSync(real).isFile() ? real : null; } catch (err) { logRead(err, real); return null; }
   }
 
   function sendFile(req, res, status, real) {
     let data;
-    try { data = fs.readFileSync(real); } catch { plain(req, res, 404, 'Not found'); return; }
+    try { data = fs.readFileSync(real); } catch (err) {
+      logRead(err, real);
+      if (isMissing(err)) plain(req, res, 404, 'Not found'); else plain(req, res, 500, 'Could not read the file');
+      return;
+    }
     const type = TYPES[path.extname(real).toLowerCase()] || 'application/octet-stream';
     res.writeHead(status, { 'Content-Type': type, 'Content-Length': data.length, 'X-Content-Type-Options': 'nosniff' });
     res.end(req.method === 'HEAD' ? undefined : data);
@@ -107,12 +118,19 @@ function handler(root, { notFound = '404.html' } = {}) {
 
 function defaultListen(server, port) {
   return new Promise((resolve, reject) => {
-    server.once('error', (err) => {
+    const onStartError = (err) => {
       reject(err.code === 'EADDRINUSE'
         ? new Error(`Port ${port} is already in use. Pick another with --port.`)
         : err);
+    };
+    server.once('error', onStartError);
+    server.listen(port, '0.0.0.0', () => {
+      // From here a server error is logged, not handed to a promise that has already settled.
+      server.removeListener('error', onStartError);
+      server.on('error', (err) => console.error(`serve: ${err.message}`));
+      server.on('clientError', (err, socket) => { if (socket.writable) socket.end('HTTP/1.1 400 Bad Request\r\n\r\n'); });
+      resolve();
     });
-    server.listen(port, '0.0.0.0', resolve);
   });
 }
 
@@ -170,6 +188,7 @@ async function runServe({ configPath, site = 'gm', port = 4321 } = {}, deps = {}
   const urls = [...addresses.map((a) => `http://${a}:${actual}/`), `http://localhost:${actual}/`];
   out(`Serving the ${site === 'gm' ? 'GM' : 'player'} site from ${folder}`);
   for (const url of urls) out(url);
+  if (site === 'gm') out('Anyone on this network can open these addresses, players included: serve it only where you trust the network.');
   out('Press Ctrl+C to stop.');
   return { server, urls };
 }
