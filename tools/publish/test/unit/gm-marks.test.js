@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const { createMarks, markKinds, sanitize, unmark, blockLines, renderMarks, marksAtHeadings } = require('../../lib/gm-marks');
-const { findHeadings, renderMarkdown } = require('../../lib/processor');
+const { findHeadings, renderMarkdown, extractSections } = require('../../lib/processor');
 
 const CLOSE = '';
 const PUA = /[-]/;
@@ -196,10 +196,33 @@ test('a heading below the opening line is closed over, its own text marked with 
   assert.equal(wellNested(renderMarks(renderMarkdown(out), m)), true);
 });
 
-test('a level 3 heading, a setext heading and a heading with no mark open are left alone', () => {
+test('a level 3 heading and headings with no mark open are left alone', () => {
   const m = createMarks();
-  const md = ['## Open', '', ...blockLines(m.open('spoilers', 's')), '### Deep', '', 'Setext', '------', ...blockLines(CLOSE)].join('\n');
+  const md = ['## Open', '', 'Setext', '------', '', ...blockLines(m.open('spoilers', 's')), '### Deep', '', 'x', ...blockLines(CLOSE)].join('\n');
   assert.equal(marksAtHeadings(md, findHeadings), md);
+});
+
+test('a setext heading is a heading too: each section the templates cut holds whole marks', () => {
+  const m = createMarks();
+  const open = m.open('gm_only_blocks', 'gm-only block');
+  const md = ['## Story', '', ...blockLines(open), 'hidden', '', 'The', 'Plans  ', '---', '', 'more hidden', ...blockLines(CLOSE),
+    '## After', '', 'shown'].join('\n');
+  const out = marksAtHeadings(md, findHeadings);
+  const lines = out.split('\n');
+  const u = lines.indexOf('---');
+  assert.deepEqual(lines.slice(u - 2, u), [`${open}The`, `Plans${CLOSE}  `], 'the title wrapped, the underline left as it was');
+  const sections = extractSections(out);
+  assert.deepEqual(sections.map((s) => unmark(s.title)), ['Story', 'The Plans', 'After']);
+  for (const s of sections) {
+    let depth = 0;
+    for (const t of s.html.matchAll(/[0-9a-z]+|/g)) {
+      depth += t[0] === CLOSE ? -1 : 1;
+      assert.ok(depth >= 0, `a close with nothing open in ${s.title}`);
+    }
+    assert.equal(depth, 0, `marks left open in ${s.title}`);
+  }
+  const plans = renderMarks(sections[1].html, m);
+  assert.match(plans, /<div class="gm-mark gm-mark--gm_only_blocks"[^>]*><p class="gm-mark__label">GM: gm-only block<\/p>\s*<p>more hidden<\/p>\s*<\/div>/);
 });
 
 test('a heading in a code block is not a heading', () => {

@@ -55,6 +55,16 @@ function wrapHeading(line, tokens) {
   return hashes + (lead || ' ') + tokens.join('') + title + CLOSE.repeat(tokens.length) + trail + cr;
 }
 
+// A setext heading's title lines with their text wrapped: the tokens open after the first line's indent and close
+// before the last line's trailing spaces, so the underline below still makes them a heading.
+function wrapSetext(titleLines, tokens) {
+  const out = titleLines.slice();
+  out[0] = out[0].replace(/^( {0,3})/, `$1${tokens.join('')}`);
+  const last = out.length - 1;
+  out[last] = out[last].replace(/([ \t]*\r?)$/, `${CLOSE.repeat(tokens.length)}$1`);
+  return out;
+}
+
 // Do a line's own tokens close every mark they open, and never one opened before the line?
 function balancedLine(line) {
   let depth = 0;
@@ -84,7 +94,10 @@ function marksAtHeadings(markdown, findHeadings) {
     const bare = line.replace(/\r$/, '');
     const code = inCode && inCode.has(i);
     const h = headingAt.get(i);
-    if (h && !h.nested && h.atx && h.level <= 2 && stack.length && balancedLine(bare)) {
+    // A setext heading's title runs from this line to the line above its underline (h.end - 1).
+    const titleLines = h && (h.atx ? [line] : lines.slice(i, h.end - 1));
+    if (h && !h.nested && h.level <= 2 && stack.length && titleLines.length
+      && balancedLine(titleLines.join('\n').replace(/\r/g, ''))) {
       const starting = [];   // marks that start at this heading, outermost first
       for (let j = lastFull(); j >= 0 && starting.length < stack.length
         && out[j].open === stack[stack.length - 1 - starting.length]; j = lastFull()) {
@@ -92,7 +105,13 @@ function marksAtHeadings(markdown, findHeadings) {
         out.splice(j, 1);
       }
       for (let k = stack.length - starting.length; k > 0; k--) blockLines(CLOSE).forEach(push);
-      out.push({ text: wrapHeading(line, starting.length ? starting : [stack[stack.length - 1]]), open: null });
+      const wrap = starting.length ? starting : [stack[stack.length - 1]];
+      if (h.atx) out.push({ text: wrapHeading(line, wrap), open: null });
+      else {
+        wrapSetext(titleLines, wrap).forEach((t) => out.push({ text: t, open: null }));
+        lines.slice(h.end - 1, h.end).forEach((t) => out.push({ text: t, open: null }));   // the underline
+        i = h.end - 1;
+      }
       for (const t of stack) blockLines(t).forEach(push);
       continue;
     }
