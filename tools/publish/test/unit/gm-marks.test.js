@@ -59,6 +59,12 @@ test('unmark keeps the words and drops the tokens', () => {
   assert.equal(unmark(`x ${m.open('spoilers', 'spoiler block')}secret${m.close()} y`), 'x secret y');
 });
 
+test('a mark number with no record is drawn as a generic mark, never as plain text', () => {
+  const out = renderMarks(`<p>a \uE000zz\uE001hidden${CLOSE} b</p>`, createMarks());
+  assert.doesNotMatch(out, PUA);
+  assert.match(out, /<span class="gm-mark gm-mark--notes" data-gm-kind="notes" data-gm-label="unknown">hidden<\/span>/);
+});
+
 test('a token cut in half by an excerpt is dropped with its digits', () => {
   const m = createMarks();
   for (let i = 0; i < 40; i++) m.open('fields', 'f');

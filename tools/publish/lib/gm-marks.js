@@ -216,8 +216,8 @@ function renderMarks(html, marks) {
     while (open.length && open[open.length - 1].rec && open[open.length - 1].rec.closed) undraw(open.pop().rec);
   };
   const openMark = (id, block) => {
-    const m = marks.get(id);
-    if (!m) { live.push({ silent: true, as: null }); return; }   // a number no mark has: its close still pairs with it
+    // A number no mark has (a build fault) is still drawn, as a generic mark, so the words never show unmarked.
+    const m = marks.get(id) || { kind: 'notes', label: 'unknown' };
     resume(block ? 'flow' : 'phrasing');
     const rec = { kind: m.kind, label: m.label, block, as: null, closed: false };
     live.push(rec);

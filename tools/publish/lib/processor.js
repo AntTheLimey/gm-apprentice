@@ -1643,7 +1643,7 @@ function markedSafeMarkdown(markdown, options) {
   let text = stripped.lines.join('\n');
   text = filterSections(text, options.excludeSections, options.frontmatter,
     { pcKeepSections: options.pcKeepSections, warn: (m) => warnings.push(m), mark: options.mark });
-  try { text = marksAtHeadings(text, findHeadings); } catch (err) { /* extractSections finds no sections either */ }
+  try { text = marksAtHeadings(text, findHeadings); } catch (err) { warnings.push('could not parse the note\'s headings; a mark may run across them'); }
   return { text, warnings, strays: [], openFence: null };
 }
 
@@ -1838,7 +1838,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
       markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter, { ...keepRules, mark });
     }
     // No mark spans a level 1-2 heading: the templates cut the page there.
-    try { markdown = marksAtHeadings(markdown, findHeadings); } catch (err) { /* extractSections finds no sections either */ }
+    try { markdown = marksAtHeadings(markdown, findHeadings); } catch (err) { warnings.push('could not parse the note\'s headings; a mark may run across them'); }
   } else {
     markdown = unstable ? '' : filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter, keepRules);
   }
