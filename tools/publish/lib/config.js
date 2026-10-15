@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { canonicalPath } = require('./manifest');
 const { isBlankStep, menuKey, words: statusWords } = require('./settings/entry-faults');
-const { readSettings, formatFault, makeFault, stops, entry, movedKeys, siteFolderKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
+const { readSettings, forSite, formatFault, makeFault, stops, entry, movedKeys, siteFolderKeys, layoutOf, nameIn, fileLabelFor, nameInFor } = require('./settings');
 
 // build.js looks up per-page field overrides via `fieldOverrides[vaultRelPathOf(page)]`,
 // and vaultRelPathOf() canonicalizes the scanned path to NFC (#139). An overrides.fields
@@ -87,10 +87,17 @@ function setOnly(map, prefix, origins) {
 // `quietStops` leaves stop-level faults out of the warnings: a command that goes on to
 // assertNoStops shows each stop once, in the error it throws. `warn` always gets the text only.
 // `siteDir` is the site folder (where vault.config.json is): the output folder is judged against it.
-function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir } = {}) {
-  const { values, origins, faults, legacy = [], layout } = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir });
-  const v = values.vault;
-  const p = values.player_site;
+// `site` is 'player' or 'gm': forSite decides that site's values (and which names the GM wrote for it);
+// everything below reshapes them as it always has. The GM site is built as a player-mode build whatever
+// `hide.mode` says, and its faults are warnings except a GM site kept by a player vault.
+function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.warn, { quietStops = false, siteDir, site = 'player' } = {}) {
+  const read = readSettings({ vaultPath, siteConfig: jsonConfigFallback, siteDir });
+  const { legacy = [], layout } = read;
+  const resolved = forSite(read, site);
+  const { origins } = resolved;
+  const v = resolved.vault;
+  const p = resolved.site;
+  const faults = site === 'gm' ? read.faults.slice() : read.faults;
   const named = (n) => origins[n] !== 'default';
 
   const live = p.features.live_stats && p.sheets.show;
@@ -124,7 +131,7 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   const paletteWritten = Object.keys(origins).some((n) => n.startsWith('player_site.theme.palette.') && named(n));
   const theme = setOnly(p.theme, 'player_site.theme', origins);
   const merged = {
-    mode: p.hide.mode,
+    mode: site === 'gm' ? 'player' : p.hide.mode,
     link_previews: p.features.link_previews,
     tohit_calculator: p.features.tohit_calculator,
     connections: p.features.connections,
@@ -166,6 +173,10 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   // (`nameInFor(publishConfig.layout, name)`). Not listed with the settings: a copy of the
   // object does not carry it, and the message then names the setting by its current name.
   Object.defineProperty(merged, 'layout', { value: layout, enumerable: false });
+  // The GM site's switch, folder and nine marks, and which site this config was read for. The build command reads
+  // `gm` from the player config to decide whether to build both. Not listed, like `layout`.
+  Object.defineProperty(merged, 'gm', { value: resolved.gm, enumerable: false });
+  Object.defineProperty(merged, 'buildsFor', { value: site, enumerable: false });
   // The site folder's own settings, for code that has only the publishConfig. Not listed, like `layout`.
   Object.defineProperty(merged, 'site', {
     value: { url: p.url, host: p.host, output: p.output, cloudflare_project: p.cloudflare_project, keep: p.keep },
@@ -224,6 +235,8 @@ function loadPublishConfig(vaultPath, jsonConfigFallback = {}, warn = console.wa
   for (const word of statusWords(v.statuses.fallen)) if (statuses.out_of_play.has(word)) statuses.fallen.add(word);
   Object.defineProperty(merged, 'statuses', { value: statuses, enumerable: false });
 
+  // On the GM site nothing it reads can show players more, so a fault is a warning (a copy: the reader's are not changed).
+  if (site === 'gm') faults.forEach((f, i) => { if (f.level === 'stop' && f.kind !== 'gm-kept-by-player') faults[i] = { ...f, level: 'warn' }; });
   for (const f of faults) if (!(quietStops && f.level === 'stop')) warn(formatFault(f));
   return merged;
 }
@@ -243,7 +256,7 @@ function assertNoStops(publishConfig, what) {
 
 // assertNoStops for a command that has only the site's vault.config.json path (deploy).
 // A config that cannot be read is left for the command to report in its own words.
-function assertNoStopsFor(configPath, what) {
+function assertNoStopsFor(configPath, what, site = 'player') {
   let raw;
   let vaultPath;
   let siteDir;
@@ -255,7 +268,7 @@ function assertNoStopsFor(configPath, what) {
   } catch {
     return;
   }
-  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}, { siteDir }), what);
+  assertNoStops(loadPublishConfig(vaultPath, raw, () => {}, { siteDir, site }), what);
 }
 
 // What `build` and `deploy` say instead of running when the GM has turned the site off.

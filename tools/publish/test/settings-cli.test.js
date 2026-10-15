@@ -893,3 +893,15 @@ test('set --create on a vault whose site file holds its settings names the real 
   assert.ok(r.err.join('\n').includes(`--config "${s.config}"`), r.err.join('\n'));
   assert.ok(!r.err.join('\n').includes('<site folder>'));
 });
+
+test('get --site gm reads a setting through the GM site and says where it came from', () => {
+  const s = scratch(null);
+  fs.writeFileSync(path.join(s.vault, '_meta', 'vault-config.yaml'), 'version: 1\nplayer_site:\n  title: Players\n  footer: Foot\ngm_site:\n  title: Table\n');
+  const title = run(s, 'get', ['player_site.title'], { site: 'gm' });
+  assert.equal(title.rc, 0);
+  assert.deepEqual(view(title.data)['player_site.title'], { value: 'Table', origin: 'gm_site.title' });
+  const footer = run(s, 'get', ['player_site.footer'], { site: 'gm' });
+  assert.deepEqual(view(footer.data)['player_site.footer'], { value: 'Foot', origin: 'inherited from player_site.footer' });
+  assert.match(run(s, 'get', ['player_site.footer'], { site: 'gm', json: false }).out, /Foot \(inherited from player_site\.footer\)/);
+  assert.equal(run(s, 'get', ['player_site.title'], {}).data.values['player_site.title'], 'Players');
+});

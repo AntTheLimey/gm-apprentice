@@ -19,6 +19,7 @@ const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
+const { forSite } = require('./resolve');
 const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, nameInFor, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
 const { row, isLeaf } = require('./describe');
@@ -101,14 +102,25 @@ function plainValue(v) {
   return JSON.stringify(v);
 }
 
+// Where a player-site setting's value comes from on the GM site: the twin the GM wrote, else the player site's own.
+function gmOrigin(read, name) {
+  const twin = name.replace(/^player_site\./, 'gm_site.');
+  if (twin === name || !REGISTRY.some((e) => e.name === twin)) return read.origins[name];
+  return read.origins[twin] === 'file' ? twin : `inherited from ${name}`;
+}
+
 function get(options, names) {
   const { vaultPath, siteConfig } = target(options);
   const leaves = LEAVES();
   for (const name of names) if (!leaves.some((e) => reaches(e, name))) throw new Error(notASetting(name));
   const read = readSettings({ vaultPath, siteConfig });
+  // --site gm: the values the GM site builds with, and for each whether the GM wrote it for that site or it is the player site's.
+  const gmSite = options.site === 'gm';
+  if (options.site && !gmSite && options.site !== 'player') throw new Error(`settings get --site takes player or gm, not "${options.site}".`);
+  const view = gmSite ? { values: { ...read.values, player_site: forSite(read, 'gm').site }, origins: read.origins } : read;
   const shown = names.length ? [...new Set(names.flatMap((name) => leaves.filter((e) => reaches(e, name))))] : leaves.filter((e) => !e.twinOf);
   const now = {};
-  for (const e of shown) now[e.name] = { value: getPath(read.values, e.name.split('.')) ?? null, origin: read.origins[e.name] };
+  for (const e of shown) now[e.name] = { value: getPath(view.values, e.name.split('.')) ?? null, origin: gmSite ? gmOrigin(read, e.name) : read.origins[e.name] };
   const asked = (f) => !names.length || names.some((name) => inScope(f.name, name) || inScope(f.use || '', name) || inScope(f.suggest || '', name) || inScope(f.setting || '', name));
   const faults = sortedFaults(read.faults.filter(asked));
   const result = {
@@ -214,6 +226,7 @@ Reads, writes, describes and checks the settings in the vault's settings file ($
 
   settings get [<name> ...]        What each setting is now and where that came from; a
                                    group name (player_site.landing) gives every setting under it
+                                   --site gm gives the values the GM site builds with
   settings set <name>=<value> ... Write settings, all or none: settings set player_site.features.connections=web
                                    A list or map is written as JSON: settings set 'player_site.landing.quick_links=["A","B"]'
   settings add <name> <entry> ...  Add entries to a list setting, keeping what it holds now
