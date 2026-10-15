@@ -99,4 +99,76 @@ function gmFolderProblem(gmFolder, { playerSiteDir, vaultPath }) {
   return null;
 }
 
-module.exports = { MARKER_FILE, GM_META_TAG, real, resolveGmFolder, defaultGmFolder, gmFolderProblem, gmOutputReason };
+// What keeps a GM page out of a search engine, should the folder ever be served beyond the table.
+const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
+const ROBOTS_TXT = 'User-agent: *\nDisallow: /\n';
+
+// The marker file, written last by a GM build that finished: { build, tool, built } and a line end.
+function writeMarker(dir, { version, now = new Date() } = {}) {
+  const marker = { build: 'gm', tool: String(version), built: now.toISOString() };
+  fs.writeFileSync(path.join(dir, MARKER_FILE), `${JSON.stringify(marker)}\n`);
+}
+
+// Whether `dir`, or a folder above it, is in a git work tree: a `.git` folder or file on the way up. No git is run.
+function insideGitWorkTree(dir) {
+  let cur = path.resolve(dir);
+  for (;;) {
+    if (fs.existsSync(path.join(cur, '.git'))) return true;
+    const up = path.dirname(cur);
+    if (up === cur) return false;
+    cur = up;
+  }
+}
+
+const escapeAttr = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+// One hidden frontmatter value as text: a relationship as "<type>: <target>" and its description, a list joined.
+function hiddenValueText(value) {
+  if (typeof value === 'string') return value;
+  if (Array.isArray(value)) return value.map(hiddenValueText).join(', ');
+  if (value && typeof value === 'object' && 'target' in value) {
+    const head = `${value.type == null ? '' : value.type}: ${value.target == null ? '' : value.target}`;
+    return value.description ? `${head} — ${value.description}` : head;
+  }
+  return JSON.stringify(value);
+}
+
+// The "Hidden from players" panel: one marked line per value hiddenFieldsOf lists. Empty when it lists nothing.
+function hiddenPanel(hidden) {
+  if (!Array.isArray(hidden) || hidden.length === 0) return '';
+  const { escapeHtml } = require('./processor');   // here: the settings commands load this file, and processor.js is heavy
+  const items = hidden.map((h) => {
+    const label = escapeAttr(h.label);
+    return `<div class="gm-mark gm-mark--${h.kind}" data-gm-kind="${h.kind}" data-gm-label="${label}">`
+      + `<p class="gm-mark__label">GM: ${escapeHtml(h.label)}</p><p>${escapeHtml(hiddenValueText(h.value))}</p></div>`;
+  });
+  return `<aside class="gm-hidden"><h2 class="gm-hidden__title">Hidden from players</h2>${items.join('')}</aside>`;
+}
+
+const STYLE_HREF = /<link\b[^>]*\bhref="([^"]*?)css\/style\.css"/;
+
+// A page as the GM site writes it: noindex, the GM meta tag and gm.css in the head; the band, the reason players do
+// not see the page and the hidden-fields panel at the top of <main> (of <body>, on a page with no <main>); and every
+// mark rendered. gm.css sits beside style.css, so its address is taken from the page's own style.css link.
+function gmPage(html, { marks, hiddenBecause = null, hidden = [] } = {}) {
+  const { renderMarks } = require('./gm-marks');
+  let out = String(html);
+  const style = STYLE_HREF.exec(out);
+  const css = style ? `<link rel="stylesheet" href="${style[1]}css/gm.css">` : '';
+  const head = `${ROBOTS_META}\n${GM_META_TAG}\n${css}`;
+  out = /<\/head>/i.test(out) ? out.replace(/<\/head>/i, `${head}\n</head>`) : `${head}\n${out}`;
+  const reason = hiddenBecause ? `Players don't see this page: ${hiddenBecause}` : null;
+  const top = [
+    '<div class="gm-band" role="note">GM copy: not for players</div>',
+    reason ? `<div class="gm-band gm-band--hidden gm-mark" data-gm-kind="notes" data-gm-label="${escapeAttr(reason)}">${escapeAttr(reason)}</div>` : '',
+    hiddenPanel(hidden),
+  ].join('');
+  const open = /<main\b[^>]*>/i.exec(out) || /<body\b[^>]*>/i.exec(out);
+  out = open ? out.slice(0, open.index + open[0].length) + top + out.slice(open.index + open[0].length) : top + out;
+  return renderMarks(out, marks);
+}
+
+module.exports = {
+  MARKER_FILE, GM_META_TAG, ROBOTS_META, ROBOTS_TXT, real, resolveGmFolder, defaultGmFolder, gmFolderProblem, gmOutputReason,
+  writeMarker, insideGitWorkTree, hiddenPanel, gmPage,
+};

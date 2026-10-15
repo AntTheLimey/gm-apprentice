@@ -1707,9 +1707,12 @@ function strippedLines(text, excludeCallouts, mark) {
 // The strip chain for the GM site: the note's own private-use characters become U+FFFD first (a note cannot forge a
 // mark), the dataview strip runs as today (never marked), then each strip is given the mark. Lines are kept, so
 // there is no `from`; the note-faults facts (strays, pre, blocks) belong to the player build.
+// `mark.sanitized`: the GM build sanitized every note once, when it was read, and has since put marks of its own
+// into the text (a secret alias, a stub's cut); those are kept.
 function markedStrippedLines(text, excludeCallouts, mark) {
   const warnings = [];
   let lines = null;
+  const clean = mark.sanitized ? (t) => t : sanitize;
   const strips = [
     dataviewLines,
     (t) => markedBlocks(t, 'gm-only', mark),
@@ -1720,7 +1723,7 @@ function markedStrippedLines(text, excludeCallouts, mark) {
   ];
   for (const strip of strips) {
     if (lines !== null && lines.length === 0) break;
-    const result = strip(lines === null ? sanitize(text) : lines.join('\n'));
+    const result = strip(lines === null ? clean(text) : lines.join('\n'));
     lines = result.lines;
     // A strip that still cuts (its kind is off) keeps a Setext line apart, as the player strip does.
     if (result.from) keepApart(lines, result.from);

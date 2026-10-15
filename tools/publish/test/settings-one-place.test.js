@@ -102,7 +102,8 @@ test('nothing reads the vault settings file but the settings package', () => {
 //   menu_extra  the GM's extra menu entries with a repeat left out (not enumerable; build.js reads each link)
 //   limits, header_facts, withheld_words  the numbers, header facts and withheld words (not enumerable; passed down to the code that uses each)
 //   statuses  the three status lists as sets, { out_of_play, fallen, gone } (not enumerable; passed down to the code that uses each)
-const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'statuses'];
+//   gm        the GM site's switch, folder and show switches, { publish, folder, show } (not enumerable; the GM build reads it)
+const DERIVED = ['switches', 'live', 'legacy', 'faults', 'layout', 'site', 'steps', 'menu_extra', 'limits', 'header_facts', 'withheld_words', 'statuses', 'gm'];
 
 // Only reads through the name `publishConfig` are checked (`publishConfig.x`, `publishConfig['x']`,
 // and one level further for the groups). A read through another name (`p.x`, `cfg.publish.x`)

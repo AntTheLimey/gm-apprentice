@@ -38,12 +38,12 @@ describe('build with the site-folder settings in the vault', () => {
     return { root, siteDir, configPath };
   }
 
-  function run(configPath, options = {}) {
+  function run(configPath) {
     const original = { warn: console.warn, log: console.log };
     const lines = [];
     console.warn = (...a) => lines.push(a.join(' '));
     console.log = (...a) => lines.push(a.join(' '));
-    try { build({ configPath, ...options }); } finally { Object.assign(console, original); }
+    try { build({ configPath }); } finally { Object.assign(console, original); }
     return lines;
   }
 
@@ -76,25 +76,12 @@ describe('build with the site-folder settings in the vault', () => {
     assert.deepStrictEqual(fs.readdirSync(target), ['precious.txt']);
   });
 
-  it('with the faults let through (the GM-site build), it still will not clean a folder it cannot read', () => {
-    const s = setup({ output: '../elsewhere' });
-    const target = path.join(s.root, 'elsewhere');
-    fs.mkdirSync(target, { recursive: true });
-    const sentinel = path.join(target, 'precious.txt');
-    fs.writeFileSync(sentinel, 'precious\n');
-    const before = hash(sentinel);
-    assert.throws(() => run(s.configPath, { allowFaults: true }),
-      /The build did not start: it will not clean a folder while it cannot read where to build or what to keep\./);
-    assert.strictEqual(hash(sentinel), before);
-  });
-
   it('an output folder that is a link to the vault (or outside the site folder) stops the build, and the vault is untouched', () => {
     const s = setup({ output: 'vlink' });
     const vault = path.join(s.root, 'vault');
     fs.symlinkSync(vault, path.join(s.siteDir, 'vlink'), 'junction');
     const before = fs.readdirSync(vault).sort();
     assert.throws(() => run(s.configPath), /settings have a fault/);
-    assert.throws(() => run(s.configPath, { allowFaults: true }), /did not start|Refusing|inside the vault|contains the vault/);
     assert.deepStrictEqual(fs.readdirSync(vault).sort(), before);
   });
 
@@ -122,7 +109,6 @@ describe('build with the site-folder settings in the vault', () => {
     const sentinel = path.join(out, 'old.html');
     fs.writeFileSync(sentinel, 'old');
     const before = hash(sentinel);
-    assert.throws(() => run(s.configPath, { allowFaults: true }), /did not start/);
     assert.throws(() => run(s.configPath), /settings have a fault/);
     assert.strictEqual(hash(sentinel), before);
   });

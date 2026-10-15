@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -19,11 +19,12 @@ const { clientFor } = require('./templates/live-mount');
 const { ignoringMark } = require('./heading-key');
 const { linkText, parseWikilink } = require('./wikilink');
 const { nameIn, fileLabel } = require('./settings');
-const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
+const { resolveConfig, loadPublishConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
-const { real } = require('./gm-site');
+const { real, resolveGmFolder, gmFolderProblem, insideGitWorkTree, gmPage, writeMarker, ROBOTS_TXT } = require('./gm-site');
+const { createMarks, markKinds, sanitize, unmark } = require('./gm-marks');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
@@ -33,7 +34,7 @@ const { partyDataScript } = require('./party-manifest');
 const { boardFor } = require('./party-board-registry');
 const { hasRealKvId, detectInbox, detectStatusBar } = require('./backend-flags');
 const { SITE_OLD_ROOTS } = require('./settings/legacy');
-const { publishesPage, autoExcludeCode, isHousekeepingNote } = require('./publish-decision');
+const { publishesPage, autoExcludeCode, isHousekeepingNote, ALWAYS_EXCLUDE_DIRS } = require('./publish-decision');
 const { publishedPages } = require('./published-pages');
 const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
@@ -79,6 +80,18 @@ function quietly(fn) {
   const saved = { log: console.log, warn: console.warn, error: console.error };
   console.log = console.warn = console.error = () => {};
   try { return fn(); } finally { Object.assign(console, saved); }
+}
+
+// A frontmatter value with `fn` applied to every string in it, at any depth (the GM build's sanitize and unmark).
+function mapStrings(v, fn) {
+  if (typeof v === 'string') return fn(v);
+  if (Array.isArray(v)) return v.map((x) => mapStrings(x, fn));
+  if (v && typeof v === 'object' && !(v instanceof Date)) {
+    const out = {};
+    for (const [k, x] of Object.entries(v)) out[k] = mapStrings(x, fn);
+    return out;
+  }
+  return v;
 }
 
 // Reads a link the GM wrote in a setting (a menu entry's `link`, a banner's `link`), in this order:
@@ -192,16 +205,48 @@ function buildSite(options) {
   const configDir = path.dirname(resolvedConfigPath);
   const rawConfig = options.rawConfig ? Object.assign({}, options.rawConfig) : loadVaultConfig(resolvedConfigPath);
   rawConfig.vaultPath = options.vaultPath ? path.resolve(options.vaultPath) : path.resolve(configDir, rawConfig.vaultPath);
-  // `allowFaults` is for the GM-site build a later change adds; nothing passes it yet but tests.
+  // `options.site`: 'player' (the default) or 'gm', the GM site: its own folder, every hidden part kept and marked.
+  if (options.site !== undefined && options.site !== 'player' && options.site !== 'gm') throw new Error(`build: unknown site "${options.site}"`);
+  const gm = options.site === 'gm';
   const printWarning = (m) => console.warn(`  WARNING: ${m}`);
-  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning, { quietStops: !options.allowFaults, siteDir: configDir });
-  if (!options.allowFaults) assertNoStops(publishConfig, 'build');
+  const { config, publishConfig } = resolveConfig(rawConfig, rawConfig.vaultPath, printWarning,
+    gm ? { quietStops: true, siteDir: configDir, site: 'gm' } : { quietStops: true, siteDir: configDir });
+  if (gm && publishConfig.gm.publish !== true) {
+    throw new Error('The GM site is off for this vault (gm_site.publish). Turn it on with settings set gm_site.publish=on.');
+  }
+  assertNoStops(publishConfig, 'build');
+  // The GM site: the player site's own settings, read once, decide what players see (the reason a page or a name is
+  // marked); the kinds of mark the GM site shows; and the table of marks this build makes.
+  const playerConfig = gm ? loadPublishConfig(rawConfig.vaultPath, rawConfig, () => {}, { quietStops: true, siteDir: configDir, site: 'player' }) : publishConfig;
+  const show = gm ? new Set(markKinds().filter((kind) => publishConfig.gm.show[kind] === true)) : new Set();
+  const mark = gm ? { marks: createMarks(), show, sanitized: true } : null;
+  const markOpt = gm ? { mark } : {};
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
-  const outputDir = options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
-  const off = siteOff(publishConfig.switches, rawConfig.vaultPath);
+  const outputDir = gm ? gmOutputDir() : options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
+  function gmOutputDir() {
+    if (options.outputDirOverride) throw new Error('The GM site is never previewed: the preview is the player site\'s. Build the GM site into its own folder (gm_site.folder).');
+    if (!publishConfig.gm.folder) throw new Error('The GM site has no folder (gm_site.folder). Set one with settings set gm_site.folder=<folder>, beside the player site folder.');
+    return resolveGmFolder(publishConfig.gm.folder, configDir);
+  }
+  // The GM site's folder is checked before any step runs and before anything is written or deleted.
+  if (gm && !dry) {
+    const problem = gmFolderProblem(outputDir, { playerSiteDir: configDir, vaultPath: rawConfig.vaultPath });
+    if (problem) throw new Error(problem);
+    if (insideGitWorkTree(outputDir)) printWarning('The GM site\'s folder is inside a git repository; do not push it.');
+  }
+  // The player site's switch does not stop the GM site: its own (gm_site.publish) was checked above.
+  const off = gm ? null : siteOff(publishConfig.switches, rawConfig.vaultPath);
   // A setting named in a message is named as this vault's file writes it.
   const nm = (name) => nameIn(rawConfig.vaultPath, name);
   if (off && !dry) throw new Error(off);
+  // Every HTML file goes through here: on the GM site it is marked (gmPage); on the player site it is written as made.
+  function writeHtml(full, html, page) {
+    fs.writeFileSync(full, gm ? gmPage(html, { marks: mark.marks, hiddenBecause: page && page.gmHiddenBecause, hidden: page && page.gmHidden }) : html);
+  }
+  // A JSON file the GM site writes holds no mark: the words between them are kept.
+  const jsonText = (data) => (gm ? unmark(JSON.stringify(data)) : JSON.stringify(data));
+  // Each site's build steps hear which site they run for and where it is built.
+  const stepEnv = { GM_APPRENTICE_SITE: gm ? 'gm' : 'player', GM_APPRENTICE_OUTPUT: outputDir };
   // The vault's build steps run only for the `build` and `deploy` commands (`options.runSteps`): never in a dry build,
   // the preview, or any command that only reads. Before anything is read from the vault, in the site folder.
   const runningSteps = options.runSteps === true && !dry && !options.outputDirOverride;
@@ -211,7 +256,7 @@ function buildSite(options) {
     const notes = packageNotes(publishConfig.layout === 'new' ? packageScripts(configDir) : {}, publishConfig.steps);
     if (notes.twice) printWarning(notes.twice);
     if (notes.only) (options.stepsLog || console.log)(`  ${notes.only}`);
-    if (publishConfig.steps.before.length) runSteps(publishConfig.steps.before, { cwd: configDir, label: 'before_build', log: options.stepsLog, stdio: options.stepsStdio });
+    if (publishConfig.steps.before.length) runSteps(publishConfig.steps.before, { cwd: configDir, label: 'before_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
   }
 
   if (config.host === 'cloudflare-pages' && typeof config.siteUrl === 'string' && /github\.io/i.test(config.siteUrl)) {
@@ -229,11 +274,12 @@ function buildSite(options) {
   const switches = publishConfig.switches || {};
   // `assumeKv` is the local preview's (scripts/live-preview.js): a store that is in memory, with no wrangler.toml.
   const kvWired = options.assumeKv === true || hasRealKvId(configDir);
-  publishConfig.live = {
+  // The GM site has no live stats and no inbox, whatever the player site says: it has no store to keep them.
+  publishConfig.live = gm ? { stats: false, inbox: false } : {
     stats: switches.liveStats === true && kvWired,
     inbox: switches.inbox === true && kvWired,
   };
-  if (!kvWired) {
+  if (!kvWired && !gm) {
     if (switches.liveStats === true) console.warn(`  WARNING: ${nm('player_site.features.live_stats')} is on but this site has no KV store wired; live stats are not published`);
     if (switches.inbox === true) console.warn(`  WARNING: ${nm('player_site.features.inbox')} is on but this site has no KV store wired; the change-request inbox is not published`);
   }
@@ -250,6 +296,11 @@ function buildSite(options) {
   const fieldOverrides = publishConfig.overrides.fields || {};
 
   function assertSafeOutputDir() {
+    if (gm) {
+      const problem = gmFolderProblem(outputDir, { playerSiteDir: configDir, vaultPath: config.vaultPath });
+      if (problem) throw new Error(problem);
+      return;
+    }
     // Real paths: a link in the site folder that leads to the vault is the vault.
     // A folder not made yet is judged by its nearest folder that exists, so it is compared the same way as the vault.
     const resolved = real(outputDir);
@@ -268,15 +319,11 @@ function buildSite(options) {
 
   function cleanOutput() {
     if (dry) return;
-    // A build that is let past the settings' faults (allowFaults) still never cleans a folder it cannot trust.
-    if (publishConfig.faults.some((f) => f.level === 'stop' && (f.setting === 'player_site.output' || f.setting === 'player_site.keep'))) {
-      throw new Error('The build did not start: it will not clean a folder while it cannot read where to build or what to keep.');
-    }
     if (!fs.existsSync(outputDir)) return;
     assertSafeOutputDir();
     for (const entry of fs.readdirSync(outputDir)) {
-      // A kept folder is kept in any letter case: this can only keep more.
-      if (config.preserveDirs.some((kept) => kept.toLowerCase() === entry.toLowerCase())) continue;
+      // A kept folder is kept in any letter case: this can only keep more. The GM site's folder keeps nothing.
+      if (!gm && config.preserveDirs.some((kept) => kept.toLowerCase() === entry.toLowerCase())) continue;
       const full = path.join(outputDir, entry);
       fs.rmSync(full, { recursive: true, force: true });
     }
@@ -295,6 +342,16 @@ function buildSite(options) {
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
     fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(src, 'utf8')));
+  }
+
+  // The GM site's own files: the band and mark styles, and a robots.txt that asks every crawler to stay out.
+  function writeGmFiles() {
+    if (dry || !gm) return;
+    const dest = path.join(outputDir, 'css/gm.css');
+    ensureDir(dest);
+    fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(path.join(__dirname, '../css/gm.css'), 'utf8')));
+    fs.writeFileSync(path.join(outputDir, 'robots.txt'), ROBOTS_TXT);
+    console.log('  wrote css/gm.css and robots.txt');
   }
 
   // A genre preset's own CSS may hardcode a Google Fonts @import for its default look
@@ -479,7 +536,7 @@ function buildSite(options) {
       genrePreset: publishConfig._genrePreset,
       overridesCss: publishConfig._overridesCss,
     });
-    fs.writeFileSync(path.join(outputDir, '404.html'), html);
+    writeHtml(path.join(outputDir, '404.html'), html);
     console.log('  wrote 404.html');
   }
 
@@ -512,7 +569,11 @@ function buildSite(options) {
   // (#209), and scanAttachments applies the same skip list to the attachments tree
   // (#210). `explain`, `manifest diff` and `doctor --site` use the same helper so all
   // four predict exactly the same exclusions the build applies.
-  const scanConfig = scanConfigFor(config, publishConfig);
+  // The GM site showing whole notes reads every folder but the plugin's own and the GM's personal one; a page in a
+  // folder the player site hides is then marked with that reason.
+  const scanConfig = gm && show.has('notes')
+    ? Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS })
+    : scanConfigFor(config, publishConfig);
   console.log('Scanning vault:', config.vaultPath);
   const scanReport = scanVaultReport(scanConfig);
   let pages = warnScanReport(scanReport);
@@ -539,7 +600,7 @@ function buildSite(options) {
   // Played sessions the manifest would withhold (#277): reported once, at the end of the
   // build, because the per-file warning drowns in a real build's log.
   const unpublishedPlayedSessions = [];
-  if (manifest) {
+  if (manifest && !gm) {
     const scanned = new Set(corpus.map(vaultRelPathOf));
     for (const entry of manifest.publishing) {
       if (!scanned.has(entry)) {
@@ -581,9 +642,24 @@ function buildSite(options) {
   // nothing and renders as plain text rather than as a broken href. Story companion
   // files are folded into their PC first (the DRAFT rule needs that pairing). The
   // rename tool asks the same function for the pages the link map is built from.
-  const { verdicts, published } = publishedPages(pages, {
+  const { verdicts, published, playerPublished } = publishedPages(pages, {
     vaultPath: config.vaultPath, publishConfig, manifest, relOf: vaultRelPathOf,
+    ...(gm ? { site: 'gm', show, hiddenFolders: playerConfig.exclude_dirs, playerConfig } : {}),
   });
+  if (gm) {
+    for (const page of pages) {
+      const verdict = verdicts.get(page);
+      if (verdict.code === 'GM_SHOWN') page.gmHiddenBecause = verdict.reason;
+    }
+    // A note cannot forge a mark: its own private-use characters go once, here, before the build puts any marks
+    // of its own into its text (a secret alias, a stub's cut), which the strips then keep (`mark.sanitized`).
+    for (const page of corpus) {
+      page.markdown = sanitize(page.markdown);
+      if (page.storyMarkdown) page.storyMarkdown = sanitize(page.storyMarkdown);
+      page.frontmatter = mapStrings(page.frontmatter, sanitize);
+      if (typeof page.displayTitle === 'string') page.displayTitle = sanitize(page.displayTitle);
+    }
+  }
   // In memory, for `explain --shown`: the note asked about is built as if it published, so
   // what it would put on the site can be read before it is given a page. A story companion
   // is shown with its PC. A `publish: false` note is never built.
@@ -598,13 +674,14 @@ function buildSite(options) {
   const withCode = (...codes) => pages.filter(p => codes.includes(verdicts.get(p).code));
 
   const draftExcluded = withCode('DRAFT_EXCLUDED');
-  if (draftExcluded.length > 0) console.log(`Excluded ${draftExcluded.length} DRAFT entity/entities`);
+  // The counts of what the player site holds back are the player build's to print.
+  if (!gm && draftExcluded.length > 0) console.log(`Excluded ${draftExcluded.length} DRAFT entity/entities`);
 
   const autoExcluded = withCode(
     'AUTO_EXCLUDED_STATUS', 'AUTO_EXCLUDED_STAGE', 'AUTO_EXCLUDED_SOURCE', 'SCENE_CUT_SKIPPED');
-  if (autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
+  if (!gm && autoExcluded.length > 0) console.log(`Auto-excluded ${autoExcluded.length} prep/draft file(s)`);
 
-  if (manifest && publishConfig.mode !== 'full') {
+  if (!gm && manifest && publishConfig.mode !== 'full') {
     // A prep file the GM explicitly listed under Publishing: named here because a
     // reader landing on a published prep page deserves an explanation for why it's
     // there. decidePage checks the manifest allowlist before the auto-exclude
@@ -619,7 +696,7 @@ function buildSite(options) {
     }
   }
 
-  if (manifest && publishConfig.mode === 'player') {
+  if (!gm && manifest && publishConfig.mode === 'player') {
     // Everything the earlier rules let through: the manifest allowlist is the only
     // thing between these pages and the site. decidePage evaluates the allowlist
     // before `publish: false`, in the order build's own passes ran, so both those
@@ -638,7 +715,7 @@ function buildSite(options) {
   }
 
   const neverPublish = withCode('PUBLISH_FALSE', 'PUBLISH_NONE');
-  if (neverPublish.length > 0) {
+  if (!gm && neverPublish.length > 0) {
     console.log(`publish: false — skipped ${neverPublish.length} file(s)`);
   }
 
@@ -660,7 +737,12 @@ function buildSite(options) {
   // take too, so all three pair on the same frontmatter (#276).
   const allNotes = scanAllNotes(config.vaultPath);   // read once: the pairing and the note-faults audit both take it
   rememberHiddenNames(linkMap, allNotes);
-  const hubPairs = pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words });
+  // The GM site follows the player site: names are withheld, and hub bodies give way to Wrap-Ups, by what the player
+  // site publishes; the GM site then keeps those names, marked.
+  const onPlayerSite = gm ? new Set(playerPublished) : null;
+  const hubPairs = gm
+    ? pairHubs(corpus, pages.filter((p) => onPlayerSite.has(p)), { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words, mark })
+    : pairHubs(corpus, pages, { vaultPath: config.vaultPath, apply: true, allNotes, withheldWords: publishConfig.withheld_words });
 
   // Reduce every page's frontmatter to its PUBLISHED view before anything
   // derived is built from it.
@@ -708,15 +790,22 @@ function buildSite(options) {
         warn: (message) => console.warn(`  WARNING: ${page.outputPath}: ${message}`) };
       // The cut text no longer holds a stray %% or an unclosed fence either: kept for the audit.
       const source = String(page.markdown || '');
-      const cut = stubCut(source, include, withhold);
-      stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
-      page.markdown = cut.text;
-      // A PC's story companion is a SEPARATE file paired in by the scanner and
-      // rendered on its own page. Reducing only page.markdown left a stubbed PC
-      // publishing its complete story — the same content the stub exists to
-      // withhold, one URL over.
-      if (page.storyMarkdown) {
-        page.storyMarkdown = keepOnlySections(page.storyMarkdown, include, withhold);
+      if (gm && show.has('sections')) {
+        // The GM site's stub page is the whole note, what the stub cuts marked. The note was sanitized when it was
+        // read, so the strips that run on it later keep these marks.
+        page.markdown = stubMarked(source, include, withhold, mark);
+        if (page.storyMarkdown) page.storyMarkdown = stubMarked(page.storyMarkdown, include, withhold, mark);
+      } else {
+        const cut = stubCut(source, include, withhold);
+        stubFacts.set(page, { source, strays: cut.strays, openFence: cut.openFence });
+        page.markdown = cut.text;
+        // A PC's story companion is a SEPARATE file paired in by the scanner and
+        // rendered on its own page. Reducing only page.markdown left a stubbed PC
+        // publishing its complete story — the same content the stub exists to
+        // withhold, one URL over.
+        if (page.storyMarkdown) {
+          page.storyMarkdown = keepOnlySections(page.storyMarkdown, include, withhold);
+        }
       }
     }
     const overridesForFile = fieldOverrides[vaultRelPathOf(page)] || {};
@@ -726,6 +815,12 @@ function buildSite(options) {
     page.sourceFrontmatter = page.frontmatter;
     page.frontmatter = publishedFrontmatter(
       page.frontmatter, excludeFields, overridesForFile);
+    // The GM page lists what that took out, in its "Hidden from players" panel.
+    if (gm) {
+      page.gmHidden = show.has('fields') || show.has('relationships')
+        ? hiddenFieldsOf(page.sourceFrontmatter, excludeFields, overridesForFile).filter((h) => show.has(h.kind))
+        : [];
+    }
   }
 
   // Two PCs on one live key would share one set of live stats (HP, loadouts, party board).
@@ -768,6 +863,12 @@ function buildSite(options) {
   const stripFacts = new Map();
   for (const page of pages) {
     const source = String(page.markdown || '');
+    if (gm) {
+      // The GM site's published view: every hidden part kept and marked. It has no note-faults facts.
+      page.publishedMarkdown = filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
+        excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections, mark });
+      continue;
+    }
     const stripped = strippedLines(source, excludeCallouts);
     const fm = page.sourceFrontmatter || page.frontmatter;
     // A stub's facts were taken when it was cut. A fault that lies wholly in text the page
@@ -870,7 +971,13 @@ function buildSite(options) {
 
   // Search index (skip if searchEnabled explicitly set to false in config)
   const searchEnabled = config.searchEnabled !== false;
-  const searchData = searchEnabled ? buildSearchIndex(pages) : null;
+  // The GM site's index is made from its pages with the marks taken out: it holds their words and no token.
+  const unmarked = (p) => {
+    const view = { ...p, frontmatter: mapStrings(p.frontmatter, unmark) };
+    for (const f of ['displayTitle', 'markdown', 'publishedMarkdown']) if (typeof p[f] === 'string') view[f] = unmark(p[f]);
+    return view;
+  };
+  const searchData = searchEnabled ? buildSearchIndex(gm ? pages.map(unmarked) : pages) : null;
 
   publishConfig._linkMap = linkMap;
   publishConfig._backlinks = backlinks;
@@ -940,7 +1047,7 @@ function buildSite(options) {
   const generatesTimeline = timelineData.events.length > 0;
   // An authored Timeline takes Events over only when players would find something on it:
   // a title and bare headings (what a new vault starts with) would hide the list of events.
-  const hasEntries = (p) => playerSafeMarkdown(p.markdown, { excludeCallouts, excludeSections, frontmatter: p.sourceFrontmatter || p.frontmatter }).text
+  const hasEntries = (p) => playerSafeMarkdown(p.markdown, { excludeCallouts, excludeSections, frontmatter: p.sourceFrontmatter || p.frontmatter, ...markOpt }).text
     .split('\n').some(line => line.trim() && !/^#{1,6}\s/.test(line.trim()));
   const authoredTimeline = pages.find(p => p.frontmatter.type === 'timeline' && hasEntries(p))
     || pages.find(p => p.outputPath.split('/').pop() === 'timeline.html' && hasEntries(p));
@@ -993,6 +1100,7 @@ function buildSite(options) {
   configureLinkPreviews(publishConfig.link_previews);
   configureConnections(publishConfig.connections);
   copyCSS();
+  writeGmFiles();
   copyJS();
   copyGenreCSS();
   writeThemeCSS();
@@ -1029,7 +1137,7 @@ function buildSite(options) {
     // nothing is written
   } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
-    fs.writeFileSync(searchDest, JSON.stringify(searchData));
+    fs.writeFileSync(searchDest, jsonText(searchData));
     console.log('  wrote search-index.json');
 
     // Copy lunr.js client library
@@ -1096,7 +1204,7 @@ function buildSite(options) {
       const basename = canonicalNfc(String(page.frontmatter.portrait).split('/').pop());
       if (basename && imageMap[basename]) usedImages.add(basename);
     }
-    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections });
+    const processed = processContent(page, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, pcKeepSections, ...markOpt });
     fx.warn(page.outputPath, processed.warnings);
     let html;
 
@@ -1106,7 +1214,7 @@ function buildSite(options) {
       case 'pc': {
         // Warnings are dropped here, not ignored: processContent above ran this same
         // strip chain over the same markdown and already reported them.
-        let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter }).text;
+        let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
         // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
         // brackets of an `![[image.png]]` embed and would flatten it to literal text.
         filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
@@ -1124,7 +1232,7 @@ function buildSite(options) {
             frontmatter: {},
             outputPath: page.outputPath,
           };
-          const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts });
+          const storyProcessed = processContent(storyPage, linkMap, excludeSections, imageMap, { usedImages, excludeCallouts, ...markOpt });
           fx.warn(page.outputPath, storyProcessed.warnings);
           storyHtml = storyProcessed.html && storyProcessed.html.trim() ? storyProcessed.html : undefined;
         }
@@ -1161,7 +1269,7 @@ function buildSite(options) {
         let identity = [];
         if (sheetsOff) {
           const identityText = page.headingsUnstable ? '' : resolveWikiLinks(
-            playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm }).text,
+            playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm, ...markOpt }).text,
             linkMap, page.outputPath);
           identity = pcIdentity(system, page.frontmatter, extractSections(identityText));
         }
@@ -1285,8 +1393,9 @@ function buildSite(options) {
   const scratchFx = () => ({ usedImages: new Set(), warn: () => {}, partyEntries: [], sheetlessPcs: [], retiredFieldPcs: [], tohitRows: [], onLook: () => {} });
 
   // The note-faults audit reads each page as it is written (`seen`), and at the end renders
-  // again the pages that link a note with no page (`namedOnPages`).
-  const audit = startNoteAudit({
+  // again the pages that link a note with no page (`namedOnPages`). The GM build has none: on the GM site every
+  // marked name and section would read as a fault, and the player build reports the notes' faults.
+  const audit = gm ? null : startNoteAudit({
     vaultPath: config.vaultPath, notes: allNotes, corpus, verdicts, report: scanReport, published: pages, linkMap,
     publishConfig, manifest, relOf: vaultRelPathOf, getsNoPage,
     // Whether a frontmatter value (`occupation`, `relationships[0].description`) is still in
@@ -1310,6 +1419,7 @@ function buildSite(options) {
   const markedOf = new Map();   // page -> its links to no-page notes, marked (null when it has none)
   const toRender = new Map();   // the pages that may print one of those names: rendered a second time
   function seen(rel, html, page, isStory) {
+    if (gm) return;
     audit.read(rel, html);
     audit.readAddresses(rel, html);
     if (page === shownPage) shown[isStory ? 'story' : 'page'] = html;
@@ -1365,7 +1475,7 @@ function buildSite(options) {
       if (dry) continue;
       const outPath = path.join(outputDir, page.outputPath);
       ensureDir(outPath);
-      fs.writeFileSync(outPath, out.html);
+      writeHtml(outPath, out.html, page);
       console.log(`  wrote ${page.outputPath}`);
     } catch (e) {
       errorCount++;
@@ -1397,7 +1507,8 @@ function buildSite(options) {
     // published values. When the status-bar tier is on it also goes live
     // (JSON island + client poll of /api/loadout-list). When off, the same
     // table renders without the live layer.
-    roster.board = sheetsOff ? null : boardFor(publishConfig.system);
+    // The GM site has no party board: it is the live layer's, which the GM site never has.
+    roster.board = sheetsOff || gm ? null : boardFor(publishConfig.system);
     roster.live = publishConfig.live.stats;
     // Guarded like every other render path so a manifest-build failure
     // does not abort the banners/story/timeline/landing stages that follow.
@@ -1417,7 +1528,7 @@ function buildSite(options) {
         if (dry) continue;
         const outPath = path.join(outputDir, deferredRoster.page.outputPath);
         ensureDir(outPath);
-        fs.writeFileSync(outPath, html);
+        writeHtml(outPath, html, deferredRoster.page);
         console.log(`  wrote ${deferredRoster.page.outputPath} (party board)`);
       } catch (e) {
         errorCount++;
@@ -1439,14 +1550,14 @@ function buildSite(options) {
     // also when nothing is written): every string of every card, under the note it is made from.
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
     const cardStrings = (v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(cardStrings) : []);
-    for (const [key, card] of Object.entries(cards)) {
+    if (!gm) for (const [key, card] of Object.entries(cards)) {
       const page = byHref.get(key);
       const text = Object.values(card).flatMap(cardStrings).join('\n');
       if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p></main>`, null, 'the link previews', 'withheld');
     }
     if (!dry) {
       const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
-      fs.writeFileSync(path.join(outputDir, 'previews.json'), JSON.stringify(built));
+      fs.writeFileSync(path.join(outputDir, 'previews.json'), jsonText(built));
       console.log('  wrote previews.json');
     }
   }
@@ -1667,7 +1778,7 @@ function buildSite(options) {
     const { slugify } = require('./scanner');
     const outputPath = `story/characters/${slugify(pc.title)}.html`;
     const storyObj = { markdown: pc.storyMarkdown, frontmatter: {}, outputPath };
-    const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts });
+    const processed = processContent(storyObj, linkMap, excludeSections, imageMap, { usedImages: fx.usedImages, excludeCallouts, ...markOpt });
     fx.warn(outputPath, processed.warnings);
     const story = {
       title: pc.displayTitle, outputPath, html: processed.html,
@@ -1686,7 +1797,7 @@ function buildSite(options) {
       if (dry) continue;
       const full = path.join(outputDir, story.outputPath);
       ensureDir(full);
-      fs.writeFileSync(full, html);
+      writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause });
       console.log(`  wrote ${story.outputPath}`);
     }
     return stories;
@@ -1694,7 +1805,7 @@ function buildSite(options) {
 
   // The search index holds a subtitle read from fields a page may not print at all
   // (`occupation` on a location): read for a secret name as the page is, note by note.
-  if (searchData) {
+  if (searchData && !gm) {
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
     const escapeText = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const strings = (v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(strings)
@@ -1718,11 +1829,11 @@ function buildSite(options) {
   // The files copied to the site are named after the vault's files: a withheld name in one of
   // them is in the address of the file. Attachments, then the other files a site copies from
   // the vault: the campaign image, a section banner and a font.
-  for (const [name, entry] of Object.entries(imageMap)) {
-    if (publishConfig.mode === 'player' && !usedImages.has(name)) continue;
-    audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: entry.sourcePath })), `images/${entry.relPath}`);
-  }
-  {
+  if (!gm) {
+    for (const [name, entry] of Object.entries(imageMap)) {
+      if (publishConfig.mode === 'player' && !usedImages.has(name)) continue;
+      audit.readFileName(canonicalNfc(vaultRelPathOf({ sourcePath: entry.sourcePath })), `images/${entry.relPath}`);
+    }
     const vaultRoot = path.resolve(config.vaultPath);
     const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
     const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
@@ -1745,11 +1856,11 @@ function buildSite(options) {
   // Written, and read by the note-faults audit for a secret name. In memory nothing is
   // written, and every one of them is still made: what they print is part of the site.
   eachListing((out, html, said) => {
-    audit.read(null, html, out);
+    if (!gm) audit.read(null, html, out);
     if (dry) return;
     const full = path.join(outputDir, out);
     ensureDir(full);
-    fs.writeFileSync(full, html);
+    writeHtml(full, html);
     console.log(said);
   }, true);
 
@@ -1816,8 +1927,9 @@ function buildSite(options) {
   // (The update does not switch such a feature on, so the line says what works now: set the switch.)
   const lost = (key, is, subject, them, its) => console.warn(
     `  WARNING: ${subject} ${is} deployed on this site but ${nm(`player_site.features.${key}`)} is not set, so ${them === 'them' ? 'they are' : 'it is'} off. Set ${nm(`player_site.features.${key}`)} to true to keep ${them}, or to false to remove ${its} functions.`);
-  if (unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'are', 'live stats', 'them', 'their');
-  if (unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'is', 'the inbox', 'it', 'its');
+  // The GM site has neither, so it says nothing of them: the player build does.
+  if (!gm && unset.includes('live_stats') && switches.characterSheets !== false && detectStatusBar(configDir)) lost('live_stats', 'are', 'live stats', 'them', 'their');
+  if (!gm && unset.includes('inbox') && detectInbox(configDir)) lost('inbox', 'is', 'the inbox', 'it', 'its');
 
   // Faults in the notes themselves: one line per code, after every other warning, and
   // nothing for a vault with none. `doctor --site` lists the same findings in full.
@@ -1844,7 +1956,7 @@ function buildSite(options) {
     return own;
   };
   const takeOff = (page, own) => { for (const f of FIELDS) if (f in page) page[f] = own[f]; };
-  quietly(() => ignoringMark(MARK_RE, () => {
+  if (!gm) quietly(() => ignoringMark(MARK_RE, () => {
     for (const page of pages) {
       const marked = toRender.get(page);
       if (!marked) continue;
@@ -1881,9 +1993,9 @@ function buildSite(options) {
     console.warn(`  WARNING: the note-faults check could not read ${auditGaps} page${auditGaps === 1 ? '' : 's'} a second time; a note named there with no page may be missing from its list.`);
   }
   // Every file is written: the after steps run, then the check of the notes and "Done!".
-  if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio });
-  for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
-  const noteFaults = audit.findings((page) => stripFacts.get(page));
+  if (runningSteps && errorCount === 0 && publishConfig.steps.after.length) runSteps(publishConfig.steps.after, { cwd: configDir, label: 'after_build', log: options.stepsLog, stdio: options.stepsStdio, extraEnv: stepEnv });
+  if (!gm) for (const pc of tohitRows) audit.calculator(pc.rel, pc.rows);
+  const noteFaults = gm ? [] : audit.findings((page) => stripFacts.get(page));
   if (options.onNoteFaults) options.onNoteFaults(noteFaults);
   for (const line of summaryLines(noteFaults)) console.warn(`  WARNING: ${line}`);
 
@@ -1897,6 +2009,8 @@ function buildSite(options) {
     err.errorCount = errorCount;
     throw err;
   }
+  // Last of all: a GM build that stopped before here leaves no marker (its pages still carry the GM meta tag).
+  if (gm) writeMarker(outputDir, { version: require('../package.json').version });
   console.log('Done!');
   return { noteFaults, shown: null, faults: publishConfig.faults };
 }
