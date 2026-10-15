@@ -636,9 +636,12 @@ const REGISTRY = [
 ];
 
 // The player site's settings the GM site cannot set for itself: one folder, one address, one host, and the live features
-// the GM site never has.
+// the GM site never has. The hide.* settings are here too: what players see has one source, so a mark always means
+// "hidden from players".
 const NOT_PER_SITE = new Set(['player_site.publish', 'player_site.folder', 'player_site.url', 'player_site.host',
   'player_site.output', 'player_site.cloudflare_project', 'player_site.keep', 'player_site.hide.mode',
+  'player_site.hide.folders', 'player_site.hide.sections', 'player_site.hide.fields', 'player_site.hide.callouts',
+  'player_site.hide.drafts', 'player_site.hide.field_exceptions',
   'player_site.features.live_stats', 'player_site.features.inbox']);
 // A twin that does not inherit when unset: the player site's build steps never run for the GM site.
 const GM_OWN_DEFAULT = { 'player_site.before_build': [], 'player_site.after_build': [] };

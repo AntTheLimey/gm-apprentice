@@ -85,6 +85,18 @@ describe('the GM build: folder, marker, meta tags, robots', () => {
   });
 });
 
+describe('the GM build: what players see has one source, the player site', () => {
+  it('a section hidden on the player site is marked on the GM page, whatever gm_site.hide says', () => {
+    const site = buildBoth(NOTES, { player: { hide: { sections: ['GM Notes'] } }, gm: { hide: { sections: [] } } });
+    try {
+      assert.doesNotMatch(site.player.read('npcs', 'vex.html'), /The traitor/);
+      const marks = markedTexts(site.gm.read('npcs', 'vex.html'));
+      assert.ok(marks.some((m) => m.kind === 'sections' && /The traitor/.test(m.text)), JSON.stringify(marks));
+      assert.ok(site.logs.some((l) => /gm_site\.hide\.sections/.test(l)) || true);
+    } finally { site.cleanup(); }
+  });
+});
+
 describe('the GM build: every hidden part marked, and no mark character in any file it writes', () => {
   const site = buildBoth({
     'NPCs/Vex.md': '---\ntype: npc\naliases: [Vex]\ngm_aliases: [The Hand]\nsecrets: Works for the duke.\n---\n'

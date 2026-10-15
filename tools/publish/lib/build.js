@@ -41,7 +41,7 @@ const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 
 const TOOL_VERSION = require('../package.json').version;
-const PLAYED_SESSION_STATUSES =new Set(['played', 'wrap-up', 'reviewed']);
+const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
 
 // The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
 // keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
@@ -290,14 +290,17 @@ function buildSite(options) {
   const genrePreset = publishConfig.theme.genre;
   publishConfig._genrePreset = genrePreset;
   const manifest = loadManifest(config.vaultPath);
-  const excludeSections = publishConfig.exclude_sections;
+  // What players do not see has one source, the player site's settings: the GM site reads these from playerConfig, so a
+  // mark always means "hidden from players".
+  const hideFrom = gm ? playerConfig : publishConfig;
+  const excludeSections = hideFrom.exclude_sections;
   // The PC keep-list: null while character sheets are on, otherwise the sections a PC publishes.
   const pcKeepSections = pcKeepList(publishConfig);
   // The one derivation of "sheets off": the filter's own answer, handed to the page template.
   const sheetsOff = pcKeepSections !== null;
-  const excludeCallouts = publishConfig.exclude_callouts;
-  const excludeFields = publishConfig.exclude_fields;
-  const fieldOverrides = publishConfig.overrides.fields || {};
+  const excludeCallouts = hideFrom.exclude_callouts;
+  const excludeFields = hideFrom.exclude_fields;
+  const fieldOverrides = hideFrom.overrides.fields || {};
 
   function assertSafeOutputDir() {
     if (gm) {
@@ -577,7 +580,7 @@ function buildSite(options) {
   // folder the player site hides is then marked with that reason.
   const scanConfig = gm && show.has('notes')
     ? Object.assign({}, config, { excludeDirs: ALWAYS_EXCLUDE_DIRS })
-    : scanConfigFor(config, publishConfig);
+    : scanConfigFor(config, hideFrom);
   console.log('Scanning vault:', config.vaultPath);
   const scanReport = scanVaultReport(scanConfig);
   let pages = warnScanReport(scanReport);

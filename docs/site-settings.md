@@ -538,6 +538,12 @@ GM site's folder is `gm_site.folder`.
 - `player_site.cloudflare_project`
 - `player_site.keep`
 - `player_site.hide.mode`
+- `player_site.hide.folders`
+- `player_site.hide.sections`
+- `player_site.hide.fields`
+- `player_site.hide.callouts`
+- `player_site.hide.drafts`
+- `player_site.hide.field_exceptions`
 - `player_site.features.live_stats`
 - `player_site.features.inbox`
 

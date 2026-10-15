@@ -34,8 +34,13 @@ test('every per-site player setting has a twin under gm_site, and only those', (
     else if (NOT_PER_SITE.has(e.name) || e.legacyOnly) assert.equal(twin, undefined, e.name);
     else assert.equal(twin && twin.twinOf, e.name, e.name);
   }
-  assert.equal(entry('gm_site.hide.sections').guards, undefined);
-  assert.equal(entry('gm_site.hide.sections').default, undefined);
+  assert.equal(entry('gm_site.title').guards, undefined);
+  assert.equal(entry('gm_site.title').default, undefined);
+  // What players see has one source: none of the hide settings is per-site.
+  for (const k of ['folders', 'sections', 'fields', 'callouts', 'drafts', 'field_exceptions', 'mode']) {
+    assert.ok(NOT_PER_SITE.has(`player_site.hide.${k}`), k);
+    assert.equal(entry(`gm_site.hide.${k}`), undefined, k);
+  }
   assert.deepEqual(entry('gm_site.after_build').gmDefault, []);
   assert.deepEqual(entry('gm_site.before_build').gmDefault, []);
 });
@@ -60,12 +65,13 @@ test('an empty gm_site reads no fault, every show switch at its default', () => 
 });
 
 test('a twin the file sets is read; one it does not set is not in values', () => {
-  const r = read('gm_site:\n  title: Table copy\n  hide:\n    sections: [Secrets]\n');
+  const r = read('gm_site:\n  title: Table copy\n  footer: Back soon\n');
   assert.equal(r.values.gm_site.title, 'Table copy');
-  assert.deepEqual(r.values.gm_site.hide.sections, ['Secrets']);
+  assert.equal(r.values.gm_site.footer, 'Back soon');
   assert.equal(r.origins['gm_site.title'], 'file');
-  assert.equal(r.origins['gm_site.footer'], 'inherit');
-  assert.equal(r.values.gm_site.footer, undefined);
+  assert.equal(r.origins['gm_site.footer'], 'file');
+  assert.equal(r.origins['gm_site.not_found'], 'inherit');
+  assert.equal(r.values.gm_site.not_found, undefined);
 });
 
 test('a setting shared by both sites, written under gm_site, is a warning naming it', () => {
@@ -76,17 +82,12 @@ test('a setting shared by both sites, written under gm_site, is a warning naming
   assert.match(f.message, /both sites/);
 });
 
-test('a twin of a hiding setting that cannot be read warns, never stops', () => {
-  const r = read('gm_site:\n  hide:\n    sections: 3\n');
-  assert.equal(stops(r.faults).length, 0);
-  assert.ok(r.faults.some((x) => x.name === 'gm_site.hide.sections' && x.level === 'warn'));
-  assert.equal(r.origins['gm_site.hide.sections'], 'fault');
-});
-
-test('a name under gm_site that is not a setting warns, even one that says it hides', () => {
-  const r = read('gm_site:\n  hide:\n    secions: [x]\n  exclude_things: [y]\n');
-  assert.equal(stops(r.faults).length, 0);
-  assert.ok(r.faults.some((x) => x.name === 'gm_site.hide.secions' && x.level === 'warn'));
+test('a hide setting under gm_site is not a setting: a warning, never a stop, and it is not read as one', () => {
+  for (const text of ['gm_site:\n  hide:\n    sections: [Secrets]\n', 'gm_site:\n  hide:\n    mode: full\n', 'gm_site:\n  exclude_things: [y]\n']) {
+    const r = read(text);
+    assert.equal(stops(r.faults).length, 0);
+    assert.ok(r.faults.some((x) => x.kind === 'unknown-name' && x.level === 'warn' && /^gm_site\./.test(x.name)), text);
+  }
 });
 
 test('a gm_site that is not a map warns and never stops', () => {
@@ -106,7 +107,8 @@ test('a GM site on a vault kept by a player stops', () => {
 test('the schema describes gm_site from the list, twins included', () => {
   const s = schema();
   assert.ok(s.properties.gm_site.properties.show.properties.spoilers);
-  assert.ok(s.properties.gm_site.properties.hide.properties.sections);
+  assert.equal(s.properties.gm_site.properties.hide, undefined);
+  assert.ok(s.properties.gm_site.properties.title);
   assert.equal(s.properties.gm_site.properties.url, undefined);
 });
 
