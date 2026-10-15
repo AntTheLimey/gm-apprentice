@@ -1791,6 +1791,16 @@ function pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, options = 
   return false;
 }
 
+// The GM site's body of a PC note whose headings a link label changes (the player site shows none of it): the whole
+// text in one `sections` mark, or nothing when that kind is not shown. `close` (default true) closes and reopens the
+// mark at each level 1-2 heading, as the templates cut there; processContent does that itself, after its own filter.
+function unstableBodyMarked(markdown, mark, { close = true } = {}) {
+  if (!mark.show.has('sections')) return '';
+  const wrapped = [...blockLines(mark.marks.open('sections', 'note body (a link label changes its headings)')), markdown, ...blockLines(mark.marks.close())].join('\n');
+  if (!close) return wrapped;
+  try { return marksAtHeadings(wrapped, findHeadings); } catch (err) { return wrapped; }
+}
+
 function processContent(page, linkMap, excludeSections, imageMap = {}, options = {}) {
   const warnings = [];
   // The strip chain is strippedLines', whole: the page, the published view the search and
@@ -1823,9 +1833,7 @@ function processContent(page, linkMap, excludeSections, imageMap = {}, options =
   }
   if (mark) {
     if (unstable) {
-      markdown = mark.show.has('sections')
-        ? [...blockLines(mark.marks.open('sections', 'note body (a link label changes its headings)')), markdown, ...blockLines(mark.marks.close())].join('\n')
-        : '';
+      markdown = unstableBodyMarked(markdown, mark, { close: false });
     } else {
       markdown = filterSections(markdown, excludeSections, page.sourceFrontmatter || page.frontmatter, { ...keepRules, mark });
     }
@@ -2252,4 +2260,4 @@ function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   };
 }
 
-module.exports = { markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { unstableBodyMarked, markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };

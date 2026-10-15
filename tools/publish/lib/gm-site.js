@@ -103,9 +103,11 @@ function gmFolderProblem(gmFolder, { playerSiteDir, vaultPath }) {
 const ROBOTS_META = '<meta name="robots" content="noindex, nofollow">';
 const ROBOTS_TXT = 'User-agent: *\nDisallow: /\n';
 
-// The marker file, written last by a GM build that finished: { build, tool, built } and a line end.
+// The marker file: { build, tool, built } and a line end. A GM build writes it first, the moment its folder is empty,
+// with `now: null` (`built` is null: the build has not finished), so a build that fails part-way leaves a folder the
+// next build knows as its own; and again last, with the time it finished.
 function writeMarker(dir, { version, now = new Date() } = {}) {
-  const marker = { build: 'gm', tool: String(version), built: now.toISOString() };
+  const marker = { build: 'gm', tool: String(version), built: now === null ? null : now.toISOString() };
   fs.writeFileSync(path.join(dir, MARKER_FILE), `${JSON.stringify(marker)}\n`);
 }
 
@@ -163,7 +165,7 @@ function gmPage(html, { marks, hiddenBecause = null, hidden = [] } = {}) {
     reason ? `<div class="gm-band gm-band--hidden gm-mark" data-gm-kind="notes" data-gm-label="${escapeAttr(reason)}">${escapeAttr(reason)}</div>` : '',
     hiddenPanel(hidden),
   ].join('');
-  const open = /<main\b[^>]*>/i.exec(out) || /<body\b[^>]*>/i.exec(out);
+  const open = /<main(?=[\s>])[^>]*>/i.exec(out) || /<body(?=[\s>])[^>]*>/i.exec(out);
   out = open ? out.slice(0, open.index + open[0].length) + top + out.slice(open.index + open[0].length) : top + out;
   return renderMarks(out, marks);
 }

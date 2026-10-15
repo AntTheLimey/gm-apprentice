@@ -8,7 +8,7 @@ const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllN
 const { optimizeImages, resolveImageConfig } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
-const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
+const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
 const { pairHubs } = require('./session-hub');
 const { generateNav, pcTemplate, npcTemplate, creatureTemplate, locationTemplate, itemTemplate, factionTemplate, eventTemplate, heritageTemplate, worldDomainTemplate, wikiTemplate, sessionBodyHtml, indexTemplate, landingTemplate, fourOhFourTemplate, DIR_LABELS, getRenderer } = require('./templates/index');
 const { isRoster } = require('./templates/nav');
@@ -40,7 +40,8 @@ const { isOutOfPlay } = require('./pc-status');
 const { sheetSourceOf } = require('./sheet-source');
 const { pcIdentity } = require('./templates/pc-identity');
 
-const PLAYED_SESSION_STATUSES = new Set(['played', 'wrap-up', 'reviewed']);
+const TOOL_VERSION = require('../package.json').version;
+const PLAYED_SESSION_STATUSES =new Set(['played', 'wrap-up', 'reviewed']);
 
 // The closing line about vault.config.json keys that moved to _meta/vault-config.md. Used
 // keys are listed plainly, a key the vault file also sets is "ignored", and an entry of a
@@ -653,6 +654,7 @@ function buildSite(options) {
     }
     // A note cannot forge a mark: its own private-use characters go once, here, before the build puts any marks
     // of its own into its text (a secret alias, a stub's cut), which the strips then keep (`mark.sanitized`).
+    // So every text given to a strip with this `mark` must come from `corpus`, sanitized here.
     for (const page of corpus) {
       page.markdown = sanitize(page.markdown);
       if (page.storyMarkdown) page.storyMarkdown = sanitize(page.storyMarkdown);
@@ -864,8 +866,10 @@ function buildSite(options) {
   for (const page of pages) {
     const source = String(page.markdown || '');
     if (gm) {
-      // The GM site's published view: every hidden part kept and marked. It has no note-faults facts.
-      page.publishedMarkdown = filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
+      // The GM site's published view: every hidden part kept and marked. It has no note-faults facts. A PC whose
+      // headings a link label changes has none, as on the player site: its page shows the body, marked, and the
+      // excerpts read from here (pull-quote, cards, search) would cut that one mark open.
+      page.publishedMarkdown = page.headingsUnstable ? '' : filterSections(strippedLines(source, excludeCallouts, mark).lines.join('\n'),
         excludeSections, page.sourceFrontmatter || page.frontmatter, { pcKeepSections, mark });
       continue;
     }
@@ -1087,6 +1091,11 @@ function buildSite(options) {
   }
 
   cleanOutput();
+  // The GM site's folder is its own from here: the marker goes in first (finished: null) and is written again last.
+  if (gm && !dry) {
+    fs.mkdirSync(outputDir, { recursive: true });
+    writeMarker(outputDir, { version: TOOL_VERSION, now: null });
+  }
   // Only a genre preset ships two palettes. A custom palette has one, and theme.css writes
   // it after the preset, so with one set a toggle would change nothing visible.
   const twoPalettes = Boolean(genrePreset) && !publishConfig.theme.palette;
@@ -1198,6 +1207,12 @@ function buildSite(options) {
   // which is rendered once every PC has been (renderRoster). `fx` is where the render's side
   // effects go (images used, warnings, party-board entries, the sheet tallies, a dressed
   // sheet): the build's own (`liveFx`), or throwaway ones when the audit renders a page again.
+  // The body of a PC note whose headings a link label changes: none on the player site; on the GM site the whole note
+  // after the strips, in one mark (processContent marks the page's own copy the same way).
+  function unstableBody(page) {
+    return gm ? unstableBodyMarked(strippedLines(String(page.markdown || ''), excludeCallouts, mark).lines.join('\n'), mark) : '';
+  }
+
   function renderPage(page, fx) {
     const usedImages = fx.usedImages;
     if (page.frontmatter.portrait) {
@@ -1214,7 +1229,7 @@ function buildSite(options) {
       case 'pc': {
         // Warnings are dropped here, not ignored: processContent above ran this same
         // strip chain over the same markdown and already reported them.
-        let filtered = page.headingsUnstable ? '' : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
+        let filtered = page.headingsUnstable ? unstableBody(page) : playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, pcKeepSections, frontmatter: page.sourceFrontmatter || page.frontmatter, ...markOpt }).text;
         // Images before wikilinks: resolveWikiLinks' `[[…]]` pattern also matches the inner
         // brackets of an `![[image.png]]` embed and would flatten it to literal text.
         filtered = resolveImageEmbeds(filtered, imageMap, page.outputPath, usedImages, {
@@ -1268,7 +1283,7 @@ function buildSite(options) {
         // for this and nothing else. A note whose headings shift has no readable body.
         let identity = [];
         if (sheetsOff) {
-          const identityText = page.headingsUnstable ? '' : resolveWikiLinks(
+          const identityText = page.headingsUnstable ? (gm ? resolveWikiLinks(unstableBody(page), linkMap, page.outputPath) : '') : resolveWikiLinks(
             playerSafeMarkdown(page.markdown, { excludeCallouts, excludeSections, frontmatter: sourceFm, ...markOpt }).text,
             linkMap, page.outputPath);
           identity = pcIdentity(system, page.frontmatter, extractSections(identityText));
@@ -1785,7 +1800,7 @@ function buildSite(options) {
       sheetOutputPath: pc.outputPath, group: characterStoryGroup(pc.frontmatter, publishConfig.statuses.fallen),
     };
     const html = characterStoryPage(story, config, publishConfig, navFor);
-    if (fx === liveFx) seen(audit.storyRelOf(pc), html, pc, true);
+    if (fx === liveFx && !gm) seen(audit.storyRelOf(pc), html, pc, true);
     return { story, html };
   }
 
@@ -2009,8 +2024,8 @@ function buildSite(options) {
     err.errorCount = errorCount;
     throw err;
   }
-  // Last of all: a GM build that stopped before here leaves no marker (its pages still carry the GM meta tag).
-  if (gm) writeMarker(outputDir, { version: require('../package.json').version });
+  // Last of all, the marker again, with the time the GM build finished (one that stopped before here left `built: null`).
+  if (gm) writeMarker(outputDir, { version: TOOL_VERSION });
   console.log('Done!');
   return { noteFaults, shown: null, faults: publishConfig.faults };
 }

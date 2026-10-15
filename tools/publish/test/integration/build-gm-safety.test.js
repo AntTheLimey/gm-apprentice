@@ -249,10 +249,59 @@ describe('the GM build beside the player site', () => {
       editSettings(s, (text) => `${text.trimEnd()}\n  after_build:\n    - node ${JSON.stringify(fail)}\n`);
       assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'gm', runSteps: true, stepsStdio: 'ignore' })), /after_build/);
       assert.ok(s.gm.exists('npcs', 'vex.html'), 'the pages were written');
-      assert.equal(s.gm.exists('gm-build.json'), false, 'a failed build leaves no marker');
+      assert.equal(JSON.parse(s.gm.read('gm-build.json')).built, null, 'a failed build leaves the marker it wrote first, unfinished');
       fs.writeFileSync(fail, '\n');
       quiet(() => build({ configPath: s.configPath, site: 'gm', runSteps: true, stepsStdio: 'ignore' }));
-      assert.ok(s.gm.exists('gm-build.json'));
+      assert.ok(!Number.isNaN(Date.parse(JSON.parse(s.gm.read('gm-build.json')).built)));
+    } finally { s.cleanup(); }
+  });
+
+  it('a GM build that fails before it writes a page does not lock its folder either', () => {
+    const s = buildBoth(NOTES, { sites: [] });
+    try {
+      quiet(() => build({ configPath: s.configPath, site: 'gm' }));
+      editSettings(s, (text) => text.replace(/^player_site:\n/m, 'player_site:\n  theme:\n    campaign_image: ../outside.png\n'));
+      assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'gm' })), /campaign_image outside vault/);
+      assert.equal(htmlOf(s.gm).length, 0, 'no page was written');
+      assert.ok(s.gm.files().length > 1, 'files besides the marker were written');
+      assert.equal(JSON.parse(s.gm.read('gm-build.json')).built, null);
+      editSettings(s, (text) => text.replace('  theme:\n    campaign_image: ../outside.png\n', ''));
+      quiet(() => build({ configPath: s.configPath, site: 'gm' }));
+      assert.ok(s.gm.exists('npcs', 'vex.html'));
+      assert.notEqual(JSON.parse(s.gm.read('gm-build.json')).built, null);
+    } finally { s.cleanup(); }
+  });
+
+  it('a PC with a story companion: the GM build writes the story page, marked as a GM page', () => {
+    const s = buildBoth({
+      'PCs/Ann.md': '---\ntype: pc\n---\n# Ann\n\n## Background\n\nA sailor.\n',
+      'PCs/Ann_Story.md': '---\ntype: character-story\ncharacter: "[[Ann]]"\n---\nShe sailed north.\n\n<!-- gm-only -->\nShe sank the ship.\n<!-- /gm-only -->\n',
+    });
+    try {
+      const story = s.gm.files().find((f) => f.endsWith(path.join('story', 'characters', 'ann.html')));
+      assert.ok(story, s.gm.files().join('\n'));
+      const html = fs.readFileSync(story, 'utf8');
+      assert.match(html, /<meta name="gm-apprentice-build" content="gm">/);
+      assert.match(html, /class="gm-band"/);
+      assert.ok(markedTexts(html).some((m) => m.kind === 'gm_only_blocks' && /sank the ship/.test(m.text)));
+      assert.doesNotMatch(s.player.read('story', 'characters', 'ann.html'), /sank the ship/);
+    } finally { s.cleanup(); }
+  });
+
+  it('a PC whose link label changes its headings (sheets off) shows its body on the GM page in one mark, and nowhere unmarked', () => {
+    const s = buildBoth({
+      'PCs/Jean.md': '---\ntype: pc\n---\n# Jean\n## Background\nok BACKGROUNDTEXT\n[[Nowhere|## Skills]]\nSTAT14\n\n## GM Notes\n\nJEANSECRET\n',
+    }, { player: { sheets: { show: false } } });
+    try {
+      const html = s.gm.read('pcs', 'jean.html');
+      const marks = markedTexts(html);
+      const body = (re) => marks.some((m) => m.label === 'note body (a link label changes its headings)' && re.test(m.text));
+      assert.ok(body(/BACKGROUNDTEXT/) && body(/JEANSECRET/), JSON.stringify(marks));
+      // Every place the words appear is inside that mark: with the marked elements cut out, none is left.
+      let rest = html;
+      for (let i = 0; i < 20; i++) rest = rest.replace(/<(div|span) class="gm-mark[^"]*"[^>]*>(?:(?!<\1\b)[\s\S])*?<\/\1>/g, '');
+      assert.doesNotMatch(rest, /BACKGROUNDTEXT|JEANSECRET/);
+      assert.doesNotMatch(s.player.read('pcs', 'jean.html'), /BACKGROUNDTEXT|JEANSECRET/);
     } finally { s.cleanup(); }
   });
 
