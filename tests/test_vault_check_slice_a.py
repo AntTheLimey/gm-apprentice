@@ -278,9 +278,12 @@ class SettingsUnavailableCommandTests(unittest.TestCase):
             with self.subTest(command):
                 proc = run_cli_without_node(vault, command)
                 self.assertEqual(proc.returncode, 2, proc.stdout)
-                self.assertEqual(
-                    proc.stderr, "error: could not read the vault's settings: "
-                                 "node is not on PATH\n")
+                # The GM-note checks first read vault.kept_by with the
+                # built-in fallback, which says so once; the command then
+                # still ends on the one error line.
+                self.assertTrue(proc.stderr.endswith(
+                    "error: could not read the vault's settings: "
+                    "node is not on PATH\n"), proc.stderr)
                 self.assertNotIn("Traceback", proc.stderr)
 
     def test_version_needs_no_settings_and_no_node(self):

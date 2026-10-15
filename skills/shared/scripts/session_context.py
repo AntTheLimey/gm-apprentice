@@ -926,6 +926,12 @@ def main() -> int:
         print(f"error: not a directory: {args.vault}", file=sys.stderr)
         return 2
 
+    # Session prep is the GM's job; a vault kept by a player has none.
+    if setting_or_builtin(args.vault, "vault.kept_by") == "player":
+        print("This vault is kept by a player (vault.kept_by: player), so "
+              "there is no session prep to gather.")
+        return 0
+
     files = list(vault_files(args.vault))
 
     if args.play:
