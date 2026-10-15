@@ -4,7 +4,7 @@
 // private-use characters (U+E000-E002, raw on the player site) and U+FFFD (what the GM build makes of them) are taken
 // out without splitting the word they stand in.
 const { stripMarkdown } = require('../search-index');
-const { foldQuotes } = require('../note-faults');
+const { foldQuotes, pageText } = require('../note-faults');
 const { labelsForLinks } = require('../wikilink');
 
 const MIN_WORDS = 4;
@@ -54,10 +54,14 @@ function piecesOfText(text) {
   return String(text).split(SENTENCE_END).map((s) => s.trim()).filter((s) => wordsOf(s).length >= MIN_WORDS);
 }
 
-// Each block of a note's text as a reader sees it: a labelled link as its label, a markdown link as its text, no tags or
-// emphasis marks. Hidden pieces and the published text they are compared with are both made here.
+// An inline picture embed: the page shows the picture (or nothing), never its file name.
+const PICTURE_EMBED = /!\[\[[^\]|]+\.(?:png|jpe?g|gif|webp|svg|avif|bmp)(?:\|[^\]]*)?\]\]/gi;
+
+// Each block of a note's text as a reader sees it: a labelled link as its label, a markdown link as its text, no tags,
+// emphasis marks or picture embeds, an entity as its character. Hidden pieces and the published text they are compared
+// with are both made here.
 function textsOfMarkdown(markdown) {
-  return blocksOf(markdown).map(stripMarkdown);
+  return blocksOf(markdown).map((block) => pageText(stripMarkdown(block.replace(PICTURE_EMBED, ' '))));
 }
 
 function piecesOfMarkdown(markdown) {

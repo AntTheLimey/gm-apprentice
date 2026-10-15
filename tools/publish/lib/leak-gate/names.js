@@ -2,7 +2,7 @@
 // The secret-name checks of the build's note audit (note-faults.js), run over the finished folder: a gm_aliases name or
 // a withheld note's name in any text file, or in a copied file's name; and a withheld note that publishes.
 const { secretNamesOf, findSecretNames, publicWordsOf, foldQuotes } = require('../note-faults');
-const { fileText, isToolFile } = require('./match');
+const { fileText, pageExtras, isToolFile } = require('./match');
 const { wordsOf } = require('./text');
 
 const REASON = { alias: 'a name kept secret in gm_aliases', withheld: 'the name of a note marked withheld' };
@@ -34,7 +34,12 @@ function holdersOf(names, publicWords) {
 // Its documents (titles, subtitles) are read, and the terms that sit in the aliases field, which no page prints; the
 // body terms come from page text the pages already show.
 function nameTextOf(file) {
-  if (file.ext === '.html' || file.ext === '.htm') return file.raw;
+  // A page's inline scripts and data attributes are sent too: added as text after the page (the name search reads a
+  // page's text, not its scripts or attributes).
+  if (file.ext === '.html' || file.ext === '.htm') {
+    const extras = pageExtras(file.raw).join('\n').replace(/&/g, '&amp;').replace(/</g, '&lt;');
+    return extras ? `${file.raw}\n<div>${extras}</div>` : file.raw;
+  }
   if (file.ext === '.json') {
     try {
       const data = JSON.parse(file.raw);
@@ -59,7 +64,8 @@ function nameFindings({ files, allFiles, hidden, findingId }) {
     const holders = holdersOf(secrets.names, publicWords);
     for (const file of files) {
       const html = nameTextOf(file);
-      if (!secrets.mayHold(html)) continue;
+      // The quick test on the file as sent and as read (a name split by tags is whole in the read text).
+      if (!secrets.mayHold(html) && !(file.text && secrets.mayHold(file.text))) continue;
       // A public name that holds a secret name is the public name (see holdersOf): taken out before the search.
       const looked = holders ? foldQuotes(html).replace(holders, ' ') : html;
       for (const hit of findSecretNames(looked, secrets.names, { publicWords })) add(file.rel, hit.kind, hit.alias, hit.owner, hit.context);

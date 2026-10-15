@@ -43,6 +43,20 @@ describe('leak gate: secret names', () => {
       assert.equal(f.note, 'NPCs/Vesper.md');
     } finally { s.cleanup(); }
   });
+  for (const [where, html] of [
+    ['a JSON island', '<script type="application/json" id="cx-data">{"who":"Elias Crowe"}</script>'],
+    ['a data-* attribute', '<span data-who="Elias Crowe"></span>'],
+    ['a name split by tags', 'They saw Eli<em>as</em> Crowe.'],
+  ]) {
+    it(`a GM alias in ${where} stops the gate (M5, M6)`, () => {
+      const s = leakSite(NOTES, SETTINGS);
+      try {
+        leakInto(s.outputDir, 'npcs/linker.html', html);
+        const found = runLeakGate({ configPath: s.configPath, outputDir: s.outputDir }).findings;
+        assert.ok(found.some((x) => x.code === 'ALIAS_IN_PROSE' && x.page === 'npcs/linker.html'), JSON.stringify(found));
+      } finally { s.cleanup(); }
+    });
+  }
   it('a withheld name in a copied file\'s name stops the gate', () => {
     const s = leakSite(NOTES, SETTINGS);
     try {

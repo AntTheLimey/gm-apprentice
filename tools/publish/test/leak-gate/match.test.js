@@ -44,8 +44,33 @@ describe('leak gate: match', () => {
       assert.ok(rels.includes('bad.txt'));
       assert.ok(!rels.includes('pic.png'));
       assert.ok(fs.existsSync(path.join(__dirname, '..', '..', 'js', 'search.js')));
-      assert.equal(isToolScript('js/search.js'), true);
-      assert.ok(!rels.includes('js/search.js'));
+      // A file named like a tool script is read unless it is the tool's own bytes (M4).
+      assert.ok(rels.includes('js/search.js'));
+      fs.copyFileSync(path.join(__dirname, '..', '..', 'js', 'search.js'), path.join(dir, 'js', 'search.js'));
+      assert.equal(isToolScript('js/search.js', fs.readFileSync(path.join(dir, 'js', 'search.js'), 'utf8')), true);
+      assert.ok(!readOutput(dir).map((f) => f.rel).includes('js/search.js'));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('reads .xml, .svg, .md, .mjs, .csv and .webmanifest files for text (M3)', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lg-ext-'));
+    try {
+      const files = {
+        'feed.xml': '<rss><item><title>the cellar opens onto the sea</title></item></rss>',
+        'map.svg': '<svg><text x="1">the cellar opens</text><text>onto the sea</text></svg>',
+        'notes.md': 'the cellar opens onto the sea',
+        'app.mjs': 'export const t = "the cellar opens onto the sea";',
+        'table.csv': 'a,the cellar opens onto the sea',
+        'site.webmanifest': '{"description":"the cellar opens onto the sea"}',
+      };
+      for (const [rel, text] of Object.entries(files)) fs.writeFileSync(path.join(dir, rel), text);
+      const m = createMatcher([piece('the cellar opens onto the sea')]);
+      for (const f of readOutput(dir)) assert.equal(m.scan(f.words).length, 1, f.rel);
+      assert.deepEqual(readOutput(dir).map((f) => f.rel).sort(), Object.keys(files).sort());
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
+  it('reads a JSON island\'s strings as text, and data-* attributes (M5)', () => {
+    const html = '<div data-note="the vicar hides the key"></div><script type="application/json" id="cx-data">{"t":"one line\\nthe twins swap at dawn"}</script>';
+    const words = wordsOf(fileText('a.html', html));
+    for (const s of ['the vicar hides the key', 'the twins swap at dawn']) assert.equal(createMatcher([piece(s)]).scan(words).length, 1, s);
   });
 });

@@ -40,6 +40,10 @@ describe('leak gate: text', () => {
   it('reads a link by its label and drops emphasis', () => {
     assert.deepEqual(piecesOfMarkdown('She met [[Lord Vane|the old lord]] at **the** quay.'), ['She met the old lord at the quay.']);
   });
+  it('reads a sentence as the page prints it: an inline picture embed is not words, an entity is its character (M10)', () => {
+    assert.deepEqual(piecesOfMarkdown('The ![[seal.png]] lies under the old altar.').map(wordsOf), [['the', 'lies', 'under', 'the', 'old', 'altar']]);
+    assert.deepEqual(piecesOfMarkdown('The vicar&apos;s key opens the crypt.').map(wordsOf), [["the", "vicar's", 'key', 'opens', 'the', 'crypt']]);
+  });
   it('takes every string of a frontmatter value', () => {
     assert.deepEqual(piecesOfValue({ target: '[[Vex]]', description: 'pays the harbourmaster every week' }), ['pays the harbourmaster every week']);
   });
