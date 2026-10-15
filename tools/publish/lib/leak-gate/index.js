@@ -4,7 +4,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const { performance } = require('perf_hooks');
-const { loadManifest } = require('../manifest');
+const { loadPublishList } = require('../manifest');
 const { collectHidden } = require('./collect');
 const { createMatcher, readOutput } = require('./match');
 const { wordsOf } = require('./text');
@@ -39,7 +39,8 @@ function runLeakGate({ configPath, outputDir }) {
   }
   // The name checks (Task 4) add their findings to `raw` here, before the accepted list is applied.
 
-  const list = loadManifest(hidden.vaultPath, { warn: () => {} });
+  // The whole file, an accepted-only one included (loadManifest answers null for that: it is no publish list).
+  const list = loadPublishList(hidden.vaultPath, { warn: () => {} });
   const accepted = (list && list.accepted) || [];
   const acceptedKeys = new Set(accepted.map((a) => keyOf(a.page, a.text)));
   const findings = [...raw.values()].filter((f) => !acceptedKeys.has(keyOf(f.page, f.text))).sort(byPageText);

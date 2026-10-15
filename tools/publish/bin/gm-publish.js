@@ -38,6 +38,7 @@ Usage:
   gm-apprentice-publish sheet show [options] Print one PC's sheet (--player-safe shows only what players see)
   gm-apprentice-publish update-pin [options] Repoint this site at the newest installed build tool
   gm-apprentice-publish manifest <cmd>       Compare the publish manifest with the vault, or update it
+  gm-apprentice-publish leaks <cmd>          Check the built player site for hidden text (list, check, accept, prune)
   gm-apprentice-publish deploy [options]     Build, deploy to the configured host, and verify the URL
   gm-apprentice-publish explain <path>       Say why one vault file does or does not publish
   gm-apprentice-publish lines                Answer what publishes, for text on stdin (used by vault_check)
@@ -152,6 +153,26 @@ the GM.
   --json             Emit { pc, sourcePath, playerSafe, frontmatter, markdown }
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
+`,
+  leaks: `
+gm-apprentice-publish leaks <list|check|accept|prune> [--config <path>] [--json]
+
+The leak check reads the built player site (the folder deploy uploads) for
+hidden text and secret names: any hidden sentence, list item or table cell of
+four words or more, a gm_aliases name, a withheld note's name. deploy runs it
+and stops on a finding; these commands run it without deploying.
+
+  leaks list                 Print the findings, each with a short id
+  leaks check                The same, and exit 1 on a finding; also names
+                             accepted findings that are no longer needed
+  leaks accept <page> <id-or-text>
+                             Accept one finding: it is written to the publish
+                             list and not asked about again while the page and
+                             the sentence stay the same
+  leaks prune                Remove accepted findings that are no longer needed
+  --config <path>            Path to vault.config.json (default: ./vault.config.json)
+  --json                     Print the result as JSON
+  --help, -h                 Show this help
 `,
   manifest: `
 gm-apprentice-publish manifest <diff|apply|publish-played|rename|convert|list> [options]
@@ -948,6 +969,29 @@ if (command === 'manifest') {
     siteToolUpdated: !!parsed.flags.siteToolUpdated,
     json: !!parsed.flags.json,
   })
+    .then(exitAfterFlush)
+    .catch(failAfterFlush);
+  return;
+}
+
+if (command === 'leaks') {
+  const verb = args[1];
+  if (!['list', 'check', 'accept', 'prune'].includes(verb)) {
+    console.error(verb ? `Error: Unknown leaks command: ${verb}` : 'Error: leaks needs a command (list, check, accept or prune)');
+    printSubcommandHelp('leaks');
+    process.exit(1);
+  }
+  const rest = args.slice(2);
+  const positional = [];
+  if (verb === 'accept') { while (rest.length && !rest[0].startsWith('--')) positional.push(rest.shift()); }
+  const parsed = parseSubcommandArgs(rest, { '--json': 'json' });
+  if (parsed.error || (verb === 'accept' && positional.length !== 2)) {
+    console.error(`Error: ${parsed.error || 'leaks accept needs a page and the finding\'s id or sentence'}`);
+    printSubcommandHelp('leaks');
+    process.exit(1);
+  }
+  const { runLeaks } = require('../lib/leaks-cli.js');
+  runLeaks({ verb, configPath: parsed.configPath, json: !!parsed.flags.json, page: positional[0], text: positional[1] })
     .then(exitAfterFlush)
     .catch(failAfterFlush);
   return;
