@@ -359,10 +359,10 @@ def _undo_full_move(vault: Path, was: dict[str, tuple[bool, Any]],
             _set_settings(vault, back)
     except (SettingsUnavailable, StepFailed) as e:
         return (f"{RETIRED_MODE} could not be removed ({why}), and the "
-                f"change before it could not be undone ({e}). The file now "
-                "has gm_site.publish on and player_site.publish off, and "
-                "still has mode: full. Run the update again: it finishes "
-                "from there")
+                f"change before it could not be fully undone ({e}). The "
+                "file still has mode: full; gm_site.publish and "
+                "player_site.publish may be part way between the old and "
+                "new values. Run the update again: it finishes from there")
     made = Path(str(folder)) if folder else None
     if made is not None and not was["gm_site.folder"][0]:
         try:

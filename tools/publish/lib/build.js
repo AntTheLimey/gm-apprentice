@@ -1600,7 +1600,7 @@ function buildSite(options) {
   }
   copyImages(filteredMap);
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
-  console.log(`${gm ? 'GM site' : 'Player mode'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
+  console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
   // The encoded bytes are now in the output tree. Scratch dir lives under os.tmpdir(), so a
   // build that throws before reaching here leaks nothing the OS won't reclaim.

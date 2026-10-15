@@ -186,8 +186,8 @@ class FullModeTests(unittest.TestCase):
             with self.assertRaises(StepFailed) as stopped:
                 item.apply(None)
         said = str(stopped.exception)
-        self.assertIn("could not be undone", said)
-        self.assertIn("gm_site.publish on and player_site.publish off", said)
+        self.assertIn("could not be fully undone", said)
+        self.assertIn("may be part way between", said)
         self.assertIn("still has mode: full", said)
         # What it says is what is there, and the next pass finishes the job.
         s = settings(vault)
