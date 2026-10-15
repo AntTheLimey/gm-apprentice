@@ -113,6 +113,50 @@ class FullModeTests(unittest.TestCase):
         item = ms.find_full_mode(vault)[0]
         self.assertIn("no GM site", item.lines[0])
 
+    def test_the_full_line_says_the_old_folder_still_holds_the_last_site(self):
+        vault, site = new_layout_vault(self, "full")
+        said = " ".join(ms.find_full_mode(vault)[0].apply(None))
+        self.assertIn("still holds the last site that published everything", said)
+        self.assertIn("stays online until you remove it", said)
+
+    def test_a_written_off_switch_only_loses_the_mode_line(self):
+        for extra, why in (("  publish: false\n", "player site is off"),
+                           ("gm_site:\n  publish: false\n", "GM site is off")):
+            with self.subTest(extra=extra):
+                vault, _site = new_layout_vault(self, "full", extra)
+                item = ms.find_full_mode(vault)[0]
+                self.assertEqual(item.group, WILL)
+                self.assertIn("does not turn the GM site on", item.lines[0])
+                done = item.apply(None)
+                self.assertIn("did not turn the GM site on", " ".join(done))
+                self.assertEqual(settings_written(vault, MODE), (None, "default"))
+                self.assertIsNot(settings_written(vault, "gm_site.publish")[0], True)
+                self.assertFalse((vault.parent / "site-gm").exists())
+
+    def test_a_gm_written_gm_folder_is_kept(self):
+        vault, site = new_layout_vault(
+            self, "full", f"gm_site:\n  folder: {(site_gm := Path(tempfile.mkdtemp(prefix='gmf-'))).as_posix()}\n")
+        self.addCleanup(shutil.rmtree, site_gm, ignore_errors=True)
+        ms.find_full_mode(vault)[0].apply(None)
+        self.assertEqual(Path(settings(vault).get("gm_site.folder")), site_gm)
+        self.assertTrue(settings(vault).get("gm_site.publish"))
+
+    def test_a_tool_that_cannot_answer_is_said_and_does_not_hold_the_stamp(self):
+        vault, _site = new_layout_vault(self, "full")
+        with mock.patch.object(ms, "settings_written",
+                               side_effect=SettingsUnavailable("the tool is gone")):
+            items = ms.find_full_mode(vault)
+        self.assertEqual([i.group for i in items], [PERSON])
+        self.assertIn("could not read player_site.hide.mode", items[0].lines[0])
+        self.assertIn("the tool is gone", items[0].lines[0])
+        self.assertFalse(items[0].holds_stamp)
+
+    def test_the_gm_leak_step_skips_a_vault_kept_by_a_player(self):
+        vault, _site = new_layout_vault(self, "player", "vault:\n  kept_by: player\n")
+        with mock.patch.object(ms, "check_gm_leak") as leak:
+            self.assertEqual(ms.find_gm_leak(vault), [])
+        leak.assert_not_called()
+
     def test_a_stop_after_the_first_write_puts_everything_back(self):
         vault, site = new_layout_vault(self, "full", "  publish: true\n")
         before = hashes(vault.parent)

@@ -18,7 +18,7 @@ from migrate_core import (CHOICE, PERSON, WILL, Check, Item, StepFailed,
 from migrate_vault import vault_system
 from vault_check import (ExplainAll, ask_publish_tool, check_frontmatter, check_gm_leak,
                          check_pc_body, check_sessions, configured_site,
-                         vault_settings)
+                         _kept_by_player, vault_settings)
 from vaultlib import (LEGACY_SETTINGS_FILE, PublishToolUnavailable, SettingsUnavailable,
                       forget_settings, google_fonts, set_key, setting_name, settings,
                       settings_default, settings_file, settings_raw, settings_set,
@@ -337,7 +337,9 @@ def _move_full_vault(vault: Path) -> list[str]:
         raise StepFailed(_undo_full_move(vault, was, folder, str(e))) from e
     return [f"This vault's site published everything (`full`), so it is now "
             f"your GM site, built in {folder}; it never goes online. The old "
-            f"site folder ({old_folder}) is no longer built."]
+            f"site folder ({old_folder}) is no longer built, but still holds "
+            "the last site that published everything; a copy already pushed "
+            "or deployed stays online until you remove it."]
 
 
 def _undo_full_move(vault: Path, was: dict[str, tuple[bool, Any]],
@@ -377,8 +379,10 @@ def find_full_mode(vault: Path) -> list[Item]:
     vault's site becomes its GM site. Every pass; not written, nothing."""
     try:
         value, origin = settings_written(vault, RETIRED_MODE)
-    except SettingsUnavailable:
-        return []
+    except SettingsUnavailable as e:
+        return [Item(FULL_MODE, PERSON,
+                     [f"(vault)\tcould not read {RETIRED_MODE}, so the "
+                      f"retired `mode` line was not looked at: {e}"])]
     if origin != "file" or value is None:
         return []
     name = setting_name(vault, RETIRED_MODE)
@@ -404,6 +408,17 @@ def find_full_mode(vault: Path) -> list[Item]:
                       "site folder is named to put it beside. Tell me the "
                       "folder (settings set player_site.folder=<folder>), "
                       "then run the update again"], holds_stamp=True)]
+    if vault_layout(vault) == "new" and any(
+            written_in_vault_file(own, n) and own.get(n) is False
+            for n in ("gm_site.publish", "player_site.publish")):
+        return [Item(FULL_MODE, WILL,
+                     [f"remove {name} (no longer used); a site switch is "
+                      "written off in this vault, so this does not turn the "
+                      "GM site on"],
+                     lambda _v: [*_drop_mode(vault),
+                                 "did not turn the GM site on: a site switch "
+                                 "is written off. To have one, turn "
+                                 "gm_site.publish on"])]
     return [Item(FULL_MODE, WILL,
                  [f"{name} is `full`: turn this vault's site into your GM site "
                   f"(gm_site.publish on, built beside the old site folder and "
@@ -486,6 +501,8 @@ def find_gm_leak(vault: Path) -> list[Item]:
     What can be moved is Will do; what the check only reports needs a
     person. Per-note INFO rows (bold labels, callouts) can never be cleared
     and are left out."""
+    if _kept_by_player(vault):
+        return []
     rows = [cells(r) for r in check_gm_leak(vault, None, fix=False)]
     stopped(rows)
     would = [(where, m) for level, where, m in rows if level == "WOULD-FIX"]
