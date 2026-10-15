@@ -240,7 +240,8 @@ the cell being changed, on a PC that is not live), read first from the PC's
    ```
    Multi-line replies (like bullet lists) require real newlines in the chat log — use bash `$'...'` quoting so `\n` becomes a newline.
 4. **Publish the applied batch once.** If the applied batch is non-empty,
-   `npm run build` then `npx wrangler@4 pages deploy`.
+   `npx gm-apprentice-publish build --site player --only sheets`, then
+   `npx gm-apprentice-publish deploy --no-build`.
    - **On deploy success:** finalize each applied id with its confirmation:
 
      ```bash
@@ -626,7 +627,7 @@ watcher** and do not relaunch it:
    own cell; `live-state-flush.md` has the detail), so the site's fallback
    seed stays fresh past
    KV's 30-day TTL. It edits the vault source only (no rebuild/deploy); the
-   values ride into the site on the next `npm run build`. Report its per-PC
+   values ride into the site on the next build. Report its per-PC
    summary. Skill experience ticks are left untouched — those belong to
    Advancement, not the flush. A PC whose current status is authored as a
    YAML `status:` *object* in frontmatter (rather than the `## Current Status`
