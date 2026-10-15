@@ -65,7 +65,7 @@ describe('manifest diff', () => {
     // Every file is New, with its bucket, code and reason on one tab-separated row.
     assert.match(text, /^ {2}Sessions\/Planned Session\.md\texclude\tAUTO_EXCLUDED_STATUS\tstatus: planned$/m);
     assert.match(text, /^ {2}Characters\/NPCs\/Prep Source\.md\texclude\tAUTO_EXCLUDED_SOURCE\tsource: prep$/m);
-    assert.match(text, /^ {2}Sessions\/Played Session\.md\tpublish\tOK\tmode: player$/m);
+    assert.match(text, /^ {2}Sessions\/Played Session\.md\tpublish\tOK\tno publish list: publishing$/m);
     assert.match(text, /^New \(5\):$/m);
     fs.rmSync(vault, { recursive: true, force: true });
   });

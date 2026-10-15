@@ -331,7 +331,7 @@ describe('explain', () => {
     assert.strictEqual(payload.publishes, true);
     assert.strictEqual(payload.outputPath, 'docs/sessions/session-07.html');
     assert.deepStrictEqual(payload.verdict, {
-      bucket: 'publish', code: 'OK', reason: 'mode: player', outputPath: 'sessions/session-07.html',
+      bucket: 'publish', code: 'OK', reason: 'no publish list: publishing', outputPath: 'sessions/session-07.html',
     });
     assert.deepStrictEqual(payload.strippedSections, ['GM Notes', 'Reconciliation Context']);
     assert.strictEqual(payload.gmOnlyBlocks, 1);

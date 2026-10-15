@@ -293,7 +293,6 @@ describe('loadPublishConfig — setting_year', () => {
       '---',
       'setting_year: 2019',
       'publish:',
-      '  mode: player',
       '---',
     ].join('\n');
     fs.writeFileSync(path.join(metaDir, 'vault-config.md'), yaml);
@@ -339,7 +338,7 @@ describe('system field', () => {
     const metaDir = path.join(tmpDir, '_meta');
     fs.mkdirSync(metaDir, { recursive: true });
     fs.writeFileSync(path.join(metaDir, 'vault-config.md'),
-      '---\npublish:\n  mode: player\n---\n');
+      '---\npublish:\n  exclude_drafts: false\n---\n');
 
     const result = loadPublishConfig(tmpDir, {});
     assert.strictEqual(result.system, null);

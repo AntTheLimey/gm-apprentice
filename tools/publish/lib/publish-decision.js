@@ -229,7 +229,7 @@ function decidePage(page, options) {
     return verdict('decide', 'SUPERSEDED_NO_TARGET', 'canon_status: SUPERSEDED with no superseded_by');
   }
 
-  return verdict('publish', 'OK', listedForPublish ? 'publish list: publishing' : 'mode: player');
+  return verdict('publish', 'OK', listedForPublish ? 'publish list: publishing' : 'no publish list: publishing');
 }
 
 // The one `decide` code the build still emits a page for. A `decide` verdict

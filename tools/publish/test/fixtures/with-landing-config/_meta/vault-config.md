@@ -1,6 +1,5 @@
 ---
 publish:
-  mode: player
   landing:
     max_npcs: 3
     max_locations: 2

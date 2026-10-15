@@ -207,7 +207,7 @@ describe('publish-decision: one case per code', () => {
     const v = decide({ type: 'npc' });
     assert.strictEqual(v.code, 'OK');
     assert.strictEqual(v.outputPath, 'characters/npcs/someone.html');
-    assert.strictEqual(v.reason, 'mode: player');
+    assert.strictEqual(v.reason, 'no publish list: publishing');
     assert.strictEqual(publishesPage(v), true);
   });
 });
