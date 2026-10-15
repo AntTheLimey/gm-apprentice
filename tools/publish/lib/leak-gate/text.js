@@ -54,18 +54,29 @@ function piecesOfText(text) {
   return String(text).split(SENTENCE_END).map((s) => s.trim()).filter((s) => wordsOf(s).length >= MIN_WORDS);
 }
 
-function piecesOfMarkdown(markdown) {
-  return blocksOf(markdown).flatMap((block) => piecesOfText(stripMarkdown(block)));
+// Each block of a note's text as a reader sees it: a labelled link as its label, a markdown link as its text, no tags or
+// emphasis marks. Hidden pieces and the published text they are compared with are both made here.
+function textsOfMarkdown(markdown) {
+  return blocksOf(markdown).map(stripMarkdown);
 }
 
-function piecesOfValue(value) {
+function piecesOfMarkdown(markdown) {
+  return textsOfMarkdown(markdown).flatMap(piecesOfText);
+}
+
+// Every string in a value, a labelled link as its label, whole (a published value is compared as it stands).
+function stringsOfValue(value) {
   const strings = [];
   (function walk(v) {
     if (typeof v === 'string') strings.push(labelsForLinks(v));
     else if (Array.isArray(v)) v.forEach(walk);
     else if (v && typeof v === 'object' && !(v instanceof Date)) Object.values(v).forEach(walk);
   }(value));
-  return strings.flatMap(piecesOfText);
+  return strings;
 }
 
-module.exports = { MIN_WORDS, normalize, wordsOf, piecesOfMarkdown, piecesOfValue };
+function piecesOfValue(value) {
+  return stringsOfValue(value).flatMap(piecesOfText);
+}
+
+module.exports = { MIN_WORDS, normalize, wordsOf, textsOfMarkdown, piecesOfMarkdown, stringsOfValue, piecesOfValue };

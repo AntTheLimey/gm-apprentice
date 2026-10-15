@@ -20,7 +20,7 @@ const {
   playerSafeMarkdown, stubMarked, stubCut, hiddenFieldsOf, publishedFrontmatter, pcHeadingsUnstable, publishMode,
 } = require('../processor');
 const { createMarks, markKinds, sanitize, markedSpans } = require('../gm-marks');
-const { piecesOfMarkdown, piecesOfValue, wordsOf } = require('./text');
+const { piecesOfMarkdown, piecesOfValue, stringsOfValue, textsOfMarkdown, wordsOf } = require('./text');
 
 const NEVER_SHOWN = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
 const neverShown = (rel) => rel.split('/').slice(0, -1).some((s) => NEVER_SHOWN.includes(s.toLowerCase()));
@@ -86,7 +86,7 @@ function collectHidden({ configPath }) {
     const fm = page.frontmatter || {};
     const overrides = fieldOverrides[rel] || {};
     for (const h of hiddenFieldsOf(fm, excludeFields, overrides)) add(piecesOfValue(h.value), rel, h.label);
-    visible.push(String(page.displayTitle || ''), ...piecesOfValue(publishedFrontmatter(fm, excludeFields, overrides)));
+    visible.push(String(page.displayTitle || ''), ...stringsOfValue(publishedFrontmatter(fm, excludeFields, overrides)));
     if (hubs.has(page)) {
       add(piecesOfMarkdown(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
       continue;
@@ -109,7 +109,8 @@ function collectHidden({ configPath }) {
         shownText = stubCut(source, include, withhold).text;
       }
       addMarked(playerSafeMarkdown(text, { ...options, mark }).text, rel);
-      visible.push(playerSafeMarkdown(shownText, options).text);
+      // Read as the hidden pieces are (textsOfMarkdown), so a sentence the GM wrote in both places matches.
+      visible.push(...textsOfMarkdown(playerSafeMarkdown(shownText, options).text));
     }
   }
 
