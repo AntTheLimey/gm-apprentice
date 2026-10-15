@@ -268,7 +268,7 @@ function buildSite(options) {
   }
   // The site's own package.json build scripts are not run by a fast build: say so, once.
   if (onlySheets) {
-    const skipped = Object.keys(packageScripts(configDir)).filter((k) => k === 'prebuild' || k === 'postbuild');
+    const skipped = Object.keys(packageScripts(configDir));
     if (skipped.length) console.log(`  Note: the site's package.json ${skipped.join(' and ')} script${skipped.length === 1 ? '' : 's'} does not run in a sheets-only build; the update moves build steps into the vault's settings.`);
   }
   // The steps before the build do not run for a fast build: they make files it does not write.
