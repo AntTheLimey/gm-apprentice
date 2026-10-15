@@ -87,13 +87,20 @@ test('the panel prints a link to a page the site has as a link, from the page it
   assert.doesNotMatch(out, /\[\[/);
 });
 
-test('a page gmPage made is one the folder check knows as the GM site\'s', () => {
+test('a page gmPage made is one deploy knows as the GM site\'s', () => {
+  const { isGmOutput } = require('../../lib/gm-site');
   const dir = tmp();
   fs.writeFileSync(path.join(dir, 'other.txt'), 'x');
   fs.writeFileSync(path.join(dir, 'page.html'), PAGE);
-  assert.match(gmOutputReason(dir), /did not make/);
+  assert.equal(isGmOutput(dir), false);
   fs.writeFileSync(path.join(dir, 'page.html'), gmPage(PAGE, { marks: createMarks() }));
-  assert.equal(gmOutputReason(dir), null);
+  assert.equal(isGmOutput(dir), true);
+  assert.match(gmOutputReason(dir), /did not make/);
+});
+
+test('a $ in the page\'s stylesheet address is not expanded as a replacement pattern', () => {
+  const html = '<html><head><link rel="stylesheet" href="a$&b/css/style.css"></head><body><main>x</main></body></html>';
+  assert.match(gmPage(html, { marks: createMarks() }), /href="a\$&b\/css\/gm\.css"\>\n<\/head>/);
 });
 
 test('the marker file: build, tool, time, and a line end', () => {

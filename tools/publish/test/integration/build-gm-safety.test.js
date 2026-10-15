@@ -6,7 +6,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const { build } = require('../../lib/build');
-const { gmOutputReason } = require('../../lib/gm-site');
+const { isGmOutput } = require('../../lib/gm-site');
 const { buildBoth, markedTexts, markedAfterMain, allFiles } = require('../helpers/gm-build');
 
 const NOTES = {
@@ -56,9 +56,9 @@ describe('the GM build: folder, marker, meta tags, robots', () => {
   it('the meta tag every GM page carries is the one the folder check knows a GM page by', () => {
     const dir = fs.mkdtempSync(path.join(site.root, 'tagged-'));
     fs.writeFileSync(path.join(dir, 'note.txt'), 'x');
-    assert.match(gmOutputReason(dir), /did not make/);
+    assert.equal(isGmOutput(dir), false);
     fs.copyFileSync(path.join(site.gm.dir, 'npcs', 'vex.html'), path.join(dir, 'vex.html'));
-    assert.equal(gmOutputReason(dir), null);
+    assert.equal(isGmOutput(dir), true);
   });
 
   it('the player build has none of it', () => {
@@ -239,6 +239,18 @@ describe('the GM build refuses a folder it must not write', () => {
       fs.writeFileSync(path.join(s.gm.dir, 'mine.txt'), 'keep me');
       assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'gm' })), /did not make/);
       assert.equal(fs.readFileSync(path.join(s.gm.dir, 'mine.txt'), 'utf8'), 'keep me');
+    } finally { s.cleanup(); }
+  });
+
+  it('refuses a folder holding one old GM page but no gm-build.json, and empties nothing', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      fs.mkdirSync(path.join(s.gm.dir, 'old'), { recursive: true });
+      fs.writeFileSync(path.join(s.gm.dir, 'old', 'saved.html'), '<html><head><meta name="gm-apprentice-build" content="gm"></head></html>');
+      fs.writeFileSync(path.join(s.gm.dir, 'mine.txt'), 'keep me');
+      assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'gm' })), /did not make/);
+      assert.equal(fs.readFileSync(path.join(s.gm.dir, 'mine.txt'), 'utf8'), 'keep me');
+      assert.ok(fs.existsSync(path.join(s.gm.dir, 'old', 'saved.html')));
     } finally { s.cleanup(); }
   });
 

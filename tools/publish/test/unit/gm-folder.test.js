@@ -51,17 +51,27 @@ test('refused: a folder with files the GM build did not make; fine once it holds
   assert.equal(gmFolderProblem(gm, { playerSiteDir: l.site, vaultPath: l.vault }), null);
 });
 
-test('a GM build that failed part-way (pages with the GM meta tag, no marker) is still the GM site\'s folder', () => {
+test('a folder with GM pages but no marker file is refused, not emptied: pages are never the proof', () => {
   const l = layout();
   const gm = path.join(l.root, 'campaign-gm');
   fs.mkdirSync(path.join(gm, 'npcs'), { recursive: true });
-  fs.writeFileSync(path.join(gm, 'npcs', 'a.html'), '<!doctype html><html><head><meta name="gm-apprentice-build" content="gm"></head></html>');
+  fs.writeFileSync(path.join(gm, 'npcs', 'a.html'), `<!doctype html><html><head>${GM_META_TAG}</head></html>`);
+  assert.match(gmOutputReason(gm), /did not make/);
+  assert.match(gmFolderProblem(gm, { playerSiteDir: l.site, vaultPath: l.vault }), /files the GM site did not make/);
+  // Only the marker file at the folder's top level makes it the GM site's.
+  fs.writeFileSync(path.join(gm, MARKER_FILE), '{}');
   assert.equal(gmOutputReason(gm), null);
   assert.equal(gmFolderProblem(gm, { playerSiteDir: l.site, vaultPath: l.vault }), null);
-  // A page without the tag does not make it the GM site's.
-  fs.writeFileSync(path.join(gm, 'npcs', 'a.html'), '<html><head><meta name="generator" content="x"></head></html>');
-  assert.match(gmOutputReason(gm), /did not make/);
-  assert.ok(gmFolderProblem(gm, { playerSiteDir: l.site, vaultPath: l.vault }));
+});
+
+test('refused: the folder is, is inside or holds the player site\'s output folder, outside the site folder or not', () => {
+  const l = layout();
+  const out = path.join(l.root, 'www');
+  fs.mkdirSync(out);
+  const opts = { playerSiteDir: l.site, playerOutputDir: out, vaultPath: l.vault };
+  assert.match(gmFolderProblem(out, opts), /output folder/);
+  assert.match(gmFolderProblem(path.join(out, 'gm'), opts), /inside the player site's output folder/);
+  assert.match(gmFolderProblem(l.root, { ...opts, vaultPath: undefined }), /holds the player site's/);
 });
 
 // A link to a place not made yet cannot be made on Windows without privileges.
@@ -81,12 +91,13 @@ linkTest('refused: a dangling link elsewhere, which cannot be made into a folder
   assert.match(gmFolderProblem(link, { playerSiteDir: l.site, vaultPath: l.vault }) || '', /^gm_site\.folder \(.*leads nowhere/);
 });
 
-test('the meta tag the folder test looks for is the one exported constant', () => {
+test('the meta tag deploy looks for is the one exported constant', () => {
+  const { isGmOutput } = require('../../lib/gm-site');
   const l = layout();
   const gm = path.join(l.root, 'campaign-gm');
   fs.mkdirSync(gm);
   fs.writeFileSync(path.join(gm, 'a.html'), `<head>${GM_META_TAG}</head>`);
-  assert.equal(gmOutputReason(gm), null);
+  assert.equal(isGmOutput(gm), true);
   assert.equal(GM_META_TAG, '<meta name="gm-apprentice-build" content="gm">');
 });
 

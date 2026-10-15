@@ -19,7 +19,7 @@ const { clientFor } = require('./templates/live-mount');
 const { ignoringMark } = require('./heading-key');
 const { linkText, parseWikilink } = require('./wikilink');
 const { nameIn, fileLabel } = require('./settings');
-const { resolveConfig, loadPublishConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff } = require('./config');
+const { resolveConfig, loadPublishConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConfig, siteOff, outputFolderOf } = require('./config');
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
@@ -224,6 +224,8 @@ function buildSite(options) {
   const markOpt = gm ? { mark } : {};
   // `outputDirOverride` is the local preview's too: it builds into a temp directory, never the site's own.
   const outputDir = gm ? gmOutputDir() : options.outputDirOverride ? path.resolve(options.outputDirOverride) : path.resolve(configDir, config.outputDir);
+  // Where the player site is written, which may be outside the site folder: the GM folder must not meet it either.
+  const playerOutputDir = gm ? path.resolve(configDir, outputFolderOf(config)) : null;
   function gmOutputDir() {
     if (options.outputDirOverride) throw new Error('The GM site is never previewed: the preview is the player site\'s. Build the GM site into its own folder (gm_site.folder).');
     if (!publishConfig.gm.folder) throw new Error('The GM site has no folder (gm_site.folder). Set one with settings set gm_site.folder=<folder>, beside the player site folder.');
@@ -231,7 +233,7 @@ function buildSite(options) {
   }
   // The GM site's folder is checked before any step runs and before anything is written or deleted.
   if (gm && !dry) {
-    const problem = gmFolderProblem(outputDir, { playerSiteDir: configDir, vaultPath: rawConfig.vaultPath });
+    const problem = gmFolderProblem(outputDir, { playerSiteDir: configDir, playerOutputDir, vaultPath: rawConfig.vaultPath });
     if (problem) throw new Error(problem);
     if (insideGitWorkTree(outputDir)) printWarning('The GM site\'s folder is inside a git repository; do not push it.');
   }
@@ -304,7 +306,7 @@ function buildSite(options) {
 
   function assertSafeOutputDir() {
     if (gm) {
-      const problem = gmFolderProblem(outputDir, { playerSiteDir: configDir, vaultPath: config.vaultPath });
+      const problem = gmFolderProblem(outputDir, { playerSiteDir: configDir, playerOutputDir, vaultPath: config.vaultPath });
       if (problem) throw new Error(problem);
       return;
     }

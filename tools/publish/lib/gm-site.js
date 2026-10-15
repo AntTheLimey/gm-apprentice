@@ -6,9 +6,8 @@ const os = require('node:os');
 const path = require('node:path');
 
 const MARKER_FILE = 'gm-build.json';
-// The mark every page of a GM build carries. A GM build that failed before it wrote the marker file leaves pages that
-// carry this, so its own folder is still known as its own.
-// The one spelling of it: the GM build writes this exact text and the folder test looks for it.
+// The mark every page of a GM build carries, so deploy can tell a GM folder even when its marker file is gone.
+// The one spelling of it: the GM build writes this exact text and the deploy test looks for it.
 const GM_META_TAG = '<meta name="gm-apprentice-build" content="gm">';
 
 // The real path of a path that may not exist yet: its nearest existing folder's real path with the rest put back.
@@ -47,34 +46,37 @@ function defaultGmFolder(playerFolder) {
 
 const inside = (child, parent) => child.startsWith(parent + path.sep);
 
-// Whether a page under `dir` carries the GM build's meta tag; the first found ends the search.
+// Whether a page under `dir` carries the GM build's meta tag; the first found ends the search. Used only to refuse a
+// deploy, where erring wide is the safe direction: a folder or page that cannot be read counts as a GM page.
 function hasGmPage(dir) {
   let entries;
-  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return false; }
+  try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return true; }
   for (const e of entries) {
     const full = path.join(dir, e.name);
     if (e.isDirectory()) {
       if (hasGmPage(full)) return true;
     } else if (e.isFile() && /\.html?$/i.test(e.name)) {
-      try { if (fs.readFileSync(full, 'utf8').includes(GM_META_TAG)) return true; } catch { /* unreadable: not a GM page */ }
+      try { if (fs.readFileSync(full, 'utf8').includes(GM_META_TAG)) return true; } catch { return true; }
     }
   }
   return false;
 }
 
-// Why a folder is not the GM site's to empty, or null when it is: it is missing, empty, holds the marker
-// file, or holds a page the GM build made (so a build that failed part-way does not lock its own folder).
+// Why a folder is not the GM site's to empty, or null when it is: it is missing, empty, or holds the marker file at
+// its top level. The marker is written first, the moment the folder is empty, so a build that failed part-way still
+// leaves it. Pages are never searched: one saved GM page deep in a folder of the GM's own must not make it ours to empty.
 function gmOutputReason(dir) {
   let entries;
   try { entries = fs.readdirSync(dir); } catch (e) {
     if (e.code === 'ENOENT') return null;
     return 'cannot be read as a folder';
   }
-  if (entries.length === 0 || gmEvidence(dir, entries)) return null;
+  if (entries.length === 0 || entries.includes(MARKER_FILE)) return null;
   return 'holds files the GM site did not make';
 }
 
-// What shows a folder is a GM build's: the marker file, or a page carrying the GM build tag; null when neither is there.
+// What shows a folder is a GM build's, for the deploy refusal: the marker file, or a page carrying the GM build tag at
+// any depth; null when neither is there.
 // `entries` is the folder's listing when the caller has it already.
 function gmEvidence(dir, entries) {
   let names = entries;
@@ -90,7 +92,7 @@ function isGmOutput(dir) {
 }
 
 // null when `gmFolder` can be the GM site's folder, otherwise the one reason it cannot, as a line for the GM.
-function gmFolderProblem(gmFolder, { playerSiteDir, vaultPath }) {
+function gmFolderProblem(gmFolder, { playerSiteDir, playerOutputDir, vaultPath }) {
   const shown = `gm_site.folder (${gmFolder})`;
   const gm = real(gmFolder);
   if (gm === path.parse(gm).root) return `${shown} is the filesystem root; the GM site cannot be built there`;
@@ -99,6 +101,12 @@ function gmFolderProblem(gmFolder, { playerSiteDir, vaultPath }) {
     if (gm === player) return `${shown} is the player site's folder; the GM site needs a folder of its own`;
     if (inside(gm, player)) return `${shown} is inside the player site's folder; the GM site needs a folder of its own`;
     if (inside(player, gm)) return `${shown} holds the player site's folder; the GM site needs a folder of its own`;
+  }
+  if (playerOutputDir) {
+    const out = real(playerOutputDir);
+    if (gm === out) return `${shown} is the player site's output folder; the GM site needs a folder of its own`;
+    if (inside(gm, out)) return `${shown} is inside the player site's output folder; the GM site needs a folder of its own`;
+    if (inside(out, gm)) return `${shown} holds the player site's output folder; the GM site needs a folder of its own`;
   }
   if (vaultPath) {
     const vault = real(vaultPath);
@@ -177,7 +185,7 @@ function gmPage(html, { marks, hiddenBecause = null, hidden = [], linkMap = {}, 
   const style = STYLE_HREF.exec(out);
   const css = style ? `<link rel="stylesheet" href="${style[1]}css/gm.css">` : '';
   const head = `${ROBOTS_META}\n${GM_META_TAG}\n${css}`;
-  out = /<\/head>/i.test(out) ? out.replace(/<\/head>/i, `${head}\n</head>`) : `${head}\n${out}`;
+  out = /<\/head>/i.test(out) ? out.replace(/<\/head>/i, () => `${head}\n</head>`) : `${head}\n${out}`;
   const reason = hiddenBecause ? `Players don't see this page: ${hiddenBecause}` : null;
   const top = [
     '<div class="gm-band" role="note">GM copy: not for players</div>',
