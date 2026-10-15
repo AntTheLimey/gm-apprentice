@@ -26,6 +26,8 @@ const NOTES = {
   // Marks in awkward places: a link label, a table cell, a heading, a callout title, an image alt, a block closed
   // three paragraphs after it opens, and a hidden block holding a ## heading of its own.
   'NPCs/Shapes.md': '---\ntype: npc\n---\nLink [<!-- gm-only -->HIDLABEL<!-- /gm-only -->](https://example.com/) end.\n\n| A | B |\n|---|---|\n| x | <!-- gm-only -->HIDCELL<!-- /gm-only --> |\n\n## Head <!-- gm-only -->HIDHEAD<!-- /gm-only -->\n\n> [!secret] Title <!-- gm-only -->HIDTITLE<!-- /gm-only -->\n> inside\n\n![pic <!-- gm-only -->HIDALT<!-- /gm-only -->](pic.png)\n\nStart <!-- gm-only -->HIDLONG1\n\nHIDLONG2\n\nHIDLONG3\n<!-- /gm-only --> end.\n\n<!-- gm-only -->\n## HIDINNERHEAD\n\nHIDINNERBODY\n<!-- /gm-only -->\n\n## GM Notes\n\nHIDGMBODY\n\n## Open Again\n\nSHOWNSHAPES.\n',
+  // A level-1 GM Notes section holds a ## heading of its own (a ## after a ## GM Notes would end that section).
+  'NPCs/Inner.md': '---\ntype: npc\n---\nIntro.\n\n# GM Notes\n\nHIDGMONE\n\n## HIDGMINNER\n\nHIDGMTWO\n\n# Visible Again\n\nSHOWNINNER.\n',
   '_archive/Old.md': '---\ntype: npc\n---\nHIDARCHIVE.\n',
   'PCs/Ann.md': '---\ntype: pc\n---\n# Ann\n\n## Background\n\nSHOWNBG.\n\n## GM Notes\n\nHIDPC\n\n## Background Two\n\nSHOWNPCAFTER.\n',
 };
@@ -52,6 +54,9 @@ const EXPECT = [
   ['HIDINNERHEAD', 'gm_only_blocks', 'npcs/shapes.html'],
   ['HIDINNERBODY', 'gm_only_blocks', 'npcs/shapes.html'],
   ['HIDGMBODY', 'sections', 'npcs/shapes.html'],
+  ['HIDGMONE', 'sections', 'npcs/inner.html'],
+  ['HIDGMINNER', 'sections', 'npcs/inner.html'],
+  ['HIDGMTWO', 'sections', 'npcs/inner.html'],
 ];
 
 describe('one of every hidden kind, both ways', () => {
@@ -146,6 +151,33 @@ describe('one of every hidden kind, both ways', () => {
     assert.ok(site.player.read('npcs', 'shapes.html').includes('SHOWNSHAPES'));
     const gm = site.gm.read('npcs', 'shapes.html');
     assert.equal(markedTexts(gm).some((m) => m.kind !== 'notes' && m.text.includes('SHOWNSHAPES')), false);
+  });
+
+  // The templates cut a page at its level 1-2 headings, so a mark must close before such a heading, wrap the heading's
+  // own text, and open again below. These pin where the marks fall, not only that the words are marked.
+  it('a ## heading inside a # GM Notes section: body, heading and text under it are each marked; the next section is not', () => {
+    const html = site.gm.read('npcs', 'inner.html');
+    const marks = markedTexts(html).filter((m) => m.kind !== 'notes');
+    for (const w of ['HIDGMONE', 'HIDGMINNER', 'HIDGMTWO']) assert.ok(marks.some((m) => m.kind === 'sections' && m.text.includes(w)), w);
+    assert.equal(marks.some((m) => m.text.includes('HIDGMINNER') && m.text.includes('HIDGMONE')), false, 'heading is not inside the first body mark');
+    assert.equal(marks.some((m) => m.text.includes('HIDGMINNER') && m.text.includes('HIDGMTWO')), false, 'heading is not inside the second body mark');
+    for (const w of ['Visible Again', 'SHOWNINNER']) {
+      assert.ok(html.includes(w), w);
+      assert.equal(marks.some((m) => m.text.includes(w)), false, `unmarked ${w}`);
+    }
+    assert.ok(site.player.read('npcs', 'inner.html').includes('SHOWNINNER'));
+  });
+
+  it('a hidden block holding a ## heading: heading and body in separate marks, the heading after it in none', () => {
+    const html = site.gm.read('npcs', 'shapes.html');
+    const marks = markedTexts(html).filter((m) => m.kind !== 'notes');
+    assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('HIDINNERHEAD')));
+    assert.ok(marks.some((m) => m.kind === 'gm_only_blocks' && m.text.includes('HIDINNERBODY')));
+    assert.equal(marks.some((m) => m.text.includes('HIDINNERHEAD') && m.text.includes('HIDINNERBODY')), false, 'cut at the heading');
+    // the heading text sits in a mark inside its heading element
+    assert.match(html, /<h2><span class="gm-mark[^"]*"[^>]*data-gm-kind="gm_only_blocks"[^>]*>HIDINNERHEAD<\/span><\/h2>/);
+    assert.match(html, /<h2>Open Again<\/h2>/);
+    assert.equal(marks.some((m) => m.text.includes('Open Again')), false, 'the next heading is outside every mark');
   });
 
   it('a note in a hidden folder is on the GM site with a band and the reason, and not on the player site', () => {
