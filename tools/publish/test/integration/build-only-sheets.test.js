@@ -155,6 +155,16 @@ describe('build --only sheets', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a story page whose story was taken away stops the fast build, naming it', () => {
+    const s = buildBoth({ ...NOTES, 'PCs/Ann_Story.md': STORY }, { sites: ['player'] });
+    try {
+      fs.rmSync(path.join(s.root, 'vault', 'PCs', 'Ann_Story.md'));
+      const before = hashes(s.player.dir);
+      assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' })), /story\/characters\/ann\.html.*Run a full build/s);
+      assert.deepEqual(hashes(s.player.dir), before);
+    } finally { s.cleanup(); }
+  });
+
   it('a new PC with a story companion gets both pages', () => {
     const s = buildBoth(NOTES, { sites: ['player'] });
     try {

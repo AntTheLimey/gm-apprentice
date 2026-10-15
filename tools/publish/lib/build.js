@@ -1525,6 +1525,16 @@ function buildSite(options) {
         if (f.endsWith('.html') && f !== 'index.html' && !wanted.has(rel)) stale.push(rel);
       }
     }
+    // The same for a PC's story page: one in the folder whose PC no longer gets a story page.
+    const stories = new Set(pages.filter((p) => p.frontmatter.type === 'pc' && p.storyMarkdown && !getsNoPage(p))
+      .map((p) => `story/characters/${slugify(p.title)}.html`));
+    const storyDir = path.join(outputDir, 'story', 'characters');
+    if (fs.existsSync(storyDir)) {
+      for (const f of fs.readdirSync(storyDir)) {
+        const rel = `story/characters/${f}`;
+        if (f.endsWith('.html') && f !== 'index.html' && !stories.has(rel)) stale.push(rel);
+      }
+    }
     if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
   }
 
