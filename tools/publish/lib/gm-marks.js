@@ -5,12 +5,12 @@
 // takes them out of every other file. This module knows nothing about notes, and requires nothing else in lib/ at
 // load: processor.js requires it, and the settings list loads templates that read processor.js as they load.
 
-const OPEN = '';
-const MID = '';
-const CLOSE = '';
+const OPEN = '\uE000';
+const MID = '\uE001';
+const CLOSE = '\uE002';
 // A whole open token (its number in group 1), an open token an excerpt cut in half (no U+E001: dropped with its
 // digits), a stray U+E001, a close.
-const TOKEN = /([0-9a-z]+)|[0-9a-z]*|[]/g;
+const TOKEN = /\uE000([0-9a-z]+)\uE001|\uE000[0-9a-z]*|[\uE001\uE002]/g;
 const SHOW = 'gm_site.show.';
 
 // A table of marks for one build: each open token carries its number in this table.
@@ -35,7 +35,7 @@ function markKinds() {
 }
 
 // A note's own text: any of the three characters it holds becomes U+FFFD, so a note cannot forge a mark.
-const sanitize = (text) => String(text == null ? '' : text).replace(/[-]/g, '�');
+const sanitize = (text) => String(text == null ? '' : text).replace(/[\uE000-\uE002]/g, '\uFFFD');
 
 // The text with every token taken out and the words between them kept.
 const unmark = (text) => String(text == null ? '' : text).replace(TOKEN, '');
@@ -82,13 +82,13 @@ function balancedLine(line) {
 // close line is an empty panel, and both lines are taken out. `findHeadings` is processor.js's, passed in.
 function marksAtHeadings(markdown, findHeadings) {
   const text = String(markdown == null ? '' : markdown);
-  if (!/[]/.test(text)) return text;
+  if (!/[\uE000\uE002]/.test(text)) return text;
   const { headingAt, inCode } = findHeadings(text);
   const lines = text.split('\n');
   const out = [];     // { text, open }: `open` is the token of a line that is an open token alone, outside code
   const stack = [];   // the tokens open, outermost first
   const lastFull = () => { for (let j = out.length - 1; j >= 0; j--) if (out[j].text.trim()) return j; return -1; };
-  const push = (t) => out.push({ text: t, open: /^[0-9a-z]+$/.test(t) ? t : null });
+  const push = (t) => out.push({ text: t, open: /^\uE000[0-9a-z]+\uE001$/.test(t) ? t : null });
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const bare = line.replace(/\r$/, '');
@@ -123,7 +123,7 @@ function marksAtHeadings(markdown, findHeadings) {
         continue;
       }
     }
-    out.push({ text: line, open: code ? null : (/^[0-9a-z]+$/.test(bare) ? bare : null) });
+    out.push({ text: line, open: code ? null : (/^\uE000[0-9a-z]+\uE001$/.test(bare) ? bare : null) });
     for (const m of bare.matchAll(TOKEN)) {
       if (m[1] !== undefined) stack.push(m[0]);
       else if (m[0] === CLOSE) stack.pop();
@@ -134,8 +134,8 @@ function marksAtHeadings(markdown, findHeadings) {
 
 // The parts of a page's HTML: a paragraph holding only a token (a block mark), elements whose text is never marked
 // (their tokens are removed), comments, and tags.
-const PARTS = /(<p>\s*(?:[0-9a-z]+|)\s*<\/p>|<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<title\b[\s\S]*?<\/title>|<textarea\b[\s\S]*?<\/textarea>|<!--[\s\S]*?-->|<[^>]*>)/i;
-const BLOCK_PART = /^<p>\s*(?:([0-9a-z]+)|)\s*<\/p>$/;
+const PARTS = /(<p>\s*(?:\uE000[0-9a-z]+\uE001|\uE002)\s*<\/p>|<script\b[\s\S]*?<\/script>|<style\b[\s\S]*?<\/style>|<title\b[\s\S]*?<\/title>|<textarea\b[\s\S]*?<\/textarea>|<!--[\s\S]*?-->|<[^>]*>)/i;
+const BLOCK_PART = /^<p>\s*(?:\uE000([0-9a-z]+)\uE001|\uE002)\s*<\/p>$/;
 const PROTECTED = /^<(?:script|style|title|textarea|!)/i;
 const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr']);
 // Elements a span may open before (text-level elements).

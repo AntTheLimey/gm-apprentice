@@ -7,8 +7,8 @@ const { execFileSync } = require('node:child_process');
 const { createMarks, markKinds, sanitize, unmark, blockLines, renderMarks, marksAtHeadings } = require('../../lib/gm-marks');
 const { findHeadings, renderMarkdown, extractSections } = require('../../lib/processor');
 
-const CLOSE = '';
-const PUA = /[-]/;
+const CLOSE = '\uE002';
+const PUA = /[\uE000-\uE002]/;
 
 // Every element in a fragment closes in the order it opened (void elements aside), and every gm-mark element is closed.
 function wellNested(html) {
@@ -40,14 +40,14 @@ test('loading the module does not load the settings list (it is read when the ki
 });
 
 test('a note cannot forge a mark', () => {
-  assert.equal(sanitize('a0b'), 'a�0�b�');
+  assert.equal(sanitize('a\uE0000\uE001b\uE002'), 'a\uFFFD0\uFFFDb\uFFFD');
 });
 
 test('the tokens: an index in base 36 between two characters, one close, the same token again', () => {
   const m = createMarks();
   for (let i = 0; i < 36; i++) m.open('fields', `f${i}`);
   const t = m.open('spoilers', 'last');
-  assert.equal(t, '' + (36).toString(36) + '');
+  assert.equal(t, '\uE000' + (36).toString(36) + '\uE001');
   assert.equal(m.again(t), t);
   assert.equal(m.close(), CLOSE);
   assert.deepEqual(m.get(36), { kind: 'spoilers', label: 'last' });
@@ -62,7 +62,7 @@ test('unmark keeps the words and drops the tokens', () => {
 test('a token cut in half by an excerpt is dropped with its digits', () => {
   const m = createMarks();
   for (let i = 0; i < 40; i++) m.open('fields', 'f');
-  const t = m.open('spoilers', 's');   // '' + '14' + '': two digits, so the cut keeps one
+  const t = m.open('spoilers', 's');   // '\uE000' + '14' + '\uE001': two digits, so the cut keeps one
   const cut = `a ${t}b${CLOSE} c ${t.slice(0, 2)}`;
   assert.equal(unmark(cut), 'a b c ');
   const out = renderMarks(`<p>${cut}</p>`, m);
@@ -154,7 +154,7 @@ test('a mark never spans a level 1-2 heading: closed before, heading marked inli
 // An open token line followed by a close line with only blank lines between them: an empty panel.
 function emptyPanel(lines) {
   const full = lines.filter((l) => l.trim());
-  return full.some((l, i) => /^[0-9a-z]+$/.test(l) && full[i + 1] === CLOSE);
+  return full.some((l, i) => /^\uE000[0-9a-z]+\uE001$/.test(l) && full[i + 1] === CLOSE);
 }
 
 test('a section mark that starts at its own heading puts the heading inside, the panel below', () => {
@@ -215,7 +215,7 @@ test('a setext heading is a heading too: each section the templates cut holds wh
   assert.deepEqual(sections.map((s) => unmark(s.title)), ['Story', 'The Plans', 'After']);
   for (const s of sections) {
     let depth = 0;
-    for (const t of s.html.matchAll(/[0-9a-z]+|/g)) {
+    for (const t of s.html.matchAll(/\uE000[0-9a-z]+\uE001|\uE002/g)) {
       depth += t[0] === CLOSE ? -1 : 1;
       assert.ok(depth >= 0, `a close with nothing open in ${s.title}`);
     }
