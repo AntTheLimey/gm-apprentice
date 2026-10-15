@@ -536,7 +536,7 @@ function runList(opts, d) {
   const empty = { publishing: [], excluded: [], needsDecision: [], reasons: new Map() };
   const sets = setsOf(list || empty);
   const c = counts(list || empty);
-  const payload = { ...sets, counts: { publishing: c.publishing, excluded: c.excluded, needs_decision: c.needsDecision } };
+  const payload = { listed: Boolean(list), ...sets, counts: { publishing: c.publishing, excluded: c.excluded, needs_decision: c.needsDecision } };
   if (opts.json) out(JSON.stringify(payload, null, 2));
   else {
     out(`${c.publishing} publishing, ${c.excluded} excluded, ${c.needsDecision} needing a decision.`);

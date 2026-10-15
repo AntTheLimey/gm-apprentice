@@ -122,6 +122,9 @@ def stub_publish_tool(case, vault, withheld=(), which="/usr/bin/node",
 
     def fake(cmd, **kwargs):
         calls.append(cmd)
+        if cmd[2:4] == ["manifest", "list"]:
+            # The publish list is read by the real tool, as in the build.
+            return REAL_RUN([cmd[0], str(vc.PUBLISH_TOOL), *cmd[2:]], **kwargs)
         if "publish-played" in cmd:
             return subprocess.CompletedProcess(cmd, 0, json.dumps(
                 plan or {"applicable": True, "published": [], "unclear": []}),
@@ -820,16 +823,15 @@ class SessionsManifestTests(unittest.TestCase):
             "---\ntype: session_wrap\nsession: \"[[Session 01 - Lone]]\"\n"
             "canon_status: AUTHORITATIVE\n---\n", encoding="utf-8")
         if manifest is not None:
-            (vault / "_meta" / "publish-manifest.md").write_text(
+            (vault / "_meta" / "publish-list.yaml").write_text(
                 manifest, encoding="utf-8")
         return vault
 
     def missing(self, vault):
         return [r for r in vc.check_sessions(vault)
-                if "publish-manifest.md" in r]
+                if "publish list" in r]
 
-    NEEDS = ("## Publishing (0 files)\n\n## Needs Decision (1 files)\n\n"
-             "- [ ] Session 01 - Lone.md\n")
+    NEEDS = ("publishing: []\nneeds_decision:\n  - Session 01 - Lone.md\n")
 
     def test_without_the_tool_the_row_promises_nothing(self):
         rows = self.missing(self.vault(self.NEEDS))
@@ -908,7 +910,7 @@ class SessionsManifestTests(unittest.TestCase):
         self.assertNotIn("will register", "".join(row))
 
     def test_the_wrap_up_of_a_published_session_is_still_reported(self):
-        vault = self.vault(f"## Publishing (1 files)\n\n- [x] {self.INDEX}\n",
+        vault = self.vault(f"publishing:\n  - {self.INDEX}\n",
                            status="wrap-up")
         reason = f"Wrap-Up not reviewed yet ({self.WRAP})"
         stub_publish_tool(self, vault, mode="player", plan={
@@ -922,27 +924,46 @@ class SessionsManifestTests(unittest.TestCase):
 
     def test_listed_under_publishing_is_silent(self):
         self.assertEqual(self.missing(self.vault(
-            "## Publishing (2 files)\n\n"
-            f"- [x] {self.INDEX}\n- [x] {self.WRAP} — recap\n")), [])
+            "publishing:\n"
+            f"  - {self.INDEX}\n  - {self.WRAP}\n")), [])
 
-    def test_unchecked_publishing_entry_does_not_count(self):
+    def test_an_entry_needing_a_decision_does_not_count(self):
         rows = self.missing(self.vault(
-            f"## Publishing (2 files)\n\n- [ ] {self.INDEX}\n"
-            f"- [x] {self.WRAP}\n"))
+            f"publishing:\n  - {self.WRAP}\n"
+            f"needs_decision:\n  - {self.INDEX}\n"))
         self.assertEqual(len(rows), 1, rows)
         self.assertIn(f"\t{self.INDEX}\t", rows[0])
 
     def test_excluded_is_a_decision_not_a_finding(self):
         self.assertEqual(self.missing(self.vault(
-            "## Excluded (2 files)\n\n"
-            f"- [x] {self.INDEX} — private\n- [x] {self.WRAP}\n")), [])
+            "excluded:\n"
+            f"  - path: {self.INDEX}\n    reason: private\n"
+            f"  - {self.WRAP}\n")), [])
+
+    def test_a_vault_not_yet_moved_is_read_through_the_tool(self):
+        # Dated: the old Markdown list is still obeyed until the update runs.
+        vault = self.vault(None)
+        (vault / "_meta" / "publish-manifest.md").write_text(
+            "## Publishing (1 files)\n\n"
+            f"- [x] {self.WRAP}\n\n## Needs Decision (1 files)\n\n"
+            f"- [ ] {self.INDEX}\n", encoding="utf-8")
+        rows = self.missing(vault)
+        self.assertEqual(len(rows), 1, rows)
+        self.assertIn(f"\t{self.INDEX}\t", rows[0])
+        self.assertIn("(Needs Decision)", rows[0])
+
+    def test_a_list_the_tool_cannot_read_is_one_row_that_promises_nothing(self):
+        rows = self.missing(self.vault("publishing: [\n"))
+        self.assertEqual(len(rows), 1, rows)
+        self.assertTrue(rows[0].startswith("INFO\t(vault)\tthe publish tool "
+                                           "could not be consulted"), rows)
 
     def test_no_manifest_is_silent(self):
         self.assertEqual(self.missing(self.vault(None)), [])
 
     def test_full_mode_is_silent(self):
         self.assertEqual(self.missing(self.vault(
-            "## Publishing (0 files)\n",
+            "publishing: []\n",
             config="---\npublish:\n  mode: full\n---\n")), [])
 
     def test_a_mode_that_is_neither_player_nor_full_is_player_as_the_build_reads_it(self):
@@ -958,11 +979,11 @@ class SessionsManifestTests(unittest.TestCase):
 
     def test_mode_defaults_to_player(self):
         self.assertEqual(len(self.missing(self.vault(
-            "## Publishing (0 files)\n", config=None))), 1)
+            "publishing: []\n", config=None))), 1)
 
     def test_unplayed_session_is_silent(self):
         self.assertEqual(self.missing(self.vault(
-            "## Publishing (0 files)\n", status="prepped")), [])
+            "publishing: []\n", status="prepped")), [])
 
 
 # A copy with its site on: with the site off there is nothing to check.
@@ -1036,7 +1057,7 @@ class FrontmatterUnparseableTests(unittest.TestCase):
         vault, _calls = self._vault()
         manifest = ("---\ngenerated: 2026-10-11T01:12:09.961Z\n"
                     "vault: \"Canticle\"\nmode: player\n---\n\n"
-                    "## Publishing (0 files)\n")
+                    "publishing: []\n")
         (vault / "_meta" / "publish-manifest.md").write_text(
             manifest, encoding="utf-8")
         (vault / "_meta" / "other.md").write_text(
@@ -5028,9 +5049,9 @@ class PublishToolEndToEndTests(unittest.TestCase):
                 hub = vault / "Sessions" / "Session 01 - Arrival.md"
                 hub.write_text(hub.read_text(encoding="utf-8").replace(
                     "status: played", f"status: {status}"), encoding="utf-8")
-                (vault / "_meta" / "publish-manifest.md").write_text(
-                    "## Publishing (0 files)\n\n## Needs Decision (1 files)"
-                    "\n\n- [ ] Sessions/Session 01 - Arrival.md\n",
+                (vault / "_meta" / "publish-list.yaml").write_text(
+                    "publishing: []\nneeds_decision:\n"
+                    "  - Sessions/Session 01 - Arrival.md\n",
                     encoding="utf-8")
                 rows = vc.check_sessions(vault)
                 self.assertFalse(rows_for(rows, "could not be consulted"), rows)

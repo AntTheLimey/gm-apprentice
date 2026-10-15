@@ -28,6 +28,28 @@ def test_no_script_restates_a_number_that_is_a_setting():
     assert hits == []
 
 
+READS = re.compile(r"read_text|read_bytes|open\(|safe_load|import yaml")
+
+
+def _list_readers(texts):
+    """Scripts that read the publish list file themselves, or load a YAML library."""
+    return [name for name, text in texts.items()
+            if re.search(r"^\s*(import|from) yaml\b", text, re.M)
+            or any("publish-list" in line and READS.search(line) for line in text.splitlines())]
+
+
+def test_the_list_scan_finds_what_it_looks_for():
+    assert _list_readers({"a.py": 'p.read_text(vault / "_meta" / "publish-list.yaml")'}) == ["a.py"]
+    assert _list_readers({"b.py": "import yaml"}) == ["b.py"]
+    assert _list_readers({"c.py": 'REL = "_meta/publish-list.yaml"'}) == []
+
+
+def test_no_script_reads_the_publish_list_file():
+    # Python asks the tool (`manifest list --json`); it parses no YAML.
+    texts = {p.name: p.read_text(encoding="utf-8") for p in SCRIPTS.glob("*.py")}
+    assert _list_readers(texts) == []
+
+
 # The generated parts of a page sit between these markers; the rest is hand-written.
 GENERATED = re.compile(r"<!-- settings:(\S+) -->.*?<!-- /settings:\1 -->", re.S)
 ROOT = Path(__file__).resolve().parents[1]

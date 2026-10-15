@@ -107,7 +107,7 @@ are left to `relink.py`, which the migration offers as a choice.
 a session index whose Wrap-Up is explicitly linked (so the site
 withholds the index body), it also reports body lines outside a gm-only
 fence as INFO, naming the document each kind belongs in. In a player-mode
-vault it warns on played sessions missing from the manifest's Publishing
+vault it warns on played sessions missing from the publish list's Publishing
 section, saying what `manifest publish-played` will do with each. Both
 answers come from the site's installed publish tool (the plugin's when
 the site has none), never from a reading of its rules here.
@@ -285,6 +285,7 @@ def _emit_tool_once() -> Callable[[str, list[str]], None]:
     return emit_once
 
 
+# Dated: the old file may still be in an un-updated vault; remove at 1.11.0.
 PUBLISH_MANIFEST_REL = "_meta/publish-manifest.md"
 
 
@@ -1013,55 +1014,42 @@ def _resolve_document_link(target: str, by_stem: dict[str, list[str]],
 
 
 PLAYED_STATUSES = {"played", "wrap-up", "reviewed"}
-_MANIFEST_ENTRY_RE = re.compile(r"^\s*-\s+(?:\[[ xX]\]\s+)?(.+)$")
-_MANIFEST_PATH_RE = re.compile(r"^(.*?\.\w+)(?:\s+(?:—|–|--)\s+.*)?$")
 
 
-def read_manifest_sections(vault: Path) -> dict[str, set[str]] | None:
-    """Vault-relative paths of `_meta/publish-manifest.md`, by section
-    (`publishing`, `excluded`, `needs_decision`), or None when the vault
-    has no manifest. Mirrors tools/publish/lib/manifest.js: an inline
-    ` — note` is dropped, paths are NFC-normalised, and only checked
-    entries count under Publishing."""
+def publish_list_sets(vault: Path) -> tuple[dict[str, set[str]] | None,
+                                            ToolAnswer]:
+    """The three sets of the publish list (`publishing`, `excluded`,
+    `needs_decision`, paths NFC-normalised), asked of the publish tool
+    (`manifest list --json`): this script reads neither list file. None
+    when the vault has no publish list or the tool could not be asked; the
+    ToolAnswer says which (its `why`)."""
+    answer = ask_publish_tool(vault, ["manifest", "list"], site_optional=True)
+    data = answer.data
+    if not isinstance(data, dict):
+        return None, answer
+    if data.get("listed") is False:
+        return None, ToolAnswer(used=answer.used)
     try:
-        text = (vault / "_meta" / "publish-manifest.md").read_text(
-            encoding="utf-8-sig")
-    except (OSError, UnicodeDecodeError):
-        return None
-    sections: dict[str, set[str]] = {
-        "publishing": set(), "excluded": set(), "needs_decision": set()}
-    current: str | None = None
-    for line in text.replace("\r", "").split("\n"):
-        heading = re.match(r"^## (.+)", line)
-        if heading:
-            title = heading.group(1).strip()
-            current = ("publishing" if title.startswith("Publishing")
-                       else "needs_decision" if title.startswith("Needs Decision")
-                       else "excluded" if title.startswith("Excluded")
-                       else None)
-            continue
-        if current is None:
-            continue
-        m = _MANIFEST_ENTRY_RE.match(line)
-        if not m or re.match(r"(?i)reason:", m.group(1).strip()):
-            continue
-        if current == "publishing" and not re.match(r"^- \[[xX]\]", line):
-            continue
-        raw = m.group(1).strip()
-        split = _MANIFEST_PATH_RE.match(raw)
-        sections[current].add(unicodedata.normalize(
-            "NFC", split.group(1) if split else raw))
-    return sections
+        sets = {key: {unicodedata.normalize("NFC", str(item["path"] if isinstance(item, dict) else item))
+                      for item in data[key]}
+                for key in ("publishing", "excluded", "needs_decision")}
+    except (KeyError, TypeError):
+        return None, ToolAnswer(
+            why="manifest list did not return the expected JSON",
+            used=answer.used)
+    return sets, answer
 
 
 def manifest_rows(vault: Path, played: list[str]) -> list[str]:
-    """WARNING rows for played sessions (and their Wrap-Ups) that
-    `_meta/publish-manifest.md` does not list under Publishing (#277).
+    """WARNING rows for played sessions (and their Wrap-Ups) that the
+    publish list does not list under Publishing (#277).
 
-    Silent unless the vault has a manifest and publishes in player mode —
-    the only mode where the manifest is an allowlist, matching
+    Silent unless the vault has a publish list and publishes in player
+    mode — the only mode where the list is an allowlist, matching
     publish-decision.js. A file under Excluded is a decision, not an
-    oversight, so it is not reported.
+    oversight, so it is not reported. The list is asked of the publish
+    tool (`manifest list`); when it can't be asked, one row says so and
+    promises nothing.
 
     What happens next is the publish tool's call, not this script's: it is
     asked (`manifest publish-played --dry-run --json`, the site's tool first,
@@ -1070,9 +1058,6 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     reason. The Wrap-Up rows come from the same answer. When it can't be
     asked, the rows promise nothing about what happens next.
     """
-    sections = read_manifest_sections(vault)
-    if sections is None:
-        return []
     # As the build reads it (the settings list's `player_site.hide.mode`): only
     # `full`, in any case, is full; anything else is player mode and the
     # list applies.
@@ -1080,6 +1065,18 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     own = settings(vault)
     if (written_in_vault_file(own, "player_site.hide.mode")
             and own.get("player_site.hide.mode") == "full"):
+        return []
+
+    if not played or not any((vault / "_meta" / name).is_file()
+                             for name in ("publish-list.yaml",
+                                          "publish-manifest.md")):
+        return []
+    sections, listed = publish_list_sets(vault)
+    if sections is None:
+        if listed.why:
+            return [_publish_tool_row(
+                listed.why, "played sessions were not checked against the "
+                "publish list", listed.used)]
         return []
 
     def unlisted(rel: str) -> str | None:
@@ -1090,8 +1087,6 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
                 else "no manifest section")
 
     waiting = [rel for rel in played if unlisted(rel)]
-    if not played:
-        return []
     answer = ask_publish_tool(vault, ["manifest", "publish-played",
                                       "--dry-run"])
     ticks: set[str] = set()
@@ -1125,7 +1120,7 @@ def manifest_rows(vault: Path, played: list[str]) -> list[str]:
     def row(rel: str, kind: str) -> str:
         where = unlisted(rel)
         head = (f"WARNING\t{rel}\t{kind} is not under Publishing in "
-                f"_meta/publish-manifest.md ({where}) — it will not publish")
+                f"the publish list ({where}) — it will not publish")
         canon = unicodedata.normalize("NFC", rel)
         if not known:
             return (f"{head} until it is listed there (publish-site runs "
@@ -1488,20 +1483,32 @@ class ExplainAll:
         return self._answer
 
 
-def ask_publish_tool(vault: Path, args: list[str]) -> ToolAnswer:
+def ask_publish_tool(vault: Path, args: list[str],
+                     site_optional: bool = False) -> ToolAnswer:
     """Run the site's publish tool with `args` plus `--json`, `--config`
     and `--vault`, and parse its JSON. `ToolAnswer()` with no data and no
-    reason means the vault publishes nothing."""
+    reason means the vault publishes nothing. `site_optional` is for a
+    question about the vault's own files (the publish list): a vault with
+    no site to ask is asked of the plugin's tool, with no `--config`."""
     config, why = _site_config(vault)
-    if config is None:
+    if config is None and site_optional:
+        site_args: list[str] = []
+        tool: Path | None = PUBLISH_TOOL
+        label = "the plugin's publish tool (the vault has no site to ask)"
+        why = None
+        if not PUBLISH_TOOL.is_file():
+            tool, why = None, f"the publish tool is not at {PUBLISH_TOOL}"
+        used: str | None = label
+    elif config is None:
         # A site that is off is not a tool that could not be asked: there is
         # nothing to say. One that is on with no folder is.
         quiet = (why == no_site_dir(vault)
                  and site_switch_written(settings(vault)) is not True)
         return ToolAnswer(why=None if quiet else why)
-    site_args = ["--config", str(config)]
-    tool, label, why = _publish_tool_for(config.parent)
-    used = label if tool == PUBLISH_TOOL else None
+    else:
+        site_args = ["--config", str(config)]
+        tool, label, why = _publish_tool_for(config.parent)
+        used = label if tool == PUBLISH_TOOL else None
     if tool is None:
         return ToolAnswer(why=why, used=label)
     node = shutil.which("node")

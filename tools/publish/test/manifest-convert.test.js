@@ -119,10 +119,16 @@ test('manifest list and manifest convert answer through the command', async () =
   assert.equal(await runManifest({ verb: 'convert', vaultPath: v }, d), 0);
   assert.equal(await runManifest({ verb: 'list', vaultPath: v, json: true }, d), 0);
   const payload = JSON.parse(lines.pop());
+  assert.equal(payload.listed, true);
   assert.deepEqual(payload.publishing, ['NPCs/Vex.md']);
   assert.deepEqual(payload.excluded.map((e) => e.path).sort(), ['Archive/Old.md', 'Sessions/Next.md']);
   assert.deepEqual(payload.counts, { publishing: 1, excluded: 2, needs_decision: 3 });
   assert.equal(await runManifest({ verb: 'list' }, d), 1);
+  const bare = fs.mkdtempSync(path.join(os.tmpdir(), 'no-list-'));
+  try {
+    assert.equal(await runManifest({ verb: 'list', vaultPath: bare, json: true }, d), 0);
+    assert.equal(JSON.parse(lines.pop()).listed, false);
+  } finally { fs.rmSync(bare, { recursive: true, force: true }); }
 });
 
 test('a reason beside a Publishing entry round-trips', () => {
