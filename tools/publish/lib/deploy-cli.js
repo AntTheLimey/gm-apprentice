@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { failureDetail } = require('./run-command');
 const { alignProjectName } = require('./setup-backend');
-const { loadVaultConfig, siteConfigFor, outputFolderOf, loadPublishConfig } = require('./config');
+const { loadVaultConfig, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig } = require('./config');
 const { buildHooks, HOOK_TIMEOUT_MS } = require('./settings/legacy');
 const { nameIn } = require('./settings');
 const { isGmOutput, gmEvidence } = require('./gm-site');
@@ -30,12 +30,6 @@ const CLOUDFLARE_AUTH_FIX =
   'an API token with the Account · Cloudflare Pages · Edit permission, then re-run deploy.';
 
 // A Cloudflare Pages project name is lowercase alphanumerics and hyphens.
-// The folder a wrangler.toml names for upload (pages_build_output_dir), or null when it names none.
-function tomlOutputFolder(text, siteRoot) {
-  const m = /^\s*pages_build_output_dir\s*=\s*["']([^"'\n]+)["']/m.exec(String(text || ''));
-  return m ? path.resolve(siteRoot, m[1]) : null;
-}
-
 function projectNameFor(config, siteRoot) {
   return config.cloudflarePagesProject
     || path.basename(siteRoot).toLowerCase().replace(/[^a-z0-9-]/g, '-');
