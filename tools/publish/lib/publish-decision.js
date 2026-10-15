@@ -262,7 +262,9 @@ function decideGmPage(page, options) {
   const withPlayer = (v) => ({ ...v, player: v });
 
   const rel = opts.rel;
-  const excludedDir = alwaysExcludedSegment(rel);
+  // The scanner reads folder names case-insensitively, so the GM site's never-shown test does too.
+  const lowerDirs = ALWAYS_EXCLUDE_DIRS.map((d) => d.toLowerCase());
+  const excludedDir = String(rel == null ? '' : rel).split('/').slice(0, -1).find((s) => lowerDirs.includes(s.toLowerCase()));
   if (excludedDir) {
     return withPlayer({ bucket: 'exclude', code: 'DIR_ALWAYS_EXCLUDED', reason: `in ${excludedDir}/ — never published`, outputPath: (page && page.outputPath) || null });
   }

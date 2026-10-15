@@ -90,6 +90,24 @@ describe('decideGmPage: never shown, or not the notes rule', () => {
     });
   }
 
+  for (const rel of [
+    '_META/vault-config.md', '_Meta/index.md', '_TEMPLATES/x.md', 'Personal/x.md', 'PERSONAL/x.md',
+    'Camp/_META/x.md', 'Camp/_TEMPLATES/x.md', 'Camp/Personal/x.md', 'Camp/PERSONAL/deep/x.md',
+  ]) {
+    it(`DIR_ALWAYS_EXCLUDED for ${rel} whatever the case, even in a hidden folder`, () => {
+      for (const hiddenFolders of [[], ['_meta', '_Templates', 'personal', 'Camp']]) {
+        const v = gm({ type: 'npc' }, { rel, hiddenFolders });
+        assert.strictEqual(v.bucket, 'exclude');
+        assert.strictEqual(v.code, 'DIR_ALWAYS_EXCLUDED');
+        assert.strictEqual(v.player.code, 'DIR_ALWAYS_EXCLUDED');
+      }
+    });
+  }
+
+  it('a folder that only starts with an always-excluded name is a normal folder', () => {
+    assert.strictEqual(gm({ type: 'npc' }, { rel: '_Metadata/x.md' }).code, 'OK');
+  });
+
   it('always-excluded wins over a hidden folder', () => {
     const v = gm({ type: 'npc' }, { rel: '_meta/x.md', hiddenFolders: ['_meta'] });
     assert.strictEqual(v.code, 'DIR_ALWAYS_EXCLUDED');
