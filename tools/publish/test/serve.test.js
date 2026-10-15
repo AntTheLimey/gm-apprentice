@@ -58,6 +58,27 @@ describe('serve', () => {
     assert.equal(r.headers.location, '/npcs/');
   });
 
+  for (const p of ['//evil.com/..', '//evil.com/%2e%2e', '//npcs', '/npcs/..', '/%2e%2e', '/npcs?x=1']) {
+    it(`a redirect for ${p} never leaves the site`, async () => {
+      const r = await request(port, 'GET', p);
+      if (r.status === 301) {
+        const loc = r.headers.location;
+        assert.match(loc, /^\/(?!\/)/, loc);
+        assert.doesNotMatch(loc, /evil/);
+      } else {
+        assert.ok([200, 400, 403, 404].includes(r.status), String(r.status));
+      }
+    });
+  }
+
+  it('every folder redirect keeps one leading slash', async () => {
+    const r = await request(port, 'GET', '//evil.com/..');
+    assert.equal(r.status, 301);
+    assert.equal(r.headers.location, '/');
+    const q = await request(port, 'GET', '/npcs?x=1');
+    assert.equal(q.headers.location, '/npcs/?x=1');
+  });
+
   it('a miss gets the site\'s 404 page with status 404', async () => {
     const r = await request(port, 'GET', '/nothing.html');
     assert.equal(r.status, 404);

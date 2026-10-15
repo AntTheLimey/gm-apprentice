@@ -88,7 +88,11 @@ function handler(root, { notFound = '404.html' } = {}) {
     if (stat && stat.isDirectory()) {
       // Relative links in a folder's page only work from the slash form.
       if (!rawPath.endsWith('/')) {
-        res.writeHead(301, { Location: `${rawPath}/${query}`, 'X-Content-Type-Options': 'nosniff' });
+        // Built from where the path landed inside the folder, never from the request text: one leading slash, then
+        // the folder's own segments, so a path like "//evil.com/.." cannot name another host.
+        const segments = path.relative(lexicalRoot, resolved).split(path.sep).filter(Boolean).map(encodeURIComponent);
+        const location = `/${segments.map((s) => `${s}/`).join('')}`;
+        res.writeHead(301, { Location: `${location}${query}`, 'X-Content-Type-Options': 'nosniff' });
         res.end();
         return;
       }
