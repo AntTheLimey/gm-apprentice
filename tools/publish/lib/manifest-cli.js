@@ -6,16 +6,19 @@
 // `diff` walks the vault, asks publish-decision what each file would do, and shows
 // what the manifest does not yet say about it — so the answer comes from the same
 // code the build runs, not from re-reading the filtering rules.
-// `apply` moves named paths between the three lists and rewrites _meta/publish-list.yaml,
-// keeping the reasons on the entries it was not asked to touch. A vault whose list is still
-// in the old Markdown file is converted first (publish-list-convert.js).
+// `apply` moves named paths between the three lists and rewrites the list, keeping the reasons
+// on the entries it was not asked to touch. It writes the file the vault is on: a vault whose
+// list is still in the old Markdown file gets it back in that file, by the old writer
+// (manifest-legacy.js); only the update and `manifest convert` move a list.
 const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
 const { loadManifest, canonicalPath, counts, listText } = require('./manifest');
+const { parseAnnotatedManifest, renderManifest } = require('./manifest-legacy');
 const { writeAtomic } = require('./settings/write');
-const { PUBLISH_LIST_FILE } = require('./settings/layout');
+const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
+const { siteToolOlderThan } = require('./settings/move');
 const { convertPublishList, setsOf } = require('./publish-list-convert');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
@@ -62,6 +65,20 @@ function entriesOf(list) {
   for (const rel of list.excluded) entries.set(rel, { section: 'excluded', annotation: reasonOf(rel) });
   for (const rel of list.needsDecision) entries.set(rel, { section: 'needsDecision', annotation: reasonOf(rel) });
   return entries;
+}
+
+// Whether the vault's list lives in the old Markdown file: it is there, or there is no list yet and the site's
+// tool is older than PUBLISH_LIST_FROM (it would read a new file as no list at all).
+function onOldFile(survey) {
+  if (survey.manifest) return survey.manifest.file === 'old';
+  return Boolean(survey.siteDir && siteToolOlderThan(survey.siteDir, PUBLISH_LIST_FROM));
+}
+
+// The list as an entries map, as the file the vault is on is read: the old file by the old annotated reader (every
+// entry line it knows, as the old writer kept them), the new one through loadManifest.
+function listedEntries(survey, readFile = (p) => fs.readFileSync(p, 'utf8')) {
+  if (survey.manifest && survey.manifest.file === 'old') return parseAnnotatedManifest(readFile(at(survey.vaultPath, OLD_LIST_FILE)));
+  return entriesOf(survey.manifest);
 }
 
 // The three lists of an entries map, as loadManifest shapes them.
@@ -141,7 +158,7 @@ async function runDiff(options, deps, survey) {
   const exists = deps.exists || ((p) => fs.existsSync(p));
   const { vaultPath, manifest, files, verdicts } = survey;
 
-  const listed = entriesOf(manifest);
+  const listed = listedEntries(survey, deps.readFile);
 
   const added = [];
   const unchanged = { publishing: 0, excluded: 0, needsDecision: 0 };
@@ -206,10 +223,12 @@ async function runApply(options, deps, survey) {
   const writeFile = deps.writeFile || ((p, c) => writeAtomic(p, c));
   const exists = deps.exists || ((p) => fs.existsSync(p));
   const mkdir = deps.mkdir || ((p) => fs.mkdirSync(p, { recursive: true }));
-  const { vaultPath, files } = survey;
+  const now = deps.now || (() => new Date());
+  const { vaultPath, files, publishConfig } = survey;
 
-  const manifestPath = path.join(vaultPath, ...PUBLISH_LIST_FILE.split('/'));
-  let entries = entriesOf(survey.manifest);
+  const old = onOldFile(survey);
+  const manifestPath = at(vaultPath, old ? OLD_LIST_FILE : PUBLISH_LIST_FILE);
+  const entries = listedEntries(survey, deps.readFile);
 
   const moves = [
     ...(options.publish || []).map((a) => Object.assign(splitReason(a), { section: 'publishing' })),
@@ -239,17 +258,6 @@ async function runApply(options, deps, survey) {
     return 1;
   }
 
-  // A vault whose list is still in the old Markdown file is moved first, all or nothing; if it cannot be, nothing is written.
-  if (survey.manifest && survey.manifest.file === 'old') {
-    const moved = convertPublishList(vaultPath);
-    if (!moved.ok) {
-      out(['The publish list could not be moved to _meta/publish-list.yaml, so nothing was written:', ...moved.blockers.map((b) => `  ${b}`)].join('\n'));
-      return 1;
-    }
-    if (!options.json) for (const line of moved.lines) out(line);
-    entries = entriesOf(loadManifest(vaultPath, { warn: () => {} }));
-  }
-
   const counted = { publishing: 0, excluded: 0, needsDecision: 0 };
   for (const move of moves) {
     entries.set(move.rel, { section: move.section, annotation: move.annotation });
@@ -268,7 +276,15 @@ async function runApply(options, deps, survey) {
   }
 
   mkdir(path.dirname(manifestPath));
-  writeFile(manifestPath, listText(listOf(entries)));
+  writeFile(manifestPath, old
+    ? renderManifest({
+      entries,
+      generated: now().toISOString(),
+      vault: publishConfig.site_title || path.basename(vaultPath),
+      mode: publishConfig.mode,
+      totalFiles: files.length,
+    })
+    : listText(listOf(entries)));
 
   const sectionCounts = { publishing: 0, excluded: 0, needsDecision: 0 };
   for (const entry of entries.values()) sectionCounts[entry.section]++;
@@ -345,7 +361,7 @@ function pairsWith(survey, published) {
 // is left to the checks above, and Excluded or non-session paths are still refused.
 function planPublishPlayed(survey, { only = null, includeUnreviewed = false, publishBody = false } = {}) {
   const { vaultPath, publishConfig, manifest, files, pagesByRel } = survey;
-  const listed = entriesOf(manifest);
+  const listed = listedEntries(survey, survey.readFile);
   const sectionOf = (rel) => (listed.get(rel) || {}).section || null;
   const onDisk = new Set(files);
   const relOf = new Map([...pagesByRel].map(([rel, page]) => [page, rel]));

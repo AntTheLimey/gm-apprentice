@@ -1029,22 +1029,95 @@ describe('manifest apply keeps a reason beside a needs_decision entry', () => {
   });
 });
 
-describe('manifest apply on a vault still holding the old Markdown list', () => {
-  it('moves the list first, keeps its reasons, then applies the change', async () => {
+// Only the update and `manifest convert` move a list (review C1): every other writer keeps the vault on its file.
+describe('a vault still on the old Markdown list stays on it', () => {
+  const oldFile = (vault) => path.join(vault, '_meta', 'publish-manifest.md');
+  const newFile = (vault) => path.join(vault, '_meta', 'publish-list.yaml');
+  // A site whose build step reads the old file: the update holds this vault on it.
+  function heldSite(vault) {
+    const site = siteFor(vault);
+    fs.mkdirSync(path.join(site.dir, 'scripts'));
+    fs.writeFileSync(path.join(site.dir, 'scripts', 'add-props.mjs'), "readFileSync('../vault/_meta/publish-manifest.md')\n");
+    fs.writeFileSync(path.join(site.dir, 'package.json'), JSON.stringify({ scripts: { postbuild: 'node scripts/add-props.mjs' } }));
+    return site;
+  }
+
+  it('apply writes the old file in the old layout, byte for byte what the old writer wrote, and no new file', async () => {
     const vault = copyVault('auto-exclude');
     fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-    fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-      '## Excluded (1 files)', '', '- [x] Sessions/Planned Session.md — prep', '',
+    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Publishing (0 files)\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Planned Session.md\n');
+    const { configPath } = heldSite(vault);
+    const c = capture();
+    const rc = await runManifest({
+      verb: 'apply', configPath, publish: ['Sessions/Played Session.md'], exclude: ['Sessions/Planned Session.md=prep'],
+    }, c.deps);
+    assert.strictEqual(rc, 0, c.text());
+    assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
+    assert.strictEqual(fs.readFileSync(oldFile(vault), 'utf8'), [
+      '---',
+      'generated: 2026-09-07T12:00:00.000Z',
+      'vault: "Test Campaign"',
+      'mode: player',
+      'total_files: 5',
+      'publishing: 1',
+      'excluded: 1',
+      'needs_decision: 0',
+      '---',
+      '',
+      '## Publishing (1 files)',
+      '',
+      '- [x] Sessions/Played Session.md',
+      '',
+      '## Excluded (1 files)',
+      '',
+      '- [x] Sessions/Planned Session.md — prep',
+      '',
+      '## Needs Decision (0 files)',
+      '',
     ].join('\n'));
+    assert.match(c.text(), /manifest updated: \+1 publishing, \+1 excluded, \+0 needs decision, -0 pruned/);
+    assert.doesNotMatch(c.text(), /Moved the publish list/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('publish-played ticks in the old file and leaves the vault on it', async () => {
+    const vault = copyVault('auto-exclude');
+    fs.writeFileSync(path.join(vault, 'Sessions', 'Session 06 - Wrap-Up.md'),
+      '---\ntype: session_wrap\nsession: "[[Played Session]]"\ncanon_status: AUTHORITATIVE\n---\n\n## Recap\n\nDone.\n');
+    fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+    fs.writeFileSync(oldFile(vault), '---\nmode: player\n---\n\n## Excluded (1 files)\n\n- [ ] Notes/Kept.md — spoils it\n\n## Needs Decision (1 files)\n\n- [ ] Sessions/Played Session.md\n');
+    const { configPath } = heldSite(vault);
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'publish-played', configPath }, c.deps), 0, c.text());
+    assert.strictEqual(fs.existsSync(newFile(vault)), false, 'no new file');
+    const written = fs.readFileSync(oldFile(vault), 'utf8');
+    assert.match(written, /- \[x\] Sessions\/Played Session\.md\n/);
+    assert.match(written, /- \[x\] Sessions\/Session 06 - Wrap-Up\.md\n/);
+    assert.match(written, /- \[x\] Notes\/Kept\.md — spoils it\n/, 'the old writer keeps an unticked Excluded entry');
+    assert.match(c.text(), /published 2 file\(s\)/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a vault with no list whose site tool cannot read the new file gets the old file', async () => {
+    const vault = copyVault('auto-exclude');
+    const site = siteFor(vault);
+    const pkg = path.join(site.dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ version: '1.26.0' }));
+    const c = capture();
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath: site.configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
+    assert.strictEqual(fs.existsSync(newFile(vault)), false);
+    assert.match(fs.readFileSync(oldFile(vault), 'utf8'), /## Excluded \(1 files\)\n\n- \[x\] Sessions\/Planned Session\.md — prep\n/);
+    fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('a vault with no list and an up-to-date site gets the new file', async () => {
+    const vault = copyVault('auto-exclude');
     const { configPath } = siteFor(vault);
     const c = capture();
-    const rc = await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, c.deps);
-    assert.strictEqual(rc, 0, c.text());
-    assert.ok(!fs.existsSync(path.join(vault, '_meta', 'publish-manifest.md')), 'the old file is gone');
-    const list = readListText(fs.readFileSync(path.join(vault, '_meta', 'publish-list.yaml'), 'utf8'));
-    assert.deepStrictEqual(list.publishing, ['Sessions/Played Session.md']);
-    assert.strictEqual(list.reasons.get('Sessions/Planned Session.md'), 'prep');
-    assert.match(c.text(), /Moved the publish list to _meta\/publish-list\.yaml/);
+    assert.strictEqual(await runManifest({ verb: 'apply', configPath, exclude: ['Sessions/Planned Session.md=prep'] }, c.deps), 0, c.text());
+    assert.strictEqual(fs.existsSync(oldFile(vault)), false);
+    assert.strictEqual(readListText(fs.readFileSync(newFile(vault), 'utf8')).reasons.get('Sessions/Planned Session.md'), 'prep');
     fs.rmSync(vault, { recursive: true, force: true });
   });
 });

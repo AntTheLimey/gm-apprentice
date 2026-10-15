@@ -1,7 +1,13 @@
 'use strict';
-// Dated: removed with settings/legacy.js at 1.11.0. Read only when the vault has no _meta/publish-list.yaml.
-// The old Markdown publish list (_meta/publish-manifest.md): the reader the build used, and the annotated reader
-// the conversion uses for reasons. Nothing here writes the old file.
+// Dated: removed with settings/legacy.js at 1.11.0, and not before no vault can still be held on the old file:
+// the update's publish-list step holds a vault there while its site's tool is older than 1.27.0 or a build step
+// reads the old file, and stamps it all the same. Removing this while that hold exists leaves a held vault with
+// no list read, so an un-pinned build publishes everything: first make the hold a stop (the vault is not up to
+// date until its list has moved), then remove this file.
+// Used only when the vault has no _meta/publish-list.yaml.
+// The old Markdown publish list (_meta/publish-manifest.md): the reader the build used, the annotated reader, and
+// the writer every command but the update and `manifest convert` uses while a vault is on it (main's renderManifest,
+// unchanged), so a vault stays on the file it is on until it is moved on purpose.
 const { parseNote } = require('./frontmatter');
 const { canonicalNfc: canonicalPath } = require('./unicode');
 
@@ -128,6 +134,44 @@ function parseAnnotatedManifest(markdown) {
   return entries;
 }
 
+const SECTIONS = [
+  { key: 'publishing', title: 'Publishing', checked: true },
+  { key: 'excluded', title: 'Excluded', checked: true },
+  { key: 'needsDecision', title: 'Needs Decision', checked: false },
+];
+
+// The old file's text for an entries map (parseAnnotatedManifest's shape), in the documented layout.
+function renderManifest({ entries, generated, vault, mode, totalFiles }) {
+  const bySection = { publishing: [], excluded: [], needsDecision: [] };
+  for (const [rel, entry] of entries) bySection[entry.section].push({ rel, annotation: entry.annotation });
+  for (const key of Object.keys(bySection)) bySection[key].sort((a, b) => (a.rel < b.rel ? -1 : a.rel > b.rel ? 1 : 0));
+
+  const lines = [
+    '---',
+    `generated: ${generated}`,
+    `vault: ${JSON.stringify(vault)}`,
+    `mode: ${mode}`,
+    `total_files: ${totalFiles}`,
+    `publishing: ${bySection.publishing.length}`,
+    `excluded: ${bySection.excluded.length}`,
+    `needs_decision: ${bySection.needsDecision.length}`,
+    '---',
+    '',
+  ];
+  for (const section of SECTIONS) {
+    const rows = bySection[section.key];
+    lines.push(`## ${section.title} (${rows.length} files)`, '');
+    for (const row of rows) {
+      const box = section.checked ? '- [x]' : '- [ ]';
+      lines.push(row.annotation ? `${box} ${row.rel} — ${row.annotation}` : `${box} ${row.rel}`);
+    }
+    lines.push('');
+  }
+  // An empty section contributes header + two blanks; collapse those, and end the
+  // file on exactly one newline.
+  return lines.join('\n').replace(/\n{3,}/g, '\n\n').replace(/\n+$/, '\n');
+}
+
 function lines(text) {
   return text.match(/[^\n]*\n|[^\n]+$/g) || [];
 }
@@ -159,4 +203,4 @@ function renameInOldList(text, from, to) {
   return changed ? out.join('') : null;
 }
 
-module.exports = { parseManifest, parseAnnotatedManifest, stripInlineComment, renameInOldList, ENTRY_RE };
+module.exports = { parseManifest, parseAnnotatedManifest, renderManifest, stripInlineComment, renameInOldList, ENTRY_RE };
