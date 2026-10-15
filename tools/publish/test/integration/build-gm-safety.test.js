@@ -254,6 +254,23 @@ describe('the GM build refuses a folder it must not write', () => {
     } finally { s.cleanup(); }
   });
 
+  it('a settings file that cannot be read fails the build with its real message, never "the GM site is off"', () => {
+    const { gmSiteOnFor } = require('../../lib/config');
+    const { spawnSync } = require('node:child_process');
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      assert.equal(gmSiteOnFor(s.configPath), true);
+      editSettings(s, () => 'version: 1\nplayer_site: [unclosed\n  - x: : :\n');
+      assert.throws(() => gmSiteOnFor(s.configPath), /./);
+      for (const args of [['--site', 'gm'], []]) {
+        const r = spawnSync(process.execPath, [path.join(__dirname, '..', '..', 'bin', 'gm-publish.js'), 'build', '--config', s.configPath, ...args], { encoding: 'utf8' });
+        assert.notEqual(r.status, 0, args.join(' '));
+        assert.doesNotMatch(r.stderr, /GM site is off/, r.stderr);
+        assert.match(r.stderr, /could not read the GM site's settings: ./, r.stderr);
+      }
+    } finally { s.cleanup(); }
+  });
+
   it('refuses when the GM site is off', () => {
     const s = buildBoth(NOTES, { sites: ['player'], gm: { publish: false } });
     try { assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'gm' })), /gm_site\.publish/); } finally { s.cleanup(); }

@@ -366,18 +366,14 @@ function siteOffFor(configPath) {
   }
 }
 
-// Whether the vault turns the GM site on (gm_site.publish). false when the site's vault.config.json or the vault's
-// settings cannot be read: the build then reports that in its own words.
+// Whether the vault turns the GM site on (gm_site.publish). A site file or vault settings that cannot be read throw
+// with the real message: the GM site must never be reported off for a reason that is not the switch.
 function gmSiteOnFor(configPath) {
-  try {
-    const resolved = path.resolve(configPath);
-    const raw = loadVaultConfig(resolved);
-    const siteDir = path.dirname(resolved);
-    const vaultPath = path.resolve(siteDir, raw.vaultPath);
-    return loadPublishConfig(vaultPath, raw, () => {}, { quietStops: true, siteDir, site: 'gm' }).gm.publish === true;
-  } catch {
-    return false;
-  }
+  const resolved = path.resolve(configPath);
+  const raw = loadVaultConfig(resolved);
+  const siteDir = path.dirname(resolved);
+  const vaultPath = path.resolve(siteDir, raw.vaultPath);
+  return loadPublishConfig(vaultPath, raw, () => {}, { quietStops: true, siteDir, site: 'gm' }).gm.publish === true;
 }
 
 module.exports = { siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };

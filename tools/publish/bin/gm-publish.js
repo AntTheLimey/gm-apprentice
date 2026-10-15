@@ -648,7 +648,11 @@ if (command === 'build') {
   // With the player site off and the GM site on, the GM site is built alone.
   const configLib = require('../lib/config');
   const off = configLib.siteOffFor(configPath);
-  const gmOn = configLib.gmSiteOnFor(configPath);
+  let gmOn;
+  try { gmOn = configLib.gmSiteOnFor(configPath); } catch (err) {
+    console.error(`Build failed: could not read the GM site's settings: ${String(err.message).split('\n')[0].trim()}`);
+    process.exit(1);
+  }
   if (siteFlag === 'gm' && !gmOn) {
     console.error('The GM site is off for this vault (gm_site.publish); nothing was built.');
     process.exit(1);
