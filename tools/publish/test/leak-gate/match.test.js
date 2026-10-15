@@ -51,6 +51,18 @@ describe('leak gate: match', () => {
       assert.ok(!readOutput(dir).map((f) => f.rel).includes('js/search.js'));
     } finally { fs.rmSync(dir, { recursive: true, force: true }); }
   });
+  it('reads a stylesheet a step wrote; the tool\'s own stylesheet, byte for byte, is skipped', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lg-css-'));
+    try {
+      fs.mkdirSync(path.join(dir, 'css'));
+      fs.writeFileSync(path.join(dir, 'css', 'extra.css'), '.x::after { content: "the cellar opens onto the sea"; }');
+      const toolCss = fs.readdirSync(path.join(__dirname, '..', '..', 'css')).find((f) => f.endsWith('.css'));
+      fs.copyFileSync(path.join(__dirname, '..', '..', 'css', toolCss), path.join(dir, 'css', toolCss));
+      const rels = readOutput(dir).map((f) => f.rel);
+      assert.ok(rels.includes('css/extra.css'));
+      assert.ok(!rels.includes(`css/${toolCss}`));
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  });
   it('reads .xml, .svg, .md, .mjs, .csv and .webmanifest files for text (M3)', () => {
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lg-ext-'));
     try {

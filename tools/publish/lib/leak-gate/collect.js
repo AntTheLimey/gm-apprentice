@@ -140,7 +140,8 @@ function collectHidden({ configPath }) {
     if (body == null) {
       // A note that cannot be read is checked as its whole text (it fails closed), and said.
       let raw = '';
-      try { raw = fs.readFileSync(note.sourcePath, 'utf8'); } catch (e) { warnings.push(`Leak check: ${rel} could not be read (${e.message}); its text is not checked.`); }
+      // A note that cannot be read at all stops the check: its text could be anywhere on the site.
+      try { raw = fs.readFileSync(note.sourcePath, 'utf8'); } catch (e) { throw new Error(`Leak check: ${rel} could not be read (${e.message}), so its text cannot be checked. Fix the file and deploy again.`); }
       try { body = parseNote(raw).content; } catch (e) {
         body = raw;
         warnings.push(`Leak check: the frontmatter of ${rel} cannot be read (${String(e.message).split('\n')[0]}); its whole text is checked.`);

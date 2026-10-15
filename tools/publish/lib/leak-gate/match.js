@@ -7,7 +7,7 @@ const path = require('path');
 const { pageText } = require('../note-faults');
 const { wordsOf, MIN_WORDS } = require('./text');
 
-const TEXT_EXT = new Set(['.html', '.htm', '.json', '.webmanifest', '.js', '.mjs', '.txt', '.md', '.csv', '.xml', '.svg']);
+const TEXT_EXT = new Set(['.html', '.htm', '.json', '.webmanifest', '.js', '.mjs', '.css', '.txt', '.md', '.csv', '.xml', '.svg']);
 const MARKUP_EXT = new Set(['.xml', '.svg']);
 const JSON_EXT = new Set(['.json', '.webmanifest']);
 const TOOL_JS = path.join(__dirname, '..', '..', 'js');
@@ -86,11 +86,11 @@ function toolCopyOf(rel) {
   return fs.existsSync(file) ? file : null;
 }
 
-// A script the tool itself copies into every site, byte for byte: it holds no vault text. A file of the same name that
-// a build step wrote is read like any other.
+// A script or stylesheet the tool itself copies into every site, byte for byte: it holds no vault text. A file of the same
+// name that a build step wrote, or changed, is read like any other.
 const toolText = new Map();
 function isToolScript(rel, raw) {
-  const file = /^js\//.test(rel) ? toolCopyOf(rel) : null;
+  const file = toolCopyOf(rel);
   if (!file) return false;
   if (!toolText.has(file)) toolText.set(file, fs.readFileSync(file, 'utf8'));
   return toolText.get(file) === raw;

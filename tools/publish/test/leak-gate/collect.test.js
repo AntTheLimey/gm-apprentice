@@ -1,6 +1,8 @@
 'use strict';
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const { leakSite } = require('../helpers/leak-site');
 const { collectHidden } = require('../../lib/leak-gate/collect');
 
@@ -90,6 +92,18 @@ describe('leak gate: collect', () => {
       assert.ok(c.pieces.some((x) => x.note === 'Prep/Broken.md' && x.text === 'the smuggler hides gold in the chapel'), JSON.stringify(c.pieces.map((x) => x.text)));
       assert.ok(c.warnings.some((w) => /Prep\/Broken\.md/.test(w)), JSON.stringify(c.warnings));
     } finally { p.cleanup(); }
+  });
+  it('a note that cannot be read at all stops the check, naming it', (t) => {
+    if (process.platform === 'win32' || (process.getuid && process.getuid() === 0)) { t.skip('file modes do not block reads here'); return; }
+    const p = leakSite({
+      'NPCs/A.md': '---\ntype: npc\n---\nThe baker is a kind man.\n',
+      'Prep/Locked.md': '---\ntype: npc\npublish: false\n---\nThe smuggler hides gold in the chapel.\n',
+    }, { player: { folder_map: { NPCs: 'npcs', Prep: 'prep' } } });
+    const locked = path.join(p.root, 'vault', 'Prep', 'Locked.md');
+    try {
+      fs.chmodSync(locked, 0o000);
+      assert.throws(() => collectHidden({ configPath: p.configPath }), /Locked\.md/);
+    } finally { fs.chmodSync(locked, 0o644); p.cleanup(); }
   });
   it('a vault kept by a player collects nothing', () => {
     const p = leakSite({ 'NPCs/A.md': '---\ntype: npc\n---\n## GM Notes\n\nThis is a secret sentence here.\n' }, { vault: { kept_by: 'player' }, gm: { publish: false } });
