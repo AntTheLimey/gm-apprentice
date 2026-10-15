@@ -1996,6 +1996,40 @@ function publishedFrontmatter(frontmatter, excludeFields = [], overrides = {}) {
   return filtered;
 }
 
+// What `publishedFrontmatter` takes out of one note's frontmatter, for the GM site's "Hidden from players" panel:
+// [{ kind: 'fields' | 'relationships', label, name, value }], in the input's key order. It is the difference between
+// the input and `publishedFrontmatter`'s output, so the rule is not written twice. The bookkeeping keys are not listed.
+const BOOKKEEPING_KEYS = new Set(['publish', 'publish_exclude_fields', 'publish_include_sections', 'withheld']);
+function hiddenFieldsOf(frontmatter, excludeFields = [], overrides = {}) {
+  const fm = frontmatter || {};
+  const out = publishedFrontmatter(fm, excludeFields, overrides);
+  // The same note with nothing the secret-name and GM-only-edge steps remove: a key still missing from this was
+  // taken out by a field rule (a name in the exclude lists), not by one of those steps.
+  const probe = { ...fm };
+  delete probe.gm_aliases;
+  if (Array.isArray(fm.relationships)) probe.relationships = [{ target: '' }];
+  const ruled = publishedFrontmatter(probe, excludeFields, overrides);
+  const field = (name, value, label = `field: ${name}`) => ({ kind: 'fields', label, name, value });
+  const hidden = [];
+  for (const key of Object.keys(fm)) {
+    if (BOOKKEEPING_KEYS.has(key)) continue;
+    const value = fm[key];
+    if (key === 'gm_aliases') {
+      hidden.push(field('gm_aliases', value));
+    } else if (key === 'aliases' && key in ruled) {
+      const shown = Array.isArray(out.aliases) ? out.aliases : [];
+      const all = Array.isArray(value) ? value : [];
+      for (const a of all) if (!shown.includes(a)) hidden.push(field('aliases', a, 'field: gm_aliases'));
+    } else if (key === 'relationships' && Array.isArray(value) && key in ruled) {
+      const shown = Array.isArray(out.relationships) ? out.relationships : [];
+      for (const edge of value) if (!shown.includes(edge)) hidden.push({ kind: 'relationships', label: 'GM-only relationship', name: 'relationships', value: edge });
+    } else if (!(key in out)) {
+      hidden.push(field(key, value));
+    }
+  }
+  return hidden;
+}
+
 // A frontmatter value that is a list of names, or one name written alone: the names, trimmed.
 function nameList(v) {
   if (typeof v === 'string') return v.trim() ? [v.trim()] : [];
@@ -2040,7 +2074,11 @@ const GM_ALIAS_NAME_FIELDS = new Set([
 // A GM alias that is also a published page's title or public alias is
 // skipped: that name belongs to the other page, and its links stay as they
 // are. `published` is the pages the site publishes (default: all of `pages`).
-function gmAliasRewriter(pages, published, rawNotes, words) {
+//
+// `mark` ({ marks, show }, the GM site): the name a player would not see stays in the text, inside a mark.
+// A withheld name is kind `withheld_names` ("players see: someone"); a secret alias is kind `fields`
+// ("gm_aliases; players see: <name>"). `published` is then the player site's pages. Without `mark`: as above.
+function gmAliasRewriter(pages, published, rawNotes, words, mark) {
   // The words are the site's withheld_words setting, always passed in; a missing set is a mistake in the calling code.
   if (!words || typeof words !== 'object' || ['person', 'place', 'thing'].some((k) => typeof words[k] !== 'string')) {
     throw new Error('gmAliasRewriter was not given the site\'s withheld_words; the caller must pass publishConfig.withheld_words');
@@ -2101,6 +2139,11 @@ function gmAliasRewriter(pages, published, rawNotes, words) {
   }
   if (owners.size === 0 && secretKeys.size === 0 && withheldKeys.size === 0) return null;
 
+  // `text` wrapped in a mark of `kind`, or null when the GM site does not show that kind.
+  const marked = (kind, label, text) => (mark && mark.show.has(kind) ? `${mark.marks.open(kind, label)}${text}${mark.marks.close()}` : null);
+  // A withheld name as the GM sees it: the owner's display title, else the link's own text with `_` read as spaces.
+  const withheldName = (owner, text) => (owner ? (owner.displayTitle || owner.title) : String(text).split('/').pop().replace(/_/g, ' '));
+
   const WIKI = wikilinkRe('g', true);
   function links(text, labelled) {
     return String(text).replace(WIKI, (match, body) => {
@@ -2123,7 +2166,17 @@ function gmAliasRewriter(pages, published, rawNotes, words) {
       const effectiveLabel = labelIsSecret ? '' : label;
       // An unlabelled link to a withheld page (by any of its names) prints the placeholder,
       // not the page's name.
-      if (hidden && !effectiveLabel) return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${hidden}]]`;
+      if (hidden && !effectiveLabel) {
+        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(owner, target));
+        return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${name === null ? hidden : name}]]`;
+      }
+      // The GM site keeps the secret alias, inside a mark that says what players see in its place.
+      if (mark && !effectiveLabel) {
+        const alias = String(labelIsSecret ? w.display : target).split('/').pop();
+        const seen = owner ? (owner.displayTitle || owner.title) : withheldName(null, target);
+        const name = marked('fields', `gm_aliases; players see: ${seen}`, alias);
+        if (name !== null) return `${bang}[[${owner ? owner.title : target}${anchor || ''}${bar}${name}]]`;
+      }
       // In prose, an unlabelled link shows the page's display title rather
       // than its filename. Frontmatter values keep a bare target, because
       // several renderers strip the brackets and look the rest up as-is.
@@ -2151,9 +2204,16 @@ function gmAliasRewriter(pages, published, rawNotes, words) {
       const owner = owners.get(gmAliasKey(v.split('/').pop()));
       // A bare name that is a withheld note's: the page prints the placeholder, as for a link.
       const hidden = placeholderFor(v);
-      if (owner) return hidden ? `[[${owner.title}|${hidden}]]` : owner.title;
+      if (owner && hidden) {
+        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(owner, v));
+        return `[[${owner.title}|${name === null ? hidden : name}]]`;
+      }
+      if (owner) return owner.title;
       const bare = v.trim();
-      if (bare && !bare.includes('[[') && hidden) return `[[${bare}|${hidden}]]`;
+      if (bare && !bare.includes('[[') && hidden) {
+        const name = marked('withheld_names', `players see: ${hidden}`, withheldName(null, bare));
+        return `[[${bare}|${name === null ? hidden : name}]]`;
+      }
       return links(v, false);
     }
     if (Array.isArray(v)) return v.map(nameIn);
@@ -2189,4 +2249,4 @@ function gmAliasRewriter(pages, published, rawNotes, words) {
   };
 }
 
-module.exports = { markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
+module.exports = { markedBlocksForTest: markedBlocks, htmlCommentsForTest: htmlComments, obsidianCommentsForTest: obsidianComments, calloutLinesForTest: calloutLines, strippedLines, renderInline, findHeadings, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, renderMarkdown, processContent, playerSafeMarkdown, noteFacts, keptFlags, stubCut, extractSections, resolveWikiLinks, filterSections, isExcludedSection, strippedSectionTitles, stripDataview, stripGmOnly, stripSpoiler, stripCallouts, stripHtmlComments, stripLeadingH1, relativePath, relativeHref, humanizeName, wikiTargetLabel, parseWikiRef, escapeHtml, resolveImageEmbeds, encodeImageUrl, encodeHref, encodeAddress, publishedSource, isSessionHub, renderMetaValue, plainMetaValue, plainRefValue, NOTE_NAME_FIELDS, refMetaValue, referenceOf, valueText, dateText, portraitBasename, filterFields, publishedFrontmatter, hiddenFieldsOf, gmAliasList, nameList, gmAliasKey, gmAliasRewriter, publishMode, isGmOnlyEdge, isWithheld, flagIsYes, withheldPlaceholder, keepOnlySections, keptSectionFlags, stubMarked, sectionVerdicts, sheetWithheldTitles };
