@@ -205,7 +205,7 @@ describe('player mode prunes unreferenced images with no manifest present (#210)
     const vault = path.join(work, 'vault');
     outputDir = path.join(work, 'docs');
 
-    // No _meta/publish-manifest.md anywhere in this vault.
+    // No publish list anywhere in this vault.
     write(vault, '_meta/vault-config.md', '---\npublish:\n  mode: player\n---\n');
     write(vault, '_attachments/Referenced.png', 'fake-png-bytes');
     write(vault, '_attachments/Never Embedded.png', 'fake-png-bytes');

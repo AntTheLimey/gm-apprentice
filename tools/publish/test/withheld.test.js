@@ -8,7 +8,7 @@ const { runSiteDoctor } = require('../lib/site-doctor');
 const { build } = require('../lib/build');
 const { summaryLines } = require('../lib/note-faults');
 const { writeNewConfig } = require('./helpers/settings-files');
-
+const { writePublishList } = require('./helpers/publish-list');
 // `withheld: true` (#291): a note's own name is a secret. Its file name, title and aliases are
 // searched for in everything the build publishes, as gm_aliases names are. An unlabelled
 // link to it prints a neutral placeholder. #292: a link to such a note is an error.
@@ -37,11 +37,7 @@ function site(files, { excluded = [], publish = null, binary = {}, mode = 'playe
   }
   const listed = publish || Object.keys(files).filter((rel) => !excluded.some((e) => e.startsWith(rel)));
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
-  fs.writeFileSync(path.join(vault, '_meta', 'publish-manifest.md'), [
-    '---', `mode: ${mode}`, '---', '',
-    `## Publishing (${listed.length} files)`, '', ...listed.map((rel) => `- [x] ${rel}`), '',
-    `## Excluded (${excluded.length} files)`, '', ...excluded.map((e) => `- [x] ${e}`), '',
-  ].join('\n'));
+  writePublishList(vault, { publishing: listed, excluded });
   const map = [...folders].map((f) => `    ${f}: ${f.toLowerCase()}\n`).join('');
   fs.writeFileSync(path.join(vault, '_meta', 'vault-config.md'),
     `---\npublish:\n  mode: ${mode}\n  exclude_dirs:\n    - Quiet\n${extra}  folder_map:\n${map}---\n`);
@@ -602,13 +598,14 @@ describe('the name matcher\'s word boundaries', () => {
   });
 });
 
-describe('a "stays hidden:" reason beside a Publishing entry', () => {
+describe('a note under publishing (which holds no reason)', () => {
   it('does not settle the link report of a withheld note', async () => {
     const files = { 'Characters/Lord_Zorn.md': zornNote('withheld: true\npublish: false\n'), 'Characters/Mara_Quill.md': mara('Met [[Lord_Zorn]].') };
-    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Lord_Zorn.md — stays hidden: x'] });
+    const { configPath } = site(files, { publish: ['Characters/Mara_Quill.md', 'Characters/Lord_Zorn.md'] });
     const { json } = await doctor(configPath, { json: true });
     const hit = json.findings.find((f) => f.code === 'NAMED_NO_PAGE');
-    assert.strictEqual(hit.reason, 'stays hidden: x');
+    // The publish list holds a reason only for an excluded entry.
+    assert.strictEqual(hit.reason, null);
     assert.strictEqual(hit.settled, false);
   });
 });

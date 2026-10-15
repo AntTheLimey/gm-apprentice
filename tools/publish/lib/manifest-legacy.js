@@ -128,4 +128,35 @@ function parseAnnotatedManifest(markdown) {
   return entries;
 }
 
-module.exports = { parseManifest, parseAnnotatedManifest, stripInlineComment, ENTRY_RE };
+function lines(text) {
+  return text.match(/[^\n]*\n|[^\n]+$/g) || [];
+}
+
+// Renames one path in the old Markdown list, text kept byte for byte but for the name. null when it names no entry.
+function renameInOldList(text, from, to) {
+  const want = canonicalPath(from);
+  let section = null;
+  let changed = false;
+  const out = lines(text).map((line) => {
+    const eol = /\r?\n$/.exec(line);
+    const body = eol ? line.slice(0, -eol[0].length) : line;
+    const heading = /^## (.+)/.exec(body);
+    if (heading) {
+      const title = heading[1].trim();
+      section = title.startsWith('Publishing') || title.startsWith('Needs Decision') || title.startsWith('Excluded') ? title : null;
+      return line;
+    }
+    if (!section) return line;
+    const prefix = /^(?:- \[[ xX]\]\s+|\s+-\s+)/.exec(body);
+    if (!prefix) return line;
+    const rest = body.slice(prefix[0].length);
+    const entry = ENTRY_RE.exec(rest.trim());
+    const named = entry ? entry[1] : rest.trim();
+    if (canonicalPath(named) !== want || !rest.startsWith(named)) return line;
+    changed = true;
+    return prefix[0] + to + rest.slice(named.length) + (eol ? eol[0] : '');
+  });
+  return changed ? out.join('') : null;
+}
+
+module.exports = { parseManifest, parseAnnotatedManifest, stripInlineComment, renameInOldList, ENTRY_RE };

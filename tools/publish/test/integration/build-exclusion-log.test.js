@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { build } = require('../../lib/build');
-
+const { writePublishList } = require('../helpers/publish-list');
 // The build prints a one-line breakdown of why pages were dropped. Each dropped
 // page is counted ONCE, under whichever rule caught it first — and which rule that
 // is has been stable since the four filter passes were written, so a page carrying
@@ -98,13 +98,7 @@ describe('build manifest-filter line counts allowlist membership only', () => {
     write('Locations/Cellar.md', '---\ntype: location\npublish: false\n---\n\nA cellar.\n');
     // Not listed at all — the allowlist drops it, so it is not in either count.
     write('Locations/Attic.md', '---\ntype: location\n---\n\nAn attic.\n');
-    write('_meta/publish-manifest.md', [
-      '---', 'mode: player', '---', '',
-      '## Publishing (2 files)', '',
-      '- [x] Locations/Tavern.md',
-      '- [x] Locations/Cellar.md',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Locations/Tavern.md', 'Locations/Cellar.md'] });
 
     const configPath = path.join(work, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({
@@ -169,12 +163,7 @@ describe('build "Auto-excluded" count excludes a manifest-re-included prep page'
     // Also prep-state, but the GM explicitly listed it under Publishing: decidePage
     // never classifies it AUTO_EXCLUDED_STATUS, so it must not inflate that count.
     write('Locations/Sneak_Peek.md', '---\ntype: location\nstatus: planned\n---\n\nA teaser the GM wants live.\n');
-    write('_meta/publish-manifest.md', [
-      '---', 'mode: player', '---', '',
-      '## Publishing (1 files)', '',
-      '- [x] Locations/Sneak_Peek.md',
-      '',
-    ].join('\n'));
+    writePublishList(vault, { publishing: ['Locations/Sneak_Peek.md'] });
 
     const configPath = path.join(work, 'vault.config.json');
     fs.writeFileSync(configPath, JSON.stringify({

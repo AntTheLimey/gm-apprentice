@@ -152,7 +152,7 @@ the GM.
   manifest: `
 gm-apprentice-publish manifest <diff|apply|publish-played|rename|convert|list> [options]
 
-Compares the publish manifest (_meta/publish-manifest.md) with what is actually
+Compares the publish list (_meta/publish-list.yaml) with what is actually
 in the vault, and edits it. "diff" classifies every vault file with the same
 decision the build makes, so a file it calls "publish" is a file the build
 publishes. The tool only shows the drift — which files are correctly

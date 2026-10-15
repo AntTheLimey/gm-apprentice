@@ -613,7 +613,7 @@ function buildSite(options) {
     const scanned = new Set(corpus.map(vaultRelPathOf));
     for (const entry of manifest.publishing) {
       if (!scanned.has(entry)) {
-        console.warn(`  WARNING: manifest lists "${entry}" but no such page was scanned`);
+        console.warn(`  WARNING: the publish list names "${entry}" but no such page was scanned`);
       }
     }
 
@@ -638,7 +638,7 @@ function buildSite(options) {
             continue;
           }
           const kind = type === 'chapter' ? 'chapter' : 'session';
-          console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not in the publish manifest — this ${kind} will NOT publish. Add it to _meta/publish-manifest.md.`);
+          console.warn(`  WARNING: "${rel}" (type: ${type}) is present in the vault but not on the publish list — this ${kind} will NOT publish. Put it on the list with manifest apply --publish "${rel}" (manifest publish-played does it for finished sessions).`);
         }
       }
     }
