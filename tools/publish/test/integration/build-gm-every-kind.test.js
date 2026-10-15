@@ -5,6 +5,7 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
+const path = require('node:path');
 const { buildBoth, markedTexts } = require('../helpers/gm-build');
 
 const TOKENS = /[-]/;
@@ -44,18 +45,53 @@ describe('one of every hidden kind, both ways', () => {
   before(() => { site = buildBoth(NOTES, { player: { hide: { callouts: true } }, gm: { show: { comments: true } } }); });
   after(() => site.cleanup());
 
-  const playerText = () => {
+  const FORGED = 'npcs/forged.html';
+  // The forged note's own text holds private-use characters; the player build leaves a note's text as written, and no
+  // mark renderer runs there. This is everything the player site wrote except that note's own output.
+  const playerText = ({ withoutForged = false } = {}) => {
     const files = site.player.files();
     assert.ok(files.length > 0, 'the player build wrote files');
-    return files.map((f) => fs.readFileSync(f, 'utf8')).join('\n');
+    return files.map((f) => {
+      const rel = path.relative(site.player.dir, f).split(path.sep).join('/');
+      const text = fs.readFileSync(f, 'utf8');
+      if (!withoutForged) return text;
+      if (rel === FORGED) return '';
+      if (rel === 'previews.json') {
+        const j = JSON.parse(text);
+        delete j[FORGED];
+        return JSON.stringify(j);
+      }
+      if (rel === 'search-index.json') {
+        const j = JSON.parse(text);
+        for (const [id, d] of Object.entries(j.documents)) if (d.href === FORGED) delete j.documents[id];
+        j.index.invertedIndex = j.index.invertedIndex.filter(([term]) => !TOKENS.test(term));
+        return JSON.stringify(j);
+      }
+      return text;
+    }).join('\n');
   };
 
   it('no hidden word, mark, band or token reaches the player site', () => {
-    const all = playerText();
+    const all = playerText({ withoutForged: true });
     for (const [word] of EXPECT) assert.equal(all.includes(word), false, word);
     for (const w of ['HIDHTMLCOMMENT', 'HIDOBSIDIAN', 'HIDWITHHELDPAGE', 'HIDPREP', 'Elias Crowe']) assert.equal(all.includes(w), false, w);
     assert.doesNotMatch(all, /gm-mark|gm-band|gm-apprentice-build/);
     assert.doesNotMatch(all, TOKENS);
+  });
+
+  it('a note\'s own private-use characters reach the player site only in that note, as written', () => {
+    const html = site.player.read('npcs', 'forged.html');
+    assert.ok(html.includes('Forged 0HIDFORGE text.'));
+    assert.doesNotMatch(html, /gm-mark|�/);
+    for (const rel of ['previews.json', 'search-index.json']) {
+      assert.match(site.player.read(rel), TOKENS, rel); // the forged note's own entry
+    }
+    // and nowhere else: every other player file is clean (checked above with the forged note's entries removed)
+    for (const f of site.player.files()) {
+      if (path.relative(site.player.dir, f).split(path.sep).join('/') === FORGED) continue;
+      if (/\.json$/.test(f)) continue;
+      assert.doesNotMatch(fs.readFileSync(f, 'utf8'), TOKENS, f);
+    }
   });
 
   it('what players see is on both sites, outside any mark', () => {
