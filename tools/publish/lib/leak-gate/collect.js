@@ -91,7 +91,10 @@ function collectHidden({ configPath }) {
       add(piecesOfMarkdown(page.markdown), rel, 'session index body (its Wrap-Up publishes)');
       continue;
     }
-    if (pcKeepSections && pcHeadingsUnstable(page, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections })) {
+    // The page as the build holds it when it asks: the note's own frontmatter apart, the published one in its place (the
+    // portrait named there decides which image embed the headings check drops).
+    const asBuilt = { ...page, sourceFrontmatter: fm, frontmatter: publishedFrontmatter(fm, excludeFields, overrides) };
+    if (pcKeepSections && pcHeadingsUnstable(asBuilt, linkMap, excludeSections, imageMap, { excludeCallouts, pcKeepSections })) {
       add(piecesOfMarkdown(page.markdown), rel, 'note body (a link label changes its headings)');
       continue;
     }
