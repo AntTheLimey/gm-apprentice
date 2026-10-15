@@ -5,7 +5,7 @@
 // Also the player site's own source text: a hidden piece that a published note also says is not hidden.
 const fs = require('fs');
 const path = require('path');
-const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, STORY_SUFFIX } = require('../scanner');
+const { scanVaultReport, scanAllNotes, buildLinkMap, scanAttachments, dirIsExcluded, STORY_SUFFIX } = require('../scanner');
 const { resolveConfig, loadPublishConfig, loadVaultConfig, vaultRelPath } = require('../config');
 const { readSettings, forSite } = require('../settings');
 const { loadManifest } = require('../manifest');
@@ -114,11 +114,13 @@ function collectHidden({ configPath }) {
     }
   }
 
-  // Every other note's body is hidden text: no page publishes it.
+  // Every other note's body is hidden text: no page publishes it. The vault's housekeeping folders (hide.folders and the
+  // folders that never publish) are left out: they routinely quote the published site, and the folder rule that keeps
+  // them off it is the simplest and best-tested one.
   const scannedByRel = new Map(corpus.map((p) => [relOf(p), p]));
   for (const note of notes) {
     const rel = canonicalNfc(String(note.vaultPath).replace(/\\/g, '/') + '.md');
-    if (publishedRels.has(rel) || neverShown(rel)) continue;
+    if (publishedRels.has(rel) || neverShown(rel) || dirIsExcluded(rel, playerConfig.exclude_dirs)) continue;
     const page = scannedByRel.get(rel);
     if (page && publishedSet.has(page)) continue;
     const verdict = page ? verdicts.get(page) : null;

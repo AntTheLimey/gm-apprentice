@@ -55,6 +55,21 @@ describe('leak gate: collect', () => {
     assert.ok(got.visible.some((t) => /Everyone knows the bridge is unsafe\./.test(t)));
     assert.ok(!got.visible.some((t) => /poisoned the mayor/.test(t)));
   });
+  it('notes in the never-published housekeeping folders are not collected (they quote the site)', () => {
+    const p = leakSite({
+      'NPCs/A.md': '---\ntype: npc\n---\nThe baker is a kind man.\n',
+      '_QA/Audit.md': '---\ntype: meta\n---\nThe audit quotes the baker is a kind man here.\n',
+      '_inbox/Chat.md': 'An old chat says the miller drowned his wife.\n',
+      '_Templates/NPC.md': 'A template sentence of many words.\n',
+      'Prep/Draft.md': '---\ntype: npc\npublish: false\n---\nThe harbourmaster takes bribes from smugglers.\n',
+    }, { player: { folder_map: { NPCs: 'npcs', Prep: 'prep' }, hide: { folders: ['_QA', '_inbox'] } } });
+    try {
+      const c = collectHidden({ configPath: p.configPath });
+      const notes = new Set(c.pieces.map((x) => x.note));
+      assert.ok(notes.has('Prep/Draft.md'), 'an unpublished note outside them is still collected');
+      for (const n of ['_QA/Audit.md', '_inbox/Chat.md', '_Templates/NPC.md']) assert.ok(!notes.has(n), `${n} was collected`);
+    } finally { p.cleanup(); }
+  });
   it('a vault kept by a player collects nothing', () => {
     const p = leakSite({ 'NPCs/A.md': '---\ntype: npc\n---\n## GM Notes\n\nThis is a secret sentence here.\n' }, { vault: { kept_by: 'player' }, gm: { publish: false } });
     try {
