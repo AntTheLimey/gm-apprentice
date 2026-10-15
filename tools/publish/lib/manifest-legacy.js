@@ -129,7 +129,8 @@ function parseAnnotatedManifest(markdown) {
     const split = /^(.*?\.\w+)(?:\s+(?:—|–|--)\s+(.*))?$/.exec(raw);
     const rel = canonicalPath(split ? split[1] : raw);
     const annotation = (split && split[2] ? split[2].trim() : null) || groupReason || null;
-    entries.set(rel, { section, annotation: section === 'needsDecision' ? null : annotation });
+    // The writer drops a Needs Decision reason, as it always has; readers that list the file still see it.
+    entries.set(rel, { section, annotation: section === 'needsDecision' ? null : annotation, decisionNote: section === 'needsDecision' ? annotation : null });
   }
   return entries;
 }

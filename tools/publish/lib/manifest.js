@@ -119,7 +119,7 @@ function loadManifest(vaultPath, { warn = console.warn } = {}) {
   const { parseManifest, parseAnnotatedManifest } = require('./manifest-legacy');
   const text = fs.readFileSync(oldFile, 'utf-8');
   const parsed = parseManifest(text);
-  // The reasons the old reader finds: beside a Publishing or Excluded entry, for the list that entry is in.
+  // The reasons the old reader finds, beside an entry of any list, for the list that entry is in.
   const annotated = parseAnnotatedManifest(text);
   const reasons = new Map();
   for (const [list, section] of [[parsed.publishing, 'publishing'], [parsed.excluded, 'excluded']]) {
@@ -127,6 +127,10 @@ function loadManifest(vaultPath, { warn = console.warn } = {}) {
       const entry = annotated.get(rel);
       if (entry && entry.section === section && entry.annotation && !reasons.has(rel)) reasons.set(rel, entry.annotation);
     }
+  }
+  for (const rel of parsed.needsDecision) {
+    const entry = annotated.get(rel);
+    if (entry && entry.section === 'needsDecision' && entry.decisionNote && !reasons.has(rel)) reasons.set(rel, entry.decisionNote);
   }
   return {
     publishing: parsed.publishing,

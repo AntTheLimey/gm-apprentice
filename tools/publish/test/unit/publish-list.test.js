@@ -98,6 +98,13 @@ describe('the YAML publish list', () => {
     assert.equal(read(v).warnings.length, 0);
   });
 
+  it('old file only: a reason beside a Needs Decision entry is read', () => {
+    const v = vaultWith({ 'publish-manifest.md': '## Needs Decision (1 files)\n\n- [ ] Drafts/Idea.md — ask the players\n' });
+    const { list } = read(v);
+    assert.deepEqual(list.needsDecision, ['Drafts/Idea.md']);
+    assert.deepEqual([...list.reasons], [['Drafts/Idea.md', 'ask the players']]);
+  });
+
   it('both files: reads the new one and warns the old is left over', () => {
     const v = vaultWith({ 'publish-manifest.md': '## Publishing (1 files)\n\n- [x] Old.md\n', 'publish-list.yaml': 'publishing:\n  - New.md\n' });
     const { list, warnings } = read(v);
