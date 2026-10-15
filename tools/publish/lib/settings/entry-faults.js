@@ -6,6 +6,7 @@
 const { canonicalNfc } = require('../unicode');
 const { makeFault } = require('./faults');
 const { nameIn } = require('./layout');
+const { resolveGmFolder, gmFolderProblem } = require('../gm-site');
 
 // A step that is blank is never run.
 const isBlankStep = (command) => String(command).trim() === '';
@@ -55,6 +56,15 @@ function entryFaults(vaultPath, values, origins) {
     const kept = nameIn(vaultPath, 'vault.kept_by');
     faults.push(makeFault({ name: on, setting: 'gm_site.publish', kind: 'gm-kept-by-player', level: 'stop',
       message: `${on} is on, but this vault is kept by a player (\`${kept}: player\`), so it has no GM site; turn ${on} off` }));
+  }
+
+  // The GM site's folder must be one it can own: not the player site's, not inside it or holding it, not the vault.
+  const gmFolder = get('gm_site.folder');
+  const playerFolder = get('player_site.folder');
+  if (typeof gmFolder === 'string' && gmFolder.trim() && typeof playerFolder === 'string' && playerFolder.trim()) {
+    const playerDir = resolveGmFolder(playerFolder, vaultPath);
+    const problem = gmFolderProblem(resolveGmFolder(gmFolder, playerDir), { playerSiteDir: playerDir, vaultPath });
+    if (problem) add('gm_site.folder', () => problem);
   }
   return faults;
 }

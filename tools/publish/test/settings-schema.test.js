@@ -148,8 +148,11 @@ test('a file that sets every setting to a valid, non-default value validates and
   const tree = everySettingFile();
   // (A GM site on a vault kept by a player is a stop of its own; the sample keeps the vault by a player.)
   tree.gm_site.publish = false;
-  assert.deepEqual(check(schema(), tree), []);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'schema-'));
+  // The GM site's folder must be a folder of its own, beside the player site's.
+  tree.player_site.folder = path.join(root, 'site');
+  tree.gm_site.folder = path.join(root, 'site-gm');
+  assert.deepEqual(check(schema(), tree), []);
   const vault = path.join(root, 'Vault');
   fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
   fs.writeFileSync(at(vault, NEW_FILE), require('yaml').stringify(tree));

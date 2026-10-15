@@ -19,6 +19,8 @@ const { REGISTRY, legacyNameOf, resolve } = require('./registry');
 const { applyChanges, refusalsFor } = require('./write');
 const { TYPES, isMap, getPath, firstLine } = require('./types');
 const { readSettings, parseNewFile } = require('./read');
+const { readSwitch } = require('./types');
+const { resolveGmFolder, defaultGmFolder, gmFolderProblem } = require('../gm-site');
 const { forSite } = require('./resolve');
 const { OLD_FILE, NEW_FILE, STATE_FILE, layoutOf, nameInFor, at: fileAt } = require('./layout');
 const { nearest } = require('./faults');
@@ -350,12 +352,51 @@ function plan(options, pairs) {
 // `noun` is what the list holds, from the setting's own entry.
 const emptyNote = (name, noun = ((resolve(name) || {}).entry || {}).of || 'entries') => `${name} is empty: nothing from the built-in list is hidden. Add the ${noun} you want hidden, or remove the key to use the built-in list again.`;
 
+// Turning the GM site on: the folder it is built into is the one named, or one beside the player site's, and it must
+// be one the GM site can own. { folder } when it is to be made or kept, { errors } when the change is refused, {}
+// when the change does not turn the GM site on. Adds the folder to the changes when it was not named.
+function turningOnGmSite(options, planned) {
+  const on = planned.changes.find((c) => c.name === 'gm_site.publish');
+  if (!on || readSwitch(on.value) !== true) return {};
+  const { vaultPath, siteConfig } = target(options);
+  // An old-layout vault is refused by the writer, as every new-only setting is.
+  if (layoutOf(vaultPath) !== 'new') return {};
+  const { values } = readSettings({ vaultPath, siteConfig });
+  const value = (name) => getPath(values, name.split('.'));
+  const namedNow = planned.changes.find((c) => c.name === 'gm_site.folder');
+  const keptBy = (planned.changes.find((c) => c.name === 'vault.kept_by') || {}).value ?? value('vault.kept_by');
+  if (keptBy === 'player') return { errors: ['This vault is kept by a player (vault.kept_by: player), so it has no GM site.'] };
+  const playerNow = planned.changes.find((c) => c.name === 'player_site.folder');
+  const player = playerNow ? playerNow.value : value('player_site.folder');
+  const playerDir = typeof player === 'string' && player.trim() ? resolveGmFolder(player, vaultPath) : null;
+  const written = namedNow ? namedNow.value : value('gm_site.folder');
+  const named = typeof written === 'string' && written.trim() !== '';
+  const none = ['There is no player_site.folder to put the GM site beside. Name its folder too: settings set gm_site.publish=on gm_site.folder=/path/to/folder'];
+  if (!named && !playerDir) return { errors: none };
+  const folder = named ? resolveGmFolder(written, playerDir || vaultPath) : defaultGmFolder(playerDir);
+  const problem = gmFolderProblem(folder, { playerSiteDir: playerDir, vaultPath });
+  if (problem) return { errors: [problem] };
+  // The folder is made inside a folder that is there; one level at most.
+  if (!fs.existsSync(folder) && !fs.existsSync(path.dirname(folder))) return { errors: none };
+  if (!named) planned.changes.push({ op: 'set', name: 'gm_site.folder', label: 'gm_site.folder', value: folder });
+  return { folder };
+}
+
 function set(options, pairs) {
   if (!pairs.length) throw new Error('settings set needs at least one name=value.');
   const planned = plan(options, pairs);
   if (planned.errors) return { errors: planned.errors };
+  const gm = turningOnGmSite(options, planned);
+  if (gm.errors) return gm;
   const done = write(options, planned.changes);
   if (done.errors) return done;
+  if (gm.folder) {
+    // Its parent was checked above; a folder already there is left as it is.
+    if (!fs.existsSync(gm.folder)) {
+      fs.mkdirSync(gm.folder, { recursive: false });
+      done.ok.notes.push(`Made the GM site's folder: ${gm.folder} (gm_site.folder).`);
+    }
+  }
   const notes = planned.empties.map((n) => emptyNote(n));
   const result = { written: planned.written, notes };
   // The line names what is now in the file: an older spelling given is replaced by the primary one.

@@ -23,6 +23,7 @@ const { resolveConfig, assertNoStops, vaultRelPath, scanConfigFor, loadVaultConf
 const { clipValue, isDressed, skinsCss, fontFamiliesFor } = require('./skins');
 const { loadManifest } = require('./manifest');
 const { canonicalNfc } = require('./unicode');
+const { real } = require('./gm-site');
 const { generateThemeCSS, googleFontNames, FONT_FORMATS, fontOutputPath } = require('./theme');
 const fontsLib = require('./fonts');
 const { buildStorySpine, chapterOfSession, unitRefs, characterStoryGroup } = require('./story-spine');
@@ -251,18 +252,6 @@ function buildSite(options) {
   function assertSafeOutputDir() {
     // Real paths: a link in the site folder that leads to the vault is the vault.
     // A folder not made yet is judged by its nearest folder that exists, so it is compared the same way as the vault.
-    const real = (p) => {
-      const tail = [];
-      let cur = path.resolve(p);
-      for (;;) {
-        try { return path.join(fs.realpathSync.native(cur), ...tail); } catch {
-          const up = path.dirname(cur);
-          if (up === cur) return path.resolve(p);
-          tail.unshift(path.basename(cur));
-          cur = up;
-        }
-      }
-    };
     const resolved = real(outputDir);
     const root = path.parse(resolved).root;
     if (resolved === root) {
