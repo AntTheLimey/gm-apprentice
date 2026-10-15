@@ -523,10 +523,14 @@ Every other player site setting can be written under `gm_site` with the
 same name, for the GM site only. Left out, the GM site uses the player
 site's value, except the build steps: the player site's steps never run
 for the GM site, so list its own under `gm_site.before_build` and
-`gm_site.after_build` (see [Build steps](#build-steps)). These cannot:
+`gm_site.after_build` (see [Build steps](#build-steps)). A GM-site build
+step must write only to the folder named in `GM_APPRENTICE_OUTPUT`; a step that
+ignores it acts on the player site's folder. These cannot:
 they belong to the player site alone (its switch, its folders, its web
-address and host) or to live play, which the GM site does not have. The
-GM site's folder is `gm_site.folder`.
+address and host), to live play, which the GM site does not have, or to
+what players see (the `hide` settings), which has one source so that a
+mark always means hidden from players. The GM site's folder is
+`gm_site.folder`.
 
 <!-- settings:gm-not-per-site -->
 
