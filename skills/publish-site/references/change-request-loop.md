@@ -241,7 +241,10 @@ the cell being changed, on a PC that is not live), read first from the PC's
    Multi-line replies (like bullet lists) require real newlines in the chat log — use bash `$'...'` quoting so `\n` becomes a newline.
 4. **Publish the applied batch once.** If the applied batch is non-empty,
    `npx gm-apprentice-publish build --site player --only sheets`, then
-   `npx gm-apprentice-publish deploy --no-build`.
+   `npx gm-apprentice-publish deploy --no-build`. If the build fails, do
+   **not** deploy: log it and leave the ids `pending`. Run a full
+   `npx gm-apprentice-publish build` once play ends, to refresh the party
+   board, previews and search.
    - **On deploy success:** finalize each applied id with its confirmation:
 
      ```bash

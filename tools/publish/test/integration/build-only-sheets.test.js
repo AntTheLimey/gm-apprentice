@@ -97,16 +97,102 @@ describe('build --only sheets', () => {
     } finally { s.cleanup(); }
   });
 
-  it('a PC renamed since the full build gets its new page, and the line says a full build tidies the rest', () => {
+  it('a PC renamed since the full build stops the fast build before anything is written, naming the old page', () => {
     const s = buildBoth(NOTES, { sites: ['player'] });
     try {
+      const before = hashes(s.player.dir);
       fs.renameSync(path.join(s.root, 'vault', 'PCs', 'Bo.md'), path.join(s.root, 'vault', 'PCs', 'Bodil.md'));
+      assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' })), /pcs\/bo\.html.*full build/s);
+      assert.deepEqual(hashes(s.player.dir), before);
+    } finally { s.cleanup(); }
+  });
+
+  it('a PC taken off the site (publish: false) stops the fast build, names the page, deletes and writes nothing', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      const before = hashes(s.player.dir);
+      const bo = path.join(s.root, 'vault', 'PCs', 'Bo.md');
+      fs.writeFileSync(bo, fs.readFileSync(bo, 'utf8').replace('type: pc', 'type: pc\npublish: false'));
+      assert.throws(() => quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' })), /pcs\/bo\.html.*Run a full build/s);
+      assert.deepEqual(hashes(s.player.dir), before);
+      assert.ok(s.player.exists('pcs', 'bo.html'));
+    } finally { s.cleanup(); }
+  });
+
+  it('through the command line the stop exits 1 and says to run a full build', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      const bo = path.join(s.root, 'vault', 'PCs', 'Bo.md');
+      fs.writeFileSync(bo, fs.readFileSync(bo, 'utf8').replace('type: pc', 'type: pc\npublish: false'));
+      const bin = path.join(__dirname, '..', '..', 'bin', 'gm-publish.js');
+      const r = spawnSync(process.execPath, [bin, 'build', '--site', 'player', '--only', 'sheets', '--config', s.configPath], { encoding: 'utf8' });
+      assert.equal(r.status, 1);
+      assert.match(r.stderr, /pcs\/bo\.html/);
+      assert.match(r.stderr, /full build/);
+    } finally { s.cleanup(); }
+  });
+
+  const STORY = '---\ntype: character-story\n---\n# Ann Story\n\nAnn told no one.\n';
+
+  it('each PC story page is written exactly as a full build writes it', () => {
+    const s = buildBoth({ ...NOTES, 'PCs/Ann_Story.md': STORY }, { sites: ['player'] });
+    try {
+      assert.ok(s.player.exists('story', 'characters', 'ann.html'));
+      const story = path.join(s.root, 'vault', 'PCs', 'Ann_Story.md');
+      fs.writeFileSync(story, STORY + '\nShe left at dawn.\n\n## GM Notes\n\nSECRET\n');
+      const before = hashes(s.player.dir);
+      quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      const fast = s.player.read('story', 'characters', 'ann.html');
+      assert.match(fast, /She left at dawn/);
+      assert.doesNotMatch(fast, /SECRET/);
+      const after = hashes(s.player.dir);
+      for (const [rel, h] of Object.entries(before)) {
+        if (rel === path.join('pcs', 'ann.html') || rel === path.join('story', 'characters', 'ann.html')) continue;
+        assert.equal(after[rel], h, rel);
+      }
+      quiet(() => build({ configPath: s.configPath, site: 'player' }));
+      assert.equal(fast, s.player.read('story', 'characters', 'ann.html'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a new PC with a story companion gets both pages', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      fs.writeFileSync(path.join(s.root, 'vault', 'PCs', 'Cy.md'), '---\ntype: pc\n---\n# Cy\n');
+      fs.writeFileSync(path.join(s.root, 'vault', 'PCs', 'Cy_Story.md'), '---\ntype: character-story\n---\n# Cy Story\n\nCy rose.\n');
+      quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.ok(s.player.exists('pcs', 'cy.html'));
+      assert.ok(s.player.exists('story', 'characters', 'cy.html'));
+    } finally { s.cleanup(); }
+  });
+
+  it('the images a written PC page uses are copied', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==', 'base64');
+      fs.mkdirSync(path.join(s.root, 'vault', '_attachments'), { recursive: true });
+      fs.writeFileSync(path.join(s.root, 'vault', '_attachments', 'Ann.png'), png);
+      const ann = path.join(s.root, 'vault', 'PCs', 'Ann.md');
+      fs.writeFileSync(ann, fs.readFileSync(ann, 'utf8') + '\n![[Ann.png]]\n');
+      assert.equal(s.player.exists('images', 'Ann.png'), false);
+      quiet(() => build({ configPath: s.configPath, site: 'player', only: 'sheets' }));
+      assert.match(s.player.read('pcs', 'ann.html'), /Ann\.png/);
+      assert.ok(s.player.exists('images', 'Ann.png'));
+    } finally { s.cleanup(); }
+  });
+
+  it('a prebuild or postbuild script in the site package.json is named, once, as not run', () => {
+    const s = buildBoth(NOTES, { sites: ['player'] });
+    try {
+      fs.writeFileSync(path.join(path.dirname(s.configPath), 'package.json'), JSON.stringify({ scripts: { postbuild: 'node theme.js' } }));
       const lines = [];
       const l = console.log; const w = console.warn;
       console.log = (m) => lines.push(String(m)); console.warn = () => {};
       try { build({ configPath: s.configPath, site: 'player', only: 'sheets' }); } finally { console.log = l; console.warn = w; }
-      assert.ok(s.player.exists('pcs', 'bodil.html'));
-      assert.ok(lines.some((m) => /1 character page is new; a full build updates the menu and the lists that link it/.test(m)));
+      const hit = lines.filter((m) => /postbuild/.test(m));
+      assert.equal(hit.length, 1);
+      assert.match(hit[0], /does not run in a sheets-only build/);
+      assert.match(hit[0], /update moves build steps into the vault's settings/);
     } finally { s.cleanup(); }
   });
 

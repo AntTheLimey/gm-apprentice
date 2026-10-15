@@ -105,7 +105,7 @@ off). The GM site is built into its own folder and never goes online.
   --only sheets      Rebuild only the character pages, for use during play; nothing else is
                      written or deleted. Needs a full build first. A new character's page
                      is written, but the menu and the lists that link it wait for a full build.
-                     The build steps after the build run; the ones before it do not.
+                     Runs the vault's after_build steps, not its before_build steps.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,

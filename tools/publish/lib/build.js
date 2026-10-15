@@ -266,6 +266,11 @@ function buildSite(options) {
     const there = gm ? fs.existsSync(path.join(outputDir, 'gm-build.json')) : fs.existsSync(path.join(outputDir, 'index.html'));
     if (!there) throw new Error(`There is no full build in ${outputDir} to update. Run gm-apprentice-publish build --site ${gm ? 'gm' : 'player'} first.`);
   }
+  // The site's own package.json build scripts are not run by a fast build: say so, once.
+  if (onlySheets) {
+    const skipped = Object.keys(packageScripts(configDir)).filter((k) => k === 'prebuild' || k === 'postbuild');
+    if (skipped.length) console.log(`  Note: the site's package.json ${skipped.join(' and ')} script${skipped.length === 1 ? '' : 's'} does not run in a sheets-only build; the update moves build steps into the vault's settings.`);
+  }
   // The steps before the build do not run for a fast build: they make files it does not write.
   if (runningSteps && !onlySheets) {
     // An output folder the build would refuse stops it before any step runs (a step may change it, so the check also stays below).
@@ -570,7 +575,7 @@ function buildSite(options) {
   }
 
   function copyImages(imageMap) {
-    if (writes !== 'all') return;
+    if (writes === 'none') return;   // a fast build copies the pictures its pages use, so an after_build step can convert them
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
@@ -597,6 +602,8 @@ function buildSite(options) {
   console.log('Scanning vault:', config.vaultPath);
   const scanReport = scanVaultReport(scanConfig);
   let pages = warnScanReport(scanReport);
+  // A fast build checks the folders PC pages go in: every PC the scan found, kept or not.
+  const scannedPcDirs = onlySheets ? new Set(pages.filter((p) => p.frontmatter.type === 'pc').map((p) => path.posix.dirname(p.outputPath))) : null;
   console.log(`Found ${pages.length} pages`);
   // Capture the scanned pages before the manifest/draft filters reassign `pages` to the published
   // subset, so templates can reach context that is excluded from rendering — above all the
@@ -1505,6 +1512,22 @@ function buildSite(options) {
     };
   }
 
+  // A fast build deletes nothing. A PC page already in the folder that a full build would no longer write
+  // (the note went unpublished, left the publish list, or was renamed) stops it before it writes anything.
+  if (onlySheets) {
+    const wanted = new Set(pages.map((p) => p.outputPath));
+    const stale = [];
+    for (const dir of scannedPcDirs) {
+      const folder = path.join(outputDir, ...dir.split('/'));
+      if (!fs.existsSync(folder)) continue;
+      for (const f of fs.readdirSync(folder)) {
+        const rel = dir === '.' ? f : `${dir}/${f}`;
+        if (f.endsWith('.html') && f !== 'index.html' && !wanted.has(rel)) stale.push(rel);
+      }
+    }
+    if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
+  }
+
   for (const page of pages) {
     try {
       if (getsNoPage(page)) continue;
@@ -1524,6 +1547,25 @@ function buildSite(options) {
       errorCount++;
       renderErrors.push(`${page.outputPath}: ${e.message}`);
       console.error(`  ERROR rendering ${page.outputPath}: ${e.message}`);
+    }
+  }
+
+  // A fast build also writes each PC's story page, as a full build does (not the story's contents page).
+  const storiesWritten = [];
+  if (onlySheets) {
+    for (const pc of pages.filter((p) => p.frontmatter.type === 'pc' && p.storyMarkdown && !getsNoPage(p))) {
+      try {
+        const { story, html } = renderCharacterStory(pc, liveFx);
+        const full = path.join(outputDir, story.outputPath);
+        ensureDir(full);
+        writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause });
+        storiesWritten.push(story.outputPath);
+        console.log(`  wrote ${story.outputPath}`);
+      } catch (e) {
+        errorCount++;
+        renderErrors.push(`${pc.title} story: ${e.message}`);
+        console.error(`  ERROR rendering the story of ${pc.title}: ${e.message}`);
+      }
     }
   }
 
@@ -2054,7 +2096,8 @@ function buildSite(options) {
   // Last of all, the marker again, with the time the GM build finished (one that stopped before here left `built: null`).
   if (onlySheets) {
     const n = sheetsWritten.length;
-    console.log(`Updated ${n} character page${n === 1 ? '' : 's'}; nothing else was rewritten.`);
+    const m = storiesWritten.length;
+    console.log(`Updated ${n} character page${n === 1 ? '' : 's'}${m ? ` and ${m} story page${m === 1 ? '' : 's'}` : ''}; nothing else was rewritten.`);
     const fresh = sheetsWritten.filter((w) => w.isNew).length;
     if (fresh > 0) console.log(`${fresh} character page${fresh === 1 ? ' is' : 's are'} new; a full build updates the menu and the lists that link ${fresh === 1 ? 'it' : 'them'}.`);
     return { noteFaults, shown: null, faults: publishConfig.faults };
