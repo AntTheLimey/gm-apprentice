@@ -129,6 +129,20 @@ directly:
   (creating a least-privilege API token, saving it in `~/.zshenv`, the
   first deploy, and custom domains)
 
+## A GM site for the table
+
+The tool can also build a second copy of the site just for you: every
+note and every hidden part, each hidden part marked with why players do
+not see it. Turn it on with `gm-apprentice-publish settings set
+gm_site.publish=on`, which makes its folder beside the player site's
+(named after it with `-gm` added). Every build then makes both sites
+(`build --site gm` or `--site player` makes one), and
+`gm-apprentice-publish serve` shows the GM site to phones and tablets on
+your home network (port 4321 unless you pick another with `--port`).
+It is never put online: `deploy` refuses a GM site's folder. Its
+settings, and how to give it build steps of its own, are in
+[Site settings](site-settings.md#the-gm-site).
+
 ## Technical details
 
 For the configuration file reference, CLI commands, and the library API,

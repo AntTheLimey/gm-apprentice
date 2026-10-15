@@ -165,7 +165,8 @@ GitHub Pages from the `docs/` folder in your repo settings.
 
 ```text
 gm-apprentice-publish init [dir]          Scaffold a new site
-gm-apprentice-publish build [options]     Build the site from vault
+gm-apprentice-publish build [options]     Build the site from vault (--site player|gm)
+gm-apprentice-publish serve [options]     Serve a built site to the home network (--site gm|player)
 gm-apprentice-publish settings <cmd>      Read, set, describe and check any site setting
 gm-apprentice-publish --version           Print version
 gm-apprentice-publish --help              Print help
@@ -188,7 +189,7 @@ On a vault still on the old settings file (see
 are `publish.site` and `publish.site_dir`, and every message names them
 that way.
 
-### `build [--config path]`
+### `build [--site player|gm] [--config path]`
 
 Reads `vault.config.json` (or the file at `--config path`) for the path to
 the vault, then writes the generated site into the vault's
@@ -197,13 +198,35 @@ each build, preserving any folders listed in `player_site.keep`. A
 `player_site.output` or `player_site.keep` that is not a folder inside the
 site folder stops the build before anything is deleted.
 
+While `gm_site.publish` is on, `build` makes the player site and then the
+GM site (the GM site alone when the player site is off); see
+[The GM site](#the-gm-site). `--site player` or `--site gm` builds one.
+`--site gm` with the GM site off stops with "The GM site is off for this
+vault (gm_site.publish); nothing was built."
+
 `build`, `deploy`, `setup-status-bar` and `setup-inbox` also run the vault's build steps, in order (see
 [Build steps](#build-steps)). A dry build, `explain`, `manifest`,
 `doctor --site` and the preview run none.
 
 | Option | Default | Description |
 |--------|---------|-------------|
+| `--site <name>` | both while the GM site is on | Build one site: `player` or `gm` |
 | `--config <path>` | `./vault.config.json` | Path to config file |
+
+### `serve [--site gm|player] [--port N] [--config path]`
+
+Serves a site that is already built to your home network, read only, so
+the GM site can be opened on a tablet or phone at the table. It serves
+the GM site unless `--site player` is given, on port 4321 unless `--port`
+names another (a whole number from 1 to 65535). It prints the addresses
+to open and runs until you stop it with Ctrl+C.
+
+It builds nothing, watches nothing and asks for no passphrase. A folder
+with nothing built in it (no `gm-build.json` for the GM site, no
+`index.html` for the player site) stops it with the build command to run
+first. It answers only GET and HEAD, never serves a file outside the
+site's folder, and shows the site's `404.html` for a page that is not
+there.
 
 ### `lines`
 
@@ -298,6 +321,39 @@ scripts an older site keeps in its `package.json` are carried across by
 `settings move` once the site's tool is 1.24.0 or later. Until then
 `deploy` keeps running those scripts for a site that has not been moved.
 
+The steps under `player_site` never run for the GM site. Its own go under
+`gm_site.before_build` and `gm_site.after_build`, and run in the same site
+folder. Every step is given `GM_APPRENTICE_SITE` (`player` or `gm`) and
+`GM_APPRENTICE_OUTPUT` (the folder that site is built into).
+
+## The GM site
+
+The GM site is a second build of the same vault, for the GM at the table:
+every note and every hidden part, each hidden part marked with why players
+do not see it. It never goes online.
+
+- `settings set gm_site.publish=on` turns it on. With no `gm_site.folder`,
+  it makes a folder beside the player site folder, named after it with
+  `-gm` added, and writes that path to `gm_site.folder`. With no
+  `player_site.folder` either, it asks for the folder to be named.
+- The GM folder holds built pages only; it uses the player site folder's
+  installed tool. It cannot be the player site's folder, inside it, or
+  hold it, and it cannot be in the vault. A GM folder inside a git
+  repository builds with a warning not to push it.
+- Every GM page carries a "GM copy: not for players" band,
+  `<meta name="robots" content="noindex, nofollow">` and
+  `<meta name="gm-apprentice-build" content="gm">`. A page players do not
+  get at all also says why. The folder holds `gm-build.json` (the tool
+  version and build time) and a `robots.txt` that turns every search
+  engine away.
+- `deploy` builds only the player site, and refuses an output folder that
+  holds `gm-build.json` or a page with the GM meta tag, with
+  `--no-build` too.
+- The live status bar and the inbox stay on the player site.
+- What it shows is set by the `gm_site.show.*` switches, and any per-site
+  `player_site` setting can be written under `gm_site` for the GM site
+  only. The full list is in `docs/site-settings.md`.
+
 ## The new settings, by group
 
 Each is set with `settings set`, `add` or `remove`, and each has a row on
@@ -326,8 +382,8 @@ list only says where to look.
 The settings file is plain YAML with nothing else in it: no frontmatter,
 no prose. It holds four names at the top: `version` (the layout's number,
 `1`), `vault` (what is true of the vault whatever site it has),
-`player_site` (the site the players see) and `gm_site` (reserved; nothing
-under it is read yet). A setting is a path through those names:
+`player_site` (the site the players see) and `gm_site` (the GM's own copy;
+see [The GM site](#the-gm-site)). A setting is a path through those names:
 `player_site.hide.sections` is `sections` inside `hide` inside
 `player_site`.
 

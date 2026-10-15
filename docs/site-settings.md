@@ -212,6 +212,11 @@ player_site:
   told to skip the build.
 - A step that runs for more than ten minutes is stopped and counts as
   failed.
+- These steps are the player site's. The GM site's are listed under
+  `gm_site.before_build` and `gm_site.after_build`, and run in the same
+  site folder. Each step is told which site it runs for and where that
+  site is built: `GM_APPRENTICE_SITE` is `player` or `gm`, and
+  `GM_APPRENTICE_OUTPUT` is the site's output folder.
 
 Or add a step yourself, from a terminal:
 
@@ -487,6 +492,15 @@ marked with the reason players do not see it. It is written to its own
 folder, and it is never put online: you read it on your own computer, or
 serve it to your home network with `gm-apprentice-publish serve`.
 
+Turn it on with `gm-apprentice-publish settings set gm_site.publish=on`.
+With no `gm_site.folder` set, this makes a folder beside the player site's
+folder, named after it with `-gm` added, and writes that path to
+`gm_site.folder`. From then on every build makes both sites; `build --site
+gm` or `build --site player` makes one. Every GM page carries a "GM copy:
+not for players" band and asks search engines to keep away, and `deploy`
+refuses to put a GM folder online. The live status bar and the inbox stay
+on the player site.
+
 <!-- settings:gm -->
 
 | Setting | What it does | Values | Left out |
@@ -507,7 +521,9 @@ serve it to your home network with `gm-apprentice-publish serve`.
 
 Every other player site setting can be written under `gm_site` with the
 same name, for the GM site only. Left out, the GM site uses the player
-site's value. These cannot, because the two sites share one folder, one
+site's value, except the build steps: the player site's steps never run
+for the GM site, so list its own under `gm_site.before_build` and
+`gm_site.after_build` (see [Build steps](#build-steps)). These cannot, because the two sites share one folder, one
 address, one host and one set of live features:
 
 <!-- settings:gm-not-per-site -->
