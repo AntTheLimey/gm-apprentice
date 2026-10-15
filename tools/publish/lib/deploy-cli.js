@@ -153,6 +153,17 @@ async function runDeploy(options, deps) {
   // A hiding-side settings fault stops the deploy, a dry run included, --no-build included (it throws; the CLI prints it once).
   (d.assertNoStopsFor || require('./config').assertNoStopsFor)(configPath, 'deploy');
 
+  let built = false;
+  const buildFailed = (line) => {
+    say(line);
+    if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands, messages }, null, 2));
+    return 1;
+  };
+  // A site the GM turned off is neither built nor uploaded, --no-build and --dry-run included.
+  const off = (d.siteOffFor || require('./config').siteOffFor)(configPath);
+  if (off) return buildFailed(off);
+
+  if (hookInfo.warning && !opts.dryRun) say(hookInfo.warning);
   if (opts.dryRun) {
     if (hooks.includes('prebuild')) commands.push('npm run prebuild');
     if (!opts.noBuild) commands.push(...vaultSteps.before, `gm-publish build --config ${configPath}`, ...vaultSteps.after);
@@ -179,16 +190,6 @@ async function runDeploy(options, deps) {
     return 0;
   }
 
-  if (hookInfo.warning) say(hookInfo.warning);
-  let built = false;
-  const buildFailed = (line) => {
-    say(line);
-    if (opts.json) out(JSON.stringify({ host, built: false, deployed: false, url: null, verified: false, status: null, attempts: 0, commands, messages }, null, 2));
-    return 1;
-  };
-  // A site the GM turned off is neither built nor uploaded, --no-build included.
-  const off = (d.siteOffFor || require('./config').siteOffFor)(configPath);
-  if (off) return buildFailed(off);
   const runHook = (hook) => {
     commands.push(`npm run ${hook}`);
     // Output streams as it happens (a big image step runs for minutes); under --json it
