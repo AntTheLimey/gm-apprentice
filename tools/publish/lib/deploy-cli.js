@@ -119,7 +119,7 @@ async function runDeploy(options, deps) {
   // The GM site never goes online: a player output folder that holds a GM build (the marker file, or a page with the
   // GM build tag) is refused before anything runs or is printed, whatever the flags.
   // With a wrangler.toml, wrangler uploads the folder the toml names, so that folder is checked too.
-  const outputFolder = path.join(siteRoot, outputFolderOf(config));
+  const outputFolder = path.resolve(siteRoot, outputFolderOf(config));
   const readTomlSafely = () => { try { return readFile(tomlPath); } catch { return ''; } };
   const tomlFolder = hasToml ? tomlOutputFolder(readTomlSafely(), siteRoot) : null;
   const gmFolder = [outputFolder, tomlFolder].filter(Boolean).find((f) => (d.isGmOutput || isGmOutput)(f));

@@ -132,8 +132,10 @@ test('isGmOutput: true for the marker file (any content) or a tagged page; false
 });
 
 test('a relative folder is read from the player site folder; the default sits beside it', () => {
-  assert.equal(resolveGmFolder('../campaign-gm', path.join(path.sep, 'a', 'campaign')), path.join(path.sep, 'a', 'campaign-gm'));
-  assert.equal(defaultGmFolder(path.join(path.sep, 'a', 'campaign') + path.sep), path.join(path.sep, 'a', 'campaign-gm'));
+  const site = path.resolve(path.sep, 'a', 'campaign');
+  const beside = path.resolve(path.sep, 'a', 'campaign-gm');
+  assert.equal(resolveGmFolder('../campaign-gm', site), beside);
+  assert.equal(defaultGmFolder(site + path.sep), beside);
 });
 
 test('a folder starting with ~/ is read from the home folder', () => {

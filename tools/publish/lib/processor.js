@@ -1003,10 +1003,11 @@ function calloutLinesMarking(markdown, exclude, mark) {
   const types = Array.isArray(exclude) ? new Set(exclude.map((t) => String(t).toLowerCase())) : null;
   const lines = markdown.split('\n');
   const out = [];
-  let inCodeFence = false;
+  let fenceDelim = null;
   for (let i = 0; i < lines.length; i++) {
-    if (/^```/.test(lines[i])) inCodeFence = !inCodeFence;
-    if (inCodeFence) { out.push(lines[i]); continue; }
+    const step = fenceStep(lines[i], fenceDelim);
+    fenceDelim = step.fenceDelim;
+    if (fenceDelim !== null || step.isFenceLine) { out.push(lines[i]); continue; }
     const m = lines[i].match(/^>[ \t]*\[!([A-Za-z][\w-]*)\][+-]?/);
     if (m && (!types || types.has(m[1].toLowerCase()))) {
       blockLines(mark.marks.open('callouts', `${m[1].toLowerCase()} callout`)).forEach((t) => out.push(t));
@@ -1224,14 +1225,11 @@ function markComments(markdown, mark, scan, skip, unclosedWarning) {
 }
 
 function htmlCommentsMarking(markdown, mark) {
-  let fenceMarker = null;
+  let fenceDelim = null;
   const skip = (line) => {
-    const fence = /^\s*(```|~~~)/.exec(line);
-    if (fence) {
-      if (fenceMarker === null) fenceMarker = fence[1];
-      else if (fenceMarker === fence[1]) fenceMarker = null;
-    }
-    return fenceMarker !== null || Boolean(fence);
+    const step = fenceStep(line, fenceDelim);
+    fenceDelim = step.fenceDelim;
+    return fenceDelim !== null || step.isFenceLine;
   };
   const scan = (line, inComment) => {
     const pieces = [];

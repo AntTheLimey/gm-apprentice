@@ -33,6 +33,14 @@ test('3: a multi-line HTML comment is a block', () => {
   assert.equal(r.text, `x\n\n${OPEN(0)}\n\nline one\nline two\n\n${CLOSE}\n\ny`);
 });
 
+test('3c: fences follow the CommonMark rule: a ~~~ fence, and a longer fence holding a ``` line', () => {
+  const { mark } = setup();
+  const tilde = '~~~\n> [!warning] Example\n> body\n~~~';
+  assert.equal(calloutLines(tilde, true, mark).lines.join('\n'), tilde);
+  const longer = '````\n```\n<!-- keep -->\n````';
+  assert.equal(htmlComments(longer, mark).text, longer);
+});
+
 test('3b: a comment in a fence stays literal', () => {
   const { mark } = setup();
   const md = '```\n<!-- keep -->\n```';

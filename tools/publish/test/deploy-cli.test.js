@@ -557,6 +557,16 @@ describe('deploy refuses a GM site folder', () => {
     });
   }
 
+  it('checks an absolute player_site.output where it is, not under the site folder', async () => {
+    const abs = path.resolve(path.sep, 'srv', 'out');
+    const h = harness({ config: { outputDir: abs } });
+    const seen = [];
+    h.deps.isGmOutput = (dir) => { seen.push(dir); return true; };
+    const rc = await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.strictEqual(seen[0], abs);
+  });
+
   it('refuses when wrangler.toml names a GM folder, though player_site.output is not one', async () => {
     const s = realSite((docs) => fs.writeFileSync(path.join(docs, 'index.html'), '<html></html>'));
     try {
