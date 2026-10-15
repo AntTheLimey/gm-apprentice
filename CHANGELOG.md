@@ -39,8 +39,18 @@ anything.
   with no publish list can accept too (the file then holds only
   `accepted:`); a vault still on `_meta/publish-manifest.md` is told to
   update first.
+- `leaks accept --page <page>` accepts every finding on one page, and
+  `leaks accept --note <note>` every finding from one note, for a
+  handout the GM gave out on purpose. Each is still recorded as its page
+  and sentence. Accepting a finding on a page also accepts the same
+  sentence in the site's data files (`previews.json`, the search index),
+  and `leaks list` shows such a leak once.
+- `leaks accept` refuses while the site's installed publish tool is older
+  than 1.30.0 (an older tool reads a publish list holding only accepted
+  findings as an empty publish list), and names the update to run first.
 - The publish-site skill walks the GM through each finding when a deploy
-  stops: fix the note, accept the finding, or report a tool bug.
+  stops: fix the note, accept the finding (or a whole handout in one
+  step), or report a tool bug.
 
 ---
 
