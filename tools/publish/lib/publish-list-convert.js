@@ -7,11 +7,79 @@ const fs = require('fs');
 const { listText, readPublishListFile, parseListText, counts } = require('./manifest');
 const { parseManifest, parseAnnotatedManifest } = require('./manifest-legacy');
 const { writeAtomic } = require('./settings/write');
-const { PUBLISH_LIST_FILE, OLD_LIST_FILE, at } = require('./settings/layout');
+const path = require('path');
+const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
+const { siteToolOlderThan } = require('./settings/move');
+const { readSettings } = require('./settings/read');
+const { packageScripts } = require('./settings/steps');
 
 const TEMP_SUFFIX = '.convert';
 const byText = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
 const sorted = (list) => [...new Set(list)].sort(byText);
+
+// ---- Holding the move back ----------------------------------------------------------------------------------
+
+const MAX_SCRIPT_BYTES = 2 * 1024 * 1024;
+
+// The build steps of a site, as the commands to run: the vault's settings for both sites, and the site folder's
+// package.json `prebuild` and `postbuild` (read by an older tool, and carried into the settings by the update).
+function stepCommands(vault, siteDir, siteJson) {
+  const commands = [];
+  try {
+    const { values } = readSettings({ vaultPath: vault, siteConfig: siteJson, siteDir });
+    for (const group of ['player_site', 'gm_site']) {
+      for (const slot of ['before_build', 'after_build']) {
+        const list = values && values[group] && values[group][slot];
+        if (Array.isArray(list)) commands.push(...list.filter((c) => typeof c === 'string'));
+      }
+    }
+  } catch { /* unreadable settings hold nothing here */ }
+  commands.push(...Object.values(packageScripts(siteDir)));
+  return commands;
+}
+
+// The first build step that names the old list file, or null: the command itself, or a file inside the site folder
+// that it names as a word (`node scripts/add-props.mjs` -> scripts/add-props.mjs). The reason is the step's own text.
+function stepReadingOldList(vault, siteDir, siteJson) {
+  let root;
+  try { root = fs.realpathSync.native(siteDir); } catch { return null; }
+  const seen = new Set();
+  for (const command of stepCommands(vault, siteDir, siteJson)) {
+    if (command.includes(path.basename(OLD_LIST_FILE))) return command.trim();
+    for (const raw of command.split(/\s+/)) {
+      const word = raw.replace(/^["']+|["']+$/g, '');
+      if (!word || seen.has(word)) continue;
+      seen.add(word);
+      try {
+        const real = fs.realpathSync.native(path.resolve(siteDir, word));
+        const inside = path.relative(root, real);
+        if (inside === '' || inside.startsWith('..') || path.isAbsolute(inside)) continue;
+        const stat = fs.statSync(real);
+        if (!stat.isFile() || stat.size > MAX_SCRIPT_BYTES) continue;
+        if (fs.readFileSync(real, 'utf8').includes(path.basename(OLD_LIST_FILE))) return inside.split(path.sep).join('/');
+      } catch { /* not a file in the folder */ }
+    }
+  }
+  return null;
+}
+
+// null when the list may move, else { held, line }. The site's tool older than PUBLISH_LIST_FROM reads a moved vault
+// as having no list; a build step that reads the old file would find none. Left behind, not wrong: told every pass.
+function holdFor(vault, siteConfigPath, { siteToolUpdated = false, pinCheck } = {}) {
+  if (!siteConfigPath) return null;
+  const siteDir = path.dirname(siteConfigPath);
+  const old = siteToolOlderThan(siteDir, PUBLISH_LIST_FROM, { updated: siteToolUpdated, ...(pinCheck ? { pinCheck } : {}) });
+  if (old) {
+    return { held: 'site-tool', line: `stays in ${OLD_LIST_FILE} until the site's publish tool is ${PUBLISH_LIST_FROM} or later` };
+  }
+  let siteJson = {};
+  try { siteJson = JSON.parse(fs.readFileSync(siteConfigPath, 'utf8')); } catch { /* none */ }
+  const script = stepReadingOldList(vault, siteDir, siteJson);
+  if (script) {
+    return { held: 'site-step', line: `stays in ${OLD_LIST_FILE}: your build step ${script} reads it. Change the script to ask \`gm-apprentice-publish manifest list --json\`, then run the update again.` };
+  }
+  return null;
+}
 
 // What the old file means, in the new file's three lists. The build's own reading decides what publishes
 // and what is held back. Two shapes the build never published fold into needs_decision, so they stay
@@ -91,10 +159,10 @@ function setsOf(list) {
 
 /**
  * @param {string} vaultPath
- * @param {{ check?: boolean, deps?: { writeTemp?: Function, readBack?: Function, removeOld?: Function } }} [options]
- * @returns {{ ok: boolean, converted: boolean, held: boolean, lines: string[], sets: object|null, blockers: string[] }}
+ * @param {{ check?: boolean, siteConfigPath?: string|null, siteToolUpdated?: boolean, deps?: { writeTemp?: Function, readBack?: Function, removeOld?: Function, pinCheck?: Function } }} [options]
+ * @returns {{ ok: boolean, converted: boolean, held: false|string, lines: string[], sets: object|null, blockers: string[] }}
  */
-function convertPublishList(vaultPath, { check = false, deps = {} } = {}) {
+function convertPublishList(vaultPath, { check = false, siteConfigPath = null, siteToolUpdated = false, deps = {} } = {}) {
   const oldFile = at(vaultPath, OLD_LIST_FILE);
   const newFile = at(vaultPath, PUBLISH_LIST_FILE);
   const tempFile = `${newFile}${TEMP_SUFFIX}`;
@@ -103,6 +171,8 @@ function convertPublishList(vaultPath, { check = false, deps = {} } = {}) {
   const none = { ok: true, converted: false, held: false, lines: [], sets: null, blockers: [] };
 
   if (!fs.existsSync(oldFile)) return none;
+  const hold = holdFor(vaultPath, siteConfigPath, { siteToolUpdated, pinCheck: deps.pinCheck });
+  if (hold) return { ...none, held: hold.held, lines: [hold.line] };
   const expected = expectedFrom(fs.readFileSync(oldFile, 'utf-8'));
   const quiet = { warn: () => {} };
 

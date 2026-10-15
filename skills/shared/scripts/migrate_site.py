@@ -230,6 +230,80 @@ def find_settings_move(vault: Path) -> list[Item]:
             Item(MOVE, WILL, [*shows, *not_told(plan["lines"])], apply)]
 
 
+PUBLISH_LIST = "publish-list"
+OLD_PUBLISH_LIST = "_meta/publish-manifest.md"   # dated: remove at 1.11.0
+
+
+def _ask_convert(vault: Path, *extra: str) -> dict[str, Any]:
+    """`manifest convert --json` for the vault, with the site's config when
+    it has one (the tool judges the site: its own version, and the build
+    steps that read the old file). A refused conversion exits 1 and still
+    answers in JSON. Raises StepFailed when it gives none."""
+    site, has_config = configured_site(vault)
+    args = ["manifest", "convert", "--vault", str(vault), "--json", *extra]
+    if site is not None and has_config:
+        args += ["--config", str(site / "vault.config.json")]
+    code, out, err = plugin_tool(args)
+    try:
+        data = json.loads(out)
+    except ValueError:
+        data = None
+    if not isinstance(data, dict) or not isinstance(data.get("ok"), bool) \
+            or not isinstance(data.get("lines"), list):
+        said = [x for x in err.splitlines() if x.strip()]
+        raise StepFailed("the publish list move gave no usable answer: "
+                         + (said[-1].strip().removeprefix("Error: ") if said
+                            else f"it exited {code}"))
+    return data
+
+
+def find_publish_list(vault: Path) -> list[Item]:
+    """Every pass: a vault still on `_meta/publish-manifest.md` moves to
+    `_meta/publish-list.yaml`, all of it by the publish tool (`manifest
+    convert`), which writes the new file, reads it back, compares the three
+    lists with the old file's and only then removes the old one. The tool
+    decides what moves and whether it should: it holds the list where it is
+    (`held`, with the words) when the site's tool is older than 1.27.0 or a
+    build step of the site reads the old file. A held list is left behind,
+    not wrong: told every pass, and it does not hold the stamp. A list the
+    tool cannot move holds it."""
+    if not (vault / OLD_PUBLISH_LIST).is_file():
+        return []
+    site, has_config = configured_site(vault)
+    # The repin comes first, so the site's tool is brought up to date before
+    # this is judged (as the settings move does).
+    flag = ["--site-tool-updated"] if site is not None and has_config else []
+    plan = _ask_convert(vault, "--check", *flag)
+    if plan.get("held"):
+        return [Item(PUBLISH_LIST, PERSON,
+                     [f"publish list\t{plan['lines'][0]}"])]
+    if not plan["ok"]:
+        return [Item(PUBLISH_LIST, PERSON,
+                     [f"publish list\tthe publish list cannot move to its new "
+                      f"file yet: {b}" for b in plan.get("blockers") or []]
+                     + ["publish list\tfix what each line names, then run the "
+                        "update again. Nothing was changed, and the old file "
+                        "is still read. The vault is not up to date until it "
+                        "has moved"], holds_stamp=True)]
+
+    def apply(_value: str | None) -> list[str]:
+        # Without the flag: by now the repin has run, so the site's tool is
+        # judged as it is, and a repin that failed holds the list back.
+        done = _ask_convert(vault)
+        if done.get("held"):
+            raise StepFailed(f"publish list {done['lines'][0]}")
+        if not done["ok"]:
+            raise StepFailed("; ".join(str(b) for b in done.get("blockers")
+                                       or ["the move was blocked"]))
+        if not (vault / "_meta" / "publish-list.yaml").is_file() \
+                or (vault / OLD_PUBLISH_LIST).exists():
+            raise StepFailed("the publish list move finished but "
+                             "_meta/publish-list.yaml is not the only list")
+        return [str(x) for x in done["lines"]]
+
+    return [Item(PUBLISH_LIST, WILL, [str(x) for x in plan["lines"]], apply)]
+
+
 def _shows_lines(plan: dict[str, Any]) -> list[str]:
     """A value carried out of the site folder that the site did not show
     before (it was read by nothing), told on its own line."""
@@ -653,6 +727,8 @@ SITE_CHECKS: list[Check] = [
     Check(REPIN, None, 1, "the site's publish tool", find_site_repin),
     Check(MOVE, None, 2, "the settings move to the new settings file",
           find_settings_move),
+    Check(PUBLISH_LIST, None, 2, "the publish list moves to its new file",
+          find_publish_list),
     Check("publish-site", None, 2, "the site switch",
           find_publish_site),
     Check("default-mode", "1.10.16", 2, "a default palette", find_default_mode,

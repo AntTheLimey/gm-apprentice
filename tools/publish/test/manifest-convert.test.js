@@ -140,3 +140,101 @@ test('a reason beside a Publishing entry round-trips', () => {
   assert.equal(list.reasons.get('NPCs/Vex.md'), 'stays hidden: x');
   assert.match(fs.readFileSync(file(v, 'publish-list.yaml'), 'utf8'), /path: NPCs\/Vex\.md/);
 });
+
+// ---- The site holds the list back -----------------------------------------------------------------------
+
+function siteWith({ toolVersion = null, steps = {}, files = {}, pkgScripts = null } = {}) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'convert-site-'));
+  fs.writeFileSync(path.join(dir, 'vault.config.json'), '{}');
+  if (toolVersion) {
+    const pkg = path.join(dir, 'node_modules', 'gm-apprentice-publish');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(path.join(pkg, 'package.json'), JSON.stringify({ version: toolVersion }));
+  }
+  for (const [name, text] of Object.entries(files)) {
+    fs.mkdirSync(path.dirname(path.join(dir, name)), { recursive: true });
+    fs.writeFileSync(path.join(dir, name), text);
+  }
+  if (pkgScripts) fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ scripts: pkgScripts }));
+  return { dir, config: path.join(dir, 'vault.config.json'), steps };
+}
+const unmanaged = () => ({ ok: true, ours: false, spec: '1.26.0', installedBefore: '1.26.0' });
+const snapshotOf = (v) => fs.readdirSync(path.join(v, '_meta')).sort().map((f) => [f, fs.readFileSync(file(v, f), 'utf8')]);
+
+test('a site tool older than 1.27.0 holds the list where it is', () => {
+  const v = vaultWith(OLD);
+  const s = siteWith({ toolVersion: '1.26.0' });
+  const before = snapshotOf(v);
+  for (const check of [true, false]) {
+    const r = convertPublishList(v, { check, siteConfigPath: s.config, deps: { pinCheck: unmanaged } });
+    assert.equal(r.ok, true);
+    assert.equal(r.held, 'site-tool');
+    assert.equal(r.lines[0], "stays in _meta/publish-manifest.md until the site's publish tool is 1.27.0 or later");
+    assert.deepEqual(snapshotOf(v), before);
+  }
+});
+
+test('a site tool the update is bringing up to date does not hold it', () => {
+  const v = vaultWith(OLD);
+  const s = siteWith({ toolVersion: '1.26.0' });
+  const ours = () => ({ ok: false, ours: true, spec: 'file:plugin', installedBefore: '1.26.0' });
+  const r = convertPublishList(v, { check: true, siteConfigPath: s.config, siteToolUpdated: true, deps: { pinCheck: ours } });
+  assert.equal(r.held, false);
+  assert.equal(r.ok, true);
+});
+
+test('a build step that reads the old file holds the list, naming the script', () => {
+  const v = vaultWith(OLD);
+  const s = siteWith({ files: { 'scripts/add-props.mjs': "readFileSync('../vault/_meta/publish-manifest.md')" }, pkgScripts: { postbuild: 'node scripts/add-props.mjs' } });
+  const before = snapshotOf(v);
+  const r = convertPublishList(v, { siteConfigPath: s.config, deps: { pinCheck: () => ({}) } });
+  assert.equal(r.held, 'site-step');
+  assert.match(r.lines[0], /^stays in _meta\/publish-manifest\.md: your build step scripts\/add-props\.mjs reads it\. Change the script to ask `gm-apprentice-publish manifest list --json`, then run the update again\.$/);
+  assert.deepEqual(snapshotOf(v), before);
+});
+
+test('a build step set in the vault settings is searched too, and a clean script is not a hold', () => {
+  const v = vaultWith(OLD);
+  fs.writeFileSync(file(v, 'vault-config.yaml'), 'version: 1\nplayer_site:\n  after_build:\n    - node scripts/add-props.mjs\n');
+  const dirty = siteWith({ files: { 'scripts/add-props.mjs': 'reads _meta/publish-manifest.md' } });
+  assert.equal(convertPublishList(v, { check: true, siteConfigPath: dirty.config, deps: { pinCheck: () => ({}) } }).held, 'site-step');
+  const clean = siteWith({ files: { 'scripts/add-props.mjs': 'asks the tool' } });
+  const r = convertPublishList(v, { check: true, siteConfigPath: clean.config, deps: { pinCheck: () => ({}) } });
+  assert.equal(r.held, false);
+  assert.equal(r.ok, true);
+});
+
+test('a step word that leaves the site folder is not read', () => {
+  const v = vaultWith(OLD);
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'outside-'));
+  fs.writeFileSync(path.join(outside, 'x.mjs'), 'publish-manifest.md');
+  const s = siteWith({ pkgScripts: { postbuild: `node ${path.join(outside, 'x.mjs')}` } });
+  assert.equal(convertPublishList(v, { check: true, siteConfigPath: s.config, deps: { pinCheck: () => ({}) } }).held, false);
+});
+
+test('a stop between the new file and the removal of the old leaves both; the next run finishes', () => {
+  const v = vaultWith(OLD);
+  const boom = () => { throw new Error('stopped'); };
+  assert.throws(() => convertPublishList(v, { deps: { removeOld: boom } }), /stopped/);
+  assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), true);
+  assert.equal(fs.existsSync(file(v, 'publish-list.yaml')), true);
+  assert.equal(fs.existsSync(file(v, 'publish-list.yaml.convert')), false);
+  const r = convertPublishList(v);
+  assert.equal(r.ok, true);
+  assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), false);
+  assert.equal(fs.existsSync(file(v, 'publish-list.yaml')), true);
+});
+
+test('the command takes --config: a step reading the old file holds the list and says so', async () => {
+  const { runManifest } = require('../lib/manifest-cli');
+  const v = vaultWith(OLD);
+  const s = siteWith({ files: { 'build.mjs': 'publish-manifest.md' }, pkgScripts: { prebuild: 'node build.mjs' } });
+  const lines = [];
+  const d = { out: (t) => lines.push(t) };
+  assert.equal(await runManifest({ verb: 'convert', vaultPath: v, configPath: s.config, check: true, json: true }, d), 0);
+  const r = JSON.parse(lines.pop());
+  assert.equal(r.held, 'site-step');
+  assert.equal(await runManifest({ verb: 'convert', vaultPath: v, configPath: s.config }, d), 0);
+  assert.match(lines.pop(), /^The publish list stays in _meta\/publish-manifest\.md: your build step build\.mjs reads it/);
+  assert.equal(fs.existsSync(file(v, 'publish-manifest.md')), true);
+});

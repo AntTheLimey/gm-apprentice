@@ -173,7 +173,7 @@ excluded versus missing is the GM's call.
                      --vault (diff and apply): read and write this vault's
                      manifest through the site's rules, as doctor --site --vault
                      audits it, so a fix lands in the vault that was audited.
-  manifest convert --vault <dir> [--check] [--json]
+  manifest convert --vault <dir> [--config <file>] [--check] [--site-tool-updated] [--json]
                      Move the publish list from _meta/publish-manifest.md to
                      _meta/publish-list.yaml, all or nothing: the new file is
                      read back and must say what the old one says before the
@@ -899,7 +899,7 @@ if (command === 'manifest') {
     args.slice(2),
     Object.assign({ '--prune': 'prune', '--json': 'json' },
       verb === 'publish-played' ? { '--dry-run': 'dryRun', '-n': 'dryRun', '--include-unreviewed': 'includeUnreviewed', '--publish-body': 'publishBody' } : {},
-      verb === 'convert' ? { '--check': 'check' } : {}),
+      verb === 'convert' ? { '--check': 'check', '--site-tool-updated': 'siteToolUpdated' } : {}),
     // --vault: vault_check asks about the vault it is checking, which need not be the
     // one the site's vaultPath names (explain --all takes it for the same reason).
     verb === 'publish-played' ? { '--vault': 'vault', '--session': 'session' }
@@ -916,7 +916,7 @@ if (command === 'manifest') {
   runManifest({
     verb,
     // For rename, only a --config the caller typed: the default is a path in the working folder.
-    configPath: verb === 'rename' && !args.includes('--config') ? null : parsed.configPath,
+    configPath: (verb === 'rename' || verb === 'convert') && !args.includes('--config') ? null : parsed.configPath,
     vaultPath: parsed.flags.vault,
     session: parsed.flags.session,
     from: parsed.flags.from,
@@ -930,6 +930,7 @@ if (command === 'manifest') {
     prune: !!parsed.flags.prune,
     dryRun: !!parsed.flags.dryRun,
     check: !!parsed.flags.check,
+    siteToolUpdated: !!parsed.flags.siteToolUpdated,
     json: !!parsed.flags.json,
   })
     .then(exitAfterFlush)

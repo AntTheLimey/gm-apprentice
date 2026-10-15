@@ -314,11 +314,8 @@ function stepScriptsIn(siteDir) {
 // A site with no tool installed or pinned is built by the plugin's own; a tool the plugin manages is repinned by the
 // update first (`updated`).
 function stepsHold(pin, { updated = false } = {}) {
-  if (!pin || (!pin.spec && !pin.installedBefore)) return null;
-  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
-  if (installed && atLeast(installed, versionIn(STEPS_FROM))) return null;
-  if (pin.ours && updated) return null;
-  return { held: 'steps', spec: pin.installedBefore || pin.spec, line: HELD_STEPS_LINE };
+  const old = oldTool(pin, STEPS_FROM, updated);
+  return old ? { held: 'steps', spec: old.shown, line: HELD_STEPS_LINE } : null;
 }
 
 // Plans what the site folder's package.json `prebuild` and `postbuild` do against the vault's `before_build` and
@@ -401,6 +398,18 @@ const atLeast = (have, want) => {
   return true;
 };
 
+// null when the site's tool is at least `from` (or the caller is bringing it up to date and the plugin owns the pin),
+// else { shown, ours }: the version or pin the GM would be told, and whether the plugin owns it. `pin` is the
+// update-pin answer. A site with no tool pinned or installed is built by the plugin's own, so it is never old.
+function oldTool(pin, from, updated) {
+  if (!pin || (!pin.spec && !pin.installedBefore)) return null;
+  // (A plugin path's number is the plugin's, not the tool's, so only a pin that is not ours is read for one.)
+  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
+  if (installed && atLeast(installed, versionIn(from))) return null;
+  if (pin.ours && updated) return null;
+  return { shown: pin.installedBefore || pin.spec, ours: !!pin.ours };
+}
+
 // null when the vault may move, else { held, spec, line }. Whether the site's tool can READ the new file decides: the
 // tool installed in the site folder, or, if none is installed, the version its package.json asks for; a tool that
 // cannot be told cannot read. Who owns the pin only decides whether the update can repin it first (`updated`).
@@ -409,13 +418,10 @@ const atLeast = (have, want) => {
 // A held vault is not wrong: it stays on the old file until its site's tool is new enough. A site with no tool
 // pinned or installed is built by the plugin's own, so it moves. `pin` is the update-pin answer.
 function holdFrom(pin, { updated = false, siteDir = '' } = {}) {
-  if (!pin || (!pin.spec && !pin.installedBefore)) return null;
-  // (A plugin path's number is the plugin's, not the tool's, so only a pin that is not ours is read for one.)
-  const installed = versionIn(pin.installedBefore) || (pin.ours ? null : versionIn(pin.spec));
-  if (installed && atLeast(installed, versionIn(FIRST_TOOL_READING_NEW_FILE))) return null;
-  if (pin.ours && updated) return null;
-  const shown = pin.installedBefore || pin.spec;
-  if (!pin.ours) {
+  const old = oldTool(pin, FIRST_TOOL_READING_NEW_FILE, updated);
+  if (!old) return null;
+  const { shown } = old;
+  if (!old.ours) {
     return { held: 'site-tool', spec: shown, line: `This vault stays on the old settings file because its site's tool (${shown}) cannot read the new one. When that tool is ${FIRST_TOOL_READING_NEW_FILE} or later, run the update again.` };
   }
   return { held: 'site-tool-old', spec: shown, line: `This vault stays on the old settings file for now: its site's publish tool (${shown}) is older than the plugin's and cannot read the new file. Update it first (gm-apprentice-publish update-pin --site "${siteDir}"), then move the vault.` };
@@ -433,6 +439,18 @@ function siteToolHold(siteDir, { updated = false, pinCheck: ask = pinCheck, step
     if (!pin.spec) pin.ours = false;
   }
   return steps ? stepsHold(pin, { updated }) : holdFrom(pin, { updated, siteDir });
+}
+
+// Whether the tool that builds a site folder is older than `from`: { shown, ours } or null. The same reading of the pin
+// and of the installed tool as siteToolHold; the caller words the answer.
+function siteToolOlderThan(siteDir, from, { updated = false, pinCheck: ask = pinCheck } = {}) {
+  const pin = { ...(ask(siteDir) || {}) };
+  const installed = siteToolVersion(siteDir);
+  if (installed) {
+    pin.installedBefore = installed;
+    if (!pin.spec) pin.ours = false;
+  }
+  return oldTool(pin, from, updated);
 }
 
 // Every site folder involved: the one the vault's settings name (when it holds a vault.config.json) and the one the
@@ -1303,4 +1321,4 @@ function applyMove(plan, deps = {}) {
   return { moved: true, lines };
 }
 
-module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, holdFrom, siteToolHoldAll, siteFileNamedBy };
+module.exports = { planMove, applyMove, isBoilerplate, siteToolHold, siteToolOlderThan, holdFrom, siteToolHoldAll, siteFileNamedBy };

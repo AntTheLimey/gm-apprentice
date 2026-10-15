@@ -520,8 +520,9 @@ function runConvert(opts, d) {
   const out = d.out || console.log;
   const vault = vaultFor(opts, out);
   if (!vault) return 1;
-  const result = convertPublishList(vault, { check: !!opts.check });
+  const result = convertPublishList(vault, { check: !!opts.check, siteConfigPath: opts.configPath ? path.resolve(opts.configPath) : null, siteToolUpdated: !!opts.siteToolUpdated });
   if (opts.json) out(JSON.stringify(result, null, 2));
+  else if (result.held) out(`The publish list ${result.lines[0]}`);
   else if (!result.ok) out(['The publish list was not moved; nothing was changed.', ...result.blockers.map((b) => `  ${b}`)].join('\n'));
   else out(result.lines.length ? result.lines.join('\n') : 'The publish list is already in _meta/publish-list.yaml.');
   return result.ok ? 0 : 1;
