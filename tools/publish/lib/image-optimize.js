@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
@@ -78,9 +79,10 @@ function buildCwebpArgs({ src, dest, maxWidth, quality, width }) {
   return args;
 }
 
-function cwebpEncoder() {
+function cwebpEncoder(version) {
   return {
     name: 'cwebp',
+    version,
     encode(src, dest, { maxWidth, quality }) {
       const args = buildCwebpArgs({ src, dest, maxWidth, quality, width: probeWidth(src) });
       execFileSync('cwebp', args, { stdio: 'ignore' });
@@ -101,11 +103,60 @@ function cwebpEncoder() {
  */
 function detectEncoder() {
   try {
-    execFileSync('cwebp', ['-version'], { stdio: 'ignore' });
-    return cwebpEncoder();
+    // The version is part of the image cache's key: another libwebp may encode other bytes.
+    const version = execFileSync('cwebp', ['-version'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+    return cwebpEncoder(version);
   } catch {
     return null;
   }
+}
+
+// The site folder's own folder for what the tool keeps between builds. Never published: the output folder is elsewhere.
+const CACHE_FOLDER = '.gm-apprentice';
+
+/**
+ * Where the image cache lives: in the site folder, beside the output folder. None (no cache, encode
+ * every build) when the output folder or the vault would hold it: the output folder is emptied and
+ * published, and the vault is the GM's.
+ *
+ * @param {string} siteDir
+ * @param {{outputDirs: string[], vaultPath: string}} where
+ * @returns {string|null}
+ */
+function imageCacheDir(siteDir, { outputDirs, vaultPath }) {
+  const dir = path.resolve(siteDir, CACHE_FOLDER, 'image-cache');
+  const within = (outer) => {
+    const rel = path.relative(path.resolve(outer), dir);
+    return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
+  };
+  return [...outputDirs, vaultPath].some(within) ? null : dir;
+}
+
+/**
+ * Add the cache folder to the site folder's .gitignore, when it has one and it does not name the folder yet.
+ * In the file's own line endings; a site with no .gitignore gets none.
+ */
+function ignoreCacheInGit(siteDir) {
+  const file = path.join(siteDir, '.gitignore');
+  let text;
+  try { text = fs.readFileSync(file, 'utf8'); } catch { return; }
+  const named = text.split(/\r?\n/).some((line) => line.trim().replace(/^\//, '').replace(/\/$/, '') === CACHE_FOLDER);
+  if (named) return;
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  const lead = text === '' || text.endsWith('\n') ? '' : eol;
+  fs.appendFileSync(file, `${lead}${CACHE_FOLDER}/${eol}`);
+}
+
+// One cache entry per picture: its bytes, and everything that changes what the encoder makes of them.
+function cacheKey(sourcePath, cfg, encoder) {
+  const hash = crypto.createHash('sha256');
+  hash.update(JSON.stringify({
+    format: cfg.format, quality: cfg.quality, maxWidth: cfg.maxWidth,
+    encoder: encoder.name, version: encoder.version || null,
+  }));
+  hash.update('\0');
+  hash.update(fs.readFileSync(sourcePath));
+  return hash.digest('hex');
 }
 
 function clamp(n, min, max) {
@@ -122,7 +173,8 @@ function resolveImageConfig(cfg) {
 }
 
 /**
- * Re-encode every optimizable image in `imageMap` into `tmpDir`, in place.
+ * Re-encode every optimizable image in `imageMap` into `tmpDir`, in place; or, given
+ * `options.cacheDir`, take each from the image cache and encode only what it does not hold.
  *
  * Mutates each converted entry: `relPath` gains the new extension (so templates emit the
  * converted reference at src-emission time, never by string-matching generated HTML) and
@@ -131,12 +183,14 @@ function resolveImageConfig(cfg) {
  *
  * @param {Record<string, {sourcePath: string, relPath: string, encodedPath?: string}>} imageMap
  * @param {object} imagesConfig - the `publish.images` block
- * @param {string} tmpDir - scratch directory the caller owns and cleans up
- * @param {{encoder?: {name: string, encode: Function}|null}} [options] - inject an encoder (tests)
- * @returns {{converted: number, skipped: number, failed: number, bytesBefore: number, bytesAfter: number, encoder: string|null, reason?: string}}
+ * @param {string|null} tmpDir - scratch directory the caller owns and cleans up; unused with a cache
+ * @param {{encoder?: {name: string, version?: string, encode: Function}|null, cacheDir?: string|null}} [options]
+ *   - inject an encoder (tests); the image cache folder (imageCacheDir)
+ * @returns {{converted: number, skipped: number, failed: number, encoded: number, bytesBefore: number, bytesAfter: number, encoder: string|null, reason?: string}}
  */
 function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
-  const stats = { converted: 0, skipped: 0, failed: 0, bytesBefore: 0, bytesAfter: 0, encoder: null };
+  const stats = { converted: 0, skipped: 0, failed: 0, encoded: 0, bytesBefore: 0, bytesAfter: 0, encoder: null };
+  const cacheDir = options.cacheDir || null;
   const cfg = resolveImageConfig(imagesConfig);
   if (!cfg.optimize) return { ...stats, reason: 'disabled' };
 
@@ -149,6 +203,7 @@ function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
     return { ...stats, reason: 'cwebp not found on PATH — install libwebp (brew install webp / apt install webp)' };
   }
   stats.encoder = encoder.name;
+  if (cacheDir) fs.mkdirSync(cacheDir, { recursive: true });
 
   // Two sources with the same stem in the same directory (`a.png` and `a.jpg`) would both
   // want `a.webp`. First one wins; the loser keeps its original bytes rather than silently
@@ -166,25 +221,49 @@ function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
       continue;
     }
 
-    // Encoded filenames are ordinals, not the source basename: the scratch path never has
-    // to survive spaces, non-ASCII, or a nested relPath.
-    const encodedPath = path.join(tmpDir, `${counter++}.${cfg.format}`);
-    try {
-      encoder.encode(entry.sourcePath, encodedPath, cfg);
-    } catch (e) {
-      console.warn(`  images: failed to encode "${basename}" — ${e.message.split('\n')[0]}`);
-      stats.failed++;
-      continue;
+    let encodedPath;
+    if (cacheDir) {
+      // The cache: one file per picture's bytes and encoding settings. A hit is the file a
+      // build encoded before, so the output is the same bytes without running the encoder.
+      encodedPath = path.join(cacheDir, `${cacheKey(entry.sourcePath, cfg, encoder)}.${cfg.format}`);
+      if (!fs.existsSync(encodedPath)) {
+        // Encoded beside the entry and renamed into place: a build stopped mid-encode
+        // leaves a temp file, never a half entry that a later build takes for a hit.
+        const temp = path.join(cacheDir, `.tmp-${process.pid}-${counter++}.${cfg.format}`);
+        try {
+          encoder.encode(entry.sourcePath, temp, cfg);
+          if (!fs.existsSync(temp)) throw new Error('the encoder wrote nothing');
+          fs.renameSync(temp, encodedPath);
+        } catch (e) {
+          fs.rmSync(temp, { force: true });
+          console.warn(`  images: failed to encode "${basename}" — ${e.message.split('\n')[0]}`);
+          stats.failed++;
+          continue;
+        }
+        stats.encoded++;
+      }
+    } else {
+      // Encoded filenames are ordinals, not the source basename: the scratch path never has
+      // to survive spaces, non-ASCII, or a nested relPath.
+      encodedPath = path.join(tmpDir, `${counter++}.${cfg.format}`);
+      try {
+        encoder.encode(entry.sourcePath, encodedPath, cfg);
+      } catch (e) {
+        console.warn(`  images: failed to encode "${basename}" — ${e.message.split('\n')[0]}`);
+        stats.failed++;
+        continue;
+      }
+      if (!fs.existsSync(encodedPath)) { stats.failed++; continue; }
+      stats.encoded++;
     }
-
-    if (!fs.existsSync(encodedPath)) { stats.failed++; continue; }
 
     const before = fs.statSync(entry.sourcePath).size;
     const after = fs.statSync(encodedPath).size;
     if (after >= before) {
       // Already well-compressed. Keeping the original is strictly better than shipping a
-      // larger file in a format some older clients can't read.
-      fs.rmSync(encodedPath, { force: true });
+      // larger file in a format some older clients can't read. A cached result stays in
+      // the cache, so the next build does not encode it again to learn the same thing.
+      if (!cacheDir) fs.rmSync(encodedPath, { force: true });
       stats.skipped++;
       continue;
     }
@@ -202,4 +281,5 @@ function optimizeImages(imageMap, imagesConfig, tmpDir, options = {}) {
 
 module.exports = {
   optimizeImages, detectEncoder, resolveImageConfig, probeWidth, buildCwebpArgs, OPTIMIZABLE_EXT,
+  imageCacheDir, ignoreCacheInGit, CACHE_FOLDER,
 };

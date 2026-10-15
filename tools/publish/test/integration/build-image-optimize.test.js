@@ -20,8 +20,9 @@ const preexistingScratch = scratchDirs();
 // never string-matches the filesystem path it would need to rewrite.
 const PORTRAIT = 'Rock Lavey.png';
 
-function setupSite({ optimize }) {
+function setupSite({ optimize, gitignore }) {
   const siteDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-images-'));
+  if (gitignore !== undefined) fs.writeFileSync(path.join(siteDir, '.gitignore'), gitignore);
   const vaultPath = path.join(siteDir, 'vault');
   const outputDir = path.join(siteDir, 'docs');
 
@@ -97,6 +98,43 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     });
   });
 
+  describe('the image cache, across two builds', () => {
+    let siteDir, outputDir, first, logs;
+    const filesOf = (dir) => fs.readdirSync(dir, { recursive: true })
+      .filter((rel) => fs.statSync(path.join(dir, rel)).isFile())
+      .map((rel) => rel.split(path.sep).join('/')).sort()
+      .map((rel) => [rel, fs.readFileSync(path.join(dir, rel)).toString('base64')]);
+    const logged = (fn) => {
+      const lines = [];
+      const was = console.log;
+      console.log = (...a) => lines.push(a.join(' '));
+      try { fn(); } finally { console.log = was; }
+      return lines.join('\n');
+    };
+    before(() => {
+      logs = [];
+      logs.push(logged(() => ({ outputDir } = setupSite({ optimize: true, gitignore: 'node_modules/\n' }))));
+      siteDir = path.dirname(outputDir);
+      first = filesOf(outputDir);
+      logs.push(logged(() => build({ configPath: path.join(siteDir, 'config.json') })));
+    });
+
+    it('builds the same site twice', () => {
+      assert.deepStrictEqual(filesOf(outputDir), first);
+    });
+
+    it('encodes on the first build and nothing on the second', () => {
+      assert.match(logs[0], /Optimized 1 image\(s\) via cwebp.*1 encoded now/);
+      assert.match(logs[1], /Optimized 1 image\(s\) via cwebp.*0 encoded now/);
+    });
+
+    it('keeps the cache in the site folder, outside the output folder, and out of git', () => {
+      const cache = path.join(siteDir, '.gm-apprentice', 'image-cache');
+      assert.strictEqual(fs.readdirSync(cache).filter((n) => n.endsWith('.webp') && !n.startsWith('.')).length, 1);
+      assert.strictEqual(fs.readFileSync(path.join(siteDir, '.gitignore'), 'utf8'), 'node_modules/\n.gm-apprentice/\n');
+    });
+  });
+
   describe('when optimization is off (the default)', () => {
     let outputDir;
     before(() => { ({ outputDir } = setupSite({ optimize: false })); });
@@ -109,6 +147,10 @@ describe('image optimization', { skip: !hasCwebp }, () => {
     it('still references the .png', () => {
       const html = fs.readFileSync(path.join(outputDir, 'characters/npcs/rock-lavey.html'), 'utf8');
       assert.ok(html.includes('images/characters/Rock%20Lavey.png'));
+    });
+
+    it('makes no image cache', () => {
+      assert.ok(!fs.existsSync(path.join(path.dirname(outputDir), '.gm-apprentice')));
     });
   });
 });

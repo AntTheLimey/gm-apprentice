@@ -5,7 +5,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { scanVaultReport, warnScanReport, buildLinkMap, scanAttachments, scanAllNotes, pcLiveKey, STORY_SUFFIX, slugify } = require('./scanner');
-const { optimizeImages, resolveImageConfig } = require('./image-optimize');
+const { optimizeImages, resolveImageConfig, imageCacheDir, ignoreCacheInGit } = require('./image-optimize');
 const { resolveBanner, renderBanner, defaultAlt, isSvg, bannerSlug, copiedBannerFiles } = require('./banners');
 const { pcKeepList, retiredSheetFieldsFor, retiredSheetFieldsMessage } = require('./pc-prose');
 const { nameList, gmAliasList, strippedLines, noteFacts, keptFlags, stubCut, stubMarked, hiddenFieldsOf, unstableBodyMarked, pcHeadingsUnstable, HEADINGS_UNSTABLE_WARNING, processContent, playerSafeMarkdown, extractSections, filterSections, filterFields, publishedFrontmatter, isGmOnlyEdge, publishMode, keepOnlySections, resolveImageEmbeds, resolveWikiLinks, relativePath, relativeHref, escapeHtml, portraitBasename, encodeHref } = require('./processor');
@@ -1099,11 +1099,17 @@ function buildSite(options) {
   // The cost of that ordering: player mode only learns which images are actually referenced
   // (`usedImages`) while rendering, so an unreferenced attachment is encoded here and then
   // dropped at copy time. Correct, just wasted work — and unavoidable without emitting a
-  // `src` before knowing the extension it will end up with.
+  // `src` before knowing the extension it will end up with. The image cache in the site
+  // folder makes it one encode per picture, ever, not one per build.
   let imagesTmpDir = null;
   if (!dry && resolveImageConfig(publishConfig.images).optimize) {
-    imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));
-    const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir);
+    const cacheDir = imageCacheDir(configDir, {
+      outputDirs: [outputDir, ...(playerOutputDir ? [playerOutputDir] : [])],
+      vaultPath: config.vaultPath,
+    });
+    if (cacheDir) ignoreCacheInGit(configDir);
+    else imagesTmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gm-publish-img-'));
+    const stats = optimizeImages(imageMap, publishConfig.images, imagesTmpDir, { cacheDir });
     if (stats.reason) {
       console.warn(`  WARNING: image optimization requested but skipped — ${stats.reason}`);
     } else {
@@ -1115,7 +1121,8 @@ function buildSite(options) {
         `Optimized ${stats.converted} image(s) via ${stats.encoder}: ` +
         `${mb(stats.bytesBefore)} MB → ${mb(stats.bytesAfter)} MB (${saved}% smaller)` +
         `${stats.skipped ? `, ${stats.skipped} left as-is` : ''}` +
-        `${stats.failed ? `, ${stats.failed} failed` : ''}`
+        `${stats.failed ? `, ${stats.failed} failed` : ''}` +
+        `${cacheDir ? `; ${stats.encoded} encoded now, the rest from the image cache` : ''}`
       );
     }
   }
