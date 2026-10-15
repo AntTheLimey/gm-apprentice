@@ -91,7 +91,7 @@ Follow with "build" to generate the site.
   --help, -h         Show this help
 `,
   build: `
-gm-apprentice-publish build [--site player|gm] [--config <path>]
+gm-apprentice-publish build [--site player|gm] [--config <path>] [--only sheets]
 
 Generates the static site from the vault named in vault.config.json. On a
 site with a backend enabled, re-syncs the plugin-owned Cloudflare Functions
@@ -102,6 +102,10 @@ gm_site.publish is on (the GM site alone when the player site is switched
 off). The GM site is built into its own folder and never goes online.
 
   --site <name>      Build one site: player or gm
+  --only sheets      Rebuild only the character pages, for use during play; nothing else is
+                     written or deleted. Needs a full build first. A new character's page
+                     is written, but the menu and the lists that link it wait for a full build.
+                     Runs the vault's after_build steps, not its before_build steps.
   --config <path>    Path to vault.config.json (default: ./vault.config.json)
   --help, -h         Show this help
 `,
@@ -634,7 +638,7 @@ if (command === 'build') {
   // watched, so it builds once and says so. Every other unknown option is refused below.
   const buildArgs = args.slice(1).filter((a) => a !== '--watch');
   const sawWatch = buildArgs.length !== args.length - 1;
-  const parsed = parseSubcommandArgs(buildArgs, {}, { '--site': 'site' });
+  const parsed = parseSubcommandArgs(buildArgs, {}, { '--site': 'site', '--only': 'only' });
   if (parsed.error) {
     const bad = /^Unknown argument: (.*)$/.exec(parsed.error);
     if (bad) refuseUnknownArgument('build', bad[1]);
@@ -645,6 +649,12 @@ if (command === 'build') {
   const siteFlag = parsed.flags.site;
   if (siteFlag !== undefined && siteFlag !== 'player' && siteFlag !== 'gm') {
     console.error(`Unknown site: ${siteFlag}. Use --site player or --site gm.`);
+    process.exit(1);
+  }
+
+  const onlyFlag = parsed.flags.only;
+  if (onlyFlag !== undefined && onlyFlag !== 'sheets') {
+    console.error(`Unknown --only value: ${onlyFlag}. The only one is sheets.`);
     process.exit(1);
   }
 
@@ -691,16 +701,16 @@ if (command === 'build') {
   // added or fixed in a newer plugin version reach flagged sites scaffolded before they
   // existed. Each feature's files follow its own switch: on copies them, an explicit off
   // removes them, unset does neither (a Tier-1 static site gets no Functions re-added).
-  if (sites.includes('player')) require('../lib/sync-functions').syncSiteFunctionsOrWarn(configPath);
+  if (sites.includes('player') && !onlyFlag) require('../lib/sync-functions').syncSiteFunctionsOrWarn(configPath);
 
   const { build } = loadBuild();
   (async () => {
     try {
       // theme.fonts.source: self-host fills the vault's font cache first (network); the
       // build itself only reads the cache (#270).
-      await require('../lib/fonts').prefetchForConfig(configPath);
+      if (!onlyFlag) await require('../lib/fonts').prefetchForConfig(configPath);
       // A failed build stops here: the next site is not built.
-      for (const site of sites) build({ configPath, runSteps: true, site });
+      for (const site of sites) build({ configPath, runSteps: true, site, only: onlyFlag });
       if (sawWatch) console.log('build has no watch mode; built once.');
     } catch (err) {
       console.error(`Build failed: ${err.message}`);

@@ -201,6 +201,11 @@ function build(options = {}) {
 
 function buildSite(options) {
   const dry = options.inMemory === true;
+  // `options.only === 'sheets'`: rebuild the PC pages and write nothing else (see `writes` below).
+  if (options.only !== undefined && options.only !== 'sheets') throw new Error(`Unknown --only value: ${options.only}. The only one is sheets.`);
+  const onlySheets = options.only === 'sheets' && !dry;
+  // What this build writes: 'all' (a full build), 'sheets' (the PC pages alone) or 'none' (in memory).
+  const writes = dry ? 'none' : onlySheets ? 'sheets' : 'all';
   const configPath = options.configPath || './vault.config.json';
   const resolvedConfigPath = path.resolve(configPath);
   const configDir = path.dirname(resolvedConfigPath);
@@ -256,7 +261,18 @@ function buildSite(options) {
   // The vault's build steps run only for the `build` and `deploy` commands (`options.runSteps`): never in a dry build,
   // the preview, or any command that only reads. Before anything is read from the vault, in the site folder.
   const runningSteps = options.runSteps === true && !dry && !options.outputDirOverride;
-  if (runningSteps) {
+  // A fast build finds a full build first: with none there is nothing to update, and nothing is written.
+  if (onlySheets) {
+    const there = gm ? fs.existsSync(path.join(outputDir, 'gm-build.json')) : fs.existsSync(path.join(outputDir, 'index.html'));
+    if (!there) throw new Error(`There is no full build in ${outputDir} to update. Run gm-apprentice-publish build --site ${gm ? 'gm' : 'player'} first.`);
+  }
+  // The site's own package.json build scripts are not run by a fast build: say so, once.
+  if (onlySheets) {
+    const skipped = Object.keys(packageScripts(configDir));
+    if (skipped.length) console.log(`  Note: the site's package.json ${skipped.join(' and ')} script${skipped.length === 1 ? '' : 's'} does not run in a sheets-only build; the update moves build steps into the vault's settings.`);
+  }
+  // The steps before the build do not run for a fast build: they make files it does not write.
+  if (runningSteps && !onlySheets) {
     // An output folder the build would refuse stops it before any step runs (a step may change it, so the check also stays below).
     assertSafeOutputDir();
     const notes = packageNotes(publishConfig.layout === 'new' ? packageScripts(configDir) : {}, publishConfig.steps);
@@ -327,7 +343,7 @@ function buildSite(options) {
   }
 
   function cleanOutput() {
-    if (dry) return;
+    if (writes !== 'all') return;
     if (!fs.existsSync(outputDir)) return;
     assertSafeOutputDir();
     for (const entry of fs.readdirSync(outputDir)) {
@@ -346,7 +362,7 @@ function buildSite(options) {
   // Every stylesheet the build writes goes through scopeColorScheme, so its light-mode
   // rules also answer to the reader's toggle (#260).
   function copyCSS() {
-    if (dry) return;
+    if (writes !== 'all') return;
     const src = path.join(__dirname, '../css/style.css');
     const dest = path.join(outputDir, 'css/style.css');
     ensureDir(dest);
@@ -355,7 +371,7 @@ function buildSite(options) {
 
   // The GM site's own files: the band and mark styles, and a robots.txt that asks every crawler to stay out.
   function writeGmFiles() {
-    if (dry || !gm) return;
+    if (writes !== 'all' || !gm) return;
     const dest = path.join(outputDir, 'css/gm.css');
     ensureDir(dest);
     fs.writeFileSync(dest, scopeColorScheme(fs.readFileSync(path.join(__dirname, '../css/gm.css'), 'utf8')));
@@ -373,7 +389,7 @@ function buildSite(options) {
   const GOOGLE_FONTS_IMPORT_RE = /^@import\s+url\(['"]?https?:\/\/(fonts\.googleapis\.com|fonts\.gstatic\.com)[^)]*\)\s*;\s*$/;
 
   function copyGenreCSS() {
-    if (dry) return;
+    if (writes !== 'all') return;
     if (!genrePreset) return;
     const src = path.join(__dirname, `../css/themes/${genrePreset}.css`);
     const dest = path.join(outputDir, `css/themes/${genrePreset}.css`);
@@ -397,7 +413,7 @@ function buildSite(options) {
   function copyOverridesCSS() {
     const src = path.join(configDir, 'css/overrides.css');
     if (!fs.existsSync(src)) return false;
-    if (dry) return true;
+    if (writes !== 'all') return true;
     const dest = path.join(outputDir, 'css/overrides.css');
     // Output inside the site dir: never rewrite the GM's own source file.
     if (path.resolve(src) === path.resolve(dest)) return true;
@@ -410,7 +426,7 @@ function buildSite(options) {
   const tohitScriptNeeded = publishConfig.tohit_calculator === 'on' && !sheetsOff
     && (clientFor(publishConfig.system) || {}).script === 'gurps-live.js';
   function copyJS() {
-    if (dry) return;
+    if (writes !== 'all') return;
     const jsDir = path.join(__dirname, '../js');
     if (!fs.existsSync(jsDir)) return;
     const destDir = path.join(outputDir, 'js');
@@ -459,7 +475,7 @@ function buildSite(options) {
   }
 
   function copyFontFiles(files) {
-    if (dry) return;
+    if (writes !== 'all') return;
     for (const f of files) {
       const dest = path.join(outputDir, 'fonts', f.rel);
       ensureDir(dest);
@@ -473,7 +489,7 @@ function buildSite(options) {
   }
 
   function writeThemeCSS() {
-    if (dry) return;
+    if (writes !== 'all') return;
     warnGoogleFonts();
     const css = scopeColorScheme(generateThemeCSS(publishConfig.theme, { selfHostCss: selfHostedFonts().css }));
     const dest = path.join(outputDir, 'css/theme.css');
@@ -493,7 +509,7 @@ function buildSite(options) {
   // otherwise a mistyped `files[].path` (e.g. a GM's .md page) would get copied straight
   // into the public site.
   function copyThemeFonts() {
-    if (dry) return;
+    if (writes !== 'all') return;
     const fontsCfg = publishConfig.theme.fonts || {};
     copySelfHostedFonts();
     const files = Array.isArray(fontsCfg.files) ? fontsCfg.files : [];
@@ -531,12 +547,12 @@ function buildSite(options) {
   }
 
   function writeNoJekyll() {
-    if (dry) return;
+    if (writes !== 'all') return;
     fs.writeFileSync(path.join(outputDir, '.nojekyll'), '');
   }
 
   function write404() {
-    if (dry) return;
+    if (writes !== 'all') return;
     const html = fourOhFourTemplate({
       siteTitle: config.siteTitle,
       siteUrl: config.siteUrl,
@@ -559,7 +575,7 @@ function buildSite(options) {
   }
 
   function copyImages(imageMap) {
-    if (dry) return;
+    if (writes === 'none') return;   // a fast build copies the pictures its pages use, so an after_build step can convert them
     for (const entry of Object.values(imageMap)) {
       const dest = path.join(outputDir, 'images', entry.relPath);
       ensureDir(dest);
@@ -586,6 +602,8 @@ function buildSite(options) {
   console.log('Scanning vault:', config.vaultPath);
   const scanReport = scanVaultReport(scanConfig);
   let pages = warnScanReport(scanReport);
+  // A fast build checks the folders PC pages go in: every PC the scan found, kept or not.
+  const scannedPcDirs = onlySheets ? new Set(pages.filter((p) => p.frontmatter.type === 'pc').map((p) => path.posix.dirname(p.outputPath))) : null;
   console.log(`Found ${pages.length} pages`);
   // Capture the scanned pages before the manifest/draft filters reassign `pages` to the published
   // subset, so templates can reach context that is excluded from rendering — above all the
@@ -1104,7 +1122,7 @@ function buildSite(options) {
 
   cleanOutput();
   // The GM site's folder is its own from here: the marker goes in first (finished: null) and is written again last.
-  if (gm && !dry) {
+  if (gm && writes === 'all') {
     fs.mkdirSync(outputDir, { recursive: true });
     writeMarker(outputDir, { version: TOOL_VERSION, now: null });
   }
@@ -1131,7 +1149,7 @@ function buildSite(options) {
   const campaignImageSource = publishConfig.theme.campaign_image;
   let campaignImageCopied = false;
   // Resolve campaign_image: copy from vault to output and rewrite to output-relative path
-  if (!dry && publishConfig.theme.campaign_image) {
+  if (writes === 'all' && publishConfig.theme.campaign_image) {
     const imgVal = publishConfig.theme.campaign_image;
     if (!imgVal.startsWith('http://') && !imgVal.startsWith('https://')) {
       const vaultRoot = path.resolve(config.vaultPath);
@@ -1154,7 +1172,7 @@ function buildSite(options) {
   writeNoJekyll();
 
   // Write search index (only if search is enabled)
-  if (dry) {
+  if (writes !== 'all') {
     // nothing is written
   } else if (searchData) {
     const searchDest = path.join(outputDir, 'search-index.json');
@@ -1199,6 +1217,7 @@ function buildSite(options) {
     const crestBase = canonicalNfc(String(publishConfig.sheet_crest).split('/').pop());
     if (crestBase && imageMap[crestBase]) usedImages.add(crestBase);
   }
+  const sheetsWritten = [];   // a fast build's PC pages: { rel, isNew }
   let errorCount = 0;
   const renderErrors = [];   // what failed to render, for a caller that gets no console (the in-memory build)
   let auditGaps = 0;         // pages the note-faults audit could not render a second time
@@ -1493,16 +1512,48 @@ function buildSite(options) {
     };
   }
 
+  // A fast build deletes nothing. A PC page already in the folder that a full build would no longer write
+  // (the note went unpublished, left the publish list, or was renamed) stops it before it writes anything.
+  if (onlySheets) {
+    const wanted = new Set(pages.map((p) => p.outputPath));
+    const stale = [];
+    for (const dir of scannedPcDirs) {
+      const folder = path.join(outputDir, ...dir.split('/'));
+      if (!fs.existsSync(folder)) continue;
+      for (const f of fs.readdirSync(folder)) {
+        const rel = dir === '.' ? f : `${dir}/${f}`;
+        if (f.endsWith('.html') && f !== 'index.html' && !wanted.has(rel)) stale.push(rel);
+      }
+    }
+    // The same for a PC's story page: one in the folder whose PC no longer gets a story page.
+    const stories = new Set(pages.filter((p) => p.frontmatter.type === 'pc' && p.storyMarkdown && !getsNoPage(p))
+      .map((p) => `story/characters/${slugify(p.title)}.html`));
+    const storyDir = path.join(outputDir, 'story', 'characters');
+    if (fs.existsSync(storyDir)) {
+      for (const f of fs.readdirSync(storyDir)) {
+        const rel = `story/characters/${f}`;
+        if (f.endsWith('.html') && f !== 'index.html' && !stories.has(rel)) stale.push(rel);
+      }
+    }
+    if (stale.length) throw new Error(`${stale.join(', ')} ${stale.length === 1 ? 'is' : 'are'} on the site but a full build would no longer write ${stale.length === 1 ? 'it' : 'them'}. Run a full build (gm-apprentice-publish build --site ${gm ? 'gm' : 'player'}); a sheets-only build deletes nothing. Nothing was written.`);
+  }
+
   for (const page of pages) {
     try {
       if (getsNoPage(page)) continue;
+      // A fast build renders the PC pages and no others.
+      if (onlySheets && page.frontmatter.type !== 'pc') continue;
       const out = renderPage(page, liveFx);
       if (out.roster) { deferredRosters.push({ page, processed: out.roster }); continue; }
       seen(vaultRelPathOf(page), out.html, page, false);
-      if (dry) continue;
+      // A fast build writes no page of the people a PC page lists, so their pictures are copied for this one.
+      if (onlySheets && publishConfig._connections) useConnectionImages(publishConfig._connections.for(page));
+      if (writes === 'none') continue;
       const outPath = path.join(outputDir, page.outputPath);
+      const isNew = onlySheets && !fs.existsSync(outPath);
       ensureDir(outPath);
       writeHtml(outPath, out.html, page);
+      if (onlySheets) sheetsWritten.push({ rel: page.outputPath, isNew });
       console.log(`  wrote ${page.outputPath}`);
     } catch (e) {
       errorCount++;
@@ -1511,8 +1562,41 @@ function buildSite(options) {
     }
   }
 
+  // The pictures a Connections model names (`images/<relPath>`) count as used, as a full build counts them
+  // through the pages that own them.
+  function useConnectionImages(model) {
+    const byRel = new Map(Object.entries(imageMap).map(([basename, entry]) => [`images/${entry.relPath}`, basename]));
+    const walk = (v) => {
+      if (Array.isArray(v)) v.forEach(walk);
+      else if (v && typeof v === 'object') {
+        if (typeof v.image === 'string' && byRel.has(v.image)) usedImages.add(byRel.get(v.image));
+        Object.values(v).forEach(walk);
+      }
+    };
+    walk(model);
+  }
+
+  // A fast build also writes each PC's story page, as a full build does (not the story's contents page).
+  const storiesWritten = [];
+  if (onlySheets) {
+    for (const pc of pages.filter((p) => p.frontmatter.type === 'pc' && p.storyMarkdown && !getsNoPage(p))) {
+      try {
+        const { story, html } = renderCharacterStory(pc, liveFx);
+        const full = path.join(outputDir, story.outputPath);
+        ensureDir(full);
+        writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause });
+        storiesWritten.push(story.outputPath);
+        console.log(`  wrote ${story.outputPath}`);
+      } catch (e) {
+        errorCount++;
+        renderErrors.push(`${pc.title} story: ${e.message}`);
+        console.error(`  ERROR rendering the story of ${pc.title}: ${e.message}`);
+      }
+    }
+  }
+
   // Written only when a PC page was dressed; an untouched site gets no skins.css.
-  if (anyDressed && !dry) {
+  if (anyDressed && writes === 'all') {
     const dest = path.join(outputDir, 'css/skins.css');
     ensureDir(dest);
     // The skins' typefaces come from the vault's font cache and are served from the site,
@@ -1552,7 +1636,7 @@ function buildSite(options) {
       try {
         const html = renderRoster(deferredRoster.page, deferredRoster.processed);
         seen(vaultRelPathOf(deferredRoster.page), html, deferredRoster.page, false);
-        if (dry) continue;
+        if (writes !== 'all') continue;
         const outPath = path.join(outputDir, deferredRoster.page.outputPath);
         ensureDir(outPath);
         writeHtml(outPath, html, deferredRoster.page);
@@ -1569,6 +1653,7 @@ function buildSite(options) {
   // publish: false page and an excluded draft are absent), each page carries its filtered
   // frontmatter and publishedMarkdown, and a card is kept only if its page file exists.
   // cleanOutput() wipes a stale previews.json.
+  // A fast build reads the PC pages' cards for the audit and writes none.
   if (publishConfig.link_previews !== 'off') {
     const { buildPreviews, onlyBuiltPages } = require('./previews');
     const { usesCocFolio } = require('./templates/pc');
@@ -1580,9 +1665,9 @@ function buildSite(options) {
     if (!gm) for (const [key, card] of Object.entries(cards)) {
       const page = byHref.get(key);
       const text = Object.values(card).flatMap(cardStrings).join('\n');
-      if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p></main>`, null, 'the link previews', 'withheld');
+      if (page && text && (!onlySheets || page.frontmatter.type === 'pc')) audit.read(vaultRelPathOf(page), `<main><p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</p></main>`, null, 'the link previews', 'withheld');
     }
-    if (!dry) {
+    if (writes === 'all') {
       const built = onlyBuiltPages(cards, (key) => fs.existsSync(path.join(outputDir, ...key.split('/'))));
       fs.writeFileSync(path.join(outputDir, 'previews.json'), jsonText(built));
       console.log('  wrote previews.json');
@@ -1600,7 +1685,7 @@ function buildSite(options) {
   }
   copyImages(filteredMap);
   const suffix = campaignImageCopied ? ' (+ campaign image)' : '';
-  console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
+  if (!onlySheets) console.log(`${gm ? 'GM site' : 'Player site'}: copied ${Object.keys(filteredMap).length} referenced images${suffix}`);
 
   // The encoded bytes are now in the output tree. Scratch dir lives under os.tmpdir(), so a
   // build that throws before reaching here leaks nothing the OS won't reclaim.
@@ -1682,7 +1767,7 @@ function buildSite(options) {
     return rendered;
   }
 
-  publishConfig._banners = dry ? {} : buildBanners(Object.keys(DIR_LABELS));
+  publishConfig._banners = writes !== 'all' ? {} : buildBanners(Object.keys(DIR_LABELS));
 
   // The landing page's banner (player_site.landing.banner.*). Its picture is found and copied by the section
   // banners' helpers, to images/banners/landing/; its link is read by resolveSiteLink, as a menu entry's is.
@@ -1700,7 +1785,7 @@ function buildSite(options) {
     }
     if (banner.image && !/^https?:\/\//i.test(banner.image)) {
       const imageFull = resolveVaultAsset(banner.image, nm('player_site.landing.banner.image'));
-      banner.image = imageFull ? (dry ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
+      banner.image = imageFull ? (writes !== 'all' ? `images/banners/landing/${path.basename(imageFull)}` : copyBannerAsset(imageFull, 'landing')) : null;
     }
     if (banner.link) {
       const read = resolveSiteLink(banner.link, { linkMap, pages });
@@ -1817,7 +1902,7 @@ function buildSite(options) {
     for (const pc of pages.filter(p => p.frontmatter.type === 'pc' && p.storyMarkdown)) {
       const { story, html } = renderCharacterStory(pc, liveFx);
       stories.push(story);
-      if (dry) continue;
+      if (writes !== 'all') continue;
       const full = path.join(outputDir, story.outputPath);
       ensureDir(full);
       writeHtml(full, html, { gmHiddenBecause: pc.gmHiddenBecause });
@@ -1830,22 +1915,23 @@ function buildSite(options) {
   // (`occupation` on a location): read for a secret name as the page is, note by note.
   if (searchData && !gm) {
     const byHref = new Map(pages.map((p) => [p.outputPath, p]));
+    const onlyPc = (page) => !onlySheets || page.frontmatter.type === 'pc';
     const escapeText = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
     const strings = (v) => (typeof v === 'string' ? [v] : Array.isArray(v) ? v.flatMap(strings)
       : v && typeof v === 'object' ? Object.values(v).flatMap(strings) : []);
     for (const doc of Object.values(searchData.documents)) {
       const page = byHref.get(doc.href);
       const text = strings(doc.subtitle).join(' ');
-      if (page && text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index');
+      if (page && text && onlyPc(page)) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index');
       // Every other string of the entry the search shows (its title, its type).
       const rest = strings(Object.entries(doc).filter(([k]) => k !== 'href' && k !== 'subtitle').map(([, v]) => v)).join('\n');
-      if (page && rest) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(rest)}</p></main>`, null, 'the search index', 'withheld');
+      if (page && rest && onlyPc(page)) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(rest)}</p></main>`, null, 'the search index', 'withheld');
     }
     // And every field of every record the index is built from, whichever fields it holds: its
     // aliases are words no page prints. Withheld names only, as the page text is read for the rest.
     for (const { page, record } of searchData.records) {
       const text = strings(Object.entries(record).filter(([k]) => k !== 'id').map(([, v]) => v)).join('\n');
-      if (text) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index', 'withheld');
+      if (text && onlyPc(page)) audit.read(vaultRelPathOf(page), `<main><p>${escapeText(text)}</p></main>`, null, 'the search index', 'withheld');
     }
   }
 
@@ -1860,10 +1946,10 @@ function buildSite(options) {
     const vaultRoot = path.resolve(config.vaultPath);
     const there = (rel) => fs.existsSync(path.resolve(vaultRoot, rel));
     const rel = (p) => canonicalNfc(String(p).replace(/\\/g, '/'));
-    if (campaignImageSource && !/^https?:\/\//.test(campaignImageSource) && there(campaignImageSource)) {
+    if (!onlySheets && campaignImageSource && !/^https?:\/\//.test(campaignImageSource) && there(campaignImageSource)) {
       audit.readFileName(rel(campaignImageSource), `images/${path.basename(campaignImageSource)}`);
     }
-    for (const dir of Object.keys(DIR_LABELS)) {
+    for (const dir of onlySheets ? [] : Object.keys(DIR_LABELS)) {
       const entry = resolveBanner(dir, { vaultPath: config.vaultPath, folderMap: config.folderMap, banners: publishConfig.banners });
       if (!entry) continue;
       for (const file of copiedBannerFiles(entry)) {
@@ -1871,14 +1957,15 @@ function buildSite(options) {
       }
     }
     const fonts = (publishConfig.theme.fonts && Array.isArray(publishConfig.theme.fonts.files)) ? publishConfig.theme.fonts.files : [];
-    for (const f of fonts) {
+    for (const f of onlySheets ? [] : fonts) {
       if (f && f.path && there(f.path)) audit.readFileName(rel(f.path), `fonts/${fontOutputPath(f.path)}`);
     }
   }
 
   // Written, and read by the note-faults audit for a secret name. In memory nothing is
   // written, and every one of them is still made: what they print is part of the site.
-  eachListing((out, html, said) => {
+  // A fast build writes none of them, and the audit's second pass over them is left out.
+  if (!onlySheets) eachListing((out, html, said) => {
     if (!gm) audit.read(null, html, out);
     if (dry) return;
     const full = path.join(outputDir, out);
@@ -1894,7 +1981,7 @@ function buildSite(options) {
   // that pairs and publishes gets ticked; the rest — no Wrap-Up at all (recap-in-hub
   // vaults), a Wrap-Up not reviewed yet or not publishing, a stale site pin — are asked
   // about, each with publish-played's own reason.
-  if (unpublishedPlayedSessions.length > 0 && !dry) {
+  if (unpublishedPlayedSessions.length > 0 && writes === 'all') {
     let plan = null;
     try {
       const { planPublishPlayed, surveyVault } = require('./manifest-cli');
@@ -2004,7 +2091,7 @@ function buildSite(options) {
     const owns = everyMarked.map(([page, marked]) => putOn(page, marked));
     const strip = publishConfig._timelineStrip;
     try {
-      eachListing((out, html) => audit.listing(out, html), false);
+      if (!onlySheets) eachListing((out, html) => audit.listing(out, html), false);
     } catch (e) {
       auditGaps++;
     } finally {
@@ -2033,6 +2120,14 @@ function buildSite(options) {
     throw err;
   }
   // Last of all, the marker again, with the time the GM build finished (one that stopped before here left `built: null`).
+  if (onlySheets) {
+    const n = sheetsWritten.length;
+    const m = storiesWritten.length;
+    console.log(`Updated ${n} character page${n === 1 ? '' : 's'}${m ? ` and ${m} story page${m === 1 ? '' : 's'}` : ''}; nothing else was rewritten.`);
+    const fresh = sheetsWritten.filter((w) => w.isNew).length;
+    if (fresh > 0) console.log(`${fresh} character page${fresh === 1 ? ' is' : 's are'} new; a full build updates the menu and the lists that link ${fresh === 1 ? 'it' : 'them'}.`);
+    return { noteFaults, shown: null, faults: publishConfig.faults };
+  }
   if (gm) writeMarker(outputDir, { version: TOOL_VERSION });
   console.log('Done!');
   return { noteFaults, shown: null, faults: publishConfig.faults };
