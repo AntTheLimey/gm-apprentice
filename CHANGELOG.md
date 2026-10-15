@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.10.63] — 2026-10-15
+
+Shrunk pictures are kept between builds, and the update offers to retire
+the site build steps the publish tool now does itself.
+
+### Added
+
+- With `player_site.images.optimize` on, the publish tool keeps each
+  shrunk picture in `.gm-apprentice/image-cache/` in the site folder,
+  keyed on the picture's bytes and the settings that change the result,
+  so a build shrinks only new or changed pictures. The site comes out
+  byte for byte the same. The folder is added to the site's `.gitignore`
+  when it has one, and to the one a new site is made with.
+- The update offers to retire four `player_site.after_build` steps the
+  tool now does itself: `apply-overrides`, `add-tohit-calc`,
+  `add-theme-toggle` and `optimize-images`. One choice per step, retire
+  or leave, each saying what changes on the site. Retiring
+  `optimize-images` turns on `player_site.images.optimize` first. The
+  script files are left where they are.
+
+---
+
 ## [1.10.62] — 2026-10-15
 
 The publish tool learns to rebuild only the character pages, and the
