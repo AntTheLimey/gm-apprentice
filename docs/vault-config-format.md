@@ -30,11 +30,13 @@ The top level holds four names and nothing else: `version`, `vault`,
 
 - `version` is the number of this layout. It is the integer `1`.
 - `vault` holds what is true of the vault whatever site it has: the game
-  system, the campaign's name, the pictures folder.
+  system, the campaign's name, the pictures folder, and who keeps it
+  (`kept_by`). On a vault kept by a player (`kept_by: player`) the GM's
+  own checks and session prep say so and stay quiet, and a GM site cannot
+  be turned on.
 - `player_site` holds everything about the site the players see.
-- `gm_site` is reserved for a site the GM keeps. Nothing under it is read
-  yet. A tool may put its own settings there later; today the reader gives
-  one warning and ignores the content.
+- `gm_site` holds the settings of the GM site, a second build for the GM
+  that shows every hidden part and never goes online.
 
 Names are grouped, so a setting is a path: `player_site.hide.sections` is
 `sections` inside `hide` inside `player_site`. A key written with nothing

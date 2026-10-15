@@ -31,6 +31,11 @@ memory. Use plain filesystem tools plus the bundled utilities
 `shared/vault-access.md`; map the generic operations in
 `references/checks/` (enumerate files, search, read) to them.
 
+**Kept by a player.** On a vault with `vault.kept_by: player`, the
+GM-note checks of `vault_check.py` (gm-leak, stale-drafts, read-aloud,
+sessions, wrapup) print one row saying so and skip; that is expected,
+not a fault.
+
 **Version check** (first invocation): run `python3
 "${CLAUDE_PLUGIN_ROOT}/skills/shared/scripts/vault_check.py" <vault>
 version`. `OK`/`SETUP` → proceed. `MISMATCH` → announce the row and

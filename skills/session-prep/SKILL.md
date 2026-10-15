@@ -41,6 +41,9 @@ exception).
 
 ## Setup
 
+- On a vault kept by a player (`vault.kept_by: player`) `session_context.py`
+  says so and gathers nothing: session prep is the GM's job, so tell the
+  player and stop.
 - Read `shared/session-principles.md` and run its Version Gate on first
   invocation.
 - Read `shared/session-document-chain.md`. You write Plan files. On

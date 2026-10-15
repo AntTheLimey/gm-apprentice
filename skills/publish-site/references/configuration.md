@@ -6,6 +6,9 @@ folder's `vault.config.json` holds only where the vault is
 
 ## Settings
 
+A copy of the site for the GM, showing everything with each hidden part
+marked, is the GM site; see `content-filtering.md` § The GM site.
+
 The publish tool holds the one list of settings. Never open the
 settings file to read one, and never edit it by hand:
 `node "$TOOL" settings --help` shows every verb (`list`, `describe`,
