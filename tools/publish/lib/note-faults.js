@@ -52,6 +52,7 @@ const STAYS_HIDDEN = /^\s*stays\s+hidden\s*:/i;
 
 const fold = (name) => canonicalNfc(name).replace(/_/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 const plural = (n, one, many) => (n === 1 ? one : many);
+const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const clip = (text, max = 160) => (text.length > max ? text.slice(0, max - 1) + '…' : text);
 const baseName = (rel) => path.posix.basename(rel, '.md');
 const isPlain = (v) => !!v && typeof v === 'object' && Object.getPrototypeOf(v) === Object.prototype;
@@ -199,6 +200,143 @@ function fileLine(readFile, abs, source, bodyLine) {
 }
 
 /**
+ * The secret names of a vault and how to look for them: every gm_aliases name and the names of the notes marked
+ * withheld, with the matcher for each. Shared by the build's note audit and by the leak gate, which runs it over the
+ * finished folder.
+ *
+ * @param {object} input
+ * @param {object[]} input.notes          scanAllNotes(vaultPath)
+ * @param {Set<string>} input.publishedRels  the vault paths of the notes that get a page
+ * @param {function} input.outOf          vault path -> the note's page on the site, or null
+ * @param {object} input.linkMap          the link map of the published pages
+ * @returns {{names: object[], probe: RegExp|null, mayHold: function, secretKeys: Set<string>, collisions: object[],
+ *   publishedWithheld: object[], unreadableFlags: object[], publicNames: Set<string>}}
+ */
+function secretNamesOf(input) {
+  const secretKeys = new Set();
+  const aliasOwners = new Map();   // folded alias -> { alias, rel }
+  const withheldOwners = new Map();   // folded name of a `withheld: true` note -> { alias, rel }
+  const publishedWithheld = [];       // withheld notes the site publishes: { rel, out }
+  const unreadableFlags = [];         // notes whose `withheld:` is neither true nor false: { rel, value }
+  for (const note of input.notes) {
+    const rel = noteRel(note);
+    // Names are read from the note as it is on disk: a published page's own frontmatter has
+    // had its gm_aliases removed by the time the build asks.
+    const fm = note.frontmatter || {};
+    for (const alias of gmAliasList(fm)) {
+      secretKeys.add(gmAliasKey(alias));
+      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel });
+    }
+    // A withheld note's own names: its file name, its title and its aliases (its gm_aliases
+    // are searched as every gm_aliases name is).
+    if (Object.prototype.hasOwnProperty.call(fm, 'withheld') && !flagReadable(fm.withheld)) unreadableFlags.push({ rel, value: fm.withheld });
+    if (isWithheld(fm) && input.publishedRels.has(rel)) {
+      // Its name is on the site by its own page: one finding for that, and no search for it.
+      publishedWithheld.push({ rel, out: input.outOf(rel) });
+    } else if (isWithheld(fm)) {
+      for (const name of [baseName(rel).replace(/_/g, ' '), note.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
+        ...nameList(fm.aliases)]) {
+        const text = typeof name === 'string' ? name.trim() : '';
+        if (text && !withheldOwners.has(fold(text))) withheldOwners.set(fold(text), { alias: text, rel });
+      }
+    }
+  }
+
+  const publicNames = new Set(Object.keys(input.linkMap).map(fold));
+  for (const key of [...aliasOwners.keys()]) if (publicNames.has(key)) aliasOwners.delete(key);
+  // A withheld name a published page also answers to is on the site already, so it cannot
+  // be searched for: it is told once (WITHHELD_NAME_PUBLIC) and left out of the search. A
+  // name gm_aliases already searches is that search's.
+  const collisions = [];
+  for (const [key, owner] of [...withheldOwners]) {
+    if (aliasOwners.has(key)) withheldOwners.delete(key);
+    else if (publicNames.has(key)) { collisions.push({ ...owner, key }); withheldOwners.delete(key); }
+  }
+  const matcher = (alias) => new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(alias.trim()).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
+    + '(?![\\p{L}\\p{N}])', 'giu');
+  const names = [...aliasOwners.values()].map((a) => ({
+    ...a,
+    kind: 'alias',
+    // Between the words of a name a space, an underscore or a hyphen all read as the same
+    // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
+    re: matcher(a.alias),
+  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })));
+  // One cheap look at the raw HTML decides whether a page is read at all: the longest word
+  // of each secret name. A name with no word of three letters is looked for on every page.
+  const probeWords = names.map((a) => (foldQuotes(a.alias).match(/[\p{L}\p{N}]+/gu) || []).sort((x, y) => y.length - x.length)[0] || '');
+  const probe = names.length === 0 ? null
+    : probeWords.some((w) => w.length < 3) ? /(?:)/
+      : new RegExp([...new Set(probeWords)].map(esc).join('|'), 'iu');
+
+  // Whether the raw HTML of a page could hold a secret name. A character that prints nothing
+  // (or its entity) may stand inside a word of the page, so a page that holds one is looked
+  // at again with those taken out, as the name is compared.
+  const HIDDEN_CHAR = /[\u200b-\u200d\u2060\ufeff\u00ad]|&(?:shy|ZeroWidthSpace|NoBreak|#\d+|#x[0-9a-f]+);/i;
+  const COMBINING = /[\u0300-\u036f]/;
+  const mayHold = (html) => probe.test(html) || ((HIDDEN_CHAR.test(html) || COMBINING.test(html)) && probe.test(foldQuotes(decodeEntities(String(html)))));
+  return { names, probe, mayHold, secretKeys, collisions, publishedWithheld, unreadableFlags, publicNames };
+}
+
+// The words that are a public name of the site (a page's name or title): a link to one prints it, so it is no leak.
+function publicWordsOf(linkMap, published) {
+  const set = new Set(Object.keys(linkMap).map((k) => fold(foldQuotes(k))));
+  for (const page of published) set.add(fold(foldQuotes(page.displayTitle || '')));
+  return set;
+}
+
+// A page's secret names: the hits of `names` (secretNamesOf's matchers) in the HTML of one built file, each
+// { kind, alias, owner, re, count, context }. On a listing page (a page made of many notes) nothing is blanked.
+// `only: 'withheld'` looks for withheld names alone: for texts that have never been read for gm_aliases names (the
+// records the search index is made of).
+function findSecretNames(html, names, { publicWords, listing = false, only = null } = {}) {
+  const hits = [];
+  // The page's own text first; a name found only in its <head> or in a tag's words (the
+  // tab title, a description, an image's alt) is on the site too.
+  // What a link to another page prints is that page's public name, not this page's words:
+  // it is blanked for the search and kept for the sentence shown. A label is this page's
+  // own words, so it is searched: only words that are a public name of the site are blanked.
+  const whole = String(html);
+  const headEnd = whole.search(/<\/head\s*>/i);
+  const bodyHtml = headEnd === -1 ? whole : whole.slice(headEnd);
+  // On an index page a link is a whole card (a name, and fields of the note under it), so
+  // there nothing is blanked: every word on it is taken from some note.
+  const blank = (text) => (listing ? text : text.replace(/\u0002([^\u0003]*)\u0003/g,
+    (m, inner) => (publicWords.has(fold(inner)) ? LINK_OPEN.repeat(m.length) : m)));
+  const body = foldQuotes(pageText(bodyHtml, { links: 'fence' }));
+  const bodyOwn = blank(body);
+  let boxes = null;
+  let rest = null;
+  for (const a of names) {
+    if (only && a.kind !== only) continue;
+    a.re.lastIndex = 0;
+    let text = body;
+    let matches = [...bodyOwn.matchAll(a.re)];
+    if (matches.length === 0) {
+      // A sheet's small boxes run a label and its value together ("TL" and the name).
+      if (boxes === null) boxes = foldQuotes(pageText(bodyHtml, { links: 'fence', spaced: true }));
+      text = boxes;
+      matches = [...blank(boxes).matchAll(a.re)];
+    }
+    if (matches.length === 0) {
+      // An index page's cards are links that carry a note's fields in their attributes.
+      if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: listing ? 'all' : true }));
+      text = rest;
+      matches = [...blank(rest).matchAll(a.re)].slice(0, 1);
+    }
+    if (matches.length === 0) continue;
+    const at = matches[0].index;
+    const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
+    const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
+    hits.push({
+      kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, count: matches.length,
+      context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
+    });
+  }
+  return hits;
+}
+
+
+/**
  * Start the audit of one vault, from what the build holds once its link map is made.
  *
  * @param {object} input
@@ -230,11 +368,6 @@ function fileLine(readFile, abs, source, bodyLine) {
 function startNoteAudit(input) {
   const readFile = input.readFile || ((p) => fs.readFileSync(p, 'utf8'));
   const scanned = new Map(input.corpus.map((p) => [input.relOf(p), p]));
-  const secretKeys = new Set();
-  const aliasOwners = new Map();   // folded alias -> { alias, rel }
-  const withheldOwners = new Map();   // folded name of a `withheld: true` note -> { alias, rel }
-  const publishedWithheld = [];       // withheld notes the site publishes: { rel, out }
-  const unreadableFlags = [];         // notes whose `withheld:` is neither true nor false: { rel, value }
   const publishedRels = new Set(input.published.map((p) => input.relOf(p)));
   const noPage = [];               // records: { rel, why, page, frontmatter, displayTitle }
   const skipped = {
@@ -242,68 +375,16 @@ function startNoteAudit(input) {
     untyped: new Set(input.report.untyped.map(canonicalNfc)),
     unmapped: new Set(input.report.unmapped.map((u) => canonicalNfc(u.dir))),
   };
+  const secrets = secretNamesOf({ notes: input.notes, publishedRels, outOf: (rel) => (scanned.get(rel) || {}).outputPath, linkMap: input.linkMap });
+  const { secretKeys, collisions, publishedWithheld, unreadableFlags, probe, mayHold, publicNames } = secrets;
+  const aliasRes = secrets.names;
   for (const note of input.notes) {
     const rel = noteRel(note);
-    const page = scanned.get(rel);
-    // Names are read from the note as it is on disk: a published page's own frontmatter has
-    // had its gm_aliases removed by the time the build asks.
-    const fm = note.frontmatter || {};
-    for (const alias of gmAliasList(fm)) {
-      secretKeys.add(gmAliasKey(alias));
-      if (!aliasOwners.has(fold(alias))) aliasOwners.set(fold(alias), { alias, rel });
-    }
-    // A withheld note's own names: its file name, its title and its aliases (its gm_aliases
-    // are searched as every gm_aliases name is).
-    if (Object.prototype.hasOwnProperty.call(fm, 'withheld') && !flagReadable(fm.withheld)) unreadableFlags.push({ rel, value: fm.withheld });
-    if (isWithheld(fm) && publishedRels.has(rel)) {
-      // Its name is on the site by its own page: one finding for that, and no search for it.
-      publishedWithheld.push({ rel, out: (scanned.get(rel) || {}).outputPath });
-    } else if (isWithheld(fm)) {
-      for (const name of [baseName(rel).replace(/_/g, ' '), note.displayTitle, typeof fm.title === 'string' ? labelsForLinks(fm.title) : '',
-        ...nameList(fm.aliases)]) {
-        const text = typeof name === 'string' ? name.trim() : '';
-        if (text && !withheldOwners.has(fold(text))) withheldOwners.set(fold(text), { alias: text, rel });
-      }
-    }
-    const why = noPageReason(rel, page, input, skipped);
-    if (why) noPage.push({ rel, page, why, frontmatter: fm, displayTitle: note.displayTitle || baseName(rel).replace(/_/g, ' ') });
+    const why = noPageReason(rel, scanned.get(rel), input, skipped);
+    if (why) noPage.push({ rel, page: scanned.get(rel), why, frontmatter: note.frontmatter || {}, displayTitle: note.displayTitle || baseName(rel).replace(/_/g, ' ') });
   }
   noPage.sort((a, b) => (a.rel < b.rel ? -1 : 1));
-
-  const publicNames = new Set(Object.keys(input.linkMap).map(fold));
   const index = noPage.length > 0 ? indexNoPageNotes(noPage, publicNames) : new Map();
-  for (const key of [...aliasOwners.keys()]) if (publicNames.has(key)) aliasOwners.delete(key);
-  // A withheld name a published page also answers to is on the site already, so it cannot
-  // be searched for: it is told once (WITHHELD_NAME_PUBLIC) and left out of the search. A
-  // name gm_aliases already searches is that search's.
-  const collisions = [];
-  for (const [key, owner] of [...withheldOwners]) {
-    if (aliasOwners.has(key)) withheldOwners.delete(key);
-    else if (publicNames.has(key)) { collisions.push({ ...owner, key }); withheldOwners.delete(key); }
-  }
-  const esc = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const matcher = (alias) => new RegExp('(?<![\\p{L}\\p{N}])' + foldQuotes(alias.trim()).split(/[\s_\-\u2010\u2011]+/).filter(Boolean).map(esc).join('[\\s_\\-\\u2010\\u2011]+')
-    + '(?![\\p{L}\\p{N}])', 'giu');
-  const aliasRes = [...aliasOwners.values()].map((a) => ({
-    ...a,
-    kind: 'alias',
-    // Between the words of a name a space, an underscore or a hyphen all read as the same
-    // name ("The_Watcher", "The-Watcher"), whichever of them gm_aliases has.
-    re: matcher(a.alias),
-  })).concat([...withheldOwners.values()].map((a) => ({ ...a, kind: 'withheld', re: matcher(a.alias) })));
-  // One cheap look at the raw HTML decides whether a page is read at all: the longest word
-  // of each secret name. A name with no word of three letters is looked for on every page.
-  const probeWords = aliasRes.map((a) => (foldQuotes(a.alias).match(/[\p{L}\p{N}]+/gu) || []).sort((x, y) => y.length - x.length)[0] || '');
-  const probe = aliasRes.length === 0 ? null
-    : probeWords.some((w) => w.length < 3) ? /(?:)/
-      : new RegExp([...new Set(probeWords)].map(esc).join('|'), 'iu');
-
-  // Whether the raw HTML of a page could hold a secret name. A character that prints nothing
-  // (or its entity) may stand inside a word of the page, so a page that holds one is looked
-  // at again with those taken out, as the name is compared.
-  const HIDDEN_CHAR = /[\u200b-\u200d\u2060\ufeff\u00ad]|&(?:shy|ZeroWidthSpace|NoBreak|#\d+|#x[0-9a-f]+);/i;
-  const COMBINING = /[\u0300-\u036f]/;
-  const mayHold = (html) => probe.test(html) || ((HIDDEN_CHAR.test(html) || COMBINING.test(html)) && probe.test(foldQuotes(decodeEntities(String(html)))));
 
   // rel -> { record, pages: Set (notes whose own page prints the name), via: Map (note ->
   // the index and listing pages that print the name from it), printed: Map }
@@ -494,57 +575,15 @@ function startNoteAudit(input) {
   // own prints, and the titles pages print. Made when first asked.
   let publicSet = null;
   const publicWords = () => {
-    if (publicSet === null) {
-      publicSet = new Set(Object.keys(input.linkMap).map((k) => fold(foldQuotes(k))));
-      for (const page of input.published) publicSet.add(fold(foldQuotes(page.displayTitle || '')));
-    }
+    if (publicSet === null) publicSet = publicWordsOf(input.linkMap, input.published);
     return publicSet;
   };
   // `only: 'withheld'` looks for withheld names alone: for texts that have never been read for
   // gm_aliases names (the records the search index is made of).
   function read(rel, html, out = null, where = 'the page', only = null) {
     if (!probe || (only && !aliasRes.some((a) => a.kind === only)) || !mayHold(html)) return;
-    // The page's own text first; a name found only in its <head> or in a tag's words (the
-    // tab title, a description, an image's alt) is on the site too.
-    // What a link to another page prints is that page's public name, not this page's words:
-    // it is blanked for the search and kept for the sentence shown. A label is this page's
-    // own words, so it is searched: only words that are a public name of the site are blanked.
-    const whole = String(html);
-    const headEnd = whole.search(/<\/head\s*>/i);
-    const bodyHtml = headEnd === -1 ? whole : whole.slice(headEnd);
-    // On an index page a link is a whole card (a name, and fields of the note under it), so
-    // there nothing is blanked: every word on it is taken from some note.
-    const blank = (text) => (out !== null ? text : text.replace(/\u0002([^\u0003]*)\u0003/g,
-      (m, inner) => (publicWords().has(fold(inner)) ? LINK_OPEN.repeat(m.length) : m)));
-    const body = foldQuotes(pageText(bodyHtml, { links: 'fence' }));
-    const bodyOwn = blank(body);
-    let boxes = null;
-    let rest = null;
-    for (const a of aliasRes) {
-      if (only && a.kind !== only) continue;
-      a.re.lastIndex = 0;
-      let text = body;
-      let matches = [...bodyOwn.matchAll(a.re)];
-      if (matches.length === 0) {
-        // A sheet's small boxes run a label and its value together ("TL" and the name).
-        if (boxes === null) boxes = foldQuotes(pageText(bodyHtml, { links: 'fence', spaced: true }));
-        text = boxes;
-        matches = [...blank(boxes).matchAll(a.re)];
-      }
-      if (matches.length === 0) {
-        // An index page's cards are links that carry a note's fields in their attributes.
-        if (rest === null) rest = foldQuotes(pageText(whole, { links: 'fence', attributes: out !== null ? 'all' : true }));
-        text = rest;
-        matches = [...blank(rest).matchAll(a.re)].slice(0, 1);
-      }
-      if (matches.length === 0) continue;
-      const at = matches[0].index;
-      const start = Math.max(text.lastIndexOf('\n', at) + 1, at - CONTEXT);
-      const stop = Math.min(...[text.indexOf('\n', at), at + matches[0][0].length + CONTEXT, text.length].filter((x) => x >= 0));
-      aliasHits.push({
-        kind: a.kind, alias: a.alias, owner: a.rel, re: a.re, rel, out, where, count: matches.length,
-        context: clip(text.slice(start, stop).replace(/[\u0002\u0003]/g, '').trim(), 2 * CONTEXT + a.alias.length),
-      });
+    for (const hit of findSecretNames(html, aliasRes, { publicWords: publicWords(), listing: out !== null, only })) {
+      aliasHits.push({ ...hit, rel, out, where });
     }
   }
 
@@ -916,4 +955,4 @@ function summaryLines(findings) {
   return lines;
 }
 
-module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE };
+module.exports = { startNoteAudit, summaryLines, PAGES_SHOWN, kindOfType, pageText, mainOf, CODES, MARK_RE, foldQuotes, secretNamesOf, publicWordsOf, findSecretNames };

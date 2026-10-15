@@ -283,4 +283,30 @@ function renderMarks(html, marks) {
   return out.join('');
 }
 
-module.exports = { createMarks, markKinds, sanitize, unmark, withoutMarked, blockLines, marksAtHeadings, renderMarks };
+// The outermost marked spans of a text: { kind, label, text }, the text with the tokens of any marks inside it taken
+// out. A span still open at the end runs to the end. The leak gate reads the hidden parts of a note this way.
+function markedSpans(text, marks) {
+  const s = String(text == null ? '' : text);
+  const out = [];
+  let depth = 0;
+  let cur = null;
+  let last = 0;
+  for (const m of s.matchAll(TOKEN)) {
+    if (depth > 0 && cur) cur.text += s.slice(last, m.index);
+    last = m.index + m[0].length;
+    if (m[1] !== undefined) {
+      if (depth === 0) {
+        const rec = (marks && marks.get(parseInt(m[1], 36))) || { kind: 'notes', label: 'unknown' };
+        cur = { kind: rec.kind, label: rec.label, text: '' };
+      }
+      depth++;
+    } else if (m[0] === CLOSE && depth > 0) {
+      depth--;
+      if (depth === 0) { out.push(cur); cur = null; }
+    }
+  }
+  if (depth > 0 && cur) { cur.text += s.slice(last); out.push(cur); }
+  return out;
+}
+
+module.exports = { createMarks, markKinds, sanitize, unmark, withoutMarked, blockLines, marksAtHeadings, renderMarks, markedSpans };

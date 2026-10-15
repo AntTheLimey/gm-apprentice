@@ -6,6 +6,7 @@ const path = require('path');
 
 const { runManifest } = require('../lib/manifest-cli');
 const { writePublishList, readListText } = require('./helpers/publish-list');
+const { loadManifest, writeAccepted } = require('../lib/manifest');
 const FIXTURES = path.join(__dirname, 'fixtures');
 
 const FOLDER_MAP = {
@@ -238,6 +239,22 @@ describe('manifest apply', () => {
     assert.deepStrictEqual(list.excluded, []);
     assert.strictEqual(list.reasons.size, 0);
     fs.rmSync(vault, { recursive: true, force: true });
+  });
+
+  it('keeps the accepted leak findings, in a list and in a file that held only them', async () => {
+    const entry = { page: 'npcs/a.html', text: 'the baker is a kind man', note: 'NPCs/A.md' };
+    for (const withList of [true, false]) {
+      const vault = copyVault('auto-exclude');
+      fs.mkdirSync(path.join(vault, '_meta'), { recursive: true });
+      if (withList) writePublishList(vault, { excluded: [{ path: 'Sessions/Played Session.md', reason: 'prep' }] });
+      writeAccepted(vault, [entry]);
+      const { configPath } = siteFor(vault);
+      await runManifest({ verb: 'apply', configPath, publish: ['Sessions/Played Session.md'] }, capture().deps);
+      const list = loadManifest(vault, { warn: () => {} });
+      assert.deepStrictEqual(list.accepted, [entry]);
+      assert.deepStrictEqual(list.publishing, ['Sessions/Played Session.md']);
+      fs.rmSync(vault, { recursive: true, force: true });
+    }
   });
 
   it('moves an entry from Needs Decision to Publishing (#277)', async () => {

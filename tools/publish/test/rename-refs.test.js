@@ -70,6 +70,14 @@ describe('manifest rename', () => {
     assert.strictEqual(fs.readFileSync(path.join(vault, '_meta/publish-list.yaml'), 'utf8'), LIST(), 'writes nothing');
   });
 
+  it('leaves an accepted block as it is', () => {
+    const accepted = 'accepted:\n  - page: npcs/emma.html\n    text: she keeps the vial in her oven\n    note: Characters/PCs/Emma_Wentworth.md\n';
+    const vault = vaultWith({ '_meta/publish-list.yaml': LIST() + accepted });
+    const text = rename(vault).files['_meta/publish-list.yaml'];
+    assert.ok(text.endsWith(accepted), 'the accepted block is unchanged');
+    assert.match(text, /^  - Characters\/PCs\/Emma_Wentworth_Hale\.md$/m);
+  });
+
   it('renames in the old Markdown list while the vault has no YAML list yet', () => {
     const vault = vaultWith({ '_meta/publish-manifest.md': OLD_LIST });
     const got = rename(vault);

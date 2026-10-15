@@ -57,6 +57,7 @@ function harness(overrides = {}) {
     sleep: async (ms) => { sleeps.push(ms); },
     now: () => new Date('2026-09-07T12:00:00.000Z'),
     config: Object.assign({ host: 'cloudflare-pages', outputDir: './docs' }, overrides.config),
+    leakGate: overrides.leakGate || (() => ({ skipped: null, missing: false, findings: [], unneeded: [], files: 3, seconds: 0.01 })),
   };
   return { deps, out, writes, wrangler, commands, builds, sleeps, fetches, files, text: () => out.join('\n') };
 }
@@ -657,5 +658,120 @@ describe('deploy hooks: an unreadable package.json (CodeRabbit #263)', () => {
     assert.strictEqual(rc, 1);
     assert.match(h.text(), /package\.json.*EACCES/);
     assert.deepStrictEqual(h.wrangler, []);
+  });
+});
+
+describe('deploy: the leak gate', () => {
+  const finding = { id: 'abc123', kind: 'text', code: 'HIDDEN_TEXT', page: 'npcs/a.html', text: 'the baker poisoned the mayor', shown: 'The baker poisoned the mayor.', note: 'NPCs/A.md', reason: 'GM Notes section' };
+  const leaking = () => ({ skipped: null, missing: false, findings: [finding], unneeded: [], files: 3, seconds: 0.01 });
+
+  it('stops before any upload and lists each finding, exit 1', async () => {
+    const h = harness({ leakGate: leaking });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(h.wrangler, []);
+    assert.equal(h.builds.length, 1);
+    assert.match(h.text(), /\[abc123\] npcs\/a\.html: "The baker poisoned the mayor\."/);
+    assert.match(h.text(), /Nothing was uploaded/);
+  });
+
+  it('github-pages: no git add, commit or push on a finding', async () => {
+    const h = harness({ leakGate: leaking, config: { host: 'github-pages' } });
+    const rc = await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.ok(!h.commands.some((c) => c.cmd === 'git' && ['add', 'commit', 'push'].includes(c.args[0])));
+  });
+
+  it('--json carries the findings and refused', async () => {
+    const h = harness({ leakGate: leaking });
+    const rc = await runDeploy({ configPath: CONFIG, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.refused, true);
+    assert.strictEqual(payload.deployed, false);
+    assert.deepStrictEqual(payload.leaks.findings.map((f) => f.id), ['abc123']);
+  });
+
+  it('--no-build checks the folder as it stands', async () => {
+    const seen = [];
+    const h = harness({ leakGate: (o) => { seen.push(o.outputDir); return leaking(); } });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps), 1);
+    assert.equal(seen.length, 1);
+    assert.deepStrictEqual(h.builds, []);
+    assert.deepStrictEqual(h.wrangler, []);
+  });
+
+  it('the folder checked is the one wrangler.toml uploads', async () => {
+    const seen = [];
+    const h = harness({ leakGate: (o) => { seen.push(o.outputDir); return { skipped: null, missing: false, findings: [], unneeded: [], files: 1, seconds: 0 }; } });
+    await runDeploy({ configPath: CONFIG }, h.deps);
+    assert.deepStrictEqual(seen, [path.join(SITE, 'docs')]);
+  });
+
+  it('a clean check says so and the deploy goes on, with the summary in --json', async () => {
+    const h = harness();
+    assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
+    assert.match(h.text(), /Leak check: nothing hidden on the player site \(3 files/);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
+    const j = harness();
+    await runDeploy({ configPath: CONFIG, json: true }, j.deps);
+    const payload = JSON.parse(j.out.join(''));
+    assert.strictEqual(payload.deployed, true);
+    assert.strictEqual(payload.leaks.checked, true);
+    assert.deepStrictEqual(payload.leaks.findings, []);
+  });
+
+  it('--dry-run runs the gate read-only, says what it would refuse, exit 1, and runs nothing', async () => {
+    const h = harness({ leakGate: leaking });
+    const rc = await runDeploy({ configPath: CONFIG, dryRun: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    assert.deepStrictEqual(h.builds, []);
+    assert.deepStrictEqual(h.wrangler, []);
+    assert.match(h.text(), /would stop/i);
+    assert.match(h.text(), /\[abc123\]/);
+  });
+
+  it('--dry-run --json carries wouldRefuse and the findings', async () => {
+    const h = harness({ leakGate: leaking });
+    const rc = await runDeploy({ configPath: CONFIG, dryRun: true, json: true }, h.deps);
+    assert.strictEqual(rc, 1);
+    const payload = JSON.parse(h.out.join(''));
+    assert.strictEqual(payload.wouldRefuse, true);
+    assert.strictEqual(payload.dryRun, true);
+    assert.deepStrictEqual(payload.leaks.findings.map((f) => f.id), ['abc123']);
+  });
+
+  it('--dry-run with no built folder says there is nothing to check, exit 0', async () => {
+    const h = harness({ leakGate: () => ({ skipped: null, missing: true, findings: [], unneeded: [], files: 0, seconds: 0 }) });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG, dryRun: true }, h.deps), 0);
+    assert.match(h.text(), /nothing to check/i);
+  });
+
+  it('a real deploy with no built folder is refused', async () => {
+    const h = harness({ leakGate: () => ({ skipped: null, missing: true, findings: [], unneeded: [], files: 0, seconds: 0 }) });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG, noBuild: true }, h.deps), 1);
+    assert.match(h.text(), /no built site/i);
+    assert.deepStrictEqual(h.wrangler, []);
+  });
+
+  it('a gate that cannot run uploads nothing', async () => {
+    const h = harness({ leakGate: () => { throw new Error('vault unreadable'); } });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 1);
+    assert.deepStrictEqual(h.wrangler.filter((a) => a[0] === 'pages'), []);
+    assert.match(h.text(), /leak check could not run: vault unreadable/i);
+  });
+
+  it('a gate that cannot run on a dry run exits 1', async () => {
+    const h = harness({ leakGate: () => { throw new Error('vault unreadable'); } });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG, dryRun: true }, h.deps), 1);
+    assert.match(h.text(), /leak check could not run: vault unreadable/i);
+  });
+
+  it('a vault kept by a player: one line, and the deploy goes on', async () => {
+    const h = harness({ leakGate: () => ({ skipped: 'The leak check is skipped: this vault is kept by a player (vault.kept_by: player), so it holds nothing hidden.', missing: false, findings: [], unneeded: [], files: 0, seconds: 0 }) });
+    assert.strictEqual(await runDeploy({ configPath: CONFIG }, h.deps), 0);
+    assert.match(h.text(), /kept by a player/);
+    assert.doesNotMatch(h.text(), /nothing hidden on the player site/);
+    assert.deepStrictEqual(h.wrangler, [['whoami'], ['pages', 'deploy']]);
   });
 });

@@ -106,4 +106,4 @@ function buildSearchIndex(allPages) {
   return built;
 }
 
-module.exports = { subtitleOf: getSubtitle, buildSearchIndex };
+module.exports = { subtitleOf: getSubtitle, buildSearchIndex, stripMarkdown };

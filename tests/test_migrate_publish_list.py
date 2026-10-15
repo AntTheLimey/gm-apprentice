@@ -83,6 +83,26 @@ class PublishListMoveTests(unittest.TestCase):
         vault = make_vault(self)
         self.assertEqual(ms.find_publish_list(vault), [])
 
+    def test_a_list_holding_only_accepted_is_neither_converted_nor_held(self):
+        # `leaks accept` on a vault with no publish list writes this file.
+        vault = make_vault(self)
+        accepted = ("accepted:\n  - page: npcs/a.html\n"
+                    "    text: the baker poisoned the mayor\n"
+                    "    note: NPCs/A.md\n")
+        (vault / "_meta" / "publish-list.yaml").write_text(accepted, encoding="utf-8")
+        self.assertEqual(ms.find_publish_list(vault), [])
+        code, plan, err = update(vault, "plan")
+        self.assertEqual(code, 0, err)
+        self.assertNotIn("publish-list", plan)
+        self.assertNotIn("publish list", plan)
+        self.assertNotIn("WARNING", plan.upper())
+        code, did, err = update(vault, *CHOOSE)
+        self.assertEqual(code, 0, err + did)
+        self.assertNotIn("publish-list", did)
+        self.assertEqual((vault / "_meta" / "publish-list.yaml").read_text(encoding="utf-8"), accepted)
+        self.assertFalse(has_old(vault))
+        self.assertEqual(read_stamp(vault), PLUGIN)
+
     def test_a_site_tool_older_than_1_27_0_keeps_the_old_list_and_says_why(self):
         vault = make_vault(self)
         put_old_list(vault)

@@ -14,7 +14,7 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
-const { loadManifest, canonicalPath, counts, listText } = require('./manifest');
+const { loadManifest, loadPublishList, canonicalPath, counts, listText } = require('./manifest');
 const { parseAnnotatedManifest, renderManifest } = require('./manifest-legacy');
 const { writeAtomic } = require('./settings/write');
 const { PUBLISH_LIST_FILE, OLD_LIST_FILE, PUBLISH_LIST_FROM, at } = require('./settings/layout');
@@ -283,7 +283,8 @@ async function runApply(options, deps, survey) {
       vault: publishConfig.site_title || path.basename(vaultPath),
       totalFiles: files.length,
     })
-    : listText(listOf(entries)));
+    // The accepted leak findings ride along; a vault whose file holds only them (no list yet) keeps them too.
+    : listText({ ...listOf(entries), accepted: (loadPublishList(vaultPath, { warn: () => {} }) || {}).accepted || [] }));
 
   const sectionCounts = { publishing: 0, excluded: 0, needsDecision: 0 };
   for (const entry of entries.values()) sectionCounts[entry.section]++;

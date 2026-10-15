@@ -245,6 +245,10 @@ the cell being changed, on a PC that is not live), read first from the PC's
    **not** deploy: log it and leave the ids `pending`. Run a full
    `npx gm-apprentice-publish build` once play ends, to refresh the party
    board, previews and search.
+   - **If the deploy stops on the leak check:** do not reply; the ids stay
+     `pending`. Tell the GM in one line that the sheet update is held by the
+     leak check and how many findings it named; they are dealt with after
+     play, or now if the GM asks (`references/leak-findings.md`).
    - **On deploy success:** finalize each applied id with its confirmation:
 
      ```bash

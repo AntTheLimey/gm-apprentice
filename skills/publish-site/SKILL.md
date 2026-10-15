@@ -142,7 +142,11 @@ A GM copy, a copy for the table: setup-wizard.md § A GM site for the table.
    — relay its final line verbatim. On a non-zero exit, go to
    capability 3. Missing Cloudflare credentials are explained
    inline by `deploy`; to set them directly, run
-   `node "$TOOL" doctor --set-cloudflare-creds`.
+   `node "$TOOL" doctor --set-cloudflare-creds`. If it stopped on the leak
+   check (the JSON has `refused: true` and `leaks.findings`), read
+   `references/leak-findings.md` and take the GM through each finding.
+   If a message says the leak check could not run, show it word for
+   word and stop: nothing was uploaded.
 
 ### 3. Troubleshooting
 (error messages, "build crashed", "portraits not showing", "page is

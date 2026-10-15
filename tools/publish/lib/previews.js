@@ -125,4 +125,4 @@ function onlyBuiltPages(cards, isBuilt) {
   return out;
 }
 
-module.exports = { cardFor, buildPreviews, getsNoPage, onlyBuiltPages };
+module.exports = { cardFor, rowsFor, buildPreviews, getsNoPage, onlyBuiltPages };

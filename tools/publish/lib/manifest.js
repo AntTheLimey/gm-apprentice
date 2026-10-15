@@ -51,7 +51,7 @@ function parseNewFile(text, warn) {
   }
   const top = data || {};
   for (const key of Object.keys(top)) {
-    if (!KEYS.includes(key)) warn(`${PUBLISH_LIST_FILE}: "${key}" is not a section of the publish list (${KEYS.join(', ')}); ignored`);
+    if (!KEYS.includes(key) && key !== 'accepted') warn(`${PUBLISH_LIST_FILE}: "${key}" is not a section of the publish list (${KEYS.join(', ')}); ignored`);
   }
 
   const reasonsBy = { publishing: new Map(), excluded: new Map(), needs_decision: new Map() };
@@ -99,13 +99,36 @@ function parseNewFile(text, warn) {
     else needsDecision.push(rel);
   }
   for (const rel of needsDecision) if (reasonsBy.needs_decision.has(rel)) reasons.set(rel, reasonsBy.needs_decision.get(rel));
-  return { publishing, excluded, needsDecision, reasons, file: 'new' };
+  // accepted: findings of the leak gate the GM accepted, each tied to its page and its exact (normalised) text. Written
+  // by `leaks accept`, never by hand.
+  const accepted = [];
+  if (top.accepted !== null && top.accepted !== undefined) {
+    if (!Array.isArray(top.accepted)) warn(`${PUBLISH_LIST_FILE}: "accepted" must be a list; ignored`);
+    else {
+      for (const item of top.accepted) {
+        if (item && typeof item === 'object' && isText(item.page) && isText(item.text)) {
+          accepted.push({ page: item.page.trim(), text: item.text.trim(), note: isText(item.note) ? item.note.trim() : '' });
+        } else warn(`${PUBLISH_LIST_FILE}: an entry under "accepted" has no page or no text; dropped`);
+      }
+    }
+  }
+  // A file holding only `accepted:` (a vault that never had a publish list, whose GM accepted a finding) is not a
+  // publish list for page decisions: loadManifest answers null for it.
+  const acceptedOnly = 'accepted' in top && !KEYS.some((key) => key in top);
+  return { publishing, excluded, needsDecision, reasons, accepted, acceptedOnly, file: 'new' };
 }
 
 // Reads the publish list of a vault: null when there is none, otherwise
-// { publishing, excluded, needsDecision (path lists), reasons (Map path -> reason), file: 'new' | 'old' }.
+// { publishing, excluded, needsDecision (path lists), reasons (Map path -> reason), accepted, file: 'new' | 'old' }.
 // `file` names the file read, so a caller can tell a vault the update has not moved. An invalid YAML file throws.
-function loadManifest(vaultPath, { warn = console.warn } = {}) {
+// A file holding only `accepted:` is no publish list for page decisions: null here. loadPublishList is the whole read.
+function loadManifest(vaultPath, options) {
+  const list = loadPublishList(vaultPath, options);
+  return list && list.acceptedOnly ? null : list;
+}
+
+// The file as it stands, an accepted-only one included (the leak gate and `leaks accept` read and write it this way).
+function loadPublishList(vaultPath, { warn = console.warn } = {}) {
   const newFile = at(vaultPath, PUBLISH_LIST_FILE);
   const oldFile = at(vaultPath, OLD_LIST_FILE);
   const hasNew = fs.existsSync(newFile);
@@ -137,6 +160,7 @@ function loadManifest(vaultPath, { warn = console.warn } = {}) {
     excluded: parsed.excluded,
     needsDecision: parsed.needsDecision,
     reasons,
+    accepted: [],
     file: 'old',
   };
 }
@@ -145,13 +169,30 @@ const sortedPaths = (list) => [...new Set(list || [])].sort((a, b) => (a < b ? -
 
 // The text of a publish list file for `list` (the shape loadManifest returns): paths sorted, each reason beside its path.
 function listText(list) {
+  const accepted = (list.accepted || []).slice().sort((a, b) => (a.page < b.page ? -1 : a.page > b.page ? 1 : a.text < b.text ? -1 : a.text > b.text ? 1 : 0));
+  const acceptedDoc = accepted.map((a) => ({ page: a.page, text: a.text, note: a.note || '' }));
+  // An accepted-only list stays accepted-only, even emptied: three empty lists would make it a publish list.
+  if (list.acceptedOnly) return YAML.stringify({ accepted: acceptedDoc }, { lineWidth: 0 });
   const reasons = list.reasons || new Map();
   const doc = {
     publishing: sortedPaths(list.publishing).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : rel)),
     excluded: sortedPaths(list.excluded).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : { path: rel })),
     needs_decision: sortedPaths(list.needsDecision).map((rel) => (reasons.get(rel) ? { path: rel, reason: reasons.get(rel) } : rel)),
   };
+  if (accepted.length) doc.accepted = acceptedDoc;
   return YAML.stringify(doc, { lineWidth: 0 });
+}
+
+// Writes the accepted findings into the vault's publish list, keeping its three lists. A vault still on the old Markdown
+// list is refused: only the update and `manifest convert` move a list. A vault with no list gets a file holding only
+// `accepted:`, which is not a publish list for page decisions (amendment 7a).
+function writeAccepted(vaultPath, accepted) {
+  const list = loadPublishList(vaultPath, { warn: () => {} });
+  if (list && list.file !== 'new') {
+    throw new Error(`This vault's publish list is not in ${PUBLISH_LIST_FILE} yet. Run the update (or gm-apprentice-publish manifest convert --vault <vault>) first.`);
+  }
+  const base = list || { publishing: [], excluded: [], needsDecision: [], reasons: new Map(), acceptedOnly: true };
+  writeAtomic(at(vaultPath, PUBLISH_LIST_FILE), listText({ ...base, accepted }));
 }
 
 function writePublishList(vaultPath, list) {
@@ -176,4 +217,4 @@ function parseListText(text, { warn = console.warn } = {}) {
   return parseNewFile(text, warn);
 }
 
-module.exports = { readPublishListFile, parseListText, loadManifest, listText, writePublishList, counts, canonicalPath, resetNotices };
+module.exports = { readPublishListFile, parseListText, loadManifest, loadPublishList, writeAccepted, listText, writePublishList, counts, canonicalPath, resetNotices };

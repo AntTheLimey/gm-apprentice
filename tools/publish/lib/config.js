@@ -334,6 +334,13 @@ function outputFolderOf(config) {
   return String(folder).replace(/^\.\//, '').replace(/\/+$/, '');
 }
 
+// The folder a wrangler.toml names for upload (pages_build_output_dir), or null when it names none. deploy and the leak
+// check both ask here, so they check the same folder.
+function tomlOutputFolder(text, siteRoot) {
+  const m = /^\s*pages_build_output_dir\s*=\s*["']([^"'\n]+)["']/m.exec(String(text || ''));
+  return m ? path.resolve(siteRoot, m[1]) : null;
+}
+
 // The site file's config with its five site keys resolved from the vault's settings, for a command that reads only
 // those (deploy, setup-inbox). A config with no vaultPath (a test's stand-in) is returned as it is.
 function siteConfigFor(raw, siteRoot, warn = () => {}) {
@@ -374,4 +381,4 @@ function gmSiteOnFor(configPath) {
   return loadPublishConfig(vaultPath, raw, () => {}, { quietStops: true, siteDir, site: 'gm' }).gm.publish === true;
 }
 
-module.exports = { siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
+module.exports = { siteOffFor, gmSiteOnFor, siteOff, siteOffText, siteConfigFor, outputFolderOf, tomlOutputFolder, loadPublishConfig, assertNoStops, assertNoStopsFor, resolveConfig, vaultRelPath, scanConfigFor, loadVaultConfig };
