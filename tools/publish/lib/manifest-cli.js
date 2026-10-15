@@ -13,8 +13,9 @@ const fs = require('fs');
 const path = require('path');
 const { scanVaultReport, dirIsExcluded, scanAllNotes } = require('./scanner');
 const { resolveConfig, assertNoStops, vaultRelPath, loadVaultConfig, scanConfigFor } = require('./config');
-const { loadManifest, canonicalPath } = require('./manifest');
+const { loadManifest, canonicalPath, counts } = require('./manifest');
 const { parseAnnotatedManifest } = require('./manifest-legacy');
+const { convertPublishList, setsOf } = require('./publish-list-convert');
 const { decidePage, publishesPage } = require('./publish-decision');
 const { pairHubs, isWrapUp } = require('./session-hub');
 const { getCanonStatus } = require('./templates/base');
@@ -526,6 +527,46 @@ async function runPublishPlayed(options, deps, survey) {
   return 0;
 }
 
+function vaultFor(opts, out) {
+  if (!opts.vaultPath) {
+    out(`manifest ${opts.verb} needs --vault <path>`);
+    return null;
+  }
+  return path.resolve(opts.vaultPath);
+}
+
+// `manifest convert`: moves the publish list to _meta/publish-list.yaml, all or nothing.
+function runConvert(opts, d) {
+  const out = d.out || console.log;
+  const vault = vaultFor(opts, out);
+  if (!vault) return 1;
+  const result = convertPublishList(vault, { check: !!opts.check });
+  if (opts.json) out(JSON.stringify(result, null, 2));
+  else if (!result.ok) out(['The publish list was not moved; nothing was changed.', ...result.blockers.map((b) => `  ${b}`)].join('\n'));
+  else out(result.lines.length ? result.lines.join('\n') : 'The publish list is already in _meta/publish-list.yaml.');
+  return result.ok ? 0 : 1;
+}
+
+// `manifest list`: the three lists and their counts, computed on request.
+function runList(opts, d) {
+  const out = d.out || console.log;
+  const vault = vaultFor(opts, out);
+  if (!vault) return 1;
+  const list = loadManifest(vault, { warn: () => {} });
+  const empty = { publishing: [], excluded: [], needsDecision: [], reasons: new Map() };
+  const sets = setsOf(list || empty);
+  const c = counts(list || empty);
+  const payload = { ...sets, counts: { publishing: c.publishing, excluded: c.excluded, needs_decision: c.needsDecision } };
+  if (opts.json) out(JSON.stringify(payload, null, 2));
+  else {
+    out(`${c.publishing} publishing, ${c.excluded} excluded, ${c.needsDecision} needing a decision.`);
+    for (const [title, rows] of [['Publishing', sets.publishing], ['Excluded', sets.excluded.map((e) => (e.reason ? `${e.path} — ${e.reason}` : e.path))], ['Needs decision', sets.needs_decision]]) {
+      if (rows.length) out(`\n${title}:\n${rows.map((r) => `  ${r}`).join('\n')}`);
+    }
+  }
+  return 0;
+}
+
 async function runManifest(options, deps) {
   const opts = options || {};
   const d = deps || {};
@@ -541,6 +582,8 @@ async function runManifest(options, deps) {
     }
   }
   // Answers about one vault from its files alone: no site config, no survey.
+  if (opts.verb === 'convert') return runConvert(opts, d);
+  if (opts.verb === 'list') return runList(opts, d);
   if (opts.verb === 'rename') return require('./rename-refs').runRename(opts, d);
   const survey = surveyVault(opts, d);
   assertNoStops(survey.publishConfig, 'manifest');

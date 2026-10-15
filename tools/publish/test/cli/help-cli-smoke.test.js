@@ -30,7 +30,7 @@ const CASES = {
   flush: [/flush \[--config/, /--dry-run/],
   sheet: [/sheet show --pc <name>/, /--player-safe/, /--json/, /whenever the audience is a player/],
   'update-pin': [/update-pin \[--site <dir>\]/, /--check/],
-  manifest: [/manifest <diff\|apply\|publish-played\|rename>/, /--prune/, /is the GM's call/],
+  manifest: [/manifest <diff\|apply\|publish-played\|rename\|convert\|list>/, /--prune/, /is the GM's call/],
   deploy: [/deploy \[--config <path>\] \[--verify\]/, /--dry-run/, /--no-build/],
   explain: [/explain <vault-relative path>/, /gm-only blocks/, /before "doctor --site"/],
   serve: [/serve \[--site gm\|player\] \[--port <n>\]/, /--port <n>/, /home network/],
@@ -93,7 +93,7 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     const r = await runIn(['manifest', 'rebuild']);
     assert.strictEqual(r.code, 1);
     assert.match(r.stderr, /Unknown manifest command: rebuild/);
-    assert.match(r.stdout, /manifest <diff\|apply\|publish-played\|rename>/);
+    assert.match(r.stdout, /manifest <diff\|apply\|publish-played\|rename\|convert\|list>/);
   });
 
   it('a repeated --publish collects both paths rather than overwriting', async () => {
@@ -110,7 +110,7 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     const publish = await runIn(['manifest', 'diff', '--publish', 'A.md']);
     assert.strictEqual(publish.code, 1);
     assert.match(publish.stderr, /Unknown argument: --publish/);
-    assert.match(publish.stdout, /manifest <diff\|apply\|publish-played\|rename>/);
+    assert.match(publish.stdout, /manifest <diff\|apply\|publish-played\|rename\|convert\|list>/);
 
     const exclude = await runIn(['manifest', 'diff', '--exclude', 'A.md=reason']);
     assert.strictEqual(exclude.code, 1);
@@ -127,7 +127,7 @@ describe('CLI: gm-publish <cmd> --help is per-subcommand', () => {
     for (const verb of ['diff', 'apply']) {
       const r = await runIn(['manifest', verb, '--help']);
       assert.strictEqual(r.code, 0);
-      assert.match(r.stdout, /manifest <diff\|apply\|publish-played\|rename>/);
+      assert.match(r.stdout, /manifest <diff\|apply\|publish-played\|rename\|convert\|list>/);
       assert.doesNotMatch(r.stdout, /Static site generator for gm-apprentice campaign vaults/);
     }
   });

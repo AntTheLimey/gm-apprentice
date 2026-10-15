@@ -147,4 +147,14 @@ function counts(list) {
   };
 }
 
-module.exports = { loadManifest, listText, writePublishList, counts, canonicalPath, resetNotices };
+// Reads one publish list file by its full path (the conversion reads its temporary copy this way). Throws when invalid.
+function readPublishListFile(file, { warn = console.warn } = {}) {
+  return parseNewFile(fs.readFileSync(file, 'utf-8'), warn);
+}
+
+// The same reading, for text already in hand.
+function parseListText(text, { warn = console.warn } = {}) {
+  return parseNewFile(text, warn);
+}
+
+module.exports = { readPublishListFile, parseListText, loadManifest, listText, writePublishList, counts, canonicalPath, resetNotices };
