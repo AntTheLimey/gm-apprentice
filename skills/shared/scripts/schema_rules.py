@@ -182,6 +182,26 @@ def inverse_predicates() -> dict[str, str]:
             for p in _ontology_predicates() if p.get("inverse")}
 
 
+def type_key(raw: str) -> str:
+    """A written relationship type as the vocabulary spells it."""
+    return re.sub(r"[\s-]+", "_", str(raw).strip().lower())
+
+
+def verb_choices(name: str) -> list[dict] | None:
+    """What a stray type means: None when the ontology has no entry, [] when
+    it is not a graph edge, else the predicates it can be (one = certain)."""
+    choices = _ontology().get("verbs", {}).get(type_key(name))
+    return None if choices is None else [dict(c) for c in choices]
+
+
+def same_fact_pairs() -> list[tuple[str, str]]:
+    return [(a, b) for a, b in _ontology().get("same_fact", [])]
+
+
+def place_fields() -> list[dict]:
+    return [dict(p) for p in _ontology().get("place_fields", [])]
+
+
 def suggest_predicates(predicate: str) -> list[str]:
     """Up to three sanctioned predicates close to an off-vocabulary one."""
     return get_close_matches(predicate, sorted(predicate_vocabulary()), n=3)
