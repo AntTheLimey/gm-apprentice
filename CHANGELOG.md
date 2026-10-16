@@ -17,7 +17,7 @@ the apprentice stops reading a 13 KB document to write a relationship.
 - `gm-apprentice-publish relationships words` prints the relationship
   words in a few lines: each predicate with its inverse and kind, grouped
   by kind, and the tone words. `--vault <vault>` prints only the
-  predicates the vault's genre uses; `--json` gives the same as data. The
+  predicates the vault's `_meta/relationship-types.md` names, read from its tables and lists only; `--json` gives the same as data. The
   skills that write relationships run it instead of reading
   `relationship-patterns.md`.
 - `scripts/gen_ontology_docs.py` writes every documented copy of the
@@ -32,16 +32,6 @@ the apprentice stops reading a 13 KB document to write a relationship.
 - A new update check, `required-ties-section`: when a vault's
   `_meta/entity-types.md` still holds the "Required Relationships"
   section, the update offers to remove it, and removes only that section.
-
-### Fixed
-
-- `relationships words --vault` reads relationship types only from table
-  cells, list items and lines that are a plain list of names. A sentence
-  of prose, or a word in backticks inside one, no longer shortens the list
-  or shows up under "Not in the vocabulary".
-- The update's removal of the "Required Relationships" section stops at the
-  next heading of the first or second level, so a `#` heading after it and
-  the notes below stay.
 
 ### Changed
 
