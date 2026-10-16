@@ -30,15 +30,6 @@ reference — drop it, don't graph it.
 - **Orphaned entities** — zero relationships. Flag, don't
   delete.
 
-## Required Relationships
-
-| Entity Type | Required Relationship |
-|-------------|----------------------|
-| NPC / PC / creature | `located_at` |
-| Faction / organization | `headquartered_at` |
-
-Flag missing required relationships in every audit.
-
 ## Wiki-Link Conventions
 
 **Frontmatter:** `"[[Entity Name]]"` (quoted, double brackets).

@@ -539,17 +539,6 @@ no `precedes` or `alternative_to`. A vault vocabulary with a
 `Sequencing` category invented it — convert those edges to
 `leads_to` fields.
 
-## Required Relationships
-
-| Entity Type | Required Relationship |
-|-------------|----------------------|
-| `npc` | `located_at` |
-| `pc` | `located_at` |
-| `creature` | `located_at` |
-| `faction` | `headquartered_at` |
-| `organization` | `headquartered_at` |
-| `heritage` | — (none required) |
-
 ## Default Folder Mapping
 
 | Type Category | Vault Folder |

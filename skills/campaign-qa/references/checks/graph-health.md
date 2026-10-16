@@ -23,7 +23,7 @@ Read all entity files in scope. For each, extract:
 - Frontmatter relationships (wiki-links in frontmatter
   fields)
 - Body wiki-links (inline references)
-- Entity type and required relationships per schema
+- Entity type per schema
 
 ### Step 2: Structural Checks
 

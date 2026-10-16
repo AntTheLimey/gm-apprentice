@@ -196,7 +196,7 @@ wiki-links; entity notes link back to sessions in their
    `vault_check.py all` (see `shared/vault-access.md`; `links.py`
    sorts the broken links and fixes the misspelt ones on a yes), then
    interpret on top of their orphan/ambiguity/schema output: type
-   pair violations, missing required relationships, mirrored edges
+   pair violations, mirrored edges
    (one fact stored on both endpoints — storage is
    single-direction).
 2. **Semantic:** redundant edges, implied traversal edges, hub

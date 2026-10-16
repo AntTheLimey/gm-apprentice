@@ -522,6 +522,57 @@ def find_schema_mirror(vault: Path) -> list[Item]:
     return [Item("schema-mirror", CHOICE, lines, apply)]
 
 
+# The retired "Required Relationships" section. Its stock text: the one-liner
+# the scaffold wrote and the table older plugins wrote.
+_RETIRED_HEADING = "## Required Relationships"
+_STOCK_TIES_LINES = {
+    "`npc`, `pc`, `creature` → `located_at`; "
+    "`faction`, `organization` → `headquartered_at`.",
+    "| Entity Type | Required Relationship |",
+    "|-------------|----------------------|",
+    "| `npc` | `located_at` |",
+    "| `pc` | `located_at` |",
+    "| `creature` | `located_at` |",
+    "| `faction` | `headquartered_at` |",
+    "| `organization` | `headquartered_at` |",
+    "| `heritage` | — (none required) |",
+}
+
+
+def find_required_ties_section(vault: Path) -> list[Item]:
+    """1.10.65: the vault's `## Required Relationships` section goes, on a
+    yes. Lines the GM added to it go too, and the offer shows them."""
+    path = vault / "_meta" / "entity-types.md"
+    if not path.is_file():
+        return []
+    text = _read(path)
+    start = re.search(rf"^{re.escape(_RETIRED_HEADING)}[ \t]*\r?$", text, re.M)
+    if not start:
+        return []
+    nxt = re.search(r"^## ", text[start.end():], re.M)
+    end = start.end() + nxt.start() if nxt else len(text)
+    body = [ln.strip() for ln in text[start.end():end].splitlines() if ln.strip()]
+    own = [ln for ln in body if ln not in _STOCK_TIES_LINES]
+
+    def apply(_value: str | None) -> list[str]:
+        new = _read(path)
+        m = re.search(rf"^{re.escape(_RETIRED_HEADING)}[ \t]*\r?$", new, re.M)
+        if not m:
+            return []
+        n = re.search(r"^## ", new[m.end():], re.M)
+        stop = m.end() + n.start() if n else len(new)
+        write_text_atomic(path, new[:m.start()] + new[stop:])
+        return ["removed the Required Relationships section"]
+
+    line = ("remove the retired \"Required Relationships\" section from "
+            "_meta/entity-types.md (nothing reads it any more); it reads: "
+            + " ".join(body))
+    if own:
+        line += (f"; your own lines in it go too: "
+                 + " / ".join(f"\"{ln}\"" for ln in own))
+    return [Item("required-ties-section", CHOICE, [line], apply)]
+
+
 # --- small per-release checks -------------------------------------------------
 
 def _wrapup_target(rel: str, text: str) -> str | None:
@@ -1114,6 +1165,9 @@ VAULT_CHECKS: list[Check] = [
           "sheet_source in PC templates", find_pc_template_field),
     Check("schema-mirror", None, 3, "the schema mirror", find_schema_mirror,
           choices=("schema-mirror",)),
+    Check("required-ties-section", "1.10.65",
+          3, "the retired required-relationships section",
+          find_required_ties_section, choices=("required-ties-section",)),
     # An empty Timeline changes what an older publish tool shows, so it waits
     # for the repin: band 4, asks_site.
     Check("timeline-page", None, 4, "the Timeline page", find_timeline_page,

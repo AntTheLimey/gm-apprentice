@@ -54,7 +54,7 @@ TIMELINE = "_Campaign/Timeline.md"
 # The sections of entity-schema.md a vault's `_meta/entity-types.md` starts
 # with, in this order.
 ENTITY_SECTIONS = ("Entity Type Hierarchy", "Frontmatter Schemas",
-                   "Type-Specific Fields", "Required Relationships",
+                   "Type-Specific Fields",
                    "Default Folder Mapping")
 CATEGORY_NAMES = {"scifi": "Sci-Fi"}
 
