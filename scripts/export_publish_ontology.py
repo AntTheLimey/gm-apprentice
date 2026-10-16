@@ -24,8 +24,8 @@ KEYS = ("type", "inverse", "category", "symmetric", "genre")
 # Top-level keys copied whole: `relationships words` prints the tones and strength, and
 # `relationships check` (Task 7) reads the verbs, same-fact pairs, place fields and the
 # entity types an edge may not point at.
-TOP_KEYS = ("tones", "tone_near", "strength_scale", "verbs", "same_fact", "place_fields",
-            "not_edge_target_types")
+TOP_KEYS = ("tones", "tone_near", "strength_scale", "storage_rule", "verbs", "same_fact",
+            "place_fields", "not_edge_target_types")
 FAMILIES = ("positive", "negative", "neutral")
 
 

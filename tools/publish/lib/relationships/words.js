@@ -17,26 +17,38 @@ function readTypesFile(vaultPath) {
   }
 }
 
-function namedIn(text, name) {
-  return new RegExp(`(?<![A-Za-z0-9_])${name}(?![A-Za-z0-9_])`).test(text);
-}
-
-// Names the file puts forward as relationship types: items of a table row's cells after the first, code spans, bullet
-// items and lines that are a bare list of names. Prose words are not names.
+// Names the file puts forward as relationship types, from structured positions only: the cells of a table row,
+// bullet or numbered items (a bare list of names, or code spans in the item), and a line that is only a list of
+// names. Prose lines are ignored: a word in a sentence is not a type. `named` is every name found; `extra` leaves out a row's first cell (its category) so a
+// category word is not mistaken for a stray type.
 function candidates(text) {
-  const found = new Set();
-  const add = (word) => { const w = word.trim(); if (IDENT.test(w)) found.add(w); };
+  const named = new Set();
+  const extra = new Set();
+  const add = (word, isExtra) => {
+    const w = word.trim();
+    if (!IDENT.test(w)) return;
+    named.add(w);
+    if (isExtra) extra.add(w);
+  };
+  const spans = (line, isExtra) => {
+    for (const m of line.matchAll(/`([^`]+)`/g)) add(m[1], isExtra);
+  };
   for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
     const line = raw.trim();
-    for (const m of line.matchAll(/`([^`]+)`/g)) add(m[1]);
     if (line.startsWith('|')) {
-      line.split('|').slice(2).forEach((cell) => cell.split(',').forEach(add));
+      line.split('|').slice(1).forEach((cell, i) => {
+        spans(cell, i > 0);
+        cell.split(',').forEach((w) => add(w, i > 0));
+      });
     } else {
-      const bare = line.replace(/^[-*]\s+/, '');
-      if (bare.split(',').every((w) => IDENT.test(w.trim()))) bare.split(',').forEach(add);
+      // A bullet or numbered item may also hold code spans; a line that is only a comma list of names counts too.
+      const item = /^(?:[-*]|\d+\.)\s+/.test(line);
+      if (item) spans(line, true);
+      const bare = line.replace(/^(?:[-*]|\d+\.)\s+/, '');
+      if (bare && bare.split(',').every((w) => IDENT.test(w.trim()))) bare.split(',').forEach((w) => add(w, true));
     }
   }
-  return found;
+  return { named, extra };
 }
 
 function wordsData({ vaultPath } = {}) {
@@ -45,14 +57,15 @@ function wordsData({ vaultPath } = {}) {
   let predicates = all;
   let unknown = [];
   if (file !== null) {
-    const named = all.filter((p) => namedIn(file, p.type));
+    const found = candidates(file);
+    const named = all.filter((p) => found.named.has(p.type));
     if (named.length > 0 && named.length < all.length) {
       predicates = named;
       const known = new Set([
         ...all.flatMap((p) => [p.type, p.inverse]),
         ...all.flatMap((p) => p.genre || []),
       ]);
-      unknown = [...candidates(file)].filter((w) => !known.has(w));
+      unknown = [...found.extra].filter((w) => !known.has(w));
     }
   }
   return {
@@ -69,8 +82,8 @@ function words(opts = {}) {
   const total = ontology.predicates.length;
   const lines = [];
   lines.push(data.subset
-    ? `Relationship types this vault uses (${data.predicates.length} of ${total}). Store one direction only; the reverse name is implied, never written.`
-    : `Relationship types (${total}). Store one direction only; the reverse name is implied, never written.`);
+    ? `Relationship types this vault uses (${data.predicates.length} of ${total}). ${ontology.storage_rule}`
+    : `Relationship types (${total}). ${ontology.storage_rule}`);
   const byCategory = new Map();
   for (const p of data.predicates) {
     if (!byCategory.has(p.category)) byCategory.set(p.category, []);
@@ -79,10 +92,11 @@ function words(opts = {}) {
   for (const [category, items] of byCategory) lines.push(`${category}: ${items.join(', ')}`);
   lines.push('(a>b: write a, b is implied. a=: two-way, stored once with bidirectional: true)');
   if (data.notInVocabulary.length) {
-    lines.push(`Not in the vocabulary (flagged by the check): ${data.notInVocabulary.join(', ')}`);
+    lines.push(`Not in the vocabulary: ${data.notInVocabulary.join(', ')}`);
   }
   lines.push(`Tones: ${FAMILIES.map((f) => `${f}: ${data.tones[f].join(', ')}`).join(' | ')}`);
   const scale = Object.entries(data.strength).map(([range, word]) => `${range} ${word}`).join(', ');
+  // The ontology file holds the scale but no default strength, so "5 when unknown" is kept here.
   lines.push(`Strength 1-10: ${scale} (5 when unknown)`);
   return lines.join('\n');
 }

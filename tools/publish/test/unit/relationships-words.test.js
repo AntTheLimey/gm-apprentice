@@ -44,14 +44,25 @@ test('tones and strength close the printout', () => {
 });
 
 test('a vault that names fewer types gets only those, and unknown names are flagged', () => {
-  const dir = vaultWith('# Relationship Types\n\n| Category | Types | Genre |\n|---|---|---|\n| Social | knows, frobs | universal |\n| Power | employs | universal |\n\n- `child_of` is the reverse of parent_of\n');
+  const dir = vaultWith('# Relationship Types\n\n| Category | Types | Genre |\n|---|---|---|\n| Social | knows, frobs | universal |\n| Power | employs | universal |\n\n- `child_of` is the reverse of `parent_of`\n');
   const out = words({ vaultPath: dir });
   assert.match(out, /^Relationship types this vault uses \(3 of 77\)\./);
-  assert.match(out, /Not in the vocabulary \(flagged by the check\): frobs$/m);
+  assert.match(out, /^Not in the vocabulary: frobs$/m);
   assert.match(out, /employs>employed_by/);
   assert.match(out, /knows=/);
   assert.doesNotMatch(out, /sibling_of/);
   assert.doesNotMatch(out, /Not in the vocabulary.*(child_of|universal)/);
+});
+
+test('a file of prose is not read as a type list, and code spans in prose are ignored', () => {
+  const prose = vaultWith('We mostly use located_at and knows; avoid working_for, use employs. Generic types like `associated_with` add nothing.\n');
+  const out = words({ vaultPath: prose });
+  assert.match(out, /^Relationship types \(77\)\./);
+  assert.doesNotMatch(out, /Not in the vocabulary/);
+  const mixed = vaultWith('Avoid `related_to` in prose.\n\n| Category | Types |\n|---|---|\n| Social | knows |\n');
+  const m = words({ vaultPath: mixed });
+  assert.match(m, /^Relationship types this vault uses \(1 of 77\)\./);
+  assert.doesNotMatch(m, /Not in the vocabulary/);
 });
 
 test('a vault with no file, an empty folder, or every name gets the full list', () => {
@@ -67,7 +78,7 @@ test('a file that is a directory is unreadable and gives the full list', () => {
   assert.match(words({ vaultPath: dir }), /^Relationship types \(77\)\./);
 });
 
-test('--json gives 77 predicates, tones and strength', () => {
+test('--json gives 77 predicates, tones, strength and the names not in the vocabulary', () => {
   const r = spawnSync(process.execPath, [BIN, 'relationships', 'words', '--json'], { encoding: 'utf8' });
   assert.strictEqual(r.status, 0, r.stderr);
   const data = JSON.parse(r.stdout);
@@ -76,6 +87,7 @@ test('--json gives 77 predicates, tones and strength', () => {
   assert.deepStrictEqual(Object.keys(data.predicates[0]).sort(), ['category', 'inverse', 'symmetric', 'type']);
   assert.deepStrictEqual(Object.keys(data.tones), ['positive', 'negative', 'neutral']);
   assert.strictEqual(data.strength['9-10'], 'defining');
+  assert.deepStrictEqual(data.notInVocabulary, []);
   assert.deepStrictEqual(wordsData().predicates.length, 77);
 });
 

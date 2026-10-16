@@ -165,7 +165,7 @@ vocabulary are listed on one line.
 
   relationships words        Print the words
   --vault <path>             The vault folder (reads _meta/relationship-types.md)
-  --json                     Print { subset, predicates, tones, strength } as JSON
+  --json                     Print { subset, predicates, tones, strength, notInVocabulary } as JSON
   --help, -h                 Show this help
 `,
   leaks: `

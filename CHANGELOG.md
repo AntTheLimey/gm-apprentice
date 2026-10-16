@@ -33,6 +33,16 @@ the apprentice stops reading a 13 KB document to write a relationship.
   `_meta/entity-types.md` still holds the "Required Relationships"
   section, the update offers to remove it, and removes only that section.
 
+### Fixed
+
+- `relationships words --vault` reads relationship types only from table
+  cells, list items and lines that are a plain list of names. A sentence
+  of prose, or a word in backticks inside one, no longer shortens the list
+  or shows up under "Not in the vocabulary".
+- The update's removal of the "Required Relationships" section stops at the
+  next heading of the first or second level, so a `#` heading after it and
+  the notes below stay.
+
 ### Changed
 
 - `relationship-patterns.md` goes from 13,064 to 6,310 bytes. The tables
