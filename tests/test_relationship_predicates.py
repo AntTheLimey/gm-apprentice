@@ -264,12 +264,14 @@ class RelationshipPatternsDocTests(unittest.TestCase):
             taught.update(re.findall(r"`([a-z]+(?:_[a-z]+)*)`", line))
         cls.taught = taught - cls.NON_PREDICATE_SPANS
 
-    def test_prose_symmetric_list_matches_the_ontology(self):
+    def test_the_document_names_no_symmetric_list(self):
+        # The symmetric predicates are marked `=` in `relationships words`; a
+        # named list here would be a second copy of the ontology.
         section = self.text[self.text.index("**Symmetric predicates**"):
                             self.text.index("**Asymmetric predicates**")]
         listed = set(re.findall(r"`([a-z_]+)`", section))
-        self.assertEqual(listed, {p["type"] for p in self.ontology["predicates"]
-                                  if p["symmetric"]})
+        symmetric = {p["type"] for p in self.ontology["predicates"] if p["symmetric"]}
+        self.assertEqual(listed & symmetric, set())
 
     def test_no_off_vocabulary_predicate_is_taught(self):
         # Every code span on a line that is not a warning must be a sanctioned

@@ -47,18 +47,19 @@ edge and must never be written as its own edge. Record
 `B --[employed_by]--> A` on B's — `employed_by` is off-vocabulary
 and the audit flags it.
 
-**Symmetric predicates** (`knows`, `sibling_of`, `spouse_of`,
-`betrothed_to`, `friend_of`, `rival_of`, `enemy_of`,
-`allied_with`, `at_war_with`, `borders`, `trades_with`,
-`negotiated_with`, `alter_ego_of`, `nemesis_of`) are stored
-**once**, on either endpoint, with `bidirectional: true`.
-Storing them on both endpoints is a duplicate edge, not
+**Symmetric predicates** (marked `=` in the `relationships words`
+list) are stored **once**, on either endpoint, with
+`bidirectional: true`. Storing them on both endpoints is a duplicate edge, not
 "consistency".
 
 **Asymmetric predicates** are stored on the endpoint that is the
 *subject* of the verb: the employer `employs`, the contained place
 is `part_of` its container, the member is `member_of` the faction,
 the liege has a `vassal_of` recorded on the vassal's file.
+
+A location's containment is written twice: the `parent_location:`
+field and a `part_of` tie. The two must agree; see
+`shared/relationship-normalization.md`.
 
 ## Modeling Patterns
 
