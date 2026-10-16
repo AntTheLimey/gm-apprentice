@@ -27,7 +27,7 @@ NORMAL = REPO / "skills" / "shared" / "relationship-normalization.md"
 MOBRPG = REPO / "tools" / "mobrpg" / "mobrpg" / "gm-apprentice-ontology.json"
 
 MARKERS = {
-    SCHEMA.name: ("categories", "symmetric", "tones"),
+    SCHEMA.name: ("categories", "symmetric", "genres", "tones"),
     NORMAL.name: ("synonyms", "verbs"),
 }
 
@@ -66,6 +66,16 @@ def _categories(o: dict) -> str:
 def _symmetric(o: dict) -> str:
     names = [p["type"] for p in o["predicates"] if p.get("symmetric")]
     return "**Symmetric types** (stored once, no direction):\n" + _wrap(", ".join(names))
+
+
+def _genres(o: dict) -> str:
+    seen: list[str] = []
+    for p in o["predicates"]:
+        seen += [g for g in p.get("genre", []) if g not in seen]
+    names = [f"`{g}`" for g in seen]
+    listed = ", ".join(names[:-1]) + " or " + names[-1]
+    return _wrap(f"**Genre tags:** each type carries {listed}; filter "
+                 "suggestions to the campaign's genre.")
 
 
 def _tones(o: dict) -> str:
@@ -116,16 +126,24 @@ def _verbs(o: dict) -> str:
 
 def blocks(o: dict) -> dict[str, str]:
     return {"categories": _categories(o), "symmetric": _symmetric(o),
-            "tones": _tones(o), "synonyms": _synonyms(o), "verbs": _verbs(o)}
+            "genres": _genres(o), "tones": _tones(o), "synonyms": _synonyms(o), "verbs": _verbs(o)}
+
+
+def _opener(name: str) -> re.Pattern[str]:
+    return re.compile(rf"<!-- generated:{name} \(scripts/gen_ontology_docs\.py\) -->\n")
 
 
 def render(text: str, b: dict[str, str]) -> str:
     """Replace the inside of each marker pair this file holds with its block."""
     for name, body in b.items():
-        opener = re.compile(rf"<!-- generated:{name} \(scripts/gen_ontology_docs\.py\) -->\n")
+        opener = _opener(name)
         closer = f"\n<!-- /generated:{name} -->"
         found = opener.findall(text)
         if not found:
+            if re.search(rf"<!-- generated:{name}\b", text):
+                raise ValueError(
+                    f"marker generated:{name} is not written as "
+                    f"<!-- generated:{name} (scripts/gen_ontology_docs.py) -->")
             continue
         if len(found) > 1:
             raise ValueError(f"marker generated:{name} appears {len(found)} times")
@@ -139,7 +157,7 @@ def render(text: str, b: dict[str, str]) -> str:
 
 def _missing(name: str, text: str) -> list[str]:
     return [m for m in MARKERS[name]
-            if f"<!-- generated:{m} " not in text or f"<!-- /generated:{m} -->" not in text]
+            if not _opener(m).search(text) or f"<!-- /generated:{m} -->" not in text]
 
 
 def outputs() -> dict[Path, str]:

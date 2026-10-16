@@ -34,3 +34,14 @@ class Generated(unittest.TestCase):
         import vault_scaffold
         self.assertIn("**Tones.**", vault_scaffold.entity_types_text())
         self.assertNotIn("generated:", vault_scaffold.entity_types_text())
+
+
+class MarkerForms(unittest.TestCase):
+    def test_an_opener_in_another_form_is_an_error_not_a_pass(self):
+        text = (REPO / "skills/shared/entity-schema.md").read_text(encoding="utf-8")
+        odd = text.replace("<!-- generated:tones (scripts/gen_ontology_docs.py) -->",
+                           "<!-- generated:tones -->")
+        self.assertNotEqual(odd, text)
+        with self.assertRaises(ValueError):
+            gen.render(odd, gen.blocks(gen.ontology()))
+        self.assertEqual(gen._missing("entity-schema.md", odd), ["tones"])

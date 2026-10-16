@@ -518,9 +518,11 @@ borders, enemy_of, at_war_with, allied_with, trades_with,
 negotiated_with, alter_ego_of, nemesis_of
 <!-- /generated:symmetric -->
 
+<!-- generated:genres (scripts/gen_ontology_docs.py) -->
 **Genre tags:** each type carries `universal`, `fantasy`, `horror`,
-`scifi`, `superhero`, `historical` or `romance`; filter
-suggestions to the campaign's genre.
+`romance`, `historical`, `scifi` or `superhero`; filter suggestions to
+the campaign's genre.
+<!-- /generated:genres -->
 
 Inverse names and modeling patterns (families, hierarchies,
 triangles): ttrpg-expert's `relationship-patterns.md`.

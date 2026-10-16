@@ -34,9 +34,8 @@ endpoint, never the inverse as its own edge.
 | `member A → B` (of a group) | `member_of A → B` |
 <!-- /generated:synonyms -->
 
-For symmetric predicates (`knows`, `allied_with`, `borders`, `enemy_of`,
-`rival_of`, `trades_with`, `sibling_of`, `spouse_of`, …) store once with
-`bidirectional: true`, either direction.
+For symmetric predicates (the ones `relationships words` marks with `=`)
+store once with `bidirectional: true`, either direction.
 
 ## Containment is two fields, and they must agree
 
